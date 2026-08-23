@@ -6,6 +6,9 @@ import { fmtDateTime } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import { EMAIL_MESSAGE_STATUS } from '../lib/status';
 import {
+  EMAIL_CHANNEL_STATE,
+  EMAIL_RETRYABLE_STATUSES,
+  emailDeliveryReason,
   fetchOrderEmailMessage,
   fetchSupplierCommunicationPreferences,
   resetOrderEmailMessage,
@@ -14,10 +17,16 @@ import {
 import { useAuth } from '../auth/AuthContext';
 
 /**
- * Provider-backed order delivery over email (0168). The button claims the send server-side;
- * the ORDER becomes `sent` only when the provider accepted the message — never because a
- * window opened. The full status ladder is shown as stored; "נמסרה לספק המייל" and "נמסרה
- * לנמען" are different claims and stay different.
+ * Provider-backed order delivery over email (0168 + 0190). The button claims the send
+ * server-side; the ORDER becomes `sent` only when the provider accepted the message — never
+ * because a window opened. What happens afterwards arrives from the signed delivery webhook, and
+ * the badge shows the CHANNEL state (#238): "נמסרה לספק המייל" and "נמסרה לנמען" are different
+ * claims and stay different, and once a message has bounced this card can never say delivered —
+ * the database refuses the regression, so there is nothing here to get wrong.
+ *
+ * The failure surface is bounded on purpose: one Hebrew sentence derived from the reason code,
+ * the provider's own capped wording as secondary evidence, and a resend. No raw provider payload,
+ * no provider credential, and no provider identifier ever reaches this screen.
  */
 export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
   orderId: string;
@@ -45,6 +54,9 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
   const sendable = ['ready', 'sent'].includes(orderStatus);
   if (!message && (!emailEnabled || !sendable || !canWrite)) return null;
 
+  const failure = message ? emailDeliveryReason(message) : null;
+  const retryable = !!message && EMAIL_RETRYABLE_STATUSES.includes(message.status);
+
   async function send(reason?: string) {
     setBusy(true);
     try {
@@ -60,8 +72,8 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
       }
       setSendOpen(false);
       void refetch();
-    } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+    } catch (failed) {
+      toast(toHebrewError(failed), 'error');
     } finally {
       setBusy(false);
     }
@@ -75,8 +87,8 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
       toast('ניסיונות השליחה אופסו');
       setResetOpen(false);
       void refetch();
-    } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+    } catch (failed) {
+      toast(toHebrewError(failed), 'error');
     } finally {
       setBusy(false);
     }
@@ -88,7 +100,7 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
         <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink-strong">
           <Mail size={15} aria-hidden="true" /> מסירת ההזמנה במייל
         </h2>
-        {message && <StatusBadge meta={EMAIL_MESSAGE_STATUS[message.status]} />}
+        {message && <StatusBadge meta={EMAIL_CHANNEL_STATE[message.delivery_state]} />}
       </div>
 
       {message ? (
@@ -99,13 +111,30 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
             {message.last_attempt_at && <> · {fmtDateTime(message.last_attempt_at)}</>}
           </p>
           {message.status === 'accepted' && message.accepted_at && (
-            <p>נמסרה לספק המייל ב-{fmtDateTime(message.accepted_at)}. אישור מסירה לנמען יתעדכן כשיתקבל אירוע מהספק.</p>
+            <p>
+              נמסרה לספק המייל ב-{fmtDateTime(message.accepted_at)}. אישור מסירה לנמען יתעדכן
+              כשיתקבל אירוע מאומת מהספק.
+            </p>
           )}
-          {message.status === 'failed' && (
+          {message.status === 'delivered' && message.delivered_at && (
+            <p>שרת הדואר של הנמען אישר את קבלת ההודעה ב-{fmtDateTime(message.delivered_at)}.</p>
+          )}
+          {/* #238: the channel failed, the order did not. Say both, and offer the resend. */}
+          {message.delivery_state === 'delivery_failed' && failure && (
             <Note tone="alert">
               <span className="min-w-0 flex-1">
-                השליחה נכשלה{message.error_code ? ` (${message.error_code})` : ''}. ניתן לנסות שוב;
-                {' '}לאחר מיצוי הניסיונות בעל העסק יכול לאפס אותם.
+                {failure.sentence}
+                {message.failed_at && <> ({fmtDateTime(message.failed_at)})</>}
+                {' '}ההזמנה עצמה נשארת במצב ״נשלחה״ — היא כבר נמסרה לספק המייל; מה שנכשל הוא
+                {' '}המסירה לנמען. שליחה חוזרת תנפיק קישור פורטל חדש ותבטל מיד את הקודם.
+                {failure.providerDetail && (
+                  <>
+                    {' '}
+                    <span dir="auto" className="text-ink-faint">
+                      דיווח ספק המייל: {failure.providerDetail}
+                    </span>
+                  </>
+                )}
               </span>
             </Note>
           )}
@@ -117,6 +146,11 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
               </span>
             </Note>
           )}
+          {/* The provider's own word for the stored status, kept visible next to the channel
+              claim so the two are never confused with each other. */}
+          <p className="text-xs text-ink-faint">
+            מצב אצל ספק המייל: {EMAIL_MESSAGE_STATUS[message.status]?.label ?? '—'}
+          </p>
         </div>
       ) : (
         <p className="mt-2 text-sm text-ink-muted">
@@ -127,8 +161,7 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
 
       {canWrite && (
         <div className="mt-3 flex flex-wrap gap-2">
-          {emailEnabled && sendable
-            && (!message || ['queued', 'failed'].includes(message.status)) && (
+          {emailEnabled && sendable && (!message || retryable) && (
             <button type="button" className="btn-primary" disabled={busy} onClick={() => setSendOpen(true)}>
               <Send size={15} /> {message ? 'שליחה חוזרת במייל' : 'שליחת ההזמנה במייל'}
             </button>
@@ -144,7 +177,7 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
       <ConfirmDialog open={sendOpen} onClose={() => setSendOpen(false)}
         onConfirm={(reason) => void send(reason)}
         title="שליחת ההזמנה לספק במייל"
-        message="המייל יכלול את פרטי ההזמנה וקישור פורטל מאובטח. ההזמנה תסומן כנשלחה רק לאחר שספק המייל יאשר את קבלת ההודעה. הפעולה תתועד ביומן הביקורת."
+        message="המייל יכלול את פרטי ההזמנה וקישור פורטל מאובטח. קישור פורטל קודם, אם קיים, יבוטל מיד. ההזמנה תסומן כנשלחה רק לאחר שספק המייל יאשר את קבלת ההודעה. הפעולה תתועד ביומן הביקורת."
         confirmLabel="שליחה" requireReason busy={busy} />
       <ConfirmDialog open={resetOpen} onClose={() => setResetOpen(false)}
         onConfirm={(reason) => void reset(reason)}
