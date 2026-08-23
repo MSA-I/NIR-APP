@@ -65,6 +65,10 @@ select pg_temp.p51_assert(
   (select count(*) from subscription_plans where not active) = 0,
   'the anonymous pricing catalogue exposed an inactive plan');
 select pg_temp.p51_assert(
+  (select string_agg(plan_key, '<' order by tier_order) from subscription_plans)
+    = 'free<basic<pro<premium<business',
+  'the anonymous pricing catalogue is not the ladder #194 decided, in order');
+select pg_temp.p51_assert(
   not exists (select 1 from plan_entitlements where plan_key = 'legacy'),
   'the anonymous pricing catalogue exposed legacy entitlements');
 select pg_temp.p51_assert(
@@ -100,16 +104,37 @@ select pg_temp.p51_assert(
   and (select unlimited from plan_entitlements
     where plan_key = 'legacy' and entitlement_key = 'documents.monthly'),
   'a limit was applied to a plan that promises none');
--- Page quotas are the document quota times the hard 20-page-per-document ceiling the worker
--- already enforces (0163). Pinning the RELATIONSHIP rather than the two numbers is what catches a
--- later edit that moves one and forgets the other, which would refuse a customer who stayed
--- inside the document quota they were sold.
+-- The two rungs that existed before the launch ladder keep the 0163 derivation: page quota =
+-- document quota times the hard 20-page-per-document ceiling the worker enforces. #197 decides a
+-- commercial ratio of TEN for the launch catalogue, but every remaining #197 figure for `free` and
+-- `pro` is a REDUCTION, and no decision states when a reduced quota reaches an organization already
+-- on the plan -- so 0184 records those three figures and deliberately does not apply them. Pinning
+-- the live values here is what stops a later edit applying a reduction by accident.
 select pg_temp.p51_assert(
   (select numeric_limit from plan_entitlements
     where plan_key = 'free' and entitlement_key = 'ocr_pages.monthly') = 25 * 20
   and (select numeric_limit from plan_entitlements
     where plan_key = 'pro' and entitlement_key = 'ocr_pages.monthly') = 300 * 20,
-  'the page quotas are no longer the document quota times the per-document page ceiling');
+  'the page quotas of the pre-launch rungs moved without a decision on reduction timing');
+-- The launch rungs are new, hold nobody, and therefore land at the decided #197 ratio of ten.
+select pg_temp.p51_assert(
+  (select numeric_limit from plan_entitlements
+    where plan_key = 'basic' and entitlement_key = 'documents.monthly') = 50
+  and (select numeric_limit from plan_entitlements
+    where plan_key = 'basic' and entitlement_key = 'ocr_pages.monthly') = 50 * 10
+  and (select numeric_limit from plan_entitlements
+    where plan_key = 'premium' and entitlement_key = 'documents.monthly') = 500
+  and (select numeric_limit from plan_entitlements
+    where plan_key = 'premium' and entitlement_key = 'ocr_pages.monthly') = 500 * 10,
+  'the launch rungs are not at the volumes #197 decided for them');
+-- Every decided figure is on record whether or not it is live, and every withheld one carries the
+-- reason it was withheld. A decision dropped on the floor reads exactly like one nobody took.
+select pg_temp.p51_assert(
+  (select count(*) from private.plan_quota_decisions) = 8
+  and not exists (
+    select 1 from private.plan_quota_decisions
+    where not applied and nullif(btrim(coalesce(withheld_reason, '')), '') is null),
+  'a #197 figure is missing from the record or was withheld without a stated reason');
 select pg_temp.p51_assert(
   (select unlimited from plan_entitlements
     where plan_key = 'business' and entitlement_key = 'ocr_pages.monthly')
