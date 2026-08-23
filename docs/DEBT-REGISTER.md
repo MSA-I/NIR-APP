@@ -416,10 +416,13 @@
 
 ### §25 — מסירת מייל מוגבלת ללא דומיין מאומת
 
-- **מצב:** Resend נבחר לכל המיילים ו־`no-reply@inplace.digital` נבחר כשולח יחיד, אך
-  `inplace.digital` לא נרכש ולא אומת. הזמנות sandbox אינן מוכיחות מסירה לכל כתובת; Supabase Auth
-  עדיין אינו מחובר ל־SMTP המותאם.
-- **ראיה:** `send-invite`, ‏`ForgotPassword.tsx`, ‏`ResetPassword.tsx`,
+- **מצב:** ‏`0168` ו־Edge ‏`email-sender` פרוסים, אך הערוץ נשאר fail-closed ולא הופעל: בזמן
+  rollout נמדדו 0 preferences ו־0 messages, לא בוצעה קריאת Resend ולא נטענה מסירה. Resend נבחר
+  לכל המיילים ו־`no-reply@inplace.digital` נבחר כשולח יחיד, אך `inplace.digital` לא נרכש ולא
+  אומת. ‏`ORDERS_FROM_EMAIL` ו־`RESEND_WEBHOOK_SECRET` חסרים; Supabase Auth עדיין אינו מחובר
+  ל־SMTP המותאם.
+- **ראיה:** `0168_supplier_order_email_delivery.sql`, ‏`email-sender`, ‏`send-invite`,
+  ‏`ForgotPassword.tsx`, ‏`ResetPassword.tsx`, ‏runtime source `15baeac`,
   `OPEN-DECISIONS.md` #114/#234–#238.
 - **הצעד הבא:** רכישה, DNS ‏SPF/DKIM/DMARC, ‏`INVITE_FROM_EMAIL`/`ORDERS_FROM_EMAIL`, ‏SMTP Auth
   ו־webhook חתום; אחר כך smoke מסירה חיצוני.
