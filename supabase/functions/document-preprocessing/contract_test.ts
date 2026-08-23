@@ -24,10 +24,30 @@ const metadata = {
   output_mode: "black_and_white",
   corners_source: "automatic",
   metrics: { shadow: 0.2 },
+  provenance: {
+    schema_version: "1",
+    source_sha256: "b".repeat(64),
+    source_bytes: 4096,
+    source_width: 1200,
+    source_height: 1800,
+    source_format: "HEIF",
+    decoder: "pillow-heif",
+    decoder_version: "1.5.0",
+    decoded_bytes: 6_480_000,
+  },
 };
 
 Deno.test("document scan action contract is strict", () => {
   assert.equal(validateScanMetadata(metadata), true);
+  assert.equal(validateScanMetadata({
+    ...metadata,
+    corners_source: "full_frame_fallback",
+    corners: [[0, 0], [1, 0], [1, 1], [0, 1]],
+  }), true);
+  assert.equal(validateScanMetadata({
+    ...metadata,
+    provenance: { ...metadata.provenance, decoded_bytes: 120_000_000 },
+  }), false);
   assert.equal(validateScanMetadata({ ...metadata, width: 32 }), false);
   assert.equal(validateScanMetadata({
     ...metadata,
@@ -110,7 +130,7 @@ Deno.test("document scan action contract is strict", () => {
 });
 
 Deno.test("document scan gateway handshake is exact", () => {
-  assert.equal(SCAN_GATEWAY_CONTRACT_VERSION, "2");
+  assert.equal(SCAN_GATEWAY_CONTRACT_VERSION, "3");
   assert.equal(scanGatewayContractMatches(new Headers({
     [SCAN_GATEWAY_CONTRACT_HEADER]: SCAN_GATEWAY_CONTRACT_VERSION,
   })), true);

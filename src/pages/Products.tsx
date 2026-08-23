@@ -12,6 +12,7 @@ import { useCategories } from './Suppliers';
 import type { Product } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
 import { ProductNameReview } from './ProductNameReview';
+import { ProductNameRepairReview, type ProductNameRepairCandidate } from './ProductNameRepairReview';
 
 interface ProductRow extends Product {
   supplierCount?: number;
@@ -34,8 +35,10 @@ export default function Products() {
   // screens accumulate, and nobody sends anyone a link to "the naming backlog". Keeping it here
   // also keeps one fetch, one refetch path, and the catalogue one press away for comparison.
   const [reviewMode, setReviewMode] = useState(false);
+  const [repairMode, setRepairMode] = useState(false);
   /** Ids named through the review queue, so the count stays true without refetching per row. */
   const [namedThisSession, setNamedThisSession] = useState<ReadonlySet<string>>(() => new Set());
+  const [repairedThisSession, setRepairedThisSession] = useState<ReadonlySet<string>>(() => new Set());
   const { data: categories } = useCategories();
 
   const { data, loading, fetching, error, refetch } = useQuery(async () => {
@@ -60,11 +63,20 @@ export default function Products() {
   const canWrite = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
   // Narrower than canWrite: the price-import RPC and the document reservation are owner/office only.
   const canUploadPrices = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
+  const { data: repairQueue, error: repairError, refetch: refetchRepair } = useQuery(async () => {
+    if (!canWrite) return [] as ProductNameRepairCandidate[];
+    const result = await supabase.rpc('get_product_name_repair_queue');
+    if (result.error) throw new Error(result.error.message);
+    return (result.data ?? []) as ProductNameRepairCandidate[];
+  }, [canWrite]);
   const rows = (data ?? []).filter((p) => !catFilter || p.category_id === catFilter);
   // `null`, never an empty array, while the catalogue is unknown: a backlog nobody has counted is
   // not a backlog of zero. The review screen renders that distinction rather than an empty queue.
   const awaitingName = data
     ? data.filter((p) => p.display_name === null && !namedThisSession.has(p.id))
+    : null;
+  const awaitingRepair = repairQueue
+    ? repairQueue.filter((candidate) => !repairedThisSession.has(candidate.candidate_id))
     : null;
 
   // Leaving the queue is the one place a refetch is worth its cost: the rows named in between are
@@ -72,7 +84,12 @@ export default function Products() {
   // catalogue plus every supplier price a few hundred times.
   function showCatalogue() {
     setReviewMode(false);
+    setRepairMode(false);
     if (namedThisSession.size > 0) void refetch();
+    if (repairedThisSession.size > 0) {
+      void refetch();
+      void refetchRepair();
+    }
   }
 
   // Open the product editor straight from a global-search result (?id=). Read-only roles never
@@ -138,7 +155,9 @@ export default function Products() {
       {error && <ErrorNote message={error} />}
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <PageHeader title="מוצרים"
-        meta={reviewMode
+        meta={repairMode
+          ? `${awaitingRepair ? awaitingRepair.length : '—'} תוצאות dry-run`
+          : reviewMode
           ? `${awaitingName ? awaitingName.length : '—'} שמות ממתינים לאישור`
           : `${rows.length} מוצרים בתצוגה`}
         actions={<>
@@ -155,17 +174,26 @@ export default function Products() {
           distinction the ספקים column below already draws. */}
       {canWrite && (
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="תצוגת מסך המוצרים">
-          <button type="button" aria-pressed={!reviewMode} onClick={showCatalogue}
-            className={`chip-filter ${reviewMode ? '' : 'chip-filter-active'}`}>קטלוג</button>
-          <button type="button" aria-pressed={reviewMode} onClick={() => setReviewMode(true)}
+          <button type="button" aria-pressed={!reviewMode && !repairMode} onClick={showCatalogue}
+            className={`chip-filter ${reviewMode || repairMode ? '' : 'chip-filter-active'}`}>קטלוג</button>
+          <button type="button" aria-pressed={reviewMode} onClick={() => { setReviewMode(true); setRepairMode(false); }}
             className={`chip-filter ${reviewMode ? 'chip-filter-active' : ''}`}
             data-testid="name-review-toggle">
             שמות לאישור ({awaitingName ? awaitingName.length : '—'})
           </button>
+          <button type="button" aria-pressed={repairMode} onClick={() => { setRepairMode(true); setReviewMode(false); }}
+            className={`chip-filter ${repairMode ? 'chip-filter-active' : ''}`}
+            data-testid="source-name-repair-toggle">
+            תיקון ממקור ({awaitingRepair ? awaitingRepair.length : '—'})
+          </button>
         </div>
       )}
 
-      {canWrite && reviewMode ? (
+      {repairError && repairMode && <ErrorNote message={repairError} />}
+      {canWrite && repairMode ? (
+        <ProductNameRepairReview queue={awaitingRepair}
+          onApplied={(id) => setRepairedThisSession((current) => new Set(current).add(id))} />
+      ) : canWrite && reviewMode ? (
         <ProductNameReview queue={awaitingName}
           onApproved={(id) => setNamedThisSession((current) => new Set(current).add(id))} />
       ) : (

@@ -205,6 +205,7 @@ describe('Products — the review mode', () => {
       http.get(`${SUPABASE_URL}/rest/v1/products`, () => HttpResponse.json(products)),
       http.get(`${SUPABASE_URL}/rest/v1/supplier_products`, () => HttpResponse.json([])),
       http.get(`${SUPABASE_URL}/rest/v1/categories`, () => HttpResponse.json([])),
+      http.post(`${SUPABASE_URL}/rest/v1/rpc/get_product_name_repair_queue`, () => HttpResponse.json([])),
     );
   }
 

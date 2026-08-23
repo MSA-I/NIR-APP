@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,7 +9,7 @@ from typing import Any, Literal, Sequence
 
 import cv2
 import numpy as np
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError, __version__ as PILLOW_VERSION
 from pillow_heif import register_heif_opener
 
 try:
@@ -23,6 +24,7 @@ cv2.setNumThreads(1)
 
 
 ScanMode = Literal["auto", "grayscale", "black_and_white"]
+CornersSource = Literal["automatic", "manual", "full_frame_fallback"]
 Point = tuple[float, float]
 MIN_AUTOMATIC_PAGE_COVERAGE = 0.45
 MAX_AUTOMATIC_CROP_MARGIN = 0.20
@@ -80,8 +82,9 @@ class ScanResult:
     corners: tuple[Point, Point, Point, Point]
     rotation_degrees: float
     output_mode: Literal["grayscale", "black_and_white"]
-    corners_source: Literal["automatic", "manual"]
+    corners_source: CornersSource
     metrics: dict[str, float]
+    provenance: dict[str, Any]
 
     def metadata(self) -> dict[str, Any]:
         return {
@@ -95,28 +98,62 @@ class ScanResult:
             "output_mode": self.output_mode,
             "corners_source": self.corners_source,
             "metrics": {key: round(value, 6) for key, value in self.metrics.items()},
+            "provenance": self.provenance,
         }
 
 
-def _read_image(path: Path, limits: ExtractionLimits) -> np.ndarray:
+def _read_image(path: Path, limits: ExtractionLimits) -> tuple[np.ndarray, dict[str, Any]]:
+    try:
+        source_bytes = path.stat().st_size
+    except OSError as exc:
+        raise ProcessingError("corrupt_document", "Image is corrupt or unsupported") from exc
+    if source_bytes < 1 or source_bytes > limits.max_file_bytes:
+        raise ProcessingError("file_size_limit", "Document exceeds the file size limit")
+    try:
+        with path.open("rb") as source_stream:
+            source_sha256 = hashlib.file_digest(source_stream, "sha256").hexdigest()
+    except OSError as exc:
+        raise ProcessingError("corrupt_document", "Image is corrupt or unsupported") from exc
+
     Image.MAX_IMAGE_PIXELS = limits.max_image_pixels
     try:
         with Image.open(path) as image:
             image.seek(0)
-            normalized = ImageOps.exif_transpose(image).convert("RGB")
-            width, height = normalized.size
+            source_format = str(image.format or "UNKNOWN").upper()
+            width, height = image.size
             if width < 32 or height < 32:
                 raise ProcessingError("scan_image_too_small", "Document image is too small to scan")
             if width * height > limits.max_image_pixels:
                 raise ProcessingError(
                     "decompressed_size_limit", "Decoded image exceeds its safety limit"
                 )
+            decoded_bytes = width * height * 3
+            if decoded_bytes > limits.max_decompressed_bytes:
+                raise ProcessingError(
+                    "decompressed_size_limit", "Decoded image exceeds its safety limit"
+                )
+            normalized = ImageOps.exif_transpose(image).convert("RGB")
             rgb = np.asarray(normalized, dtype=np.uint8)
     except ProcessingError:
         raise
     except (OSError, UnidentifiedImageError, Image.DecompressionBombError) as exc:
         raise ProcessingError("corrupt_document", "Image is corrupt or unsupported") from exc
-    return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    decoder = "pillow-heif" if source_format in {"HEIF", "HEIC", "AVIF"} else "pillow"
+    decoder_version = (
+        importlib.metadata.version("pillow-heif") if decoder == "pillow-heif" else PILLOW_VERSION
+    )
+    provenance = {
+        "schema_version": "1",
+        "source_sha256": source_sha256,
+        "source_bytes": source_bytes,
+        "source_width": width,
+        "source_height": height,
+        "source_format": source_format,
+        "decoder": decoder,
+        "decoder_version": decoder_version,
+        "decoded_bytes": decoded_bytes,
+    }
+    return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), provenance
 
 
 def _order_points(points: np.ndarray) -> np.ndarray:
@@ -174,7 +211,11 @@ def _edge_span(edges: np.ndarray) -> float:
     return (height * width) / float(edges.shape[0] * edges.shape[1])
 
 
-def detect_document_corners(image: np.ndarray) -> tuple[Point, Point, Point, Point]:
+def detect_document_corners(
+    image: np.ndarray,
+    *,
+    include_source: bool = False,
+) -> tuple[Point, Point, Point, Point] | tuple[tuple[Point, Point, Point, Point], CornersSource]:
     height, width = image.shape[:2]
     scale = min(1.0, 1600.0 / max(width, height))
     resized = cv2.resize(
@@ -243,7 +284,7 @@ def detect_document_corners(image: np.ndarray) -> tuple[Point, Point, Point, Poi
 
     if not candidates:
         if flat_frame_fallback:
-            return FULL_FRAME
+            return (FULL_FRAME, "full_frame_fallback") if include_source else FULL_FRAME
         if not page_sized_rejected and _edge_span(edges) >= MIN_FULL_FRAME_EDGE_SPAN:
             # No page-sized quadrilateral exists anywhere in this frame at any of the five
             # epsilon ratios -- not one that was found and then judged untrustworthy, but none
@@ -267,7 +308,7 @@ def detect_document_corners(image: np.ndarray) -> tuple[Point, Point, Point, Poi
             # accepting the candidate deletes one. The span guard covers the other two ways a
             # frame holds no page-sized rectangle: a blank capture, and a small document on a
             # large desk, neither of which should be scanned whole.
-            return FULL_FRAME
+            return (FULL_FRAME, "full_frame_fallback") if include_source else FULL_FRAME
         raise ProcessingError(
             "document_not_detected",
             "Document boundaries could not be detected; manual corner selection is required",
@@ -275,7 +316,8 @@ def detect_document_corners(image: np.ndarray) -> tuple[Point, Point, Point, Poi
     points = _order_points(max(candidates, key=lambda item: item[0])[1]) / scale
     normalized = points / np.array([width, height], dtype=np.float32)
     normalized = np.clip(normalized, 0.0, 1.0)
-    return tuple((float(x), float(y)) for x, y in normalized)  # type: ignore[return-value]
+    detected = tuple((float(x), float(y)) for x, y in normalized)
+    return (detected, "automatic") if include_source else detected  # type: ignore[return-value]
 
 
 def validate_corners(corners: Sequence[Sequence[float]]) -> tuple[Point, Point, Point, Point]:
@@ -524,13 +566,13 @@ def scan_document(
     destination = Path(output_path).resolve()
     if source == destination:
         raise ProcessingError("scan_output_invalid", "Scanned output must not replace the source")
-    image = _read_image(source, limits)
+    image, provenance = _read_image(source, limits)
     if corners is None:
-        selected_corners = detect_document_corners(image)
-        corners_source: Literal["automatic", "manual"] = "automatic"
+        detected = detect_document_corners(image, include_source=True)
+        selected_corners, corners_source = detected  # type: ignore[misc]
     else:
         selected_corners = validate_corners(corners)
-        corners_source = "manual"
+        corners_source: CornersSource = "manual"
     transformed = _perspective_transform(image, selected_corners)
     del image
     gray = cv2.cvtColor(transformed, cv2.COLOR_BGR2GRAY)
@@ -540,6 +582,7 @@ def scan_document(
     if deskewed is not gray:
         del gray
     enhanced, black_and_white, metrics = _enhance(deskewed)
+    metrics["full_frame_fallback"] = 1.0 if corners_source == "full_frame_fallback" else 0.0
     preserve_small_text = deskewed.shape[0] * deskewed.shape[1] <= SMALL_TEXT_PRESERVE_PIXELS
     output_mode = _select_mode(
         mode,
@@ -582,4 +625,5 @@ def scan_document(
         output_mode=output_mode,
         corners_source=corners_source,
         metrics=metrics,
+        provenance=provenance,
     )

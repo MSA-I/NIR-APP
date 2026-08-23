@@ -250,4 +250,23 @@ describe('QuickCapture quality warning', () => {
     expect(uploadedFiles()[0]).toBe(file);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
+
+  it('does not silently upload HEIC when client decode fails; it names server preprocessing first', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => { throw new Error('unsupported HEIC'); }));
+    render(<Harness />);
+
+    const heic = new File([new Uint8Array([1, 2, 3, 4])], 'IMG_0042.HEIC', {
+      type: 'image/heic',
+    });
+    pick([heic]);
+
+    expect(await screen.findByText('בדיקת התמונה תושלם בשרת')).toBeInTheDocument();
+    expect(screen.getByText(/המקור יישמר ללא שינוי/)).toBeInTheDocument();
+    expect(mocks.tusUpload).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'שמירת המקור והמשך' }));
+    await waitFor(() => expect(mocks.tusUpload).toHaveBeenCalledTimes(1));
+    expect(uploadedFiles()[0]).toBe(heic);
+    expect(mocks.rpc).toHaveBeenCalledWith('begin_document_intake', { p_document_id: 'doc-1' });
+  });
 });

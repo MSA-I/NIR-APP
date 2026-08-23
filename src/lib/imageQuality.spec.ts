@@ -6,6 +6,7 @@ import {
   findWeakCaptures,
   isMeasurablePhoto,
   measureImageQuality,
+  measureImageQualityOutcome,
   measureLumaMetrics,
   metricSampleSize,
   qualityVerdict,
@@ -202,6 +203,26 @@ describe('measureImageQuality', () => {
   it('returns no verdict when the decoder throws — an unreadable file still uploads', async () => {
     vi.stubGlobal('createImageBitmap', vi.fn(async () => { throw new Error('unsupported HEIC'); }));
     await expect(measureImageQuality(imageFile('IMG_0042.heic', 'image/heic'))).resolves.toBeNull();
+  });
+
+  it('routes unsupported HEIC to bounded server preprocessing without replacing its bytes', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => { throw new Error('unsupported HEIC'); }));
+    const file = imageFile('IMG_0042.heic', 'image/heic');
+    const before = new Uint8Array(await file.arrayBuffer());
+
+    await expect(measureImageQualityOutcome(file)).resolves.toEqual({
+      kind: 'server_required',
+      file,
+      reason: 'client_decode_unsupported',
+    });
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(before);
+  });
+
+  it('keeps an ordinary JPEG decoder failure unavailable rather than claiming HEIC routing', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => { throw new Error('decode failed'); }));
+    await expect(measureImageQualityOutcome(imageFile())).resolves.toMatchObject({
+      kind: 'unavailable',
+    });
   });
 
   it('returns no verdict when the canvas throws mid-measurement', async () => {

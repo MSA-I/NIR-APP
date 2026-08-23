@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import tempfile
 import threading
 import unittest
@@ -54,6 +55,14 @@ def _write_full_frame_page(path: Path) -> None:
     for y in range(180, 1020, 45):
         cv2.line(canvas, (55, y), (795, y), (35, 35, 35), 3)
     cv2.imwrite(str(path), canvas)
+
+
+def _write_heif_page(path: Path) -> None:
+    canvas = np.full((1100, 850, 3), 244, dtype=np.uint8)
+    cv2.putText(canvas, "IPHONE HEIC", (70, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (15, 15, 15), 3)
+    for y in range(180, 1020, 48):
+        cv2.line(canvas, (60, y), (790, y), (35, 35, 35), 3)
+    Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)).save(path, format="HEIF", quality=90)
 
 
 def _write_small_off_centre_panel(path: Path) -> None:
@@ -213,7 +222,7 @@ class DocumentScanningTests(unittest.TestCase):
 
             result = scan_document(source, output)
 
-            self.assertEqual(result.corners_source, "automatic")
+            self.assertEqual(result.corners_source, "full_frame_fallback")
             self.assertEqual(
                 result.corners,
                 ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)),
@@ -274,11 +283,48 @@ class DocumentScanningTests(unittest.TestCase):
 
             result = scan_document(source, output)
 
-            self.assertEqual(result.corners_source, "automatic")
+            self.assertEqual(result.corners_source, "full_frame_fallback")
             self.assertEqual(
                 result.corners, ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
             )
             self.assertTrue(output.is_file())
+
+    def test_heif_derivative_preserves_original_and_records_decoder_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "iphone.heic"
+            output = root / "scan.png"
+            _write_heif_page(source)
+            original = source.read_bytes()
+
+            result = scan_document(
+                source, output, corners=[[0, 0], [1, 0], [1, 1], [0, 1]]
+            )
+
+            self.assertEqual(source.read_bytes(), original)
+            provenance = result.metadata()["provenance"]
+            self.assertEqual(provenance["source_sha256"], hashlib.sha256(original).hexdigest())
+            self.assertEqual(provenance["source_bytes"], len(original))
+            self.assertEqual(provenance["source_format"], "HEIF")
+            self.assertEqual(provenance["decoder"], "pillow-heif")
+            self.assertRegex(provenance["decoder_version"], r"^\d+\.\d+")
+            self.assertEqual(provenance["decoded_bytes"], 850 * 1100 * 3)
+
+    def test_image_decode_obeys_the_decompressed_byte_limit_before_rgb_allocation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "large-decoded.png"
+            Image.new("RGB", (200, 200), "white").save(source)
+
+            with self.assertRaises(ProcessingError) as caught:
+                scan_document(
+                    source,
+                    root / "scan.png",
+                    corners=[[0, 0], [1, 0], [1, 1], [0, 1]],
+                    limits=ExtractionLimits(max_decompressed_bytes=1000),
+                )
+
+            self.assertEqual(caught.exception.code, "decompressed_size_limit")
 
     def test_small_off_centre_panel_still_requires_manual_corners(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
