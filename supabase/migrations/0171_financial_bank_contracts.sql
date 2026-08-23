@@ -97,6 +97,28 @@ revoke all on table private.supplier_bank_detail_migration_queue
   from public, anon, authenticated, service_role;
 
 -- Literal move only. No parser, heuristic or structured backfill is permitted here.
+--
+-- Two triggers on public.suppliers stand down for exactly this conversion, inside this
+-- transaction, and come straight back. The precedent is 0056:96 and 0134:6.
+--
+--   suppliers_audit (0001:447) writes to_jsonb(old) into audit_logs.old_values. Clearing the
+--   column row by row would therefore copy every legacy bank string, in the clear, into a table
+--   the browser reads (audit_select, then audit_log_read_model, then the supplier log screen) --
+--   republishing the exact text this migration exists to take out of browser reach, with a null
+--   actor and no reason. The same rows would additionally fan out one supplier.updated domain
+--   event each (0063:157). One summary row per organization is written below instead: counts,
+--   never text. Existing audit history is not touched.
+--
+--   zz_organization_write_guard (0092:177) raises organization_read_only whenever
+--   private.organization_access_mode is not active/trial/grace. Its lifecycle escape hatch
+--   requires auth.uid(), which is null during a migration, so one suspended or offboarding
+--   tenant still holding legacy bank text would fail the whole migration -- and would equally
+--   block the summary row, because audit_logs carries the same guard. Retiring a column is
+--   schema evolution, not a tenant write, so the latch is suspended for the conversion only.
+alter table public.suppliers disable trigger suppliers_audit;
+alter table public.suppliers disable trigger zz_organization_write_guard;
+alter table public.audit_logs disable trigger zz_organization_write_guard;
+
 do $legacy_move$
 declare
   v_source_count integer;
@@ -130,8 +152,30 @@ begin
     raise exception '0171: legacy bank clearing lost rows: source %, cleared %',
       v_source_count, v_cleared_count;
   end if;
+
+  -- One row per organization, derived from the queue: how many suppliers moved, never what any
+  -- of them said. The action is deliberately not supplier_bank_details_changed -- that name is a
+  -- mapped domain event (0063:160) reserved for a human decision, and this is a conversion.
+  insert into public.audit_logs (
+    org_id, user_id, action, entity_type, entity_id, old_values, new_values, reason
+  )
+  select queue.org_id,
+         null::uuid,
+         'supplier_bank_details_migrated',
+         'suppliers',
+         null::uuid,
+         null::jsonb,
+         jsonb_build_object('migration', '0171', 'supplier_count', count(*)),
+         'Legacy free-text bank details moved to the private review queue by migration 0171. '
+           || 'No bank text was copied into the audit ledger.'
+  from private.supplier_bank_detail_migration_queue queue
+  group by queue.org_id;
 end
 $legacy_move$;
+
+alter table public.audit_logs enable trigger zz_organization_write_guard;
+alter table public.suppliers enable trigger zz_organization_write_guard;
+alter table public.suppliers enable trigger suppliers_audit;
 
 alter table public.suppliers
   add constraint suppliers_legacy_bank_details_retired
@@ -231,22 +275,13 @@ grant execute on function public.read_supplier_bank_migration_item(uuid)
 
 -- ===== 3. Step-up command over structured rows =====
 
-create or replace function public.update_supplier_bank_details(
-  p_supplier_id uuid,
-  p_bank_details text,
-  p_reason text
-) returns void
-language plpgsql
-security invoker
-set search_path = public
-as $$
-begin
-  raise exception 'supplier_bank_details_contract_retired' using errcode = '0A000';
-end
-$$;
-
-revoke all on function public.update_supplier_bank_details(uuid, text, text)
-  from public, anon, authenticated;
+-- The 0061 free-text signature is dropped, not left behind as a throwing stub. Both signatures
+-- would have the same arity and the same parameter names, and PostgREST resolves an RPC by
+-- parameter names alone: every browser call would come back PGRST203 rather than reaching either
+-- body -- including the removal call, where a JSON null carries no type to disambiguate with.
+-- Every other overload pair in this schema differs in arity. Replacing a signature by dropping
+-- it is the idiom here (0030:16, 0032:398, 0052:27, 0129:19, 0136:1375, 0141:95).
+drop function public.update_supplier_bank_details(uuid, text, text);
 
 create function public.update_supplier_bank_details(
   p_supplier_id uuid,
@@ -623,7 +658,7 @@ where registry.table_name = 'supplier_bank_accounts';
 do $self_check$
 declare
   v_violations text;
-  v_directory text;
+  v_directory_columns text[];
   v_import text;
 begin
   if exists (
@@ -648,21 +683,55 @@ begin
     raise exception '0171: browser has direct structured-bank table access';
   end if;
 
+  -- to_regprocedure, not has_function_privilege: the free-text signature is gone, and asking
+  -- about a privilege on a function that does not exist raises rather than returning false.
   if not has_function_privilege(
        'authenticated', 'public.update_supplier_bank_details(uuid,jsonb,text)', 'EXECUTE')
-     or has_function_privilege(
-       'authenticated', 'public.update_supplier_bank_details(uuid,text,text)', 'EXECUTE') then
+     or to_regprocedure('public.update_supplier_bank_details(uuid,text,text)') is not null then
     raise exception '0171: structured command is not the sole browser bank write path';
   end if;
 
-  select pg_get_viewdef('public.financial_supplier_directory'::regclass)
-    into v_directory;
-  if position('supplier.bank_details' in v_directory) > 0
-     or position('supplier_bank_accounts' in v_directory) = 0
-     or position('right(coalesce(account.account_number, account.iban), 4)' in lower(v_directory)) = 0
-     or position('account.account_holder' in lower(v_directory)) > 0
-     or position('''iban ''::text || account.iban' in lower(v_directory)) > 0 then
-    raise exception '0171: financial supplier projection still trusts legacy bank text';
+  -- The projection contract is asserted against the rewrite rule's recorded column dependencies
+  -- rather than against pg_get_viewdef text. A deparser is not a stable needle: RIGHT is a
+  -- function-name keyword, so the masking call comes back printed as "right"(...) and a literal
+  -- pin for right(coalesce(...)) can never match -- the check would fail on every run no matter
+  -- what the view reads. pg_depend records exactly which columns the view consumes, which is the
+  -- question actually being asked. That the projected value is a last-four mask and not the full
+  -- number is a value claim, and it is proved against real rows in p62.
+  if exists (
+    select 1
+    from pg_depend dependency
+    join pg_rewrite rule on rule.oid = dependency.objid
+    join pg_attribute attribute
+      on attribute.attrelid = dependency.refobjid
+     and attribute.attnum = dependency.refobjsubid
+    where dependency.classid = 'pg_rewrite'::regclass
+      and dependency.refclassid = 'pg_class'::regclass
+      and rule.ev_class = 'public.financial_supplier_directory'::regclass
+      and dependency.refobjid = 'public.suppliers'::regclass
+      and attribute.attname = 'bank_details'
+  ) then
+    raise exception '0171: financial supplier projection still reads the legacy bank column';
+  end if;
+
+  select coalesce(array_agg(attribute.attname order by attribute.attname), '{}'::text[])
+    into v_directory_columns
+  from pg_depend dependency
+  join pg_rewrite rule on rule.oid = dependency.objid
+  join pg_attribute attribute
+    on attribute.attrelid = dependency.refobjid
+   and attribute.attnum = dependency.refobjsubid
+  where dependency.classid = 'pg_rewrite'::regclass
+    and dependency.refclassid = 'pg_class'::regclass
+    and rule.ev_class = 'public.financial_supplier_directory'::regclass
+    and dependency.refobjid = 'public.supplier_bank_accounts'::regclass;
+
+  if not (v_directory_columns @> array['account_number', 'country_code', 'iban']::text[])
+     or (v_directory_columns
+         && array['account_holder', 'bic', 'bank_code', 'branch_code']::text[]) then
+    raise exception
+      '0171: the shared supplier directory reads the wrong bank columns: %',
+      v_directory_columns;
   end if;
 
   select pg_get_functiondef(

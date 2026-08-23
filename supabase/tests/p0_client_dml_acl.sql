@@ -265,8 +265,11 @@ select pg_temp.p0_acl_assert(
   and not has_table_privilege('authenticated', 'public.supplier_bank_accounts', 'INSERT')
   and not has_table_privilege('authenticated', 'public.supplier_bank_accounts', 'UPDATE')
   and not has_table_privilege('authenticated', 'public.supplier_bank_accounts', 'DELETE')
+  -- The free-text signature is dropped, not revoked: two same-arity overloads sharing parameter
+  -- names are unresolvable to PostgREST. has_function_privilege would raise on the missing
+  -- function, so absence is asserted with to_regprocedure.
   and has_function_privilege('authenticated', 'public.update_supplier_bank_details(uuid,jsonb,text)', 'EXECUTE')
-  and not has_function_privilege('authenticated', 'public.update_supplier_bank_details(uuid,text,text)', 'EXECUTE')
+  and to_regprocedure('public.update_supplier_bank_details(uuid,text,text)') is null
   and not has_column_privilege('authenticated', 'public.products', 'org_id', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.products', 'active', 'UPDATE')
   and not has_any_column_privilege('authenticated', 'public.purchase_requests', 'INSERT')

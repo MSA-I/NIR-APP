@@ -101,13 +101,47 @@ $$;
 revoke all on function private.resolve_audit_legal_entity(uuid,text,uuid,text)
   from public, anon, authenticated, service_role;
 
+-- OPEN-DECISIONS #255 admits two outcomes for an event that cannot be attributed
+-- deterministically: fail closed, or stay cross_scope BECAUSE the taxonomy says the entity is
+-- organizational. A default applied to an entity nobody classified is neither. Calling every
+-- unclassified entity 'financial_accounting' would both mislabel it and silently narrow who may
+-- read it -- until now every owner and accountant could read those rows, and the new policy would
+-- hand them to holders of the root scope only. So the migration refuses to apply while any audited
+-- entity is unclassified, and names the values that must be ruled on.
+do $assert_taxonomy_complete$
+declare
+  v_missing text;
+begin
+  select string_agg(distinct audit.entity_type, ', ' order by audit.entity_type)
+    into v_missing
+  from public.audit_logs audit
+  where not exists (
+    select 1 from private.audit_scope_taxonomy taxonomy
+    where taxonomy.entity_type = audit.entity_type
+  );
+  if v_missing is not null then
+    raise exception 'audit_scope_taxonomy_incomplete: classify in private.audit_scope_taxonomy before 0175 can apply: %', v_missing
+      using errcode = '22023';
+  end if;
+end
+$assert_taxonomy_complete$;
+
 update public.audit_logs audit
-set scope_domain = coalesce((select scope_domain from private.audit_scope_taxonomy
-                             where entity_type=audit.entity_type), 'financial_accounting'),
-    legal_entity_id = private.resolve_audit_legal_entity(audit.org_id, audit.entity_type, audit.entity_id,
-      coalesce((select resolver from private.audit_scope_taxonomy where entity_type=audit.entity_type), 'ambiguous'));
+set scope_domain = taxonomy.scope_domain,
+    legal_entity_id = private.resolve_audit_legal_entity(
+      audit.org_id, audit.entity_type, audit.entity_id, taxonomy.resolver)
+from private.audit_scope_taxonomy taxonomy
+where taxonomy.entity_type = audit.entity_type;
 update public.audit_logs
 set scope_class = case when legal_entity_id is null then 'cross_scope' else 'legal_entity' end;
+
+-- The column defaults exist only so the two NOT NULL columns could be added to a populated table.
+-- Leaving them in place would re-create the silent classification this migration just removed, one
+-- INSERT at a time, for anyone who bypassed the trigger. Without them a bypass is a NOT NULL
+-- violation, which is the fail-closed outcome #255 asks for.
+alter table public.audit_logs
+  alter column scope_domain drop default,
+  alter column scope_class drop default;
 
 alter table public.audit_logs
   add constraint audit_logs_scope_domain_check
@@ -132,9 +166,15 @@ declare
   v_taxonomy private.audit_scope_taxonomy;
 begin
   select * into v_taxonomy from private.audit_scope_taxonomy where entity_type=new.entity_type;
-  new.scope_domain := coalesce(v_taxonomy.scope_domain, 'financial_accounting');
+  if not found then
+    -- Same rule at run time as at migration time: a newly audited entity nobody classified is
+    -- refused, rather than silently labelled financial and silently narrowed to the root scope.
+    raise exception
+      'audit_scope_taxonomy_incomplete: %', new.entity_type using errcode = '22023';
+  end if;
+  new.scope_domain := v_taxonomy.scope_domain;
   new.legal_entity_id := private.resolve_audit_legal_entity(
-    new.org_id, new.entity_type, new.entity_id, coalesce(v_taxonomy.resolver, 'ambiguous'));
+    new.org_id, new.entity_type, new.entity_id, v_taxonomy.resolver);
   new.scope_class := case when new.legal_entity_id is null then 'cross_scope' else 'legal_entity' end;
   return new;
 end
@@ -143,9 +183,23 @@ revoke all on function private.assign_audit_scope() from public, anon, authentic
 create trigger aa_assign_audit_scope before insert on public.audit_logs
 for each row execute function private.assign_audit_scope();
 
+-- Raw audit history is immutable: UPDATE is refused unconditionally, for superuser too. DELETE is
+-- refused the same way UNLESS the caller declared an authorized purge first, in exactly the shape
+-- 0174 uses for app.invoice_three_way_writer: a transaction-local GUC the caller sets around its
+-- own statement, never a role test. Two callers need it and no browser role can reach it -- 0020
+-- revoked INSERT/UPDATE/DELETE/TRUNCATE on audit_logs from public, anon and authenticated, so the
+-- GUC is a second fence behind a closed door, not the only one:
+--   * tenant teardown -- supabase/demo/demo_reset.sql, and offboarding, which must be able to
+--     remove an organization completely rather than leave its ledger behind;
+--   * gate fixtures that clear the audit footprint they created themselves
+--     (supabase/tests/p49_platform_capabilities.sql).
 create function private.audit_log_immutable_guard()
 returns trigger language plpgsql security invoker set search_path = public as $$
 begin
+  if tg_op = 'DELETE'
+     and current_setting('app.audit_purge', true) = 'organization_teardown' then
+    return old;
+  end if;
   raise exception 'audit_log_immutable' using errcode='42501';
 end
 $$;
@@ -189,6 +243,24 @@ declare v_violations text;
 begin
   if exists (select 1 from public.audit_logs where scope_class='legal_entity' and legal_entity_id is null) then
     raise exception '0175: legal audit row lacks legal entity';
+  end if;
+  if exists (
+    select 1 from public.audit_logs audit
+    where not exists (select 1 from private.audit_scope_taxonomy taxonomy
+                      where taxonomy.entity_type = audit.entity_type)
+  ) then
+    raise exception '0175: an audited entity_type survived the backfill unclassified';
+  end if;
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='audit_logs'
+      and column_name in ('scope_domain','scope_class') and column_default is not null
+  ) then
+    raise exception '0175: audit scope columns kept a silent default';
+  end if;
+  if position('app.audit_purge' in pg_get_functiondef(
+       'private.audit_log_immutable_guard()'::regprocedure)) = 0 then
+    raise exception '0175: the audit immutability guard has no authorized purge path';
   end if;
   select string_agg(assertion||' -- '||detail,e'\n' order by assertion,detail) into v_violations
   from private.scope_enforcement_violations();

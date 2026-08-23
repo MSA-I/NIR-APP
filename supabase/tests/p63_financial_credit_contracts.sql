@@ -3,8 +3,14 @@
 -- This suite proves the two owner decisions that close DEBT §49-§50:
 --   * an approved credit note creates one received credit only when supplier and credited invoice
 --     resolve uniquely; the document remains evidence and intake alone changes no balance;
---   * credit allocations consume only the remaining amount under the credit row lock. Partial use
---     stays received, full use becomes offset, and two payments cannot consume the same remainder.
+--   * credit allocations consume only the remaining amount, a credit may only settle its OWN
+--     invoice, and every reader of "how much credit was consumed" answers from allocations that
+--     actually happened rather than from the credit's lifecycle label.
+--
+-- Everything here runs inside ONE transaction and ends in ROLLBACK. Nothing is left behind, so the
+-- suite is re-runnable and cannot shift the row counts p9, p49 and live_schema_alignment measure.
+-- The real two-session race lives in p63_financial_credit_concurrency.sql, which commits its own
+-- fixtures on a disposable database -- the same split payment_credit_override_concurrency.sql uses.
 \set ON_ERROR_STOP on
 
 begin;
@@ -15,6 +21,18 @@ begin
   if not coalesce(p_condition, false) then
     raise exception 'P63 financial credit assertion failed: %', p_message;
   end if;
+end
+$$;
+
+create function pg_temp.p63_expect_error(p_sql text, p_fragment text)
+returns void language plpgsql as $$
+begin
+  begin
+    execute p_sql;
+    raise exception 'P63 expected error containing %, statement succeeded: %', p_fragment, p_sql;
+  exception when others then
+    if sqlerrm like 'P63 expected error%' or position(p_fragment in sqlerrm) = 0 then raise; end if;
+  end;
 end
 $$;
 
@@ -49,24 +67,26 @@ insert into public.suppliers (id, org_id, name, status) values
   ('f6300000-0000-4000-8000-000000000011', 'f6300000-0000-4000-8000-000000000001',
    'P63 supplier', 'active');
 
+-- INV-CREDITED is 200 on purpose: a 60 credit consumed in two 30 halves has to leave the invoice
+-- visibly part-settled in between, which a 100 invoice would hide behind a zero balance.
 insert into public.invoices (
   id, org_id, supplier_id, invoice_number, invoice_date,
   amount_before_vat, vat_amount, total_amount, review_status
 ) values
   ('f6300000-0000-4000-8000-000000000021', 'f6300000-0000-4000-8000-000000000001',
-   'f6300000-0000-4000-8000-000000000011', 'INV-CREDITED', current_date, 100, 0, 100, 'received'),
+   'f6300000-0000-4000-8000-000000000011', 'INV-CREDITED', current_date, 200, 0, 200, 'received'),
   ('f6300000-0000-4000-8000-000000000022', 'f6300000-0000-4000-8000-000000000001',
    'f6300000-0000-4000-8000-000000000011', 'INV-AMBIGUOUS', current_date, 100, 0, 100, 'received'),
   ('f6300000-0000-4000-8000-000000000023', 'f6300000-0000-4000-8000-000000000001',
    'f6300000-0000-4000-8000-000000000011', 'INV-AMBIGUOUS', current_date, 100, 0, 100, 'received'),
   ('f6300000-0000-4000-8000-000000000024', 'f6300000-0000-4000-8000-000000000001',
-   'f6300000-0000-4000-8000-000000000011', 'INV-PARTIAL-A', current_date, 100, 0, 100, 'received'),
+   'f6300000-0000-4000-8000-000000000011', 'INV-PAID-BY-CREDIT', current_date, 100, 0, 100, 'received'),
   ('f6300000-0000-4000-8000-000000000025', 'f6300000-0000-4000-8000-000000000001',
-   'f6300000-0000-4000-8000-000000000011', 'INV-PARTIAL-B', current_date, 100, 0, 100, 'received'),
+   'f6300000-0000-4000-8000-000000000011', 'INV-OVERPAY', current_date, 200, 0, 200, 'received'),
   ('f6300000-0000-4000-8000-000000000026', 'f6300000-0000-4000-8000-000000000001',
-   'f6300000-0000-4000-8000-000000000011', 'INV-RACE-A', current_date, 100, 0, 100, 'received'),
+   'f6300000-0000-4000-8000-000000000011', 'INV-FOREIGN-CREDIT', current_date, 100, 0, 100, 'received'),
   ('f6300000-0000-4000-8000-000000000027', 'f6300000-0000-4000-8000-000000000001',
-   'f6300000-0000-4000-8000-000000000011', 'INV-RACE-B', current_date, 100, 0, 100, 'received');
+   'f6300000-0000-4000-8000-000000000011', 'INV-COVERAGE', current_date, 100, 0, 100, 'received');
 
 -- Two credit-note readings: one has one exact invoice, one has two. Supplier provenance is the
 -- document's tenant-bound supplier_id, not a client-supplied guess.
@@ -138,6 +158,8 @@ insert into public.document_interpretations (
     'line_items', '[]'::jsonb, 'suggested_annotations', '[]'::jsonb)
 from generate_series(1, 2) n;
 
+-- ===== 1. Intake: one credit, only when the credited invoice is unambiguous =====
+
 set local role authenticated;
 select pg_temp.p63_activate('f6300000-0000-4000-8000-000000000002');
 
@@ -175,7 +197,7 @@ select pg_temp.p63_assert(
    where source_document_id = 'f6300000-0000-4000-8000-000000000031'),
   'credit-note provenance, amount, invoice or received status was not preserved');
 select pg_temp.p63_assert(
-  (select credited_amount = 0 and balance = 100
+  (select credited_amount = 0 and balance = 200
    from public.p0_invoice_balance_rows()
    where invoice_id = 'f6300000-0000-4000-8000-000000000021'),
   'credit-note intake changed the invoice balance before any allocation');
@@ -220,54 +242,85 @@ select pg_temp.p63_assert(
        where id = 'f6300000-0000-4000-8000-000000000032'),
   'an unresolved credit note left review or created a credit');
 
--- The four payment invoices are approved through the real command so accountant visibility and
--- payment execution use production-shaped approval snapshots.
+-- ===== 2. Payment fixtures =====
+
+-- The payable invoices are approved through the real command so accountant visibility and payment
+-- execution use production-shaped approval snapshots.
 select pg_temp.p63_activate('f6300000-0000-4000-8000-000000000002');
 select public.set_invoice_review_status(id, 'in_review', 'P63 fixture enters review')
-from public.invoices where id between
-  'f6300000-0000-4000-8000-000000000024'::uuid and
-  'f6300000-0000-4000-8000-000000000027'::uuid order by id;
+from public.invoices
+where id = any (array[
+  'f6300000-0000-4000-8000-000000000021',
+  'f6300000-0000-4000-8000-000000000024',
+  'f6300000-0000-4000-8000-000000000025',
+  'f6300000-0000-4000-8000-000000000026',
+  'f6300000-0000-4000-8000-000000000027']::uuid[])
+order by id;
 select public.set_invoice_review_status(id, 'approved', 'P63 fixture approved')
-from public.invoices where id between
-  'f6300000-0000-4000-8000-000000000024'::uuid and
-  'f6300000-0000-4000-8000-000000000027'::uuid order by id;
+from public.invoices
+where id = any (array[
+  'f6300000-0000-4000-8000-000000000021',
+  'f6300000-0000-4000-8000-000000000024',
+  'f6300000-0000-4000-8000-000000000025',
+  'f6300000-0000-4000-8000-000000000026',
+  'f6300000-0000-4000-8000-000000000027']::uuid[])
+order by id;
 
+-- Fixture rows are written with no end-user subject, which is the branch p1_financial_command_guard
+-- reserves for migrations and seeds. Leaving the owner's subject in place would instead make the
+-- inserts depend on app.p1_financial_writer still holding the value the approval command left there.
 reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claim.role', '', true);
+select set_config('request.jwt.claims', '', true);
+
 insert into public.payment_requests (
   id, org_id, supplier_id, amount, status, created_by, approved_by, approved_at
-) values
-  ('f6300000-0000-4000-8000-000000000081', 'f6300000-0000-4000-8000-000000000001',
-   'f6300000-0000-4000-8000-000000000011', 100, 'approved',
-   'f6300000-0000-4000-8000-000000000002', 'f6300000-0000-4000-8000-000000000002', now()),
-  ('f6300000-0000-4000-8000-000000000082', 'f6300000-0000-4000-8000-000000000001',
-   'f6300000-0000-4000-8000-000000000011', 100, 'approved',
-   'f6300000-0000-4000-8000-000000000002', 'f6300000-0000-4000-8000-000000000002', now()),
-  ('f6300000-0000-4000-8000-000000000083', 'f6300000-0000-4000-8000-000000000001',
-   'f6300000-0000-4000-8000-000000000011', 100, 'approved',
-   'f6300000-0000-4000-8000-000000000002', 'f6300000-0000-4000-8000-000000000002', now()),
-  ('f6300000-0000-4000-8000-000000000084', 'f6300000-0000-4000-8000-000000000001',
-   'f6300000-0000-4000-8000-000000000011', 100, 'approved',
-   'f6300000-0000-4000-8000-000000000002', 'f6300000-0000-4000-8000-000000000002', now());
-insert into public.payment_request_invoices (org_id, payment_request_id, invoice_id, amount_allocated) values
-  ('f6300000-0000-4000-8000-000000000001', 'f6300000-0000-4000-8000-000000000081',
-   'f6300000-0000-4000-8000-000000000024', 100),
-  ('f6300000-0000-4000-8000-000000000001', 'f6300000-0000-4000-8000-000000000082',
-   'f6300000-0000-4000-8000-000000000025', 100),
-  ('f6300000-0000-4000-8000-000000000001', 'f6300000-0000-4000-8000-000000000083',
-   'f6300000-0000-4000-8000-000000000026', 100),
-  ('f6300000-0000-4000-8000-000000000001', 'f6300000-0000-4000-8000-000000000084',
-   'f6300000-0000-4000-8000-000000000027', 100);
+)
+select ('f6300000-0000-4000-8000-0000000000' || spec.suffix)::uuid,
+       'f6300000-0000-4000-8000-000000000001',
+       'f6300000-0000-4000-8000-000000000011',
+       spec.amount, 'approved',
+       'f6300000-0000-4000-8000-000000000002',
+       'f6300000-0000-4000-8000-000000000002', now()
+from (values
+  ('81', 100), ('82', 100), ('83', 100), ('84', 100),
+  ('85', 120), ('86', 100), ('87', 100), ('88', 200)
+) as spec(suffix, amount);
+
+insert into public.payment_request_invoices (org_id, payment_request_id, invoice_id, amount_allocated)
+select 'f6300000-0000-4000-8000-000000000001',
+       ('f6300000-0000-4000-8000-0000000000' || spec.request)::uuid,
+       ('f6300000-0000-4000-8000-0000000000' || spec.invoice)::uuid,
+       spec.amount
+from (values
+  ('81', '21', 100), ('82', '21', 100), ('83', '24', 100), ('84', '25', 100),
+  ('85', '25', 120), ('86', '26', 100), ('87', '26', 100),
+  ('88', '26', 100), ('88', '27', 100)
+) as spec(request, invoice, amount);
+
+-- Four hand-built credits alongside the document credit. 93 deliberately names no invoice: what an
+-- unlinked credit may offset is an open business question, and the executor must say so by name.
 insert into public.credit_requests (
   id, org_id, supplier_id, invoice_id, reason, amount, status, created_by
-) values (
-  'f6300000-0000-4000-8000-000000000091',
-  'f6300000-0000-4000-8000-000000000001',
-  'f6300000-0000-4000-8000-000000000011',
-  'f6300000-0000-4000-8000-000000000026',
-  'other', 25, 'received', 'f6300000-0000-4000-8000-000000000002');
+) values
+  ('f6300000-0000-4000-8000-000000000091', 'f6300000-0000-4000-8000-000000000001',
+   'f6300000-0000-4000-8000-000000000011', 'f6300000-0000-4000-8000-000000000024',
+   'other', 100, 'received', 'f6300000-0000-4000-8000-000000000002'),
+  ('f6300000-0000-4000-8000-000000000092', 'f6300000-0000-4000-8000-000000000001',
+   'f6300000-0000-4000-8000-000000000011', 'f6300000-0000-4000-8000-000000000025',
+   'other', 50, 'received', 'f6300000-0000-4000-8000-000000000002'),
+  ('f6300000-0000-4000-8000-000000000093', 'f6300000-0000-4000-8000-000000000001',
+   'f6300000-0000-4000-8000-000000000011', null,
+   'other', 30, 'received', 'f6300000-0000-4000-8000-000000000002'),
+  ('f6300000-0000-4000-8000-000000000094', 'f6300000-0000-4000-8000-000000000001',
+   'f6300000-0000-4000-8000-000000000011', 'f6300000-0000-4000-8000-000000000026',
+   'other', 30, 'received', 'f6300000-0000-4000-8000-000000000002');
 
 set local role authenticated;
 select pg_temp.p63_activate('f6300000-0000-4000-8000-000000000003', true);
+
+-- ===== 3. Partial consumption of a credit against its own invoice =====
 
 select pg_temp.p63_assert(
   (select not (r ->> 'idempotent')::boolean
@@ -275,7 +328,7 @@ select pg_temp.p63_assert(
      'f6300000-0000-4000-8000-000000000081', current_date, 'bank transfer',
      'P63-PARTIAL-A', null,
      jsonb_build_array(
-       jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000024',
+       jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000021',
          'credit_id', null, 'amount', 70),
        jsonb_build_object('invoice_id', null,
          'credit_id', (select id from public.credit_requests
@@ -295,7 +348,7 @@ select pg_temp.p63_assert(
                           where source_document_id = 'f6300000-0000-4000-8000-000000000031')),
   'partial use did not stay received with a computed remaining balance');
 select pg_temp.p63_assert(
-  (select credited_amount = 30 and balance = 70
+  (select paid_amount = 70 and credited_amount = 30 and balance = 100
    from public.p0_invoice_balance_rows()
    where invoice_id = 'f6300000-0000-4000-8000-000000000021'),
   'the partial allocation, rather than intake, did not become the credited amount');
@@ -304,7 +357,7 @@ select public.execute_payment_request(
   'f6300000-0000-4000-8000-000000000082', current_date, 'bank transfer',
   'P63-PARTIAL-B', null,
   jsonb_build_array(
-    jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000025',
+    jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000021',
       'credit_id', null, 'amount', 70),
     jsonb_build_object('invoice_id', null,
       'credit_id', (select id from public.credit_requests
@@ -319,101 +372,167 @@ select pg_temp.p63_assert(
        where credit_id = (select id from public.credit_requests
                           where source_document_id = 'f6300000-0000-4000-8000-000000000031')),
   'full consumption did not move the credit to offset exactly at zero remaining');
+select pg_temp.p63_assert(
+  (select balance = 0 from public.p0_invoice_balance_rows()
+   where invoice_id = 'f6300000-0000-4000-8000-000000000021'),
+  'two cash-plus-credit payments did not settle the invoice they named');
 
-commit;
+-- ===== 4. A payment settled by cash plus a PARTLY consumed credit reads as paid =====
+--
+-- Credit 91 is 100 against INV-PAID-BY-CREDIT and only 40 of it is used here, so it stays
+-- `received`. Under the lifecycle rule the invoice therefore counted zero credit, reported 40
+-- outstanding and stayed `partial` for ever. The balance is the same either way; the status is not.
+select public.execute_payment_request(
+  'f6300000-0000-4000-8000-000000000083', current_date, 'bank transfer',
+  'P63-PAID-BY-CREDIT', null,
+  jsonb_build_array(
+    jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000024',
+      'credit_id', null, 'amount', 60),
+    jsonb_build_object('invoice_id', null,
+      'credit_id', 'f6300000-0000-4000-8000-000000000091', 'amount', 40)),
+  'P63 cash plus partly consumed credit');
+reset role;
+select pg_temp.p63_assert(
+  (select payment_status = 'paid' from public.invoices
+   where id = 'f6300000-0000-4000-8000-000000000024')
+  and (select status = 'received' from public.credit_requests
+       where id = 'f6300000-0000-4000-8000-000000000091'),
+  'an invoice settled by cash plus a partly consumed credit did not read as paid');
+set local role authenticated;
+select pg_temp.p63_activate('f6300000-0000-4000-8000-000000000003', true);
 
--- Real concurrent sessions. A trigger pauses the first credit allocation while it holds the
--- credit row lock; the second request must wait, re-read the remaining balance and refuse.
-create extension if not exists dblink;
-drop schema if exists p63_credit_concurrency cascade;
-create schema p63_credit_concurrency;
-create table p63_credit_concurrency.results (runner text primary key, result jsonb not null);
-
-create function p63_credit_concurrency.activate()
-returns void language plpgsql security invoker as $$
-begin
-  perform set_config('request.jwt.claim.sub', 'f6300000-0000-4000-8000-000000000003', true);
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', 'f6300000-0000-4000-8000-000000000003',
-    'amr', jsonb_build_array(jsonb_build_object(
-      'method', 'password', 'timestamp', extract(epoch from clock_timestamp())::bigint
-    ))
-  )::text, true);
-  perform set_config('statement_timeout', '7000', true);
-  perform set_config('role', 'authenticated', true);
-end
-$$;
-
-create function p63_credit_concurrency.pause_first_credit_allocation()
-returns trigger language plpgsql as $$
-begin
-  if new.credit_id = 'f6300000-0000-4000-8000-000000000091' then
-    perform pg_sleep(1.2);
-  end if;
-  return new;
-end
-$$;
-create trigger zz_p63_pause_credit_allocation
-before insert on public.payment_allocations
-for each row execute function p63_credit_concurrency.pause_first_credit_allocation();
-
-create function p63_credit_concurrency.run_payment(
-  p_request uuid, p_invoice uuid, p_reference text
-) returns jsonb language plpgsql security invoker as $$
-begin
-  perform p63_credit_concurrency.activate();
-  begin
-    return public.execute_payment_request(
-      p_request, current_date, 'bank transfer', p_reference, null,
+-- ===== 5. The overpayment the lifecycle rule allowed =====
+--
+-- INV-OVERPAY is 200. 60 cash and 40 of credit 92 leave 100. The lifecycle rule counted the
+-- still-`received` credit as zero and would have accepted another 120 of cash -- 20 more than the
+-- invoice is worth. The guard now measures allocations that happened.
+select public.execute_payment_request(
+  'f6300000-0000-4000-8000-000000000084', current_date, 'bank transfer',
+  'P63-OVERPAY-BASE', null,
+  jsonb_build_array(
+    jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000025',
+      'credit_id', null, 'amount', 60),
+    jsonb_build_object('invoice_id', null,
+      'credit_id', 'f6300000-0000-4000-8000-000000000092', 'amount', 40)),
+  'P63 overpay baseline');
+select pg_temp.p63_assert(
+  (select balance = 100 from public.p0_invoice_balance_rows()
+   where invoice_id = 'f6300000-0000-4000-8000-000000000025'),
+  'the baseline payment did not leave exactly 100 outstanding');
+select pg_temp.p63_expect_error(
+  $$select public.execute_payment_request(
+      'f6300000-0000-4000-8000-000000000085', current_date, 'bank transfer',
+      'P63-OVERPAY', null,
       jsonb_build_array(
-        jsonb_build_object('invoice_id', p_invoice, 'credit_id', null, 'amount', 80),
+        jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000025',
+          'credit_id', null, 'amount', 120)),
+      'P63 overpay attempt')$$,
+  'allocation_exceeds_balance');
+select pg_temp.p63_assert(
+  not exists (select 1 from public.payments where reference = 'P63-OVERPAY'),
+  'the refused overpayment still recorded a payment');
+
+-- ===== 6. A credit may only settle its own invoice =====
+--
+-- Credit 91 belongs to INV-PAID-BY-CREDIT and has 60 remaining, so amount, status, supplier and
+-- remainder all pass. The only predicate it fails is containment: its invoice is not in this
+-- request. Before the fix this succeeded and silently left the named invoice 30 short.
+select pg_temp.p63_expect_error(
+  $$select public.execute_payment_request(
+      'f6300000-0000-4000-8000-000000000086', current_date, 'bank transfer',
+      'P63-FOREIGN-CREDIT', null,
+      jsonb_build_array(
+        jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000026',
+          'credit_id', null, 'amount', 70),
         jsonb_build_object('invoice_id', null,
-          'credit_id', 'f6300000-0000-4000-8000-000000000091', 'amount', 20)),
-      'P63 concurrent partial credit allocation');
-  exception when others then
-    if position('allocation_target_invalid' in sqlerrm) = 0 then raise; end if;
-    return jsonb_build_object('error', 'allocation_target_invalid');
-  end;
-end
-$$;
+          'credit_id', 'f6300000-0000-4000-8000-000000000091', 'amount', 30)),
+      'P63 credit from another invoice')$$,
+  'allocation_target_invalid');
 
-select dblink_connect('p63_a', 'dbname=' || current_database());
-select dblink_connect('p63_b', 'dbname=' || current_database());
-select dblink_send_query('p63_a', $$select p63_credit_concurrency.run_payment(
-  'f6300000-0000-4000-8000-000000000083',
-  'f6300000-0000-4000-8000-000000000026', 'P63-RACE-A')$$);
-select pg_sleep(0.15);
-select dblink_send_query('p63_b', $$select p63_credit_concurrency.run_payment(
-  'f6300000-0000-4000-8000-000000000084',
-  'f6300000-0000-4000-8000-000000000027', 'P63-RACE-B')$$);
-insert into p63_credit_concurrency.results
-select 'a', result from dblink_get_result('p63_a') as t(result jsonb);
-insert into p63_credit_concurrency.results
-select 'b', result from dblink_get_result('p63_b') as t(result jsonb);
-select dblink_disconnect('p63_a');
-select dblink_disconnect('p63_b');
+-- An unlinked credit fails closed under its own name. This is a placeholder, not a decision:
+-- OPEN-DECISIONS #244 settled partial consumption of an invoice-linked credit and is silent here.
+select pg_temp.p63_expect_error(
+  $$select public.execute_payment_request(
+      'f6300000-0000-4000-8000-000000000087', current_date, 'bank transfer',
+      'P63-UNLINKED-CREDIT', null,
+      jsonb_build_array(
+        jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000026',
+          'credit_id', null, 'amount', 70),
+        jsonb_build_object('invoice_id', null,
+          'credit_id', 'f6300000-0000-4000-8000-000000000093', 'amount', 30)),
+      'P63 credit with no invoice')$$,
+  'credit_request_not_linked_to_invoice');
 
+-- ===== 7. The cash a credit displaces comes off the credit's own invoice =====
+--
+-- Both invoices belong to the request, both cash rows fit their own allocation and the totals add
+-- up to the approved 200, so every pre-existing check passes. What does not add up is per invoice:
+-- INV-FOREIGN-CREDIT would receive 100 cash AND its own 30 credit while INV-COVERAGE is left 30
+-- short. Allocation order in an unordered array decided who got overpaid.
+select pg_temp.p63_expect_error(
+  $$select public.execute_payment_request(
+      'f6300000-0000-4000-8000-000000000088', current_date, 'bank transfer',
+      'P63-COVERAGE', null,
+      jsonb_build_array(
+        jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000026',
+          'credit_id', null, 'amount', 100),
+        jsonb_build_object('invoice_id', 'f6300000-0000-4000-8000-000000000027',
+          'credit_id', null, 'amount', 70),
+        jsonb_build_object('invoice_id', null,
+          'credit_id', 'f6300000-0000-4000-8000-000000000094', 'amount', 30)),
+      'P63 credit paid off the wrong invoice')$$,
+  'allocation_invoice_coverage_mismatch');
+reset role;
+select pg_temp.p63_assert(
+  not exists (select 1 from public.payments
+              where reference in ('P63-FOREIGN-CREDIT', 'P63-UNLINKED-CREDIT', 'P63-COVERAGE'))
+  and (select coalesce(sum(amount), 0) = 0 from public.payment_allocations
+       where credit_id in ('f6300000-0000-4000-8000-000000000093',
+                           'f6300000-0000-4000-8000-000000000094')),
+  'a refused allocation still moved money');
+
+-- ===== 8. No live financial reader answers from lifecycle labels any more =====
+--
+-- The four readers 0173 patched forward are not otherwise reachable from a transactional suite:
+-- soft_delete_supplier needs a supplier with no balance and no orders, and both approval-side
+-- readers need a pending request built through the approval command. Their bodies are asserted
+-- directly, which is the same idiom p64 uses for the reversal consumption anchor.
 do $$
+declare
+  v_stale text;
 begin
-  if not (
-    select count(*) filter (where result ->> 'error' = 'allocation_target_invalid') = 1
-       and count(*) filter (where result ->> 'payment_id' is not null) = 1
-    from p63_credit_concurrency.results
-  ) then
-    raise exception 'P63 financial credit assertion failed: concurrent payments did not produce one success and one refusal';
+  select string_agg(proc.oid::regprocedure::text, ', ' order by proc.oid::regprocedure::text)
+    into v_stale
+  from pg_catalog.pg_proc proc
+  where proc.oid in (
+    'public.execute_payment_request(uuid,date,text,text,text,jsonb,text)'::regprocedure,
+    'public.p0_invoice_balance_rows()'::regprocedure,
+    'public.p1_refresh_invoice_payment_statuses(uuid,uuid[])'::regprocedure,
+    'public.soft_delete_supplier(uuid,text)'::regprocedure,
+    'public.payment_request_financial_check_signals(uuid,numeric,uuid[],uuid)'::regprocedure,
+    'public.p1_transition_payment_request(uuid,text,text,boolean,text,uuid,numeric)'::regprocedure
+  )
+    and position('cr.status in (''offset''' in replace(proc.prosrc, e'\r', '')) > 0;
+  if v_stale is not null then
+    raise exception
+      'P63 financial credit assertion failed: lifecycle-based credit consumption survives in %',
+      v_stale;
   end if;
-  if (select coalesce(sum(amount), 0) from public.payment_allocations
-      where credit_id = 'f6300000-0000-4000-8000-000000000091') <> 20 then
-    raise exception 'P63 financial credit assertion failed: concurrent payments over-allocated one credit';
+  if position('applied.credit_id = cr.id' in replace(pg_get_functiondef(
+       'public.p1_transition_payment_request(uuid,text,text,boolean,text,uuid,numeric)'::regprocedure
+     ), e'\r', '')) = 0 then
+    raise exception
+      'P63 financial credit assertion failed: the open-credit override barrier still sums the original credit amount';
   end if;
-  if (select status <> 'received' from public.credit_requests
-      where id = 'f6300000-0000-4000-8000-000000000091') then
-    raise exception 'P63 financial credit assertion failed: a credit with 5 remaining left received';
+  if position('applied.credit_id = cr.id' in replace(pg_get_functiondef(
+       'public.payment_request_financial_check_signals(uuid,numeric,uuid[],uuid)'::regprocedure
+     ), e'\r', '')) = 0 then
+    raise exception
+      'P63 financial credit assertion failed: the office open-credit signal still sums the original credit amount';
   end if;
 end
 $$;
 
-drop trigger zz_p63_pause_credit_allocation on public.payment_allocations;
-drop schema p63_credit_concurrency cascade;
+rollback;
 
 select 'p63_financial_credit_contracts_passed' as result;

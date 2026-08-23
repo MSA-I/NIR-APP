@@ -177,6 +177,32 @@ select pg_temp.p64_expect_error(
   $$delete from public.audit_logs where action = 'p64_invoice_a'$$,
   'audit_log_immutable');
 
+-- An entity nobody classified is refused rather than defaulted. #255 allows cross_scope only when
+-- the taxonomy says the entity is organizational, so an unclassified one has no legal answer at
+-- all -- and calling it financial would additionally narrow who may read it.
+select pg_temp.p64_expect_error(
+  $$insert into public.audit_logs (org_id, user_id, action, entity_type, entity_id, reason)
+    values ('1c640000-0000-4000-8000-000000000001', '2c640000-0000-4000-8000-000000000001',
+            'p64_unclassified', 'p64_entity_not_in_taxonomy', null, 'X')$$,
+  'audit_scope_taxonomy_incomplete');
+
+-- The authorized purge is exactly as wide as tenant teardown and fixture cleanup need: DELETE
+-- only, only while the caller has declared it, and never a way to rewrite what an entry says.
+select set_config('app.audit_purge', 'organization_teardown', true);
+select pg_temp.p64_expect_error(
+  $$update public.audit_logs set reason = 'rewritten' where action = 'p64_invoice_a'$$,
+  'audit_log_immutable');
+with purged as (
+  delete from public.audit_logs where action = 'p64_org' returning 1
+)
+select pg_temp.p64_assert(count(*) = 1,
+  'the declared audit purge did not remove the row it named')
+from purged;
+select set_config('app.audit_purge', '', true);
+select pg_temp.p64_expect_error(
+  $$delete from public.audit_logs where action = 'p64_invoice_a'$$,
+  'audit_log_immutable');
+
 select pg_temp.p64_assert(
   position('interval ''90 days''' in lower(pg_get_viewdef('public.supplier_metrics'::regclass))) > 0
   and position('interval ''180 days''' in lower(pg_get_viewdef('public.supplier_metrics'::regclass))) = 0

@@ -54,9 +54,13 @@ select pg_temp.p62_assert(
   and not has_table_privilege('authenticated', 'public.supplier_bank_accounts', 'UPDATE')
   and not has_table_privilege('authenticated', 'public.supplier_bank_accounts', 'DELETE'),
   'browser received direct structured-bank table access');
+-- Absence is asserted with to_regprocedure, not with has_function_privilege: 0171 drops the
+-- free-text signature outright rather than revoking it, because two same-arity overloads with
+-- identical parameter names are unresolvable to PostgREST, and asking about a privilege on a
+-- function that no longer exists raises instead of answering false.
 select pg_temp.p62_assert(
   has_function_privilege('authenticated', 'public.update_supplier_bank_details(uuid,jsonb,text)', 'EXECUTE')
-  and not has_function_privilege('authenticated', 'public.update_supplier_bank_details(uuid,text,text)', 'EXECUTE'),
+  and to_regprocedure('public.update_supplier_bank_details(uuid,text,text)') is null,
   'new command is not the sole browser write path');
 
 insert into public.organizations (id, name, status) values
@@ -154,6 +158,17 @@ select pg_temp.p62_assert(
        from public.financial_supplier_directory
        where id = '3b620000-0000-4000-8000-000000000001'),
   'structured account is missing or the shared directory exposes more than last4');
+-- The international shape gets the same value assertion. 0171 asserts structurally that the
+-- directory reads no column beyond country plus the two maskable ones; that the rendered value
+-- is a last-four mask rather than the whole IBAN can only be measured against a real row.
+select pg_temp.p62_assert(
+  (select bank_details like '%3000%'
+      and bank_details not like '%DE89370400440532013000%'
+      and bank_details not like '%COBADEFFXXX%'
+      and bank_details not like '%P62 Global%'
+   from public.financial_supplier_directory
+   where id = '3b620000-0000-4000-8000-000000000002'),
+  'the shared directory exposes the full IBAN, the BIC or the account holder');
 reset role;
 select pg_temp.p62_assert(
   position('supplier.bank_details' in pg_get_viewdef('public.financial_supplier_directory'::regclass)) = 0,

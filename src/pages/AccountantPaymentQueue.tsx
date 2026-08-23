@@ -24,6 +24,8 @@ interface InvoiceAllocationInput {
 
 interface SelectedCreditAllocation {
   credit_id: string;
+  /** The invoice this credit belongs to, straight from `credit_request_balance_rows`. */
+  invoice_id: string | null;
   amount: number;
   remaining: number;
 }
@@ -34,39 +36,113 @@ interface PaymentAllocationPayload {
   amount: number;
 }
 
+/** One row of `credit_request_balance_rows` (0173). */
+export interface SupplierCreditBalance {
+  credit_id: string;
+  invoice_id: string | null;
+  credit_number: number;
+  amount: number;
+  allocated_amount: number;
+  remaining_amount: number;
+  status: string;
+}
+
+/**
+ * Splits the supplier's open credits into what THIS request may offset and what it may not.
+ *
+ * `credit_request_balance_rows` returns every open credit of the supplier, and a credit closes
+ * the one invoice it names. Offering a credit that names an invoice outside this request would
+ * let the accountant shrink the transfer while the request's own invoices stay open — cash down,
+ * invoice ledger and payment ledger apart. Both exclusions are returned rather than dropped, so
+ * the screen can say why a credit it clearly holds is not on offer.
+ */
+export function partitionSupplierCredits(
+  balances: SupplierCreditBalance[],
+  requestInvoiceIds: ReadonlySet<string>,
+): { open: SupplierCreditBalance[]; available: SupplierCreditBalance[];
+     unlinked: SupplierCreditBalance[]; otherRequests: SupplierCreditBalance[] } {
+  const open = balances.filter(
+    (credit) => credit.status === 'received' && credit.remaining_amount > 0);
+  return {
+    open,
+    available: open.filter(
+      (credit) => credit.invoice_id != null && requestInvoiceIds.has(credit.invoice_id)),
+    // OPEN-DECISIONS: which invoice an unlinked credit offsets is a business question the owner
+    // has not answered. Until it is, such a credit is not selectable and the reason is shown.
+    unlinked: open.filter((credit) => credit.invoice_id == null),
+    otherRequests: open.filter(
+      (credit) => credit.invoice_id != null && !requestInvoiceIds.has(credit.invoice_id)),
+  };
+}
+
 const agora = (value: number) => Math.round(value * 100);
 const money = (value: number) => value / 100;
+
+/** Named refusals of `buildPaymentAllocations`, said in the accountant's language. */
+const ALLOCATION_REFUSALS: Record<string, string> = {
+  credit_allocation_exceeds_remaining: 'סכום הקיזוז חורג מיתרת הזיכוי הזמינה',
+  credit_allocation_exceeds_invoice: 'סכום הקיזוז חורג מסכום החשבונית שאליה משויך הזיכוי',
+  credit_invoice_not_in_request: 'זיכוי שנבחר אינו משויך לחשבונית מדרישת התשלום הזו',
+  payment_cash_amount_required:
+    'חייב להישאר סכום להעברה בפועל — לא ניתן לכסות את מלוא הדרישה בזיכויים',
+};
+
+const allocationRefusal = (error: unknown) =>
+  ALLOCATION_REFUSALS[(error as Error | undefined)?.message ?? '']
+  ?? 'לא ניתן לחשב את פיצול התשלום מהזיכויים שנבחרו';
 
 /**
  * Replaces part of the approved liability with supplier credit while preserving the approved
  * total. Invoice allocations are the cash transfer; credit allocations are the offset. Integer
  * agorot keep the browser from manufacturing a rounding remainder that the database rejects.
+ *
+ * A credit belongs to exactly ONE invoice (`credit_requests.invoice_id`, reported by
+ * `credit_request_balance_rows`), and `p0_invoice_balance_rows` closes that same invoice once the
+ * credit is consumed. So the offset is subtracted from the cash of ITS invoice, never from a
+ * pooled figure: the earlier version reduced one shared pot and then filled invoices in array
+ * order, which left whichever invoice happened to come last short by the credit — an invoice the
+ * credit had nothing to do with, chosen by an unordered `payment_request_invoices` read.
  */
 export function buildPaymentAllocations(
   invoices: InvoiceAllocationInput[],
   credits: SelectedCreditAllocation[],
 ): { allocations: PaymentAllocationPayload[]; cashAmount: number; creditAmount: number } {
-  const invoiceTotal = invoices.reduce((sum, invoice) => sum + agora(invoice.amount_allocated), 0);
+  // One entry per invoice: the executor rejects two allocations naming the same invoice.
+  const cashByInvoice = new Map<string, number>();
+  for (const invoice of invoices) {
+    cashByInvoice.set(
+      invoice.invoice_id,
+      (cashByInvoice.get(invoice.invoice_id) ?? 0) + agora(invoice.amount_allocated),
+    );
+  }
+
   let creditTotal = 0;
   for (const credit of credits) {
     const amount = agora(credit.amount);
     if (amount <= 0) continue;
     if (amount > agora(credit.remaining)) throw new Error('credit_allocation_exceeds_remaining');
+    // Refused, not silently dropped: offsetting cash here while the invoice the credit actually
+    // closes sits in another request is exactly how the invoice ledger and the payment ledger
+    // drift apart. The server is not assumed to catch this.
+    if (!credit.invoice_id || !cashByInvoice.has(credit.invoice_id)) {
+      throw new Error('credit_invoice_not_in_request');
+    }
+    const invoiceCash = cashByInvoice.get(credit.invoice_id) ?? 0;
+    // An offset larger than its own invoice cannot be absorbed without shortening a different
+    // invoice. Refuse and say so, rather than truncate.
+    if (amount > invoiceCash) throw new Error('credit_allocation_exceeds_invoice');
+    cashByInvoice.set(credit.invoice_id, invoiceCash - amount);
     creditTotal += amount;
   }
-  const cashTotal = invoiceTotal - creditTotal;
-  if (cashTotal < 1) throw new Error('payment_cash_amount_required');
 
-  let cashLeft = cashTotal;
   const allocations: PaymentAllocationPayload[] = [];
-  for (const invoice of invoices) {
-    const allocated = Math.min(agora(invoice.amount_allocated), cashLeft);
-    if (allocated > 0) {
-      allocations.push({ invoice_id: invoice.invoice_id, credit_id: null, amount: money(allocated) });
-      cashLeft -= allocated;
-    }
+  let cashTotal = 0;
+  for (const [invoiceId, cash] of cashByInvoice) {
+    if (cash <= 0) continue; // fully offset by credit — the executor rejects a zero allocation
+    cashTotal += cash;
+    allocations.push({ invoice_id: invoiceId, credit_id: null, amount: money(cash) });
   }
-  if (cashLeft !== 0) throw new Error('credit_allocation_total_invalid');
+  if (cashTotal < 1) throw new Error('payment_cash_amount_required');
 
   for (const credit of credits) {
     const amount = agora(credit.amount);
@@ -194,28 +270,34 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
   const { data: creditBalances, loading: creditsLoading, error: creditsError } = useQuery(async () =>
     unwrap(await supabase.rpc('credit_request_balance_rows', {
       p_supplier_id: pr.supplier.id,
-    })) as {
-      credit_id: string;
-      invoice_id: string | null;
-      credit_number: number;
-      amount: number;
-      allocated_amount: number;
-      remaining_amount: number;
-      status: string;
-    }[]);
+    })) as SupplierCreditBalance[]);
 
-  const availableCredits = (creditBalances ?? []).filter(
-    (credit) => credit.status === 'received' && credit.remaining_amount > 0);
+  const requestInvoiceIds = new Set(pr.invoices.map((invoice) => invoice.invoice_id));
+  const invoiceNumberById = new Map(
+    pr.invoices.map((invoice) => [invoice.invoice_id, invoice.invoice?.invoice_number ?? null]));
+  const invoiceAmountById = new Map(
+    pr.invoices.map((invoice) => [invoice.invoice_id, invoice.amount_allocated]));
+
+  const {
+    open: openCredits,
+    available: availableCredits,
+    unlinked: unlinkedCredits,
+    otherRequests: otherRequestCredits,
+  } = partitionSupplierCredits(creditBalances ?? [], requestInvoiceIds);
+
   const selectedCredits = availableCredits.map((credit) => ({
     credit_id: credit.credit_id,
+    invoice_id: credit.invoice_id,
     amount: Number(creditAmounts[credit.credit_id] || 0),
     remaining: credit.remaining_amount,
   })).filter((credit) => Number.isFinite(credit.amount) && credit.amount > 0);
   let allocationPreview: ReturnType<typeof buildPaymentAllocations> | null = null;
+  let allocationError: string | null = null;
   try {
     allocationPreview = buildPaymentAllocations(pr.invoices, selectedCredits);
-  } catch {
+  } catch (error) {
     allocationPreview = null;
+    allocationError = allocationRefusal(error);
   }
 
   // Field validation first, then the step-up gate. Re-authentication happens only when the JWT's
@@ -224,7 +306,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
   function requestExecute() {
     if (!f.reference.trim()) { toast('נדרשת אסמכתת העברה', 'error'); return; }
     if (!allocationPreview) {
-      toast('סכום הזיכויים חייב להיות קטן מסכום ההעברה ולא לחרוג מהיתרה הזמינה', 'error');
+      toast(allocationError ?? 'לא ניתן לחשב את פיצול התשלום מהזיכויים שנבחרו', 'error');
       return;
     }
     setReauthOpen(true);
@@ -288,7 +370,9 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
 
         <dl className="text-sm space-y-1.5">
           <div className="flex justify-between"><dt className="text-ink-muted">סכום מאושר</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount)}</dd></div>
-          <div className="flex justify-between"><dt className="text-ink-muted">קיזוז זיכויים</dt><dd className="num">{fmtMoneyExact(allocationPreview?.creditAmount ?? 0)}</dd></div>
+          {/* `—`, never `0`: while the credits load, or while the selection is invalid, the offset
+              is unknown — and an unknown offset printed as ₪0.00 is a claim that none was taken. */}
+          <div className="flex justify-between"><dt className="text-ink-muted">קיזוז זיכויים</dt><dd className="num">{fmtMoneyExact(allocationPreview?.creditAmount ?? null)}</dd></div>
           <div className="flex justify-between"><dt className="text-ink-muted">סכום להעברה בפועל</dt><dd className="font-semibold num">{fmtMoneyExact(allocationPreview?.cashAmount ?? null)}</dd></div>
           {pr.due_date && <div className="flex justify-between"><dt className="text-ink-muted">תאריך יעד</dt><dd>{fmtDate(pr.due_date)}</dd></div>}
           <div className="flex justify-between"><dt className="text-ink-muted">חשבוניות</dt>
@@ -312,8 +396,13 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           <h3 className="text-sm font-medium text-ink-soft">זיכויים זמינים לקיזוז</h3>
           {creditsLoading && <p className="mt-2 text-sm text-ink-muted" role="status">טוען יתרות זיכוי…</p>}
           {creditsError && <p className="mt-2 text-sm text-alert-fg" role="alert">{creditsError}</p>}
-          {!creditsLoading && !creditsError && availableCredits.length === 0 && (
-            <p className="mt-2 text-sm text-ink-muted">אין זיכויים זמינים לספק זה</p>
+          {!creditsLoading && !creditsError && openCredits.length === 0 && (
+            <p className="mt-2 text-sm text-ink-muted">אין זיכויים פתוחים לספק זה</p>
+          )}
+          {!creditsLoading && !creditsError && openCredits.length > 0 && availableCredits.length === 0 && (
+            <p className="mt-2 text-sm text-ink-muted">
+              אין זיכויים פתוחים המשויכים לחשבוניות של דרישת התשלום הזו
+            </p>
           )}
           {availableCredits.length > 0 && (
             <ul className="mt-3 space-y-3">
@@ -323,6 +412,14 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
                     <span>זיכוי <span className="num">#{credit.credit_number}</span></span>
                     <span className="badge-done">זמין לקיזוז</span>
                   </div>
+                  {/* The linkage is the whole point of the selection — the accountant must see
+                      WHICH invoice of this request the offset is taken off. */}
+                  <p className="mt-1 text-sm text-ink-muted">
+                    משויך לחשבונית{' '}
+                    <span className="font-medium text-ink-body" dir="ltr">
+                      {invoiceNumberById.get(credit.invoice_id ?? '') ?? 'מספר לא זמין'}
+                    </span>
+                  </p>
                   <p className="mt-1 text-sm text-ink-muted">
                     יתרה זמינה <span className="num font-medium text-ink-body">{fmtMoneyExact(credit.remaining_amount)}</span>
                   </p>
@@ -333,7 +430,10 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
                     id={`credit-allocation-${credit.credit_id}`}
                     type="number"
                     min="0"
-                    max={credit.remaining_amount}
+                    max={Math.min(
+                      credit.remaining_amount,
+                      invoiceAmountById.get(credit.invoice_id ?? '') ?? credit.remaining_amount,
+                    )}
                     step="0.01"
                     className="input num mt-1"
                     value={creditAmounts[credit.credit_id] ?? ''}
@@ -351,6 +451,29 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
               ))}
             </ul>
           )}
+
+          {unlinkedCredits.length > 0 && (
+            <div className="mt-3">
+              <Note tone="await">
+                <span>
+                  <span className="num">{unlinkedCredits.length}</span> זיכויים פתוחים אינם משויכים
+                  לחשבונית, ולכן אינם ניתנים לקיזוז כאן. לאיזו חשבונית זיכוי כזה נזקף היא החלטה
+                  עסקית שטרם הוכרעה, ואין למערכת ברירת מחדל. יש לשייך את הזיכוי לחשבונית לפני קיזוז.
+                </span>
+              </Note>
+            </div>
+          )}
+          {otherRequestCredits.length > 0 && (
+            <div className="mt-3">
+              <Note tone="await">
+                <span>
+                  <span className="num">{otherRequestCredits.length}</span> זיכויים פתוחים משויכים
+                  לחשבוניות שאינן בדרישת תשלום זו. קיזוזם כאן היה מקטין את ההעברה מבלי לסגור את
+                  החשבוניות שבדרישה.
+                </span>
+              </Note>
+            </div>
+          )}
         </div>
 
         <hr className="border-line-soft" />
@@ -362,6 +485,12 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
         <div><label className="label" htmlFor="payment-execution-reference">אסמכתת העברה *</label><input id="payment-execution-reference" className="input num" dir="ltr" value={f.reference} onChange={(e) => setF((s) => ({ ...s, reference: e.target.value }))} /></div>
         <div><label className="label" htmlFor="payment-execution-notes">הערות</label><input id="payment-execution-notes" className="input" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></div>
         <div><label className="label" htmlFor="payment-execution-reason">סיבת ביצוע / אישור הפעולה *</label><input id="payment-execution-reason" className="input" value={f.reason} onChange={(e) => setF((s) => ({ ...s, reason: e.target.value }))} /></div>
+
+        {/* The button below is disabled while the split cannot be computed; the reason is stated
+            here instead of leaving the accountant to guess which figure is wrong. */}
+        {allocationError && (
+          <p className="text-sm text-alert-fg" role="alert">{allocationError}</p>
+        )}
 
         <div className="flex justify-end gap-2">
           <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>

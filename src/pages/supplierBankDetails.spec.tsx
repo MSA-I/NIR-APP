@@ -197,6 +197,67 @@ describe('SupplierForm — structured bank-details flow (migration 0171)', () =>
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
   });
 
+  it('creating with the bank select left on "ללא פרטי בנק" saves nothing and demands no step-up', async () => {
+    const user = userEvent.setup();
+    const inserts: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(`${SUPABASE_URL}/rest/v1/suppliers`, async ({ request }) => {
+        inserts.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json({ id: 'sup-new' }, { status: 201 });
+      }),
+    );
+    const rpcBodies = trackBankRpc();
+    const onSaved = vi.fn();
+    render(
+      <ToastProvider>
+        <SupplierForm supplier={null} onClose={vi.fn()} onSaved={onSaved} />
+      </ToastProvider>,
+    );
+
+    await user.type(screen.getByLabelText('שם הספק *'), 'ספק חדש בלי בנק');
+    // Opened the select, looked, and chose to enter nothing. The row is inserted bank-less
+    // anyway, so there is no prior value to clear and nothing for a reason or a password to guard.
+    await user.selectOptions(bankType(), 'IL');
+    await user.selectOptions(bankType(), '');
+    await user.click(saveButton());
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(inserts).toHaveLength(1);
+    expect(rpcBodies).toHaveLength(0);
+    expect(screen.queryByRole('heading', { name: 'עדכון פרטי בנק' })).toBeNull();
+    expect(screen.queryByText('הספק נוצר — פרטי הבנק דורשים אימות וסיבה')).toBeNull();
+  });
+
+  it('clearing an EXISTING supplier\'s bank details is still a reasoned, audited change', async () => {
+    const user = userEvent.setup();
+    serveCurrentBankDetails([{
+      supplier_id: 'sup-1', account_holder: 'ספק בדיקה בעמ', country_code: 'IL',
+      bank_code: '12', branch_code: '001', account_number: '999',
+      iban: null, bic: null, migration_pending: false,
+    }]);
+    trackSupplierPatch();
+    const rpcBodies = trackBankRpc();
+    renderForm();
+
+    await waitFor(() => expect(bankType()).toHaveValue('IL'));
+    await user.selectOptions(bankType(), '');
+    await user.click(saveButton());
+
+    // Erasing details that exist is a real change — it keeps the reason + step-up boundary.
+    await user.type(
+      await screen.findByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'),
+      'הספק סגר את החשבון',
+    );
+    await user.click(screen.getByRole('button', { name: 'אישור העדכון' }));
+
+    await waitFor(() => expect(rpcBodies).toHaveLength(1));
+    expect(rpcBodies[0]).toEqual({
+      p_supplier_id: 'sup-1',
+      p_bank_details: null,
+      p_reason: 'הספק סגר את החשבון',
+    });
+  });
+
   it('prompts for a password inside the flow when the session is stale', async () => {
     authState.session = sessionWithAge(10 * 60);
     const user = userEvent.setup();

@@ -414,7 +414,12 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         .insert({ ...row, org_id: profile!.org_id }).select('id').single();
       setBusy(false);
       if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-      if (nextBank !== undefined) {
+      // `nextBank` truthiness, not `!== undefined`: on a NEW supplier `null` means the user opened
+      // the bank select and chose "ללא פרטי בנק", i.e. saved nothing. There is no prior value to
+      // clear on a row that was just inserted bank-less, so demanding a reason and a password
+      // step-up here would be a step-up for a no-op. On an EXISTING supplier `null` is a real
+      // change — erasing details that are there — and keeps the `!== undefined` test above.
+      if (nextBank) {
         // #106: the row exists bank-less; the details now take the same reasoned step-up
         // path a change to an existing supplier takes.
         toast('הספק נוצר — פרטי הבנק דורשים אימות וסיבה');
