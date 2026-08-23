@@ -120,6 +120,25 @@ verify_jwt = false
 [functions.email-sender]
 verify_jwt = true
 
+# The signed Resend delivery webhook (0190). verify_jwt = false because there is no caller to
+# authenticate: Resend signs each delivery with Svix, and the HMAC over the raw request body --
+# not a JWT -- is the security boundary, the same argument outbox-worker and send-push already
+# make for a machine caller holding a shared secret. A bad or missing signature answers 403
+# before the body is parsed, and the recording RPC is service-role-only.
+[functions.email-webhook]
+verify_jwt = false
+
+# Caller-initiated WhatsApp order delivery (0191): the browser's JWT is forwarded to
+# claim_whatsapp_order_message, which is the security boundary -- the email-sender precedent.
+[functions.whatsapp-sender]
+verify_jwt = true
+
+# The provider is not a user of this system and cannot present a JWT. The credential is the
+# request signature: HMAC-SHA1 over the callback URL and the sorted POST parameters, keyed by
+# that tenant's own Vault token and verified inside the handler -- the supplier-portal shape.
+[functions.whatsapp-webhook]
+verify_jwt = false
+
 [analytics]
 enabled = false
 port = 55437
