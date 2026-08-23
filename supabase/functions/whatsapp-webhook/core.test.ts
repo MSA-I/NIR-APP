@@ -184,6 +184,9 @@ Deno.test('every documented outbound status maps to exactly one internal state, 
   assertEquals(mapTwilioStatus('sent'), 'sent');
   assertEquals(mapTwilioStatus('delivered'), 'delivered');
   assertEquals(mapTwilioStatus('read'), 'read');
+  // Pins an INHERITED ASSUMPTION, not a decision: 'undelivered' -> 'failed' follows #238's
+  // EMAIL rule; the WhatsApp question was deferred by the owner on 23.08.2026 until a Twilio
+  // account exists (see the marker at this mapping in core.ts). Green here is not agreement.
   assertEquals(mapTwilioStatus('undelivered'), 'failed');
   assertEquals(mapTwilioStatus('failed'), 'failed');
   assertEquals(mapTwilioStatus('canceled'), 'failed');

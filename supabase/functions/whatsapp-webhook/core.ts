@@ -153,6 +153,18 @@ const OUTBOUND_STATUS: Record<string, InternalDeliveryStatus> = {
   sent: 'sent',
   delivered: 'delivered',
   read: 'read',
+  // INHERITED ASSUMPTION -- NOT A DECISION. Mapping `undelivered` (a delivery receipt saying
+  // the message did NOT arrive, after Twilio already reported `sent`) onto `failed` follows
+  // decision #238. But #238 decided the EMAIL case: an order that was accepted and then bounced
+  // keeps order status `sent`, the mail channel becomes `delivery_failed`, and a resend is
+  // offered. **#238 does not decide the WhatsApp case.** The owner DEFERRED the WhatsApp
+  // question on 23.08.2026, explicitly until a Twilio account exists and the real status
+  // sequence can be observed -- because what Twilio actually emits, and in what order, is not
+  // something we can responsibly guess from documentation.
+  //
+  // So this line is a borrowed default that happens to be tested, not a settled rule. Do NOT
+  // cite it as decided WhatsApp behaviour, and do not remove this marker to tidy the map: the
+  // test below pins the behaviour, and only this comment records that nobody chose it yet.
   undelivered: 'failed',
   failed: 'failed',
   canceled: 'failed',

@@ -46,7 +46,11 @@
 --     freeze for ambiguous in-flight sends and the monotonic status ladder are 0028/0029's and
 --     stay 0028/0029's. Monotonicity remains enforced in SQL (whatsapp_status_rank +
 --     record_whatsapp_message_status), so a late or out-of-order provider callback cannot
---     regress a further-along state no matter which Edge Function delivers it.
+--     regress a further-along state no matter which Edge Function delivers it. One thing in
+--     that ladder is NOT decided: what a post-`sent` non-delivery means for a WhatsApp order.
+--     The adapter follows #238, which decided the EMAIL case; the owner deferred the WhatsApp
+--     case on 23.08.2026 until a provider account exists and the real status sequence can be
+--     observed. It is marked as an inherited assumption at the mapping itself.
 --
 --   * EXISTING BODIES ARE PATCHED BY ANCHOR, NEVER REDECLARED. The 0133/0168 idiom: fetch the
 --     LIVE definition with pg_get_functiondef, assert each anchor appears exactly once, refuse
