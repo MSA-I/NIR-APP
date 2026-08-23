@@ -141,14 +141,31 @@ select pg_temp.p54_assert(
     is not null,
   'a dead letter carries no reason');
 
--- Nothing this file does changes a customer's plan. Acting on a billing event is a later wave;
--- until then an event is evidence, and an operator changes a subscription deliberately.
+-- RECORDING IS NOT APPLYING, and 0187 did not blur that line. The ingestion door writes the event
+-- and stops; running a transition is a separate, separately granted call. Nothing an event can
+-- contain makes the door act on it.
 select pg_temp.p54_assert(
   (select plan_key from organization_subscriptions
     where org_id = '54000000-0000-4000-8000-000000000001')
     = (select plan_key from organization_subscriptions
        where org_id = '54000000-0000-4000-8000-000000000002'),
   'receiving a billing event silently changed a subscription');
+select pg_temp.p54_assert(
+  (select status from private.billing_events where provider_event_id = 'evt_1') = 'stored',
+  'the ingestion door marked an event processed without a transition having run');
+
+-- And the transition dispatcher itself refuses, because the provider is unproven (#213). This is
+-- the same claim P71 proves in detail; it is restated here so that the boundary suite alone is
+-- enough to show that merging the processor did not activate billing.
+select pg_temp.p54_assert(
+  (public.service_apply_billing_event('manual', 'evt_1') ->> 'reason_code') = 'provider_not_enabled',
+  'a billing transition ran for a provider nobody has enabled');
+select pg_temp.p54_assert(
+  (select plan_key from organization_subscriptions
+    where org_id = '54000000-0000-4000-8000-000000000001')
+    = (select plan_key from organization_subscriptions
+       where org_id = '54000000-0000-4000-8000-000000000002'),
+  'a refused transition changed a subscription anyway');
 
 reset role;
 
