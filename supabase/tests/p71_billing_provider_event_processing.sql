@@ -135,14 +135,31 @@ $$;
 select pg_temp.p71_assert(
   not exists (select 1 from private.billing_provider_boundary where enabled),
   'a billing provider is seeded enabled -- code merge would be billing activation');
+-- Named triples, not a row count: a census would also count whatever else a concurrent program
+-- happens to have put in this database, and would then be green here and red in CI.
 select pg_temp.p71_assert(
-  (select count(*) from private.billing_provider_boundary
-    where provider in ('paddle', 'stripe', 'morning')) = 3,
-  'the boundary does not name all three decided providers');
+  not exists (
+    select 1 from (values
+      ('paddle',  'merchant_of_record', '#213'),
+      ('stripe',  'merchant_of_record', '#207'),
+      ('morning', 'tax_documents',      '#256')
+    ) as expected(provider, role, decision)
+    where not exists (
+      select 1 from private.billing_provider_boundary boundary
+      where boundary.provider = expected.provider
+        and boundary.role = expected.role
+        and boundary.decision_reference = expected.decision)),
+  'the boundary does not carry each decided provider in its decided role');
 select pg_temp.p71_assert(
   (select readiness from private.billing_provider_boundary where provider = 'paddle')
     like '%ACCOUNT_NOT_PROVEN%',
   'the recorded Paddle readiness no longer matches #213');
+select pg_temp.p71_assert(
+  (select readiness from private.billing_provider_boundary where provider = 'stripe')
+    like '%NOT_AUTHORIZED%'
+  and (select readiness from private.billing_provider_boundary where provider = 'morning')
+    like '%NOT_INTEGRATED%',
+  'the recorded fallback readiness no longer matches #207/#256');
 select pg_temp.p71_assert(
   not exists (select 1 from private.billing_provider_price_map),
   'the provider price map carries a guessed plan mapping');
@@ -494,9 +511,19 @@ select pg_temp.p71_assert(
 select pg_temp.p71_assert(
   pg_temp.p71_usage_fingerprint() = current_setting('p71.usage'),
   'the usage surface moved somewhere across the full transition suite (#242)');
+-- Each refusal, named to the event that caused it. A ">= 6" would pass for the wrong six.
 select pg_temp.p71_assert(
-  (select count(*) from private.billing_event_dead_letters) >= 6,
-  'the dead-letter queue did not hold every event that changed nothing');
+  not exists (
+    select 1 from (values
+      ('evt_disabled',       'provider_not_enabled'),
+      ('evt_unknown',        'event_type_unrecognized'),
+      ('evt_paused',         'transition_undecided'),
+      ('evt_unmapped',       'plan_unmapped'),
+      ('evt_adj_chargeback', 'adjustment_action_not_decided'),
+      ('evt_adj_scopeless',  'refund_scope_undeterminable')
+    ) as expected(event_id, reason)
+    where pg_temp.p71_dead_reason(expected.event_id) is distinct from expected.reason),
+  'an event that changed nothing left no dead letter, or left the wrong reason');
 -- One dead letter per event, however many times it is redelivered.
 select pg_temp.p71_assert(
   (select count(*) from private.billing_event_dead_letters)
@@ -518,6 +545,88 @@ select pg_temp.p71_assert(
                  or to_jsonb(rejection) ? 'provider_event_id'),
   'an ingress rejection retained a caller-supplied identifier');
 
+reset role;
+
+-- ===== Reconciliation: a human can see the drift (0188) =====
+-- The point of these reads is that "nothing happened" is never indistinguishable from "it worked".
+-- Received, processed and dead-lettered are three separate counts, and an event still awaiting a
+-- transition is its own number rather than being folded into either.
+select pg_temp.p71_as('72000000-0000-4000-8000-000000000002');
+set local role authenticated;
+
+select pg_temp.p71_assert(
+  -- evt_disabled, evt_unmapped, evt_forged, evt_activate: four arrived, one applied.
+  (select received from public.platform_billing_reconciliation()
+    where provider = 'paddle' and event_type = 'subscription.activated') = 4,
+  'reconciliation did not count every activation event that arrived');
+select pg_temp.p71_assert(
+  (select processed from public.platform_billing_reconciliation()
+    where provider = 'paddle' and event_type = 'subscription.activated') = 1,
+  'reconciliation did not separate the activation that applied from the ones that did not');
+select pg_temp.p71_assert(
+  (select dead_lettered from public.platform_billing_reconciliation()
+    where provider = 'paddle' and event_type = 'subscription.activated') = 2,
+  'reconciliation hid the activations that changed nothing');
+select pg_temp.p71_assert(
+  (select unattributable from public.platform_billing_reconciliation()
+    where provider = 'paddle' and event_type = 'subscription.activated') = 1,
+  'reconciliation did not report the event that belonged to no customer');
+-- received must always equal the sum of the ways an event can have ended. A read model whose
+-- parts do not add up to its whole is how drift hides.
+select pg_temp.p71_assert(
+  not exists (select 1 from public.platform_billing_reconciliation()
+              where received <> processed + dead_lettered + awaiting + unattributable),
+  'a reconciliation row does not add up; events are being lost between its columns');
+
+select pg_temp.p71_assert(
+  not exists (
+    select 1 from (values
+      ('provider_not_enabled'), ('plan_unmapped'), ('transition_undecided'),
+      ('event_type_unrecognized'), ('adjustment_action_not_decided'),
+      ('refund_scope_undeterminable')
+    ) as expected(reason)
+    where not exists (select 1 from public.platform_billing_dead_letter_queue() queued
+                      where queued.reason_code = expected.reason)),
+  'the dead-letter queue an operator works does not show every kind of refusal');
+select pg_temp.p71_assert(
+  (select organization from public.platform_billing_dead_letter_queue()
+    where reason_code = 'plan_unmapped') = 'P71 linked',
+  'the queue does not name the customer whose event is stuck');
+
+select pg_temp.p71_assert(
+  (select enabled from public.platform_billing_boundary() where provider = 'paddle')
+  and not (select enabled from public.platform_billing_boundary() where provider = 'stripe')
+  and not (select enabled from public.platform_billing_boundary() where provider = 'morning')
+  and (select decision_reference from public.platform_billing_boundary()
+       where provider = 'stripe') = '#207',
+  'the operator cannot see which provider is live and on whose decision');
+
+select pg_temp.p71_assert(
+  (select rejected from public.platform_billing_ingress_rejections()
+    where provider = 'paddle' and reason_code = 'signature_invalid') = 1,
+  'unverifiable traffic is invisible to the operator');
+
+-- None of these reads may hand a payment processor's raw payload to a console.
+select pg_temp.p71_assert(
+  not exists (
+    select 1 from pg_proc
+    where oid in (to_regprocedure('public.platform_billing_reconciliation(timestamptz,timestamptz)'),
+                  to_regprocedure('public.platform_billing_dead_letter_queue(integer)'),
+                  to_regprocedure('public.platform_billing_boundary()'),
+                  to_regprocedure('public.platform_billing_ingress_rejections(timestamptz,timestamptz)'))
+      and prosrc ~ '\mpayload\M'),
+  'an operator billing read returns the provider payload');
+reset role;
+
+-- A tenant owner reads none of it, and in particular learns no provider identifier.
+select pg_temp.p71_as('72000000-0000-4000-8000-000000000001');
+set local role authenticated;
+select pg_temp.p71_assert(
+  (select count(*) from public.platform_billing_reconciliation()) = 0
+  and (select count(*) from public.platform_billing_dead_letter_queue()) = 0
+  and (select count(*) from public.platform_billing_boundary()) = 0
+  and (select count(*) from public.platform_billing_ingress_rejections()) = 0,
+  'a tenant owner read the platform billing reconciliation');
 reset role;
 
 -- A user JWT reaches neither the dispatcher nor the rejection counter.
