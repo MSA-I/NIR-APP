@@ -106,6 +106,10 @@ Morning או חיוב Paddle/Stripe פעיל. לפני הפעלה נדרשים �
 - מפעיל: `https://app.inplace.digital/operator`
 - `https://www.inplace.digital` מפנה קנונית ל־`https://inplace.digital`
 
+> **גובר על שתי השורות הראשונות: הכרעת בעלים 23.08.2026 — ה-apex ‏`inplace.digital` ו-`www`
+> נשארים לא מוגדרים, והכתובת היחידה המיועדת היא `app.inplace.digital`.** ראה §6.ב. הרשימה
+> למעלה משקפת את נוסח #235 כפי שנכתב ב-22.08.2026 ונשמרת כהיסטוריה, לא כיעד.
+
 האפליקציה והמפעיל חולקים origin/session, אך הרשאת המפעיל נשארת שרתית. מצב:
 `SELECTED / NOT_PURCHASED / DNS_NOT_CONFIGURED / AUTH_ALLOWLIST_NOT_CONFIGURED / NOT_DEPLOYED`.
 לפני טענת זמינות נדרשים רכישה, DNS, redirect, ‏Cloudflare Pages custom domains, ‏Supabase Auth
@@ -147,14 +151,31 @@ redirect allowlist, התאמת origins וסשן, ואז smoke אנונימי ו�
    רשם ובאמצעי תשלום, ולכן חסומה לכל סוכן.
 2. **מיד לפני הרכישה** יש להריץ שוב את אותה קריאת RDAP. אם היא מחזירה `200` עם אובייקט דומיין —
    השם נתפס, וכל שאר הפרק אינו ישים עד הכרעת בעלים חדשה על שם חלופי (‏#234 נפתחת מחדש).
-3. לרשום את הדומיין לאותו חשבון Cloudflare שמחזיק את פרויקט ה-Pages, או להעביר אליו את ה-nameservers;
-   ‏Cloudflare Pages דורש שהאזור יהיה תחת ה-nameservers שלו כדי ליצור בעצמו את רשומת ה-apex.
+3. להביא את האזור לאותו חשבון Cloudflare שמחזיק את פרויקט ה-Pages (רישום שם, או העברת
+   ה-nameservers). זה נדרש כדי ש-Cloudflare יוכל ליצור את רשומת ה-custom domain של
+   `app.inplace.digital` וכדי לפרסם את רשומות Resend — **לא** בשביל ה-apex, שהוכרע כלא-מוגדר (§6.ב).
 4. **אל תגדיר DNS לפני הרכישה** ואל תשנה שום דבר בסביבה החיה בינתיים — ראה §6.ח.
 
-### 6.ב ‏ רשומות DNS למבנה הכתובות (#235)
+### 6.ב ‏ רשומות DNS — מה מוגדר, ומה **הוכרע שלא** יוגדר
 
-מבנה הכתובות המוכרע ב-#235: שיווקי `https://inplace.digital`; אפליקציה `https://app.inplace.digital`;
-מפעיל `https://app.inplace.digital/operator`; ‏`https://www.inplace.digital` מפנה קנונית לשיווקי.
+‏#235 כפי שהוא כתוב מונה ארבע כתובות: שיווקי `https://inplace.digital`; אפליקציה
+`https://app.inplace.digital`; מפעיל `https://app.inplace.digital/operator`;
+ו-`https://www.inplace.digital` שמפנה קנונית לשיווקי.
+
+> **הכרעת בעלים מאוחרת יותר, 23.08.2026 — ‏`inplace.digital` (ה-apex) נשאר לא מוגדר.**
+> **הכתובת היחידה המיועדת היא `app.inplace.digital`.** אין אתר שיווקי, אין הפניית apex, אין
+> entry רביעי ב-build. **‏`www.inplace.digital` הולך בעקבות ה-apex** — גם הוא מחוץ לתחום.
+>
+> זהו **מצב מוכרע, לא שלב ממתין.** ‏`inplace.digital` ו-`www.inplace.digital` אינם "עוד לא
+> הוגדרו" ואינם מחכים לאיש; הוכרע שהם לא יוגדרו. **החזרתם לתחום דורשת הכרעת בעלים חדשה** —
+> ואין לגזור אותה מקיומו של שם הדומיין, מ-#235 כפי שהוא מנוסח, או מהיגיון "ממילא רכשנו".
+>
+> ההכרעה הזו **סוגרת** את הפער שנרשם כאן קודם ("אין אתר שיווקי ל-apex"): לא חסר ארטיפקט —
+> לא נדרש ארטיפקט.
+>
+> **הערת עקביות:** נוסח #235 ב-`docs/OPEN-DECISIONS.md` טרם תוקן ועדיין מונה את ה-apex ואת
+> ‏`www`. תיקון הרשומה שם הוא כתיבה של האורקסטרטור בלבד ואינו בסמכות הפרק הזה. עד שיתוקן,
+> **ההכרעה המאוחרת גוברת** על הנוסח הישן, וכל קורא של #235 צריך להגיע לכאן.
 
 **‏`/operator` הוא נתיב, לא subdomain.** ‏#235 ו-#161 קובעים שהאפליקציה והמפעיל חולקים origin וסשן,
 ושגבול ההרשאה נשאר **בשרת** (`not_platform_admin`). ‏`public/_redirects` מתעד שהמפעיל אינו צריך שום
@@ -162,28 +183,28 @@ redirect allowlist, התאמת origins וסשן, ואז smoke אנונימי ו�
 subdomain מפעיל ואין "להקשיח" את הגבול הזה ב-DNS** — DNS אינו גבול הרשאה, והפרדה כזו רק תשבור את
 הסשן המשותף בלי להוסיף אבטחה.
 
+**רשומות שכן נדרשות — הרשימה המלאה, אין מעבר לה:**
+
 | סוג | שם | ערך | Proxy | TTL | מתי הערך ידוע |
 |---|---|---|---|---|---|
-| ‏CNAME (apex) | `inplace.digital` | נוצר על ידי Cloudflare בעת הוספת ה-custom domain בלוח Pages | Proxied | Auto | רק אחרי שקיים פרויקט Pages לאתר השיווקי — **אינו קיים** (§6.ג) |
-| ‏CNAME | `www` | נוצר על ידי Cloudflare בעת הוספת `www.inplace.digital` כ-custom domain, ומעליו כלל Single Redirect | Proxied | Auto | אחרי apex |
 | ‏CNAME | `app` | ‏`<פרויקט Pages>.pages.dev` — כיום `supplyflow-baq.pages.dev` | Proxied | Auto | הפרויקט קיים; ראה אזהרת השם ב-§6.ג |
 | ‏— | `app.inplace.digital/operator` | **אין רשומה.** נתיב באותו origin | — | — | — |
 | ‏MX / TXT | רשומות Resend | ראה §6.ה | ראה §6.ה | Auto | רק אחרי שהדומיין נוסף בלוח Resend |
 
-מקור: ‏Cloudflare Pages custom domains (נקרא 23.08.2026,
-`https://developers.cloudflare.com/pages/configuration/custom-domains/`) — לדומיין apex "configure
-your nameservers to point to Cloudflare's nameservers" ואז "Cloudflare will proceed by creating a
-CNAME record for you"; ל-subdomain נדרש `CNAME` אל `<YOUR_SITE>.pages.dev`. אותו עמוד מזהיר
-מפורשות שיצירת CNAME ידנית **בלי** לשייך קודם את הדומיין בלוח Pages "will result in your domain
-failing to resolve" עם שגיאת `522`. כלומר: **קודם לוח Pages, אחר כך DNS** — לא להפך.
+**רשומות שהוכרע שלא ייכתבו:** ‏`inplace.digital` ‏(apex) ו-`www`. אין להן שורה בטבלה למעלה
+בכוונה — טבלה היא רשימת פעולות, והן אינן פעולה ממתינה אלא מצב מוכרע (ראה הקטע המסוגר בראש §6.ב).
+דרך המימוש של הפניית `www` אינה מפורטת כאן, גם לא כהערה, כדי שלא תיקרא כהוראה רדומה.
 
-**‏`www` → apex: לממש ככלל Single Redirect ב-Cloudflare, לא בקובץ `_redirects` של הריפו.**
-לפי `https://developers.cloudflare.com/rules/url-forwarding/examples/redirect-www-to-root/` (נקרא
-23.08.2026): תבנית wildcard על `https://www.*`, יעד `https://${1}`, סטטוס `301`, ו-"Preserve query
-string: Enabled". ‏**אסור** לממש את ההפניה הזו כשורה ב-`public/_redirects`: הקובץ הזה חל רק על
-בקשות שכבר מוגשות בידי פרויקט ה-Pages, והריפו כבר נשא לולאת הפניה מדודה בדיוק מהדפוס הזה — כלל
-`200` שיעדו קובץ `.html` נחת על ה-308 הקנוני של Pages וחזר לעצמו "forever", ובגללו קונסולת המפעיל
-הייתה בלתי-נגישה בייצור מרגע השילוח (‏`public/_redirects` שורות 1–15, מדידה מ-19.08.2026;
+מקור: ‏Cloudflare Pages custom domains (נקרא 23.08.2026,
+`https://developers.cloudflare.com/pages/configuration/custom-domains/`) — ל-subdomain נדרש
+`CNAME` אל `<YOUR_SITE>.pages.dev`. אותו עמוד מזהיר מפורשות שיצירת CNAME ידנית **בלי** לשייך
+קודם את הדומיין בלוח Pages "will result in your domain failing to resolve" עם שגיאת `522`.
+כלומר: **קודם לוח Pages, אחר כך DNS** — לא להפך.
+
+**אזהרת `public/_redirects` — עומדת בפני עצמה, ואינה קשורה לשום הפניית דומיין.** הקובץ הזה חל רק
+על בקשות שכבר מוגשות בידי פרויקט ה-Pages, והריפו כבר נשא לולאת הפניה מדודה: כלל `200` שיעדו קובץ
+`.html` נחת על ה-308 הקנוני של Pages וחזר לעצמו "forever", ובגללו קונסולת המפעיל הייתה
+בלתי-נגישה בייצור מרגע השילוח (‏`public/_redirects` שורות 1–15, מדידה מ-19.08.2026;
 ‏`docs/PROGRESS.md:347-348`). **אין להוסיף ל-`public/_redirects` שום כלל שיעדו `.html`.**
 
 ### 6.ג ‏ ‏Cloudflare Pages custom domains
@@ -199,14 +220,13 @@ string: Enabled". ‏**אסור** לממש את ההפניה הזו כשורה �
   מכיל אחת, ו-README מציין במפורש שהעבודה בריפו "אינה פורסת Cloudflare Pages" (`README.md:54`).
   הפריסה היא פעולת בעלים ידנית מחוץ לריפו.
 
-**שתי אזהרות שחייבות הכרעת בעלים לפני ביצוע:**
+**מוכרע — שלושת ה-entries נשארים שלושה.** ההכרעה מ-23.08.2026 (§6.ב) מבטלת את הצורך ב-entry
+רביעי ובפרויקט Pages שני: אין אתר שיווקי ואין הפניית apex. אין כאן ארטיפקט חסר, ואין כאן משימה
+פתוחה — יש היעדר מכוון. **‏custom domain יחיד נוסף לפרויקט הקיים: `app.inplace.digital`.**
 
-1. **אין אתר שיווקי.** ‏#235 מקצה את `inplace.digital` ל"אתר שיווקי", אבל **אין ארטיפקט כזה בריפו**.
-   הפניית ה-apex לפרויקט ה-Pages הקיים תגיש את **האפליקציה** בכתובת השיווקית — תוצאה שגויה. ה-apex
-   נשאר לא-מוגדר עד שקיים אתר שיווקי (פרויקט Pages נפרד), או עד הכרעת בעלים אחרת.
-2. **שם פרויקט ה-Pages עדיין נושא את המותג שפרש** (`supplyflow-baq`). שינוי שם הפרויקט משנה את
-   הכתובת הקנונית `*.pages.dev` ולכן שובר כל רשומה, allowlist ו-smoke שמצביעים עליה. זו הכרעת
-   בעלים, לא ניקוי בדרך.
+**אזהרה אחת שעדיין דורשת הכרעת בעלים:** שם פרויקט ה-Pages עדיין נושא את המותג שפרש
+(`supplyflow-baq`). שינוי שם הפרויקט משנה את הכתובת הקנונית `*.pages.dev` ולכן שובר כל רשומה,
+allowlist ו-smoke שמצביעים עליה. זו הכרעת בעלים, לא ניקוי בדרך.
 
 **סדר הפעולות (‏`https://developers.cloudflare.com/pages/configuration/custom-domains/`, נקרא 23.08.2026):**
 
@@ -257,6 +277,11 @@ remote Auth URL configuration (#114)." ‏**אין לערוך את `supabase/con
 ### 6.ה ‏ אימות `inplace.digital` ב-Resend (#236)
 
 מצב מ-#236: **`SELECTED / DOMAIN_NOT_VERIFIED / SMTP_NOT_CONFIGURED / NOT_LIVE`**.
+
+**זה אינו סותר את §6.ב.** דואר ואתר הם שני משטחים נפרדים על אותו שם: רשומות `MX`/`TXT` לשורש
+`inplace.digital` נדרשות כדי לשלוח מ-`no-reply@inplace.digital` (#237), ואינן גורמות לשורש להגיש
+תעבורת web. **אין להסיק מהן שה-apex "בעצם כן מוגדר"** ואין לצרף אליהן רשומת `CNAME` או custom
+domain.
 
 **הערכים האמיתיים נוצרים פר-דומיין ואינם ניתנים לכתיבה מראש.** ‏Resend מפרסם שהרשומות "must match
 exactly what Resend generated. Copy and paste the records to avoid configuration errors", ושהן
@@ -414,7 +439,9 @@ delivering and fully passing DMARC" (`https://resend.com/docs/dashboard/domains/
 | `https://app.inplace.digital/operator` | מגיש `assets/operator-*.js` ולא את קליפת הדייר |
 | `https://app.inplace.digital/portal` | מגיש `assets/portal-*.js` |
 | `https://app.inplace.digital/portal.html` | ‏`308` אל `/portal` — התנהגות Pages תקינה; **אין להוסיף לה כלל `_redirects`** (§2, ‏§6.ב) |
-| `https://www.inplace.digital/x?y=1` | ‏`301` אל `https://inplace.digital/x?y=1` — כולל ה-query |
+
+‏`inplace.digital` ו-`www.inplace.digital` **אינם נבדקים** — הוכרע שהם לא יוגדרו (§6.ב). ‏smoke
+שמנסה אותם אינו כשל של הפריסה, ואין "לתקן" אותו בהוספת רשומה.
 
 **מחובר:** קריאה בלבד עם שלוש זהויות הבדיקה המאושרות ב-`CLAUDE.md`, והוכחת אפס כתיבות עסקיות.
 זהויות שפרשו (`kitchen`, ‏`payer`, ‏`supplier`) חייבות להישאר חסומות.
@@ -426,14 +453,17 @@ delivering and fully passing DMARC" (`https://resend.com/docs/dashboard/domains/
 ‏**המלכודת הזו אינה מתועדת ב-`docs/` נכון ל-23.08.2026** — היא נרשמת כאן לראשונה; רישום ב-DEBT הוא
 פעולת האורקסטרטור.
 
-### 6.י ‏ מצב סגירה — כל השערים שעדיין סגורים
+### 6.י ‏ מצב סגירה
+
+הטבלה הזו מערבבת שני דברים שאסור לבלבל ביניהם, ולכן העמודה האחרונה אומרת מה כל שורה:
+**שער סגור** הוא משימה שלא בוצעה, ו**מוכרע מחוץ לתחום** הוא משימה שלא תבוצע.
 
 | שער | הכרעה | מצב 23.08.2026 |
 |---|---|---|
-| רכישת `inplace.digital` | #234 | `NOT_PURCHASED`. ‏RDAP ‏`404` ב-23.08.2026 13:18 UTC — אין רשומת רישום, ואין שריון |
-| ‏DNS למבנה הכתובות | #235 | `DNS_NOT_CONFIGURED`. שום רשומה לא נכתבה |
-| אתר שיווקי ל-apex | #235 | **חסר ארטיפקט.** אין אתר שיווקי בריפו; ה-apex אינו ניתן להפניה |
-| ‏Cloudflare Pages custom domains | #235 | `ROUTES_NOT_DEPLOYED`. לא נוסף אף custom domain |
+| רכישת `inplace.digital` | #234 | **שער סגור.** ‏`NOT_PURCHASED`; ‏RDAP ‏`404` ב-23.08.2026 13:18 UTC — אין רשומת רישום, ואין שריון |
+| ‏DNS ל-`app` ולרשומות Resend | #235 | **שער סגור.** ‏`DNS_NOT_CONFIGURED`; שום רשומה לא נכתבה |
+| ‏apex ‏`inplace.digital` + ‏`www` | הכרעת בעלים 23.08.2026 | **מוכרע מחוץ לתחום.** לא יוגדרו; אין אתר שיווקי ואין הפניה קנונית. אין כאן ארטיפקט חסר. החזרה לתחום = הכרעת בעלים חדשה. נוסח #235 טרם תוקן — תיקונו הוא כתיבת האורקסטרטור |
+| ‏Cloudflare Pages custom domain ל-`app` | #235 | **שער סגור.** ‏`ROUTES_NOT_DEPLOYED`; לא נוסף אף custom domain |
 | ‏Supabase Auth site URL + allowlist | #235, #114 | `AUTH_ALLOWLIST_NOT_CONFIGURED`. ‏`config.toml` הוא ה-gate המקומי בלבד |
 | אימות דומיין ב-Resend | #236 | `DOMAIN_NOT_VERIFIED`. ‏SPF/DKIM/DMARC לא פורסמו |
 | מדיניות DMARC ותיבת `rua` | — | **לא הוכרע.** אינו מופיע ב-#236 או ב-#237. שאלה פתוחה לבעלים |
@@ -443,5 +473,6 @@ delivering and fully passing DMARC" (`https://resend.com/docs/dashboard/domains/
 | ‏`APP_BASE_URL` / ‏`ALLOWED_ORIGINS` | #235 | ללא שינוי — ובכוונה, לפי אילוץ הסדר ב-§6.ח |
 | מסירה חיצונית מוכחת | #236, #238 | `NOT_LIVE`. לא נשלח מייל חי, גם לא לבדיקה |
 
-**הכרעה אינה הפעלה, וחשבון אינו הפעלה.** כל השורות בטבלה הזו סגורות. אין בפרק הזה טענה שמשהו
-הוגדר, אומת או חי.
+**הכרעה אינה הפעלה, וחשבון אינו הפעלה.** אף שורה בטבלה הזו אינה פעילה — השורות המסומנות "שער
+סגור" לא בוצעו, והשורה המסומנת "מוכרע מחוץ לתחום" לא תבוצע. אין בפרק הזה טענה שמשהו הוגדר,
+אומת או חי.
