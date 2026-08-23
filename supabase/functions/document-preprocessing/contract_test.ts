@@ -3,6 +3,8 @@ import {
   MAX_SCAN_OUTPUT_BYTES,
   SCAN_GATEWAY_CONTRACT_HEADER,
   SCAN_GATEWAY_CONTRACT_VERSION,
+  SCAN_HEIF_SOURCE_FORMATS,
+  SCAN_SOURCE_FORMATS,
   scanGatewayContractMatches,
   ScanRequestValidationError,
   validateScanActionRequest,
@@ -127,6 +129,56 @@ Deno.test("document scan action contract is strict", () => {
     lease_owner: "scanner-1",
     org_id: jobId,
   }), ScanRequestValidationError);
+});
+
+/**
+ * A multi-picture JPEG — the ordinary output of an iPhone or Android HDR/Live capture — is
+ * `image/jpeg` to upload and `MPO` to Pillow. Rejecting it here would fail the scan job on a
+ * legal photograph that every other layer accepted, so this pins the whole set the worker may
+ * report, in both directions: each accepted, and a label outside it refused.
+ */
+Deno.test("every source format the worker can report is accepted, and nothing else is", () => {
+  for (const source_format of SCAN_SOURCE_FORMATS) {
+    const decoder =
+      (SCAN_HEIF_SOURCE_FORMATS as readonly string[]).includes(source_format)
+        ? "pillow-heif"
+        : "pillow";
+    assert.equal(
+      validateScanMetadata({
+        ...metadata,
+        provenance: { ...metadata.provenance, source_format, decoder },
+      }),
+      true,
+      `${source_format} must be accepted`,
+    );
+  }
+  assert.equal(SCAN_SOURCE_FORMATS.includes("MPO"), true);
+  assert.equal(SCAN_SOURCE_FORMATS.includes("UNKNOWN"), true);
+  for (const source_format of ["PSD", "mpo", "", "JPG"]) {
+    assert.equal(
+      validateScanMetadata({
+        ...metadata,
+        provenance: { ...metadata.provenance, source_format, decoder: "pillow" },
+      }),
+      false,
+      `${source_format} must be refused`,
+    );
+  }
+  // The decoder must still match the container it claims to have opened.
+  assert.equal(
+    validateScanMetadata({
+      ...metadata,
+      provenance: { ...metadata.provenance, source_format: "MPO", decoder: "pillow-heif" },
+    }),
+    false,
+  );
+  assert.equal(
+    validateScanMetadata({
+      ...metadata,
+      provenance: { ...metadata.provenance, source_format: "HEIC", decoder: "pillow" },
+    }),
+    false,
+  );
 });
 
 Deno.test("document scan gateway handshake is exact", () => {

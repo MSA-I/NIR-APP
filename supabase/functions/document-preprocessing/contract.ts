@@ -8,6 +8,40 @@ export const MAX_SCAN_SOURCE_BYTES = 10 * 1024 * 1024;
 export const MAX_SCAN_SOURCE_PIXELS = 40_000_000;
 export const MAX_SCAN_DECODED_BYTES = 100 * 1024 * 1024;
 
+/**
+ * Every value the worker may report as the source container, and nothing else.
+ *
+ * This is a closed set on three layers (worker, here, `0179`), so it can only stay closed if the
+ * worker never reports anything outside it — which is why `worker/ocr/src/scanning.py` maps any
+ * label it does not recognise, and the case where Pillow names no format at all, onto `UNKNOWN`
+ * rather than passing the raw string through.
+ *
+ * `MPO` is the case that forced this. Pillow reports `MPO` for a multi-picture JPEG — ordinary
+ * iPhone and Android HDR/Live captures — whose mime type is `image/jpeg`, which upload already
+ * accepts (`0136:11-13`). A closed list without it turns a legal photograph into
+ * `invalid_request` 400 and fails the scan job on an image nothing else in the system objects
+ * to. The format label is provenance, not a gate: the real safety bounds are the byte, pixel and
+ * decoded-memory limits above, and those are unaffected by what the container is called.
+ */
+export const SCAN_SOURCE_FORMATS = [
+  "JPEG",
+  "JPEG2000",
+  "MPO",
+  "PNG",
+  "WEBP",
+  "HEIF",
+  "HEIC",
+  "AVIF",
+  "GIF",
+  "BMP",
+  "TIFF",
+  "PPM",
+  "UNKNOWN",
+] as const;
+
+/** The formats `pillow-heif` opens; every other source format must have been read by Pillow. */
+export const SCAN_HEIF_SOURCE_FORMATS = ["HEIF", "HEIC", "AVIF"] as const;
+
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CHECKSUM = /^etag:[0-9a-f]{16,128}(?:-[0-9]+)?$/i;
@@ -174,11 +208,9 @@ export function validateScanMetadata(value: unknown): value is ScanMetadata {
     Number(provenance.source_height) <= 65_535 &&
     Number(provenance.source_width) * Number(provenance.source_height) <= MAX_SCAN_SOURCE_PIXELS &&
     typeof provenance.source_format === "string" &&
-    ["JPEG", "PNG", "WEBP", "HEIF", "HEIC", "AVIF", "GIF", "BMP", "TIFF"].includes(
-      provenance.source_format,
-    ) &&
+    (SCAN_SOURCE_FORMATS as readonly string[]).includes(provenance.source_format) &&
     ["pillow", "pillow-heif"].includes(String(provenance.decoder)) &&
-    (["HEIF", "HEIC", "AVIF"].includes(provenance.source_format)
+    ((SCAN_HEIF_SOURCE_FORMATS as readonly string[]).includes(provenance.source_format)
       ? provenance.decoder === "pillow-heif"
       : provenance.decoder === "pillow") &&
     typeof provenance.decoder_version === "string" &&

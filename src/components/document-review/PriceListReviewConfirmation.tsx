@@ -573,6 +573,8 @@ export function PriceListReviewConfirmation({
   }
 
   const showControls = canStart;
+  /** The price list of this document has been taken in — by this session's confirmation or before it. */
+  const priceListIngested = Boolean(receipt || autoDecision?.submission_id);
   const selectedCount = drafts.filter((draft) => draft.approved).length;
   const returnPath = '/prices';
   // Counted off the predictions rather than off the drafts: these two numbers state what the machine
@@ -694,10 +696,17 @@ export function PriceListReviewConfirmation({
         </div>
       </dl>
 
-      <PriceListAutomationReadiness
-        documentId={snapshot.documentId}
-        interpretationId={currentInterpretation.id}
-      />
+      {/* Same gate as the review controls, and for the same reason the two sentences above differ:
+          a price list that has already been taken in has nothing left to prepare, and „מוכנים
+          ליצירה N" beside a live „הכנת האצווה" button on such a document offered work that is over.
+          When the intake is done the block says so instead of disappearing without explanation. */}
+      {(showControls || priceListIngested) && (
+        <PriceListAutomationReadiness
+          documentId={snapshot.documentId}
+          interpretationId={currentInterpretation.id}
+          ingested={priceListIngested}
+        />
+      )}
 
       {autoDecision && (
         <div className="mt-4 rounded-lg border border-line bg-surface-sunken p-3">

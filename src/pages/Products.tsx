@@ -12,7 +12,7 @@ import { useCategories } from './Suppliers';
 import type { Product } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
 import { ProductNameReview } from './ProductNameReview';
-import { ProductNameRepairReview, type ProductNameRepairCandidate } from './ProductNameRepairReview';
+import { ProductNameRepairReview, type ProductNameRepairQueue } from './ProductNameRepairReview';
 
 interface ProductRow extends Product {
   supplierCount?: number;
@@ -63,11 +63,14 @@ export default function Products() {
   const canWrite = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
   // Narrower than canWrite: the price-import RPC and the document reservation are owner/office only.
   const canUploadPrices = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
-  const { data: repairQueue, error: repairError, refetch: refetchRepair } = useQuery(async () => {
-    if (!canWrite) return [] as ProductNameRepairCandidate[];
+  // The dry run that fills this queue is service_role-only and is triggered out of band, so the
+  // ordinary state is "no report was ever produced". `has_dry_run` is what separates that from a
+  // finished backlog: without it the chip below asserted `(0)` about something nobody measured.
+  const { data: repairSummary, error: repairError, refetch: refetchRepair } = useQuery(async () => {
+    if (!canWrite) return null;
     const result = await supabase.rpc('get_product_name_repair_queue');
     if (result.error) throw new Error(result.error.message);
-    return (result.data ?? []) as ProductNameRepairCandidate[];
+    return (result.data ?? null) as ProductNameRepairQueue | null;
   }, [canWrite]);
   const rows = (data ?? []).filter((p) => !catFilter || p.category_id === catFilter);
   // `null`, never an empty array, while the catalogue is unknown: a backlog nobody has counted is
@@ -75,9 +78,13 @@ export default function Products() {
   const awaitingName = data
     ? data.filter((p) => p.display_name === null && !namedThisSession.has(p.id))
     : null;
-  const awaitingRepair = repairQueue
-    ? repairQueue.filter((candidate) => !repairedThisSession.has(candidate.candidate_id))
+  // Three states, three different sentences: unknown (not loaded), never measured (no dry-run
+  // report exists), and measured (a real count, `0` included).
+  const repairMeasured = repairSummary ? repairSummary.has_dry_run : null;
+  const awaitingRepair = repairSummary
+    ? repairSummary.candidates.filter((candidate) => !repairedThisSession.has(candidate.candidate_id))
     : null;
+  const repairCount = repairMeasured && awaitingRepair ? awaitingRepair.length : null;
 
   // Leaving the queue is the one place a refetch is worth its cost: the rows named in between are
   // already gone from the queue locally, and a round trip per approval would refetch the whole
@@ -156,7 +163,12 @@ export default function Products() {
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <PageHeader title="מוצרים"
         meta={repairMode
-          ? `${awaitingRepair ? awaitingRepair.length : '—'} תוצאות dry-run`
+          // #250: a dry run is a safety measure, never an approval gate. This queue is a list of
+          // names a person has to approve one by one, so it is named after that — the term
+          // „dry-run" stays with the report that produced it.
+          ? repairMeasured === false
+            ? 'לא הופק דוח dry-run'
+            : `${repairCount ?? '—'} שמות ממתינים לתיקון ממקור`
           : reviewMode
           ? `${awaitingName ? awaitingName.length : '—'} שמות ממתינים לאישור`
           : `${rows.length} מוצרים בתצוגה`}
@@ -184,14 +196,14 @@ export default function Products() {
           <button type="button" aria-pressed={repairMode} onClick={() => { setRepairMode(true); setReviewMode(false); }}
             className={`chip-filter ${repairMode ? 'chip-filter-active' : ''}`}
             data-testid="source-name-repair-toggle">
-            תיקון ממקור ({awaitingRepair ? awaitingRepair.length : '—'})
+            תיקון ממקור ({repairCount ?? '—'})
           </button>
         </div>
       )}
 
       {repairError && repairMode && <ErrorNote message={repairError} />}
       {canWrite && repairMode ? (
-        <ProductNameRepairReview queue={awaitingRepair}
+        <ProductNameRepairReview queue={awaitingRepair} dryRunProduced={repairMeasured}
           onApplied={(id) => setRepairedThisSession((current) => new Set(current).add(id))} />
       ) : canWrite && reviewMode ? (
         <ProductNameReview queue={awaitingName}

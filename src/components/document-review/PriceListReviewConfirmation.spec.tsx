@@ -103,7 +103,18 @@ function predictions(count = LINE_COUNT): PriceListPredictedLine[] {
   });
 }
 
-const preparationQueue = (prepared = false) => predictions(2).map((line) => ({
+/**
+ * More rows than the screen used to render.
+ *
+ * The old fixture returned exactly two, which is why `rows.slice(0, 5)` stayed green while the
+ * owner was pressing „אישור האצווה כמסומנת נכונה" over lines the screen had never drawn. Twelve is
+ * past that cut, and `CALIBRATION_PAGED` below is past the server page size.
+ */
+const CALIBRATION_LINES = 12;
+/** One row more than the component's page size, so walking the queue takes two requests. */
+const CALIBRATION_PAGED = 201;
+
+const preparationQueue = (prepared = false, count = CALIBRATION_LINES) => predictions(count).map((line) => ({
   shadow_run_id: line.shadow_run_id,
   shadow_line_id: line.id,
   document_id: line.document_id,
@@ -122,12 +133,35 @@ const preparationQueue = (prepared = false) => predictions(2).map((line) => ({
   unit: line.unit,
   proposed_unit_price: line.proposed_unit_price,
   current_unit_price: line.current_unit_price,
-  already_reviewed: false,
   preparation_id: prepared ? 'office-preparation-1' : null,
   prepared_by: prepared ? 'office-1' : null,
   prepared_role: prepared ? 'office' : null,
   preparation_created_at: prepared ? '2026-08-23T08:00:00Z' : null,
+  preparation_line_count: prepared ? count : null,
 }));
+
+type PreparationQueueRow = ReturnType<typeof preparationQueue>[number];
+
+/**
+ * The queue the way the server hands it over: one window per call, plus the outstanding total
+ * counted over the whole filtered set. Passing a `total` larger than `rows` models a window the
+ * caller cannot walk to the end of — the case in which no count on the screen is honest.
+ */
+function servePreparationQueue(
+  rows: PreparationQueueRow[],
+  total = rows.length,
+  overrides: Partial<PreparationQueueRow> = {},
+) {
+  return (body: Record<string, unknown>) => {
+    const offset = Number(body.p_offset ?? 0);
+    const limit = Number(body.p_limit ?? 200);
+    return {
+      data: rows.slice(offset, offset + limit)
+        .map((row) => ({ ...row, ...overrides, pending_total_count: total })),
+      error: null,
+    };
+  };
+}
 
 function snapshot(
   priceListPredictions: PriceListPredictedLine[],
@@ -382,19 +416,18 @@ describe('כיול באצווה ו-dry-run מוצרים', () => {
     expect(mocks.rpc).not.toHaveBeenCalledWith('get_price_list_calibration_preparation_queue', expect.anything());
   });
 
-  it('owner בודק שורות מוכנות, מכין אצווה ומאשר אותה בלי להפעיל Platform', async () => {
-    mocks.rpc.mockImplementation(async (name: string) => {
-      if (name === 'get_price_list_calibration_preparation_queue') {
-        return { data: preparationQueue(), error: null };
-      }
+  it('owner רואה כל שורה באצווה, מכין אותה ומאשר אותה בלי להפעיל Platform', async () => {
+    const rows = preparationQueue();
+    mocks.rpc.mockImplementation(async (name: string, body: Record<string, unknown>) => {
+      if (name === 'get_price_list_calibration_preparation_queue') return servePreparationQueue(rows)(body);
       if (name === 'get_qualified_product_creation_dry_run') {
         return { data: QUALIFIED_DRY_RUN, error: null };
       }
       if (name === 'prepare_price_list_calibration_batch') {
-        return { data: { preparation_id: 'preparation-1', line_count: 2, idempotent: false }, error: null };
+        return { data: { preparation_id: 'preparation-1', line_count: CALIBRATION_LINES, idempotent: false }, error: null };
       }
       if (name === 'record_price_list_calibration_batch') {
-        return { data: { preparation_id: 'preparation-1', reviewed_count: 2, idempotent: false }, error: null };
+        return { data: { preparation_id: 'preparation-1', reviewed_count: CALIBRATION_LINES, idempotent: false }, error: null };
       }
       return { data: null, error: null };
     });
@@ -406,15 +439,20 @@ describe('כיול באצווה ו-dry-run מוצרים', () => {
     );
 
     expect(await screen.findByText('כיול מחירון באצווה')).toBeInTheDocument();
-    expect(screen.getByText((_text, element) => element?.textContent === '2 שורות מוכנות לבדיקה'))
+    expect(screen.getByText((_text, element) => element?.textContent === `${CALIBRATION_LINES} שורות מוכנות לבדיקה`))
       .toBeInTheDocument();
+    // Every line of the batch is drawn. „אישור האצווה כמסומנת נכונה" is a claim about all of them,
+    // so a screen that renders a prefix of the batch may not offer it (#248).
+    await waitFor(() => expect(screen.getAllByTestId('calibration-preparation-row'))
+      .toHaveLength(CALIBRATION_LINES));
+
     await user.type(screen.getByLabelText('סיבת הכנת האצווה'), 'בדיקת שורות המסמך');
     await user.click(screen.getByRole('button', { name: 'הכנת האצווה לבדיקת בעלים' }));
     await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith(
       'prepare_price_list_calibration_batch',
       expect.objectContaining({
         p_shadow_run_id: 'shadow-run-1',
-        p_line_ids: ['shadow-line-0', 'shadow-line-1'],
+        p_line_ids: rows.map((row) => row.shadow_line_id),
         p_idempotency_key: expect.any(String),
         p_reason: 'בדיקת שורות המסמך',
       }),
@@ -433,16 +471,66 @@ describe('כיול באצווה ו-dry-run מוצרים', () => {
     expect(screen.queryByRole('button', { name: /Platform|הפעלת אוטומציה/ })).toBeNull();
   });
 
-  it('owner מאשר preparation שמשרד הכין בסשן קודם בלי להכין אצווה חלופית', async () => {
-    mocks.rpc.mockImplementation(async (name: string) => {
+  it('קורא את כל שורות המסמך גם כשהן חורגות מעמוד אחד של השרת', async () => {
+    const rows = preparationQueue(false, CALIBRATION_PAGED);
+    const offsets: unknown[] = [];
+    mocks.rpc.mockImplementation(async (name: string, body: Record<string, unknown>) => {
       if (name === 'get_price_list_calibration_preparation_queue') {
-        return { data: preparationQueue(true), error: null };
+        offsets.push(body.p_offset);
+        expect(body.p_document_id).toBe('document-1');
+        return servePreparationQueue(rows)(body);
       }
+      if (name === 'get_qualified_product_creation_dry_run') return { data: QUALIFIED_DRY_RUN, error: null };
+      return { data: null, error: null };
+    });
+    render(
+      <MemoryRouter>
+        <PriceListReviewConfirmation snapshot={snapshot(predictions())} actorId="owner-1" onRefetch={async () => true} />
+      </MemoryRouter>,
+    );
+
+    // A 338-line price list cannot be reviewed through a single window (DEBT-REGISTER §42), and a
+    // document that is not the organization's oldest is not in the first window at all — hence the
+    // document argument and the walk.
+    await waitFor(() => expect(screen.getAllByTestId('calibration-preparation-row'))
+      .toHaveLength(CALIBRATION_PAGED));
+    expect(offsets).toEqual([0, 200]);
+    expect(screen.getByText((_text, element) => element?.textContent === `${CALIBRATION_PAGED} שורות מוכנות לבדיקה`))
+      .toBeInTheDocument();
+    expect(screen.queryByText(/לא ניתן להציג את כל שורות הכיול/)).toBeNull();
+  });
+
+  it('חלון קטוע אינו מציג מספר ואינו מאפשר להכין אצווה', async () => {
+    const rows = preparationQueue();
+    mocks.rpc.mockImplementation(async (name: string, body: Record<string, unknown>) => {
+      // The server counts 338 outstanding rows and hands back 12: a count drawn from what arrived
+      // would be a statement about the window, not about the document.
+      if (name === 'get_price_list_calibration_preparation_queue') return servePreparationQueue(rows, 338)(body);
+      if (name === 'get_qualified_product_creation_dry_run') return { data: QUALIFIED_DRY_RUN, error: null };
+      return { data: null, error: null };
+    });
+    render(
+      <MemoryRouter>
+        <PriceListReviewConfirmation snapshot={snapshot(predictions())} actorId="owner-1" onRefetch={async () => true} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/לא ניתן להציג את כל שורות הכיול/)).toBeInTheDocument();
+    expect(screen.getByText((_text, element) => element?.textContent === '— שורות מוכנות לבדיקה'))
+      .toBeInTheDocument();
+    expect(screen.queryByText(`${CALIBRATION_LINES} שורות מוכנות לבדיקה`)).toBeNull();
+    expect(screen.getByRole('button', { name: 'הכנת האצווה לבדיקת בעלים' })).toBeDisabled();
+  });
+
+  it('owner מאשר preparation שמשרד הכין בסשן קודם בלי להכין אצווה חלופית', async () => {
+    const rows = preparationQueue(true);
+    mocks.rpc.mockImplementation(async (name: string, body: Record<string, unknown>) => {
+      if (name === 'get_price_list_calibration_preparation_queue') return servePreparationQueue(rows)(body);
       if (name === 'get_qualified_product_creation_dry_run') {
         return { data: QUALIFIED_DRY_RUN, error: null };
       }
       if (name === 'record_price_list_calibration_batch') {
-        return { data: { preparation_id: 'office-preparation-1', reviewed_count: 2, idempotent: false }, error: null };
+        return { data: { preparation_id: 'office-preparation-1', reviewed_count: CALIBRATION_LINES, idempotent: false }, error: null };
       }
       return { data: null, error: null };
     });
@@ -464,14 +552,37 @@ describe('כיול באצווה ו-dry-run מוצרים', () => {
     expect(mocks.rpc.mock.calls.some(([name]) => name === 'prepare_price_list_calibration_batch')).toBe(false);
   });
 
+  it('מסרב לאשר אצווה שמכסה יותר שורות ממה שהמסך הראה', async () => {
+    // The office prepared the run's 338 lines; this screen holds 12 of them. `record_…_batch`
+    // writes 'correct' over every line_id it was given, so approving here would mark 326 lines
+    // nobody looked at.
+    const rows = preparationQueue(true);
+    mocks.rpc.mockImplementation(async (name: string, body: Record<string, unknown>) => {
+      if (name === 'get_price_list_calibration_preparation_queue') {
+        return servePreparationQueue(rows, rows.length, { preparation_line_count: 338 })(body);
+      }
+      if (name === 'get_qualified_product_creation_dry_run') return { data: QUALIFIED_DRY_RUN, error: null };
+      return { data: null, error: null };
+    });
+    render(
+      <MemoryRouter>
+        <PriceListReviewConfirmation snapshot={snapshot(predictions())} actorId="owner-1" onRefetch={async () => true} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/אי אפשר לאשר שורות שלא נראו/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'אישור האצווה כמסומנת נכונה' })).toBeNull();
+    expect(screen.queryByLabelText('סיבת אישור האצווה')).toBeNull();
+    expect(mocks.rpc.mock.calls.some(([name]) => name === 'record_price_list_calibration_batch')).toBe(false);
+  });
+
   it('office מכין בלבד, וריטריי משתמש באותו idempotency key', async () => {
     mocks.role = 'office';
+    const rows = preparationQueue();
     const keys: unknown[] = [];
     let prepareAttempt = 0;
     mocks.rpc.mockImplementation(async (name: string, body: Record<string, unknown>) => {
-      if (name === 'get_price_list_calibration_preparation_queue') {
-        return { data: preparationQueue(), error: null };
-      }
+      if (name === 'get_price_list_calibration_preparation_queue') return servePreparationQueue(rows)(body);
       if (name === 'get_qualified_product_creation_dry_run') {
         return { data: QUALIFIED_DRY_RUN, error: null };
       }
@@ -480,7 +591,7 @@ describe('כיול באצווה ו-dry-run מוצרים', () => {
         prepareAttempt += 1;
         return prepareAttempt === 1
           ? { data: null, error: { message: 'temporary preparation failure' } }
-          : { data: { preparation_id: 'preparation-office', line_count: 2, idempotent: true }, error: null };
+          : { data: { preparation_id: 'preparation-office', line_count: CALIBRATION_LINES, idempotent: true }, error: null };
       }
       return { data: null, error: null };
     });
@@ -520,6 +631,53 @@ describe('כיול באצווה ו-dry-run מוצרים', () => {
     expect(await screen.findByText('אין שורות כיול שממתינות להכנה במסמך הזה.')).toBeInTheDocument();
     expect(await screen.findByRole('alert')).toHaveTextContent(/dry-run|בדיקת הכשירות/);
     expect(screen.queryByRole('button', { name: /יצירת מוצרים|הפעלה/ })).toBeNull();
+  });
+
+  it('על מסמך שכבר נקלט אינו מציע הכנת אצווה ואומר שהקליטה הסתיימה', async () => {
+    const ingested = {
+      ...snapshot(predictions()),
+      priceListDecision: {
+        id: 'decision-1', org_id: 'org-1', document_id: 'document-1', job_id: 'job-1',
+        interpretation_id: 'interpretation-1', actor_id: 'owner-1', supplier_id: 'supplier-1',
+        submission_id: 'submission-1', outcome: 'auto_applied', reason_code: null,
+        decision_confidence: null, accepted_count: LINE_COUNT - UNMATCHED_LINES,
+        waiting_count: UNMATCHED_LINES, created_product_count: 0,
+        created_at: '2026-08-23T09:00:00Z', reverted_at: null, reverted_by: null, reverted_reason: null,
+      },
+    } as unknown as DocumentProcessingSnapshot;
+    render(
+      <MemoryRouter>
+        <PriceListReviewConfirmation snapshot={ingested} actorId="owner-1" onRefetch={async () => true} />
+      </MemoryRouter>,
+    );
+
+    // „מוכנים ליצירה N" beside a live „הכנת האצווה" button on an ingested price list offered work
+    // that is over. The block now states the document's actual state instead.
+    expect(await screen.findByText(/המחירון של המסמך הזה כבר נקלט/)).toBeInTheDocument();
+    expect(screen.queryByText('כיול מחירון באצווה')).toBeNull();
+    expect(screen.queryByText('בדיקת כשירות לאוטומציית מוצרים')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'הכנת האצווה לבדיקת בעלים' })).toBeNull();
+    expect(mocks.rpc).not.toHaveBeenCalledWith('get_price_list_calibration_preparation_queue', expect.anything());
+  });
+
+  it('על מסמך שעדיין בעיבוד אינו מציג את משטח הכיול כלל', async () => {
+    // Neither open for review nor ingested: the readiness block has nothing true to say about this
+    // document yet, so it says nothing rather than counting rows behind a reading that is not done.
+    const processing = {
+      ...snapshot(predictions()),
+      job: { id: 'job-1', status: 'processing', last_error_code: null, last_error_message: null },
+    } as unknown as DocumentProcessingSnapshot;
+    render(
+      <MemoryRouter>
+        <PriceListReviewConfirmation snapshot={processing} actorId="owner-1" onRefetch={async () => true} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('בעיבוד')).toBeInTheDocument();
+    expect(screen.queryByText('כיול מחירון באצווה')).toBeNull();
+    expect(screen.queryByText('בדיקת כשירות לאוטומציית מוצרים')).toBeNull();
+    expect(screen.queryByText(/המחירון של המסמך הזה כבר נקלט/)).toBeNull();
+    expect(mocks.rpc).not.toHaveBeenCalledWith('get_price_list_calibration_preparation_queue', expect.anything());
   });
 });
 

@@ -87,11 +87,38 @@ begin
       interpretation.created_at desc, interpretation.id desc
   ), resolved as (
     select document.id as document_id, document.document_kind as current_kind,
+      -- ALLOWLIST, NOT A PASS-THROUGH -- on both evidence branches, for the same reason the entity
+      -- branch below is one. `documents.document_kind` and the interpretation/review vocabulary are
+      -- two different closed domains that happen to overlap, and the second one has already been
+      -- widened once without the first (0104 added `tax_receipt` to the contract AND to the CHECK,
+      -- so today every value maps). `else <stored value>` bets that this stays true. The next value
+      -- added to `smart_document_interpretation_valid` or to `approved_document_type` would surface
+      -- here as a preview row with `would_change = true` and an `apply` that dies with 23514
+      -- check_violation -- a raw Postgres error on a document a person just approved -- instead of
+      -- a named refusal. Naming the seven pairs makes an unknown type resolve to `other`, which the
+      -- CHECK can always store, exactly as `payment`/`supplier`/`inbox`/`archive` do (#233).
+      -- P66 pins this against the LIVE constraint and the LIVE contract rather than against a copy.
       case
         when human.id is not null then case human.approved_document_type
-          when 'credit_note' then 'credit' else human.approved_document_type end
+          when 'invoice' then 'invoice'
+          when 'delivery_note' then 'delivery_note'
+          when 'credit_note' then 'credit'
+          when 'price_list' then 'price_list'
+          when 'quote' then 'quote'
+          when 'payment_confirmation' then 'payment_confirmation'
+          when 'tax_receipt' then 'tax_receipt'
+          else 'other'
+        end
         when verified.id is not null then case verified.document_type
-          when 'credit_note' then 'credit' else verified.document_type end
+          when 'invoice' then 'invoice'
+          when 'delivery_note' then 'delivery_note'
+          when 'credit_note' then 'credit'
+          when 'price_list' then 'price_list'
+          when 'quote' then 'quote'
+          when 'payment_confirmation' then 'payment_confirmation'
+          when 'tax_receipt' then 'tax_receipt'
+          else 'other'
+        end
         when document.document_kind <> 'other' then document.document_kind
         else case document.entity_type
           when 'invoice' then 'invoice'

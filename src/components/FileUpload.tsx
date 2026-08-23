@@ -638,13 +638,20 @@ export async function screenPickedFiles(files: File[]): Promise<ScreenedPick> {
   }
 }
 
-/** Files requiring neither a re-take nor a server-only decode. Dismiss never uploads silently. */
+/**
+ * The picked batch minus the captures the person was asked to take again.
+ *
+ * **`serverRequired` stays in, deliberately.** A weak capture is a photograph of a document that
+ * will not read well — dropping it and reopening the camera is the whole point of the warning.
+ * A HEIC is not that: the original is intact and it is only this browser that cannot read the
+ * container, which is exactly the case the server derivative lane exists for (#246: no rejection
+ * and no silent upload without a check). Omitting it here would make Escape, the backdrop and
+ * the X throw away an intact document with no toast and no row in the Upload Center — a
+ * rejection, and the one outcome the decision rules out.
+ */
 export function pickWithoutWeak(pick: ScreenedPick): File[] {
-  const attention = new Set([
-    ...pick.weak.map((item) => item.file),
-    ...pick.serverRequired,
-  ]);
-  return pick.files.filter((file) => !attention.has(file));
+  const weak = new Set(pick.weak.map((item) => item.file));
+  return pick.files.filter((file) => !weak.has(file));
 }
 
 /**
@@ -652,9 +659,13 @@ export function pickWithoutWeak(pick: ScreenedPick): File[] {
  * document, which is the only moment the information is worth anything.
  *
  * Three outcomes, and none of them loses or routes a file silently:
- *  - re-take     → the good captures upload, the weak ones are dropped, the picker reopens
+ *  - re-take     → the weak captures are dropped and the picker reopens; everything else uploads
  *  - upload anyway → everything uploads, exactly as it was picked
- *  - dismiss (Escape/backdrop/X) → the good captures upload, the weak ones are dropped
+ *  - dismiss (Escape/backdrop/X) → same as re-take without reopening the picker
+ *
+ * In `serverOnly` mode — nothing weak, only a container this browser cannot read — there is no
+ * re-take at all. On an iPhone another capture is another HEIC, so the button would be a loop
+ * that never terminates in a readable file. The single action keeps the original and continues.
  */
 export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDismiss }: {
   pick: ScreenedPick;
@@ -688,8 +699,8 @@ export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDi
         <Note tone="info" className="mb-3">
           <span className="min-w-0 flex-1">
             {pick.serverRequired.length === 1
-              ? 'תמונה אחת דורשת פענוח שרתי. המקור עצמו לא יוחלף.'
-              : <><span className="num">{pick.serverRequired.length}</span> תמונות דורשות פענוח שרתי. קובצי המקור לא יוחלפו.</>}
+              ? 'תמונה אחת דורשת פענוח שרתי. המקור יועלה כפי שהוא ולא יוחלף.'
+              : <><span className="num">{pick.serverRequired.length}</span> תמונות דורשות פענוח שרתי. קובצי המקור יועלו כפי שהם ולא יוחלפו.</>}
           </span>
         </Note>
       )}
@@ -704,9 +715,11 @@ export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDi
         <button type="button" className={serverOnly ? 'btn-primary' : 'btn-secondary'} onClick={onUploadAnyway}>
           {serverOnly ? 'שמירת המקור והמשך' : WEAK_CAPTURE_PROCEED_LABEL}
         </button>
-        <button type="button" className={serverOnly ? 'btn-secondary' : 'btn-primary'} onClick={onRetake}>
-          {weakCaptureRetryLabel(source)}
-        </button>
+        {!serverOnly && (
+          <button type="button" className="btn-primary" onClick={onRetake}>
+            {weakCaptureRetryLabel(source)}
+          </button>
+        )}
       </div>
     </Modal>
   );

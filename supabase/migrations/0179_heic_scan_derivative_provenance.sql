@@ -13,8 +13,15 @@ create table public.document_scan_derivative_provenance (
   source_bytes bigint not null check (source_bytes between 1 and 10485760),
   source_width integer not null check (source_width between 32 and 65535),
   source_height integer not null check (source_height between 32 and 65535),
+  -- Keep this list identical to SCAN_SOURCE_FORMATS in
+  -- supabase/functions/document-preprocessing/contract.ts. The worker normalises any
+  -- label it does not recognise to 'UNKNOWN', so a legal capture can never fail
+  -- validation on the container label alone; the real ceilings are bytes, pixels and
+  -- decoded memory. MPO is what Pillow reports for multi-picture JPEG, which is what
+  -- iPhone and Android HDR captures produce and which upload already accepts as
+  -- image/jpeg.
   source_format text not null check (
-    source_format in ('JPEG','PNG','WEBP','HEIF','HEIC','AVIF','GIF','BMP','TIFF')
+    source_format in ('JPEG','JPEG2000','MPO','PNG','WEBP','HEIF','HEIC','AVIF','GIF','BMP','TIFF','PPM','UNKNOWN')
   ),
   decoder text not null check (decoder in ('pillow', 'pillow-heif')),
   decoder_version text not null check (decoder_version ~ '^[0-9A-Za-z][0-9A-Za-z._+-]{0,99}$'),
@@ -102,7 +109,7 @@ begin
          * (p_provenance ->> 'source_height')::bigint * 3
      or (p_provenance ->> 'decoded_bytes')::bigint > 104857600
      or p_provenance ->> 'source_format' not in
-        ('JPEG','PNG','WEBP','HEIF','HEIC','AVIF','GIF','BMP','TIFF')
+        ('JPEG','JPEG2000','MPO','PNG','WEBP','HEIF','HEIC','AVIF','GIF','BMP','TIFF','PPM','UNKNOWN')
      or p_provenance ->> 'decoder' not in ('pillow','pillow-heif')
      or (p_provenance ->> 'decoder_version') !~ '^[0-9A-Za-z][0-9A-Za-z._+-]{0,99}$'
      or ((p_provenance ->> 'source_format') in ('HEIF','HEIC','AVIF'))

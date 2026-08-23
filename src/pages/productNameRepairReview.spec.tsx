@@ -37,7 +37,7 @@ describe('ProductNameRepairReview', () => {
     }));
     const applied = vi.fn();
     const user = userEvent.setup();
-    render(<ToastProvider><ProductNameRepairReview queue={[READY, BLOCKED]} onApplied={applied} /></ToastProvider>);
+    render(<ToastProvider><ProductNameRepairReview queue={[READY, BLOCKED]} dryRunProduced onApplied={applied} /></ToastProvider>);
 
     const ready = screen.getByTestId('repair-candidate-ready');
     expect(ready).toHaveTextContent(READY.old_name);
@@ -61,7 +61,7 @@ describe('ProductNameRepairReview', () => {
   });
 
   it('keeps missing source blocked and offers no approval button', () => {
-    render(<ToastProvider><ProductNameRepairReview queue={[BLOCKED]} onApplied={vi.fn()} /></ToastProvider>);
+    render(<ToastProvider><ProductNameRepairReview queue={[BLOCKED]} dryRunProduced onApplied={vi.fn()} /></ToastProvider>);
     const card = screen.getByTestId('repair-candidate-blocked');
     expect(card).toHaveTextContent(/מקור/);
     expect(within(card).queryByRole('button', { name: 'אישור התיקון' })).toBeNull();
@@ -79,7 +79,7 @@ describe('ProductNameRepairReview', () => {
         : HttpResponse.json({ candidate_id: READY.candidate_id, idempotent: true });
     }));
     const user = userEvent.setup();
-    render(<ToastProvider><ProductNameRepairReview queue={[READY]} onApplied={vi.fn()} /></ToastProvider>);
+    render(<ToastProvider><ProductNameRepairReview queue={[READY]} dryRunProduced onApplied={vi.fn()} /></ToastProvider>);
     const card = screen.getByTestId('repair-candidate-ready');
     await user.type(within(card).getByLabelText(/סיבה/), 'נבדק מול המקור');
     await user.click(within(card).getByRole('button', { name: 'אישור התיקון' }));
@@ -88,5 +88,18 @@ describe('ProductNameRepairReview', () => {
     await waitFor(() => expect(keys).toHaveLength(2));
     expect(keys[0]).toBeTruthy();
     expect(keys[1]).toBe(keys[0]);
+  });
+  it('separates "nothing pending" from "nothing was ever measured"', () => {
+    // The dry run is service_role-only and triggered out of band, so an empty queue is normally an
+    // unmeasured one. Saying "אין תיקוני מקור ממתינים" there asserts a zero nobody counted.
+    const { unmount } = render(
+      <ToastProvider><ProductNameRepairReview queue={[]} dryRunProduced={false} onApplied={vi.fn()} /></ToastProvider>,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(/לא הופק דוח dry-run/);
+    expect(screen.queryByText('אין תיקוני מקור ממתינים.')).toBeNull();
+    unmount();
+
+    render(<ToastProvider><ProductNameRepairReview queue={[]} dryRunProduced onApplied={vi.fn()} /></ToastProvider>);
+    expect(screen.getByRole('status')).toHaveTextContent('אין תיקוני מקור ממתינים.');
   });
 });

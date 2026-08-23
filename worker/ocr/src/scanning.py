@@ -35,6 +35,44 @@ MAX_NLM_DENOISE_PIXELS = 4_000_000
 
 FULL_FRAME: tuple[Point, Point, Point, Point] = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
 
+# The source containers the scan contract names, mirrored in
+# `supabase/functions/document-preprocessing/contract.ts` and in migration 0179. Because those two
+# layers are closed sets, this one has to be total: `_normalize_source_format` maps every other
+# label -- and the case where Pillow names no format at all -- onto UNKNOWN instead of letting an
+# unlisted string reach validation.
+#
+# MPO is the label that forced this. Pillow reports MPO for a multi-picture JPEG, which is what an
+# ordinary iPhone or Android HDR/Live capture is; its mime type is image/jpeg, which upload already
+# accepts (0136:11-13). Without this, the derivative of a completely legal photograph is refused by
+# the Edge with invalid_request and the scan job fails -- on an image that decoded correctly.
+#
+# The format label is provenance, not a safety gate. What bounds this path is the file-byte,
+# pixel and decoded-byte limits enforced above, and none of them depend on the container's name.
+SOURCE_FORMATS = frozenset(
+    {
+        "JPEG",
+        "JPEG2000",
+        "MPO",
+        "PNG",
+        "WEBP",
+        "HEIF",
+        "HEIC",
+        "AVIF",
+        "GIF",
+        "BMP",
+        "TIFF",
+        "PPM",
+    }
+)
+HEIF_SOURCE_FORMATS = frozenset({"HEIF", "HEIC", "AVIF"})
+UNKNOWN_SOURCE_FORMAT = "UNKNOWN"
+
+
+def _normalize_source_format(detected: str | None) -> str:
+    """The contract-legal name for what Pillow says it opened. Never raises, never passes through."""
+    label = str(detected or "").strip().upper()
+    return label if label in SOURCE_FORMATS else UNKNOWN_SOURCE_FORMAT
+
 # Fraction of the frame that the detected edges must span before the whole frame may be accepted
 # as the page. Separates "the page fills the frame, so it has no outer edge to trace" from the two
 # other ways a frame can contain no page-sized rectangle: a blank capture, and a small document
@@ -119,7 +157,7 @@ def _read_image(path: Path, limits: ExtractionLimits) -> tuple[np.ndarray, dict[
     try:
         with Image.open(path) as image:
             image.seek(0)
-            source_format = str(image.format or "UNKNOWN").upper()
+            detected_format = str(image.format or "").upper()
             width, height = image.size
             if width < 32 or height < 32:
                 raise ProcessingError("scan_image_too_small", "Document image is too small to scan")
@@ -138,7 +176,11 @@ def _read_image(path: Path, limits: ExtractionLimits) -> tuple[np.ndarray, dict[
         raise
     except (OSError, UnidentifiedImageError, Image.DecompressionBombError) as exc:
         raise ProcessingError("corrupt_document", "Image is corrupt or unsupported") from exc
-    decoder = "pillow-heif" if source_format in {"HEIF", "HEIC", "AVIF"} else "pillow"
+    # Both derived from the same detected label, so the pairing the Edge and 0179 enforce
+    # (HEIF/HEIC/AVIF <-> pillow-heif) cannot be broken by the normalization: those three names are
+    # in SOURCE_FORMATS and therefore survive it unchanged.
+    decoder = "pillow-heif" if detected_format in HEIF_SOURCE_FORMATS else "pillow"
+    source_format = _normalize_source_format(detected_format)
     decoder_version = (
         importlib.metadata.version("pillow-heif") if decoder == "pillow-heif" else PILLOW_VERSION
     )

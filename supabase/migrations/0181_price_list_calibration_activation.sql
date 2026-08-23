@@ -25,22 +25,34 @@ alter table public.price_list_calibration_preparations force row level security;
 revoke all on public.price_list_calibration_preparations from public,anon,authenticated,service_role;
 grant select,insert on public.price_list_calibration_preparations to service_role;
 
-create function public.get_price_list_calibration_preparation_queue(p_limit integer default 50)
+-- The queue is read PER DOCUMENT and paginated. An org-wide window ordered by run.created_at
+-- returned the organization's oldest rows, so the review screen of any newer document saw none of
+-- its own lines and stated that none were waiting. A live price list is 338 lines (DEBT-REGISTER
+-- §42) and `eligible` needs every one of them reviewed, so the window has to be walkable and the
+-- caller has to be able to tell a short page from a truncated one -- hence pending_total_count,
+-- counted over the whole filtered set before OFFSET/LIMIT.
+create function public.get_price_list_calibration_preparation_queue(
+  p_document_id uuid, p_limit integer default 200, p_offset integer default 0
+)
 returns table(
   shadow_run_id uuid, shadow_line_id uuid, document_id uuid, file_name text,
   supplier_id uuid, supplier_name text, line_index integer, source_row integer,
   preparation_id uuid, prepared_by uuid, prepared_role public.user_role,
-  preparation_created_at timestamptz,
+  preparation_created_at timestamptz, preparation_line_count integer,
   predicted_action text, reason_code text, product_id uuid, matched_product_name text,
   sku text, barcode text, product_name text, unit text,
-  proposed_unit_price numeric, current_unit_price numeric, already_reviewed boolean
+  proposed_unit_price numeric, current_unit_price numeric, pending_total_count bigint
 ) language plpgsql stable security definer set search_path=public,pg_temp as $$
 declare v_org uuid:=auth_org();
 begin
   if v_org is null or auth.uid() is null or auth_role() not in ('owner','office') then
     raise exception 'calibration_preparation_not_authorized' using errcode='42501';
   end if;
-  if p_limit is null or p_limit not between 1 and 200 then
+  if p_document_id is null then
+    raise exception 'calibration_preparation_document_required' using errcode='22023';
+  end if;
+  if p_limit is null or p_limit not between 1 and 500
+     or p_offset is null or p_offset<0 then
     raise exception 'calibration_preparation_limit_invalid' using errcode='22023';
   end if;
   return query
@@ -48,32 +60,54 @@ begin
     select distinct on (review.shadow_line_id) review.shadow_line_id,review.id
     from public.price_list_calibration_reviews review where review.org_id=v_org
     order by review.shadow_line_id,review.revision desc
+  ), pending as (
+    select run.id as run_id,run.created_at as run_created_at,line.id as line_id,
+      run.document_id as run_document_id,document.file_name as document_file_name,
+      run.supplier_id as run_supplier_id,supplier.name as run_supplier_name,
+      line.line_index as pending_line_index,line.source_row as pending_source_row,
+      preparation.id as prep_id,preparation.prepared_by as prep_by,
+      preparation.prepared_role as prep_role,preparation.created_at as prep_created_at,
+      preparation.prep_line_count as prep_line_count,
+      line.predicted_action as pending_predicted_action,line.reason_code as pending_reason_code,
+      line.product_id as pending_product_id,product.name as pending_matched_product_name,
+      line.sku as pending_sku,line.barcode as pending_barcode,
+      line.product_name as pending_product_name,line.unit as pending_unit,
+      line.proposed_unit_price as pending_proposed_unit_price,
+      line.current_unit_price as pending_current_unit_price
+    from public.price_list_shadow_runs run
+    join public.documents document on document.org_id=run.org_id and document.id=run.document_id
+      and document.deleted_at is null
+      and (document.unit_id is null or document.unit_id=any(public.auth_scopes()))
+    join public.price_list_shadow_lines line on line.org_id=run.org_id and line.shadow_run_id=run.id
+    left join public.suppliers supplier on supplier.org_id=run.org_id and supplier.id=run.supplier_id
+    left join public.products product on product.org_id=line.org_id and product.id=line.product_id
+    left join latest_review latest on latest.shadow_line_id=line.id
+    left join lateral (
+      select prepared.id,prepared.prepared_by,prepared.prepared_role,prepared.created_at,
+        cardinality(prepared.line_ids) as prep_line_count
+      from public.price_list_calibration_preparations prepared
+      where prepared.org_id=run.org_id and prepared.shadow_run_id=run.id
+      order by prepared.created_at desc,prepared.id desc limit 1
+    ) preparation on true
+    -- Already-reviewed lines are dropped here, not in the browser: a client-side filter over a
+    -- server-side window silently shrinks the page and makes the count a guess.
+    where run.org_id=v_org and run.document_id=p_document_id and latest.id is null
   )
-  select run.id,line.id,run.document_id,document.file_name,run.supplier_id,supplier.name,
-    line.line_index,line.source_row,preparation.id,preparation.prepared_by,preparation.prepared_role,
-    preparation.created_at,line.predicted_action,line.reason_code,line.product_id,product.name,
-    line.sku,line.barcode,line.product_name,line.unit,line.proposed_unit_price,line.current_unit_price,
-    latest.id is not null
-  from public.price_list_shadow_runs run
-  join public.documents document on document.org_id=run.org_id and document.id=run.document_id
-    and document.deleted_at is null
-    and (document.unit_id is null or document.unit_id=any(public.auth_scopes()))
-  join public.price_list_shadow_lines line on line.org_id=run.org_id and line.shadow_run_id=run.id
-  left join public.suppliers supplier on supplier.org_id=run.org_id and supplier.id=run.supplier_id
-  left join public.products product on product.org_id=line.org_id and product.id=line.product_id
-  left join latest_review latest on latest.shadow_line_id=line.id
-  left join lateral (
-    select prepared.id,prepared.prepared_by,prepared.prepared_role,prepared.created_at
-    from public.price_list_calibration_preparations prepared
-    where prepared.org_id=run.org_id and prepared.shadow_run_id=run.id
-    order by prepared.created_at desc,prepared.id desc limit 1
-  ) preparation on true
-  where run.org_id=v_org
-  order by run.created_at,line.line_index,line.id limit p_limit;
+  select pending.run_id,pending.line_id,pending.run_document_id,pending.document_file_name,
+    pending.run_supplier_id,pending.run_supplier_name,pending.pending_line_index,
+    pending.pending_source_row,pending.prep_id,pending.prep_by,pending.prep_role,
+    pending.prep_created_at,pending.prep_line_count,
+    pending.pending_predicted_action,pending.pending_reason_code,pending.pending_product_id,
+    pending.pending_matched_product_name,pending.pending_sku,pending.pending_barcode,
+    pending.pending_product_name,pending.pending_unit,pending.pending_proposed_unit_price,
+    pending.pending_current_unit_price,count(*) over ()
+  from pending
+  order by pending.run_created_at,pending.run_id,pending.pending_line_index,pending.line_id
+  offset p_offset limit p_limit;
 end $$;
-revoke all on function public.get_price_list_calibration_preparation_queue(integer)
+revoke all on function public.get_price_list_calibration_preparation_queue(uuid,integer,integer)
   from public,anon,service_role;
-grant execute on function public.get_price_list_calibration_preparation_queue(integer)
+grant execute on function public.get_price_list_calibration_preparation_queue(uuid,integer,integer)
   to authenticated;
 
 create function public.prepare_price_list_calibration_batch(
@@ -96,6 +130,19 @@ begin
      (select count(*) from public.price_list_shadow_lines line
       where line.org_id=v_org and line.shadow_run_id=p_shadow_run_id and line.id=any(v_ids))<>cardinality(v_ids) then
     raise exception 'calibration_preparation_lines_invalid' using errcode='22023';
+  end if;
+  -- A batch is all-or-nothing over what is still outstanding. #248 permits approving a prefilled
+  -- batch only when every line in it is correct; a partial batch would let an owner approve a
+  -- window while the run keeps unreviewed lines nobody ever looked at, and would make the
+  -- preparation's line_count -- the number the reviewing screen checks its rendered rows against
+  -- -- a statement about a subset instead of about the run.
+  if exists(
+    select 1 from public.price_list_shadow_lines line
+    where line.org_id=v_org and line.shadow_run_id=p_shadow_run_id and not (line.id=any(v_ids))
+      and not exists(select 1 from public.price_list_calibration_reviews review
+        where review.org_id=v_org and review.shadow_line_id=line.id)
+  ) then
+    raise exception 'calibration_preparation_incomplete' using errcode='22023';
   end if;
   perform pg_advisory_xact_lock(hashtextextended('price-list-calibration-prep:'||v_org||':'||p_idempotency_key,0));
   select * into v_existing from public.price_list_calibration_preparations
@@ -190,17 +237,31 @@ update private.tenant_export_registry registry set exported_columns='{}',schema_
 where registry.table_name='price_list_calibration_preparations';
 
 insert into private.scope_definer_enforcements(function_signature,body_hash,enforcement_kind,scope_proof)
-select 'get_price_list_calibration_preparation_queue(integer)',md5(replace(proc.prosrc,e'\r','')),
-  'filtered_read','0181 filters auth_org runs through non-deleted documents whose unit is null or in auth_scopes; returns only IDs and review-safe line fields.'
-from pg_proc proc where proc.oid='public.get_price_list_calibration_preparation_queue(integer)'::regprocedure;
+select 'get_price_list_calibration_preparation_queue(uuid,integer,integer)',md5(replace(proc.prosrc,e'\r','')),
+  'filtered_read','0181 filters auth_org runs of one document through non-deleted documents whose unit is null or in auth_scopes; returns only IDs and review-safe line fields.'
+from pg_proc proc where proc.oid='public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure;
 
 do $$ declare v text; begin
   if position('auth.uid() is distinct from v_actor' in pg_get_functiondef(
     'public.platform_set_price_list_automation_scope(uuid,uuid,text,uuid,text)'::regprocedure))=0 then
     raise exception '0181: platform identity is not rechecked under lock'; end if;
-  if pg_get_functiondef('public.get_price_list_calibration_preparation_queue(integer)'::regprocedure)
+  if pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
        ~* '(provider|model|prompt_version|schema_version|payload|decision_confidence|evidence_block_ids)' then
     raise exception '0181: office preparation projection exposes technical/raw evidence';
+  end if;
+  -- The screen cannot honestly say "N rows waiting" without a document filter and a total that
+  -- survives paging, and cannot refuse an oversized batch without the preparation's own line count.
+  if pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
+       not like '%run.document_id=p_document_id%'
+     or pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
+       not like '%count(*) over ()%'
+     or pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
+       not like '%cardinality(prepared.line_ids)%' then
+    raise exception '0181: calibration queue is not document-scoped, paged and counted';
+  end if;
+  if pg_get_functiondef('public.prepare_price_list_calibration_batch(uuid,uuid[],uuid,text)'::regprocedure)
+       not like '%calibration_preparation_incomplete%' then
+    raise exception '0181: a preparation may cover a subset of the outstanding lines';
   end if;
   select string_agg(assertion||' -- '||detail,e'\n' order by assertion,detail) into v
   from private.scope_enforcement_violations(); if v is not null then raise exception e'0181 scope:\n%',v; end if;

@@ -293,16 +293,20 @@ export async function measureImageQuality(file: File): Promise<ImageQualityMeasu
  * in memory at a time on a phone. Once the batch budget is spent the remaining files are left
  * unmeasured rather than the picker left hanging — they upload with no verdict, which is the
  * correct failure direction.
+ *
+ * **A spent budget produces no verdict of any kind, HEIF included.** `server_required` is a
+ * measured outcome — this browser tried to decode these bytes and could not — and a file that
+ * was never decoded has not been measured. iOS Safari's `createImageBitmap` does read HEIC, so
+ * routing an unmeasured `.heic` to the server on the strength of its name alone would be a
+ * verdict from the file extension, and would then send a perfectly decodable capture down a
+ * path the person has to answer a dialog about.
  */
 export async function screenImageQuality(files: readonly File[]): Promise<ImageQualityScreening> {
   const weak: WeakCapture[] = [];
   const serverRequired: File[] = [];
   const deadline = Date.now() + BATCH_BUDGET_MS;
   for (const file of files) {
-    if (Date.now() >= deadline) {
-      if (isHeif(file)) serverRequired.push(file);
-      continue;
-    }
+    if (Date.now() >= deadline) continue;
     const outcome = await measureImageQualityOutcome(file);
     if (outcome.kind === 'server_required') {
       serverRequired.push(file);

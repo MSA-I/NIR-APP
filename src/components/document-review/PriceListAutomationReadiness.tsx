@@ -25,11 +25,14 @@ interface CalibrationPreparationRow {
   unit: string | null;
   proposed_unit_price: number | null;
   current_unit_price: number | null;
-  already_reviewed: boolean;
   preparation_id: string | null;
   prepared_by: string | null;
   prepared_role: 'owner' | 'office' | null;
   preparation_created_at: string | null;
+  /** Lines covered by the newest preparation of this run — the run's number, not this page's. */
+  preparation_line_count: number | null;
+  /** Rows still awaiting review for this document, counted before OFFSET/LIMIT. */
+  pending_total_count: number;
 }
 
 interface QualifiedProductRow {
@@ -66,6 +69,44 @@ interface ReviewReceipt {
   idempotent: boolean;
 }
 
+/**
+ * The whole document, walked. A live price list is 338 lines (DEBT-REGISTER §42) and a batch may
+ * only be approved once every one of its lines has been rendered, so the screen pages the queue to
+ * the end instead of reading one window and calling it the answer.
+ */
+const QUEUE_PAGE_SIZE = 200;
+/** Above this the screen refuses to claim a count rather than paging forever. */
+const QUEUE_MAX_ROWS = 2000;
+
+interface CalibrationQueue {
+  rows: CalibrationPreparationRow[];
+  /** What the server says is outstanding for this document. */
+  total: number;
+  /** True when `rows` is not the whole of `total` — then no count is honest and nothing is actionable. */
+  truncated: boolean;
+}
+
+async function loadCalibrationQueue(documentId: string): Promise<CalibrationQueue> {
+  const rows: CalibrationPreparationRow[] = [];
+  let total = 0;
+  for (let offset = 0; ; offset += QUEUE_PAGE_SIZE) {
+    const response = await supabase.rpc('get_price_list_calibration_preparation_queue', {
+      p_document_id: documentId,
+      p_limit: QUEUE_PAGE_SIZE,
+      p_offset: offset,
+    });
+    if (response.error) throw new Error(response.error.message);
+    const page = (response.data ?? []) as CalibrationPreparationRow[];
+    if (page.length > 0) total = Number(page[0].pending_total_count);
+    rows.push(...page);
+    if (page.length < QUEUE_PAGE_SIZE) break;
+    if (rows.length >= QUEUE_MAX_ROWS) return { rows, total, truncated: true };
+  }
+  // Rows can also move under a walk that spans several requests; fewer rows than the server
+  // counted is the same problem as a hard truncation and gets the same answer.
+  return { rows, total, truncated: rows.length !== total };
+}
+
 const sampleLabel = (row: QualifiedProductRow) => row.product_name?.trim()
   || row.sku?.trim()
   || row.barcode?.trim()
@@ -79,13 +120,15 @@ function stableKey(keys: Map<string, string>, identity: string) {
   return created;
 }
 
-export function PriceListAutomationReadiness({ documentId, interpretationId }: {
+export function PriceListAutomationReadiness({ documentId, interpretationId, ingested }: {
   documentId: string;
   interpretationId: string;
+  /** The document's price list has already been taken in; preparation and qualification are closed. */
+  ingested: boolean;
 }) {
   const { profile } = useAuth();
   const allowed = profile?.role === 'owner' || profile?.role === 'office';
-  const [queue, setQueue] = useState<CalibrationPreparationRow[] | null>(null);
+  const [queue, setQueue] = useState<CalibrationQueue | null>(null);
   const [queueError, setQueueError] = useState<string | null>(null);
   const [dryRun, setDryRun] = useState<QualifiedProductDryRun | null>(null);
   const [dryRunError, setDryRunError] = useState<string | null>(null);
@@ -99,47 +142,48 @@ export function PriceListAutomationReadiness({ documentId, interpretationId }: {
   const reviewKeys = useRef(new Map<string, string>());
 
   useEffect(() => {
-    if (!allowed) return;
+    if (!allowed || ingested) return;
     let cancelled = false;
     setQueue(null);
     setQueueError(null);
     setDryRun(null);
     setDryRunError(null);
-    void Promise.all([
-      supabase.rpc('get_price_list_calibration_preparation_queue', { p_limit: 50 }),
+    void Promise.allSettled([
+      loadCalibrationQueue(documentId),
       supabase.rpc('get_qualified_product_creation_dry_run', { p_interpretation_id: interpretationId }),
     ]).then(([queueResult, dryRunResult]) => {
       if (cancelled) return;
-      if (queueResult.error) setQueueError(toHebrewError(queueResult.error.message));
-      else setQueue(((queueResult.data ?? []) as CalibrationPreparationRow[])
-        .filter((row) => row.document_id === documentId && !row.already_reviewed));
-      if (dryRunResult.error) setDryRunError(`בדיקת הכשירות נכשלה: ${toHebrewError(dryRunResult.error.message)}`);
-      else {
-        const result = dryRunResult.data as QualifiedProductDryRun;
-        if (!result || result.interpretation_id !== interpretationId || result.mutated !== false) {
-          setDryRunError('בדיקת הכשירות לא החזירה תוצאת dry-run תקינה.');
-        } else setDryRun(result);
+      if (queueResult.status === 'rejected') setQueueError(toHebrewError(queueResult.reason));
+      else setQueue(queueResult.value);
+      if (dryRunResult.status === 'rejected') {
+        setDryRunError(`בדיקת הכשירות נכשלה: ${toHebrewError(dryRunResult.reason)}`);
+        return;
       }
-    }).catch((error) => {
-      if (cancelled) return;
-      const message = toHebrewError(error);
-      setQueueError(message);
-      setDryRunError(`בדיקת הכשירות נכשלה: ${message}`);
+      if (dryRunResult.value.error) {
+        setDryRunError(`בדיקת הכשירות נכשלה: ${toHebrewError(dryRunResult.value.error.message)}`);
+        return;
+      }
+      const result = dryRunResult.value.data as QualifiedProductDryRun;
+      if (!result || result.interpretation_id !== interpretationId || result.mutated !== false) {
+        setDryRunError('בדיקת הכשירות לא החזירה תוצאת dry-run תקינה.');
+      } else setDryRun(result);
     });
     return () => { cancelled = true; };
-  }, [allowed, documentId, interpretationId]);
+  }, [allowed, documentId, ingested, interpretationId]);
 
   const groups = useMemo(() => {
     const grouped = new Map<string, CalibrationPreparationRow[]>();
-    for (const row of queue ?? []) {
+    for (const row of queue?.rows ?? []) {
       grouped.set(row.shadow_run_id, [...(grouped.get(row.shadow_run_id) ?? []), row]);
     }
     return [...grouped.entries()].map(([shadowRunId, rows]) => ({
       shadowRunId,
       rows: rows.sort((left, right) => left.line_index - right.line_index),
-      serverPreparation: rows[0]?.preparation_id ? {
+      // The server's own count of the preparation, never the length of what this page happened to
+      // fetch — a receipt derived from the rows on screen can never contradict the rows on screen.
+      serverPreparation: rows[0]?.preparation_id && rows[0].preparation_line_count != null ? {
         preparation_id: rows[0].preparation_id,
-        line_count: rows.length,
+        line_count: rows[0].preparation_line_count,
         idempotent: true,
       } satisfies PreparationReceipt : null,
       preparedRole: rows[0]?.prepared_role ?? null,
@@ -147,6 +191,18 @@ export function PriceListAutomationReadiness({ documentId, interpretationId }: {
   }, [queue]);
 
   if (!allowed) return null;
+
+  if (ingested) {
+    return (
+      <div className="mt-5 border-t border-line pt-5">
+        <Note tone="idle">
+          <span className="min-w-0 flex-1">
+            המחירון של המסמך הזה כבר נקלט. הכנת אצוות כיול ובדיקת הכשירות אינן פתוחות על מסמך שנקלט.
+          </span>
+        </Note>
+      </div>
+    );
+  }
 
   async function prepareBatch(shadowRunId: string, rows: CalibrationPreparationRow[]) {
     const reason = (prepareReasons[shadowRunId] ?? '').trim();
@@ -192,6 +248,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId }: {
   }
 
   const qualifiedSamples = dryRun?.rows.filter((row) => row.outcome === 'qualified_create').slice(0, 5) ?? [];
+  const truncated = queue?.truncated ?? false;
 
   return (
     <div className="mt-5 space-y-4 border-t border-line pt-5">
@@ -252,7 +309,15 @@ export function PriceListAutomationReadiness({ documentId, interpretationId }: {
         </div>
         {!queue && !queueError && <p className="text-sm text-ink-muted" role="status">טוען שורות כיול…</p>}
         {queueError && <Note tone="alert" role="alert">{queueError}</Note>}
-        {queue && groups.length === 0 && (
+        {truncated && (
+          <Note tone="alert" role="alert">
+            <span className="min-w-0 flex-1">
+              לא ניתן להציג את כל שורות הכיול הממתינות במסמך הזה, ולכן אין מספר שאפשר להצהיר עליו.
+              הכנת אצווה ואישורה חסומים עד שכל השורות ייטענו.
+            </span>
+          </Note>
+        )}
+        {queue && !truncated && groups.length === 0 && (
           <Note tone="idle">אין שורות כיול שממתינות להכנה במסמך הזה.</Note>
         )}
         {groups.map(({ shadowRunId, rows, serverPreparation, preparedRole }) => {
@@ -260,29 +325,39 @@ export function PriceListAutomationReadiness({ documentId, interpretationId }: {
           const reviewReceipt = reviewed[shadowRunId];
           const preparing = busyAction === `prepare:${shadowRunId}`;
           const reviewing = busyAction === `review:${shadowRunId}`;
+          // Every line of the batch is on screen. Approving „כולן נכונות" over rows the reviewer
+          // never saw is the one thing #248 does not permit, so the count the server recorded for
+          // the preparation and the count actually rendered here have to be the same number.
+          const batchFullyShown = receipt != null && !truncated && receipt.line_count === rows.length;
           return (
             <div key={shadowRunId} className="rounded-lg border border-line bg-surface p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium text-ink"><span className="num">{rows.length}</span> שורות מוכנות לבדיקה</p>
+                <p className="text-sm font-medium text-ink" data-testid="calibration-row-count">
+                  <span className="num">{truncated ? '—' : rows.length}</span> שורות מוכנות לבדיקה
+                </p>
                 <span className={reviewReceipt ? 'badge-done' : receipt ? 'badge-info' : 'badge-await'}>
                   {reviewReceipt ? 'האצווה אושרה' : receipt ? 'הוכנה לבעלים' : 'טרם הוכנה'}
                 </span>
               </div>
-              <ul className="space-y-1 text-sm text-ink-soft">
-                {rows.slice(0, 5).map((row) => (
-                  <li key={row.shadow_line_id} className="flex flex-wrap justify-between gap-2">
-                    <span><bdi>{row.product_name ?? row.matched_product_name ?? 'שורה ללא שם'}</bdi></span>
-                    <span className="text-ink-muted">שורה <span className="num">{row.source_row ?? row.line_index + 1}</span> · {fmtMoneyExact(row.proposed_unit_price)}</span>
-                  </li>
-                ))}
-              </ul>
+              <div className="max-h-96 overflow-y-auto rounded-lg bg-surface-sunken p-2"
+                tabIndex={0} role="region" aria-label="שורות האצווה המוכנות לבדיקה">
+                <ul className="space-y-1 text-sm text-ink-soft">
+                  {rows.map((row) => (
+                    <li key={row.shadow_line_id} data-testid="calibration-preparation-row"
+                      className="flex flex-wrap justify-between gap-2">
+                      <span><bdi>{row.product_name ?? row.matched_product_name ?? 'שורה ללא שם'}</bdi></span>
+                      <span className="text-ink-muted">שורה <span className="num">{row.source_row ?? row.line_index + 1}</span> · {fmtMoneyExact(row.proposed_unit_price)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
               {!receipt && (
                 <div className="space-y-2">
                   <label className="label" htmlFor={`calibration-prepare-reason-${shadowRunId}`}>סיבת הכנת האצווה</label>
                   <textarea id={`calibration-prepare-reason-${shadowRunId}`} className="input" rows={2} maxLength={1000}
                     value={prepareReasons[shadowRunId] ?? ''}
                     onChange={(event) => setPrepareReasons((current) => ({ ...current, [shadowRunId]: event.target.value }))} />
-                  <button type="button" className="btn-secondary" disabled={preparing}
+                  <button type="button" className="btn-secondary" disabled={preparing || truncated}
                     onClick={() => void prepareBatch(shadowRunId, rows)}>
                     {preparing && <Loader2 size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
                     הכנת האצווה לבדיקת בעלים
@@ -295,7 +370,16 @@ export function PriceListAutomationReadiness({ documentId, interpretationId }: {
               {receipt && preparedRole === 'office' && profile?.role === 'owner' && !reviewReceipt && (
                 <Note tone="idle">האצווה הוכנה על ידי מנהל המשרד.</Note>
               )}
-              {receipt && profile?.role === 'owner' && !reviewReceipt && (
+              {receipt && profile?.role === 'owner' && !reviewReceipt && !batchFullyShown && (
+                <Note tone="alert" role="alert">
+                  <span className="min-w-0 flex-1">
+                    האצווה שהוכנה מכסה <span className="num">{receipt.line_count}</span> שורות, ובמסך מוצגות{' '}
+                    <span className="num">{truncated ? '—' : rows.length}</span>. אי אפשר לאשר שורות שלא נראו —
+                    יש לרענן את המסך ולהכין אצווה מחדש על השורות הממתינות.
+                  </span>
+                </Note>
+              )}
+              {receipt && profile?.role === 'owner' && !reviewReceipt && batchFullyShown && (
                 <div className="space-y-2">
                   <label className="label" htmlFor={`calibration-review-reason-${shadowRunId}`}>סיבת אישור האצווה</label>
                   <textarea id={`calibration-review-reason-${shadowRunId}`} className="input" rows={2} maxLength={1000}

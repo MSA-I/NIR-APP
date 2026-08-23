@@ -269,4 +269,69 @@ describe('QuickCapture quality warning', () => {
     expect(uploadedFiles()[0]).toBe(heic);
     expect(mocks.rpc).toHaveBeenCalledWith('begin_document_intake', { p_document_id: 'doc-1' });
   });
+
+  /**
+   * #246 forbids two outcomes: silent upload without a check, and rejection. Closing the dialog
+   * must not become the second one. The container is unreadable to this browser; the document
+   * itself is intact, and the person who just photographed it gets no toast and no Upload Center
+   * row to tell them it vanished.
+   */
+  it('closing the HEIC dialog still uploads the original — it is not a rejection', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => { throw new Error('unsupported HEIC'); }));
+    render(<Harness />);
+
+    const heic = new File([new Uint8Array([1, 2, 3, 4])], 'IMG_0042.HEIC', { type: 'image/heic' });
+    const before = new Uint8Array(await heic.arrayBuffer());
+    pick([heic]);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'סגירה' }));
+
+    await waitFor(() => expect(mocks.tusUpload).toHaveBeenCalledTimes(1));
+    expect(uploadedFiles()[0]).toBe(heic);
+    expect(new Uint8Array(await heic.arrayBuffer())).toEqual(before);
+    expect(mocks.rpc).toHaveBeenCalledWith('begin_document_intake', { p_document_id: 'doc-1' });
+  });
+
+  /** Another capture on an iPhone is another HEIC. Offering "re-take" here is an endless loop. */
+  it('offers no re-take when only the format is unreadable', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => { throw new Error('unsupported HEIC'); }));
+    render(<Harness />);
+
+    pick([new File([new Uint8Array([1, 2, 3, 4])], 'IMG_0042.HEIC', { type: 'image/heic' })]);
+
+    expect(await screen.findByRole('button', { name: 'שמירת המקור והמשך' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'צילום מחדש' })).not.toBeInTheDocument();
+  });
+
+  it('a re-take drops the weak capture only — the HEIC beside it still uploads', async () => {
+    const flat = pixels('flat');
+    vi.stubGlobal('createImageBitmap', vi.fn(async (file: File) => {
+      if (/\.heic$/i.test(file.name)) throw new Error('unsupported HEIC');
+      return { width: 48, height: 48, close: vi.fn() };
+    }));
+    vi.stubGlobal('OffscreenCanvas', class {
+      constructor(readonly width: number, readonly height: number) {}
+      getContext() {
+        return {
+          imageSmoothingEnabled: false,
+          imageSmoothingQuality: 'low',
+          drawImage: () => {},
+          getImageData: () => ({ data: flat.rgba }),
+        };
+      }
+    });
+    render(<Harness />);
+
+    const blurred = photo('blurred.jpg');
+    const heic = new File([new Uint8Array([1, 2, 3, 4])], 'IMG_0042.HEIC', { type: 'image/heic' });
+    pick([blurred, heic]);
+
+    expect(await screen.findByText('התמונה יצאה מטושטשת')).toBeInTheDocument();
+    expect(screen.getByText(/המקור יועלה כפי שהוא/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'צילום מחדש' }));
+
+    await waitFor(() => expect(mocks.tusUpload).toHaveBeenCalledTimes(1));
+    expect(uploadedFiles()).toEqual([heic]);
+  });
 });

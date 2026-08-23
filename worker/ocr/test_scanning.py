@@ -20,7 +20,11 @@ from src.limits import DEFAULT_LIMITS, ExtractionLimits
 from src.ocr import PageImage
 from src.parsers import extract_file
 from src.scanning import (
+    HEIF_SOURCE_FORMATS,
     SEVERE_SHADOW_SCORE,
+    SOURCE_FORMATS,
+    UNKNOWN_SOURCE_FORMAT,
+    _normalize_source_format,
     _select_mode,
     detect_document_corners,
     scan_document,
@@ -63,6 +67,21 @@ def _write_heif_page(path: Path) -> None:
     for y in range(180, 1020, 48):
         cv2.line(canvas, (60, y), (790, y), (35, 35, 35), 3)
     Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)).save(path, format="HEIF", quality=90)
+
+
+def _write_multi_picture_jpeg(path: Path) -> None:
+    """A multi-picture JPEG -- what an iPhone/Android HDR or Live capture actually is.
+
+    Two JPEG pictures in one container with an MPF index; the mime type is image/jpeg, which the
+    upload gate already accepts, and Pillow labels the container MPO rather than JPEG.
+    """
+    canvas = np.full((1100, 850, 3), 244, dtype=np.uint8)
+    cv2.putText(canvas, "IPHONE HDR", (70, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (15, 15, 15), 3)
+    for y in range(180, 1020, 48):
+        cv2.line(canvas, (60, y), (790, y), (35, 35, 35), 3)
+    primary = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
+    secondary = Image.fromarray(cv2.cvtColor((canvas * 0.5).astype(np.uint8), cv2.COLOR_BGR2RGB))
+    primary.save(path, format="MPO", save_all=True, append_images=[secondary], quality=90)
 
 
 def _write_small_off_centre_panel(path: Path) -> None:
@@ -309,6 +328,48 @@ class DocumentScanningTests(unittest.TestCase):
             self.assertEqual(provenance["decoder"], "pillow-heif")
             self.assertRegex(provenance["decoder_version"], r"^\d+\.\d+")
             self.assertEqual(provenance["decoded_bytes"], 850 * 1100 * 3)
+
+    def test_multi_picture_jpeg_reports_a_source_format_the_contract_accepts(self) -> None:
+        """An iPhone HDR capture is image/jpeg to upload and MPO to Pillow.
+
+        Before the allowlist carried MPO the derivative of this perfectly legal photograph was
+        refused by the Edge with invalid_request and the scan job failed on an image that had
+        decoded correctly. This pins the label the worker actually emits for it.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "IMG_0042.jpg"
+            _write_multi_picture_jpeg(source)
+            original = source.read_bytes()
+
+            result = scan_document(
+                source, root / "scan.png", corners=[[0, 0], [1, 0], [1, 1], [0, 1]]
+            )
+
+            self.assertEqual(source.read_bytes(), original)
+            provenance = result.metadata()["provenance"]
+            self.assertEqual(provenance["source_format"], "MPO")
+            self.assertIn(provenance["source_format"], SOURCE_FORMATS)
+            self.assertEqual(provenance["decoder"], "pillow")
+
+    def test_every_source_format_the_worker_emits_is_one_the_contract_names(self) -> None:
+        """The Edge and 0179 hold closed sets, so this mapping has to be total.
+
+        Mirrored in `supabase/functions/document-preprocessing/contract.ts`
+        (`SCAN_SOURCE_FORMATS`) and in migration 0179's `source_format` check.
+        """
+        allowed = SOURCE_FORMATS | {UNKNOWN_SOURCE_FORMAT}
+        for detected in ["MPO", "JPEG2000", "PPM", "JPEG", "HEIF", "jpeg", " png "]:
+            self.assertIn(_normalize_source_format(detected), allowed)
+        for detected in [None, "", "PSD", "ICNS", "DDS", "SOMETHING NEW"]:
+            self.assertEqual(_normalize_source_format(detected), UNKNOWN_SOURCE_FORMAT)
+        self.assertEqual(_normalize_source_format("MPO"), "MPO")
+        # The decoder pairing the Edge and 0179 enforce is derived from the same detected label,
+        # so the three pillow-heif containers must survive normalization unchanged -- otherwise a
+        # HEIC would arrive as UNKNOWN with decoder pillow-heif and be refused.
+        self.assertTrue(HEIF_SOURCE_FORMATS <= SOURCE_FORMATS)
+        for detected in HEIF_SOURCE_FORMATS:
+            self.assertEqual(_normalize_source_format(detected), detected)
 
     def test_image_decode_obeys_the_decompressed_byte_limit_before_rgb_allocation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

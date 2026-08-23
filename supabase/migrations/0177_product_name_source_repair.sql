@@ -267,32 +267,63 @@ revoke all on function public.prepare_product_name_repair_dry_run(uuid, uuid, te
 grant execute on function public.prepare_product_name_repair_dry_run(uuid, uuid, text, uuid[], jsonb)
   to service_role;
 
+-- Returns the queue AND whether it was ever measured.
+--
+-- The dry run is service_role-only (above) and reachable only through the product-name-repair Edge
+-- function, so the ordinary state of this queue in a fresh organization is "nobody has produced a
+-- report yet". A bare empty row set could not express that: the screen read it as "zero repairs
+-- pending" and asserted a count nothing had counted, which is precisely the fake zero the
+-- constitution forbids. `has_dry_run` is the measurement; `candidates` is the result of it.
 create function public.get_product_name_repair_queue()
-returns table (
-  candidate_id uuid, product_id uuid, status text, reason_code text,
-  old_name text, proposed_name text, source_submission_id uuid, source_file_name text,
-  source_checksum text, source_row integer, source_evidence jsonb
-)
+returns jsonb
 language plpgsql stable security definer set search_path = public, pg_temp
 as $$
 declare
   v_org uuid := auth_org();
+  v_run_count bigint;
+  v_latest timestamptz;
+  v_candidates jsonb;
 begin
   if v_org is null or auth_role() not in ('owner', 'office') then
     raise exception 'product_name_repair_not_authorized' using errcode = '42501';
   end if;
-  return query
-  select candidate.id, candidate.product_id, candidate.status, candidate.reason_code,
-         candidate.old_name, candidate.proposed_name, candidate.source_submission_id,
-         run.source_file_name, run.source_checksum, candidate.source_row, candidate.source_evidence
-  from public.product_name_repair_candidates candidate
-  join public.product_name_repair_runs run
-    on run.org_id = candidate.org_id and run.id = candidate.run_id
-  left join public.product_name_repair_decisions decision
-    on decision.org_id = candidate.org_id and decision.candidate_id = candidate.id
-  where candidate.org_id = v_org and decision.id is null
-  order by case candidate.status when 'ready' then 0 when 'blocked' then 1 else 2 end,
-           candidate.created_at, candidate.id;
+  select count(*), max(run.created_at) into v_run_count, v_latest
+  from public.product_name_repair_runs run
+  where run.org_id = v_org;
+
+  select coalesce(jsonb_agg(entry.candidate_json
+           order by entry.status_rank, entry.created_at, entry.candidate_id), '[]'::jsonb)
+  into v_candidates
+  from (
+    select candidate.id as candidate_id, candidate.created_at as created_at,
+      case candidate.status when 'ready' then 0 when 'blocked' then 1 else 2 end as status_rank,
+      jsonb_build_object(
+        'candidate_id', candidate.id,
+        'product_id', candidate.product_id,
+        'status', candidate.status,
+        'reason_code', candidate.reason_code,
+        'old_name', candidate.old_name,
+        'proposed_name', candidate.proposed_name,
+        'source_submission_id', candidate.source_submission_id,
+        'source_file_name', run.source_file_name,
+        'source_checksum', run.source_checksum,
+        'source_row', candidate.source_row,
+        'source_evidence', candidate.source_evidence
+      ) as candidate_json
+    from public.product_name_repair_candidates candidate
+    join public.product_name_repair_runs run
+      on run.org_id = candidate.org_id and run.id = candidate.run_id
+    left join public.product_name_repair_decisions decision
+      on decision.org_id = candidate.org_id and decision.candidate_id = candidate.id
+    where candidate.org_id = v_org and decision.id is null
+  ) entry;
+
+  return jsonb_build_object(
+    'has_dry_run', v_run_count > 0,
+    'dry_run_count', v_run_count,
+    'latest_dry_run_at', v_latest,
+    'candidates', v_candidates
+  );
 end $$;
 
 revoke all on function public.get_product_name_repair_queue() from public, anon, service_role;
@@ -418,6 +449,12 @@ where registry.table_name in ('product_name_repair_runs', 'product_name_repair_c
 do $$
 declare v_violations text;
 begin
+  -- The screen may never render a 0 it did not measure, so the reader has to be able to tell an
+  -- empty queue from a queue that was never produced.
+  if pg_get_functiondef('public.get_product_name_repair_queue()'::regprocedure)
+       not like '%has_dry_run%' then
+    raise exception '0177: the repair queue does not report whether a dry run was ever produced';
+  end if;
   select string_agg(assertion || ' -- ' || detail, e'\n' order by assertion, detail)
     into v_violations from private.scope_enforcement_violations();
   if v_violations is not null then raise exception e'0177 scope assertions failed:\n%', v_violations; end if;

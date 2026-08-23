@@ -1,5 +1,17 @@
 -- 0182 -- #250 qualified product dry-run plus #245/#251/#252 negative structural guards.
 -- No policy is enabled and no product is created by this migration.
+--
+-- WHAT THE GUARDS MEASURE, stated here so the header is never read as more than the code does. A
+-- guard that advertises coverage it does not have is worse than no guard, because it is quoted as
+-- proof:
+--   #245  pins the body of private.document_text_sanitize, denies it to every write path into
+--         document_extractions/document_interpretations, and keeps document_text_key separate.
+--   #251  body-scans the REGISTERED automation roots for direct purchase-order UPDATE/DELETE. A
+--         hop through an unregistered helper is outside this scan and is said again at the arm.
+--   #252  keys the drift read model and the activation writers by OID rather than by rendered
+--         signature text, and reports the read model going unpinned instead of returning nothing.
+-- P68 falsifies each arm against a deliberate violation, so "no rows" means the scan ran and found
+-- nothing rather than that the predicate matched nothing.
 
 alter function public.apply_price_list_interpretation(uuid,uuid,uuid)
   rename to apply_price_list_interpretation_qualified_impl;
@@ -206,7 +218,13 @@ from (values
   ('public.platform_set_autonomy_policy(uuid,text,boolean,numeric,text)',
    'Only tenant autonomy policy setter.',false,false,true,'{}'::text[]),
   ('public.get_price_list_drift_metrics(integer)',
-   'Numeric drift read model; never calls an activation writer.',false,false,false,'{}'::text[])
+   'Numeric drift read model; never calls an activation writer.',false,false,false,'{}'::text[]),
+  -- #245: the stored evidence text stays faithful to the extraction. This row exists to PIN the
+  -- sanitizer's body, so the denylist that 0077 argued into place cannot quietly become something
+  -- else; the two arms below say where it may and may not appear.
+  ('private.document_text_sanitize(text)',
+   'Denylist-only text sanitizer (#245); a comparison/dedup input, never a stored-evidence rewriter.',
+   false,false,false,'{}'::text[])
 ) declared(signature,responsibility,raw_writer,automation_root,activation_writer,callees)
 left join pg_proc proc on proc.oid=to_regprocedure(declared.signature);
 
@@ -243,8 +261,34 @@ returns table(assertion text,detail text) language sql stable set search_path=pu
     '(insert[[:space:]]+into|update)[[:space:]]+(public[.])?document_(extractions|interpretations)'
     and position('save_document_interpretation' in proc.prosrc)=0
   union all
-  -- Every registered automation root and exact registered callee is denied direct PO/PO-item
+  -- #245, the arm the header promised and did not carry. The raw_evidence_writer arms above ask
+  -- WHO writes the evidence tables; this one asks WHAT reaches them. `document_text_sanitize` is a
+  -- comparison and dedup input -- `document_text_key` inverts it into an allowlist for the KEY and
+  -- for nothing else -- so a write path into document_extractions/document_interpretations that
+  -- routes through it is precisely the silent rewrite of stored evidence #245 refused.
+  select 'sanitized_raw_evidence_write',proc.oid::regprocedure::text
+  from pg_proc proc join pg_namespace ns on ns.oid=proc.pronamespace
+  where ns.nspname in ('public','private')
+    and proc.prosrc~* '(insert[[:space:]]+into|update)[[:space:]]+(public[.])?document_(extractions|interpretations)'
+    and position('document_text_sanitize' in proc.prosrc)>0
+  union all
+  -- ...and the key stays a SEPARATE function. If the allowlist inversion that only the comparison
+  -- key may use ever migrates into the sanitizer itself, faithful storage is gone; the body_hash
+  -- pin would report that only as unexplained drift rather than as the decision it breaks.
+  select 'normalized_key_not_separated',
+    coalesce(to_regprocedure('private.document_text_key(text)')::text,
+      'private.document_text_key(text) is missing')
+  where to_regprocedure('private.document_text_key(text)') is null
+    or exists(select 1 from pg_proc proc
+      where proc.oid=to_regprocedure('private.document_text_sanitize(text)')
+        and position('[^0-9a-z' in proc.prosrc)>0)
+  union all
+  -- Every registered automation root and exact registered callee is denied DIRECT PO/PO-item
   -- UPDATE/DELETE. Creation of a new revision is a different named command outside this registry.
+  -- SCOPE, STATED SO IT IS NOT READ AS MORE: this is a body scan of the registered signatures. A
+  -- root that reaches purchase_order_items through an unregistered helper one hop away is NOT
+  -- caught here; `expected_callees` is the place a known hop is pinned, and P68 falsifies the arm
+  -- so that "no rows" means "the scan ran and found nothing", not "the scan matched nothing".
   select 'purchase_order_snapshot_mutation',registry.function_signature
   from private.document_automation_authoritative_functions registry
   join pg_proc proc on proc.oid=to_regprocedure(registry.function_signature)
@@ -260,13 +304,28 @@ returns table(assertion text,detail text) language sql stable set search_path=pu
   ) and not exists(select 1 from private.document_automation_authoritative_functions registry
     where registry.function_signature=proc.oid::regprocedure::text and registry.activation_writer)
   union all
+  -- #252. Keyed on to_regprocedure, never on the rendered signature text: `regprocedure::text`
+  -- drops the schema only while the function is visible, so a literal
+  -- 'get_price_list_drift_metrics(integer)' stops matching the moment the stored form gains a
+  -- `public.` prefix -- and a predicate that matches nothing returns no rows, which reads as PASS.
+  -- That is the same trap as the A5 textual guard. The callee name comes from pg_proc.proname for
+  -- the same reason: split_part on a schema-qualified signature searches for the wrong token.
   select 'numeric_drift_activation_call',activation.function_signature
   from private.document_automation_authoritative_functions drift
   join pg_proc drift_proc on drift_proc.oid=to_regprocedure(drift.function_signature)
-  cross join private.document_automation_authoritative_functions activation
-  where drift.function_signature='get_price_list_drift_metrics(integer)'
-    and activation.activation_writer
-    and position(split_part(activation.function_signature,'(',1) in drift_proc.prosrc)>0
+  join private.document_automation_authoritative_functions activation on activation.activation_writer
+  join pg_proc activation_proc on activation_proc.oid=to_regprocedure(activation.function_signature)
+  where drift_proc.oid=to_regprocedure('public.get_price_list_drift_metrics(integer)')
+    and position(activation_proc.proname in drift_proc.prosrc)>0
+  union all
+  -- ...and the arm above cannot go quiet by losing its subject. If the drift read model is absent,
+  -- or is no longer the row this registry pins, that absence is itself the violation rather than
+  -- an empty result.
+  select 'numeric_drift_read_model_unpinned','public.get_price_list_drift_metrics(integer)'
+  where to_regprocedure('public.get_price_list_drift_metrics(integer)') is null
+    or not exists(select 1 from private.document_automation_authoritative_functions registry
+      where to_regprocedure(registry.function_signature)
+        =to_regprocedure('public.get_price_list_drift_metrics(integer)'))
   union all
   select 'qualified_writer_missing','apply_price_list_interpretation_qualified_impl lost atomic locks/writers'
   where not (

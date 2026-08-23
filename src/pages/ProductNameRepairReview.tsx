@@ -25,12 +25,36 @@ const REASON: Record<NonNullable<ProductNameRepairCandidate['reason_code']>, str
   source_same_as_current: 'שם המקור זהה לשם השמור; אין שינוי לאישור.',
 };
 
-export function ProductNameRepairReview({ queue, onApplied }: {
+/** What `get_product_name_repair_queue` answers: the queue, and whether it was ever measured. */
+export interface ProductNameRepairQueue {
+  has_dry_run: boolean;
+  dry_run_count: number;
+  latest_dry_run_at: string | null;
+  candidates: ProductNameRepairCandidate[];
+}
+
+export function ProductNameRepairReview({ queue, dryRunProduced, onApplied }: {
   queue: ProductNameRepairCandidate[] | null;
+  /**
+   * `false` when no dry-run report has ever been produced for this organization, `null` while that
+   * is unknown. An empty queue under `false` is not a finished backlog — it is an unmeasured one,
+   * and the screen may not render it as a zero.
+   */
+  dryRunProduced: boolean | null;
   onApplied: (candidateId: string) => void;
 }) {
-  if (queue === null) {
+  if (queue === null || dryRunProduced === null) {
     return <div className="note-idle" role="status">לא ידוע כמה תיקוני מקור ממתינים — דוח ה־dry-run לא נטען.</div>;
+  }
+  if (!dryRunProduced) {
+    return (
+      <div className="note-idle" role="status">
+        <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+        <span className="min-w-0 flex-1">
+          לא הופק דוח dry-run לתיקון שמות ממקור. עד שיופק — לא ידוע כמה שמות דורשים תיקון, ואין כאן טענה על אפס.
+        </span>
+      </div>
+    );
   }
   if (queue.length === 0) {
     return <div className="note-done" role="status"><Check size={16} aria-hidden="true" />אין תיקוני מקור ממתינים.</div>;
