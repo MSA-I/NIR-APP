@@ -509,3 +509,176 @@ export async function fetchFunnelMetrics(days: number): Promise<FunnelMetric[]> 
   const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
   return (await rpc<FunnelMetric[]>('platform_funnel_metrics', { p_from: from })) ?? [];
 }
+
+/* ---------- Wave 2: platform lifecycle (0195-0197) ---------- */
+
+/**
+ * A tenant-visible reason code for a lifecycle change (#20). The vocabulary lives in the
+ * database (`private.organization_lifecycle_reason_codes`), never in this file: adding a
+ * commercial category is an owner decision recorded as data, not a new union member here.
+ */
+export interface LifecycleReasonCode {
+  reason_code: string;
+  applies_to_status: OrgStatus;
+  tenant_label: string;
+}
+
+/**
+ * One Platform-only commercial note attached to a lifecycle change (#20). It is readable only
+ * through this RPC, by a platform admin holding `org.lifecycle`. The tenant has no path to it —
+ * the storage is Shape-2 in `private`, with no policies and no grants.
+ */
+export interface LifecycleInternalNote {
+  id: string;
+  audit_log_id: string;
+  actor_email: string | null;
+  status: OrgStatus;
+  public_reason_code: string;
+  internal_note: string;
+  created_at: string;
+}
+
+export async function fetchLifecycleReasonCodes(): Promise<LifecycleReasonCode[]> {
+  return (await rpc<LifecycleReasonCode[]>('organization_lifecycle_reason_labels', {})) ?? [];
+}
+
+export async function fetchLifecycleInternalNotes(orgId: string): Promise<LifecycleInternalNote[]> {
+  return (await rpc<LifecycleInternalNote[]>(
+    'platform_organization_lifecycle_notes', { p_org_id: orgId },
+  )) ?? [];
+}
+
+/**
+ * `set_organization_lifecycle` after the #20 split. `publicReason` and `publicReasonCode` are
+ * tenant-visible; `internalNote` is not, and must never be rendered on a tenant surface.
+ */
+export function setOrganizationLifecycle(input: {
+  orgId: string; status: OrgStatus; publicReason: string;
+  publicReasonCode: string | null; internalNote: string | null;
+}): Promise<unknown> {
+  return rpc('set_organization_lifecycle', {
+    p_org_id: input.orgId,
+    p_status: input.status,
+    p_trial_ends_at: null,
+    p_reason: input.publicReason,
+    p_public_reason_code: input.publicReasonCode,
+    p_internal_note: input.internalNote,
+  });
+}
+
+/** One row of the abandoned-signup report (#175). Report only: it has no write path. */
+export interface AbandonedSignupCandidate {
+  org_id: string;
+  organization_name: string;
+  created_at: string;
+  days_since_signup: number;
+  owner_verified: boolean;
+  has_activity: boolean;
+  disposition: 'empty_cleanup_eligible' | 'quarantine_required';
+  quarantined: boolean;
+  reminders_pending: number;
+  reminders_not_sent: number;
+}
+
+export interface QuarantineEntry {
+  id: string;
+  org_id: string;
+  organization_name: string;
+  reason_code: string;
+  opened_at: string;
+  resolved_at: string | null;
+  resolution: 'released' | 'escalated' | null;
+}
+
+export async function fetchAbandonedSignupCandidates(
+  olderThanDays = 30,
+): Promise<AbandonedSignupCandidate[]> {
+  return (await rpc<AbandonedSignupCandidate[]>(
+    'platform_abandoned_signup_candidates', { p_older_than_days: olderThanDays },
+  )) ?? [];
+}
+
+export async function fetchQuarantineQueue(): Promise<QuarantineEntry[]> {
+  return (await rpc<QuarantineEntry[]>('platform_quarantine_queue', {})) ?? [];
+}
+
+export function resolveQuarantine(input: {
+  queueId: string; resolution: 'released' | 'escalated'; reason: string;
+}): Promise<unknown> {
+  return rpc('platform_resolve_quarantine', {
+    p_queue_id: input.queueId,
+    p_resolution: input.resolution,
+    p_reason: input.reason,
+  });
+}
+
+/**
+ * One purge candidate (#261). Every gate is reported separately on purpose: an operator
+ * approving a batch has to see WHICH gate a tenant fails, not only that it fails one.
+ */
+export interface PurgeCandidate {
+  org_id: string;
+  organization_name: string;
+  offboarding_request_id: string;
+  requested_at: string;
+  retention_eligible: boolean;
+  legal_hold_clear: boolean;
+  export_ready: boolean;
+  backup_present: boolean;
+  eligible: boolean;
+}
+
+export interface PurgeBatch {
+  id: string;
+  approved_by: string;
+  approved_at: string;
+  reason: string;
+  tenant_count: number;
+  purged_count: number;
+  skipped_count: number;
+}
+
+export interface PurgeBatchItem {
+  org_id: string;
+  organization_name: string;
+  gates_at_approval: unknown;
+  outcome: 'purged' | 'skipped' | null;
+  skip_reason: string | null;
+  executed_at: string | null;
+}
+
+export async function fetchPurgeCandidates(): Promise<PurgeCandidate[]> {
+  return (await rpc<PurgeCandidate[]>('platform_purge_candidates', {})) ?? [];
+}
+
+export async function fetchPurgeBatches(): Promise<PurgeBatch[]> {
+  return (await rpc<PurgeBatch[]>('platform_purge_batches', {})) ?? [];
+}
+
+export async function fetchPurgeBatchItems(batchId: string): Promise<PurgeBatchItem[]> {
+  return (await rpc<PurgeBatchItem[]>('platform_purge_batch_items', { p_batch_id: batchId })) ?? [];
+}
+
+/** Approving a batch does NOT execute it. Execution is a separate, service-only command that
+    replays this manifest, and #261 does not authorize running it. */
+export function approvePurgeBatch(input: {
+  orgIds: string[]; reason: string;
+}): Promise<string> {
+  return rpc<string>('approve_organization_purge_batch', {
+    p_org_ids: input.orgIds,
+    p_reason: input.reason,
+  });
+}
+
+export function recordPurgeBackupEvidence(input: {
+  orgId: string; backupReference: string; backupTakenAt: string;
+  restoreVerifiedAt: string | null; reason: string;
+}): Promise<string> {
+  return rpc<string>('record_organization_purge_backup_evidence', {
+    p_org_id: input.orgId,
+    p_backup_reference: input.backupReference,
+    p_backup_taken_at: input.backupTakenAt,
+    p_restore_verified_at: input.restoreVerifiedAt,
+    p_reason: input.reason,
+  });
+}
