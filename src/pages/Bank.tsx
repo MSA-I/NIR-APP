@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { reasonOr } from '../lib/reason';
 import { useSearchParams } from 'react-router';
-import { Upload, Landmark, Link2, AlertTriangle, EyeOff, Loader2, CheckCircle2, Unlink } from 'lucide-react';
-import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+import { Upload, Download, Landmark, Link2, AlertTriangle, EyeOff, Loader2, CheckCircle2, Unlink } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
@@ -17,6 +15,13 @@ import { useParamState } from '../lib/useParamState';
 import { SupplierSelectField, useQuickSupplier } from '../components/QuickSupplierPicker';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { financialSupplierMap, readFinancialSuppliers } from '../lib/financialSuppliers';
+import {
+  BANK_IMPORT_CONTRACT,
+  BANK_IMPORT_HEADERS,
+  BANK_IMPORT_TEMPLATE_VERSION,
+  parseCanonicalBankImportWorkbook,
+  type CanonicalBankImportRow,
+} from '../lib/bankImportWorkbook';
 import {
   SUPPLIER_SEARCH_NARROWED,
   fetchServerList,
@@ -42,20 +47,6 @@ async function sha256(data: ArrayBuffer | string): Promise<string> {
 
 /** normalize supplier names for fuzzy contains-matching against bank descriptions */
 const norm = (s: string) => s.replace(/["'״׳]/g, '').replace(/בע\s*מ/g, '').replace(/\s+/g, ' ').trim();
-
-function parseDate(v: string): string | null {
-  const s = String(v).trim();
-  let m = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/); // dd/mm/yyyy
-  if (m) {
-    const yy = m[3].length === 2 ? `20${m[3]}` : m[3];
-    return `${yy}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-  }
-  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); // ISO
-  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-  return null;
-}
-
-const parseAmount = (v: unknown) => Math.abs(Number(String(v ?? '').replace(/[₪,\s]/g, ''))) || 0;
 
 const PAGE_SIZE = 15;
 /** `bank_transactions_org_date_idx` / `..._org_status_date_idx` (0053): tx_date is the one
@@ -227,7 +218,7 @@ export default function Bank() {
             <input type="month" className="input w-auto!" aria-label="סינון תנועות בנק לפי חודש" value={monthFilter} onChange={(e) => patchParams({ month: e.target.value, page: '' })} />
           </>
         }
-        emptyTitle="אין תנועות בנק" emptySubtitle="ייבא תדפיס בנק (CSV / Excel) כדי להתחיל בהתאמות" />
+        emptyTitle="אין תנועות בנק" emptySubtitle="ייבא את תבנית ה־XLSX העדכנית כדי להתחיל בהתאמות" />
 
       {importOpen && <BankImportModal onClose={() => setImportOpen(false)} onDone={() => { setImportOpen(false); refetchAll(); }} />}
       {selected && (
@@ -286,18 +277,35 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
   );
 }
 
-/* ================= Import wizard: file -> column mapping -> insert ================= */
+/* ================= Canonical XLSX import: signature -> preview -> atomic command ================= */
 function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState('');
   const [fileHash, setFileHash] = useState('');
-  const [headers, setHeaders] = useState<string[]>([]);
-  const [rawRows, setRawRows] = useState<Record<string, unknown>[]>([]);
-  const [map, setMap] = useState({ date: '', description: '', amount: '', reference: '' });
+  const [rawRows, setRawRows] = useState<CanonicalBankImportRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+
+  const importError: Record<string, string> = {
+    bank_import_xlsx_required: 'יש לבחור קובץ XLSX מהתבנית העדכנית. CSV ו־XLS אינם נתמכים.',
+    bank_import_workbook_invalid: 'חוברת ה־XLSX פגומה או אינה ניתנת לקריאה.',
+    bank_import_sheet_invalid: 'שם הגיליון או מספר הגיליונות אינם תואמים לתבנית.',
+    bank_import_version_unsupported: 'גרסת התבנית חסרה או אינה נתמכת. הורידו את התבנית העדכנית.',
+    bank_import_headers_invalid: 'כותרות העמודות אינן תואמות לתבנית העדכנית.',
+    bank_import_formula_forbidden: 'החוברת מכילה נוסחה או טקסט שנראה כנוסחה. הייבוא בוטל לפני כתיבה.',
+    bank_import_cell_type_invalid: 'סוג תא אינו תקין: תאריך חייב להיות תא תאריך וסכום חייב להיות מספר.',
+    bank_import_row_invalid: 'נמצאה שורה ללא תאריך, תיאור או סכום חיובי תקינים.',
+    bank_import_row_limit: 'החוברת מכילה יותר מ־5,000 תנועות.',
+  };
+
+  function downloadTemplate() {
+    const anchor = document.createElement('a');
+    anchor.href = '/templates/inplace-bank-import-v1.xlsx';
+    anchor.download = `inplace-bank-import-v${BANK_IMPORT_TEMPLATE_VERSION}.xlsx`;
+    anchor.click();
+  }
 
   async function onFile(file: File) {
     setBusy(true);
@@ -305,67 +313,40 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
       const buf = await file.arrayBuffer();
       setFileHash(await sha256(buf));
       setFileName(file.name);
-      let rows: Record<string, unknown>[] = [];
-      if (file.name.toLowerCase().endsWith('.csv')) {
-        const text = new TextDecoder('utf-8').decode(buf);
-        const parsed = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true });
-        rows = parsed.data;
-      } else {
-        const wb = XLSX.read(buf);
-        rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]]);
-      }
-      if (!rows.length) { toast('הקובץ ריק או לא נקרא', 'error'); return; }
-      const hs = Object.keys(rows[0]);
-      setHeaders(hs);
-      setRawRows(rows);
-      // best-effort auto-mapping by common Hebrew headers
-      const find = (...names: string[]) => hs.find((h) => names.some((n) => h.includes(n))) ?? '';
-      setMap({
-        date: find('תאריך', 'date'),
-        description: find('תיאור', 'פרטים', 'description'),
-        amount: find('חובה', 'סכום', 'amount', 'debit'),
-        reference: find('אסמכתא', 'reference', 'סימוכין'),
-      });
-    } catch {
-      toast('קריאת הקובץ נכשלה', 'error');
+      const parsed = parseCanonicalBankImportWorkbook(buf, file.name);
+      if (!parsed.rows.length) { toast('התבנית אינה מכילה תנועות לייבוא', 'error'); return; }
+      setRawRows(parsed.rows);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : '';
+      toast(importError[code] ?? 'קריאת הקובץ נכשלה', 'error');
     } finally {
       setBusy(false);
     }
   }
 
   async function runImport() {
-    if (!map.date || !map.description || !map.amount) { toast('יש למפות לפחות תאריך, תיאור וסכום', 'error'); return; }
     setBusy(true);
     try {
       const suppliers = await readFinancialSuppliers();
-      const invalidRows: number[] = [];
-      const normalized = await Promise.all(rawRows.map(async (raw, index) => {
-        const date = parseDate(String(raw[map.date] ?? ''));
-        const amount = parseAmount(raw[map.amount]);
-        const description = String(raw[map.description] ?? '').trim();
-        if (!date || !amount || !description) { invalidRows.push(index + 2); return null; }
-        const reference = map.reference ? String(raw[map.reference] ?? '').trim() || null : null;
-        const rowHash = await sha256(`${date}|${amount}|${reference ?? ''}|${description}`);
-        const supplier = suppliers.find((s) => norm(description).includes(norm(s.name)) || norm(s.name).includes(norm(description)));
+      const normalized = await Promise.all(rawRows.map(async (raw) => {
+        const rowHash = await sha256(`${raw.tx_date}|${raw.amount}|${raw.reference ?? ''}|${raw.description}`);
+        const supplier = suppliers.find((s) => norm(raw.description).includes(norm(s.name)) || norm(s.name).includes(norm(raw.description)));
         return {
-          tx_date: date,
-          description,
-          amount,
-          is_debit: true,
-          reference,
-          raw,
+          tx_date: raw.tx_date,
+          description: raw.description,
+          amount: raw.amount,
+          is_debit: raw.is_debit,
+          reference: raw.reference,
+          raw: raw.raw,
           supplier_id: supplier?.id ?? null,
           row_hash: rowHash,
         };
       }));
-      if (invalidRows.length) {
-        throw new Error(`הייבוא בוטל: שורות ${invalidRows.slice(0, 12).join(', ')} אינן כוללות תאריך, תיאור וסכום תקינים.`);
-      }
 
       const imported = unwrap(await supabase.rpc('import_bank_transactions', {
         p_filename: fileName,
         p_file_hash: fileHash,
-        p_column_mapping: map,
+        p_column_mapping: BANK_IMPORT_CONTRACT,
         p_rows: normalized,
         p_reason: reasonOr(reason, 'ייבוא תדפיס הבנק'),
       })) as { row_count: number; idempotent: boolean };
@@ -386,26 +367,18 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
           <Note tone="done">{result}</Note>
           <div className="flex justify-end"><button className="btn-primary" onClick={onDone}>סיום</button></div>
         </div>
-      ) : !headers.length ? (
+      ) : !rawRows.length ? (
         <div className="text-center py-8">
-          <p className="text-sm text-ink-soft mb-4">בחר קובץ CSV או Excel מתדפיס הבנק. השורה המקורית נשמרת במלואה.</p>
-          <button className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
-          <input ref={fileRef} type="file" hidden accept=".csv,.xlsx,.xls" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
+          <p className="text-sm text-ink-soft mb-4">ייבוא מתבצע רק מתבנית XLSX קנונית בגרסה {BANK_IMPORT_TEMPLATE_VERSION}. אין מיפוי עמודות או ניחוש מבנה.</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <button className="btn-secondary" type="button" onClick={downloadTemplate}><Download size={16} /> הורדת התבנית העדכנית</button>
+            <button className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת XLSX</button>
+          </div>
+          <input ref={fileRef} type="file" hidden accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="text-sm text-ink-soft">{fileName} · {rawRows.length} שורות. מיפוי עמודות:</div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {([['date', 'תאריך *'], ['description', 'תיאור *'], ['amount', 'סכום (חובה) *'], ['reference', 'אסמכתא']] as const).map(([k, label]) => (
-              <div key={k}>
-                <label className="label" htmlFor={`bank-import-${k}`}>{label}</label>
-                <select id={`bank-import-${k}`} className="input" value={map[k]} onChange={(e) => setMap((m) => ({ ...m, [k]: e.target.value }))}>
-                  <option value="">—</option>
-                  {headers.map((h) => <option key={h} value={h}>{h}</option>)}
-                </select>
-              </div>
-            ))}
-          </div>
+          <div className="text-sm text-ink-soft">{fileName} · {rawRows.length} תנועות · תבנית v{BANK_IMPORT_TEMPLATE_VERSION}</div>
           <div className="max-h-48 overflow-auto border border-line-soft rounded-lg">
             <table className="w-full">
               {/* The overrides that used to force .th to 11px and .td to 12px are gone. This is the
@@ -413,17 +386,23 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
                   DESIGN.md reserves 11px for sidebar group headings, explicitly not for content.
                   The wrapper above already scrolls in both axes, so the canonical scale costs
                   nothing but a wider table. */}
-              <thead className="table-head sticky top-0"><tr>{headers.map((h) => <th key={h} scope="col" className="th">{h}</th>)}</tr></thead>
+              <thead className="table-head sticky top-0"><tr>{BANK_IMPORT_HEADERS.map((header) => <th key={header} scope="col" className="th">{header}</th>)}</tr></thead>
               <tbody className="divide-y divide-line-soft">
-                {rawRows.slice(0, 6).map((r, i) => (
-                  <tr key={i}>{headers.map((h) => <td key={h} className="td">{String(r[h] ?? '')}</td>)}</tr>
+                {rawRows.slice(0, 6).map((row, index) => (
+                  <tr key={index}>
+                    <td className="td num" dir="ltr">{row.tx_date}</td>
+                    <td className="td">{row.description}</td>
+                    <td className="td" dir="ltr">{row.direction}</td>
+                    <td className="td num">{row.amount}</td>
+                    <td className="td num" dir="ltr">{row.reference ?? '—'}</td>
+                  </tr>
                 ))}
               </tbody>
             </table>
           </div>
           <div><label className="label">סיבת הייבוא (רשות)</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
           <div className="flex justify-end gap-2">
-            <button className="btn-secondary" disabled={busy} onClick={() => { setHeaders([]); setRawRows([]); }}>קובץ אחר</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => { setRawRows([]); setFileName(''); setFileHash(''); }}>קובץ אחר</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>
               {busy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />} ייבוא
             </button>

@@ -773,16 +773,17 @@ select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000005
 set local role authenticated;
 select pg_temp.p1_assert(
   (import_bank_transactions(
-    'bank.csv', repeat('a', 64), '{"date":"date"}'::jsonb,
+    'bank.xlsx', repeat('a', 64),
+    '{"template_version":"1","sheet":"Bank Transactions","headers":["transaction_date","description","direction","amount","reference"]}'::jsonb,
     jsonb_build_array(
       jsonb_build_object(
         'tx_date', '2026-07-20', 'description', 'Supplier A1 invoice', 'amount', 50,
-        'is_debit', true, 'reference', 'BANK-50', 'raw', '{}'::jsonb,
+        'is_debit', true, 'reference', 'BANK-50', 'raw', '{"direction":"debit"}'::jsonb,
         'supplier_id', '30000000-0000-0000-0000-000000000001', 'row_hash', repeat('b', 64)
       ),
       jsonb_build_object(
         'tx_date', '2026-07-20', 'description', 'Supplier A1 payment', 'amount', 118,
-        'is_debit', true, 'reference', 'REF-001', 'raw', '{}'::jsonb,
+        'is_debit', true, 'reference', 'REF-001', 'raw', '{"direction":"debit"}'::jsonb,
         'supplier_id', '30000000-0000-0000-0000-000000000001', 'row_hash', repeat('c', 64)
       )
     ),
@@ -792,7 +793,9 @@ select pg_temp.p1_assert(
 );
 select pg_temp.p1_assert(
   (import_bank_transactions(
-    'bank.csv', repeat('a', 64), '{"date":"date"}'::jsonb, '[]'::jsonb, 'ניסיון חוזר'
+    'bank.xlsx', repeat('a', 64),
+    '{"template_version":"1","sheet":"Bank Transactions","headers":["transaction_date","description","direction","amount","reference"]}'::jsonb,
+    '[]'::jsonb, 'ניסיון חוזר'
   )->>'idempotent')::boolean,
   'bank file retry must return existing import'
 );
@@ -812,10 +815,11 @@ select assign_bank_transaction_supplier(
 do $$
 begin
   perform import_bank_transactions(
-    'bad.csv', repeat('d', 64), '{}'::jsonb,
+    'bad.xlsx', repeat('d', 64),
+    '{"template_version":"1","sheet":"Bank Transactions","headers":["transaction_date","description","direction","amount","reference"]}'::jsonb,
     jsonb_build_array(jsonb_build_object(
       'tx_date', '2026-07-20', 'description', 'bad', 'amount', 0, 'is_debit', true,
-      'raw', '{}'::jsonb, 'row_hash', repeat('e', 64)
+      'raw', '{"direction":"debit"}'::jsonb, 'row_hash', repeat('e', 64)
     )),
     'בדיקת rollback'
   );
@@ -1155,7 +1159,9 @@ select pg_temp.p1_assert(
 do $$
 begin
   perform import_bank_transactions(
-    'office.csv', repeat('f', 64), '{}'::jsonb, '[]'::jsonb, 'office bank attempt'
+    'office.xlsx', repeat('f', 64),
+    '{"template_version":"1","sheet":"Bank Transactions","headers":["transaction_date","description","direction","amount","reference"]}'::jsonb,
+    '[]'::jsonb, 'office bank attempt'
   );
   raise exception 'expected office bank rejection';
 exception when sqlstate '42501' then

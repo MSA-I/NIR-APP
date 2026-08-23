@@ -11,7 +11,71 @@ import { fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import type { PaymentRequest } from '../lib/types';
 import { useAuth } from '../auth/AuthContext';
-import { financialSupplierMap } from '../lib/financialSuppliers';
+import {
+  financialSupplierBankAccountMap,
+  financialSupplierMap,
+  formatSupplierBankAccount,
+} from '../lib/financialSuppliers';
+
+interface InvoiceAllocationInput {
+  invoice_id: string;
+  amount_allocated: number;
+}
+
+interface SelectedCreditAllocation {
+  credit_id: string;
+  amount: number;
+  remaining: number;
+}
+
+interface PaymentAllocationPayload {
+  invoice_id: string | null;
+  credit_id: string | null;
+  amount: number;
+}
+
+const agora = (value: number) => Math.round(value * 100);
+const money = (value: number) => value / 100;
+
+/**
+ * Replaces part of the approved liability with supplier credit while preserving the approved
+ * total. Invoice allocations are the cash transfer; credit allocations are the offset. Integer
+ * agorot keep the browser from manufacturing a rounding remainder that the database rejects.
+ */
+export function buildPaymentAllocations(
+  invoices: InvoiceAllocationInput[],
+  credits: SelectedCreditAllocation[],
+): { allocations: PaymentAllocationPayload[]; cashAmount: number; creditAmount: number } {
+  const invoiceTotal = invoices.reduce((sum, invoice) => sum + agora(invoice.amount_allocated), 0);
+  let creditTotal = 0;
+  for (const credit of credits) {
+    const amount = agora(credit.amount);
+    if (amount <= 0) continue;
+    if (amount > agora(credit.remaining)) throw new Error('credit_allocation_exceeds_remaining');
+    creditTotal += amount;
+  }
+  const cashTotal = invoiceTotal - creditTotal;
+  if (cashTotal < 1) throw new Error('payment_cash_amount_required');
+
+  let cashLeft = cashTotal;
+  const allocations: PaymentAllocationPayload[] = [];
+  for (const invoice of invoices) {
+    const allocated = Math.min(agora(invoice.amount_allocated), cashLeft);
+    if (allocated > 0) {
+      allocations.push({ invoice_id: invoice.invoice_id, credit_id: null, amount: money(allocated) });
+      cashLeft -= allocated;
+    }
+  }
+  if (cashLeft !== 0) throw new Error('credit_allocation_total_invalid');
+
+  for (const credit of credits) {
+    const amount = agora(credit.amount);
+    if (amount > 0) {
+      allocations.push({ invoice_id: null, credit_id: credit.credit_id, amount: money(amount) });
+    }
+  }
+  return { allocations, cashAmount: money(cashTotal), creditAmount: money(creditTotal) };
+}
 
 /**
  * Focused execution view for the accountant persona.
@@ -45,10 +109,19 @@ export default function AccountantPaymentQueue() {
       .select('*, invoices:payment_request_invoices(invoice_id, amount_allocated, invoice:invoices(invoice_number)), approver:profiles!p0_pr_approved_actor_tenant_fk(full_name)')
       .in('status', ['approved', 'sent_for_execution', 'executed', 'matched'])
       .order('due_date', { ascending: true, nullsFirst: false })) as RawRow[];
-    const suppliers = await financialSupplierMap(rows.map((row) => row.supplier_id));
+    const supplierIds = rows.map((row) => row.supplier_id);
+    const [suppliers, bankAccounts] = await Promise.all([
+      financialSupplierMap(supplierIds),
+      financialSupplierBankAccountMap(supplierIds),
+    ]);
     return rows.map<Row>((row) => ({
       ...row,
-      supplier: suppliers.get(row.supplier_id) ?? { id: row.supplier_id, name: '—', bank_details: null },
+      supplier: {
+        ...(suppliers.get(row.supplier_id) ?? {
+          id: row.supplier_id, name: '—', tax_id: null, payment_terms: null, status: 'active', bank_details: null,
+        }),
+        bank_details: formatSupplierBankAccount(bankAccounts.get(row.supplier_id)),
+      },
     }));
   });
 
@@ -117,12 +190,43 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
   const [reauthOpen, setReauthOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [creditAmounts, setCreditAmounts] = useState<Record<string, string>>({});
+  const { data: creditBalances, loading: creditsLoading, error: creditsError } = useQuery(async () =>
+    unwrap(await supabase.rpc('credit_request_balance_rows', {
+      p_supplier_id: pr.supplier.id,
+    })) as {
+      credit_id: string;
+      invoice_id: string | null;
+      credit_number: number;
+      amount: number;
+      allocated_amount: number;
+      remaining_amount: number;
+      status: string;
+    }[]);
+
+  const availableCredits = (creditBalances ?? []).filter(
+    (credit) => credit.status === 'received' && credit.remaining_amount > 0);
+  const selectedCredits = availableCredits.map((credit) => ({
+    credit_id: credit.credit_id,
+    amount: Number(creditAmounts[credit.credit_id] || 0),
+    remaining: credit.remaining_amount,
+  })).filter((credit) => Number.isFinite(credit.amount) && credit.amount > 0);
+  let allocationPreview: ReturnType<typeof buildPaymentAllocations> | null = null;
+  try {
+    allocationPreview = buildPaymentAllocations(pr.invoices, selectedCredits);
+  } catch {
+    allocationPreview = null;
+  }
 
   // Field validation first, then the step-up gate. Re-authentication happens only when the JWT's
   // password AMR entry is stale — the server (0061) asserts freshness itself, so a fresh session
   // sees no new modal and a stale one is prompted instead of rejected.
   function requestExecute() {
     if (!f.reference.trim()) { toast('נדרשת אסמכתת העברה', 'error'); return; }
+    if (!allocationPreview) {
+      toast('סכום הזיכויים חייב להיות קטן מסכום ההעברה ולא לחרוג מהיתרה הזמינה', 'error');
+      return;
+    }
     setReauthOpen(true);
   }
 
@@ -135,11 +239,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
         p_method: 'העברה בנקאית',
         p_reference: f.reference.trim(),
         p_notes: f.notes.trim() || null,
-        p_allocations: pr.invoices.map((link) => ({
-          invoice_id: link.invoice_id,
-          credit_id: null,
-          amount: link.amount_allocated,
-        })),
+        p_allocations: allocationPreview?.allocations ?? [],
         p_reason: reasonOr(f.reason, 'ביצוע העברת תשלום'),
       })) as { payment_id: string };
 
@@ -188,6 +288,8 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
 
         <dl className="text-sm space-y-1.5">
           <div className="flex justify-between"><dt className="text-ink-muted">סכום מאושר</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount)}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">קיזוז זיכויים</dt><dd className="num">{fmtMoneyExact(allocationPreview?.creditAmount ?? 0)}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">סכום להעברה בפועל</dt><dd className="font-semibold num">{fmtMoneyExact(allocationPreview?.cashAmount ?? null)}</dd></div>
           {pr.due_date && <div className="flex justify-between"><dt className="text-ink-muted">תאריך יעד</dt><dd>{fmtDate(pr.due_date)}</dd></div>}
           <div className="flex justify-between"><dt className="text-ink-muted">חשבוניות</dt>
             <dd dir="ltr">{pr.invoices.map((i) => i.invoice?.invoice_number).filter(Boolean).join(', ') || 'לא זמינות'}</dd></div>
@@ -206,11 +308,56 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           )}
         </dl>
 
+        <div className="rounded-lg border border-line bg-surface p-4">
+          <h3 className="text-sm font-medium text-ink-soft">זיכויים זמינים לקיזוז</h3>
+          {creditsLoading && <p className="mt-2 text-sm text-ink-muted" role="status">טוען יתרות זיכוי…</p>}
+          {creditsError && <p className="mt-2 text-sm text-alert-fg" role="alert">{creditsError}</p>}
+          {!creditsLoading && !creditsError && availableCredits.length === 0 && (
+            <p className="mt-2 text-sm text-ink-muted">אין זיכויים זמינים לספק זה</p>
+          )}
+          {availableCredits.length > 0 && (
+            <ul className="mt-3 space-y-3">
+              {availableCredits.map((credit) => (
+                <li key={credit.credit_id} className="rounded-lg bg-surface-sunken p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span>זיכוי <span className="num">#{credit.credit_number}</span></span>
+                    <span className="badge-done">זמין לקיזוז</span>
+                  </div>
+                  <p className="mt-1 text-sm text-ink-muted">
+                    יתרה זמינה <span className="num font-medium text-ink-body">{fmtMoneyExact(credit.remaining_amount)}</span>
+                  </p>
+                  <label className="label mt-2 block" htmlFor={`credit-allocation-${credit.credit_id}`}>
+                    סכום לקיזוז בהעברה זו
+                  </label>
+                  <input
+                    id={`credit-allocation-${credit.credit_id}`}
+                    type="number"
+                    min="0"
+                    max={credit.remaining_amount}
+                    step="0.01"
+                    className="input num mt-1"
+                    value={creditAmounts[credit.credit_id] ?? ''}
+                    placeholder="0.00"
+                    onChange={(event) => setCreditAmounts((current) => ({
+                      ...current,
+                      [credit.credit_id]: event.target.value,
+                    }))}
+                  />
+                  <p className="mt-1 text-xs text-ink-muted">
+                    הוקצו בעבר <span className="num">{fmtMoneyExact(credit.allocated_amount)}</span>
+                    {' · '}סכום מקורי <span className="num">{fmtMoneyExact(credit.amount)}</span>
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         <hr className="border-line-soft" />
 
         <div className="grid grid-cols-2 gap-3">
           <div><label className="label" htmlFor="payment-execution-date">תאריך ביצוע</label><input id="payment-execution-date" type="date" className="input" value={f.paid_date} onChange={(e) => setF((s) => ({ ...s, paid_date: e.target.value }))} /></div>
-          <div><label className="label" htmlFor="payment-execution-amount">סכום מאושר להעברה</label><input id="payment-execution-amount" type="number" className="input num" value={pr.amount} readOnly /></div>
+          <div><label className="label" htmlFor="payment-execution-amount">סכום להעברה בפועל</label><input id="payment-execution-amount" type="number" className="input num" value={allocationPreview?.cashAmount ?? ''} readOnly /></div>
         </div>
         <div><label className="label" htmlFor="payment-execution-reference">אסמכתת העברה *</label><input id="payment-execution-reference" className="input num" dir="ltr" value={f.reference} onChange={(e) => setF((s) => ({ ...s, reference: e.target.value }))} /></div>
         <div><label className="label" htmlFor="payment-execution-notes">הערות</label><input id="payment-execution-notes" className="input" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></div>
@@ -218,7 +365,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
 
         <div className="flex justify-end gap-2">
           <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-          <button className="btn-primary" disabled={busy} onClick={requestExecute}>
+          <button className="btn-primary" disabled={busy || !allocationPreview} onClick={requestExecute}>
             {busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} ההעברה בוצעה
           </button>
         </div>

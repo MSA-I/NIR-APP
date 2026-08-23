@@ -259,6 +259,14 @@ select pg_temp.p0_acl_assert(
   -- reason + audit).
   and not has_column_privilege('authenticated', 'public.suppliers', 'bank_details', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.suppliers', 'bank_details', 'INSERT')
+  -- 0171: the replacement is Shape-2. The browser can neither read nor mutate its base table;
+  -- projections and the jsonb step-up command are the only paths.
+  and not has_table_privilege('authenticated', 'public.supplier_bank_accounts', 'SELECT')
+  and not has_table_privilege('authenticated', 'public.supplier_bank_accounts', 'INSERT')
+  and not has_table_privilege('authenticated', 'public.supplier_bank_accounts', 'UPDATE')
+  and not has_table_privilege('authenticated', 'public.supplier_bank_accounts', 'DELETE')
+  and has_function_privilege('authenticated', 'public.update_supplier_bank_details(uuid,jsonb,text)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.update_supplier_bank_details(uuid,text,text)', 'EXECUTE')
   and not has_column_privilege('authenticated', 'public.products', 'org_id', 'UPDATE')
   and not has_column_privilege('authenticated', 'public.products', 'active', 'UPDATE')
   and not has_any_column_privilege('authenticated', 'public.purchase_requests', 'INSERT')

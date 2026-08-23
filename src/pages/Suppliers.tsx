@@ -12,9 +12,10 @@ import { PriceListUploadModal, SUBMISSION_STATUS, submissionMonthLabel } from '.
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
 import { canStartSupplierCommerce, SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
 import { fmtMoneyExact, fmtNum, fmtDate, fmtDays, productLabel } from '../lib/format';
-import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission } from '../lib/types';
+import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission, SupplierBankDetails, SupplierBankMigrationItem } from '../lib/types';
 import { SUPPLIER_COLUMNS } from '../lib/supplierColumns';
 import { SupplierCommunicationCard } from '../components/SupplierCommunicationCard';
+import { readFinancialSupplierBankAccount, readSupplierBankMigrationItem } from '../lib/financialSuppliers';
 
 // suppliers.rating* are added in migration 0011. The hand-written Supplier type (types.ts) is
 // read-only this wave and does not carry them yet, so extend it locally.
@@ -258,15 +259,24 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   // UPDATE column grant in 0061; changing it goes through `update_supplier_bank_details`
   // (step-up + mandatory reason + audit). `bankStep` holds the new value while the reason
   // dialog is up; `bankReauth` holds the confirmed reason while ReauthModal decides.
-  const [bankStep, setBankStep] = useState<{ nextBank: string | null; supplierId: string } | null>(null);
+  const [bankStep, setBankStep] = useState<{ nextBank: SupplierBankDetails | null; supplierId: string } | null>(null);
   const [bankReauth, setBankReauth] = useState<string | null>(null);
   const [bankBusy, setBankBusy] = useState(false);
+  const [legacyBank, setLegacyBank] = useState<SupplierBankMigrationItem | null>(null);
+  const [bankLoadError, setBankLoadError] = useState<string | null>(null);
+  const bankTouchedRef = useRef(false);
+  const [bankTouched, setBankTouched] = useState(false);
+  const [bank, setBank] = useState({
+    kind: '' as '' | 'IL' | 'international',
+    account_holder: '', country_code: '', bank_code: '', branch_code: '',
+    account_number: '', iban: '', bic: '',
+  });
 
   const [f, setF] = useState({
     name: supplier?.name ?? '', tax_id: supplier?.tax_id ?? '', contact_name: supplier?.contact_name ?? '',
     phone: supplier?.phone ?? '', whatsapp: supplier?.whatsapp ?? '', email: supplier?.email ?? '',
     address: supplier?.address ?? '', min_order_amount: supplier?.min_order_amount?.toString() ?? '',
-    payment_terms: supplier?.payment_terms ?? '', bank_details: '',
+    payment_terms: supplier?.payment_terms ?? '',
     notes: supplier?.notes ?? '', status: (supplier?.status ?? 'active') as SupplierStatus,
     delivery_days: supplier?.delivery_days ?? [] as number[],
     cutoff_time: supplier?.cutoff_time?.slice(0, 5) ?? '',
@@ -276,7 +286,40 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
 
   const set = (k: string, v: unknown) => setF((s) => ({ ...s, [k]: v }));
 
-  const bankFieldRef = useRef<HTMLInputElement>(null);
+  const setBankField = (key: keyof typeof bank, value: string) => {
+    bankTouchedRef.current = true;
+    setBankTouched(true);
+    setBank((current) => ({ ...current, [key]: value }));
+  };
+
+  useEffect(() => {
+    if (!supplier) return;
+    let cancelled = false;
+    void Promise.all([
+      readFinancialSupplierBankAccount(supplier.id),
+      readSupplierBankMigrationItem(supplier.id),
+    ]).then(([current, legacy]) => {
+      if (cancelled) return;
+      setLegacyBank(legacy);
+      setBankLoadError(null);
+      if (!current || bankTouchedRef.current) return;
+      setBank({
+        kind: current.country_code === 'IL' ? 'IL' : 'international',
+        account_holder: current.account_holder,
+        country_code: current.country_code === 'IL' ? '' : current.country_code,
+        bank_code: current.bank_code ?? '',
+        branch_code: current.branch_code ?? '',
+        account_number: current.account_number ?? '',
+        iban: current.iban ?? '',
+        bic: current.bic ?? '',
+      });
+    }).catch((error) => {
+      if (!cancelled) setBankLoadError(toHebrewError(error));
+    });
+    return () => { cancelled = true; };
+  }, [supplier]);
+
+  const bankFieldRef = useRef<HTMLSelectElement>(null);
   useEffect(() => {
     if (focus !== 'bank') return;
     // After the modal has taken its own initial focus, otherwise the dialog wins the race.
@@ -287,8 +330,61 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
     return () => cancelAnimationFrame(frame);
   }, [focus]);
 
+  function bankPayload(): SupplierBankDetails | null {
+    if (!bank.kind) return null;
+    const accountHolder = bank.account_holder.trim();
+    if (!accountHolder) throw new Error('יש להזין שם בעל חשבון');
+    if (bank.kind === 'IL') {
+      const bankCode = bank.bank_code.replace(/\s+/g, '');
+      const branchCode = bank.branch_code.replace(/\s+/g, '');
+      const accountNumber = bank.account_number.replace(/\s+/g, '');
+      if (!/^\d{1,3}$/.test(bankCode)
+          || !/^\d{1,3}$/.test(branchCode)
+          || !/^[0-9-]{1,20}$/.test(accountNumber)) {
+        throw new Error('יש להזין מספר בנק, סניף וחשבון ישראליים תקינים');
+      }
+      return {
+        account_holder: accountHolder,
+        country_code: 'IL',
+        bank_code: bankCode,
+        branch_code: branchCode,
+        account_number: accountNumber,
+        iban: null,
+        bic: null,
+      };
+    }
+    const countryCode = bank.country_code.trim().toUpperCase();
+    const iban = bank.iban.replace(/\s+/g, '').toUpperCase();
+    const bic = bank.bic.replace(/\s+/g, '').toUpperCase() || null;
+    if (!/^[A-Z]{2}$/.test(countryCode)
+        || !/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/.test(iban)
+        || iban.slice(0, 2) !== countryCode
+        || (bic && !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(bic))) {
+      throw new Error('יש להזין קוד מדינה, IBAN ו־BIC תקינים');
+    }
+    return {
+      account_holder: accountHolder,
+      country_code: countryCode,
+      bank_code: null,
+      branch_code: null,
+      account_number: null,
+      iban,
+      bic,
+    };
+  }
+
   async function save() {
     if (!f.name.trim()) { toast('שם ספק הוא שדה חובה', 'error'); return; }
+    let nextBank: SupplierBankDetails | null | undefined;
+    if (bankTouched) {
+      if (bankLoadError) { toast('לא ניתן לעדכן פרטי בנק לפני טעינת המידע הקיים', 'error'); return; }
+      try {
+        nextBank = bankPayload();
+      } catch (error) {
+        toast(toHebrewError(error), 'error');
+        return;
+      }
+    }
     setBusy(true);
     const newRating = f.rating || null; // 0 (cleared) → null; DB checks 1..5
     const ratingChanged = newRating !== (supplier?.rating ?? null);
@@ -307,16 +403,10 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
       rating_updated_at: ratingChanged ? new Date().toISOString() : (supplier?.rating_updated_at ?? null),
     };
     if (supplier) {
-      // The field opens EMPTY now (0112): the list row no longer carries bank_details, because
-      // the column is not selectable by any client role. So "changed" means "something was
-      // typed" — an untouched field leaves the stored details alone rather than clearing them,
-      // which is the safe direction for the column that decides where money goes.
-      const nextBank = f.bank_details.trim() || null;
-      const bankChanged = nextBank !== null;
       const res = await supabase.from('suppliers').update(row).eq('id', supplier.id);
       setBusy(false);
       if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-      if (bankChanged) { setBankStep({ nextBank, supplierId: supplier.id }); return; }
+      if (nextBank !== undefined) { setBankStep({ nextBank, supplierId: supplier.id }); return; }
       toast('הספק עודכן');
       onSaved();
     } else {
@@ -324,8 +414,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         .insert({ ...row, org_id: profile!.org_id }).select('id').single();
       setBusy(false);
       if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-      const nextBank = f.bank_details || null;
-      if (nextBank) {
+      if (nextBank !== undefined) {
         // #106: the row exists bank-less; the details now take the same reasoned step-up
         // path a change to an existing supplier takes.
         toast('הספק נוצר — פרטי הבנק דורשים אימות וסיבה');
@@ -390,7 +479,43 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         <div><label className="label" htmlFor="supplier-cutoff">שעת סגירת הזמנות</label><input id="supplier-cutoff" type="time" className="input" value={f.cutoff_time} onChange={(e) => set('cutoff_time', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-minimum">מינימום הזמנה (₪)</label><input id="supplier-minimum" type="number" className="input num" value={f.min_order_amount} onChange={(e) => set('min_order_amount', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-payment-terms">תנאי תשלום</label><input id="supplier-payment-terms" className="input" placeholder="שוטף + 30" value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} /></div>
-        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-details">פרטי בנק — מלא רק כדי לשנות (אינם מוצגים)</label><input id="supplier-bank-details" ref={bankFieldRef} className="input" value={f.bank_details} onChange={(e) => set('bank_details', e.target.value)} /></div>
+        <div className="sm:col-span-2 rounded-xl border border-line-soft bg-surface-sunken p-4 space-y-3">
+          <div>
+            <label className="label" htmlFor="supplier-bank-kind">סוג פרטי הבנק</label>
+            <select id="supplier-bank-kind" ref={bankFieldRef} className="input" value={bank.kind}
+              onChange={(event) => setBankField('kind', event.target.value)}>
+              <option value="">ללא פרטי בנק</option>
+              <option value="IL">חשבון בישראל</option>
+              <option value="international">חשבון בינלאומי</option>
+            </select>
+          </div>
+          {legacyBank && (
+            <Note tone="await">
+              <span className="block font-medium">טקסט ישן לבדיקה בלבד — אינו מקור לתשלום</span>
+              <span className="block mt-1" dir="ltr">{legacyBank.legacy_bank_details}</span>
+              <span className="block mt-1">יש להזין ולאשר ידנית את השדות המובנים. המערכת אינה מפרשת את הטקסט.</span>
+            </Note>
+          )}
+          {bankLoadError && <ErrorNote message="טעינת פרטי הבנק הקיימים נכשלה. עדכון בנק חסום; שאר פרטי הספק עדיין ניתנים לעריכה." />}
+          {bank.kind && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-holder">שם בעל החשבון *</label><input id="supplier-bank-holder" className="input" value={bank.account_holder} onChange={(event) => setBankField('account_holder', event.target.value)} /></div>
+              {bank.kind === 'IL' ? (
+                <>
+                  <div><label className="label" htmlFor="supplier-bank-code">מספר בנק *</label><input id="supplier-bank-code" inputMode="numeric" dir="ltr" className="input" value={bank.bank_code} onChange={(event) => setBankField('bank_code', event.target.value)} /></div>
+                  <div><label className="label" htmlFor="supplier-bank-branch">מספר סניף *</label><input id="supplier-bank-branch" inputMode="numeric" dir="ltr" className="input" value={bank.branch_code} onChange={(event) => setBankField('branch_code', event.target.value)} /></div>
+                  <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-account">מספר חשבון *</label><input id="supplier-bank-account" inputMode="numeric" dir="ltr" className="input" value={bank.account_number} onChange={(event) => setBankField('account_number', event.target.value)} /></div>
+                </>
+              ) : (
+                <>
+                  <div><label className="label" htmlFor="supplier-bank-country">קוד מדינה (ISO) *</label><input id="supplier-bank-country" maxLength={2} dir="ltr" className="input uppercase" value={bank.country_code} onChange={(event) => setBankField('country_code', event.target.value)} /></div>
+                  <div><label className="label" htmlFor="supplier-bank-bic">BIC / SWIFT</label><input id="supplier-bank-bic" dir="ltr" className="input uppercase" value={bank.bic} onChange={(event) => setBankField('bic', event.target.value)} /></div>
+                  <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-iban">IBAN *</label><input id="supplier-bank-iban" dir="ltr" className="input uppercase" value={bank.iban} onChange={(event) => setBankField('iban', event.target.value)} /></div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
         <div>
           <label className="label" htmlFor="supplier-status">סטטוס</label>
           <select id="supplier-status" className="input" value={f.status} onChange={(e) => set('status', e.target.value)}
@@ -425,7 +550,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         onClose={cancelBankStep}
         onConfirm={(reason) => setBankReauth(reason ?? '')}
         title="עדכון פרטי בנק"
-        message={`פרטי הבנק של ״${supplier?.name ?? f.name}״ ישתנו ל: ${bankStep?.nextBank ?? 'ללא פרטי בנק'}. השינוי דורש אימות סיסמה טרי ונרשם ביומן הביקורת.`}
+        message={`פרטי הבנק של ״${supplier?.name ?? f.name}״ ${bankStep?.nextBank ? `יעודכנו לחשבון ${bankStep.nextBank.country_code} שמסתיים ב־${(bankStep.nextBank.account_number ?? bankStep.nextBank.iban ?? '').slice(-4)}` : 'יוסרו'}. השינוי דורש אימות סיסמה טרי ונרשם ביומן הביקורת.`}
         confirmLabel="אישור העדכון"
         requireReason
         busy={bankBusy}
@@ -571,7 +696,7 @@ export function SupplierCard() {
     // סטטיים מזויפים"), matching how OTD and lead time above already behave.
     { label: 'חריגים פתוחים', value: fmtNum(m?.open_exceptions ?? null), sub: m ? `${fmtNum(m.exceptions_lifetime)} בסה״כ` : 'טרם חושבו מדדים', tone: (m?.open_exceptions ?? 0) > 0 ? 'alert' : 'idle' },
     { label: 'זיכויים פתוחים', value: fmtNum(m?.open_credits ?? null), sub: fmtMoneyExact(m?.open_credits_amount ?? null), tone: (m?.open_credits ?? 0) > 0 ? 'await' : 'idle' },
-    { label: 'שינויי מחיר (180 יום)', value: fmtNum(m?.price_changes_window ?? null), sub: m ? `${fmtNum(m.priced_items)} פריטים` : 'טרם חושבו מדדים', tone: 'idle' },
+    { label: 'שינויי מחיר (90 הימים האחרונים)', value: fmtNum(m?.price_changes_window ?? null), sub: m ? `${fmtNum(m.priced_items)} פריטים` : 'טרם חושבו מדדים', tone: 'idle' },
     { label: 'מינימום הזמנה', value: fmtMoneyExact(s.min_order_amount), tone: 'idle' },
     { label: 'תנאי תשלום', value: s.payment_terms ?? '—', tone: 'idle', numeric: false },
   ];

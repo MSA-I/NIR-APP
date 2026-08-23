@@ -10,6 +10,7 @@ import { APP_ROUTE_POLICY } from '../lib/routePolicy';
 
 const source = readFileSync(join(process.cwd(), 'src', 'pages', 'FinancialSupplier.tsx'), 'utf8');
 const app = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
+const supplierReader = readFileSync(join(process.cwd(), 'src', 'lib', 'financialSuppliers.ts'), 'utf8');
 
 describe('financial supplier capability boundary', () => {
   it('ignores historical matched requests when deciding whether current due exposure is known', () => {
@@ -74,6 +75,27 @@ describe('financial supplier capability boundary', () => {
       const page = readFileSync(join(process.cwd(), 'src', 'pages', file), 'utf8');
       expect(page, file).not.toContain("from('suppliers')");
       expect(page, file).not.toMatch(/supplier\s*:\s*suppliers\s*\(/);
+    }
+  });
+
+  it('keeps full bank destinations out of the general directory and wires them only to edit/payment', () => {
+    expect(supplierReader).toContain("from('financial_supplier_directory')");
+    expect(supplierReader).toContain("from('financial_supplier_bank_accounts')");
+    const fullBankConsumers = [
+      'AccountantPaymentQueue.tsx',
+      'Suppliers.tsx',
+    ];
+    for (const file of fullBankConsumers) {
+      const page = readFileSync(join(process.cwd(), 'src', 'pages', file), 'utf8');
+      expect(page, file).toMatch(/financialSupplierBankAccountMap|readFinancialSupplierBankAccount/);
+    }
+    for (const file of [
+      'Bank.tsx', 'Credits.tsx', 'Exceptions.tsx', 'Expenses.tsx', 'InvoiceDetail.tsx',
+      'Invoices.tsx', 'PaymentRequests.tsx', 'Payments.tsx', 'Reports.tsx',
+      join('dashboards', 'AccountantDashboard.tsx'),
+    ]) {
+      const page = readFileSync(join(process.cwd(), 'src', 'pages', file), 'utf8');
+      expect(page, file).not.toMatch(/financialSupplierBankAccountMap|readFinancialSupplierBankAccount/);
     }
   });
 });
