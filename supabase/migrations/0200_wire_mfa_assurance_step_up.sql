@@ -65,3 +65,22 @@ $$;
 -- it is here so that a future reader cannot mistake the patch for a grant-widening step.
 revoke all on function assert_recent_password_authentication()
   from public, anon, authenticated;
+
+-- ===== A1/A3/A5 re-assertion =====
+-- Every migration after 0057 must re-run the scope proofs so a new table, policy, trigger or
+-- SECURITY DEFINER function cannot land beyond the gate. This migration adds no enforced-table
+-- surface and no exemption row; the assertion proves that rather than assuming it.
+do $$
+declare
+  v_violations text;
+begin
+  select string_agg(assertion || ' -- ' || detail, e'
+' order by assertion, detail)
+    into v_violations
+  from private.scope_enforcement_violations();
+  if v_violations is not null then
+    raise exception e'0200 scope assertions failed:
+%', v_violations;
+  end if;
+end
+$$;

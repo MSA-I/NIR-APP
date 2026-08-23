@@ -1334,6 +1334,9 @@ try {
     Invoke-SqlTest "supabase\tests\p6b_upload_reservations.sql" "P6b upload-reservation renewal, sweep grace and column guard"
     Invoke-SqlTest "supabase\tests\p7_integration_adapters.sql" "P7 webhook subscriptions, enqueue trigger, signed claim and failure ledger"
     Invoke-SqlTest "supabase\tests\p9_five_domains.sql" "P9 notification preferences, search type gate, approval policy and the transition mirror"
+    Invoke-SqlTest "supabase\tests\p74_mfa_assurance.sql" "P74 role-based MFA assurance in the step-up primitive, fail-closed aal parsing and the no-bypass proof"
+    Invoke-SqlTest "supabase\tests\p75_platform_lifecycle.sql" "P75 platform lifecycle: the suspension reason splits, an unclassified table blocks deletion instead of being missed, a reminder cannot claim a send with no provider, and a purge replays an approved manifest under a per-tenant re-check"
+    Invoke-SqlTest "supabase\tests\p76_owner_webhook_verification.sql" "P76 owner webhook registration, verification handshake, SSRF corpus and the offboarding claim fence"
     Invoke-SqlTest "supabase\tests\payment_credit_override.sql" "Payment approval with legal-entity scoped open-credit override"
     Invoke-SqlTest "supabase\tests\monthly_report_snapshots.sql" "Immutable legal-entity monthly accountant snapshots"
     Invoke-Preflight
