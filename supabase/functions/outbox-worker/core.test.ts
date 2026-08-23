@@ -24,7 +24,7 @@ function claimedRow(overrides: Partial<ClaimedRow> = {}): ClaimedRow {
     attempt: 1,
     idempotency_key:
       "sf:e7000000-0000-4000-8000-000000000001:webhook:a7000000-0000-4000-8000-000000000001",
-    url: "https://receiver.example.test/hooks/orders",
+    url: "https://receiver.example.com/hooks/orders",
     body: KAV_BODY,
     timestamp: KAV_TIMESTAMP,
     signature: KAV_HEX,
@@ -75,7 +75,7 @@ test("the known-answer vector matches the SQL-side pinned hex", async () => {
 test("resolveTarget maps a fully resolved row to url, verbatim body and headers", () => {
   const resolved = resolveTarget(claimedRow());
   assert.ok(resolved);
-  assert.equal(resolved.url, "https://receiver.example.test/hooks/orders");
+  assert.equal(resolved.url, "https://receiver.example.com/hooks/orders");
   // Verbatim: the exact string the database signed, never a re-serialization.
   assert.equal(resolved.body, KAV_BODY);
   assert.deepEqual(resolved.headers, {
@@ -149,11 +149,25 @@ test("webhook targets require public HTTPS without credentials or custom ports",
   ]) assert.equal(isAllowedWebhookUrl(rejected, allowed), false, rejected);
 });
 
+test("the shared validator closes the encodings the old inline check missed", () => {
+  // The previous inline guard tested `/^[0-9.]+$/` on the hostname, which is true of a dotted
+  // quad and false of every other inet_aton spelling of the same address. These four are all
+  // 127.0.0.1 to a C resolver, and all four used to be allowlist-eligible.
+  const allowed = new Set(["0x7f.1", "2130706433", "0177.0.0.1", "0x7f000001"]);
+  for (const encoded of allowed) {
+    assert.equal(
+      isAllowedWebhookUrl(`https://${encoded}/supplyflow`, allowed),
+      false,
+      `${encoded} is loopback in another spelling and must be rejected before the allowlist`,
+    );
+  }
+});
+
 test("delivery never follows redirects and reports them as failures", async () => {
   let calls = 0;
   const outcome = await deliverWebhook(
     resolveTarget(claimedRow())!,
-    new Set(["receiver.example.test"]),
+    new Set(["receiver.example.com"]),
     async (_input, init) => {
       calls += 1;
       assert.equal(init?.redirect, "manual");

@@ -18,6 +18,8 @@
 // arrives WITHOUT url/signature/timestamp; resolveTarget() answers null and the worker
 // records a failed attempt (`target_unregistered`) — the wave-5 accounting, preserved.
 
+import { classifyWebhookUrl, guardedFetch } from '../webhook-verify/ssrf.ts';
+
 export interface ClaimedRow {
   outbox_id: string;
   target: string;
@@ -52,31 +54,49 @@ export interface ResolvedDelivery {
   headers: Record<string, string>;
 }
 
-/** Webhooks are an outbound trust boundary. Reject obvious local/private targets before fetch;
- * production egress policy remains the second line of defence against DNS rebinding. */
+/**
+ * Webhooks are an outbound trust boundary, and this is the FIRST of two gates.
+ *
+ * The string half now delegates to `classifyWebhookUrl` (webhook-verify/ssrf.ts) so the
+ * delivery path and the verification handshake reject the same URL for the same reason — the
+ * previous inline check and the registration-time check could drift apart, and a validator that
+ * disagrees with itself across two files is how an encoding gets through one of them. The
+ * behaviour it replaces is preserved exactly, including that a literal address is refused in
+ * every encoding, plus the encodings the inline version missed (`0x7f.1`, `2130706433`).
+ *
+ * The operator allowlist stays on top of it, unchanged: `OUTBOX_ALLOWED_HOSTS` is a deployment
+ * decision about which hosts this worker may talk to at all, and it is deliberately NOT relaxed
+ * here — see the report accompanying this change.
+ *
+ * The SECOND gate is connect time (`guardedFetch` below), which is the only one that closes DNS
+ * rebinding: a host that passes here can still resolve to a private address a moment later.
+ */
 export function isAllowedWebhookUrl(value: string, allowedHosts: ReadonlySet<string>): boolean {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return false;
-  }
-  if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')) return false;
-
-  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return false;
-  // Managed external integrations use DNS names. Reject every literal IP representation,
-  // including IPv4-mapped IPv6, rather than maintaining a bypass-prone address parser here.
-  if (host.includes(':') || /^[0-9.]+$/.test(host)) return false;
-  return allowedHosts.has(host);
+  const classified = classifyWebhookUrl(value);
+  if (!classified.ok) return false;
+  return allowedHosts.has(classified.value.host);
 }
 
 export interface DeliveryOutcome { ok: boolean; code?: number; error?: string }
 
+/**
+ * The default transport: resolve once, refuse the hostname if any answer is non-public, dial the
+ * validated ADDRESS, and carry the registered name only as SNI. `fetch` cannot do this — it
+ * resolves the name again inside the TLS stack, which is exactly the window a rebinding resolver
+ * needs. Redirects are not followed by construction; the caller still classifies a 3xx below so
+ * the recorded outcome is unchanged.
+ */
+const pinnedWebhookFetch: typeof fetch = (input, init) =>
+  guardedFetch(typeof input === 'string' ? input : String(input), {
+    method: (init?.method as string | undefined) ?? 'POST',
+    headers: (init?.headers as Record<string, string> | undefined) ?? {},
+    body: typeof init?.body === 'string' ? init.body : '',
+  });
+
 export async function deliverWebhook(
   resolved: ResolvedDelivery,
   allowedHosts: ReadonlySet<string>,
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = pinnedWebhookFetch,
 ): Promise<DeliveryOutcome> {
   if (!isAllowedWebhookUrl(resolved.url, allowedHosts)) {
     return { ok: false, error: 'target_url_rejected' };
