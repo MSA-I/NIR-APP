@@ -51,21 +51,37 @@ $$;
 revoke all on function public.invoice_three_way_immutable_guard()
   from public, anon, authenticated, service_role;
 
--- Pin the two exact consumption anchors rather than copying the ~1,000-line assessment function.
+-- Pin the exact consumption anchors rather than copying the ~1,000-line assessment function.
+--
+-- TWO live functions read prior-approval consumption, not one. `private.invoice_line_candidates`
+-- (0099:474) subtracts capacity a prior approval already claimed while SELECTING candidates;
+-- `private.invoice_three_way_raw` (0099:1187) recomputes the same figure per order item while
+-- ASSESSING them. Each carries exactly ONE `snapshot.invoice_id, snapshot.assessment` projection
+-- and ONE consumption filter, in its own shape -- `is not null` in the candidate selector,
+-- `= item.id::text` in the raw assessment. Reading a single body and expecting the projection twice
+-- is what the counts below used to assert; that count is only reachable across the two bodies, and
+-- `pg_get_functiondef` returns one. Patching only the raw reader would also leave a reversed
+-- approval still consuming capacity during candidate selection: the reversal would change what an
+-- invoice REPORTS while the next invoice stayed barred from claiming the released quantity.
+-- So both bodies move, each asserted against its own live definition.
 do $patch_consumption$
 declare
   v_definition text;
   v_old text;
   v_new text;
+  v_projection_old constant text := 'snapshot.invoice_id, snapshot.assessment';
+  v_projection_new constant text :=
+    'snapshot.invoice_id, snapshot.assessment, snapshot.reversed_at';
 begin
-  select pg_get_functiondef('private.invoice_three_way_raw(uuid,uuid)'::regprocedure)
+  -- --- private.invoice_line_candidates -- capacity a prior approval already claimed ---
+  select replace(
+      pg_get_functiondef('private.invoice_line_candidates(uuid,uuid)'::regprocedure), e'\r', '')
     into v_definition;
-  v_old := 'snapshot.invoice_id, snapshot.assessment';
-  v_new := 'snapshot.invoice_id, snapshot.assessment, snapshot.reversed_at';
-  if (length(v_definition)-length(replace(v_definition,v_old,'')))/length(v_old) <> 2 then
-    raise exception '0174: latest approval projection anchor moved';
+  if (length(v_definition) - length(replace(v_definition, v_projection_old, '')))
+       / length(v_projection_old) <> 1 then
+    raise exception '0174: candidate approval projection anchor moved';
   end if;
-  v_definition := replace(v_definition, v_old, v_new);
+  v_definition := replace(v_definition, v_projection_old, v_projection_new);
 
   v_old := 'where approved_item ->> ''purchase_order_item_id'' is not null';
   v_new := 'where approval.reversed_at is null' || e'\n'
@@ -73,7 +89,17 @@ begin
   if position(v_old in v_definition) = 0 then
     raise exception '0174: candidate consumption anchor moved';
   end if;
-  v_definition := replace(v_definition, v_old, v_new);
+  execute replace(v_definition, v_old, v_new);
+
+  -- --- private.invoice_three_way_raw -- the per-order-item assessment ---
+  select replace(
+      pg_get_functiondef('private.invoice_three_way_raw(uuid,uuid)'::regprocedure), e'\r', '')
+    into v_definition;
+  if (length(v_definition) - length(replace(v_definition, v_projection_old, '')))
+       / length(v_projection_old) <> 1 then
+    raise exception '0174: latest approval projection anchor moved';
+  end if;
+  v_definition := replace(v_definition, v_projection_old, v_projection_new);
 
   v_old := 'where approved_item ->> ''purchase_order_item_id'' = item.id::text';
   v_new := 'where approval.reversed_at is null' || e'\n'
@@ -82,6 +108,16 @@ begin
     raise exception '0174: prior approval consumption anchor moved';
   end if;
   execute replace(v_definition, v_old, v_new);
+
+  -- Both bodies now gate on the reversal column; neither may be left behind.
+  if position('approval.reversed_at is null' in
+       replace(pg_get_functiondef(
+         'private.invoice_line_candidates(uuid,uuid)'::regprocedure), e'\r', '')) = 0
+     or position('approval.reversed_at is null' in
+       replace(pg_get_functiondef(
+         'private.invoice_three_way_raw(uuid,uuid)'::regprocedure), e'\r', '')) = 0 then
+    raise exception '0174: a prior-consumption reader still ignores reversal';
+  end if;
 end
 $patch_consumption$;
 

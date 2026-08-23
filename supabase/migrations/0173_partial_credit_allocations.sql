@@ -78,9 +78,21 @@ declare
     group by cr.org_id, cr.invoice_id
   )$replacement$;
 begin
-  if position(v_anchor in v_definition) = 0
-     or position('sum(pa.amount) as amount' in v_definition) > 0 then
-    raise exception '0173: p0_invoice_balance_rows credit anchor moved or patch already applied';
+  -- Two DIFFERENT states, measured on disjoint evidence and named separately. The earlier single
+  -- test used 'sum(pa.amount) as amount' as its already-applied sentinel, but the live body has
+  -- summed payment_allocations that way in its `paid` CTE since 0022 -- the sentinel matched the
+  -- function's OWN unchanged text, so the guard fired on a body that was in perfect shape and no
+  -- migration after this one could run. A sentinel must be a property the patch CREATES, never a
+  -- string that also occurs in what it reads.
+  --
+  -- "Already applied" is therefore the DISAPPEARANCE of what this patch removes: the lifecycle
+  -- credit predicate. That is the same predicate section 4 uses to define a stale reader, so the
+  -- two cannot drift apart, and nothing else in this body can reintroduce it.
+  if position('cr.status in (''offset''' in v_definition) = 0 then
+    raise exception '0173: p0_invoice_balance_rows credit patch already applied';
+  end if;
+  if position(v_anchor in v_definition) = 0 then
+    raise exception '0173: p0_invoice_balance_rows credit anchor moved';
   end if;
   execute replace(v_definition, v_anchor, v_replacement);
 end
@@ -649,7 +661,10 @@ begin
      or position('set invoice_id = a.credit_invoice_id' in v_executor) = 0
      or position('into v_linked_credits' in v_executor) = 0
      or position('credit_request_invoice_linked' in v_executor) = 0
-     or position('sum(pa.amount) as amount' in v_balance) = 0 then
+     -- NOT 'sum(pa.amount) as amount': the `paid` CTE has read payment_allocations that way since
+     -- 0022, so that needle passes whether or not section 2 changed anything -- an assertion that
+     -- cannot fail. The join this patch introduces is the only new text in the body.
+     or position('pa.credit_id = cr.id' in v_balance) = 0 then
     raise exception '0173: partial-credit executor or allocation-based balance did not land';
   end if;
 

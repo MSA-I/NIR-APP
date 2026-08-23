@@ -112,9 +112,16 @@ grant select on public.supplier_metrics to authenticated;
 do $$
 declare v_definition text; v_violations text;
 begin
+  -- Needles are the LITERALS only, never the surrounding cast syntax. pg_get_viewdef is a
+  -- deparser: it re-prints a constant from the parse tree as '90 days'::interval and never in the
+  -- `interval '90 days'` prefix form this view is written in. Pinning the prefix form makes the
+  -- positive test fail on every run whatever the view says, and -- worse -- makes the 180-day
+  -- negative test unable to fire even if a 180-day window really did survive. The quoted literal
+  -- is printed verbatim in either rendering, so it is the part that can be pinned. Same reasoning
+  -- as 0171's move from pg_get_viewdef text to pg_depend: assert what the deparser cannot restyle.
   select lower(pg_get_viewdef('public.supplier_metrics'::regclass)) into v_definition;
-  if position('interval ''90 days''' in v_definition)=0
-     or position('interval ''180 days''' in v_definition)>0
+  if position('''90 days''' in v_definition)=0
+     or position('''180 days''' in v_definition)>0
      or position('min(g.received_at)' in v_definition)=0
      or position('exceptions_lifetime' in v_definition)=0
      or position('credits_lifetime' in v_definition)=0 then
