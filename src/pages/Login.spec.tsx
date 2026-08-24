@@ -30,6 +30,29 @@ describe('מסך הכניסה', () => {
     expect(password).toHaveAttribute('type', 'password');
   });
 
+  it('מציב את השיידר משמאל ואת הטופס מימין בפריסת הדסקטופ', () => {
+    render(<MemoryRouter><Login /></MemoryRouter>);
+
+    const visualPanel = screen.getByRole('region', { name: 'זהות InPlace' });
+    const formPanel = screen.getByRole('region', { name: 'כניסה לחשבון' });
+    const split = visualPanel.parentElement;
+
+    expect(split).toHaveAttribute('dir', 'ltr');
+    expect(split?.children[0]).toBe(visualPanel);
+    expect(split?.children[1]).toBe(formPanel);
+    expect(screen.getByRole('link', { name: 'להרשמה' })).toHaveAttribute('href', '/signup');
+  });
+
+  it('מציג כפתור Google עתידי שאינו מבצע פעולה', () => {
+    render(<MemoryRouter><Login /></MemoryRouter>);
+
+    const googleButton = screen.getByRole('button', { name: 'המשך עם Google' });
+    expect(googleButton).toHaveAttribute('aria-disabled', 'true');
+    expect(googleButton).toHaveAttribute('title', 'חיבור Google יתווסף בהמשך');
+    fireEvent.click(googleButton);
+    expect(googleButton).toBeInTheDocument();
+  });
+
   it('מציע מילוי חשבון דמו רק מול הסטאק המקומי', () => {
     vi.stubEnv('VITE_SUPABASE_URL', 'http://127.0.0.1:55431');
     vi.stubEnv('VITE_DEMO_PASSWORD_SEED', 'manualgate2026');

@@ -74,6 +74,9 @@ precision highp float;
 uniform vec2 u_res;
 uniform float u_time;
 uniform vec3 u_colors[5];
+uniform vec2 u_pointer;
+uniform vec2 u_pointer_velocity;
+uniform float u_pointer_influence;
 
 out vec4 outColor;
 
@@ -121,9 +124,17 @@ void main() {
   vec2 uv = gl_FragCoord.xy / u_res;
   float aspect = u_res.x / u_res.y;
   vec2 p = vec2(uv.x * aspect, uv.y) * 1.8;
-  // ~0.03 field-units/sec is the "takes half a minute to feel different" pacing; faster reads
-  // as weather, not as a control room at rest.
-  float t = u_time * 0.032;
+  // A local curl follows the pointer instead of translating the whole field. Fast movement pulls
+  // a short wake through the fold; stopped movement still bends the nearby texture gently.
+  vec2 pointerDelta = (uv - u_pointer) * vec2(aspect, 1.0);
+  float pointerFalloff = exp(-3.8 * dot(pointerDelta, pointerDelta));
+  float pointerSpeed = clamp(length(u_pointer_velocity), 0.0, 1.0);
+  vec2 pointerCurl = vec2(-pointerDelta.y, pointerDelta.x);
+  p += pointerCurl * pointerFalloff * u_pointer_influence * (0.09 + 0.09 * pointerSpeed);
+  p -= u_pointer_velocity * pointerFalloff * u_pointer_influence * 0.03;
+
+  // Faster than the original near-static drift, still slow enough for a financial workspace.
+  float t = u_time * 0.052;
 
   // Two warp passes are what makes the field fold into itself: one pass only drifts, a third
   // reads as churn.
@@ -145,12 +156,18 @@ void main() {
   // the orbit lives in low-x mid-y territory, a corner guard zeroes whatever gaussian tail still
   // reaches top-start, and a bottom fade protects the copy anchored there. The two orbit periods
   // are incommensurate on purpose — the cycle never visibly repeats.
-  vec2 lobeCenter = vec2(0.36 + 0.20 * cos(u_time * 0.21), 0.46 + 0.16 * sin(u_time * 0.13));
+  vec2 orbitCenter = vec2(0.36 + 0.24 * cos(u_time * 0.29), 0.46 + 0.19 * sin(u_time * 0.18));
+  vec2 pointerCenter = clamp(u_pointer - u_pointer_velocity * 0.08, vec2(0.08), vec2(0.92));
+  vec2 lobeCenter = mix(orbitCenter, pointerCenter, 0.22 * u_pointer_influence);
   vec2 away = (uv - lobeCenter) * vec2(aspect, 1.0);
   float lobe = exp(-4.0 * dot(away, away));
+  vec2 wakeCenter = clamp(pointerCenter - u_pointer_velocity * 0.15, vec2(0.08), vec2(0.92));
+  vec2 wakeAway = (uv - wakeCenter) * vec2(aspect, 1.0);
+  float wake = exp(-6.5 * dot(wakeAway, wakeAway));
   float guard = 1.0 - smoothstep(0.55, 0.90, uv.x) * smoothstep(0.55, 0.90, uv.y);
   guard *= smoothstep(0.03, 0.22, uv.y);
-  float sheen = lobe * guard;
+  // max(), not addition: mouse response can move the highlight but never raise its measured cap.
+  float sheen = max(lobe, wake * pointerSpeed * u_pointer_influence * 0.18) * guard;
   // Amplitudes set by measurement, not by eye. Method: hide the copy, screenshot the panel eight
   // times over 12.6s, take the brightest pixel inside each text element's own box. Result here is
   // rgb(68,105,109) = 6.02:1 under white and 5.6:1 under shell-ink — AA with margin. The first
@@ -239,12 +256,28 @@ function boot(canvas: HTMLCanvasElement): Cleanup {
   gl.uniform3fv(gl.getUniformLocation(program, 'u_colors'), palette);
   const resLoc = gl.getUniformLocation(program, 'u_res');
   const timeLoc = gl.getUniformLocation(program, 'u_time');
+  const pointerLoc = gl.getUniformLocation(program, 'u_pointer');
+  const pointerVelocityLoc = gl.getUniformLocation(program, 'u_pointer_velocity');
+  const pointerInfluenceLoc = gl.getUniformLocation(program, 'u_pointer_influence');
 
   let sized = false;
   let time = 0;
   let last: number | null = null;
   let raf = 0;
   let disposed = false;
+  let pointerX = 0.36;
+  let pointerY = 0.46;
+  let pointerTargetX = pointerX;
+  let pointerTargetY = pointerY;
+  let pointerVelocityX = 0;
+  let pointerVelocityY = 0;
+  let pointerVelocityTargetX = 0;
+  let pointerVelocityTargetY = 0;
+  let pointerInfluence = 0;
+  let pointerInfluenceTarget = 0;
+  let lastPointerX = pointerX;
+  let lastPointerY = pointerY;
+  let lastPointerTime: number | null = null;
 
   const resize = (): void => {
     const rect = canvas.getBoundingClientRect();
@@ -269,7 +302,24 @@ function boot(canvas: HTMLCanvasElement): Cleanup {
   const renderFrame = (): void => {
     if (!sized || disposed) return;
     gl.uniform1f(timeLoc, time);
+    gl.uniform2f(pointerLoc, pointerX, pointerY);
+    gl.uniform2f(pointerVelocityLoc, pointerVelocityX, pointerVelocityY);
+    gl.uniform1f(pointerInfluenceLoc, pointerInfluence);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  };
+
+  const settlePointer = (deltaSeconds: number): void => {
+    const positionEase = 1 - Math.exp(-deltaSeconds * 4.5);
+    const velocityEase = 1 - Math.exp(-deltaSeconds * 7);
+    const influenceEase = 1 - Math.exp(-deltaSeconds * (pointerInfluenceTarget > pointerInfluence ? 4 : 2.2));
+    pointerX += (pointerTargetX - pointerX) * positionEase;
+    pointerY += (pointerTargetY - pointerY) * positionEase;
+    pointerVelocityX += (pointerVelocityTargetX - pointerVelocityX) * velocityEase;
+    pointerVelocityY += (pointerVelocityTargetY - pointerVelocityY) * velocityEase;
+    pointerInfluence += (pointerInfluenceTarget - pointerInfluence) * influenceEase;
+    // Velocity is a gesture, not a permanent direction: decay even while the cursor rests inside.
+    pointerVelocityTargetX *= Math.exp(-deltaSeconds * 7);
+    pointerVelocityTargetY *= Math.exp(-deltaSeconds * 7);
   };
 
   const tick = (timestamp: number): void => {
@@ -287,7 +337,9 @@ function boot(canvas: HTMLCanvasElement): Cleanup {
     last = timestamp - (elapsed % interval);
     // Own clock from clamped deltas: raw performance.now() would teleport the field after a
     // debugger pause or tab restore instead of letting it resume mid-fold.
-    time += Math.min(elapsed, 100) / 1000;
+    const deltaSeconds = Math.min(elapsed, 100) / 1000;
+    time += deltaSeconds;
+    settlePointer(deltaSeconds);
     renderFrame();
     raf = requestAnimationFrame(tick);
   };
@@ -324,6 +376,34 @@ function boot(canvas: HTMLCanvasElement): Cleanup {
     else if (!motion.matches) startLoop();
   };
 
+  const pointerSurface = canvas.parentElement ?? canvas;
+  const onPointerMove = (event: PointerEvent): void => {
+    if (event.pointerType === 'touch') return;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    const nextX = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    const nextY = Math.min(1, Math.max(0, 1 - (event.clientY - rect.top) / rect.height));
+    const eventTime = event.timeStamp;
+    if (lastPointerTime !== null) {
+      const delta = Math.max(8, Math.min(80, eventTime - lastPointerTime)) / 1000;
+      pointerVelocityTargetX = Math.min(1, Math.max(-1, ((nextX - lastPointerX) / delta) * 0.05));
+      pointerVelocityTargetY = Math.min(1, Math.max(-1, ((nextY - lastPointerY) / delta) * 0.05));
+    }
+    pointerTargetX = nextX;
+    pointerTargetY = nextY;
+    pointerInfluenceTarget = 1;
+    lastPointerX = nextX;
+    lastPointerY = nextY;
+    lastPointerTime = eventTime;
+  };
+
+  const onPointerLeave = (): void => {
+    pointerInfluenceTarget = 0;
+    pointerVelocityTargetX = 0;
+    pointerVelocityTargetY = 0;
+    lastPointerTime = null;
+  };
+
   const observer = new ResizeObserver(() => {
     resize();
     // Resizing the drawing buffer clears it; repaint at once so the reduced-motion still frame
@@ -343,6 +423,9 @@ function boot(canvas: HTMLCanvasElement): Cleanup {
   resize();
   observer.observe(canvas);
   canvas.addEventListener('webglcontextlost', onContextLost);
+  pointerSurface.addEventListener('pointermove', onPointerMove, { passive: true });
+  pointerSurface.addEventListener('pointerleave', onPointerLeave);
+  pointerSurface.addEventListener('pointercancel', onPointerLeave);
   motion.addEventListener('change', onMotionChange);
   document.addEventListener('visibilitychange', onVisibility);
   onMotionChange();
@@ -353,6 +436,9 @@ function boot(canvas: HTMLCanvasElement): Cleanup {
     stopLoop();
     observer.disconnect();
     canvas.removeEventListener('webglcontextlost', onContextLost);
+    pointerSurface.removeEventListener('pointermove', onPointerMove);
+    pointerSurface.removeEventListener('pointerleave', onPointerLeave);
+    pointerSurface.removeEventListener('pointercancel', onPointerLeave);
     motion.removeEventListener('change', onMotionChange);
     document.removeEventListener('visibilitychange', onVisibility);
     gl.deleteVertexArray(vao);
