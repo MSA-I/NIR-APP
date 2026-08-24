@@ -389,16 +389,26 @@
 
 ## תהליכים חיצוניים וציות
 
-### §3 — Rules Engine ו־Report Jobs אושרו לתכנון; Workflow Engine נדחה סופית
+### §3 — Rules Engine תוכנן והוגדר היקף; Report Jobs נסגר; Workflow Engine נדחה סופית
 
-- **מצב:** הכרעות הבעלים #257–#259 מבדילות בין שלוש היכולות. Workflow Engine כללי לא ייבנה;
-  מכונות המצב והפקודות בעלות־השם נשארות מקור האמת. Rules Engine ו־Report Jobs אושרו לתכנון בלבד,
-  ועדיין `NOT_DESIGNED / NOT_IMPLEMENTED`. כלל רשאי להתריע, לנתב או להחמיר בלבד; job משרת דוחות
-  קיימים וכבדים ואינו ממציא דוח או שדה.
+- **מצב (עודכן 23.08.2026):** שלוש היכולות נפרדו סופית.
+  **Workflow Engine** — לא ייבנה (#257); מכונות המצב והפקודות בעלות־השם נשארות מקור האמת.
+  **Rules Engine** — תוכנן ב־`docs/PLAN-rules-engine-20260823.md` והוכרע: **הכותב הוא המפעיל,
+  לא הבעלים** (‏#258 תוקן; ‏`0076:237-241` גובר), **הצרכן** הוא שלושת הספים ב־`src/lib/alerts.ts`
+  ‏(`PRICE_INCREASE_WINDOW_DAYS` · `ABOVE_AVG_MARGIN` · `DUE_SOON_DAYS`) עם baseline זהה לערך
+  הקיים, **ירידה מותרת עד ה־baseline ולא מתחתיו**, וכל שינוי נרשם ב־`audit_logs` בארגון היעד.
+  ‏`DECIDED / DESIGNED / NOT_IMPLEMENTED`.
+  **Report Jobs** — **נסגר כפריט פעיל** (#259 עודכן): אין דוח קיים שמצדיק תור. כל דוח נבנה
+  בדפדפן; הארטיפקט השרתי היחיד (‏ייצוא offboarding) כבר בנוי ב־`0103`; לא נמדד ולו דוח אחד;
+  ומה שכבד כבד מ־N+1/אינדקס/ספירה — סיבות שתור אינו מתקן. `DECIDED / WITHDRAWN / NOT_BUILT`.
 - **ראיה:** `OPEN-DECISIONS.md` #257–#259, ‏`INTEGRATION-ARCHITECTURE.md`,
-  ‏`read_allowed_transitions()` ו־`p9_five_domains.sql`.
-- **הצעד הבא:** שתי תוכניות נפרדות ומצומצמות — authoring/simulation/conflicts ל־Rules;
-  worker/storage/retention/permissions ל־Report Jobs. אין מיגרציה או מימוש מכוח ההכרעה בלבד.
+  ‏`read_allowed_transitions()`, ‏`p9_five_domains.sql`, ‏`0076:237-241,252,295-297`,
+  ‏`0126:20-21`, ‏`0006:159`, ‏`docs/PLAN-rules-engine-20260823.md`,
+  ‏`docs/PLAN-report-jobs-20260823.md`.
+- **הצעד הבא:** ל־Rules — מימוש לפי §8 בתוכנית: מיגרציה `0183`, סוויטה `p69`, מחיקת
+  ‏`AlertRuleControl.tsx`, וסגירת האמת הכפולה ב־`assistant/tools/open-alerts.ts:110-125`.
+  ל־Report Jobs — **אין צעד**; הפריט חוזר רק בהתקיים שני התנאים ב־§8 של התוכנית שלו.
+  **אין מיגרציה או מימוש מכוח ההכרעה בלבד.**
 
 ### §5 — אין הוכחת webhook ליעד חיצוני אמיתי
 
