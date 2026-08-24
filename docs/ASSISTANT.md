@@ -324,17 +324,17 @@ offboarding, suspended או actor שהשתנה אחרי טעינת history אי�
 | למה חשבונית חסומה | `IMPLEMENTED` | `explain_invoice_block`; קודי וסבילויות three-way-match של השרת |
 | מה הוזמן, התקבל וחויב | `IMPLEMENTED` | `compare_order_receipt_invoice`; quantities/deltas מה-RPC הקנוני |
 | שורות מעל מחיר ההזמנה | `IMPLEMENTED_PER_INVOICE` | אותו כלי מול snapshot ההזמנה; רשימה חוצת-חשבוניות היא `DOES_NOT_EXIST` |
-| ספקים שהעלו מחיר החודש | `BLOCKED_DECISION #189` | אין כיוון/baseline/month/aggregation מוכרעים |
+| ספקים שהעלו מחיר החודש | `IMPLEMENTED_CALENDAR_MONTH` | `get_monthly_price_rises` מעל `0203`; חודש קלנדרי מ-1 בחודש לפי `Asia/Jerusalem`, delta נטו חיובי בלבד, ושורה בלי בסיס סמכותי מוחרגת כ-`לא ניתן למדוד` ולא נספרת כאפס |
 | כסף שממתין לזיכוי | `IMPLEMENTED_WITH_SCOPE_LIMIT` | `get_open_credits`; ‏`DEBT §49` נשאר גלוי |
 | הזמנות שנשלחו ולא אושרו | `IMPLEMENTED` | `get_orders_awaiting_confirmation`; סטטוס `sent`, RLS ו-pagination |
 | תנועות בנק לא מותאמות | `IMPLEMENTED_ROLE_BOUND` | `get_unmatched_bank_transactions`; owner/accountant בלבד, projection ללא raw/reference |
 | הספק שמאחר הכי הרבה וגודל המדגם | `PARTIAL / BLOCKED_DECISION #30` | `get_supplier_performance` מחזיר מדדים ומדגם; אינו ממציא פונקציית דירוג |
 | מוצרים שצפויים להיגמר | `IMPLEMENTED_READ_ONLY` | `get_inventory_risk`; null נשאר “לא נמדד”, incoming אינו מנוכה |
-| המלצת ספק / חיסכון / הצעת רכש | `BLOCKED_DECISION #190` | אין calculation owner; ‏#109 אוסר כתיבה ישירה ל-PO |
+| המלצת ספק / חיסכון / הצעת רכש | `IMPLEMENTED_EXPLAIN_ONLY` | `get_purchase_comparison` מעל `0203`, מייבא את `compareLine`/`summarizeComparison` מ-`src/lib/orderComparison.ts` כדי שלא תהיה נוסחה שנייה; מחזיר breach במקום להעלות כמות, ואינו כותב PO (‏#109/#182) |
 | טיוטת הזמנת רכש | `BLOCKED_DECISION #109/#182/#190` | state machine קיים; composer ופקודת draft בטוחה אינם קיימים |
 | טיוטת דרישת תשלום | `BLOCKED_DECISION #182` | `create_payment_request` מועמד בלבד; אין composer/revalidation/idempotency מחוברים |
-| תזכורת לספק | `BLOCKED_DECISION #191` | אין external-message capability או command קנוני |
-| עזרה על המוצר מ-metadata | `BLOCKED_DECISION #192` | אין registry/corpus סמכותי; route policy לבדה אינה תוכן עזרה |
+| תזכורת לספק | `IMPLEMENTED_DRAFT_ONLY` | `draft_supplier_reminder` מחזיר עובדות בלבד; הגוף נכתב כבלוק `draft` שתוויתו קבוע של המוצר, ספרותיו מוצמדות לערכי עובדות, ו-`נשלח` נדחה. owner/office בלבד. אין external-message capability, ו-`check:assistant-no-send` שומר על כך |
+| עזרה על המוצר מ-metadata | `IMPLEMENTED_REGISTRY_ONLY` | `get_product_help` מעל `src/lib/assistant/productHelpRegistry.ts`; ‏route הוא מפתח של `APP_ROUTE_POLICY`, תפקידי רשומה מצרים ולא מרחיבים, עברית היא locale הבסיס, ואין fallback — שאלה שאין לה רשומה נענית `no_capability` |
 | חיפוש ישות וניווט | `IMPLEMENTED_LOCATOR_ONLY` | `find_entity`; type/route allowlist ו-current-role validation |
 | סיכום/התראות/חשיפת תשלום | `IMPLEMENTED_WITH_NAMED_PARTIALS` | שלושת הכלים מחזירים failures וכיסוי; אין “אפס” במקום נתון שלא נמדד |
 | read tools / external sending / live evaluation switches | `BLOCKED_DECISION #193` | UI כרוך ב-read tools; שתי האחרות אינן פעילות ואינן מוצגות כיכולת קיימת |
@@ -432,7 +432,7 @@ focus/return path, source side-by-side, history open וניגודיות מיני
 |---|---|---|---|---|
 | 1. Contracts ו־client boundary | `contracts.ts`, ‏`client.ts`, ‏`errorCodes.ts` | Zod strict ל־ask/run/history; 2xx פגום נכשל סגור | `client.spec.ts`, ‏typecheck | שינוי wire דורש Edge+client באותו commit |
 | 2. Actor, flags ומכסה | `auth.ts`, ‏`flags.ts`, ‏`runSession.ts` | actor נפתר בכל שימוש; flags exposure בלבד; fingerprint מנקה זיכרון/cache | auth/flags/component negative tests | מכסה עסקית #180 חוסמת activation |
-| 3. Read tools ו־capability map | `tools/*`, ‏§7 | 13 כלים allowlisted, projection מפורש ו־server calculation owner | tools/reads/business suites | #189–#192 נשארים יכולות חסרות ממוספרות |
+| 3. Read tools ו־capability map | `tools/*`, ‏§7 | 17 כלים allowlisted, projection מפורש ו־server calculation owner | tools/reads/business/readmodels suites | #189–#192 מומשו ב-24.08.2026; ‏#193 נשאר: אין מתג כתיבה או שליחה, כי היכולת אינה קיימת |
 | 4. Provider ו־egress | `provider.ts`, ‏`egress.ts`, ‏`0166` | server-only provider, lease מסוג `assistant`, אין fallback ספק | provider/egress, ‏`p58` | ממשל #179 ומחיר #183 חוסמים activation |
 | 5. Validation ו־evidence authorization | `validate.ts`, ‏`evidence-authorization.ts` | semantic claim + source/route/current actor reauthorization | deleted/hidden/tenant/role/scope negative tests | כשל מסיר תשובה שלמה, לא ממציא redaction |
 | 6. Persistence, deletion ו־retention | `0164`, ‏`history.ts`, ‏§6 | 90 יום history, ‏30 יום proposal לא־מבוצע, delete עצמי מבוקר | `p56`, history Deno tests | backup/provider deletion נשאר ממשל #179/#181 |
