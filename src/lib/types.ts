@@ -131,12 +131,31 @@ export interface SearchHit {
 export interface Category { id: string; org_id: string; name: string; sort: number }
 
 export type SupplierStatus = 'active' | 'inactive' | 'problematic' | 'pending';
+export interface SupplierBankDetails {
+  supplier_id?: string;
+  account_holder: string;
+  country_code: string;
+  bank_code: string | null;
+  branch_code: string | null;
+  account_number: string | null;
+  iban: string | null;
+  bic: string | null;
+  migration_pending?: boolean;
+}
+
+export interface SupplierBankMigrationItem {
+  supplier_id: string;
+  legacy_bank_details: string;
+  status: 'pending';
+}
+
 export interface Supplier {
   id: string; org_id: string; name: string;
   tax_id: string | null; contact_name: string | null; phone: string | null;
   whatsapp: string | null; email: string | null; address: string | null;
   delivery_days: number[]; cutoff_time: string | null;
   min_order_amount: number | null; payment_terms: string | null;
+  /** Legacy column. 0171 clears it and keeps review-only text in a private migration queue. */
   bank_details: string | null; notes: string | null;
   status: SupplierStatus; deleted_at: string | null;
 }
@@ -302,7 +321,7 @@ export interface BankImport {
 }
 export interface BankTransaction {
   id: string; org_id: string; import_id: string; tx_date: string; description: string;
-  amount: number; is_debit: boolean; reference: string | null; raw: Record<string, string>;
+  amount: number; is_debit: boolean; reference: string | null; raw: Record<string, unknown>;
   supplier_id: string | null; status: BankTxStatus; row_hash: string;
   supplier?: Supplier;
 }
@@ -348,6 +367,8 @@ export type DocumentProcessingStatus =
   | 'review'
   | 'completed'
   | 'failed';
+
+export type DocumentScanCornersSource = 'automatic' | 'manual' | 'full_frame_fallback';
 
 export type ExtractionBlockType = 'text' | 'heading' | 'table' | 'image' | 'handwriting';
 export type ExtractionMarkKind = 'circle' | 'check' | 'cross' | 'underline' | 'star' | 'custom' | 'unknown';
@@ -442,6 +463,9 @@ export interface AuditLog {
   entity_type: string; entity_id: string | null;
   old_values: Record<string, unknown> | null; new_values: Record<string, unknown> | null;
   reason: string | null; created_at: string;
+  scope_domain?: 'financial_accounting' | 'organization_identity_platform';
+  scope_class?: 'legal_entity' | 'cross_scope';
+  legal_entity_id?: string | null;
 }
 
 export interface MonthlyExport {

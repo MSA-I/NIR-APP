@@ -1,0 +1,103 @@
+// billing-webhook -- the signed door for provider billing events.
+//
+// 0157 built the storage, the idempotency, the attribution and the audit and said what remained:
+// "a signature check and a parser". Both now exist -- the signature check in
+// _shared/billing-adapter.ts, implemented from Paddle's published contract (read 23.08.2026,
+// https://developer.paddle.com/webhooks/about/signature-verification/), and the decision in
+// ./core.ts, which is where every test points. This file is wiring and nothing else: it must never
+// read, parse or reformat the request body, because the bytes that are verified have to be the
+// bytes that arrived. core.test.ts asserts that as a property of this source.
+//
+// verify_jwt = false, and for a concrete reason rather than by habit. There is no user here and no
+// Authorization header to check: the credential IS the provider's signature over the body, the
+// tenant-export and supplier-portal shape. A JWT gate in front of this function would reject every
+// genuine delivery and secure nothing.
+//
+// WHAT THIS FUNCTION CANNOT DO. Per OPEN-DECISIONS #213 Paddle is
+// SELECTED / ACCOUNT_NOT_PROVEN / KYC_NOT_PROVEN / ISRAEL_PAYOUT_NOT_PROVEN / NOT_INTEGRATED, and
+// 0187 seeds every provider disabled with no function able to enable one. So even a perfectly
+// signed, perfectly attributed event changes no entitlement today: it is recorded, dead-lettered
+// with `provider_not_enabled`, and visible in the reconciliation reads. Deploying this function is
+// not billing activation.
+//
+// Required environment (supabase secrets set ...):
+//   BILLING_PROVIDER          -- which provider this deployment serves; 'paddle'
+//   PADDLE_WEBHOOK_SECRET     -- the notification destination's endpoint secret (pdl_ntfset_...)
+//   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY -- injected by the platform
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.91.1';
+import { billingAdapterFor } from '../_shared/billing-adapter.ts';
+import { handleWebhook, type WebhookPorts } from './core.ts';
+
+Deno.serve((incoming) => {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!supabaseUrl || !serviceKey) {
+    return new Response(JSON.stringify({ error: 'refused' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    });
+  }
+
+  const provider = Deno.env.get('BILLING_PROVIDER') ?? 'paddle';
+  const resolved = billingAdapterFor(provider, (name) => Deno.env.get(name));
+  const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
+  const ports: WebhookPorts = {
+    adapter: resolved.ok ? resolved.value : null,
+    providerName: provider,
+    adapterRefusal: resolved.ok ? undefined : { code: resolved.code, detail: resolved.detail },
+
+    // 0157's ingestion door. It resolves the organization from the provider-customer link we wrote
+    // ourselves and never from the payload, which is why nothing but the customer id is passed.
+    recordEvent: async (event) => {
+      const { data, error } = await admin.rpc('service_record_billing_event', {
+        p_provider: event.provider,
+        p_provider_event_id: event.providerEventId,
+        p_event_type: event.eventType,
+        p_provider_customer_id: event.providerCustomerId,
+        p_payload: event.payload,
+      });
+      if (error) {
+        console.error('billing-webhook record failed', error.code);
+        return { ok: false, detail: error.code ?? 'record_failed' };
+      }
+      const outcome = data as { status?: string; idempotent?: boolean } | null;
+      return { ok: true, status: outcome?.status, idempotent: outcome?.idempotent };
+    },
+
+    // 0187's dispatcher. Everything it refuses becomes a dead letter with a reason; nothing it
+    // refuses changes entitlement.
+    applyEvent: async (providerEventId, eventProvider) => {
+      const { data, error } = await admin.rpc('service_apply_billing_event', {
+        p_provider: eventProvider,
+        p_provider_event_id: providerEventId,
+      });
+      if (error) {
+        console.error('billing-webhook apply failed', error.code);
+        return { ok: false, detail: error.code ?? 'apply_failed' };
+      }
+      const outcome = data as
+        { status?: string; applied?: boolean; idempotent?: boolean; reason_code?: string } | null;
+      return {
+        ok: true,
+        status: outcome?.status,
+        applied: outcome?.applied,
+        idempotent: outcome?.idempotent,
+        reasonCode: outcome?.reason_code,
+      };
+    },
+
+    // Counted, never stored: private.billing_events uniques on the event id the request CLAIMS, so
+    // writing an unverified one would let an attacker pre-register an identifier and make the
+    // genuine delivery look like a replay. The counter holds no caller-supplied value at all.
+    recordRejection: async (rejectedProvider, reasonCode) => {
+      const { error } = await admin.rpc('service_record_billing_ingress_rejection', {
+        p_provider: rejectedProvider,
+        p_reason_code: reasonCode,
+      });
+      if (error) console.error('billing-webhook rejection counter failed', error.code);
+    },
+  };
+
+  return handleWebhook(incoming, ports);
+});

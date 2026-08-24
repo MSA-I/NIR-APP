@@ -108,11 +108,11 @@ insert into profiles (id, org_id, full_name, role) values
   ('25000000-0000-0000-0000-000000000001', '15000000-0000-0000-0000-000000000001',
    'P5 Owner', 'owner');
 
--- The supplier fixture carries bank details ON PURPOSE: the trigger-authored audit row
--- holds the full row image, and the map's payload allowlist must not leak it.
-insert into suppliers (id, org_id, name, bank_details) values
+-- Legacy bank text is retired by 0171. Supplier creation remains bank-less; payment-destination
+-- changes use their dedicated command, whose audit contains fingerprint/last-four only.
+insert into suppliers (id, org_id, name) values
   ('35000000-0000-0000-0000-000000000001', '15000000-0000-0000-0000-000000000001',
-   'P5 Supplier', 'IL00-0000-secret-account');
+   'P5 Supplier');
 
 insert into invoices (id, org_id, supplier_id, invoice_number, invoice_date,
                       amount_before_vat, vat_amount, total_amount, review_status) values
@@ -126,7 +126,7 @@ insert into invoices (id, org_id, supplier_id, invoice_number, invoice_date,
 
 -- The fixture supplier insert itself proves the trigger-authored arm of the map:
 -- audit_row_change wrote ('insert','suppliers') and the fan-out projected ONLY the
--- allowlisted keys -- the bank details stayed in the audit trail.
+-- allowlisted keys. No legacy or structured bank field belongs in this event.
 select pg_temp.p5_assert(
   (select count(*) from domain_events
    where org_id = '15000000-0000-0000-0000-000000000001'
@@ -135,11 +135,12 @@ select pg_temp.p5_assert(
   'a supplier fixture insert must fan out to exactly one supplier.created event');
 
 select pg_temp.p5_assert(
-  (select payload ? 'name' and payload ? 'status' and not payload ? 'bank_details'
+  (select payload ? 'name' and payload ? 'status'
+      and not (payload ?| array['bank_details','account_number','iban','bic','bank_code','branch_code'])
    from domain_events
    where event_type = 'supplier.created'
      and entity_id = '35000000-0000-0000-0000-000000000001'),
-  'supplier.created payload must hold only allowlisted keys -- never bank_details');
+  'supplier.created payload must hold only allowlisted keys -- never bank destination data');
 
 -- Direct invoice fixture inserts use trigger action ('insert','invoices'), which is
 -- deliberately NOT mapped: invoice.created belongs to the reasoned creation command.

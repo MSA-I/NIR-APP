@@ -7,7 +7,7 @@ import { useToast, Skeleton, ConfirmDialog, ErrorNote, Modal, Note } from './ui'
 import {
   WEAK_CAPTURE_LABEL,
   WEAK_CAPTURE_PROCEED_LABEL,
-  findWeakCaptures,
+  screenImageQuality,
   weakCaptureHint,
   weakCaptureRetryLabel,
   weakCaptureTitle,
@@ -619,25 +619,36 @@ export function syncPendingDocumentPhotos() {
 /**
  * The picked batch, screened before a single byte is uploaded (owner's ruling: WARN, never block).
  *
- * `weak` names the captures the measurement is not confident about; `files` is the batch exactly
- * as picked. The screening never rejects and never rewrites: on any doubt `findWeakCaptures`
- * returns nothing and the batch uploads as it always did.
+ * `weak` names measured captures that need attention; `serverRequired` names HEIC/HEIF the browser
+ * cannot decode. `files` remains the batch exactly as picked. Neither path rewrites source bytes.
  */
 export interface ScreenedPick {
   files: File[];
   weak: WeakCapture[];
+  serverRequired: File[];
 }
 
 export async function screenPickedFiles(files: File[]): Promise<ScreenedPick> {
   try {
-    return { files, weak: await findWeakCaptures(files) };
+    const screening = await screenImageQuality(files);
+    return { files, weak: screening.weak, serverRequired: screening.serverRequired };
   } catch {
     // A quality check must never be the reason an upload fails.
-    return { files, weak: [] };
+    return { files, weak: [], serverRequired: [] };
   }
 }
 
-/** The files of a screened pick minus the weak ones — the good captures, never blocked by a warning. */
+/**
+ * The picked batch minus the captures the person was asked to take again.
+ *
+ * **`serverRequired` stays in, deliberately.** A weak capture is a photograph of a document that
+ * will not read well — dropping it and reopening the camera is the whole point of the warning.
+ * A HEIC is not that: the original is intact and it is only this browser that cannot read the
+ * container, which is exactly the case the server derivative lane exists for (#246: no rejection
+ * and no silent upload without a check). Omitting it here would make Escape, the backdrop and
+ * the X throw away an intact document with no toast and no row in the Upload Center — a
+ * rejection, and the one outcome the decision rules out.
+ */
 export function pickWithoutWeak(pick: ScreenedPick): File[] {
   const weak = new Set(pick.weak.map((item) => item.file));
   return pick.files.filter((file) => !weak.has(file));
@@ -647,10 +658,14 @@ export function pickWithoutWeak(pick: ScreenedPick): File[] {
  * "This one will not read well" — said while the person is still standing in front of the
  * document, which is the only moment the information is worth anything.
  *
- * Three outcomes, and none of them loses a file silently:
- *  - re-take     → the good captures upload, the weak ones are dropped, the picker reopens
+ * Three outcomes, and none of them loses or routes a file silently:
+ *  - re-take     → the weak captures are dropped and the picker reopens; everything else uploads
  *  - upload anyway → everything uploads, exactly as it was picked
- *  - dismiss (Escape/backdrop/X) → the good captures upload, the weak ones are dropped
+ *  - dismiss (Escape/backdrop/X) → same as re-take without reopening the picker
+ *
+ * In `serverOnly` mode — nothing weak, only a container this browser cannot read — there is no
+ * re-take at all. On an iPhone another capture is another HEIC, so the button would be a loop
+ * that never terminates in a readable file. The single action keeps the original and continues.
  */
 export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDismiss }: {
   pick: ScreenedPick;
@@ -659,13 +674,16 @@ export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDi
   onUploadAnyway: () => void;
   onDismiss: () => void;
 }) {
-  const goodCount = pick.files.length - pick.weak.length;
+  const goodCount = pick.files.length - pick.weak.length - pick.serverRequired.length;
+  const serverOnly = pick.weak.length === 0 && pick.serverRequired.length > 0;
   return (
     <Modal
-      open={pick.weak.length > 0}
+      open={pick.weak.length > 0 || pick.serverRequired.length > 0}
       onClose={onDismiss}
-      title={weakCaptureTitle(pick.weak)}
-      description={weakCaptureHint(pick.weak, source)}
+      title={serverOnly ? 'בדיקת התמונה תושלם בשרת' : weakCaptureTitle(pick.weak)}
+      description={serverOnly
+        ? 'הדפדפן אינו יכול לקרוא את פורמט התמונה. המקור יישמר ללא שינוי, ולאחר ההעלאה תופק בשרת נגזרת מוגבלת ובת־מעקב לצורך בדיקה ו־OCR.'
+        : weakCaptureHint(pick.weak, source)}
     >
       {pick.files.length > 1 && (
         <ul className="mb-3 divide-y divide-line-soft rounded-lg border border-line-soft text-sm">
@@ -677,6 +695,15 @@ export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDi
           ))}
         </ul>
       )}
+      {pick.serverRequired.length > 0 && (
+        <Note tone="info" className="mb-3">
+          <span className="min-w-0 flex-1">
+            {pick.serverRequired.length === 1
+              ? 'תמונה אחת דורשת פענוח שרתי. המקור יועלה כפי שהוא ולא יוחלף.'
+              : <><span className="num">{pick.serverRequired.length}</span> תמונות דורשות פענוח שרתי. קובצי המקור יועלו כפי שהם ולא יוחלפו.</>}
+          </span>
+        </Note>
+      )}
       {goodCount > 0 && (
         <Note tone="idle" className="mb-3">
           {goodCount === 1
@@ -685,12 +712,14 @@ export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDi
         </Note>
       )}
       <div className="flex flex-wrap justify-end gap-2">
-        <button type="button" className="btn-secondary" onClick={onUploadAnyway}>
-          {WEAK_CAPTURE_PROCEED_LABEL}
+        <button type="button" className={serverOnly ? 'btn-primary' : 'btn-secondary'} onClick={onUploadAnyway}>
+          {serverOnly ? 'שמירת המקור והמשך' : WEAK_CAPTURE_PROCEED_LABEL}
         </button>
-        <button type="button" className="btn-primary" onClick={onRetake}>
-          {weakCaptureRetryLabel(source)}
-        </button>
+        {!serverOnly && (
+          <button type="button" className="btn-primary" onClick={onRetake}>
+            {weakCaptureRetryLabel(source)}
+          </button>
+        )}
       </div>
     </Modal>
   );
@@ -866,7 +895,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
     } finally {
       setScreening(false);
     }
-    if (!pick.weak.length) { void uploadFiles(pick.files); return; }
+    if (!pick.weak.length && !pick.serverRequired.length) { void uploadFiles(pick.files); return; }
     setWeakPick(pick);
   }
 

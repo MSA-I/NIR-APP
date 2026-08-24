@@ -91,6 +91,17 @@ export interface Resolution {
   order_id?: string | null;
 }
 
+export interface CreditResolution {
+  resolved: boolean;
+  reason: 'supplier_ambiguous' | 'supplier_unresolved' | 'invoice_reference_unresolved'
+    | 'credit_amount_unresolved' | 'not_found' | 'ambiguous' | null;
+  supplier_id: string | null;
+  invoice_id: string | null;
+  reference_invoice_number: string | null;
+  amount: number | null;
+  candidate_count?: number;
+}
+
 export interface DocumentReviewRead {
   document_id: string;
   file_name: string | null;
@@ -103,6 +114,7 @@ export interface DocumentReviewRead {
   interpretation_id: string | null;
   supplier_resolution: Resolution | null;
   order_resolution: Resolution | null;
+  credit_resolution?: CreditResolution | null;
   assessment: DocumentAssessment | null;
   state: 'awaiting_interpretation' | 'supplier_unresolved' | 'blocked' | 'ready_for_approval';
 }
@@ -291,6 +303,13 @@ export function approvalEffects(
         { happens: false, text: 'לא תיווצר חשבונית, לא תשלום ולא חיוב מכל סוג' },
         { happens: false, text: 'אם לא ניתן לקשר — לא ייווצר קישור, והמסמך יישאר לבדיקה ידנית' },
       ];
+    case 'credit_note':
+      return [
+        { happens: true, text: 'יירשם זיכוי ספק במצב "התקבל" ויקושר לחשבונית המקור' },
+        { happens: true, text: 'מסמך הזיכוי יישמר כראיה עם הפירוש שאושר' },
+        { happens: false, text: 'הזיכוי לא יקוזז מיתרה בעצם האישור' },
+        { happens: false, text: 'לא יבוצע תשלום ולא ישתנה סכום חשבונית המקור' },
+      ];
     default:
       return [{ happens: false, text: 'לסוג המסמך הזה אין עדיין מסלול אישור' }];
   }
@@ -394,5 +413,6 @@ export function canSubmit(read: DocumentReviewRead, supplierId: string | null): 
   if (!read.interpretation_id || !supplierId) return false;
   if (!read.document_type) return false;
   if (read.document_type === 'delivery_note' && !read.assessment?.order_id) return false;
+  if (read.document_type === 'credit_note' && !read.credit_resolution?.resolved) return false;
   return true;
 }

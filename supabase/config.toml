@@ -86,6 +86,9 @@ verify_jwt = true
 [functions.submit-price-list]
 verify_jwt = true
 
+[functions.product-name-repair]
+verify_jwt = true
+
 [functions.upload-organization-logo]
 verify_jwt = true
 
@@ -119,6 +122,12 @@ verify_jwt = false
 # claim_email_order_message, which is the security boundary.
 [functions.email-sender]
 verify_jwt = true
+
+# The billing provider webhook has no user and no JWT by design (0187): the credential is Paddle's
+# HMAC-SHA256 signature over the raw request body, verified inside the handler against the endpoint
+# secret. Requiring an Authorization header would reject every genuine delivery and secure nothing.
+[functions.billing-webhook]
+verify_jwt = false
 
 [analytics]
 enabled = false

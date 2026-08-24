@@ -253,6 +253,30 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
         </div>
       )}
 
+      {read.document_type === 'credit_note' && read.credit_resolution && (
+        <div className="rounded-lg border border-line bg-surface p-4">
+          <h3 className="text-sm font-medium text-ink-soft">חשבונית המקור לזיכוי</h3>
+          {read.credit_resolution.resolved ? (
+            <dl className="mt-2 space-y-1.5 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-ink-muted">מספר חשבונית</dt>
+                <dd><bdi>{read.credit_resolution.reference_invoice_number ?? '—'}</bdi></dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-ink-muted">סכום הזיכוי במסמך</dt>
+                <dd className="num font-medium">{fmtMoneyExact(read.credit_resolution.amount)}</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="mt-2 text-sm text-alert-fg">
+              {read.credit_resolution.reason === 'ambiguous'
+                ? 'נמצאה יותר מחשבונית מקור אחת. המסמך נשאר לבדיקה עד לבחירה חד־משמעית.'
+                : 'לא ניתן לזהות חשבונית מקור אחת. המסמך נשאר לבדיקה ולא יירשם זיכוי.'}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* What will happen — and, just as importantly, what will not. Immediately above the button
           it describes, because that ordering is the whole point of the sentences (DESIGN.md §2). */}
       <div className="rounded-lg border border-line bg-surface p-4">

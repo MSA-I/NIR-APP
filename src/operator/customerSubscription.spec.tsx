@@ -104,4 +104,20 @@ describe('מנוי והרשאות בכרטיס הלקוח', () => {
     renderSection(['billing.view']);
     expect(screen.getByText(/תקופת חיוב לא התקבלה/)).toBeInTheDocument();
   });
+
+  it('אינו מזהה תקופת חיוב עם תקופת שימוש — #242 הפריד ביניהן', () => {
+    // Until #242 this screen said the billing period was what a per-period limit resets against.
+    // It is not: the usage period is anchored to the organization's signup timestamp and no
+    // billing event resets it, so an operator reading a renewal date must not read a quota reset.
+    renderSection(['billing.view']);
+    expect(screen.getByText(/מעוגנת לתאריך ההרשמה/)).toBeInTheDocument();
+    expect(screen.getByText(/אינם מאפסים/)).toBeInTheDocument();
+  });
+
+  it('מסביר מה המשמעות של פיגור תשלום — קריאה בלבד, יציאה רק בתשלום חתום', () => {
+    renderSection(['billing.view'], [entitlement()], { ...subscription, status: 'past_due' });
+    expect(screen.getByText(/קריאה בלבד/)).toBeInTheDocument();
+    expect(screen.getByText(/אירוע תשלום מוצלח וחתום/)).toBeInTheDocument();
+    expect(screen.getByText(/אין מעבר אוטומטי/)).toBeInTheDocument();
+  });
 });

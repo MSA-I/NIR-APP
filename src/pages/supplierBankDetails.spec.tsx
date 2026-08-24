@@ -45,7 +45,7 @@ type SupplierProp = ComponentProps<typeof SupplierForm>['supplier'];
 const supplier = {
   id: 'sup-1', org_id: 'org-test', name: 'ספק בדיקה', tax_id: null, contact_name: null,
   phone: '03-1234567', whatsapp: null, email: null, address: null, min_order_amount: null,
-  payment_terms: null, bank_details: 'בנק 10 · סניף 800 · חשבון 123', notes: null,
+  payment_terms: null, bank_details: null, notes: null,
   status: 'active', delivery_days: [], cutoff_time: null,
   rating: null, rating_updated_at: null, rating_note: null,
 } as unknown as NonNullable<SupplierProp>;
@@ -75,6 +75,13 @@ function trackBankRpc(status = 204, message?: string) {
   return bodies;
 }
 
+function serveCurrentBankDetails(data: Record<string, unknown>[] = []) {
+  server.use(
+    http.get(`${SUPABASE_URL}/rest/v1/financial_supplier_bank_accounts`, () => HttpResponse.json(data)),
+    http.post(`${SUPABASE_URL}/rest/v1/rpc/read_supplier_bank_migration_item`, () => HttpResponse.json([])),
+  );
+}
+
 function renderForm(onSaved = vi.fn()) {
   render(
     <ToastProvider>
@@ -84,23 +91,31 @@ function renderForm(onSaved = vi.fn()) {
   return onSaved;
 }
 
-const bankField = () => screen.getByLabelText('פרטי בנק — מלא רק כדי לשנות (אינם מוצגים)');
+const bankType = () => screen.getByLabelText('סוג פרטי הבנק');
 const saveButton = () => screen.getByRole('button', { name: 'שמירה' });
+
+async function fillIsraelBank(user: ReturnType<typeof userEvent.setup>, suffix = '999') {
+  await user.selectOptions(bankType(), 'IL');
+  await user.type(screen.getByLabelText('שם בעל החשבון *'), 'ספק בדיקה בעמ');
+  await user.type(screen.getByLabelText('מספר בנק *'), '12');
+  await user.type(screen.getByLabelText('מספר סניף *'), '001');
+  await user.type(screen.getByLabelText('מספר חשבון *'), suffix);
+}
 
 beforeEach(() => {
   // Signed in seconds ago — ReauthModal's mandatory skip-when-fresh keeps the flow modal-free.
   authState.session = sessionWithAge(30);
+  serveCurrentBankDetails();
 });
 
-describe('SupplierForm — the dedicated bank-details flow (migration 0061)', () => {
+describe('SupplierForm — structured bank-details flow (migration 0171)', () => {
   it('routes a bank change through reason + step-up to the RPC, never the direct update', async () => {
     const user = userEvent.setup();
     const patched = trackSupplierPatch();
     const rpcBodies = trackBankRpc();
     const onSaved = renderForm();
 
-    await user.clear(bankField());
-    await user.type(bankField(), 'בנק 12 · סניף 001 · חשבון 999');
+    await fillIsraelBank(user);
     await user.click(saveButton());
 
     // The generic save ran, and bank_details was NOT in it — the column left the UPDATE grant.
@@ -121,7 +136,15 @@ describe('SupplierForm — the dedicated bank-details flow (migration 0061)', ()
     await waitFor(() => expect(rpcBodies).toHaveLength(1));
     expect(rpcBodies[0]).toEqual({
       p_supplier_id: 'sup-1',
-      p_bank_details: 'בנק 12 · סניף 001 · חשבון 999',
+      p_bank_details: {
+        account_holder: 'ספק בדיקה בעמ',
+        country_code: 'IL',
+        bank_code: '12',
+        branch_code: '001',
+        account_number: '999',
+        iban: null,
+        bic: null,
+      },
       p_reason: 'עדכון חשבון לפי מכתב מהספק',
     });
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
@@ -145,7 +168,7 @@ describe('SupplierForm — the dedicated bank-details flow (migration 0061)', ()
     );
 
     await user.type(screen.getByLabelText('שם הספק *'), 'ספק חדש עם בנק');
-    await user.type(bankField(), 'בנק 10 · סניף 800 · חשבון 123');
+    await fillIsraelBank(user, '123');
     await user.click(saveButton());
 
     // The INSERT itself must be bank-less — 0088 revoked the column grant (#106, option 2).
@@ -160,10 +183,79 @@ describe('SupplierForm — the dedicated bank-details flow (migration 0061)', ()
     await waitFor(() => expect(rpcBodies).toHaveLength(1));
     expect(rpcBodies[0]).toEqual({
       p_supplier_id: 'sup-new',
-      p_bank_details: 'בנק 10 · סניף 800 · חשבון 123',
+      p_bank_details: {
+        account_holder: 'ספק בדיקה בעמ',
+        country_code: 'IL',
+        bank_code: '12',
+        branch_code: '001',
+        account_number: '123',
+        iban: null,
+        bic: null,
+      },
       p_reason: 'הקמת ספק עם פרטי בנק',
     });
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
+  });
+
+  it('creating with the bank select left on "ללא פרטי בנק" saves nothing and demands no step-up', async () => {
+    const user = userEvent.setup();
+    const inserts: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(`${SUPABASE_URL}/rest/v1/suppliers`, async ({ request }) => {
+        inserts.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json({ id: 'sup-new' }, { status: 201 });
+      }),
+    );
+    const rpcBodies = trackBankRpc();
+    const onSaved = vi.fn();
+    render(
+      <ToastProvider>
+        <SupplierForm supplier={null} onClose={vi.fn()} onSaved={onSaved} />
+      </ToastProvider>,
+    );
+
+    await user.type(screen.getByLabelText('שם הספק *'), 'ספק חדש בלי בנק');
+    // Opened the select, looked, and chose to enter nothing. The row is inserted bank-less
+    // anyway, so there is no prior value to clear and nothing for a reason or a password to guard.
+    await user.selectOptions(bankType(), 'IL');
+    await user.selectOptions(bankType(), '');
+    await user.click(saveButton());
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(inserts).toHaveLength(1);
+    expect(rpcBodies).toHaveLength(0);
+    expect(screen.queryByRole('heading', { name: 'עדכון פרטי בנק' })).toBeNull();
+    expect(screen.queryByText('הספק נוצר — פרטי הבנק דורשים אימות וסיבה')).toBeNull();
+  });
+
+  it('clearing an EXISTING supplier\'s bank details is still a reasoned, audited change', async () => {
+    const user = userEvent.setup();
+    serveCurrentBankDetails([{
+      supplier_id: 'sup-1', account_holder: 'ספק בדיקה בעמ', country_code: 'IL',
+      bank_code: '12', branch_code: '001', account_number: '999',
+      iban: null, bic: null, migration_pending: false,
+    }]);
+    trackSupplierPatch();
+    const rpcBodies = trackBankRpc();
+    renderForm();
+
+    await waitFor(() => expect(bankType()).toHaveValue('IL'));
+    await user.selectOptions(bankType(), '');
+    await user.click(saveButton());
+
+    // Erasing details that exist is a real change — it keeps the reason + step-up boundary.
+    await user.type(
+      await screen.findByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'),
+      'הספק סגר את החשבון',
+    );
+    await user.click(screen.getByRole('button', { name: 'אישור העדכון' }));
+
+    await waitFor(() => expect(rpcBodies).toHaveLength(1));
+    expect(rpcBodies[0]).toEqual({
+      p_supplier_id: 'sup-1',
+      p_bank_details: null,
+      p_reason: 'הספק סגר את החשבון',
+    });
   });
 
   it('prompts for a password inside the flow when the session is stale', async () => {
@@ -185,8 +277,7 @@ describe('SupplierForm — the dedicated bank-details flow (migration 0061)', ()
     );
     renderForm();
 
-    await user.clear(bankField());
-    await user.type(bankField(), 'בנק 20');
+    await fillIsraelBank(user, '20');
     await user.click(saveButton());
     await user.type(
       await screen.findByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'),
@@ -202,7 +293,11 @@ describe('SupplierForm — the dedicated bank-details flow (migration 0061)', ()
     await user.click(screen.getByRole('button', { name: /אישור זהות/ }));
 
     await waitFor(() => expect(rpcBodies).toHaveLength(1));
-    expect(rpcBodies[0]).toMatchObject({ p_supplier_id: 'sup-1', p_bank_details: 'בנק 20', p_reason: 'החלפת חשבון' });
+    expect(rpcBodies[0]).toMatchObject({
+      p_supplier_id: 'sup-1',
+      p_bank_details: { country_code: 'IL', account_number: '20' },
+      p_reason: 'החלפת חשבון',
+    });
   });
 
   it('leaves the other-fields path untouched: no RPC, no reason dialog', async () => {
@@ -230,8 +325,7 @@ describe('SupplierForm — the dedicated bank-details flow (migration 0061)', ()
     trackBankRpc(401, 'fresh_authentication_required');
     const onSaved = renderForm();
 
-    await user.clear(bankField());
-    await user.type(bankField(), 'בנק 31');
+    await fillIsraelBank(user, '31');
     await user.click(saveButton());
     await user.type(
       await screen.findByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'),
@@ -245,5 +339,45 @@ describe('SupplierForm — the dedicated bank-details flow (migration 0061)', ()
     // The reason dialog survives the failure — the user retries instead of retyping everything.
     expect(screen.getByRole('heading', { name: 'עדכון פרטי בנק' })).toBeInTheDocument();
     expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('renders international fields and sends IBAN/BIC without Israel-only columns', async () => {
+    const user = userEvent.setup();
+    trackSupplierPatch();
+    const rpcBodies = trackBankRpc();
+    renderForm();
+
+    await user.selectOptions(bankType(), 'international');
+    await user.type(screen.getByLabelText('שם בעל החשבון *'), 'Global Supplier GmbH');
+    await user.type(screen.getByLabelText('קוד מדינה (ISO) *'), 'de');
+    await user.type(screen.getByLabelText('IBAN *'), 'de89 3704 0044 0532 0130 00');
+    await user.type(screen.getByLabelText('BIC / SWIFT'), 'cobadeffxxx');
+    await user.click(saveButton());
+    await user.type(await screen.findByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'), 'אישור מסמך ספק');
+    await user.click(screen.getByRole('button', { name: 'אישור העדכון' }));
+
+    await waitFor(() => expect(rpcBodies).toHaveLength(1));
+    expect(rpcBodies[0]).toMatchObject({
+      p_bank_details: {
+        account_holder: 'Global Supplier GmbH', country_code: 'DE',
+        bank_code: null, branch_code: null, account_number: null,
+        iban: 'DE89370400440532013000', bic: 'COBADEFFXXX',
+      },
+    });
+  });
+
+  it('shows legacy free text only as migration evidence and never pre-fills structured fields', async () => {
+    server.use(
+      http.post(`${SUPABASE_URL}/rest/v1/rpc/read_supplier_bank_migration_item`, () => HttpResponse.json([{
+        supplier_id: 'sup-1',
+        legacy_bank_details: 'בנק ישן 10 סניף 800 חשבון 123',
+        status: 'pending',
+      }])),
+    );
+    renderForm();
+
+    expect(await screen.findByText('בנק ישן 10 סניף 800 חשבון 123')).toBeInTheDocument();
+    expect(bankType()).toHaveValue('');
+    expect(screen.queryByDisplayValue('123')).toBeNull();
   });
 });
