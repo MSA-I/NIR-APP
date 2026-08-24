@@ -62,7 +62,7 @@ const PATTERNS: [RegExp, string][] = [
   // other says "nobody has told the system what you have", which is our problem, not the
   // customer's, and sending them to buy an upgrade for it would be wrong.
   [/plan_limit_reached/i,
-    'הגעתם למכסת החודש במסלול הנוכחי — מסמכים או עמודי סריקה. המסמכים הקיימים והדוחות נשארים זמינים; לעיבוד מסמך חדש יש לשדרג מסלול או להמתין לתחילת תקופת החיוב הבאה.'],
+    'הגעתם למכסת התקופה במסלול הנוכחי — מסמכים או עמודי סריקה. המסמכים הקיימים והדוחות נשארים זמינים; לעיבוד מסמך חדש יש לשדרג מסלול או להמתין לתחילת תקופת השימוש הבאה.'],
   [/plan_limit_unknown/i,
     'לא הוגדרה מכסת מסמכים למסלול של הארגון, ולכן העיבוד נעצר מחשש לחיוב לא מבוקר. זו הגדרה במערכת ולא חריגה שלכם — יש לפנות לתמיכה.'],
   [/not_platform_capability/i,
@@ -73,6 +73,12 @@ const PATTERNS: [RegExp, string][] = [
     'כבר קיים חריג פעיל להרשאה הזו. יש לבטל אותו לפני שמגדירים חריג חדש.'],
   [/subscription_plan_inactive/i,
     'המסלול הזה אינו מוצע ללקוחות חדשים ואי אפשר להעביר אליו ארגון.'],
+  // The billing adapter's single refusal for every unproven-provider path -- checkout and
+  // cancellation alike. Without it a refused cancellation fell through to FALLBACK, which for an
+  // action the customer believes they just performed is close enough to silence. Our state, not
+  // theirs, and it promises no date because none has been decided. Wording provisional (#203).
+  [/not_configured/i,
+    'הפעולה אינה זמינה עדיין: חיבור ספק הסליקה טרם הוגדר במערכת. זו הגדרה אצלנו ולא משהו שחסר מצדכם, ושום דבר במנוי לא השתנה.'],
   [/internal_note_already_resolved/i,
     'משימת המעקב כבר נסגרה. פתיחה מחדש נעשית ברשומה חדשה, כדי שהסגירה הקודמת תישאר מתועדת.'],
   [/internal_note_immutable|platform_lifecycle_event_immutable/i,

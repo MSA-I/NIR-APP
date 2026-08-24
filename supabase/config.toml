@@ -123,6 +123,12 @@ verify_jwt = false
 [functions.email-sender]
 verify_jwt = true
 
+# The billing provider webhook has no user and no JWT by design (0187): the credential is Paddle's
+# HMAC-SHA256 signature over the raw request body, verified inside the handler against the endpoint
+# secret. Requiring an Authorization header would reject every genuine delivery and secure nothing.
+[functions.billing-webhook]
+verify_jwt = false
+
 [analytics]
 enabled = false
 port = 55437

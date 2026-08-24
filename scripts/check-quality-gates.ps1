@@ -1115,6 +1115,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "assistant" = "true"
     "supplier-portal" = "false"
     "email-sender" = "true"
+    "billing-webhook" = "false"
   }
   foreach ($functionName in $functionJwt.Keys) {
     $expectedJwt = $functionJwt[$functionName]
@@ -1308,6 +1309,8 @@ try {
     Invoke-SqlTest "supabase\tests\p66_document_kind_history.sql" "Historical document kinds resolve through one visible precedence -- human, verified interpretation, existing non-other kind, allowlisted entity inference, then other -- where the interpretation map is an allowlist that can never propose a kind the live documents CHECK cannot store, and every applied decision carries its source in an append-only ledger"
     Invoke-SqlTest "supabase\tests\p67_document_media_contracts.sql" "HEIC derivative provenance is immutable and server-written with source hash, dimensions and decoder version, decompression and pixel ceilings are structural rather than advisory, and full_frame_fallback is an explicit third scan source instead of an inference from coordinates"
     Invoke-SqlTest "supabase\tests\p68_document_calibration_automation.sql" "Owner calibration and Platform activation under step-up and completeness, a qualified-product dry-run that counts without writing, and the #245/#251/#252 negative guards proven by falsification to fire on a real violation rather than merely to return no rows"
+    Invoke-SqlTest "supabase\tests\p70_launch_plans_and_usage_anchor.sql" "The launch ladder is ordered, priced in two versioned pre-tax catalogues and never lets a caller name its own currency; Legacy retires through an idempotent, audited, reasoned command whose dry run names every organization the new ceilings drop beneath; the usage period is anchored to the organization's signup instant, so no payment, renewal, tier change, cancellation, delinquency, late payment or refund resets a counter; and a referral pays both sides once, in their own periods, with only the unused remainder ever reversible"
+    Invoke-SqlTest "supabase\tests\p71_billing_provider_event_processing.sql" "A provider event is recorded before anything acts on it and applied exactly once: a forged organization in the payload moves no entitlement, an unrecognized or undecided event type dead-letters without touching a plan, a merchant of record that is not enabled refuses even a correctly signed activation, no transition writes a usage counter or period, and a tenant reads none of the platform reconciliation surface"
     Invoke-SqlTest "supabase\tests\p24_inventory_intelligence.sql" "Inventory consumption evidence, incoming supply, suggestions, price context and tenant isolation"
     Invoke-SqlTest "supabase\tests\p25_tenant_offboarding_export.sql" "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p26_price_baseline.sql" "Contractual price baseline as of the document date, reversal ordering, undisclosed fallbacks and read-only guarantee"
