@@ -46,6 +46,7 @@ import {
   type EvidenceAuthorizationClient,
 } from "./evidence-authorization.ts";
 import { AssistantEdgeError, corsFor, fail, json } from "./errors.ts";
+import { assertGovernedProviderConstruction } from "./governance.ts";
 import {
   listAuthorizedConversations,
   loadAuthorizedConversationContext,
@@ -373,6 +374,12 @@ export async function handler(req: Request): Promise<Response> {
       evidence,
       now: () => new Date(),
     };
+    // Defence in depth, not a second opinion: parseAssistantConfig already refused an incomplete
+    // #179 evidence set before this request had a config at all. This re-decides over the rows
+    // the decision CARRIES rather than trusting its allowed flag, so a future refactor that keeps
+    // the flag and loosens the parse still cannot reach a provider. It sits before the egress
+    // lease, so a refusal takes no lease and spends nothing.
+    assertGovernedProviderConstruction(config.governance);
     const provider = createOpenAiAssistantProvider({
       apiKey: providerKey,
       model: config.model,
