@@ -4,6 +4,7 @@
 // cited fact under the product's own formatting rules, and a fact from a provider-forbidden
 // classification can support nothing. An answer that fails twice ships no prose at all.
 import {
+  ASSISTANT_DRAFT_ROLES,
   type AssistantAnswer,
   AssistantAnswerSchema,
   DIGIT_PATTERN,
@@ -117,6 +118,51 @@ export function validateAnswer(
       }
       return;
     }
+    if (block.type === "draft") {
+      // #191 is a role decision, not a rendering preference: accountant is offered no supplier
+      // draft at all. An unknown role refuses too -- both live call sites pass one, so the only
+      // way to arrive here without a role is a new caller that has not thought about this.
+      if (!role || !ASSISTANT_DRAFT_ROLES.includes(role)) {
+        errors.push(`block:${index}:draft_not_permitted`);
+      }
+      // Nothing in this product sends a supplier message, so a draft that says it was sent is a
+      // false statement about the product itself -- the one lie no citation could ever support.
+      if (block.text.includes("נשלח")) {
+        errors.push(`block:${index}:draft_claims_sent`);
+      }
+      const draftFacts: Fact[] = [];
+      for (const factId of block.fact_ids) {
+        const fact = factById.get(factId);
+        if (!fact) {
+          errors.push(`block:${index}:unknown_fact_id:${factId}`);
+          continue;
+        }
+        if (!mayReachProvider(fact.classification)) {
+          errors.push(`block:${index}:forbidden_fact_classification:${factId}`);
+          continue;
+        }
+        draftFacts.push(fact);
+      }
+      for (const sourceId of block.source_ids) {
+        if (!sourceIds.has(sourceId)) {
+          errors.push(`block:${index}:unknown_source_id:${sourceId}`);
+        }
+      }
+      // The digit rule is not relaxed for a message body. A reminder that names an order number
+      // or a quantity is carrying a quantity, and it is pinned to cited VALUES exactly as a claim
+      // is -- the union here spans every cited fact because a draft is a paragraph rather than a
+      // single assertion, not because the bar is lower.
+      const draftValues = new Set<string>();
+      for (const fact of draftFacts) {
+        for (const numeral of valueNumeralsForFact(fact)) draftValues.add(numeral);
+      }
+      for (const numeral of extractNumerals(block.text)) {
+        if (!draftValues.has(numeral)) {
+          errors.push(`block:${index}:numeral_without_fact:${numeral}`);
+        }
+      }
+      return;
+    }
     const cited: Fact[] = [];
     for (const factId of block.fact_ids) {
       const fact = factById.get(factId);
@@ -177,9 +223,11 @@ export function validateAnswer(
   // alone may not stand: the answer must anchor itself in at least one claim, or say WHY there
   // is no answer through the closed no_answer_reason vocabulary -- otherwise a failed tool could
   // read as a false all-clear.
+  // A draft counts as an anchor because it is fact-pinned in the same way a claim is: its
+  // `fact_ids` is required, and every numeral in it was checked against a cited value above.
   if (
     facts.length > 0 && answer.no_answer_reason === null &&
-    !answer.blocks.some((block) => block.type === "claim")
+    !answer.blocks.some((block) => block.type === "claim" || block.type === "draft")
   ) {
     errors.push("answer:prose_only_without_claim_or_reason");
   }
