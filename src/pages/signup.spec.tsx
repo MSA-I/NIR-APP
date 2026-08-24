@@ -7,6 +7,24 @@ import Signup from './Signup';
 const invoke = vi.fn();
 const getSession = vi.fn();
 const signInWithOAuth = vi.fn();
+
+/**
+ * `enabledFederatedProviders` reads `import.meta.env` at module scope, which Vite has already
+ * substituted before any test runs — `stubEnv` cannot reach it. The module is mocked so a test can
+ * say "Google is configured" without pretending to rebuild the bundle.
+ */
+const federated = vi.hoisted(() => ({
+  providers: [] as ('google' | 'apple')[],
+  start: vi.fn(async () => ({ error: null })),
+}));
+
+vi.mock('../lib/authProviders', () => ({
+  FEDERATED_PROVIDERS: ['google', 'apple'],
+  FEDERATED_PROVIDER_LABEL: { google: 'Google', apple: 'Apple' },
+  enabledFederatedProviders: () => federated.providers,
+  startFederatedSignup: federated.start,
+}));
+
 vi.mock('../lib/supabase', () => ({
   supabase: {
     functions: { invoke: (...a: unknown[]) => invoke(...a) },
@@ -45,10 +63,18 @@ const googleSession = (over: Record<string, unknown> = {}) => ({
   },
 });
 
+/** The same shape for any provider — the branch is decided by app_metadata.provider, not by us. */
+const federatedSession = (provider: 'google' | 'apple', email: string) => googleSession({
+  email,
+  app_metadata: { provider },
+});
+
 beforeEach(() => {
   invoke.mockResolvedValue({ data: { status: 'pending_confirmation', message: NEUTRAL }, error: null });
   getSession.mockResolvedValue({ data: { session: null } });
   signInWithOAuth.mockResolvedValue({ error: null });
+  federated.providers = [];
+  federated.start.mockClear();
 });
 
 describe('פתיחת חשבון', () => {
@@ -131,6 +157,46 @@ describe('פתיחת חשבון', () => {
     expect(body).not.toHaveProperty('password');
     // The address is the server's to read from the token, not the form's to assert.
     expect(body).not.toHaveProperty('email');
+  });
+
+  it('מצייר כפתור לכל ספק מוגדר, ומוסר לו את פתיחת התהליך', async () => {
+    federated.providers = ['google', 'apple'];
+    const user = userEvent.setup();
+    renderScreen();
+    await waitFor(() => expect(getSession).toHaveBeenCalled());
+
+    expect(screen.getAllByRole('button', { name: /^המשך עם/ }).map((b) => b.textContent))
+      .toEqual(['המשך עם Google', 'המשך עם Apple']);
+
+    await user.click(screen.getByRole('button', { name: 'המשך עם Apple' }));
+    expect(federated.start).toHaveBeenCalledWith('apple');
+  });
+
+  it('המסלול הפדרטיבי שולח את הספק שהטוקן מצהיר עליו — apple, לא google', async () => {
+    // The body's `identity` follows app_metadata. Sending the wrong one would be refused by
+    // public-signup's provider check, so the screen must not be the thing that guesses.
+    getSession.mockResolvedValue(federatedSession('apple', 'owner@privaterelay.appleid.test'));
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByText(/מחובר כ/);
+    await user.type(screen.getByLabelText('שם העסק'), 'מסעדת הגפן');
+    await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalled());
+    const body = invoke.mock.calls[0]![1].body as Record<string, unknown>;
+    expect(body.identity).toBe('apple');
+    expect(body).not.toHaveProperty('password');
+    expect(body).not.toHaveProperty('email');
+  });
+
+  it('חזרה מ-Apple עם כתובת Private Relay מציגה אותה כפי שהיא', async () => {
+    // A relay address is the only address this session proves. Hiding or rewriting it would tell
+    // the owner they signed up as somebody else.
+    getSession.mockResolvedValue(federatedSession('apple', 'owner@privaterelay.appleid.test'));
+    renderScreen();
+
+    expect(await screen.findByText('owner@privaterelay.appleid.test')).toBeInTheDocument();
+    expect(screen.queryByLabelText('סיסמה')).toBeNull();
   });
 
   it('סשן שמצהיר על Google ב-user_metadata בלבד אינו נחשב Google', async () => {

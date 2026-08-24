@@ -221,7 +221,8 @@ jobs:
             supabase/functions/_shared/organization-access.test.ts \
             supabase/functions/_shared/organization-egress.test.ts \
             supabase/functions/_shared/reserved-egress.test.ts \
-            supabase/functions/_shared/edge-organization-access-wiring.test.ts 2>&1 | tee deno-organization-boundaries.log
+            supabase/functions/_shared/edge-organization-access-wiring.test.ts \
+            supabase/functions/_shared/provision.test.ts 2>&1 | tee deno-organization-boundaries.log
           grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-document-gateway.log \
             || { echo 'No document-gateway test completed.'; exit 1; }
           grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-organization-boundaries.log \

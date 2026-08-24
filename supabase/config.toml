@@ -71,6 +71,20 @@ client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
 secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
 skip_nonce_check = false
 
+# Apple sign-up, same rule and the same two server-side enforcement points (owner decision
+# 25.08.2026). It needed no migration: 0205's guard refuses every identity whose provider is not
+# 'email', which was already true of Apple the day it was written.
+#
+# Disabled, and not for the usual reason. Apple requires an Apple Developer Program membership
+# before a Service ID or a signing key can exist at all, and the project has none -- so unlike
+# Google, this provider has never been exercised end to end. `client_id` is the SERVICE ID (not the
+# App ID), and `secret` is an ES256 JWT that Supabase mints from the .p8 key and which Apple
+# expires after six months, so this one carries a rotation obligation Google does not.
+[auth.external.apple]
+enabled = false
+client_id = "env(SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
+
 [edge_runtime]
 enabled = true
 policy = "oneshot"

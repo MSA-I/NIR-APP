@@ -1,4 +1,5 @@
 import {
+  adoptExistingUserAsOwner,
   MIN_PASSWORD_LENGTH, provisionTenant, rollbackTenant, validateProvisionInput,
   type ProvisionAdminClient,
 } from "./provision.ts";
@@ -201,5 +202,98 @@ Deno.test("public signup never returns rollback leftovers to an anonymous caller
     throw new Error(
       "public-signup exposes internal cleanup identifiers and database errors in its response",
     );
+  }
+});
+
+/**
+ * A client for the federated door: it records deletions and can be told to fail one insert.
+ *
+ * `createUser` throws rather than returning, because the whole point of this path is that GoTrue
+ * already made the account. A regression that reintroduced the call would otherwise pass silently.
+ */
+function adoptionAdmin(failInsertOn?: string): {
+  admin: ProvisionAdminClient;
+  deletedUsers: string[];
+  deleted: string[];
+  inserts: Record<string, unknown[]>;
+} {
+  const deletedUsers: string[] = [];
+  const deleted: string[] = [];
+  const inserts: Record<string, unknown[]> = {};
+  const admin = {
+    from(table: string) {
+      return {
+        insert(rows: unknown) {
+          (inserts[table] ??= []).push(rows);
+          const error = table === failInsertOn ? { message: `${table} refused` } : null;
+          return Object.assign(Promise.resolve({ error }), {
+            select: () => Object.assign(
+              Promise.resolve({ data: error ? null : [{ id: "cat-1" }], error }),
+              { single: () => Promise.resolve({ data: error ? null : { id: "org-9" }, error }) },
+            ),
+          });
+        },
+        delete: () => ({
+          eq: (_column: string, _value: string) => {
+            deleted.push(table);
+            return Promise.resolve({ error: null });
+          },
+        }),
+      };
+    },
+    auth: {
+      admin: {
+        createUser: () => {
+          throw new Error("the federated path must never create an auth user");
+        },
+        deleteUser: (id: string) => {
+          deletedUsers.push(id);
+          return Promise.resolve({ error: null });
+        },
+      },
+    },
+  } as unknown as ProvisionAdminClient;
+  return { admin, deletedUsers, deleted, inserts };
+}
+
+Deno.test("adopting an existing identity keys the owner profile by the id it was handed", async () => {
+  const { admin, inserts } = adoptionAdmin();
+  const outcome = await adoptExistingUserAsOwner(admin, {
+    name: "מסעדת הגפן",
+    ownerUserId: "google-user-7",
+    ownerName: "בעלים בדיקה",
+  });
+  if (!outcome.ok) throw new Error("adoption failed on a valid payload");
+
+  const profile = (inserts.profiles?.[0] ?? {}) as Record<string, unknown>;
+  if (profile.id !== "google-user-7") throw new Error("the profile was not keyed by the auth user");
+  if (profile.role !== "owner") throw new Error("a federated signup produced a role other than owner");
+  if (outcome.result.owner_user_id !== "google-user-7") {
+    throw new Error("the outcome reported an owner this call did not adopt");
+  }
+  // Status, plan and VAT stay the database's, exactly as on the password path.
+  const org = (inserts.organizations?.[0] ?? {}) as Record<string, unknown>;
+  for (const forbidden of ["status", "plan", "vat_rate", "subscription_plan_id"]) {
+    if (forbidden in org) throw new Error(`the federated door wrote ${forbidden}`);
+  }
+});
+
+Deno.test("a failed adoption removes the organization and NEVER the pre-existing auth account", async () => {
+  const { admin, deletedUsers, deleted } = adoptionAdmin("profiles");
+  const outcome = await adoptExistingUserAsOwner(admin, {
+    name: "מסעדת הגפן",
+    ownerUserId: "google-user-7",
+    ownerName: "בעלים בדיקה",
+  });
+  if (outcome.ok) throw new Error("a refused profile insert reported success");
+
+  // The organization this call created is unwound...
+  for (const table of ["categories", "organization_subscriptions", "organizations"]) {
+    if (!deleted.includes(table)) throw new Error(`rollback left ${table} behind`);
+  }
+  // ...and the person's identity, which predates this call and may be their only way back in, is
+  // not. Deleting it would lock them out of an account this code never created.
+  if (deletedUsers.length > 0) {
+    throw new Error(`rollback deleted auth user(s) it did not create: ${deletedUsers.join(", ")}`);
   }
 });

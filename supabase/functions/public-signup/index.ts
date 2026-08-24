@@ -89,44 +89,60 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   /**
-   * The federated branch (0205). Owner decision 24.08.2026: signing up with Google is for the
-   * person creating the organization, and for nobody else.
+   * The federated branch (0205). Owner decision 24.08.2026, extended to Apple on 25.08.2026:
+   * signing up with a federated identity is for the person creating the organization, and for
+   * nobody else.
    *
    * Unlike the password branch this one HAS a caller, and its safety is that caller's own token:
    *
    *   * The provider is read from `app_metadata`, which GoTrue writes. `user_metadata` is
    *     self-asserted and is never consulted for an authorization decision.
-   *   * The email is Google's, not the form's. A federated signup cannot claim an address it did
-   *     not prove, so there is nothing here to enumerate and no neutral answer to hide behind.
+   *   * The email is the provider's, not the form's. A federated signup cannot claim an address it
+   *     did not prove, so there is nothing here to enumerate and no neutral answer to hide behind.
    *   * A caller that already has a profile is refused. This path creates a NEW tenant and can
    *     never attach a second profile to an existing one, which is the other half of "owner only"
    *     -- the first half being 0205's refusal inside `accept_invitation`.
    *
    * The rate limit still applies: an authenticated caller is not an unbounded one.
+   *
+   * Adding Apple needed no migration, and that is a property of how 0205 was written rather than
+   * luck: its guard reads `coalesce(private.auth_identity_provider(), 'email') <> 'email'`, so it
+   * already refuses EVERY non-password identity, and `service_identity_has_profile` never asked
+   * which provider was involved. The rule was "federated", never "Google".
    */
-  if (body.identity === 'google') {
+  const FEDERATED_IDENTITIES = ['google', 'apple'] as const;
+  const requestedIdentity = FEDERATED_IDENTITIES.find((id) => id === body.identity);
+  if (requestedIdentity) {
+    // The provider name is safe to echo: the caller sent it, and it is checked against the token
+    // below before it decides anything.
+    const label = requestedIdentity === 'google' ? 'Google' : 'Apple';
     const bearer = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim();
     if (!bearer) {
-      return json({ error: { code: 'unauthenticated', message: 'נדרשת התחברות עם Google' } }, 401);
+      return json({ error: { code: 'unauthenticated', message: `נדרשת התחברות עם ${label}` } }, 401);
     }
     const caller = await admin0.auth.getUser(bearer);
     const user = caller.data?.user;
     if (caller.error || !user) {
-      return json({ error: { code: 'unauthenticated', message: 'נדרשת התחברות עם Google' } }, 401);
+      return json({ error: { code: 'unauthenticated', message: `נדרשת התחברות עם ${label}` } }, 401);
     }
     const provider = (user.app_metadata as { provider?: unknown } | null)?.provider;
-    if (provider !== 'google') {
+    // The token decides, not the body. A session issued by one provider cannot be spent on
+    // another's branch, so `identity` in the payload is a request and never a claim.
+    if (provider !== requestedIdentity) {
       return json({
         error: {
-          code: 'identity_not_google',
-          message: 'המסלול הזה פתוח רק לחשבון שהתחבר דרך Google.',
+          code: 'identity_provider_mismatch',
+          message: `המסלול הזה פתוח רק לחשבון שהתחבר דרך ${label}.`,
         },
       }, 403);
     }
     const email = typeof user.email === 'string' ? user.email.trim().toLowerCase() : '';
     if (!email) {
+      // Apple returns no address when the person hides it and the relay is unavailable. Without one
+      // there is nothing to rate-limit against and no way to reach the owner, so this refuses
+      // rather than inventing a placeholder address the tenant would be keyed by forever.
       return json({
-        error: { code: 'identity_without_email', message: 'חשבון Google ללא כתובת דואר מאומתת' },
+        error: { code: 'identity_without_email', message: `חשבון ${label} ללא כתובת דואר מאומתת` },
       }, 403);
     }
 
@@ -191,12 +207,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     await admin0.rpc('service_record_product_event', {
       p_org_id: adopted.result.org_id,
       p_event_name: 'signup.completed',
-      p_properties: { identity: 'google' },
+      p_properties: { identity: requestedIdentity },
       p_idempotency_key: adopted.result.org_id,
     });
 
-    // Google already proved the address, so there is nothing to confirm and the person is signed
-    // in already. The browser reloads into the product rather than into a "check your mail" page.
+    // The provider already proved the address, so there is nothing to confirm and the person is
+    // signed in already. The browser reloads into the product, not into a "check your mail" page.
     return json({ status: 'ready', message: 'הארגון נוצר. אפשר להתחיל.' }, 201);
   }
 
