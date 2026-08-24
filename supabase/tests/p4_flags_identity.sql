@@ -13,9 +13,9 @@
 --       path cannot quietly lose it); then behaviourally, EVERY wired path fails on
 --       missing, stale and future (beyond the +30s skew ceiling) password AMR with
 --       'fresh_authentication_required'/42501 and passes on a fresh one;
---   (d) suppliers.bank_details: the direct column write is revoked, the rest of the 0036
---       allowlist survives, and update_supplier_bank_details enforces role + step-up +
---       reason + tenant with a reasoned audit;
+--   (d) structured supplier_bank_accounts: the legacy column remains retired, the rest of the
+--       0036 allowlist survives, and update_supplier_bank_details enforces role + step-up +
+--       reason + tenant while auditing only fingerprint/last-four metadata;
 --   (e) security_events rows are written by the wired successes and are not readable by
 --       the browser role (nor are the two identity tables);
 --   (f) a duplicate (provider, external_subject) mapping and a cross-tenant mapping are
@@ -86,11 +86,11 @@ insert into profiles (id, org_id, full_name, role) values
 insert into platform_admins (user_id, note) values
   ('27000000-0000-0000-0000-000000000010', 'P4 platform operator fixture');
 
-insert into suppliers (id, org_id, name, bank_details) values
+insert into suppliers (id, org_id, name) values
   ('37000000-0000-0000-0000-000000000001', '17000000-0000-0000-0000-000000000001',
-   'P4 supplier A1', 'בנק 12 סניף 345 חשבון 67890'),
+   'P4 supplier A1'),
   ('37000000-0000-0000-0000-000000000009', '17000000-0000-0000-0000-000000000002',
-   'P4 supplier B1', null);
+   'P4 supplier B1');
 
 -- Payment fixtures for the execution paths (p1_financial_commands.sql:1079-1107 idiom).
 insert into invoices (
@@ -373,7 +373,7 @@ as $$
     ('public.grant_user_scope(uuid,uuid,text)'),
     ('public.revoke_user_scope(uuid,uuid,text)'),
     ('public.update_identity_provider_settings(text,boolean,jsonb,jsonb,text)'),
-    ('public.update_supplier_bank_details(uuid,text,text)'),
+    ('public.update_supplier_bank_details(uuid,jsonb,text)'),
     -- Wave 7's ninth path, added to this registry in wave 10 (audit Finding 5). 0066:285
     -- calls flipping a webhook subscription active "the same exfiltration class as changing a
     -- supplier's bank_details, so #85 applies" -- and then did not extend the list, which is
@@ -795,7 +795,9 @@ select pg_temp.p4_claims('27000000-0000-0000-0000-000000000004', interval '0');
 do $$
 begin
   perform update_supplier_bank_details(
-    '37000000-0000-0000-0000-000000000001', 'בנק 98', 'P4: accountant attempt');
+    '37000000-0000-0000-0000-000000000001',
+    '{"account_holder":"P4 Supplier","country_code":"IL","bank_code":"98","branch_code":"1","account_number":"999","iban":null,"bic":null}'::jsonb,
+    'P4: accountant attempt');
   raise exception 'P4 flags/identity assertion failed: accountant changed bank details';
 exception when sqlstate '42501' then
   if sqlerrm not like '%supplier_bank_details_not_authorized%' then raise; end if;
@@ -806,7 +808,9 @@ select pg_temp.p4_claims('27000000-0000-0000-0000-000000000002', null);
 do $$
 begin
   perform update_supplier_bank_details(
-    '37000000-0000-0000-0000-000000000001', 'בנק 98', 'P4: no amr');
+    '37000000-0000-0000-0000-000000000001',
+    '{"account_holder":"P4 Supplier","country_code":"IL","bank_code":"98","branch_code":"1","account_number":"999","iban":null,"bic":null}'::jsonb,
+    'P4: no amr');
   raise exception 'P4 flags/identity assertion failed: bank details changed without amr';
 exception when sqlstate '42501' then
   if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
@@ -816,7 +820,9 @@ select pg_temp.p4_claims('27000000-0000-0000-0000-000000000002', interval '-10 m
 do $$
 begin
   perform update_supplier_bank_details(
-    '37000000-0000-0000-0000-000000000001', 'בנק 98', 'P4: stale amr');
+    '37000000-0000-0000-0000-000000000001',
+    '{"account_holder":"P4 Supplier","country_code":"IL","bank_code":"98","branch_code":"1","account_number":"999","iban":null,"bic":null}'::jsonb,
+    'P4: stale amr');
   raise exception 'P4 flags/identity assertion failed: bank details changed with stale amr';
 exception when sqlstate '42501' then
   if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
@@ -826,7 +832,9 @@ select pg_temp.p4_claims('27000000-0000-0000-0000-000000000002', interval '10 mi
 do $$
 begin
   perform update_supplier_bank_details(
-    '37000000-0000-0000-0000-000000000001', 'בנק 98', 'P4: future amr');
+    '37000000-0000-0000-0000-000000000001',
+    '{"account_holder":"P4 Supplier","country_code":"IL","bank_code":"98","branch_code":"1","account_number":"999","iban":null,"bic":null}'::jsonb,
+    'P4: future amr');
   raise exception 'P4 flags/identity assertion failed: bank details changed with a future amr';
 exception when sqlstate '42501' then
   if sqlerrm not like '%fresh_authentication_required%' then raise; end if;
@@ -836,7 +844,9 @@ select pg_temp.p4_claims('27000000-0000-0000-0000-000000000002', interval '0');
 do $$
 begin
   perform update_supplier_bank_details(
-    '37000000-0000-0000-0000-000000000001', 'בנק 98', '   ');
+    '37000000-0000-0000-0000-000000000001',
+    '{"account_holder":"P4 Supplier","country_code":"IL","bank_code":"98","branch_code":"1","account_number":"999","iban":null,"bic":null}'::jsonb,
+    '   ');
   raise exception 'P4 flags/identity assertion failed: bank details changed without a reason';
 exception when sqlstate '22023' then
   if sqlerrm not like '%supplier_bank_details_reason_required%' then raise; end if;
@@ -845,25 +855,32 @@ $$;
 do $$
 begin
   perform update_supplier_bank_details(
-    '37000000-0000-0000-0000-000000000009', 'בנק 98', 'P4: cross-tenant attempt');
+    '37000000-0000-0000-0000-000000000009',
+    '{"account_holder":"P4 Supplier","country_code":"IL","bank_code":"98","branch_code":"1","account_number":"999","iban":null,"bic":null}'::jsonb,
+    'P4: cross-tenant attempt');
   raise exception 'P4 flags/identity assertion failed: a cross-tenant supplier was accepted';
 exception when sqlstate 'P0002' then
   if sqlerrm not like '%supplier_unknown%' then raise; end if;
 end
 $$;
 select update_supplier_bank_details(
-  '37000000-0000-0000-0000-000000000001', 'בנק 20 סניף 555 חשבון 11111',
+  '37000000-0000-0000-0000-000000000001',
+  '{"account_holder":"P4 Supplier","country_code":"IL","bank_code":"20","branch_code":"555","account_number":"11111","iban":null,"bic":null}'::jsonb,
   'P4: עדכון פרטי בנק עם אימות טרי');
 select pg_temp.p4_assert(
-  (select bank_details = 'בנק 20 סניף 555 חשבון 11111'
-   from suppliers where id = '37000000-0000-0000-0000-000000000001')
+  (select country_code = 'IL' and bank_code = '20' and branch_code = '555'
+      and account_number = '11111'
+   from supplier_bank_accounts where supplier_id = '37000000-0000-0000-0000-000000000001')
   and exists (
     select 1 from audit_logs
     where org_id = '17000000-0000-0000-0000-000000000001'
       and action = 'supplier_bank_details_changed'
       and entity_id = '37000000-0000-0000-0000-000000000001'
-      and reason = 'P4: עדכון פרטי בנק עם אימות טרי'),
-  'the reasoned bank-details command must land with its audit row');
+      and reason = 'P4: עדכון פרטי בנק עם אימות טרי'
+      and new_values ->> 'last_four' = '1111'
+      and new_values ? 'fingerprint'
+      and not (new_values ?| array['account_number','iban','bic','bank_code','branch_code'])),
+  'the structured bank command must land while audit keeps only fingerprint and last four');
 
 -- ===== (e) security_events: written by the successes, unreadable by the browser =====
 select pg_temp.p4_assert(

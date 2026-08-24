@@ -136,6 +136,21 @@ describe('הבדיקה מקפלת את העבודה של המכונה ולא א�
     expect(effects.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('מציג את חשבונית המקור והיתרה של מסמך זיכוי לפני האישור', async () => {
+    await renderPanel(reviewRead({
+      document_type: 'credit_note',
+      credit_resolution: {
+        resolved: true, reason: null, supplier_id: 'supplier-1', invoice_id: 'invoice-1',
+        reference_invoice_number: 'INV-1042', amount: 60, candidate_count: 1,
+      },
+    }));
+
+    expect(screen.getByText('חשבונית המקור לזיכוי')).toBeInTheDocument();
+    expect(screen.getByText('INV-1042')).toBeInTheDocument();
+    expect(screen.getByText(/60/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'אישור המסמך' })).toBeEnabled();
+  });
+
   it('אינו מקפל סחורה שהוזמנה ואינה מופיעה במסמך — זו טענת מלאי, לא פירוט', async () => {
     await renderPanel(reviewRead({
       assessment: {

@@ -115,7 +115,7 @@ insert into credit_requests (
   '11000000-0000-0000-0000-000000000001',
   '31000000-0000-0000-0000-000000000001',
   '61000000-0000-0000-0000-000000000006',
-  'wrong_price', 25, 'received', '21000000-0000-0000-0000-000000000001'
+  'wrong_price', 25, 'open', '21000000-0000-0000-0000-000000000001'
 );
 
 insert into payment_requests (
@@ -268,8 +268,8 @@ declare v_result jsonb;
 begin
   perform p1_concurrency_test.activate('21000000-0000-0000-0000-000000000001');
   v_result := transition_credit_request(
-    '65000000-0000-0000-0000-000000000001', 'offset',
-    'concurrent credit offset'
+    '65000000-0000-0000-0000-000000000001', 'requested',
+    'concurrent credit request'
   );
   perform pg_sleep(p_hold_seconds);
   return v_result;
@@ -557,10 +557,18 @@ select p1_concurrency_test.assert(
    from p1_concurrency_test.results where case_name = 'same_credit'),
   'concurrent credit transition was not exactly-once'
 );
+-- What this case owns is the exactly-once shape of the transition under a real race, so it races a
+-- move that does not depend on money: after 0173 a credit only reaches 'offset' once allocations
+-- consume it, and the concurrent money path -- two payments contending for one credit, one success
+-- and one named refusal -- is raced in p63_financial_credit_concurrency. The second half of this
+-- assertion is now the inverse contract, and it is the one worth pinning here: a lifecycle move with
+-- no allocation behind it must leave the invoice exactly where it was.
 select p1_concurrency_test.assert(
-  (select status = 'offset' from credit_requests where id = '65000000-0000-0000-0000-000000000001')
-  and (select payment_status = 'paid' from invoices where id = '61000000-0000-0000-0000-000000000006'),
-  'concurrent credit transition did not refresh the invoice exactly once'
+  (select status = 'requested' and resolved_at is null
+     from credit_requests where id = '65000000-0000-0000-0000-000000000001')
+  and (select payment_status is distinct from 'paid'
+       from invoices where id = '61000000-0000-0000-0000-000000000006'),
+  'concurrent credit transition did not land exactly once without settling the invoice'
 );
 
 select dblink_send_query('p1_a', 'select p1_concurrency_test.run_bank_match(1.2)');

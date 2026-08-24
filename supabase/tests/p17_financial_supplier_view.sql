@@ -28,6 +28,19 @@ insert into public.suppliers (
 ) values
   ('37000000-0000-4000-8000-000000000001', '17000000-0000-4000-8000-000000000001', 'P17 supplier A', 'A-17', 'שוטף + 30', '{1}', '10:00', 500, 'procurement-only A'),
   ('37000000-0000-4000-8000-000000000002', '17000000-0000-4000-8000-000000000002', 'P17 supplier B', 'B-17', 'שוטף + 60', '{2}', '11:00', 700, 'procurement-only B');
+select set_config('request.jwt.claim.sub', '27000000-0000-4000-8000-000000000003', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '27000000-0000-4000-8000-000000000003',
+  'role', 'authenticated',
+  'amr', jsonb_build_array(jsonb_build_object(
+    'method', 'password', 'timestamp', extract(epoch from clock_timestamp())::bigint
+  ))
+)::text, true);
+select public.update_supplier_bank_details(
+  '37000000-0000-4000-8000-000000000001',
+  '{"account_holder":"P17 supplier A","country_code":"IL","bank_code":"12","branch_code":"345","account_number":"123456"}'::jsonb,
+  'P17 structured bank fixture');
 select pg_temp.p17_assert(
   not (select p.prosecdef from pg_catalog.pg_proc p
        where p.oid = 'public.read_financial_supplier(uuid)'::regprocedure),
@@ -70,6 +83,11 @@ select pg_temp.p17_assert(
    where table_schema = 'public' and table_name = 'financial_supplier_directory')
     = array['id', 'name', 'tax_id', 'payment_terms', 'status', 'bank_details']::text[],
   'financial supplier directory exposed procurement-only columns');
+select pg_temp.p17_assert(
+  (select bank_details like '%3456%' and bank_details not like '%123456%'
+   from public.financial_supplier_directory
+   where id = '37000000-0000-4000-8000-000000000001'),
+  'general financial directory must expose only masked last-four bank status');
 do $$
 begin
   execute 'select notes from public.financial_supplier_directory limit 1';
