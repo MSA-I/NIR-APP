@@ -176,11 +176,17 @@ insert into public.platform_admins (user_id, note) values
   ('66000000-0000-4000-8000-000000000005', 'P56 platform ops');
 
 -- ===== An unstated quota refuses, rather than being treated as infinite =====
--- As shipped, assistant_runs.monthly is the explicit unknown state for every plan.
+-- 0164 shipped assistant_runs.monthly in the explicit unknown state for EVERY plan, and this arm
+-- read that state off the default rung. 0202 gave the four self-service rungs the figures #198
+-- decided, so the unknown state now lives where a number would be an invention: `business`, whose
+-- answer is `מותאם` and therefore a per-contract override. The tenant is placed there for the two
+-- arms below, because what they test is the refusal, not the rung.
+update public.organization_subscriptions set plan_key = 'business'
+where org_id = '56000000-0000-4000-8000-000000000001';
 select pg_temp.p56_assert(
   not coalesce((public.effective_entitlement(
     '56000000-0000-4000-8000-000000000001', 'assistant_runs.monthly') ->> 'measured')::boolean, false),
-  'the shipped assistant run quota claims to be measured');
+  'the contract-priced assistant run quota claims to be measured');
 
 select pg_temp.p56_as('66000000-0000-4000-8000-000000000002');
 set local role authenticated;
@@ -219,6 +225,8 @@ $$;
 reset role;
 
 -- ===== A stated quota admits, and one recorded run counts exactly once =====
+update public.organization_subscriptions set plan_key = 'free'
+where org_id = '56000000-0000-4000-8000-000000000001';
 update public.plan_entitlements
    set unlimited = false, numeric_limit = 2, updated_at = now()
  where plan_key = 'free' and entitlement_key = 'assistant_runs.monthly';

@@ -14,8 +14,15 @@ import { APP_NAME } from '../lib/branding';
  * subject's rights. Two honest gaps are recorded in OPEN-DECISIONS: the operator's legal
  * identity/contact details are placeholders the owner must fill before marketing the
  * product, and this drafting is NOT legal advice — a lawyer's review is the owner's call.
+ *
+ * 2026-08-24 — version bumped for one deletion: the privacy policy used to state flatly that a
+ * document sent for interpretation is not stored at the model provider. `store: false` is an API
+ * REQUEST, not the provider's undertaking — docs/ASSISTANT.md §5.1 says so in the same repository —
+ * and OPEN-DECISIONS #179 forbids promising zero retention without a contract that proves it. A
+ * consent document is the last place a promise nobody can back belongs, so the sentence now says
+ * what the system actually does and what it does not know.
  */
-export const TERMS_VERSION = '2026-08-09';
+export const TERMS_VERSION = '2026-08-24';
 
 function LegalShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -125,9 +132,11 @@ export function PrivacyPolicy() {
         <p>
           הנתונים מאוחסנים ומעובדים אצל ספקי משנה המשמשים את השירות: ‏Supabase (מסד נתונים,
           אימות ואחסון קבצים), ‏OpenAI (פירוש אוטומטי של תוכן מסמכים שהועלו), ‏Cloudflare (אירוח
-          האפליקציה), ‏Resend (משלוח מיילים תפעוליים) ו-Sentry (דיווח תקלות). מסמך שנשלח לפירוש
-          אינו נשמר אצל ספק המודל (store: false). המפעילה אינה מוכרת מידע אישי ואינה משתמשת בו
-          לפרסום.
+          האפליקציה), ‏Resend (משלוח מיילים תפעוליים) ו-Sentry (דיווח תקלות). בשליחת
+          מסמך לפירוש המערכת מבקשת מספק המודל שלא ישמור את התוכן (store: false). זו בקשה
+          בממשק הספק ולא התחייבות שלו: שימור ולוגים בצד הספק כפופים לתנאיו, והמפעילה
+          אינה מבטיחה אפס-שימור בלי הסכם שמעגן זאת. המפעילה אינה מוכרת מידע אישי
+          ואינה משתמשת בו לפרסום.
         </p>
       </section>
       <section>

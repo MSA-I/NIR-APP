@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router';
-import { Check, ChevronLeft, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Check, ChevronLeft, Copy, NotepadText, ThumbsDown, ThumbsUp } from 'lucide-react';
 import type {
   AssistantRole,
   AssistantRunResult,
   Fact,
   NoAnswerReason,
   SourceReference,
+} from '../../lib/assistant/contracts';
+import {
+  ASSISTANT_DRAFT_LABEL,
+  ASSISTANT_DRAFT_ROLES,
 } from '../../lib/assistant/contracts';
 import { assistantSourceRouteDecision } from '../../lib/assistant/routeAccess';
 import { sendAssistantFeedback } from '../../lib/assistant/client';
@@ -70,6 +74,8 @@ const ASSISTANT_TOOL_LABELS: Record<string, string> = {
   get_inventory_risk: 'סיכון מלאי',
   get_payment_exposure: 'חשיפה לתשלום',
   find_entity: 'חיפוש רשומה',
+  get_product_help: 'עזרה על המוצר',
+  draft_supplier_reminder: 'נתוני תזכורת לספק',
 };
 
 function toolLabel(tool: string): string {
@@ -92,6 +98,111 @@ function SourceLink({ source, onNavigate, active = false }: {
       <ChevronLeft size={14} aria-hidden="true" />
       פתיחת מקור: {source.label}
     </Link>
+  );
+}
+
+/**
+ * The evidence under one block: the exact facts the server issued for it, and the screens where a
+ * person can go and check them. Shared by claim and draft blocks — a draft that quotes an order
+ * number has to be as traceable as a sentence that states one.
+ */
+function EvidenceTrail({ facts, sources, sourceIsCurrent, onNavigate }: {
+  facts: readonly Fact[];
+  sources: readonly SourceReference[];
+  sourceIsCurrent: (source: SourceReference) => boolean;
+  onNavigate: () => void;
+}) {
+  return (
+    <>
+      {facts.length > 0 && (
+        <dl className="mt-2 space-y-1 border-t border-line-soft pt-2">
+          {facts.map((fact) => (
+            <div key={fact.id} className="flex items-start justify-between gap-3">
+              <dt className="min-w-0 text-xs text-ink-muted">
+                <span className="block">{fact.label}</span>
+                <span className="mt-0.5 block text-xs">נמדד ל־<span className="num">{fmtDateTime(fact.as_of)}</span></span>
+              </dt>
+              <dd className="num shrink-0 text-sm font-medium text-ink-mid">{factValueText(fact)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {sources.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          {sources.map((source) => (
+            <SourceLink key={source.id} source={source} active={sourceIsCurrent(source)} onNavigate={onNavigate} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * A supplier reminder the PERSON sends (OPEN-DECISIONS #191).
+ *
+ * Everything about this block is shaped by one rule: the product does not contact suppliers. So
+ * there is a copy action and nothing else — no recipient field, no channel picker, no "send"
+ * button, and no wording anywhere claiming a message went out. The label is the product's own
+ * constant rather than anything the model wrote, so a model cannot rename its own output into
+ * something that reads like a completed action.
+ *
+ * The body is `pre-wrap` and `dir="auto"` because #191 allows Hebrew or English and a message
+ * keeps its own line breaks; the surrounding page stays RTL either way.
+ */
+function DraftBlock({ text, facts, sources, sourceIsCurrent, onNavigate }: {
+  text: string;
+  facts: readonly Fact[];
+  sources: readonly SourceReference[];
+  sourceIsCurrent: (source: SourceReference) => boolean;
+  onNavigate: () => void;
+}) {
+  const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
+
+  async function copyDraft() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopy('copied');
+    } catch {
+      // Clipboard access can be refused by the browser; say what to do instead of failing silently.
+      setCopy('failed');
+    }
+  }
+
+  return (
+    <section
+      aria-label={ASSISTANT_DRAFT_LABEL}
+      className="rounded-xl border-s-2 border-action-line bg-action-wash p-3"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="flex items-center gap-1.5 text-xs font-medium text-ink-soft">
+          <NotepadText size={14} aria-hidden="true" /> {ASSISTANT_DRAFT_LABEL}
+        </h3>
+        <button
+          type="button"
+          className="btn-ghost gap-1 px-2! py-1! text-xs"
+          onClick={() => void copyDraft()}
+        >
+          <Copy size={13} aria-hidden="true" /> העתקת הטיוטה
+        </button>
+      </div>
+      <p dir="auto" className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink-body">
+        {text}
+      </p>
+      {/* Always present, so a screen reader is told the copy happened rather than only being
+          shown it. Empty while idle; `sr-only` keeps the resting state out of the layout. */}
+      <p role="status" className={copy === 'idle' ? 'sr-only' : 'mt-1.5 text-xs text-ink-muted'}>
+        {copy === 'copied'
+          ? 'הטיוטה הועתקה. אפשר להדביק אותה בכלי ההתכתבות שלך.'
+          : copy === 'failed'
+            ? 'לא ניתן להעתיק אוטומטית — יש לסמן את הטקסט ולהעתיק ידנית.'
+            : ''}
+      </p>
+      <EvidenceTrail facts={facts} sources={sources} sourceIsCurrent={sourceIsCurrent} onNavigate={onNavigate} />
+      <p className="mt-2 text-xs text-ink-muted">
+        זו הצעת ניסוח בלבד. המערכת אינה פונה לספק במקומך ואינה בוחרת נמען או ערוץ.
+      </p>
+    </section>
   );
 }
 
@@ -177,29 +288,26 @@ export default function AnswerView({ result, role, onNavigate }: {
         const sources = block.source_ids
           .map((id) => sourceById.get(id))
           .filter((source): source is SourceReference => source !== undefined);
+        if (block.type === 'draft') {
+          // #191 gives the supplier draft to owner and office only. The Edge refuses it for any
+          // other role and so does this renderer: a stored run reopened after a role change must
+          // not surface one, the same reason a source is re-authorized on every render.
+          if (!ASSISTANT_DRAFT_ROLES.includes(role)) return null;
+          return (
+            <DraftBlock
+              key={index}
+              text={block.text}
+              facts={facts}
+              sources={sources}
+              sourceIsCurrent={sourceIsCurrent}
+              onNavigate={onNavigate}
+            />
+          );
+        }
         return (
           <div key={index} className="rounded-xl bg-surface-sunken p-3">
             <p className="text-sm leading-relaxed text-ink-body">{block.text}</p>
-            {facts.length > 0 && (
-              <dl className="mt-2 space-y-1 border-t border-line-soft pt-2">
-                {facts.map((fact) => (
-                  <div key={fact.id} className="flex items-start justify-between gap-3">
-                    <dt className="min-w-0 text-xs text-ink-muted">
-                      <span className="block">{fact.label}</span>
-                      <span className="mt-0.5 block text-xs">נמדד ל־<span className="num">{fmtDateTime(fact.as_of)}</span></span>
-                    </dt>
-                    <dd className="num shrink-0 text-sm font-medium text-ink-mid">{factValueText(fact)}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-            {sources.length > 0 && (
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                {sources.map((source) => (
-                  <SourceLink key={source.id} source={source} active={sourceIsCurrent(source)} onNavigate={onNavigate} />
-                ))}
-              </div>
-            )}
+            <EvidenceTrail facts={facts} sources={sources} sourceIsCurrent={sourceIsCurrent} onNavigate={onNavigate} />
           </div>
         );
       })}

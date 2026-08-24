@@ -1,9 +1,11 @@
+import { readFileSync } from 'node:fs';
 import { MemoryRouter } from 'react-router';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AssistantPanel from '../AssistantPanel';
 import {
+  ASSISTANT_DRAFT_LABEL,
   ASSISTANT_ERROR_MESSAGES,
   type AssistantRunResult,
 } from '../../lib/assistant/contracts';
@@ -106,6 +108,37 @@ const makeResult = (over: Partial<AssistantRunResult> = {}): AssistantRunResult 
   as_of: '2026-08-20T08:00:00.000Z',
   proposal: null,
   ...over,
+});
+
+/* טיוטת תזכורת לספק (#191): גוף ההודעה שהמשתמש עצמו ישלח, מעוגן בעובדות שהשרת הנפיק. */
+const DRAFT_TEXT = 'שלום, נשמח לעדכון על מועד האספקה של הזמנה 1042.';
+
+const draftResult = (): AssistantRunResult => makeResult({
+  answer: {
+    blocks: [{ type: 'draft', text: DRAFT_TEXT, fact_ids: ['f1'], source_ids: ['s1'] }],
+    next_steps: [],
+    no_answer_reason: null,
+  },
+  facts: [{
+    id: 'f1',
+    kind: 'order.status',
+    subject: { entity: 'purchase_order', id: 'po-1' },
+    label: 'מספר ההזמנה — הזמנה #1042',
+    value: '1042',
+    unit: 'text',
+    tool: 'draft_supplier_reminder',
+    as_of: '2026-08-20T08:00:00.000Z',
+    classification: 'tenant_standard',
+  }],
+  sources: [{
+    id: 's1',
+    entity: 'purchase_order',
+    entity_id: 'po-1',
+    label: 'הזמנה #1042 — ירקות השדה',
+    route: '/orders/po-1',
+    classification: 'tenant_standard',
+  }],
+  tools_used: [{ tool: 'draft_supplier_reminder', complete: true }],
 });
 
 function renderPanel() {
@@ -548,5 +581,65 @@ describe('העוזר של InPlace — הפאנל', () => {
     fireEvent.click(screen.getByRole('button', { name: 'מועיל' }));
     expect(await screen.findByText(/המשוב נרשם/)).toBeInTheDocument();
     expect(feedback).toHaveBeenCalledWith('run-1', true);
+  });
+  it('בלוק טיוטה מוצג עם התווית הקבועה של המוצר ועם פעולת העתקה בלבד', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+    ask.mockResolvedValue(draftResult());
+    renderPanel();
+    const dialog = await openDialog();
+    await askQuestion('נסח תזכורת לספק');
+
+    expect(await screen.findByText(DRAFT_TEXT)).toBeInTheDocument();
+    // התווית היא קבוע של המוצר, לא מחרוזת שהמודל כתב.
+    expect(screen.getByRole('region', { name: ASSISTANT_DRAFT_LABEL })).toBeInTheDocument();
+    expect(screen.getByText(ASSISTANT_DRAFT_LABEL)).toBeInTheDocument();
+    // העובדה שהטיוטה מצטטת מוצגת על ידה — טיוטה עקיבה כמו כל טענה.
+    expect(screen.getByText('מספר ההזמנה — הזמנה #1042')).toBeInTheDocument();
+
+    const copyButton = screen.getByRole('button', { name: 'העתקת הטיוטה' });
+    copyButton.focus();
+    expect(copyButton).toHaveFocus();
+    await userEvent.click(copyButton);
+    expect(writeText).toHaveBeenCalledWith(DRAFT_TEXT);
+    // האישור מוכרז ולא רק נראה.
+    const confirmation = await screen.findByText(/הטיוטה הועתקה/);
+    expect(confirmation).toHaveAttribute('role', 'status');
+
+    // אין שום אפורדנס של שליחה, נמען או ערוץ — המשתמש מעתיק ושולח בעצמו.
+    expect(screen.queryByRole('button', { name: /שליחה|לשלוח|נמען|ערוץ|WhatsApp|מייל/ })).toBeNull();
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.queryByRole('link', { name: /WhatsApp/ })).toBeNull();
+    expect(dialog.textContent).not.toMatch(/נשלח/);
+  });
+
+  it('accountant אינו רואה טיוטה לספק גם כשה-Edge שלח אחת (#191)', async () => {
+    currentRole = 'accountant';
+    ask.mockResolvedValue(draftResult());
+    renderPanel();
+    await openDialog();
+    await askQuestion('נסח תזכורת לספק');
+    await screen.findByText('הבדיקה הושלמה');
+
+    expect(screen.queryByText(DRAFT_TEXT)).toBeNull();
+    expect(screen.queryByText(ASSISTANT_DRAFT_LABEL)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'העתקת הטיוטה' })).toBeNull();
+  });
+
+  it('הרכיב עצמו אינו מכיל שום נתיב שליחה — גם לא כמחרוזת', () => {
+    const source = readFileSync('src/components/assistant/AnswerView.tsx', 'utf8');
+    // #191: המוצר אינו שולח לספק, ולכן המילה הזו אינה קיימת ברכיב שמציג את התשובה — לא בקוד,
+    // לא בהערה ולא בטקסט למשתמש.
+    expect(source).not.toContain('נשלח');
+    // הסריקה הבאה היא על הקוד בלבד: הערה שמסבירה שאין נמען ואין ערוץ היא בדיוק התיעוד שרוצים
+    // שיישאר, ואסור שהיא תיקרא כמסלול שליחה.
+    const code = source
+      .split('\n')
+      .filter((line) => !/^\s*(\/\/|\*|\/\*|\{\/\*)/.test(line))
+      .join('\n')
+      .toLowerCase();
+    for (const forbidden of ['mailto:', 'whatsapp', 'recipient', 'channel', 'sendMessage', 'href=']) {
+      expect(code).not.toContain(forbidden.toLowerCase());
+    }
   });
 });

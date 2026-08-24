@@ -95,10 +95,14 @@ select pg_temp.p70_assert(
                      or pages.numeric_limit is distinct from docs.numeric_limit * 10
            end)),
   'a plan page quota is not its document quota times ten');
+-- Scoped by decision_ref: 0202 recorded #198's four assistant figures in the same ledger, and a
+-- bare count would both fail on a second owner decision and hide one of #197's own eight behind it.
 select pg_temp.p70_assert(
-  (select count(*) from private.plan_quota_decisions) = 8
+  (select count(*) from private.plan_quota_decisions
+   where decision_ref = 'OPEN-DECISIONS #197') = 8
   and (select count(*) from private.plan_quota_decisions
-       where previous_limit is not null and previous_limit > decided_limit) = 3,
+       where decision_ref = 'OPEN-DECISIONS #197'
+         and previous_limit is not null and previous_limit > decided_limit) = 3,
   'the #197 record does not hold eight figures with the three ceiling reductions it made');
 -- Every decided figure actually reached the catalogue: a record without the application is a
 -- number nobody is held to.
@@ -127,19 +131,32 @@ select pg_temp.p70_assert(
       where entitlement.plan_key = plan.plan_key
         and entitlement.entitlement_key = definition.entitlement_key)),
   'a plan/entitlement pair is unseeded, so a new rung would resolve to `unavailable`');
--- The assistant quota is the ONE metric allowed to sit in the unknown-that-refuses state: #198
--- states the steady numbers but #209 puts a differently-anchored 30-day window in front of them.
+-- The assistant quota was the ONE metric allowed to sit in the unknown-that-refuses state while
+-- #209's differently-anchored window was undecided. 0202 closed that gap, so the rule is now
+-- narrower rather than gone: the four self-service rungs hold #198's figures, and the unknown state
+-- survives only where a number would be an invention -- `business`, whose answer is `מותאם` and
+-- therefore a per-contract override, and the retired `legacy` rung, which gets no new allowance.
 select pg_temp.p70_assert(
   not exists (
     select 1 from plan_entitlements
     where kind = 'numeric' and not unlimited and numeric_limit is null
-      and entitlement_key <> 'assistant_runs.monthly'),
-  'a metric beyond the assistant quota entered the unknown-that-refuses state');
+      and not (entitlement_key = 'assistant_runs.monthly'
+               and plan_key in ('business', 'legacy'))),
+  'a metric beyond the contract-priced assistant quota entered the unknown-that-refuses state');
+select pg_temp.p70_assert(
+  (select count(*) from (values
+     ('free', 20), ('basic', 40), ('pro', 100), ('premium', 250)) as decided(plan_key, quota)
+   join plan_entitlements entitlement
+     on entitlement.plan_key = decided.plan_key
+    and entitlement.entitlement_key = 'assistant_runs.monthly'
+    and not entitlement.unlimited
+    and entitlement.numeric_limit = decided.quota) = 4,
+  'the assistant quota is not the four figures #198 decided for the self-service rungs');
 select pg_temp.p70_assert(
   (select count(*) from plan_entitlements
    where entitlement_key = 'assistant_runs.monthly' and not unlimited and numeric_limit is null)
-   = (select count(*) from subscription_plans),
-  'the assistant quota stopped refusing on some rung without #209 being decided');
+   = 2,
+  'the assistant quota stopped refusing on the contract-priced or the retired rung');
 
 -- ===== 3. Price (#195, #201, #208) =====
 select pg_temp.p70_assert(
@@ -907,11 +924,18 @@ select pg_temp.p70_assert(
     '70000000-0000-4000-8000-000000000006', 'documents.monthly') ->> 'referral_bonus')::numeric = 10,
   'the resolution rule does not report the bonus separately from the plan');
 -- An unstated limit stays a refusal: a bonus is added to a number, and there is no number here.
+-- Since #198 the only genuinely unstated ceiling is the contract-priced rung's assistant quota, so
+-- the organization is moved onto it for the length of this check and put straight back -- what is
+-- being tested is the resolution rule, not which plan this fixture happens to sit on.
+update organization_subscriptions set plan_key = 'business'
+where org_id = '70000000-0000-4000-8000-000000000006';
 select pg_temp.p70_assert(
   (public.effective_entitlement(
     '70000000-0000-4000-8000-000000000006', 'assistant_runs.monthly') ->> 'measured')::boolean
     = false,
   'a bonus made an unstated limit look measured');
+update organization_subscriptions set plan_key = 'free'
+where org_id = '70000000-0000-4000-8000-000000000006';
 
 -- A replayed activation pays once. The key is (referral, beneficiary, period) and the retry lands
 -- on the same row.

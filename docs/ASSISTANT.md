@@ -102,16 +102,26 @@
 `OPEN-DECISIONS #98` מסווג הזרמת נתונים עסקיים לכתובת חיצונית כ"אותה מחלקת דליפה כמו פרטי בנק".
 זה בדיוק מה שהיטל הכלי הופך להיות כשהוא מגיע לספק — ולכן ההיטל הצר הוא הבקרה, לא הבטחה.
 
-| שאלת ממשל | מצב |
-|---|---|
-| האם הנתונים משמשים לאימון | **חייב להיות "לא" חוזי לפני הפעלה בייצור** |
-| שימור אצל הספק / אפס-שימור | **דורש אימות מול הספק שייבחר** |
-| לוגים אצל הספק | **דורש אימות** |
-| הסכם עיבוד נתונים (DPA) | **דורש חתימה לפני דייר ראשון** |
-| אזור / ריבונות נתונים | **דורש הכרעה** |
-| הפרדת סביבות | מפתח נפרד לייצור ולפיתוח |
-| החלפת מפתחות | ידנית, מתועדת |
-| מדיניות ספק גיבוי | **אין ספק גיבוי.** כשל ספק = תשובה דטרמיניסטית, לא ספק אחר |
+**חמש שורות החובה של `#179` נאכפות בקוד, לא בכוונה טובה.**
+‏`supabase/functions/assistant/governance.ts` קורא אותן מהתצורה, ו-`parseAssistantConfig` מסרב
+**לפני הדגם ולפני שאר הכוונונים** אם אחת מהן אינה `VERIFIED`. הסירוב מגיע לדפדפן כ-
+`assistant_provider_unavailable` (‏503) — "העוזר אינו זמין כרגע. הנתונים עצמם זמינים במסכים." —
+כלומר בדיוק ה-fallback הדטרמיניסטי, ולא ספק שני. הראיות עצמן, עם מקור מתוארך ושם מי שאימת,
+נרשמות ב-**`docs/ASSISTANT-ACTIVATION-EVIDENCE.md`**; המסמך הזה מתעד את הקוד, לא להפך.
+
+| שורת ממשל | מפתח בקוד | מצב 24.08.2026 | מה נדרש כדי לסגור |
+|---|---|---|---|
+| שימוש הנתונים לאימון | `training_use` | `MISSING` | מקור רשמי מתוארך של הספק, ושם מי שקרא |
+| שימור אצל הספק | `retention` | `MISSING` | ‏standard בגילוי נאות **או** חוזה שמוכיח zero-retention |
+| לוגים אצל הספק | `provider_logs` | `MISSING` | מקור רשמי מתוארך; אותו כלל חוזה חל על טענת אפס-לוגים |
+| הסכם עיבוד נתונים (DPA) | `dpa` | `MISSING` | חתימה לפני דייר ראשון, עם הפניה לחוזה |
+| אזור / ריבונות נתונים | `data_region` | `MISSING` | מקור רשמי מתוארך |
+| הפרדת סביבות | — | קיים | מפתח נפרד לייצור ולפיתוח |
+| החלפת מפתחות | — | קיים | ידנית, מתועדת |
+| מדיניות ספק גיבוי | — | **אין ספק גיבוי** | כשל ספק = תשובה דטרמיניסטית, לא ספק אחר |
+
+‏`store: false` (‏`provider.ts:339`) אינו אחת מחמש השורות ואינו מחליף אף אחת מהן: זו בקשת API,
+לא הוכחת מחיקה ולא חוזה.
 
 ### תצורה — משתני סביבה של פונקציית ה-Edge
 
@@ -127,6 +137,7 @@
 | `AI_ASSISTANT_TIMEOUT_MS` | ‏30,000 | פגום = סירוב |
 | `AI_ASSISTANT_MAX_TOOL_CALLS_PER_TURN` | ‏4 | פגום = סירוב |
 | `AI_ASSISTANT_CONTEXT_MESSAGE_LIMIT` | ‏12 | פגום = סירוב |
+| `AI_ASSISTANT_GOVERNANCE_TRAINING_USE` · `_RETENTION` · `_PROVIDER_LOGS` · `_DPA` · `_DATA_REGION` | — | **חובה, חמישתן.** חסרה, אינה `VERIFIED`, או אינה מפוענחת = סירוב `assistant_governance_incomplete:<שורות>`. הפורמט ב-`ASSISTANT-ACTIVATION-EVIDENCE.md §3` |
 | `AI_ASSISTANT_DAILY_USER_LIMIT` · `_DAILY_ORG_LIMIT` · `_MONTHLY_ORG_LIMIT` | לא מוגדר | לא מוגדר = **אין תקרה נוספת**; מוגדר אך בלתי-מדיד = סירוב |
 | `AI_ASSISTANT_SOFT_COST_CAP` · `_HARD_COST_CAP` | לא מוגדר | **אין מקור מחיר היום** (`#183`), ולכן עלות נרשמת `null`; הגדרת אחת התקרות מסרבת fail-closed עד שמקור מחיר מנוהל ימלא מדידה אמיתית |
 
@@ -313,17 +324,17 @@ offboarding, suspended או actor שהשתנה אחרי טעינת history אי�
 | למה חשבונית חסומה | `IMPLEMENTED` | `explain_invoice_block`; קודי וסבילויות three-way-match של השרת |
 | מה הוזמן, התקבל וחויב | `IMPLEMENTED` | `compare_order_receipt_invoice`; quantities/deltas מה-RPC הקנוני |
 | שורות מעל מחיר ההזמנה | `IMPLEMENTED_PER_INVOICE` | אותו כלי מול snapshot ההזמנה; רשימה חוצת-חשבוניות היא `DOES_NOT_EXIST` |
-| ספקים שהעלו מחיר החודש | `BLOCKED_DECISION #189` | אין כיוון/baseline/month/aggregation מוכרעים |
+| ספקים שהעלו מחיר החודש | `IMPLEMENTED_CALENDAR_MONTH` | `get_monthly_price_rises` מעל `0203`; חודש קלנדרי מ-1 בחודש לפי `Asia/Jerusalem`, delta נטו חיובי בלבד, ושורה בלי בסיס סמכותי מוחרגת כ-`לא ניתן למדוד` ולא נספרת כאפס |
 | כסף שממתין לזיכוי | `IMPLEMENTED_WITH_SCOPE_LIMIT` | `get_open_credits`; ‏`DEBT §49` נשאר גלוי |
 | הזמנות שנשלחו ולא אושרו | `IMPLEMENTED` | `get_orders_awaiting_confirmation`; סטטוס `sent`, RLS ו-pagination |
 | תנועות בנק לא מותאמות | `IMPLEMENTED_ROLE_BOUND` | `get_unmatched_bank_transactions`; owner/accountant בלבד, projection ללא raw/reference |
 | הספק שמאחר הכי הרבה וגודל המדגם | `PARTIAL / BLOCKED_DECISION #30` | `get_supplier_performance` מחזיר מדדים ומדגם; אינו ממציא פונקציית דירוג |
 | מוצרים שצפויים להיגמר | `IMPLEMENTED_READ_ONLY` | `get_inventory_risk`; null נשאר “לא נמדד”, incoming אינו מנוכה |
-| המלצת ספק / חיסכון / הצעת רכש | `BLOCKED_DECISION #190` | אין calculation owner; ‏#109 אוסר כתיבה ישירה ל-PO |
+| המלצת ספק / חיסכון / הצעת רכש | `IMPLEMENTED_EXPLAIN_ONLY` | `get_purchase_comparison` מעל `0203`, מייבא את `compareLine`/`summarizeComparison` מ-`src/lib/orderComparison.ts` כדי שלא תהיה נוסחה שנייה; מחזיר breach במקום להעלות כמות, ואינו כותב PO (‏#109/#182) |
 | טיוטת הזמנת רכש | `BLOCKED_DECISION #109/#182/#190` | state machine קיים; composer ופקודת draft בטוחה אינם קיימים |
 | טיוטת דרישת תשלום | `BLOCKED_DECISION #182` | `create_payment_request` מועמד בלבד; אין composer/revalidation/idempotency מחוברים |
-| תזכורת לספק | `BLOCKED_DECISION #191` | אין external-message capability או command קנוני |
-| עזרה על המוצר מ-metadata | `BLOCKED_DECISION #192` | אין registry/corpus סמכותי; route policy לבדה אינה תוכן עזרה |
+| תזכורת לספק | `IMPLEMENTED_DRAFT_ONLY` | `draft_supplier_reminder` מחזיר עובדות בלבד; הגוף נכתב כבלוק `draft` שתוויתו קבוע של המוצר, ספרותיו מוצמדות לערכי עובדות, ו-`נשלח` נדחה. owner/office בלבד. אין external-message capability, ו-`check:assistant-no-send` שומר על כך |
+| עזרה על המוצר מ-metadata | `IMPLEMENTED_REGISTRY_ONLY` | `get_product_help` מעל `src/lib/assistant/productHelpRegistry.ts`; ‏route הוא מפתח של `APP_ROUTE_POLICY`, תפקידי רשומה מצרים ולא מרחיבים, עברית היא locale הבסיס, ואין fallback — שאלה שאין לה רשומה נענית `no_capability` |
 | חיפוש ישות וניווט | `IMPLEMENTED_LOCATOR_ONLY` | `find_entity`; type/route allowlist ו-current-role validation |
 | סיכום/התראות/חשיפת תשלום | `IMPLEMENTED_WITH_NAMED_PARTIALS` | שלושת הכלים מחזירים failures וכיסוי; אין “אפס” במקום נתון שלא נמדד |
 | read tools / external sending / live evaluation switches | `BLOCKED_DECISION #193` | UI כרוך ב-read tools; שתי האחרות אינן פעילות ואינן מוצגות כיכולת קיימת |
@@ -421,7 +432,7 @@ focus/return path, source side-by-side, history open וניגודיות מיני
 |---|---|---|---|---|
 | 1. Contracts ו־client boundary | `contracts.ts`, ‏`client.ts`, ‏`errorCodes.ts` | Zod strict ל־ask/run/history; 2xx פגום נכשל סגור | `client.spec.ts`, ‏typecheck | שינוי wire דורש Edge+client באותו commit |
 | 2. Actor, flags ומכסה | `auth.ts`, ‏`flags.ts`, ‏`runSession.ts` | actor נפתר בכל שימוש; flags exposure בלבד; fingerprint מנקה זיכרון/cache | auth/flags/component negative tests | מכסה עסקית #180 חוסמת activation |
-| 3. Read tools ו־capability map | `tools/*`, ‏§7 | 13 כלים allowlisted, projection מפורש ו־server calculation owner | tools/reads/business suites | #189–#192 נשארים יכולות חסרות ממוספרות |
+| 3. Read tools ו־capability map | `tools/*`, ‏§7 | 17 כלים allowlisted, projection מפורש ו־server calculation owner | tools/reads/business/readmodels suites | #189–#192 מומשו ב-24.08.2026; ‏#193 נשאר: אין מתג כתיבה או שליחה, כי היכולת אינה קיימת |
 | 4. Provider ו־egress | `provider.ts`, ‏`egress.ts`, ‏`0166` | server-only provider, lease מסוג `assistant`, אין fallback ספק | provider/egress, ‏`p58` | ממשל #179 ומחיר #183 חוסמים activation |
 | 5. Validation ו־evidence authorization | `validate.ts`, ‏`evidence-authorization.ts` | semantic claim + source/route/current actor reauthorization | deleted/hidden/tenant/role/scope negative tests | כשל מסיר תשובה שלמה, לא ממציא redaction |
 | 6. Persistence, deletion ו־retention | `0164`, ‏`history.ts`, ‏§6 | 90 יום history, ‏30 יום proposal לא־מבוצע, delete עצמי מבוקר | `p56`, history Deno tests | backup/provider deletion נשאר ממשל #179/#181 |

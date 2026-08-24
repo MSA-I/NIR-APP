@@ -7,6 +7,17 @@
 // What is deliberately NOT here: a history-retention knob. Retention is owned by the database
 // (a scheduled purge on the run tables), because an Edge variable can only stop NEW writes --
 // it cannot expire what is already stored, and two owners for one policy is how the two drift.
+//
+// What IS here, and is not a knob: the provider-governance gate (#179). Incomplete governance
+// evidence refuses through the same ConfigResult every malformed knob refuses through, so a
+// boundary that starts without it cannot reach a provider at all. It is placed with the
+// configuration on purpose -- governance is a precondition of having a provider, not a check
+// somebody remembers to call before using one.
+import {
+  assertProviderGovernance,
+  type ProviderGovernanceDecision,
+  readProviderGovernanceEvidence,
+} from "./governance.ts";
 
 /**
  * Prompt version, following interpret-document's PROMPT_VERSION convention: bump on ANY change
@@ -69,6 +80,13 @@ export interface AssistantConfig {
   hardCostCap: number | null;
   /** AI_ASSISTANT_CONTEXT_MESSAGE_LIMIT -- default 12, bounds 0..50. */
   contextMessageLimit: number;
+  /**
+   * The #179 decision, carried rather than discarded: parseAssistantConfig never returns a
+   * config whose governance is anything but an allow, and the provider-construction site
+   * revalidates these rows before a client exists. Keeping the evidence on the config is what
+   * makes that second check possible without re-reading the environment.
+   */
+  governance: ProviderGovernanceDecision;
 }
 
 export type ConfigResult =
@@ -102,6 +120,14 @@ export function parseAssistantConfig(env: EnvReader): ConfigResult {
   if (provider !== "openai") {
     return { ok: false, reason: "assistant_provider_unsupported" };
   }
+  // Governance is decided BEFORE the model and the knobs, so an operator with incomplete
+  // provider evidence is told that -- not that a model is unset. The rows are named in the
+  // reason, which index.ts already logs verbatim on the refusal path.
+  const governance = assertProviderGovernance(
+    readProviderGovernanceEvidence(env, provider),
+  );
+  if (!governance.allowed) return { ok: false, reason: governance.reason };
+
   const model = env("AI_ASSISTANT_MODEL")?.trim() ?? "";
   if (!model) return { ok: false, reason: "assistant_model_unset" };
   const fastModel = env("AI_ASSISTANT_FAST_MODEL")?.trim() || model;
@@ -165,6 +191,7 @@ export function parseAssistantConfig(env: EnvReader): ConfigResult {
       softCostCap,
       hardCostCap,
       contextMessageLimit,
+      governance,
     },
   };
 }

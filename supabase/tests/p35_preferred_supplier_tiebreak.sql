@@ -98,13 +98,51 @@ select pg_temp.p35_assert(
   'fewer than two recommendation sites carry the preference tie-break. 0018 and 0043 both choose '
   'a supplier, and a rule that lives in one of them is a rule two screens disagree about');
 
+-- This arm used to read: any body containing `s.preferred desc` must also contain the literal
+-- `order by sp.current_price, s.preferred desc`. It was written when the only two recommendation
+-- sites (0018, 0043) both used the aliases `sp` and `s`, and it had two faults that only showed up
+-- once a third site existed. It FALSE-POSITIVED on any alias whose name ends in "s" -- 0203's
+-- `offers.preferred desc` contains the substring `s.preferred desc` while ordering by price first,
+-- exactly as #145 requires -- and, worse in the other direction, it was BLIND to a real violation
+-- written under any other alias: `o.preferred desc, o.current_price` matched neither pattern and
+-- passed.
+--
+-- The rule #145 states has nothing to do with alias names: preference may only ever appear
+-- immediately after price in an ordering. So count instead of substring-match -- every occurrence
+-- of `preferred desc` in a public body must be one that price introduces. That covers 0203 rather
+-- than excusing it, and it fires under any alias.
 select pg_temp.p35_assert(
   not exists (
     select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
-      and p.prosrc like '%s.preferred desc%'
-      and p.prosrc not like '%order by sp.current_price, s.preferred desc%'),
+      and (select count(*) from regexp_matches(p.prosrc, 'preferred\s+desc', 'g'))
+        <> (select count(*) from regexp_matches(
+              p.prosrc, 'current_price,\s*[a-z_]*\.?preferred\s+desc', 'g'))),
   'a recommendation orders by preference BEFORE price somewhere');
+
+-- The arm above is a negative check, and a negative check that has never been seen to fire has
+-- proven nothing. Falsify it here against a positive control rather than trusting it: a function
+-- that really does order by preference first must make it fail.
+create function public.p35_falsify_preference_first()
+returns table (supplier_id uuid)
+language sql stable as $$
+  select sp.supplier_id
+  from public.supplier_products sp
+  join public.suppliers s on s.id = sp.supplier_id
+  order by s.preferred desc, sp.current_price
+$$;
+
+select pg_temp.p35_assert(
+  exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and (select count(*) from regexp_matches(p.prosrc, 'preferred\s+desc', 'g'))
+        <> (select count(*) from regexp_matches(
+              p.prosrc, 'current_price,\s*[a-z_]*\.?preferred\s+desc', 'g'))),
+  'the preference-ordering check did not fire on a function that orders by preference first, so '
+  'it proves nothing about the functions it passes');
+
+drop function public.p35_falsify_preference_first();
 
 -- ===== 3. Setting it is a reasoned, audited decision =====
 

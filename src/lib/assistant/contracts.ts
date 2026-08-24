@@ -191,6 +191,16 @@ export const FACT_KINDS = [
   'order_invoice.delta',
   'supplier.balance',
   'supplier.price_change',
+  /** The price that was in effect at the start of the calendar month a rise is measured against. */
+  'supplier.price_baseline',
+  /** What choosing this supplier saved against the NEXT-cheapest usable offer (src/lib/orderComparison.ts). */
+  'comparison.saved_vs_next',
+  /** What choosing this supplier costs above the cheapest usable offer. */
+  'comparison.extra_vs_cheapest',
+  /** A supplier minimum the entered quantity does not clear. Reported, never silently cleared (#190). */
+  'comparison.minimum_breach',
+  /** One authoritative product-help entry, valued by its canonical route (#192). */
+  'product_help.entry',
   'payment_request.total',
   'payment_request.status',
   'credit.open_amount',
@@ -330,15 +340,19 @@ export const ORG_TIME_ZONE = 'Asia/Jerusalem';
 /**
  * Named periods the assistant may ask for.
  *
- * `last_7_days` and `last_30_days` are trailing windows anchored on today in `ORG_TIME_ZONE`.
+ * `last_7_days`, `last_30_days` and `last_90_days` are trailing windows anchored on today in
+ * `ORG_TIME_ZONE`, and their labels say so out loud.
  *
- * Calendar week and calendar month are absent on purpose, and the reason is measured rather than
- * stylistic: the product currently means two different things by "השבוע". `summary.ts` and
- * `alerts.ts` use trailing windows (7 and 30 days), while the dashboard's own weekly buckets use
- * `startOfCalendarWeek` from src/lib/format.ts, which starts on Sunday. Server-side there is no
- * week helper at all. Offering both semantics here would let one question return two numbers, both
- * defensible, with nothing on screen to say which was used. Until the owner picks one
- * (OPEN-DECISIONS #178), the assistant answers only in windows it can name out loud.
+ * The two-meanings problem this list was originally written around has since been decided.
+ * OPEN-DECISIONS #178 (owner, 21.08.2026) rules that in this product "week" and "month" mean
+ * CALENDAR periods in `ORG_TIME_ZONE` — a week from Sunday 00:00, a month from the 1st at 00:00 —
+ * and that a trailing window is legal only under an explicit `7 הימים האחרונים` / `30 הימים
+ * האחרונים` label that never calls itself a week or a month. That is why the two vocabularies
+ * below are separate constants rather than one enum: a tool picks the semantic it actually
+ * computed, and the label it must print comes with it.
+ *
+ * Calendar WEEK is still absent, and deliberately: no server read model computes one yet, and a
+ * period the assistant can name but not measure is a promise with no number behind it.
  */
 export const TIME_WINDOWS = ['last_7_days', 'last_30_days', 'last_90_days'] as const;
 export type TimeWindow = (typeof TIME_WINDOWS)[number];
@@ -354,6 +368,21 @@ export const TIME_WINDOW_LABELS: Record<TimeWindow, string> = {
   last_7_days: '7 הימים האחרונים',
   last_30_days: '30 הימים האחרונים',
   last_90_days: '90 הימים האחרונים',
+};
+
+/**
+ * Calendar periods, kept apart from the trailing windows above so that no tool can print a
+ * trailing label over a calendar computation or the reverse (#178).
+ *
+ * `this_calendar_month` is the period #189 measures a supplier price rise over: from the 1st of
+ * the current month at 00:00 in `ORG_TIME_ZONE` until now. The boundary lives in the server read
+ * model; this constant only fixes the name the answer must carry.
+ */
+export const CALENDAR_PERIODS = ['this_calendar_month'] as const;
+export type CalendarPeriod = (typeof CALENDAR_PERIODS)[number];
+
+export const CALENDAR_PERIOD_LABELS: Record<CalendarPeriod, string> = {
+  this_calendar_month: 'החודש הקלנדרי הנוכחי, מה-1 בחודש',
 };
 
 /* ============================================================================
@@ -396,7 +425,47 @@ export const ClaimBlockSchema = z.object({
   source_ids: z.array(z.string().min(1)).max(12).default([]),
 }).strict();
 
-export const AssistantBlockSchema = z.discriminatedUnion('type', [TextBlockSchema, ClaimBlockSchema]);
+/**
+ * A supplier reminder the human sends, not the product (#191).
+ *
+ * The label is a constant here rather than a field on the block, so the model cannot rename its
+ * own output: it composes a body, and the product decides that a body is presented as `טיוטה`.
+ * There is no recipient, no channel and no send — those capabilities do not exist anywhere in the
+ * assistant surface, and `scripts/check-assistant-no-send.mjs` keeps it that way.
+ *
+ * The digit rule is NOT relaxed here. A reminder that names an order number or an amount is
+ * carrying a quantity, so a draft is pinned exactly like a claim: every numeral in the body must
+ * be a rendering of a cited fact's VALUE, checked by validateAnswer(). `fact_ids` is therefore
+ * required rather than optional — a draft with nothing behind it is prose with a label.
+ */
+export const ASSISTANT_DRAFT_LABEL = 'טיוטה';
+
+/**
+ * The claim the product must never make about itself, held as a constant so it exists in exactly
+ * ONE place. `scripts/check-assistant-no-send.mjs` forbids this word across the whole assistant
+ * surface; the refusal that enforces the ban needs to name the word it bans, and a guard cannot
+ * tell a refusal apart from an affordance by reading a string literal. Defining it here — and
+ * importing it wherever it is checked — is what keeps the guard's single allowance to one
+ * reviewed line instead of a per-file exception list.
+ */
+export const ASSISTANT_SENT_CLAIM_MARKER = 'נשלח';
+
+/** #191: owner and office compose supplier drafts. `accountant` deliberately does not. */
+export const ASSISTANT_DRAFT_ROLES: readonly AssistantRole[] = ['owner', 'office'];
+
+export const DraftBlockSchema = z.object({
+  type: z.literal('draft'),
+  /** A message body rather than a sentence, hence the wider ceiling than a text block. */
+  text: z.string().min(1).max(1200),
+  fact_ids: z.array(z.string().min(1)).min(1).max(12),
+  source_ids: z.array(z.string().min(1)).max(12).default([]),
+}).strict();
+
+export const AssistantBlockSchema = z.discriminatedUnion('type', [
+  TextBlockSchema,
+  ClaimBlockSchema,
+  DraftBlockSchema,
+]);
 export type AssistantBlock = z.infer<typeof AssistantBlockSchema>;
 
 /** Why an answer is absent. Named reasons, so "I don't know" is never mistaken for "there is none". */
@@ -428,6 +497,49 @@ export type AssistantAnswer = z.infer<typeof AssistantAnswerSchema>;
 
 /** What the browser receives. The envelope the panel renders. */
 export type AssistantRunResult = z.infer<typeof AssistantRunResultSchema>;
+
+/* ============================================================================
+ * 6b. Product help
+ * ==========================================================================*/
+
+/**
+ * The shape of one authoritative product-help entry (#192).
+ *
+ * The registry in `src/lib/assistant/productHelpRegistry.ts` is the SINGLE source of truth for
+ * "how do I do X in this product". A prompt, a design document or an on-screen sentence is not a
+ * source: they drift, and a drifted answer about the product is indistinguishable from a correct
+ * one until somebody follows it. The entry therefore carries its own provenance — who owns it,
+ * which version it is, when it was last touched and what it was written from — and its `route` is
+ * a key of `APP_ROUTE_POLICY`, not a free string, so a screen that is removed or whose roles move
+ * breaks the registry guard instead of shipping a dead instruction.
+ *
+ * There is no fallback. A question the registry does not answer is answered `no_capability`.
+ */
+export const PRODUCT_HELP_LOCALES = ['he', 'en'] as const;
+export type ProductHelpLocale = (typeof PRODUCT_HELP_LOCALES)[number];
+
+export const ProductHelpEntrySchema = z
+  .object({
+    id: z.string().min(1).max(120).regex(/^[a-z0-9_]+$/, 'product_help_id_shape'),
+    /** Bumped whenever the steps change, so an answer can name the version it came from. */
+    version: z.number().int().positive(),
+    /** Who is accountable for the sentence being true. */
+    owner: z.string().min(1).max(80),
+    locale: z.enum(PRODUCT_HELP_LOCALES),
+    /** Roles this entry may be shown to. Narrower than, never wider than, the route's own roles. */
+    roles: z.array(z.enum(ASSISTANT_ROLES)).min(1),
+    /** A key of APP_ROUTE_POLICY. The guard resolves it to a path and to that path's roles. */
+    route: z.string().min(1).max(80),
+    label: z.string().min(1).max(120),
+    /** What a person actually does, in order. An entry with no steps explains nothing. */
+    steps: z.array(z.string().min(1).max(300)).min(1).max(10),
+    /** Where the steps were written from — a document, a decision or a screen contract. */
+    source: z.string().min(1).max(200),
+    /** ISO calendar date, so staleness is answerable without reading Git. */
+    updated_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'product_help_updated_at_shape'),
+  })
+  .strict();
+export type ProductHelpEntry = z.infer<typeof ProductHelpEntrySchema>;
 
 /* ============================================================================
  * 7. Proposal state machine

@@ -9,6 +9,11 @@ import {
   runOptedInAssistantLiveEvaluation,
 } from "./evaluation.ts";
 import {
+  assertGovernedProviderConstruction,
+  assertProviderGovernance,
+  readProviderGovernanceEvidence,
+} from "./governance.ts";
+import {
   buildInstructions,
   createOpenAiAssistantProvider,
   runAssistantTurn,
@@ -81,10 +86,28 @@ function syntheticTool(testCase: AllowedAssistantEvaluationCase): AssistantTool 
   };
 }
 
-async function executeSyntheticLiveEvaluation(
+/**
+ * Exported for the governance test. This is the one provider-construction path in the function
+ * directory that does NOT go through parseAssistantConfig, so the #179 gate config.ts enforces
+ * cannot reach it by construction -- it has to be asserted here, in the same file, or the
+ * promise in ASSISTANT.md §4.1 that "even a synthetic runner does not bypass #179" is untrue.
+ *
+ * `env` is a parameter rather than a direct Deno.env read so the gate is testable without
+ * mutating process environment across cases; the production caller passes the real reader.
+ */
+export async function executeSyntheticLiveEvaluation(
   apiKey: string,
   model: string,
+  env: (name: string) => string | undefined = (name) => Deno.env.get(name),
 ): Promise<{ passed: number; total: number }> {
+  // Before the corpus, before a key is used and before anything is fetched. A synthetic corpus
+  // carries no tenant data, but it is still OUR text reaching a provider whose retention, logs
+  // and training terms nobody has verified -- which is the whole of what #179 governs. The gate
+  // is not about whose data it is; it is about whether we know what happens to it.
+  assertGovernedProviderConstruction(
+    assertProviderGovernance(readProviderGovernanceEvidence(env, "openai")),
+  );
+
   const cases = ASSISTANT_EVALUATION_CORPUS.filter(
     (testCase): testCase is AllowedAssistantEvaluationCase => testCase.allowed,
   );

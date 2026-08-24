@@ -37,6 +37,7 @@ jobs:
       money: ${{ steps.filter.outputs.money }}
       exemptions: ${{ steps.filter.outputs.exemptions }}
       supplier: ${{ steps.filter.outputs.supplier }}
+      nosend: ${{ steps.filter.outputs.nosend }}
       vitest: ${{ steps.filter.outputs.vitest }}
     steps:
       - uses: actions/checkout@v4
@@ -76,6 +77,9 @@ jobs:
           money_inputs='^(src/|scripts/check-money\.ts$)'
           exemption_inputs='^(supabase/migrations/|scripts/check-exemption-pin\.ts$)'
           supplier_inputs='^(src/|scripts/check-supplier-columns\.ts$)'
+          # The assistant surface, tests included: the no-send guard reads spec files too (an
+          # egress kind or a foreign flag key counts wherever it is written).
+          nosend_inputs='^(src/lib/assistant/|src/components/assistant/|src/components/AssistantPanel\.tsx$|supabase/functions/assistant/|scripts/check-assistant-no-send\.mjs$)'
           vitest_inputs='^(src/|.*\.(spec|test)\.[cm]?[jt]sx?$)'
 
           if [ ! -s changed-files.txt ] || product_matches "$build_common|$build_inputs"; then
@@ -83,13 +87,14 @@ jobs:
           else
             echo "build=false" >> "$GITHUB_OUTPUT"
           fi
-          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$token_inputs|$money_inputs|$exemption_inputs|$supplier_inputs|$vitest_inputs"; then echo "verify=true" >> "$GITHUB_OUTPUT"; else echo "verify=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$token_inputs|$money_inputs|$exemption_inputs|$supplier_inputs|$nosend_inputs|$vitest_inputs"; then echo "verify=true" >> "$GITHUB_OUTPUT"; else echo "verify=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$vitest_inputs"; then echo "install=true" >> "$GITHUB_OUTPUT"; else echo "install=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$knip_inputs"; then echo "knip=true" >> "$GITHUB_OUTPUT"; else echo "knip=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-design-tokens\.ts$" || product_matches '^src/'; then echo "tokens=true" >> "$GITHUB_OUTPUT"; else echo "tokens=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-money\.ts$" || product_matches '^src/'; then echo "money=true" >> "$GITHUB_OUTPUT"; else echo "money=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$exemption_inputs"; then echo "exemptions=true" >> "$GITHUB_OUTPUT"; else echo "exemptions=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-supplier-columns\.ts$" || product_matches '^src/'; then echo "supplier=true" >> "$GITHUB_OUTPUT"; else echo "supplier=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$nosend_inputs"; then echo "nosend=true" >> "$GITHUB_OUTPUT"; else echo "nosend=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$vitest_config|$vitest_inputs"; then echo "vitest=true" >> "$GITHUB_OUTPUT"; else echo "vitest=false" >> "$GITHUB_OUTPUT"; fi
 
   build:
@@ -151,6 +156,9 @@ jobs:
       - name: Supplier-column guard
         if: needs.changes.outputs.supplier == 'true'
         run: npm run check:supplier-columns
+      - name: Assistant no-send guard
+        if: needs.changes.outputs.nosend == 'true'
+        run: npm run check:assistant-no-send
       - name: Vitest
         if: needs.changes.outputs.vitest == 'true'
         run: npm run test

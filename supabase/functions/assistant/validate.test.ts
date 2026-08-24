@@ -554,3 +554,107 @@ Deno.test("a canonical route that the current role cannot open is rejected", () 
     assert.ok(result.errors.includes("source:s1:route_not_permitted"));
   }
 });
+
+// ---------------------------------------------------------------------------
+// Draft blocks (#191). A draft is a message body a human copies and sends himself. The label is
+// the product's, not the model's; the numerals in it are pinned exactly like a claim's; and the
+// word "נשלח" may never appear, because nothing in this product sends it.
+// ---------------------------------------------------------------------------
+
+Deno.test("a draft whose numerals all render a cited fact's value is accepted", () => {
+  const result = validateAnswer(
+    answer([{
+      type: "draft",
+      text: "שלום, נשמח לעדכון על מועד האספקה של 12 הפריטים שהוזמנו.",
+      fact_ids: ["f1"],
+      source_ids: [],
+    }]),
+    [fact()],
+    [],
+    "owner",
+  );
+  assert.equal(result.ok, true);
+});
+
+Deno.test("a draft may not carry a numeral no cited fact supports", () => {
+  const result = validateAnswer(
+    answer([{
+      type: "draft",
+      text: "שלום, נשמח לעדכון על 99 הפריטים שהוזמנו.",
+      fact_ids: ["f1"],
+      source_ids: [],
+    }]),
+    [fact()],
+    [],
+    "owner",
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(result.errors.includes("block:0:numeral_without_fact:99"));
+  }
+});
+
+Deno.test("a draft may never claim it was sent", () => {
+  const result = validateAnswer(
+    answer([{
+      type: "draft",
+      text: "שלום, המסר נשלח לספק ואנו ממתינים לתשובה.",
+      fact_ids: ["f1"],
+      source_ids: [],
+    }]),
+    [fact()],
+    [],
+    "owner",
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.ok(result.errors.includes("block:0:draft_claims_sent"));
+});
+
+Deno.test("accountant is offered no supplier draft at all", () => {
+  const result = validateAnswer(
+    answer([{
+      type: "draft",
+      text: "שלום, נשמח לעדכון על מועד האספקה.",
+      fact_ids: ["f1"],
+      source_ids: [],
+    }]),
+    [fact()],
+    [],
+    "accountant",
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.ok(result.errors.includes("block:0:draft_not_permitted"));
+});
+
+Deno.test("a draft citing a provider-forbidden fact supports nothing", () => {
+  const result = validateAnswer(
+    answer([{
+      type: "draft",
+      text: "שלום, נשמח לעדכון.",
+      fact_ids: ["f1"],
+      source_ids: [],
+    }]),
+    [fact({ classification: "bank_restricted" })],
+    [],
+    "owner",
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(result.errors.includes("block:0:forbidden_fact_classification:f1"));
+  }
+});
+
+Deno.test("a fact-pinned draft satisfies the no-prose-only rule", () => {
+  const result = validateAnswer(
+    answer([{
+      type: "draft",
+      text: "שלום, נשמח לעדכון על מועד האספקה.",
+      fact_ids: ["f1"],
+      source_ids: [],
+    }]),
+    [fact()],
+    [],
+    "office",
+  );
+  assert.equal(result.ok, true);
+});
