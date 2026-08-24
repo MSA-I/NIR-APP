@@ -1001,6 +1001,13 @@ begin
     raise exception 'abandoned_signup_has_activity' using errcode = '42501';
   end if;
 
+  -- 0175 made the raw audit ledger immutable: DELETE is refused unconditionally -- superuser
+  -- included -- unless this transaction has declared an authorized purge, and it names tenant
+  -- teardown as one of the two callers that legitimately need it. The declaration has to open HERE,
+  -- around delete_tenant_rows: that is the call that removes audit_logs. delete_tenant_organization_row
+  -- below only takes the organization row and what still cascades from it, so declaring around that
+  -- one alone leaves the ledger deletion outside the window and the guard refuses it.
+  perform set_config('app.audit_purge', 'organization_teardown', true);
   v_removed := private.delete_tenant_rows(v_org.id);
 
   -- Written BEFORE the organization row goes, and outside its cascade, so it survives.
@@ -1008,12 +1015,6 @@ begin
     (org_id, org_created_at, days_since_signup, removed_row_counts)
   values (v_org.id, v_org.created_at, v_age, v_removed);
 
-  -- 0175 made the raw audit ledger immutable: DELETE is refused unconditionally unless the caller
-  -- has declared an authorized purge in this transaction, and it names tenant teardown as one of the
-  -- two callers that need it. Removing an organization must take its ledger with it rather than
-  -- leave an orphaned tenant's history behind, so the declaration is set for this statement and
-  -- cleared immediately after -- transaction-local either way, and never a role test.
-  perform set_config('app.audit_purge', 'organization_teardown', true);
   perform private.delete_tenant_organization_row(v_org.id);
   perform set_config('app.audit_purge', '', true);
 
