@@ -1,17 +1,21 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Pricing from './Pricing';
 
 /**
- * The public pricing page, held to OPEN-DECISIONS #194, #195, #199–#204 and #208.
+ * The public pricing page, held to OPEN-DECISIONS #194, #199–#204, #208 and the owner's ruling of
+ * 25.08.2026 that no price reaches a public surface before launch.
  *
- * Every number here comes from the server catalogue, never from a constant in the TSX
- * (ARCHITECTURE.md:244). The PRICE fixtures are #195 verbatim, because the catalogue is being
- * seeded with exactly those figures. The QUOTA fixtures are deliberately NOT #197 verbatim — see
- * the note above `QUOTAS` — because the page's job is to report what the server enforces, and
- * proving that is the point of two of the tests below.
+ * Every number the page DOES print comes from the server catalogue, never from a constant in the
+ * TSX (ARCHITECTURE.md:244). The QUOTA fixtures are deliberately NOT #197 verbatim — see the note
+ * above `QUOTAS` — because the page's job is to report what the server enforces, and proving that
+ * is the point of two of the tests below.
+ *
+ * The PRICE fixtures stay, and stay #195 verbatim, precisely BECAUSE the page must not show them.
+ * They are the positive control for the absence: the catalogue hands this page real prices in
+ * both currencies and both intervals, so a page that rendered any of them fails the test below.
+ * An absence proved against a fixture with nothing in it would prove nothing.
  */
 const rpc = vi.fn();
 vi.mock('../lib/supabase', () => ({ supabase: { rpc: (...args: unknown[]) => rpc(...args) } }));
@@ -91,42 +95,34 @@ describe('דף המסלולים הציבורי', () => {
     expect(screen.queryByText(/דברו איתנו/)).not.toBeInTheDocument();
   });
 
-  it('מציג את שני הקטלוגים המוכרעים בזה לצד זה — ולא בוחר מטבע במקום הלקוח', async () => {
+  it('אינו מפרסם שום מחיר — גם כשהקטלוג מגיש לו אחד בשני מטבעות', async () => {
     renderPage();
     await settle();
-    // #195, verbatim: Israel 0/69/249/449 ILS, global 0/20/79/149 USD.
-    const israel = screen.getByRole('row', { name: /מחיר — ישראל/ });
-    for (const amount of ['69', '249', '449']) {
-      expect(within(israel).getByText(new RegExp(amount))).toBeInTheDocument();
+    // The catalogue above hands this page #195 verbatim in both currencies and both intervals.
+    // No currency symbol may reach the DOM: `fmtPlanPrice` is the only thing that emits one, and
+    // the page no longer calls it.
+    expect(screen.queryAllByText(/[₪$]/)).toHaveLength(0);
+    // The amounts themselves, chosen from the set that cannot collide with a quota fixture.
+    for (const amount of ['449', '4,490', '149', '1,490', '69', '790']) {
+      expect(screen.queryAllByText(new RegExp(amount))).toHaveLength(0);
     }
-    const global = screen.getByRole('row', { name: /מחיר — גלובלי/ });
-    for (const amount of ['20', '79', '149']) {
-      expect(within(global).getByText(new RegExp(amount))).toBeInTheDocument();
-    }
+    expect(screen.queryByRole('row', { name: /מחיר/ })).not.toBeInTheDocument();
   });
 
-  it('מחזיק את המחיר השנתי המוכרע — מחיר של עשרה חודשים, בלי חישוב בדפדפן', async () => {
-    const user = userEvent.setup();
+  it('אינו מציג בורר מחזור חיוב — פקד שבלי מחיר אינו משנה דבר', async () => {
     renderPage();
     await settle();
-    await user.click(screen.getByRole('button', { name: 'שנתי' }));
-    const israel = screen.getByRole('row', { name: /מחיר — ישראל/ });
-    for (const amount of ['690', '2,490', '4,490']) {
-      expect(within(israel).getByText(new RegExp(amount))).toBeInTheDocument();
+    for (const label of ['חודשי', 'שנתי']) {
+      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
     }
-    const global = screen.getByRole('row', { name: /מחיר — גלובלי/ });
-    for (const amount of ['200', '790', '1,490']) {
-      expect(within(global).getByText(new RegExp(amount))).toBeInTheDocument();
-    }
-    // Free has no annual catalogue entry; an em dash says so instead of inventing a figure.
-    expect(within(israel).getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText(/עשרה חודשים/)).not.toBeInTheDocument();
   });
 
-  it('אומר שהמטבע נקבע מכתובת החיוב המאומתת, ואין בורר מטבע', async () => {
+  it('אומר איפה המחיר כן נמסר ולפי מה נקבע המטבע, ואין בורר מטבע', async () => {
     renderPage();
     await settle();
+    expect(screen.getByText(/אינו מפורסם בדף הזה/)).toBeInTheDocument();
     expect(screen.getByText(/כתובת החיוב המאומתת/)).toBeInTheDocument();
-    expect(screen.getByText(/לפני מס/)).toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: /מטבע/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^מטבע/ })).not.toBeInTheDocument();
   });
