@@ -1,9 +1,22 @@
 # נתיב הרשאות מקומי
 
-מפתח הגישה של Supabase נמצא ב־
-`D:\משה פרוייקטים\פיתוח אתרים\NIR-APP-DOCS\NIR-TOKEN-SUPABASE.txt`
+**עודכן 24.08.2026 — מפתחות ה־API רוכזו לתיקייה אחת מחוץ לריפו:**
+`D:\משה פרוייקטים\פיתוח אתרים\AI\API\`
+
+| מפתח | קובץ |
+|---|---|
+| ‏Supabase Management | `AI\API\NIR-TOKEN-SUPABASE.txt` |
+| ‏Resend — שליחה בלבד | `AI\API\Resend api.txt` (זהו גם ה־SMTP password של Supabase Auth) |
+| ‏Resend — גישה מלאה | `AI\API\RESEND-Full.txt` (ניהול דומיינים; אין להשתמש בו לשליחה) |
+| ‏Cloudflare — ‏DNS/‏Zone | `AI\API\CF-TOKEN-DOMAINS.txt` |
+
+הנתיב הקודם `NIR-APP-DOCS\NIR-TOKEN-SUPABASE.txt` **אינו קיים יותר.** ‏`scripts/db-query.ps1`
+קורא את הטוקן ממשתנה הסביבה `SUPABASE_ACCESS_TOKEN` ולכן לא נשבר, אך כל סקריפט שקורא את הקובץ
+ישירות חייב את הנתיב החדש.
 
 יש לקרוא את הערך מהקובץ בזמן הרצה בלבד. אין להעתיק את המפתח עצמו לריפו, ללוגים או למסמכי הפרויקט.
+
+**חשבונות הבדיקה והמניפסט המקומי לא זזו** ונשארו תחת `NIR-APP-DOCS` כמתואר למטה.
 
 ## חשבונות בדיקה באתר החי
 
