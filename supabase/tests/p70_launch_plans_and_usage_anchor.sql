@@ -68,20 +68,22 @@ reset role;
 -- ===== 2. Volumes (#197), applied in full at cutover =====
 select pg_temp.p70_assert(
   (select count(*) from (values
-     ('free',    'documents.monthly',   25),
-     ('free',    'ocr_pages.monthly',  250),
-     ('basic',   'documents.monthly',   50),
-     ('basic',   'ocr_pages.monthly',  500),
-     ('pro',     'documents.monthly',  200),
-     ('pro',     'ocr_pages.monthly', 2000),
-     ('premium', 'documents.monthly',  500),
-     ('premium', 'ocr_pages.monthly', 5000)) as expected(plan_key, entitlement_key, quota)
+     -- #197's eight figures, as #266 revised them on 24.08.2026. Documents came down at every
+     -- tier and pages remain exactly ten times documents -- the derived ceiling, not a dial.
+     ('free',    'documents.monthly',   20),
+     ('free',    'ocr_pages.monthly',  200),
+     ('basic',   'documents.monthly',   40),
+     ('basic',   'ocr_pages.monthly',  400),
+     ('pro',     'documents.monthly',  150),
+     ('pro',     'ocr_pages.monthly', 1500),
+     ('premium', 'documents.monthly',  375),
+     ('premium', 'ocr_pages.monthly', 3750)) as expected(plan_key, entitlement_key, quota)
    join plan_entitlements entitlement
      on entitlement.plan_key = expected.plan_key
     and entitlement.entitlement_key = expected.entitlement_key
     and not entitlement.unlimited
     and entitlement.numeric_limit = expected.quota) = 8,
-  'the metered quotas are not the eight figures #197 decided');
+  'the metered quotas are not the eight figures #197/#266 decided');
 -- The ratio is ten, superseding 0163's twenty as the COMMERCIAL multiple. The per-document
 -- 20-AI-page file cap is a different limit, lives in the worker, and is untouched.
 select pg_temp.p70_assert(
@@ -96,14 +98,18 @@ select pg_temp.p70_assert(
            end)),
   'a plan page quota is not its document quota times ten');
 -- Scoped by decision_ref: 0202 recorded #198's four assistant figures in the same ledger, and a
--- bare count would both fail on a second owner decision and hide one of #197's own eight behind it.
+-- bare count would both fail on a second owner decision and hide one of the eight behind it.
+--
+-- The eight metered figures belong to #266 since 24.08.2026: 0208 restated every one of them and
+-- the ledger holds the CURRENT decision per quota, not a log. All eight came down this time --
+-- #197's three reductions became eight -- which is the difference the assertion should notice.
 select pg_temp.p70_assert(
   (select count(*) from private.plan_quota_decisions
-   where decision_ref = 'OPEN-DECISIONS #197') = 8
+   where decision_ref = 'OPEN-DECISIONS #266') = 8
   and (select count(*) from private.plan_quota_decisions
-       where decision_ref = 'OPEN-DECISIONS #197'
-         and previous_limit is not null and previous_limit > decided_limit) = 3,
-  'the #197 record does not hold eight figures with the three ceiling reductions it made');
+       where decision_ref = 'OPEN-DECISIONS #266'
+         and previous_limit is not null and previous_limit > decided_limit) = 8,
+  'the #266 record does not hold eight figures, every one of them a reduction');
 -- Every decided figure actually reached the catalogue: a record without the application is a
 -- number nobody is held to.
 select pg_temp.p70_assert(
@@ -474,24 +480,32 @@ select pg_temp.p70_assert(
   'the dry run reported a tenant as over quota that has used nothing');
 -- The report carries the ceiling that was replaced beside the one now in force, per organization
 -- and per metric, so the owner can see the size of every move rather than only its result.
+-- The target follows the catalogue, so #266's 200 replaced #197's 250 here. The assertion is
+-- about the report carrying BOTH numbers, not about either of their values, so it reads the
+-- target from the catalogue rather than restating it and going stale again at the next decision.
 select pg_temp.p70_assert(
-  (select previous_limit from public.platform_plan_cutover_report()
-   where org_id = '70000000-0000-4000-8000-000000000001'
-     and metric_key = 'ocr_pages.monthly') = 500
-  and (select target_limit from public.platform_plan_cutover_report()
-   where org_id = '70000000-0000-4000-8000-000000000001'
-     and metric_key = 'ocr_pages.monthly') = 250,
+  (select previous_limit is not null
+      and target_limit = (select numeric_limit from plan_entitlements
+                           where plan_key = 'free' and entitlement_key = 'ocr_pages.monthly')
+      and previous_limit > target_limit
+     from public.platform_plan_cutover_report()
+    where org_id = '70000000-0000-4000-8000-000000000001'
+      and metric_key = 'ocr_pages.monthly'),
   'the report does not carry the ceiling that was replaced beside the one now in force');
 select pg_temp.p70_assert(
   (select ceiling_dropped from public.platform_plan_cutover_report()
    where org_id = '70000000-0000-4000-8000-000000000001'
      and metric_key = 'ocr_pages.monthly'),
   'the report does not flag a metric whose ceiling this migration lowered');
+-- The pair above and below is what proves the flag DISCRIMINATES rather than always firing.
+-- It used to contrast pages with documents; #266 lowered documents too, so the metric that does
+-- not move is now the one with no prior ceiling to drop from — which is the more exact case
+-- anyway, because `null -> 20` must never read as a reduction.
 select pg_temp.p70_assert(
   not (select ceiling_dropped from public.platform_plan_cutover_report()
        where org_id = '70000000-0000-4000-8000-000000000001'
-         and metric_key = 'documents.monthly'),
-  'the report flagged a ceiling drop on a metric whose figure did not move');
+         and metric_key = 'assistant_runs.monthly'),
+  'the report flagged a ceiling drop on a metric that had no ceiling to drop from');
 select pg_temp.p70_assert(
   not exists (select 1 from public.platform_plan_cutover_report() where target_plan_key = 'legacy'),
   'the report proposed moving somebody ONTO the retired plan');
@@ -717,11 +731,16 @@ select pg_temp.p70_assert(
     select 1 from public.get_public_plan_quotas()
     where not measured and (unlimited or numeric_limit is not null)),
   'an unmeasured entitlement was published with a value attached');
+-- Read from the catalogue rather than restated: the assertion is that what is PUBLISHED equals
+-- what is enforced, which is the property that matters and the one that does not go stale when a
+-- decision moves the figure.
 select pg_temp.p70_assert(
   (select measured from public.get_public_plan_quotas()
    where plan_key = 'basic' and entitlement_key = 'documents.monthly')
   and (select numeric_limit from public.get_public_plan_quotas()
-   where plan_key = 'basic' and entitlement_key = 'documents.monthly') = 50,
+       where plan_key = 'basic' and entitlement_key = 'documents.monthly')
+      = (select numeric_limit from plan_entitlements
+          where plan_key = 'basic' and entitlement_key = 'documents.monthly'),
   'a decided, counted quota was not published');
 reset role;
 
@@ -915,9 +934,14 @@ select pg_temp.p70_assert(
 
 -- The bonus reaches the quota through the ONE resolution rule, so enforcement and every read model
 -- see the same number.
+-- Plan limit PLUS the ten, read from the catalogue rather than added up here: the assertion is
+-- that the bonus reaches the quota through the one resolution rule, not that the plan is at any
+-- particular number. #266 moved free from 25 to 20 and this did not have to move with it.
 select pg_temp.p70_assert(
   (public.effective_entitlement(
-    '70000000-0000-4000-8000-000000000006', 'documents.monthly') ->> 'limit')::numeric = 35,
+    '70000000-0000-4000-8000-000000000006', 'documents.monthly') ->> 'limit')::numeric
+   = (select numeric_limit + 10 from plan_entitlements
+       where plan_key = 'free' and entitlement_key = 'documents.monthly'),
   'the referral bonus did not raise the beneficiary''s effective limit');
 select pg_temp.p70_assert(
   (public.effective_entitlement(
@@ -967,12 +991,17 @@ select pg_temp.p70_assert(
   'the cycle block was not recorded as a reason code');
 
 -- #230: reversal takes back only the UNUSED remainder. Consume four of the beneficiary's units
--- first: with a plan allowance of 25 and a bonus of 10, twenty-nine used means four of the bonus
--- are spent and six remain.
+-- first: the plan allowance plus four, against a bonus of 10, means four of the bonus are spent
+-- and six remain -- whatever the plan allowance is worth on the day.
+-- The burn is the PLAN limit plus four, so four of the ten-document grant are spent and six
+-- remain whatever the plan is worth. It used to be the literal 29, which meant "25 plus four"
+-- until #266 moved free to 20 and quietly turned it into "20 plus nine".
 do $$
-declare v_i integer;
+declare v_i integer; v_burn integer;
 begin
-  for v_i in 1..29 loop
+  select numeric_limit + 4 into v_burn from plan_entitlements
+   where plan_key = 'free' and entitlement_key = 'documents.monthly';
+  for v_i in 1..v_burn loop
     perform private.record_usage_event(
       '70000000-0000-4000-8000-000000000006', 'documents.monthly', 1,
       'p70-burn-' || v_i, 'p70');
@@ -982,7 +1011,9 @@ $$;
 select pg_temp.p70_assert(
   (select quantity from private.usage_counters
    where org_id = '70000000-0000-4000-8000-000000000006'
-     and metric_key = 'documents.monthly') = 29,
+     and metric_key = 'documents.monthly')
+   = (select numeric_limit + 4 from plan_entitlements
+       where plan_key = 'free' and entitlement_key = 'documents.monthly'),
   'the reversal fixture did not consume what it meant to');
 
 select pg_temp.p70_as('71000000-0000-4000-8000-000000000002', true);
@@ -1013,7 +1044,9 @@ select pg_temp.p70_assert(
 select pg_temp.p70_assert(
   (select quantity from private.usage_counters
    where org_id = '70000000-0000-4000-8000-000000000006'
-     and metric_key = 'documents.monthly') = 29,
+     and metric_key = 'documents.monthly')
+   = (select numeric_limit + 4 from plan_entitlements
+       where plan_key = 'free' and entitlement_key = 'documents.monthly'),
   'the reversal clawed back usage that had already happened -- #230 forbids it');
 select pg_temp.p70_assert(
   (select count(*) from private.referral_grants

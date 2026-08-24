@@ -5,8 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#003F47" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="icon" type="image/png" href="/icons/icon-192.png" />
-    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <!-- Icon order is the fallback chain: a browser that understands SVG stops at the first
+         line and gets a vector mark at any density; older ones fall through to favicon.ico.
+         The .ico must exist as a file regardless of these tags - public/_redirects ends with
+         `/* /index.html 200`, so a bare /favicon.ico request was previously answered with an
+         HTML document. Source is inplace-symbol.svg, byte-identical to what the marketing
+         site serves, so both tabs show the same mark. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" sizes="any" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/icons/favicon-96.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="preload" href="/fonts/noto/NotoSansHebrew-Hebrew.woff2" as="font" type="font/woff2" crossorigin />
     <!-- Product name only: the tenant is unknown until auth resolves, and AuthContext
          prefixes the organization name to this once it is. -->

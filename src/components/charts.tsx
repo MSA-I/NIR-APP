@@ -198,18 +198,29 @@ export function SpendBarChart({
 
 export type CategorySlice = { name: string; total: number };
 
-/* Adjacent slices are assigned so that no neighbouring pair sits close in lightness. The ramp is
-   monochrome-sequential by owner decision (T7.3g, "לפי צבעי המערכת"), so lightness distance is the
-   only separation there is, and the order is the only lever that does not touch a single hue.
-   The previous order dated from T7.1's mixed ramp (a slate and a bronze step, since retired) and
-   left the last two neighbours at 1.65:1 — visually one wedge with a 2px gap in it.
-   Measured neighbour contrast, in draw order chart-1 → chart-3 → chart-4 → chart-2 → "אחר":
-     4.23 · 6.61 · 3.50 · 3.11 — every pair now clears 3:1.
-   "אחר" keeps bars[4]. ONE definition, used by both the arc Cell and the legend swatch — the
-   duplicated expression they had before was an unchecked contract. */
-const DONUT_ORDER = [0, 2, 3, 1] as const;
-function sliceColor(bars: string[], name: string, index: number) {
-  return name === 'אחר' ? bars[4] : bars[DONUT_ORDER[index % DONUT_ORDER.length]];
+/* A category keeps its colour when the amounts move (24.08.2026).
+   The old assignment was `DONUT_ORDER[index % 4]`, and `index` is the slice's RANK — the list
+   arrives sorted by total (topCategoriesWithOther). So a quiet month that swapped second place
+   for third repainted both wedges, and the reader had to re-read the legend to find the category
+   they were following. Colour that moves with rank is not identity, it is decoration.
+
+   The slot now comes from the NAME: the named categories of this donut, sorted, and the
+   category's position in that order. Two consequences worth stating rather than discovering.
+   A category's colour is stable across every refresh, filter and month for as long as the same
+   set of categories is on screen — which is the case that was broken. It can still change when a
+   DIFFERENT category enters or leaves the top four, because a four-slot donut has no room for a
+   catalogue-wide mapping; the upgrade path, if that ever matters, is a persisted per-category
+   slot, and it is not worth a table today.
+
+   "אחר" is pinned to the last step: it is an aggregate, never an entity, and it must not take a
+   slot from something that is. ONE definition, used by both the arc Cell and the legend swatch —
+   the duplicated expression they had before was an unchecked contract. */
+const OTHER_SLICE = 'אחר';
+function sliceColor(categorical: string[], name: string, allNames: readonly string[]) {
+  if (name === OTHER_SLICE) return categorical[categorical.length - 1];
+  const named = allNames.filter((candidate) => candidate !== OTHER_SLICE).sort((a, b) => a.localeCompare(b, 'he'));
+  const slot = named.indexOf(name);
+  return categorical[(slot < 0 ? 0 : slot) % (categorical.length - 1)];
 }
 
 /** Donut + center total + HTML legend. Generalizes the owner category-mix chart; run `slices` through
@@ -230,6 +241,7 @@ export function CategoryDonut({ slices, total, ariaLabel, emptyMessage, hrefFor,
   hrefLabel?: (slice: CategorySlice) => string;
 }) {
   const t = chartTheme();
+  const sliceNames = slices.map((slice) => slice.name);
   if (total <= 0) {
     return <div className="flex h-24 items-center justify-center text-center text-sm text-ink-muted sm:h-44">{emptyMessage}</div>;
   }
@@ -246,8 +258,8 @@ export function CategoryDonut({ slices, total, ariaLabel, emptyMessage, hrefFor,
                 <Pie data={slices} dataKey="total" nameKey="name" innerRadius="55%" outerRadius="92%"
                   rootTabIndex={-1} tabIndex={-1} paddingAngle={2} stroke="none" isAnimationActive={animation.active} animationDuration={550}
                   animationEasing="ease-out" onAnimationEnd={animation.finish}>
-                  {slices.map((slice, index) => (
-                    <Cell key={slice.name} fill={sliceColor(t.bars, slice.name, index)} />
+                  {slices.map((slice) => (
+                    <Cell key={slice.name} fill={sliceColor(t.categorical, slice.name, sliceNames)} />
                   ))}
                 </Pie>
               </PieChart>
@@ -260,12 +272,12 @@ export function CategoryDonut({ slices, total, ariaLabel, emptyMessage, hrefFor,
         )}
       </ChartViewport>
       <ul className="flex min-w-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs">
-        {slices.map((slice, index) => {
+        {slices.map((slice) => {
           const href = hrefFor?.(slice) ?? null;
           const pct = Math.round((slice.total / total) * 100);
           const swatch = (
             <span className="size-2 shrink-0 rounded-full" aria-hidden="true"
-              style={{ backgroundColor: sliceColor(t.bars, slice.name, index) }} />
+              style={{ backgroundColor: sliceColor(t.categorical, slice.name, sliceNames) }} />
           );
           return (
             <li key={slice.name}>

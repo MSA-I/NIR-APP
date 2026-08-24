@@ -5,6 +5,7 @@
 type ChartTheme = {
   bar: string;
   bars: string[];
+  categorical: string[];
   grid: string;
   tick: string;
   label: string;
@@ -23,6 +24,11 @@ export function chartTheme() {
     cache = {
       bar,
       bars: [bar, v('--color-chart-2'), v('--color-chart-3'), v('--color-chart-4'), v('--color-chart-5')],
+      // Two palettes, two jobs. `bars` is the sequential ramp — magnitude, where lightness
+      // order carries meaning. `categorical` is identity, where it cannot: see the block
+      // above --color-series-1 in index.css for the measurement that separated them.
+      categorical: [v('--color-series-1'), v('--color-series-2'), v('--color-series-3'),
+        v('--color-series-4'), v('--color-series-5')],
       grid: v('--color-chart-grid'),
       tick: v('--color-chart-tick'),
       label: v('--color-chart-label'),
@@ -41,22 +47,25 @@ export function chartTheme() {
  * The two roles a comparison chart has, and the pairing that serves them — decided here, once,
  * instead of at each call site.
  *
- * Both existing comparison charts chose their own indices, and they disagreed in the worst
- * possible direction: the main dashboard separated its two series by 1.56:1 and carried a dash,
- * while the accountant dashboard separated by 4.23:1 and carried none. The ramp is
- * monochrome-sequential, so lightness is the only separation colour can give — and the dash is
- * the carrier that is not colour at all. There is no reason to spend one and not the other.
+ * Both existing comparison charts used to choose their own indices, and they disagreed in the
+ * worst possible direction: the main dashboard separated its two series by 1.56:1 and carried a
+ * dash, while the accountant dashboard separated by 4.23:1 and carried none.
  *
- * chart-1 ↔ chart-3 measures 4.23:1. Every other pair, for the record: 1↔2 2.24 · 1↔4 1.56 ·
- * 1↔5 6.97 · 2↔3 1.89 · 2↔4 3.51 · 2↔5 3.11 · 3↔4 6.61 · 3↔5 1.65 · 4↔5 10.89. A future third
- * role picks from that table, not by eye — and `colorLanguage.spec.ts` holds the 3:1 floor.
+ * WHY THE MEASURE CHANGED (24.08.2026). That 3:1 floor was a WCAG contrast ratio, which is a
+ * LIGHTNESS ratio — the right instrument only while the ramp was monochrome and lightness was
+ * the only separation colour could give. With a categorical palette it is the wrong instrument
+ * and an impossible one: those steps sit at similar lightness on purpose, so that no series
+ * dominates, and inside the validator's L band no two of them can reach 3:1 at all. The measure
+ * that actually answers "can a reader tell these two apart" is OKLab ΔE, and colorLanguage.spec
+ * now holds it at >= 15 for normal vision and >= 8 under simulated protanopia/deuteranopia.
+ * series-1 vs series-2 measures 26.1 normal, 23.6 worst-CVD — the strongest pair the palette
+ * offers that also keeps the primary in the brand's oceanic family.
  *
  * `dash` on the counterpart is not decoration and not optional WHERE A STROKE EXISTS: in
  * ComparisonLineChart it is what keeps the two series apart in greyscale print, in a compressed
- * screenshot, and under colour-vision deficiency. GroupedBarChart ignores the field — a filled
- * bar has no stroke to dash — and carries its second identity in the dot legend below the plot
- * instead. Measured in the browser: the line chart renders stroke-dasharray "7 5" on the
- * counterpart; the bars render the same two fills with the legend beneath them.
+ * screenshot, and for a reader who sees no colour at all. Hue got better; it did not become
+ * sufficient. GroupedBarChart ignores the field — a filled bar has no stroke to dash — and
+ * carries its second identity in the dot legend below the plot instead.
  */
 export function comparisonSeries(
   primary: { key: string; name: string },
@@ -64,7 +73,7 @@ export function comparisonSeries(
 ) {
   const t = chartTheme();
   return [
-    { ...primary, color: t.bars[0] },
-    { ...counterpart, color: t.bars[2], dash: true },
+    { ...primary, color: t.categorical[0] },
+    { ...counterpart, color: t.categorical[1], dash: true },
   ];
 }

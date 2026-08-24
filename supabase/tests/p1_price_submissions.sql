@@ -940,10 +940,21 @@ select import_supplier_prices(
   '[{"supplier_id":"31000000-0000-0000-0000-000000000002","product_id":"41000000-0000-0000-0000-000000000002","price":22,"available":true}]'::jsonb,
   '2026-07-01', 'manager legacy import regression'
 );
+-- 0207 changed what a BACKDATED import means. The trusted submissions above set 21.5 for today;
+-- this import carries 2026-07-01, which is older, so it records history and leaves the present
+-- alone. Before 0207 it moved current_price to 22 -- a price from July overwriting August's.
 select pg_temp.p1b_assert(
-  (select current_price = 22 from supplier_products
+  (select current_price = 21.5 from supplier_products
     where id = '51000000-0000-0000-0000-000000000002'),
-  'office legacy importer was not preserved'
+  'a backdated legacy import moved current_price, which 0207 forbids'
+);
+select pg_temp.p1b_assert(
+  exists (
+    select 1 from price_history
+     where supplier_product_id = '51000000-0000-0000-0000-000000000002'
+       and price = 22 and effective_date = date '2026-07-01'
+  ),
+  'the backdated legacy import was dropped instead of recorded as history'
 );
 
 -- Reviewed OCR bridge: owner and office can upload and enqueue a price-list document for any
