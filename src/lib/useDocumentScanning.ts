@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { supabase } from './supabase';
 import { useQuery } from './useQuery';
+import type { DocumentScanCornersSource } from './types';
 
 export type DocumentScanStatus =
   | 'queued'
@@ -26,7 +27,7 @@ export interface DocumentScanState {
   output_storage_path: string | null;
   output_mode: 'grayscale' | 'black_and_white' | null;
   detected_corners: ScanCorners | null;
-  corners_source: 'automatic' | 'manual' | null;
+  corners_source: DocumentScanCornersSource | null;
   rotation_degrees: number | null;
   accepted: boolean;
   updated_at: string;
@@ -75,7 +76,8 @@ function parseState(value: unknown): DocumentScanState | null {
       || !(row.output_id === null || (typeof row.output_id === 'string' && UUID.test(row.output_id)))
       || !(row.output_storage_path === null || typeof row.output_storage_path === 'string')
       || !(row.output_mode === null || row.output_mode === 'grayscale' || row.output_mode === 'black_and_white')
-      || !(row.corners_source === null || row.corners_source === 'automatic' || row.corners_source === 'manual')
+      || !(row.corners_source === null || row.corners_source === 'automatic'
+        || row.corners_source === 'manual' || row.corners_source === 'full_frame_fallback')
       || !(row.rotation_degrees === null || (typeof row.rotation_degrees === 'number'
         && Number.isFinite(row.rotation_degrees) && row.rotation_degrees >= -7 && row.rotation_degrees <= 7))
       || typeof row.accepted !== 'boolean'

@@ -54,7 +54,7 @@ export default function Analytics() {
     // A supplier with no supplier_metrics row has no measured counts; rendering 0 would assert
     // "nothing happened" instead of "not measured". Sorting still treats absence as 0 so the
     // unmeasured suppliers group at the bottom rather than scattering.
-    { key: 'price', header: 'שינויי מחיר (30 יום)', className: 'num', sortValue: (r) => r.m?.price_changes_window ?? 0,
+    { key: 'price', header: 'שינויי מחיר (90 הימים האחרונים)', className: 'num', sortValue: (r) => r.m?.price_changes_window ?? 0,
       render: (r) => fmtNum(r.m?.price_changes_window ?? null) },
     { key: 'exceptions', header: 'חריגים פתוחים', className: 'num', sortValue: (r) => r.m?.open_exceptions ?? 0,
       render: (r) => fmtNum(r.m?.open_exceptions ?? null) },

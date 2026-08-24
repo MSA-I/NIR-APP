@@ -338,7 +338,7 @@ async function complete(
     if (existing.error || await sha256(new Uint8Array(await existing.data.arrayBuffer())) !==
       request.metadata.output_sha256) throw new GatewayError("output_unavailable", 503);
   }
-  const result = await admin.rpc("service_complete_document_scan_job", {
+  const result = await admin.rpc("service_complete_document_scan_job_v2", {
     p_job_id: request.job_id,
     p_processing_attempt_id: request.processing_attempt_id,
     p_lease_owner: request.lease_owner,
@@ -355,6 +355,7 @@ async function complete(
     p_corners_source: request.metadata.corners_source,
     p_rotation_degrees: request.metadata.rotation_degrees,
     p_metrics: request.metadata.metrics,
+    p_provenance: request.metadata.provenance,
   });
   if (result.error) {
     if (created) await storage.storage.from(OUTPUT_BUCKET).remove([path]);

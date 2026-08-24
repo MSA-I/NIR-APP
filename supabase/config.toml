@@ -86,6 +86,9 @@ verify_jwt = true
 [functions.submit-price-list]
 verify_jwt = true
 
+[functions.product-name-repair]
+verify_jwt = true
+
 [functions.upload-organization-logo]
 verify_jwt = true
 

@@ -480,6 +480,13 @@ insert into credit_requests (id, org_id, supplier_id, invoice_id, reason, amount
   ('99000000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
    '39000000-0000-4000-8000-000000000001', null, 'damaged', 40, 'open');
 
+-- After 0173 a credit reaches 'offset' only once allocations consume it, so the state-machine probe
+-- needs that money to exist before it can walk the received -> offset edge. This is a fixture, not a
+-- relaxation: every edge the probe rejects is still rejected, and by the same named error.
+insert into payment_allocations (org_id, payment_id, credit_id, amount) values
+  ('19000000-0000-4000-8000-000000000001', '89000000-0000-4000-8000-000000000001',
+   '99000000-0000-4000-8000-000000000001', 40);
+
 -- 0073: a payment request without a legal_entity unit cannot transition at all
 -- (payment_request_scope_unresolved fires before the matrix). The fixture takes the
 -- org's bootstrap entity -- the same one p0_invoices_set_unit gave the linked invoice.

@@ -115,8 +115,8 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
   /**
    * The capture is measured here, before `uploadFiles` — the whole value of the warning is that
    * it arrives while the person is still holding the phone in front of the document, and before
-   * the file costs a paid OCR call. Screening cannot reject: on any doubt it reports nothing and
-   * the batch takes the path it always took, with the same File objects.
+   * the file costs a paid OCR call. Screening cannot reject or rewrite. Unsupported HEIC/HEIF is
+   * named before the same File enters the bounded server scan path; ordinary uncertainty stays no verdict.
    */
   async function onPick(files: FileList | null) {
     if (!files?.length) return;
@@ -128,7 +128,7 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
     } finally {
       setScreening(false);
     }
-    if (!pick.weak.length) { void uploadFiles(pick.files); return; }
+    if (!pick.weak.length && !pick.serverRequired.length) { void uploadFiles(pick.files); return; }
     setWeakPick(pick);
   }
 

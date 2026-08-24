@@ -200,11 +200,21 @@ describe('ProductNameReview — an unknown catalogue', () => {
 });
 
 describe('Products — the review mode', () => {
-  function wireCatalogue(products: Product[]) {
+  /**
+   * `has_dry_run: false` is the ordinary state of the repair queue: the dry run is service_role
+   * only and is triggered out of band, so in a fresh organization no report has ever been produced.
+   * The old fixture returned a bare `[]`, which is why the chip could claim `(0)` about something
+   * nothing had measured.
+   */
+  const NO_DRY_RUN = { has_dry_run: false, dry_run_count: 0, latest_dry_run_at: null, candidates: [] };
+
+  function wireCatalogue(products: Product[], repairQueue: Record<string, unknown> = NO_DRY_RUN) {
     server.use(
       http.get(`${SUPABASE_URL}/rest/v1/products`, () => HttpResponse.json(products)),
       http.get(`${SUPABASE_URL}/rest/v1/supplier_products`, () => HttpResponse.json([])),
       http.get(`${SUPABASE_URL}/rest/v1/categories`, () => HttpResponse.json([])),
+      http.post(`${SUPABASE_URL}/rest/v1/rpc/get_product_name_repair_queue`,
+        () => HttpResponse.json(repairQueue)),
     );
   }
 
@@ -231,5 +241,61 @@ describe('Products — the review mode', () => {
     expect(screen.getByTestId(`review-${BLOCKED.id}`)).toBeInTheDocument();
     // Already approved once; re-proposing a name a person settled would be the backfill 0149 refused.
     expect(screen.queryByTestId(`review-${NAMED.id}`)).toBeNull();
+  });
+
+  it('renders a dash, never a zero, for a repair backlog no dry run ever measured', async () => {
+    const user = userEvent.setup();
+    wireCatalogue([NAMED]);
+    render(
+      <QueryClientProvider client={createAppQueryClient()}>
+        <OrgScopeProvider org="org-test">
+          <ToastProvider>
+            <MemoryRouter initialEntries={['/products']}><Products /></MemoryRouter>
+          </ToastProvider>
+        </OrgScopeProvider>
+      </QueryClientProvider>,
+    );
+
+    const toggle = await screen.findByTestId('source-name-repair-toggle');
+    // `(0)` would be a claim about a reality nobody looked at — the exact thing the constitution
+    // forbids on a screen whose whole purpose is fidelity to evidence.
+    await waitFor(() => expect(toggle).toHaveTextContent('תיקון ממקור (—)'));
+    expect(toggle).not.toHaveTextContent('(0)');
+
+    await user.click(toggle);
+    // Said twice on purpose: the page header states the mode, the queue states its own emptiness.
+    expect(await screen.findByText(/אין כאן טענה על אפס/)).toBeInTheDocument();
+    expect(screen.getAllByText(/לא הופק דוח dry-run/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('אין תיקוני מקור ממתינים.')).toBeNull();
+    // #250: a dry run is a safety measure, not an approval queue, so the queue is not named after it.
+    expect(screen.queryByText(/תוצאות dry-run/)).toBeNull();
+  });
+
+  it('counts the pending repairs once a dry-run report exists, and names the queue for what it is', async () => {
+    const user = userEvent.setup();
+    wireCatalogue([NAMED], {
+      has_dry_run: true, dry_run_count: 1, latest_dry_run_at: '2026-08-23T07:00:00Z',
+      candidates: [{
+        candidate_id: 'candidate-1', product_id: NAMED.id, status: 'ready', reason_code: null,
+        old_name: ')ג"ק 5( ןבל חמק', proposed_name: 'קמח לבן (5 ק"ג)',
+        source_submission_id: 'submission-1', source_file_name: 'מחירון יולי.xlsx',
+        source_checksum: 'a'.repeat(64), source_row: 7, source_evidence: {},
+      }],
+    });
+    render(
+      <QueryClientProvider client={createAppQueryClient()}>
+        <OrgScopeProvider org="org-test">
+          <ToastProvider>
+            <MemoryRouter initialEntries={['/products']}><Products /></MemoryRouter>
+          </ToastProvider>
+        </OrgScopeProvider>
+      </QueryClientProvider>,
+    );
+
+    const toggle = await screen.findByTestId('source-name-repair-toggle');
+    await waitFor(() => expect(toggle).toHaveTextContent('תיקון ממקור (1)'));
+    await user.click(toggle);
+    expect(await screen.findByText('1 שמות ממתינים לתיקון ממקור')).toBeInTheDocument();
+    expect(screen.queryByText(/תוצאות dry-run/)).toBeNull();
   });
 });
