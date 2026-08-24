@@ -5,7 +5,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Signup from './Signup';
 
 const invoke = vi.fn();
-vi.mock('../lib/supabase', () => ({ supabase: { functions: { invoke: (...a: unknown[]) => invoke(...a) } } }));
+const getSession = vi.fn();
+const signInWithOAuth = vi.fn();
+vi.mock('../lib/supabase', () => ({
+  supabase: {
+    functions: { invoke: (...a: unknown[]) => invoke(...a) },
+    auth: {
+      getSession: () => getSession(),
+      signInWithOAuth: (...a: unknown[]) => signInWithOAuth(...a),
+    },
+  },
+}));
 
 const NEUTRAL = 'אם הכתובת אינה רשומה עדיין — נשלח אליה מייל אישור';
 
@@ -21,8 +31,24 @@ const fill = async () => {
   return user;
 };
 
+/** A session as the auth server reports one: the provider lives in app_metadata, never in user_metadata. */
+const googleSession = (over: Record<string, unknown> = {}) => ({
+  data: {
+    session: {
+      user: {
+        email: 'owner@gmail.test',
+        app_metadata: { provider: 'google' },
+        user_metadata: { full_name: 'משה כהן' },
+        ...over,
+      },
+    },
+  },
+});
+
 beforeEach(() => {
   invoke.mockResolvedValue({ data: { status: 'pending_confirmation', message: NEUTRAL }, error: null });
+  getSession.mockResolvedValue({ data: { session: null } });
+  signInWithOAuth.mockResolvedValue({ error: null });
 });
 
 describe('פתיחת חשבון', () => {
@@ -69,5 +95,55 @@ describe('פתיחת חשבון', () => {
     const user = await fill();
     await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
     expect(await screen.findByText(/יותר מדי בקשות הרשמה/)).toBeInTheDocument();
+  });
+
+  it('כפתור Google מוסתר כשהספק אינו מוגדר', async () => {
+    renderScreen();
+    await waitFor(() => expect(getSession).toHaveBeenCalled());
+    // The flag is off in the test environment, and a door that leads to "provider not enabled"
+    // is worse than no door.
+    expect(screen.queryByRole('button', { name: 'המשך עם Google' })).toBeNull();
+  });
+
+  it('חזרה מ-Google מבקשת שם עסק בלבד — לא אימייל ולא סיסמה', async () => {
+    getSession.mockResolvedValue(googleSession());
+    renderScreen();
+
+    await screen.findByText(/מחובר כ/);
+    expect(screen.getByLabelText('שם העסק')).toBeInTheDocument();
+    // Google proved the address; asking for it again, or for a password, would be theatre.
+    expect(screen.queryByLabelText('אימייל')).toBeNull();
+    expect(screen.queryByLabelText('סיסמה')).toBeNull();
+  });
+
+  it('המסלול הפדרטיבי שולח identity=google ולעולם לא סיסמה', async () => {
+    getSession.mockResolvedValue(googleSession());
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByText(/מחובר כ/);
+    await user.type(screen.getByLabelText('שם העסק'), 'מסעדת הגפן');
+    await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalled());
+    const body = invoke.mock.calls[0]![1].body as Record<string, unknown>;
+    expect(body.identity).toBe('google');
+    expect(body.organization_name).toBe('מסעדת הגפן');
+    expect(body).not.toHaveProperty('password');
+    // The address is the server's to read from the token, not the form's to assert.
+    expect(body).not.toHaveProperty('email');
+  });
+
+  it('סשן שמצהיר על Google ב-user_metadata בלבד אינו נחשב Google', async () => {
+    // user_metadata is self-asserted. If this branch could be entered by writing a value into it,
+    // the whole owner-only rule would rest on a field the user controls.
+    getSession.mockResolvedValue(googleSession({
+      app_metadata: { provider: 'email' },
+      user_metadata: { full_name: 'משה כהן', provider: 'google' },
+    }));
+    renderScreen();
+
+    await waitFor(() => expect(getSession).toHaveBeenCalled());
+    expect(screen.queryByText(/מחובר כ/)).toBeNull();
+    expect(screen.getByLabelText('סיסמה')).toBeInTheDocument();
   });
 });

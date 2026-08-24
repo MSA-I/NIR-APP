@@ -227,3 +227,74 @@ export async function provisionTenant(
     return { ok: false, failure: { kind: 'failed', message, leftovers } };
   }
 }
+
+/**
+ * The same tenant, for an auth user that already exists (0205).
+ *
+ * A federated sign-in has already produced the account and already proved the address — Google
+ * did both before the browser came back — so there is no user to create and no confirmation to
+ * wait for. Everything else is `provisionTenant` unchanged: the organization's status, plan, VAT
+ * rate and categories stay the database's to decide, exactly as they are for a password signup.
+ *
+ * The rollback is narrower on purpose. `created.userId` is left unset even though the profile is
+ * keyed by it, so a failure here removes the organization this call made and NEVER the person's
+ * auth account: that account predates this call and may be their only way back in.
+ */
+export async function adoptExistingUserAsOwner(
+  admin: ProvisionAdminClient,
+  input: { name: string; ownerUserId: string; ownerName: string; categories?: string[] },
+): Promise<ProvisionOutcome> {
+  const name = input.name.trim();
+  const ownerName = input.ownerName.trim();
+  const categories = (input.categories ?? DEFAULT_CATEGORIES)
+    .map((c) => c.trim())
+    .filter((c) => c.length > 0);
+
+  const created: { orgId?: string; userId?: string } = {};
+
+  try {
+    const orgInsert = await admin
+      .from('organizations')
+      .insert({ name })
+      .select('id')
+      .single();
+    if (orgInsert.error || !orgInsert.data) {
+      throw new Error(`יצירת הארגון נכשלה: ${orgInsert.error?.message ?? 'לא הוחזר מזהה'}`);
+    }
+    created.orgId = orgInsert.data.id as string;
+
+    const profileInsert = await admin.from('profiles').insert({
+      id: input.ownerUserId,
+      org_id: created.orgId,
+      full_name: ownerName,
+      role: 'owner',
+      active: true,
+    });
+    if (profileInsert.error) {
+      throw new Error(`יצירת פרופיל הבעלים נכשלה: ${profileInsert.error.message}`);
+    }
+
+    let categoriesCreated = 0;
+    if (categories.length > 0) {
+      const catInsert = await admin
+        .from('categories')
+        .insert(categories.map((c, i) => ({ org_id: created.orgId, name: c, sort: i + 1 })))
+        .select('id');
+      if (catInsert.error) throw new Error(`יצירת קטגוריות הבסיס נכשלה: ${catInsert.error.message}`);
+      categoriesCreated = catInsert.data?.length ?? 0;
+    }
+
+    return {
+      ok: true,
+      result: {
+        org_id: created.orgId,
+        owner_user_id: input.ownerUserId,
+        categories_created: categoriesCreated,
+      },
+    };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    const leftovers = await rollbackTenant(admin, created);
+    return { ok: false, failure: { kind: 'failed', message, leftovers } };
+  }
+}

@@ -20,11 +20,16 @@
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { provisionTenant, validateProvisionInput } from '../_shared/provision.ts';
+import {
+  adoptExistingUserAsOwner,
+  provisionTenant,
+  validateProvisionInput,
+} from '../_shared/provision.ts';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'x-client-info, apikey, content-type, x-correlation-id',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-correlation-id',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -73,11 +78,126 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ error: { code: 'server_misconfigured', message: 'ההרשמה אינה זמינה כרגע' } }, 500);
   }
 
+  const admin0 = createClient(url, serviceKey, { auth: { persistSession: false } });
+  const address0 = clientAddress(req);
+
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
     return json({ error: { code: 'invalid_request', message: 'גוף הבקשה אינו JSON תקין' } }, 400);
+  }
+
+  /**
+   * The federated branch (0205). Owner decision 24.08.2026: signing up with Google is for the
+   * person creating the organization, and for nobody else.
+   *
+   * Unlike the password branch this one HAS a caller, and its safety is that caller's own token:
+   *
+   *   * The provider is read from `app_metadata`, which GoTrue writes. `user_metadata` is
+   *     self-asserted and is never consulted for an authorization decision.
+   *   * The email is Google's, not the form's. A federated signup cannot claim an address it did
+   *     not prove, so there is nothing here to enumerate and no neutral answer to hide behind.
+   *   * A caller that already has a profile is refused. This path creates a NEW tenant and can
+   *     never attach a second profile to an existing one, which is the other half of "owner only"
+   *     -- the first half being 0205's refusal inside `accept_invitation`.
+   *
+   * The rate limit still applies: an authenticated caller is not an unbounded one.
+   */
+  if (body.identity === 'google') {
+    const bearer = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim();
+    if (!bearer) {
+      return json({ error: { code: 'unauthenticated', message: 'נדרשת התחברות עם Google' } }, 401);
+    }
+    const caller = await admin0.auth.getUser(bearer);
+    const user = caller.data?.user;
+    if (caller.error || !user) {
+      return json({ error: { code: 'unauthenticated', message: 'נדרשת התחברות עם Google' } }, 401);
+    }
+    const provider = (user.app_metadata as { provider?: unknown } | null)?.provider;
+    if (provider !== 'google') {
+      return json({
+        error: {
+          code: 'identity_not_google',
+          message: 'המסלול הזה פתוח רק לחשבון שהתחבר דרך Google.',
+        },
+      }, 403);
+    }
+    const email = typeof user.email === 'string' ? user.email.trim().toLowerCase() : '';
+    if (!email) {
+      return json({
+        error: { code: 'identity_without_email', message: 'חשבון Google ללא כתובת דואר מאומתת' },
+      }, 403);
+    }
+
+    const standing = await admin0.rpc('service_identity_has_profile', { p_user_id: user.id });
+    if (standing.error) {
+      return json({ error: { code: 'signup_unavailable', message: 'ההרשמה אינה זמינה כרגע' } }, 503);
+    }
+    if (standing.data === true) {
+      // Already belongs somewhere. Saying so is safe: the caller proved this identity is theirs.
+      return json({
+        error: {
+          code: 'identity_already_has_organization',
+          message: 'החשבון הזה כבר משויך לארגון. יש להיכנס במקום להירשם.',
+        },
+      }, 409);
+    }
+
+    const organizationName = typeof body.organization_name === 'string'
+      ? body.organization_name.trim()
+      : '';
+    if (organizationName.length < 2) {
+      return json({ error: { code: 'invalid_request', message: 'שם הארגון קצר מדי' } }, 400);
+    }
+    const displayName = typeof body.full_name === 'string' && body.full_name.trim()
+      ? body.full_name.trim()
+      : (user.user_metadata as { full_name?: unknown } | null)?.full_name;
+    const ownerName = typeof displayName === 'string' && displayName.trim()
+      ? displayName.trim()
+      : email;
+
+    const federatedLimit = await admin0.rpc('service_check_signup_rate', {
+      p_ip_hash: address0 ? await sha256Hex(address0) : null,
+      p_email_hash: await sha256Hex(email),
+    });
+    if (federatedLimit.error) {
+      return json({ error: { code: 'signup_unavailable', message: 'ההרשמה אינה זמינה כרגע' } }, 503);
+    }
+    if (!(federatedLimit.data as { allowed?: boolean })?.allowed) {
+      return json({
+        error: {
+          code: 'rate_limited',
+          message: 'התקבלו יותר מדי בקשות הרשמה. יש לנסות שוב מאוחר יותר.',
+        },
+      }, 429);
+    }
+
+    const adopted = await adoptExistingUserAsOwner(admin0, {
+      name: organizationName,
+      ownerUserId: user.id,
+      ownerName,
+    });
+    if (!adopted.ok) {
+      await admin0.rpc('service_mark_signup_rejected', { p_email_hash: await sha256Hex(email) });
+      return json({
+        error: {
+          code: 'signup_failed',
+          message: 'ההרשמה נכשלה. יש לנסות שוב, ואם הבעיה חוזרת לפנות לתמיכה.',
+        },
+      }, 500);
+    }
+
+    await admin0.rpc('service_record_product_event', {
+      p_org_id: adopted.result.org_id,
+      p_event_name: 'signup.completed',
+      p_properties: { identity: 'google' },
+      p_idempotency_key: adopted.result.org_id,
+    });
+
+    // Google already proved the address, so there is nothing to confirm and the person is signed
+    // in already. The browser reloads into the product rather than into a "check your mail" page.
+    return json({ status: 'ready', message: 'הארגון נוצר. אפשר להתחיל.' }, 201);
   }
 
   const input = {
@@ -93,9 +213,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const problem = validateProvisionInput(input);
   if (problem) return json({ error: { code: 'invalid_request', message: problem } }, 400);
 
-  const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
+  const admin = admin0;
 
-  const address = clientAddress(req);
+  const address = address0;
   const emailHash = await sha256Hex(input.ownerEmail.trim().toLowerCase());
   const ipHash = address ? await sha256Hex(address) : null;
 
