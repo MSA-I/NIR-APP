@@ -29,7 +29,10 @@ describe('the legal pages and the consented version', () => {
     render(<MemoryRouter><PrivacyPolicy /></MemoryRouter>);
     expect(screen.getByRole('heading', { name: 'מדיניות פרטיות' })).toBeInTheDocument();
     for (const processor of ['Supabase', 'OpenAI', 'Cloudflare', 'Resend', 'Sentry']) {
-      expect(screen.getByText(new RegExp(processor))).toBeInTheDocument();
+      // getAllByText rather than getByText: since 2026-08-24 the model provider is named twice on
+      // purpose -- once in the sub-processor list and again in the section that says what it does
+      // with the content. The contract is that each processor is named, not that it is named once.
+      expect(screen.getAllByText(new RegExp(processor)).length).toBeGreaterThan(0);
     }
     expect(screen.getByText(/תיקון 13/)).toBeInTheDocument();
   });
@@ -43,5 +46,18 @@ describe('the legal pages and the consented version', () => {
     expect(screen.getByText(/store: false/)).toBeInTheDocument();
     expect(screen.getByText(/אינה מבטיחה אפס-שימור/)).toBeInTheDocument();
     expect(screen.queryByText(/אינו נשמר אצל ספק המודל/)).toBeNull();
+  });
+  it('privacy discloses the three provider-side facts a reader cannot discover', () => {
+    // Deleting a promise we could not keep was half the work (the case above). The other half is
+    // saying what actually happens, and these three came from OpenAI's own dated pages, recorded
+    // in docs/ASSISTANT-ACTIVATION-EVIDENCE.md §1. Each is pinned because each is the kind of
+    // sentence that gets quietly softened later.
+    render(<MemoryRouter><PrivacyPolicy /></MemoryRouter>);
+    // Retention is a number with a direction, not "the provider's terms apply".
+    expect(screen.getByText(/עד 30 יום/)).toBeInTheDocument();
+    // Human review is not limited to the provider's own staff.
+    expect(screen.getByText(/קבלני צד-שלישי/)).toBeInTheDocument();
+    // No regional restriction is configured, and Israel is not even available.
+    expect(screen.getByText(/ישראל אינה אזור/)).toBeInTheDocument();
   });
 });

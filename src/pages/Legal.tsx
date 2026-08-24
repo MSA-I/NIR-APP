@@ -21,6 +21,22 @@ import { APP_NAME } from '../lib/branding';
  * and OPEN-DECISIONS #179 forbids promising zero retention without a contract that proves it. A
  * consent document is the last place a promise nobody can back belongs, so the sentence now says
  * what the system actually does and what it does not know.
+ *
+ * 2026-08-24, same version, second change — and deliberately the SAME version rather than a second
+ * bump. The deletion above shipped nowhere: it was merged and never deployed, so no consent was
+ * ever stamped against the intermediate text. The version a user will actually consent to is this
+ * one, and stamping two different documents with one string is only a lie if both were served.
+ *
+ * What this change adds is section 3, and it exists because the #179 evidence was finally gathered
+ * from OpenAI's own dated pages (docs/ASSISTANT-ACTIVATION-EVIDENCE.md §1). Removing a promise we
+ * could not keep was half the work; the other half is saying what actually happens. Three facts a
+ * reader has no way to discover and every right to know: inputs may be retained for up to 30 days
+ * with two open-ended extensions in the provider's own wording; those abuse logs are readable by
+ * the provider's authorised employees AND by third-party contractors; and no regional restriction
+ * is configured, Israel is not even an available region, and provider-side "system data" leaves any
+ * region regardless. Section 2 keeps the sub-processor list; the provider-side facts get their own
+ * heading rather than a clause at the end of a dense paragraph, because a disclosure buried in
+ * prose is the same half-truth in a politer form.
  */
 export const TERMS_VERSION = '2026-08-24';
 
@@ -132,15 +148,41 @@ export function PrivacyPolicy() {
         <p>
           הנתונים מאוחסנים ומעובדים אצל ספקי משנה המשמשים את השירות: ‏Supabase (מסד נתונים,
           אימות ואחסון קבצים), ‏OpenAI (פירוש אוטומטי של תוכן מסמכים שהועלו), ‏Cloudflare (אירוח
-          האפליקציה), ‏Resend (משלוח מיילים תפעוליים) ו-Sentry (דיווח תקלות). בשליחת
-          מסמך לפירוש המערכת מבקשת מספק המודל שלא ישמור את התוכן (store: false). זו בקשה
-          בממשק הספק ולא התחייבות שלו: שימור ולוגים בצד הספק כפופים לתנאיו, והמפעילה
-          אינה מבטיחה אפס-שימור בלי הסכם שמעגן זאת. המפעילה אינה מוכרת מידע אישי
-          ואינה משתמשת בו לפרסום.
+          האפליקציה), ‏Resend (משלוח מיילים תפעוליים) ו-Sentry (דיווח תקלות). המפעילה אינה
+          מוכרת מידע אישי ואינה משתמשת בו לפרסום.
         </p>
       </section>
       <section>
-        <h3>3. הפרדת לקוחות ואבטחה</h3>
+        <h3>3. מה קורה אצל ספק המודל</h3>
+        <p>
+          כשמסמך נשלח לפירוש אוטומטי, תוכנו מגיע ל-OpenAI. הפרטים שלהלן נבדקו בתנאים הרשמיים
+          של הספק ב-24.08.2026, והם תיאור של מה שהספק אומר — לא התחייבות של המפעילה במקומו.
+        </p>
+        <p>
+          <strong>אימון:</strong> לפי תנאי הספק, נתונים שנשלחים דרך ה-API אינם משמשים לאימון
+          מודלים, אלא אם הארגון בחר במפורש לשתף אותם. המפעילה לא בחרה בכך.{' '}
+          <strong>שמירה:</strong> הספק רשאי לשמור קלט ופלט <strong>עד 30 יום</strong> לצורך
+          מתן השירות ואיתור שימוש לרעה, ולתקופה ארוכה יותר אם הדין מחייב או אם הדבר נדרש
+          להגנה על השירות או על צד שלישי מפני נזק.{' '}
+          <strong>עיון אנושי:</strong> יומני השימוש-לרעה עשויים לכלול את הטקסט עצמו, ולפי תנאי
+          הספק הם נגישים לעובדים מורשים שלו <strong>וגם לקבלני צד-שלישי</strong> המחויבים
+          בסודיות, לצורך בדיקת שימוש לרעה בלבד.
+        </p>
+        <p>
+          <strong>מה שהמערכת עושה, ומה שאין בו הבטחה:</strong> בכל קריאה המערכת מבקשת מהספק שלא
+          לשמור את התשובה לשליפה מאוחרת (‏store: false). זו בקשה בממשק הספק ולא
+          התחייבות שלו, והיא <strong>אינה</strong> מונעת את יומני השימוש-לרעה שתוארו למעלה.
+          הסדר של אפס-שימור אצל הספק דורש אישור מוקדם והסכם נפרד; כל עוד אין הסכם כזה,{' '}
+          <strong>המפעילה אינה מבטיחה אפס-שימור</strong>.
+        </p>
+        <p>
+          <strong>מיקום העיבוד:</strong> לא הוגדרה הגבלת אזור מול הספק, ולכן העיבוד והאחסון
+          הזמני אצלו עשויים להתבצע מחוץ לישראל, לרבות מחוץ לאיחוד האירופי. ישראל אינה אזור
+          נתמך אצל הספק. גם במסלולי הגבלת אזור, נתוני מערכת ומטא-דאטה עשויים לצאת מהאזור.
+        </p>
+      </section>
+      <section>
+        <h3>4. הפרדת לקוחות ואבטחה</h3>
         <p>
           נתוני כל לקוח מופרדים ברמת מסד הנתונים (Row-Level Security לפי ארגון), הגישה מוצפנת
           (TLS), פעולות רגישות דורשות אימות סיסמה טרי, וקבצים נשמרים בדלי פרטי שהגישה אליו
@@ -148,7 +190,7 @@ export function PrivacyPolicy() {
         </p>
       </section>
       <section>
-        <h3>4. שמירה ומחיקה</h3>
+        <h3>5. שמירה ומחיקה</h3>
         <p>
           רשומות כספיות נשמרות לאורך תקופת ההתקשרות ובהתאם לחובות שמירת רשומות שבדין. מחיקת
           רשומות כספיות היא "מחיקה רכה" המשמרת עקיבות ביקורת. עם סיום ההתקשרות ניתן לבקש העתק
@@ -156,7 +198,7 @@ export function PrivacyPolicy() {
         </p>
       </section>
       <section>
-        <h3>5. הזכויות שלך</h3>
+        <h3>6. הזכויות שלך</h3>
         <p>
           בהתאם לחוק הגנת הפרטיות, התשמ"א-1981 (כפי שתוקן בתיקון 13), עומדת לך זכות לעיין במידע
           שנאסף עליך, לבקש תיקון מידע שגוי ולבקש מחיקה בכפוף לחובות שבדין. פנייה בנושא — אל איש
@@ -164,7 +206,7 @@ export function PrivacyPolicy() {
         </p>
       </section>
       <section>
-        <h3>6. עוגיות ואחסון מקומי</h3>
+        <h3>7. עוגיות ואחסון מקומי</h3>
         <p>
           השירות משתמש באחסון מקומי בדפדפן לניהול ההתחברות ולעבודה לא-מקוונת (טיוטות קבלה
           וצילומים שממתינים לחיבור). אין שימוש בעוגיות פרסום או מעקב צד-שלישי.
