@@ -133,7 +133,8 @@ as $$
     ('public.grant_user_scope(uuid,uuid,text)'),
     ('public.revoke_user_scope(uuid,uuid,text)'),
     ('public.update_identity_provider_settings(text,boolean,jsonb,jsonb,text)'),
-    ('public.update_supplier_bank_details(uuid,text,text)'),
+    -- 0171 replaced the free-text bank command with the structured one, keeping its step-up call.
+    ('public.update_supplier_bank_details(uuid,jsonb,text)'),
     ('public.set_webhook_subscription_active(uuid,boolean,text)')
   ) as wired(signature)
   where to_regprocedure(wired.signature) is null

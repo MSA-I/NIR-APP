@@ -255,10 +255,11 @@ select vault.create_secret('p7-secret-gamma') as secret_gamma \gset
 --   ...04  org1, ACTIVE,   {payment.executed}            -> negative: filter mismatch
 --   ...05  org2, ACTIVE,   '{}'                          -> negative: foreign tenant
 -- 0198 makes verification STRUCTURAL: an active subscription must carry verified_at and a
--- verified_url equal to its url, enforced by a CHECK rather than by the command that writes it. The
--- four active rows below are therefore verified rows, which is what an active subscription is after
--- 0198; the inactive one is left unverified deliberately, because that combination is still legal
--- and this fixture is the only place that proves the constraint permits it.
+-- verified_url equal to its url, enforced by a CHECK rather than by the command that writes it. All
+-- five rows below are therefore verified. The inactive one is verified too, because the toggle proof
+-- further down enables it, and set_webhook_subscription_active refuses to enable a subscription that
+-- was never verified -- verified-but-off is exactly what a subscription the owner verified and then
+-- disabled looks like. That refusal, and the unverified states it protects, are p76's subject.
 insert into webhook_subscriptions (id, org_id, url, event_types, secret_id, active, description,
                                    verified_at, verified_url) values
   ('a7000000-0000-4000-8000-000000000001', '17000000-0000-0000-0000-000000000001',
@@ -271,7 +272,7 @@ insert into webhook_subscriptions (id, org_id, url, event_types, secret_id, acti
   ('a7000000-0000-4000-8000-000000000003', '17000000-0000-0000-0000-000000000001',
    'https://p7.example.test/hooks/inactive', '{}'::text[], :'secret_gamma', false,
    'P7 inactive',
-   null, null),
+   now(), 'https://p7.example.test/hooks/inactive'),
   ('a7000000-0000-4000-8000-000000000004', '17000000-0000-0000-0000-000000000001',
    'https://p7.example.test/hooks/mismatch', array['payment.executed'], :'secret_gamma',
    true, 'P7 filter mismatch',

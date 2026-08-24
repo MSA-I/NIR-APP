@@ -148,6 +148,7 @@ from (values
   ('org_autonomy_policies'),
   ('org_flag_configurations'),
   ('organization_entitlement_overrides'),
+  ('organization_billing_periods'),
   ('organization_offboarding_requests'),
   ('payment_allocations'),
   ('payment_request_invoices'),
