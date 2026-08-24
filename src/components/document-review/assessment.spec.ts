@@ -102,6 +102,15 @@ describe('approvalEffects mirrors what apply_reviewed_document actually does', (
     expect(effects.filter((effect) => effect.happens)).toHaveLength(1);
   });
 
+  it('says an approved credit note records a received credit without offsetting a balance', () => {
+    const effects = approvalEffects('credit_note', false);
+    expect(effects.some((effect) => effect.happens
+      && effect.text.includes('זיכוי') && effect.text.includes('התקבל'))).toBe(true);
+    const negative = effects.filter((effect) => !effect.happens).map((effect) => effect.text).join(' ');
+    expect(negative).toContain('לא יקוזז');
+    expect(negative).toContain('לא יבוצע תשלום');
+  });
+
   it('offers no approval path for a subtype the command does not handle', () => {
     expect(approvalEffects('price_list', false).every((effect) => !effect.happens)).toBe(true);
     expect(approvalEffects(null, false).every((effect) => !effect.happens)).toBe(true);
@@ -191,6 +200,24 @@ describe('canSubmit errs toward letting the server decide', () => {
       document_type: 'delivery_note',
       assessment: assessment({ order_id: 'o1' }) as never,
     }), 's1')).toBe(true);
+  });
+
+  it('keeps an unresolved credit note in review until the server names one invoice', () => {
+    const unresolved = {
+      ...read({ document_type: 'credit_note' }),
+      credit_resolution: {
+        resolved: false, reason: 'ambiguous', supplier_id: 's1', invoice_id: null,
+        reference_invoice_number: 'INV-1', amount: 60, candidate_count: 2,
+      },
+    } as unknown as DocumentReviewRead;
+    const resolved = {
+      ...unresolved,
+      credit_resolution: { ...unresolved.credit_resolution, resolved: true, reason: null,
+        invoice_id: 'invoice-1', candidate_count: 1 },
+    } as unknown as DocumentReviewRead;
+
+    expect(canSubmit(unresolved, 's1')).toBe(false);
+    expect(canSubmit(resolved, 's1')).toBe(true);
   });
 
   it('does not block an invoice with findings — the server is the gate, not this', () => {

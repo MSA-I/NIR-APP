@@ -22,6 +22,14 @@ begin
     raise exception 'Organization % is named "%" — that is not the demo tenant. Refusing to delete.', v_org, v_name;
   end if;
 
+  -- 0175 made raw audit history immutable and gave audit_logs a legal-entity foreign key to
+  -- org_units with ON DELETE RESTRICT. Removing a tenant therefore needs two things this file did
+  -- not need before: the authorized purge declaration the immutability guard defines, and the
+  -- tenant's audit rows gone BEFORE `delete from organizations` cascades its org_units away --
+  -- otherwise the restrict fires on the seeded rows that carry a legal entity. The GUC is
+  -- transaction-local and expires with this statement.
+  perform set_config('app.audit_purge', 'organization_teardown', true);
+
   -- Order follows the foreign keys inward: junctions and children first, then their
   -- parents, then profiles (referenced by every created_by / received_by column), and
   -- finally the organization itself.
@@ -83,11 +91,18 @@ begin
   delete from private.integration_outbox where org_id = v_org;
   delete from domain_events where org_id = v_org;
 
+  -- Before the organization, not after: every audit row the seed wrote for an invoice, payment
+  -- or payment request carries legal_entity_id, and audit_logs_legal_entity_fk (0175) restricts
+  -- the org_units delete that `delete from organizations` cascades.
+  delete from audit_logs where org_id = v_org;
+
   delete from organizations where id = v_org;
 
-  -- Last: the deletes above each fired the audit trigger and wrote new audit rows. Since
-  -- migration 0009 the allocation tables carry org_id too, so this one predicate catches
-  -- every audit row the teardown produced.
+  -- Again, last: the deletes above each fired the audit trigger and wrote new audit rows. Since
+  -- migration 0009 the allocation tables carry org_id too, so this one predicate catches every
+  -- audit row the teardown produced. These rows never carry a legal entity -- the row each one
+  -- describes is already gone, so private.resolve_audit_legal_entity finds nothing and classifies
+  -- them cross_scope -- which is why they do not block the cascade above.
   delete from audit_logs where org_id = v_org;
 
   raise notice 'Demo organization % removed.', v_org;

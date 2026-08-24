@@ -1300,6 +1300,9 @@ try {
     Write-Gate "Reset after committed supplier-portal concurrency fixtures"
     Reset-LocalDatabase
     Invoke-SqlTest "supabase\tests\p60_email_order_delivery.sql" "Email order delivery: fail-closed communication preferences, the claim/settle ledger with attempt ceilings and ambiguous-send freezes, and sent stamped only by the observed provider event"
+    Invoke-SqlTest "supabase\tests\p62_financial_bank_contracts.sql" "A supplier payment destination is structured rather than free text: the shape is Israeli or international and never both, the browser reaches the table through no privilege of its own, the shared directory renders a country and a last four and nothing more, the legacy text waits in a private queue that only a human save closes, and the bank import refuses anything but the canonical workbook"
+    Invoke-SqlTest "supabase\tests\p63_financial_credit_contracts.sql" "An approved credit note becomes one received credit only when its invoice is unambiguous, a credit is consumed to its remainder and never against another invoice, an unlinked credit fails closed by name, and no financial reader answers from lifecycle labels"
+    Invoke-SqlTest "supabase\tests\p64_financial_reversal_audit_metrics.sql" "One-time owner reversal releases consumed quantity without touching evidence, audit rows carry a deterministic legal entity or fail closed, raw history is immutable outside a declared purge, and supplier metrics read 90 days"
     Invoke-SqlTest "supabase\tests\p24_inventory_intelligence.sql" "Inventory consumption evidence, incoming supply, suggestions, price context and tenant isolation"
     Invoke-SqlTest "supabase\tests\p25_tenant_offboarding_export.sql" "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p26_price_baseline.sql" "Contractual price baseline as of the document date, reversal ordering, undisclosed fallbacks and read-only guarantee"
@@ -1348,6 +1351,7 @@ try {
     Invoke-SqlTest "supabase\tests\p1_concurrency.sql" "P1 real concurrent sessions" "supabase_admin"
     Invoke-SqlTest "supabase\tests\payment_credit_override_concurrency.sql" "Concurrent payment replay, approval, execution and credit creation" "supabase_admin"
     Invoke-SqlTest "supabase\tests\monthly_report_snapshots_concurrency.sql" "Concurrent immutable monthly snapshot version allocation" "supabase_admin"
+    Invoke-SqlTest "supabase\tests\p63_financial_credit_concurrency.sql" "Two accountants racing for one credit remainder: one payment, one named refusal, no double allocation" "supabase_admin"
 
     Write-Gate "P1B local Edge runtime, 10/100/1,000 rows and failure recovery"
     Invoke-PriceListEdgeSmoke

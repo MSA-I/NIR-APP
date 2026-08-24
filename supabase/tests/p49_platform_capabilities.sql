@@ -111,10 +111,15 @@ insert into public.platform_admin_roles (user_id, role_key) values
 -- very thing being measured. They are cleared rather than excluded in the function: a NULL actor
 -- in production is a service_role write on the tenant's behalf -- an Edge Function interpreting a
 -- document the customer uploaded -- which IS customer activity and must keep counting.
+-- 0175 made raw audit history immutable. Clearing a fixture's own footprint is the authorized
+-- purge that guard defines, declared transaction-locally and withdrawn on the next line, so every
+-- later statement in this suite still meets the ordinary immutable ledger.
+select set_config('app.audit_purge', 'organization_teardown', true);
 delete from public.audit_logs where org_id in (
   '49000000-0000-4000-8000-000000000001',
   '49000000-0000-4000-8000-000000000002',
   '49000000-0000-4000-8000-000000000003');
+select set_config('app.audit_purge', '', true);
 
 -- Activity: tenant A acted a day ago, and an OPERATOR touched the same tenant just now. The list
 -- must report the tenant's timestamp, never the console's own footprint. Tenant C acted an hour

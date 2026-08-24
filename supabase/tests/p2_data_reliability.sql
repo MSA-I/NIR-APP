@@ -116,6 +116,22 @@ insert into credit_requests (
   '22000000-0000-0000-0000-000000000001'
 );
 
+-- After 0173 a credit reaches 'offset' only once allocations consume it, and the lifecycle
+-- assertions below walk received -> offset -> closed. The money that makes that edge legal has to
+-- exist first, so the fixture pays the credit in full.
+insert into payments (id, org_id, supplier_id, amount, paid_date, method, reference) values (
+  '82000000-0000-0000-0000-000000000001',
+  '12000000-0000-0000-0000-000000000001',
+  (select id from p2_suppliers where n = 1),
+  10, current_date, 'bank_transfer', 'P2-CREDIT-REF'
+);
+insert into payment_allocations (org_id, payment_id, credit_id, amount) values (
+  '12000000-0000-0000-0000-000000000001',
+  '82000000-0000-0000-0000-000000000001',
+  '72000000-0000-0000-0000-000000000001',
+  10
+);
+
 -- Aggregates execute as the browser role and remain tenant-scoped by RLS.
 select set_config('request.jwt.claim.sub', '22000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
