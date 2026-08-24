@@ -46,7 +46,7 @@ fallback לעברית, ובדף יש מתג שפה. הטוקן נשאר ב-fragm
 חסימה לעשר דקות; אין IP קריא); כשלי lookup ב-`private.supplier_portal_lookup_failures`;
 נעילות קישור ב-`supplier_order_links.locked_until`. משטח קריאה מורשה יתווסף בפאזת התצפיות.
 
-## 2. מייל יוצא — Resend; ‏B1 ממומש ומוזג, לא נפרס
+## 2. מייל יוצא — Resend; הדומיין מאומת ו־Auth מחובר (24.08.2026). ‏B1 ממומש ומוזג, לא נפרס
 
 **מצב קוד ומיזוג:** ‏PR #87 ו־`0168` מוזגו. ‏`email-sender` (`verify_jwt=true`) כולל preferences
 fail-closed, claim/lease, חמש ניסיונות, קפיאת `unknown`, תבניות he/en ויישוב provider-accepted.
@@ -56,15 +56,44 @@ fail-closed, claim/lease, חמש ניסיונות, קפיאת `unknown`, תבנ�
 | משתנה | תפקיד ומצב |
 |---|---|
 | `RESEND_API_KEY` | משמש את `send-invite`; עצם קיומו אינו הוכחת דומיין, SMTP או מסירה חיצונית |
-| `INVITE_FROM_EMAIL` | זהות שולח להזמנות עובד; היעד המוכרע הוא `no-reply@inplace.digital` |
-| `ORDERS_FROM_EMAIL` | זהות שולח להזמנות ספק; היעד המוכרע הוא אותה כתובת. טרם הוכח כמוגדר |
-| `APP_BASE_URL` | בסיס לקישורי הפורטל בגוף המייל |
+| `INVITE_FROM_EMAIL` | **מוגדר 24.08.2026** ל־`InPlace <no-reply@inplace.digital>` |
+| `ORDERS_FROM_EMAIL` | **נוצר 24.08.2026** עם אותו ערך. קודם לא היה קיים כלל, ו־`email-sender` נפל חזרה ל־`INVITE_FROM_EMAIL` |
+| `APP_BASE_URL` | בסיס לקישורי הפורטל בגוף המייל; מאז 24.08 `https://app.inplace.digital` |
 | `ALLOWED_ORIGINS` | allowlist ל־CORS |
 | `RESEND_WEBHOOK_SECRET` | סוד Svix לאירועי delivered/bounced; טרם הוכח כמוגדר |
 
-**מה חסר להפעלה:** ‏`inplace.digital` נבחר אך לא נרכש ולא אומת. נדרשים רכישה, SPF/DKIM/DMARC,
-אימות Resend, הגדרת השולחים, SMTP Auth ל־Supabase, החלת `0168`, פריסת `email-sender` ו־smoke
-חיצוני. בלי תצורה הפונקציה עונה `misconfigured`; העבודה הידנית והפורטל נשארים זמינים.
+### 2.א ‏ תשתית הדואר — חיה ומדודה מ־24.08.2026
+
+**מה נמדד, ולא הוסק:**
+
+| שכבה | מצב |
+|---|---|
+| דומיין ב־Resend | `verified` · ‏id `e7f315d9…27c2` · אזור `eu-west-1` (אירופה) |
+| ‏DKIM / SPF של Resend | שניהם `verified`, על `resend._domainkey` ועל `send.` |
+| ‏DMARC | `v=DMARC1; p=none; rua=mailto:dmarc@inplace.digital;` — שלב ניטור מכוון |
+| מסירה יוצאת | נמדדה `delivered`; ‏Gmail החזיר **SPF, DKIM ו־DMARC ‏`PASS`** במקור ההודעה |
+| ‏Supabase Auth SMTP | `smtp.resend.com:465`, משתמש `resend`, שולח `no-reply@inplace.digital`, שם `InPlace` |
+| מכסת מיילי Auth | **מ־2 ל־100 בשעה.** ‏`rate_limit_email_sent=2` היה חוסם השקה: שני מיילים בשעה **לכל הפרויקט**, מכתובת `supabase.co` |
+| קבלת דואר | ‏Cloudflare Email Routing `enabled=true` / `status=ready`; ‏`dmarc@inplace.digital` מועבר לתיבת הבעלים, אומת בהודעת בדיקה שהגיעה. ‏catch-all **כבוי** |
+
+**סיסמת ה־SMTP היא מפתח Resend המוגבל־שליחה**, לא המפתח המלא — Auth רק שולח.
+
+**‏Resend שולח, ‏Cloudflare מקבל, ושניהם על אותו דומיין בלי להתנגש:** רשומות השליחה יושבות על
+`send.` ו־`resend._domainkey`; רשומות הקבלה על השורש ועל `cf2024-1._domainkey`. חמש רשומות ה־MX
+של NameCheap ורשומת ה־SPF שלהן **נמחקו** — הבעלים אישר שלא היה דואר פעיל, ושתי רשומות SPF על
+אותו שם פוסלות זו את זו.
+
+**מה שעדיין לא הוכח, ואסור לטעון:** ‏**מייל Auth אמיתי לא נשלח.** חשבונות הבדיקה הם `@gamos.demo`
+— דומיין מזויף שיחזור — ו־`recover` לכתובת שאינה קיימת מחזיר `200` בלי לשלוח, מטעמי אי־מנייה.
+‏Supabase אימת את חיבור ה־SMTP בשמירה, וזו הראיה שיש; ההוכחה הסופית היא המייל האמיתי הראשון.
+כמו כן `RESEND_WEBHOOK_SECRET` ו־`email-webhook` עדיין אינם, ולכן accepted עדיין אינו delivered
+במסלול המוצר.
+
+**חוב שנפתח כאן:** תבניות מיילי ה־Auth הן ברירות המחדל **באנגלית** (`"Reset your password"`,
+`"You've been invited"`) במוצר עברי RTL. לא חוסם, אך יש לסגור לפני לקוח ראשון.
+
+**מעבר מ־`p=none`:** רק אחרי תקופה מייצגת של קריאת דוחות `rua` בפועל, ואז `quarantine` לפני
+`reject`. הכרעת בעלים חדשה, לא ניקוי בדרך.
 
 **Webhook bounce הוא שלב עתידי נפרד:** ‏`email-webhook` אינו קיים. #238 קובע ש־bounce מאוחר
 אינו מחזיר את lifecycle ההזמנה אחורה: ההזמנה נשארת `sent`, מצב ערוץ המייל הופך
@@ -109,7 +138,7 @@ Morning או חיוב Paddle/Stripe פעיל. לפני הפעלה נדרשים �
 | `https://app.inplace.digital` | **חי.** ‏custom domain על פרויקט ה־Pages הקיים `supplyflow` (`status=active`, ‏`cert=active`), דרך `CNAME app → supplyflow-baq.pages.dev` proxied |
 | `https://app.inplace.digital/operator` | נתיב באותו origin. נטען, והגבול השרתי לא זז — `office` ו־`accountant` מנותבים לדשבורד שלהם |
 | `https://supplyflow-baq.pages.dev` | **נשאר חי** כ־origin לגלגול אחורה; מגיש את אותה פריסה בדיוק. אין הפניה למשתמש |
-| `https://inplace.digital` (apex) | **אינו מגיש דבר, במכוון.** רשומות ה־web של NameCheap שסריקת הייבוא משכה — `A → 192.64.119.114` ו־`CNAME www → parkingpage.namecheap.com` — נמחקו לפני שההאצלה הפכה סמכותית |
+| `https://inplace.digital` (apex) | **אינו מגיש דבר, במכוון.** רשומות ה־web של NameCheap שסריקת הייבוא משכה — `A → 192.64.119.114` ו־`CNAME www → parkingpage.namecheap.com` — נמחקו לפני שההאצלה הפכה סמכותית. השורש נושא רשומות **דואר** בלבד (§2.א); אין לגזור מהן רשות להוסיף לו רשומת web |
 | `https://www.inplace.digital` | **‏NXDOMAIN.** אין רשומה ואין הפניה |
 
 האזור מתארח ב־Cloudflare (‏id `82a4bdef…7b5a`, ‏`active`) עם `clyde.ns.cloudflare.com` ו־
