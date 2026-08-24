@@ -3,6 +3,12 @@ import { toHebrewError } from '../errors';
 import { askAssistant } from './client';
 import type { AssistantHistoryView, AssistantRunResult } from './contracts';
 
+/** One settled exchange: what was asked, and the answer that was authorized for it. */
+export interface AssistantTurn {
+  question: string;
+  result: AssistantRunResult;
+}
+
 export interface AssistantRunSession {
   authorizationFingerprint: string;
   question: string;
@@ -11,13 +17,21 @@ export interface AssistantRunSession {
   submittedQuestion: string | null;
   pending: boolean;
   result: AssistantRunResult | null;
+  /**
+   * The conversation as a thread, oldest turn first. A run appends; it does not replace. The
+   * single `result` above stays the newest turn's result so every existing reader is unchanged.
+   */
+  turns: AssistantTurn[];
   conversationId: string | null;
   rawError: string | null;
   errorText: string | null;
   announcement: string;
   /** Starts one run, or returns the already-running promise. */
   submit: (route: string | null) => Promise<boolean>;
-  restoreHistory: (view: AssistantHistoryView, expectedAuthorizationFingerprint: string) => boolean;
+  restoreHistory: (
+    turns: readonly AssistantHistoryView[],
+    expectedAuthorizationFingerprint: string,
+  ) => boolean;
   resetConversation: () => void;
 }
 
@@ -66,7 +80,7 @@ export function useAssistantRunSession(
   const [question, setQuestion] = useState('');
   const [submittedQuestion, setSubmittedQuestion] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [result, setResult] = useState<AssistantRunResult | null>(null);
+  const [turns, setTurns] = useState<AssistantTurn[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [rawError, setRawError] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -88,7 +102,7 @@ export function useAssistantRunSession(
     setQuestion('');
     setSubmittedQuestion(null);
     setPending(false);
-    setResult(null);
+    setTurns([]);
     setConversationId(null);
     setRawError(null);
     setErrorText(null);
@@ -118,7 +132,7 @@ export function useAssistantRunSession(
           authorizationEpochRef.current !== authorizationEpoch ||
           authorizationRef.current !== authorizationFingerprint
         ) return false;
-        setResult(next);
+        setTurns((previous) => [...previous, { question: trimmed, result: next }]);
         setConversationId(next.conversation_id);
         setQuestion('');
         setAnnouncement('הבדיקה הושלמה');
@@ -152,7 +166,7 @@ export function useAssistantRunSession(
     // A response already in flight still belongs to the current conversation. Let it settle; the
     // control is disabled in the dialog too, and this guard protects future callers.
     if (inFlightRef.current) return;
-    setResult(null);
+    setTurns([]);
     setConversationId(null);
     setQuestion('');
     setSubmittedQuestion(null);
@@ -162,21 +176,25 @@ export function useAssistantRunSession(
   }, []);
 
   const restoreHistory = useCallback((
-    view: AssistantHistoryView,
+    restored: readonly AssistantHistoryView[],
     expectedAuthorizationFingerprint: string,
   ): boolean => {
     if (
       inFlightRef.current ||
+      restored.length === 0 ||
       authorizationRef.current !== expectedAuthorizationFingerprint ||
       authorizationFingerprint !== expectedAuthorizationFingerprint
     ) return false;
+    const newest = restored[restored.length - 1]!;
     setQuestion('');
-    setSubmittedQuestion(view.question);
-    setResult(view.result);
-    setConversationId(view.result.conversation_id);
+    setSubmittedQuestion(newest.question);
+    setTurns(restored.map((turn) => ({ question: turn.question, result: turn.result })));
+    setConversationId(newest.result.conversation_id);
     setRawError(null);
     setErrorText(null);
-    setAnnouncement('הבדיקה הקודמת נטענה');
+    setAnnouncement(
+      restored.length === 1 ? 'הבדיקה הקודמת נטענה' : `נטענה שיחה קודמת עם ${restored.length} בדיקות`,
+    );
     return true;
   }, [authorizationFingerprint]);
 
@@ -188,7 +206,10 @@ export function useAssistantRunSession(
     setQuestion,
     submittedQuestion: authorizationChanged ? null : submittedQuestion,
     pending: authorizationChanged ? false : pending,
-    result: authorizationChanged ? null : result,
+    // Derived, not stored: one thread is the only source of truth for what is on screen, and a
+    // second copy of the newest answer is a second thing that can disagree with it.
+    result: authorizationChanged ? null : (turns.at(-1)?.result ?? null),
+    turns: authorizationChanged ? [] : turns,
     conversationId: authorizationChanged ? null : conversationId,
     rawError: authorizationChanged ? null : rawError,
     errorText: authorizationChanged ? null : errorText,

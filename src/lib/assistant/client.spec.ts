@@ -237,20 +237,58 @@ describe('מילון השגיאות — ניסוח אחד, לא שניים', () 
 
 describe('פעולות שיחה', () => {
   it('פתיחת בדיקה קודמת עוברת רק דרך Edge שמבצע reauthorization ומפרש מעטפה סגורה', async () => {
-    const historyRun = {
-      question: 'מה מצב החשבונית?',
-      result: { ...emptyRun, conversation_id: '22222222-2222-4222-8222-222222222222' },
-    };
-    invoke.mockResolvedValue({ data: historyRun, error: null });
+    // The whole conversation, oldest turn first — the Edge used to answer with only the newest
+    // turn, which is what made a stored conversation not worth reopening.
+    const turns = [
+      {
+        question: 'מה מצב החשבונית?',
+        result: { ...emptyRun, conversation_id: '22222222-2222-4222-8222-222222222222' },
+      },
+      {
+        question: 'ומה נשאר לשלם עליה?',
+        result: {
+          ...emptyRun,
+          run_id: '33333333-3333-4333-8333-333333333333',
+          conversation_id: '22222222-2222-4222-8222-222222222222',
+        },
+      },
+    ];
+    invoke.mockResolvedValue({ data: { turns }, error: null });
 
     await expect(loadAssistantConversation('22222222-2222-4222-8222-222222222222'))
-      .resolves.toEqual(historyRun);
+      .resolves.toEqual(turns);
     expect(invoke).toHaveBeenCalledWith('assistant', {
       body: {
         operation: 'history_load',
         conversation_id: '22222222-2222-4222-8222-222222222222',
       },
     });
+  });
+
+  it('מעטפת history בת תור אחד עדיין נטענת כשיחה בת תור אחד', async () => {
+    const turns = [{
+      question: 'מה מצב החשבונית?',
+      result: { ...emptyRun, conversation_id: '22222222-2222-4222-8222-222222222222' },
+    }];
+    invoke.mockResolvedValue({ data: { turns }, error: null });
+
+    await expect(loadAssistantConversation('22222222-2222-4222-8222-222222222222'))
+      .resolves.toEqual(turns);
+  });
+
+  // The old shape is not accepted as a courtesy: a bare `{question, result}` would silently drop
+  // every earlier turn, which is the defect this replaced.
+  it('המעטפה הישנה של תור בודד נדחית ולא מתפרשת כשיחה', async () => {
+    invoke.mockResolvedValue({
+      data: {
+        question: 'מה מצב החשבונית?',
+        result: { ...emptyRun, conversation_id: '22222222-2222-4222-8222-222222222222' },
+      },
+      error: null,
+    });
+
+    await expect(loadAssistantConversation('22222222-2222-4222-8222-222222222222'))
+      .rejects.toThrow('assistant_unsupported_answer');
   });
 
   it('פתיחת history נכשלת סגור אם ה-Edge החזיר shape לא מוכר', async () => {

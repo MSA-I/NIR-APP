@@ -766,3 +766,22 @@ export const AssistantHistoryViewSchema = z.object({
   result: AssistantRunResultSchema,
 }).strict();
 export type AssistantHistoryView = z.infer<typeof AssistantHistoryViewSchema>;
+
+/**
+ * A whole conversation, oldest turn first.
+ *
+ * The server has always built the full ordered list — `loadAuthorizedConversationViews` returns
+ * every run in the conversation that still passes validation and evidence authorization — and the
+ * Edge handler then returned only `views.at(-1)`. Reopening a conversation therefore showed its
+ * last question and nothing else, which is what made the history list not worth having.
+ *
+ * The cap matches the server's own load limit. Each turn is re-validated and re-authorized on
+ * every load, so a turn whose evidence the current role may no longer see is dropped as a whole
+ * turn rather than rendered with holes in it.
+ */
+export const ASSISTANT_TRANSCRIPT_MAX_TURNS = 12;
+
+export const AssistantHistoryTranscriptSchema = z.object({
+  turns: z.array(AssistantHistoryViewSchema).min(1).max(ASSISTANT_TRANSCRIPT_MAX_TURNS),
+}).strict();
+export type AssistantHistoryTranscript = z.infer<typeof AssistantHistoryTranscriptSchema>;

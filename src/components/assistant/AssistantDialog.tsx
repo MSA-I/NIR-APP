@@ -75,7 +75,7 @@ function needsFallback(rawError: string): boolean {
  */
 function ConversationHistory({ authorizationFingerprint, onOpen }: {
   authorizationFingerprint: string;
-  onOpen: (view: AssistantHistoryView, expectedAuthorizationFingerprint: string) => void;
+  onOpen: (turns: AssistantHistoryView[], expectedAuthorizationFingerprint: string) => void;
 }) {
   const { data, loading, error, refetch } = useAssistantConversations(authorizationFingerprint);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -113,9 +113,9 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
                 setOpeningId(conversation.id);
                 setOpenError(null);
                 void loadAssistantConversation(conversation.id)
-                  .then((view) => {
+                  .then((restored) => {
                     setOpeningId(null);
-                    onOpen(view, expectedAuthorizationFingerprint);
+                    onOpen(restored, expectedAuthorizationFingerprint);
                   })
                   .catch((e) => {
                     setOpeningId(null);
@@ -178,6 +178,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
     submittedQuestion,
     pending,
     result,
+    turns,
     conversationId,
     rawError,
     errorText,
@@ -245,24 +246,62 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
             העוזר מציג רק נתונים שהמערכת מדדה, ולכל ממצא מצרף עדכניות ומקור לבדיקה.
           </p>
 
-          {submittedQuestion && (
-            <section className="rounded-lg bg-surface-sunken p-3" aria-labelledby={`${titleId}-question`}>
-              <h3 id={`${titleId}-question`} className="text-xs font-medium text-ink-muted">השאלה שנבדקה</h3>
-              <p className="mt-1 text-sm font-medium leading-relaxed text-ink">{submittedQuestion}</p>
-              {result && (
-                <p className="mt-2 text-xs text-ink-muted">
-                  עודכן ל־<span className="num">{fmtDateTime(result.as_of)}</span>
-                </p>
-              )}
-            </section>
+          {/*
+            The conversation as a thread: every question the person asked and every answer that
+            was authorized for it, oldest first. Owner decision 24.08.2026 replaced the earlier
+            single-exchange surface — the answer is still an evidence card, not prose in a bubble,
+            so a fact keeps its value, its freshness and its source wherever it sits in the thread.
+          */}
+          {turns.length > 0 && (
+            <ol className="space-y-5" aria-label="השיחה עם העוזר">
+              {turns.map((turn) => (
+                <li key={turn.result.run_id} className="space-y-2">
+                  <div className="flex justify-end">
+                    <p className="max-w-[85%] rounded-2xl rounded-ee-sm bg-action px-3 py-2 text-sm font-medium leading-relaxed text-on-solid">
+                      {turn.question}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl rounded-ss-sm bg-surface-sunken p-3">
+                    <p className="mb-2 text-xs text-ink-muted">
+                      עודכן ל־<span className="num">{fmtDateTime(turn.result.as_of)}</span>
+                    </p>
+                    {role && (
+                      <AnswerView
+                        result={turn.result}
+                        role={role}
+                        onNavigate={closeForProductNavigation}
+                      />
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+
+          {/* The question that is still in flight sits at the end of the thread, as its author. */}
+          {pending && submittedQuestion && (
+            <div className="flex justify-end">
+              <p className="max-w-[85%] rounded-2xl rounded-ee-sm bg-action px-3 py-2 text-sm font-medium leading-relaxed text-on-solid">
+                {submittedQuestion}
+              </p>
+            </div>
           )}
 
           {pending && (
-            <div role="status" aria-busy="true" className="space-y-2">
+            <div role="status" aria-busy="true" className="space-y-2 rounded-2xl rounded-ss-sm bg-surface-sunken p-3">
               <span className="sr-only">בודק את הנתונים המורשים</span>
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-5/6" />
               <Skeleton className="h-4 w-2/3" />
+            </div>
+          )}
+
+          {/* A failed run leaves no turn, so its question would otherwise vanish with the error. */}
+          {!pending && errorText && submittedQuestion && (
+            <div className="flex justify-end">
+              <p className="max-w-[85%] rounded-2xl rounded-ee-sm bg-action px-3 py-2 text-sm font-medium leading-relaxed text-on-solid">
+                {submittedQuestion}
+              </p>
             </div>
           )}
 
@@ -291,10 +330,6 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
             </div>
           )}
 
-          {!pending && !errorText && result && role && (
-            <AnswerView result={result} role={role} onNavigate={closeForProductNavigation} />
-          )}
-
           {!pending && !result && !errorText && (
             <section aria-labelledby={`${titleId}-start`}>
               <h3 id={`${titleId}-start`} className="section-title">מה תרצה לבדוק?</h3>
@@ -315,7 +350,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
                 <div className="mt-5">
                   <ConversationHistory
                     authorizationFingerprint={authorizationFingerprint}
-                    onOpen={(view, expected) => restoreHistory(view, expected)}
+                    onOpen={(restored, expected) => restoreHistory(restored, expected)}
                   />
                 </div>
               )}
