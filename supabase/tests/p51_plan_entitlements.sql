@@ -127,29 +127,45 @@ select pg_temp.p51_assert(
   'the launch rungs are not at the volumes #197 decided for them');
 -- Every decided figure is on record beside the one it replaced, so the size of each move stays
 -- answerable after the fact -- three of the eight lowered a ceiling somebody was already under.
+-- Scoped to #197 by its own decision_ref since 0202 recorded #198's four assistant figures in the
+-- same table: a bare count would have turned a second owner decision into a test failure, and
+-- worse, would have let one of #197's own eight go missing behind #198's four.
 select pg_temp.p51_assert(
-  (select count(*) from private.plan_quota_decisions) = 8
+  (select count(*) from private.plan_quota_decisions
+   where decision_ref = 'OPEN-DECISIONS #197') = 8
   and (select count(*) from private.plan_quota_decisions
-       where previous_limit is not null and previous_limit > decided_limit) = 3,
+       where decision_ref = 'OPEN-DECISIONS #197'
+         and previous_limit is not null and previous_limit > decided_limit) = 3,
   'the #197 record does not hold eight figures with three ceiling reductions');
--- The pin below was one assertion until 0164 introduced a metric whose limit nobody has decided
--- yet. Splitting it keeps both teeth rather than blunting one: a STATED number outside the two
--- decided limits still fails, and the unknown-that-refuses state is pinned to exactly the one key
--- allowed to hold it. A single relaxed assertion would have let any future metric ship as
--- "unknown" and read as green.
+-- Two teeth, kept apart. The first: a plan may not restrict anything the owner has not decided.
+-- Naming the allowed metrics was how this read until 0202 added a third, and a list of names has to
+-- be edited every time -- so the rule is now stated as what it always meant: every stated ceiling
+-- must be backed by a row in the decision ledger for that exact plan and figure. A number typed
+-- into plan_entitlements without a decision behind it still fails, whichever metric it belongs to,
+-- and a boolean turned off still fails because no decision row can back it.
+select pg_temp.p51_assert(
+  not exists (
+    select 1 from plan_entitlements entitlement
+    where ((entitlement.kind = 'numeric'
+             and not entitlement.unlimited and entitlement.numeric_limit is not null)
+        or (entitlement.kind = 'boolean' and entitlement.boolean_value is not true))
+      and not exists (
+        select 1 from private.plan_quota_decisions decision
+        where decision.plan_key = entitlement.plan_key
+          and decision.entitlement_key = entitlement.entitlement_key
+          and decision.decided_limit = entitlement.numeric_limit)),
+  'a plan ceiling was stated without a recorded owner decision behind it');
+-- The second: the unknown-that-refuses state is pinned to exactly the rows allowed to hold it.
+-- Since #198 that is the assistant quota on the contract-priced rung and on the retired one --
+-- `מותאם` is a per-contract override, not a number a migration may invent, and Legacy gets no new
+-- allowance. Any other unstated numeric would ship as "unknown" and read as green.
 select pg_temp.p51_assert(
   not exists (
     select 1 from plan_entitlements
-    where entitlement_key not in ('documents.monthly', 'ocr_pages.monthly')
-      and ((kind = 'numeric' and not unlimited and numeric_limit is not null)
-        or (kind = 'boolean' and boolean_value is not true))),
-  'an entitlement beyond the two decided limits became restrictive without a decision');
-select pg_temp.p51_assert(
-  not exists (
-    select 1 from plan_entitlements
-    where entitlement_key <> 'assistant_runs.monthly'
-      and kind = 'numeric' and not unlimited and numeric_limit is null),
-  'an entitlement beyond the assistant run quota entered the unknown-that-refuses state without a decision');
+    where kind = 'numeric' and not unlimited and numeric_limit is null
+      and not (entitlement_key = 'assistant_runs.monthly'
+               and plan_key in ('business', 'legacy'))),
+  'an entitlement beyond the contract-priced assistant quota entered the unknown-that-refuses state');
 
 -- ===== Fixture =====
 insert into public.organizations (id, name, status, created_at) values

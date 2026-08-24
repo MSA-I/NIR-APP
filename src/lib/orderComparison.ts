@@ -17,7 +17,12 @@
  * Distinct from `calculateOrderSavings` in ./orderSavings — that one prices consolidating the
  * whole basket onto a single supplier. Same screen, different question.
  */
-import { centsFromUnits, hundredths, lineUnits, moneyFromCents } from './orderSavings';
+// Explicit extension, the same reason ./orderSplit.ts gives for its own: Vite accepts either, and
+// `allowImportingTsExtensions` type-checks this form, but a direct Node or Deno resolver does not
+// guess. Deno matters here now — supabase/functions/assistant/tools/getPurchaseComparison.ts
+// imports compareLine/summarizeComparison from this file so the saving formula has exactly one
+// implementation across the screen and the assistant.
+import { centsFromUnits, hundredths, lineUnits, moneyFromCents } from './orderSavings.ts';
 
 export type LineComparisonStatus = 'saved' | 'same_price' | 'overpaying' | 'single_offer' | 'no_basis';
 
