@@ -513,7 +513,17 @@ select pg_temp.p75_assert(
       'organization_rule_versions',
       'rule_definitions'
     )),
-  'C1: a public table carrying org_id is not classified in the activity-evidence registry');
+  'C1: a public table carrying org_id is not classified in the activity-evidence registry: '
+  || coalesce((
+       select string_agg(violation.table_name, ', ' order by violation.table_name)
+       from private.org_activity_registry_violations() violation
+       where violation.table_name not in (
+         'global_rule_bindings',
+         'global_rule_versions',
+         'organization_rule_bindings',
+         'organization_rule_versions',
+         'rule_definitions'
+       )), ''));
 
 savepoint mutation_c1;
 create table public.p75_unclassified_business_table (
