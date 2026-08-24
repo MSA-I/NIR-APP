@@ -18,28 +18,79 @@ DPA · אזור נתונים** — כולן ל-OpenAI, שהוא ספק המוד�
 
 ## 1. חמש שורות החובה
 
-מצב נכון ל-**24.08.2026**. כל השורות `MISSING`, ולכן **ההפעלה נדחית**.
+מצב נכון ל-**24.08.2026, אחרי שליפה מהמקורות הרשמיים של OpenAI**. ארבע שורות `VERIFIED`,
+שורה אחת (`dpa`) `MISSING` — ולכן **ההפעלה עדיין נדחית.**
 
 | שורה | תביעה (claim) | מקור רשמי מתוארך | תאריך שליפה | מי אימת | סטטוס |
 |---|---|---|---|---|---|
-| `training_use` — האם הקלט משמש לאימון | — | — | — | — | `MISSING` |
-| `retention` — כמה זמן הספק שומר קלט/פלט | — | — | — | — | `MISSING` |
-| `provider_logs` — אילו לוגים נשמרים ולכמה זמן | — | — | — | — | `MISSING` |
-| `dpa` — הסכם עיבוד נתונים חתום | — | — | — | — | `MISSING` |
-| `data_region` — היכן העיבוד והאחסון מתבצעים | — | — | — | — | `MISSING` |
+| `training_use` | `no_training_on_api_data_by_default_opt_in_available` | `https://developers.openai.com/api/docs/guides/your-data` · `https://help.openai.com/en/articles/5722486-how-your-data-is-used-to-improve-model-performance` | 2026-08-24 | Claude (סוכן מחקר), ציטוטים אומתו שנית ב-`curl` על ידי הסוכן הראשי | `VERIFIED` |
+| `retention` | `retention_up_to_30_days_default` | `https://openai.com/enterprise-privacy/` (Updated: January 8, 2026) | 2026-08-24 | כנ״ל | `VERIFIED` |
+| `provider_logs` | `abuse_logs_30_days_employees_and_third_party_contractors` | `https://developers.openai.com/api/docs/guides/your-data` · `https://openai.com/enterprise-privacy/` | 2026-08-24 | כנ״ל | `VERIFIED` |
+| `dpa` | `dpa_self_serve_form_via_ironclad_clickthrough` — **התהליך** מתועד; **החתימה בפועל לחשבון הזה אינה ידועה** | `https://openai.com/policies/data-processing-addendum/` (Effective: January 1, 2026) · טופס: `https://ironcladapp.com/public-launch/63ffefa2bed6885f4536d0fe` | 2026-08-24 | — | `MISSING` |
+| `data_region` | `no_data_residency_configured_unrestricted_processing` | `https://developers.openai.com/api/docs/guides/your-data` | 2026-08-24 | כנ״ל | `VERIFIED` |
 
-**למה כולן `MISSING` ולא ניחוש סביר:** התנאים המתוארכים של OpenAI אינם נמצאים בריפו, ואין אפשרות
-לאמת אותם ללא גישה למקור הרשמי. שורה שאי אפשר לגבות במקור נשארת `MISSING` — **משפט סביר אינו
-ראיה**, והנזק של משפט סביר שגוי כאן אינו באג אלא הצהרה כוזבת ללקוח על מה שקורה לנתונים שלו.
+### הציטוטים המכריעים, מילה במילה
 
-**מה שכן נמצא בריפו, ומה הוא לא מוכיח:**
+הציטוטים נשמרים באנגלית בכוונה: זהו נוסח משפטי, ותרגום הופך ראיה לפרשנות.
 
-| ממצא | איפה | מה הוא כן | מה הוא לא |
-|---|---|---|---|
-| `store: false` בכל קריאה לספק | `supabase/functions/assistant/provider.ts:339` | בקשת API שהתוכן לא יישמר אצל הספק | **אינו הוכחת מחיקה** ואינו חוזה. ‏`ASSISTANT.md §5.1` אומר זאת במפורש |
-| ‏OpenAI מופיע כמעבד-משנה ב-`/privacy` | `src/pages/Legal.tsx` | גילוי קיים של זהות המעבד | אינו אומר דבר על אימון, שימור, לוגים, DPA או אזור |
-| מפתח וספק נפרדים לעוזר ול-OCR | `config.ts` · `ASSISTANT.md §4` | הפרדת תצורה | אינו ראיית ממשל |
-| lease מסוג `assistant` לכל קריאה | `egress.ts` · `0166` | גידור, ביקורת וסילוק עם ראיה בצד שלנו | אינו נוגע במה שקורה **אצל הספק** |
+- **`training_use`** — „As of March 1, 2023, data sent to the OpenAI API is not used to train or
+  improve OpenAI models (unless you explicitly opt in to share data with us)."
+  ובעמוד העזרה: „Unless they explicitly opt-in, organizations are opted out of data-sharing by
+  default."
+- **`retention`** — „OpenAI may securely retain API inputs and outputs for up to 30 days to
+  provide the services and to identify abuse. After 30 days, API inputs and outputs are removed
+  from our systems, unless we are legally required to retain them."
+- **`provider_logs`** — „By default, abuse monitoring logs are generated for all API feature
+  usage and retained for up to 30 days, unless longer retention is required by law, or is
+  reasonably necessary to protect our services or any third party from harm."
+  ומי קורא אותם: „(1) authorized employees … and (2) specialized third-party contractors who are
+  bound by confidentiality and security obligations, solely to review for abuse and misuse."
+- **`dpa`** — „Yes, we are able to execute a Data Processing Addendum (DPA) with customers … Please
+  complete our DPA form to execute a DPA with OpenAI."
+- **`data_region`** — „Contact our sales team to see if you're eligible for using data residency
+  controls." · „To use data residency with any region other than the United States, you must be
+  approved for abuse monitoring controls, and execute a Modified Retention amendment."
+
+### מה שהמחקר מצא ומשנה את מה שמותר לכתוב ללקוח
+
+1. **אפס-שימור אינו זמין בלי הסכם נפרד.** ‏„Currently, these controls are subject to prior
+   approval by OpenAI and acceptance of additional requirements." הכרעת `#179` — שאין להבטיח
+   אפס-שימור בלי חוזה שמוכיח אותו — **נכונה ונתמכת ישירות**. וגם ZDR מאושר אינו מוחלט: סריקת
+   CSAM, ‏„Eyes Off" ו-„Safety Retention" הן שלוש הסתייגויות כתובות שמחזירות תוכן ללוגים.
+2. **`store: false` הוא מתג שליפה, לא ערובת שימור.** ההגדרה המלאה בתיעוד ה-API היא
+   „Whether to store the generated model response for later retrieval via API." לוגי ניטור
+   ההתעללות נוצרים בכל מקרה — ‏„generated for all API feature usage". הכיוון אף הפוך מהאינטואיציה:
+   ‏„When Zero Data Retention is enabled for an organization, the store parameter will always be
+   treated as false" — ‏ZDR כופה את הפרמטר, לא הפרמטר משיג ZDR. **הניסוח „שלחנו `store:false`
+   ולכן שום דבר לא נשמר" הוא הבטחה כוזבת.**
+3. **קבלני צד-שלישי קוראים תוכן.** לא רק עובדי OpenAI. גילוי נאות חייב לומר זאת.
+4. **ה-DPA הנוכחי (1.1.2026) אינו מכיל סעיף שימור של 30 יום.** סעיף 3.3 מטיל את הגדרות השימור
+   על הלקוח. סעיף 30 היום חי ב-FAQ ובתיעוד — מסמכים שהספק רשאי לשנות חד-צדדית — **ולא בחוזה.**
+   אין לצטט את ה-DPA כמקור למגבלת 30 היום. (נוסח „maximum of thirty (30) days" ששרד בתוצאות
+   חיפוש שייך ל-DPA המבוטל מ-2.2024.)
+5. **אחסון אזורי אינו עיבוד אזורי.** מתוך עשר האזורים הנתמכים, **בשבעה** `Processing: No` —
+   הנתונים במנוחה נשארים, ההסקה יוצאת. עיבוד באיחוד האירופי מותנה מראש באישור ZDR/MAM. ‏**ישראל
+   אינה ברשימת האזורים כלל.** ובלי הגדרה כלשהי — וזה מצבנו — ברירת המחדל היא בלתי-מוגבלת.
+6. **מה שמוגדר כ-„system data" יוצא מהאזור בכל מקרה**, וכולל **`structured output schema`** —
+   כלומר סכימת ה-JSON שמתארת את אובייקטי העסק שלנו.
+
+### למה `dpa` נשארת `MISSING`, ומה בדיוק צריך כדי לסגור אותה
+
+התהליך מתועד ואומת: ‏OpenAI מציעה DPA ל-API, החתימה היא click-through דרך טופס **Ironclad**
+(צד שלישי, לא דומיין של OpenAI), ולקוח באזור הכלכלי האירופי מתקשר מול `OpenAI Ireland Ltd.`
+ואחרת מול `OpenAI OpCo, LLC`.
+
+**מה שאיש לא יכול לחקור:** האם **החשבון הזה** חתם. זו עובדה על החשבון ולא על התנאים הפומביים,
+ואין עמוד בעולם שיענה עליה. היא חייבת להיקבע על ידי מי שיש לו גישה להגדרות הארגון ב-OpenAI,
+ולהירשם כאן כעובדה שאושרה על ידי הבעלים — **לא כעובדה שנחקרה**.
+
+### מה שלא ניתן היה לשלוף, ונשאר לא-נענה
+
+- ‏`trust.openai.com` החזיר 403 מאחורי Cloudflare בכל ניסיון. **אף שורה בדוח הזה אינה מסתמכת
+  עליו.**
+- שם יחידה ארגונית שקוראת את הלוגים. העמודים אומרים „authorized employees" ו-„specialized
+  third-party contractors" בלבד.
+- ערך ברירת המחדל המתועד של `store`. התיעוד מתאר את ההתנהגות ואינו נוקב בערך.
 
 ---
 
@@ -105,6 +156,9 @@ status=VERIFIED;claim=example_claim;source=https://example.invalid/policy;retrie
 | תאריך | שורה | פעולה | תוצאה | מי |
 |---|---|---|---|---|
 | 24.08.2026 | כל חמש | הקמת התבנית; חיפוש ראיה בריפו | אין בריפו מקור רשמי מתוארך לאף שורה — כולן `MISSING`, ההפעלה נדחית | סוכן ממשל (בסקירת בעלים) |
+| 24.08.2026 | `training_use`, `retention`, `provider_logs`, `data_region` | שליפה מהמקורות הרשמיים של OpenAI לבקשת הבעלים | ארבע השורות `VERIFIED` עם URL, תאריך שליפה וציטוט מילולי | סוכן מחקר; חמישה ציטוטים מכריעים אומתו שנית ב-`curl` בלתי-תלוי על ידי הסוכן הראשי |
+| 24.08.2026 | `dpa` | שליפה מהמקורות הרשמיים | **התהליך** אומת (טופס Ironclad, ‏click-through, ישות מתקשרת לפי אזור); **החתימה בפועל בחשבון אינה ניתנת למחקר** ונשארת `MISSING` | כנ״ל |
+| 24.08.2026 | — | ניסיון גישה ל-`trust.openai.com` | ‏403 מאחורי Cloudflare; **אף שורה אינה נשענת עליו** | כנ״ל |
 
 ---
 
@@ -116,6 +170,20 @@ status=VERIFIED;claim=example_claim;source=https://example.invalid/policy;retrie
 - **מחיקה אצל הספק כתוצאה ממחיקת שיחה** — הטיהור מוחק מהמסד החי (`ASSISTANT.md §6`); הוא אינו
   טוען דבר על הספק.
 - **ספק גיבוי** — לא קיים, ואין להציג אותו כתוכנית המשכיות.
+
+### ומה שחייב **להיאמר** לפני ההפעלה, לפי מה שנשלף ב-24.08
+
+הרשימה למעלה היא מה שאסור להבטיח. אלה שלושה דברים שאסור **להשמיט**, כי הם ההפרש בין גילוי נאות
+לבין חצי אמת:
+
+1. **בני אדם שאינם עובדי הספק רשאים לקרוא תוכן.** ‏„specialized third-party contractors …
+   solely to review for abuse and misuse". גילוי שאומר רק „הספק" מחמיץ את זה.
+2. **שימור של עד 30 יום הוא ברירת המחדל שלנו**, ולא אפס — עם שתי הארכות פתוחות בנוסח הספק
+   („required by law" · „reasonably necessary to protect our services or any third party from
+   harm"). ‏`store: false` אינו משנה זאת.
+3. **אין אצלנו הגדרת אזור.** ברירת המחדל בלתי-מוגבלת; ישראל אינה אזור נתמך כלל; ואפילו אילו
+   הוגדר אזור — אחסון אזורי אינו עיבוד אזורי בשבעה מתוך עשרה אזורים, ו-`structured output schema`
+   מסווג `system data` ויוצא מהאזור בכל מקרה.
 
 **קשור:** `docs/ASSISTANT.md §4` (ממשל הספק) · `docs/OPEN-DECISIONS.md` שורות #179, ‏#124, ‏#182,
 ‏#191, ‏#193, ‏#205 · `supabase/functions/assistant/governance.ts` ·
