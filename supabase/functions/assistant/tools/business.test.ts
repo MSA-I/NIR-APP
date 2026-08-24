@@ -756,8 +756,11 @@ Deno.test("open credits: a failed per-supplier breakdown degrades to complete:fa
   assert.equal(envelope.sources[0]?.entity_id, actor().orgId);
 });
 
+// The count is pinned rather than derived: a tool is a capability, and a capability arriving
+// without anyone noticing is what this number exists to prevent. 11 -> 13 on 24.08.2026 for
+// get_product_help (#192) and draft_supplier_reminder (#191), both read-only.
 Deno.test("every tool declares roles, a Hebrew description and a strict JSON schema", () => {
-  assert.equal(deterministicBusinessTools.length, 11);
+  assert.equal(deterministicBusinessTools.length, 13);
   for (const tool of deterministicBusinessTools) {
     assert.ok(tool.requiredRoles.length > 0, `${tool.name} has no roles`);
     assert.ok(/[֐-׿]/.test(tool.description), `${tool.name} description is not Hebrew`);
@@ -765,5 +768,5 @@ Deno.test("every tool declares roles, a Hebrew description and a strict JSON sch
     assert.equal(schema.additionalProperties, false, `${tool.name} schema is not strict`);
   }
   const names = new Set(deterministicBusinessTools.map((tool) => tool.name));
-  assert.equal(names.size, 11);
+  assert.equal(names.size, 13);
 });

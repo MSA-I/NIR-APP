@@ -5,14 +5,21 @@
 import assert from "node:assert/strict";
 import { z } from "zod";
 import type { ActorContext } from "../../../src/lib/assistant/contracts.ts";
+import {
+  ASSISTANT_DRAFT_LABEL,
+  ASSISTANT_DRAFT_ROLES,
+} from "../../../src/lib/assistant/contracts.ts";
 import { AssistantEdgeError } from "./errors.ts";
 import {
+  ANSWER_JSON_SCHEMA,
   type AssistantProviderPort,
   buildInstructions,
   createOpenAiAssistantProvider,
   type ProviderTurn,
   runAssistantTurn,
   TOOL_RESULT_PREFIX,
+  VALIDATION_FEEDBACK_HINTS,
+  validationFeedback,
 } from "./provider.ts";
 import { getBusinessSummaryTool } from "./tools/business-summary.ts";
 import { getOpenAlertsTool } from "./tools/open-alerts.ts";
@@ -60,6 +67,15 @@ function summaryDb(): ToolDataPort {
 
 function toolContext(db: ToolDataPort) {
   return { db, actor, evidence: new RunEvidence(), now: () => new Date("2026-08-20T10:00:00Z") };
+}
+
+function toolContextAs(db: ToolDataPort, role: ActorContext["role"]) {
+  return {
+    db,
+    actor: { ...actor, role },
+    evidence: new RunEvidence(),
+    now: () => new Date("2026-08-20T10:00:00Z"),
+  };
 }
 
 const allowEvidence = () => Promise.resolve({ ok: true as const });
@@ -524,4 +540,151 @@ Deno.test("a rejected first answer is retried once with the validation errors fe
     JSON.stringify(item).includes("text_block_contains_digits")
   );
   assert.ok(corrective, "validation errors are fed back to the model");
+});
+
+/* ============================================================================
+ * The draft block crosses the provider boundary (#191/#193)
+ * ==========================================================================*/
+
+/** JSON Schema is untyped by nature; read it the way a provider would, one narrow step at a time. */
+function schemaObject(value: unknown): Record<string, unknown> {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value));
+  return value as Record<string, unknown>;
+}
+
+Deno.test("the answer schema declares a draft arm that carries no label, recipient or channel", () => {
+  const blocks = schemaObject(schemaObject(ANSWER_JSON_SCHEMA.properties).blocks);
+  const arms = schemaObject(blocks.items).anyOf;
+  assert.ok(Array.isArray(arms));
+  const draft = arms.map(schemaObject).find((arm) => {
+    const type = schemaObject(schemaObject(arm.properties).type);
+    return Array.isArray(type.enum) && type.enum[0] === "draft";
+  });
+  assert.ok(draft, "the schema must offer a draft arm at all");
+
+  const properties = schemaObject(draft.properties);
+  assert.deepEqual(Object.keys(properties), ["type", "text", "fact_ids", "source_ids"]);
+  assert.deepEqual(draft.required, ["type", "text", "fact_ids", "source_ids"]);
+  assert.equal(draft.additionalProperties, false);
+  // No label field: the product owns the word, so the model cannot rename its own output.
+  // No recipient and no channel: neither capability exists anywhere in this product.
+  for (const absent of ["label", "recipient", "channel", "to", "send"]) {
+    assert.equal(absent in properties, false, absent);
+  }
+});
+
+Deno.test("the system prompt teaches the draft rules and never offers to send", () => {
+  const instructions = buildInstructions();
+  assert.ok(instructions.includes(ASSISTANT_DRAFT_LABEL));
+  assert.ok(instructions.includes("copies and sends himself"));
+  assert.ok(instructions.includes("never write a label"));
+  assert.ok(instructions.includes("Every numeral inside a draft"));
+  assert.ok(instructions.includes("Never write that anything was sent"));
+  for (const role of ASSISTANT_DRAFT_ROLES) assert.ok(instructions.includes(role));
+  assert.equal(instructions.includes("accountant"), false);
+});
+
+Deno.test("a rejected draft is retried once with the new code explained, not just named", async () => {
+  const observed: unknown[][] = [];
+  const ctx = toolContext(summaryDb());
+  const provider = scriptedProvider([
+    turnOf({
+      outputItems: [functionCall("c1", "get_business_summary")],
+      toolCalls: [{ call_id: "c1", name: "get_business_summary", arguments: "{}" }],
+    }),
+    turnOf({
+      answerText: JSON.stringify({
+        blocks: [{
+          type: "draft",
+          // 12 is a legal numeral -- it is f1's value -- so the ONLY defect here is the claim
+          // that the product sent something, which is the sentence #191 forbids outright.
+          text: "התזכורת על 12 החשבוניות נשלחה לספק.",
+          fact_ids: ["f1"],
+          source_ids: [],
+        }],
+        next_steps: [],
+        no_answer_reason: null,
+      }),
+    }),
+    turnOf({
+      answerText: JSON.stringify({
+        blocks: [{
+          type: "draft",
+          text: "שלום, נשמח לעדכון על 12 החשבוניות הפתוחות מולנו.",
+          fact_ids: ["f1"],
+          source_ids: [],
+        }],
+        next_steps: [],
+        no_answer_reason: null,
+      }),
+    }),
+  ], observed);
+
+  const outcome = await runAssistantTurn({
+    provider,
+    registry: REGISTRY,
+    toolContext: ctx,
+    question: "נסח תזכורת לספק",
+    conversationContext: [],
+    maxToolCalls: 4,
+    totalBudgetMs: 60_000,
+    authorizeEvidence: allowEvidence,
+  });
+  assert.equal(outcome.validationRetried, true);
+  assert.equal(outcome.answer.blocks[0].type, "draft");
+
+  const corrective = JSON.stringify(observed[2]);
+  assert.ok(corrective.includes("draft_claims_sent"), "the raw code travels");
+  assert.ok(
+    corrective.includes(VALIDATION_FEEDBACK_HINTS.draft_claims_sent),
+    "and so does what it means",
+  );
+});
+
+Deno.test("a draft offered to a role #191 excludes is explained as a role decision", () => {
+  const feedback = validationFeedback(["block:0:draft_not_permitted"]);
+  assert.ok(feedback.includes("draft_not_permitted"));
+  assert.ok(feedback.includes(VALIDATION_FEEDBACK_HINTS.draft_not_permitted));
+  // The hint has to say that rewording will not help, or the one retry is spent on a rewrite.
+  assert.ok(VALIDATION_FEEDBACK_HINTS.draft_not_permitted.includes("בלי בלוק טיוטה"));
+  // A code with no hint still travels raw rather than being swallowed.
+  const plain = validationFeedback(["block:0:text_block_contains_digits"]);
+  assert.ok(plain.includes("text_block_contains_digits"));
+  assert.equal(plain.includes("משמעות הקודים"), false);
+});
+
+Deno.test("accountant never gets a draft through, however well cited it is", async () => {
+  const observed: unknown[][] = [];
+  const draftAnswer = JSON.stringify({
+    blocks: [{
+      type: "draft",
+      text: "שלום, נשמח לעדכון על ההזמנה.",
+      fact_ids: ["f1"],
+      source_ids: [],
+    }],
+    next_steps: [],
+    no_answer_reason: null,
+  });
+  const provider = scriptedProvider([
+    turnOf({ answerText: draftAnswer }),
+    turnOf({ answerText: draftAnswer }),
+  ], observed);
+
+  await assert.rejects(
+    runAssistantTurn({
+      provider,
+      registry: REGISTRY,
+      toolContext: toolContextAs(summaryDb(), "accountant"),
+      question: "נסח תזכורת לספק",
+      conversationContext: [],
+      maxToolCalls: 4,
+      totalBudgetMs: 60_000,
+      authorizeEvidence: allowEvidence,
+    }),
+    (error: unknown) =>
+      error instanceof AssistantEdgeError &&
+      error.code === "assistant_unsupported_answer",
+  );
+  // It was refused as a ROLE decision, and the retry said so.
+  assert.ok(JSON.stringify(observed[1]).includes("draft_not_permitted"));
 });
