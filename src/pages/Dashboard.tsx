@@ -939,6 +939,9 @@ export default function Dashboard() {
                         {' · '}<span className="num">{data.dueWindow.dueWithin7Count}</span> דרישות
                       </p>
                     </div>
+                    <Link className="link self-start text-sm" to="/payment-requests?due=soon">
+                      כל דרישות התשלום בחלון
+                    </Link>
                   </div>
                 )}
               </section>

@@ -75,7 +75,9 @@ export default function PaymentRequests() {
   }, [idFilter, data]);
 
   const today = todayISO();  // local calendar day; due_date is a plain date, string compare is correct
-  const dueSoon = addCalendarDays(today, 7);
+  // +6, not +7: the window is seven days INCLUDING today, which is what the dashboard tile
+  // says and what management_dashboard_snapshot measures since 0168. `today + 7` spans eight.
+  const dueSoon = addCalendarDays(today, 6);
   const rows = (data ?? []).filter((r) => {
     if (idFilter) return r.id === idFilter;
     const active = !['matched', 'cancelled', 'executed'].includes(r.status);
@@ -83,7 +85,10 @@ export default function PaymentRequests() {
     const dueOk = !dueFilter ? true
       : dueFilter === 'today' ? active && r.due_date === today
       : dueFilter === 'overdue' ? active && !!r.due_date && r.due_date < today
-      : dueFilter === 'soon' ? ['draft', 'pending_approval', 'approved', 'sent_for_execution'].includes(r.status) && !!r.due_date && r.due_date <= dueSoon
+      // Drafts are excluded here for the same reason 0168 excludes them from the aggregate:
+      // a request still being written is not a claim on cash. Keeping them would show more
+      // rows than the tile counted, and the tile is where people arrive from.
+      : dueFilter === 'soon' ? ['pending_approval', 'approved', 'sent_for_execution', 'investigation', 'suspected_duplicate'].includes(r.status) && !!r.due_date && r.due_date <= dueSoon
       : true;
     return statusOk && dueOk;
   });

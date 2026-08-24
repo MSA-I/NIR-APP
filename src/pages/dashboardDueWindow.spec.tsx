@@ -13,7 +13,7 @@
 // too: a zero standing in for the unknown is a claim about reality nobody made.
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
@@ -166,4 +166,29 @@ describe('לתשלום בשבוע הקרוב — הכסף, לא כיסוי הת�
     // appear is the breakdown line, which would be a claim about an amount nobody measured.
     expect(tile.textContent).not.toContain('מתוכם באיחור');
   });
+
+  // 0168. The tile was the only money figure on this screen with no way out of it, and the
+  // destination it now points at has to select exactly the rows the tile counted. The href IS
+  // that contract: `due=soon` is the PaymentRequests filter whose window and status set were
+  // corrected alongside the aggregate. A link to any other filter would show a different
+  // number of rows than the figure the user just clicked.
+  it('מקשר לרשימה שמסננת בדיוק את מה שנספר', async () => {
+    const tile = await renderWith({
+      dueDateCoverage: 2, activeCount: 3, overdue: 1, dueToday: 0,
+      overdueAmount: 10, dueWithin7Amount: 35, dueWithin7Count: 1,
+    });
+
+    const link = within(tile).getByRole('link', { name: 'כל דרישות התשלום בחלון' });
+    expect(link).toHaveAttribute('href', '/payment-requests?due=soon');
+  });
+
+  it('בלי נתונים אין קישור — אין לאן ללכת', async () => {
+    const tile = await renderWith({
+      dueDateCoverage: 0, activeCount: 2, overdue: null, dueToday: null,
+      overdueAmount: null, dueWithin7Amount: null, dueWithin7Count: null,
+    });
+
+    expect(within(tile).queryByRole('link')).toBeNull();
+  });
+
 });
