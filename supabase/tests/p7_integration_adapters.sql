@@ -254,21 +254,33 @@ select vault.create_secret('p7-secret-gamma') as secret_gamma \gset
 --   ...03  org1, INACTIVE, '{}'                          -> negative: inactive
 --   ...04  org1, ACTIVE,   {payment.executed}            -> negative: filter mismatch
 --   ...05  org2, ACTIVE,   '{}'                          -> negative: foreign tenant
-insert into webhook_subscriptions (id, org_id, url, event_types, secret_id, active, description) values
+-- 0198 makes verification STRUCTURAL: an active subscription must carry verified_at and a
+-- verified_url equal to its url, enforced by a CHECK rather than by the command that writes it. All
+-- five rows below are therefore verified. The inactive one is verified too, because the toggle proof
+-- further down enables it, and set_webhook_subscription_active refuses to enable a subscription that
+-- was never verified -- verified-but-off is exactly what a subscription the owner verified and then
+-- disabled looks like. That refusal, and the unverified states it protects, are p76's subject.
+insert into webhook_subscriptions (id, org_id, url, event_types, secret_id, active, description,
+                                   verified_at, verified_url) values
   ('a7000000-0000-4000-8000-000000000001', '17000000-0000-0000-0000-000000000001',
-   'https://p7.example.test/hooks/all', '{}'::text[], :'secret_alpha', true, 'P7 all'),
+   'https://p7.example.test/hooks/all', '{}'::text[], :'secret_alpha', true, 'P7 all',
+   now(), 'https://p7.example.test/hooks/all'),
   ('a7000000-0000-4000-8000-000000000002', '17000000-0000-0000-0000-000000000001',
    'https://p7.example.test/hooks/approved', array['invoice.approved'], :'secret_beta',
-   true, 'P7 approved only'),
+   true, 'P7 approved only',
+   now(), 'https://p7.example.test/hooks/approved'),
   ('a7000000-0000-4000-8000-000000000003', '17000000-0000-0000-0000-000000000001',
    'https://p7.example.test/hooks/inactive', '{}'::text[], :'secret_gamma', false,
-   'P7 inactive'),
+   'P7 inactive',
+   now(), 'https://p7.example.test/hooks/inactive'),
   ('a7000000-0000-4000-8000-000000000004', '17000000-0000-0000-0000-000000000001',
    'https://p7.example.test/hooks/mismatch', array['payment.executed'], :'secret_gamma',
-   true, 'P7 filter mismatch'),
+   true, 'P7 filter mismatch',
+   now(), 'https://p7.example.test/hooks/mismatch'),
   ('a7000000-0000-4000-8000-000000000005', '17000000-0000-0000-0000-000000000002',
    'https://p7.example.test/hooks/foreign', '{}'::text[], :'secret_gamma', true,
-   'P7 foreign tenant');
+   'P7 foreign tenant',
+   now(), 'https://p7.example.test/hooks/foreign');
 
 -- The generated derivation holds for every row.
 select pg_temp.p7_assert(

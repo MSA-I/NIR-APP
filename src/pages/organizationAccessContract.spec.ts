@@ -8,6 +8,9 @@ const app = source('src/App.tsx');
 const layout = source('src/components/Layout.tsx');
 const admin = source('src/pages/Admin.tsx');
 const customers = source('src/operator/Customers.tsx');
+// 0195 split the lifecycle reason. The RPC call itself moved into the platform helper, so the
+// "never trial" half of this contract is now asserted where the arguments are actually built.
+const platform = source('src/lib/platform.ts');
 const provision = source('supabase/functions/admin-provision/index.ts');
 // Provisioning moved into a module both doors share (0159): the operator's and the public
 // signup's. The lifecycle claim is asserted where the insert now lives.
@@ -53,11 +56,22 @@ describe('organization access after Trial retirement', () => {
   // copy-paste back into the tenant-shaped page fails here.
   it('limits Platform Admin lifecycle actions to suspend and reactivate', () => {
     expect(customers).toContain("action: 'suspend' | 'reactivate'");
-    expect(customers).toContain("const status = action === 'suspend' ? 'suspended' : 'active'");
+    expect(customers).toContain("next.action === 'suspend' ? 'suspended' : 'active'");
     expect(customers).toContain('<ReauthModal');
-    expect(customers).toContain('p_trial_ends_at: null');
+    expect(platform).toContain('p_trial_ends_at: null');
+    expect(platform).not.toContain("p_status: 'trial'");
     expect(customers).not.toContain("p_status: 'trial'");
     expect(customers).not.toContain('trialEndInstant');
+    // #20: the operator's internal commercial note has its own argument and must never be the
+    // one the tenant reads. A screen that funnelled both boxes into p_reason would defeat 0195
+    // without failing anything else.
+    expect(platform).toContain('p_internal_note: input.internalNote');
+    expect(platform).toContain('p_reason: input.publicReason');
+    expect(customers).toContain('internalNote');
+    // The behavioural half -- that the operator's two boxes reach the two arguments and are not
+    // merged on the way -- is asserted in src/operator/customers.spec.tsx against the call the
+    // screen actually makes. A source-text regex over this file cannot tell an object literal
+    // from a type literal and would fail on the dialog's own props type.
     expect(admin).not.toContain("supabase.rpc('set_organization_lifecycle'");
     expect(provision).not.toContain('body.trial_ends_at');
     expect(provision).not.toContain('body.status');

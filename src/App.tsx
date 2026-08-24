@@ -58,6 +58,7 @@ const DocumentOperations = lazy(() => import('./pages/DocumentOperations'));
 const ConsolidatedInvoices = lazy(() => import('./pages/ConsolidatedInvoices'));
 const DocumentReview = lazy(() => import('./pages/DocumentReview'));
 const Settings = lazy(() => import('./pages/Settings'));
+const WebhookSettings = lazy(() => import('./pages/WebhookSettings'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 
 class LazyRouteErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -321,6 +322,7 @@ export default function App() {
             The intersection is one role, and an accountant would read a wall of UUIDs. */}
         <Route path="/supplier-log" element={<Guard roles={['owner']}><SupplierLog /></Guard>} />
         <Route path="/settings" element={<Guard roles={['owner']}><Settings /></Guard>} />
+        <Route path="/settings/webhooks" element={<Guard roles={['owner']}><WebhookSettings /></Guard>} />
         <Route path="/onboarding" element={<Guard roles={['owner']} write><Onboarding /></Guard>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
