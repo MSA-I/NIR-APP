@@ -42,7 +42,9 @@ select pg_temp.p64_assert(
   to_regprocedure('public.reverse_invoice_three_way_approval_consumption(uuid,text)') is not null,
   'reversal command is missing');
 select pg_temp.p64_assert(
-  (select array_agg(column_name order by ordinal_position) @>
+  -- information_schema.columns.column_name is sql_identifier, and there is no @> between
+  -- sql_identifier[] and text[]; cast per element so the containment test has an operator.
+  (select array_agg(column_name::text order by ordinal_position) @>
       array['reversed_at','reversed_by','reversal_reason']::text[]
    from information_schema.columns
    where table_schema = 'public' and table_name = 'invoice_three_way_approval_snapshots'),
@@ -203,9 +205,11 @@ select pg_temp.p64_expect_error(
   $$delete from public.audit_logs where action = 'p64_invoice_a'$$,
   'audit_log_immutable');
 
+-- pg_get_viewdef re-renders an interval literal as '90 days'::interval, never as the
+-- interval '90 days' the migration was written with, so the assertion matches the rendered form.
 select pg_temp.p64_assert(
-  position('interval ''90 days''' in lower(pg_get_viewdef('public.supplier_metrics'::regclass))) > 0
-  and position('interval ''180 days''' in lower(pg_get_viewdef('public.supplier_metrics'::regclass))) = 0
+  position('''90 days''::interval' in lower(pg_get_viewdef('public.supplier_metrics'::regclass))) > 0
+  and position('''180 days''' in lower(pg_get_viewdef('public.supplier_metrics'::regclass))) = 0
   and position('min(g.received_at)' in lower(pg_get_viewdef('public.supplier_metrics'::regclass))) > 0,
   'supplier metrics did not move to 90 days or lost first-complete-receipt rule');
 

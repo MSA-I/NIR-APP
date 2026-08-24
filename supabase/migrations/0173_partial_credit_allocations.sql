@@ -642,6 +642,71 @@ on conflict (function_signature) do update
       enforcement_kind = excluded.enforcement_kind,
       scope_proof = excluded.scope_proof;
 
+-- ===== 3c. The one writer that could still contradict those readers =====
+--
+-- Sections 2, 3 and 3b moved every READER of "how much credit settled this invoice" onto applied
+-- payment_allocations. transition_credit_request is the writer, and it was left able to stamp
+-- 'offset' -- setting resolved_at, and telling the Credits screen the credit is spent -- with
+-- nothing allocated at all. After this migration that combination is incoherent in a way that
+-- costs money in both directions at once: the invoice stays unpaid because no allocation exists,
+-- and credit_request_balance_rows still reports the full amount as remaining, so the same credit
+-- can be applied again in a payment. Owner ruling, 24.08.2026: the label follows the money, so the
+-- transition refuses until the credit is consumed. Reaching 'offset' is what execute_payment_request
+-- already does when it allocates the credit; this makes the manual path agree with it rather than
+-- become a second, unaudited way to settle an invoice.
+--
+-- No tolerance. Both amounts are numeric(12,2) and allocations sum exactly, so an epsilon here would
+-- only re-open the double-count it closes, one agora at a time.
+--
+-- Anchored replacement of the LIVE body, like every other patch in this migration. The function sits
+-- on the A5 exemption list rather than the enforcement ledger, so there is no body hash to re-pin and
+-- the pinned exemption count is unchanged.
+do $patch_credit_offset_gate$
+declare
+  v_definition text;
+  v_anchor text;
+  v_replacement text;
+begin
+  v_definition := replace(
+    pg_get_functiondef('public.transition_credit_request(uuid,credit_status,text)'::regprocedure),
+    e'\r', '');
+
+  v_anchor := $anchor$  if not v_allowed then
+    raise exception 'credit_request_transition_invalid' using errcode = 'P0001';
+  end if;$anchor$;
+
+  v_replacement := $replacement$  if not v_allowed then
+    raise exception 'credit_request_transition_invalid' using errcode = 'P0001';
+  end if;
+
+  if p_status = 'offset'
+     and coalesce((
+           select sum(allocation.amount)
+           from payment_allocations allocation
+           where allocation.org_id = v_org and allocation.credit_id = v_credit.id
+         ), 0) < v_credit.amount then
+    raise exception 'credit_request_not_fully_allocated' using errcode = 'P0001';
+  end if;$replacement$;
+
+  if position(v_anchor in v_definition) = 0 then
+    raise exception '0173: transition_credit_request validation anchor moved';
+  end if;
+
+  execute replace(v_definition, v_anchor, v_replacement);
+end
+$patch_credit_offset_gate$;
+
+do $assert_credit_offset_gate$
+begin
+  if coalesce(
+       (select p.prosrc from pg_catalog.pg_proc p
+         where p.oid = 'public.transition_credit_request(uuid,credit_status,text)'::regprocedure),
+       '') !~ 'credit_request_not_fully_allocated' then
+    raise exception '0173: the credit offset gate did not land';
+  end if;
+end
+$assert_credit_offset_gate$;
+
 -- ===== 4. Anchors and scope re-assertion =====
 do $$
 declare
