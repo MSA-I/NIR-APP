@@ -103,13 +103,26 @@ select pg_temp.p78_assert(
 -- ===== 5. The refusal is legible afterwards =====
 -- A write that changed less than it was asked to must say so, or the audit trail quietly
 -- disagrees with the table.
+-- Both writes above land in ONE transaction, so both audit rows carry the same `now()`. Asking
+-- for "the latest" then falls through to an id tiebreak that is not an ordering anyone chose --
+-- it passed locally and failed in CI on the same code. The row is identified by what it says
+-- instead, which is also what the assertion is actually about.
 select pg_temp.p78_assert(
   (select (new_values ->> 'superseded_by_newer_effective_date')::boolean
      from public.audit_logs
     where action = 'supplier_product_price_set'
       and entity_id = '5a600000-0000-4000-8000-000000000001'
-    order by created_at desc, id desc limit 1),
+      and new_values ->> 'effective_date' = '2026-07-01'),
   'the audit row does not record that a backdated write was superseded');
+
+-- The other write is the control: a forward-dated price supersedes nothing.
+select pg_temp.p78_assert(
+  (select (new_values ->> 'superseded_by_newer_effective_date')::boolean = false
+     from public.audit_logs
+    where action = 'supplier_product_price_set'
+      and entity_id = '5a600000-0000-4000-8000-000000000001'
+      and new_values ->> 'effective_date' = '2026-09-01'),
+  'a forward-dated write was marked as superseded');
 
 -- ===== 6. The bulk import path obeys the same rule =====
 -- Every client import (PriceListUpload, QuickCreateProduct, Onboarding, PriceLists) funnels

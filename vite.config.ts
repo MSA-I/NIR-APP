@@ -47,7 +47,9 @@ export default defineConfig({
         // Note `navigateFallbackDenylist` does not exist in injectManifest mode — the
         // equivalent guard lives in public/sw.js, which refuses to answer /operator
         // navigations from the shell cache.
-        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest,woff2}'],
+        // `ico` joined the list when index.html began linking /favicon.ico: the offline shell
+        // check refuses cached HTML that depends on a resource the worker never cached.
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,woff2}'],
         // The supplier portal (portal.html + its `portal` entry chunk) stays out for the same
         // reason as the operator console: it is not the tenant shell, and a token-bearing
         // supplier page must never be served from a tenant cache.
