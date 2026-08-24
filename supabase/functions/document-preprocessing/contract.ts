@@ -1,9 +1,46 @@
 export const SCAN_GATEWAY_CONTRACT_HEADER =
   "x-document-scan-gateway-contract-version";
-export const SCAN_GATEWAY_CONTRACT_VERSION = "2";
+export const SCAN_GATEWAY_CONTRACT_VERSION = "3";
 export const MAX_SCAN_REQUEST_BYTES = 15 * 1024 * 1024;
 export const MAX_SCAN_SMALL_REQUEST_BYTES = 16 * 1024;
 export const MAX_SCAN_OUTPUT_BYTES = 10 * 1024 * 1024;
+export const MAX_SCAN_SOURCE_BYTES = 10 * 1024 * 1024;
+export const MAX_SCAN_SOURCE_PIXELS = 40_000_000;
+export const MAX_SCAN_DECODED_BYTES = 100 * 1024 * 1024;
+
+/**
+ * Every value the worker may report as the source container, and nothing else.
+ *
+ * This is a closed set on three layers (worker, here, `0179`), so it can only stay closed if the
+ * worker never reports anything outside it — which is why `worker/ocr/src/scanning.py` maps any
+ * label it does not recognise, and the case where Pillow names no format at all, onto `UNKNOWN`
+ * rather than passing the raw string through.
+ *
+ * `MPO` is the case that forced this. Pillow reports `MPO` for a multi-picture JPEG — ordinary
+ * iPhone and Android HDR/Live captures — whose mime type is `image/jpeg`, which upload already
+ * accepts (`0136:11-13`). A closed list without it turns a legal photograph into
+ * `invalid_request` 400 and fails the scan job on an image nothing else in the system objects
+ * to. The format label is provenance, not a gate: the real safety bounds are the byte, pixel and
+ * decoded-memory limits above, and those are unaffected by what the container is called.
+ */
+export const SCAN_SOURCE_FORMATS = [
+  "JPEG",
+  "JPEG2000",
+  "MPO",
+  "PNG",
+  "WEBP",
+  "HEIF",
+  "HEIC",
+  "AVIF",
+  "GIF",
+  "BMP",
+  "TIFF",
+  "PPM",
+  "UNKNOWN",
+] as const;
+
+/** The formats `pillow-heif` opens; every other source format must have been read by Pillow. */
+export const SCAN_HEIF_SOURCE_FORMATS = ["HEIF", "HEIC", "AVIF"] as const;
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -70,8 +107,21 @@ export type ScanMetadata = {
   corners: [[number, number], [number, number], [number, number], [number, number]];
   rotation_degrees: number;
   output_mode: "grayscale" | "black_and_white";
-  corners_source: "automatic" | "manual";
+  corners_source: "automatic" | "manual" | "full_frame_fallback";
   metrics: Record<string, number>;
+  provenance: ScanProvenance;
+};
+
+export type ScanProvenance = {
+  schema_version: "1";
+  source_sha256: string;
+  source_bytes: number;
+  source_width: number;
+  source_height: number;
+  source_format: string;
+  decoder: "pillow" | "pillow-heif";
+  decoder_version: string;
+  decoded_bytes: number;
 };
 
 export class ScanRequestValidationError extends Error {
@@ -142,7 +192,36 @@ export function validateScanMetadata(value: unknown): value is ScanMetadata {
     "output_mode",
     "corners_source",
     "metrics",
+    "provenance",
   ])) return false;
+  const provenance = value.provenance;
+  const provenanceValid = exact(provenance, [
+    "schema_version", "source_sha256", "source_bytes", "source_width", "source_height",
+    "source_format", "decoder", "decoder_version", "decoded_bytes",
+  ]) && provenance.schema_version === "1" &&
+    typeof provenance.source_sha256 === "string" && SHA256.test(provenance.source_sha256) &&
+    Number.isInteger(provenance.source_bytes) && Number(provenance.source_bytes) >= 1 &&
+    Number(provenance.source_bytes) <= MAX_SCAN_SOURCE_BYTES &&
+    Number.isInteger(provenance.source_width) && Number(provenance.source_width) >= 32 &&
+    Number(provenance.source_width) <= 65_535 &&
+    Number.isInteger(provenance.source_height) && Number(provenance.source_height) >= 32 &&
+    Number(provenance.source_height) <= 65_535 &&
+    Number(provenance.source_width) * Number(provenance.source_height) <= MAX_SCAN_SOURCE_PIXELS &&
+    typeof provenance.source_format === "string" &&
+    (SCAN_SOURCE_FORMATS as readonly string[]).includes(provenance.source_format) &&
+    ["pillow", "pillow-heif"].includes(String(provenance.decoder)) &&
+    ((SCAN_HEIF_SOURCE_FORMATS as readonly string[]).includes(provenance.source_format)
+      ? provenance.decoder === "pillow-heif"
+      : provenance.decoder === "pillow") &&
+    typeof provenance.decoder_version === "string" &&
+    /^[0-9A-Za-z][0-9A-Za-z._+-]{0,99}$/.test(provenance.decoder_version) &&
+    Number.isInteger(provenance.decoded_bytes) &&
+    Number(provenance.decoded_bytes) ===
+      Number(provenance.source_width) * Number(provenance.source_height) * 3 &&
+    Number(provenance.decoded_bytes) <= MAX_SCAN_DECODED_BYTES;
+  const fullFrame = JSON.stringify(value.corners) === JSON.stringify(
+    [[0, 0], [1, 0], [1, 1], [0, 1]],
+  );
   return value.schema_version === "1" &&
     typeof value.output_sha256 === "string" &&
     SHA256.test(value.output_sha256) &&
@@ -157,11 +236,12 @@ export function validateScanMetadata(value: unknown): value is ScanMetadata {
     Number.isFinite(value.rotation_degrees) &&
     value.rotation_degrees >= -7 && value.rotation_degrees <= 7 &&
     ["grayscale", "black_and_white"].includes(String(value.output_mode)) &&
-    ["automatic", "manual"].includes(String(value.corners_source)) &&
+    ["automatic", "manual", "full_frame_fallback"].includes(String(value.corners_source)) &&
+    (value.corners_source !== "full_frame_fallback" || fullFrame) &&
     isRecord(value.metrics) && Object.keys(value.metrics).length <= 20 &&
     Object.values(value.metrics).every((metric) =>
       typeof metric === "number" && Number.isFinite(metric)
-    );
+    ) && provenanceValid;
 }
 
 export function scanGatewayContractMatches(headers: Headers): boolean {

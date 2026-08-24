@@ -119,11 +119,20 @@ exception when foreign_key_violation then null;
 end
 $$;
 
--- ===== The billing period says which definition produced it =====
+-- ===== The usage period says which definition produced it, and it is the signup anchor =====
+-- Until 22.08.2026 this asserted the opposite: that a supplied billing window BECAME the usage
+-- period. #242 reverses that outright, because a period_start that follows the money re-keys
+-- private.usage_counters -- whose primary key contains period_start -- and a new key is a new row
+-- starting at zero. The reset nobody wrote was a schema side effect, and 0185 removes it.
 select pg_temp.p52_assert(
   (select period_source from private.usage_period('52000000-0000-4000-8000-000000000001'))
-    = 'calendar_month',
-  'the period fell back to something other than a named calendar month');
+    = 'signup_anchor',
+  'the usage period does not name the organization signup anchor as its source');
+
+select set_config(
+  'p52.anchored_period_start',
+  (select period_start::text from private.usage_period('52000000-0000-4000-8000-000000000001')),
+  true);
 
 update organization_subscriptions
    set current_period_start = now() - interval '3 days',
@@ -131,8 +140,10 @@ update organization_subscriptions
  where org_id = '52000000-0000-4000-8000-000000000001';
 select pg_temp.p52_assert(
   (select period_source from private.usage_period('52000000-0000-4000-8000-000000000001'))
-    = 'subscription',
-  'a supplied billing window was ignored in favour of the calendar month');
+    = 'signup_anchor'
+  and (select period_start::text from private.usage_period('52000000-0000-4000-8000-000000000001'))
+    = current_setting('p52.anchored_period_start'),
+  'a supplied billing window moved the usage period -- #242 says it never may');
 
 -- ===== Enforcement: the seeded plan allows, so the pipeline still works =====
 select pg_temp.p52_as('62000000-0000-4000-8000-000000000001');
@@ -333,7 +344,7 @@ select pg_temp.p52_assert(
   'the operator usage read did not see the recorded pages');
 select pg_temp.p52_assert(
   (select period_source from public.platform_org_usage('52000000-0000-4000-8000-000000000001')
-    limit 1) = 'subscription',
+    limit 1) = 'signup_anchor',
   'the operator usage read did not report which period definition produced the number');
 reset role;
 

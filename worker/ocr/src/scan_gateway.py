@@ -15,7 +15,7 @@ from .gateway import RETRYABLE_STATUS, _NoRedirect
 
 
 SCAN_GATEWAY_CONTRACT_HEADER = "x-document-scan-gateway-contract-version"
-SCAN_GATEWAY_CONTRACT_VERSION = "2"
+SCAN_GATEWAY_CONTRACT_VERSION = "3"
 CHECKSUM_PREFIX = "etag:"
 
 

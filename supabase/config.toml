@@ -86,6 +86,9 @@ verify_jwt = true
 [functions.submit-price-list]
 verify_jwt = true
 
+[functions.product-name-repair]
+verify_jwt = true
+
 [functions.upload-organization-logo]
 verify_jwt = true
 
@@ -137,6 +140,12 @@ verify_jwt = true
 # request signature: HMAC-SHA1 over the callback URL and the sorted POST parameters, keyed by
 # that tenant's own Vault token and verified inside the handler -- the supplier-portal shape.
 [functions.whatsapp-webhook]
+verify_jwt = false
+
+# The billing provider webhook has no user and no JWT by design (0187): the credential is Paddle's
+# HMAC-SHA256 signature over the raw request body, verified inside the handler against the endpoint
+# secret. Requiring an Authorization header would reject every genuine delivery and secure nothing.
+[functions.billing-webhook]
 verify_jwt = false
 
 [analytics]

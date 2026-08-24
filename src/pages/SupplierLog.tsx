@@ -94,7 +94,7 @@ export default function SupplierLog() {
   const [supplierFilter, setSupplierFilter] = useParamState('supplier');
 
   const { data, loading, error } = useQuery(async () => {
-    const logs = unwrap(await supabase.from('audit_logs')
+    const logs = unwrap(await supabase.from('audit_log_read_model')
       .select('*')
       .in('entity_type', ENTITY_TYPES)
       .order('created_at', { ascending: false })
@@ -246,8 +246,8 @@ export default function SupplierLog() {
         title={<span className="flex items-center gap-2"><ScrollText size={22} aria-hidden="true" /> יומן עדכון ספקים</span>}
         meta={`${rows.length} עדכונים בתצוגה · 400 האחרונים`} />
 
-      {/* audit_logs is classified cross_scope and organization-wide (0074). With more than one legal
-          entity this list would show activity from a sibling entity too — stated, not hidden. */}
+      {/* 0175: financial rows are legal-entity scoped; organization/identity/platform rows remain
+          cross-scope. Ambiguous financial history is visible only to a root-scoped reader. */}
       <DataTable
         rows={rows}
         columns={columns}

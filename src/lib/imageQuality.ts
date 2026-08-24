@@ -24,10 +24,10 @@
  *     pixels back; the `File` handed to tus stays the same object, byte-identical. Canvas
  *     conversion discards source pixels, orientation and metadata that OCR and the long-term
  *     document evidence both need — see the note at `FileUpload.tsx`'s tus call.
- *  2. **A quality check must never be the reason an upload fails.** Every path that cannot
- *     produce a confident number returns `null`, which reads as "no verdict" and lets the
- *     upload proceed untouched. Non-images (PDF, Office, unknown) return `null` immediately —
- *     they are not photographs.
+ *  2. **A quality check must never be the reason an upload fails.** Ordinary decode/measurement
+ *     failures return no verdict. HEIC/HEIF decode unsupported by the browser is different: the
+ *     caller names the bounded server derivative before upload, then uploads the same immutable
+ *     File. Non-images (PDF, Office, unknown) remain not applicable.
  */
 
 /** Mirrors MAX_METRIC_SAMPLE_PIXELS in `worker/ocr/src/scanning.py:30`. */
@@ -70,6 +70,16 @@ export interface WeakCapture {
   file: File;
   verdict: Exclude<ImageQualityVerdict, 'ok'>;
   measurement: ImageQualityMeasurement;
+}
+
+export type ImageQualityOutcome =
+  | { kind: 'measured'; file: File; measurement: ImageQualityMeasurement }
+  | { kind: 'server_required'; file: File; reason: 'client_decode_unsupported' }
+  | { kind: 'unavailable'; file: File };
+
+export interface ImageQualityScreening {
+  weak: WeakCapture[];
+  serverRequired: File[];
 }
 
 /* ---------- the pure core (shared with the calibration harness and the unit tests) ---------- */
@@ -178,6 +188,12 @@ export function isMeasurablePhoto(file: File): boolean {
   return RASTER_EXTENSIONS.has(extension);
 }
 
+function isHeif(file: File): boolean {
+  const mime = file.type.trim().toLowerCase();
+  if (mime === 'image/heic' || mime === 'image/heif') return true;
+  return /\.(heic|heif)$/i.test(file.name);
+}
+
 function createSampleCanvas(width: number, height: number): OffscreenCanvas | HTMLCanvasElement | null {
   if (typeof OffscreenCanvas === 'function') return new OffscreenCanvas(width, height);
   if (typeof document === 'undefined') return null;
@@ -231,36 +247,45 @@ function withDecodeBudget(pending: Promise<ImageBitmap>, budgetMs: number): Prom
 }
 
 /**
- * Measures one picked file. Returns `null` — "no verdict, upload as usual" — for anything that is
- * not a raster photograph, for a source too large to be worth decoding, when the decode overruns
- * its budget or is unsupported (HEIC on a desktop browser), and for any thrown error at all.
+ * Measures one picked file. The detailed outcome distinguishes unsupported HEIC/HEIF — which the
+ * existing server scan lane can decode under hard byte/pixel/memory bounds — from an ordinary
+ * unavailable client measurement. The compatibility wrapper below still returns measurement/null.
  *
  * The `file` argument is only ever read. Nothing here produces a replacement blob.
  */
-export async function measureImageQuality(file: File): Promise<ImageQualityMeasurement | null> {
-  if (!isMeasurablePhoto(file)) return null;
-  if (typeof createImageBitmap !== 'function') return null;
+export async function measureImageQualityOutcome(file: File): Promise<ImageQualityOutcome> {
+  const unavailable = (): ImageQualityOutcome => ({ kind: 'unavailable', file });
+  const serverRequired = (): ImageQualityOutcome => ({
+    kind: 'server_required', file, reason: 'client_decode_unsupported',
+  });
+  if (!isMeasurablePhoto(file)) return unavailable();
+  if (typeof createImageBitmap !== 'function') return isHeif(file) ? serverRequired() : unavailable();
   let bitmap: ImageBitmap | null = null;
   try {
     bitmap = await withDecodeBudget(createImageBitmap(file), DECODE_BUDGET_MS);
-    if (!bitmap) return null;
+    if (!bitmap) return isHeif(file) ? serverRequired() : unavailable();
     const { width, height } = bitmap;
-    if (!width || !height || width * height > MAX_SOURCE_PIXELS) return null;
+    if (!width || !height || width * height > MAX_SOURCE_PIXELS) return unavailable();
     const sample = metricSampleSize(width, height);
     const rgba = drawSample(bitmap, sample.width, sample.height);
-    if (!rgba) return null;
+    if (!rgba) return unavailable();
     const metrics = measureLumaMetrics(rgba, sample.width, sample.height);
-    if (!Number.isFinite(metrics.laplacianVariance) || !Number.isFinite(metrics.meanLuma)) return null;
-    return {
-      ...metrics,
-      verdict: qualityVerdict(metrics),
-      sampledPixels: sample.width * sample.height,
-    };
+    if (!Number.isFinite(metrics.laplacianVariance) || !Number.isFinite(metrics.meanLuma)) {
+      return unavailable();
+    }
+    return { kind: 'measured', file, measurement: {
+      ...metrics, verdict: qualityVerdict(metrics), sampledPixels: sample.width * sample.height,
+    } };
   } catch {
-    return null;
+    return isHeif(file) ? serverRequired() : unavailable();
   } finally {
     bitmap?.close?.();
   }
+}
+
+export async function measureImageQuality(file: File): Promise<ImageQualityMeasurement | null> {
+  const outcome = await measureImageQualityOutcome(file);
+  return outcome.kind === 'measured' ? outcome.measurement : null;
 }
 
 /**
@@ -268,18 +293,32 @@ export async function measureImageQuality(file: File): Promise<ImageQualityMeasu
  * in memory at a time on a phone. Once the batch budget is spent the remaining files are left
  * unmeasured rather than the picker left hanging — they upload with no verdict, which is the
  * correct failure direction.
+ *
+ * **A spent budget produces no verdict of any kind, HEIF included.** `server_required` is a
+ * measured outcome — this browser tried to decode these bytes and could not — and a file that
+ * was never decoded has not been measured. iOS Safari's `createImageBitmap` does read HEIC, so
+ * routing an unmeasured `.heic` to the server on the strength of its name alone would be a
+ * verdict from the file extension, and would then send a perfectly decodable capture down a
+ * path the person has to answer a dialog about.
  */
-export async function findWeakCaptures(files: readonly File[]): Promise<WeakCapture[]> {
+export async function screenImageQuality(files: readonly File[]): Promise<ImageQualityScreening> {
   const weak: WeakCapture[] = [];
+  const serverRequired: File[] = [];
   const deadline = Date.now() + BATCH_BUDGET_MS;
   for (const file of files) {
-    if (Date.now() >= deadline) break;
-    const measurement = await measureImageQuality(file);
-    if (measurement && measurement.verdict !== 'ok') {
-      weak.push({ file, verdict: measurement.verdict, measurement });
+    if (Date.now() >= deadline) continue;
+    const outcome = await measureImageQualityOutcome(file);
+    if (outcome.kind === 'server_required') {
+      serverRequired.push(file);
+    } else if (outcome.kind === 'measured' && outcome.measurement.verdict !== 'ok') {
+      weak.push({ file, verdict: outcome.measurement.verdict, measurement: outcome.measurement });
     }
   }
-  return weak;
+  return { weak, serverRequired };
+}
+
+export async function findWeakCaptures(files: readonly File[]): Promise<WeakCapture[]> {
+  return (await screenImageQuality(files)).weak;
 }
 
 /* ---------- Hebrew copy ---------- */

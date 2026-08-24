@@ -406,15 +406,33 @@ select pg_temp.p1_assert(
 select transition_credit_request(
   '65000000-0000-0000-0000-000000000001', 'received', 'credit received'
 );
-select transition_credit_request(
-  '65000000-0000-0000-0000-000000000001', 'offset', 'credit offset against invoice'
+-- 0173 settles an invoice from applied payment_allocations rather than from a credit's lifecycle
+-- label, so the label may no longer run ahead of the money. Stamping an unallocated credit 'offset'
+-- used to be how this suite reached 'paid'; it would now leave the invoice unpaid AND leave the full
+-- amount still allocatable, which is the same credit spent twice. The legitimate route to 'offset' is
+-- consumption by execute_payment_request, proven end to end -- allocation, remaining balance, the
+-- credit reaching 'offset' at exactly zero remaining, and the invoice becoming 'paid' -- in
+-- p63_financial_credit_contracts. What belongs here is the refusal, and the proof that a refusal
+-- moved nothing.
+do $$
+begin
+  perform transition_credit_request(
+    '65000000-0000-0000-0000-000000000001', 'offset', 'offset with nothing allocated'
+  );
+  raise exception 'expected unallocated credit offset rejection';
+exception when sqlstate 'P0001' then
+  if sqlerrm not like '%credit_request_not_fully_allocated%' then raise; end if;
+end
+$$;
+select pg_temp.p1_assert(
+  (select payment_status is distinct from 'paid'
+     from invoices where id = '60000000-0000-0000-0000-000000000003'),
+  'a refused credit offset must not have settled the invoice'
 );
 select pg_temp.p1_assert(
-  (select payment_status = 'paid' from invoices where id = '60000000-0000-0000-0000-000000000003'),
-  'credit offset did not refresh invoice payment status'
-);
-select transition_credit_request(
-  '65000000-0000-0000-0000-000000000001', 'closed', 'credit closed'
+  (select status = 'received' and resolved_at is null
+     from credit_requests where id = '65000000-0000-0000-0000-000000000001'),
+  'a refused credit offset must not have moved or resolved the credit'
 );
 select pg_temp.p1_assert(
   exists (
@@ -422,7 +440,7 @@ select pg_temp.p1_assert(
     where entity_type = 'credit_requests'
       and entity_id = '65000000-0000-0000-0000-000000000001'
       and action = 'credit_request_transitioned'
-      and reason = 'credit closed'
+      and reason = 'credit received'
   ),
   'credit transition audit is missing its reason'
 );
@@ -448,8 +466,16 @@ select pg_temp.p1_assert(
   )->>'idempotent')::boolean,
   'payment request retry must be idempotent'
 );
-select transition_payment_request(
-  '80000000-0000-0000-0000-000000000001', 'approved', 'אישור בעלים'
+-- The credit above is still 'received' with its full 118 remaining, because after 0173 nothing has
+-- consumed it. That is precisely the state the open-credit barrier exists for: approving a payment to
+-- a supplier who still owes money back must be a decision, not a default. The accountant path in
+-- PaymentRequests.tsx acknowledges it explicitly, naming the supplier and the total it saw, so a
+-- credit that moved underneath fences the approval instead of slipping through it.
+select approve_payment_request_with_credit_override(
+  '80000000-0000-0000-0000-000000000001',
+  '30000000-0000-0000-0000-000000000001',
+  118,
+  'זיכוי פתוח נבדק מול הספק ואושר להמשך'
 );
 
 reset role;
@@ -773,16 +799,17 @@ select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000005
 set local role authenticated;
 select pg_temp.p1_assert(
   (import_bank_transactions(
-    'bank.csv', repeat('a', 64), '{"date":"date"}'::jsonb,
+    'bank.xlsx', repeat('a', 64),
+    '{"template_version":"1","sheet":"Bank Transactions","headers":["transaction_date","description","direction","amount","reference"]}'::jsonb,
     jsonb_build_array(
       jsonb_build_object(
         'tx_date', '2026-07-20', 'description', 'Supplier A1 invoice', 'amount', 50,
-        'is_debit', true, 'reference', 'BANK-50', 'raw', '{}'::jsonb,
+        'is_debit', true, 'reference', 'BANK-50', 'raw', '{"direction":"debit"}'::jsonb,
         'supplier_id', '30000000-0000-0000-0000-000000000001', 'row_hash', repeat('b', 64)
       ),
       jsonb_build_object(
         'tx_date', '2026-07-20', 'description', 'Supplier A1 payment', 'amount', 118,
-        'is_debit', true, 'reference', 'REF-001', 'raw', '{}'::jsonb,
+        'is_debit', true, 'reference', 'REF-001', 'raw', '{"direction":"debit"}'::jsonb,
         'supplier_id', '30000000-0000-0000-0000-000000000001', 'row_hash', repeat('c', 64)
       )
     ),
@@ -792,7 +819,9 @@ select pg_temp.p1_assert(
 );
 select pg_temp.p1_assert(
   (import_bank_transactions(
-    'bank.csv', repeat('a', 64), '{"date":"date"}'::jsonb, '[]'::jsonb, 'ניסיון חוזר'
+    'bank.xlsx', repeat('a', 64),
+    '{"template_version":"1","sheet":"Bank Transactions","headers":["transaction_date","description","direction","amount","reference"]}'::jsonb,
+    '[]'::jsonb, 'ניסיון חוזר'
   )->>'idempotent')::boolean,
   'bank file retry must return existing import'
 );
@@ -812,10 +841,11 @@ select assign_bank_transaction_supplier(
 do $$
 begin
   perform import_bank_transactions(
-    'bad.csv', repeat('d', 64), '{}'::jsonb,
+    'bad.xlsx', repeat('d', 64),
+    '{"template_version":"1","sheet":"Bank Transactions","headers":["transaction_date","description","direction","amount","reference"]}'::jsonb,
     jsonb_build_array(jsonb_build_object(
       'tx_date', '2026-07-20', 'description', 'bad', 'amount', 0, 'is_debit', true,
-      'raw', '{}'::jsonb, 'row_hash', repeat('e', 64)
+      'raw', '{"direction":"debit"}'::jsonb, 'row_hash', repeat('e', 64)
     )),
     'בדיקת rollback'
   );
@@ -1050,6 +1080,18 @@ insert into credit_requests (
   '60000000-0000-0000-0000-000000000002',
   'other', 1, 'requested', '20000000-0000-0000-0000-000000000001'
 );
+-- A second credit, left at 'open'. After 0173 the only move out of 'received' is 'offset', and that
+-- one now requires allocated money; the office assertion below is about the ROLE keeping its
+-- transition path, so it gets a transition that does not depend on a payment having happened.
+insert into credit_requests (
+  id, org_id, supplier_id, invoice_id, reason, amount, status, created_by
+) values (
+  '65000000-0000-0000-0000-000000000005',
+  '10000000-0000-0000-0000-000000000001',
+  '30000000-0000-0000-0000-000000000001',
+  '60000000-0000-0000-0000-000000000002',
+  'other', 1, 'open', '20000000-0000-0000-0000-000000000001'
+);
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000005', true);
 set local role authenticated;
 do $$
@@ -1108,11 +1150,23 @@ select pg_temp.p1_assert(
 );
 select pg_temp.p1_assert(
   not (transition_credit_request(
-    '65000000-0000-0000-0000-000000000004', 'offset',
-    'מנהל הרכש קיזז את הזיכוי שהתקבל'
+    '65000000-0000-0000-0000-000000000005', 'requested',
+    'מנהל הרכש דרש את הזיכוי מהספק'
   )->>'idempotent')::boolean,
   'office lost the active credit transition path'
 );
+-- And the gate is not role-shaped: office is refused the unallocated offset for the same reason
+-- everyone else is, which is that no money moved.
+do $$
+begin
+  perform transition_credit_request(
+    '65000000-0000-0000-0000-000000000004', 'offset', 'מנהל הרכש קיזז את הזיכוי שהתקבל'
+  );
+  raise exception 'expected unallocated credit offset rejection for office';
+exception when sqlstate 'P0001' then
+  if sqlerrm not like '%credit_request_not_fully_allocated%' then raise; end if;
+end
+$$;
 select pg_temp.p1_assert(
   not (invoice_financial_check_signals('60000000-0000-0000-0000-000000000002')->>'bank_match_exists')::boolean,
   'office received a bank-match signal'
@@ -1155,7 +1209,9 @@ select pg_temp.p1_assert(
 do $$
 begin
   perform import_bank_transactions(
-    'office.csv', repeat('f', 64), '{}'::jsonb, '[]'::jsonb, 'office bank attempt'
+    'office.xlsx', repeat('f', 64),
+    '{"template_version":"1","sheet":"Bank Transactions","headers":["transaction_date","description","direction","amount","reference"]}'::jsonb,
+    '[]'::jsonb, 'office bank attempt'
   );
   raise exception 'expected office bank rejection';
 exception when sqlstate '42501' then

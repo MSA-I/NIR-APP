@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pencil, ShieldPlus, Undo2 } from 'lucide-react';
-import { Modal, StatusBadge, ConfirmDialog } from '../components/ui';
+import { Modal, Note, StatusBadge, ConfirmDialog } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { fmtDate, fmtDateTime, fmtNum } from '../lib/format';
 import { SUBSCRIPTION_STATUS } from '../lib/status';
@@ -68,8 +68,8 @@ export default function CustomerSubscription({
           <span className="text-lg font-medium text-ink">{subscription.plan_label}</span>
           <StatusBadge meta={SUBSCRIPTION_STATUS[subscription.status]} />
           <span className="text-sm text-ink-muted">חיוב {BILLING_INTERVAL[subscription.billing_interval]}</span>
-          {/* The billing period is what a per-period limit resets against. When the provider has
-              not told us one, saying so beats implying a month that nobody agreed. */}
+          {/* When the provider has not told us a period, saying so beats implying a month that
+              nobody agreed. What this date is NOT is explained in the line below. */}
           <span className="text-sm text-ink-muted">
             {subscription.current_period_end
               ? `תקופת החיוב עד ${fmtDate(subscription.current_period_end)}`
@@ -81,6 +81,35 @@ export default function CustomerSubscription({
         </div>
       ) : (
         <p className="text-sm text-ink-muted">לא נמצא מנוי לארגון הזה.</p>
+      )}
+
+      {subscription && (
+        <>
+          {/* OPEN-DECISIONS #242 separated the two periods, and this screen used to conflate them:
+              the renewal date above looks like the date the quota comes back, and it is not. The
+              usage period is anchored immutably to the organization's signup timestamp, and no
+              billing event — payment, renewal, tier or interval change, cancellation, refund,
+              delinquency recovery or the Legacy cutover — moves it or resets a counter. An
+              operator answering "when does this customer get capacity back" from the renewal date
+              would answer wrong. */}
+          <p className="text-sm text-ink-muted">
+            תקופת החיוב אינה תקופת השימוש: המכסות נספרות בתקופה מעוגנת לתאריך ההרשמה של הארגון,
+            ותשלום, חידוש, שינוי מסלול, ביטול או החזר אינם מאפסים אותה.
+          </p>
+
+          {/* #221/#222: a failed renewal is a read-only state, not a downgrade and not deletion,
+              and it ends only on a signed payment event. Naming that here keeps an operator from
+              "helping" by hand-setting the plan back to active. */}
+          {subscription.status === 'past_due' && (
+            <Note tone="alert">
+              <span className="min-w-0 flex-1">
+                חיוב החידוש נכשל, והארגון בקריאה בלבד עד להסדרת התשלום: אין מעבר אוטומטי למסלול
+                חינם, אין מחיקה ואין סיום שירות. היציאה היא אך ורק באמצעות אירוע תשלום מוצלח וחתום
+                מספק הסליקה.
+              </span>
+            </Note>
+          )}
+        </>
       )}
 
       {unmeasured > 0 && (
