@@ -55,14 +55,14 @@ const inputSchema = z
       )
       .min(1)
       .max(MAX_LINES)
-      .optional(),
-    request_id: z.string().uuid().optional(),
+      .nullish(),
+    request_id: z.string().uuid().nullish(),
   })
   .strict()
   // Exactly one input, enforced before the call rather than trusted afterwards: accepting both
   // would let a caller pass a draft id and a different basket and never learn which was answered.
   .refine(
-    (value) => (value.lines === undefined) !== (value.request_id === undefined),
+    (value) => (value.lines == null) !== (value.request_id == null),
     { message: "lines_or_request_id_exactly_one" },
   );
 
@@ -178,7 +178,7 @@ export const getPurchaseComparison: AssistantTool = {
     type: "object",
     properties: {
       lines: {
-        type: "array",
+        type: ["array", "null"],
         minItems: 1,
         maxItems: MAX_LINES,
         description:
@@ -194,11 +194,15 @@ export const getPurchaseComparison: AssistantTool = {
         },
       },
       request_id: {
-        type: "string",
-        description: "מזהה טיוטת הזמנה קיימת. יש להעביר lines או request_id, לא את שניהם.",
+        type: ["string", "null"],
+        description:
+          "מזהה טיוטת הזמנה קיימת, או null. יש להעביר lines או request_id, לא את שניהם.",
       },
     },
-    required: [],
+    // Strict mode requires every property here, so the either/or is expressed by nullability:
+    // exactly one of the two carries a value and the other is null. `inputSchema` refuses both
+    // and refuses neither, so the rule is enforced where it was always enforced.
+    required: ["lines", "request_id"],
     additionalProperties: false,
   },
   requiredRoles: ["owner", "office"],

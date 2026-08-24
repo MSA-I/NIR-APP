@@ -32,8 +32,9 @@ const inputSchema = z
   .object({
     question: z.string().trim().max(200).default(""),
     /** An exact registry id, when a previous turn already named one. Never a guess. */
-    entry_id: z.string().trim().max(120).default(""),
-    locale: z.enum(PRODUCT_HELP_LOCALES).default(PRODUCT_HELP_BASE_LOCALE),
+    entry_id: z.string().trim().max(120).nullish().transform((value) => value ?? ""),
+    locale: z.enum(PRODUCT_HELP_LOCALES).nullish()
+      .transform((value) => value ?? PRODUCT_HELP_BASE_LOCALE),
   })
   .strict();
 
@@ -59,17 +60,19 @@ export const getProductHelp: AssistantTool = {
         description: "שאלת המשתמש על המוצר, כלשונה",
       },
       entry_id: {
-        type: "string",
+        type: ["string", "null"],
         maxLength: 120,
         description: "מזהה רשומת עזרה מדויק, אם כבר נמסר בתור קודם",
       },
       locale: {
-        type: "string",
-        enum: [...PRODUCT_HELP_LOCALES],
-        description: "שפת הרשומה המבוקשת (ברירת מחדל: עברית)",
+        anyOf: [
+          { type: "string", enum: [...PRODUCT_HELP_LOCALES] },
+          { type: "null" },
+        ],
+        description: "שפת הרשומה המבוקשת, או null לברירת המחדל (עברית)",
       },
     },
-    required: ["question"],
+    required: ["question", "entry_id", "locale"],
     additionalProperties: false,
   },
   // All three roles may ask; the registry narrows per entry, so an accountant asking a staff-only

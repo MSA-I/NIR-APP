@@ -34,7 +34,7 @@ const RESULT_LIMIT_PER_TYPE = 5;
 const inputSchema = z
   .object({
     query: z.string().trim().min(2).max(80),
-    kind: z.enum(KINDS).default("any"),
+    kind: z.enum(KINDS).nullish().transform((value) => value ?? "any"),
   })
   .strict();
 
@@ -105,12 +105,14 @@ export const findEntity: AssistantTool = {
         description: "מה שהמשתמש נקב בשמו: מספר מסמך, שם ספק או מוצר",
       },
       kind: {
-        type: "string",
-        enum: [...KINDS],
-        description: "צמצום לסוג ישות מסוים (ברירת מחדל: הכול)",
+        anyOf: [
+          { type: "string", enum: [...KINDS] },
+          { type: "null" },
+        ],
+        description: "צמצום לסוג ישות מסוים, או null לברירת המחדל (הכול)",
       },
     },
-    required: ["query"],
+    required: ["query", "kind"],
     additionalProperties: false,
   },
   requiredRoles: ["owner", "office", "accountant"],
