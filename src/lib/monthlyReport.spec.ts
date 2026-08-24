@@ -28,6 +28,7 @@ const input = {
       supplier: { name: 'ספק אחד' }, invoice_number: 'INV-1', invoice_date: '2026-08-01',
       amount_before_vat: 100, vat_amount: 18, total_amount: 118,
       review_status: 'approved', payment_status: 'unpaid',
+      balance: { credited_amount: 0 },
     }],
     payments: [], credits: [], exceptions: [],
   },
@@ -37,7 +38,7 @@ const input = {
 const summary = monthlyReportTemplateValues({
   orgName: input.orgName, periodLabel: 'אוגוסט 2026', periodFrom: '01.08.2026',
   periodTo: '31.08.2026', generatedAt: '01.09.2026',
-  invoices: input.data.invoices, credits: input.data.credits,
+  invoices: input.data.invoices,
 });
 
 const snapshot: MonthlyReportSnapshot = {

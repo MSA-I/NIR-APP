@@ -29,15 +29,28 @@ export function monthlyReportTemplateValues(input: ReportPeriodInput & {
     vat_amount: number;
     total_amount: number;
     supplier: { name: string };
+    /**
+     * `invoice_balances.credited_amount` for this invoice — the credit the server has already
+     * taken off it. `null` when the reader has no balance row for the invoice.
+     */
+    balance?: { credited_amount: number } | null;
   }[];
-  credits: { amount: number; status: string }[];
 }): ReportTemplateValues {
   const netTotal = input.invoices.reduce((sum, row) => sum + row.amount_before_vat, 0);
   const vatTotal = input.invoices.reduce((sum, row) => sum + row.vat_amount, 0);
   const grossTotal = input.invoices.reduce((sum, row) => sum + row.total_amount, 0);
-  const creditsRecognized = input.credits
-    .filter((row) => row.status === 'offset' || row.status === 'closed')
-    .reduce((sum, row) => sum + row.amount, 0);
+  // Recognised credit is read from the same computed balance the screen shows, never re-derived
+  // here from credit lifecycle labels. Since 0173 the canonical credited amount is the sum of the
+  // `payment_allocations` that name the credit, and a credit consumed in part stays `received` —
+  // so an `offset`/`closed` filter drops money `invoice_balances` has already subtracted and
+  // overstates `net_expense` in the file the accountant receives.
+  //
+  // Both sides of the subtraction must range over the same invoices. If any invoice in the total
+  // has no balance row, the credited figure is unanswerable and stays `—` rather than 0.
+  const creditedRows = input.invoices.map((row) => row.balance ?? null);
+  const creditsRecognized = creditedRows.includes(null)
+    ? null
+    : creditedRows.reduce((sum, row) => sum + (row?.credited_amount ?? 0), 0);
 
   return {
     ...commonValues(input),
@@ -46,7 +59,7 @@ export function monthlyReportTemplateValues(input: ReportPeriodInput & {
     vat_total: vatTotal,
     gross_total: grossTotal,
     credits_recognized: creditsRecognized,
-    net_expense: grossTotal - creditsRecognized,
+    net_expense: creditsRecognized === null ? null : grossTotal - creditsRecognized,
     supplier_count: new Set(input.invoices.map((row) => row.supplier.name).filter(Boolean)).size,
   };
 }

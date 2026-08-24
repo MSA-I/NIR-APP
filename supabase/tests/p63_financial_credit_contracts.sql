@@ -56,13 +56,18 @@ insert into public.organizations (id, name, status, vat_rate) values
 
 insert into auth.users (id, email) values
   ('f6300000-0000-4000-8000-000000000002', 'p63-owner@example.test'),
-  ('f6300000-0000-4000-8000-000000000003', 'p63-accountant@example.test');
+  ('f6300000-0000-4000-8000-000000000003', 'p63-accountant@example.test'),
+  ('f6300000-0000-4000-8000-000000000004', 'p63-office@example.test');
 
 insert into public.profiles (id, org_id, full_name, role) values
   ('f6300000-0000-4000-8000-000000000002', 'f6300000-0000-4000-8000-000000000001',
    'P63 owner', 'owner'),
   ('f6300000-0000-4000-8000-000000000003', 'f6300000-0000-4000-8000-000000000001',
-   'P63 accountant', 'accountant');
+   'P63 accountant', 'accountant'),
+  -- office reads the supplier card but not the allocation ledger. Section 3 uses this identity to
+  -- prove the open-credit amount refuses rather than reverting to the pre-allocation figure.
+  ('f6300000-0000-4000-8000-000000000004', 'f6300000-0000-4000-8000-000000000001',
+   'P63 office', 'office');
 
 insert into public.suppliers (id, org_id, name, status) values
   ('f6300000-0000-4000-8000-000000000011', 'f6300000-0000-4000-8000-000000000001',
@@ -383,6 +388,39 @@ select pg_temp.p63_assert(
    from public.p0_invoice_balance_rows()
    where invoice_id = 'f6300000-0000-4000-8000-000000000021'),
   'the partial allocation, rather than intake, did not become the credited amount');
+
+-- ===== 3a. The supplier card reports what is LEFT of the credit (0204) =====
+-- A credit consumed in part stays `received`, so 0176's sum of the full `cr.amount` reported the
+-- spent part as still available. Owner reads the true remainder; office, who may not read the
+-- allocation ledger, gets a refusal instead of the pre-allocation figure.
+
+select pg_temp.p63_activate('f6300000-0000-4000-8000-000000000002');
+
+-- The positive control comes first: unless a partially consumed credit is live right here, the
+-- assertion below cannot tell the two view bodies apart and would pass on either.
+select pg_temp.p63_assert(
+  (select coalesce(sum(amount), 0) <> coalesce(sum(remaining_amount), 0)
+   from public.credit_request_balance_rows('f6300000-0000-4000-8000-000000000011')
+   where status in ('open','requested','received')),
+  'no partially consumed credit is live at this point, so the open-credit assertion proves nothing');
+
+select pg_temp.p63_assert(
+  (select m.open_credits_amount
+   from public.supplier_metrics m
+   where m.supplier_id = 'f6300000-0000-4000-8000-000000000011')
+  = (select coalesce(sum(b.remaining_amount), 0)
+     from public.credit_request_balance_rows('f6300000-0000-4000-8000-000000000011') b
+     where b.status in ('open','requested','received')),
+  'the supplier card open-credit amount is not the computed remaining balance');
+
+select pg_temp.p63_activate('f6300000-0000-4000-8000-000000000004');
+select pg_temp.p63_assert(
+  (select open_credits > 0 and open_credits_amount is null
+   from public.supplier_metrics
+   where supplier_id = 'f6300000-0000-4000-8000-000000000011'),
+  'office was shown an open-credit amount it cannot compute inside its own read boundary');
+
+select pg_temp.p63_activate('f6300000-0000-4000-8000-000000000003', true);
 
 select public.execute_payment_request(
   'f6300000-0000-4000-8000-000000000082', current_date, 'bank transfer',
