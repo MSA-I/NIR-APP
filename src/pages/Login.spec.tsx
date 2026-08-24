@@ -1,11 +1,13 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const signIn = vi.hoisted(() => vi.fn());
 
 vi.mock('../auth/AuthContext', () => ({
   homeFor: () => '/dashboard',
   useAuth: () => ({
-    signIn: vi.fn(),
+    signIn,
     session: null,
     profile: null,
     loading: false,
@@ -15,7 +17,10 @@ vi.mock('../auth/AuthContext', () => ({
 import Login from './Login';
 
 describe('מסך הכניסה', () => {
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    signIn.mockReset();
+  });
 
   it('מציג ומסתיר את הסיסמה בלי לשנות את הערך', () => {
     render(<MemoryRouter><Login /></MemoryRouter>);
@@ -28,6 +33,23 @@ describe('מסך הכניסה', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'הסתרת סיסמה' }));
     expect(password).toHaveAttribute('type', 'password');
+  });
+
+  it('מציע מילוי חשבון דמו רק מול הסטאק המקומי', () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'http://127.0.0.1:55431');
+    vi.stubEnv('VITE_DEMO_PASSWORD_SEED', 'manualgate2026');
+    render(<MemoryRouter><Login /></MemoryRouter>);
+
+    fireEvent.click(screen.getByText('חשבונות דמו מקומיים'));
+    expect(screen.getAllByRole('button', { name: /^כניסה כ/ }).map((button) => button.textContent))
+      .toEqual(['מנהל/בעלים', 'מנהל רכש', 'רואה חשבון']);
+    fireEvent.click(screen.getByRole('button', { name: 'כניסה כמנהל/בעלים' }));
+
+    expect(screen.getByLabelText('אימייל')).toHaveValue('owner@demo.supplyflow.local');
+    expect(screen.getByLabelText('סיסמה')).toHaveValue('P4!manualgate2026-owner-Aa7');
+    expect(screen.queryByText('מנהל מטבח')).not.toBeInTheDocument();
+    expect(screen.queryByText('מבצע העברות')).not.toBeInTheDocument();
+    expect(screen.queryByText('ספק')).not.toBeInTheDocument();
   });
 
   it('מציב את השיידר משמאל ואת הטופס מימין בפריסת הדסקטופ', () => {
@@ -43,31 +65,30 @@ describe('מסך הכניסה', () => {
     expect(screen.getByRole('link', { name: 'להרשמה' })).toHaveAttribute('href', '/signup');
   });
 
-  it('מציג כפתור Google עתידי שאינו מבצע פעולה', () => {
+  it('מציג כפתור Google עתידי שאינו מפעיל התחברות', () => {
     render(<MemoryRouter><Login /></MemoryRouter>);
 
     const googleButton = screen.getByRole('button', { name: 'המשך עם Google' });
     expect(googleButton).toHaveAttribute('aria-disabled', 'true');
     expect(googleButton).toHaveAttribute('title', 'חיבור Google יתווסף בהמשך');
     fireEvent.click(googleButton);
-    expect(googleButton).toBeInTheDocument();
+    expect(signIn).not.toHaveBeenCalled();
   });
 
-  it('מציע מילוי חשבון דמו רק מול הסטאק המקומי', () => {
+  it('מתחבר מיד לחשבון הדמו המקומי שנבחר', async () => {
     vi.stubEnv('VITE_SUPABASE_URL', 'http://127.0.0.1:55431');
     vi.stubEnv('VITE_DEMO_PASSWORD_SEED', 'manualgate2026');
     render(<MemoryRouter><Login /></MemoryRouter>);
 
     fireEvent.click(screen.getByText('חשבונות דמו מקומיים'));
-    expect(screen.getAllByRole('button', { name: /^מילוי פרטי/ }).map((button) => button.textContent))
-      .toEqual(['מנהל/בעלים', 'מנהל רכש', 'רואה חשבון']);
-    fireEvent.click(screen.getByRole('button', { name: 'מילוי פרטי מנהל/בעלים' }));
+    fireEvent.click(screen.getByRole('button', { name: 'כניסה כמנהל/בעלים' }));
 
-    expect(screen.getByLabelText('אימייל')).toHaveValue('owner@demo.supplyflow.local');
-    expect(screen.getByLabelText('סיסמה')).toHaveValue('P4!manualgate2026-owner-Aa7');
-    expect(screen.queryByText('מנהל מטבח')).not.toBeInTheDocument();
-    expect(screen.queryByText('מבצע העברות')).not.toBeInTheDocument();
-    expect(screen.queryByText('ספק')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(signIn).toHaveBeenCalledWith(
+        'owner@demo.supplyflow.local',
+        'P4!manualgate2026-owner-Aa7',
+      );
+    });
   });
 
   it('אינו חושף חשבונות דמו כשהאפליקציה מצביעה לייצור', () => {
