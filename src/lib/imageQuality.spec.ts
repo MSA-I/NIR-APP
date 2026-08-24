@@ -6,9 +6,11 @@ import {
   findWeakCaptures,
   isMeasurablePhoto,
   measureImageQuality,
+  measureImageQualityOutcome,
   measureLumaMetrics,
   metricSampleSize,
   qualityVerdict,
+  screenImageQuality,
   weakCaptureHint,
   weakCaptureRetryLabel,
   weakCaptureTitle,
@@ -204,6 +206,26 @@ describe('measureImageQuality', () => {
     await expect(measureImageQuality(imageFile('IMG_0042.heic', 'image/heic'))).resolves.toBeNull();
   });
 
+  it('routes unsupported HEIC to bounded server preprocessing without replacing its bytes', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => { throw new Error('unsupported HEIC'); }));
+    const file = imageFile('IMG_0042.heic', 'image/heic');
+    const before = new Uint8Array(await file.arrayBuffer());
+
+    await expect(measureImageQualityOutcome(file)).resolves.toEqual({
+      kind: 'server_required',
+      file,
+      reason: 'client_decode_unsupported',
+    });
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(before);
+  });
+
+  it('keeps an ordinary JPEG decoder failure unavailable rather than claiming HEIC routing', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => { throw new Error('decode failed'); }));
+    await expect(measureImageQualityOutcome(imageFile())).resolves.toMatchObject({
+      kind: 'unavailable',
+    });
+  });
+
   it('returns no verdict when the canvas throws mid-measurement', async () => {
     vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 32, height: 32, close: vi.fn() })));
     vi.stubGlobal('OffscreenCanvas', class {
@@ -289,6 +311,40 @@ describe('findWeakCaptures', () => {
 
   it('reports nothing for an empty pick', async () => {
     await expect(findWeakCaptures([])).resolves.toEqual([]);
+  });
+});
+
+describe('screenImageQuality and the batch budget', () => {
+  const heicFile = () => imageFile('IMG_0042.heic', 'image/heic');
+
+  it('routes a HEIC the browser genuinely failed to decode to the server', async () => {
+    const decode = vi.fn(async () => { throw new Error('unsupported HEIC'); });
+    vi.stubGlobal('createImageBitmap', decode);
+    const heic = heicFile();
+
+    await expect(screenImageQuality([heic])).resolves.toEqual({ weak: [], serverRequired: [heic] });
+    expect(decode).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * The budget is a limit on how long the picker may be held open, not evidence about a file.
+   * iOS Safari's `createImageBitmap` does read HEIC, so a `.heic` that was never decoded has not
+   * been shown to need anything — claiming otherwise is a verdict read off the file extension.
+   */
+  it('gives no verdict at all once the budget is spent, not even for HEIC', async () => {
+    const decode = vi.fn(async () => { throw new Error('should never be reached'); });
+    vi.stubGlobal('createImageBitmap', decode);
+    // Built before the clock is frozen: `new File()` reads Date.now() for `lastModified`.
+    const batch = [heicFile(), imageFile()];
+    const now = vi.spyOn(Date, 'now');
+    now.mockReturnValueOnce(0);      // the deadline is taken from this call
+    now.mockReturnValue(60_000);     // every file is reached well after it
+    try {
+      await expect(screenImageQuality(batch)).resolves.toEqual({ weak: [], serverRequired: [] });
+      expect(decode).not.toHaveBeenCalled();
+    } finally {
+      now.mockRestore();
+    }
   });
 });
 

@@ -83,6 +83,29 @@ describe('DocumentScanPreview', () => {
     expect(changed).toHaveBeenCalledOnce();
   });
 
+  it('names a full-frame fallback instead of presenting it as detected automatic corners', async () => {
+    const state: DocumentScanState = {
+      ...base,
+      status: 'ready',
+      output_id: '44444444-4444-4444-8444-444444444444',
+      output_storage_path: 'org/document/job/scan.png',
+      output_mode: 'grayscale',
+      detected_corners: [[0, 0], [1, 0], [1, 1], [0, 1]],
+      corners_source: 'full_frame_fallback',
+      rotation_degrees: 0,
+    };
+    render(<DocumentScanPreview
+      state={state}
+      originalStoragePath="org/inbox/source.jpg"
+      fileName="invoice.jpg"
+      readOnly={false}
+      onChanged={vi.fn()}
+    />);
+
+    expect(await screen.findByText(/הדף ממלא את כל מסגרת המקור/)).toBeInTheDocument();
+    expect(screen.getByText(/לא זוהה מלבן גבולות אוטומטי/)).toBeInTheDocument();
+  });
+
   it('creates an immutable successor when a ready crop needs corrected boundaries', async () => {
     const changed = vi.fn().mockResolvedValue(true);
     const state: DocumentScanState = {

@@ -221,6 +221,11 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
       )}
       {(state.status === 'ready' || state.status === 'accepted') && !editingCorners && originalUrl && scanUrl && (
         <div className="space-y-4">
+          {state.corners_source === 'full_frame_fallback' && (
+            <Note tone="idle">
+              הדף ממלא את כל מסגרת המקור. לא זוהה מלבן גבולות אוטומטי, ולכן הסריקה שמרה את המסגרת המלאה במקום לחתוך ראיה.
+            </Note>
+          )}
           <div className="grid min-w-0 gap-4 lg:grid-cols-2">
             <figure className="min-w-0 overflow-hidden rounded-lg border border-line bg-surface-sunken">
               <figcaption className="border-b border-line bg-surface px-3 py-2 text-sm font-medium text-ink-soft">המקור</figcaption>

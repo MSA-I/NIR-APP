@@ -40,6 +40,11 @@ class _Response:
         return False
 
 
+class ScanGatewayVersionTests(unittest.TestCase):
+    def test_provenance_contract_version_is_three(self) -> None:
+        self.assertEqual(SCAN_GATEWAY_CONTRACT_VERSION, "3")
+
+
 class _Opener:
     def __init__(self) -> None:
         self.requests: list[dict[str, Any]] = []

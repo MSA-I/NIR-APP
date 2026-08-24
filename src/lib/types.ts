@@ -368,6 +368,8 @@ export type DocumentProcessingStatus =
   | 'completed'
   | 'failed';
 
+export type DocumentScanCornersSource = 'automatic' | 'manual' | 'full_frame_fallback';
+
 export type ExtractionBlockType = 'text' | 'heading' | 'table' | 'image' | 'handwriting';
 export type ExtractionMarkKind = 'circle' | 'check' | 'cross' | 'underline' | 'star' | 'custom' | 'unknown';
 export type ExtractionBoundingBox = [xMin: number, yMin: number, xMax: number, yMax: number];
