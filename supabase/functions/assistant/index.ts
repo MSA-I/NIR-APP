@@ -16,6 +16,7 @@ import {
   AssistantAskRequestSchema,
   AssistantHistoryListRequestSchema,
   AssistantHistoryLoadRequestSchema,
+  ASSISTANT_TRANSCRIPT_MAX_TURNS,
   type AssistantCapabilities,
   type AssistantRunResult,
   type Fact,
@@ -301,11 +302,13 @@ export async function handler(req: Request): Promise<Response> {
       const views = await loadAuthorizedConversationViews(admin, authorization, {
         actor,
         conversationId: parsedRequest.request.conversation_id,
-        limit: 12,
+        limit: ASSISTANT_TRANSCRIPT_MAX_TURNS,
       });
-      const latest = views.at(-1);
-      if (!latest) throw new AssistantEdgeError("assistant_history_unavailable");
-      return json(cors, latest, 200);
+      // The whole conversation, oldest turn first. This used to return `views.at(-1)` and throw
+      // the rest away, so reopening a conversation showed one question and no thread -- the work
+      // of loading, validating and authorizing every turn was done and then discarded.
+      if (views.length === 0) throw new AssistantEdgeError("assistant_history_unavailable");
+      return json(cors, { turns: views }, 200);
     } catch (error) {
       const edgeError = error instanceof AssistantEdgeError
         ? error

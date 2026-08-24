@@ -15,7 +15,9 @@ import type { AssistantTool, ToolContext } from "./registry.ts";
 import { failure, num, record } from "./shared.ts";
 
 const inputSchema = z
-  .object({ window: z.enum(TIME_WINDOWS).default("last_30_days") })
+  .object({
+    window: z.enum(TIME_WINDOWS).nullish().transform((value) => value ?? "last_30_days"),
+  })
   .strict();
 
 export const getPurchaseMetrics: AssistantTool = {
@@ -31,12 +33,14 @@ export const getPurchaseMetrics: AssistantTool = {
     type: "object",
     properties: {
       window: {
-        type: "string",
-        enum: [...TIME_WINDOWS],
-        description: "החלון הנגרר למדידה (ברירת מחדל: 30 הימים האחרונים)",
+        anyOf: [
+          { type: "string", enum: [...TIME_WINDOWS] },
+          { type: "null" },
+        ],
+        description: "החלון הנגרר למדידה, או null לברירת המחדל (30 הימים האחרונים)",
       },
     },
-    required: [],
+    required: ["window"],
     additionalProperties: false,
   },
   requiredRoles: ["owner", "office", "accountant"],

@@ -34,7 +34,7 @@ import {
 const inputSchema = z
   .object({
     /** One specific order, when the person named it. Empty means "every late sent order". */
-    order_id: z.string().trim().max(64).default(""),
+    order_id: z.string().trim().max(64).nullish().transform((value) => value ?? ""),
     limit: limitSchema,
   })
   .strict();
@@ -75,13 +75,13 @@ export const draftSupplierReminder: AssistantTool = {
     type: "object",
     properties: {
       order_id: {
-        type: "string",
+        type: ["string", "null"],
         maxLength: 64,
         description: "מזהה הזמנה מסוימת, אם המשתמש נקב בה",
       },
       limit: LIMIT_JSON_SCHEMA,
     },
-    required: [],
+    required: ["order_id", "limit"],
     additionalProperties: false,
   },
   // #191 is a role decision, not a rendering preference: accountant is offered no supplier-draft

@@ -330,9 +330,32 @@ describe('העוזר של InPlace — הפאנל', () => {
     await askQuestion('מה מצב הספקים בחלון שנבדק?');
     await screen.findByText('היתרה הפתוחה לספק ירקות השדה גבוהה מהרגיל.');
 
-    expect(screen.getByText('השאלה שנבדקה')).toBeInTheDocument();
+    // Owner decision 24.08.2026: the exchange reads as a conversation. The question stays on
+    // screen as the message its author wrote, and the answer keeps its freshness beside it.
+    expect(screen.getByLabelText('השיחה עם העוזר')).toBeInTheDocument();
     expect(screen.getByText('מה מצב הספקים בחלון שנבדק?')).toBeInTheDocument();
     expect(screen.getByText(/עודכן ל־/)).toBeInTheDocument();
+  });
+
+  it('שאלה שנייה מצטרפת לשיחה במקום להחליף את הראשונה', async () => {
+    ask.mockResolvedValueOnce(makeResult());
+    renderPanel();
+    await openDialog();
+    await askQuestion('מה מצב הספקים בחלון שנבדק?');
+    await screen.findByText('היתרה הפתוחה לספק ירקות השדה גבוהה מהרגיל.');
+
+    ask.mockResolvedValueOnce(makeResult({
+      run_id: '55555555-5555-4555-8555-555555555555',
+      answer: { blocks: [{ type: 'text', text: 'שתי חשבוניות ממתינות לאישור.' }], next_steps: [], no_answer_reason: null },
+    }));
+    await askQuestion('וכמה חשבוניות ממתינות?');
+    await screen.findByText('שתי חשבוניות ממתינות לאישור.');
+
+    // The first exchange is still there. Before this, a second question replaced the first.
+    expect(screen.getByText('מה מצב הספקים בחלון שנבדק?')).toBeInTheDocument();
+    expect(screen.getByText('היתרה הפתוחה לספק ירקות השדה גבוהה מהרגיל.')).toBeInTheDocument();
+    expect(screen.getByText('וכמה חשבוניות ממתינות?')).toBeInTheDocument();
+    expect(screen.getAllByText(/עודכן ל־/)).toHaveLength(2);
   });
 
   it('היקף הבדיקה מציג תוויות מוצר עבריות ולא שמות tools פנימיים', async () => {
@@ -385,16 +408,35 @@ describe('העוזר של InPlace — הפאנל', () => {
       title: 'מה מצב הספקים?',
       updated_at: '2026-08-20T08:00:00.000Z',
     }];
-    loadConversation.mockResolvedValue({
-      question: 'מה מצב הספקים?',
-      result: { ...makeResult(), conversation_id: historyRows[0].id },
-    });
+    // A stored conversation comes back whole. Returning only its newest turn is the defect this
+    // replaced: the earlier questions were loaded, authorized, and then thrown away.
+    loadConversation.mockResolvedValue([
+      {
+        question: 'מה שאלתי קודם?',
+        result: {
+          ...makeResult(),
+          run_id: '66666666-6666-4666-8666-666666666666',
+          conversation_id: historyRows[0].id,
+          answer: {
+            blocks: [{ type: 'text', text: 'התשובה מהתור הראשון.' }],
+            next_steps: [],
+            no_answer_reason: null,
+          },
+        },
+      },
+      {
+        question: 'מה מצב הספקים?',
+        result: { ...makeResult(), conversation_id: historyRows[0].id },
+      },
+    ]);
     renderPanel();
     await openDialog();
 
     await userEvent.click(screen.getByRole('button', { name: /פתיחת הבדיקה מה מצב הספקים/ }));
     expect(loadConversation).toHaveBeenCalledWith(historyRows[0].id);
-    expect(await screen.findByText('השאלה שנבדקה')).toBeInTheDocument();
+    expect(await screen.findByLabelText('השיחה עם העוזר')).toBeInTheDocument();
+    expect(screen.getByText('מה שאלתי קודם?')).toBeInTheDocument();
+    expect(screen.getByText('התשובה מהתור הראשון.')).toBeInTheDocument();
     expect(screen.getByText('מה מצב הספקים?')).toBeInTheDocument();
     expect(screen.getByText('היתרה הפתוחה לספק ירקות השדה גבוהה מהרגיל.')).toBeInTheDocument();
   });
@@ -406,7 +448,7 @@ describe('העוזר של InPlace — הפאנל', () => {
       title: 'מה מצב הספקים?',
       updated_at: '2026-08-20T08:00:00.000Z',
     }];
-    const pendingHistory = deferred<{ question: string; result: AssistantRunResult }>();
+    const pendingHistory = deferred<{ question: string; result: AssistantRunResult }[]>();
     loadConversation.mockReturnValue(pendingHistory.promise);
     const view = renderPanel();
     await openDialog();
@@ -419,10 +461,10 @@ describe('העוזר של InPlace — הפאנל', () => {
       </MemoryRouter>,
     );
     await act(async () => {
-      pendingHistory.resolve({
+      pendingHistory.resolve([{
         question: 'מה מצב הספקים?',
         result: { ...makeResult(), conversation_id: historyRows[0].id },
-      });
+      }]);
       await pendingHistory.promise;
     });
 

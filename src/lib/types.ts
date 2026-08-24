@@ -106,7 +106,8 @@ export interface SupplierMetrics {
   exceptions_window: number;
   exceptions_lifetime: number;
   open_credits: number;
-  open_credits_amount: number;
+  /** `null` for a reader who may not read the allocation ledger the remainder is computed from. */
+  open_credits_amount: number | null;
   credits_window: number;
   credits_lifetime: number;
   priced_items: number;

@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { ClipboardCheck } from 'lucide-react';
 import { useLocation } from 'react-router';
 import { ASSISTANT_FLAG_KEYS } from '../lib/assistant/contracts';
+import {
+  listAssistantConversations,
+  loadAssistantConversation,
+} from '../lib/assistant/client';
 import { useFeatureFlags } from '../lib/flags';
 import { APP_NAME } from '../lib/branding';
 import { useAuth } from '../auth/AuthContext';
@@ -46,6 +50,45 @@ export default function AssistantPanel({ session: sharedSession }: {
   }));
   const session = sharedSession ?? localSession;
   const hasActiveCheck = session.pending || session.result !== null || session.submittedQuestion !== null;
+
+  /**
+   * A refresh empties the run session — it lives in browser memory on purpose, because a stored
+   * answer would outlive the authorization it was produced under. What it should NOT cost is the
+   * conversation: that is on the server, and before this the person had to go find it in a list.
+   *
+   * So the first time this panel opens under a given authorization, an empty session adopts the
+   * newest conversation. Once per authorization, not once per open: reopening after "בדיקה חדשה"
+   * must not drag the old thread back, and the fingerprint is what a new sign-in changes.
+   *
+   * Every turn is re-validated and re-authorized by the Edge function on this load, so nothing is
+   * shown here that the current role could not be shown now. A failure is silent by design — the
+   * panel still opens ready for a new question, which is exactly where it was before.
+   */
+  const restoredFingerprintRef = useRef<string | null>(null);
+  const historyEnabled = isEnabled(ASSISTANT_FLAG_KEYS.history);
+  useEffect(() => {
+    if (!open || !historyEnabled) return;
+    const fingerprint = session.authorizationFingerprint;
+    if (restoredFingerprintRef.current === fingerprint) return;
+    restoredFingerprintRef.current = fingerprint;
+    if (hasActiveCheck || session.conversationId !== null) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const conversations = await listAssistantConversations(1);
+        const newest = conversations[0];
+        if (cancelled || !newest) return;
+        const turns = await loadAssistantConversation(newest.id);
+        if (cancelled) return;
+        session.restoreHistory(turns, fingerprint);
+      } catch {
+        // An unavailable history is not an error the person asked for. The panel stays usable.
+      }
+    })();
+    return () => { cancelled = true; };
+    // Deliberately keyed to the open edge and the authorization, not to `session`: the session
+    // object changes on every keystroke, and the fingerprint guard is what keeps this to one run.
+  }, [open, historyEnabled, session.authorizationFingerprint]);
 
   // A source navigation and the layer cleanup can settle in adjacent frames. Reassert the
   // explicit mobile return path after the route commit so focus never falls back to <body>.

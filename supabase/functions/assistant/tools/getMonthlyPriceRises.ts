@@ -97,7 +97,7 @@ export const getMonthlyPriceRises: AssistantTool = {
   inputJsonSchema: {
     type: "object",
     properties: { limit: LIMIT_JSON_SCHEMA },
-    required: [],
+    required: ["limit"],
     additionalProperties: false,
   },
   requiredRoles: ["owner", "office"],

@@ -205,8 +205,10 @@ export default function Reports() {
         periodFrom: fmtDate(start),
         periodTo: fmtDate(addCalendarDays(end, -1)),
         generatedAt: fmtDateTime(data.generatedAt),
+        // The invoice rows carry their `invoice_balances` row, which is where the recognised
+        // credit comes from. The credit list is what the month's credit sheet lists; it is not
+        // the money that came off these invoices.
         invoices: data.invoices,
-        credits: data.credits,
       });
       // This file lands in an accountant's inbox, and an accountant serves several businesses.
       // The name has to say whose report it is; a fixed tenant name would break multi-tenancy.

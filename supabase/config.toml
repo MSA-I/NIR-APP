@@ -59,6 +59,18 @@ max_frequency = "1s"
 otp_length = 6
 otp_expiry = 3600
 
+# Google sign-up for the OWNER of a new organization (OPEN-DECISIONS #265, 24.08.2026).
+# Disabled unless the two secrets are present, so a checkout without them behaves exactly as
+# before. "Owner only" is NOT enforced here -- enabling a provider makes /auth/v1/authorize
+# reachable by anyone. It is enforced where standing is granted: 0205 makes accept_invitation
+# refuse a federated caller, and public-signup's Google branch only ever creates an owner of a
+# NEW organization and refuses a caller that already has a profile.
+[auth.external.google]
+enabled = false
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+skip_nonce_check = false
+
 [edge_runtime]
 enabled = true
 policy = "oneshot"

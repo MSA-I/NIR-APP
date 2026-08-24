@@ -3,7 +3,7 @@ import { ok } from '../errors';
 import { useQuery, type QueryState } from '../useQuery';
 import {
   AssistantHistoryListResponseSchema,
-  AssistantHistoryViewSchema,
+  AssistantHistoryTranscriptSchema,
   AssistantRunResultSchema,
   type AssistantAskRequest,
   type AssistantConversationRow as AssistantConversationRowContract,
@@ -100,12 +100,16 @@ export async function askAssistant(request: AssistantAskRequest): Promise<Assist
  */
 export type AssistantConversationRow = AssistantConversationRowContract;
 
-async function listConversations(): Promise<AssistantConversationRow[]> {
-  const data = await invokeAssistant({ operation: 'history_list', limit: 10 });
+export async function listAssistantConversations(
+  limit = 10,
+): Promise<AssistantConversationRow[]> {
+  const data = await invokeAssistant({ operation: 'history_list', limit });
   const parsed = AssistantHistoryListResponseSchema.safeParse(data);
   if (!parsed.success) throw new Error('assistant_unsupported_answer');
   return parsed.data.conversations;
 }
+
+const listConversations = () => listAssistantConversations(10);
 
 /**
  * The conversation list, cached under `['org', <tenant>, 'assistant', 'conversations']`.
@@ -122,14 +126,17 @@ export function useAssistantConversations(
   );
 }
 
-export async function loadAssistantConversation(conversationId: string): Promise<AssistantHistoryView> {
+/** The whole conversation, oldest turn first. Every turn was re-authorized server-side. */
+export async function loadAssistantConversation(
+  conversationId: string,
+): Promise<AssistantHistoryView[]> {
   const data = await invokeAssistant({
     operation: 'history_load',
     conversation_id: conversationId,
   });
-  const parsed = AssistantHistoryViewSchema.safeParse(data);
+  const parsed = AssistantHistoryTranscriptSchema.safeParse(data);
   if (!parsed.success) throw new Error('assistant_unsupported_answer');
-  return parsed.data;
+  return parsed.data.turns;
 }
 
 /**
