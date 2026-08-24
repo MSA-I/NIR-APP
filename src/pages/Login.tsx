@@ -77,18 +77,16 @@ export default function Login() {
   }
 
   return (
-    <main className="min-h-dvh flex flex-col items-center justify-center bg-canvas p-4 sm:p-6">
-      {/* One card holds both halves, instead of two objects floating in a full-viewport petrol
-          field. The colour is now a bounded panel inside the card rather than the whole screen —
-          which is also what stops it from reading as decorative expanse (PRODUCT.md). */}
-      <div className="card w-full max-w-5xl overflow-hidden">
-        <div className="lg:grid lg:grid-cols-[2fr_3fr]">
-          {/* Nothing is authenticated here, so there is no tenant to name — the login screen
-              wears the product's identity, and the tenant's appears after sign-in.
-              On a phone this collapses to a banner: the fold belongs to the form. */}
-          <div className="aurora-pane h-44 lg:h-auto">
+    <main className="flex min-h-dvh flex-col items-center justify-center bg-canvas px-4 py-5 sm:px-6 lg:py-7">
+      {/* `dir=ltr` fixes the physical split from the reference: aurora on the visual left, form on
+          the visual right. Each panel restores RTL for its Hebrew content. */}
+      <div className="card w-full max-w-[75rem] overflow-hidden">
+        <div dir="ltr" className="lg:grid lg:min-h-[min(50rem,calc(100dvh-5rem))] lg:grid-cols-2">
+          {/* Nothing is authenticated here, so there is no tenant to name. On a phone the visual
+              collapses to a compact banner so the form still owns the first fold. */}
+          <section aria-label="זהות InPlace" dir="rtl" className="aurora-pane h-48 lg:h-auto">
             <canvas ref={auroraRef} aria-hidden="true" className="absolute inset-0 size-full" />
-            <div className="relative z-10 flex h-full flex-col justify-between p-6 lg:p-10">
+            <div className="relative z-10 flex h-full flex-col justify-between p-6 sm:p-8 lg:p-10 xl:p-12">
               <h1>
                 <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="156" height="34"
                   className="h-auto w-36 sm:w-40" />
@@ -116,11 +114,20 @@ export default function Login() {
                 </li>
               </ul>
             </div>
-          </div>
-          <div className="p-6 sm:p-8 lg:p-10">
-            <h2 className="text-2xl font-semibold text-ink">כניסה לחשבון</h2>
-            <p className="mt-1 text-sm text-ink-muted">הזינו את פרטי המשתמש כדי להמשיך.</p>
-            <form onSubmit={(e) => void onSubmit(e)} className="mt-6 space-y-5" aria-busy={busy || undefined}>
+          </section>
+          <section aria-labelledby="login-heading" dir="rtl"
+            className="flex items-center bg-surface px-6 py-8 sm:px-10 sm:py-10 lg:px-12 xl:px-16">
+            <div className="mx-auto w-full max-w-md">
+              <div>
+                <h2 id="login-heading" className="text-3xl font-semibold tracking-tight text-ink">כניסה לחשבון</h2>
+                <p className="mt-2 text-sm text-ink-muted">
+                  אין לכם חשבון?{' '}
+                  <Link to="/signup" className="font-medium text-action underline-offset-2 hover:underline">
+                    להרשמה
+                  </Link>
+                </p>
+              </div>
+              <form onSubmit={(e) => void onSubmit(e)} className="mt-8 space-y-5" aria-busy={busy || undefined}>
               {params.get('reset') === 'success' && (
                 <p role="status" className="note-done">הסיסמה הוחלפה וכל החיבורים נותקו. אפשר להתחבר מחדש.</p>
               )}
@@ -181,8 +188,19 @@ export default function Login() {
                 {busy ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Lock size={15} aria-hidden="true" />}
                 {busy ? 'מתחבר…' : 'התחברות'}
               </button>
-            </form>
-          </div>
+              <div className="flex items-center gap-3" aria-hidden="true">
+                <span className="h-px flex-1 bg-line" />
+                <span className="text-xs text-ink-muted">או</span>
+                <span className="h-px flex-1 bg-line" />
+              </div>
+              <button type="button" aria-disabled="true" title="חיבור Google יתווסף בהמשך"
+                className="btn min-h-12 w-full border border-line-strong bg-surface text-ink hover:bg-surface-hover">
+                <img src="/brand/google-g.svg" alt="" width="18" height="18" aria-hidden="true" />
+                המשך עם Google
+              </button>
+              </form>
+            </div>
+          </section>
         </div>
       </div>
       {/* Outside the card now, on the page canvas — flex+gap rather than space-x-3, because the
