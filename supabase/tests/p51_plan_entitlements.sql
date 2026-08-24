@@ -92,11 +92,14 @@ select pg_temp.p51_assert(
 -- an open owner decision and a seeded limit would have been an invented one. The owner decided
 -- (#166), so the guard now pins what was decided rather than the absence of a decision: Free
 -- below Pro, both stated, and nothing else restrictive.
+--
+-- The figures moved on 24.08.2026 under #266 -- 25/200 became 20/150 -- and this pin moved with
+-- the decision, which is the only thing that may move it.
 select pg_temp.p51_assert(
   (select numeric_limit from plan_entitlements
-    where plan_key = 'free' and entitlement_key = 'documents.monthly') = 25
+    where plan_key = 'free' and entitlement_key = 'documents.monthly') = 20
   and (select numeric_limit from plan_entitlements
-    where plan_key = 'pro' and entitlement_key = 'documents.monthly') = 200,
+    where plan_key = 'pro' and entitlement_key = 'documents.monthly') = 150,
   'the decided monthly document limits moved without a decision');
 select pg_temp.p51_assert(
   (select unlimited from plan_entitlements
@@ -109,34 +112,46 @@ select pg_temp.p51_assert(
 -- as a separate per-file cap in the worker. Pinning the RELATIONSHIP rather than the numbers is
 -- what catches a later edit that moves one and forgets the other, which would refuse a customer
 -- who stayed inside the document quota they were sold.
+-- Pinned as the relationship rather than as two products of the numbers of the day: #266 moved
+-- the documents on 24.08.2026 and this assertion did not have to move with them, which is the
+-- property the paragraph above claims and did not previously have.
 select pg_temp.p51_assert(
-  (select numeric_limit from plan_entitlements
-    where plan_key = 'free' and entitlement_key = 'ocr_pages.monthly') = 25 * 10
-  and (select numeric_limit from plan_entitlements
-    where plan_key = 'pro' and entitlement_key = 'ocr_pages.monthly') = 200 * 10,
+  not exists (
+    select 1
+      from plan_entitlements docs
+      join plan_entitlements pages on pages.plan_key = docs.plan_key
+     where docs.entitlement_key = 'documents.monthly'
+       and pages.entitlement_key = 'ocr_pages.monthly'
+       and not docs.unlimited and not pages.unlimited
+       and pages.numeric_limit is distinct from docs.numeric_limit * 10),
   'the page quotas are no longer the document quota times ten');
 select pg_temp.p51_assert(
   (select numeric_limit from plan_entitlements
-    where plan_key = 'basic' and entitlement_key = 'documents.monthly') = 50
+    where plan_key = 'basic' and entitlement_key = 'documents.monthly') = 40
   and (select numeric_limit from plan_entitlements
-    where plan_key = 'basic' and entitlement_key = 'ocr_pages.monthly') = 50 * 10
+    where plan_key = 'basic' and entitlement_key = 'ocr_pages.monthly') = 40 * 10
   and (select numeric_limit from plan_entitlements
-    where plan_key = 'premium' and entitlement_key = 'documents.monthly') = 500
+    where plan_key = 'premium' and entitlement_key = 'documents.monthly') = 375
   and (select numeric_limit from plan_entitlements
-    where plan_key = 'premium' and entitlement_key = 'ocr_pages.monthly') = 500 * 10,
-  'the launch rungs are not at the volumes #197 decided for them');
+    where plan_key = 'premium' and entitlement_key = 'ocr_pages.monthly') = 375 * 10,
+  'the launch rungs are not at the volumes #266 decided for them');
 -- Every decided figure is on record beside the one it replaced, so the size of each move stays
 -- answerable after the fact -- three of the eight lowered a ceiling somebody was already under.
 -- Scoped to #197 by its own decision_ref since 0202 recorded #198's four assistant figures in the
 -- same table: a bare count would have turned a second owner decision into a test failure, and
 -- worse, would have let one of #197's own eight go missing behind #198's four.
+--
+-- The eight metered figures belong to #266 since 24.08.2026: the ledger holds the CURRENT
+-- decision per quota rather than a log, so 0208 restated all eight and every one came down.
+-- 0208 is idempotent about this on purpose -- a second run keeps the ceiling it replaced instead
+-- of recording "it was already 20", which would erase the move it is meant to evidence.
 select pg_temp.p51_assert(
   (select count(*) from private.plan_quota_decisions
-   where decision_ref = 'OPEN-DECISIONS #197') = 8
+   where decision_ref = 'OPEN-DECISIONS #266') = 8
   and (select count(*) from private.plan_quota_decisions
-       where decision_ref = 'OPEN-DECISIONS #197'
-         and previous_limit is not null and previous_limit > decided_limit) = 3,
-  'the #197 record does not hold eight figures with three ceiling reductions');
+       where decision_ref = 'OPEN-DECISIONS #266'
+         and previous_limit is not null and previous_limit > decided_limit) = 8,
+  'the #266 record does not hold eight figures, every one of them a reduction');
 -- Two teeth, kept apart. The first: a plan may not restrict anything the owner has not decided.
 -- Naming the allowed metrics was how this read until 0202 added a third, and a list of names has to
 -- be edited every time -- so the rule is now stated as what it always meant: every stated ceiling

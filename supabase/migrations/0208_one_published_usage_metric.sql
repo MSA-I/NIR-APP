@@ -55,9 +55,23 @@ begin
       (v_row.plan_key, 'documents.monthly', v_row.docs::numeric, v_previous,
        coalesce(v_previous_unlimited, false), 'OPEN-DECISIONS #266')
     on conflict (plan_key, entitlement_key) do update
-       set decided_limit = excluded.decided_limit,
-           previous_limit = excluded.previous_limit,
-           previous_unlimited = excluded.previous_unlimited,
+       -- `previous_limit` moves only when the decided number actually moves. A second run of
+       -- this migration reads the value it wrote the first time, so blindly taking the incoming
+       -- `previous` would record "it was already 20" and erase the 25 it replaced -- provenance
+       -- destroyed by the act of re-running.
+       set previous_limit = case
+             when private.plan_quota_decisions.decided_limit
+                  is distinct from excluded.decided_limit
+             then private.plan_quota_decisions.decided_limit
+             else private.plan_quota_decisions.previous_limit
+           end,
+           previous_unlimited = case
+             when private.plan_quota_decisions.decided_limit
+                  is distinct from excluded.decided_limit
+             then coalesce(private.plan_quota_decisions.previous_unlimited, false)
+             else private.plan_quota_decisions.previous_unlimited
+           end,
+           decided_limit = excluded.decided_limit,
            decision_ref = excluded.decision_ref,
            recorded_at = now();
 
@@ -78,11 +92,25 @@ begin
       (plan_key, entitlement_key, decided_limit, previous_limit, previous_unlimited, decision_ref)
     values
       (v_row.plan_key, 'ocr_pages.monthly', (v_row.docs::numeric * v_page_ceiling), v_previous,
-       coalesce(v_previous_unlimited, false), 'OPEN-DECISIONS #266 (derived ceiling)')
+       coalesce(v_previous_unlimited, false), 'OPEN-DECISIONS #266')
     on conflict (plan_key, entitlement_key) do update
-       set decided_limit = excluded.decided_limit,
-           previous_limit = excluded.previous_limit,
-           previous_unlimited = excluded.previous_unlimited,
+       -- `previous_limit` moves only when the decided number actually moves. A second run of
+       -- this migration reads the value it wrote the first time, so blindly taking the incoming
+       -- `previous` would record "it was already 20" and erase the 25 it replaced -- provenance
+       -- destroyed by the act of re-running.
+       set previous_limit = case
+             when private.plan_quota_decisions.decided_limit
+                  is distinct from excluded.decided_limit
+             then private.plan_quota_decisions.decided_limit
+             else private.plan_quota_decisions.previous_limit
+           end,
+           previous_unlimited = case
+             when private.plan_quota_decisions.decided_limit
+                  is distinct from excluded.decided_limit
+             then coalesce(private.plan_quota_decisions.previous_unlimited, false)
+             else private.plan_quota_decisions.previous_unlimited
+           end,
+           decided_limit = excluded.decided_limit,
            decision_ref = excluded.decision_ref,
            recorded_at = now();
   end loop;
