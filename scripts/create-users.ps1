@@ -49,8 +49,8 @@ if ($manifestFile.Equals($repoRoot, [System.StringComparison]::OrdinalIgnoreCase
 
 $manifest = Get-Content -LiteralPath $manifestFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $accounts = @($manifest.accounts)
-if ($accounts.Count -ne 3) {
-  throw "Credentials manifest must contain exactly the three active demo accounts."
+if ($accounts.Count -lt 3 -or $accounts.Count -gt 6) {
+  throw "Credentials manifest must contain the three active demo accounts and may also retain the three retired accounts."
 }
 
 $seenEmails = @{}
@@ -58,12 +58,16 @@ $seenPasswords = @{}
 foreach ($account in $accounts) {
   $email = ([string]$account.email).Trim().ToLowerInvariant()
   $password = [string]$account.password
-  if ($allowedEmails -notcontains $email) { throw "Unexpected demo account in credentials manifest: $email" }
+  if ($allowedEmails -notcontains $email -and $retiredEmails -notcontains $email) {
+    throw "Unexpected demo account in credentials manifest: $email"
+  }
   if ($seenEmails.ContainsKey($email)) { throw "Duplicate demo account in credentials manifest: $email" }
-  if ($password.Length -lt 16) { throw "Each demo password must contain at least 16 characters." }
-  if ($seenPasswords.ContainsKey($password)) { throw "Every demo account must use a unique password." }
   $seenEmails[$email] = $true
-  $seenPasswords[$password] = $true
+  if ($allowedEmails -contains $email) {
+    if ($password.Length -lt 16) { throw "Each active demo password must contain at least 16 characters." }
+    if ($seenPasswords.ContainsKey($password)) { throw "Every active demo account must use a unique password." }
+    $seenPasswords[$password] = $true
+  }
 }
 foreach ($email in $activeEmails) {
   if (-not $seenEmails.ContainsKey($email)) { throw "Missing demo account in credentials manifest: $email" }

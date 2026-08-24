@@ -59,11 +59,10 @@ export default function Login() {
 
   if (!loading && session && profile) return <Navigate to={homeFor(profile.role)} replace />;
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function signInWithCredentials(loginEmail: string, loginPassword: string) {
     setBusy(true);
     setError(null);
-    const err = await signIn(email.trim(), password);
+    const err = await signIn(loginEmail, loginPassword);
     setBusy(false);
     if (err) {
       // One string used to be translated by hand and everything else passed through raw, so the
@@ -74,6 +73,11 @@ export default function Login() {
     } else {
       navigate('/', replaceOpts);
     }
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    await signInWithCredentials(email.trim(), password);
   }
 
   return (
@@ -166,17 +170,18 @@ export default function Login() {
                     חשבונות דמו מקומיים
                   </summary>
                   <p className="mb-2 text-xs text-ink-muted">
-                    ממלא את פרטי החשבון לבדיקה. האפשרות זמינה רק מול Supabase המקומי.
+                    לחיצה מתחברת מיד לחשבון שנבחר. האפשרות זמינה רק מול Supabase המקומי.
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     {demoAccounts.map((account) => (
                       <button key={account.role} type="button"
                         className="btn-secondary min-h-11 justify-center px-2 text-xs"
-                        aria-label={`מילוי פרטי ${account.label}`}
+                        aria-label={`כניסה כ${account.label}`}
+                        disabled={busy}
                         onClick={() => {
                           setEmail(account.email);
                           setPassword(account.password);
-                          setError(null);
+                          void signInWithCredentials(account.email, account.password);
                         }}>
                         {account.label}
                       </button>
