@@ -1,0 +1,245 @@
+{
+  "observedAt": "2026-08-23T22:36:54.030Z",
+  "baseUrl": "https://supplyflow-baq.pages.dev",
+  "deploymentId": "e851dbe8-fcc6-450d-b5b8-d80aace67da0",
+  "releaseSha": "15baeac",
+  "roles": [
+    {
+      "role": "owner",
+      "origin": "https://supplyflow-baq.pages.dev",
+      "loginSucceeded": true,
+      "afterLogin": "https://supplyflow-baq.pages.dev/dashboard",
+      "deepLinkUrl": "https://supplyflow-baq.pages.dev/suppliers",
+      "deepLinkStayedAuthenticated": true,
+      "deepLinkHeading": "ספקים",
+      "reloadStayedAuthenticated": true,
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "overflow": false,
+      "logoutSucceeded": true,
+      "afterLogout": "https://supplyflow-baq.pages.dev/login",
+      "consoleErrors": [],
+      "pageErrors": [],
+      "requestFailures": [
+        {
+          "url": "https://supplyflow-baq.pages.dev/icons/icon-192.png",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/notifications",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/notifications",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/documents",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/documents",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/suppliers",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/notifications",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/documents",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/notifications",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/notifications",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/notifications",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/documents",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/auth/v1/logout",
+          "error": "net::ERR_ABORTED"
+        }
+      ],
+      "httpErrors": [],
+      "corsErrors": []
+    },
+    {
+      "role": "office",
+      "origin": "https://supplyflow-baq.pages.dev",
+      "loginSucceeded": true,
+      "afterLogin": "https://supplyflow-baq.pages.dev/dashboard",
+      "deepLinkUrl": "https://supplyflow-baq.pages.dev/suppliers",
+      "deepLinkStayedAuthenticated": true,
+      "deepLinkHeading": "ספקים",
+      "reloadStayedAuthenticated": true,
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "overflow": false,
+      "logoutSucceeded": true,
+      "afterLogout": "https://supplyflow-baq.pages.dev/login",
+      "consoleErrors": [],
+      "pageErrors": [],
+      "requestFailures": [
+        {
+          "url": "https://supplyflow-baq.pages.dev/icons/icon-192.png",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/notifications",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/notifications",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/documents",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/documents",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/suppliers",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/notifications",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/notifications",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/documents",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/notifications",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/notifications",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/documents",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/auth/v1/logout",
+          "error": "net::ERR_ABORTED"
+        }
+      ],
+      "httpErrors": [],
+      "corsErrors": []
+    },
+    {
+      "role": "accountant",
+      "origin": "https://supplyflow-baq.pages.dev",
+      "loginSucceeded": true,
+      "afterLogin": "https://supplyflow-baq.pages.dev/dashboard",
+      "deepLinkUrl": "https://supplyflow-baq.pages.dev/dashboard",
+      "deepLinkStayedAuthenticated": true,
+      "deepLinkHeading": "מרכז הבקרה — הנהלת חשבונות",
+      "reloadStayedAuthenticated": true,
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "overflow": false,
+      "logoutSucceeded": true,
+      "afterLogout": "https://supplyflow-baq.pages.dev/login",
+      "consoleErrors": [],
+      "pageErrors": [],
+      "requestFailures": [
+        {
+          "url": "https://supplyflow-baq.pages.dev/icons/icon-192.png",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://rkftlbctohswhbbiaqin.supabase.co/auth/v1/logout",
+          "error": "net::ERR_ABORTED"
+        }
+      ],
+      "httpErrors": [],
+      "corsErrors": []
+    }
+  ],
+  "operator": {
+    "url": "https://supplyflow-baq.pages.dev/operator",
+    "status": "loaded",
+    "bodyText": "תפעול פלטפורמה לקוחות משפך ניהול פלטפורמה אוטונומיית מסמכים owner@gamos.demo התנתקות ניהול פלטפורמה ארגון חדש הערות מלקוחות ההערה ארגון תפקיד מסך מכשיר שליחה מתי בחלק זה נותן תראה פה עסק לדוגמה מנהל/בעלים /suppliers/aa000000-0000-4000-8000-000000000012 402px נשלח 21.08.2026, 09:48 זה לא מראה הזמנה שעשיתי מאחים כן ולא רושם כמה ספק פתוח אצלנו בחישוב של אותו חודש ההזמנות עסק לדוגמה מנהל/בעלים /suppli"
+  },
+  "recovery": {
+    "url": "https://rkftlbctohswhbbiaqin.supabase.co/auth/v1/recover?redirect_to=https%3A%2F%2Fsupplyflow-baq.pages.dev%2Freset-password",
+    "redirectToInQuery": "https://supplyflow-baq.pages.dev/reset-password",
+    "body": {
+      "email": "owner@gamos.demo",
+      "code_challenge": null,
+      "code_challenge_method": null,
+      "gotrue_meta_security": {}
+    }
+  },
+  "mobile": {
+    "url": "https://supplyflow-baq.pages.dev/dashboard",
+    "clientWidth": 390,
+    "scrollWidth": 390,
+    "overflow": false,
+    "consoleErrors": [],
+    "pageErrors": [],
+    "requestFailures": [
+      {
+        "url": "https://supplyflow-baq.pages.dev/icons/icon-192.png",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/notifications",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/notifications",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/documents",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/documents",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://rkftlbctohswhbbiaqin.supabase.co/rest/v1/suppliers",
+        "error": "net::ERR_ABORTED"
+      }
+    ],
+    "httpErrors": [],
+    "corsErrors": []
+  },
+  "summary": {
+    "loginFailures": 0,
+    "logoutFailures": 0,
+    "deepLinkFailures": 0,
+    "overflowFailures": 0,
+    "corsErrorPages": 0,
+    "consoleErrorPages": 0,
+    "pageErrorPages": 0,
+    "httpErrorPages": 0,
+    "requestFailurePages": 3
+  }
+}

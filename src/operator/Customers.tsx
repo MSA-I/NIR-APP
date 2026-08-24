@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Building2, PauseCircle, PlayCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { Building2, Lock, PauseCircle, PlayCircle } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';
 import {
-  DataTable, ErrorNote, Note, SkeletonTable, StatusBadge, ConfirmDialog, useToast,
+  DataTable, ErrorNote, Modal, Note, SkeletonTable, StatusBadge, useToast,
   type ServerColumn,
 } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
@@ -12,8 +11,10 @@ import { fmtDate, fmtNum } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import { ORG_STATUS } from '../lib/status';
 import {
-  fetchMyCapabilities, fetchPlatformCustomers,
-  type CustomerAttention, type PlatformCapability, type PlatformCustomer,
+  fetchLifecycleReasonCodes, fetchMyCapabilities, fetchPlatformCustomers,
+  setOrganizationLifecycle,
+  type CustomerAttention, type LifecycleReasonCode, type PlatformCapability,
+  type PlatformCustomer,
 } from '../lib/platform';
 import type { OrgStatus } from '../lib/types';
 
@@ -48,6 +49,132 @@ const ATTENTION_FILTERS: { key: string; label: string; value: CustomerAttention 
   { key: 'processing_failures', label: 'כשלי עיבוד מסמכים', value: 'processing_failures' },
 ];
 
+/**
+ * The suspension dialog after the #20 split. It is two fields, not one, and the difference
+ * between them is the whole point: the top field is written into the tenant's own audit trail
+ * and the tenant's owner and accountant can read it; the bottom field is Platform-only storage
+ * the tenant has no path to. The screen says so in as many words, because an operator who
+ * believes both fields are private will put the commercial note in the wrong one.
+ *
+ * This is NOT the security boundary — the split is enforced in the command and in the storage
+ * (0195). This is the surface that makes the boundary usable.
+ */
+function LifecycleDialog({
+  pending, codes, busy, onClose, onSubmit,
+}: {
+  pending: PendingLifecycle | null;
+  codes: LifecycleReasonCode[];
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (input: { reasonCode: string; publicReason: string; internalNote: string }) => void;
+}) {
+  const codeId = useId();
+  const publicId = useId();
+  const internalId = useId();
+  const suspending = pending?.action === 'suspend';
+  const targetStatus: OrgStatus = suspending ? 'suspended' : 'active';
+  const choices = codes.filter((code) => code.applies_to_status === targetStatus);
+  const [reasonCode, setReasonCode] = useState('');
+  const [publicReason, setPublicReason] = useState('');
+  const [internalNote, setInternalNote] = useState('');
+
+  const dialogKey = `${pending?.customer.id ?? ''}:${pending?.action ?? ''}`;
+  const [lastKey, setLastKey] = useState('');
+  if (pending && dialogKey !== lastKey) {
+    // Reset on open rather than in an effect: a stale internal note carried into the next
+    // customer's dialog would be an operator note filed against the wrong tenant.
+    setLastKey(dialogKey);
+    setReasonCode(choices[0]?.reason_code ?? '');
+    setPublicReason('');
+    setInternalNote('');
+  }
+
+  if (!pending) return null;
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      busy={busy}
+      title={suspending
+        ? `השהיית ${pending.customer.name}`
+        : `הפעלת ${pending.customer.name} מחדש`}
+      description={suspending
+        ? 'כל משתמשי הארגון יאבדו גישה לנתונים באופן מיידי — החסימה נאכפת בבסיס הנתונים, לא במסך בלבד.'
+        : 'הארגון יחזור לסטטוס «פעיל» וגישת המשתמשים תשוחזר.'}
+    >
+      <div className="mb-4">
+        <label className="label" htmlFor={codeId}>קוד סיבה (נרשם ביומן של הדייר)</label>
+        <select
+          id={codeId}
+          className="input"
+          value={reasonCode}
+          onChange={(event) => setReasonCode(event.target.value)}
+        >
+          {choices.map((code) => (
+            <option key={code.reason_code} value={code.reason_code}>{code.tenant_label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="mb-4">
+        <label className="label" htmlFor={publicId}>סיבה גלויה לדייר</label>
+        <p className="mb-1 text-xs text-ink-muted">
+          בעל הארגון ורואה החשבון שלו יכולים לקרוא את הטקסט הזה. יש לנסח אותו כהודעה ללקוח.
+        </p>
+        <textarea
+          id={publicId}
+          className="input"
+          rows={2}
+          maxLength={1000}
+          value={publicReason}
+          onChange={(event) => setPublicReason(event.target.value)}
+        />
+      </div>
+
+      <div className="mb-4">
+        <label className="label flex items-center gap-1.5" htmlFor={internalId}>
+          <Lock size={14} aria-hidden="true" />
+          הערה פנימית — Platform בלבד
+        </label>
+        <p className="mb-1 text-xs text-ink-muted">
+          לא נכנסת ליומן של הדייר, לא לייצוא הנתונים שלו ולא להתראה. כאן נרשמת התמונה המסחרית.
+        </p>
+        <textarea
+          id={internalId}
+          className="input"
+          rows={3}
+          maxLength={4000}
+          value={internalNote}
+          onChange={(event) => setInternalNote(event.target.value)}
+        />
+      </div>
+
+      <div className="flex gap-2 justify-end">
+        <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>
+          ביטול
+        </button>
+        <button
+          type="button"
+          className={suspending ? 'btn-danger' : 'btn-primary'}
+          disabled={busy}
+          onClick={() => onSubmit({ reasonCode, publicReason, internalNote })}
+        >
+          {suspending ? 'השהיה' : 'הפעלה מחדש'}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+interface PendingLifecycle {
+  customer: PlatformCustomer;
+  action: 'suspend' | 'reactivate';
+  reasonCode?: string;
+  publicReason?: string;
+  internalNote?: string;
+}
+
 export default function Customers() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -55,9 +182,7 @@ export default function Customers() {
   const [attentionKey, setAttentionKey] = useState('none');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
-  const [pending, setPending] = useState<{
-    customer: PlatformCustomer; action: 'suspend' | 'reactivate'; reason?: string;
-  } | null>(null);
+  const [pending, setPending] = useState<PendingLifecycle | null>(null);
   const [reauth, setReauth] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -66,11 +191,12 @@ export default function Customers() {
 
   const { data, loading, fetching, error, refetch } = useQuery(
     async () => {
-      const [capabilities, customers] = await Promise.all([
+      const [capabilities, codes, customers] = await Promise.all([
         fetchMyCapabilities(),
+        fetchLifecycleReasonCodes(),
         fetchPlatformCustomers({ search, status, attention, page, pageSize: PAGE_SIZE }),
       ]);
-      return { capabilities, ...customers };
+      return { capabilities, codes, ...customers };
     },
     [search, statusKey, attentionKey, page],
   );
@@ -78,22 +204,28 @@ export default function Customers() {
   const capabilities: PlatformCapability[] = data?.capabilities ?? [];
   const may = (capability: PlatformCapability) => capabilities.includes(capability);
 
-  async function applyStatus(
-    customer: PlatformCustomer, action: 'suspend' | 'reactivate', reason?: string,
-  ) {
-    const status = action === 'suspend' ? 'suspended' : 'active';
+  async function applyStatus(next: PendingLifecycle) {
     setBusy(true);
-    const res = await supabase.rpc('set_organization_lifecycle', {
-      p_org_id: customer.id,
-      p_status: status,
-      p_trial_ends_at: null,
-      p_reason: reason?.trim() ?? '',
-    });
+    try {
+      await setOrganizationLifecycle({
+        orgId: next.customer.id,
+        status: next.action === 'suspend' ? 'suspended' : 'active',
+        publicReason: next.publicReason?.trim() || (next.action === 'suspend'
+          ? 'השהיית הארגון' : 'הפעלת הארגון מחדש'),
+        publicReasonCode: next.reasonCode?.trim() || null,
+        // Empty means "no note", never an empty string in the ledger.
+        internalNote: next.internalNote?.trim() || null,
+      });
+    } catch (rpcError) {
+      setBusy(false);
+      setReauth(false);
+      toast(toHebrewError((rpcError as Error).message), 'error');
+      return;
+    }
     setBusy(false);
     setReauth(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
     setPending(null);
-    toast(action === 'suspend' ? 'הארגון הושהה — הגישה נחסמה' : 'הארגון הופעל מחדש');
+    toast(next.action === 'suspend' ? 'הארגון הושהה — הגישה נחסמה' : 'הארגון הופעל מחדש');
     void refetch();
   }
 
@@ -224,35 +356,31 @@ export default function Customers() {
         }
       />
 
-      <ConfirmDialog
-        open={!!pending && !reauth}
+      <LifecycleDialog
+        pending={reauth ? null : pending}
+        codes={data?.codes ?? []}
         busy={busy}
-        danger={pending?.action === 'suspend'}
-        requireReason
-        title={pending?.action === 'suspend'
-          ? `השהיית ${pending.customer.name}`
-          : `הפעלת ${pending?.customer.name ?? ''} מחדש`}
-        message={pending?.action === 'suspend'
-          ? 'כל משתמשי הארגון יאבדו גישה לנתונים באופן מיידי — החסימה נאכפת בבסיס הנתונים, לא במסך בלבד.'
-          : 'הארגון יחזור לסטטוס «פעיל» וגישת המשתמשים תשוחזר.'}
-        confirmLabel={pending?.action === 'suspend' ? 'השהיה' : 'הפעלה מחדש'}
         onClose={() => setPending(null)}
-        onConfirm={(reason) => {
+        onSubmit={(input) => {
           if (!pending) return;
-          if (pending.action === 'reactivate') {
-            setPending({ ...pending, reason });
-            setReauth(true);
-            return;
-          }
-          void applyStatus(pending.customer, pending.action, reason);
+          // BOTH directions re-authenticate. set_organization_lifecycle has demanded a fresh
+          // password since 0134:176 for suspension as well as reactivation; asking only on the
+          // way back left an operator staring at a step-up error they had no way to satisfy.
+          setPending({
+            ...pending,
+            reasonCode: input.reasonCode,
+            publicReason: input.publicReason,
+            internalNote: input.internalNote,
+          });
+          setReauth(true);
         }}
       />
       <ReauthModal
         open={reauth}
-        title="אימות זהות להפעלת ארגון מחדש"
-        onConfirm={() => {
-          if (pending) void applyStatus(pending.customer, pending.action, pending.reason);
-        }}
+        title={pending?.action === 'suspend'
+          ? 'אימות זהות להשהיית ארגון'
+          : 'אימות זהות להפעלת ארגון מחדש'}
+        onConfirm={() => { if (pending) void applyStatus(pending); }}
         onCancel={() => setReauth(false)}
       />
     </div>

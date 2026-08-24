@@ -1,5 +1,82 @@
 # PROGRESS — מצב נוכחי
 
+עודכן: 24.08.2026 — **‏`https://app.inplace.digital` חי ומאומת. תצורה בלבד: אין build חדש, אין פריסה חדשה ואין שינוי קוד.**
+
+> **מה חי עכשיו.** האזור `inplace.digital` (‏id `82a4bdef…7b5a`) **‏active** ב-Cloudflare אחרי שה-nameservers
+> ברשם הוחלפו ל-`clyde.ns.cloudflare.com`/`rose.ns.cloudflare.com` (‏RDAP `last changed`
+> ‏`2026-08-23T22:07:04Z`). ‏`app.inplace.digital` מחובר כ-custom domain לפרויקט ה-Pages **הקיים**
+> ‏`supplyflow` — `status=active`, ‏`cert=active` — דרך `CNAME app → supplyflow-baq.pages.dev`
+> ‏(proxied). ‏**לא נוצר עותק שני של האפליקציה:** ה-entry chunks בשתי הכתובות זהים
+> ‏(`index-Do0SLF1a.js`, ‏`client-DW-RYYJh.js`, ‏`format-BW5Zejev.js`, ‏`recharts-BhAWep5w.js`),
+> כלומר שתיהן מגישות את פריסת הייצור `e851dbe8-fcc6-450d-b5b8-d80aace67da0` ‏(`15baeac`).
+>
+> **למה לא נדרש build.** ה-frontend אינו נושא כתובת בסיס. הלקוח בונה כל קישור מוחלט מ-
+> `window.location.origin` — ‏`src/lib/supplierPortal.ts:11` ו-`src/pages/ForgotPassword.tsx:33` —
+> ולכן **אותו bundle בדיוק** נכון לשתי הכתובות. אין `VITE_APP_BASE_URL` בחוזה, ולא נוסף כזה.
+> הכתובת המוחלטת היחידה היא שרתית: הסוד `APP_BASE_URL`.
+>
+> **מה שונה בתצורה, ומה נשמר.** ‏`ALLOWED_ORIGINS` **הורחב תוספתית** ל-
+> `pages.dev, localhost:5199, app.inplace.digital` — הסדר נשמר כך ש-`allowed[0]` לא זז; מקור לא-מורשה
+> עדיין נדחה ואין `*`. ‏`APP_BASE_URL` הועבר ל-`https://app.inplace.digital`. ב-Supabase Auth ה-Site URL
+> **היה `http://localhost:3000`** — ברירת המחדל של Supabase, מעולם לא הוצבעה לייצור — והוא עכשיו
+> `https://app.inplace.digital`; ה-allowlist **הורחב ולא הוחלף**:
+> ‏`…pages.dev/reset-password` **נשאר** לצד `…app.inplace.digital/reset-password`, כדי שקישורי שחזור
+> שכבר נשלחו ימשיכו לנחות. אין wildcard.
+>
+> **‏`supplyflow-baq.pages.dev` נשאר חי** כ-origin לגלגול אחורה; לא נוצרה ממנו הפניה למשתמש.
+>
+> **ה-apex ו-`www` אינם מוגדרים — במכוון.** סריקת הייבוא של Cloudflare משכה את ברירות המחדל של
+> ‏NameCheap, ובהן `A inplace.digital → 192.64.119.114` (דף חניה) ו-`CNAME www → parkingpage.namecheap.com`,
+> שתיהן proxied. **שתיהן נמחקו לפני שההאצלה הפכה סמכותית**, ולכן `https://inplace.digital` ו-
+> `https://www.inplace.digital` אינם מגישים דבר (`www` מחזיר NXDOMAIN). רשומות ה-MX וה-SPF של השורש
+> **לא נגעו** — הן מישור הדואר, ומטופלות בנפרד.
+>
+> **אימות חי, לא הסקה.** ‏14 נתיבים על הכתובת החדשה מחזירים `200` ו-`/operator.html` מחזיר `308`
+> ל-`/operator`. ‏Playwright headed-equivalent מול הייצור עם שלוש זהויות הבדיקה המורשות: התחברות 3/3,
+> התנתקות 3/3, deep-link ל-`/suppliers` ורענון מלא שומרים סשן 3/3, **אפס** שגיאות console, ‏pageerror,
+> ‏CORS ו-HTTP≥400, אפס גלישה אופקית ב-1440×900 וב-390×844. בקשת השחזור **נלכדה ובוטלה לפני שיצאה**
+> והוכיחה `redirect_to=https://app.inplace.digital/reset-password` — בדיוק הערך שב-allowlist.
+> ‏`/accept-invite` ו-`/portal` מגישים את המסכים שלהם עם הודעת "קישור לא תקין", לא 404.
+> **גבול המפעיל לא זז:** ‏`office` ו-`accountant` מנותבים מ-`/operator` לדשבורד שלהם, ואותה סוויטה
+> בדיוק רצה כביקורת מול `pages.dev` והחזירה סיכום **זהה בייטית** — כלומר ההתנהגות היא של המוצר, לא
+> של המעבר.
+>
+> **מה שבמפורש לא קרה בשלב הזה:** לא Twilio, לא חיוב, לא Assistant, לא דגל, לא מיגרציה,
+> לא רשומה עסקית. ראיות: `artifacts/domain-cutover/`.
+
+עודכן: 24.08.2026 — **תשתית הדואר הופעלה על אותו דומיין: ‏Resend מאומת, ‏Auth מחובר ל-SMTP, וחסם
+שני-המיילים-בשעה הוסר.** תצורה בלבד; אין קוד, build או פריסה חדשים.
+
+> **החסם שנמצא במדידה.** ‏`rate_limit_email_sent` בייצור היה **`2`** — שני מיילים בשעה **לכל
+> הפרויקט**, לא לכל משתמש — דרך שירות הפיתוח המשותף של Supabase ומכתובת `supabase.co`. שלושה
+> לקוחות שמאפסים סיסמה באותה שעה, והשלישי לא מקבל דבר בלי שגיאה. זו לא הגדרה שכדאי לשפר אלא
+> **חוסם השקה**, והוא היה שם בשקט. עכשיו `100`, וניתן להעלאה רק מפני שיש SMTP מותאם.
+>
+> **מה חי.** ‏`inplace.digital` **מאומת** ב-Resend (`eu-west-1`, אירופה) עם DKIM ו-SPF; ‏Auth שולח
+> דרך `smtp.resend.com:465` בזהות `InPlace <no-reply@inplace.digital>`; ‏`INVITE_FROM_EMAIL`
+> ו-`ORDERS_FROM_EMAIL` נושאים את אותה כתובת (‏`ORDERS_FROM_EMAIL` **לא היה קיים כלל** קודם,
+> ו-`email-sender` נפל חזרה ל-invite). ‏DMARC פורסם כ-`p=none` עם `rua=mailto:dmarc@inplace.digital`,
+> ו-Cloudflare Email Routing מעביר את התיבה הזו לבעלים — `enabled=true`, ‏catch-all **כבוי**.
+>
+> **סיסמת ה-SMTP היא מפתח Resend המוגבל-שליחה**, לא המלא. ל-Auth אין שום צורך בניהול דומיינים.
+>
+> **שני כיוונים נמדדו, לא הוסקו.** יוצא: הודעה נשלחה ונמדדה `delivered`, ו-Gmail החזיר **SPF,
+> ‏DKIM ו-DMARC ‏`PASS`** במקור ההודעה. נכנס: הודעה נשלחה אל `dmarc@inplace.digital` ונחתה בתיבת
+> הבעלים דרך Cloudflare — כלומר דוחות ה-`rua` שהרשומה מבקשת אכן ינחתו במקום שנקרא, וזה מה שהופך
+> את המסלול `none → quarantine → reject` לתוכנית עם תנאי מעבר מדידים ולא להצהרה.
+>
+> **שני משטחים על אותו שם, בלי התנגשות:** ‏Resend **שולח** דרך `send.` ו-`resend._domainkey`;
+> ‏Cloudflare **מקבל** דרך השורש ו-`cf2024-1._domainkey`. חמש רשומות ה-MX של NameCheap ורשומת
+> ה-SPF שלהן נמחקו — הבעלים אישר שלא היה דואר פעיל, ושתי רשומות SPF על אותו שם פוסלות זו את זו.
+> אחרי המחיקה נמדד ש-Resend נשאר `verified` על שלוש רשומותיו.
+>
+> **מה שאסור לטעון: מייל Auth אמיתי לא נשלח.** חשבונות הבדיקה הם `@gamos.demo` — דומיין מזויף —
+> ו-`recover` לכתובת שאינה קיימת מחזיר `200` בלי לשלוח, מטעמי אי-מנייה. ‏Supabase אימת את חיבור
+> ה-SMTP בשמירה; ההוכחה הסופית היא המייל האמיתי הראשון. ‏`RESEND_WEBHOOK_SECRET` ו-`email-webhook`
+> עדיין אינם, ולכן accepted עדיין אינו delivered במסלול המוצר.
+>
+> **חוב שנפתח:** תבניות מיילי ה-Auth הן ברירות מחדל **באנגלית** במוצר עברי RTL.
+
 עודכן: 23.08.2026 — **מועמד המיזוג דרך `0170` שוחרר ל־Production; Assistant וקריאות לספקי צד־שלישי נשארו כבויים.**
 
 > **מקור runtime וראיות:** ‏PR #97 תיקן את קריאת ה־flags האנונימית ומוזג כ־

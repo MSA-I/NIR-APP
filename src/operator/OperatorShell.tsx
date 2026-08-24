@@ -17,6 +17,8 @@ const NAV = [
   { to: '/admin/funnel', label: 'משפך', end: false },
   { to: '/admin', label: 'ניהול פלטפורמה', end: true },
   { to: '/admin/autonomy', label: 'אוטונומיית מסמכים', end: false },
+  { to: '/admin/signups', label: 'הרשמות שלא אושרו', end: false },
+  { to: '/admin/purge', label: 'מחיקה סופית', end: false },
 ] as const;
 
 export default function OperatorShell() {
