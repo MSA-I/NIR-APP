@@ -449,6 +449,18 @@ as $$
     on attribute.attrelid = reference.conrelid
    and attribute.attnum = any(reference.conkey)
   where reference.contype = 'f'
+    -- public.audit_logs is excluded, and the reason is structural rather than a preference.
+    -- 0175 gave the ledger a foreign key to org_units over (org_id, legal_entity_id), both nullable,
+    -- so the catalogue rule below selects it like any other child. It also made that table immutable:
+    -- private.audit_log_immutable_guard refuses EVERY update unconditionally -- superuser included --
+    -- and permits only a DELETE that declared an authorized purge. A breaker pass therefore raises
+    -- audit_log_immutable before the teardown reaches its first delete, which is what three gate runs
+    -- reported as a bare 'audit_log_immutable' until 0200 taught the refusal to name its operation.
+    --
+    -- Nulling it would be pointless even if it were permitted: the ledger does not survive a teardown,
+    -- it is deleted by it. It is the CHILD of that foreign key, so the staged delete removes it before
+    -- org_units, and the on-delete-restrict side is satisfied without any row ever being updated.
+    and not (child.schema_name = 'public' and child.table_name = 'audit_logs')
   group by child.schema_name, child.table_name, reference.oid
   having bool_and(not attribute.attnotnull)
 $$;
