@@ -16,7 +16,8 @@
 --
 -- WHY THIS IS NOT A SECOND STEP-UP PRIMITIVE (SECURITY-MODEL 6, threat model 0).
 -- assert_mfa_assurance() is not called by any command. It is called by
--- assert_recent_password_authentication() -- wired in 0200 -- which stays the single entry
+-- assert_recent_password_authentication() -- NOT yet wired, by owner ruling 24.08.2026 -- which
+-- stays the single entry
 -- point every sensitive command already calls. One mechanism, extended in place. Adding a
 -- second primitive that commands had to remember to call separately is exactly the failure
 -- the named-path registry exists to catch.
@@ -84,7 +85,9 @@ revoke all on function assert_mfa_assurance() from public, anon, authenticated;
 comment on function assert_mfa_assurance() is
   'Raises mfa_assurance_required/42501 when an owner or accountant session has not reached '
   'aal2. Optional for office, silent for a caller with no resolvable role (0133). Called '
-  'only from assert_recent_password_authentication (0200), never directly by a command.';
+  'only from assert_recent_password_authentication once the owner authorizes that wiring, never '
+  'directly by a command. Built and not wired: #88 keeps password step-up until the MFA contract is '
+  'live and proven, and nothing in the product enrols a factor yet.';
 
 -- ===== A1/A3/A5 re-assertion =====
 -- Every migration after 0057 must re-run the scope proofs so a new table, policy, trigger or

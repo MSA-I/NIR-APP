@@ -1,4 +1,4 @@
--- P74 role-based MFA assurance harness for 0199-0200 (#88). Run only against an isolated
+-- P74 role-based MFA assurance harness for 0199 (#88). Run only against an isolated
 -- local database with every migration applied. The transaction is rolled back.
 --
 -- Scope note, deliberate: this suite proves the SERVER-SIDE assurance contract only --
@@ -108,12 +108,21 @@ create function pg_temp.p74_assurance_uncovered()
 returns setof text
 language sql stable
 as $$
-  select 'primitive missing assurance: public.assert_recent_password_authentication()'
+  select 'the one step-up primitive is missing: public.assert_recent_password_authentication()'
   where to_regprocedure('public.assert_recent_password_authentication()') is null
-     or coalesce(
+  union all
+  -- Owner ruling, 24.08.2026: the assurance primitive is BUILT and not WIRED. #88 says to keep
+  -- password step-up until the MFA contract is live and proven, and nothing in the product enrols a
+  -- factor yet -- so wiring assurance into this primitive would refuse every owner and accountant on
+  -- every payment, bank-detail change, month export and scope grant, with no way to enrol from
+  -- inside the product. This arm pins that decision: a future migration that quietly adds the call
+  -- fails the gate and has to be decided again rather than discovered in production.
+  select 'the step-up primitive carries an MFA assurance call the owner has not authorized: '
+      || 'public.assert_recent_password_authentication()'
+  where coalesce(
           (select p.prosrc from pg_catalog.pg_proc p
             where p.oid = to_regprocedure('public.assert_recent_password_authentication()')::oid),
-          '') !~ 'assert_mfa_assurance'
+          '') ~ 'assert_mfa_assurance'
   union all
   select 'path lost the step-up primitive: ' || wired.signature
   from (values
@@ -139,11 +148,14 @@ select pg_temp.p74_assert(
   'assurance coverage is incomplete: ' ||
   coalesce((select string_agg(u, '; ') from pg_temp.p74_assurance_uncovered() u), ''));
 
--- ===== (B8) Mutation proof -- the B2 check must actually detect a loss =====
+-- ===== (B8) Mutation proof -- the B2 check must actually detect an unauthorized wiring =====
+-- A registry that cannot fail is not a gate. The mutation adds the call the owner declined, and B2
+-- must name it; rolling back must clear it again.
 savepoint mutation_assurance;
 create or replace function assert_recent_password_authentication() returns void
 language plpgsql security definer set search_path = public as $$
 begin
+  perform assert_mfa_assurance();
   raise exception 'p74_mutated_stub' using errcode = 'P0001';
 end
 $$;
@@ -151,12 +163,13 @@ revoke all on function assert_recent_password_authentication() from public, anon
 select pg_temp.p74_assert(
   exists (
     select 1 from pg_temp.p74_assurance_uncovered() u
-    where u = 'primitive missing assurance: public.assert_recent_password_authentication()'),
-  'the B2 registry must detect a primitive that dropped the assurance call');
+    where u = 'the step-up primitive carries an MFA assurance call the owner has not authorized: '
+           || 'public.assert_recent_password_authentication()'),
+  'the B2 registry must detect a primitive that was wired to assurance without authorization');
 rollback to savepoint mutation_assurance;
 select pg_temp.p74_assert(
   not exists (select 1 from pg_temp.p74_assurance_uncovered()),
-  'rolling the mutation back must restore full assurance coverage');
+  'rolling the mutation back must clear the unauthorized-wiring finding');
 
 -- ===== (B3) Fail-closed aal parsing, table-driven -- one row per malformed shape =====
 -- `jsonb_typeof(missing)` is SQL NULL, so a plain `<> 'string'` evaluates to NULL and the
