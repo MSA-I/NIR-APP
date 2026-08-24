@@ -135,32 +135,119 @@ function tokenValue(name: string): string {
   return alias ? tokenValue(alias[1]) : raw;
 }
 
-function luminanceOf(name: string) {
+/**
+ * The measure that replaced WCAG contrast for mark-vs-mark separation (24.08.2026).
+ *
+ * WCAG's ratio is defined for TEXT on a BACKGROUND and is a function of luminance alone, so as
+ * a test of "can a reader tell these two series apart" it can only ever see lightness. That was
+ * adequate while the ramp was monochrome — lightness was the only difference there was. It is
+ * not adequate for a categorical palette, whose steps sit at deliberately similar lightness so
+ * that none of them dominates, and where hue carries the identity.
+ *
+ * OKLab Euclidean distance x100 is the perceptual measure that sees both. The thresholds below
+ * are the data-viz skill's: 15 for unsimulated vision, 8 under simulated colour-vision
+ * deficiency. The CVD transforms are Machado, Oliveira & Fernandes (2009) at severity 1.0,
+ * applied in LINEAR RGB — the model the thresholds were calibrated against, so swapping in a
+ * different simulation would mean recalibrating the numbers too.
+ */
+const MACHADO = {
+  protan: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+  deutan: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.011820, 0.042940, 0.968881]],
+} as const;
+
+function linearRgbToOklab([r, g, b]: readonly [number, number, number]) {
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s,
+  ] as const;
+}
+
+/** oklch() components of a token, following one level of var() indirection. */
+function oklchOf(name: string) {
   const value = tokenValue(name);
   const parts = value.match(/^oklch\(([\d.]+)%\s+([\d.]+)\s+([\d.]+)\)$/);
   if (!parts) throw new Error(`--${name} is not a plain oklch() value: ${value}`);
-  const [r, g, b] = oklchToLinearRgb(Number(parts[1]) / 100, Number(parts[2]), Number(parts[3]));
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return { lightness: Number(parts[1]) / 100, chroma: Number(parts[2]), hue: Number(parts[3]) };
 }
 
-function contrast(a: string, b: string) {
-  const [hi, lo] = [luminanceOf(a), luminanceOf(b)].sort((x, y) => y - x);
-  return (hi + 0.05) / (lo + 0.05);
+function labOf(name: string, deficiency?: keyof typeof MACHADO) {
+  const { lightness, chroma, hue } = oklchOf(name);
+  const linear = oklchToLinearRgb(lightness, chroma, hue);
+  if (!deficiency) return linearRgbToOklab(linear);
+  const matrix = MACHADO[deficiency];
+  return linearRgbToOklab(matrix.map((row) => row[0] * linear[0] + row[1] * linear[1] + row[2] * linear[2]) as unknown as readonly [number, number, number]);
 }
+
+function deltaE(a: string, b: string, deficiency?: keyof typeof MACHADO) {
+  const [p, q] = [labOf(a, deficiency), labOf(b, deficiency)];
+  return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) * 100;
+}
+
+const NORMAL_FLOOR = 15;
+const CVD_FLOOR = 8;
+const CHROMA_FLOOR = 0.1;
+const SERIES_TOKENS = [1, 2, 3, 4, 5].map((n) => `color-series-${n}`);
+
+describe('categorical palette', () => {
+  it('כל צעד נושא כרומה אמיתית — לא אפור שמתחזה לגוון', () => {
+    // The defect this palette exists to answer. Every step of the sequential ramp measures under
+    // 0.10 chroma (0.058 · 0.050 · 0.031 · 0.022 · 0.015), which is why five "different" colours
+    // read as five greys. A categorical step that drifts back under the floor is the same bug.
+    for (const token of SERIES_TOKENS) {
+      expect(oklchOf(token).chroma, token).toBeGreaterThanOrEqual(CHROMA_FLOOR);
+    }
+  });
+
+  it('כל זוג נבדל — גם למי שאינו רואה צבע', () => {
+    // ALL pairs, not just neighbours: the donut puts four named slices and "אחר" on screen at
+    // once, and the legend chips sit in a row, so any two steps get compared directly. A
+    // neighbour-only check would pass a palette whose first and third steps are indistinguishable.
+    for (let i = 0; i < SERIES_TOKENS.length; i++) {
+      for (let j = i + 1; j < SERIES_TOKENS.length; j++) {
+        const [a, b] = [SERIES_TOKENS[i], SERIES_TOKENS[j]];
+        expect(deltaE(a, b), `${a} vs ${b} (normal vision)`).toBeGreaterThanOrEqual(NORMAL_FLOOR);
+        expect(Math.min(deltaE(a, b, 'protan'), deltaE(a, b, 'deutan')), `${a} vs ${b} (CVD)`)
+          .toBeGreaterThanOrEqual(CVD_FLOOR);
+      }
+    }
+  });
+
+  it('אף צעד קטגורי אינו משאיל טוקן סטטוס', () => {
+    // The two vocabularies stay apart (DESIGN.md, חוק שני אוצרות-המילים). A series step that
+    // resolved to a status family would make a chart mark claim a business state.
+    for (const token of SERIES_TOKENS) {
+      expect(rules).toMatch(new RegExp(`--${token}:\\s*oklch\\(`));
+    }
+  });
+});
+
 
 describe('comparison series', () => {
   const theme = readFileSync('src/lib/theme.ts', 'utf8');
   const body = theme.slice(theme.indexOf('export function comparisonSeries'));
-  const steps = [...body.matchAll(/t\.bars\[(\d)\]/g)].map((match) => Number(match[1]));
+  const steps = [...body.matchAll(/t\.categorical\[(\d)\]/g)].map((match) => Number(match[1]));
 
-  it('שתי הסדרות מופרדות ב-3:1 לפחות — לא רק מול המשטח, אלא זו מול זו', () => {
-    // The measurement nobody was making. Until now every chart colour was checked against the
-    // SURFACE it sits on; no assertion asked what a series measures against the series beside it.
-    // That is how the main dashboard shipped two lines at 1.56:1 — chart-1 against chart-4, where
-    // colour contributed nothing and the dash carried the entire distinction on its own.
+  it('שתי הסדרות נבדלות ב-ΔE, לא ביחס בהירות', () => {
+    // The measurement nobody was making, restated in the right unit. Until 0148-era work no
+    // assertion asked what a series measures against the series beside it — that is how the main
+    // dashboard shipped two lines at 1.56:1, where colour contributed nothing and the dash
+    // carried the whole distinction alone.
+    //
+    // The floor used to be 3:1 WCAG. That number is now unreachable BY CONSTRUCTION and its
+    // absence is not a regression: categorical steps are held at similar lightness on purpose,
+    // and WCAG only sees lightness. ΔE sees hue too, which is what actually separates them now.
     expect(steps).toHaveLength(2);
-    const pair = contrast(`color-chart-${steps[0] + 1}`, `color-chart-${steps[1] + 1}`);
-    expect(pair, `chart-${steps[0] + 1} vs chart-${steps[1] + 1}`).toBeGreaterThanOrEqual(3);
+    const [primary, counterpart] = steps.map((step) => `color-series-${step + 1}`);
+    expect(deltaE(primary, counterpart), `${primary} vs ${counterpart} (normal vision)`)
+      .toBeGreaterThanOrEqual(NORMAL_FLOOR);
+    expect(
+      Math.min(deltaE(primary, counterpart, 'protan'), deltaE(primary, counterpart, 'deutan')),
+      `${primary} vs ${counterpart} (CVD)`,
+    ).toBeGreaterThanOrEqual(CVD_FLOOR);
   });
 
   it('הסדרה השנייה תמיד מקווקוות — נשא שאינו צבע', () => {

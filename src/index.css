@@ -101,6 +101,41 @@
   --color-chart-3: oklch(68.84% 0.0313 202);
   --color-chart-4: var(--color-shell);
   --color-chart-5: oklch(83.11% 0.0153 192);
+
+  /* ---- Categorical series — IDENTITY, which the ramp above cannot carry (24.08.2026) ----
+     The ramp is sequential and it is good at that: bars over time, a sparkline, one series
+     whose lightness ordering means something. It was also being used for IDENTITY — donut
+     categories and the two-series comparison — and a one-hue ramp cannot do that job, because
+     the only separation it has to give is lightness.
+
+     That is a measurement, not an opinion. Fed to the data-viz validator against this file's
+     own canvas, all five ramp steps fail the 0.10 chroma floor (0.058 · 0.050 · 0.031 · 0.022
+     · 0.015): below that number a hue stops reading as a hue, which is exactly the complaint.
+     DESIGN.md had already conceded the ceiling in words — "שלושה צעדים מובחנים בפועל" out of
+     five. These five steps are the same measurement answered.
+
+     Chosen by search, not by eye: hue and lightness were optimised together to maximise the
+     WORST all-pairs OKLab ΔE under simulated protanopia and deuteranopia, subject to staying
+     inside the validator's L band, keeping chroma calm (<= 0.145, so nothing shouts), and
+     avoiding the hue bands the status vocabulary owns (alert ~15-40, await ~62-80, done
+     ~150-172) so a chart mark can never be mistaken for a state. Result: worst pair 15.3 CVD
+     and 16.1 normal, against thresholds of 8 and 15. series-1 stays in the brand's oceanic
+     family so the charts still read as this product.
+
+     The two light steps (series-2, series-4) measure under 3:1 against the canvas. That is a
+     WARN the skill discharges with secondary encoding, and the encoding is already there and
+     mandatory: donut chips name every slice with its share, the counterpart line is dashed,
+     the 2px paddingAngle keeps arcs apart, and every chart carries an ARIA description.
+     Identity here never rests on colour alone -- colour only makes it FASTER.
+
+     Replacing a step means re-running the validator AND src/lib/colorLanguage.spec.ts, which
+     holds the ΔE floors. Do not add a sixth: nothing consumes one, and a palette that grows
+     before it has a consumer is what the token rule exists to prevent. */
+  --color-series-1: oklch(58% 0.105 222);
+  --color-series-2: oklch(73% 0.145 108);
+  --color-series-3: oklch(46% 0.125 48);
+  --color-series-4: oklch(73% 0.125 192);
+  --color-series-5: oklch(46% 0.145 270);
   /* ---- Section identity — WHERE, never WHAT (retired hue-wayfinding, T7.3) ----
      Until T7.3 the three work domains carried three DISTINCT hues (275/305/335). The owner saw
      the purple underline and read it as "a color with no meaning" — the hue-distance wayfinding
