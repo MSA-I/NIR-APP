@@ -35,6 +35,27 @@
 -- another migration entirely. An anchor at the end of this file fails the migration if any
 -- transition body so much as names the usage counter surface.
 
+-- ===== 0. The entity type this file audits, classified before it can be written =====
+--
+-- 0175 classifies every audited entity as financial_accounting or organization_identity_platform and
+-- REFUSES the write when it recognizes neither -- private.assign_audit_scope() raises at run time,
+-- not only during the migration. Section 8 below writes audit rows under
+-- 'organization_subscriptions', an entity that did not exist when the owner ruled on the taxonomy on
+-- 24.08.2026, so without this row the first processed provider event raises
+-- audit_scope_taxonomy_incomplete. The refusal is the designed behaviour; the classification is the
+-- answer to it.
+--
+-- ORGANIZATION, NOT FINANCIAL, and the ruling already decides it. A subscription is the platform's
+-- commercial relationship with a whole tenant: entity_id here is the org_id itself, there is one
+-- subscription per organization, and no legal entity owns one. That is the same shape as
+-- organizations and organization_offboarding_requests, both already cross_scope. Calling it
+-- financial would be worse than merely inaccurate -- 0175 ships no resolver that could reach a legal
+-- entity from an org_id, so every row would fall into the root-only bucket and an organization's own
+-- accountant would lose sight of its billing history, for no gain to anyone.
+insert into private.audit_scope_taxonomy(entity_type, scope_domain, resolver, rationale) values
+  ('organization_subscriptions','organization_identity_platform','cross_scope',
+   'The platform subscription of a whole tenant; entity_id is the org_id and no legal entity owns one.');
+
 -- ===== 1. The provider boundary: seeded shut, with no key =====
 create table private.billing_provider_boundary (
   provider           text primary key check (provider ~ '^[a-z][a-z0-9_]*$'),
