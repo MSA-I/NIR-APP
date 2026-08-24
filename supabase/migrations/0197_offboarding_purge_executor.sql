@@ -472,8 +472,16 @@ begin
       v_item.org_id, v_actor, 'org_lifecycle_change',
       jsonb_build_object('event', 'purge_executed', 'batch_id', v_batch.id));
 
+    -- 0175 refuses DELETE on the raw audit ledger unconditionally -- superuser included -- unless
+    -- this transaction has declared an authorized purge, and it names tenant teardown as one of the
+    -- two callers that legitimately need it. A purge that left the ledger behind would keep a
+    -- deleted tenant's history forever, which is the opposite of what #261 approves. Declared per
+    -- tenant and cleared straight after, so it covers this organization's deletion and nothing else
+    -- in the batch loop.
+    perform set_config('app.audit_purge', 'organization_teardown', true);
     v_removed := private.delete_tenant_rows(v_item.org_id);
     perform private.delete_tenant_organization_row(v_item.org_id);
+    perform set_config('app.audit_purge', '', true);
 
     insert into private.organization_purge_executions
       (batch_id, org_id, outcome, removed_row_counts)

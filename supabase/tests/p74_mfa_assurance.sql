@@ -263,23 +263,23 @@ end
 $$;
 reset role;
 
--- ===== (B1) Server enforcement through a real wired command =====
--- Called as PostgREST calls it. manage_profile_access holds EXECUTE for `authenticated`
--- (verified from the catalogue before this suite was written), so the role switch is safe.
+-- ===== (B1) The deferred state, through a real wired command =====
+-- Owner ruling 24.08.2026: the assurance primitive is built and NOT wired, because nothing in the
+-- product enrols a factor and wiring it would refuse every owner and accountant on every step-up
+-- path. So the honest assertion here is the inverse of enforcement: a fresh-password owner still
+-- passes at aal1, exactly as before 0199 existed. This is the second guard on the deferral, and it
+-- guards a different thing than B2 does -- B2 reads the primitive's SOURCE, this reads a real
+-- command's BEHAVIOUR through the role PostgREST uses. Wire assurance and both fail, which is the
+-- point: the decision comes back to the owner instead of surfacing as a lockout in production.
+-- DEBT §62 carries the exit condition.
 select pg_temp.p74_claims('28000000-0000-0000-0000-000000000001', '"aal1"'::jsonb, interval '0');
 set local role authenticated;
-do $$
-begin
-  perform manage_profile_access(
-    '28000000-0000-0000-0000-000000000004', 'office', true, null, 'P74: aal1 must not pass');
-  raise exception 'P74 MFA assurance assertion failed: owner mutated access from an aal1 session';
-exception when sqlstate '42501' then
-  if sqlerrm not like '%mfa_assurance_required%' then raise; end if;
-end
-$$;
+select manage_profile_access(
+  '28000000-0000-0000-0000-000000000004', 'office', true, null, 'P74: aal1 still passes, unwired');
 reset role;
 
--- ... and the same call succeeds once the session is aal2.
+-- aal2 passes too. Assurance forms no opinion either way while it is unwired, so a stronger session
+-- must not be treated as a different contract.
 select pg_temp.p74_claims('28000000-0000-0000-0000-000000000001', '"aal2"'::jsonb, interval '0');
 set local role authenticated;
 select manage_profile_access(

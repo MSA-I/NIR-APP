@@ -1008,7 +1008,14 @@ begin
     (org_id, org_created_at, days_since_signup, removed_row_counts)
   values (v_org.id, v_org.created_at, v_age, v_removed);
 
+  -- 0175 made the raw audit ledger immutable: DELETE is refused unconditionally unless the caller
+  -- has declared an authorized purge in this transaction, and it names tenant teardown as one of the
+  -- two callers that need it. Removing an organization must take its ledger with it rather than
+  -- leave an orphaned tenant's history behind, so the declaration is set for this statement and
+  -- cleared immediately after -- transaction-local either way, and never a role test.
+  perform set_config('app.audit_purge', 'organization_teardown', true);
   perform private.delete_tenant_organization_row(v_org.id);
+  perform set_config('app.audit_purge', '', true);
 
   return jsonb_build_object('org_id', v_org.id, 'removed', v_removed);
 end
