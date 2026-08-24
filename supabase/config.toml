@@ -40,10 +40,13 @@ file_size_limit = "50MiB"
 enabled = true
 site_url = "http://127.0.0.1:5199"
 # The quality preview uses the canonical local port 5199. Local GoTrue treats redirect ports as
-# exact, and the pinned CLI loads only the first entry here, so keep this list deliberately singular.
-# Production needs the mirror ({origin}/reset-password) in the remote Auth URL configuration (#114).
+# exact, and the pinned CLI loads only the first entry here -- which is why this stayed a single
+# string while /reset-password was the only destination. A federated sign-up adds a second
+# ({origin}/signup), so the entry became a glob rather than a list the CLI would silently truncate.
+# The glob is strictly wider than what it replaces and is bounded to the loopback preview origin.
+# Production needs both mirrors in the remote Auth URL configuration (#114, #265).
 additional_redirect_urls = [
-  "http://127.0.0.1:5199/reset-password",
+  "http://127.0.0.1:5199/**",
 ]
 jwt_expiry = 3600
 enable_signup = true
@@ -65,6 +68,17 @@ otp_expiry = 3600
 # reachable by anyone. It is enforced where standing is granted: 0205 makes accept_invitation
 # refuse a federated caller, and public-signup's Google branch only ever creates an owner of a
 # NEW organization and refuses a caller that already has a profile.
+# Stays `false` in the repository, and that is a CI fact rather than an unfinished step. The
+# quality gate runs `supabase start` (quality-gate.yml) whenever this file changes, so a committed
+# `true` without the two secrets in the runner's environment hands GoTrue an empty client id and
+# the container never becomes healthy -- the SQL and browser jobs would fail on a checkout that has
+# nothing to do with authentication. Flipping it belongs with wiring the secrets into CI and the
+# hosted project, not with the code that reads them.
+#
+# Verified locally on 25.08.2026 by exporting the two variables and recreating the container:
+# GoTrue redirected to accounts.google.com with the registered client id, redirect_uri
+# http://127.0.0.1:55431/auth/v1/callback, scope "email profile", code flow, state present, and
+# Google answered with its sign-in page rather than invalid_client.
 [auth.external.google]
 enabled = false
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
