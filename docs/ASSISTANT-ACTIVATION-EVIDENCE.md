@@ -26,8 +26,28 @@ DPA · אזור נתונים** — כולן ל-OpenAI, שהוא ספק המוד�
 | `training_use` | `no_training_on_api_data_by_default_opt_in_available` | `https://developers.openai.com/api/docs/guides/your-data` · `https://help.openai.com/en/articles/5722486-how-your-data-is-used-to-improve-model-performance` | 2026-08-24 | Claude (סוכן מחקר), ציטוטים אומתו שנית ב-`curl` על ידי הסוכן הראשי | `VERIFIED` |
 | `retention` | `retention_up_to_30_days_default` | `https://openai.com/enterprise-privacy/` (Updated: January 8, 2026) | 2026-08-24 | כנ״ל | `VERIFIED` |
 | `provider_logs` | `abuse_logs_30_days_employees_and_third_party_contractors` | `https://developers.openai.com/api/docs/guides/your-data` · `https://openai.com/enterprise-privacy/` | 2026-08-24 | כנ״ל | `VERIFIED` |
-| `dpa` | `dpa_self_serve_form_via_ironclad_clickthrough` — **התהליך** מתועד; **החתימה בפועל לחשבון הזה אינה ידועה** | `https://openai.com/policies/data-processing-addendum/` (Effective: January 1, 2026) · טופס: `https://ironcladapp.com/public-launch/63ffefa2bed6885f4536d0fe` | 2026-08-24 | — | `MISSING` |
+| `dpa` | `dpa_self_serve_form_via_ironclad_clickthrough` — **התהליך** מתועד; **החתימה בפועל נדחתה בהכרעת בעלים 24.08.2026** ונרשמה כחוב ב-`DEBT-REGISTER §63` | `https://openai.com/policies/data-processing-addendum/` (Effective: January 1, 2026) · טופס: `https://ironcladapp.com/public-launch/63ffefa2bed6885f4536d0fe` | 2026-08-24 | — | `MISSING` (דחייה מאושרת) |
 | `data_region` | `no_data_residency_configured_unrestricted_processing` | `https://developers.openai.com/api/docs/guides/your-data` | 2026-08-24 | כנ״ל | `VERIFIED` |
+
+### מה שנצפה בחשבון עצמו (בעלים, 24.08.2026)
+
+התנאים הפומביים אומרים מה **מותר** לספק לעשות. אלה שלוש עובדות על **החשבון שלנו**, שאין דרך
+לחקור אותן מבחוץ ורק בעל החשבון יכול לראות. הן נרשמות כאן כתצפית של אדם, לא כתוצאת מחקר.
+
+| מה נבדק | היכן | מה נמצא | מה זה אומר |
+|---|---|---|---|
+| שיתוף נתונים לאימון | ‏`Settings → Organization → Data controls` | **מכובה** | ברירת המחדל של הספק לא שונתה. הטענה בדף הפרטיות — „המפעילה לא בחרה בכך" — **נכונה ונצפתה**, ולא רק הוסקה מברירת מחדל |
+| טאב `Data Retention` | ‏`platform.openai.com/settings/organization/data-controls/data-retention` | **קיים** | לפי תיעוד הספק הטאב מופיע רק לארגון ש**אושר** לבקרות שימור. ראה ההערה למטה — זו הסקה מתיעוד, לא תצפית ישירה על מכתב אישור |
+| בקרת השימור עצמה | אותו מסך | **מכובה** | **לא הופעל ZDR ולא MAM.** כלומר עלינו חל שימור ברירת המחדל של עד 30 יום — בדיוק מה שדף הפרטיות אומר |
+
+**מה שהתצפית הזו סוגרת:** אין פער בין מה שהדף אומר למה שקורה. הדף מתאר שימור של עד 30 יום
+ואינו מבטיח אפס-שימור — וזה בדיוק מצב החשבון. **אילו הבקרה הייתה דלוקה, הדף היה מספר על
+המשתמש פחות ממה שנכון**, וזו הייתה טעות בכיוון ההפוך — פחות מסוכנת, אך עדיין אי-דיוק.
+
+**שאלה פתוחה שאינה חוסמת:** קיום הטאב מרמז, לפי תיעוד הספק, על אישור קיים לבקרות שימור. לא
+נבדק מה הטאב **מציע** בפועל (אפשרויות לבחירה מול הפניה למכירות), ולכן `#179` אינו מסתמך על כך
+בשום שורה. אין לכך משמעות כל עוד הבקרה מכובה: התוצאה זהה. אם אי-פעם תישקל הפעלת ZDR — **זו
+נקודת הפתיחה לבדוק**, ולא הנחה שאפשר לצאת ממנה.
 
 ### הציטוטים המכריעים, מילה במילה
 
@@ -159,6 +179,8 @@ status=VERIFIED;claim=example_claim;source=https://example.invalid/policy;retrie
 | 24.08.2026 | `training_use`, `retention`, `provider_logs`, `data_region` | שליפה מהמקורות הרשמיים של OpenAI לבקשת הבעלים | ארבע השורות `VERIFIED` עם URL, תאריך שליפה וציטוט מילולי | סוכן מחקר; חמישה ציטוטים מכריעים אומתו שנית ב-`curl` בלתי-תלוי על ידי הסוכן הראשי |
 | 24.08.2026 | `dpa` | שליפה מהמקורות הרשמיים | **התהליך** אומת (טופס Ironclad, ‏click-through, ישות מתקשרת לפי אזור); **החתימה בפועל בחשבון אינה ניתנת למחקר** ונשארת `MISSING` | כנ״ל |
 | 24.08.2026 | — | ניסיון גישה ל-`trust.openai.com` | ‏403 מאחורי Cloudflare; **אף שורה אינה נשענת עליו** | כנ״ל |
+| 24.08.2026 | `dpa` | הכרעת בעלים | **החתימה נדחית ונרשמת כחוב** (`DEBT §63`). דחייה מאושרת אינה פותחת את השער: `#179` מותיר את העוזר כבוי כשה-DPA אינו זמין, והקוד אוכף זאת | בעלים |
+| 24.08.2026 | `training_use`, `retention` | תצפית בעלים בחשבון עצמו | שיתוף לאימון **מכובה**; טאב `Data Retention` **קיים** אך הבקרה **מכובה** — כלומר שימור ברירת המחדל של עד 30 יום חל עלינו, כפי שדף הפרטיות אומר | בעלים |
 
 ---
 
