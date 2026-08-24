@@ -116,6 +116,10 @@ select pg_temp.p21_assert(
 -- These two rows are added HERE, below the assertions above, so every claim already made keeps
 -- describing the fixture it was written for. Each row is one defect 0168 fixed.
 reset role;
+-- The financial-command guard (0023/0033) refuses a direct write while a JWT subject is set: a
+-- person writing money outside an RPC is exactly what it exists to stop. Fixture setup is not a
+-- person, so it clears the subject first, as p63 does, and restores it below.
+select set_config('request.jwt.claim.sub', '', true);
 insert into public.payment_requests (org_id, supplier_id, amount, due_date, status) values
   -- (1) A DATED DRAFT inside the window. Before 0168 its 500 landed in dueWithin7Amount: a
   -- request nobody had submitted yet, reported as money leaving the account this week.
@@ -195,6 +199,9 @@ select pg_temp.p21_assert(
 -- requests are dated 2026-12-01, outside every window asserted above, so no figure already
 -- claimed moves.
 reset role;
+-- Same reason as the payment_requests fixture above: the audit source guard (0020) refuses a
+-- write whose org differs from the ACTOR's org, and fixture setup has no actor.
+select set_config('request.jwt.claim.sub', '', true);
 insert into public.org_units (id, org_id, parent_id, unit_type, name)
 select ('61000000-0000-4000-8000-00000000000' || n)::uuid,
        '21000000-0000-4000-8000-000000000001', root.id, 'legal_entity', 'P21 LE' || n

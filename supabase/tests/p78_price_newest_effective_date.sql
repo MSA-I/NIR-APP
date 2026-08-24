@@ -82,6 +82,9 @@ select pg_temp.p78_assert(
   'the backdated price was refused entry to history -- it is a fact, not a mistake');
 
 -- ===== 4. The as-of read answers with it, for its own period =====
+-- `private` is not reachable from `authenticated`; reading the baseline is a server question.
+reset role;
+
 -- This is what makes (3) worth doing rather than merely harmless.
 select pg_temp.p78_assert(
   (private.supplier_price_effective_on(

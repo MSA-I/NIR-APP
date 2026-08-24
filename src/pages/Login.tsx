@@ -119,7 +119,7 @@ export default function Login() {
             className="flex items-center bg-surface px-6 py-8 sm:px-10 sm:py-10 lg:px-12 xl:px-16">
             <div className="mx-auto w-full max-w-md">
               <div>
-                <h2 id="login-heading" className="text-3xl font-semibold tracking-tight text-ink">כניסה לחשבון</h2>
+                <h2 id="login-heading" className="text-3xl font-semibold text-ink">כניסה לחשבון</h2>
                 <p className="mt-2 text-sm text-ink-muted">
                   אין לכם חשבון?{' '}
                   <Link to="/signup" className="font-medium text-action underline-offset-2 hover:underline">
