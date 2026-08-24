@@ -244,6 +244,8 @@ const PATTERNS: [RegExp, string][] = [
     'לא ניתן לבטל הזמנה שכבר התקבלה, גם באופן חלקי.'],
   [/invoice_fields_required|invoice_review_fields_required/i,
     'חסרים פרטים הנדרשים לשמירת החשבונית.'],
+  [/credit_request_not_fully_allocated/i,
+    'הזיכוי טרם נוצל. אפשר לסמן אותו כמקוזז רק אחרי שהוא שובץ בתשלום בפועל.'],
   [/credit_request_transition_invalid/i,
     'לא ניתן להעביר את הזיכוי לסטטוס שנבחר מהמצב הנוכחי.'],
   [/credit_request_invoice_unknown|credit_request_unknown/i,
