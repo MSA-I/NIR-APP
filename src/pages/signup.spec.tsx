@@ -25,6 +25,16 @@ vi.mock('../lib/authProviders', () => ({
   startFederatedSignup: federated.start,
 }));
 
+/** The tenant bootstrap as `AuthContext` reports it — null profile means "no organization yet". */
+const auth = vi.hoisted(() => ({
+  state: { session: null as unknown, profile: null as unknown, loading: false },
+}));
+
+vi.mock('../auth/AuthContext', () => ({
+  homeFor: () => '/dashboard',
+  useAuth: () => auth.state,
+}));
+
 vi.mock('../lib/supabase', () => ({
   supabase: {
     functions: { invoke: (...a: unknown[]) => invoke(...a) },
@@ -75,6 +85,7 @@ beforeEach(() => {
   signInWithOAuth.mockResolvedValue({ error: null });
   federated.providers = [];
   federated.start.mockClear();
+  auth.state = { session: null, profile: null, loading: false };
 });
 
 describe('פתיחת חשבון', () => {
@@ -157,6 +168,34 @@ describe('פתיחת חשבון', () => {
     expect(body).not.toHaveProperty('password');
     // The address is the server's to read from the token, not the form's to assert.
     expect(body).not.toHaveProperty('email');
+  });
+
+  it('כניסה חוזרת של זהות שכבר יש לה ארגון אינה מבקשת שם עסק שוב', async () => {
+    // Both entrances send the provider back to /signup, so the SECOND sign-in lands here too.
+    // Without the redirect the person is asked to name a business they already have, and
+    // public-signup refuses with identity_already_has_organization only after they fill the form.
+    auth.state = {
+      session: { user: { id: 'u1' } },
+      profile: { id: 'u1', role: 'owner', org_id: 'org-1' },
+      loading: false,
+    };
+    getSession.mockResolvedValue(federatedSession('google', 'owner@gmail.test'));
+    renderScreen();
+
+    await waitFor(() => expect(screen.queryByLabelText('שם העסק')).toBeNull());
+    expect(screen.queryByText(/נשאר רק לתת שם לעסק/)).toBeNull();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('זהות פדרטיבית ללא ארגון נשארת במסך ההרשמה', async () => {
+    // The mirror of the case above: a first-time federated caller has a session and no profile,
+    // and must NOT be redirected — this screen is the only one that can finish their signup.
+    auth.state = { session: { user: { id: 'u2' } }, profile: null, loading: false };
+    getSession.mockResolvedValue(federatedSession('google', 'newcomer@gmail.test'));
+    renderScreen();
+
+    expect(await screen.findByText(/נשאר רק לתת שם לעסק/)).toBeInTheDocument();
+    expect(screen.getByLabelText('שם העסק')).toBeInTheDocument();
   });
 
   it('מצייר כפתור לכל ספק מוגדר, ומוסר לו את פתיחת התהליך', async () => {

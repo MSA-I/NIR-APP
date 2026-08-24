@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, Navigate } from 'react-router';
+import { useAuth, homeFor } from '../auth/AuthContext';
 import { Building2, MailCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { ErrorNote, Note } from '../components/ui';
@@ -49,6 +50,7 @@ export default function Signup() {
     null,
   );
   const providers = enabledFederatedProviders();
+  const { session, profile, loading } = useAuth();
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +76,19 @@ export default function Signup() {
     });
     return () => { cancelled = true; };
   }, []);
+
+  /**
+   * A returning federated identity lands HERE, not on the login screen: `redirectTo` is
+   * {origin}/signup for both entrances, because on the first visit this is the only screen that can
+   * finish the job. On the second visit it is the wrong screen entirely — without this guard the
+   * person is asked to name a business they already have, and `public-signup` refuses with
+   * `identity_already_has_organization` after they fill the form. The server was right and the
+   * screen was a dead end; this is the same redirect `Login.tsx` has always had.
+   *
+   * Below the hooks, because a redirect must not skip them. Gated on `!loading` so the frame where
+   * the profile has not resolved yet does not read as "no tenant".
+   */
+  if (!loading && session && profile) return <Navigate to={homeFor(profile.role)} replace />;
 
   async function continueWith(provider: FederatedProvider) {
     setError(null);
