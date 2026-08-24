@@ -1,4 +1,4 @@
--- 0168 -- The due-window tile stops counting drafts, stops spanning eight days, and starts
+-- 0206 -- The due-window tile stops counting drafts, stops spanning eight days, and starts
 -- respecting unit scope.
 --
 -- THREE DEFECTS IN ONE CTE (owner review, 24.08.2026). `payment_request_metrics` feeds the
@@ -55,7 +55,7 @@ declare
   v_replacement text;
   v_hits int;
   v_note constant text :=
-    '0168: management_dashboard_snapshot is not where 0100/0148 left it. Fix the anchor '
+    '0206: management_dashboard_snapshot is not where 0100/0148 left it. Fix the anchor '
     'deliberately rather than letting the migration guess.';
 begin
   v_def := replace(pg_get_functiondef(
@@ -63,7 +63,7 @@ begin
 
   -- Idempotent (the 0117/0145/0148 lesson): recognise ITS OWN result, and specifically a
   -- string this migration writes that no earlier one could have. The unit-scope predicate on
-  -- payment_requests is unique to 0168.
+  -- payment_requests is unique to 0206.
   if position('p.unit_id = any(public.auth_scopes())' in v_def) > 0 then
     return;
   end if;
@@ -136,7 +136,7 @@ $due_window_semantics$;
 
 comment on function public.management_dashboard_snapshot(date) is
   'Owner/office tenant-scoped dashboard snapshot. SECURITY INVOKER; preserves RLS and '
-  'null-vs-zero evidence semantics. 0148 added the due-window money; 0168 makes the window '
+  'null-vs-zero evidence semantics. 0148 added the due-window money; 0206 makes the window '
   'seven days rather than eight, drops draft requests from every due-window aggregate '
   '(contested requests stay counted), and applies the auth_scopes() unit fence.';
 
@@ -149,7 +149,7 @@ begin
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0168 scope assertions failed:\n%', v_violations;
+    raise exception e'0206 scope assertions failed:\n%', v_violations;
   end if;
 end
 $$;
@@ -165,11 +165,11 @@ begin
 
   -- The window is seven days and nothing still spans eight.
   if position('p_today + 7' in v_def) > 0 then
-    raise exception '0168 anchor: an eight-day due window survived the replacement.';
+    raise exception '0206 anchor: an eight-day due window survived the replacement.';
   end if;
   v_hits := (length(v_def) - length(replace(v_def, 'p_today + 6', ''))) / length('p_today + 6');
   if v_hits <> 2 then
-    raise exception '0168 anchor: expected 2 seven-day windows, found %.', v_hits;
+    raise exception '0206 anchor: expected 2 seven-day windows, found %.', v_hits;
   end if;
 
   -- Every due-window aggregate excludes drafts, and nothing else in the body was widened:
@@ -178,30 +178,30 @@ begin
   v_hits := (length(v_def) - length(replace(v_def, '''draft'', ''executed'', ''matched'', ''cancelled''', '')))
             / length('''draft'', ''executed'', ''matched'', ''cancelled''');
   if v_hits <> 6 then
-    raise exception '0168 anchor: expected 6 draft-excluding predicates, found %.', v_hits;
+    raise exception '0206 anchor: expected 6 draft-excluding predicates, found %.', v_hits;
   end if;
 
   -- The unit fence is present.
   if position('p.unit_id = any(public.auth_scopes())' in v_def) = 0 then
-    raise exception '0168 anchor: the unit-scope fence is missing.';
+    raise exception '0206 anchor: the unit-scope fence is missing.';
   end if;
 
   -- 0137's payable fence and 0148's money keys both had to survive an anchored rewrite of the
   -- same body. This is the check that would have caught a naive create-or-replace.
   if position('i.financial_role = ''payable''' in v_def) = 0 then
-    raise exception '0168 anchor: 0137 payable fence was lost.';
+    raise exception '0206 anchor: 0137 payable fence was lost.';
   end if;
   if position('''overdueAmount'', case' in v_def) = 0
      or position('''dueWithin7Amount'', case' in v_def) = 0
      or position('''dueWithin7Count'', case' in v_def) = 0 then
-    raise exception '0168 anchor: a 0148 due-window money key was lost.';
+    raise exception '0206 anchor: a 0148 due-window money key was lost.';
   end if;
 
   -- The evidence guard and its coalesce are untouched -- 0148:143-148 refused their removal
-  -- and 0168 must not become the migration that quietly undoes that.
+  -- and 0206 must not become the migration that quietly undoes that.
   if position('coalesce(pr.overdue_amount, 0)' in v_def) = 0
      or position('coalesce(pr.due_within_7_amount, 0)' in v_def) = 0 then
-    raise exception '0168 anchor: the measured-zero coalesce was lost.';
+    raise exception '0206 anchor: the measured-zero coalesce was lost.';
   end if;
 
   -- SECURITY INVOKER survived; RLS is still the boundary.
@@ -209,7 +209,7 @@ begin
     select 1 from pg_proc
     where oid = 'public.management_dashboard_snapshot(date)'::regprocedure and prosecdef
   ) then
-    raise exception '0168 anchor: the function became SECURITY DEFINER.';
+    raise exception '0206 anchor: the function became SECURITY DEFINER.';
   end if;
 end
 $$;

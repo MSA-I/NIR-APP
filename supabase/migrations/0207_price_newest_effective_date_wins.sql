@@ -1,4 +1,4 @@
--- 0169 -- A price with an OLDER effective date stops overwriting a newer one.
+-- 0207 -- A price with an OLDER effective date stops overwriting a newer one.
 --
 -- THE DEFECT (owner review, 24.08.2026). Both live price writers decide whether to move
 -- `supplier_products.current_price` by asking whether the incoming effective date is
@@ -86,7 +86,7 @@ begin
       '  where id = v_row.id;');
     v_hits := (length(v_def) - length(replace(v_def, v_anchor, ''))) / length(v_anchor);
     if v_hits <> 1 then
-      raise exception '0169: set_supplier_product_price row update found % times, expected 1. '
+      raise exception '0207: set_supplier_product_price row update found % times, expected 1. '
         'Fix the anchor deliberately rather than letting the migration guess.', v_hits;
     end if;
     v_def := replace(v_def, v_anchor, v_replacement);
@@ -101,7 +101,7 @@ begin
       '      ''superseded_by_newer_effective_date'', p_effective_date < v_row.price_effective_date');
     v_hits := (length(v_def) - length(replace(v_def, v_anchor, ''))) / length(v_anchor);
     if v_hits <> 1 then
-      raise exception '0169: set_supplier_product_price audit payload found % times, expected 1.', v_hits;
+      raise exception '0207: set_supplier_product_price audit payload found % times, expected 1.', v_hits;
     end if;
     v_def := replace(v_def, v_anchor, v_replacement);
 
@@ -141,7 +141,7 @@ begin
       '      where id = v_existing.id;');
     v_hits := (length(v_def) - length(replace(v_def, v_anchor, ''))) / length(v_anchor);
     if v_hits <> 1 then
-      raise exception '0169: the import loop row update found % times, expected 1. '
+      raise exception '0207: the import loop row update found % times, expected 1. '
         'Fix the anchor deliberately rather than letting the migration guess.', v_hits;
     end if;
     v_def := replace(v_def, v_anchor, v_replacement);
@@ -152,12 +152,12 @@ end
 $newest_date_wins$;
 
 comment on function public.set_supplier_product_price(uuid, numeric, date, boolean, text) is
-  'Single reasoned price write. 0169: an effective date older than the stored one records '
+  'Single reasoned price write. 0207: an effective date older than the stored one records '
   'history but does not move current_price / price_effective_date; the audit row carries '
   'superseded_by_newer_effective_date so a refused move is legible.';
 
 comment on function public.p1_import_supplier_prices_internal(jsonb, date, text) is
-  'Bulk price import, the path every client import funnels through. 0169: a row whose effective '
+  'Bulk price import, the path every client import funnels through. 0207: a row whose effective '
   'date is older than the stored one still writes price_history and still counts as updated, '
   'but leaves current_price and price_effective_date on the newer figure.';
 
@@ -170,7 +170,7 @@ begin
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0169 scope assertions failed:\n%', v_violations;
+    raise exception e'0207 scope assertions failed:\n%', v_violations;
   end if;
 end
 $$;
@@ -187,35 +187,35 @@ begin
     'public.p1_import_supplier_prices_internal(jsonb, date, text)'::regprocedure), e'\r', '');
 
   if position('greatest(v_row.price_effective_date, p_effective_date)' in v_set) = 0 then
-    raise exception '0169 anchor: set_supplier_product_price still moves the effective date unconditionally.';
+    raise exception '0207 anchor: set_supplier_product_price still moves the effective date unconditionally.';
   end if;
   if position('greatest(v_existing.price_effective_date, p_effective_date)' in v_import) = 0 then
-    raise exception '0169 anchor: the import loop still moves the effective date unconditionally.';
+    raise exception '0207 anchor: the import loop still moves the effective date unconditionally.';
   end if;
   if position('''superseded_by_newer_effective_date''' in v_set) = 0 then
-    raise exception '0169 anchor: the audit payload does not record a refused move.';
+    raise exception '0207 anchor: the audit payload does not record a refused move.';
   end if;
 
   -- price_history is still written by both, unconditionally. This is the check that would catch
   -- a future "simplification" that stopped recording backdated facts.
   if position('insert into price_history' in v_set) = 0
      or position('insert into price_history' in v_import) = 0 then
-    raise exception '0169 anchor: a writer stopped recording price_history.';
+    raise exception '0207 anchor: a writer stopped recording price_history.';
   end if;
 
-  -- Both stay SECURITY DEFINER behind the financial-writer fence; 0169 changes arithmetic, not
+  -- Both stay SECURITY DEFINER behind the financial-writer fence; 0207 changes arithmetic, not
   -- the security posture, and a definer that lost its guard call would be a far worse defect
   -- than the one being fixed.
   if position('app.p1_financial_writer' in v_set) = 0
      or position('app.p1_financial_writer' in v_import) = 0 then
-    raise exception '0169 anchor: a writer lost its p1_financial_command_guard handshake.';
+    raise exception '0207 anchor: a writer lost its p1_financial_command_guard handshake.';
   end if;
   if not exists (
     select 1 from pg_proc
     where oid = 'public.set_supplier_product_price(uuid, numeric, date, boolean, text)'::regprocedure
       and prosecdef
   ) then
-    raise exception '0169 anchor: set_supplier_product_price is no longer SECURITY DEFINER.';
+    raise exception '0207 anchor: set_supplier_product_price is no longer SECURITY DEFINER.';
   end if;
 end
 $$;
