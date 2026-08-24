@@ -5,6 +5,7 @@
 // classification can support nothing. An answer that fails twice ships no prose at all.
 import {
   ASSISTANT_DRAFT_ROLES,
+  ASSISTANT_SENT_CLAIM_MARKER,
   type AssistantAnswer,
   AssistantAnswerSchema,
   DIGIT_PATTERN,
@@ -127,7 +128,7 @@ export function validateAnswer(
       }
       // Nothing in this product sends a supplier message, so a draft that says it was sent is a
       // false statement about the product itself -- the one lie no citation could ever support.
-      if (block.text.includes("נשלח")) {
+      if (block.text.includes(ASSISTANT_SENT_CLAIM_MARKER)) {
         errors.push(`block:${index}:draft_claims_sent`);
       }
       const draftFacts: Fact[] = [];

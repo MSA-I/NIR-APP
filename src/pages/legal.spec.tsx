@@ -33,4 +33,15 @@ describe('the legal pages and the consented version', () => {
     }
     expect(screen.getByText(/תיקון 13/)).toBeInTheDocument();
   });
+
+  it('privacy states what the system asks the provider, never what the provider does', () => {
+    // OPEN-DECISIONS #179: zero retention is never promised without a contract that proves it, and
+    // `store: false` is an API REQUEST rather than the provider's undertaking — docs/ASSISTANT.md
+    // §5.1 says so. The page said flatly that a document is not stored at the provider until
+    // 2026-08-24; this pins the deletion so it cannot come back as a plausible-sounding sentence.
+    render(<MemoryRouter><PrivacyPolicy /></MemoryRouter>);
+    expect(screen.getByText(/store: false/)).toBeInTheDocument();
+    expect(screen.getByText(/אינה מבטיחה אפס-שימור/)).toBeInTheDocument();
+    expect(screen.queryByText(/אינו נשמר אצל ספק המודל/)).toBeNull();
+  });
 });

@@ -440,6 +440,16 @@ export const ClaimBlockSchema = z.object({
  */
 export const ASSISTANT_DRAFT_LABEL = 'טיוטה';
 
+/**
+ * The claim the product must never make about itself, held as a constant so it exists in exactly
+ * ONE place. `scripts/check-assistant-no-send.mjs` forbids this word across the whole assistant
+ * surface; the refusal that enforces the ban needs to name the word it bans, and a guard cannot
+ * tell a refusal apart from an affordance by reading a string literal. Defining it here — and
+ * importing it wherever it is checked — is what keeps the guard's single allowance to one
+ * reviewed line instead of a per-file exception list.
+ */
+export const ASSISTANT_SENT_CLAIM_MARKER = 'נשלח';
+
 /** #191: owner and office compose supplier drafts. `accountant` deliberately does not. */
 export const ASSISTANT_DRAFT_ROLES: readonly AssistantRole[] = ['owner', 'office'];
 

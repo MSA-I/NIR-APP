@@ -12,6 +12,12 @@ import {
 } from "./auth.ts";
 import { AssistantEdgeError } from "./errors.ts";
 import type { AssistantConfig } from "./config.ts";
+import {
+  assertProviderGovernance,
+  type GovernanceEvidenceRow,
+  type GovernanceRow,
+  GOVERNANCE_ROWS,
+} from "./governance.ts";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const USER = "22222222-2222-4222-8222-222222222222";
@@ -30,6 +36,26 @@ function port(
   };
 }
 
+/**
+ * Complete #179 governance evidence is a precondition of a config existing at all (config.ts
+ * refuses without it), so the fixture carries an allow. These are SHAPES, not claims about what
+ * OpenAI's terms say -- the dated evidence lives in docs/ASSISTANT-ACTIVATION-EVIDENCE.md.
+ */
+const governanceFixture = (() => {
+  const rows = {} as Record<GovernanceRow, GovernanceEvidenceRow>;
+  for (const row of GOVERNANCE_ROWS) {
+    rows[row] = {
+      status: "VERIFIED",
+      claim: `${row}_fixture`,
+      source: `https://example.test/${row}`,
+      retrieved: "2026-08-24",
+      verifier: "test-fixture",
+      contract: null,
+    };
+  }
+  return assertProviderGovernance({ provider: "openai", rows });
+})();
+
 function baseConfig(overrides: Partial<AssistantConfig> = {}): AssistantConfig {
   return {
     provider: "openai",
@@ -44,6 +70,7 @@ function baseConfig(overrides: Partial<AssistantConfig> = {}): AssistantConfig {
     softCostCap: null,
     hardCostCap: null,
     contextMessageLimit: 12,
+    governance: governanceFixture,
     ...overrides,
   };
 }

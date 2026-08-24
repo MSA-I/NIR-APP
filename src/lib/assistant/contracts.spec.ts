@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ASSISTANT_DRAFT_LABEL,
   ASSISTANT_DRAFT_ROLES,
+  ASSISTANT_SENT_CLAIM_MARKER,
   AssistantBlockSchema,
   CALENDAR_PERIOD_LABELS,
   CALENDAR_PERIODS,
@@ -109,5 +110,14 @@ describe('product-help entry (#192)', () => {
 
   it('refuses a role that is not an assistant role', () => {
     expect(ProductHelpEntrySchema.safeParse({ ...entry, roles: ['kitchen'] }).success).toBe(false);
+  });
+});
+
+describe('the sent-claim marker (#191)', () => {
+  it('exists exactly once so the guard has one line to allow', () => {
+    expect(ASSISTANT_SENT_CLAIM_MARKER).toBe('נשלח');
+    // The refusal in supabase/functions/assistant/validate.ts imports this rather than repeating
+    // the literal; scripts/check-assistant-no-send.mjs allows only this one definition line.
+    expect(ASSISTANT_DRAFT_LABEL).not.toContain(ASSISTANT_SENT_CLAIM_MARKER);
   });
 });

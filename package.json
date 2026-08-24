@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "check:supplier-columns": "node scripts/check-supplier-columns.ts",
+    "check:assistant-no-send": "node scripts/check-assistant-no-send.mjs",
     "check:exemptions": "node scripts/check-exemption-pin.ts",
     "check:money": "node scripts/check-money.ts",
     "check:tokens": "node scripts/check-design-tokens.ts",
@@ -14,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && vite build",
     "build:almoni": "node scripts/build-almoni.mjs",
-    "verify": "npm run check:dead-code && npm run check:tokens && npm run check:typography && npm run check:money && npm run check:exemptions && npm run check:supplier-columns && npm run test",
+    "verify": "npm run check:dead-code && npm run check:tokens && npm run check:typography && npm run check:money && npm run check:exemptions && npm run check:supplier-columns && npm run check:assistant-no-send && npm run test",
     "check": "npm run build && npm run verify",
     "quality": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-quality-gates.ps1",
     "preview": "vite preview",

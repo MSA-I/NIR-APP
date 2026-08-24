@@ -5,6 +5,7 @@
 // itself (defence in depth, not a substitute). Requires --allow-env (the handler reads its
 // configuration from the environment); no network is touched on any path exercised here.
 import assert from "node:assert/strict";
+import { GOVERNANCE_ENV_VARS, GOVERNANCE_ROWS } from "./governance.ts";
 import { handler, parseAssistantRequest } from "./index.ts";
 
 function withEnv() {
@@ -13,6 +14,15 @@ function withEnv() {
   Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-service-key");
   Deno.env.set("AI_ASSISTANT_API_KEY", "test-provider-key");
   Deno.env.set("AI_ASSISTANT_MODEL", "test-model");
+  // #179 evidence is checked before the model, so without it every case below would refuse for
+  // the governance reason and the model case would stop proving what it claims to prove. These
+  // are fixture SHAPES; the dated evidence lives in docs/ASSISTANT-ACTIVATION-EVIDENCE.md.
+  for (const row of GOVERNANCE_ROWS) {
+    Deno.env.set(
+      GOVERNANCE_ENV_VARS[row],
+      `status=VERIFIED;claim=${row}_fixture;source=https://example.test/${row};retrieved=2026-08-24;verifier=test-fixture`,
+    );
+  }
 }
 
 Deno.test("a non-POST method is refused", async () => {
@@ -42,6 +52,26 @@ Deno.test("a request without a bearer token is rejected before anything runs", a
 Deno.test("an unset model refuses every run -- no silent default", async () => {
   withEnv();
   Deno.env.delete("AI_ASSISTANT_MODEL");
+  const response = await handler(
+    new Request("http://localhost/assistant", {
+      method: "POST",
+      body: JSON.stringify({ question: "שאלה" }),
+      headers: {
+        "content-type": "application/json",
+        Authorization: "Bearer irrelevant",
+      },
+    }),
+  );
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.error.code, "assistant_provider_unavailable");
+});
+
+Deno.test("one missing governance row refuses the ask before any provider work (#179)", async () => {
+  // The whole point of the gate: a boundary whose provider evidence is incomplete does not
+  // degrade, warn or retry -- it refuses, and the browser is told the data is on the screens.
+  withEnv();
+  Deno.env.delete(GOVERNANCE_ENV_VARS.dpa);
   const response = await handler(
     new Request("http://localhost/assistant", {
       method: "POST",
