@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
+import { useOrgScope } from '../lib/query/orgScope';
 
 /**
  * Which plan this business is on, worn in the phone top bar (owner report 25.08.2026).
@@ -15,6 +16,16 @@ import { useAuth } from '../auth/AuthContext';
  * catalogue and the billing boundary, and copying its key onto the org object would create a
  * second answer that drifts. One RPC, one truth. `plan_label` comes from the server too, so the
  * Hebrew rung names live in `subscription_plans` and not in this file.
+ *
+ * IT WAITS FOR THE TENANT SCOPE, NOT FOR A ROLE, and that distinction cost a browser-gate run.
+ * The first version fired as soon as `profile.role === 'owner'`, which is true before the Supabase
+ * client necessarily has a session attached — so the call could leave as an ANONYMOUS request to a
+ * function `anon` holds no EXECUTE on. In CI that surfaced as `HTTP 502` on `my_subscription` in
+ * three scenarios, alongside one on `resolve_feature_flags`: the only two bootstrap resolvers with
+ * exactly that grant shape. `useFeatureFlags` had already written the rule down —
+ * "calling a tenant resolver before auth bootstrap completes creates an anonymous 401" — and this
+ * component simply did not follow it. `useOrgScope()` is the same gate, from the same place, and it
+ * is null until AuthProvider has an organisation.
  *
  * SILENCE, NOT «—», WHEN THERE IS NO ANSWER. The dash rule ("a metric with no data shows —, never
  * 0") is about a MEASUREMENT the reader asked for. Nobody asked this chrome a question, so a dash
@@ -42,11 +53,12 @@ const TIER_CLASS: Record<string, string> = {
 
 export function PlanBadge() {
   const { profile } = useAuth();
+  const org = useOrgScope();
   const isOwner = profile?.role === 'owner';
   const [plan, setPlan] = useState<SubscriptionSummary | null>(null);
 
   useEffect(() => {
-    if (!isOwner) { setPlan(null); return; }
+    if (!isOwner || org === null) { setPlan(null); return; }
     let cancelled = false;
     void (async () => {
       const { data, error } = await supabase.rpc('my_subscription');
@@ -54,7 +66,7 @@ export function PlanBadge() {
       setPlan(((data ?? []) as SubscriptionSummary[])[0] ?? null);
     })();
     return () => { cancelled = true; };
-  }, [isOwner]);
+  }, [isOwner, org]);
 
   if (!isOwner || !plan) return null;
   const tierClass = TIER_CLASS[plan.plan_key];
