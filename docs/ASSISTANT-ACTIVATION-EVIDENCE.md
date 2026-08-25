@@ -18,15 +18,27 @@ DPA · אזור נתונים** — כולן ל-OpenAI, שהוא ספק המוד�
 
 ## 1. חמש שורות החובה
 
-מצב נכון ל-**24.08.2026, אחרי שליפה מהמקורות הרשמיים של OpenAI**. ארבע שורות `VERIFIED`,
+מצב נכון ל-**25.08.2026**. ארבע שורות `VERIFIED` (נשלפו מהמקורות הרשמיים של OpenAI ב-24.08),
 שורה אחת (`dpa`) `MISSING` — ולכן **ההפעלה עדיין נדחית.**
+
+> **מה השתנה ב-25.08.2026, וזו הבחנה שמשנה את המשמעות של השורה החסרה.** עד אז נרשם כאן שהבעלים
+> *בחר* לדחות חתימה זמינה. זה לא היה מדויק, והבעלים תיקן: **אין מי שיחתום.** ‏DPA נכרת בין
+> **ישות משפטית** לבין `OpenAI OpCo, LLC`, וחברה טרם נרשמה — כלומר אין צד מתקשר. החתימה נקבעה
+> **לזמן ההשקה**, כשהחברה קיימת, ולפני הדייר הראשון.
+>
+> **הבעלים גם הורה להפעיל את העוזר בייצור.** ‏**ההוראה אינה מיושמת, ואסור שתיושם בכתיבת
+> `VERIFIED` בשורת `dpa`.** ‏`VERIFIED` הוא טענה על חוזה קיים; לרשום אותו בהיעדר חוזה הוא בדיוק
+> מה שהמסמך הזה קיים כדי למנוע, והוא היה זולג משם ל-`/privacy` ול-`/terms` שנגזרים מאותן שורות.
+> ההוראה ממתינה למשטח חריג מפורש בקוד השער — מוגבל לפני ההשקה, לארגון של הבעלים בלבד, נרשם
+> ב-`audit_logs` ונסגר ברגע שקיים דייר. **הכלל העומד בראש המסמך לא זז:** שער שנפתח עם ארבע
+> שורות מתוך חמש אינו שער, וגם „הכרעת בעלים" אינה שורת ראיה.
 
 | שורה | תביעה (claim) | מקור רשמי מתוארך | תאריך שליפה | מי אימת | סטטוס |
 |---|---|---|---|---|---|
 | `training_use` | `no_training_on_api_data_by_default_opt_in_available` | `https://developers.openai.com/api/docs/guides/your-data` · `https://help.openai.com/en/articles/5722486-how-your-data-is-used-to-improve-model-performance` | 2026-08-24 | Claude (סוכן מחקר), ציטוטים אומתו שנית ב-`curl` על ידי הסוכן הראשי | `VERIFIED` |
 | `retention` | `retention_up_to_30_days_default` | `https://openai.com/enterprise-privacy/` (Updated: January 8, 2026) | 2026-08-24 | כנ״ל | `VERIFIED` |
 | `provider_logs` | `abuse_logs_30_days_employees_and_third_party_contractors` | `https://developers.openai.com/api/docs/guides/your-data` · `https://openai.com/enterprise-privacy/` | 2026-08-24 | כנ״ל | `VERIFIED` |
-| `dpa` | `dpa_self_serve_form_via_ironclad_clickthrough` — **התהליך** מתועד; **החתימה בפועל נדחתה בהכרעת בעלים 24.08.2026** ונרשמה כחוב ב-`DEBT-REGISTER §63` | `https://openai.com/policies/data-processing-addendum/` (Effective: January 1, 2026) · טופס: `https://ironcladapp.com/public-launch/63ffefa2bed6885f4536d0fe` | 2026-08-24 | — | `MISSING` (דחייה מאושרת) |
+| `dpa` | `dpa_self_serve_form_via_ironclad_clickthrough` — **התהליך** מתועד; **החתימה אינה אפשרית היום: אין ישות משפטית שתתקשר** (בעלים, 25.08.2026), ונקבעה לזמן ההשקה לפני הדייר הראשון. חוב: `DEBT-REGISTER §63` | `https://openai.com/policies/data-processing-addendum/` (Effective: January 1, 2026) · טופס: `https://ironcladapp.com/public-launch/63ffefa2bed6885f4536d0fe` | 2026-08-24 | — | `MISSING` (אין צד מתקשר) |
 | `data_region` | `no_data_residency_configured_unrestricted_processing` | `https://developers.openai.com/api/docs/guides/your-data` | 2026-08-24 | כנ״ל | `VERIFIED` |
 
 ### מה שנצפה בחשבון עצמו (בעלים, 24.08.2026)
@@ -181,6 +193,9 @@ status=VERIFIED;claim=example_claim;source=https://example.invalid/policy;retrie
 | 24.08.2026 | — | ניסיון גישה ל-`trust.openai.com` | ‏403 מאחורי Cloudflare; **אף שורה אינה נשענת עליו** | כנ״ל |
 | 24.08.2026 | `dpa` | הכרעת בעלים | **החתימה נדחית ונרשמת כחוב** (`DEBT §63`). דחייה מאושרת אינה פותחת את השער: `#179` מותיר את העוזר כבוי כשה-DPA אינו זמין, והקוד אוכף זאת | בעלים |
 | 24.08.2026 | `training_use`, `retention` | תצפית בעלים בחשבון עצמו | שיתוף לאימון **מכובה**; טאב `Data Retention` **קיים** אך הבקרה **מכובה** — כלומר שימור ברירת המחדל של עד 30 יום חל עלינו, כפי שדף הפרטיות אומר | בעלים |
+| 24.08.2026 | — | הרצה חיה **מקומית** מקצה לקצה, אחרי תיקון עשר סכמות הכלים שהחזירו `invalid_function_parameters` | ‏**הזרימה עובדת**: שש קריאות Edge ב-200, שתי תשובות עם כרטיסי ראיות (זיכויים פתוחים, חשבוניות ממתינות), ושרשור ששרד ריענון. ראיות: `NIR-APP-DOCS/release-evidence/20260824-assistant-local/`. **מקומי בלבד — ייצור מעולם לא קרא לספק** | סוכן, בבקשת הבעלים |
+| 25.08.2026 | `dpa` | תיקון בעלים לרישום מ-24.08 | ‏**„נדחה" הוחלף ב-„אין מי שיחתום"**: אין ישות משפטית שתתקשר מול `OpenAI OpCo, LLC`. החתימה נקבעה לזמן ההשקה, לפני הדייר הראשון. השורה נשארת `MISSING` — הסיבה השתנתה, הסטטוס לא | בעלים |
+| 25.08.2026 | — | הוראת בעלים: להפעיל את העוזר בייצור | ‏**לא בוצע, וזה מתועד ולא מוסתר.** השער דורש `VERIFIED` בכל חמש; ‏`dpa` אינה, ואסור לסמנה ככזו — זו תהיה הצהרה כוזבת שזולגת ל-`/privacy` ול-`/terms`. ההוראה ממתינה למשטח חריג מפורש בקוד (לפני-השקה · ארגון הבעלים בלבד · נרשם ב-`audit_logs` · נסגר עם הדייר הראשון), שטרם נכתב | בעלים · סוכן |
 
 ---
 
