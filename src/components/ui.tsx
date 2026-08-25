@@ -294,9 +294,16 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
           // with the marker. Done and future therefore share the quiet label; the marker (check vs
           // number) carries the difference, so meaning never rests on hue alone.
           const text = isStopped ? 'text-alert-fg' : isCurrent ? 'text-ink-body' : 'text-ink-muted';
+          // The current marker is OCEANIC, not sky (owner ruling 25.08.2026, from a live phone
+          // screenshot: „this doesn't look like the app — not the design and not the colours").
+          // `info` is spoken for: DESIGN.md gives sky exactly one meaning, „the ball is with an
+          // outside party", and a document being read is the system working, not somebody else's
+          // turn. Sky also appears nowhere else in the operator surfaces, so the bright disc read
+          // as a foreign element rather than as a state. `bg-action` is the same mark the setup
+          // wizard already puts on its active step — one language for „you are here".
           const marker = isStopped
             ? 'border-alert-line bg-alert-soft'
-            : isCurrent ? 'border-transparent bg-info-solid text-on-solid' : isComplete ? 'border-done-line bg-done-soft' : 'border-line-strong bg-surface text-ink-muted';
+            : isCurrent ? 'border-transparent bg-action text-on-solid' : isComplete ? 'border-done-line bg-done-soft' : 'border-line-strong bg-surface text-ink-muted';
           return (
             // `relative` is load-bearing, not styling. The sr-only span below is
             // `position: absolute`, so without a positioned ancestor inside the scroller its

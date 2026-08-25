@@ -204,14 +204,16 @@ describe('העוזר של InPlace — הפאנל', () => {
     await waitFor(() => expect(trigger()).toHaveFocus());
   });
 
-  it('הטריגר נושא את המילה „בדיקה" ואינו נשען על האייקון לבדו', () => {
-    // Updated 25.08.2026 (#273). This case used to pin the ABSENCE of a sparkles icon, which was
-    // the anti-goal list expressed as a test. The owner revoked that one item, so the icon
-    // assertion is inverted -- but the half that still matters is kept and is the reason the case
-    // exists: on desktop the trigger must carry the WORD, so its meaning never rests on a glyph.
+  it('הטריגר הוא הנצנוץ בלבד, והשם נשאר נגיש בלי טקסט נראה', () => {
+    // Rewritten 25.08.2026 by owner ruling: the assistant was never named „בדיקה", and the word
+    // beside the icon read like an environment tag on a live product. The case that used to pin
+    // the WORD now pins what replaced it — the trigger shows no text at ANY width, and the name
+    // it lost from the surface it keeps as its accessible name. That is the half worth guarding:
+    // dropping visible text is only safe while the label survives for a screen reader.
     desktopMode = true;
     renderPanel();
-    expect(trigger()).toHaveTextContent('בדיקה');
+    expect(trigger().textContent?.trim()).toBe('');
+    expect(trigger()).toHaveAccessibleName('העוזר של InPlace');
     expect(trigger().querySelector('[data-assistant-trigger-icon="sparkles"]')).not.toBeNull();
   });
 

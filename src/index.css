@@ -394,7 +394,14 @@ body {
      unstyled with no build error — see the semantic token contract in DESIGN.md. */
   .badge-done  { @apply badge bg-done-soft  text-done-on-soft; }
   .badge-await { @apply badge bg-await-soft text-await-on-soft; }
-  .badge-alert { @apply badge bg-alert-soft text-alert-on-soft; }
+  /* alert is the one badge that is SOLID (owner ruling 25.08.2026: "all the red at the strength
+     the bell shows it"). The tonal pattern is right for the other four — they report a state you
+     read at your own pace — but it made the failure pill pale pink beside a bell badge wearing the
+     deepest shade of the same family, and the owner read that as two different reds rather than one
+     red at two strengths. Solid gives the alert pill the bell's exact treatment: `alert-solid` with
+     `on-solid` lettering, measured at 6.06:1 (AA, and the same pairing `.btn-danger` already ships).
+     Meaning still never rests on hue — every consumer pairs the badge with its own words. */
+  .badge-alert { @apply badge bg-alert-solid text-on-solid; }
   .badge-info  { @apply badge bg-info-soft  text-info-on-soft; }
   .badge-idle  { @apply badge bg-idle-soft  text-idle-on-soft; }
 
