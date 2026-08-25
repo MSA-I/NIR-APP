@@ -382,7 +382,7 @@ export async function handler(req: Request): Promise<Response> {
     // the decision CARRIES rather than trusting its allowed flag, so a future refactor that keeps
     // the flag and loosens the parse still cannot reach a provider. It sits before the egress
     // lease, so a refusal takes no lease and spends nothing.
-    assertGovernedProviderConstruction(config.governance);
+    assertGovernedProviderConstruction(config.governance, { organizationId: actor.orgId });
     const provider = createOpenAiAssistantProvider({
       apiKey: providerKey,
       model: config.model,
