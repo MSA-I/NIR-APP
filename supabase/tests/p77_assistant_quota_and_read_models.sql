@@ -71,6 +71,15 @@ insert into public.organizations (id, name, status) values
   ('77000000-0000-4000-8000-000000000005', 'P77 prices tenant',           'active'),
   ('77000000-0000-4000-8000-000000000006', 'P77 business, newly verified', 'active');
 
+-- 0210 creates an organisation on `premium` while the pre-launch window is open, and this suite is
+-- about the WINDOW rather than about which plan a demo lands on -- its arms compare the intro
+-- allowance against "the plan number", so that number has to be one the suite chose. Pinned to
+-- `free` here, explicitly, so the assertions keep naming a figure instead of tracking whatever the
+-- default happens to be this month. The arms that need another tier set it themselves below.
+update public.organization_subscriptions set plan_key = 'free'
+ where org_id in ('77000000-0000-4000-8000-000000000001', '77000000-0000-4000-8000-000000000002',
+                  '77000000-0000-4000-8000-000000000003', '77000000-0000-4000-8000-000000000005');
+
 insert into auth.users (id, email, email_confirmed_at) values
   ('78000000-0000-4000-8000-000000000001', 'owner-intro-p77@example.test',
    now() - interval '5 days'),

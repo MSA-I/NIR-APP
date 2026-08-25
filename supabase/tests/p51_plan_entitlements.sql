@@ -204,12 +204,23 @@ insert into public.platform_admin_roles (user_id, role_key) values
   ('61000000-0000-4000-8000-000000000003', 'billing'),
   ('61000000-0000-4000-8000-000000000004', 'support');
 
--- Organizations created after 0154 land on `free` through the default-subscription trigger, not
+-- Organizations created after 0154 land on a plan through the default-subscription trigger, not
 -- through the one-time backfill. Proving that here is the whole reason wave 4 will not refuse
 -- every customer who signs up tomorrow.
+--
+-- WHICH plan is now a function of the clock, not a constant (0210, owner ruling 25.08.2026):
+-- inside the pre-launch window every organisation is a demo and is created on `premium`; after it,
+-- on `free` again, with no further migration because the trigger reads the date rather than a row
+-- somebody has to remember to change. The assertion reads the SAME date from the SAME function --
+-- a literal here would be the second copy of a deadline that 0210 exists to avoid, and it would
+-- start failing on its own the day the window closes.
+-- Captured HERE, while the suite is still superuser: `private` is unreadable to `authenticated`,
+-- and the isolation assertion further down runs under that role.
+select case when clock_timestamp() < private.prelaunch_window_end() then 'premium' else 'free' end
+  as plan \gset p51_default_
 select pg_temp.p51_assert(
   (select plan_key from organization_subscriptions
-    where org_id = '51000000-0000-4000-8000-000000000002') = 'free',
+    where org_id = '51000000-0000-4000-8000-000000000002') = :'p51_default_plan',
   'a newly created organization received no default subscription');
 
 -- Move A to a paid tier so the plan lookup resolves something other than the default.
@@ -265,11 +276,14 @@ $$;
 
 reset role;
 
--- Tenant B is on the untouched backfill plan, and must see that rather than tenant A's.
+-- Tenant B is on the plan the trigger gave it, and must see that rather than tenant A's. What
+-- this assertion is actually about is ISOLATION -- A was moved to `pro` above -- so the expected
+-- value is "whatever a new organisation is created on", read from 0210's own branch rather than
+-- written out as a constant a second time.
 select pg_temp.p51_as('61000000-0000-4000-8000-000000000002');
 set local role authenticated;
 select pg_temp.p51_assert(
-  (select plan_key from public.my_entitlements() limit 1) = 'free',
+  (select plan_key from public.my_entitlements() limit 1) = :'p51_default_plan',
   'one tenant resolved to another tenant''s plan');
 reset role;
 
@@ -425,7 +439,7 @@ reset role;
 select pg_temp.p51_as('61000000-0000-4000-8000-000000000002');
 set local role authenticated;
 select pg_temp.p51_assert(
-  (select plan_key from public.my_entitlements() limit 1) = 'free',
+  (select plan_key from public.my_entitlements() limit 1) = :'p51_default_plan',
   'tenant B''s plan moved while tenant A was being edited');
 reset role;
 

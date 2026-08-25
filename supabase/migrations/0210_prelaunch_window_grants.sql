@@ -87,6 +87,35 @@ create trigger zzz_organizations_prelaunch_assistant
   after insert on public.organizations
   for each row execute function private.organizations_prelaunch_assistant();
 
+-- ===== 3b. A grant the SYSTEM wrote is not the tenant doing business =====
+-- `private.organization_has_business_activity` walks every public table carrying `org_id` and
+-- treats any unregistered one as evidence. Section 3 gives every new organisation two
+-- `org_flag_configurations` rows, so without this the predicate would answer TRUE for an
+-- organisation that has never had a supplier, a document or a user -- and the lifecycle would
+-- lose the ability to classify an account as empty at all. That is not a test detail: nothing
+-- would ever be cleanable again, and the failure would look like caution rather than a bug.
+--
+-- `organization_subscriptions` is already registered `not_evidence` on exactly this reasoning,
+-- and a flag configuration is the same kind of row: written by us, about our rollout, at a moment
+-- the tenant did nothing.
+--
+-- THIS ONE OVERWRITES, WHICH THE REGISTRY'S OTHER WRITERS DELIBERATELY DO NOT. The convention is
+-- `do nothing`, so a migration cannot silently reverse a disposition somebody reconsidered. The
+-- exception is earned here because the row being replaced is not a reconsidered judgement: it
+-- carries the generic default rationale, "a row here exists only because somebody used the
+-- product" -- and section 3 above is precisely what makes that sentence untrue for this table.
+-- Updating it is answering the old reasoning, not ignoring it.
+insert into private.org_activity_evidence_registry (table_name, disposition, rationale)
+values (
+  'org_flag_configurations',
+  'not_evidence',
+  'A feature-flag configuration is written by the platform -- by the pre-launch grant in 0210 at '
+  || 'creation, or by platform_set_org_flag -- and never by the tenant working. Same reasoning as '
+  || 'organization_subscriptions.'
+)
+on conflict (table_name) do update
+  set disposition = excluded.disposition, rationale = excluded.rationale;
+
 -- ===== 4. The organisations that already exist =====
 -- Every one of them is a demo today, which is the premise the owner stated. The plan move is
 -- deliberately narrow -- only a row that is still on the seeded `free`/`manual` pair, so a

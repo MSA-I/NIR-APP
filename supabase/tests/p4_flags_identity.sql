@@ -157,12 +157,26 @@ reset role;
 -- a flag from doing -- it is an 0076-shape policy in 0164 §6 instead, with a baseline-off CHECK
 -- and a reasoned platform command.
 --
--- What stays non-negotiable is the second half: `enabled = 0`. Every flag is born off for every
--- tenant, the assistant three included; only platform_set_org_flag (platform admin + reason +
--- audit) turns one on. A flag that shipped on would defeat the whole law.
+-- The second half used to read `enabled = 0` -- every flag born off for every tenant, only
+-- platform_set_org_flag turning one on. 0210 (owner ruling 25.08.2026) grants `assistant.ui` and
+-- `assistant.history` to an organisation created inside the pre-launch window, so a fixture tenant
+-- created by this suite is now born with exactly two resolved on.
+--
+-- WHAT THAT DID NOT CHANGE, and what this assertion now pins instead, because it is the half that
+-- was actually load-bearing: NO FLAG SHIPPED ON GLOBALLY. `default_state` is still false for all
+-- six, so the surface is off by definition and every ON state is a ROW against one organisation
+-- that names why it exists -- a reason and an audit entry for platform_set_org_flag, a
+-- `targeting.ends_at` that expires by itself for the pre-launch grant. Raising `default_state`
+-- would still defeat the whole law, and that is now said in the assertion rather than only in the
+-- consequence it used to have.
+select count(*) filter (where default_state)::text as global_on
+from private.flag_definitions \gset flags_
 select pg_temp.p4_assert(
-  :'flags_base_total'::int = 6 and :'flags_base_enabled'::int = 0,
-  'the defined surface is exactly six flags, all born off');
+  :'flags_base_total'::int = 6
+  and :'flags_global_on'::int = 0
+  and :'flags_base_enabled'::int
+      = case when clock_timestamp() < private.prelaunch_window_end() then 2 else 0 end,
+  'the defined surface is exactly six flags, none on by definition, and only the pre-launch pair resolved on');
 
 -- An orphan config row (no definition) must NOT expand the resolved surface.
 reset role;
