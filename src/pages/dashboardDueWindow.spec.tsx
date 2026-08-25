@@ -143,6 +143,35 @@ describe('לתשלום בשבוע הקרוב — הכסף, לא כיסוי הת�
     expect(tile.textContent).toMatch(/1 דרישות/);
   });
 
+  // 25.08.2026. The tile carries one graphic now, and it is the only place on this screen where a
+  // width is an ARGUMENT: two inline percentages that claim "this much of the money is already
+  // late". A wrong denominator would keep rendering a perfectly plausible bar, so the split is
+  // asserted here rather than trusted. The bar itself stays aria-hidden — the two sentences under
+  // it already name both amounts, and this test reads the DOM node, not the accessibility tree.
+  it('פס הפיצול מחלק לפי הכסף שחייב לזוז, לא לפי מספר הדרישות', async () => {
+    const tile = await renderWith({
+      dueDateCoverage: 2, activeCount: 3, overdue: 1, dueToday: 0,
+      overdueAmount: 10, dueWithin7Amount: 30, dueWithin7Count: 4,
+    });
+
+    const segments = [...tile.querySelectorAll('.split-bar > span')].map((s) => (s as HTMLElement).style.width);
+    // 10 of 40 is late — a QUARTER of the bar, even though only one request in five is the late
+    // one. Counting requests instead of shekels would have drawn 20% here and been wrong quietly.
+    expect(segments).toEqual(['25%', '75%']);
+  });
+
+  it('חלון בלי כסף — אין פס, ולא פס בחלוקת אפס', async () => {
+    const tile = await renderWith({
+      dueDateCoverage: 2, activeCount: 3, overdue: 0, dueToday: 0,
+      overdueAmount: 0, dueWithin7Amount: 0, dueWithin7Count: 0,
+    });
+
+    // Requests exist and are dated, so the tile still shows ₪0 rather than the empty sentence.
+    // The bar has nothing to divide by: it must be absent, not a NaN% pair of widths.
+    expect(tile.textContent).toContain(fmtMoneyRounded(0));
+    expect(tile.querySelector('.split-bar')).toBeNull();
+  });
+
   it('חלון ריק מעל דרישות מתוארכות הוא אפס מדוד, לא "—"', async () => {
     const tile = await renderWith({
       dueDateCoverage: 2, activeCount: 3, overdue: 2, dueToday: 0,

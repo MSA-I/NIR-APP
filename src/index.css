@@ -136,6 +136,28 @@
   --color-series-3: oklch(46% 0.125 48);
   --color-series-4: oklch(73% 0.125 192);
   --color-series-5: oklch(46% 0.145 270);
+
+  /* ---- Bar ramp — MAGNITUDE, spoken in the categorical palette's language (25.08.2026) ----
+     When identity moved to series-* the monthly bar chart stayed behind on chart-1..5, so the
+     trends board ended up showing TWO colour languages side by side in one glance: a donut and a
+     line pair in the new hues, and beside them bars in deep teal, onyx and a near-grey. The owner
+     read it exactly that way — "the colours did not reach the purchase-spend chart".
+
+     The fix is not "reuse the categorical steps". A bar chart over months encodes MAGNITUDE, and
+     the categorical palette is built to have no magnitude order — its steps sit at deliberately
+     similar lightness so that none of them dominates. Reusing it would have made the highest and
+     lowest month two unrelated hues. So this stays a ramp, and what changes is the family it is
+     drawn from: three lightness steps of the categorical PRIMARY's own hue (222). The bars now
+     read as the same product as the donut's leading slice and the "רכש" line, while separation
+     inside the ramp is still pure lightness — the only carrier that survives colour blindness.
+
+     `mid` aliases series-1 rather than repeating its literal: one value, one name. The outer two
+     are that hue darkened and lightened; the L gaps (0.18 / 0.22) are what colorLanguage.spec
+     pins, because a ramp whose steps converge stops encoding rank while still looking fine. */
+  --color-bar-high: oklch(40% 0.105 222);
+  --color-bar-mid: var(--color-series-1);
+  --color-bar-low: oklch(80% 0.062 222);
+
   /* ---- Section identity — WHERE, never WHAT (retired hue-wayfinding, T7.3) ----
      Until T7.3 the three work domains carried three DISTINCT hues (275/305/335). The owner saw
      the purple underline and read it as "a color with no meaning" — the hue-distance wayfinding
@@ -840,6 +862,14 @@ html { transition: --glow-x 0.45s ease-out, --glow-y 0.45s ease-out; }
 @keyframes freshness-settle { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 .freshness-settle { animation: freshness-settle 0.18s ease-out both; }
 
+/* The due-window tile's split bar. A REVEAL, never a grow: the two segments' widths are the
+   overdue/due-soon split itself, so animating the widths would parade wrong ratios on the way to
+   the right one. Wiping the finished bar in from the inline start (RTL: the right edge) shows the
+   overdue segment first — the part that decides whether the week is calm. `both` holds it clipped
+   through the delay, which lands it just after its card has finished settling (dash step 4). */
+@keyframes split-bar-reveal { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0 0 0 0); } }
+.split-bar { animation: split-bar-reveal 0.5s ease-out 0.3s both; }
+
 /* The navigation stays scrollable when its content exceeds the viewport, but the operating-system
    track is visual noise inside the fixed sidebar. Scope this narrowly: tables and page content keep
    their native scrollbars as an overflow affordance. */
@@ -863,7 +893,8 @@ html { transition: --glow-x 0.45s ease-out, --glow-y 0.45s ease-out; }
   .dashboard-depth summary svg { transition-duration: 0.01ms !important; }
   .btn-primary:active, .btn-secondary:active, .btn-danger:active, .btn-ghost:active,
   .card-link-hover:hover { translate: none !important; }
-  .dash-enter > *, .freshness-settle { animation: none; }
+  /* The split bar keeps its widths — they are data. Only the wipe stops. */
+  .dash-enter > *, .freshness-settle, .split-bar { animation: none; }
 }
 
 @media print {

@@ -4,7 +4,8 @@
 // static per page load; a future runtime theme switch must invalidate `cache`.
 type ChartTheme = {
   bar: string;
-  bars: string[];
+  barHigh: string;
+  barLow: string;
   categorical: string[];
   grid: string;
   tick: string;
@@ -20,13 +21,21 @@ export function chartTheme() {
   if (!cache) {
     const s = getComputedStyle(document.documentElement);
     const v = (name: string) => s.getPropertyValue(name).trim();
-    const bar = v('--color-chart-1');
+    const bar = v('--color-bar-mid');
     cache = {
       bar,
-      bars: [bar, v('--color-chart-2'), v('--color-chart-3'), v('--color-chart-4'), v('--color-chart-5')],
-      // Two palettes, two jobs. `bars` is the sequential ramp — magnitude, where lightness
-      // order carries meaning. `categorical` is identity, where it cannot: see the block
-      // above --color-series-1 in index.css for the measurement that separated them.
+      barHigh: v('--color-bar-high'),
+      barLow: v('--color-bar-low'),
+      // Two palettes, two jobs. bar/barHigh/barLow are the sequential ramp — magnitude, where
+      // lightness order carries meaning. `categorical` is identity, where it cannot: see the
+      // block above --color-series-1 in index.css for the measurement that separated them.
+      //
+      // Until 25.08.2026 the ramp read chart-1..5, which is where the two jobs had been split
+      // — but it left the ramp in the OLD hue family after identity had moved to series-*, so
+      // one screen showed two colour vocabularies at once. The ramp is now three lightness
+      // steps of series-1's hue: same family, still a ramp. `bars` (the five-entry array) is
+      // gone with it; only these three steps were ever read, and an array of five invited a
+      // sixth caller to pick an index nobody had measured.
       categorical: [v('--color-series-1'), v('--color-series-2'), v('--color-series-3'),
         v('--color-series-4'), v('--color-series-5')],
       grid: v('--color-chart-grid'),

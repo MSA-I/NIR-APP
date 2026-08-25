@@ -148,11 +148,13 @@ export function TrendSparkline({ points, label }: { points: DashboardWeeklyPoint
 
 export type BarPoint = { key: string; label: string; total: number };
 
-/** Vertical bar chart, rank-colored (T7.3k, owner on image #24): the HIGHEST bucket wears
- *  ONYX, the LOWEST positive bucket wears the pale ramp step, and everything between is
- *  OCEANIC. Named owner exception to "color follows the entity, never its rank" — here the
- *  color IS the ranking, restated by the ARIA text and the tooltip values. Thin, rounded
- *  marks; empty → emptyMessage, not empty axes. */
+/** Vertical bar chart, rank-colored (T7.3k, owner on image #24): the HIGHEST bucket wears the
+ *  darkest ramp step, the LOWEST positive bucket the palest, and everything between the middle
+ *  one. Named owner exception to "color follows the entity, never its rank" — here the color IS
+ *  the ranking, restated by the ARIA text and the tooltip values. The three steps are one hue
+ *  (series-1's) at three lightnesses since 25.08.2026: the ranking still reads, and the chart
+ *  no longer speaks a different colour language than the donut beside it. Thin, rounded marks;
+ *  empty → emptyMessage, not empty axes. */
 export function SpendBarChart({
   points, ariaLabel, emptyMessage, className = 'mt-2 h-32 sm:h-48', maxBarSize = 32, valueFormatter = fmtMoneyExact,
 }: {
@@ -168,10 +170,10 @@ export function SpendBarChart({
   const max = positive.length ? Math.max(...positive) : 0;
   const min = positive.length ? Math.min(...positive) : 0;
   const rankFill = (total: number) => {
-    if (total <= 0) return t.bars[4];
-    if (total === max) return t.bars[3];      // onyx — the highest
-    if (total === min) return t.bars[4];      // pale gray-teal — the lowest
-    return t.bar;                             // oceanic — the middle
+    if (total <= 0) return t.barLow;
+    if (total === max) return t.barHigh;      // deep oceanic — the highest
+    if (total === min) return t.barLow;       // pale oceanic — the lowest
+    return t.bar;                             // the primary series hue — the middle
   };
   return (
     <ChartViewport className={className} label={ariaLabel}>
