@@ -6,6 +6,8 @@ import type {
 import type { EvidenceAuthorizationPort } from "./evidence-authorization.ts";
 import { AssistantEdgeError } from "./errors.ts";
 import {
+  CONVERSATION_IDLE_TTL_MS,
+  isConversationExpired,
   listAuthorizedConversations,
   loadAuthorizedConversationContext,
   loadAuthorizedConversationViews,
@@ -178,7 +180,9 @@ Deno.test("history list returns only conversations whose latest run passes curre
   const rows = await listAuthorizedConversations(
     rpc,
     access(),
-    { actor, limit: 10 },
+    // `now` is injected because the list now applies an idle expiry (#272). Without it this
+    // fixture would age past the window on its own and the case would start failing by calendar.
+    { actor, limit: 10, now: new Date("2026-08-20T12:00:00.000Z") },
   );
 
   assert.deepEqual(rows, [{
@@ -202,7 +206,7 @@ Deno.test("history list omits even title and date when current source access is 
   const rows = await listAuthorizedConversations(
     rpc,
     access(actor, false),
-    { actor, limit: 10 },
+    { actor, limit: 10, now: new Date("2026-08-20T12:00:00.000Z") },
   );
   assert.deepEqual(rows, []);
 });
@@ -304,4 +308,71 @@ Deno.test("an unavailable service snapshot maps to the one safe history refusal"
       error instanceof AssistantEdgeError &&
       error.code === "assistant_history_unavailable",
   );
+});
+
+// ---------------------------------------------------------------------------------------------
+// Idle expiry (OPEN-DECISIONS #272, owner 25.08.2026).
+//
+// "A thread without history — meaning after 24 hours of no use it resets." That is an expiry,
+// not the absence of persistence: inside the window a refresh must not end the conversation.
+// These cases pin both halves, because only proving the second one would let a regression that
+// never resumes anything pass as "working".
+
+const LAST_USED = "2026-08-20T10:00:00.000Z";
+const listAt = (now: string, updatedAt: string = LAST_USED) =>
+  listAuthorizedConversations(
+    routedService({
+      service_assistant_recent_conversations: {
+        conversations: [{ id: CONVERSATION, updated_at: updatedAt }],
+      },
+      service_assistant_conversation_snapshot: snapshot(),
+    }),
+    access(),
+    { actor, limit: 10, now: new Date(now) },
+  );
+
+Deno.test("a conversation used an hour ago is still offered back", async () => {
+  assert.equal((await listAt("2026-08-20T11:00:00.000Z")).length, 1);
+});
+
+Deno.test("a conversation idle just under 24 hours survives -- a refresh must not end it", async () => {
+  assert.equal((await listAt("2026-08-21T09:59:59.000Z")).length, 1);
+});
+
+Deno.test("a conversation idle past 24 hours is not offered back", async () => {
+  assert.deepEqual(await listAt("2026-08-21T10:00:01.000Z"), []);
+});
+
+Deno.test("the reset is total: days later there is nothing to resume", async () => {
+  assert.deepEqual(await listAt("2026-09-01T10:00:00.000Z"), []);
+});
+
+Deno.test("an unreadable timestamp expires rather than resurrects", async () => {
+  // The safe direction: start a new thread. Resuming a conversation whose age cannot be
+  // established is the one outcome the owner's ruling rules out.
+  assert.deepEqual(await listAt("2026-08-20T11:00:00.000Z", "not-a-date"), []);
+});
+
+Deno.test("expiry is decided per conversation, not for the whole list", async () => {
+  const fresh = "66666666-6666-4666-8666-666666666666";
+  const rows = await listAuthorizedConversations(
+    routedService({
+      service_assistant_recent_conversations: {
+        conversations: [
+          { id: CONVERSATION, updated_at: "2026-08-19T10:00:00.000Z" }, // stale
+          { id: fresh, updated_at: "2026-08-21T09:00:00.000Z" }, // fresh
+        ],
+      },
+      service_assistant_conversation_snapshot: snapshot(),
+    }),
+    access(),
+    { actor, limit: 10, now: new Date("2026-08-21T10:00:00.000Z") },
+  );
+  assert.deepEqual(rows.map((r) => r.id), [fresh]);
+});
+
+Deno.test("the window is the documented 24 hours, not a number that drifted", () => {
+  assert.equal(CONVERSATION_IDLE_TTL_MS, 24 * 60 * 60 * 1000);
+  assert.equal(isConversationExpired(LAST_USED, new Date("2026-08-21T09:59:59.000Z")), false);
+  assert.equal(isConversationExpired(LAST_USED, new Date("2026-08-21T10:00:01.000Z")), true);
 });

@@ -295,10 +295,29 @@ export async function loadAuthorizedConversationContext(
   return context;
 }
 
+/**
+ * How long a conversation survives without being used (OPEN-DECISIONS #272, owner 25.08.2026).
+ *
+ * The owner asked for a thread "without history — meaning after 24 hours of no use it resets".
+ * That is an EXPIRY, not the absence of persistence: within the window a refresh, a tab close or
+ * a lunch break must not end the conversation, which is the behaviour `95f10e2` was written to
+ * fix. Past the window the thread is not offered back, and the next question starts a new one.
+ */
+export const CONVERSATION_IDLE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** True when a conversation has been idle longer than the window and must not be resumed. */
+export function isConversationExpired(updatedAt: string, now: Date): boolean {
+  const last = Date.parse(updatedAt);
+  // An unparsable timestamp is treated as expired: the safe direction is to start a new thread,
+  // never to resurrect one whose age cannot be established.
+  if (!Number.isFinite(last)) return true;
+  return now.getTime() - last > CONVERSATION_IDLE_TTL_MS;
+}
+
 export async function listAuthorizedConversations(
   service: HistorySnapshotRpc,
   authorization: EvidenceAuthorizationPort,
-  values: { actor: ActorContext; limit: number },
+  values: { actor: ActorContext; limit: number; now?: Date },
 ): Promise<AuthorizedConversationListRow[]> {
   const recent = await service.rpc("service_assistant_recent_conversations", {
     p_org_id: values.actor.orgId,
@@ -310,11 +329,18 @@ export async function listAuthorizedConversations(
     !Array.isArray(recent.data.conversations)
   ) throw new AssistantEdgeError("assistant_history_unavailable");
 
+  // The expiry is applied HERE, at the one boundary that decides what may come back. Everything
+  // downstream -- the list the panel renders, and the adoption of the most recent thread on first
+  // open -- reads this result, so filtering once is what makes the reset total rather than
+  // cosmetic. A stale row is simply never offered; it is not deleted here, and the documents say
+  // so rather than implying a purge this function does not perform.
+  const now = values.now ?? new Date();
   const candidates = recent.data.conversations.flatMap((value) => {
     if (
       !isRecord(value) || typeof value.id !== "string" ||
       typeof value.updated_at !== "string"
     ) return [];
+    if (isConversationExpired(value.updated_at, now)) return [];
     return [{ id: value.id, updated_at: value.updated_at }];
   });
 
