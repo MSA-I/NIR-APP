@@ -91,10 +91,26 @@ export const GOVERNANCE_ENV_VARS: Record<GovernanceRow, string> = {
  */
 export const PRELAUNCH_EXCEPTION_ENV_VAR = "AI_ASSISTANT_PRELAUNCH_EXCEPTION";
 
+/**
+ * `org=all` — every organisation, for the life of the exception.
+ *
+ * Added 25.08.2026 by owner ruling, after the owner was shown that signup is open to the public
+ * and that Google sign-up went live two days earlier, and chose the open grant anyway on the
+ * stated ground that every account today is a demo. It is a WORD and not a wildcard character, and
+ * it is the only non-UUID this parser accepts: an operator has to type the thing they mean, and
+ * `org=all` is legible in a secret store and in the audit line in a way that an empty field or a
+ * `*` never is. The expiry, the reason and the dpa-only limit are untouched — this widens WHO the
+ * exception covers, and nothing else.
+ */
+export const PRELAUNCH_EXCEPTION_ALL_ORGANIZATIONS = "all";
+
 export interface PrelaunchException {
   /** Inclusive last day the exception is honoured, ISO `YYYY-MM-DD`. */
   until: string;
-  /** The single organisation it covers. Any other org is refused at construction. */
+  /**
+   * The organisation it covers, or `all` for every organisation. A UUID is still matched exactly
+   * at construction; any other org is refused.
+   */
   organizationId: string;
   /** Why it exists, carried into the refusal and the audit trail. */
   reason: string;
@@ -385,6 +401,7 @@ export function assertGovernedProviderConstruction(
   // warm isolate can hold a decision parsed before midnight and construct a provider after it.
   const exception = rechecked.prelaunchException;
   if (!exception) return;
+  if (exception.organizationId === PRELAUNCH_EXCEPTION_ALL_ORGANIZATIONS) return;
   if (context.organizationId !== exception.organizationId) {
     throw new ProviderGovernanceRefusedError(
       "assistant_governance_incomplete:dpa=prelaunch_exception_wrong_organization",
@@ -487,7 +504,9 @@ export function readPrelaunchException(env: EnvReader): PrelaunchExceptionRead {
   const organizationId = fields.get("org") ?? "";
   const reason = fields.get("reason") ?? "";
   if (!isIsoDate(until)) return { kind: "unparsable" };
-  if (!UUID_PATTERN.test(organizationId)) return { kind: "unparsable" };
+  const coversEveryOrganization =
+    organizationId.toLowerCase() === PRELAUNCH_EXCEPTION_ALL_ORGANIZATIONS;
+  if (!coversEveryOrganization && !UUID_PATTERN.test(organizationId)) return { kind: "unparsable" };
   // A reason nobody wrote is a permission nobody justified, and the audit line would read empty.
   if (!isFilled(reason)) return { kind: "unparsable" };
 

@@ -282,8 +282,25 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
   const percent = progress && progress.total > 0
     ? Math.min(100, Math.max(0, Math.round((progress.done / progress.total) * 100)))
     : null;
+  // How far the process itself has come, in steps. Owner ruling 25.08.2026: "instead of numbers,
+  // show a progress bar". The numbered discs were the wrong instrument twice over — a reader does
+  // not care that reading is step two, and „4" on the last disc invited the same off-by-one the
+  // setup screen had. A filled track answers the question the numbers were standing in for (how
+  // much is left) without asking anyone to count. It is derived, never animated for effect: a
+  // stopped process shows the ground it actually covered and no more.
+  const stepPercent = currentIndex < 0 || steps.length === 0
+    ? 0
+    : Math.round(((failed ? currentIndex : currentIndex + 1) / steps.length) * 100);
   return (
     <div className="rounded-2xl bg-surface-sunken p-3">
+      {/* aria-hidden: the <ol> below already exposes the same fact to a screen reader through
+          aria-current, and a second announcement of it would be noise, not redundancy. */}
+      <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-line-soft" aria-hidden="true">
+        <div
+          className={`h-full rounded-full transition-[width] duration-500 ease-out ${failed ? 'bg-alert-solid' : 'bg-action'}`}
+          style={{ width: `${stepPercent}%` }}
+        />
+      </div>
       <ol aria-label="שלבי התהליך" className="flex min-w-0 flex-wrap items-center gap-y-2 overflow-x-auto pb-1">
         {steps.map((step, index) => {
           const isCurrent = index === currentIndex;
@@ -315,8 +332,12 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
             // 3px out and stayed inside the tolerance.
             <li key={step.key} aria-current={isCurrent ? 'step' : undefined} className="relative flex min-w-fit items-center sm:flex-1">
               <span className={`flex items-center gap-1.5 text-xs font-medium ${text}`}>
-                <span className={`flex size-6 shrink-0 items-center justify-center rounded-full border ${marker}`} aria-hidden="true">
-                  {isStopped ? <AlertTriangle size={12} /> : isComplete ? <Check size={12} /> : index + 1}
+                {/* No number. The mark says which of four states this step is in — stopped, done,
+                    here, not yet — and the bar above says how far along the process is. A digit
+                    said neither, and on the last step it said „4" beside a heading that promised
+                    something else. `size-5` because a dot needs less room than a digit did. */}
+                <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${marker}`} aria-hidden="true">
+                  {isStopped ? <AlertTriangle size={11} /> : isComplete ? <Check size={11} /> : null}
                 </span>
                 {step.label}
                 {isCurrent && <span className="sr-only">{isStopped ? ' — השלב שנעצר' : ' — השלב הנוכחי'}</span>}
