@@ -111,6 +111,13 @@ insert into public.organizations(id,name,status) values
   ('14700000-0000-4000-8000-000000000001','P47 tenant A','active'),
   ('14700000-0000-4000-8000-000000000002','P47 tenant B','active');
 
+-- 0211 grants the four document autonomy policies to every organisation created inside the
+-- pre-launch window, so a fixture tenant is now born WITH them. This suite's OFF scenarios
+-- need the opposite, and after 0211 "off" is a state a test has to construct rather than
+-- inherit. Removing the birth grants by name is that construction.
+delete from org_autonomy_policies where org_id in (
+  '14700000-0000-4000-8000-000000000001','14700000-0000-4000-8000-000000000002');
+
 select id as unit_id from public.org_units
 where org_id='14700000-0000-4000-8000-000000000001' and unit_type='legal_entity'
 \gset p47_
