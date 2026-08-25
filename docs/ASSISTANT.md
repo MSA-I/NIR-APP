@@ -152,6 +152,7 @@
 | `AI_ASSISTANT_MAX_TOOL_CALLS_PER_TURN` | ‏4 | פגום = סירוב |
 | `AI_ASSISTANT_CONTEXT_MESSAGE_LIMIT` | ‏12 | פגום = סירוב |
 | `AI_ASSISTANT_GOVERNANCE_TRAINING_USE` · `_RETENTION` · `_PROVIDER_LOGS` · `_DPA` · `_DATA_REGION` | — | **חובה, חמישתן.** חסרה, אינה `VERIFIED`, או אינה מפוענחת = סירוב `assistant_governance_incomplete:<שורות>`. הפורמט ב-`ASSISTANT-ACTIVATION-EVIDENCE.md §3` |
+| `AI_ASSISTANT_PRELAUNCH_EXCEPTION` | — (אין) | **אופציונלי, ומוותר על שורת `dpa` בלבד** (`#271`). פורמט `until=YYYY-MM-DD;org=<uuid>;reason=<text>`. מוותר רק כאשר `dpa` חסרה או `MISSING`, רק לארגון הנקוב, ורק עד התאריך — אחרת `prelaunch_exception_covers_dpa_only` / `_not_for_this_cause` / `_wrong_organization` / `_expired`. ערך פגום = `assistant_prelaunch_exception_unparsable`, **לא** „אין היתר". **אינו הופך את `dpa` ל-`VERIFIED` ואינו משנה דבר ב-`/privacy`** |
 | `AI_ASSISTANT_DAILY_USER_LIMIT` · `_DAILY_ORG_LIMIT` · `_MONTHLY_ORG_LIMIT` | לא מוגדר | לא מוגדר = **אין תקרה נוספת**; מוגדר אך בלתי-מדיד = סירוב |
 | `AI_ASSISTANT_SOFT_COST_CAP` · `_HARD_COST_CAP` | לא מוגדר | **אין מקור מחיר היום** (`#183`), ולכן עלות נרשמת `null`; הגדרת אחת התקרות מסרבת fail-closed עד שמקור מחיר מנוהל ימלא מדידה אמיתית |
 

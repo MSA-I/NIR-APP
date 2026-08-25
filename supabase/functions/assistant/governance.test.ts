@@ -18,8 +18,11 @@ import {
   type GovernanceRow,
   type GovernanceEvidenceRow,
   GOVERNED_PROVIDER,
+  PRELAUNCH_EXCEPTION_ENV_VAR,
+  type PrelaunchException,
   ProviderGovernanceRefusedError,
   type ProviderGovernanceEvidence,
+  readPrelaunchException,
   readProviderGovernanceEvidence,
 } from "./governance.ts";
 
@@ -280,4 +283,174 @@ Deno.test("a fully configured environment allows, and the read is deterministic"
   assert.equal(assertProviderGovernance(read()).allowed, true);
   // Same input, same answer -- twice in a row, with no clock and no I/O between them.
   assert.deepEqual(assertProviderGovernance(read()), assertProviderGovernance(read()));
+});
+
+// ---------------------------------------------------------------------------------------------
+// The pre-launch exception (OPEN-DECISIONS #271, owner ruling 25.08.2026).
+//
+// The exception exists because no company is registered, so no DPA can be executed -- there is no
+// counterparty, not an unsigned form. It waives ONE row, for ONE organisation, until ONE date.
+// Everything below is the negative side of that sentence, because a waiver whose bounds are not
+// tested is a waiver without bounds.
+
+const OWNER_ORG = "11111111-2222-3333-4444-555555555555";
+const OTHER_ORG = "99999999-8888-7777-6666-555555555555";
+
+function exception(overrides: Partial<PrelaunchException> = {}): PrelaunchException {
+  return { until: "2026-12-31", organizationId: OWNER_ORG, reason: "pre_launch_owner_org", ...overrides };
+}
+
+/** A fixed instant, injected everywhere: a case that read the real clock would rot on its own. */
+const BEFORE_EXPIRY = new Date("2026-08-25T00:00:00Z");
+const AFTER_EXPIRY = new Date("2027-01-01T00:00:00Z");
+
+Deno.test("the exception waives an absent dpa row, and says so on the decision", () => {
+  const decision = assertProviderGovernance(completeEvidence({ dpa: null }), {
+    exception: exception(),
+    now: BEFORE_EXPIRY,
+  });
+  assert.ok(decision.allowed);
+  assert.equal(decision.prelaunchException?.organizationId, OWNER_ORG);
+  // The waiver must never launder the row into evidence: /privacy is derived from these rows,
+  // and a VERIFIED dpa here would become a false statement to a customer.
+  assert.equal(decision.rows.dpa.status, "MISSING");
+});
+
+Deno.test("the exception waives a dpa row that is present and MISSING", () => {
+  const decision = assertProviderGovernance(
+    completeEvidence({ dpa: { ...verifiedRow(), status: "MISSING" } }),
+    { exception: exception(), now: BEFORE_EXPIRY },
+  );
+  assert.ok(decision.allowed);
+  assert.equal(decision.rows.dpa.status, "MISSING");
+});
+
+Deno.test("a CONTRADICTED dpa row is never waivable", () => {
+  // "Nobody supplied one" and "we checked and the answer is no" are different facts. Only the
+  // first is what the owner ruled on.
+  const decision = assertProviderGovernance(
+    completeEvidence({ dpa: { ...verifiedRow(), status: "CONTRADICTED" } }),
+    { exception: exception(), now: BEFORE_EXPIRY },
+  );
+  assert.ok(!decision.allowed);
+  assert.match(decision.reason, /prelaunch_exception_not_for_this_cause/);
+});
+
+Deno.test("the exception covers dpa only -- a second unmet row still refuses", () => {
+  const decision = assertProviderGovernance(
+    completeEvidence({ dpa: null, retention: null }),
+    { exception: exception(), now: BEFORE_EXPIRY },
+  );
+  assert.ok(!decision.allowed);
+  assert.match(decision.reason, /prelaunch_exception_covers_dpa_only/);
+  assert.match(decision.reason, /retention=row_absent/);
+});
+
+Deno.test("an expired exception refuses with no code change", () => {
+  const decision = assertProviderGovernance(completeEvidence({ dpa: null }), {
+    exception: exception(),
+    now: AFTER_EXPIRY,
+  });
+  assert.ok(!decision.allowed);
+  assert.match(decision.reason, /prelaunch_exception_expired/);
+});
+
+Deno.test("the last day is inclusive and the day after is not", () => {
+  const onLastDay = assertProviderGovernance(completeEvidence({ dpa: null }), {
+    exception: exception({ until: "2026-12-31" }),
+    now: new Date("2026-12-31T23:59:59Z"),
+  });
+  assert.ok(onLastDay.allowed);
+  const nextDay = assertProviderGovernance(completeEvidence({ dpa: null }), {
+    exception: exception({ until: "2026-12-31" }),
+    now: new Date("2027-01-01T00:00:00Z"),
+  });
+  assert.ok(!nextDay.allowed);
+});
+
+Deno.test("no exception configured means the dpa row refuses exactly as before", () => {
+  const decision = assertProviderGovernance(completeEvidence({ dpa: null }), {
+    exception: null,
+    now: BEFORE_EXPIRY,
+  });
+  assert.ok(!decision.allowed);
+  assert.match(decision.reason, /dpa=row_absent/);
+  assert.ok(!decision.reason.includes("prelaunch"));
+});
+
+Deno.test("construction binds the waiver to one organisation", () => {
+  const decision = assertProviderGovernance(completeEvidence({ dpa: null }), {
+    exception: exception(),
+    now: BEFORE_EXPIRY,
+  });
+  assert.ok(decision.allowed);
+
+  // The organisation it was granted to proceeds.
+  assertGovernedProviderConstruction(decision, { organizationId: OWNER_ORG, now: BEFORE_EXPIRY });
+
+  // Any other organisation does not -- this is the bound that keeps a customer who signs up
+  // tomorrow from being swept under an arrangement that was never about them.
+  assert.throws(
+    () => assertGovernedProviderConstruction(decision, { organizationId: OTHER_ORG, now: BEFORE_EXPIRY }),
+    ProviderGovernanceRefusedError,
+  );
+  // And an unknown organisation is not a pass-through.
+  assert.throws(
+    () => assertGovernedProviderConstruction(decision, { now: BEFORE_EXPIRY }),
+    ProviderGovernanceRefusedError,
+  );
+});
+
+Deno.test("construction re-checks expiry, so a warm isolate cannot outlive the date", () => {
+  // Parsed while valid, constructed after midnight on the end date.
+  const decision = assertProviderGovernance(completeEvidence({ dpa: null }), {
+    exception: exception(),
+    now: BEFORE_EXPIRY,
+  });
+  assert.ok(decision.allowed);
+  assert.throws(
+    () => assertGovernedProviderConstruction(decision, { organizationId: OWNER_ORG, now: AFTER_EXPIRY }),
+    ProviderGovernanceRefusedError,
+  );
+});
+
+Deno.test("a fully verified decision needs no organisation and carries no exception", () => {
+  const decision = assertProviderGovernance(completeEvidence(), { now: BEFORE_EXPIRY });
+  assert.ok(decision.allowed);
+  assert.equal(decision.prelaunchException, undefined);
+  assertGovernedProviderConstruction(decision, { now: BEFORE_EXPIRY });
+});
+
+Deno.test("the exception is read fail-closed: absent, valid, and unparsable are three answers", () => {
+  assert.equal(readPrelaunchException(() => undefined).kind, "absent");
+  assert.equal(readPrelaunchException(() => "   ").kind, "absent");
+
+  const valid = readPrelaunchException((name) =>
+    name === PRELAUNCH_EXCEPTION_ENV_VAR
+      ? `until=2026-12-31;org=${OWNER_ORG};reason=pre_launch_owner_org`
+      : undefined
+  );
+  assert.equal(valid.kind, "valid");
+  if (valid.kind === "valid") {
+    assert.equal(valid.exception.until, "2026-12-31");
+    assert.equal(valid.exception.organizationId, OWNER_ORG);
+  }
+
+  // Each of these is a way an operator can believe an exception is live when it is not, so each
+  // must be reported rather than read as "absent".
+  const malformed = [
+    `until=31/12/2026;org=${OWNER_ORG};reason=x`, // not ISO
+    `until=2026-13-01;org=${OWNER_ORG};reason=x`, // impossible month
+    `until=2026-12-31;org=not-a-uuid;reason=x`,
+    `until=2026-12-31;org=${OWNER_ORG}`, // reason missing
+    `until=2026-12-31;org=${OWNER_ORG};reason=tbd`, // placeholder is not a reason
+    `until=2026-12-31;org=${OWNER_ORG};reason=x;until=2027-01-01`, // duplicated key
+    `until=2026-12-31;org=${OWNER_ORG};reason=x;scope=everything`, // unknown key
+  ];
+  for (const raw of malformed) {
+    const read = readPrelaunchException((name) =>
+      name === PRELAUNCH_EXCEPTION_ENV_VAR ? raw : undefined
+    );
+    assert.equal(read.kind, "unparsable", `must not accept: ${raw}`);
+  }
 });
