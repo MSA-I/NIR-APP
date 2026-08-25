@@ -104,6 +104,12 @@ export async function executeSyntheticLiveEvaluation(
   // carries no tenant data, but it is still OUR text reaching a provider whose retention, logs
   // and training terms nobody has verified -- which is the whole of what #179 governs. The gate
   // is not about whose data it is; it is about whether we know what happens to it.
+  //
+  // The pre-launch exception is deliberately NOT threaded in here, and this is not an oversight
+  // to tidy up later. That exception is scoped to one production organisation asking about its
+  // own books; a synthetic corpus belongs to no organisation, so there is no identity for the
+  // bound to check and nothing would constrain the waiver. This path therefore requires all five
+  // rows on their own evidence, and refuses while `dpa` is unmet.
   assertGovernedProviderConstruction(
     assertProviderGovernance(readProviderGovernanceEvidence(env, "openai")),
   );

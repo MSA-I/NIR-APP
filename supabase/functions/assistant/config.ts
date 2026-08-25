@@ -16,6 +16,7 @@
 import {
   assertProviderGovernance,
   type ProviderGovernanceDecision,
+  readPrelaunchException,
   readProviderGovernanceEvidence,
 } from "./governance.ts";
 
@@ -123,8 +124,16 @@ export function parseAssistantConfig(env: EnvReader): ConfigResult {
   // Governance is decided BEFORE the model and the knobs, so an operator with incomplete
   // provider evidence is told that -- not that a model is unset. The rows are named in the
   // reason, which index.ts already logs verbatim on the refusal path.
+  // A pre-launch exception that does not parse is reported, never read as "no exception". The
+  // silent reading would refuse for the wrong reason and send an operator to look at the five
+  // evidence rows, which are not what is broken.
+  const exceptionRead = readPrelaunchException(env);
+  if (exceptionRead.kind === "unparsable") {
+    return { ok: false, reason: "assistant_prelaunch_exception_unparsable" };
+  }
   const governance = assertProviderGovernance(
     readProviderGovernanceEvidence(env, provider),
+    { exception: exceptionRead.kind === "valid" ? exceptionRead.exception : null },
   );
   if (!governance.allowed) return { ok: false, reason: governance.reason };
 
