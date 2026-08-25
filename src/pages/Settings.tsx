@@ -515,7 +515,7 @@ export default function Settings() {
         </div>
         {offboardingError && <ErrorNote message={offboardingError} />}
         {offboarding && (
-          <div className="rounded-lg border border-line bg-surface-sunken px-4 py-3 text-sm">
+          <div className="rounded-2xl bg-surface-sunken px-4 py-3 text-sm">
             <div className="font-medium text-ink">{OFFBOARDING_STATUS_LABELS[offboarding.status]}</div>
             <div className="mt-1 text-ink-muted">
               הבקשה נפתחה ב־<span className="num">{fmtDateTime(offboarding.requested_at)}</span>. אפשר לבטל עד <span className="num">{fmtDateTime(offboarding.cancellation_deadline)}</span>.

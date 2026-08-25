@@ -466,7 +466,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           )}
         </dl>
 
-        <div className="rounded-lg border border-line bg-surface p-4">
+        <div className="rounded-2xl bg-surface-sunken p-4">
           <h3 className="text-sm font-medium text-ink-soft">זיכויים זמינים לקיזוז</h3>
           {creditsLoading && <p className="mt-2 text-sm text-ink-muted" role="status">טוען יתרות זיכוי…</p>}
           {creditsError && <p className="mt-2 text-sm text-alert-fg" role="alert">{creditsError}</p>}

@@ -1102,7 +1102,7 @@ function DoneStep({ counts, skipped, onGoToStep, onFinish }: {
       </div>
 
       {pending.length > 0 && (
-        <div className="rounded-lg border border-line bg-surface-sunken px-4 py-3">
+        <div className="rounded-2xl bg-surface-sunken px-4 py-3">
           <div className="text-sm font-medium text-ink-mid">שלבים שדילגת עליהם</div>
           <div className="flex flex-wrap gap-2 mt-2">
             {pending.map((s) => (

@@ -484,7 +484,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         <div><label className="label" htmlFor="supplier-cutoff">שעת סגירת הזמנות</label><input id="supplier-cutoff" type="time" className="input" value={f.cutoff_time} onChange={(e) => set('cutoff_time', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-minimum">מינימום הזמנה (₪)</label><input id="supplier-minimum" type="number" className="input num" value={f.min_order_amount} onChange={(e) => set('min_order_amount', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-payment-terms">תנאי תשלום</label><input id="supplier-payment-terms" className="input" placeholder="שוטף + 30" value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} /></div>
-        <div className="sm:col-span-2 rounded-xl border border-line-soft bg-surface-sunken p-4 space-y-3">
+        <div className="sm:col-span-2 rounded-2xl bg-surface-sunken p-4 space-y-3">
           <div>
             <label className="label" htmlFor="supplier-bank-kind">סוג פרטי הבנק</label>
             <select id="supplier-bank-kind" ref={bankFieldRef} className="input" value={bank.kind}

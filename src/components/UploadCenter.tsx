@@ -678,7 +678,7 @@ export function UploadCenter() {
   }
 
   return (
-    <section aria-label="מרכז ההעלאות" data-upload-center className="mb-3 rounded-lg border border-line bg-surface">
+    <section aria-label="מרכז ההעלאות" data-upload-center className="mb-3 card">
       <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-line-soft px-3 py-1.5">
         <span className="text-sm font-medium text-ink-soft">
           מרכז ההעלאות

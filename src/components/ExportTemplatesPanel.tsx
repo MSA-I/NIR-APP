@@ -207,7 +207,7 @@ export function ExportTemplatesPanel({ orgId }: { orgId: string }) {
                 onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
             </div>
 
-            <div className="rounded-lg border border-line bg-surface p-3">
+            <div className="rounded-2xl bg-surface-sunken p-3">
               <h3 className="text-sm font-medium text-ink">מה נקרא מהקובץ</h3>
               <ul className="mt-2 space-y-1 text-sm text-ink-body">
                 {draft.parsed.sheets.map((sheet) => (
