@@ -15,7 +15,8 @@ import { Modal, Note, useToast } from './ui';
  *
  * Placement is the top bar beside the bell on DESKTOP, and a row inside the phone drawer on
  * mobile (owner report 25.08.2026: the phone top bar is four icons wide and the subscription tier
- * had to go somewhere). The drawer placement is why `beforeCapture` exists — see below.
+ * had to go somewhere). The drawer placement is why the capture note at the end of this comment
+ * exists — the menu is an overlay, and an overlay is exactly what the picture must not be of.
  *
  * ponytail: a 30-second cooldown after a send, no queue and no retry. The row is the record and
  * the operator console is the fallback view; wire a real retry in only if notes start getting
@@ -30,21 +31,26 @@ import { Modal, Note, useToast } from './ui';
  * with it, and can take it out or take it again. Attached by default, because a bug report with a
  * picture is worth several without one — but never attached silently.
  *
- * `beforeCapture` IS LOAD-BEARING, not a convenience hook. From the phone drawer the trigger sits
- * on top of the screen being reported, so "capture first" would photograph the open menu — the
- * exact failure the order above exists to prevent, reintroduced by a different overlay. The caller
- * dismisses its own chrome and resolves once the browser has painted without it; only then does
- * the capture run.
+ * THE DRAWER DOES NOT CLOSE WHEN THE NOTE OPENS, and the first version of the phone placement got
+ * this wrong in a way worth recording. The reasoning looked sound — from a menu, "capture first"
+ * would photograph the menu — so the trigger dismissed the drawer and waited for the paint before
+ * capturing. But this component is rendered INSIDE the drawer, so closing it unmounted the
+ * component mid-click: the capture ran and `setOpen(true)` landed on a corpse. The dialog never
+ * appeared. Local checks missed it because they only asserted the row EXISTS; the browser gate
+ * caught it by clicking the row, which is the difference between the two kinds of evidence.
+ *
+ * The drawer never needed closing. `SKIP_SELECTOR` in `lib/screenshot.ts` already skips
+ * `[role="dialog"]`, and the drawer is one — so the panel is excluded from the picture while
+ * staying mounted. What it did NOT cover is the half-opaque scrim behind it, which would have
+ * tinted the whole capture; Layout marks that `data-no-capture`. Exclusion, not removal.
  */
 
 const COOLDOWN_MS = 30_000;
 
-export default function FeedbackButton({ onShell = false, variant = 'icon', beforeCapture }: {
+export default function FeedbackButton({ onShell = false, variant = 'icon' }: {
   onShell?: boolean;
   /** `menu` renders a full-width drawer row instead of a round icon target. */
   variant?: 'icon' | 'menu';
-  /** Awaited before the screenshot. See the note above — the drawer MUST be gone by then. */
-  beforeCapture?: () => void | Promise<void>;
 }) {
   const { profile } = useAuth();
   const location = useLocation();
@@ -92,10 +98,9 @@ export default function FeedbackButton({ onShell = false, variant = 'icon', befo
    * "capture again" case where the dialog IS open.
    */
   const openWithCapture = useCallback(async () => {
-    if (beforeCapture) await beforeCapture();
     await capture();
     setOpen(true);
-  }, [beforeCapture, capture]);
+  }, [capture]);
 
   const send = useCallback(async () => {
     if (!profile) return;

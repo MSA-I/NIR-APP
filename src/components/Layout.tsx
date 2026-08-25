@@ -472,18 +472,6 @@ export default function Layout() {
    * Both navigation surfaces stay fully expanded by owner decision. The phone drawer scrolls as
    * one direct list; no destination requires opening a disclosure first.
    */
-  /**
-   * The drawer has to be OFF SCREEN before the note's screenshot runs, or the picture is of the
-   * menu rather than of the screen being reported (FeedbackButton's `beforeCapture` explains why
-   * the order matters at all). Two frames, not one: the first lets React commit the unmount the
-   * URL change triggers, the second lets the browser paint without it. One frame still catches
-   * the drawer mid-dismissal.
-   */
-  const dismissDrawerForCapture = () => new Promise<void>((resolve) => {
-    closeMobileMenu();
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
-
   const accountBlock = (
     <div className="px-1 pt-3">
       <div className="text-sm text-ink font-medium">{profile?.full_name}</div>
@@ -534,9 +522,7 @@ export default function Layout() {
         {/* The note trigger, in the drawer because the phone top bar gave its slot to the tier
             mark (owner report 25.08.2026). It sits with the account rather than with the
             destinations: it goes nowhere, it opens a dialog. */}
-        {!stickyFooter && feedbackOn && (
-          <FeedbackButton variant="menu" beforeCapture={dismissDrawerForCapture} />
-        )}
+        {!stickyFooter && feedbackOn && <FeedbackButton variant="menu" />}
         {!stickyFooter && accountBlock}
       </nav>
       {stickyFooter && (
@@ -711,9 +697,14 @@ export default function Layout() {
       </header>
       {searchOpen && <GlobalSearch variant="mobile" onClose={() => setSearchOpen(false)} />}
       {/* T7.3k (owner, image #35): neutral dark scrim — the oceanic one read as a strange
-          blue tint over the page. */}
+          blue tint over the page.
+
+          `data-no-capture` (25.08.2026): the feedback note photographs the viewport, and this
+          scrim is a half-opaque sheet over all of it. The panel inside is already skipped by the
+          capture because it is `role="dialog"`; the scrim is not, and without this a note sent
+          from the menu would arrive as a picture of the screen behind a grey wash. */}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-shell/50 no-print" onClick={() => closeMobileMenu()}>
+        <div data-no-capture className="lg:hidden fixed inset-0 z-50 bg-shell/50 no-print" onClick={() => closeMobileMenu()}>
           {/* T7.3k fix (owner, image #29): OPAQUE light gray — translucency here sat over the
               dark backdrop and the page behind it, and the blend read as a murky blue tint.
               The top bar can stay translucent because only the light canvas scrolls under it. */}

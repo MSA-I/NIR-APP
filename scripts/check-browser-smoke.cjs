@@ -2693,7 +2693,11 @@ async function navigationOrderAndActiveState(browser) {
     assert.deepEqual(nav.topLevel.map((item) => item.path),
       ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
       `wrong owner daily navigation: ${JSON.stringify(nav.topLevel)}`);
-    assert.deepEqual(nav.groups, ['ניהול', 'בקרה'],
+    // 'המנוי' joined the catalogue on 25.08.2026 and therefore appears here too: the desktop
+    // top bar renders every NAMED section as a dropdown, so a group added for the phone drawer is
+    // not a phone-only change. Last, after the two work groups, which is where the contract the
+    // tenant runs under belongs relative to the business it runs.
+    assert.deepEqual(nav.groups, ['ניהול', 'בקרה', 'המנוי'],
       `wrong navigation dropdown groups or order: ${JSON.stringify(nav.groups)}`);
     assert.equal(nav.all.some((item) => item.path === '/documents/archive'), false,
       'the low-frequency archive still competes in the main navigation');
@@ -3454,7 +3458,8 @@ async function feedbackNoteChannel(browser) {
     await settle(page);
 
     // The trigger lives in the DRAWER on a phone (owner report 25.08.2026): the top bar gave its
-    // slot to the subscription tier mark. On desktop it is still in the bar.
+    // slot to the subscription tier mark. On desktop it is still in the bar. The menu STAYS OPEN
+    // behind the dialog -- see the note in FeedbackButton for why closing it was wrong.
     await page.getByRole('button', { name: 'פתיחת תפריט' }).click();
     await page.locator('#mobile-navigation').waitFor();
     const trigger = page.getByRole('button', { name: 'שליחת הערה' });
@@ -3465,13 +3470,15 @@ async function feedbackNoteChannel(browser) {
 
     await trigger.click();
     await page.getByText('לצרף צילום של המסך', { exact: true }).waitFor();
-    // THE WHOLE POINT OF THE DRAWER PLACEMENT WORKING AT ALL. The capture runs before the dialog
-    // opens so the dialog cannot be in the picture -- but from a drawer, the DRAWER would be, and
-    // a screenshot of the menu is useless for reporting the screen behind it. The trigger
-    // dismisses its own chrome and waits for the paint before capturing, so by the time the
-    // dialog is up the drawer must be gone from the DOM entirely.
-    assert.equal(await page.locator('#mobile-navigation').count(), 0,
-      'the drawer was still mounted when the note dialog opened -- the screenshot is of the menu');
+    // The drawer must not reach the picture, and the mechanism is exclusion rather than removal:
+    // the panel is already `role="dialog"`, which `SKIP_SELECTOR` skips, and the scrim behind it
+    // carries `data-no-capture` so a half-opaque sheet does not tint the whole screenshot. Both
+    // markers are asserted, because losing either one is invisible until somebody reads a note
+    // with a photograph of the menu attached to it.
+    assert.equal(await page.locator('#mobile-navigation[role="dialog"]').count(), 1,
+      'the drawer lost role="dialog" -- the screenshot would now include the open menu');
+    assert.equal(await page.locator('[data-no-capture]:has(#mobile-navigation)').count(), 1,
+      'the drawer scrim is not marked data-no-capture -- the screenshot would be tinted by it');
     await page.getByAltText('תצוגה מקדימה של הצילום שיישלח').waitFor();
     // Unique per run: the lookup below must find this note and not a previous run's.
     const note = `בדיקת שער ${Date.now()}`;
