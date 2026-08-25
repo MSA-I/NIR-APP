@@ -38,21 +38,33 @@ vi.mock('../lib/webhooks', async () => {
   };
 });
 
-/** An owner with a JWT that already carries a fresh password proof, so ReauthModal skips. */
-vi.mock('../auth/AuthContext', () => {
-  const amr = { method: 'password', timestamp: Math.floor(Date.now() / 1000) };
-  const payload = btoa(JSON.stringify({ sub: 'me', amr: [amr] }));
-  return {
-    useAuth: () => ({
+/**
+ * An owner with a JWT that already carries a fresh password proof, so ReauthModal skips.
+ *
+ * The proof is minted on every `useAuth()` call rather than once when this module loads, and that
+ * is load-bearing rather than tidy. `FRESH_PASSWORD_WINDOW_SECONDS` is four minutes, and this file
+ * has eleven `userEvent`-heavy tests; on a loaded CI runner it takes longer than that to reach the
+ * last one. A timestamp frozen at import time expires part-way through the file, `ReauthModal`
+ * stops skipping and asks for a password, and the RPC the final test waits for is never called —
+ * which is exactly how it failed in CI while passing locally every time.
+ *
+ * Freshness EXPIRING is a real behaviour and deserves its own test with a deliberately stale
+ * timestamp. What it must not be is an accident of how long the suite took to run.
+ */
+vi.mock('../auth/AuthContext', () => ({
+  useAuth: () => {
+    const amr = { method: 'password', timestamp: Math.floor(Date.now() / 1000) };
+    const payload = btoa(JSON.stringify({ sub: 'me', amr: [amr] }));
+    return {
       profile: { id: 'me', org_id: 'org-1', role: 'owner', full_name: 'בעלת העסק', active: true },
       org: { id: 'org-1', name: 'ארגון', vat_rate: 18, settings: {} },
       session: { access_token: `x.${payload}.y`, user: { id: 'me', email: 'owner@example.com' } },
       roleLabels: ROLE_LABEL,
       organizationAccess: { mode: 'active', canWrite: true },
       refreshOrganizationAccess: async () => {},
-    }),
-  };
-});
+    };
+  },
+}));
 
 import WebhookSettings from './WebhookSettings';
 
