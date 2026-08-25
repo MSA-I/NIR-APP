@@ -135,7 +135,16 @@ export default function FeedbackButton({ onShell = false, variant = 'icon' }: {
   if (!profile) return null;
 
   const cooling = cooldownUntil > Date.now();
-  const label = cooling ? 'ההערה נשלחה — אפשר לשלוח עוד אחת בעוד רגע' : 'שליחת הערה';
+  /**
+   * THE COOLDOWN WORDING MAY NOT CLAIM A DELIVERY, and it used to. "ההערה נשלחה" was written
+   * when this was an icon and the string only ever reached `aria-label`, so nothing on screen
+   * said it -- but the cooldown starts after a note is STORED, which is not the same as sent, and
+   * a failed delivery left the trigger announcing a success. Rendering the label as a drawer row
+   * made the latent inaccuracy visible, and the browser gate failed on it by name: "the screen
+   * claimed a delivery that failed". The cooldown is about the WAIT; the outcome is the toast's
+   * to report, and only it knows which one happened.
+   */
+  const label = cooling ? 'אפשר לשלוח הערה נוספת בעוד רגע' : 'שליחת הערה';
 
   return (
     <>
