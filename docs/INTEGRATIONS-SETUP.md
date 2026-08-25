@@ -678,7 +678,34 @@ know your messages are delivering and fully passing DMARC"
 בשרת: ‏`accept_invitation` מסרב לכל קורא שאינו `email` (‏`0205`, ‏`invite_requires_password_identity`),
 והענף הפדרטיבי ב-`public-signup` מסרב לקורא שכבר יש לו פרופיל.
 
-### 7.א ‏ Google — `DECIDED / IMPLEMENTED / PROVIDER_NOT_CONFIGURED`
+### 7.א ‏ Google — `DECIDED / IMPLEMENTED / PROVIDER_CONFIGURED / FRONTEND_NOT_DEPLOYED`
+
+**עודכן 25.08.2026 — הספק הוגדר בייצור, והכפתור עדיין אינו שם.** שני חצאים, ורק אחד בוצע:
+
+| מה | מצב |
+|---|---|
+| ‏Google Cloud Console — OAuth client | **בוצע.** שני ה־redirect URIs רשומים: ייצור ומקומי |
+| ‏Supabase המרוחק — הספק | **בוצע** דרך Management API: ‏`external_google_enabled=true`, ‏`client_id`/`secret` מוזנים |
+| ‏Supabase המרוחק — `uri_allow_list` | **בוצע.** נוסף `/signup` ל־`app.inplace.digital` ול־`supplyflow-baq.pages.dev` (‏`/reset-password` היה שם קודם) |
+| אימות שרת | **בוצע.** ‏`/auth/v1/authorize?provider=google` מחזיר 302 ל־`accounts.google.com` עם ה־client_id הרשום, ‏`scope=email profile`, ‏`response_type=code`; ‏Google עונה בדף כניסה ולא ב־`invalid_client` |
+| שומרי `0205` בייצור | **נמדדו לפני ההדלקה:** ‏`accept_invitation` מכילה `invite_requires_password_identity`; ‏`private.auth_identity_provider()` ו־`public.service_identity_has_profile(uuid)` קיימות |
+| חזית הייצור | **שער סגור.** הבנייה אינה מכילה `VITE_GOOGLE_SIGNUP_ENABLED`, ולכן **אין כפתור באתר החי** |
+| ‏`config.toml` בריפו | `enabled = false` **בכוונה** — שער האיכות מריץ `supabase start` בכל שינוי לקובץ, ו־`true` בלי הסודות ב־runner מפיל jobs שאינם קשורים ל־auth |
+
+**מה שההדלקה בייצור אומרת, ומה שהיא לא.** הפעלת הספק הופכת את
+`/auth/v1/authorize?provider=google` לנגיש לכל אחד באינטרנט — גם בלי כפתור. זר שיתחבר כך מקבל
+**סשן בלי פרופיל**: ‏`auth_org()` לא מוצא לו שורה, כלומר אפס גישה, ו־`accept_invitation` מסרבת לו
+בשם. זה בדיוק מה ש־`#265` תיאר מראש, ולכן נמדדו השומרים **לפני** ההדלקה ולא אחריה.
+
+**מקומית, מקצה לקצה (25.08.2026):** כניסה עם חשבון Google אמיתי יצרה ארגון אחד, פרופיל `owner`
+אחד, ‏`plan_key=free` לפי `#165`, קטגוריית בסיס `כללי`, ו־`private.product_events` עם
+`signup.completed {"identity":"google"}`. כניסה חוזרת נוחתת במוצר ואינה יוצרת ארגון שני.
+
+**מלכודת מקומית ששווה לדעת:** ‏`npm run dev` קושר **רק** ‏IPv6 ‏(`[::1]:5199`), ולכן
+`http://127.0.0.1:5199` מסרב חיבור — בעוד ש־`site_url` ורשימת ההיתר של GoTrue המקומי הם על
+`127.0.0.1`. לאימות OAuth יש להריץ `--host 127.0.0.1`.
+
+#### פרטי ההקמה
 
 | מה | ערך |
 |---|---|
