@@ -663,3 +663,93 @@ know your messages are delivering and fully passing DMARC"
 **בעלות אינה תצורה, הכרעה אינה הפעלה, וחשבון אינו הפעלה.** שורה אחת בטבלה מסומנת "בוצע" —
 הרכישה — והיא אינה מקנה דבר מעבר לבעלות על השם. כל שאר השורות סגורות או מוכרעות מחוץ לתחום.
 **אין בפרק הזה טענה שמשהו הואצל, הוגדר, אומת או חי.**
+
+---
+
+## 7. זהויות פדרטיביות — Google ו-Apple. **שני הספקים כבויים; אף אחד לא הוגדר**
+
+הקוד לשני המסלולים קיים ומאומת ביחידה. מה שחסר הוא credentials, ובלעדיהם `enabled = false`
+ב-`supabase/config.toml` והכפתורים אינם מצוירים כלל — דלת שמובילה ל-„הספק אינו מופעל" גרועה
+מהיעדר דלת.
+
+**מי רשאי, ואיפה זה נאכף.** ‏`#265` (Google, ‏24.08.2026) ו-`#267` (Apple, ‏25.08.2026): זהות
+פדרטיבית יכולה להיות **בעלים של ארגון חדש בלבד**. עובד מגיע מהזמנה ובסיסמה. האכיפה **אינה**
+בכפתורים — הפעלת ספק ברמת הפרויקט הופכת את `/auth/v1/authorize` לנגיש לכל אחד. היא בשתי נקודות
+בשרת: ‏`accept_invitation` מסרב לכל קורא שאינו `email` (‏`0205`, ‏`invite_requires_password_identity`),
+והענף הפדרטיבי ב-`public-signup` מסרב לקורא שכבר יש לו פרופיל.
+
+### 7.א ‏ Google — `DECIDED / IMPLEMENTED / PROVIDER_CONFIGURED / FRONTEND_NOT_DEPLOYED`
+
+**עודכן 25.08.2026 — הספק הוגדר בייצור, והכפתור עדיין אינו שם.** שני חצאים, ורק אחד בוצע:
+
+| מה | מצב |
+|---|---|
+| ‏Google Cloud Console — OAuth client | **בוצע.** שני ה־redirect URIs רשומים: ייצור ומקומי |
+| ‏Supabase המרוחק — הספק | **בוצע** דרך Management API: ‏`external_google_enabled=true`, ‏`client_id`/`secret` מוזנים |
+| ‏Supabase המרוחק — `uri_allow_list` | **בוצע.** נוסף `/signup` ל־`app.inplace.digital` ול־`supplyflow-baq.pages.dev` (‏`/reset-password` היה שם קודם) |
+| אימות שרת | **בוצע.** ‏`/auth/v1/authorize?provider=google` מחזיר 302 ל־`accounts.google.com` עם ה־client_id הרשום, ‏`scope=email profile`, ‏`response_type=code`; ‏Google עונה בדף כניסה ולא ב־`invalid_client` |
+| שומרי `0205` בייצור | **נמדדו לפני ההדלקה:** ‏`accept_invitation` מכילה `invite_requires_password_identity`; ‏`private.auth_identity_provider()` ו־`public.service_identity_has_profile(uuid)` קיימות |
+| חזית הייצור | **שער סגור.** הבנייה אינה מכילה `VITE_GOOGLE_SIGNUP_ENABLED`, ולכן **אין כפתור באתר החי** |
+| ‏`config.toml` בריפו | `enabled = false` **בכוונה** — שער האיכות מריץ `supabase start` בכל שינוי לקובץ, ו־`true` בלי הסודות ב־runner מפיל jobs שאינם קשורים ל־auth |
+
+**מה שההדלקה בייצור אומרת, ומה שהיא לא.** הפעלת הספק הופכת את
+`/auth/v1/authorize?provider=google` לנגיש לכל אחד באינטרנט — גם בלי כפתור. זר שיתחבר כך מקבל
+**סשן בלי פרופיל**: ‏`auth_org()` לא מוצא לו שורה, כלומר אפס גישה, ו־`accept_invitation` מסרבת לו
+בשם. זה בדיוק מה ש־`#265` תיאר מראש, ולכן נמדדו השומרים **לפני** ההדלקה ולא אחריה.
+
+**מקומית, מקצה לקצה (25.08.2026):** כניסה עם חשבון Google אמיתי יצרה ארגון אחד, פרופיל `owner`
+אחד, ‏`plan_key=free` לפי `#165`, קטגוריית בסיס `כללי`, ו־`private.product_events` עם
+`signup.completed {"identity":"google"}`. כניסה חוזרת נוחתת במוצר ואינה יוצרת ארגון שני.
+
+**מלכודת מקומית ששווה לדעת:** ‏`npm run dev` קושר **רק** ‏IPv6 ‏(`[::1]:5199`), ולכן
+`http://127.0.0.1:5199` מסרב חיבור — בעוד ש־`site_url` ורשימת ההיתר של GoTrue המקומי הם על
+`127.0.0.1`. לאימות OAuth יש להריץ `--host 127.0.0.1`.
+
+#### פרטי ההקמה
+
+| מה | ערך |
+|---|---|
+| ‏Google Cloud Console | ‏OAuth consent screen: `External`; scopes `userinfo.email` + `userinfo.profile` בלבד |
+| ‏Authorized redirect URI — ייצור | `https://<project-ref>.supabase.co/auth/v1/callback` (המקור הקובע הוא דף הספק בדשבורד) |
+| ‏Authorized redirect URI — מקומי | `http://127.0.0.1:55431/auth/v1/callback` |
+| ‏Authorized JavaScript origins | **ריק בכוונה.** הזרימה היא authorization code בצד השרת; ‏GoTrue מבצע את ההחלפה, לא הדפדפן |
+| סודות | ‏`SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` · `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` |
+| דגל חזית | ‏`VITE_GOOGLE_SIGNUP_ENABLED=true` |
+
+שני ה-scopes אינם רגישים, ולכן **פרסום האפליקציה אינו דורש ביקורת אימות של Google**. כל עוד היא
+במצב `Testing` רק כתובות ב-`Test users` נכנסות, וה-refresh token פג אחרי 7 ימים.
+
+### 7.ב ‏ Apple — `DECIDED / IMPLEMENTED / NEVER_EXERCISED`
+
+**זה לא אותו מצב כמו Google, ואסור לקרוא לו כך.** לגוגל חסרים רק ערכים; לאפל חסר **תנאי מקדים
+שאינו בשליטת הפרויקט**: חברות ב-Apple Developer Program (‏$99 לשנה), שבלעדיה אי אפשר להנפיק
+Service ID או מפתח חתימה. הקוד לא רץ מעולם מקצה לקצה מול Apple — לא מקומית ולא בייצור.
+
+| מה | ערך |
+|---|---|
+| דרוש קודם | ‏Apple Developer Program פעיל |
+| ‏`client_id` | ה-**Service ID**, לא ה-App ID |
+| ‏`secret` | ‏JWT ‏ES256 ש-Supabase מנפיק ממפתח `.p8`; ‏**Apple מפקיע אותו כל 6 חודשים** — חובת רוטציה שאין לגוגל |
+| נדרש בקונסולה | ‏App ID ← Service ID ← מפתח „Sign in with Apple" (`.p8`, ‏Key ID, ‏Team ID) ← אימות דומיין |
+| ‏Return URL | `https://<project-ref>.supabase.co/auth/v1/callback` |
+| סודות | ‏`SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID` · `SUPABASE_AUTH_EXTERNAL_APPLE_SECRET` |
+| דגל חזית | ‏`VITE_APPLE_SIGNUP_ENABLED=true` |
+
+**שני דברים שאפל עושה אחרת, ושניהם כבר מטופלים בקוד:**
+
+1. **שם המשתמש מגיע רק בהרשאה הראשונה אי-פעם.** מסך ההרשמה מבקש שם עסק בכל מקרה, ו-`ownerName`
+   נופל חזרה לכתובת הדואר כשאין שם — אותו fallback שכבר היה בענף Google.
+2. **Private Relay.** משתמש יכול למסור `@privaterelay.appleid.com`. זו הכתובת היחידה שהסשן מוכיח,
+   ולכן היא מוצגת כפי שהיא ונשמרת כפי שהיא. **מה שעדיין פתוח:** הכתובת מתה אם המשתמש מבטל את
+   הגישה, ואז לארגון אין ערוץ דואר לבעלים — ראו `#267`.
+
+**מה שלא נדרש, ולמה זה תכונה של `0205` ולא מזל.** הוספת Apple **לא דרשה מיגרציה**: השומר של
+‏`0205` בודק `coalesce(private.auth_identity_provider(), 'email') <> 'email'`, כלומר הוא כבר מסרב
+לכל זהות שאינה סיסמה, ו-`service_identity_has_profile` מעולם לא שאל באיזה ספק מדובר. הכלל נכתב
+„פדרטיבי", לא „Google".
+
+### 7.ג ‏ מה נדרש כדי לטעון שמסלול עובד
+
+‏HTTP 200 או הופעת כפתור אינם הוכחה. לכל ספק בנפרד: כניסה חיה בדפדפן ← מסך ההרשמה מציג את
+הכתובת שהספק הוכיח ← מתן שם עסק ← **ספירה במסד**: ארגון אחד, פרופיל `owner` אחד, קטגוריות בסיס.
+ואז יציאה וכניסה חוזרת עם אותה זהות — נחיתה ישירה במוצר, **בלי ארגון שני**.

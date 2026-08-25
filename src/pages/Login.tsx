@@ -5,6 +5,12 @@ import { useAuth, homeFor } from '../auth/AuthContext';
 import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
 import { startAurora } from '../lib/loginAurora';
+import {
+  enabledFederatedProviders,
+  FEDERATED_PROVIDER_LABEL,
+  startFederatedSignup,
+  type FederatedProvider,
+} from '../lib/authProviders';
 
 const LOCAL_DEMO_ROLES = [
   { role: 'owner', label: 'מנהל/בעלים' },
@@ -46,6 +52,7 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const auroraRef = useRef<HTMLCanvasElement>(null);
+  const providers = enabledFederatedProviders();
   const demoAccounts = import.meta.env.DEV
     ? localDemoAccounts(
         import.meta.env.VITE_SUPABASE_URL as string | undefined,
@@ -78,6 +85,20 @@ export default function Login() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     await signInWithCredentials(email.trim(), password);
+  }
+
+  /**
+   * Owner decision 25.08.2026, amending #265: the login screen may start the federated hand-off,
+   * because a business owner opening an account looks for the door here first. It does not finish
+   * it — the provider returns the browser to /signup, which is still the only screen that turns a
+   * proven address into an organization, and `public-signup` is still the only thing that agrees.
+   */
+  async function continueWith(provider: FederatedProvider) {
+    setError(null);
+    const { error: failure } = await startFederatedSignup(provider);
+    if (failure) {
+      setError(`ההתחברות עם ${FEDERATED_PROVIDER_LABEL[provider]} אינה זמינה כרגע.`);
+    }
   }
 
   return (
@@ -193,16 +214,32 @@ export default function Login() {
                 {busy ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Lock size={15} aria-hidden="true" />}
                 {busy ? 'מתחבר…' : 'התחברות'}
               </button>
-              <div className="flex items-center gap-3" aria-hidden="true">
-                <span className="h-px flex-1 bg-line" />
-                <span className="text-xs text-ink-muted">או</span>
-                <span className="h-px flex-1 bg-line" />
-              </div>
-              <button type="button" aria-disabled="true" title="חיבור Google יתווסף בהמשך"
-                className="btn min-h-12 w-full border border-line-strong bg-surface text-ink hover:bg-surface-hover">
-                <img src="/brand/google-g.svg" alt="" width="18" height="18" aria-hidden="true" />
-                המשך עם Google
-              </button>
+              {providers.length > 0 && (
+                <>
+                  <div className="flex items-center gap-3" aria-hidden="true">
+                    <span className="h-px flex-1 bg-line" />
+                    <span className="text-xs text-ink-muted">או</span>
+                    <span className="h-px flex-1 bg-line" />
+                  </div>
+                  {providers.map((provider) => (
+                    <button key={provider} type="button" disabled={busy}
+                      onClick={() => void continueWith(provider)}
+                      className="btn min-h-12 w-full border border-line-strong bg-surface text-ink hover:bg-surface-hover">
+                      {provider === 'google' && (
+                        <img src="/brand/google-g.svg" alt="" width="18" height="18" aria-hidden="true" />
+                      )}
+                      פתיחת עסק עם {FEDERATED_PROVIDER_LABEL[provider]}
+                    </button>
+                  ))}
+                  {/* Says what the button does, because it does not do what a button on a LOGIN
+                      screen usually does. The provider proves an address and returns the browser to
+                      /signup, where a business still has to be named — so an employee who tries
+                      this arrives holding a session that grants nothing (0205, #265). */}
+                  <p className="text-center text-xs text-ink-muted">
+                    לפתיחת עסק חדש. הצטרפות לעסק קיים נעשית מהזמנה שנשלחה אליך.
+                  </p>
+                </>
+              )}
               </form>
             </div>
           </section>

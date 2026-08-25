@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, Navigate } from 'react-router';
+import { useAuth, homeFor } from '../auth/AuthContext';
 import { Building2, MailCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { ErrorNote, Note } from '../components/ui';
+import {
+  enabledFederatedProviders,
+  FEDERATED_PROVIDER_LABEL,
+  FEDERATED_PROVIDERS,
+  startFederatedSignup,
+  type FederatedProvider,
+} from '../lib/authProviders';
 
 const MIN_PASSWORD_LENGTH = 10;
+
+function isFederatedProvider(value: unknown): value is FederatedProvider {
+  return typeof value === 'string' && (FEDERATED_PROVIDERS as readonly string[]).includes(value);
+}
 
 /**
  * Self-service signup (0159) — the screen that reversed OPEN-DECISIONS #12.
@@ -15,23 +27,30 @@ const MIN_PASSWORD_LENGTH = 10;
  * would change nothing either — the Edge Function reads exactly these four keys.
  */
 /**
- * Signing up with Google is offered here and nowhere else (OPEN-DECISIONS #265, 24.08.2026):
+ * Signing up with a federated identity FINISHES here (OPEN-DECISIONS #265, amended 25.08.2026):
  * this screen creates an ORGANIZATION, and the person who creates one is its owner. An employee
  * arrives through an invitation and a password, and `0205` makes the invitation command refuse a
  * federated caller by name — so the rule holds even if someone calls the API directly.
  *
- * The button is hidden unless the provider is configured. A door that leads only to
- * "provider is not enabled" is worse than no door.
+ * The login screen may now START the hand-off, because a business owner opening an account often
+ * looks for the door there first. It changes nothing about who ends up with standing: the provider
+ * returns the browser to THIS screen, and a business still has to be named before anything exists.
+ *
+ * Which providers are drawn, and where the browser comes back to, live in `lib/authProviders.ts`
+ * so that this screen and the login screen cannot disagree.
  */
-const GOOGLE_SIGNUP_ENABLED = import.meta.env.VITE_GOOGLE_SIGNUP_ENABLED === 'true';
 
 export default function Signup() {
   const [form, setForm] = useState({ organization: '', name: '', email: '', password: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
-  /** Set when Google sent the browser back here with a session but no organization yet. */
-  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
+  /** Set when a provider sent the browser back here with a session but no organization yet. */
+  const [federated, setFederated] = useState<{ provider: FederatedProvider; email: string } | null>(
+    null,
+  );
+  const providers = enabledFederatedProviders();
+  const { session, profile, loading } = useAuth();
 
   useEffect(() => {
     let cancelled = false;
@@ -39,8 +58,13 @@ export default function Signup() {
       const user = data.session?.user;
       // `app_metadata` is written by the auth server. `user_metadata` is self-asserted and is
       // never what decides which branch runs — the Edge function re-reads this server-side too.
-      if (cancelled || !user || user.app_metadata?.provider !== 'google') return;
-      setGoogleEmail(user.email ?? null);
+      if (cancelled || !user) return;
+      const provider = user.app_metadata?.provider;
+      if (!isFederatedProvider(provider)) return;
+      // Apple hands over the address on the first authorization and, for a Private Relay account,
+      // hands over a forwarding one. Either way it is the only address this session proves, so it
+      // is what gets shown — never a value the person could have typed.
+      setFederated({ provider, email: user.email ?? '' });
       const suggested = typeof user.user_metadata?.full_name === 'string'
         ? user.user_metadata.full_name
         : '';
@@ -53,24 +77,36 @@ export default function Signup() {
     return () => { cancelled = true; };
   }, []);
 
-  async function continueWithGoogle() {
+  /**
+   * A returning federated identity lands HERE, not on the login screen: `redirectTo` is
+   * {origin}/signup for both entrances, because on the first visit this is the only screen that can
+   * finish the job. On the second visit it is the wrong screen entirely — without this guard the
+   * person is asked to name a business they already have, and `public-signup` refuses with
+   * `identity_already_has_organization` after they fill the form. The server was right and the
+   * screen was a dead end; this is the same redirect `Login.tsx` has always had.
+   *
+   * Below the hooks, because a redirect must not skip them. Gated on `!loading` so the frame where
+   * the profile has not resolved yet does not read as "no tenant".
+   */
+  if (!loading && session && profile) return <Navigate to={homeFor(profile.role)} replace />;
+
+  async function continueWith(provider: FederatedProvider) {
     setError(null);
-    const { error: failure } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/signup` },
-    });
-    if (failure) setError('ההתחברות עם Google אינה זמינה כרגע.');
+    const { error: failure } = await startFederatedSignup(provider);
+    if (failure) {
+      setError(`ההתחברות עם ${FEDERATED_PROVIDER_LABEL[provider]} אינה זמינה כרגע.`);
+    }
   }
 
-  /** The federated branch: Google proved the address, so only the organization name is missing. */
-  async function finishGoogleSignup() {
+  /** The federated branch: the provider proved the address, so only the business name is missing. */
+  async function finishFederatedSignup(provider: FederatedProvider) {
     setBusy(true);
     setError(null);
     const { data, error: failure } = await supabase.functions.invoke<{ message?: string }>(
       'public-signup',
       {
         body: {
-          identity: 'google',
+          identity: provider,
           organization_name: form.organization.trim(),
           full_name: form.name.trim(),
         },
@@ -158,10 +194,13 @@ export default function Signup() {
 
         {error && <ErrorNote message={error} />}
 
-        {googleEmail && (
+        {federated && (
           <Note tone="idle">
             <span className="min-w-0 flex-1">
-              מחובר כ־<span dir="ltr">{googleEmail}</span>. נשאר רק לתת שם לעסק.
+              {federated.email
+                ? <>מחובר כ־<span dir="ltr">{federated.email}</span> עם {FEDERATED_PROVIDER_LABEL[federated.provider]}.</>
+                : <>מחובר עם {FEDERATED_PROVIDER_LABEL[federated.provider]}.</>}
+              {' '}נשאר רק לתת שם לעסק.
             </span>
           </Note>
         )}
@@ -177,7 +216,7 @@ export default function Signup() {
           <input id="signup-name" className="input" value={form.name} autoComplete="name"
             onChange={(event) => setForm({ ...form, name: event.target.value })} />
         </div>
-        {!googleEmail && (
+        {!federated && (
           <>
             <div>
               <label className="label" htmlFor="signup-email">אימייל</label>
@@ -201,10 +240,10 @@ export default function Signup() {
           </span>
         </Note>
 
-        {googleEmail ? (
+        {federated ? (
           <button type="button" className="btn-primary w-full"
             disabled={busy || form.organization.trim().length < 2}
-            onClick={() => void finishGoogleSignup()}>
+            onClick={() => void finishFederatedSignup(federated.provider)}>
             {busy ? 'פותח חשבון…' : 'פתיחת חשבון'}
           </button>
         ) : (
@@ -214,13 +253,15 @@ export default function Signup() {
           </button>
         )}
 
-        {GOOGLE_SIGNUP_ENABLED && !googleEmail && (
+        {!federated && providers.length > 0 && (
           <>
             <p className="text-center text-xs text-ink-muted">או</p>
-            <button type="button" className="btn-secondary w-full" disabled={busy}
-              onClick={() => void continueWithGoogle()}>
-              המשך עם Google
-            </button>
+            {providers.map((provider) => (
+              <button key={provider} type="button" className="btn-secondary w-full" disabled={busy}
+                onClick={() => void continueWith(provider)}>
+                המשך עם {FEDERATED_PROVIDER_LABEL[provider]}
+              </button>
+            ))}
             <p className="text-center text-xs text-ink-muted">
               פתיחת עסק חדש בלבד. הצטרפות לעסק קיים נעשית מהזמנה שנשלחה אליך.
             </p>

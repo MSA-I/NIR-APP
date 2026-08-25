@@ -4,6 +4,23 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const signIn = vi.hoisted(() => vi.fn());
 
+/**
+ * The provider flags are `import.meta.env` reads at module scope, so Vite has already substituted
+ * them by the time a test runs and `stubEnv` cannot reach them. The module is mocked instead, which
+ * is also the honest shape of the assertion: this screen's job is to draw whatever is configured
+ * and to hand off, not to decide what is configured.
+ */
+const federated = vi.hoisted(() => ({
+  providers: [] as ('google' | 'apple')[],
+  start: vi.fn(async () => ({ error: null })),
+}));
+
+vi.mock('../lib/authProviders', () => ({
+  FEDERATED_PROVIDER_LABEL: { google: 'Google', apple: 'Apple' },
+  enabledFederatedProviders: () => federated.providers,
+  startFederatedSignup: federated.start,
+}));
+
 vi.mock('../auth/AuthContext', () => ({
   homeFor: () => '/dashboard',
   useAuth: () => ({
@@ -20,6 +37,8 @@ describe('מסך הכניסה', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     signIn.mockReset();
+    federated.providers = [];
+    federated.start.mockClear();
   });
 
   it('מציג ומסתיר את הסיסמה בלי לשנות את הערך', () => {
@@ -65,14 +84,36 @@ describe('מסך הכניסה', () => {
     expect(screen.getByRole('link', { name: 'להרשמה' })).toHaveAttribute('href', '/signup');
   });
 
-  it('מציג כפתור Google עתידי שאינו מפעיל התחברות', () => {
+  it('אינו מצייר דלת ספק שאינה מוגדרת, ולא מפריד "או" ריק', () => {
     render(<MemoryRouter><Login /></MemoryRouter>);
 
-    const googleButton = screen.getByRole('button', { name: 'המשך עם Google' });
-    expect(googleButton).toHaveAttribute('aria-disabled', 'true');
-    expect(googleButton).toHaveAttribute('title', 'חיבור Google יתווסף בהמשך');
-    fireEvent.click(googleButton);
+    expect(screen.queryByRole('button', { name: /פתיחת עסק עם/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('או')).not.toBeInTheDocument();
+    // The screen still has a way to open an account — it is simply the password one.
+    expect(screen.getByRole('link', { name: 'להרשמה' })).toHaveAttribute('href', '/signup');
+  });
+
+  it('מוסר את פתיחת העסק לספק המוגדר, ולא לכניסה בסיסמה', async () => {
+    federated.providers = ['google', 'apple'];
+    render(<MemoryRouter><Login /></MemoryRouter>);
+
+    expect(screen.getAllByRole('button', { name: /פתיחת עסק עם/ })
+      .map((button) => button.textContent))
+      .toEqual(['פתיחת עסק עם Google', 'פתיחת עסק עם Apple']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'פתיחת עסק עם Google' }));
+
+    await waitFor(() => expect(federated.start).toHaveBeenCalledWith('google'));
+    // The federated door must never be mistaken for the password one: this screen signs nobody in.
     expect(signIn).not.toHaveBeenCalled();
+  });
+
+  it('אומר במפורש שהדלת הזו פותחת עסק חדש ואינה הצטרפות לעסק קיים', () => {
+    federated.providers = ['google'];
+    render(<MemoryRouter><Login /></MemoryRouter>);
+
+    expect(screen.getByText('לפתיחת עסק חדש. הצטרפות לעסק קיים נעשית מהזמנה שנשלחה אליך.'))
+      .toBeInTheDocument();
   });
 
   it('מתחבר מיד לחשבון הדמו המקומי שנבחר', async () => {
