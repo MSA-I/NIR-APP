@@ -177,6 +177,37 @@ comment on function private.organizations_prelaunch_autonomy() is
   '(0211). Writes the documented 0.900 floor and never a looser number, and stamps expires_at so '
   'the grant ends by itself.';
 
+-- 0182 keeps a registry of every function allowed to switch document automation ON, and P68's
+-- `unregistered_activation_writer` arm compares it against every live function whose body writes
+-- `org_autonomy_policies`. The guard refused this file until the line below existed, which is
+-- exactly what #245/#251/#252 bought: the set of things that can hand a model authority has to be
+-- enumerable, and a new writer declares itself rather than being discovered later.
+--
+-- The hash is computed from the body just created, the same way 0182 computes its own, with
+-- carriage returns stripped so a migration applied from Windows and one applied on a Linux
+-- runner store the same value (0209's lesson, applied here rather than relearned). `chr(13)`
+-- rather than an escape: this file is edited from a Windows shell, and the escape is exactly what
+-- gets mangled on the way in.
+insert into private.document_automation_authoritative_functions(
+  function_signature, responsibility, raw_evidence_writer, automation_root, activation_writer,
+  expected_callees, body_hash
+)
+select proc.oid::regprocedure::text,
+       'Pre-launch birth grant: writes tenant autonomy policy for a new organisation, time-boxed '
+       'to the window (0211, #275). Not an operator command -- it cannot lower a threshold and '
+       'cannot grant beyond the window.',
+       false, false, true, '{}'::text[],
+       md5(replace(proc.prosrc, chr(13), ''))
+from pg_proc proc
+where proc.oid = to_regprocedure('private.organizations_prelaunch_autonomy()')
+on conflict (function_signature) do update
+  set responsibility = excluded.responsibility,
+      raw_evidence_writer = excluded.raw_evidence_writer,
+      automation_root = excluded.automation_root,
+      activation_writer = excluded.activation_writer,
+      expected_callees = excluded.expected_callees,
+      body_hash = excluded.body_hash;
+
 -- `zzz_` for 0154's reason and 0210's: this must run after anything that could still reject the
 -- organisation row.
 drop trigger if exists zzz_organizations_prelaunch_autonomy on public.organizations;
