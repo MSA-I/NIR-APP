@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router';
-import { ClipboardCheck, Loader2, RotateCcw, Send, Trash2, X } from 'lucide-react';
+import { Loader2, RotateCcw, Send, Sparkles, Trash2, X } from 'lucide-react';
 import {
   ASSISTANT_FLAG_KEYS,
   ASSISTANT_QUESTION_MAX_CHARS,
@@ -220,7 +220,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
     >
         <div className="flex items-center gap-2 border-b border-line-soft px-4 py-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-action-wash text-action" aria-hidden="true">
-            <ClipboardCheck size={19} />
+            <Sparkles size={19} />
           </span>
           <div className="min-w-0 flex-1">
             <h2 id={titleId} className="truncate font-semibold text-ink">העוזר של {APP_NAME}</h2>
@@ -257,11 +257,11 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
               {turns.map((turn) => (
                 <li key={turn.result.run_id} className="space-y-2">
                   <div className="flex justify-end">
-                    <p className="max-w-[85%] rounded-2xl rounded-ee-sm bg-action px-3 py-2 text-sm font-medium leading-relaxed text-on-solid">
+                    <p className="max-w-[85%] rounded-3xl rounded-ee-sm bg-action px-3 py-2 text-sm font-medium leading-relaxed text-on-solid">
                       {turn.question}
                     </p>
                   </div>
-                  <div className="rounded-2xl rounded-ss-sm bg-surface-sunken p-3">
+                  <div className="card rounded-ss-sm p-3">
                     <p className="mb-2 text-xs text-ink-muted">
                       עודכן ל־<span className="num">{fmtDateTime(turn.result.as_of)}</span>
                     </p>
@@ -281,14 +281,14 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
           {/* The question that is still in flight sits at the end of the thread, as its author. */}
           {pending && submittedQuestion && (
             <div className="flex justify-end">
-              <p className="max-w-[85%] rounded-2xl rounded-ee-sm bg-action px-3 py-2 text-sm font-medium leading-relaxed text-on-solid">
+              <p className="max-w-[85%] rounded-3xl rounded-ee-sm bg-action px-3 py-2 text-sm font-medium leading-relaxed text-on-solid">
                 {submittedQuestion}
               </p>
             </div>
           )}
 
           {pending && (
-            <div role="status" aria-busy="true" className="space-y-2 rounded-2xl rounded-ss-sm bg-surface-sunken p-3">
+            <div role="status" aria-busy="true" className="card space-y-2 rounded-ss-sm p-3">
               <span className="sr-only">בודק את הנתונים המורשים</span>
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-5/6" />
@@ -299,7 +299,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
           {/* A failed run leaves no turn, so its question would otherwise vanish with the error. */}
           {!pending && errorText && submittedQuestion && (
             <div className="flex justify-end">
-              <p className="max-w-[85%] rounded-2xl rounded-ee-sm bg-action px-3 py-2 text-sm font-medium leading-relaxed text-on-solid">
+              <p className="max-w-[85%] rounded-3xl rounded-ee-sm bg-action px-3 py-2 text-sm font-medium leading-relaxed text-on-solid">
                 {submittedQuestion}
               </p>
             </div>

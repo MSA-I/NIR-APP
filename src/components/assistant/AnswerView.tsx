@@ -312,10 +312,25 @@ export default function AnswerView({ result, role, onNavigate }: {
         );
       })}
 
+      {/* Red TEXT, not a filled panel (owner, 25.08.2026 — #273).
+          `.note-alert` paints wash + line + on-soft, which is the system's notice box: something
+          went wrong with the SYSTEM. This sentence is the opposite — the check ran correctly and
+          honestly reports that a number could not be measured. Dressed as an error it read as a
+          malfunction. `text-alert-fg` is the treatment index.css:228 reserves for "text/icon on
+          white", and the dashboard already uses it 21 times for exactly this register: a red
+          statement about the data, on the surface it belongs to. */}
       {result.answer.no_answer_reason && (
-        <Note tone={result.answer.no_answer_reason === 'not_measured' ? 'alert' : 'info'}>
-          <span className="min-w-0 flex-1">{NO_ANSWER_TEXT[result.answer.no_answer_reason]}</span>
-        </Note>
+        result.answer.no_answer_reason === 'not_measured'
+          ? (
+            <p className="text-sm font-medium leading-relaxed text-alert-fg">
+              {NO_ANSWER_TEXT[result.answer.no_answer_reason]}
+            </p>
+          )
+          : (
+            <Note tone="info">
+              <span className="min-w-0 flex-1">{NO_ANSWER_TEXT[result.answer.no_answer_reason]}</span>
+            </Note>
+          )
       )}
 
       {result.answer.next_steps.length > 0 && (

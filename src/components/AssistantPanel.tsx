@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ClipboardCheck } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { useLocation } from 'react-router';
 import { ASSISTANT_FLAG_KEYS } from '../lib/assistant/contracts';
 import {
@@ -132,7 +132,10 @@ export default function AssistantPanel({ session: sharedSession }: {
         aria-expanded={open}
         onClick={() => setOpen(true)}
       >
-        <ClipboardCheck size={19} aria-hidden="true" data-assistant-trigger-icon="operational-check" />
+        {/* Sparkles, restored by owner ruling 25.08.2026 (#273). `c5604f5` replaced it with
+            ClipboardCheck to satisfy the anti-goal list; the owner has now revoked that one
+            item. The rest of the list — avatar, robot, model name, typing theatre — stands. */}
+        <Sparkles size={19} aria-hidden="true" data-assistant-trigger-icon="sparkles" />
         <span className="hidden text-sm font-medium lg:inline">
           {hasActiveCheck ? 'חזרה לבדיקה' : 'בדיקה'}
         </span>
