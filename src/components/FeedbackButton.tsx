@@ -13,8 +13,10 @@ import { Modal, Note, useToast } from './ui';
  * or failed flag read therefore made the screenshot option disappear even though the note channel
  * itself was healthy. The database remains the permission boundary.
  *
- * Placement is the top bar beside the bell, on both viewports. It is the one slot that exists in
- * phone mode and on desktop without colliding with the bottom action bar or the speed dial.
+ * Placement is the top bar beside the bell on DESKTOP, and a row inside the phone drawer on
+ * mobile (owner report 25.08.2026: the phone top bar is four icons wide and the subscription tier
+ * had to go somewhere). The drawer placement is why the capture note at the end of this comment
+ * exists — the menu is an overlay, and an overlay is exactly what the picture must not be of.
  *
  * ponytail: a 30-second cooldown after a send, no queue and no retry. The row is the record and
  * the operator console is the fallback view; wire a real retry in only if notes start getting
@@ -28,11 +30,28 @@ import { Modal, Note, useToast } from './ui';
  * The person then SEES what would be sent, is told in Hebrew that whatever is on that screen goes
  * with it, and can take it out or take it again. Attached by default, because a bug report with a
  * picture is worth several without one — but never attached silently.
+ *
+ * THE DRAWER DOES NOT CLOSE WHEN THE NOTE OPENS, and the first version of the phone placement got
+ * this wrong in a way worth recording. The reasoning looked sound — from a menu, "capture first"
+ * would photograph the menu — so the trigger dismissed the drawer and waited for the paint before
+ * capturing. But this component is rendered INSIDE the drawer, so closing it unmounted the
+ * component mid-click: the capture ran and `setOpen(true)` landed on a corpse. The dialog never
+ * appeared. Local checks missed it because they only asserted the row EXISTS; the browser gate
+ * caught it by clicking the row, which is the difference between the two kinds of evidence.
+ *
+ * The drawer never needed closing. `SKIP_SELECTOR` in `lib/screenshot.ts` already skips
+ * `[role="dialog"]`, and the drawer is one — so the panel is excluded from the picture while
+ * staying mounted. What it did NOT cover is the half-opaque scrim behind it, which would have
+ * tinted the whole capture; Layout marks that `data-no-capture`. Exclusion, not removal.
  */
 
 const COOLDOWN_MS = 30_000;
 
-export default function FeedbackButton({ onShell = false }: { onShell?: boolean }) {
+export default function FeedbackButton({ onShell = false, variant = 'icon' }: {
+  onShell?: boolean;
+  /** `menu` renders a full-width drawer row instead of a round icon target. */
+  variant?: 'icon' | 'menu';
+}) {
   const { profile } = useAuth();
   const location = useLocation();
   const toast = useToast();
@@ -116,19 +135,40 @@ export default function FeedbackButton({ onShell = false }: { onShell?: boolean 
   if (!profile) return null;
 
   const cooling = cooldownUntil > Date.now();
-  const label = cooling ? 'ההערה נשלחה — אפשר לשלוח עוד אחת בעוד רגע' : 'שליחת הערה';
+  /**
+   * THE COOLDOWN WORDING MAY NOT CLAIM A DELIVERY, and it used to. "ההערה נשלחה" was written
+   * when this was an icon and the string only ever reached `aria-label`, so nothing on screen
+   * said it -- but the cooldown starts after a note is STORED, which is not the same as sent, and
+   * a failed delivery left the trigger announcing a success. Rendering the label as a drawer row
+   * made the latent inaccuracy visible, and the browser gate failed on it by name: "the screen
+   * claimed a delivery that failed". The cooldown is about the WAIT; the outcome is the toast's
+   * to report, and only it knows which one happened.
+   */
+  const label = cooling ? 'אפשר לשלוח הערה נוספת בעוד רגע' : 'שליחת הערה';
 
   return (
     <>
-      <button type="button" onClick={() => void openWithCapture()} disabled={cooling || capturing}
-        aria-label={label} title={label}
-        className={`grid size-[44px] shrink-0 place-items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 ${
-          onShell
-            ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
-            : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
-        }`}>
-        <MessageSquarePlus size={19} aria-hidden="true" />
-      </button>
+      {/* Same control, two shapes. The drawer row borrows the navigation item's geometry
+          (min-h-11, gap-2.5, rounded-lg) so it reads as one list with the destinations above it —
+          it is a button and not a Link because it opens a dialog rather than going anywhere. */}
+      {variant === 'menu' ? (
+        <button type="button" onClick={() => void openWithCapture()} disabled={cooling || capturing}
+          title={label}
+          className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink-body transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset disabled:opacity-50">
+          <MessageSquarePlus size={17} aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate text-start">{cooling ? label : 'שליחת הערה'}</span>
+        </button>
+      ) : (
+        <button type="button" onClick={() => void openWithCapture()} disabled={cooling || capturing}
+          aria-label={label} title={label}
+          className={`grid size-[44px] shrink-0 place-items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 ${
+            onShell
+              ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
+              : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
+          }`}>
+          <MessageSquarePlus size={19} aria-hidden="true" />
+        </button>
+      )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="שליחת הערה" busy={busy}
         description="מה לא עבד, מה חסר, או מה היה מבלבל. ההערה מגיעה ישר אליי.">

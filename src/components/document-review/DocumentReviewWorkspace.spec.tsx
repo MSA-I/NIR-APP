@@ -180,6 +180,29 @@ describe('confidence leaves the review screens and stays inside the disclosure',
     expect(disclosure.getByText('mark-1')).toBeInTheDocument();
   });
 
+  /**
+   * Owner report 25.08.2026: "כשכתוב לי פרטים טכניים אני לא אמור לראות שם מודל ו-ai ודברים כאלה".
+   * DESIGN.md already banned a model name on the assistant surface; this is the same rule reaching
+   * the document surface. The fixture deliberately carries `openai` / `gpt-4o-mini` in BOTH the
+   * extraction and the interpretation, so this test fails the moment either finds its way back
+   * onto the screen — and it asserts against the whole document, not the disclosure, because the
+   * rule is that a tenant never meets these words here, not that this one box hides them.
+   */
+  it('never prints the vendor or the model, while keeping the ids support needs', async () => {
+    renderWorkspace(0.62);
+    const disclosure = within(await openTechnicalDetails());
+
+    expect(screen.queryByText(/openai/i)).toBeNull();
+    expect(screen.queryByText(/gpt-4o-mini/i)).toBeNull();
+    expect(screen.queryByText(/מנוע פירוש|מנוע חילוץ/)).toBeNull();
+
+    // What replaced them: our own revisions, which name no company and are what a support session
+    // actually needs to find one exact run.
+    expect(disclosure.getByText('גרסת עיבוד')).toBeInTheDocument();
+    expect(disclosure.getByText('מזהה משימה')).toBeInTheDocument();
+    expect(disclosure.getByText('טביעת מקור')).toBeInTheDocument();
+  });
+
   it('shows — for a confidence the contract never carried, never a fabricated 0%', async () => {
     renderWorkspace(null);
     const disclosure = within(await openTechnicalDetails());
@@ -254,10 +277,12 @@ describe('a document being read makes exactly one claim that it is being read', 
     snapshot.stage = 'processing';
     renderSnapshot(snapshot);
 
-    // The strip's own line, and the accessible name of its bar. `DocumentStatusBadge` renders the
-    // very same string from `progressLabel` for the folder and the upload centre, which have no
-    // strip; here that made "עמוד 3 מתוך 12" appear twice, a few pixels apart, from two files.
-    expect(screen.getAllByText('עמוד 3 מתוך 12')).toHaveLength(1);
+    // ZERO printed copies now, not one (owner ruling 25.08.2026: the bar replaces the numbers).
+    // The count is still delivered where a determinate progressbar is supposed to carry it — the
+    // `aria-valuetext` asserted on the next line. `DocumentStatusBadge` renders the very same
+    // string from `progressLabel` for the folder and the upload centre, which have no strip, and
+    // it stays suppressed here; that is the third assertion.
+    expect(screen.queryAllByText('עמוד 3 מתוך 12')).toHaveLength(0);
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'עמוד 3 מתוך 12');
     expect(document.querySelectorAll('[data-document-status-progress]')).toHaveLength(0);
   });

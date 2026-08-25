@@ -20,8 +20,11 @@ describe('מעטפת הניווט', () => {
       '/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers',
     ]);
     expect(owner[0].items).toHaveLength(6);
+    // 'המנוי' is last and NOT collapsible: one item behind a disclosure is a door with a lid,
+    // and the point of the group (owner report 25.08.2026) was to stop the subscription being
+    // something you find by scrolling a settings screen.
     expect(owner.slice(1).map((section) => [section.section, section.collapsible])).toEqual([
-      ['ניהול', true], ['בקרה', true],
+      ['ניהול', true], ['בקרה', true], ['המנוי', undefined],
     ]);
   });
 

@@ -219,6 +219,19 @@
   --color-star: var(--color-amber-400);            /* rating stars: decoration, not status */
   --color-star-hover: var(--color-amber-300);
 
+  /* ---- Tier marks — commercial identity, and deliberately NOT a sixth status meaning ----
+     (owner report 25.08.2026: "חינם פשוט · בסיס טקסטורה · פרו זוהר · פרימיום בזהב".)
+     The obvious way to render gold is a pale amber pill, and that is exactly what must not
+     happen: `await-soft` IS pale amber (hue ~95, L 96%), it means "the ball is with an outside
+     party", and a tier mark wearing it would put a status claim in the top bar. So the gold here
+     is a SATURATED MID-LIGHTNESS FILL with onyx lettering — a metal chip, not a wash — which
+     separates it from the await pill by structure and not only by hue. The rung's NAME is always
+     printed inside the mark, so the meaning never rests on colour at all.
+     Three stops because one flat fill has no metal in it: highlight, body, edge. */
+  --color-tier-gold: oklch(76% 0.135 88);          /* the body of the chip */
+  --color-tier-gold-soft: oklch(89% 0.085 92);     /* the lit edge */
+  --color-tier-gold-deep: oklch(58% 0.105 78);     /* the shaded edge and the border */
+
   /* ---- Section 6: one color language ----
      Four meanings: done=הושלם/תקין · await=ממתין לטיפול · alert=חריגה/דחוף · info=מידע.
      idle is the *absence* of a claim (neutral), not a fifth meaning — see plan פ-1.
@@ -274,7 +287,7 @@ html {
   font-synthesis: none;
   min-inline-size: 0;
   max-inline-size: 100%;
-  --mobile-action-bar-size: 4rem;
+  --mobile-action-bar-size: 4.25rem;
 }
 
 html[data-font-mode="almoni"] {
@@ -404,6 +417,60 @@ body {
   .badge-alert { @apply badge bg-alert-solid text-on-solid; }
   .badge-info  { @apply badge bg-info-soft  text-info-on-soft; }
   .badge-idle  { @apply badge bg-idle-soft  text-idle-on-soft; }
+
+  /* ---- Subscription tier marks (owner report 25.08.2026) ----
+     A tier mark is NOT a badge-*: those five say something about data, and this says which
+     product the business bought. It therefore borrows the badge geometry and none of its colour
+     language. Four looks up one ladder, each one step richer than the last:
+       free     quiet paper — a rung with nothing to advertise
+       basic    the brand gradient, soft
+       pro      the same gradient, deeper, plus a sheen that travels (see below)
+       premium  the gold chip; `business` reuses it, being above premium on the ladder
+     `.plan-badge` keeps `position: relative` and `overflow: hidden` because pro's sheen is an
+     absolutely positioned overlay that must be clipped to the pill. */
+  .plan-badge { @apply badge relative overflow-hidden px-2.5 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus; }
+  .plan-badge-free { @apply bg-surface-sunken text-ink-soft; }
+  .plan-badge-basic {
+    @apply text-action-on-soft;
+    border: 1px solid var(--color-action-line);
+    background-image: linear-gradient(135deg, var(--color-action-wash) 0%, var(--color-action-soft) 100%);
+  }
+  .plan-badge-pro {
+    @apply text-on-solid;
+    border: 1px solid var(--color-action-solid);
+    background-image: linear-gradient(135deg, var(--color-action-solid) 0%, var(--color-action) 100%);
+  }
+  .plan-badge-premium {
+    @apply text-shell;
+    border: 1px solid var(--color-tier-gold-deep);
+    background-image: linear-gradient(135deg,
+      var(--color-tier-gold-soft) 0%,
+      var(--color-tier-gold) 45%,
+      var(--color-tier-gold-deep) 100%);
+  }
+
+  /* Pro's travelling sheen. OWNER RULING 25.08.2026, and it is an EXPLICIT, NAMED EXCEPTION to
+     "אנימציה שאינה מצב — אסור בחוקה" (DESIGN.md §Don't): nothing about this loop reports a change
+     in the system. The exception is bounded so it stays one mark and not a new habit — a single
+     element, one slow pass, no layout property, no colour that means anything, and it stops dead
+     under reduced-motion with the pill's static gradient still fully legible underneath. */
+  .plan-badge-pro::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(105deg,
+      transparent 35%,
+      color-mix(in oklab, var(--color-on-solid) 42%, transparent) 50%,
+      transparent 65%);
+    background-size: 260% 100%;
+    background-repeat: no-repeat;
+    animation: plan-badge-sheen 3.2s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes plan-badge-sheen {
+    from { background-position: 130% 0; }
+    to   { background-position: -130% 0; }
+  }
 
   /* Shared alert box (§4.3). ErrorNote and the ad-hoc notice boxes point here.
      note-idle carries a neutral notice — a statement with no semantic claim (audit round 2). */
@@ -587,22 +654,35 @@ body {
   flex: 1 1 0;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* Bottom-anchored, ALL five of them. See the label rule below for why this and the fixed label
+     box are one fix and not two. */
+  justify-content: flex-end;
   gap: 0.125rem;
   padding: 0.375rem 0.25rem;
   text-align: center;
 }
 
 /* ponytail: raised capture puck — a circle overlapping the bar's top edge, so its upper half
-   reads as a dome and gives the most-used action a much larger tap target. */
-.mobile-action-raised {
-  justify-content: flex-end;
-  padding-block-end: 0.5rem;
-}
+   reads as a dome and gives the most-used action a much larger tap target.
 
+   THE LABEL ALIGNMENT FIX (owner report 25.08.2026: "הטקסט שלהם לא מיושר"). The centre item's
+   word sat lower than its four neighbours, and the cause was structural rather than a padding
+   value being slightly off: the puck is `position: absolute`, so it contributes NO height, which
+   left this column holding a label where every other column holds icon + gap + label. The old
+   answer was to bottom-anchor this one item and pad it — two properties that had to be re-tuned
+   by hand every time the icon size, the gap or the bar height moved, and were last tuned against
+   a 4rem bar and a one-line label.
+
+   So instead of anchoring differently, this column is given back the height the absolute puck
+   took away: an empty flow box exactly as tall as a sibling's icon. Every item then shares one
+   layout — centred, icon-box + gap + label — and the labels line up by construction, whether they
+   wrap or not. The puck keeps floating above it all, unaffected. */
 .mobile-action-puck {
   position: absolute;
-  inset-block-start: -1.25rem;
+  /* -1.75rem, not -1.25rem: half the puck now sits above the bar's edge. The label rule below
+     raised the bar and pinned every label to a fixed two-line box, and the puck has to clear the
+     top of that box rather than the top of whatever the centre label happened to be. */
+  inset-block-start: -1.75rem;
   inset-inline: 0;
   margin-inline: auto;
   display: grid;
@@ -624,9 +704,28 @@ body {
   background: var(--color-action-solid);
 }
 
+/* THE LABEL ALIGNMENT FIX (owner report 25.08.2026: "הטקסט שלהם לא מיושר").
+   Measured before touching anything, at 390px: the five label boxes sat at three different
+   heights. TWO independent causes, and fixing either one alone leaves the screen still wrong:
+
+   1. The centre item was anchored differently from its four neighbours -- `flex-end` plus its own
+      bottom padding, because the puck is `position: absolute` and contributes no height, so that
+      column held a label where every other column held icon + gap + label. Those two properties
+      had to be re-tuned by hand whenever the icon size, the gap or the bar height moved, and were
+      last tuned against a one-line label.
+   2. The labels wrap differently from each other. `הזמנה חדשה` takes two lines at 390px while
+      `מרכז הבקרה` takes one, and centred items grow in BOTH directions, so a wrapped label
+      pushed its own first line 8px above its neighbour's.
+
+   So: every item is bottom-anchored (above), and the label box is a FIXED two lines whether one
+   line fills it or two. Same bottom edge, same box height, therefore same first-line baseline --
+   by construction, not by a tuned number, and it survives a wording change. The bar grew from
+   4rem to 4.25rem to hold the reserved second line, and `--mobile-action-bar-size` is what
+   `.phone-safe-main` reserves, so the page clearance follows automatically. */
 .mobile-action-label {
   display: -webkit-box;
   max-inline-size: 100%;
+  min-block-size: 2rem;   /* two lines at the 1rem leading below — reserved, not conditional */
   overflow: hidden;
   line-height: 1rem;
   -webkit-box-orient: vertical;
@@ -649,9 +748,10 @@ body {
     padding-block: 0.125rem;
   }
 
-  .mobile-action-raised { padding-block-end: 0.25rem; }
-
   .mobile-action-puck {
+    /* The portrait rule raised the puck to clear a two-line label box. Landscape clamps to one
+       line, so the original offset already clears it and the extra lift would only float the
+       puck for no reason. */
     inset-block-start: -0.75rem;
     inline-size: 3rem;
     block-size: 3rem;
@@ -659,6 +759,7 @@ body {
 
   .mobile-action-label {
     line-height: 0.75rem;
+    min-block-size: 0.75rem;   /* one line here, so the reserved box is one line too */
     -webkit-line-clamp: 1;
     line-clamp: 1;
   }
@@ -902,6 +1003,10 @@ html { transition: --glow-x 0.45s ease-out, --glow-y 0.45s ease-out; }
   .card-link-hover:hover { translate: none !important; }
   /* The split bar keeps its widths — they are data. Only the wipe stops. */
   .dash-enter > *, .freshness-settle, .split-bar { animation: none; }
+  /* Pro's sheen is the one loop in the product that reports nothing, so it is also the one that
+     may vanish completely: the pill's static gradient carries the whole mark without it. Hidden
+     rather than merely paused, because a sheen frozen mid-pass reads as a rendering fault. */
+  .plan-badge-pro::after { animation: none; display: none; }
 }
 
 @media print {

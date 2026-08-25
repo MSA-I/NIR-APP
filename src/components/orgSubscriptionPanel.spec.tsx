@@ -71,6 +71,19 @@ const priced = (currency: string, amounts: Record<string, number>) =>
     ? option
     : { ...option, currency, catalogue_version: 'v1', monthly_amount: amounts[option.plan_key] ?? null }));
 
+/**
+ * `get_public_plan_quotas()` — the SAME server function the public ladder reads, which is why the
+ * cards can compare rungs without a second source of numbers. Only `documents.monthly` is
+ * published (#266); `users.max` rides along unmeasured so the card's dash path is exercised too.
+ */
+const PLAN_QUOTAS = [
+  { plan_key: 'free', entitlement_key: 'documents.monthly', label: 'מסמכים', unit: 'מסמכים', unlimited: false, numeric_limit: 20, measured: true },
+  { plan_key: 'basic', entitlement_key: 'documents.monthly', label: 'מסמכים', unit: 'מסמכים', unlimited: false, numeric_limit: 40, measured: true },
+  { plan_key: 'pro', entitlement_key: 'documents.monthly', label: 'מסמכים', unit: 'מסמכים', unlimited: false, numeric_limit: 150, measured: true },
+  { plan_key: 'premium', entitlement_key: 'documents.monthly', label: 'מסמכים', unit: 'מסמכים', unlimited: false, numeric_limit: 375, measured: true },
+  { plan_key: 'free', entitlement_key: 'users.max', label: 'משתמשים', unit: 'משתמשים', unlimited: false, numeric_limit: null, measured: false },
+];
+
 const USAGE = [
   { metric_key: 'documents.monthly', label: 'מסמכים', used: 180, usage_limit: 200, unlimited: false, measured: true, remaining: 20, percent_used: 90, period_end: '2026-09-04T00:00:00.000Z' },
   { metric_key: 'users.max', label: 'משתמשים', used: null, usage_limit: null, unlimited: false, measured: false, remaining: null, percent_used: null, period_end: null },
@@ -81,6 +94,7 @@ function mockServer(sub: Record<string, unknown>, options: OptionFixture[] = OPT
     if (name === 'my_subscription') return Promise.resolve({ data: [sub], error: null });
     if (name === 'my_upgrade_options') return Promise.resolve({ data: options, error: null });
     if (name === 'organization_usage_snapshot') return Promise.resolve({ data: USAGE, error: null });
+    if (name === 'get_public_plan_quotas') return Promise.resolve({ data: PLAN_QUOTAS, error: null });
     return Promise.resolve({ data: null, error: null });
   });
 }
@@ -107,7 +121,11 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
   it('בלי מדינת חיוב מאומתת — אינו טוען מטבע ואינו מציג מחיר מנוחש', async () => {
     renderPanel();
     await settle();
-    expect(await screen.findByText(/כתובת חיוב מאומתת/)).toBeInTheDocument();
+    // The sentence lives in the availability notice now rather than in a second box of its own:
+    // "nothing can be bought yet" and "which is why the amounts are dashes" are one fact, and on a
+    // Free organization both notices used to render one under the other saying it twice.
+    const availability = await screen.findByTestId('billing-availability');
+    expect(availability.textContent).toMatch(/כתובת החיוב המאומתת/);
     expect(screen.queryByRole('combobox', { name: /מטבע/ })).not.toBeInTheDocument();
     // Every priced plan shows an em dash rather than a currency nobody verified.
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(4);
@@ -124,6 +142,44 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     expect(screen.getByText(/249/)).toBeInTheDocument();
     expect(screen.getByText(/449/)).toBeInTheDocument();
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * Owner report 25.08.2026: "התוכניות השונות עם האופציה לשדרוג, כמו בכל אפליקציה נורמלית".
+   * A card per rung — and the reason this test also asserts what is ABSENT is that the obvious
+   * next thing to put on a plan card is a feature list, and #274's feature ladder is
+   * `NOT_IMPLEMENTED`: every capability boolean is still `true` for every plan and `0184` fails
+   * any migration that turns one off. A card promising "ייצוא ✗ בחינם" would sell a difference
+   * the server does not enforce.
+   */
+  it('מציג כרטיס לכל מסלול עם המכסה שמותר לפרסם, ובלי טבלת יכולות שאינה נאכפת', async () => {
+    renderPanel();
+    await settle();
+
+    const cards = await screen.findByTestId('plan-cards');
+    expect(cards.querySelectorAll('li')).toHaveLength(5);
+    expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/20/);
+    expect(cards.querySelector('[data-plan="premium"]')?.textContent).toMatch(/375/);
+    // Business is a conversation and carries a contractual quota, never a published number.
+    expect(cards.querySelector('[data-plan="business"]')?.textContent).toMatch(/מכסה חוזית/);
+    // The rung the organization is actually on is marked, and offers itself no upgrade to itself.
+    expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/המסלול הנוכחי/);
+    expect(cards.querySelector('[data-plan="free"]')?.querySelector('button')).toBeNull();
+
+    // No capability matrix. These are #274's promised differences; none of them is enforced yet.
+    expect(screen.queryByText(/ייצוא Excel|התאמות בנק|לוח ביצועי ספקים/)).not.toBeInTheDocument();
+  });
+
+  it('כפתורי השדרוג מושבתים ואומרים למה — הם אינם מוסתרים ואינם קוראים לכלום', async () => {
+    renderPanel();
+    await settle();
+    const cards = await screen.findByTestId('plan-cards');
+    // #204 forbids putting the path out of reach; #217 forbids opening an entitlement without a
+    // signed server event. Visible and disabled is the only shape that honours both.
+    const upgrades = [...cards.querySelectorAll('button')];
+    expect(upgrades).toHaveLength(4);
+    for (const button of upgrades) expect(button).toBeDisabled();
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it('אין שום נתיב רכישה — לא כפתור, לא קריאה לפונקציה, ולא מילה שנשמעת כמו תשלום שבוצע', async () => {

@@ -2693,7 +2693,11 @@ async function navigationOrderAndActiveState(browser) {
     assert.deepEqual(nav.topLevel.map((item) => item.path),
       ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
       `wrong owner daily navigation: ${JSON.stringify(nav.topLevel)}`);
-    assert.deepEqual(nav.groups, ['ניהול', 'בקרה'],
+    // 'המנוי' joined the catalogue on 25.08.2026 and therefore appears here too: the desktop
+    // top bar renders every NAMED section as a dropdown, so a group added for the phone drawer is
+    // not a phone-only change. Last, after the two work groups, which is where the contract the
+    // tenant runs under belongs relative to the business it runs.
+    assert.deepEqual(nav.groups, ['ניהול', 'בקרה', 'המנוי'],
       `wrong navigation dropdown groups or order: ${JSON.stringify(nav.groups)}`);
     assert.equal(nav.all.some((item) => item.path === '/documents/archive'), false,
       'the low-frequency archive still competes in the main navigation');
@@ -2982,6 +2986,19 @@ async function documentVocabulary(browser) {
     const opened = await technical.evaluate((node) => node.textContent || '');
     assert(opened.includes('95%'),
       'the supplier confidence is not reachable inside פרטים טכניים in one click');
+
+    // Owner report 25.08.2026: no vendor and no model name reaches a tenant. The fixture carries
+    // 'openai-fixture' / 'gpt-local-contract-fixture' on the interpretation and
+    // 'private-fixture' / 'ocr-acceptance-hebrew' on the extraction precisely so this assertion
+    // has something to catch. Asserted on the WHOLE page, not the disclosure, because the rule is
+    // that the words are not on the screen -- not that one box happens to hide them.
+    const wholePage = await page.locator('#main').evaluate((node) => node.textContent || '');
+    for (const banned of ['openai', 'gpt-', 'מנוע פירוש', 'מנוע חילוץ']) {
+      assert.equal(wholePage.toLowerCase().includes(banned.toLowerCase()), false,
+        `the review screen still prints the processing vendor or model: ${banned}`);
+    }
+    assert(opened.includes('גרסת עיבוד'),
+      'the disclosure lost the processing-version row that replaced the two engine rows');
     await page.screenshot({ path: path.join(outDir, 'document-technical-disclosure-1440.png'), fullPage: true });
     report.screenshots.push('document-technical-disclosure-1440.png');
   } finally {
@@ -3440,6 +3457,11 @@ async function feedbackNoteChannel(browser) {
     await page.goto(`${baseURL}/dashboard`);
     await settle(page);
 
+    // The trigger lives in the DRAWER on a phone (owner report 25.08.2026): the top bar gave its
+    // slot to the subscription tier mark. On desktop it is still in the bar. The menu STAYS OPEN
+    // behind the dialog -- see the note in FeedbackButton for why closing it was wrong.
+    await page.getByRole('button', { name: 'פתיחת תפריט' }).click();
+    await page.locator('#mobile-navigation').waitFor();
     const trigger = page.getByRole('button', { name: 'שליחת הערה' });
     await trigger.waitFor();
     const box = await trigger.boundingBox();
@@ -3448,6 +3470,15 @@ async function feedbackNoteChannel(browser) {
 
     await trigger.click();
     await page.getByText('לצרף צילום של המסך', { exact: true }).waitFor();
+    // The drawer must not reach the picture, and the mechanism is exclusion rather than removal:
+    // the panel is already `role="dialog"`, which `SKIP_SELECTOR` skips, and the scrim behind it
+    // carries `data-no-capture` so a half-opaque sheet does not tint the whole screenshot. Both
+    // markers are asserted, because losing either one is invisible until somebody reads a note
+    // with a photograph of the menu attached to it.
+    assert.equal(await page.locator('#mobile-navigation[role="dialog"]').count(), 1,
+      'the drawer lost role="dialog" -- the screenshot would now include the open menu');
+    assert.equal(await page.locator('[data-no-capture]:has(#mobile-navigation)').count(), 1,
+      'the drawer scrim is not marked data-no-capture -- the screenshot would be tinted by it');
     await page.getByAltText('תצוגה מקדימה של הצילום שיישלח').waitFor();
     // Unique per run: the lookup below must find this note and not a previous run's.
     const note = `בדיקת שער ${Date.now()}`;

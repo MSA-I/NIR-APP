@@ -10,6 +10,7 @@ import AssistantPanel from './AssistantPanel';
 import { assistantAuthorizationFingerprint, useAssistantRunSession } from '../lib/assistant/runSession';
 import NotificationBell from './NotificationBell';
 import FeedbackButton from './FeedbackButton';
+import { PlanBadge } from './PlanBadge';
 import { ConfirmDialog, useDialogLayer, useToast } from './ui';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
 import { pendingOfflineWork } from '../lib/offlineQueue';
@@ -152,6 +153,11 @@ export const NAV_SECTIONS: NavSection[] = [
       navItem('/analytics', Activity, ['owner', 'office']),
       navItem('/supplier-log', ScrollText, ['owner']),
       navItem('/settings', Settings, ['owner']),
+      // The subscription left the settings screen for an address of its own (owner report
+      // 25.08.2026). It is catalogued here beside /settings because this array is the permission
+      // record for every authenticated destination; where it SURFACES is decided below, by
+      // SUBSCRIPTION_PATHS, and that is its own drawer group rather than a row inside control.
+      navItem('/settings/subscription', CreditCard, ['owner']),
       // /onboarding was absent from this catalogue entirely, so nothing could route to it: not the
       // sidebar, not the drawer, not quickActions, and homeFor() always answers /dashboard. The
       // setup wizard was built to be RE-OPENED — it reads live counts on every mount so it shows
@@ -181,6 +187,16 @@ const CONTROL_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
   accountant: ['/documents/consolidated-invoices', '/exceptions', '/expenses', '/reports'],
 };
 
+/**
+ * Its own group, not a row inside 'בקרה' (owner report 25.08.2026). Everything in the three
+ * groups above is the business the tenant runs; this is the contract they run it under, and a
+ * single-item group is the honest shape for a subject with exactly one screen. Owner only, the
+ * same boundary the panel and the route guard already draw (owner decision 23.08.2026).
+ */
+const SUBSCRIPTION_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
+  owner: ['/settings/subscription'],
+};
+
 function catalogItem(path: string, role: ActiveRole): NavItem | null {
   const item = NAV_SECTIONS.flatMap((section) => section.items).find((candidate) => candidate.to === path);
   return item?.roles.includes(role) ? item : null;
@@ -203,6 +219,8 @@ export function sectionsForRole(role: ActiveRole | undefined): NavSection[] {
     { section: '', items: itemsFor(role, DAILY_PATHS[role]) },
     { section: 'ניהול', items: itemsFor(role, MANAGEMENT_PATHS[role] ?? []), collapsible: true },
     { section: 'בקרה', items: itemsFor(role, CONTROL_PATHS[role] ?? []), collapsible: true },
+    // Last, and deliberately not collapsible: one item behind a disclosure is a door with a lid.
+    { section: 'המנוי', items: itemsFor(role, SUBSCRIPTION_PATHS[role] ?? []) },
   ].filter((section) => section.items.length > 0) : [];
 }
 
@@ -501,6 +519,10 @@ export default function Layout() {
             list scrolling behind it, and on a short viewport it ate the last destinations. On the
             desktop sidebar the strip is right — that column is permanent, has room, and the strip
             is the one place the signed-in identity lives. Same markup, different anchoring. */}
+        {/* The note trigger, in the drawer because the phone top bar gave its slot to the tier
+            mark (owner report 25.08.2026). It sits with the account rather than with the
+            destinations: it goes nowhere, it opens a dialog. */}
+        {!stickyFooter && feedbackOn && <FeedbackButton variant="menu" />}
         {!stickyFooter && accountBlock}
       </nav>
       {stickyFooter && (
@@ -659,10 +681,14 @@ export default function Layout() {
         </div>
         {/* T7.3k (owner, images #33-34 "אתה רואה את ההבדלים בשפה?"): the desktop language —
             bare round icon targets in dark ink straight on the bar, no boxed cluster. */}
+        {/* Owner report 25.08.2026: the note trigger left this cluster and the tier mark took its
+            slot. The note is not gone — it is a row in the drawer, where the same click also has
+            room for a word. Four icon targets and a phone title do not fit on a 390px bar, and
+            the one of them a person uses least often is the one that moves. */}
         <div className="mobile-shell-actions flex shrink-0 items-center gap-0.5">
           <AssistantPanel session={assistantSession} />
           <NotificationBell />
-          <FeedbackButton />
+          <PlanBadge />
           {canSearch && (
             <button className="grid size-[44px] shrink-0 place-items-center rounded-full text-ink-soft transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
               aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={21} /></button>
@@ -671,9 +697,14 @@ export default function Layout() {
       </header>
       {searchOpen && <GlobalSearch variant="mobile" onClose={() => setSearchOpen(false)} />}
       {/* T7.3k (owner, image #35): neutral dark scrim — the oceanic one read as a strange
-          blue tint over the page. */}
+          blue tint over the page.
+
+          `data-no-capture` (25.08.2026): the feedback note photographs the viewport, and this
+          scrim is a half-opaque sheet over all of it. The panel inside is already skipped by the
+          capture because it is `role="dialog"`; the scrim is not, and without this a note sent
+          from the menu would arrive as a picture of the screen behind a grey wash. */}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-shell/50 no-print" onClick={() => closeMobileMenu()}>
+        <div data-no-capture className="lg:hidden fixed inset-0 z-50 bg-shell/50 no-print" onClick={() => closeMobileMenu()}>
           {/* T7.3k fix (owner, image #29): OPAQUE light gray — translucency here sat over the
               dark backdrop and the page behind it, and the blend read as a murky blue tint.
               The top bar can stay translucent because only the light canvas scrolls under it. */}

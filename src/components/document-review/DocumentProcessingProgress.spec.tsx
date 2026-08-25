@@ -107,7 +107,10 @@ describe('רצועת שלבי העיבוד', () => {
     expect(bar.getAttribute('aria-valuenow')).toBe('7');
     expect(bar.getAttribute('aria-valuemax')).toBe('27');
     expect(bar.getAttribute('aria-valuetext')).toBe('עמוד 7 מתוך 27');
-    expect(screen.getByText('עמוד 7 מתוך 27')).toBeTruthy();
+    // The bar REPLACES the count, it does not sit under a copy of it (owner ruling 25.08.2026).
+    // The words are still delivered — as the bar's `aria-valuetext`, asserted above — so a screen
+    // reader loses nothing while the screen stops saying the same thing twice.
+    expect(screen.queryByText('עמוד 7 מתוך 27')).toBeNull();
   });
 
   it('לא ממציאה בר כשהעובד עדיין לא דיווח עמודים', () => {
@@ -133,7 +136,7 @@ describe('רצועת שלבי העיבוד', () => {
     const bar = screen.getByRole('progressbar');
     expect(bar.getAttribute('aria-valuenow')).toBe('2');
     expect(bar.getAttribute('aria-valuetext')).toBe('מקטע 2 מתוך 4');
-    expect(screen.getByText(/מקטע 2 מתוך 4/)).toBeTruthy();
+    expect(screen.queryByText(/מקטע 2 מתוך 4/)).toBeNull();
   });
 
   it('לא ממציאה בר פירוש כשהשרת לא דיווח מקטעים', () => {

@@ -160,16 +160,20 @@ describe('/settings — users, attention strip and archive', () => {
     expect(screen.queryByRole('option', { name: HISTORICAL_ROLE_LABEL.payer })).toBeNull();
   });
 
-  it('gives the owner the subscription panel, with Business as a conversation and no figure', async () => {
+  /**
+   * The subscription LEFT this screen for `/settings/subscription` (owner report 25.08.2026); the
+   * contract it carries is unchanged and is pinned by `orgSubscriptionPanel.spec.tsx`, which
+   * mounts the panel directly. What this file has to keep asserting is the move itself: settings
+   * is the operational configuration of the business, and finding the plan meant scrolling past
+   * VAT rates and the logo uploader to get to it.
+   */
+  it('no longer carries the subscription — it moved to a screen and a menu group of its own', async () => {
     renderSettings([OFFICE]);
     await screen.findByText('רות משרד');
 
-    const panel = await screen.findByRole('region', { name: 'מסלול ומנוי' });
-    expect(within(panel).getByTestId('current-plan')).toHaveTextContent('חינם');
-    // #194/#201: Business is a conversation here and carries no price anywhere.
-    expect(within(panel).getByText('ביזנס')).toBeInTheDocument();
-    expect(within(panel).getByText('דברו איתנו')).toBeInTheDocument();
-    expect(within(panel).queryByText(/299/)).toBeNull();
+    expect(screen.queryByRole('region', { name: 'מסלול ומנוי' })).toBeNull();
+    expect(screen.queryByTestId('current-plan')).toBeNull();
+    expect(screen.queryByText('דברו איתנו')).toBeNull();
   });
 
   it('shows neither extra surface when every profile holds an assignable role', async () => {

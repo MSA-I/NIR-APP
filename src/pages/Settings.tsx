@@ -8,7 +8,6 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { PageHeader, SkeletonCards, useToast, ErrorNote, Note, DataTable, Disclosure, StatusBadge, ConfirmDialog, Modal, type Column } from '../components/ui';
 import { ExportTemplatesPanel } from '../components/ExportTemplatesPanel';
-import { OrgSubscriptionPanel } from '../components/OrgSubscriptionPanel';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVITATION_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime, fmtNum } from '../lib/format';
@@ -452,8 +451,12 @@ export default function Settings() {
 
   return (
     <div className="space-y-5 max-w-3xl">
+      {/* `meta`: "מדיניות עבודה" went with the autonomy switches to the operator app
+          (19.08.2026) and the subscription moved to /settings/subscription (25.08.2026); the
+          header kept advertising both. A meta line that names areas the screen no longer has
+          sends people scrolling for something that is not there. */}
       <PageHeader title={<span className="flex items-center gap-2"><SettingsIcon size={22} /> הגדרות מערכת</span>}
-        meta="עסק, אבטחה, צוות ומדיניות עבודה"
+        meta="עסק, צוות ואבטחה"
         actions={<Link className="btn-secondary" to="/onboarding"><ClipboardCheck size={16} /> רשימת הקמה</Link>} />
 
       <div className="card card-pad space-y-4">
@@ -483,17 +486,16 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* The organization's own commercial subscription — plan, price, upgrade, cancel, and the
-          read-only state a failed renewal puts the tenant in.
+      {/* The commercial subscription moved to `/settings/subscription` (owner report 25.08.2026)
+          and is reached from its own drawer group. It is NOT reduced to a link here: this screen
+          is the operational settings of the business, the plan is the contract the business runs
+          under, and a card pointing sideways would be a ninth thing to scroll past on a screen
+          whose complaint was that it had too many.
 
-          OWNER ONLY, by owner decision (23.08.2026): only `owner` may manage the subscription.
-          `office` and `accountant` keep read visibility of usage and limits and cannot change the
-          plan or cancel. This gate was built fail-closed from PRODUCT.md's capability contract
-          before the decision existed — `office` has no access to payment at all, `accountant` only
-          executes an already-approved SUPPLIER payment — and the ruling confirmed it. It is no
-          longer an assumption. A control that refuses on submit is worse than a control that is
-          not there — the same reasoning that gates the export-templates panel two blocks below. */}
-      {profile?.role === 'owner' && <OrgSubscriptionPanel />}
+          OWNER ONLY has not changed (owner decision 23.08.2026) — the boundary simply moved from
+          this conditional to the route guard in App.tsx, which is the stronger place for it:
+          `office` and `accountant` now cannot reach the surface at all, rather than reaching a
+          screen that renders nothing for them. */}
 
       {/* The autonomy switches left this screen for the operator application (src/operator/,
           19.08.2026): they were never the owner's control — platform_set_autonomy_policy
@@ -565,12 +567,14 @@ export default function Settings() {
               still cannot reset another user's password — that stays closed by decision, and the
               operator valve (admin-provision reset_password) remains the fallback when mail
               delivery fails. */}
+          {/* One paragraph, not two (owner report 25.08.2026: "טקסט שלא אמור להיות והוא די
+              מעוך"). The second one explained the employee's own recovery path — a route that
+              starts on the LOGIN screen, is signposted there, and has nothing to do with the two
+              password fields underneath it. Two stacked muted paragraphs were also the only place
+              on this screen where helper text piled up on itself. The decision it recorded
+              (#114) is unchanged and is still in the comment above. */}
           <p className="text-sm text-ink-muted mt-1">
             הסיסמה מוחלפת מיד ותידרש בכניסה הבאה. השדות כאן משנים את הסיסמה שלך בלבד.
-          </p>
-          <p className="text-sm text-ink-muted mt-1">
-            עובד ששכח סיסמה מאפס אותה בעצמו: ״שכחתי סיסמה״ במסך הכניסה שולח קישור איפוס לכתובת המייל שלו.
-            אם המייל אינו מגיע — מפעיל המערכת מנפיק סיסמה חדשה ומוסר אותה בערוץ מאובטח.
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 sm:items-end">
