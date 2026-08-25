@@ -666,11 +666,16 @@ know your messages are delivering and fully passing DMARC"
 
 ---
 
-## 7. זהויות פדרטיביות — Google ו-Apple. **שני הספקים כבויים; אף אחד לא הוגדר**
+## 7. זהויות פדרטיביות — **Google חי בייצור (25.08.2026); Apple כבוי ומעולם לא הופעל**
 
-הקוד לשני המסלולים קיים ומאומת ביחידה. מה שחסר הוא credentials, ובלעדיהם `enabled = false`
-ב-`supabase/config.toml` והכפתורים אינם מצוירים כלל — דלת שמובילה ל-„הספק אינו מופעל" גרועה
-מהיעדר דלת.
+הקוד לשני המסלולים קיים ומאומת ביחידה. ל-Apple חסרים credentials, ובלעדיהם הכפתור אינו מצויר
+כלל — דלת שמובילה ל-„הספק אינו מופעל" גרועה מהיעדר דלת.
+
+> **המשתנה שמכריע אם הדלת נמצאת שם בכלל: `VITE_GOOGLE_SIGNUP_ENABLED`.** זהו דגל **בזמן בנייה** —
+> ‏Vite מטמיע אותו ב-bundle — ולכן **סביבת בנייה שאינה נושאת אותו מייצרת מוצר בלי הכפתור, גם
+> כשהספק מוגדר ועובד בשרת.** זה בדיוק מה שקרה כאן: הספק הודלק בייצור בבוקר, והאתר החי לא הציע
+> Google במשך שעות, מפני שקובץ ה-`.env` של סביבת הבנייה לא הכיל את השורה. הוא **אינו** נכנס
+> ל-Git; ‏`.env.example` מתעד אותו כדי שהחוסר יהיה גלוי במקום שקט.
 
 **מי רשאי, ואיפה זה נאכף.** ‏`#265` (Google, ‏24.08.2026) ו-`#267` (Apple, ‏25.08.2026): זהות
 פדרטיבית יכולה להיות **בעלים של ארגון חדש בלבד**. עובד מגיע מהזמנה ובסיסמה. האכיפה **אינה**
@@ -678,9 +683,11 @@ know your messages are delivering and fully passing DMARC"
 בשרת: ‏`accept_invitation` מסרב לכל קורא שאינו `email` (‏`0205`, ‏`invite_requires_password_identity`),
 והענף הפדרטיבי ב-`public-signup` מסרב לקורא שכבר יש לו פרופיל.
 
-### 7.א ‏ Google — `DECIDED / IMPLEMENTED / PROVIDER_CONFIGURED / FRONTEND_NOT_DEPLOYED`
+### 7.א ‏ Google — `DECIDED / IMPLEMENTED / PROVIDER_CONFIGURED / LIVE`
 
-**עודכן 25.08.2026 — הספק הוגדר בייצור, והכפתור עדיין אינו שם.** שני חצאים, ורק אחד בוצע:
+**עודכן 25.08.2026 — שני החצאים בוצעו, והכפתור חי באתר.** ‏`VITE_GOOGLE_SIGNUP_ENABLED=true`
+נוסף לסביבת הבנייה, נבנה מחדש ונפרס; מסך הכניסה מציג „פתיחת עסק עם Google" עם שורת ההסבר
+„לפתיחת עסק חדש. הצטרפות לעסק קיים נעשית מהזמנה שנשלחה אליך.", ואומת בצילום מסך בדסקטופ:
 
 | מה | מצב |
 |---|---|
@@ -689,7 +696,7 @@ know your messages are delivering and fully passing DMARC"
 | ‏Supabase המרוחק — `uri_allow_list` | **בוצע.** נוסף `/signup` ל־`app.inplace.digital` ול־`supplyflow-baq.pages.dev` (‏`/reset-password` היה שם קודם) |
 | אימות שרת | **בוצע.** ‏`/auth/v1/authorize?provider=google` מחזיר 302 ל־`accounts.google.com` עם ה־client_id הרשום, ‏`scope=email profile`, ‏`response_type=code`; ‏Google עונה בדף כניסה ולא ב־`invalid_client` |
 | שומרי `0205` בייצור | **נמדדו לפני ההדלקה:** ‏`accept_invitation` מכילה `invite_requires_password_identity`; ‏`private.auth_identity_provider()` ו־`public.service_identity_has_profile(uuid)` קיימות |
-| חזית הייצור | **שער סגור.** הבנייה אינה מכילה `VITE_GOOGLE_SIGNUP_ENABLED`, ולכן **אין כפתור באתר החי** |
+| חזית הייצור | **בוצע 25.08.2026.** ‏`VITE_GOOGLE_SIGNUP_ENABLED=true` בסביבת הבנייה, בנייה ופריסה מחדש, ‏hash parity בשלוש הכתובות ו-smoke נקי. **המשתנה אינו בריפו** — הוא חי ב-`.env` של סביבת הבנייה בלבד, ולכן כל סביבה חדשה חייבת להגדיר אותו מחדש או המוצר יאבד את הכפתור בשקט |
 | ‏`config.toml` בריפו | `enabled = false` **בכוונה** — שער האיכות מריץ `supabase start` בכל שינוי לקובץ, ו־`true` בלי הסודות ב־runner מפיל jobs שאינם קשורים ל־auth |
 
 **מה שההדלקה בייצור אומרת, ומה שהיא לא.** הפעלת הספק הופכת את
