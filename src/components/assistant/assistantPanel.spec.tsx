@@ -204,12 +204,15 @@ describe('העוזר של InPlace — הפאנל', () => {
     await waitFor(() => expect(trigger()).toHaveFocus());
   });
 
-  it('הטריגר מסביר בדסקטופ שמדובר בבדיקה ולא נשען על אייקון AI', () => {
+  it('הטריגר נושא את המילה „בדיקה" ואינו נשען על האייקון לבדו', () => {
+    // Updated 25.08.2026 (#273). This case used to pin the ABSENCE of a sparkles icon, which was
+    // the anti-goal list expressed as a test. The owner revoked that one item, so the icon
+    // assertion is inverted -- but the half that still matters is kept and is the reason the case
+    // exists: on desktop the trigger must carry the WORD, so its meaning never rests on a glyph.
     desktopMode = true;
     renderPanel();
     expect(trigger()).toHaveTextContent('בדיקה');
-    expect(trigger().querySelector('[data-assistant-trigger-icon="operational-check"]')).not.toBeNull();
-    expect(trigger().querySelector('[data-assistant-trigger-icon="sparkles"]')).toBeNull();
+    expect(trigger().querySelector('[data-assistant-trigger-icon="sparkles"]')).not.toBeNull();
   });
 
   it('ב-1024 ומעלה המשטח docked ו-non-modal: אין aria-modal ואין נעילת body', async () => {
