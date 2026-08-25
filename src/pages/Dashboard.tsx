@@ -751,6 +751,12 @@ export default function Dashboard() {
     ? data.weekly.some((point) => point.count > 0) || data.paidWeekly.some((point) => point.count > 0)
     : false;
   const categoryTotal = data?.categories.reduce((sum, category) => sum + category.total, 0) ?? 0;
+  // The due-window tile's split bar divides by this, so it is computed once here and guarded
+  // once at the call site: a window that holds requests but no money is a real state (all-zero
+  // amounts), and dividing by it would paint NaN% into two inline widths.
+  const dueSplitTotal = data?.dueWindow
+    ? data.dueWindow.overdueAmount + data.dueWindow.dueWithin7Amount
+    : 0;
   const monthlyAria = data ? `הוצאות רכש לפי חודש: ${data.monthly.length
     ? data.monthly.map((point) => `${point.month} ${point.count ? fmtMoneyExact(point.total) : 'אין חשבוניות'}`).join(', ')
     : 'אין נתוני חשבוניות לתקופה'}` : '';
@@ -916,7 +922,11 @@ export default function Dashboard() {
                   A ring encodes a part of a WHOLE; here the "whole" is a seven-day window we
                   chose, so a percentage of it would be arithmetic about our own choice while
                   hiding the only figure that matters. Two lines under one total instead.
-                  The word באיחור carries the meaning; the alert ink only repeats it. */}
+                  The word באיחור carries the meaning; the alert ink only repeats it.
+                  25.08.2026 — the tile is no longer text-only. Owner report: with a chart on
+                  either side of it, a tile with no graphic at all read as a slot that had failed
+                  to render. It gets a two-segment split bar, NOT the ring back: the objection
+                  above was never "no graphic", it was "not a percentage of a window we chose". */}
               <section className="card card-pad lg:col-span-3" aria-labelledby="due-window-title">
                 <h3 id="due-window-title" className="text-sm font-semibold text-ink-body">לתשלום בשבוע הקרוב</h3>
                 <p className="text-xs text-ink-muted">דרישות תשלום פעילות, כולל מה שכבר באיחור</p>
@@ -929,6 +939,20 @@ export default function Dashboard() {
                     <div className="kpi-hero num text-ink" dir="ltr">
                       {glanceMoney(data.dueWindow.overdueAmount + data.dueWindow.dueWithin7Amount)}
                     </div>
+                    {/* The one graphic this tile gets, and the reason it is allowed where the ring
+                        was not: THIS part-of-whole has a real whole. The ring divided by a window
+                        we chose; this divides the money that has to move into the half that is
+                        already late and the half that is not — the same two figures the lines
+                        below name, in the proportion the eye reads before it reads a number.
+                        Two segments, the split-bar idiom every AP dashboard uses for aging.
+                        aria-hidden: the lines below carry both amounts and both counts, and a
+                        screen reader gains nothing from hearing the split a third time. */}
+                    {dueSplitTotal > 0 && (
+                      <div className="split-bar flex h-2 overflow-hidden rounded-full bg-line-soft" aria-hidden="true">
+                        <span className="bg-alert-solid" style={{ width: `${(data.dueWindow.overdueAmount / dueSplitTotal) * 100}%` }} />
+                        <span className="bg-bar-mid" style={{ width: `${(data.dueWindow.dueWithin7Amount / dueSplitTotal) * 100}%` }} />
+                      </div>
+                    )}
                     <div className="flex flex-col gap-1.5 text-sm">
                       <p className="text-alert-fg">
                         מתוכם באיחור <span className="num" dir="ltr">{glanceMoney(data.dueWindow.overdueAmount)}</span>

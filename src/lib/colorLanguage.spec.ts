@@ -216,6 +216,22 @@ describe('categorical palette', () => {
     }
   });
 
+  it('רמפת העמודות היא גוון אחד בשלוש בהירות — לא פלטה קטגורית שנייה', () => {
+    // The ramp encodes RANK, and a ramp can only do that through lightness — which is also the
+    // one carrier that survives colour blindness. Two failures are possible and both look fine
+    // on a designer's screen: steps that converge in lightness (rank stops reading), and steps
+    // that wander in hue (the ramp turns into a second, unmeasured categorical palette beside
+    // the real one — exactly the split that put the bar chart in the old vocabulary until
+    // 25.08.2026). The floor is the smaller of the two gaps the tokens ship with.
+    const ramp = ['color-bar-high', 'color-bar-mid', 'color-bar-low'].map(oklchOf);
+    const [high, mid, low] = ramp;
+    expect(high.lightness).toBeLessThan(mid.lightness);
+    expect(mid.lightness).toBeLessThan(low.lightness);
+    expect(mid.lightness - high.lightness).toBeGreaterThanOrEqual(0.15);
+    expect(low.lightness - mid.lightness).toBeGreaterThanOrEqual(0.15);
+    for (const step of ramp) expect(step.hue).toBe(ramp[0].hue);
+  });
+
   it('אף צעד קטגורי אינו משאיל טוקן סטטוס', () => {
     // The two vocabularies stay apart (DESIGN.md, חוק שני אוצרות-המילים). A series step that
     // resolved to a status family would make a chart mark claim a business state.
@@ -254,7 +270,7 @@ describe('comparison series', () => {
     // Greyscale print, a compressed screenshot, and colour-vision deficiency all erase hue and
     // leave lightness. The dash survives all three, so it is a requirement and not a garnish.
     expect(body).toContain('dash: true');
-    expect(body.indexOf('dash: true')).toBeGreaterThan(body.indexOf(`t.bars[${steps[0]}]`));
+    expect(body.indexOf('dash: true')).toBeGreaterThan(body.indexOf(`t.categorical[${steps[0]}]`));
   });
 
   it('אף מסך אינו בונה סדרות בעצמו — הזיווג חי במקום אחד', () => {
