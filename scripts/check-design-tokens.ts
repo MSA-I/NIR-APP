@@ -70,9 +70,10 @@ interface Violation {
 }
 
 const violations: Violation[] = [];
+const sourceFiles = [...walkSource(srcRoot)];
 let scanned = 0;
 
-for (const file of walkSource(srcRoot)) {
+for (const file of sourceFiles) {
   scanned += 1;
   const lines = readFileSync(file, 'utf8').split(/\r?\n/);
   lines.forEach((text, index) => {
@@ -131,6 +132,86 @@ if (themeEnd === -1) {
 
 const cssLineOf = (index: number) => css.slice(0, index).split('\n').length;
 
+/**
+ * Fourth scope, and the one the 2026-08-25 audit paid for: a semantic class that points at a
+ * token which was never defined. `text-ink-strong` (18 uses, 8 files, all of the supplier portal)
+ * and a bare `text-alert` (the „does not qualify" X in the operator console) both compiled to
+ * nothing at all — Tailwind emits no rule for an undefined token, so the text silently inherited
+ * its parent colour and the red warning was not red. The three checks above look for colour that
+ * bypasses the token layer; this one looks for colour that *claims* the token layer and misses.
+ *
+ * Only names whose first segment already belongs to a defined family are judged — `ink-strong` is
+ * tested because `ink`, `ink-body`, `ink-mid` exist, while `text-sm` and `border-b` are not colour
+ * at all and are left alone. A whole new family is a deliberate act and shows up in review; a typo
+ * inside an existing one is what nobody sees.
+ */
+/**
+ * Comments are blanked before this scan, same rule the CSS side already follows: prose must never
+ * trip an assertion. Two comments in the tree name a dead class on purpose — the note in
+ * `DocumentOperations.tsx` explaining why the urgent banner lost its border, and the one in
+ * `quickActions.spec.ts` listing the `bg-section-*` utilities nothing may use. Both are the record
+ * of a fixed bug; failing the gate on them would delete the record. A `//` inside JSX text or a
+ * regex is blanked too — that can only hide a violation on that line, never invent one.
+ */
+function blankComments(source: string) {
+  let out = '';
+  let mode: 'code' | 'line' | 'block' | '"' | "'" | '`' = 'code';
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    const next = source[i + 1];
+    if (mode === 'code') {
+      if (ch === '/' && next === '/') { mode = 'line'; out += '  '; i += 1; continue; }
+      if (ch === '/' && next === '*') { mode = 'block'; out += '  '; i += 1; continue; }
+      if (ch === '"' || ch === "'" || ch === '`') mode = ch;
+      out += ch;
+      continue;
+    }
+    if (mode === 'line') {
+      if (ch === '\n') { mode = 'code'; out += ch; continue; }
+      out += ' ';
+      continue;
+    }
+    if (mode === 'block') {
+      if (ch === '*' && next === '/') { mode = 'code'; out += '  '; i += 1; continue; }
+      out += ch === '\n' ? ch : ' ';
+      continue;
+    }
+    // Inside a string literal: `\` escapes the next character, the matching quote closes it.
+    if (ch === '\\') { out += '  '; i += 1; continue; }
+    if (ch === mode) mode = 'code';
+    out += ch;
+  }
+  return out;
+}
+
+const themeBody = css.slice(themeStart, themeEnd);
+const definedTokens = new Set([...themeBody.matchAll(/--color-([a-z0-9]+(?:-[a-z0-9]+)*)\s*:/g)].map((m) => m[1]));
+if (definedTokens.size === 0) {
+  console.error('check:tokens FAILED — no --color-* tokens found inside @theme. The extractor is broken, not the source.');
+  process.exit(1);
+}
+const colourFamilies = new Set([...definedTokens].map((name) => name.split('-')[0]));
+const SEMANTIC_CLASS =
+  /\b(?:bg|text|border|ring|fill|stroke|divide|outline|decoration|placeholder|accent|caret)-([a-z][a-z0-9]*(?:-[a-z0-9]+)*)\b/g;
+
+for (const file of sourceFiles) {
+  const lines = blankComments(readFileSync(file, 'utf8')).split(/\r?\n/);
+  lines.forEach((text, index) => {
+    SEMANTIC_CLASS.lastIndex = 0;
+    for (const found of text.matchAll(SEMANTIC_CLASS)) {
+      const name = found[1];
+      if (definedTokens.has(name)) continue;
+      if (!colourFamilies.has(name.split('-')[0])) continue;
+      violations.push({
+        file: relative(srcRoot, file),
+        line: index + 1,
+        match: found[0],
+        why: `no --color-${name} in @theme — the class compiles to nothing and the colour silently falls back to the parent`,
+      });
+    }
+  });
+}
+
 LEGACY_NOTATION.lastIndex = 0;
 for (const found of css.matchAll(LEGACY_NOTATION)) {
   violations.push({
@@ -161,7 +242,8 @@ if (violations.length > 0) {
 }
 
 console.log(
-  `check:tokens passed: ${scanned} .ts/.tsx files with zero raw palette classes, zero hex literals ` +
-    'and zero stock Tailwind shadows; ' +
+  `check:tokens passed: ${scanned} .ts/.tsx files with zero raw palette classes, zero hex literals, ` +
+    `zero stock Tailwind shadows and zero references to a colour outside the ${definedTokens.size} ` +
+    'tokens @theme actually defines; ' +
     'src/index.css keeps every colour literal inside @theme and uses no rgb()/hsl().',
 );

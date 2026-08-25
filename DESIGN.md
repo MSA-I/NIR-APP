@@ -196,7 +196,7 @@ components:
   button-ghost: { textColor: "{colors.ink-soft}", hoverBackground: "{colors.canvas}" }
   input: { backgroundColor: "{colors.surface}", border: "{colors.line-strong}", focusRing: "{colors.focus}", rounded: "{rounded.control}" }
   card: { backgroundColor: "{colors.surface}", border: "none — T7", rounded: "{rounded.card}", shadow: "onyx soft-wide (T7.3f)", note: "הפרדה מצל נראה + הפרש גוון מול canvas + ריווח, לעולם לא ממסגרת כהה" }
-  badge-*: { pattern: "bg-{tone}-soft + text-{tone}-on-soft", rounded: "{rounded.pill}" }
+  badge-*: { pattern: "bg-{tone}-soft + text-{tone}-on-soft", rounded: "{rounded.pill}", exception: "alert — bg-alert-solid + text-on-solid (הכרעת בעלים 25.08.2026, 6.06:1)" }
   note-*: { pattern: "bg-{tone}-wash + border-{tone}-line + text-{tone}-on-soft" }
 ---
 

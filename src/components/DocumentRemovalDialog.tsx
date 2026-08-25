@@ -100,8 +100,8 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
           </p>
 
           {impact.effects.length > 0 && (
-            <div className="rounded-lg border border-line bg-surface p-3">
-              <h3 className="text-sm font-medium text-ink-strong">
+            <div className="rounded-2xl bg-surface-sunken p-3">
+              <h3 className="text-sm font-medium text-ink">
                 מה נוצר מהמסמך הזה
               </h3>
               <ul className="mt-2 space-y-1 text-sm text-ink-body">
@@ -129,7 +129,7 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
           )}
 
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-ink-strong">מה להסיר</legend>
+            <legend className="text-sm font-medium text-ink">מה להסיר</legend>
             <label className="flex min-h-11 items-start gap-2 text-sm text-ink-body">
               <input type="radio" name="removal-mode" className="mt-1"
                 checked={mode === 'document_only'}

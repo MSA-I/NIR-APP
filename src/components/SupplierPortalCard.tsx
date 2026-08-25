@@ -97,7 +97,7 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
   return (
     <div className="card p-4 no-print">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink-strong">
+        <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink">
           <Link2 size={15} aria-hidden="true" /> פורטל ספק
         </h2>
         {state && <StatusBadge meta={SUPPLIER_LINK_STATE[state]} />}

@@ -173,7 +173,7 @@ export default function ProductPurchaseSummary() {
           {exporting ? 'מכין קובץ…' : 'ייצוא Excel'}
         </button>} />
 
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface p-3">
+      <div className="flex flex-wrap items-end gap-3 card p-3">
         <div>
           <label className="label" htmlFor="summary-from">מתאריך</label>
           <input id="summary-from" type="date" className="input num" value={from}

@@ -248,7 +248,11 @@ function Stepper({ current, doneByData, skipped, onSelect }: {
                   {s.label}
                 </span>
                 <span className="block text-xs text-ink-muted">
-                  {done ? 'הושלם' : wasSkipped ? 'דולג' : `שלב ${i + 1}`}
+                  {/* „סיכום" and not „שלב 5": the header promises four short steps that fill the
+                      system with business data, and that is what the first four do. The last entry
+                      reviews what was entered and closes the wizard — numbering it made the screen
+                      contradict its own heading (audit 2026-08-25). */}
+                  {done ? 'הושלם' : wasSkipped ? 'דולג' : s.key === 'done' ? 'סיכום' : `שלב ${i + 1}`}
                 </span>
               </span>
             </button>
@@ -1098,7 +1102,7 @@ function DoneStep({ counts, skipped, onGoToStep, onFinish }: {
       </div>
 
       {pending.length > 0 && (
-        <div className="rounded-lg border border-line bg-surface-sunken px-4 py-3">
+        <div className="rounded-2xl bg-surface-sunken px-4 py-3">
           <div className="text-sm font-medium text-ink-mid">שלבים שדילגת עליהם</div>
           <div className="flex flex-wrap gap-2 mt-2">
             {pending.map((s) => (

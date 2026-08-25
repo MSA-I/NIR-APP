@@ -197,7 +197,7 @@ function ScannerDialog({ entries, onClose, onPick }: {
           ? <Note tone="await" role="status">{camera.message}</Note>
           : (
             <>
-              <div className="overflow-hidden rounded-lg border border-line bg-surface-sunken">
+              <div className="overflow-hidden rounded-2xl bg-surface-sunken">
                 {/* muted + playsInline: iOS refuses to play an inline camera preview without both. */}
                 <video ref={videoRef} className="block w-full" muted playsInline aria-label="תצוגת מצלמה לסריקת ברקוד" />
               </div>

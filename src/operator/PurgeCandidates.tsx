@@ -31,7 +31,7 @@ const GATES: { key: keyof PurgeCandidate; label: string }[] = [
 function GateMark({ ok }: { ok: boolean }) {
   return ok
     ? <Check size={16} className="text-ok" aria-label="עומד בתנאי" />
-    : <X size={16} className="text-alert" aria-label="אינו עומד בתנאי" />;
+    : <X size={16} className="text-alert-fg" aria-label="אינו עומד בתנאי" />;
 }
 
 export default function PurgeCandidates() {

@@ -217,7 +217,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
                 </button>
                 <div className="min-w-0 flex-1">
                   <button type="button" onClick={() => void open(doc)} className="block max-w-full truncate text-start text-sm font-medium text-ink-body hover:text-action">
-                    {doc.file_name}
+                    <bdi>{doc.file_name}</bdi>
                   </button>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-muted">
                     <span className="font-medium text-ink-soft">{source}</span>

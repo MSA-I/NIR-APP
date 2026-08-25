@@ -125,6 +125,17 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   | Edge Function | חוזי Deno של Edge; OCR Docker רק בשינוי worker | deploy רק לפונקציה שהשתנתה, אימות secrets/JWT וקריאה חיה ממוקדת | אין Pages, גיבוי DB או OCR עבור Edge שאינו OCR |
   | Auth / תפקידים / RLS | האיחוד של DB/Edge/browser הנוגעים לחוזה | smoke מחובר וקריאה בלבד לתפקידים שנפגעו, בדיקת חסימה לתפקידים שפרשו והוכחת אפס כתיבות עסקיות | אין מטריצת כל התפקידים לשינוי שאינו הרשאה |
   | Dependencies | `build` + ‏`verify` + ‏`audit`; browser כי קוד runtime שנפתר השתנה | deploy frontend רק אם החבילה נכנסת ל־bundle | אין SQL או OCR אלא אם קבצי המשטח שלהם השתנו |
+  | ‏`worker/ocr/**` או גרסת חוזה gateway | build ו־self-check של OCR ב־`contracts` | **פריסה מחדש של ה־VPS באותו רולאאוט**, והוכחת `job_claimed`+`job_completed` ביומן | אין Pages, DB או Edge שאינם קשורים |
+
+  **ה־worker אינו נפרס עם כלום.** הוא רץ על VPS נפרד ואף שער ואף שלב רולאאוט אינו נוגע בו, ולכן
+  merge ל־`main` לעולם אינו מגיע אליו. לשני חוזי ה־gateway יש מספר גרסה **בשני צדדים** —
+  ‏`GATEWAY_CONTRACT_VERSION` ב־`worker/ocr/src/gateway.py` מול
+  ‏`supabase/functions/document-processing/contract.ts`, ו־`SCAN_GATEWAY_CONTRACT_VERSION` ב־
+  ‏`worker/ocr/src/scan_gateway.py` מול `supabase/functions/document-preprocessing/contract.ts`.
+  העלאת מספר בצד אחד בלבד **משביתה את עיבוד המסמכים בייצור בשקט**: העובד ממשיך לרוץ, מדווח
+  ‏`Up`, ונכשל ב־`gateway_contract_mismatch` בכל poll — והמסך מציג „ממתין בתור", כלומר הכשל
+  נראה למשתמש כהמתנה. כך זה קרה ב־`a3603c0` (24.08.2026): ה־Edge עלה ל־`3`, העובד נשאר על `2`,
+  ואפס מסמכים עובדו במשך חמישה ימים. ‏`Up` אינו ראיה — הראיה היא `job_claimed` ביומן.
 
   שינוי חוצה־משטחים מחבר את הדרישות; הוא אינו מחזיר אוטומטית את השער הידני המלא. ריצת
   `workflow_dispatch` היא חריג מפורש שמריץ הכול. PASS היסטורי לעולם אינו מחליף check טרי על ה־SHA.

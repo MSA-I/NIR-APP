@@ -188,7 +188,7 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
             <ScanLine size={19} className="text-action" aria-hidden="true" />
             <h2 id="document-scan-title" className="section-title">הכנת סריקה לקריאה</h2>
           </div>
-          <p className="mt-1 break-words text-sm text-ink-muted">{fileName}</p>
+          <p className="mt-1 break-words text-sm text-ink-muted"><bdi>{fileName}</bdi></p>
         </div>
         <span className={state.status === 'accepted' ? 'badge-done' : state.status === 'failed' ? 'badge-alert' : 'badge-await'}>
           {state.status === 'queued' ? 'ממתין לסריקה'
@@ -227,11 +227,11 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
             </Note>
           )}
           <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-            <figure className="min-w-0 overflow-hidden rounded-lg border border-line bg-surface-sunken">
+            <figure className="min-w-0 overflow-hidden rounded-2xl bg-surface-sunken">
               <figcaption className="border-b border-line bg-surface px-3 py-2 text-sm font-medium text-ink-soft">המקור</figcaption>
               <img src={originalUrl} alt={`המסמך המקורי ${fileName}`} className="block max-h-[58vh] w-full object-contain lg:max-h-[72vh]" />
             </figure>
-            <figure className="min-w-0 overflow-hidden rounded-lg border border-line bg-surface-sunken">
+            <figure className="min-w-0 overflow-hidden rounded-2xl bg-surface-sunken">
               <figcaption className="border-b border-line bg-surface px-3 py-2 text-sm font-medium text-ink-soft">
                 הסריקה המשופרת · {state.output_mode === 'black_and_white' ? 'שחור־לבן' : 'גווני אפור'}
               </figcaption>

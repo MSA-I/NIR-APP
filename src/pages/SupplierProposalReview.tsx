@@ -175,14 +175,14 @@ export default function SupplierProposalReview() {
 
       {proposal.supplier_note && (
         <div className="card p-4">
-          <h2 className="text-sm font-medium text-ink-strong">הערת הספק</h2>
+          <h2 className="text-sm font-medium text-ink">הערת הספק</h2>
           <p className="mt-1 text-sm text-ink-body"><bdi>{proposal.supplier_note}</bdi></p>
         </div>
       )}
 
       {proposal.proposed_delivery_date && (
         <div className="card p-4">
-          <h2 className="text-sm font-medium text-ink-strong">שינוי מוצע בתאריך האספקה</h2>
+          <h2 className="text-sm font-medium text-ink">שינוי מוצע בתאריך האספקה</h2>
           <p className="mt-1 text-sm text-ink-body">
             מקורי: <span className="num">{fmtDate(order.expected_date)}</span>
             {' · '}מוצע: <span className="num font-medium">{fmtDate(proposal.proposed_delivery_date)}</span>
@@ -335,7 +335,7 @@ function ProposalLineCard({
     <div className="card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-medium text-ink-strong"><bdi>{line.product_name}</bdi></p>
+          <p className="font-medium text-ink"><bdi>{line.product_name}</bdi></p>
           {line.availability === 'unavailable' && (
             <p className="mt-1 text-sm text-alert-fg">הספק סימן: הפריט אינו זמין</p>
           )}

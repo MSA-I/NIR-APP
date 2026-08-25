@@ -728,7 +728,7 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
               {snapshot.annotations.map((annotation) => {
                 const feedback = feedbackByAnnotation.get(annotation.id);
                 return (
-                  <article key={annotation.id} className="rounded-lg border border-line bg-surface p-3">
+                  <article key={annotation.id} className="rounded-2xl bg-surface-sunken p-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
                         <h4 className="break-words font-semibold text-ink-body">{annotation.label}</h4>
@@ -764,7 +764,7 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
               {snapshot.ruleApplications.map((application) => {
                 const rule = ruleById.get(application.rule_id);
                 return (
-                  <article key={application.id} className="rounded-lg border border-line bg-surface p-3">
+                  <article key={application.id} className="rounded-2xl bg-surface-sunken p-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
                         <h4 className="break-words font-semibold text-ink-body">{rule ? `${rule.label} (${rule.tag_key})` : `כלל ${application.rule_id}`}</h4>

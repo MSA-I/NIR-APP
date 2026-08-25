@@ -294,9 +294,16 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
           // with the marker. Done and future therefore share the quiet label; the marker (check vs
           // number) carries the difference, so meaning never rests on hue alone.
           const text = isStopped ? 'text-alert-fg' : isCurrent ? 'text-ink-body' : 'text-ink-muted';
+          // The current marker is OCEANIC, not sky (owner ruling 25.08.2026, from a live phone
+          // screenshot: „this doesn't look like the app — not the design and not the colours").
+          // `info` is spoken for: DESIGN.md gives sky exactly one meaning, „the ball is with an
+          // outside party", and a document being read is the system working, not somebody else's
+          // turn. Sky also appears nowhere else in the operator surfaces, so the bright disc read
+          // as a foreign element rather than as a state. `bg-action` is the same mark the setup
+          // wizard already puts on its active step — one language for „you are here".
           const marker = isStopped
             ? 'border-alert-line bg-alert-soft'
-            : isCurrent ? 'border-transparent bg-info-solid text-on-solid' : isComplete ? 'border-done-line bg-done-soft' : 'border-line-strong bg-surface text-ink-muted';
+            : isCurrent ? 'border-transparent bg-action text-on-solid' : isComplete ? 'border-done-line bg-done-soft' : 'border-line-strong bg-surface text-ink-muted';
           return (
             // `relative` is load-bearing, not styling. The sr-only span below is
             // `position: absolute`, so without a positioned ancestor inside the scroller its
@@ -1377,7 +1384,24 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
                 const body = (
                   <>
                     <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0 break-words font-medium text-ink-body">{title}</div>
+                      {/* The row target is the title alone, exactly as on the desktop table, and for
+                          the same reason: a column may render its own control (audit 2026-08-25 —
+                          the „best price" cell in Products is a <button>), and a card body wrapped
+                          whole in a <button> made that button-in-button. Invalid HTML, two nested
+                          focus targets, and an ambiguous tap. Mouse click stays on the <li>. */}
+                      {/* No aria-label here, unlike the desktop first cell: there the button holds
+                          one column out of many and needs rowLabel to say which row it opens, while
+                          the card title IS the row's name. A second control with the identical
+                          accessible name would only duplicate it. */}
+                      {onRowClick ? (
+                        <button type="button"
+                          onClick={(event) => { event.stopPropagation(); onRowClick(row); }}
+                          className="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2">
+                          {title}
+                        </button>
+                      ) : (
+                        <div className="min-w-0 break-words font-medium text-ink-body">{title}</div>
+                      )}
                       {mobileTrailing && <div className="shrink-0">{mobileTrailing(row)}</div>}
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-sm text-ink-mid">
@@ -1395,33 +1419,18 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
                     </div>
                   </>
                 );
-                // With rowActions the card body cannot stay one big <button> holding the menu —
-                // button-in-button is invalid HTML — so the <li> becomes a flex row: the same
-                // clickable body shrunk to flex-1 plus the menu as a sibling at the logical end.
-                // Without rowActions the original markup is untouched (zero regression).
+                // One shape for both cases: the <li> is the mouse target, the title is the
+                // keyboard/AT target, and the action menu is a sibling that stops the click from
+                // also navigating. Same division of labour as the desktop <tr>.
                 return (
-                  <li key={row.id} className={`mobile-data-card ${rowActions ? 'flex items-start' : ''}`}>
-                    {rowActions ? (
-                      <>
-                        {onRowClick ? (
-                          <button type="button" onClick={() => onRowClick(row)}
-                            className="flex-1 min-w-0 text-start p-4 row-hover cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2">
-                            {body}
-                          </button>
-                        ) : (
-                          <div className="flex-1 min-w-0 p-4">{body}</div>
-                        )}
-                        <div className="shrink-0 pe-2 pt-3">
-                          <ActionMenu items={rowActions(row)} label={`פעולות עבור ${rowLabel?.(row) ?? row.id}`} />
-                        </div>
-                      </>
-                    ) : onRowClick ? (
-                      <button type="button" onClick={() => onRowClick(row)}
-                        className="w-full text-start p-4 row-hover cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2">
-                        {body}
-                      </button>
-                    ) : (
-                      <div className="p-4">{body}</div>
+                  <li key={row.id}
+                    className={`mobile-data-card p-4 ${onRowClick ? 'row-hover cursor-pointer' : ''} ${rowActions ? 'flex items-start gap-2' : ''}`}
+                    onClick={onRowClick ? () => onRowClick(row) : undefined}>
+                    <div className="min-w-0 flex-1">{body}</div>
+                    {rowActions && (
+                      <div className="shrink-0" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                        <ActionMenu items={rowActions(row)} label={`פעולות עבור ${rowLabel?.(row) ?? row.id}`} />
+                      </div>
                     )}
                   </li>
                 );

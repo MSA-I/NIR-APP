@@ -81,6 +81,22 @@ describe('רצועת שלבי העיבוד', () => {
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
 
+  // Owner ruling 25.08.2026, from a phone screenshot of the live site: "this doesn't look like the
+  // app — not the design and not the colours". The active disc was `info` (sky), and DESIGN.md gives
+  // sky exactly one meaning — the ball is with an outside party. A document being read is the system
+  // working. The oceanic action colour is the same mark the setup wizard puts on its active step, so
+  // the two steppers in the product now speak one language. Pinned here because a colour that means
+  // the wrong thing reads as correct to everyone who did not write the rule.
+  it('הצעד הפעיל לובש את צבע הפעולה של המערכת ולא את גוון „מידע”', () => {
+    render(<DocumentProcessingProgress
+      snapshot={snapshot({ status: 'leased', attempt_count: 1 })}
+      now={NOW}
+    />);
+    const marker = document.querySelector('li[aria-current="step"] span span');
+    expect(marker?.className).toContain('bg-action');
+    expect(marker?.className).not.toContain('bg-info-solid');
+  });
+
   it('מציגה מונה עמודים אמיתי בזמן קריאה', () => {
     render(<DocumentProcessingProgress
       snapshot={snapshot({ status: 'leased', attempt_count: 1, progress_done: 7, progress_total: 27 })}

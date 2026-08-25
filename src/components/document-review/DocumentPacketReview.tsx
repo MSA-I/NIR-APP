@@ -135,7 +135,7 @@ function SegmentEditor({ draft, stored, pageCount, editable, busy, attention, on
   onChange: (patch: Partial<SegmentDraft>) => void;
 }) {
   return (
-    <article className="rounded-lg border border-line bg-surface-sunken p-3">
+    <article className="rounded-2xl bg-surface-sunken p-3">
       <div className="grid gap-3 sm:grid-cols-[6rem_6rem_minmax(0,1fr)]">
         <label>
           <span className="label">עמוד ראשון</span>

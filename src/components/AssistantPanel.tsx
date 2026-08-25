@@ -125,7 +125,7 @@ export default function AssistantPanel({ session: sharedSession }: {
       <button
         ref={triggerRef}
         type="button"
-        className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full bg-action px-0 text-on-solid transition-colors hover:bg-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus lg:px-3"
+        className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full bg-action px-0 text-on-solid transition-colors hover:bg-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         aria-label={label}
         title={label}
         aria-controls="inplace-assistant-panel"
@@ -134,11 +134,13 @@ export default function AssistantPanel({ session: sharedSession }: {
       >
         {/* Sparkles, restored by owner ruling 25.08.2026 (#273). `c5604f5` replaced it with
             ClipboardCheck to satisfy the anti-goal list; the owner has now revoked that one
-            item. The rest of the list — avatar, robot, model name, typing theatre — stands. */}
+            item. The rest of the list — avatar, robot, model name, typing theatre — stands.
+            The visible word „בדיקה" beside it is gone by owner ruling 25.08.2026: the assistant
+            was never named that, and the label read as an environment tag on a live product.
+            The sparkle alone is the trigger, on every width — so `gap-2` and the `lg:px-3` that
+            only existed to seat the text go with it. `aria-label`/`title` still carry the full
+            name, so nothing is lost to a screen reader or to a hover. */}
         <Sparkles size={19} aria-hidden="true" data-assistant-trigger-icon="sparkles" />
-        <span className="hidden text-sm font-medium lg:inline">
-          {hasActiveCheck ? 'חזרה לבדיקה' : 'בדיקה'}
-        </span>
       </button>
       {open && (
         <AssistantDialog

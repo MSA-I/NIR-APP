@@ -330,7 +330,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
           // the preparation and the count actually rendered here have to be the same number.
           const batchFullyShown = receipt != null && !truncated && receipt.line_count === rows.length;
           return (
-            <div key={shadowRunId} className="rounded-lg border border-line bg-surface p-4 space-y-3">
+            <div key={shadowRunId} className="card p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium text-ink" data-testid="calibration-row-count">
                   <span className="num">{truncated ? '—' : rows.length}</span> שורות מוכנות לבדיקה

@@ -156,7 +156,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
   return (
     <section className="space-y-5" aria-label="בדיקת מסמך שהתקבל">
       {/* The two states, as two sentences with two icons. Never one word covering both. */}
-      <div className="rounded-lg border border-line bg-surface p-4">
+      <div className="card p-4">
         <p className="flex items-start gap-2 text-sm text-ink-body">
           <CircleCheck size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
           <span>{storedSentence}</span>
@@ -206,7 +206,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
       {/* Supplier and order, each with the evidence that decided it. A resolution with no
           explanation is indistinguishable from a guess. */}
       {read.supplier_resolution && (
-        <div className="rounded-lg border border-line bg-surface p-4">
+        <div className="card p-4">
           <h3 className="text-sm font-medium text-ink-soft">הספק</h3>
           <p className="mt-1 text-sm text-ink-body">
             {read.supplier_resolution.resolved
@@ -230,7 +230,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
       )}
 
       {read.order_resolution && (
-        <div className="rounded-lg border border-line bg-surface p-4">
+        <div className="card p-4">
           <h3 className="text-sm font-medium text-ink-soft">ההזמנה</h3>
           <p className="mt-1 text-sm text-ink-body">
             {read.order_resolution.resolved
@@ -254,7 +254,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
       )}
 
       {read.document_type === 'credit_note' && read.credit_resolution && (
-        <div className="rounded-lg border border-line bg-surface p-4">
+        <div className="card p-4">
           <h3 className="text-sm font-medium text-ink-soft">חשבונית המקור לזיכוי</h3>
           {read.credit_resolution.resolved ? (
             <dl className="mt-2 space-y-1.5 text-sm">
@@ -279,7 +279,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
 
       {/* What will happen — and, just as importantly, what will not. Immediately above the button
           it describes, because that ordering is the whole point of the sentences (DESIGN.md §2). */}
-      <div className="rounded-lg border border-line bg-surface p-4">
+      <div className="card p-4">
         <h3 className="text-sm font-medium text-ink-soft">מה יקרה באישור</h3>
         <ul className="mt-2 space-y-1.5">
           {effects.map((effect, index) => (
@@ -298,7 +298,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
           one control on the screen, on a phone. Folding it and leaving the button here is the
           same information in the order a decision is actually made. */}
       {editable && (
-        <div className="rounded-lg border border-line bg-surface p-4">
+        <div className="card p-4">
           <label className="block text-sm font-medium text-ink-soft" htmlFor="review-reason">
             סיבה (רשות — נרשמת ביומן הביקורת ובתיק המסמך)
           </label>
@@ -338,7 +338,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
       {/* Below the decision: what the machine checked and settled. Folded, counted, one click
           away — never deleted, and never a finding. */}
       {(advisory.length > 0 || (assessment && assessment.lines.length > 0)) && (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface" data-testid="assessment-detail">
+        <div className="overflow-hidden card" data-testid="assessment-detail">
           {advisory.length > 0 && (
             <Disclosure
               title="שווה לשים לב"

@@ -283,7 +283,7 @@ export default function AccountantPaymentQueue() {
       ) : (
         <div className="space-y-3">
           {pending.map((r) => (
-            <button key={r.id} className="card w-full text-start p-4 hover:border-action-line transition-all" onClick={() => setSelected(r)}>
+            <button key={r.id} className="card card-link-hover w-full text-start p-4" onClick={() => setSelected(r)}>
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-ink">{r.supplier.name}</span>
                 <span className="kpi-value-compact num">{fmtMoneyExact(r.amount)}</span>
@@ -466,7 +466,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           )}
         </dl>
 
-        <div className="rounded-lg border border-line bg-surface p-4">
+        <div className="rounded-2xl bg-surface-sunken p-4">
           <h3 className="text-sm font-medium text-ink-soft">זיכויים זמינים לקיזוז</h3>
           {creditsLoading && <p className="mt-2 text-sm text-ink-muted" role="status">טוען יתרות זיכוי…</p>}
           {creditsError && <p className="mt-2 text-sm text-alert-fg" role="alert">{creditsError}</p>}

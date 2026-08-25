@@ -709,7 +709,7 @@ export function PriceListReviewConfirmation({
       )}
 
       {autoDecision && (
-        <div className="mt-4 rounded-lg border border-line bg-surface-sunken p-3">
+        <div className="mt-4 rounded-2xl bg-surface-sunken p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-semibold text-ink-body">תוצאת הקליטה האוטומטית</h3>
             <span className={autoDecision.reverted_at
@@ -894,7 +894,7 @@ export function PriceListReviewConfirmation({
             ? products.find((product) => product.id === prediction.product_id)?.name ?? null
             : null;
           return (
-            <article key={`${item.source_row ?? 'none'}-${index}`} className="rounded-lg border border-line bg-surface p-3">
+            <article key={`${item.source_row ?? 'none'}-${index}`} className="rounded-2xl bg-surface-sunken p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold text-ink-body">שורה <span className="num">{index + 1}</span></h3>
                 <div className="flex items-center gap-2">
@@ -908,7 +908,7 @@ export function PriceListReviewConfirmation({
                   <span className="text-xs text-ink-muted">שורת מקור <span className="num">{item.source_row ?? '—'}</span></span>
                 </div>
               </div>
-              <div className="mt-3 rounded-lg border border-line bg-surface p-3">
+              <div className="mt-3 rounded-2xl bg-surface-sunken p-3">
                   <dl className="grid gap-2 sm:grid-cols-2">
                     {Object.entries(item.values).map(([key, value]) => (
                       <div key={key} className="min-w-0 rounded-lg bg-surface-sunken p-2">
@@ -971,7 +971,7 @@ export function PriceListReviewConfirmation({
                       conclusion before the work. Creating it now also carries the price this row
                       printed into the field, which is what completes the line in one act. */}
                   {newProductFor === index ? (
-                      <div className="mt-3 rounded-lg border border-line bg-surface-sunken p-3">
+                      <div className="mt-3 rounded-2xl bg-surface-sunken p-3">
                         <div className="grid gap-3 sm:grid-cols-2">
                           <label>
                             <span className="label">שם המוצר החדש *</span>

@@ -113,7 +113,7 @@ export default function SignupQuarantine() {
                     <td className="py-2 num">{fmtNum(row.days_since_signup)}</td>
                     <td className="py-2">
                       {row.disposition === 'quarantine_required'
-                        ? <span className="text-alert">פעילות עסקית — בידוד</span>
+                        ? <span className="text-alert-fg">פעילות עסקית — בידוד</span>
                         : <span className="text-ink-muted">ריק — מועמד לניקוי</span>}
                     </td>
                     <td className="py-2 num">{fmtNum(row.reminders_not_sent)}</td>

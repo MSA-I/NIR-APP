@@ -215,7 +215,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
 
   return (
     <Modal open onClose={onClose} title={target === 'invoice' ? 'שיוך לחשבונית' : 'שיוך לקבלת סחורה'} busy={busy} statusMessage={busy ? 'משייך את המסמך' : undefined}>
-      <p className="mb-3 truncate text-sm text-ink-soft">המסמך: {doc.file_name}</p>
+      <p className="mb-3 truncate text-sm text-ink-soft">המסמך: <bdi>{doc.file_name}</bdi></p>
       <label className="mb-3 block">
         <span className="sr-only">חיפוש יעד לשיוך</span>
         <span className="relative block">
@@ -732,7 +732,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       render: (doc) => (
         <span className="flex min-w-0 items-center gap-2">
           <FileText size={16} className="shrink-0 text-ink-faint" aria-hidden="true" />
-          <span className="min-w-0 truncate font-medium text-ink-body">{doc.file_name}</span>
+          <span className="min-w-0 truncate font-medium text-ink-body"><bdi>{doc.file_name}</bdi></span>
         </span>
       ),
     },
@@ -917,7 +917,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         <DataTable rows={filtered} columns={columns} pageSize={20}
           rowLabel={(doc) => `מסמך ${doc.file_name}`}
           onRowClick={(doc) => review(doc)}
-          mobileTitle={(doc) => doc.file_name}
+          mobileTitle={(doc) => <bdi>{doc.file_name}</bdi>}
           mobileTrailing={(doc) => (
             <span className="flex flex-wrap justify-end gap-1">
               <DocumentStatusBadge status={statusFor(doc)} data-testid="document-processing-status"
