@@ -317,7 +317,7 @@ export default function Reports() {
   }, new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]);
   // A disabled button looks clickable but does nothing; the title says why it is blocked.
   const exportBlockedReason = fetching ? 'הנתונים נטענים…' : error ? 'שגיאה בטעינת הנתונים' : null;
-  const metricLinkClass = 'card card-pad block transition-colors hover:border-action-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
+  const metricLinkClass = 'card card-pad card-link-hover block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
   const selectedLegalEntity = lockedReports?.legalEntities.find(
     (unit) => unit.id === lockedReports.selectedUnitId,
   ) ?? null;

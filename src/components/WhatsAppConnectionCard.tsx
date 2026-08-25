@@ -138,7 +138,7 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
     <section className="card p-4" aria-labelledby="whatsapp-connection-heading">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="whatsapp-connection-heading"
-          className="flex items-center gap-1.5 text-sm font-medium text-ink-strong">
+          className="flex items-center gap-1.5 text-sm font-medium text-ink">
           <MessageCircle size={15} aria-hidden="true" /> חיבור WhatsApp של הארגון
         </h2>
         <div className="flex items-center gap-2">

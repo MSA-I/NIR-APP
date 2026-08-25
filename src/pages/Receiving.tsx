@@ -167,7 +167,7 @@ function ReceivingOrderCard({ order, today, localDraft, machineDraft, onOpen }: 
 
   return (
     <button onClick={onOpen}
-      className="card w-full text-start p-4 hover:border-action-line active:scale-[.99] transition-all focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2">
+      className="card card-link-hover w-full text-start p-4 focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2">
       <div className="flex items-center justify-between gap-2">
         <div className="font-semibold text-ink text-base">{order.supplier.name}</div>
         <StatusBadge meta={PO_STATUS[order.status]} />

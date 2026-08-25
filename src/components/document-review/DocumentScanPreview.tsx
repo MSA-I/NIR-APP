@@ -188,7 +188,7 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
             <ScanLine size={19} className="text-action" aria-hidden="true" />
             <h2 id="document-scan-title" className="section-title">הכנת סריקה לקריאה</h2>
           </div>
-          <p className="mt-1 break-words text-sm text-ink-muted">{fileName}</p>
+          <p className="mt-1 break-words text-sm text-ink-muted"><bdi>{fileName}</bdi></p>
         </div>
         <span className={state.status === 'accepted' ? 'badge-done' : state.status === 'failed' ? 'badge-alert' : 'badge-await'}>
           {state.status === 'queued' ? 'ממתין לסריקה'

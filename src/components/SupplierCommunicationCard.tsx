@@ -76,7 +76,7 @@ export function SupplierCommunicationCard({ supplierId, supplierEmail, supplierP
   return (
     <div className="card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink-strong">
+        <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink">
           <MessageSquareText size={15} aria-hidden="true" /> תקשורת עם הספק
         </h2>
         <div className="flex items-center gap-2">

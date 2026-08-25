@@ -283,7 +283,7 @@ export default function AccountantPaymentQueue() {
       ) : (
         <div className="space-y-3">
           {pending.map((r) => (
-            <button key={r.id} className="card w-full text-start p-4 hover:border-action-line transition-all" onClick={() => setSelected(r)}>
+            <button key={r.id} className="card card-link-hover w-full text-start p-4" onClick={() => setSelected(r)}>
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-ink">{r.supplier.name}</span>
                 <span className="kpi-value-compact num">{fmtMoneyExact(r.amount)}</span>

@@ -97,7 +97,7 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
   return (
     <div className="card p-4 no-print">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink-strong">
+        <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink">
           <Mail size={15} aria-hidden="true" /> מסירת ההזמנה במייל
         </h2>
         {message && <StatusBadge meta={EMAIL_CHANNEL_STATE[message.delivery_state]} />}

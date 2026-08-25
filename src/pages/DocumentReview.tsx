@@ -153,7 +153,7 @@ export default function DocumentReview() {
           <BackAction fallback="/documents" label="חזרה למסמכים" carrySearch />
           <div>
             <h1 className="page-title">בדיקת מסמך</h1>
-            <p className="mt-1 break-words text-sm text-ink-muted">{snapshot.document?.file_name ?? 'מסמך שהועלה'}</p>
+            <p className="mt-1 break-words text-sm text-ink-muted"><bdi>{snapshot.document?.file_name ?? 'מסמך שהועלה'}</bdi></p>
           </div>
         </div>
         {processing.fetching && (

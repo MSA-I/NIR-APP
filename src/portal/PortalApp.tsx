@@ -108,7 +108,7 @@ export default function PortalApp() {
   if (screen.kind === 'invalid') {
     return (
       <Shell locale={locale} onSwitchLocale={switchLocale}>
-        <h1 className="text-lg font-semibold text-ink-strong">{copy.invalidTitle}</h1>
+        <h1 className="text-lg font-semibold text-ink">{copy.invalidTitle}</h1>
         <p className="mt-2 text-ink-muted">{copy.invalidBody}</p>
       </Shell>
     );
@@ -116,7 +116,7 @@ export default function PortalApp() {
   if (screen.kind === 'locked') {
     return (
       <Shell locale={locale} onSwitchLocale={switchLocale}>
-        <h1 className="text-lg font-semibold text-ink-strong">{copy.lockedTitle}</h1>
+        <h1 className="text-lg font-semibold text-ink">{copy.lockedTitle}</h1>
         <p className="mt-2 text-ink-muted">{copy.lockedBody}</p>
       </Shell>
     );
@@ -124,7 +124,7 @@ export default function PortalApp() {
   if (screen.kind === 'error') {
     return (
       <Shell locale={locale} onSwitchLocale={switchLocale}>
-        <h1 className="text-lg font-semibold text-ink-strong">{copy.errorTitle}</h1>
+        <h1 className="text-lg font-semibold text-ink">{copy.errorTitle}</h1>
         <p className="mt-2 text-ink-muted">{copy.errorBody}</p>
       </Shell>
     );
@@ -139,7 +139,7 @@ export default function PortalApp() {
       <Shell orgName={snapshot.org_name} locale={locale} onSwitchLocale={switchLocale}>
         <OrderHeader view={view} locale={locale} />
         <div className="card mt-4 p-4">
-          <h2 className="font-semibold text-ink-strong">
+          <h2 className="font-semibold text-ink">
             {screen.justNow ? copy.sentNow : copy.alreadySent}
           </h2>
           <p className="mt-1 text-sm text-ink-muted">
@@ -280,7 +280,7 @@ function Shell({ children, orgName, locale, onSwitchLocale }: {
         <header className="mb-4 flex items-start justify-between gap-3">
           <div>
             <p className="text-xs text-ink-faint">{copy.pageTitle}</p>
-            {orgName && <p className="text-lg font-semibold text-ink-strong"><bdi>{orgName}</bdi></p>}
+            {orgName && <p className="text-lg font-semibold text-ink"><bdi>{orgName}</bdi></p>}
           </div>
           <button
             type="button"
@@ -304,7 +304,7 @@ function OrderHeader({ view, locale }: { view: PortalView; locale: PortalLocale 
   return (
     <div className="card p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-lg font-semibold text-ink-strong">
+        <h1 className="text-lg font-semibold text-ink">
           {copy.order} <span className="num">#{snapshot.order_number}</span>
           {snapshot.revision_number > 1 && (
             <span className="ms-2 badge bg-action-wash text-ink-mid">
@@ -354,7 +354,7 @@ function ItemsView({
           return (
             <li key={item.order_item_id} className={`card p-4 ${edit.unavailable ? 'opacity-80' : ''}`}>
               <div className="flex items-start justify-between gap-3">
-                <p className="font-medium text-ink-strong"><bdi>{item.product_name}</bdi></p>
+                <p className="font-medium text-ink"><bdi>{item.product_name}</bdi></p>
                 <p className="text-sm text-ink-muted num whitespace-nowrap">
                   {formatPortalQuantity(locale, item.qty, item.unit)} × {formatPortalMoney(locale, item.unit_price)}
                 </p>

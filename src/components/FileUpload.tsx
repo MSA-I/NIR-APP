@@ -689,7 +689,7 @@ export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDi
         <ul className="mb-3 divide-y divide-line-soft rounded-lg border border-line-soft text-sm">
           {pick.weak.map((item, index) => (
             <li key={`${item.file.name}-${index}`} className="flex items-center gap-2 px-3 py-2">
-              <span className="min-w-0 flex-1 truncate text-ink-body">{item.file.name}</span>
+              <span className="min-w-0 flex-1 truncate text-ink-body"><bdi>{item.file.name}</bdi></span>
               <span className="badge-await shrink-0">{WEAK_CAPTURE_LABEL[item.verdict]}</span>
             </li>
           ))}
@@ -1024,7 +1024,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
             return (
               <li key={d.id} className="flex min-h-14 flex-wrap items-center gap-2 px-3 py-2 text-sm">
                 <FileText size={15} className="shrink-0 text-ink-faint" />
-                <button className="link min-w-32 flex-1 truncate text-start" onClick={() => void open(d)}>{d.file_name}</button>
+                <button className="link min-w-32 flex-1 truncate text-start" onClick={() => void open(d)}><bdi>{d.file_name}</bdi></button>
                 <span className="hidden text-xs text-ink-muted sm:inline">{documentKindLabel(d.document_kind)}</span>
                 {/* G1, finding 20 — same badge, same four human states as the documents folder.
                     The raw stage stays on `data-document-processing-status`. */}
