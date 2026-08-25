@@ -230,6 +230,34 @@ cross join unnest(array[
 where clock_timestamp() < private.prelaunch_window_end()
 on conflict (org_id, policy_key) do nothing;
 
+-- ===== 4b. A grant the SYSTEM wrote is not the tenant doing business =====
+-- The same correction 0210 makes for `org_flag_configurations`, for the same reason and with the
+-- same consequence if it is skipped. `private.organization_has_business_activity` walks every
+-- public table carrying `org_id` and treats an unregistered one as evidence; section 3 gives every
+-- new organisation four rows here, so without this NO organisation would ever be classifiable as
+-- empty again and the abandoned-account lifecycle would stop working — silently, and looking like
+-- caution rather than a bug.
+--
+-- OWNER RULING 25.08.2026, and it is what forces this rather than merely permitting it: everything
+-- the window changes must return to normal when the window ends. The rows do NOT disappear on that
+-- date, they only stop resolving — so leaving the table classified as evidence would leave every
+-- organisation created during the window permanently un-cleanable, which is the opposite of
+-- returning to normal.
+--
+-- It is also simply the correct classification, before the window and after it: this table is
+-- written by `platform_set_autonomy_policy` or by the birth grant above. A tenant has never
+-- written a row here and has no privilege to.
+insert into private.org_activity_evidence_registry (table_name, disposition, rationale)
+values (
+  'org_autonomy_policies',
+  'not_evidence',
+  'An autonomy policy is written by the platform -- by the pre-launch birth grant in 0211, or by '
+  || 'platform_set_autonomy_policy under step-up and a reason -- and never by the tenant working. '
+  || 'Same reasoning as organization_subscriptions and org_flag_configurations.'
+)
+on conflict (table_name) do update
+  set disposition = excluded.disposition, rationale = excluded.rationale;
+
 -- ===== 5. The tenant export contract follows the column =====
 -- `0103` hashes the shape of every tenant table so a column cannot join an offboarding export
 -- without somebody having looked at it. Adding `expires_at` is that change, and this is that look:
