@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Cpu, FileCheck2, RefreshCw, ScanText } from 'lucide-react';
+import { FileCheck2, RefreshCw, ScanText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { openReservedPopup } from '../../lib/popup';
 import { documentProcessingFailureText, documentUiStatus } from '../../lib/documentStatus';
@@ -221,16 +221,31 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
           >
             <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-ink-soft">פרטים טכניים</summary>
             <dl className="mt-2 grid gap-2 text-xs text-ink-muted">
+              {/* THE VENDOR AND THE MODEL ARE GONE (owner report 25.08.2026: "כשכתוב לי פרטים
+                  טכניים אני לא אמור לראות שם מודל ו-ai ודברים כאלה"). DESIGN.md already banned a
+                  model name on the assistant surface; the ruling extends the same rule here, and
+                  the reason is the same on both: a customer of a procurement system is buying the
+                  reading, not the machine that did it, and printing "openai · gpt-…" beside their
+                  supplier invoice makes the vendor the subject of the screen.
+
+                  WHAT SURVIVES, AND WHY IT IS NOT THE SAME THING. Support has to be able to find
+                  one exact run when a reading is wrong, and the four rows that do that — job id,
+                  source digest, contract version, and the prompt/schema pair — are OURS. They
+                  identify our own revision of our own pipeline (`DEBT §19` is the open claim that
+                  rests on the prompt version), and none of them names a company or a product. The
+                  two engine rows collapse into one "גרסת עיבוד" line for the same reason: with
+                  the brand names removed, what was left of each was a version. Nothing is deleted
+                  from the database — `engine`, `model` and `provider` are still written and still
+                  queryable by an operator; they simply stop being printed at a tenant. */}
               <div>
-                <dt className="flex items-center gap-1.5 font-medium text-ink-soft"><ScanText size={14} aria-hidden="true" /> מנוע חילוץ</dt>
-                <dd className="mt-0.5 break-words">{snapshot.extraction ? `${snapshot.extraction.engine} · ${snapshot.extraction.model} ${snapshot.extraction.model_version}` : 'טרם זמין'}</dd>
-              </div>
-              <div>
-                <dt className="flex items-center gap-1.5 font-medium text-ink-soft"><Cpu size={14} aria-hidden="true" /> מנוע פירוש</dt>
+                <dt className="flex items-center gap-1.5 font-medium text-ink-soft"><ScanText size={14} aria-hidden="true" /> גרסת עיבוד</dt>
                 <dd className="mt-0.5 break-words">
+                  {snapshot.extraction
+                    ? <>קריאה <span dir="ltr" className="num">{snapshot.extraction.model_version}</span></>
+                    : 'קריאה — טרם זמין'}
                   {snapshot.interpretation
-                    ? `${snapshot.interpretation.provider} · ${snapshot.interpretation.model} · prompt ${snapshot.interpretation.prompt_version} · schema ${snapshot.interpretation.schema_version}`
-                    : 'טרם זמין'}
+                    ? <> · פירוש <span dir="ltr" className="num">{snapshot.interpretation.prompt_version}</span> / <span dir="ltr" className="num">{snapshot.interpretation.schema_version}</span></>
+                    : ' · פירוש — טרם זמין'}
                 </dd>
               </div>
               {snapshot.job && (

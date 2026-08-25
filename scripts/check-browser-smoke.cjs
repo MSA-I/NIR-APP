@@ -2982,6 +2982,19 @@ async function documentVocabulary(browser) {
     const opened = await technical.evaluate((node) => node.textContent || '');
     assert(opened.includes('95%'),
       'the supplier confidence is not reachable inside פרטים טכניים in one click');
+
+    // Owner report 25.08.2026: no vendor and no model name reaches a tenant. The fixture carries
+    // 'openai-fixture' / 'gpt-local-contract-fixture' on the interpretation and
+    // 'private-fixture' / 'ocr-acceptance-hebrew' on the extraction precisely so this assertion
+    // has something to catch. Asserted on the WHOLE page, not the disclosure, because the rule is
+    // that the words are not on the screen -- not that one box happens to hide them.
+    const wholePage = await page.locator('#main').evaluate((node) => node.textContent || '');
+    for (const banned of ['openai', 'gpt-', 'מנוע פירוש', 'מנוע חילוץ']) {
+      assert.equal(wholePage.toLowerCase().includes(banned.toLowerCase()), false,
+        `the review screen still prints the processing vendor or model: ${banned}`);
+    }
+    assert(opened.includes('גרסת עיבוד'),
+      'the disclosure lost the processing-version row that replaced the two engine rows');
     await page.screenshot({ path: path.join(outDir, 'document-technical-disclosure-1440.png'), fullPage: true });
     report.screenshots.push('document-technical-disclosure-1440.png');
   } finally {
@@ -3440,6 +3453,10 @@ async function feedbackNoteChannel(browser) {
     await page.goto(`${baseURL}/dashboard`);
     await settle(page);
 
+    // The trigger lives in the DRAWER on a phone (owner report 25.08.2026): the top bar gave its
+    // slot to the subscription tier mark. On desktop it is still in the bar.
+    await page.getByRole('button', { name: 'פתיחת תפריט' }).click();
+    await page.locator('#mobile-navigation').waitFor();
     const trigger = page.getByRole('button', { name: 'שליחת הערה' });
     await trigger.waitFor();
     const box = await trigger.boundingBox();
@@ -3448,6 +3465,13 @@ async function feedbackNoteChannel(browser) {
 
     await trigger.click();
     await page.getByText('לצרף צילום של המסך', { exact: true }).waitFor();
+    // THE WHOLE POINT OF THE DRAWER PLACEMENT WORKING AT ALL. The capture runs before the dialog
+    // opens so the dialog cannot be in the picture -- but from a drawer, the DRAWER would be, and
+    // a screenshot of the menu is useless for reporting the screen behind it. The trigger
+    // dismisses its own chrome and waits for the paint before capturing, so by the time the
+    // dialog is up the drawer must be gone from the DOM entirely.
+    assert.equal(await page.locator('#mobile-navigation').count(), 0,
+      'the drawer was still mounted when the note dialog opened -- the screenshot is of the menu');
     await page.getByAltText('תצוגה מקדימה של הצילום שיישלח').waitFor();
     // Unique per run: the lookup below must find this note and not a previous run's.
     const note = `בדיקת שער ${Date.now()}`;

@@ -10,6 +10,7 @@ import AssistantPanel from './AssistantPanel';
 import { assistantAuthorizationFingerprint, useAssistantRunSession } from '../lib/assistant/runSession';
 import NotificationBell from './NotificationBell';
 import FeedbackButton from './FeedbackButton';
+import { PlanBadge } from './PlanBadge';
 import { ConfirmDialog, useDialogLayer, useToast } from './ui';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
 import { pendingOfflineWork } from '../lib/offlineQueue';
@@ -152,6 +153,11 @@ export const NAV_SECTIONS: NavSection[] = [
       navItem('/analytics', Activity, ['owner', 'office']),
       navItem('/supplier-log', ScrollText, ['owner']),
       navItem('/settings', Settings, ['owner']),
+      // The subscription left the settings screen for an address of its own (owner report
+      // 25.08.2026). It is catalogued here beside /settings because this array is the permission
+      // record for every authenticated destination; where it SURFACES is decided below, by
+      // SUBSCRIPTION_PATHS, and that is its own drawer group rather than a row inside control.
+      navItem('/settings/subscription', CreditCard, ['owner']),
       // /onboarding was absent from this catalogue entirely, so nothing could route to it: not the
       // sidebar, not the drawer, not quickActions, and homeFor() always answers /dashboard. The
       // setup wizard was built to be RE-OPENED — it reads live counts on every mount so it shows
@@ -181,6 +187,16 @@ const CONTROL_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
   accountant: ['/documents/consolidated-invoices', '/exceptions', '/expenses', '/reports'],
 };
 
+/**
+ * Its own group, not a row inside 'בקרה' (owner report 25.08.2026). Everything in the three
+ * groups above is the business the tenant runs; this is the contract they run it under, and a
+ * single-item group is the honest shape for a subject with exactly one screen. Owner only, the
+ * same boundary the panel and the route guard already draw (owner decision 23.08.2026).
+ */
+const SUBSCRIPTION_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
+  owner: ['/settings/subscription'],
+};
+
 function catalogItem(path: string, role: ActiveRole): NavItem | null {
   const item = NAV_SECTIONS.flatMap((section) => section.items).find((candidate) => candidate.to === path);
   return item?.roles.includes(role) ? item : null;
@@ -203,6 +219,8 @@ export function sectionsForRole(role: ActiveRole | undefined): NavSection[] {
     { section: '', items: itemsFor(role, DAILY_PATHS[role]) },
     { section: 'ניהול', items: itemsFor(role, MANAGEMENT_PATHS[role] ?? []), collapsible: true },
     { section: 'בקרה', items: itemsFor(role, CONTROL_PATHS[role] ?? []), collapsible: true },
+    // Last, and deliberately not collapsible: one item behind a disclosure is a door with a lid.
+    { section: 'המנוי', items: itemsFor(role, SUBSCRIPTION_PATHS[role] ?? []) },
   ].filter((section) => section.items.length > 0) : [];
 }
 
@@ -454,6 +472,18 @@ export default function Layout() {
    * Both navigation surfaces stay fully expanded by owner decision. The phone drawer scrolls as
    * one direct list; no destination requires opening a disclosure first.
    */
+  /**
+   * The drawer has to be OFF SCREEN before the note's screenshot runs, or the picture is of the
+   * menu rather than of the screen being reported (FeedbackButton's `beforeCapture` explains why
+   * the order matters at all). Two frames, not one: the first lets React commit the unmount the
+   * URL change triggers, the second lets the browser paint without it. One frame still catches
+   * the drawer mid-dismissal.
+   */
+  const dismissDrawerForCapture = () => new Promise<void>((resolve) => {
+    closeMobileMenu();
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+
   const accountBlock = (
     <div className="px-1 pt-3">
       <div className="text-sm text-ink font-medium">{profile?.full_name}</div>
@@ -501,6 +531,12 @@ export default function Layout() {
             list scrolling behind it, and on a short viewport it ate the last destinations. On the
             desktop sidebar the strip is right — that column is permanent, has room, and the strip
             is the one place the signed-in identity lives. Same markup, different anchoring. */}
+        {/* The note trigger, in the drawer because the phone top bar gave its slot to the tier
+            mark (owner report 25.08.2026). It sits with the account rather than with the
+            destinations: it goes nowhere, it opens a dialog. */}
+        {!stickyFooter && feedbackOn && (
+          <FeedbackButton variant="menu" beforeCapture={dismissDrawerForCapture} />
+        )}
         {!stickyFooter && accountBlock}
       </nav>
       {stickyFooter && (
@@ -659,10 +695,14 @@ export default function Layout() {
         </div>
         {/* T7.3k (owner, images #33-34 "אתה רואה את ההבדלים בשפה?"): the desktop language —
             bare round icon targets in dark ink straight on the bar, no boxed cluster. */}
+        {/* Owner report 25.08.2026: the note trigger left this cluster and the tier mark took its
+            slot. The note is not gone — it is a row in the drawer, where the same click also has
+            room for a word. Four icon targets and a phone title do not fit on a 390px bar, and
+            the one of them a person uses least often is the one that moves. */}
         <div className="mobile-shell-actions flex shrink-0 items-center gap-0.5">
           <AssistantPanel session={assistantSession} />
           <NotificationBell />
-          <FeedbackButton />
+          <PlanBadge />
           {canSearch && (
             <button className="grid size-[44px] shrink-0 place-items-center rounded-full text-ink-soft transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
               aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={21} /></button>

@@ -85,6 +85,14 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
   // The step label above already names the step. This line may only add what it does not say:
   // how long, how far, or that nothing is required of the reader. "ממתין לעובד פנוי" named a
   // worker process, and "הנתונים מתפרשים לשדות ולשורות" was the label "פירוש הנתונים" again.
+  //
+  // THE BAR REPLACES THE COUNT, it does not accompany it (owner ruling 25.08.2026: "הפרוגרס בר
+  // אמור להחליף את המספרים שמראים התקדמות ולא שיהיה גם זה וגם זה"). `progressLabel` used to be
+  // handed to BOTH this line and the bar, and `LifecycleStrip` renders both, so the same sentence
+  // appeared twice, stacked. It still reaches a screen reader — it is the bar's `aria-valuetext`,
+  // which is where a determinate progressbar is supposed to carry its words. So when there IS a
+  // measured count, this line stays empty and the bar speaks; when there is not, there is no bar
+  // to speak and the sentence has to.
   let detail: string | null = null;
   if (stopped) {
     detail = null;
@@ -102,13 +110,16 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
     // An unknown page count stays unknown. A "0 מתוך 0" here would be a claim about the document
     // that nobody has made yet — the constitution's dash rule, applied to a counter. DESIGN.md §5
     // requires the strip to SAY so rather than fall silent, so this branch keeps a sentence.
-    detail = hasProgress
-      ? progressLabel
-      : 'מספר העמודים עדיין לא ידוע.';
+    detail = hasProgress ? null : 'מספר העמודים עדיין לא ידוע.';
   } else if (current === 'interpreting') {
     detail = hasProgress
-      ? progressLabel
+      ? null
       : job.status === 'extracted'
+        // Says only what is true in every environment. The server dispatcher runs once a minute
+        // in production, but its configuration row is written by hand rather than by a migration
+        // (0081:21-22 says so on purpose), so an environment can exist where nothing dispatches
+        // and only opening the document starts the work. A sentence promising that it "starts by
+        // itself shortly" would be a claim about deployment state that this component cannot see.
         ? 'הקריאה הסתיימה. הפירוש עוד לא התחיל.'
         : 'מספר המקטעים עדיין לא ידוע.';
   }

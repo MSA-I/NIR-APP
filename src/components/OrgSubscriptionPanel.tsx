@@ -84,6 +84,41 @@ interface UsageRow {
   measured: boolean;
 }
 
+/**
+ * What each rung includes, for the comparison the cards make. It comes from the SAME server
+ * function the public ladder reads, which is the point: a second source would let the signed-in
+ * comparison and the public one disagree, and the server already blanks anything nothing counts
+ * (#199, DEBT §56) so a forgetful caller cannot publish a promise by accident.
+ */
+interface PlanQuotaRow {
+  plan_key: string;
+  entitlement_key: string;
+  label: string;
+  unit: string;
+  unlimited: boolean;
+  numeric_limit: number | null;
+  measured: boolean;
+}
+
+/**
+ * The one quota #266 lets a customer be shown. OCR pages are derived from it (ten per document)
+ * and deliberately unpublished; users and suppliers have no counter behind them at all. A card
+ * that listed every key would be three dashes and one number.
+ */
+const CARD_QUOTA_KEY = 'documents.monthly';
+
+/**
+ * Which tier mark each rung wears — the same five classes the top-bar badge uses, so the chip a
+ * person taps in the header is the chip they then find on their own row here.
+ */
+const TIER_CLASS: Record<string, string> = {
+  free: 'plan-badge-free',
+  basic: 'plan-badge-basic',
+  pro: 'plan-badge-pro',
+  premium: 'plan-badge-premium',
+  business: 'plan-badge-premium',
+};
+
 const INTERVALS = [['monthly', 'חודשי'], ['yearly', 'שנתי']] as const;
 type Interval = (typeof INTERVALS)[number][0];
 
@@ -91,15 +126,17 @@ export function OrgSubscriptionPanel() {
   const [subscription, setSubscription] = useState<SubscriptionRow | null>(null);
   const [options, setOptions] = useState<UpgradeOption[]>([]);
   const [usage, setUsage] = useState<UsageRow[]>([]);
+  const [planQuotas, setPlanQuotas] = useState<PlanQuotaRow[]>([]);
   const [interval, setIntervalChoice] = useState<Interval>('monthly');
   const [error, setError] = useState<string | null>(null);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
 
   const load = useCallback(async () => {
-    const [sub, upgrade, snapshot] = await Promise.all([
+    const [sub, upgrade, snapshot, quotas] = await Promise.all([
       supabase.rpc('my_subscription'),
       supabase.rpc('my_upgrade_options'),
       supabase.rpc('organization_usage_snapshot'),
+      supabase.rpc('get_public_plan_quotas'),
     ]);
     if (sub.error || upgrade.error) {
       setError('לא ניתן לטעון את פרטי המסלול כרגע.');
@@ -110,6 +147,8 @@ export function OrgSubscriptionPanel() {
     setSubscription(row);
     setOptions((upgrade.data ?? []) as UpgradeOption[]);
     setUsage(snapshot.error ? [] : ((snapshot.data ?? []) as UsageRow[]));
+    // A quota read that fails costs the cards one line each; it must not cost the whole panel.
+    setPlanQuotas(quotas.error ? [] : ((quotas.data ?? []) as PlanQuotaRow[]));
     if (row) setIntervalChoice(row.billing_interval === 'yearly' ? 'yearly' : 'monthly');
   }, []);
 
@@ -171,7 +210,13 @@ export function OrgSubscriptionPanel() {
 
           {/* Wording provisional under #203. One boolean in, three sentences out — and the third
               is the one that matters: an unknown availability is said aloud, never rendered as a
-              refusal. Nothing here names the provider or hints why it is not ready. */}
+              refusal. Nothing here names the provider or hints why it is not ready.
+
+              THE PRICE SENTENCE LIVES HERE NOW, not in a second box (owner report 25.08.2026:
+              the settings screen read as cramped duplicated prose). On a Free organization with
+              no verified billing country BOTH notices used to render, one under the other, and
+              they were two halves of the same fact: nothing can be bought yet, and that is why
+              the amounts are dashes. Said once. */}
           <Note tone={availability === 'unavailable' ? 'info' : 'idle'}>
             <span className="min-w-0 flex-1" data-testid="billing-availability">
               {availability === 'unavailable'
@@ -180,6 +225,7 @@ export function OrgSubscriptionPanel() {
                 && 'רכישת מסלול בתשלום עדיין אינה מתבצעת מהמסך הזה. הפרטים והמכסות למטה מעודכנים.'}
               {availability === 'indeterminate'
                 && 'לא ניתן לקבוע כרגע אם רכישת מסלול זמינה. זה אינו אומר שהיא חסומה — רענון או ניסיון מאוחר יותר יראה את המצב העדכני.'}
+              {!currency && ' המחיר נקבע במטבע של כתובת החיוב המאומתת אצל ספק הסליקה — לא לפי מיקום משוער ולא לפי בחירת מטבע — ולכן הוא מוצג כאן כ«—» עד שלב התשלום.'}
             </span>
           </Note>
 
@@ -215,54 +261,93 @@ export function OrgSubscriptionPanel() {
             </div>
           </div>
 
-          {currency ? (
+          {currency && (
             <p className="text-sm text-ink-muted">
               המחירים בקטלוג שנקבע לכתובת החיוב המאומתת שלך, לפני מס. ספק הסליקה מחשב וגובה את המס
               המקומי.
             </p>
-          ) : (
-            <Note tone="info">
-              <span className="min-w-0 flex-1">
-                המטבע והקטלוג נקבעים לפי כתובת חיוב מאומתת אצל ספק הסליקה — לא לפי מיקום משוער ולא
-                לפי בחירת מטבע. כל עוד לא אומתה כתובת חיוב אין מטבע מאומת, ולכן המחירים מוצגים כאן
-                כ«—» וייקבעו בשלב התשלום.
-              </span>
-            </Note>
           )}
 
-          <ul className="divide-y divide-line-soft">
+          {/* The ladder as CARDS (owner report 25.08.2026: "התוכניות השונות עם האופציה לשדרוג,
+              כמו בכל אפליקציה נורמלית"). It was a flat list of label-and-price rows, which reads
+              as a table of the same thing five times rather than as five products.
+
+              WHAT A CARD IS ALLOWED TO SAY, and why it is this little:
+                * The tier mark and its Hebrew name — both from the server's catalogue.
+                * ONE quota: documents per usage period. #266 makes it the single published
+                  metric; OCR pages are derived from it and unpublished, and users/suppliers have
+                  no counter behind them at all (DEBT §56).
+                * The price, which today is «—» for everyone. Owner ruling 25.08.2026.
+                * `ביזנס`: `דברו איתנו`, never a figure (#194/#201).
+              WHAT IT MUST NOT SAY: a per-plan capability list. #274 decided one and it is
+              `NOT_IMPLEMENTED` — every capability boolean is still `true` for every plan, and
+              `0184` fails any migration that turns one off. A card claiming "ייצוא ✗ בחינם" would
+              promise a difference the server does not enforce. */}
+          <ul data-testid="plan-cards" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {[...options].sort((a, b) => a.tier_order - b.tier_order).map((option) => {
               const current = option.plan_key === subscription.plan_key;
               const amount = amountOf(option);
+              const quota = planQuotas.find(
+                (row) => row.plan_key === option.plan_key && row.entitlement_key === CARD_QUOTA_KEY,
+              );
               return (
-                <li key={option.plan_key}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
-                  <span className="min-w-32 text-sm text-ink-body">{option.label}</span>
+                <li key={option.plan_key} data-plan={option.plan_key}
+                  className={`flex flex-col gap-2 rounded-2xl p-4 ${
+                    current ? 'bg-surface-selected' : 'bg-surface-sunken'
+                  }`}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`plan-badge ${TIER_CLASS[option.plan_key] ?? 'plan-badge-free'}`}>
+                      {option.label}
+                    </span>
+                    {current && <span className="badge-idle">המסלול הנוכחי</span>}
+                  </div>
+
                   {option.contact_sales ? (
                     // #194 and #201: a conversation, never a figure.
-                    <span className="text-sm text-ink">דברו איתנו</span>
+                    <span className="text-sm font-medium text-ink">דברו איתנו</span>
                   ) : (
-                    <span className={amount == null || !currency ? 'num text-sm text-ink-muted' : 'num text-sm text-ink'}>
+                    <span className={amount == null || !currency ? 'num text-lg text-ink-muted' : 'num text-lg text-ink'}>
                       {currency ? fmtPlanPrice(amount, currency) : '—'}
                     </span>
                   )}
-                  {current && <span className="badge-idle">המסלול הנוכחי</span>}
-                  {/* A paid organization sees the scheduled-change control, disabled: #216's
-                      transition is unbuilt, and a button that calls nothing is worse than one
-                      that says it cannot. A Free organization sees no control at all — the
-                      availability note above already says why, and a disabled button per plan
-                      would repeat it four times. */}
-                  {!current && !option.contact_sales && option.paid && subscription.is_paid_plan && (
-                    <span className="ms-auto">
-                      <button type="button" className="btn-secondary py-1! text-xs" disabled>
-                        תזמון מעבר ל{option.label}
-                      </button>
-                    </span>
+
+                  {/* The number on its own line, the server's own wording under it. The label is
+                      not restated or "improved" here: `/pricing` prints the same string from the
+                      same function, and a card that reworded it would be the second place a
+                      customer could read a different sentence about one entitlement. */}
+                  <span className="text-sm text-ink-body">
+                    {option.contact_sales
+                      ? 'מכסה חוזית, נקבעת מול השירות'
+                      : !quota || !quota.measured ? <span className="text-ink-muted">—</span>
+                        : quota.unlimited ? `${quota.label} ללא הגבלה`
+                          : (
+                            <>
+                              <span className="num block text-lg font-medium text-ink">{fmtNum(quota.numeric_limit)}</span>
+                              {quota.label}
+                            </>
+                          )}
+                  </span>
+
+                  {/* Disabled, with the reason said out loud (owner ruling 25.08.2026). There is
+                      no `billing-checkout` function and no signed provider event to open a paid
+                      entitlement with (#217), so a live button would either lie or no-op — and
+                      #204 forbids hiding the control instead, because a customer must be able to
+                      see that the path exists and why it is shut. THIS COMPONENT CALLS NO EDGE
+                      FUNCTION AT ALL; that absence is the guarantee, not this `disabled`. */}
+                  {!current && (
+                    <button type="button" className="btn-secondary mt-auto w-full py-1! text-xs" disabled
+                      title="החיוב עדיין לא נפתח">
+                      {option.contact_sales ? 'פנייה לשירות' : `שדרוג ל${option.label}`}
+                    </button>
                   )}
                 </li>
               );
             })}
           </ul>
+          <p className="text-sm text-ink-muted">
+            כפתורי השדרוג אינם פעילים עדיין: החיוב טרם נפתח. שינוי מסלול נעשה כרגע מול השירות, והוא
+            אינו מאפס את תקופת השימוש או את המונים.
+          </p>
 
           <div className="flex flex-wrap justify-end gap-2">
             {subscription.is_paid_plan && subscription.cancel_at_period_end && (

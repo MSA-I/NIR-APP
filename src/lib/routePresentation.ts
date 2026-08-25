@@ -33,6 +33,7 @@ export const STATIC_ROUTE_TITLES = {
   '/analytics': 'ביצועי ספקים',
   '/supplier-log': 'יומן עדכון ספקים',
   '/settings': 'הגדרות מערכת',
+  '/settings/subscription': 'המנוי שלי',
   '/onboarding': 'הקמת המערכת',
 } as const;
 
@@ -82,7 +83,10 @@ export const STATIC_ROUTE_DESCRIPTIONS: Record<StaticRoutePath, string> = {
   '/reports/products': 'בדיקת הכמות והעלות שנרכשו בכל מוצר, לצד שלושת מקורות הנתונים שמאחורי המספר.',
   '/analytics': 'השוואת הספקים זה מול זה: זמן אספקה, עמידה בזמנים, תנודתיות מחיר וחריגים פתוחים.',
   '/supplier-log': 'בדיקה מי שינה פרט של ספק או מחיר של מוצר, מתי, ומאיזו סיבה.',
-  '/settings': 'הגדרת פרטי העסק, המשתמשים והרשאותיהם, ומדיניות העבודה של המערכת.',
+  // "מדיניות העבודה" left this screen with the autonomy switches (19.08.2026); the sentence
+  // outlived them by a week. What is actually here is the business details, the team and the exit.
+  '/settings': 'הגדרת פרטי העסק והלוגו, ניהול המשתמשים והרשאותיהם, והחלפת הסיסמה שלך.',
+  '/settings/subscription': 'המסלול שהעסק נמצא בו, מה כולל כל אחד מהמסלולים, וכמה מהמכסה נוצל בתקופה הזו.',
   '/onboarding': 'רשימת ההקמה של הבעלים: ארבעה שלבים שממלאים את המערכת בנתוני העסק, ואפשר לחזור אליהם בכל עת.',
 };
 
