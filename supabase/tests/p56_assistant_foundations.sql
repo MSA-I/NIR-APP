@@ -413,6 +413,12 @@ select pg_temp.p56_assert(
 reset role;
 
 -- ===== The three exposure flags exist, born off, and resolve off for a fresh organization =====
+-- Reads `private`, so it is defined while the suite is still superuser and called before the
+-- role switch below. Two inside the window (ui + history), zero after it.
+create function pg_temp.p56_expected_on() returns int language sql as $$
+  select case when clock_timestamp() < private.prelaunch_window_end() then 2 else 0 end
+$$;
+
 select pg_temp.p56_assert(
   (select count(*) from private.flag_definitions
     where flag_key in ('assistant.ui', 'assistant.history', 'assistant.drafts')
@@ -421,14 +427,24 @@ select pg_temp.p56_assert(
     select 1 from private.flag_definitions where flag_key = 'assistant.confirmed_actions'),
   'the assistant flag surface is not exactly the three exposure switches, all born off');
 
+-- 0210 (owner ruling 25.08.2026) grants `assistant.ui` and `assistant.history` to an organisation
+-- created inside the pre-launch window, so "fresh" no longer means "all three off". What it still
+-- means, and what this now pins, is that `assistant.drafts` is NOT among them: it is the switch
+-- whose ON state opens a road to a business write, its execution road needs the
+-- `assistant.confirmed_actions` policy that does not exist, and 0210 deliberately left it alone.
+-- The grant that DID happen is time-boxed and says so in the row -- asserted below by reading the
+-- same date the trigger wrote, not a literal.
+select pg_temp.p56_expected_on() as n \gset p56_prelaunch_
 select pg_temp.p56_as('66000000-0000-4000-8000-000000000002');
 set local role authenticated;
 select pg_temp.p56_assert(
-  (select count(*) from resolve_feature_flags()
-    where flag_key like 'assistant.%' and state = false) = 3
+  (select count(*) from resolve_feature_flags() where flag_key like 'assistant.%')
+    = 3
+  and (select count(*) from resolve_feature_flags()
+        where flag_key like 'assistant.%' and state) = :'p56_prelaunch_n'::int
   and not exists (
     select 1 from resolve_feature_flags()
-    where flag_key like 'assistant.%' and state),
+    where flag_key = 'assistant.drafts' and state),
   'an assistant flag resolved on for a fresh organization');
 reset role;
 

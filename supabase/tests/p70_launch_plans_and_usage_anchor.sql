@@ -937,11 +937,20 @@ select pg_temp.p70_assert(
 -- Plan limit PLUS the ten, read from the catalogue rather than added up here: the assertion is
 -- that the bonus reaches the quota through the one resolution rule, not that the plan is at any
 -- particular number. #266 moved free from 25 to 20 and this did not have to move with it.
+-- The plan is read from the ORGANISATION rather than named, because which plan a new one is
+-- created on stopped being a constant in 0210: inside the pre-launch window it is `premium`, after
+-- it `free`. Naming either would make this assertion fail on a calendar date for a reason that has
+-- nothing to do with referrals -- and the comment above already says the point is the bonus
+-- reaching the quota through the one resolution rule, not the plan being at any particular number.
 select pg_temp.p70_assert(
   (public.effective_entitlement(
     '70000000-0000-4000-8000-000000000006', 'documents.monthly') ->> 'limit')::numeric
-   = (select numeric_limit + 10 from plan_entitlements
-       where plan_key = 'free' and entitlement_key = 'documents.monthly'),
+   = (select entitlement.numeric_limit + 10
+      from plan_entitlements entitlement
+      join organization_subscriptions subscription
+        on subscription.plan_key = entitlement.plan_key
+      where subscription.org_id = '70000000-0000-4000-8000-000000000006'
+        and entitlement.entitlement_key = 'documents.monthly'),
   'the referral bonus did not raise the beneficiary''s effective limit');
 select pg_temp.p70_assert(
   (public.effective_entitlement(

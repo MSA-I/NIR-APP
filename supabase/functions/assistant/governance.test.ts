@@ -401,6 +401,25 @@ Deno.test("construction binds the waiver to one organisation", () => {
   );
 });
 
+Deno.test("org=all covers every organisation, and still expires on the date", () => {
+  const decision = assertProviderGovernance(completeEvidence({ dpa: null }), {
+    exception: exception({ organizationId: "all" }),
+    now: BEFORE_EXPIRY,
+  });
+  assert.ok(decision.allowed);
+
+  // The point of the widening: an organisation the exception never named proceeds.
+  assertGovernedProviderConstruction(decision, { organizationId: OTHER_ORG, now: BEFORE_EXPIRY });
+  assertGovernedProviderConstruction(decision, { organizationId: OWNER_ORG, now: BEFORE_EXPIRY });
+
+  // What it does NOT widen. The date still ends it, and widening WHO must never widen WHEN --
+  // that is the whole reason the grant is safe to hand out before a contract exists.
+  assert.throws(
+    () => assertGovernedProviderConstruction(decision, { organizationId: OTHER_ORG, now: AFTER_EXPIRY }),
+    ProviderGovernanceRefusedError,
+  );
+});
+
 Deno.test("construction re-checks expiry, so a warm isolate cannot outlive the date", () => {
   // Parsed while valid, constructed after midnight on the end date.
   const decision = assertProviderGovernance(completeEvidence({ dpa: null }), {
@@ -434,6 +453,18 @@ Deno.test("the exception is read fail-closed: absent, valid, and unparsable are 
   if (valid.kind === "valid") {
     assert.equal(valid.exception.until, "2026-12-31");
     assert.equal(valid.exception.organizationId, OWNER_ORG);
+  }
+
+  // `org=all` is the one non-UUID this parser accepts (owner ruling 25.08.2026, pre-launch demo
+  // window). Case is not meaningful; a typo next to it still is.
+  for (const raw of ["all", "ALL"]) {
+    const every = readPrelaunchException((name) =>
+      name === PRELAUNCH_EXCEPTION_ENV_VAR
+        ? `until=2026-12-31;org=${raw};reason=pre_launch_every_org_is_a_demo`
+        : undefined
+    );
+    assert.equal(every.kind, "valid", `must accept org=${raw}`);
+    if (every.kind === "valid") assert.equal(every.exception.organizationId, "all");
   }
 
   // Each of these is a way an operator can believe an exception is live when it is not, so each
