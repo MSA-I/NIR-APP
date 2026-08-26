@@ -768,8 +768,19 @@ export function Stepper({ value, onChange, min = 0, max, step = 1, inputStep, la
     }, HOLD_REPEAT_DELAY_MS);
   };
 
+  /*
+   * The GROUP carries no name, and that is deliberate. It used to repeat `label`, which the input
+   * below also carries — so a screen reader announced the same words twice, once on entering the
+   * group and once on reaching the field. That is the defect `PlanBadge` had with an identical
+   * `aria-label` and `title`, in a second place.
+   * Nothing is lost by dropping it: since 26.08.2026 both buttons carry full sentences of their
+   * own (`הגדלת הכמות שהתקבלה עבור X`), so no child depends on the group for context. The role
+   * stays — it still binds the three controls together as one widget.
+   * It also made every `[aria-label="כמות X"]` selector ambiguous, which is how this surfaced:
+   * the browser gate resolved two elements and refused to guess.
+   */
   return (
-    <div role="group" aria-label={label} className={`flex items-center gap-1.5 ${className}`}>
+    <div role="group" className={`flex items-center gap-1.5 ${className}`}>
       {/* `select-none touch-manipulation`: a press-and-hold on a phone is also the gesture for
           select-text and the callout menu, and neither belongs on a quantity button. */}
       <button type="button" className="btn-secondary btn-icon select-none touch-manipulation" disabled={disabled || atMin}

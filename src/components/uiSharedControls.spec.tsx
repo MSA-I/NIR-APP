@@ -167,6 +167,21 @@ describe('Stepper — נחסם בקצוות במקום לבלוע לחיצה', (
     expect(input).toHaveValue(5);
   });
 
+  /*
+   * A screen reader announced the quantity twice — once entering the group, once reaching the
+   * field — because both carried the same `aria-label`. It also made every
+   * `[aria-label="כמות X"]` selector ambiguous, which is how the browser gate found it.
+   * This pins the shape rather than the spelling: whatever the group is called, it must not be
+   * called the same thing as the control inside it.
+   */
+  it('הקבוצה אינה חוזרת על שם השדה שבתוכה', () => {
+    render(<Stepper value={2} onChange={() => {}} label="כמות עגבניות" />);
+    const group = screen.getByRole('group');
+    const input = screen.getByRole('spinbutton', { name: 'כמות עגבניות' });
+    expect(group).not.toHaveAttribute('aria-label', input.getAttribute('aria-label'));
+    expect(group.querySelectorAll('[aria-label="כמות עגבניות"]')).toHaveLength(1);
+  });
+
   // Receiving focuses this input when a barcode scan matches a line. A primitive with no handle
   // would have killed that silently — the control still looks right, the scanner just stops.
   it('חושף את שדה הקלט לקורא, כדי שסריקת ברקוד תוכל למקד אותו', () => {

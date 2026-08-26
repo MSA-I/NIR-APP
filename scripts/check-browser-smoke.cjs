@@ -1473,7 +1473,11 @@ async function orderSupplierComparison(browser) {
     await reminder.waitFor({ state: 'hidden' });
     await page.waitForURL((url) => url.pathname === '/orders/new' && url.searchParams.has('draft'), { timeout: 25_000 });
     await waitForSaved();
-    assert((await page.locator(`[aria-label="כמות ${product}"]`).innerText()).includes('3'), 'reminder did not restore quantity 3 to the cart');
+    // The cart quantity is an editable `input[type=number]` since the steppers converged, so it
+    // lives in `value` and not in a text node — `innerText` on a spinbutton is always empty.
+    // Reading it by role also pins WHAT the control is, which the raw attribute selector did not.
+    assert(await page.getByRole('spinbutton', { name: `כמות ${product}` }).inputValue() === '3',
+      'reminder did not restore quantity 3 to the cart');
 
     const restoredStepTwoSave = waitForDraftSave();
     await page.getByRole('button', { name: 'המשך לספקים' }).click();
