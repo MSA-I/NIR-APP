@@ -121,6 +121,12 @@ export default function ProductStep({ products, categories, offersByProduct, car
               {carted && (
                 <Stepper className="me-3 shrink-0 sm:me-4" value={carted.qty} min={1}
                   label={`כמות ${productLabel(product)}`}
+                  /* The picker's own sentences, kept verbatim from the control this replaced.
+                     „הוספת כמות X" inflects the verbal noun to take the object; the primitive's
+                     „הוספה — כמות X" cannot, and would have been a silent downgrade for the one
+                     user who navigates this list by name. */
+                  decrementLabel={`הפחתת כמות ${productLabel(product)}`}
+                  incrementLabel={`הוספת כמות ${productLabel(product)}`}
                   onChange={(next) => onQty(product.id, next)} />
               )}
             </div>

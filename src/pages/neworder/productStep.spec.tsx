@@ -96,8 +96,11 @@ describe('ProductStep — the row is a real toggle', () => {
 // 19.08.2026). The floor of 1 also protects the newly editable input: clearing the field clamps
 // to 1 instead of deleting the line under the user mid-keystroke.
 describe('ProductStep — the quantity stepper has a floor of 1', () => {
-  const minusName = 'הפחתה — כמות עגבניות';
-  const plusName = 'הוספה — כמות עגבניות';
+  // The screen's own sentences, passed to `Stepper` as decrementLabel/incrementLabel. They are the
+  // names this control carried before it was shared, and pinning them here is what keeps the next
+  // convergence from quietly trading them for the primitive's generic composition.
+  const minusName = 'הפחתת כמות עגבניות';
+  const plusName = 'הוספת כמות עגבניות';
 
   it('the minus is disabled at qty 1, so decrementing can no longer empty the line', async () => {
     const { onQty } = renderStep(['p1'], 1);

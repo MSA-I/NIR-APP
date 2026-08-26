@@ -1081,9 +1081,16 @@ export function ReceiveOrder() {
               {/* The field keeps its own size. This is the number the screen exists to capture,
                   read at arm's length by someone holding a crate — a deliberate difference, not
                   drift, so convergence does not get to delete it. */}
+              {/* The two button names are the screen's own sentences, not the primitive's
+                  composition: „הגדלת הכמות שהתקבלה עבור X" names the action, the product AND what
+                  the number means, which „הוספה — כמות שהתקבלה עבור X" only gestures at. They are
+                  also what a screen-reader user on this screen has been hearing since the control
+                  was hand-rolled here, and convergence had no mandate to change that. */}
               <Stepper value={line.qty} min={0} inputStep="any"
                 inputClassName="w-24! text-lg! py-2.5! font-semibold"
                 label={`כמות שהתקבלה עבור ${productLabel(item.product)}`}
+                decrementLabel={`הפחתת הכמות שהתקבלה עבור ${productLabel(item.product)}`}
+                incrementLabel={`הגדלת הכמות שהתקבלה עבור ${productLabel(item.product)}`}
                 inputRef={(element) => { qtyInputs.current[item.id] = element; }}
                 onChange={(next) => setLine(item.id, { qty: next }, item)} />
               {line.qty !== remaining && (

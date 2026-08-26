@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, createContext, useContext, type ElementType, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { Link, useLocation } from 'react-router';
 import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Search, X, Loader2, Inbox, Bell, Check, Columns3, SlidersHorizontal, AlertTriangle, Minus, Plus } from 'lucide-react';
 import {
@@ -527,8 +527,25 @@ export const panelId = (prefix: string, key: string) => `${prefix}-panel-${key}`
  *
  * Roving tabindex per WAI-ARIA: exactly one tab is in the tab order and the arrows move between
  * them. The arrows are swapped for RTL on purpose — ArrowLeft advances, because in a right-to-left
- * strip the next tab is the one to the left. Focus moves on the following frame, since the element
- * being focused may not exist until the state change has rendered.
+ * strip the next tab is the one to the left.
+ *
+ * FOCUS MOVES SYNCHRONOUSLY, and that is a correction (26.08.2026). It used to move in a
+ * `requestAnimationFrame`, on the stated grounds that "the element being focused may not exist
+ * until the state change has rendered" — which was never true here: this strip renders EVERY tab
+ * on every render, and `value` only decides which one is selected. Nothing appears or disappears,
+ * so there was never a missing element to wait for.
+ *
+ * What the frame delay did produce was a race, and not only in tests. `onKeyDown` closes over the
+ * pressed tab's `index`, and keys land on `document.activeElement`. Between the press and the
+ * frame, focus is still on the OLD tab — so a second key arriving inside that window runs the old
+ * closure with the old index and moves to the wrong tab. A person holding an arrow key, or a
+ * screen-reader user stepping quickly, generates keys faster than one per frame. The unit test
+ * that caught this on a loaded runner was reporting a product defect, not test flake.
+ *
+ * `flushSync` is what makes the synchronous focus honest rather than merely fast: it commits the
+ * new `aria-selected`/`tabIndex` BEFORE focus lands, so a screen reader announces the tab as
+ * selected instead of announcing the state the strip is about to leave. Focusing first and
+ * committing after would have closed the race and opened that one.
  *
  * Renders the strip only. Panels stay with the caller, wired through panelId, so a heavy panel is
  * still the caller's to mount or skip.
@@ -551,8 +568,8 @@ export function Tabs({ items, value, onChange, label, idPrefix, className = '' }
     else if (event.key === 'End') next = items.length - 1;
     else return;
     event.preventDefault();
-    onChange(items[next].key);
-    requestAnimationFrame(() => document.getElementById(tabId(idPrefix, items[next].key))?.focus());
+    flushSync(() => onChange(items[next].key));
+    document.getElementById(tabId(idPrefix, items[next].key))?.focus();
   }
   return (
     <div role="tablist" aria-label={label} className={`no-print flex gap-1 overflow-x-auto border-b border-line ${className}`}>
@@ -648,7 +665,7 @@ const HOLD_REPEAT_TICK_MS = 60;
  * silently swallowed in the handler, because a control that accepts a press and does nothing
  * teaches the user that the app is unreliable.
  */
-export function Stepper({ value, onChange, min = 0, max, step = 1, inputStep, label, disabled = false, inputRef, inputClassName = '', className = '' }: {
+export function Stepper({ value, onChange, min = 0, max, step = 1, inputStep, label, decrementLabel, incrementLabel, disabled = false, inputRef, inputClassName = '', className = '' }: {
   value: number;
   onChange: (next: number) => void;
   min?: number;
@@ -663,8 +680,23 @@ export function Stepper({ value, onChange, min = 0, max, step = 1, inputStep, la
    * control in a `<form>` or styles `:invalid`. Pass `'any'` for a continuous quantity.
    */
   inputStep?: number | 'any';
-  /** Names the group for a screen reader, e.g. "כמות עבור עגבניות". */
+  /** Names the group and the number input for a screen reader, e.g. "כמות עבור עגבניות". */
   label: string;
+  /**
+   * The two button names, when the call site has a better SENTENCE than a composition can build.
+   *
+   * The default — `הפחתה — ${label}` / `הוספה — ${label}` — is a fallback, not the target. Hebrew
+   * puts a verbal noun into the construct state to take an object (‏הפחתה → הפחתת), and no prefix
+   * template can perform that inflection: the composed name is a fragment plus an em dash plus a
+   * second fragment, where the hand-written one is a sentence. Receiving and the cart both HAD the
+   * sentence — „הגדלת הכמות שהתקבלה עבור עגבניות", „הוספת כמות עגבניות" — and converging on the
+   * shared control silently traded it for the fragment. Convergence removes accidental difference;
+   * a name a screen-reader user has been hearing for months is not accidental.
+   *
+   * Passing one and not the other is a mistake the type cannot catch, so pass both or neither.
+   */
+  decrementLabel?: string;
+  incrementLabel?: string;
   disabled?: boolean;
   /**
    * A handle on the number input. Receiving needs it: a barcode scan that matches a line scrolls to
@@ -741,7 +773,7 @@ export function Stepper({ value, onChange, min = 0, max, step = 1, inputStep, la
       {/* `select-none touch-manipulation`: a press-and-hold on a phone is also the gesture for
           select-text and the callout menu, and neither belongs on a quantity button. */}
       <button type="button" className="btn-secondary btn-icon select-none touch-manipulation" disabled={disabled || atMin}
-        aria-label={`הפחתה — ${label}`} onPointerDown={() => startHold(-step)} onClick={() => stepTo(clamp(value - step))}>
+        aria-label={decrementLabel ?? `הפחתה — ${label}`} onPointerDown={() => startHold(-step)} onClick={() => stepTo(clamp(value - step))}>
         <Minus size={ICON.sm} aria-hidden="true" />
       </button>
       <input ref={inputRef} type="number" className={`input num w-20! text-center ${inputClassName}`} value={emptied ? '' : value} min={min} max={max} step={inputStep ?? step}
@@ -774,7 +806,7 @@ export function Stepper({ value, onChange, min = 0, max, step = 1, inputStep, la
         }}
         onBlur={() => setEmptied(false)} />
       <button type="button" className="btn-secondary btn-icon select-none touch-manipulation" disabled={disabled || atMax}
-        aria-label={`הוספה — ${label}`} onPointerDown={() => startHold(step)} onClick={() => stepTo(clamp(value + step))}>
+        aria-label={incrementLabel ?? `הוספה — ${label}`} onPointerDown={() => startHold(step)} onClick={() => stepTo(clamp(value + step))}>
         <Plus size={ICON.sm} aria-hidden="true" />
       </button>
     </div>

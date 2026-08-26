@@ -41,10 +41,16 @@ describe('Tabs — ניווט מקלדת בכיוון הנכון', () => {
     render(<Harness />);
     await user.click(screen.getByRole('tab', { name: 'הזמנות' }));
 
+    // No `waitFor` around the focus assertions, deliberately: `Tabs` moves focus synchronously in
+    // the key handler. Waiting for it would pass either way and would hide the return of the
+    // requestAnimationFrame this used to use — the delay that let a second key run the previous
+    // tab's stale index.
     await user.keyboard('{ArrowLeft}');
+    expect(screen.getByRole('tab', { name: 'חשבוניות' })).toHaveFocus();
     expect(screen.getByRole('tab', { name: 'חשבוניות' })).toHaveAttribute('aria-selected', 'true');
 
     await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'הזמנות' })).toHaveFocus();
     expect(screen.getByRole('tab', { name: 'הזמנות' })).toHaveAttribute('aria-selected', 'true');
   });
 
@@ -54,12 +60,36 @@ describe('Tabs — ניווט מקלדת בכיוון הנכון', () => {
     await user.click(screen.getByRole('tab', { name: 'הזמנות' }));
 
     await user.keyboard('{End}');
+    expect(screen.getByRole('tab', { name: 'מחירים' })).toHaveFocus();
     expect(screen.getByRole('tab', { name: 'מחירים' })).toHaveAttribute('aria-selected', 'true');
 
     await user.keyboard('{ArrowLeft}');
+    expect(screen.getByRole('tab', { name: 'הזמנות' })).toHaveFocus();
     expect(screen.getByRole('tab', { name: 'הזמנות' })).toHaveAttribute('aria-selected', 'true');
 
     await user.keyboard('{Home}');
+    expect(screen.getByRole('tab', { name: 'הזמנות' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'הזמנות' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  /*
+   * The race itself, pinned. Two keys with nothing awaited between them — the shape of a held-down
+   * arrow, or a screen-reader user stepping fast.
+   *
+   * `Tabs` closes over the PRESSED tab's index and keys land on `document.activeElement`, so any
+   * delay between the state change and the focus move lets the second key re-run the first key's
+   * closure with its stale index. Under the requestAnimationFrame this replaced, `{End}{ArrowLeft}`
+   * resolved against index 0 instead of index 2 and landed on 'חשבוניות'. It was reported as a
+   * flaky test on a loaded runner; it was a real defect that a loaded runner made frequent.
+   */
+  it('שני מקשים ברצף אינם קוראים את המדד של הלשונית הקודמת', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole('tab', { name: 'הזמנות' }));
+
+    await user.keyboard('{End}{ArrowLeft}');
+
+    expect(screen.getByRole('tab', { name: 'הזמנות' })).toHaveFocus();
     expect(screen.getByRole('tab', { name: 'הזמנות' })).toHaveAttribute('aria-selected', 'true');
   });
 
