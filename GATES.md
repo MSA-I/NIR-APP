@@ -39,29 +39,31 @@ pin the above.
 | G9 | `npm run build` green | build + typecheck clean | **PASS** |
 | G10 | `npm run verify` green | Knip, `check:money`, `check:tokens` (382 files), `check:typography` (383), `check:exemptions`, `check:supplier-columns`, `check:assistant-no-send`, `check:assistant-tool-schemas`, `check:anchored-replacements`, **1,657 tests / 158 files** | **PASS** |
 | G11 | Visual evidence exists for every visual claim | headed runs at 1440×1000 and 390×844, before and after, in the session scratchpad | **PASS** |
-| G12 | The subscription ladder is re-laid out to the reference image | — | **BLOCKED**, see below |
+| G12 | The subscription ladder is a grid on the wide viewport and one rung per line on the phone, on `/settings/subscription` only | `PLAN_GRID` = 1 / 2 / **5** tracks at base / `md` / `xl`; measured in the live app — 358px single track at 390px wide. `/pricing` still renders `PLAN_LIST`. Screenshots `after/subscription.png` and `after/subscription-mobile.png` | **PASS** |
+| G13 | The dashboard's background orb tracks the pointer closely and sits a little deeper | transition `0.45s` → **`0.12s`** (read live off `<html>`); orb alpha `15%` → **`17%`**, which is the measured AA ceiling — swept in the running app, `ink-muted` on canvas: 15% → 4.73, 17% → 4.60, 18% → **4.47 fails**, 20% → **4.32 fails** | **PASS** |
 
-## G12 — blocked on the owner, not deferred by me
+## G12 — the ruling it reverses, and what the owner kept from it
 
-The reference image is a four-column card grid. `PlanCard.tsx` carries a signed owner ruling from
-**the same day** (26.08.2026) that says the opposite, with its reasons:
+`PlanCard.tsx` carried a ruling from earlier the same day rejecting a grid: five rungs in three
+columns wrap 3 + 2 and leave a hole; five columns crush every card to ~217px; a grid reads as a
+shelf of equals. Rather than override it silently, it was put back to the owner, who answered on
+26.08.2026: **«רשת באתר המותאם · שורה במובייל · רק מה שבאפליקציה בהגדרות»**.
 
-> WHY A LIST AND NOT A GRID (owner ruling, 26.08.2026) — five rungs in three columns wrap 3 + 2
-> and leave a hole; five columns crush every card to ~217px; and a grid is read as a shelf of
-> equals, while a tier ladder is an ordered thing.
-
-The grid was built, shown, and rejected before the rows shipped. Rebuilding it on the strength of
-a new reference image is entirely the owner's call — but it is a REVERSAL of a ruling recorded in
-the code, not a gap in it, and it touches both ladder surfaces (`/settings/subscription` and
-`/pricing`) plus the skeleton that has to match them. Doing it silently would erase a decision;
-guessing which of the two the owner meant would risk rebuilding the wrong screen. Asked instead.
+That answer keeps the arithmetic and drops the aesthetic objection. So the grid is bounded exactly
+where the old ruling had a point: it starts at `xl`, not `lg` (five tracks need 80rem, and the page
+container was widened to match), the phone keeps one rung per line, and `/pricing` — a comparison
+rather than a place you act, and the surface with no price to build a card around — stays a list.
+The reversal is written into `PLAN_GRID`, `PlanCardLayout` and DESIGN.md beside the plan-badge
+section, so the next reader meets the decision and not the contradiction.
 
 ## Out of this ledger, and why
 
-- `ABANDON: marketing-cursor` — item 7 is in a DIFFERENT REPOSITORY
-  (`D:\משה פרוייקטים\פיתוח אתרים\NIR-APP-LANDING-PAGE`, `github.com/MSA-I/NIR-APP-LANDING-PAGE`).
-  This worktree cannot carry it; it needs its own branch, gates and PR. Raised with the owner
-  rather than done silently in the wrong repo.
-- The public `/pricing` page is NOT re-laid out. The reference image shows prices, and #206/25.08
-  forbids a price on a public surface — so the card layout the owner asked for is applied to the
-  authenticated `המנוי שלי`, which is the only subscription surface that has a price to show.
+- Item 7 was read as the marketing site's custom cursor and was about to be sent to the landing-page
+  repository. The owner corrected it: **it is in this app** — "לא בדיוק סמן אלא יותר שיידר כזה
+  שנמצא ברקע של הדאשבורד", i.e. `.app-glow`. Done here, as G13. Nothing is owed to the other repo.
+- The public `/pricing` page is NOT re-laid out, by the owner's own scoping ("רק מה שבאפליקציה
+  בהגדרות"). It also could not carry the reference's card anyway: #206/25.08 forbids a price on a
+  public surface, and the reference's card is built around one.
+- **`--color-ink-muted` was not deepened.** It is what caps G13's orb at 17%, and moving it
+  repaints secondary text on every screen — a decision of its own, not a side effect of an
+  atmosphere tweak. Flagged to the owner as the available next step.

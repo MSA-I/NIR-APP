@@ -8,7 +8,7 @@ import { DOMAIN, key } from '../lib/query/keys';
 import { useOrgScope } from '../lib/query/orgScope';
 import { planTierClass } from './PlanBadge';
 import {
-  HEADLINE_QUOTA_KEY, PLAN_LIST, PlanCard, PlanLadderSkeleton, planEmphasis, type PlanFeatureRow,
+  HEADLINE_QUOTA_KEY, PLAN_GRID, PlanCard, PlanLadderSkeleton, planEmphasis, type PlanFeatureRow,
 } from './PlanCard';
 import { usageSnapshotQuery, type UsageRow } from './PlanLimitNote';
 import { ErrorNote, ICON, Modal, Note, Skeleton, StatusBadge } from './ui';
@@ -517,7 +517,7 @@ export function OrgSubscriptionPanel() {
           SAME shape `/pricing` loads into, from `PlanCard.tsx`, so the placeholder cannot drift
           from the row it stands for. Five rungs and an action on each: that is what this surface
           resolves into. */}
-      {loading && <PlanLadderSkeleton heading testId="subscription-skeleton" />}
+      {loading && <PlanLadderSkeleton heading layout="grid" testId="subscription-skeleton" />}
 
       {/* THE LADDER, AS ITS OWN REGION OF REAL CARDS (owner report 25.08.2026: "התוכניות השונות עם
           האופציה לשדרוג, כמו בכל אפליקציה נורמלית"; owner verdict 26.08.2026 on what shipped:
@@ -546,7 +546,7 @@ export function OrgSubscriptionPanel() {
         <section aria-labelledby="plan-ladder-heading" className="space-y-4">
           <h2 id="plan-ladder-heading" className="section-title">כל המסלולים</h2>
 
-          <ul data-testid="plan-cards" className={PLAN_LIST}>
+          <ul data-testid="plan-cards" className={PLAN_GRID}>
             {[...options].sort((a, b) => a.tier_order - b.tier_order).map((option) => {
               const current = option.plan_key === subscription.plan_key;
               const amount = amountOf(option);
@@ -567,6 +567,7 @@ export function OrgSubscriptionPanel() {
 
               return (
                 <PlanCard
+                  layout="grid"
                   key={option.plan_key}
                   planKey={option.plan_key}
                   label={option.label}

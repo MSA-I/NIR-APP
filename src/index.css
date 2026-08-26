@@ -1110,9 +1110,15 @@ body {
    tonal step + shadow of .card, per the borderless-card rule. */
 @property --glow-x { syntax: '<percentage>'; inherits: true; initial-value: 72%; }
 @property --glow-y { syntax: '<percentage>'; inherits: true; initial-value: 12%; }
-/* T7.3e: 0.45s — at 0.7s with viewport-size washes the drift was imperceptible ("גרדיאנט
-   סטטי", owner); the tighter spotlights plus a faster ease make the pointer response legible. */
-html { transition: --glow-x 0.45s ease-out, --glow-y 0.45s ease-out; }
+/* THE LAG IS THIS LINE, and it has now been tightened twice for the same reason. 0.7s read as a
+   static gradient (T7.3e); 0.45s made the drift visible but left the orb trailing the pointer by
+   most of a second of travel, which the owner reported on 26.08.2026 as the orb not following the
+   mouse accurately. 0.12s is the smallest value that still smooths: the property is updated once
+   per animation frame (~16ms), so a transition of roughly seven frames rounds off the step
+   without the orb ever being somewhere the pointer is not. Zero would work and is deliberately
+   not used — with `@property` interpolation off, a viewport-sized radial jumps in whole pixels
+   and reads as judder rather than as atmosphere. */
+html { transition: --glow-x 0.12s ease-out, --glow-y 0.12s ease-out; }
 /* T7.3f — the moving color lives on the BACKGROUND, exactly as the owner approved in T7.3c,
    minus the static cyan base that sat under it ("הוספת רקע סטטי ועל זה את האפקט") and minus
    any card spotlight ("ממש לא רציתי"). Two washes only, both from the three-color mandate:
@@ -1128,9 +1134,23 @@ html { transition: --glow-x 0.45s ease-out, --glow-y 0.45s ease-out; }
   /* T7.3h: ONE orb (owner: "צריך שזה יהיה כדור אחד") — the deep-wheat counter-wash is gone.
      The orb DERIVES from --color-action: it was the oceanic literal spelled out again, so a
      brand repaint left the atmosphere behind. Same value, one source. */
+  /* 15% → 17% (owner, 26.08.2026: "להכהות טיפה יותר"), AND 17 IS A CEILING, NOT A PREFERENCE.
+     The orb's darkest spot is a real background for real text — section subtitles sit on the bare
+     canvas, and T7.1's dashboard tiles are semi-transparent — so `ink-muted` over it is a WCAG
+     measurement, which is why that token was deepened to 47% in the first place. Swept in the
+     running app by painting canvas + orb onto a 2D canvas and reading the pixel back:
+
+       15%  ink-muted 4.73   (the value DESIGN.md recorded as 4.75)
+       17%  ink-muted 4.60   <- here
+       18%  ink-muted 4.47   fails AA
+       20%  ink-muted 4.32   fails AA
+
+     So "a little darker" is the literal ceiling of this token pair. Going further is a real
+     option and it is not this line: it means deepening `--color-ink-muted` again, which repaints
+     secondary text on every screen in the product and is a decision of its own. */
   background:
     radial-gradient(46rem circle at var(--glow-x) var(--glow-y),
-      color-mix(in oklab, var(--color-action) 15%, transparent), transparent 68%);
+      color-mix(in oklab, var(--color-action) 17%, transparent), transparent 68%);
 }
 @media (prefers-reduced-motion: reduce) { html { transition: none; } }
 /* Phone and tablet: flat canvas, no atmosphere at all (owner, 19.08.2026). The orb exists to
