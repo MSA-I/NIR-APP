@@ -44,6 +44,15 @@ insert into public.supplier_products (
   '4c000000-0000-4000-8000-000000000001',
   10, current_date, true, 'P18B-SKU'
 );
+-- 0211 grants the four document autonomy policies to every organisation created inside the
+-- pre-launch window, so a fixture tenant is now born WITH them. This suite needs the
+-- opposite, and after 0211 "off" is a state a test has to construct rather than inherit.
+-- Removing the birth grants by name is that construction.
+-- Here the collision is literal: this suite writes its OWN grant at 0.95, and without the
+-- delete the insert hits org_autonomy_policies_org_key. The suite's number is the one that
+-- must win -- it is testing a threshold, not a default.
+delete from org_autonomy_policies
+ where org_id = '1c000000-0000-4000-8000-000000000001';
 insert into public.org_autonomy_policies (
   org_id, policy_key, autonomy_enabled, min_confidence
 ) values (

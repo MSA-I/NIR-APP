@@ -512,6 +512,14 @@ insert into organizations (id, name, status) values
   ('14000000-0000-4000-8000-000000000003', 'P14 suspended tenant', 'active'),
   ('14000000-0000-4000-8000-000000000004', 'P14 tenant D', 'active');
 
+-- 0211 grants the four document autonomy policies to every organisation created inside the
+-- pre-launch window, so a fixture tenant is now born WITH them. This suite's OFF scenarios
+-- need the opposite, and after 0211 "off" is a state a test has to construct rather than
+-- inherit. Removing the birth grants by name is that construction.
+delete from org_autonomy_policies where org_id in (
+  '14000000-0000-4000-8000-000000000001', '14000000-0000-4000-8000-000000000002',
+  '14000000-0000-4000-8000-000000000003', '14000000-0000-4000-8000-000000000004');
+
 insert into auth.users (id, email) values
   ('24000000-0000-4000-8000-000000000001', 'p14-owner-a@example.test'),
   ('24000000-0000-4000-8000-000000000002', 'p14-owner-b@example.test'),

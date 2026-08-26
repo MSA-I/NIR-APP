@@ -396,6 +396,13 @@ select
   (select count(*) from public.price_list_interpretation_decisions
     where org_id = '18000000-0000-4000-8000-000000000001') as live_decisions;
 
+-- 0211 grants the four document autonomy policies to every organisation created inside the
+-- pre-launch window, so a fixture tenant is now born WITH them. This suite needs the
+-- opposite, and after 0211 "off" is a state a test has to construct rather than inherit.
+-- Removing the birth grants by name is that construction.
+delete from org_autonomy_policies
+ where org_id = '18000000-0000-4000-8000-000000000001';
+
 select pg_temp.p18_assert(
   not exists (
     select 1 from public.org_autonomy_policies

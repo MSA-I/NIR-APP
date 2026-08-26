@@ -228,7 +228,17 @@ select pg_temp.p68_assert(
       =to_regprocedure('private.document_text_sanitize(text)')
       and not registry.raw_evidence_writer and not registry.automation_root
       and not registry.activation_writer)
-  and (select count(*)=2 from private.document_automation_authoritative_functions where activation_writer),
+  -- THREE activation writers since 0211, not two, and the third is named rather than counted.
+  -- A bare count says "the set changed"; naming the member says which decision changed it, and
+  -- fails just as loudly if a future function writes org_autonomy_policies and registers itself
+  -- without anyone deciding it should. #275: the pre-launch birth grant is the only AUTOMATIC
+  -- one -- the other two are operator commands behind step-up and a reason.
+  and (select count(*)=3 from private.document_automation_authoritative_functions where activation_writer)
+  and exists(select 1 from private.document_automation_authoritative_functions registry
+    where to_regprocedure(registry.function_signature)
+      =to_regprocedure('private.organizations_prelaunch_autonomy()')
+      and registry.activation_writer
+      and not registry.raw_evidence_writer and not registry.automation_root),
   'the registry lost the drift read model, the #245 sanitizer pin or the exact activation-writer set');
 select pg_temp.p68_assert(
   exists(select 1 from private.autonomy_policy_definitions

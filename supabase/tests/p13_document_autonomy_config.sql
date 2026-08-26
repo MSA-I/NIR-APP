@@ -181,14 +181,51 @@ begin
 end
 $$;
 
--- ===== (a) OFF is the state of the world =====
--- Asserted BEFORE any fixture exists: whatever this database already contains -- the demo
--- tenant, every migration that ran -- nothing switched autonomy on anywhere. This is the
--- assertion that would catch a future migration "helpfully" enabling it for existing tenants.
+-- ===== (a) What is ON, and what may never be =====
+-- This section used to assert that autonomy was enabled NOWHERE, on the strength of #109(b): a
+-- tenant is switched on deliberately, by an operator, with a reason, in the audit log. The owner
+-- replaced that default on 25.08.2026 for the pre-launch window only (0211), on the premise 0210
+-- already records -- no real customer has signed up, every account is a demo -- and the assertion
+-- had to move with the decision rather than be deleted with it.
+--
+-- WHAT MOVED: a grant may now exist, and a new organisation is born with four of them.
+-- WHAT DID NOT: it must be TIME-BOXED, and it must never be looser than the documented floor.
+-- Those two are what this section now pins, and between them they still catch the thing #109(b)
+-- was protecting against -- a migration quietly granting a model permanent authority to write
+-- financial records, or rolling the uncalibrated 0.900 downwards one edit at a time.
 select pg_temp.p13_assert(
-  (select count(*) from public.org_autonomy_policies where autonomy_enabled) = 0,
-  'no organization anywhere may be born with autonomy enabled -- a migration that turns it '
-  || 'on for existing tenants is exactly what must not happen');
+  (select count(*) from public.org_autonomy_policies
+    where autonomy_enabled and expires_at is null
+      and org_id <> '11111111-1111-4111-8111-111111111111'::uuid) = 0,
+  'a grant with no expiry is a permanent one -- outside the demo tenant that was switched on by '
+  || 'hand, every enabled policy must carry the end of the pre-launch window (0211)');
+
+select pg_temp.p13_assert(
+  (select count(*) from public.org_autonomy_policies where min_confidence < 0.900) = 0,
+  'no grant may sit below the documented 0.900 floor -- #104 on a number: a tenant may demand '
+  || 'MORE confidence and never less');
+
+-- The expiry is load-bearing, so it is proven rather than trusted: a grant whose date has passed
+-- must resolve exactly like an organisation that was never configured. Same three answers a
+-- missing row gives -- not configured, not enabled, no threshold -- because 0211 put the clock in
+-- the JOIN rather than in a new branch of the answer.
+do $expiry$
+declare
+  v_org uuid;
+  v_row record;
+begin
+  select org_id into v_org from public.org_autonomy_policies
+   where policy_key = 'document.interpretation' and autonomy_enabled limit 1;
+  if v_org is null then return; end if;
+  update public.org_autonomy_policies set expires_at = now() - interval '1 second'
+   where org_id = v_org and policy_key = 'document.interpretation';
+  select * into v_row from private.autonomy_policy_for_org(v_org, 'document.interpretation');
+  if v_row.configured or v_row.autonomy_enabled or v_row.min_confidence is not null then
+    raise exception 'P13 autonomy config assertion failed: an EXPIRED grant still resolves as '
+      'configured=% enabled=% min=%', v_row.configured, v_row.autonomy_enabled, v_row.min_confidence;
+  end if;
+end
+$expiry$;
 
 select pg_temp.p13_assert(
   exists (
@@ -229,6 +266,15 @@ insert into profiles (id, org_id, full_name, role) values
 
 insert into platform_admins (user_id, note) values
   ('23000000-0000-4000-8000-000000000010', 'P13 platform operator fixture');
+
+-- 0211 grants four policies to every organisation created inside the pre-launch window, so the
+-- fixtures above were born configured. That is the decision working, and it is asserted in
+-- section (a) -- but it leaves this suite with no unconfigured tenant, and "unconfigured resolves
+-- to off" is the invariant that survives the window and covers every policy key with no row. So
+-- the birth grants are removed HERE, deliberately and by name, to construct that case.
+delete from org_autonomy_policies
+ where org_id in ('13000000-0000-4000-8000-000000000001',
+                  '13000000-0000-4000-8000-000000000002');
 
 -- A tenant nobody configured evaluates to disabled, and its threshold is a MARK, not a zero.
 -- Zero would be a claim about the world -- and the worst possible one here, because a reader
