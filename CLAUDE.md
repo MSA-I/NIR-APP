@@ -109,6 +109,12 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   והמסונן לפי נתיבים. migration בלבד אינו מפעיל browser, אלא אם תוכנו משנה policy/RLS,
   ‏`user_role`, פונקציות ה־auth של ה־scope או grant/revoke ל־`authenticated`/`anon`.
 
+  **‏PR שהבסיס שלו אינו `main` מקבל אפס בדיקות, וזה נראה כמו הצלחה.** שני ה-workflows
+  מופעלים על `pull_request: branches: [main]` בלבד. ‏PR ערום על ענף של PR אחר מחזיר
+  „no checks reported" — לא build, לא verify, לא סוויטות SQL — ואין סימן אדום שיאמר זאת.
+  לענף כזה מריצים את השער במפורש — `gh workflow run quality-gate.yml --ref <branch>` — וקושרים
+  לתוצאה בהערה על ה-PR, מפני ש-`workflow_dispatch` אינו מופיע ברשימת ה-checks שלו. ‏`DEBT §65`.
+
   **ריצה מקומית — רק כמוצא אחרון**, לניפוי כשל ש-CI כבר דיווח עליו או לעבודה על הסקריפט עצמו:
   ‏`$env:SUPPLYFLOW_ALLOW_LOCAL_QUALITY = '1'; npm run quality`. לפני כן: לעצור `npm run dev`
   (תופס את פורט 5199 וחיבור כותב ל-DB) ולוודא שאין סוכן אחר באמצע ריצה. **ריצה אחת בכל רגע במכונה.**

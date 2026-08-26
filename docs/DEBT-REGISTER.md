@@ -603,6 +603,23 @@ Hebrew and clears the field" — עם `Unable to find an element with the text: 
 להריץ את הקובץ תחת `--reporter=verbose --no-file-parallelism` עד כשל, ולשמור את ה-DOM המלא של
 הרגע — בלי לדעת איזו הודעה **כן** הופיעה במקום, כל תיקון נוסף הוא ניחוש רביעי.
 
+### §65 — ‏PR שהבסיס שלו אינו `main` מקבל **אפס** בדיקות
+
+- **מצב (נמדד 25.08.2026):** שני ה-workflows מופעלים על
+  `pull_request: branches: [main]` בלבד. ‏PR ‏#130, שבסיסו ענף של PR אחר, החזיר
+  „no checks reported" — לא build, לא verify, ולא סוויטות SQL. **מיגרציה היתה
+  עוברת בלי שאף סוויטה תרוץ על מסד נקי.**
+- **למה זה מסוכן ולא רק מעצבן:** ה-PR נראה תקין. אין סימן אדום, אין אזהרה, ואין
+  שורה שאומרת „לא נבדק". **היעדר בדיקה נראה זהה לבדיקה שעברה** — אותו דפוס
+  של „‏`Up` אינו ראיה" מ-`CLAUDE.md`.
+- **ראיה:** `.github/workflows/quality-gate.yml:30-35` · `.github/workflows/build.yml:17-21` ·
+  ‏`gh pr checks 130` החזיר „no checks reported on the branch".
+- **מה עושים בינתיים:** ‏`gh workflow run quality-gate.yml --ref <branch>` — ‏`workflow_dispatch`
+  מריץ את **כל** ה-jobs ללא סינון נתיבים, וזו הדרך היחידה לקבל ראיה על ענף ערום.
+  התוצאה אינה מופיעה על ה-PR — יש לקשר אליה בהערה.
+- **הצעד הזול הבא:** להוסיף job זעיר שרץ על **כל** PR ללא סינון בסיס, ונכשל
+  בשם כשהבסיס אינו `main` — כך שהיעדר הכיסוי **נראה** במקום להיעדר בשקט.
+
 ### §64 — הפירוש האוטומטי מוגדר בייצור ביד, והריפו אינו יודע על כך
 
 - **מה נמדד בייצור (25.08.2026, קריאה חיה):** ‏`private.document_interpretation_automation_config`
