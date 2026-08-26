@@ -87,32 +87,32 @@ describe('מסך הכניסה', () => {
   it('אינו מצייר דלת ספק שאינה מוגדרת, ולא מפריד "או" ריק', () => {
     render(<MemoryRouter><Login /></MemoryRouter>);
 
-    expect(screen.queryByRole('button', { name: /פתיחת עסק עם/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /המשך עם/ })).not.toBeInTheDocument();
     expect(screen.queryByText('או')).not.toBeInTheDocument();
     // The screen still has a way to open an account — it is simply the password one.
     expect(screen.getByRole('link', { name: 'להרשמה' })).toHaveAttribute('href', '/signup');
   });
 
-  it('מוסר את פתיחת העסק לספק המוגדר, ולא לכניסה בסיסמה', async () => {
+  it('מוסר את הדלת הפדרטיבית לספק המוגדר, ולא לכניסה בסיסמה', async () => {
     federated.providers = ['google', 'apple'];
     render(<MemoryRouter><Login /></MemoryRouter>);
 
-    expect(screen.getAllByRole('button', { name: /פתיחת עסק עם/ })
+    expect(screen.getAllByRole('button', { name: /המשך עם/ })
       .map((button) => button.textContent))
-      .toEqual(['פתיחת עסק עם Google', 'פתיחת עסק עם Apple']);
+      .toEqual(['המשך עם Google', 'המשך עם Apple']);
 
-    fireEvent.click(screen.getByRole('button', { name: 'פתיחת עסק עם Google' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך עם Google' }));
 
     await waitFor(() => expect(federated.start).toHaveBeenCalledWith('google'));
     // The federated door must never be mistaken for the password one: this screen signs nobody in.
     expect(signIn).not.toHaveBeenCalled();
   });
 
-  it('אומר במפורש שהדלת הזו פותחת עסק חדש ואינה הצטרפות לעסק קיים', () => {
+  it('אומר במפורש שהדלת הזו לבעלי עסק ואינה הצטרפות לעסק קיים', () => {
     federated.providers = ['google'];
     render(<MemoryRouter><Login /></MemoryRouter>);
 
-    expect(screen.getByText('לפתיחת עסק חדש. הצטרפות לעסק קיים נעשית מהזמנה שנשלחה אליך.'))
+    expect(screen.getByText('בעלי עסק נכנסים כאן. הצטרפות לעסק קיים נעשית מהזמנה שנשלחה אליך.'))
       .toBeInTheDocument();
   });
 

@@ -228,15 +228,18 @@ export default function Login() {
                       {provider === 'google' && (
                         <img src="/brand/google-g.svg" alt="" width="18" height="18" aria-hidden="true" />
                       )}
-                      פתיחת עסק עם {FEDERATED_PROVIDER_LABEL[provider]}
+                      המשך עם {FEDERATED_PROVIDER_LABEL[provider]}
                     </button>
                   ))}
-                  {/* Says what the button does, because it does not do what a button on a LOGIN
-                      screen usually does. The provider proves an address and returns the browser to
-                      /signup, where a business still has to be named — so an employee who tries
-                      this arrives holding a session that grants nothing (0205, #265). */}
+                  {/* Neutral wording, because one door serves two people. A returning owner is
+                      signed straight into their dashboard by the guard in `Signup.tsx` — naming
+                      the button "פתיחת עסק" told them, wrongly, that pressing it opens a SECOND
+                      business, so the person it works for was the one it scared off. A new owner
+                      still names a business on /signup. The line below carries the warning that
+                      the label used to: an employee who tries this arrives holding a session that
+                      grants nothing (0205, #265). */}
                   <p className="text-center text-xs text-ink-muted">
-                    לפתיחת עסק חדש. הצטרפות לעסק קיים נעשית מהזמנה שנשלחה אליך.
+                    בעלי עסק נכנסים כאן. הצטרפות לעסק קיים נעשית מהזמנה שנשלחה אליך.
                   </p>
                 </>
               )}
