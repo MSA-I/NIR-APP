@@ -156,6 +156,60 @@ Auth ה־Site URL היה `http://localhost:3000` ועכשיו `https://app.inpla
 `window.location.origin`, ולכן אותה פריסה בדיוק (`e851dbe8…`, ‏`15baeac`) נכונה לשתי הכתובות — אומת
 בהתאמת entry chunks. אין `VITE_APP_BASE_URL` בחוזה ולא נוסף.
 
+### 5.א ‏ `auth.inplace.digital` — דומיין Auth משלנו; מסך גוגל כבר אינו מציג את מזהה הפרויקט
+
+**מצב מ־26.08.2026: `ACTIVE`.** ‏Supabase מדווח `5_services_reconfigured`, תעודה פעילה מ־Google
+Trust Services (‏`issued 2026-08-26`, ‏`expires 2026-11-24`).
+
+**הבעיה שנפתרה.** מסך הכניסה של גוגל מציג את המארח של ה־`redirect_uri`, ו־GoTrue בונה אותו מכתובת
+ה־external שלו. כל עוד זו הייתה `rkftlbctohswhbbiaqin.supabase.co`, בעל עסק שנרשם דרך גוגל ראה
+„המשך אל rkftlbctohswhbbiaqin.supabase.co" — מזהה הפרויקט הגולמי. זה לא באג בקוד: `signInWithOAuth`
+ב־`src/lib/authProviders.ts:55` שולח בקשה רגילה, והמארח נקבע בצד Supabase בלבד.
+
+**מה נעשה.** תוסף ‏Custom Domain (‏10$/חודש) הופעל על הפרויקט — הארגון `MSA-I` כבר על `pro`, ולכן
+לא נדרש שדרוג תוכנית. הודעת הדחייה של ה־API לפני ההפעלה (`entitlement_required`) מנוסחת
+„available on the Pro plan and above" ומטעה: היא נאמרת גם לארגון Pro שהתוסף עצמו חסר לו.
+
+| רשומה ב־Cloudflare | ערך | הערה |
+|---|---|---|
+| `CNAME auth` | `rkftlbctohswhbbiaqin.supabase.co` | **`proxied=false` חובה.** ענן כתום שובר את האימות |
+| `TXT _acme-challenge.auth` | אתגר ה־DCV שהנפיק Supabase | חד־פעמי; אין להעתיק ערך ישן |
+
+**סדר שאסור להפוך:** ה־`CNAME` קודם — Supabase מסרב לאתחל בלעדיו („cannot be found"); ואת
+ה־`redirect_uri` החדש מוסיפים ב־Google Cloud **לפני** ‏`Activate`, אחרת ההפעלה מפנה את גוגל לכתובת
+שאינה מוכרת לו והכניסה נשברת. ה־client (‏project `inplace-506521`) נושא כעת גם
+`https://auth.inplace.digital/auth/v1/callback`, והישן **לא נמחק**.
+
+**הראיה, מדף גוגל עצמו** ולא מהתיעוד: ‏`GET /auth/v1/authorize?provider=google` ומעקב אחרי
+ה־`Location` מחזיר דף שבו `data-app-name="inplace.digital"`, ‏`auth.inplace.digital` מופיע ו־
+`supabase.co` **אינו מופיע כלל**. גוגל מקצר את התצוגה ל־apex.
+
+**לא נדרשה בנייה או פריסה.** ‏`VITE_SUPABASE_URL` נשאר `https://rkftlbctohswhbbiaqin.supabase.co`
+במכוון: ‏GoTrue בונה את ה־`redirect_uri` מכתובת ה־external שלו ולא מהמארח שאליו פנה הדפדפן, ולכן
+**גם כניסה דרך המארח הישן מציגה כבר את הכתובת החדשה** — נמדד בשני המסלולים. החלפת המשתנה היא
+ניקיון אופציונלי שדורש rollout של frontend, לא תנאי לתיקון.
+
+**‏Apple נהנה מאותו תיקון** בלי עבודה נוספת — הוא עובר באותו `redirect_uri`.
+
+**מה שנשאר פתוח:** גוגל מציג **דומיין**, לא „InPlace". שם ולוגו דורשים מילוי מסך ההסכמה
+(‏`console.cloud.google.com/auth/branding`, ‏project `inplace-506521`) ואחריו אימות מותג מול גוגל,
+שאורך ימים עד שבועות. עד האישור המסך ממשיך להציג `inplace.digital`, ולכן זו הכרעת בעלים ולא חסם.
+
+**הזהות הנראית של המוצר היא סמל ה-favicon, לא אריח האפליקציה.** ‏`public/favicon.svg` ו-
+`public/brand/inplace-app-icon.svg` נושאים את אותו Place Bay ונראים דומה במבט חטוף, אבל האריח
+מוסיף רקע Onyx מעוגל שאינו מה שהמוצר מציג בלשונית הדפדפן. הכרעת בעלים 26.08.2026: **כל ייצוא
+לוגו לצד שלישי נגזר מסמל ה-favicon**, והאריח נדחה במפורש אחרי שנבחר בטעות.
+
+**‏Google consent screen — הקובץ בפועל הוא הווריאנט הלבן.** ‏`public/brand/inplace-symbol-paper.svg`
+הוא אותו סמל ב-Paper במקום Onyx. נבחר בהכרעת בעלים 26.08.2026 מפני ש-`favicon.svg` הוא Onyx על רקע
+שקוף, ומסך ההתחברות של גוגל — כפי שנצפה במכשיר הבעלים — מוגש על רקע כהה, שם הסמל הכהה כמעט נעלם.
+הייצוא הוא PNG ‏120×120 ברקע שקוף, מרונדר ב-Chromium; אומת ויזואלית מול `#131314`.
+
+> **הפשרה מתועדת ולא נפתרה:** גוגל אינו מאפשר שני לוגואים. סמל לבן על רקע שקוף נעלם על משטח
+> **בהיר**, בדיוק כפי שהכהה נעלם על כהה. נבחר הצד שנצפה בפועל. אם יתברר שגוגל מגיש למשתמשים גם
+> מסך בהיר, החלופה היחידה שעובדת בשני המצבים היא אריח האפליקציה — וזו סטייה מהכרעת ה-favicon,
+> כלומר הכרעת בעלים מחדש ולא בחירה שקטה.
+
 **שינוי שם פרויקט ה־Pages נשאר הכרעת בעלים פתוחה.** הפרויקט עדיין `supplyflow`; שינוי שם מזיז את
 `*.pages.dev` ושובר את ה־CNAME, את ה־allowlist ואת ה־smoke.
 
