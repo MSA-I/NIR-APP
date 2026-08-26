@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Camera, Eye, FileSearch, RefreshCw, RotateCcw, Upload } from 'lucide-react';
+import { AlertTriangle, Camera, FileSearch, RefreshCw, Upload } from 'lucide-react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import {
+  Card,
   ConfirmDialog,
   DataTable,
+  ICON,
   KpiCard,
   Note,
+  PageHeader,
   SkeletonCards,
   SkeletonTable,
   useToast,
@@ -272,25 +275,29 @@ export default function DocumentOperations() {
 
   return (
     <div className="min-w-0 space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-5">
-        <div className="max-w-2xl">
-          <p className="mb-1 text-xs font-semibold text-action">מסמכים שדורשים החלטה</p>
-          <h1 className="page-title">בקרת מסמכים</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select className="input w-auto!" aria-label="טווח בקרת מסמכים" value={windowDays}
-            onChange={(event) => setWindowDays(Number(event.target.value))}>
-            <option value={7}>7 ימים</option>
-            <option value={30}>30 ימים</option>
-            <option value={90}>90 ימים</option>
-          </select>
-          <button type="button" className="btn-secondary min-h-11" onClick={() => void refreshAll()}
-            disabled={operations.fetching || attempts.fetching || priceReviews.fetching}
-            aria-label="רענון בקרת מסמכים">
-            <RefreshCw size={16} aria-hidden="true" /> רענון
-          </button>
-        </div>
-      </header>
+      {/* The eyebrow („מסמכים שדורשים החלטה") is gone, not lost: PageHeader resolves this route's
+          own one-line description from the catalogue — „בקרה על קליטת המסמכים: מה נתקע בעיבוד, מה
+          נכשל ומה ממתין להחלטה אנושית" — which says the same thing in the place every other screen
+          says it. The rule under the header is kept through `className`. */}
+      <PageHeader
+        className="border-b border-line pb-5"
+        title="בקרת מסמכים"
+        actions={
+          <>
+            <select className="input w-auto!" aria-label="טווח בקרת מסמכים" value={windowDays}
+              onChange={(event) => setWindowDays(Number(event.target.value))}>
+              <option value={7}>7 ימים</option>
+              <option value={30}>30 ימים</option>
+              <option value={90}>90 ימים</option>
+            </select>
+            <button type="button" className="btn-secondary" onClick={() => void refreshAll()}
+              disabled={operations.fetching || attempts.fetching || priceReviews.fetching}
+              aria-label="רענון בקרת מסמכים">
+              <RefreshCw size={ICON.sm} aria-hidden="true" /> רענון
+            </button>
+          </>
+        }
+      />
 
       <section aria-labelledby="document-control-overview-title" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
@@ -308,23 +315,23 @@ export default function DocumentOperations() {
         {operations.error && <Note tone="alert" role="alert">{operations.error}</Note>}
       </section>
 
-      <section aria-labelledby="consolidated-invoices-title" className="card card-pad space-y-4">
+      <Card className="space-y-4" as="section" aria-labelledby="consolidated-invoices-title">
         <div>
           <h2 id="consolidated-invoices-title" className="section-title">חשבוניות מרכזות</h2>
           <p className="mt-1 text-sm text-ink-soft">חשבונית אחת של ספק לחודש משמשת עוגן לכל חשבוניות הביניים ותעודות המשלוח של אותו ספק.</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Link className="btn-primary min-h-11 w-full sm:w-auto" to="/documents/consolidated-invoices">
-            <Camera size={16} aria-hidden="true" /> צילום מסמכים
+          <Link className="btn-primary w-full sm:w-auto" to="/documents/consolidated-invoices">
+            <Camera size={ICON.sm} aria-hidden="true" /> צילום מסמכים
           </Link>
-          <Link className="btn-secondary min-h-11 w-full sm:w-auto" to="/documents/consolidated-invoices">
-            <Upload size={16} aria-hidden="true" /> העלאת מסמכים
+          <Link className="btn-secondary w-full sm:w-auto" to="/documents/consolidated-invoices">
+            <Upload size={ICON.sm} aria-hidden="true" /> העלאת מסמכים
           </Link>
-          <Link className="btn-secondary min-h-11 w-full sm:w-auto" to="/documents/consolidated-invoices">
-            <FileSearch size={16} aria-hidden="true" /> צפייה בהתאמות
+          <Link className="btn-secondary w-full sm:w-auto" to="/documents/consolidated-invoices">
+            <FileSearch size={ICON.sm} aria-hidden="true" /> צפייה בהתאמות
           </Link>
         </div>
-      </section>
+      </Card>
 
       {/* `note-alert`, not a hand-rolled box. The previous markup asked for `border-alert/30` and
           `text-alert`, and there is no `--color-alert` token in @theme — only the six surfaces
@@ -336,20 +343,20 @@ export default function DocumentOperations() {
           className="note-alert flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p id="document-control-attention-title" className="flex items-center gap-1.5 text-xs font-semibold">
-              <AlertTriangle size={14} aria-hidden="true" /> הפריט הדחוף ביותר
+              <AlertTriangle size={ICON.xs} aria-hidden="true" /> הפריט הדחוף ביותר
             </p>
             <h2 className="mt-1 truncate text-lg font-semibold text-ink">{currentIssue.file_name}</h2>
             <p className="mt-1">{attemptUiStatus(currentIssue).description}</p>
           </div>
           <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row">
             {canRecoverStuck && attemptUiStatus(currentIssue).state === 'stuck' && (
-              <button type="button" className="btn-primary min-h-11 w-full sm:w-auto" onClick={() => setRecoveryTarget(currentIssue)}>
-                <RotateCcw size={16} aria-hidden="true" /> שחזור עיבוד
+              <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => setRecoveryTarget(currentIssue)}>
+                <RefreshCw size={ICON.sm} aria-hidden="true" /> שחזור עיבוד
               </button>
             )}
-            <button type="button" className="btn-secondary min-h-11 w-full sm:w-auto"
+            <button type="button" className="btn-secondary w-full sm:w-auto"
               onClick={() => navigate(`/documents/${encodeURIComponent(currentIssue.document_id)}/review`)}>
-              <Eye size={16} aria-hidden="true" /> פתיחת המסמך
+              <FileSearch size={ICON.sm} aria-hidden="true" /> פתיחת המסמך
             </button>
           </div>
         </section>
@@ -362,6 +369,7 @@ export default function DocumentOperations() {
         </div>
         {attempts.loading && !attempts.data ? <SkeletonTable title={false} cols={4} /> : (
           <DataTable rows={filteredAttempts} columns={attemptColumns} searchable pageSize={20}
+            tableLabel="מסמכים אחרונים"
             searchLabel="חיפוש מסמך בבקרת מסמכים"
             searchFn={(row, query) => row.file_name.toLocaleLowerCase('he').includes(query)}
             error={attempts.error}
@@ -380,10 +388,14 @@ export default function DocumentOperations() {
             }
             onRowClick={(row) => navigate(`/documents/${encodeURIComponent(row.document_id)}/review`)}
             rowLabel={(row) => `מסמך ${row.file_name}`}
+            // One icon per meaning across the document screens: `FileSearch` opens the review
+            // workspace, `RefreshCw` sends a document through processing again. `Eye` is reserved
+            // for viewing the ORIGINAL file (DocumentsInbox: „צפייה במקור"), and `RotateCcw` for
+            // undoing an automatic decision — neither of which is what these three do.
             rowActions={(row) => [
-              { key: 'review', label: 'פתיחת בדיקה', icon: Eye, onSelect: () => navigate(`/documents/${encodeURIComponent(row.document_id)}/review`) },
-              { key: 'recover', label: 'שחזור עיבוד', icon: RotateCcw, hidden: !canRecoverStuck || attemptUiStatus(row).state !== 'stuck', onSelect: () => setRecoveryTarget(row) },
-              { key: 'reprocess', label: row.status === 'failed' ? 'ניסיון נוסף' : 'עיבוד מחדש', icon: RotateCcw, hidden: !canWrite || isActiveAttempt(row), onSelect: () => setReprocessTarget(row) },
+              { key: 'review', label: 'פתיחת בדיקה', icon: FileSearch, onSelect: () => navigate(`/documents/${encodeURIComponent(row.document_id)}/review`) },
+              { key: 'recover', label: 'שחזור עיבוד', icon: RefreshCw, hidden: !canRecoverStuck || attemptUiStatus(row).state !== 'stuck', onSelect: () => setRecoveryTarget(row) },
+              { key: 'reprocess', label: row.status === 'failed' ? 'ניסיון נוסף' : 'עיבוד מחדש', icon: RefreshCw, hidden: !canWrite || isActiveAttempt(row), onSelect: () => setReprocessTarget(row) },
             ]}
           />
         )}
@@ -393,6 +405,7 @@ export default function DocumentOperations() {
         <h2 id="document-control-price-title" className="section-title">מחירונים שממתינים לבדיקה</h2>
         {priceReviews.loading && !priceReviews.data ? <SkeletonTable title={false} cols={4} /> : (
           <DataTable rows={priceReviews.data ?? []} columns={priceReviewColumns} pageSize={10}
+            tableLabel="מחירונים שממתינים לבדיקה"
             error={priceReviews.error}
             emptyTitle="אין כרגע מחירונים שממתינים לבדיקה"
             emptySubtitle="מחירון חדש שידרוש החלטה יופיע כאן."

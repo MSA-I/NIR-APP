@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MessageSquareText, Pencil } from 'lucide-react';
-import { Modal, StatusBadge, useToast } from './ui';
+import { ICON, Modal, StatusBadge, useToast } from './ui';
 import { useQuery } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
 import { COMMUNICATION_CHANNEL } from '../lib/status';
@@ -77,13 +77,13 @@ export function SupplierCommunicationCard({ supplierId, supplierEmail, supplierP
     <div className="card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink">
-          <MessageSquareText size={15} aria-hidden="true" /> תקשורת עם הספק
+          <MessageSquareText size={ICON.sm} aria-hidden="true" /> תקשורת עם הספק
         </h2>
         <div className="flex items-center gap-2">
           <StatusBadge meta={COMMUNICATION_CHANNEL[effectiveChannel]} />
           {canWrite && (
             <button type="button" className="btn-ghost" onClick={openEditor}>
-              <Pencil size={15} /> עריכה
+              <Pencil size={ICON.sm} /> עריכה
             </button>
           )}
         </div>
@@ -143,7 +143,7 @@ export function SupplierCommunicationCard({ supplierId, supplierEmail, supplierP
               value={whatsappOverride} onChange={(e) => setWhatsappOverride(e.target.value)} />
           </div>
           <label className="flex min-h-11 items-center gap-2 text-sm text-ink-body">
-            <input type="checkbox" className="size-5" checked={remindersAllowed}
+            <input type="checkbox" className="size-5 shrink-0" checked={remindersAllowed}
               onChange={(e) => setRemindersAllowed(e.target.checked)} />
             הספק מאשר קבלת תזכורות אוטומטיות
           </label>

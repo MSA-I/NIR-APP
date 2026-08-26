@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Mail, RotateCcw, Send } from 'lucide-react';
-import { ConfirmDialog, Note, StatusBadge, useToast } from './ui';
+import { Loader2, Mail, RotateCcw, Send } from 'lucide-react';
+import { ConfirmDialog, ICON, Note, StatusBadge, useToast } from './ui';
 import { useQuery } from '../lib/useQuery';
 import { fmtDateTime } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
@@ -98,7 +98,7 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
     <div className="card p-4 no-print">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink">
-          <Mail size={15} aria-hidden="true" /> מסירת ההזמנה במייל
+          <Mail size={ICON.sm} aria-hidden="true" /> מסירת ההזמנה במייל
         </h2>
         {message && <StatusBadge meta={EMAIL_CHANNEL_STATE[message.delivery_state]} />}
       </div>
@@ -163,12 +163,14 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
         <div className="mt-3 flex flex-wrap gap-2">
           {emailEnabled && sendable && (!message || retryable) && (
             <button type="button" className="btn-primary" disabled={busy} onClick={() => setSendOpen(true)}>
-              <Send size={15} /> {message ? 'שליחה חוזרת במייל' : 'שליחת ההזמנה במייל'}
+              {busy ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" /> : <Send size={ICON.sm} aria-hidden="true" />}
+              {message ? 'שליחה חוזרת במייל' : 'שליחת ההזמנה במייל'}
             </button>
           )}
           {message && ['failed', 'unknown'].includes(message.status) && profile?.role === 'owner' && (
             <button type="button" className="btn-ghost" disabled={busy} onClick={() => setResetOpen(true)}>
-              <RotateCcw size={15} /> איפוס ניסיונות (בעלים)
+              {busy ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" /> : <RotateCcw size={ICON.sm} aria-hidden="true" />}
+              איפוס ניסיונות (בעלים)
             </button>
           )}
         </div>

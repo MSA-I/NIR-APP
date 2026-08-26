@@ -2,7 +2,7 @@ import { NavLink, Outlet } from 'react-router';
 import { useState } from 'react';
 import { LogOut, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { useToast } from '../components/ui';
+import { ICON, useToast } from '../components/ui';
 import { toHebrewError } from '../lib/errors';
 
 /**
@@ -43,18 +43,20 @@ export default function OperatorShell() {
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
           <span className="flex items-center gap-2 font-medium text-ink">
-            <ShieldCheck size={19} aria-hidden="true" /> תפעול פלטפורמה
+            <ShieldCheck size={ICON.md} aria-hidden="true" /> תפעול פלטפורמה
           </span>
-          <nav aria-label="ניווט מסוף התפעול" className="flex items-center gap-1">
+          <nav aria-label="ניווט מסוף התפעול" className="flex flex-wrap items-center gap-1">
             {NAV.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.end}
+                // min-h-11: a nav item is a tap target like any other, and py-1.5 alone put the
+                // whole operator navigation at 30px on a phone.
                 className={({ isActive }) =>
                   isActive
-                    ? 'rounded-full bg-surface-sunken px-3 py-1.5 text-sm font-medium text-ink'
-                    : 'rounded-full px-3 py-1.5 text-sm text-ink-soft transition-colors hover:text-ink'}
+                    ? 'inline-flex min-h-11 items-center rounded-full bg-surface-sunken px-3 py-1.5 text-sm font-medium text-ink'
+                    : 'inline-flex min-h-11 items-center rounded-full px-3 py-1.5 text-sm text-ink-soft transition-colors hover:text-ink'}
               >
                 {item.label}
               </NavLink>
@@ -65,7 +67,7 @@ export default function OperatorShell() {
               <span dir="ltr" className="text-sm text-ink-muted">{session.user.email}</span>
             )}
             <button type="button" className="btn-ghost" disabled={busy} onClick={() => void handleSignOut()}>
-              <LogOut size={15} /> {busy ? 'מתנתק…' : 'התנתקות'}
+              <LogOut size={ICON.sm} aria-hidden="true" /> {busy ? 'מתנתק…' : 'התנתקות'}
             </button>
           </div>
         </div>

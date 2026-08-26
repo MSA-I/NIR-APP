@@ -1,5 +1,6 @@
 import { ArrowRight } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
+import { ICON } from './ui';
 
 /**
  * One back action for detail, review and multi-step screens (H3).
@@ -44,13 +45,13 @@ export function BackAction({ fallback, label, carrySearch = false }: {
     return (
       <Link className="btn-ghost min-h-11" to={target.to}>
         {/* RTL: the arrow points right, which is "back" in a right-to-left reading order. */}
-        <ArrowRight size={18} aria-hidden="true" /> {label}
+        <ArrowRight size={ICON.md} aria-hidden="true" /> {label}
       </Link>
     );
   }
   return (
     <button type="button" className="btn-ghost min-h-11" onClick={() => navigate(-1)}>
-      <ArrowRight size={18} aria-hidden="true" /> {label}
+      <ArrowRight size={ICON.md} aria-hidden="true" /> {label}
     </button>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { Plus, Phone, Mail, MapPin, Clock, Truck, Star, TrendingUp, TrendingDown, Pencil, Trash2, Upload, Landmark } from 'lucide-react';
@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
 import { useAuth } from '../auth/AuthContext';
-import { Breadcrumbs, DataTable, StatusBadge, useToast, Modal, ErrorNote, Note, ConfirmDialog, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, type Column } from '../components/ui';
+import { Breadcrumbs, Card, DataTable, StatusBadge, useToast, Modal, ErrorNote, Note, ConfirmDialog, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, SubPanel, Tabs, TabPanel, ToggleGroup, ICON, type Column } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { PriceListUploadModal, SUBMISSION_STATUS, submissionMonthLabel } from '../components/PriceListUpload';
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
@@ -169,7 +169,7 @@ export function SuppliersList() {
   const columns: Column<SupplierWithBalance>[] = [
     { key: 'name', header: 'ספק', priority: 3, sortValue: (r) => r.name, render: (r) => <span className="font-medium text-ink">{r.name}</span> },
     { key: 'rating', header: 'דירוג', priority: 3, className: 'num', sortValue: (r) => r.rating ?? 0, render: (r) => r.rating != null
-        ? <span className="inline-flex items-center gap-1"><Star size={13} className="fill-star text-star" />{r.rating}</span>
+        ? <span className="inline-flex items-center gap-1"><Star size={ICON.xs} className="fill-star text-star" aria-hidden="true" />{r.rating}</span>
         : <span className="text-ink-ghost">—</span> },
     { key: 'cats', header: 'קטגוריות', priority: 3, render: (r) => <span className="text-ink-muted">{r.categories?.join(', ') || '—'}</span> },
     { key: 'contact', header: 'איש קשר', priority: 3, render: (r) => r.contact_name || '—' },
@@ -189,7 +189,7 @@ export function SuppliersList() {
         meta={financial
           ? `${data?.length ?? 0} ספקים · ${(data ?? []).filter((supplier) => (supplier.open_balance ?? 0) > 0).length} עם יתרה פתוחה`
           : `${data?.length ?? 0} ספקים`}
-        actions={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> ספק חדש</button>} />
+        actions={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> ספק חדש</button>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.contact_name ?? '').toLowerCase().includes(q) || (r.tax_id ?? '').toLowerCase().includes(q)}
         searchLabel="חיפוש בספקים"
@@ -221,8 +221,7 @@ export function SuppliersList() {
         }
         emptyTitle="עדיין אין ספקים"
         emptySubtitle="הוסף את הספק הראשון כדי להתחיל לנהל רכש, מחירים ויתרות"
-        emptyAction={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> ספק חדש</button>} />
-      {balanceFilter === 'open' && rows.length === 0 && <p className="text-sm text-ink-muted">אין ספקים עם יתרה פתוחה.</p>}
+        emptyAction={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> ספק חדש</button>} />
       {editing && <SupplierForm supplier={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refetch(); }} />}
       {priceUploadFor && (
         <PriceListUploadModal supplier={{ id: priceUploadFor.id, name: priceUploadFor.name }}
@@ -468,23 +467,22 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         <div><label className="label" htmlFor="supplier-whatsapp">WhatsApp</label><input id="supplier-whatsapp" className="input" dir="ltr" value={f.whatsapp} onChange={(e) => set('whatsapp', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-email">אימייל</label><input id="supplier-email" className="input" dir="ltr" value={f.email} onChange={(e) => set('email', e.target.value)} /></div>
         <div className="sm:col-span-2"><label className="label" htmlFor="supplier-address">כתובת</label><input id="supplier-address" className="input" value={f.address} onChange={(e) => set('address', e.target.value)} /></div>
-        <fieldset>
-          <legend className="label">ימי אספקה</legend>
-          <div className="flex flex-wrap gap-1.5">
-            {days.map((d, i) => (
-              <button type="button" key={i}
-                aria-pressed={f.delivery_days.includes(i)}
-                className={`rounded-lg border px-2.5 py-1.5 text-xs ${f.delivery_days.includes(i) ? 'bg-action-solid text-on-solid border-action-solid' : 'border-line-strong text-ink-soft hover:bg-surface-hover'}`}
-                onClick={() => set('delivery_days', f.delivery_days.includes(i) ? f.delivery_days.filter((x) => x !== i) : [...f.delivery_days, i].sort())}>
-                {d}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+        <div>
+          <span className="label">ימי אספקה</span>
+          <ToggleGroup label="ימי אספקה"
+            items={days.map((d, i) => ({ key: String(i), label: d }))}
+            value={f.delivery_days.map(String)}
+            onChange={(key) => {
+              const day = Number(key);
+              set('delivery_days', f.delivery_days.includes(day)
+                ? f.delivery_days.filter((x) => x !== day)
+                : [...f.delivery_days, day].sort());
+            }} />
+        </div>
         <div><label className="label" htmlFor="supplier-cutoff">שעת סגירת הזמנות</label><input id="supplier-cutoff" type="time" className="input" value={f.cutoff_time} onChange={(e) => set('cutoff_time', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-minimum">מינימום הזמנה (₪)</label><input id="supplier-minimum" type="number" className="input num" value={f.min_order_amount} onChange={(e) => set('min_order_amount', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-payment-terms">תנאי תשלום</label><input id="supplier-payment-terms" className="input" placeholder="שוטף + 30" value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} /></div>
-        <div className="sm:col-span-2 rounded-2xl bg-surface-sunken p-4 space-y-3">
+        <SubPanel className="sm:col-span-2 space-y-3">
           <div>
             <label className="label" htmlFor="supplier-bank-kind">סוג פרטי הבנק</label>
             <select id="supplier-bank-kind" ref={bankFieldRef} className="input" value={bank.kind}
@@ -520,7 +518,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
               )}
             </div>
           )}
-        </div>
+        </SubPanel>
         <div>
           <label className="label" htmlFor="supplier-status">סטטוס</label>
           <select id="supplier-status" className="input" value={f.status} onChange={(e) => set('status', e.target.value)}
@@ -664,18 +662,6 @@ export function SupplierCard() {
     { key: 'prices' as const, label: `מחירים (${data?.prices.length ?? 0})` },
   ]), [data]);
 
-  function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
-    let next = index;
-    if (event.key === 'ArrowLeft') next = (index + 1) % tabs.length;
-    else if (event.key === 'ArrowRight') next = (index - 1 + tabs.length) % tabs.length;
-    else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = tabs.length - 1;
-    else return;
-    event.preventDefault();
-    setTab(tabs[next].key);
-    requestAnimationFrame(() => document.getElementById(`supplier-tab-${tabs[next].key}`)?.focus());
-  }
-
   if (loading) return <RecordSkeleton />;
   if (error || !data) return <ErrorNote message={error ?? 'ספק לא נמצא'} />;
   const s = data.supplier;
@@ -719,55 +705,50 @@ export function SupplierCard() {
             </span></>}
         meta={<>
             {s.contact_name && <span>{s.contact_name}</span>}
-            {s.phone && <span className="flex items-center gap-1"><Phone size={13} /><span dir="ltr">{s.phone}</span></span>}
-            {s.email && <span className="flex items-center gap-1"><Mail size={13} /><span dir="ltr">{s.email}</span></span>}
-            {s.address && <span className="flex items-center gap-1"><MapPin size={13} />{s.address}</span>}
-            {s.delivery_days.length > 0 && <span className="flex items-center gap-1"><Truck size={13} />ימי אספקה {fmtDays(s.delivery_days)}</span>}
-            {s.cutoff_time && <span className="flex items-center gap-1"><Clock size={13} />סגירת הזמנות {s.cutoff_time.slice(0, 5)}</span>}
+            {s.phone && <span className="flex items-center gap-1"><Phone size={ICON.xs} aria-hidden="true" /><span dir="ltr">{s.phone}</span></span>}
+            {s.email && <span className="flex items-center gap-1"><Mail size={ICON.xs} aria-hidden="true" /><span dir="ltr">{s.email}</span></span>}
+            {s.address && <span className="flex items-center gap-1"><MapPin size={ICON.xs} aria-hidden="true" />{s.address}</span>}
+            {s.delivery_days.length > 0 && <span className="flex items-center gap-1"><Truck size={ICON.xs} aria-hidden="true" />ימי אספקה {fmtDays(s.delivery_days)}</span>}
+            {s.cutoff_time && <span className="flex items-center gap-1"><Clock size={ICON.xs} aria-hidden="true" />סגירת הזמנות {s.cutoff_time.slice(0, 5)}</span>}
           </>}
         primaryAction={canWrite && canStartSupplierCommerce(s.status)
-          ? <button className="btn-primary" onClick={() => setUploadOpen(true)}><Upload size={15} /> העלאת מחירון</button>
+          ? <button className="btn-primary" onClick={() => setUploadOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> העלאת מחירון</button>
           : null}
         secondaryActions={canWrite && <>
             {/* Named, not buried: "החליף מספר חשבון" is the task, and it used to be four steps
                 inside a form of twenty fields. Navigates rather than calling setEditing directly,
                 so the address is the one another screen can link to. */}
             <button className="btn-secondary" onClick={() => navigate(`/suppliers/${s.id}?edit=bank`)}>
-              <Landmark size={15} /> עדכון פרטי בנק
+              <Landmark size={ICON.sm} aria-hidden="true" /> עדכון פרטי בנק
             </button>
             <button className="btn-secondary" onClick={() => setEditing(true)}>עריכה</button>
           </>} />
 
       <Scorecard items={scoreItems} />
 
-      {s.notes && <div className="card card-pad text-sm text-ink-soft">{s.notes}</div>}
+      {s.notes && <Card className="text-sm text-ink-soft">{s.notes}</Card>}
 
       <SupplierCommunicationCard supplierId={s.id} supplierEmail={s.email}
         supplierPhone={s.whatsapp || s.phone} canWrite={!!canWrite} />
 
 
-      <div role="tablist" aria-label={`מידע עבור ${s.name}`} className="flex gap-1 border-b border-line no-print overflow-x-auto">
-        {tabs.map((t) => (
-          <button key={t.key} id={`supplier-tab-${t.key}`} role="tab" aria-selected={tab === t.key} aria-controls={`supplier-panel-${t.key}`}
-            tabIndex={tab === t.key ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, tabs.indexOf(t))} onClick={() => setTab(t.key)}
-            className={`min-h-11 px-4 py-2 text-sm whitespace-nowrap border-b-2 -mb-px ${tab === t.key ? 'border-action-solid text-action font-medium' : 'border-transparent text-ink-muted hover:text-ink-mid'}`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Tabs generates exactly these ids (tabId/panelId with idPrefix "supplier"), so the
+          panels below keep the wiring they already had. */}
+      <Tabs items={tabs} value={tab} onChange={(key) => setTab(key as typeof tab)}
+        label={`מידע עבור ${s.name}`} idPrefix="supplier" />
 
       {tab === 'orders' && (
-        <div role="tabpanel" id="supplier-panel-orders" aria-labelledby="supplier-tab-orders">
+        <TabPanel idPrefix="supplier" tabKey="orders">
         <DataTable rows={data.orders} columns={[
           { key: 'num', header: 'מס׳', className: 'num', render: (r: PurchaseOrder) => `#${r.number}` },
           { key: 'date', header: 'תאריך', sortValue: (r: PurchaseOrder) => r.created_at, render: (r: PurchaseOrder) => fmtDate(r.created_at) },
           { key: 'expected', header: 'אספקה צפויה', render: (r: PurchaseOrder) => fmtDate(r.expected_date) },
           { key: 'status', header: 'סטטוס', render: (r: PurchaseOrder) => <StatusBadge meta={PO_STATUS[r.status]} /> },
         ]} rowLabel={(r) => `הזמנת רכש מספר ${r.number} עבור ${s.name}`} onRowClick={(r) => navigate(`/orders/${r.id}`)} emptyTitle="אין הזמנות לספק זה" />
-        </div>
+        </TabPanel>
       )}
       {tab === 'invoices' && (
-        <div role="tabpanel" id="supplier-panel-invoices" aria-labelledby="supplier-tab-invoices" className="space-y-3">
+        <TabPanel idPrefix="supplier" tabKey="invoices" className="space-y-3">
         {data.consolidatedCount > 0 && (
           /* One wrapper span: a Note body may mix elements with each other, never with bare
              prose (noteProse.spec — .note is a flex row and shreds raw text into columns). */
@@ -786,10 +767,10 @@ export function SupplierCard() {
           { key: 'review', header: 'בדיקה', render: (r: Invoice) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
           { key: 'payment', header: 'תשלום', render: (r: Invoice) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
         ]} rowLabel={(r) => `חשבונית ${r.invoice_number} של ${s.name}`} onRowClick={(r) => navigate(`/invoices/${r.id}`)} emptyTitle="אין חשבוניות לספק זה" />
-        </div>
+        </TabPanel>
       )}
       {tab === 'payments' && (
-        <div role="tabpanel" id="supplier-panel-payments" aria-labelledby="supplier-tab-payments">
+        <TabPanel idPrefix="supplier" tabKey="payments">
         {data.payments ? (
           <DataTable rows={data.payments} columns={[
             { key: 'date', header: 'תאריך', sortValue: (r: Payment) => r.paid_date, render: (r: Payment) => fmtDate(r.paid_date) },
@@ -800,10 +781,10 @@ export function SupplierCard() {
         ) : (
           <Note tone="info">צפייה בתשלומים וביתרה הפתוחה של ספק זמינה לבעלים בלבד.</Note>
         )}
-        </div>
+        </TabPanel>
       )}
       {tab === 'credits' && (
-        <div role="tabpanel" id="supplier-panel-credits" aria-labelledby="supplier-tab-credits">
+        <TabPanel idPrefix="supplier" tabKey="credits">
         <DataTable rows={data.credits} columns={[
           { key: 'num', header: 'מס׳', className: 'num', render: (r: CreditRequest) => `#${r.number}` },
           { key: 'reason', header: 'סיבה', render: (r: CreditRequest) => CREDIT_REASON[r.reason] },
@@ -811,13 +792,13 @@ export function SupplierCard() {
           { key: 'status', header: 'סטטוס', render: (r: CreditRequest) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
           { key: 'date', header: 'נפתח', sortValue: (r: CreditRequest) => r.created_at, render: (r: CreditRequest) => fmtDate(r.created_at) },
         ]} rowLabel={(r) => `דרישת זיכוי מספר ${r.number} עבור ${s.name}`} onRowClick={() => navigate('/credits')} emptyTitle="אין זיכויים לספק זה" />
-        </div>
+        </TabPanel>
       )}
       {tab === 'prices' && (
-        <div role="tabpanel" id="supplier-panel-prices" aria-labelledby="supplier-tab-prices">
+        <TabPanel idPrefix="supplier" tabKey="prices">
           <SupplierPricesTab rows={data.prices} history={data.history}
             submissions={data.canSeeSubmissions ? data.submissions : null} />
-        </div>
+        </TabPanel>
       )}
 
       {editing && (
@@ -884,8 +865,8 @@ function SupplierPricesTab({ rows, history, submissions }: {
         // trend-*. It used to say alert-solid/done-fg — identical values today, which is exactly
         // why the mismatch survived unseen; the two vocabularies stay apart (DESIGN.md §2).
         return pct > 0
-          ? <span className="inline-flex items-center gap-1 text-trend-up-fg font-medium"><TrendingUp size={14} />{'‎'}+{pct.toFixed(1)}%</span>
-          : <span className="inline-flex items-center gap-1 text-trend-down-fg font-medium"><TrendingDown size={14} />{'‎'}{pct.toFixed(1)}%</span>;
+          ? <span className="inline-flex items-center gap-1 text-trend-up-fg font-medium"><TrendingUp size={ICON.xs} aria-hidden="true" />{'‎'}+{pct.toFixed(1)}%</span>
+          : <span className="inline-flex items-center gap-1 text-trend-down-fg font-medium"><TrendingDown size={ICON.xs} aria-hidden="true" />{'‎'}{pct.toFixed(1)}%</span>;
       },
     },
     {

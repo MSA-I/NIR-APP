@@ -3,7 +3,7 @@ import { Link, Navigate } from 'react-router';
 import { useAuth, homeFor } from '../auth/AuthContext';
 import { Building2, MailCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { ErrorNote, Note } from '../components/ui';
+import { Card, ErrorNote, ICON, Note } from '../components/ui';
 import {
   enabledFederatedProviders,
   FEDERATED_PROVIDER_LABEL,
@@ -13,6 +13,10 @@ import {
 } from '../lib/authProviders';
 
 const MIN_PASSWORD_LENGTH = 10;
+
+/** The one shape check on the address, named once so `ready` and the field's own validity state
+ *  cannot drift apart — the screen already made this judgement, it simply never told the field. */
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function isFederatedProvider(value: unknown): value is FederatedProvider {
   return typeof value === 'string' && (FEDERATED_PROVIDERS as readonly string[]).includes(value);
@@ -131,9 +135,13 @@ export default function Signup() {
     void data;
   }
 
+  // Typed-but-wrong, not merely empty: an untouched field is not a mistake yet, and marking it
+  // invalid before anyone has typed would announce a failure the visitor has not made.
+  const emailProblem = form.email.trim().length > 0 && !EMAIL_SHAPE.test(form.email.trim());
+  const passwordProblem = form.password.length > 0 && form.password.length < MIN_PASSWORD_LENGTH;
   const ready = form.organization.trim().length > 0
     && form.name.trim().length > 0
-    && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())
+    && EMAIL_SHAPE.test(form.email.trim())
     && form.password.length >= MIN_PASSWORD_LENGTH;
 
   async function submit() {
@@ -170,29 +178,29 @@ export default function Signup() {
 
   if (sent) {
     return (
-      <main className="mx-auto max-w-md px-4 py-12">
-        <div className="card card-pad space-y-3 text-center">
-          <MailCheck size={28} aria-hidden="true" className="mx-auto text-done-fg" />
+      <main className="mx-auto max-w-md px-4 py-8 sm:py-12">
+        <Card className="space-y-3 text-center">
+          <MailCheck size={ICON.hero} aria-hidden="true" className="mx-auto text-done-fg" />
           <h1 className="page-title">בדקו את תיבת הדואר</h1>
           {/* Deliberately the same sentence whether the address was new or already registered:
               a different answer per case would turn this page into a way to discover who has an
               account. */}
           <p className="text-sm text-ink-soft">{sent}</p>
           <Link className="btn-secondary" to="/login">מעבר להתחברות</Link>
-        </div>
+        </Card>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto max-w-md px-4 py-12">
-      <div className="card card-pad space-y-4">
-        <h1 className="page-title flex items-center gap-2"><Building2 size={22} /> פתיחת חשבון</h1>
+    <main className="mx-auto max-w-md px-4 py-8 sm:py-12">
+      <Card className="space-y-4">
+        <h1 className="page-title flex items-center gap-2"><Building2 size={ICON.xl} aria-hidden="true" /> פתיחת חשבון</h1>
         <p className="text-sm text-ink-soft">
           החשבון נפתח מיד, וההתחברות אפשרית לאחר אישור כתובת האימייל.
         </p>
 
-        {error && <ErrorNote message={error} />}
+        {error && <div id="signup-problem"><ErrorNote message={error} /></div>}
 
         {federated && (
           <Note tone="idle">
@@ -205,33 +213,46 @@ export default function Signup() {
           </Note>
         )}
 
-        <div>
-          <label className="label" htmlFor="signup-organization">שם העסק</label>
-          <input id="signup-organization" className="input" value={form.organization}
-            autoComplete="organization"
-            onChange={(event) => setForm({ ...form, organization: event.target.value })} />
-        </div>
-        <div>
-          <label className="label" htmlFor="signup-name">שם מלא</label>
-          <input id="signup-name" className="input" value={form.name} autoComplete="name"
-            onChange={(event) => setForm({ ...form, name: event.target.value })} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="signup-organization">שם העסק</label>
+            <input id="signup-organization" className="input" value={form.organization}
+              autoComplete="organization"
+              aria-describedby={error ? 'signup-problem' : undefined}
+              onChange={(event) => setForm({ ...form, organization: event.target.value })} />
+          </div>
+          <div>
+            <label className="label" htmlFor="signup-name">שם מלא</label>
+            <input id="signup-name" className="input" value={form.name} autoComplete="name"
+              aria-describedby={error ? 'signup-problem' : undefined}
+              onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          </div>
         </div>
         {!federated && (
-          <>
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="signup-email">אימייל</label>
+              {/* The screen has always judged this address — that is what greys out the button.
+                  It simply never told the field, so a screen reader met a dead control and no
+                  reason for it. */}
               <input id="signup-email" type="email" dir="ltr" className="input" value={form.email}
                 autoComplete="email"
+                aria-invalid={emailProblem || undefined}
+                aria-describedby={error ? 'signup-problem' : undefined}
                 onChange={(event) => setForm({ ...form, email: event.target.value })} />
             </div>
             <div>
               <label className="label" htmlFor="signup-password">סיסמה</label>
               <input id="signup-password" type="password" dir="ltr" className="input"
                 value={form.password} autoComplete="new-password"
+                aria-invalid={passwordProblem || undefined}
+                aria-describedby={`signup-password-rule${error ? ' signup-problem' : ''}`}
                 onChange={(event) => setForm({ ...form, password: event.target.value })} />
-              <p className="mt-1 text-xs text-ink-muted">לפחות {MIN_PASSWORD_LENGTH} תווים.</p>
+              <p id="signup-password-rule" className={`mt-1 text-xs ${passwordProblem ? 'text-alert-fg' : 'text-ink-muted'}`}>
+                לפחות {MIN_PASSWORD_LENGTH} תווים.
+              </p>
             </div>
-          </>
+          </div>
         )}
 
         <Note tone="idle">
@@ -271,7 +292,7 @@ export default function Signup() {
         <p className="text-center text-sm text-ink-muted">
           כבר יש חשבון? <Link className="link" to="/login">התחברות</Link>
         </p>
-      </div>
+      </Card>
     </main>
   );
 }

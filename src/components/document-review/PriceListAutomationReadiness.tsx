@@ -4,7 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { fmtMoneyExact } from '../../lib/format';
 import { toHebrewError } from '../../lib/errors';
 import { supabase } from '../../lib/supabase';
-import { Note } from '../ui';
+import { ICON, Note } from '../ui';
 
 interface CalibrationPreparationRow {
   shadow_run_id: string;
@@ -359,7 +359,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
                     onChange={(event) => setPrepareReasons((current) => ({ ...current, [shadowRunId]: event.target.value }))} />
                   <button type="button" className="btn-secondary" disabled={preparing || truncated}
                     onClick={() => void prepareBatch(shadowRunId, rows)}>
-                    {preparing && <Loader2 size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+                      {preparing && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />}
                     הכנת האצווה לבדיקת בעלים
                   </button>
                 </div>
@@ -388,8 +388,8 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
                   <button type="button" className="btn-primary" disabled={reviewing}
                     onClick={() => void reviewBatch(shadowRunId, receipt)}>
                     {reviewing
-                      ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                      : <CheckCircle2 size={16} aria-hidden="true" />}
+                    ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />
+                      : <CheckCircle2 size={ICON.sm} aria-hidden="true" />}
                     אישור האצווה כמסומנת נכונה
                   </button>
                 </div>

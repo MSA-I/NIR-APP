@@ -19,10 +19,9 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 
-import { quickActionsForPath } from '../components/Fab';
 import { quickCaptureReviewTarget } from '../components/QuickCapture';
 import { quickActionsFor } from '../lib/quickActions';
-import { showNavHeaders, sectionsForRole } from '../components/Layout';
+import { sectionsForRole } from '../components/Layout';
 import { CategoryDonut } from '../components/charts';
 import { toHebrewError } from '../lib/errors';
 import {
@@ -52,11 +51,19 @@ beforeAll(() => {
 describe('finding 7 — focused forms keep the full bar without losing capture', () => {
   const FOCUSED = ['/orders/new', '/invoices/new', '/receiving/abc-123'];
 
+  /**
+   * `quickActionsForPath(role, pathname)` was the subject here until 26.08.2026. It had stopped
+   * being one: after this very finding the body became `return quickActionsFor(role)` and the
+   * pathname argument was discarded, so three of the five cases below were asserting that a
+   * function ignores a parameter. The CONTRACT is unchanged and still pinned — the bar a role gets
+   * does not depend on the screen — it is simply asserted against the function that decides it,
+   * plus `layoutMobileNavigation.spec.tsx`, which renders the bar ON a focused route.
+   */
   it('keeps every role action on the three long-form routes', () => {
-    for (const path of FOCUSED) {
-      const actions = quickActionsForPath('office', path);
-      expect(actions).toEqual(quickActionsFor('office'));
+    for (const role of ['owner', 'office', 'accountant'] as const) {
+      expect(quickActionsFor(role).length).toBeGreaterThan(0);
     }
+    expect(FOCUSED).toHaveLength(3);
   });
 
   /**
@@ -66,10 +73,8 @@ describe('finding 7 — focused forms keep the full bar without losing capture',
    * the person's unsaved work in place.
    */
   it('keeps navigation and capture together there', () => {
-    for (const path of FOCUSED) {
-      expect(quickActionsForPath('office', path).some((action) => action.kind === 'link')).toBe(true);
-      expect(quickActionsForPath('office', path).some((action) => action.kind === 'capture')).toBe(true);
-    }
+    expect(quickActionsFor('office').some((action) => action.kind === 'link')).toBe(true);
+    expect(quickActionsFor('office').some((action) => action.kind === 'capture')).toBe(true);
   });
 
   it('opens one captured document from a safe route but never abandons an unsaved form', () => {
@@ -82,14 +87,9 @@ describe('finding 7 — focused forms keep the full bar without losing capture',
     expect(quickCaptureReviewTarget('/dashboard', 2, 2, id)).toBeNull();
   });
 
-  it('changes nothing anywhere else', () => {
-    for (const role of ['owner', 'office', 'accountant'] as const) {
-      expect(quickActionsForPath(role, '/dashboard')).toEqual(quickActionsFor(role));
-    }
-  });
-
   it('does not erase a role without a capture action', () => {
-    expect(quickActionsForPath('accountant', '/invoices/new')).toEqual(quickActionsFor('accountant'));
+    expect(quickActionsFor('accountant').every((action) => action.kind === 'link')).toBe(true);
+    expect(quickActionsFor('accountant').length).toBeGreaterThan(0);
   });
 });
 
@@ -148,27 +148,25 @@ describe('finding 8 — "שכפול כטיוטה" is gone, and nothing replaced 
 
 /* ================= finding 12 — the header rule whose premise expired ================= */
 
+/**
+ * `showNavHeaders(sections)` was exported for this block and consulted by no renderer, so the three
+ * cases here proved a predicate rather than a screen. The rule it stood for now lives where it is
+ * visible — a named group with one destination renders as a plain link, not a disclosure — and
+ * `layout.spec.ts` asserts it against the section data the shell actually consumes.
+ */
 describe('finding 12 — no group header over a single grouped link', () => {
   it('shows no tenant destinations without an active role', () => {
-    const sections = sectionsForRole(undefined);
-    expect(sections.flatMap((s) => s.items)).toHaveLength(0);
-    expect(showNavHeaders(sections)).toBe(false);
-  });
-
-  it('still shows them to every role with a real menu', () => {
-    for (const role of ['owner', 'office', 'accountant'] as const) {
-      expect(showNavHeaders(sectionsForRole(role))).toBe(true);
-    }
+    expect(sectionsForRole(undefined).flatMap((s) => s.items)).toHaveLength(0);
   });
 
   /**
    * The regression that reopened it: /dashboard was added for ALL roles and lives in the unnamed
-   * leading section. Counting named sections only keeps the rule independent of that entry.
+   * leading section, so a rule counting every item would be satisfied by it alone.
    */
   it('is not moved by the unnamed leading section', () => {
     const accountant = sectionsForRole('accountant');
     expect(accountant[0]?.section).toBe('');
-    expect(showNavHeaders(accountant)).toBe(true);
+    expect(accountant.filter((s) => s.section).flatMap((s) => s.items).length).toBeGreaterThan(0);
   });
 });
 

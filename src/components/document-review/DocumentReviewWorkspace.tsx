@@ -3,7 +3,7 @@ import { FileCheck2, RefreshCw, ScanText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { openReservedPopup } from '../../lib/popup';
 import { documentProcessingFailureText, documentUiStatus } from '../../lib/documentStatus';
-import { Note, useToast } from '../ui';
+import { ICON, Note, useToast } from '../ui';
 import { DocumentStatusBadge } from '../DocumentStatusBadge';
 import { DocumentAssessmentPanel } from './DocumentAssessmentPanel';
 import { DocumentExportPreview } from './DocumentExportPreview';
@@ -202,7 +202,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
             to report; its absence carries the same information without spending the space. */}
         {(snapshot.reviewCorrections.length > 0 || snapshot.annotations.length > 0) && (
           <div className="mt-4 rounded-lg bg-surface-sunken p-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-ink-soft"><FileCheck2 size={17} aria-hidden="true" /> שכבות בדיקה</div>
+            <div className="flex items-center gap-2 text-sm font-medium text-ink-soft"><FileCheck2 size={ICON.md} aria-hidden="true" /> שכבות בדיקה</div>
             <p className="mt-1 text-sm text-ink-body"><span className="num">{snapshot.reviewCorrections.length}</span> תיקונים · <span className="num">{snapshot.annotations.length}</span> הערות</p>
           </div>
         )}
@@ -238,7 +238,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
                   from the database — `engine`, `model` and `provider` are still written and still
                   queryable by an operator; they simply stop being printed at a tenant. */}
               <div>
-                <dt className="flex items-center gap-1.5 font-medium text-ink-soft"><ScanText size={14} aria-hidden="true" /> גרסת עיבוד</dt>
+                <dt className="flex items-center gap-1.5 font-medium text-ink-soft"><ScanText size={ICON.xs} aria-hidden="true" /> גרסת עיבוד</dt>
                 <dd className="mt-0.5 break-words">
                   {snapshot.extraction
                     ? <>קריאה <span dir="ltr" className="num">{snapshot.extraction.model_version}</span></>
@@ -282,7 +282,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
 
             {technicalOpen && interpretationEvidence.length > 0 && (
               <div
-                className="mt-2 max-w-full overflow-x-auto rounded-lg border border-line"
+                className="mt-2 table-scroll overflow-x-auto rounded-lg border border-line"
                 role="region"
                 tabIndex={0}
                 aria-label="רמות זיהוי גולמיות של הפירוש; ניתן לגלול בתוך הטבלה"
@@ -311,7 +311,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
 
             {technicalOpen && extractionEvidence.length > 0 && (
               <div
-                className="mt-2 max-w-full overflow-x-auto rounded-lg border border-line"
+                className="mt-2 table-scroll overflow-x-auto rounded-lg border border-line"
                 role="region"
                 tabIndex={0}
                 aria-label="רמות זיהוי גולמיות של החילוץ; ניתן לגלול בתוך הטבלה"
@@ -353,7 +353,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
           </span>
           {!readOnly && onReprocess && (
             <button type="button" className="btn-secondary" disabled={reprocessing} onClick={onReprocess}>
-              <RefreshCw className={reprocessing ? 'animate-spin motion-reduce:animate-none' : ''} size={17} aria-hidden="true" />
+              <RefreshCw className={reprocessing ? 'animate-spin ' : ''} size={ICON.md} aria-hidden="true" />
               {reprocessing ? 'שולח מחדש…' : 'עיבוד מחדש'}
             </button>
           )}

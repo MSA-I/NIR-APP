@@ -129,7 +129,14 @@ describe('document control capability and UX contract', () => {
     expect(source.indexOf('מה קורה עכשיו')).toBeLessThan(source.indexOf('הפריט הדחוף ביותר'));
     expect(source.indexOf('הפריט הדחוף ביותר')).toBeLessThan(source.indexOf('מסמכים אחרונים'));
     expect(source).toContain('grid grid-cols-2 gap-3 lg:grid-cols-4');
-    expect(source).toContain('min-h-11');
+    // The 44px floor used to be pinned here as a literal `min-h-11` repeated on every control.
+    // It moved to where it belongs: `@utility btn` in index.css sets `min-h-11`, and every
+    // variant applies it — so a control that wears `btn-primary` or `btn-secondary` cannot be
+    // under the floor, and a control that wears neither is the actual risk. That is what this
+    // now measures: every <button> and <Link> on the screen goes through the shared base.
+    const controls = source.match(/<(?:button|Link)\s[^>]*?className="[^"]*"/g) ?? [];
+    expect(controls.length).toBeGreaterThan(0);
+    for (const control of controls) expect(control).toMatch(/className="[^"]*\bbtn-/);
     expect(source).not.toMatch(/overflow-x-(?:auto|scroll)/);
   });
 

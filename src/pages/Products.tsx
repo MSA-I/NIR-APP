@@ -5,7 +5,7 @@ import { Plus, Pencil, Copy, Power, Upload, History } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, Modal, useToast, ErrorNote, PageHeader, SkeletonTable, ConfirmDialog, type Column } from '../components/ui';
+import { DataTable, Modal, useToast, ErrorNote, PageHeader, SkeletonTable, ConfirmDialog, ToggleGroup, ICON, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
 import { fmtMoneyExact, formatUnit, normalizeUnitInput, productLabel } from '../lib/format';
 import { useCategories } from './Suppliers';
@@ -175,9 +175,9 @@ export default function Products() {
         actions={<>
           {/* The same owner/office boundary used by the price-list screen. */}
           {canUploadPrices
-            ? <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={16} /> העלאת מחירון ספק</button>
+            ? <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> העלאת מחירון ספק</button>
             : <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמנהל הרכש בלבד.</span>}
-          {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={16} /> מוצר חדש</button>}
+          {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> מוצר חדש</button>}
         </>} />
 
       {/* Only owner/office can call set_product_display_name (0149), so nobody else is offered a
@@ -185,20 +185,18 @@ export default function Products() {
           catalogue is unknown, and a real 0 when the work is genuinely finished — the same
           distinction the ספקים column below already draws. */}
       {canWrite && (
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="תצוגת מסך המוצרים">
-          <button type="button" aria-pressed={!reviewMode && !repairMode} onClick={showCatalogue}
-            className={`chip-filter ${reviewMode || repairMode ? '' : 'chip-filter-active'}`}>קטלוג</button>
-          <button type="button" aria-pressed={reviewMode} onClick={() => { setReviewMode(true); setRepairMode(false); }}
-            className={`chip-filter ${reviewMode ? 'chip-filter-active' : ''}`}
-            data-testid="name-review-toggle">
-            שמות לאישור ({awaitingName ? awaitingName.length : '—'})
-          </button>
-          <button type="button" aria-pressed={repairMode} onClick={() => { setRepairMode(true); setReviewMode(false); }}
-            className={`chip-filter ${repairMode ? 'chip-filter-active' : ''}`}
-            data-testid="source-name-repair-toggle">
-            תיקון ממקור ({repairCount ?? '—'})
-          </button>
-        </div>
+        <ToggleGroup label="תצוגת מסך המוצרים"
+          value={reviewMode ? 'review' : repairMode ? 'repair' : 'catalogue'}
+          onChange={(mode) => {
+            if (mode === 'review') { setReviewMode(true); setRepairMode(false); return; }
+            if (mode === 'repair') { setRepairMode(true); setReviewMode(false); return; }
+            showCatalogue();
+          }}
+          items={[
+            { key: 'catalogue', label: 'קטלוג' },
+            { key: 'review', label: `שמות לאישור (${awaitingName ? awaitingName.length : '—'})`, testId: 'name-review-toggle' },
+            { key: 'repair', label: `תיקון ממקור (${repairCount ?? '—'})`, testId: 'source-name-repair-toggle' },
+          ]} />
       )}
 
       {repairError && repairMode && <ErrorNote message={repairError} />}

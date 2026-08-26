@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pencil, ShieldPlus, Undo2 } from 'lucide-react';
-import { Modal, Note, StatusBadge, ConfirmDialog } from '../components/ui';
+import { Modal, Note, StatusBadge, ConfirmDialog, ICON } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { fmtDate, fmtDateTime, fmtNum } from '../lib/format';
 import { SUBSCRIPTION_STATUS } from '../lib/status';
@@ -11,6 +11,25 @@ import {
 } from '../lib/platform';
 
 const BILLING_INTERVAL: Record<string, string> = { monthly: 'חודשי', yearly: 'שנתי' };
+
+/**
+ * Every unit `private.entitlement_definitions` defines, in Hebrew.
+ *
+ * It used to be one ternary — `row.unit === 'bytes' ? 'בתים' : ''` — which is not "we only
+ * translate bytes", it is "every other unit is silently dropped". `40` appeared where `40 מסמכים`
+ * belonged, and an operator reading a column of bare integers has to remember which row counts
+ * documents and which counts users. The map covers the six units that exist; the LOOKUP falls back
+ * to the raw unit rather than to an empty string, so a unit added by a later migration shows up as
+ * itself and is visible enough to be translated, instead of vanishing.
+ */
+const ENTITLEMENT_UNIT: Record<string, string> = {
+  users: 'משתמשים',
+  suppliers: 'ספקים',
+  documents: 'מסמכים',
+  pages: 'עמודים',
+  bytes: 'בתים',
+  runs: 'ריצות',
+};
 
 /**
  * The honest rendering of one resolved entitlement, and the reason this component exists.
@@ -24,9 +43,60 @@ function entitlementValue(row: OrgEntitlement): { text: string; muted: boolean }
   if (!row.measured) return { text: '—', muted: true };
   if (row.kind === 'boolean') return { text: row.boolean_value ? 'פעיל' : 'חסום', muted: false };
   if (row.unlimited) return { text: 'ללא הגבלה', muted: false };
-  const unit = row.unit === 'bytes' ? 'בתים' : '';
+  const unit = row.unit ? ENTITLEMENT_UNIT[row.unit] ?? row.unit : '';
   return { text: `${fmtNum(row.numeric_limit ?? 0)} ${unit}`.trim(), muted: false };
 }
+
+/**
+ * Paddle's event vocabulary (`0187` section 2), in the language the rest of this console speaks.
+ *
+ * The list printed `subscription.past_due` and `paddle` verbatim into an otherwise Hebrew screen —
+ * machine keys an operator has to decode before they can act, on the one panel where the question
+ * is usually "did the customer's payment fail, and when". The phrasing is NOMINAL on purpose: this
+ * section is headed "אירועים מספק החיוב" and each row is the name of something the PROVIDER
+ * reported, not a claim that our own subscription state moved. Whether it moved is the ledger's
+ * business and is deliberately not shown here.
+ *
+ * The fallback is the raw key, for the reason every fallback in this file is: an event type added
+ * at the provider must appear as itself rather than as a blank, and `0187` dead-letters an
+ * unrecognised type instead of hiding it. The raw key also stays in the row's `title`, because
+ * correlating with the provider's own dashboard needs the exact string.
+ */
+const BILLING_EVENT_TYPE: Record<string, string> = {
+  'subscription.created': 'יצירת מנוי',
+  'subscription.imported': 'ייבוא מנוי',
+  'subscription.trialing': 'מנוי בתקופת ניסיון',
+  'subscription.activated': 'הפעלת מנוי בתשלום',
+  'subscription.updated': 'עדכון פרטי מנוי',
+  'subscription.canceled': 'ביטול מנוי',
+  'subscription.past_due': 'כשל בחיוב חידוש',
+  'subscription.resumed': 'חזרה מביטול מנוי',
+  'subscription.paused': 'הקפאת מנוי',
+  'transaction.completed': 'השלמת תשלום',
+  'transaction.paid': 'תשלום שנגבה',
+  'transaction.payment_failed': 'כשל בתשלום',
+  'transaction.billed': 'הנפקת חיוב',
+  'transaction.created': 'יצירת עסקה',
+  'transaction.ready': 'עסקה מוכנה לחיוב',
+  'transaction.updated': 'עדכון עסקה',
+  'transaction.canceled': 'ביטול עסקה',
+  'transaction.past_due': 'עסקה בפיגור',
+  'transaction.revised': 'תיקון עסקה',
+  'adjustment.created': 'רישום התאמה',
+  'adjustment.updated': 'עדכון התאמה',
+};
+
+/**
+ * The three providers `0187` seeds. A brand name is not translated — `Paddle` is what the operator
+ * will look for in the provider's own console — it is merely capitalised as the name it is, rather
+ * than left as the lowercase database key.
+ */
+const BILLING_PROVIDER: Record<string, string> = {
+  paddle: 'Paddle',
+  stripe: 'Stripe',
+  morning: 'Morning',
+  manual: 'ידני',
+};
 
 export default function CustomerSubscription({
   orgId, subscription, entitlements, plans, billingEvents, may, busy, run,
@@ -58,7 +128,7 @@ export default function CustomerSubscription({
         {may('subscription.edit') && (
           <button type="button" className="btn-ghost ms-auto py-1! text-xs"
             onClick={() => setEditingPlan(true)}>
-            <Pencil size={13} /> שינוי מנוי
+            <Pencil size={ICON.xs} /> שינוי מנוי
           </button>
         )}
       </div>
@@ -67,7 +137,13 @@ export default function CustomerSubscription({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="text-lg font-medium text-ink">{subscription.plan_label}</span>
           <StatusBadge meta={SUBSCRIPTION_STATUS[subscription.status]} />
-          <span className="text-sm text-ink-muted">חיוב {BILLING_INTERVAL[subscription.billing_interval]}</span>
+          {/* The fallback is not defensive noise: without it an interval outside monthly|yearly —
+              which the column's CHECK allows a future migration to add — renders the dangling
+              fragment "חיוב " with nothing after it, and a reader cannot tell a missing translation
+              from a missing value. `CustomerUsage` already had this right with `?? period_source`. */}
+          <span className="text-sm text-ink-muted">
+            חיוב {BILLING_INTERVAL[subscription.billing_interval] ?? subscription.billing_interval}
+          </span>
           {/* When the provider has not told us a period, saying so beats implying a month that
               nobody agreed. What this date is NOT is explained in the line below. */}
           <span className="text-sm text-ink-muted">
@@ -138,12 +214,12 @@ export default function CustomerSubscription({
                   {row.override_id ? (
                     <button type="button" className="btn-ghost py-1! text-xs"
                       onClick={() => setRevoking(row)}>
-                      <Undo2 size={13} /> ביטול החריג
+                      <Undo2 size={ICON.xs} /> ביטול החריג
                     </button>
                   ) : (
                     <button type="button" className="btn-ghost py-1! text-xs"
                       onClick={() => setGranting(row)}>
-                      <ShieldPlus size={13} /> חריג
+                      <ShieldPlus size={ICON.xs} /> חריג
                     </button>
                   )}
                 </span>
@@ -160,9 +236,14 @@ export default function CustomerSubscription({
           <h3 className="text-sm font-medium text-ink-body">אירועים מספק החיוב</h3>
           <ul className="space-y-1">
             {billingEvents.map((event) => (
-              <li key={event.id} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-ink-body">{event.event_type}</span>
-                <span className="text-xs text-ink-muted">{event.provider}</span>
+              <li key={event.id} className="flex flex-wrap items-center gap-2 text-sm"
+                title={`${event.event_type} · ${event.provider}`}>
+                <span className="text-ink-body">
+                  {BILLING_EVENT_TYPE[event.event_type] ?? event.event_type}
+                </span>
+                <span className="text-xs text-ink-muted">
+                  {BILLING_PROVIDER[event.provider] ?? event.provider}
+                </span>
                 <span className="ms-auto text-xs text-ink-muted">{fmtDateTime(event.received_at)}</span>
               </li>
             ))}

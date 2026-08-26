@@ -5,7 +5,7 @@ import { Loader2, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { Breadcrumbs, PageHeader, RecordSkeleton, useToast, ConfirmDialog, ErrorNote, Note, StatusBadge } from '../components/ui';
+import { Breadcrumbs, PageHeader, RecordSkeleton, useToast, ConfirmDialog, ErrorNote, Note, StatusBadge, Card, ICON } from '../components/ui';
 import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
 import { fmtDate, todayISO } from '../lib/format';
@@ -334,7 +334,7 @@ export default function InvoiceNew() {
         </div>
       )}
 
-      <div className="card card-pad grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <Card className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
           {/* `disabled` when the invoice is linked covers the create button too: a supplier the
               linked order already decided is not one the user may add to here. */}
@@ -350,30 +350,34 @@ export default function InvoiceNew() {
         <div><label className="label" htmlFor="invoice-new-total">סה״כ לתשלום *</label><input id="invoice-new-total" type="number" step="0.01" className="input num font-semibold" value={f.total} onChange={(e) => onTotal(e.target.value)} /></div>
         <div className="sm:col-span-2"><label className="label" htmlFor="invoice-new-notes">הערות</label><textarea id="invoice-new-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
         <div className="sm:col-span-2"><label className="label" htmlFor="invoice-new-reason">סיבת קליטת החשבונית *</label><input id="invoice-new-reason" className="input" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>
-      </div>
+      </Card>
 
       {(checks || checking || checkError) && (
-        <div className="card card-pad">
+        <Card>
           <div className="section-title mb-3 flex items-center gap-2">
             בדיקות אוטומטיות
-            {checking && <span role="status" className="flex items-center gap-1 text-sm text-ink-muted"><Loader2 size={14} className="animate-spin text-ink-faint" aria-hidden="true" /> בודק…</span>}
+            {checking && <span role="status" className="flex items-center gap-1 text-sm text-ink-muted"><Loader2 size={ICON.sm} className="animate-spin text-ink-faint" aria-hidden="true" /> בודק…</span>}
           </div>
           {checkError && <Note tone="alert">{checkError}</Note>}
           {checks && <CheckList checks={checks} />}
-        </div>
+        </Card>
       )}
 
       <div className="flex justify-end gap-2">
         <button className="btn-secondary" onClick={() => dirty ? setLeaveTarget('/invoices') : navigate('/invoices')}>ביטול</button>
         {hasCritical ? (
           <>
-            <button className="btn-secondary" disabled={busy || !checksReady} onClick={() => void save()}>שמירה כ״דורשת בירור״</button>
+            <button className="btn-secondary" disabled={busy || !checksReady} onClick={() => void save()}>
+              {busy && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />} שמירה כ״דורשת בירור״
+            </button>
             <button className="btn-danger" disabled={busy || !checksReady} onClick={() => setOverrideOpen(true)}>
-              <ShieldAlert size={15} /> אישור למרות האזהרה
+              <ShieldAlert size={ICON.sm} aria-hidden="true" /> אישור למרות האזהרה
             </button>
           </>
         ) : (
-          <button className="btn-primary" disabled={busy || !checksReady} onClick={() => void save()}>שמירת חשבונית</button>
+          <button className="btn-primary" disabled={busy || !checksReady} onClick={() => void save()}>
+            {busy && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />} שמירת חשבונית
+          </button>
         )}
       </div>
 

@@ -4,7 +4,7 @@ import { Check, CheckCircle2, Clock3, Loader2, MessageCircle, XCircle } from 'lu
 import { supabase } from '../../lib/supabase';
 import { useQuery, unwrap } from '../../lib/useQuery';
 import { useAuth } from '../../auth/AuthContext';
-import { ConfirmDialog, ErrorNote, Modal, PageLoader, useToast } from '../../components/ui';
+import { ConfirmDialog, ErrorNote, Modal, RecordSkeleton, PageHeader, ICON, useToast } from '../../components/ui';
 import { useCategories } from '../Suppliers';
 import { toHebrewError } from '../../lib/errors';
 import {
@@ -716,9 +716,9 @@ export default function NewOrder() {
     toast('ההזמנה סומנה כנשלחה לספק');
   }
 
-  if (loading) return <PageLoader />;
+  if (loading) return <RecordSkeleton />;
   if (error) return <ErrorNote message={error} />;
-  if (!hydrated) return <PageLoader />;
+  if (!hydrated) return <RecordSkeleton />;
 
   const saveLabel = saveStatus === 'saving' ? 'שומר…'
     : saveStatus === 'dirty' ? 'ממתין לשמירה…'
@@ -739,27 +739,30 @@ export default function NewOrder() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="page-title">הזמנה חדשה</h1>
-          <p className="mt-1 text-sm text-ink-muted">בחירת מוצרים תחילה, אישור ספקים ומחירים לאחר מכן</p>
-          <div className={`mt-2 flex min-h-6 items-center gap-1.5 text-xs ${saveStatus === 'error' ? 'text-alert-fg' : 'text-ink-muted'}`} role="status" aria-live="polite">
-            {saveStatus === 'saving' ? <Loader2 size={13} className="animate-spin" /> : saveStatus === 'saved' ? <Check size={13} /> : <Clock3 size={13} />}
+      <PageHeader
+        title="הזמנה חדשה"
+        description="בחירת מוצרים תחילה, אישור ספקים ומחירים לאחר מכן"
+        meta={(
+          <>
+          <div className={`flex min-h-6 items-center gap-1.5 text-xs ${saveStatus === 'error' ? 'text-alert-fg' : 'text-ink-muted'}`} role="status" aria-live="polite">
+            {saveStatus === 'saving' ? <Loader2 size={ICON.xs} className="animate-spin" aria-hidden="true" /> : saveStatus === 'saved' ? <Check size={ICON.xs} aria-hidden="true" /> : <Clock3 size={ICON.xs} aria-hidden="true" />}
             <span>{draftNumber ? <>טיוטה <span className="num">#{draftNumber}</span> · </> : null}{saveLabel}</span>
             {saveStatus === 'error' && <button type="button" className="font-semibold underline" onClick={() => void runSaveQueue()}>ניסיון חוזר</button>}
           </div>
           {saveError && saveStatus === 'error' && <p role="alert" className="text-xs text-alert-fg">{saveError}</p>}
-        </div>
-        <div className="flex flex-col items-stretch gap-1 sm:items-end">
+          </>
+        )}
+        actions={(
+          <div className="flex flex-col items-stretch gap-1 sm:items-end">
           <div className="flex flex-wrap gap-2">
-            {(draftId || cart.length > 0) && <button type="button" className="btn-ghost text-alert-fg" disabled={busy} onClick={() => setCancelOpen(true)}><XCircle size={15} /> ביטול טיוטה</button>}
+            {(draftId || cart.length > 0) && <button type="button" className="btn-danger" disabled={busy} onClick={() => setCancelOpen(true)}><XCircle size={ICON.sm} aria-hidden="true" /> ביטול טיוטה</button>}
             <button type="button" className="btn-primary" disabled={busy || !cart.length || split.blocked.length > 0} onClick={() => void goToSummary()}>
-              <CheckCircle2 size={15} /> סקירה ואישור
+              <CheckCircle2 size={ICON.sm} aria-hidden="true" /> סקירה ואישור
             </button>
           </div>
           {split.blocked.length > 0 && <p className="text-xs text-alert-fg sm:text-end">יש <span className="num">{split.blocked.length}</span> פריטים ללא הקצאת ספק תקפה — יש לתקן אותם כדי להמשיך</p>}
-        </div>
-      </div>
+          </div>
+        )} />
 
       {/* T7.3: the wizard steps speak the floating-pill language — a white pill strip with the
           active step as a solid oceanic pill, replacing the ruled underline tabs.
@@ -868,11 +871,11 @@ export default function NewOrder() {
                     : hasWhatsApp ? (
                       <>
                         <button type="button" className={opened ? 'btn-secondary' : 'btn-primary'} disabled={sendingId !== null} onClick={() => sendQueuedOrder(order)}>
-                          <MessageCircle size={15} /> {opened ? 'פתיחה מחדש' : 'פתיחת WhatsApp'}
+                          <MessageCircle size={ICON.sm} aria-hidden="true" /> {opened ? 'פתיחה מחדש' : 'פתיחת WhatsApp'}
                         </button>
                         {opened && (
                           <button type="button" className="btn-primary" disabled={sendingId !== null} onClick={() => void confirmQueuedOrderSent(order)}>
-                            {sendingId === order.id ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} סמן כנשלחה לספק
+                            {sendingId === order.id ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={ICON.sm} aria-hidden="true" />} סמן כנשלחה לספק
                           </button>
                         )}
                       </>

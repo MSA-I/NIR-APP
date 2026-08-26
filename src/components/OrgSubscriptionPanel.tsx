@@ -1,9 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { CreditCard, Undo2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fmtDate, fmtNum, fmtPlanPrice } from '../lib/format';
 import { SUBSCRIPTION_STATUS } from '../lib/status';
-import { ErrorNote, Modal, Note, StatusBadge } from './ui';
+import { DOMAIN, key } from '../lib/query/keys';
+import { useOrgScope } from '../lib/query/orgScope';
+import { planTierClass } from './PlanBadge';
+import {
+  HEADLINE_QUOTA_KEY, PLAN_LIST, PlanCard, PlanLadderSkeleton, planEmphasis, type PlanFeatureRow,
+} from './PlanCard';
+import { usageSnapshotQuery, type UsageRow } from './PlanLimitNote';
+import { ErrorNote, ICON, Modal, Note, Skeleton, StatusBadge } from './ui';
 
 /**
  * The tenant's own subscription surface: what they are on, what else exists, and the three
@@ -18,10 +26,12 @@ import { ErrorNote, Modal, Note, StatusBadge } from './ui';
  * payment, and contains no wording that could be read as money having moved. A rule enforced by
  * the absence of a code path cannot be violated by a future edit to that path.
  *
- * THE OTHER FOUR RULES, each with the decision that forces it:
+ * THE OTHER FIVE RULES, each with the decision that forces it:
  *   * Currency is never guessed (#208). ILS or USD follows the billing country VERIFIED at the
  *     merchant of record — not an IP, not a picker. With no verified country there is no verified
- *     currency, so prices render `—` and the panel says why. Never `0`.
+ *     currency, so no amount is rendered at all and the ladder says where the amount IS given
+ *     (`PRICE_AT_UPGRADE`; it was a `—` in each price slot until the owner's ruling of
+ *     26.08.2026). Never `0`.
  *   * `ביזנס` is `דברו איתנו` and carries no figure (#194). The internal minimums of #201 are
  *     platform business and never reach a tenant screen.
  *   * A paid→paid tier or interval change lands AT THE NEXT RENEWAL with no proration (#216);
@@ -29,10 +39,26 @@ import { ErrorNote, Modal, Note, StatusBadge } from './ui';
  *     Neither ever touches the usage period, which is anchored to signup (#242). The server
  *     transitions for all three do not exist yet, so the controls render DISABLED with the reason
  *     stated — visible per #204, which forbids hidden cancellation, and never silently no-op.
- *     `is_paid_plan` is false for every organization today, so none of them is reachable.
  *   * A failed renewal is read-only, not deletion and not a silent downgrade (#221), and the only
  *     way out is a successful signed payment event (#222). The notice says both halves, because a
  *     customer who is refused an upload will otherwise assume the worse one.
+ *   * **A PLAN CAN BE GIVEN, AND THEN "PAID PLAN" STOPS MEANING "PAID FOR".** This one is new, and
+ *     it is the correction that shaped this rewrite. `is_paid_plan` answers a question about the
+ *     LADDER — is this rung above free — and until `0210` that happened to coincide with the
+ *     question the customer's screen was actually asking. `0210` puts every organisation on
+ *     `premium` until the window closes, so from the day it deploys every tenant answers true to
+ *     `is_paid_plan` while not one of them has paid anything. Three branches here used to key off
+ *     it and all three then lie: a person who never bought anything would be shown a billing
+ *     period, told "תקופת חיוב לא התקבלה מספק הסליקה" — which reads as a payment failure — and
+ *     offered a cancel button for a subscription that does not exist. They now key off
+ *     `has_paid` from `my_plan_grant()` (0212), which is the existence of a real billing period
+ *     and nothing softer. `is_paid_plan` keeps its own job: it still decides which rung this is.
+ *
+ * AND THE WINDOW IS SAID OUT LOUD. #276 makes the end of an introductory window a real reduction
+ * in service and requires the screen to say, BEFORE it happens, what closes, when, and on which
+ * plan it reopens — "הודעה שמגיעה אחרי הסגירה נקראת כתקלה". `0210` shipped the grant with no date
+ * at all and no screen anywhere mentioning it; `0212` gives it an end date and `my_plan_grant()`
+ * hands that date to the notice below.
  */
 interface SubscriptionRow {
   plan_key: string;
@@ -63,6 +89,27 @@ interface SubscriptionRow {
   billing_provider_enabled: boolean;
 }
 
+/**
+ * `my_plan_grant()` (0212). Every key is always present and never null-by-absence, the same
+ * contract `0189` wrote for `my_billing_availability()`: a missing key that a caller coalesces to
+ * `false` would render an outage as a fact about the customer.
+ */
+interface PlanGrant {
+  /** The current rung was GIVEN by the pre-launch window rather than bought. */
+  granted: boolean;
+  /** When the grant stops applying. Null whenever `granted` is false. */
+  ends_at: string | null;
+  /** The rung the organization returns to. Nothing is deleted at that boundary. */
+  reverts_to_plan_key: string;
+  reverts_to_label: string | null;
+  /**
+   * Whether a billing period was ever opened for this organization — the only honest reading of
+   * "this customer has actually paid". `private.record_billing_period` is its sole writer, and it
+   * is reached from a verified provider event or an operator command carrying a reason.
+   */
+  has_paid: boolean;
+}
+
 interface UpgradeOption {
   plan_key: string;
   label: string;
@@ -73,15 +120,6 @@ interface UpgradeOption {
   catalogue_version: string | null;
   monthly_amount: number | null;
   yearly_amount: number | null;
-}
-
-interface UsageRow {
-  metric_key: string;
-  label: string;
-  used: number | null;
-  usage_limit: number | null;
-  unlimited: boolean;
-  measured: boolean;
 }
 
 /**
@@ -101,58 +139,146 @@ interface PlanQuotaRow {
 }
 
 /**
- * The one quota #266 lets a customer be shown. OCR pages are derived from it (ten per document)
- * and deliberately unpublished; users and suppliers have no counter behind them at all. A card
- * that listed every key would be three dashes and one number.
+ * WHAT THE PRICE SLOT SAYS WHEN THERE IS NO PRICE TO PUT IN IT (owner ruling 26.08.2026).
+ *
+ * Every organization is in this state today, because `private.record_billing_country` (`0186:671`)
+ * has no production caller, so no billing country is verified and #208 cannot decide which of the
+ * two catalogues applies. The slot used to hold «—», and five of those stacked down the price
+ * column read as a broken screen rather than as a figure being withheld.
+ *
+ * THE THREE THINGS THIS SENTENCE MAY NOT DO, and how it avoids each:
+ *   * name or imply a number — it names none, and gives no range, no "from", no "starting at";
+ *   * read as an error or a loading state — it describes a step in the purchase, not a failure,
+ *     and nothing about it suggests a retry or a wait;
+ *   * promise a price the product has not decided to show — it promises only that the amount is
+ *     given at the moment of moving to a paid plan, which is #267's own sentence: «נמסר בתוך
+ *     החשבון, בשלב המעבר למסלול בתשלום».
+ *
+ * #208's currency rule — ILS or USD by the billing country VERIFIED at the merchant of record,
+ * never an IP and never a picker — is deliberately NOT repeated here. The availability notice
+ * above the ladder states it once, in full; printing it again on every row is the cramped
+ * duplicated prose this whole package went out to remove.
  */
-const CARD_QUOTA_KEY = 'documents.monthly';
+const PRICE_AT_UPGRADE = 'המחיר נמסר במעבר למסלול בתשלום';
 
 /**
- * Which tier mark each rung wears — the same five classes the top-bar badge uses, so the chip a
- * person taps in the header is the chip they then find on their own row here.
+ * THE LADDER'S ACTIONS, AND THE ONE MEASUREMENT THAT DECIDES HOW THEY LOOK.
+ *
+ * Owner report, 26.08.2026: the four «מעבר ל…» buttons read as broken and the promoted
+ * «שדרוג לפרימיום» rendered as a muddy grey lozenge with a smeared band under it. Both complaints
+ * have the SAME cause, and it is not the palette — it is `@utility btn`'s `disabled:opacity-50`.
+ * Every one of these buttons is `disabled` (there is no `billing-checkout` function and no signed
+ * provider event to open a paid entitlement with, #217), so every one of them is painted at half
+ * strength, and half strength is what a reader has been trained to read as "broken".
+ *
+ * MEASURED against the built stylesheet, at 390 and 1280, on the real rows:
+ *
+ *   the four quiet rungs, on the paper surface (`--color-surface`, rgb 255,252,248)
+ *     label `ink-mid` on `action-wash`   9.60:1 at full strength  ->  2.53:1 under the dim
+ *     the lozenge itself vs the row      1.08:1                   ->  1.04:1
+ *   the promoted rung, on the onyx fill (`--color-tier-onyx`, rgb 39,41,54)
+ *     the paper body vs the row         14.09:1                   ->  4.71:1, i.e. rgb(147,147,151)
+ *     the travelling 2px band                                        keeps 47–54% of its chroma
+ *     the blurred `::before` halo below                              peaks at 6.4:1 against the
+ *       row while the button's own body sits at 4.71 — the DECORATION outshining the CONTROL is
+ *       exactly the "smeared band" in the report, and it is a consequence of the dim, not of the
+ *       dark surface. `index.css`'s paper body for `[data-state='featured']` already works; it was
+ *       simply being halved back into grey.
+ *
+ * AND NO PALETTE CAN RESCUE IT WHILE THE DIM IS ON. At 50% over the paper row, a colour has to
+ * composite below L 0.29 to clear 3:1 — which is `--color-ink` (3.42:1) and nothing lighter:
+ * `action-line` falls from 3.48 to 1.75. A near-black outline on four buttons is the exact
+ * separation T7.1 bans (DESIGN.md:202 — Secondary is «טונאלי ללא מסגרת»). So the dim is not one
+ * factor among several; it forecloses every legal treatment, and lifting it is the whole fix.
+ *
+ * WHAT REPLACES IT AS THE "NOT AVAILABLE" SIGNAL, because opacity was doing that job:
+ * `cursor: not-allowed` (still on `.btn:disabled`), the `title` on every button, the `disabled`
+ * attribute itself — which is what a screen reader announces and what makes the control genuinely
+ * inert — and the sentence under the ladder that says the billing path has not opened. The
+ * guarantee #217 rests on has never been the opacity or even the attribute: it is that THIS FILE
+ * INVOKES NO EDGE FUNCTION. Legibility and inertness were never the same property.
+ *
+ * `action-soft` rather than `action-wash` for the quiet rungs — one tonal step deeper, already in
+ * the vocabulary (it is `btn-secondary`'s own hover), no border. It roughly doubles the lozenge's
+ * separation from the row (ΔL 0.163 vs 0.073) and takes the label to 10.21:1. The lozenge still
+ * measures 1.19:1 against the paper and cannot do better: WCAG 1.4.11's 3:1 is unreachable for a
+ * borderless tonal control on a near-white surface, and it exempts inactive components anyway. The
+ * affordance is carried by the label, which is how a tertiary control has always worked here.
+ *
+ * ONE DEFINITION, and `/pricing` needs none of it — that ladder renders no action at all.
+ * The variant now has its named home: `.btn-standby` in `index.css`, beside `btn-danger-quiet`.
+ * Both are the same shape of decision — a real control that is deliberately not the primary one —
+ * and `.btn-standby` carries the `disabled:opacity-100` with it, so the reason travels with the
+ * class instead of being re-derived at each call site.
  */
-const TIER_CLASS: Record<string, string> = {
-  free: 'plan-badge-free',
-  basic: 'plan-badge-basic',
-  pro: 'plan-badge-pro',
-  premium: 'plan-badge-premium',
-  business: 'plan-badge-premium',
-};
+/** A sideways move, a downgrade, or «פנייה לשירות» — a real control, deliberately not promoted. */
+const PLAN_ACTION_QUIET = 'btn-standby w-full';
+/** The rung the ladder points at. `btn-rainbow` stays the owner's named exception, undimmed. */
+const PLAN_ACTION_UPGRADE = 'btn-rainbow disabled:opacity-100 w-full';
 
 const INTERVALS = [['monthly', 'חודשי'], ['yearly', 'שנתי']] as const;
 type Interval = (typeof INTERVALS)[number][0];
 
+const rows = async <T,>(name: string): Promise<T[]> => {
+  const { data, error } = await supabase.rpc(name);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as T[];
+};
+
 export function OrgSubscriptionPanel() {
-  const [subscription, setSubscription] = useState<SubscriptionRow | null>(null);
-  const [options, setOptions] = useState<UpgradeOption[]>([]);
-  const [usage, setUsage] = useState<UsageRow[]>([]);
-  const [planQuotas, setPlanQuotas] = useState<PlanQuotaRow[]>([]);
-  const [interval, setIntervalChoice] = useState<Interval>('monthly');
-  const [error, setError] = useState<string | null>(null);
+  const org = useOrgScope();
+  /**
+   * THE GATE THAT A BROWSER-GATE RUN ALREADY PAID FOR ONCE. `my_subscription` is one of the two
+   * bootstrap resolvers `anon` holds no EXECUTE on (`0186:820`), so calling it before AuthProvider
+   * has an organisation leaves an ANONYMOUS request that can only come back 502. `PlanBadge` was
+   * fixed and pinned; this panel called the identical RPC with no gate at all and was saved only by
+   * sitting behind an owner-only route — which is a coincidence of routing, not a rule. Same gate,
+   * same place, stated here so the next mount of this component inherits it.
+   */
+  const enabled = org !== null;
+  const [intervalChoice, setIntervalChoice] = useState<Interval | null>(null);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
 
-  const load = useCallback(async () => {
-    const [sub, upgrade, snapshot, quotas] = await Promise.all([
-      supabase.rpc('my_subscription'),
-      supabase.rpc('my_upgrade_options'),
-      supabase.rpc('organization_usage_snapshot'),
-      supabase.rpc('get_public_plan_quotas'),
-    ]);
-    if (sub.error || upgrade.error) {
-      setError('לא ניתן לטעון את פרטי המסלול כרגע.');
-      return;
-    }
-    setError(null);
-    const row = ((sub.data ?? []) as SubscriptionRow[])[0] ?? null;
-    setSubscription(row);
-    setOptions((upgrade.data ?? []) as UpgradeOption[]);
-    setUsage(snapshot.error ? [] : ((snapshot.data ?? []) as UsageRow[]));
-    // A quota read that fails costs the cards one line each; it must not cost the whole panel.
-    setPlanQuotas(quotas.error ? [] : ((quotas.data ?? []) as PlanQuotaRow[]));
-    if (row) setIntervalChoice(row.billing_interval === 'yearly' ? 'yearly' : 'monthly');
-  }, []);
+  const subscriptionQuery = useQuery({
+    queryKey: key(org, DOMAIN.subscription, 'mine'),
+    queryFn: () => rows<SubscriptionRow>('my_subscription'),
+    enabled,
+  });
+  const optionsQuery = useQuery({
+    queryKey: key(org, DOMAIN.subscription, 'upgrade-options'),
+    queryFn: () => rows<UpgradeOption>('my_upgrade_options'),
+    enabled,
+  });
+  const grantQuery = useQuery({
+    queryKey: key(org, DOMAIN.subscription, 'grant'),
+    queryFn: async (): Promise<PlanGrant | null> => {
+      const { data, error } = await supabase.rpc('my_plan_grant');
+      if (error) throw new Error(error.message);
+      return (data ?? null) as PlanGrant | null;
+    },
+    enabled,
+  });
+  const quotasQuery = useQuery({
+    queryKey: key(org, DOMAIN.subscription, 'plan-quotas'),
+    queryFn: () => rows<PlanQuotaRow>('get_public_plan_quotas'),
+    enabled,
+  });
+  /**
+   * LAZY, and the dialog is the only reader. This snapshot answers "how much of the current period
+   * is gone", which is #220's disclosure before a cancellation — a question most people on this
+   * screen never ask. It used to be fetched on mount for everybody. The key is shared with
+   * `PlanLimitNote`, which is mounted directly above this panel on the same screen, so when the
+   * note has already asked, opening the dialog costs nothing at all.
+   */
+  const usageQuery = useQuery({ ...usageSnapshotQuery(org), enabled: enabled && confirmingCancel });
 
-  useEffect(() => { void load(); }, [load]);
+  const subscription = subscriptionQuery.data?.[0] ?? null;
+  const options = optionsQuery.data ?? [];
+  // A quota read that fails costs the cards one line each; it must not cost the whole panel.
+  const planQuotas = quotasQuery.data ?? [];
+  const grant = grantQuery.data ?? null;
+  const loading = enabled && (subscriptionQuery.isLoading || optionsQuery.isLoading);
+  const failed = !!(subscriptionQuery.error || optionsQuery.error);
 
   /**
    * `schedule_subscription_change`, `cancel_subscription_at_period_end` and `resume_subscription`
@@ -162,8 +288,21 @@ export function OrgSubscriptionPanel() {
    * call sites: an orphan RPC name in the source is a real defect, not a placeholder.
    */
   const currency = subscription?.billing_country_verified ? subscription.catalogue_currency : null;
+  // The server's interval until the reader says otherwise. Derived rather than copied into state by
+  // an effect: a second source of the same fact is a second thing that can be stale.
+  const interval: Interval =
+    intervalChoice ?? (subscription?.billing_interval === 'yearly' ? 'yearly' : 'monthly');
   const amountOf = (option: UpgradeOption) =>
     (interval === 'yearly' ? option.yearly_amount : option.monthly_amount);
+  /** The rung this organization stands on, for "is that card up or down from here". */
+  const currentTier = options.find((option) => option.plan_key === subscription?.plan_key)?.tier_order ?? null;
+  /**
+   * HAS THIS ORGANIZATION ACTUALLY PAID. Not "is it on a paid rung" — see the fifth rule above.
+   * Defaults to false while the grant read is in flight or has failed, which is the direction that
+   * cannot invent a customer: the worst case is that a genuinely paying customer briefly does not
+   * see their period line, rather than a person who never paid being shown a billing failure.
+   */
+  const hasPaid = grant?.has_paid === true;
   /**
    * Three states, never two. "We could not determine" must not be rendered as "no" — the same
    * distinction the codebase already draws with `measured: false` → «—» rather than `0`. `0189`
@@ -174,208 +313,419 @@ export function OrgSubscriptionPanel() {
       : subscription.billing_provider_enabled ? 'available' : 'unavailable';
 
   return (
-    <section className="card card-pad space-y-4" aria-labelledby="org-subscription-heading">
-      <h2 id="org-subscription-heading" className="section-title flex items-center gap-2">
-        <CreditCard size={17} /> מסלול ומנוי
-      </h2>
+    /**
+     * TWO REGIONS, NOT ONE CARD WITH EVERYTHING IN IT — and this is the structural half of the
+     * owner's complaint about the plan cards.
+     *
+     * The whole panel used to be a single `.card`, so the ladder was five sunken boxes drawn
+     * INSIDE a surface: a card within a card, which `ui.tsx` names as the thing that reads as two
+     * objects, and the inner boxes could not carry elevation of their own because they were
+     * already sitting on one. The plans have their own question — "what else is there" — so they
+     * get their own region, and their cards are real cards on the canvas with the app's own
+     * radius and shadow.
+     *
+     * The state of THIS organization's subscription — what it is on, what closes and when, what
+     * it may cancel — stays in the card above them, because that is one subject and it is prose.
+     */
+    <div className="space-y-5">
+      <section className="card card-pad space-y-4" aria-labelledby="org-subscription-heading">
+        <h2 id="org-subscription-heading" className="section-title flex items-center gap-2">
+          <CreditCard size={ICON.md} /> מסלול ומנוי
+        </h2>
 
-      {error && <ErrorNote message={error} />}
+        {failed && <ErrorNote message="לא ניתן לטעון את פרטי המסלול כרגע." />}
 
-      {subscription && (
-        <>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <span data-testid="current-plan" className="text-lg font-medium text-ink">
-              {subscription.plan_label}
-            </span>
-            <StatusBadge meta={SUBSCRIPTION_STATUS[subscription.status]} />
-            {subscription.is_paid_plan && (
-              <span className="text-sm text-ink-muted">
-                {subscription.current_period_end
-                  ? `התקופה ששולמה מסתיימת ב־${fmtDate(subscription.current_period_end)}`
-                  : 'תקופת חיוב לא התקבלה מספק הסליקה'}
-              </span>
-            )}
-          </div>
+        {/* THE LAYOUT, HELD, WHILE IT LOADS. The body used to be gated on `subscription &&` alone,
+            so for the length of the fetch this card was a heading and nothing else — and then five
+            plan cards arrived at once and shoved the page down. It also meant a zero-row answer
+            with no error rendered that same blank for ever, with nothing telling the reader
+            whether the screen was broken or merely empty. Both are answered below. The plan grid's
+            own placeholder is a sibling of this card, mirroring where the real one lands. */}
+        {loading && <StatusSkeleton />}
 
-          {subscription.delinquent && (
-            <Note tone="alert" role="alert">
-              <span className="min-w-0 flex-1">
-                חיוב החידוש לא נגבה, והארגון נמצא במצב קריאה בלבד: אפשר לצפות, לייצא ולהוריד, אך
-                עיבוד, העלאה וכתיבה חדשה חסומים. היציאה ממצב זה היא אך ורק באמצעות אירוע תשלום
-                מוצלח וחתום מספק הסליקה — אין מעבר אוטומטי למסלול חינם, אין יציאה אוטומטית בחלוף
-                הזמן, ושום נתון קיים אינו נמחק.
-              </span>
-            </Note>
-          )}
-
-          {/* Wording provisional under #203. One boolean in, three sentences out — and the third
-              is the one that matters: an unknown availability is said aloud, never rendered as a
-              refusal. Nothing here names the provider or hints why it is not ready.
-
-              THE PRICE SENTENCE LIVES HERE NOW, not in a second box (owner report 25.08.2026:
-              the settings screen read as cramped duplicated prose). On a Free organization with
-              no verified billing country BOTH notices used to render, one under the other, and
-              they were two halves of the same fact: nothing can be bought yet, and that is why
-              the amounts are dashes. Said once. */}
-          <Note tone={availability === 'unavailable' ? 'info' : 'idle'}>
-            <span className="min-w-0 flex-1" data-testid="billing-availability">
-              {availability === 'unavailable'
-                && 'רכישת מסלול בתשלום אינה זמינה עדיין. אפשר להמשיך לעבוד במסלול הנוכחי; כשהרכישה תיפתח היא תופיע כאן.'}
-              {availability === 'available'
-                && 'רכישת מסלול בתשלום עדיין אינה מתבצעת מהמסך הזה. הפרטים והמכסות למטה מעודכנים.'}
-              {availability === 'indeterminate'
-                && 'לא ניתן לקבוע כרגע אם רכישת מסלול זמינה. זה אינו אומר שהיא חסומה — רענון או ניסיון מאוחר יותר יראה את המצב העדכני.'}
-              {!currency && ' המחיר נקבע במטבע של כתובת החיוב המאומתת אצל ספק הסליקה — לא לפי מיקום משוער ולא לפי בחירת מטבע — ולכן הוא מוצג כאן כ«—» עד שלב התשלום.'}
+        {!loading && !failed && !subscription && (
+          <Note tone="alert">
+            <span className="min-w-0 flex-1" data-testid="subscription-missing">
+              לא נמצאו פרטי מסלול לארגון הזה. אין כאן טענה על חיוב ולא נגרע דבר — זו הגדרה במערכת,
+              ויש לפנות לתמיכה כדי להשלים אותה.
             </span>
           </Note>
+        )}
 
-          {subscription.scheduled_plan_key && (
-            <Note tone="info">
-              <span className="min-w-0 flex-1">
-                המעבר ל{subscription.scheduled_plan_label} ייכנס לתוקף בחידוש הבא
-                {subscription.scheduled_effective_at ? `, ב־${fmtDate(subscription.scheduled_effective_at)}` : ''},
-                ללא חישוב יחסי ובלי חיוב באמצע התקופה. עד אז המסלול הנוכחי ותנאיו נשארים בתוקף,
-                ותקופת השימוש והמונים אינם מושפעים.
+        {subscription && (
+          <>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span data-testid="current-plan" className="text-lg font-medium text-ink">
+                {subscription.plan_label}
               </span>
-            </Note>
-          )}
-
-          {subscription.cancel_at_period_end && (
-            <Note tone="await">
-              <span className="min-w-0 flex-1">
-                המנוי מסומן לביטול. גישה מלאה עד {fmtDate(subscription.current_period_end)}, ואז
-                הארגון עובר למסלול חינם — בלי החזר, בלי מחיקה ובלי סיום שירות. אפשר לחזור מהביטול
-                עד המועד הזה.
-              </span>
-            </Note>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-ink-body" id="subscription-interval-label">מחזור חיוב</span>
-            <div className="flex gap-2" role="group" aria-labelledby="subscription-interval-label">
-              {INTERVALS.map(([value, label]) => (
-                <button key={value} type="button" aria-pressed={interval === value}
-                  className={`chip-filter ${interval === value ? 'chip-filter-active' : ''}`}
-                  onClick={() => setIntervalChoice(value)}>{label}</button>
-              ))}
+              <StatusBadge meta={SUBSCRIPTION_STATUS[subscription.status]} />
+              {/* `hasPaid`, not `is_paid_plan`. Without it, `0210`'s grant shows every organization
+                  either a paid period they never bought or a sentence about the payment provider
+                  failing to send one. */}
+              {subscription.is_paid_plan && hasPaid && (
+                <span className="text-sm text-ink-muted">
+                  {subscription.current_period_end
+                    ? `התקופה ששולמה מסתיימת ב־${fmtDate(subscription.current_period_end)}`
+                    : 'תקופת חיוב לא התקבלה מספק הסליקה'}
+                </span>
+              )}
             </div>
-          </div>
 
-          {currency && (
-            <p className="text-sm text-ink-muted">
-              המחירים בקטלוג שנקבע לכתובת החיוב המאומתת שלך, לפני מס. ספק הסליקה מחשב וגובה את המס
-              המקומי.
-            </p>
-          )}
+            {/* THE WINDOW, SAID BEFORE IT CLOSES (#276, and `0212` for the date).
+                Four facts and no fifth: what the organization holds, that it was given rather than
+                bought, until when, and what it becomes afterwards. No countdown — #204 forbids one
+                — and no capability list, because #274's feature ladder is `NOT_IMPLEMENTED` and the
+                only difference the server enforces between these rungs today is the published quota
+                (#266). Promising that exports or bank reconciliation "close" would be selling a
+                difference nothing enforces. */}
+            {grant?.granted && (
+              <Note tone="info">
+                <span className="min-w-0 flex-1" data-testid="plan-grant-window">
+                  מסלול {subscription.plan_label} ניתן לארגון ללא תשלום לתקופת ההרצה שלפני ההשקה,
+                  והוא בתוקף עד {fmtDate(grant.ends_at)}. לא בוצע חיוב, לא נדרש אמצעי תשלום ולא
+                  נפתחה תקופת חיוב.
+                  {grant.reverts_to_label
+                    ? ` במועד הזה הארגון עובר למסלול ${grant.reverts_to_label}, ומכסות אותו מסלול הן שיחולו מאותו רגע.`
+                    : ' במועד הזה הארגון עובר למסלול הבסיסי, ומכסותיו הן שיחולו מאותו רגע.'}
+                  {' '}שום נתון אינו נמחק וכל מה שנקלט נשאר במקומו; תקופת השימוש והמונים אינם מתאפסים.
+                </span>
+              </Note>
+            )}
 
-          {/* The ladder as CARDS (owner report 25.08.2026: "התוכניות השונות עם האופציה לשדרוג,
-              כמו בכל אפליקציה נורמלית"). It was a flat list of label-and-price rows, which reads
-              as a table of the same thing five times rather than as five products.
+            {subscription.delinquent && (
+              <Note tone="alert" role="alert">
+                <span className="min-w-0 flex-1">
+                  חיוב החידוש לא נגבה, והארגון נמצא במצב קריאה בלבד: אפשר לצפות, לייצא ולהוריד, אך
+                  עיבוד, העלאה וכתיבה חדשה חסומים. היציאה ממצב זה היא אך ורק באמצעות אירוע תשלום
+                  מוצלח וחתום מספק הסליקה — אין מעבר אוטומטי למסלול חינם, אין יציאה אוטומטית בחלוף
+                  הזמן, ושום נתון קיים אינו נמחק.
+                </span>
+              </Note>
+            )}
 
-              WHAT A CARD IS ALLOWED TO SAY, and why it is this little:
-                * The tier mark and its Hebrew name — both from the server's catalogue.
-                * ONE quota: documents per usage period. #266 makes it the single published
-                  metric; OCR pages are derived from it and unpublished, and users/suppliers have
-                  no counter behind them at all (DEBT §56).
-                * The price, which today is «—» for everyone. Owner ruling 25.08.2026.
-                * `ביזנס`: `דברו איתנו`, never a figure (#194/#201).
-              WHAT IT MUST NOT SAY: a per-plan capability list. #274 decided one and it is
-              `NOT_IMPLEMENTED` — every capability boolean is still `true` for every plan, and
-              `0184` fails any migration that turns one off. A card claiming "ייצוא ✗ בחינם" would
-              promise a difference the server does not enforce. */}
-          <ul data-testid="plan-cards" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {/* Wording provisional under #203. One boolean in, three sentences out — and the third
+                is the one that matters: an unknown availability is said aloud, never rendered as a
+                refusal. Nothing here names the provider or hints why it is not ready.
+
+                THE PRICE SENTENCE LIVES HERE NOW, not in a second box (owner report 25.08.2026:
+                the settings screen read as cramped duplicated prose). On a Free organization with
+                no verified billing country BOTH notices used to render, one under the other, and
+                they were two halves of the same fact: nothing can be bought yet, and that is why
+                the amounts are dashes. Said once. */}
+            <Note tone={availability === 'unavailable' ? 'info' : 'idle'}>
+              <span className="min-w-0 flex-1" data-testid="billing-availability">
+                {availability === 'unavailable'
+                  && 'רכישת מסלול בתשלום אינה זמינה עדיין. אפשר להמשיך לעבוד במסלול הנוכחי; כשהרכישה תיפתח היא תופיע כאן.'}
+                {availability === 'available'
+                  && 'רכישת מסלול בתשלום עדיין אינה מתבצעת מהמסך הזה. הפרטים והמכסות למטה מעודכנים.'}
+                {availability === 'indeterminate'
+                  && 'לא ניתן לקבוע כרגע אם רכישת מסלול זמינה. זה אינו אומר שהיא חסומה — רענון או ניסיון מאוחר יותר יראה את המצב העדכני.'}
+                {!currency && ' המחיר נקבע במטבע של כתובת החיוב המאומתת אצל ספק הסליקה — לא לפי מיקום משוער ולא לפי בחירת מטבע — ולכן הוא נמסר במעבר למסלול בתשלום ולא מוצג כאן מראש.'}
+              </span>
+            </Note>
+
+            {subscription.scheduled_plan_key && (
+              <Note tone="info">
+                <span className="min-w-0 flex-1">
+                  המעבר ל{subscription.scheduled_plan_label} ייכנס לתוקף בחידוש הבא
+                  {subscription.scheduled_effective_at ? `, ב־${fmtDate(subscription.scheduled_effective_at)}` : ''},
+                  ללא חישוב יחסי ובלי חיוב באמצע התקופה. עד אז המסלול הנוכחי ותנאיו נשארים בתוקף,
+                  ותקופת השימוש והמונים אינם מושפעים.
+                </span>
+              </Note>
+            )}
+
+            {subscription.cancel_at_period_end && (
+              <Note tone="await">
+                <span className="min-w-0 flex-1">
+                  המנוי מסומן לביטול. גישה מלאה עד {fmtDate(subscription.current_period_end)}, ואז
+                  הארגון עובר למסלול חינם — בלי החזר, בלי מחיקה ובלי סיום שירות. אפשר לחזור מהביטול
+                  עד המועד הזה.
+                </span>
+              </Note>
+            )}
+
+            {/* THE INTERVAL PICKER APPEARS ONLY WHEN THERE ARE TWO AMOUNTS TO PICK BETWEEN.
+                `Pricing.tsx` removed its own toggle outright and stated the rule: with no price on
+                screen it is "a control that changes nothing on the page". The authenticated twin
+                kept it, and it is in exactly the same condition — `currency` is null for every
+                organization because `private.record_billing_country` (`0186:671`) has no production
+                caller, so both columns render «—» and pressing either chip changes not one
+                character. It is not deleted, because unlike the public page this surface WILL show
+                real amounts the day a billing country is verified, and then the choice is
+                meaningful. It is bound to the only condition under which it does anything.
+
+                The reference put this control in the middle of the ladder, as a pill-shaped
+                segmented toggle over the grid. It stays HERE, in the state card, because on this
+                surface it is a property of the organization's billing — and because the reference's
+                switch is a `@radix-ui/react-switch`, which this repo does not have and is not
+                adding for a control that is already spelled `chip-filter`. */}
+            {currency && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-ink-body" id="subscription-interval-label">מחזור חיוב</span>
+                <div className="flex gap-2" role="group" aria-labelledby="subscription-interval-label">
+                  {INTERVALS.map(([value, label]) => (
+                    <button key={value} type="button" aria-pressed={interval === value}
+                      className={`chip-filter ${interval === value ? 'chip-filter-active' : ''}`}
+                      onClick={() => setIntervalChoice(value)}>{label}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {currency && (
+              <p className="text-sm text-ink-muted">
+                המחירים בקטלוג שנקבע לכתובת החיוב המאומתת שלך, לפני מס. ספק הסליקה מחשב וגובה את המס
+                המקומי.
+              </p>
+            )}
+
+            {/* THE LIFECYCLE CONTROLS BELONG TO A SUBSCRIPTION, AND A GRANT IS NOT ONE.
+                #204 forbids putting cancellation out of reach, and that rule is about a customer
+                who HAS something to cancel. Offering "ביטול המנוי" to an organization that never
+                bought anything is not honouring #204 — it is inventing a subscription, and the
+                dialog then has to admit at its own confirm step that there is nothing to cancel.
+                `hasPaid` is the condition; `is_paid_plan` alone would show this row to every tenant
+                from the day `0210` deploys.
+
+                They moved INTO this card with the ladder moving out of it. They act on the
+                subscription this card describes, and they were sitting under five plan cards that
+                have nothing to do with cancelling one. */}
+            {subscription.is_paid_plan && hasPaid && (
+              <div className="flex flex-wrap justify-end gap-2">
+                {subscription.cancel_at_period_end && (
+                  <button type="button" className="btn-secondary" disabled>
+                    <Undo2 size={ICON.sm} /> חזרה מהביטול
+                  </button>
+                )}
+                {/* Reachable, not disabled: opening it is how #220's usage-versus-quota disclosure
+                    is delivered. The stop is at the confirm step, where it is stated rather than
+                    silently swallowed. */}
+                {!subscription.cancel_at_period_end && (
+                  <button type="button" className="btn-secondary text-alert-fg"
+                    onClick={() => setConfirmingCancel(true)}>
+                    ביטול המנוי
+                  </button>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* The ladder's own shape while it loads, not a spinner in the middle of it — and now the
+          SAME shape `/pricing` loads into, from `PlanCard.tsx`, so the placeholder cannot drift
+          from the row it stands for. Five rungs and an action on each: that is what this surface
+          resolves into. */}
+      {loading && <PlanLadderSkeleton heading testId="subscription-skeleton" />}
+
+      {/* THE LADDER, AS ITS OWN REGION OF REAL CARDS (owner report 25.08.2026: "התוכניות השונות עם
+          האופציה לשדרוג, כמו בכל אפליקציה נורמלית"; owner verdict 26.08.2026 on what shipped:
+          "נראים כאילו ילד בן 3 בנה אותם").
+
+          WHAT A CARD IS ALLOWED TO SAY, and why it is this little:
+            * The tier mark and its Hebrew name — both from the server's catalogue.
+            * Where the rung stands relative to this organization's own — read from `tier_order`,
+              which is already fetched and already sorting this list. It lives in Origin UI's
+              per-item badge slot, beside the mark, because it is a fact about the READER and not
+              about the product.
+            * Whether the rung costs money, from `option.paid`. That is the only product
+              description on the card: we have no marketing line per plan, and writing one would be
+              inventing a business answer (`OPEN-DECISIONS.md:3`).
+            * ONE quota: documents per usage period. #266 makes it the single published metric;
+              OCR pages are derived from it and unpublished, and users/suppliers have no counter
+              behind them at all (DEBT §56). It is why the "feature list" the reference fills with
+              five ticks is one row here — five would take four inventions to write.
+            * The price, which today is «—» for everyone. Owner ruling 25.08.2026.
+            * `ביזנס`: `דברו איתנו`, never a figure (#194/#201).
+          WHAT IT MUST NOT SAY: a per-plan capability list. #274 decided one and it is
+          `NOT_IMPLEMENTED` — every capability boolean is still `true` for every plan, and `0184`
+          fails any migration that turns one off. A card claiming "ייצוא ✗ בחינם" would promise a
+          difference the server does not enforce. */}
+      {subscription && (
+        <section aria-labelledby="plan-ladder-heading" className="space-y-4">
+          <h2 id="plan-ladder-heading" className="section-title">כל המסלולים</h2>
+
+          <ul data-testid="plan-cards" className={PLAN_LIST}>
             {[...options].sort((a, b) => a.tier_order - b.tier_order).map((option) => {
               const current = option.plan_key === subscription.plan_key;
               const amount = amountOf(option);
               const quota = planQuotas.find(
-                (row) => row.plan_key === option.plan_key && row.entitlement_key === CARD_QUOTA_KEY,
+                (row) => row.plan_key === option.plan_key && row.entitlement_key === HEADLINE_QUOTA_KEY,
               );
+              /**
+               * UP OR DOWN, READ FROM `tier_order` — which was already fetched, already on the
+               * card, and already used to sort this list. The label used to be "שדרוג ל…"
+               * unconditionally, which was harmless only while every organization sat on the bottom
+               * rung. `0210` puts them all near the top, so the free card would have read
+               * "שדרוג לחינם" — an offer to upgrade to less. Neither word is a judgement (#202
+               * forbids those): one says the rung is above this one, the other says it is not.
+               */
+              const isUpgrade = currentTier !== null && option.tier_order > currentTier;
+              /** An amount only exists once a billing country has been verified (#208). */
+              const hasAmount = !option.contact_sales && currency !== null && amount !== null;
+
               return (
-                <li key={option.plan_key} data-plan={option.plan_key}
-                  className={`flex flex-col gap-2 rounded-2xl p-4 ${
-                    current ? 'bg-surface-selected' : 'bg-surface-sunken'
-                  }`}>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`plan-badge ${TIER_CLASS[option.plan_key] ?? 'plan-badge-free'}`}>
-                      {option.label}
-                    </span>
-                    {current && <span className="badge-idle">המסלול הנוכחי</span>}
-                  </div>
+                <PlanCard
+                  key={option.plan_key}
+                  planKey={option.plan_key}
+                  label={option.label}
+                  /* One map, one fallback (`planTierClass`). A rung the ladder has no look for
+                     wears no mark on EITHER surface — the header chip and this card used to
+                     disagree, and `plan-badge-free` on an unknown key advertised it as the free
+                     plan. Which card is FEATURED is not decided here at all: `PlanCard` reads the
+                     static emphasis map, because #202 forbids an emphasis keyed to the reader. */
+                  tierClass={planTierClass(option.plan_key)}
+                  current={current}
+                  /* Origin UI's per-item badge slot, carrying exactly what it is for: which rung
+                     this is RELATIVE TO YOURS, then the product's own static emphasis. The first
+                     was `badge-idle` and the second `badge-info`; `idle` and `info` are two of the
+                     five STATUS tones and they belong to data, not to a commercial rung. */
+                  chips={[
+                    ...(currentTier === null ? []
+                      : [current ? 'המסלול הנוכחי' : isUpgrade ? 'מדרגה מעל' : 'מדרגה מתחת']),
+                    ...(planEmphasis(option.plan_key) ? [planEmphasis(option.plan_key) as string] : []),
+                  ]}
+                  /* The one thing a row can say about the rung itself without inventing a
+                     product description: whether it costs money. `option.paid` is the server's
+                     own boolean, and it is the only answer to "so what is this rung" on a screen
+                     where no amount is shown that is not a guess. */
+                  standing={option.paid ? 'מסלול בתשלום' : 'לא נדרש אמצעי תשלום'}
+                  /* THE PRICE SLOT, AND THE SENTENCE THAT REPLACED FIVE DASHES (owner ruling
+                     26.08.2026: «משפט קצר במקום מקף»). Stacked in a list, five «—» in the column
+                     the eye reads as the price read as a broken screen rather than as a withheld
+                     figure — the dash rule was written for ONE metric inside a row of real ones,
+                     not for a whole column of them.
 
-                  {option.contact_sales ? (
-                    // #194 and #201: a conversation, never a figure.
-                    <span className="text-sm font-medium text-ink">דברו איתנו</span>
-                  ) : (
-                    <span className={amount == null || !currency ? 'num text-lg text-ink-muted' : 'num text-lg text-ink'}>
-                      {currency ? fmtPlanPrice(amount, currency) : '—'}
-                    </span>
-                  )}
+                     `PRICE_AT_UPGRADE` says the actual reason and nothing else. It names no
+                     number and implies none; it is not an error and not a loading state; and it
+                     promises no price that the product has not decided to show. It is #267
+                     almost verbatim — «נמסר בתוך החשבון, בשלב המעבר למסלול בתשלום» — and #208's
+                     currency rule is NOT repeated here, because the availability notice above the
+                     ladder already carries it in full and saying it five more times is the
+                     cramped duplicated prose the owner asked to remove in the first place.
 
-                  {/* The number on its own line, the server's own wording under it. The label is
-                      not restated or "improved" here: `/pricing` prints the same string from the
-                      same function, and a card that reworded it would be the second place a
-                      customer could read a different sentence about one entitlement. */}
-                  <span className="text-sm text-ink-body">
-                    {option.contact_sales
-                      ? 'מכסה חוזית, נקבעת מול השירות'
-                      : !quota || !quota.measured ? <span className="text-ink-muted">—</span>
-                        : quota.unlimited ? `${quota.label} ללא הגבלה`
-                          : (
-                            <>
-                              <span className="num block text-lg font-medium text-ink">{fmtNum(quota.numeric_limit)}</span>
-                              {quota.label}
-                            </>
-                          )}
-                  </span>
+                     THE MONEY LAYER IS UNTOUCHED. `fmtPlanPrice` still answers «—» for a null
+                     amount; what changed is that this call site no longer ASKS it that question.
+                     It is called only when there is both a verified currency (#208) and an
+                     amount, so a missing price is still missing — it is only said differently. */
+                  /* THE FREE RUNG IS NOT A WITHHELD PRICE, and giving it the sentence was a small
+                     lie the list layout made visible: four identical "המחיר נמסר במעבר למסלול
+                     בתשלום" down the column, one of them on the rung that has no price to give at
+                     all. `option.paid` is the server's own boolean and it separates the two cases
+                     — nothing to disclose, versus something to disclose later. It also drops the
+                     big «0 ₪» the catalogue produces for that rung once a currency IS verified:
+                     zero is a true amount here, but a price slot reading `0` on a plan whose whole
+                     description is "free" is a figure doing a word's job. */
+                  // #194 and #201: a conversation, never a figure — and never at price size.
+                  figure={option.contact_sales ? 'דברו איתנו'
+                    : !option.paid ? 'ללא עלות'
+                      : hasAmount ? fmtPlanPrice(amount, currency) : PRICE_AT_UPGRADE}
+                  figureTone={option.contact_sales || !option.paid ? 'compact'
+                    : hasAmount ? 'anchor' : 'quiet'}
+                  /* The period rides the price's own baseline, and only when there IS a price to
+                     bill in one. A period beside the sentence would dress an absence as a monthly
+                     one, and "ללא עלות לחודש" would bill nothing on a cycle. */
+                  figureNote={option.paid && hasAmount
+                    ? (interval === 'yearly' ? 'לשנה' : 'לחודש') : undefined}
+                  /* Disabled, with the reason said out loud (owner ruling 25.08.2026). There is no
+                     `billing-checkout` function and no signed provider event to open a paid
+                     entitlement with (#217), so a live button would either lie or no-op — and #204
+                     forbids hiding the control instead, because a customer must be able to see
+                     that the path exists and why it is shut. THIS COMPONENT CALLS NO EDGE FUNCTION
+                     AT ALL; that absence is the guarantee, not this `disabled`.
 
-                  {/* Disabled, with the reason said out loud (owner ruling 25.08.2026). There is
-                      no `billing-checkout` function and no signed provider event to open a paid
-                      entitlement with (#217), so a live button would either lie or no-op — and
-                      #204 forbids hiding the control instead, because a customer must be able to
-                      see that the path exists and why it is shut. THIS COMPONENT CALLS NO EDGE
-                      FUNCTION AT ALL; that absence is the guarantee, not this `disabled`. */}
-                  {!current && (
-                    <button type="button" className="btn-secondary mt-auto w-full py-1! text-xs" disabled
-                      title="החיוב עדיין לא נפתח">
-                      {option.contact_sales ? 'פנייה לשירות' : `שדרוג ל${option.label}`}
-                    </button>
-                  )}
-                </li>
+                     `btn-rainbow` is the owner's ruling of 26.08.2026 and it is a NAMED, BOUNDED
+                     exception to two design rules — for THIS action and no other. It is bounded
+                     twice over here: only the plan-upgrade button wears it, and only when the card
+                     really is a rung up. A downgrade and a "פנייה לשירות" are different actions and
+                     keep the quiet treatment.
+
+                     BOTH treatments and the measurement behind them are at `PLAN_ACTION_QUIET` /
+                     `PLAN_ACTION_UPGRADE` above — the short version is that `disabled` was costing
+                     these five buttons half their contrast and that is why they read as broken.
+
+                     The current rung has no action and gets a SPACER of the button's own height
+                     instead of nothing, so the list keeps an even rhythm rather than one row
+                     sitting 44px shorter than the rest.
+
+                     The RTL glow bug this call site used to patch — `.btn-rainbow::before`
+                     centring itself with `inset-inline-start: 50%` plus a physical
+                     `translate: -50% 0`, which measured 120px past the button's start edge and
+                     scrolled the whole page sideways — is FIXED IN `index.css` now
+                     (`inset-inline: 20%`, no translate), and the two `before:` utilities that
+                     stood in for it are gone with it. `index.css` also gives the band a paper body
+                     on `[data-state='featured']`; that rule was always correct and was simply
+                     being halved back into grey by the dim. */
+                  action={current
+                    ? <div className="min-h-11" aria-hidden />
+                    : (
+                      <button type="button" disabled title="החיוב עדיין לא נפתח"
+                        className={isUpgrade && !option.contact_sales
+                          ? PLAN_ACTION_UPGRADE : PLAN_ACTION_QUIET}>
+                        {option.contact_sales
+                          ? 'פנייה לשירות'
+                          : isUpgrade ? `שדרוג ל${option.label}` : `מעבר ל${option.label}`}
+                      </button>
+                    )}
+                  /* The server's own wording, not a restatement: `/pricing` prints the same string
+                     from the same function, and a card that reworded it would be the second place a
+                     customer could read a different sentence about one entitlement. */
+                  features={[option.contact_sales
+                    ? { key: HEADLINE_QUOTA_KEY, text: 'מכסה חוזית, נקבעת מול השירות', affirmative: true }
+                    : !quota || !quota.measured
+                      /* Still a dash, and deliberately: the owner's ruling replaced the five
+                         PRICE dashes, which were a column of them in the slot the eye reads as
+                         the amount. This is ONE entitlement inside a row of real ones, which is
+                         the case the dash rule was written for — an unmeasured quota (DEBT §56)
+                         must not be dressed as `0`, and it must not be dressed as a promise
+                         either. */
+                      ? { key: HEADLINE_QUOTA_KEY, text: <><span>—</span> {quota?.label ?? 'מסמכים'}</>, affirmative: false }
+                      : quota.unlimited
+                        ? { key: HEADLINE_QUOTA_KEY, text: `${quota.label} ללא הגבלה`, affirmative: true }
+                        : {
+                          key: HEADLINE_QUOTA_KEY,
+                          text: <><span className="num font-medium">{fmtNum(quota.numeric_limit)}</span> {quota.label}</>,
+                          affirmative: true,
+                        }] satisfies PlanFeatureRow[]}
+                />
               );
             })}
           </ul>
+
           <p className="text-sm text-ink-muted">
             כפתורי השדרוג אינם פעילים עדיין: החיוב טרם נפתח. שינוי מסלול נעשה כרגע מול השירות, והוא
             אינו מאפס את תקופת השימוש או את המונים.
           </p>
-
-          <div className="flex flex-wrap justify-end gap-2">
-            {subscription.is_paid_plan && subscription.cancel_at_period_end && (
-              <button type="button" className="btn-secondary" disabled>
-                <Undo2 size={15} /> חזרה מהביטול
-              </button>
-            )}
-            {/* Reachable, not disabled: opening it is how #220's usage-versus-quota disclosure is
-                delivered, and #204 forbids putting cancellation out of reach. The stop is at the
-                confirm step, where it is stated rather than silently swallowed. */}
-            {subscription.is_paid_plan && !subscription.cancel_at_period_end && (
-              <button type="button" className="btn-secondary text-alert-fg"
-                onClick={() => setConfirmingCancel(true)}>
-                ביטול המנוי
-              </button>
-            )}
-          </div>
-        </>
+        </section>
       )}
 
       {confirmingCancel && subscription && (
         <CancelDialog
-          usage={usage}
+          usage={usageQuery.data ?? []}
+          loading={usageQuery.isLoading}
           periodEnd={subscription.current_period_end}
           onClose={() => setConfirmingCancel(false)}
         />
       )}
-    </section>
+    </div>
+  );
+}
+
+/**
+ * The state card's own shape while it loads. `aria-hidden`, and deliberately not a second
+ * `role="status"`: the ladder placeholder below carries the one "טוען" a screen reader should
+ * hear, matching `SkeletonRegion` in `ui.tsx`.
+ */
+function StatusSkeleton() {
+  return (
+    <div aria-hidden className="space-y-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Skeleton className="h-6 w-32" />
+        <Skeleton className="h-5 w-20 rounded-full" />
+      </div>
+      <Skeleton className="h-16 w-full rounded-xl" />
+    </div>
   );
 }
 
@@ -386,8 +736,9 @@ export function OrgSubscriptionPanel() {
  * decision is the actual usage against the actual quota, including the metrics we cannot measure,
  * which appear as `—` rather than a reassuring zero.
  */
-function CancelDialog({ usage, periodEnd, onClose }: {
+function CancelDialog({ usage, loading, periodEnd, onClose }: {
   usage: UsageRow[];
+  loading: boolean;
   periodEnd: string | null;
   onClose: () => void;
 }) {
@@ -404,23 +755,33 @@ function CancelDialog({ usage, periodEnd, onClose }: {
         </p>
         <div className="rounded-lg bg-surface-sunken px-4 py-3">
           <h3 className="text-sm font-medium text-ink-body">השימוש שלך בתקופה הנוכחית</h3>
-          <ul className="mt-2 space-y-1">
-            {usage.map((row) => (
-              <li key={row.metric_key} data-testid={`cancel-usage-${row.metric_key}`}
-                className="flex flex-wrap items-center gap-x-2 text-sm">
-                <span className="min-w-32 text-ink-body">{row.label}</span>
-                {!row.measured || row.usage_limit === null ? (
-                  <span className="text-ink-muted">—</span>
-                ) : (
-                  <>
-                    <span className="num text-ink">{fmtNum(row.used)}</span>
-                    <span className="text-ink-muted">מתוך</span>
-                    <span className="num text-ink">{fmtNum(row.usage_limit)}</span>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
+          {/* The snapshot is fetched when this dialog opens, not on mount. Holding the row shape
+              while it arrives keeps the dialog from growing under the reader's cursor. */}
+          {loading ? (
+            <div role="status" aria-busy="true" className="mt-2 space-y-2">
+              <span className="sr-only">טוען</span>
+              <Skeleton className="h-4 w-48" />
+              <Skeleton className="h-4 w-40" />
+            </div>
+          ) : (
+            <ul className="mt-2 space-y-1">
+              {usage.map((row) => (
+                <li key={row.metric_key} data-testid={`cancel-usage-${row.metric_key}`}
+                  className="flex flex-wrap items-center gap-x-2 text-sm">
+                  <span className="min-w-32 text-ink-body">{row.label}</span>
+                  {!row.measured || row.usage_limit === null ? (
+                    <span className="text-ink-muted">—</span>
+                  ) : (
+                    <>
+                      <span className="num text-ink">{fmtNum(row.used)}</span>
+                      <span className="text-ink-muted">מתוך</span>
+                      <span className="num text-ink">{fmtNum(row.usage_limit)}</span>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         {/* The honest stop. A refused cancellation must never look like a completed one, and a
             transient toast is close enough to silence for an action the customer believes they

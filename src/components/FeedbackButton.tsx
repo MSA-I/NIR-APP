@@ -4,7 +4,7 @@ import { Camera, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { NOTE_MAX_LENGTH, submitFeedbackNote } from '../lib/feedback';
 import { captureViewport, type ScreenshotCapture } from '../lib/screenshot';
-import { Modal, Note, useToast } from './ui';
+import { ICON, Modal, Note, useToast } from './ui';
 
 /**
  * The design partner's note, from any screen, straight to the vendor.
@@ -47,11 +47,14 @@ import { Modal, Note, useToast } from './ui';
 
 const COOLDOWN_MS = 30_000;
 
-export default function FeedbackButton({ onShell = false, variant = 'icon' }: {
-  onShell?: boolean;
+/**
+ * `onShell` was removed on 26.08.2026 for the same reason as the bell's: it switched this trigger
+ * onto the dark Onyx ramp, and T7.3k made every cluster that renders it light. No caller passed it.
+ */
+export default function FeedbackButton({ variant = 'icon' }: {
   /** `menu` renders a full-width drawer row instead of a round icon target. */
   variant?: 'icon' | 'menu';
-}) {
+} = {}) {
   const { profile } = useAuth();
   const location = useLocation();
   const toast = useToast();
@@ -155,18 +158,14 @@ export default function FeedbackButton({ onShell = false, variant = 'icon' }: {
         <button type="button" onClick={() => void openWithCapture()} disabled={cooling || capturing}
           title={label}
           className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink-body transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset disabled:opacity-50">
-          <MessageSquarePlus size={17} aria-hidden="true" />
+          <MessageSquarePlus size={ICON.md} aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate text-start">{cooling ? label : 'שליחת הערה'}</span>
         </button>
       ) : (
         <button type="button" onClick={() => void openWithCapture()} disabled={cooling || capturing}
           aria-label={label} title={label}
-          className={`grid size-[44px] shrink-0 place-items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 ${
-            onShell
-              ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
-              : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
-          }`}>
-          <MessageSquarePlus size={19} aria-hidden="true" />
+          className="btn-ghost btn-icon rounded-full">
+          <MessageSquarePlus size={ICON.xl} aria-hidden="true" />
         </button>
       )}
 
@@ -192,7 +191,7 @@ export default function FeedbackButton({ onShell = false, variant = 'icon' }: {
                 </label>
                 <button type="button" className="btn-ghost min-h-11 text-sm"
                   disabled={busy || capturing} onClick={() => void capture()}>
-                  <Camera size={16} aria-hidden="true" /> צילום מחדש
+                  <Camera size={ICON.sm} aria-hidden="true" /> צילום מחדש
                 </button>
               </div>
               {includeShot && (
@@ -226,7 +225,7 @@ export default function FeedbackButton({ onShell = false, variant = 'icon' }: {
               onClick={() => setOpen(false)}>ביטול</button>
             <button type="button" className="btn-primary" disabled={busy || !note.trim()}
               onClick={() => void send()}>
-              {busy ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : 'שליחה'}
+                {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : 'שליחה'}
             </button>
           </div>
         </div>

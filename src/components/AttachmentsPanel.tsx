@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 import type { DocumentRow } from '../lib/types';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { ActionMenu } from './ActionMenu';
-import { ConfirmDialog, ErrorNote, Note, Skeleton, useToast } from './ui';
+import { ConfirmDialog, ErrorNote, ICON, Note, Skeleton, useToast } from './ui';
 import { DocumentStatusBadge } from './DocumentStatusBadge';
 import { documentUiStatus } from '../lib/documentStatus';
 import {
@@ -163,7 +163,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
         </div>
         {canUpload && <>
           <button type="button" className="btn-secondary" disabled={busy || retryFiles.length > 0} onClick={() => inputRef.current?.click()}>
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+            {busy ? <Loader2 size={ICON.sm} className="animate-spin" /> : <Upload size={ICON.sm} />}
             הוספת קבצים
           </button>
           <input ref={inputRef} type="file" hidden multiple accept={DOCUMENT_UPLOAD_ACCEPT} data-document-upload-input
@@ -179,7 +179,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
               <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs">נכשלו: {uploadSummary.failed.join(', ')}</span>
                 {retryFiles.length > 0 && (
-                  <button type="button" className="btn-ghost min-h-11" disabled={busy} onClick={() => void uploadFiles(retryFiles, uploadSummary)}>
+                  <button type="button" className="btn-ghost btn-sm" disabled={busy} onClick={() => void uploadFiles(retryFiles, uploadSummary)}>
                     ניסיון חוזר לנכשלים בלבד
                   </button>
                 )}
@@ -211,13 +211,20 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
             const stage = processing.data ? processing.snapshots[doc.id]?.stage ?? 'unprocessed' : null;
             return (
               <li key={doc.id} className="flex min-h-16 items-center gap-3 py-2">
-                <button type="button" onClick={() => void open(doc)} aria-label={`פתיחת ${doc.file_name}`}
-                  className="grid size-11 shrink-0 place-items-center border border-line bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-                  {image ? <img src={thumb} alt="" className="size-full object-cover" /> : <FileText size={18} className="text-ink-faint" aria-hidden="true" />}
-                </button>
+                {/* One row used to carry THREE ways to open the same document: this thumbnail, the
+                    title beside it, and „צפייה" in the menu — three tab stops and three accessible
+                    names for one action. The title is the primary (it names the thing, so it is
+                    what a person and a screen reader both reach for) and the menu keeps the
+                    explicit route; the thumbnail is now what it always looked like — a preview. */}
+                <span aria-hidden="true"
+                  className="grid size-11 shrink-0 place-items-center border border-line bg-surface-sunken">
+                  {image ? <img src={thumb} alt="" className="size-full object-cover" /> : <FileText size={ICON.md} className="text-ink-faint" />}
+                </span>
                 <div className="min-w-0 flex-1">
-                  <button type="button" onClick={() => void open(doc)} className="block max-w-full truncate text-start text-sm font-medium text-ink-body hover:text-action">
-                    <bdi>{doc.file_name}</bdi>
+                  {/* 44px like every other control (DESIGN.md): with the thumbnail demoted this is
+                      the row's only direct open affordance, and it was ~20px tall. */}
+                  <button type="button" onClick={() => void open(doc)} className="flex min-h-11 max-w-full items-center text-start text-sm font-medium text-ink-body hover:text-action">
+                    <bdi className="truncate">{doc.file_name}</bdi>
                   </button>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-muted">
                     <span className="font-medium text-ink-soft">{source}</span>

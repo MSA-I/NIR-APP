@@ -5,7 +5,7 @@ import { Loader2, Send, CheckCircle2, RotateCcw, SearchCheck, FilePenLine } from
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { Breadcrumbs, useToast, StatusBadge, LifecycleStrip, Modal, ConfirmDialog, ErrorNote, Note, RecordHeader, RecordSkeleton } from '../components/ui';
+import { Breadcrumbs, useToast, StatusBadge, LifecycleStrip, Modal, ConfirmDialog, ErrorNote, Note, RecordHeader, RecordSkeleton, Card, ICON } from '../components/ui';
 import { InvoiceAttachments } from '../components/AttachmentsPanel';
 import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
@@ -397,10 +397,11 @@ export default function InvoiceDetail() {
   const primaryKey = graphUnavailable ? null : invoicePrimaryAction(transitions, inv.review_status, inv.payment_status);
   const primaryTransition = transitions.find((action) => action.to === primaryKey);
   const primaryAction = !isOffice ? null : primaryKey === 'payment-request' ? (
-    <button className="btn-primary" onClick={() => navigate(`/payment-requests?new=${inv.id}`)}><Send size={15} /> יצירת דרישת תשלום</button>
+    <button className="btn-primary" onClick={() => navigate(`/payment-requests?new=${inv.id}`)}><Send size={ICON.sm} aria-hidden="true" /> יצירת דרישת תשלום</button>
   ) : primaryTransition ? (
     <button className="btn-primary" disabled={busy} onClick={() => requestReview(primaryTransition.to)}>
-      {primaryTransition.to === 'approved' ? <CheckCircle2 size={15} /> : <Send size={15} />}{primaryTransition.label}
+      {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />
+        : primaryTransition.to === 'approved' ? <CheckCircle2 size={ICON.sm} aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />}{primaryTransition.label}
     </button>
   ) : null;
   const nextAction = primaryKey === 'payment-request' ? 'יצירת דרישת תשלום'
@@ -420,10 +421,11 @@ export default function InvoiceDetail() {
           {isOffice && transitions.filter((transition) => transition.to !== primaryKey).map((transition) => (
             <button key={transition.to} className="btn-secondary" disabled={busy || graphUnavailable}
               onClick={() => requestReview(transition.to)}>
-              {transition.to === 'investigation' ? <SearchCheck size={15} /> : transition.to === 'approved' ? <CheckCircle2 size={15} /> : <Send size={15} />}{transition.label}
+                {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />
+                : transition.to === 'investigation' ? <SearchCheck size={ICON.sm} aria-hidden="true" /> : transition.to === 'approved' ? <CheckCircle2 size={ICON.sm} aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />}{transition.label}
             </button>
           ))}
-          {canEdit && <button className="btn-secondary" onClick={() => setCreditOpen(true)}><RotateCcw size={15} /> דרישת זיכוי</button>}
+          {canEdit && <button className="btn-secondary" onClick={() => setCreditOpen(true)}><RotateCcw size={ICON.sm} aria-hidden="true" /> דרישת זיכוי</button>}
         </>}
         lifecycle={lifecycleSteps.length ? <LifecycleStrip steps={lifecycleSteps} current={inv.review_status} nextAction={nextAction} /> : undefined} />
 
@@ -457,7 +459,7 @@ export default function InvoiceDetail() {
 
       {/* print-area on the money + details cards: shadows/borders drop in print so the sheet
           stays a clean invoice document (same convention as the Orders print sheet). */}
-      <div className={`card grid overflow-hidden ${isProcurementManager ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-4'}`}>
+      <Card pad={false} clip className={`grid ${isProcurementManager ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-4'}`}>
         <div className="p-4 print-area"><div className="text-xs text-ink-muted">סה״כ חשבונית</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(inv.total_amount)}</div>
           <div className="text-xs text-ink-muted mt-0.5">לפני מע״מ {fmtMoneyExact(inv.amount_before_vat)} + מע״מ {fmtMoneyExact(inv.vat_amount)}</div></div>
         {!isProcurementManager && (
@@ -476,10 +478,10 @@ export default function InvoiceDetail() {
             <div className="border-s border-t border-line-soft p-4 print-area sm:border-t-0"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`kpi-value-compact num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
           </>
         )}
-      </div>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card card-pad space-y-3 print-area">
+        <Card className="space-y-3 print-area">
           <div className="section-title">פרטים</div>
           <dl className="text-sm space-y-2">
             <div className="flex justify-between"><dt className="text-ink-muted">תאריך חשבונית</dt><dd>{fmtDate(inv.invoice_date)}</dd></div>
@@ -495,10 +497,10 @@ export default function InvoiceDetail() {
               <dd>{inv.receipts.length ? inv.receipts.map((r) => `#${r.goods_receipts.number}`).join(', ') : '—'}</dd></div>
           </dl>
           {inv.notes && <div className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-3 py-2">{inv.notes}</div>}
-        </div>
+        </Card>
 
         {/* attachments/allocations are working-screen material, not part of the printed sheet */}
-        <div className="card card-pad no-print">
+        <Card className="no-print">
           <InvoiceAttachments invoiceId={inv.id} receipts={inv.receipts.map((r) => r.goods_receipts)} />
           {data.allocations.length > 0 && (
             <div className="mt-4">
@@ -513,10 +515,10 @@ export default function InvoiceDetail() {
               </ul>
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
-      <section className="card card-pad no-print" aria-labelledby="invoice-three-way-title">
+      <Card as="section" className="no-print" aria-labelledby="invoice-three-way-title">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 id="invoice-three-way-title" className="section-title">התאמת הזמנה, קבלה וחשבונית</h2>
@@ -542,7 +544,7 @@ export default function InvoiceDetail() {
           )}
           {isOffice && organizationAccess.canWrite && inv.review_status !== 'approved' && (
             <button className="btn-secondary" onClick={() => setLineReviewOpen(true)}>
-              <FilePenLine size={15} /> בדיקת שורות והתאמות
+              <FilePenLine size={ICON.sm} aria-hidden="true" /> בדיקת שורות והתאמות
             </button>
           )}
         </div>
@@ -600,7 +602,7 @@ export default function InvoiceDetail() {
               && data.threeWay.approval_blocked && !data.threeWay.override_active
               && !data.threeWay.definite_duplicate_invoice && (
                 <div className="flex justify-end">
-                  <button className="btn-secondary text-alert-fg" disabled={busy}
+                  <button className="btn-danger-quiet" disabled={busy}
                     onClick={() => setOverrideConfirmOpen(true)}>
                     עקיפת חסימה לאחר אימות זהות
                   </button>
@@ -608,20 +610,20 @@ export default function InvoiceDetail() {
               )}
           </div>
         )}
-      </section>
+      </Card>
 
-      <div className="card card-pad no-print">
+      <Card className="no-print">
         <div className="flex items-center justify-between mb-3">
           <div className="section-title">בדיקות אוטומטיות</div>
-          <button className="btn-secondary py-1.5!" onClick={() => void runChecks()} disabled={checking}>
-            {checking ? <Loader2 size={14} className="animate-spin" /> : <SearchCheck size={15} />} הרצת בדיקות
+          <button className="btn-secondary btn-sm" onClick={() => void runChecks()} disabled={checking}>
+            {checking ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <SearchCheck size={ICON.sm} aria-hidden="true" />} הרצת בדיקות
           </button>
         </div>
         {checkError && <Note tone="alert">{checkError}</Note>}
         {checks ? <CheckList checks={checks} /> : !checking && !checkError && /* Device-neutral wording: on a phone nobody clicks. */ (
           <div className="text-sm text-ink-muted">״הרצת בדיקות״ משווה את החשבונית מול הזמנות, קבלות, תשלומים ותנועות בנק.</div>
         )}
-      </div>
+      </Card>
 
       {creditOpen && (
         <CreditFromInvoice invoice={inv} draft={creditDraft}

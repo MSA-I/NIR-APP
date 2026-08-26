@@ -16,7 +16,7 @@ import {
   parseTemplateWorkbook,
   type ParsedWorkbook,
 } from '../lib/exportTemplateWorkbook';
-import { ErrorNote, Modal, Note, useToast } from './ui';
+import { ErrorNote, ICON, Modal, Note, SubPanel, useToast } from './ui';
 
 /**
  * Package K's screen: the accountant's own workbook becomes the export.
@@ -145,7 +145,7 @@ export function ExportTemplatesPanel({ orgId }: { orgId: string }) {
     <div className="card card-pad space-y-4">
       <div>
         <h2 className="section-title flex items-center gap-2">
-          <FileSpreadsheet size={17} aria-hidden="true" /> תבניות ייצוא
+          <FileSpreadsheet size={ICON.md} aria-hidden="true" /> תבניות ייצוא
         </h2>
         <p className="mt-1 text-sm text-ink-muted">
           העלו את קובץ ה-Excel שרואה החשבון עובד איתו, וסמנו איזה נתון נכנס לאיזה תא. מכאן והלאה
@@ -170,7 +170,7 @@ export function ExportTemplatesPanel({ orgId }: { orgId: string }) {
                 <div className="mt-1 flex items-center gap-1.5 text-sm">
                   {live?.found ? (
                     <>
-                      <CheckCircle2 size={15} aria-hidden="true" className="text-done-fg" />
+                      <CheckCircle2 size={ICON.sm} aria-hidden="true" className="text-done-fg" />
                       <span className="text-ink-body">
                         {live.name} · <span dir="ltr">{live.workbook_name}</span> · גרסה
                         <span className="num"> {live.version}</span>
@@ -182,7 +182,7 @@ export function ExportTemplatesPanel({ orgId }: { orgId: string }) {
                 </div>
               </div>
               <label className="btn-secondary min-h-11 cursor-pointer">
-                <Upload size={15} aria-hidden="true" />
+                <Upload size={ICON.sm} aria-hidden="true" />
                 {live?.found ? 'החלפת התבנית' : 'העלאת תבנית'}
                 <input type="file" className="sr-only" accept={WORKBOOK_MIME_TYPES.join(',')}
                   disabled={busy}
@@ -207,7 +207,7 @@ export function ExportTemplatesPanel({ orgId }: { orgId: string }) {
                 onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
             </div>
 
-            <div className="rounded-2xl bg-surface-sunken p-3">
+            <SubPanel>
               <h3 className="text-sm font-medium text-ink">מה נקרא מהקובץ</h3>
               <ul className="mt-2 space-y-1 text-sm text-ink-body">
                 {draft.parsed.sheets.map((sheet) => (
@@ -223,7 +223,7 @@ export function ExportTemplatesPanel({ orgId }: { orgId: string }) {
                   טווחים בעלי שם: {draft.parsed.namedRanges.join(', ')}
                 </p>
               )}
-            </div>
+            </SubPanel>
 
             {draft.mapping.length === 0 ? (
               <Note tone="await" role="status">
@@ -275,7 +275,7 @@ export function ExportTemplatesPanel({ orgId }: { orgId: string }) {
                 onClick={() => setDraft(null)}>ביטול</button>
               <button type="button" className="btn-primary min-h-11" disabled={busy}
                 onClick={() => void submit()}>
-                {busy && <Loader2 size={16} aria-hidden="true" className="animate-spin" />}
+                  {busy && <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" />}
                 אישור התבנית
               </button>
             </div>

@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toHebrewError } from '../lib/errors';
 import { fmtMoneyExact, formatQuantity, formatUnit, normalizeUnitInput } from '../lib/format';
-import { Modal, Note, useToast } from './ui';
+import { ICON, Modal, Note, useToast } from './ui';
 
 export type InvoiceReviewCandidate = {
   invoice_line_id: string;
@@ -265,7 +265,7 @@ export function InvoiceLineReviewModal({
                 setEvidenceKey(crypto.randomUUID());
               }}
             >
-              <Plus size={15} /> הוספת שורה
+              <Plus size={ICON.sm} aria-hidden="true" /> הוספת שורה
             </button>
           </div>
 
@@ -287,14 +287,14 @@ export function InvoiceLineReviewModal({
                 {lines.length > 1 && (
                   <button
                     type="button"
-                    className="mt-3 inline-flex min-h-11 items-center gap-1 text-sm text-alert-fg"
+                    className="btn-ghost btn-sm mt-3 text-alert-fg"
                     disabled={busy !== null}
                     onClick={() => {
                       setLines((current) => current.filter((_, lineIndex) => lineIndex !== index));
                       setEvidenceKey(crypto.randomUUID());
                     }}
                   >
-                    <Trash2 size={15} /> הסרת השורה מהגרסה החדשה
+                    <Trash2 size={ICON.sm} aria-hidden="true" /> הסרת השורה מהגרסה החדשה
                   </button>
                 )}
               </fieldset>

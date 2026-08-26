@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { reasonOr } from '../lib/reason';
-import { AlertTriangle, Check, Loader2, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, Check, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toHebrewError } from '../lib/errors';
-import { Modal, Note, useToast } from './ui';
+import { ConfirmDialog, ICON, Modal, Note, SubPanel, useToast } from './ui';
 
 /**
  * Removing a document, with the consequences computed before the button is pressed (0116 + 0119).
@@ -19,6 +18,14 @@ import { Modal, Note, useToast } from './ui';
  * The destructive choice is not disabled on the client's opinion. The server recomputes the blocker
  * list inside its own row lock — an invoice can be approved between reading this dialog and
  * pressing the button — so what this screen renders is guidance, and the refusal is the server's.
+ *
+ * Two surfaces, on purpose (convergence sweep 26.08.2026). This dialog is the DECISION — what the
+ * removal takes with it, which blockers stand, which of the two modes. The COMMITMENT is the shared
+ * `ConfirmDialog`, which owns the audit reason, the busy spinner and — for the derived mode — the
+ * `btn-danger` colour DESIGN.md:552 requires of anything that undoes financial records. It used to
+ * be one bespoke modal with its own reason textarea and a `btn-primary` on the destructive branch.
+ * The reason still reaches `remove_document` with the same two fallback sentences: they are the
+ * ConfirmDialog titles, and `ConfirmDialog` falls back to its title.
  */
 export interface RemovalEffect { kind: string; action: string; description: string }
 export interface RemovalBlocker { kind: string; description: string }
@@ -42,9 +49,10 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
   const [impact, setImpact] = useState<RemovalImpact | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<'document_only' | 'document_and_derived'>('document_only');
-  const [reason, setReason] = useState('');
+  const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
+  const destructive = mode === 'document_and_derived';
 
   const load = useCallback(async () => {
     const result = await supabase.rpc('get_document_removal_impact', {
@@ -59,19 +67,17 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
     if (!open) return;
     setImpact(null);
     setMode('document_only');
-    setReason('');
+    setConfirming(false);
     void load();
   }, [open, load]);
 
-  const submit = useCallback(async () => {
+  const submit = useCallback(async (reason?: string) => {
     setBusy(true);
     const result = await supabase.rpc('remove_document', {
-      p_document_id: documentId, p_mode: mode,
-      p_reason: reasonOr(reason, mode === 'document_and_derived'
-        ? 'הסרת מסמך וביטול מה שנוצר ממנו'
-        : 'הסרת מסמך מתיקיית המסמכים'),
+      p_document_id: documentId, p_mode: mode, p_reason: reason,
     });
     setBusy(false);
+    setConfirming(false);
     if (result.error) { toast(toHebrewError(result.error), 'error'); return; }
     const answer = result.data as { already_removed?: boolean; undone_count?: number };
     toast(answer.already_removed
@@ -81,7 +87,7 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
         : 'המסמך הוסר. הרשומות שנוצרו ממנו נשארו', 'success');
     onClose();
     onRemoved();
-  }, [documentId, mode, reason, toast, onClose, onRemoved]);
+  }, [documentId, mode, toast, onClose, onRemoved]);
 
   return (
     <Modal open={open} onClose={onClose} title="הסרת מסמך" busy={busy}>
@@ -95,12 +101,12 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
           {/* Always true, and said before anything else. A person about to press remove is exactly
               who needs to know the file itself survives. */}
           <p className="flex items-start gap-2 text-sm text-ink-body">
-            <Check size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+            <Check size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
             <span>הקובץ המקורי והראיות נשמרים בכל מקרה — ההסרה אינה מוחקת אותם.</span>
           </p>
 
           {impact.effects.length > 0 && (
-            <div className="rounded-2xl bg-surface-sunken p-3">
+            <SubPanel>
               <h3 className="text-sm font-medium text-ink">
                 מה נוצר מהמסמך הזה
               </h3>
@@ -109,7 +115,7 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
                   <li key={index}>· {effect.description}</li>
                 ))}
               </ul>
-            </div>
+            </SubPanel>
           )}
 
           {impact.blockers.length > 0 && (
@@ -119,7 +125,7 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
                 <ul className="mt-2 space-y-1">
                   {impact.blockers.map((blocker, index) => (
                     <li key={index} className="flex items-start gap-2 text-sm">
-                      <ShieldAlert size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+                      <ShieldAlert size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
                       <span>{blocker.description}</span>
                     </li>
                   ))}
@@ -131,7 +137,7 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium text-ink">מה להסיר</legend>
             <label className="flex min-h-11 items-start gap-2 text-sm text-ink-body">
-              <input type="radio" name="removal-mode" className="mt-1"
+              <input type="radio" name="removal-mode" className="mt-1 shrink-0"
                 checked={mode === 'document_only'}
                 onChange={() => setMode('document_only')} />
               <span>
@@ -139,7 +145,7 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
               </span>
             </label>
             <label className="flex min-h-11 items-start gap-2 text-sm text-ink-body">
-              <input type="radio" name="removal-mode" className="mt-1"
+              <input type="radio" name="removal-mode" className="mt-1 shrink-0"
                 checked={mode === 'document_and_derived'}
                 onChange={() => setMode('document_and_derived')} />
               <span>
@@ -153,19 +159,11 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
             </label>
           </fieldset>
 
-          <div>
-            <label className="label" htmlFor="removal-reason">
-              סיבה (רשות — נרשמת ביומן הביקורת)
-            </label>
-            <textarea id="removal-reason" className="input min-h-20" value={reason}
-              maxLength={1000} onChange={(event) => setReason(event.target.value)} />
-          </div>
-
-          {mode === 'document_and_derived' && impact.blockers.length === 0
+          {destructive && impact.blockers.length === 0
             && impact.derived_count > 0 && (
             <Note tone="await" role="status">
               <p className="flex items-start gap-2 text-sm">
-                <AlertTriangle size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+                <AlertTriangle size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
                 <span>
                   <span className="num">{impact.derived_count}</span> רשומות יבוטלו. חשבונית תימחק
                   מחיקה רכה וניתן יהיה לראותה ביומן; טיוטת קבלה תבוטל לגמרי.
@@ -175,16 +173,30 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
           )}
 
           <div className="flex justify-end gap-2">
-            <button type="button" className="btn-secondary min-h-11" disabled={busy}
+            <button type="button" className="btn-secondary" disabled={busy}
               onClick={onClose}>ביטול</button>
-            <button type="button" className="btn-primary min-h-11"
-              disabled={busy} onClick={() => void submit()}>
-              {busy && <Loader2 size={16} aria-hidden="true" className="animate-spin" />}
+            {/* The trigger wears the colour of what it is about to do: undoing derived records is
+                destructive, filing the document away is not (DESIGN.md:552, :586). */}
+            <button type="button" className={destructive ? 'btn-danger' : 'btn-primary'}
+              disabled={busy} onClick={() => setConfirming(true)}>
               הסרה
             </button>
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        onConfirm={(reason) => void submit(reason)}
+        danger={destructive}
+        requireReason
+        busy={busy}
+        confirmLabel="הסרה"
+        title={destructive ? 'הסרת מסמך וביטול מה שנוצר ממנו' : 'הסרת מסמך מתיקיית המסמכים'}
+        message={destructive
+          ? `${impact?.derived_count ?? 0} רשומות שנוצרו מהמסמך יבוטלו יחד איתו. הקובץ המקורי והראיות נשמרים.`
+          : 'המסמך יוסר מתיקיית המסמכים. כל מה שנוצר ממנו נשאר כפי שהוא, והקובץ המקורי נשמר.'}
+      />
     </Modal>
   );
 }

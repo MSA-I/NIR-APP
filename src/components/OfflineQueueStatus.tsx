@@ -5,6 +5,7 @@ import { fmtDateTime } from '../lib/format';
 import { useOfflineQueue, offlineQueue } from '../lib/offlineQueue';
 import { syncPendingDocumentPhotos } from './FileUpload';
 import { listPendingPhotos } from '../lib/offlineDb';
+import { ICON } from './ui';
 
 /**
  * The offline status strip for the receiving path (`OFFLINE-SYNC-DESIGN.md` §6).
@@ -98,7 +99,7 @@ export default function OfflineQueueStatus() {
       role="status" aria-live="polite" data-testid="offline-queue-status">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="flex items-center gap-1.5 font-medium text-ink">
-          {!queue.online && <CloudOff size={14} />}
+          {!queue.online && <CloudOff size={ICON.xs} />}
           {queue.online ? 'מחובר לרשת' : 'אין חיבור לרשת — העבודה נשמרת במכשיר'}
         </span>
         <span>
@@ -125,7 +126,7 @@ export default function OfflineQueueStatus() {
         <button type="button" className="btn-ghost ms-auto min-h-11 text-xs"
           disabled={queue.syncing || !queue.online || !hasSyncableWork}
           onClick={() => void syncAll()}>
-          <RefreshCw size={13} /> ניסיון סנכרון עכשיו
+          <RefreshCw size={ICON.xs} /> ניסיון סנכרון עכשיו
         </button>
       </div>
 

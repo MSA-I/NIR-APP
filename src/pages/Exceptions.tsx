@@ -6,7 +6,7 @@ import { AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, Note, type Column } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, Note, ICON, type Column } from '../components/ui';
 import { EXCEPTION_TYPE, EXCEPTION_STATUS, SEVERITY } from '../lib/status';
 import { fmtDate, fmtMoneyExact } from '../lib/format';
 import { logAction } from '../lib/audit';
@@ -110,7 +110,7 @@ export default function Exceptions() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title={<span className="flex items-center gap-2"><AlertTriangle size={22} className="text-await-fg" /> חריגים</span>}
+      <PageHeader title={<span className="flex items-center gap-2"><AlertTriangle size={ICON.xl} className="text-await-fg" aria-hidden="true" /> חריגים</span>}
         meta={`${rows.length} חריגים בתצוגה`} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.title.toLowerCase().includes(q) || (r.supplier?.name ?? '').toLowerCase().includes(q)}
@@ -207,7 +207,7 @@ function ExceptionDetail({ row, canWrite, canOpenProcurement, onClose, onChanged
         )}
         {links.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {links.map((l) => <button key={l.path} className="btn-secondary py-1.5!" onClick={() => onNavigate(l.path)}>{l.label}</button>)}
+            {links.map((l) => <button key={l.path} className="btn-secondary btn-sm" onClick={() => onNavigate(l.path)}>{l.label}</button>)}
           </div>
         )}
         {canWrite && ['open', 'in_progress'].includes(row.status) && (

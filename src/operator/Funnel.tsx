@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AlertTriangle, TrendingUp } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';
-import { ErrorNote, Note, PageLoader } from '../components/ui';
+import { Card, ErrorNote, ICON, Note, PageHeader, SkeletonCards, ToggleGroup } from '../components/ui';
 import { fmtDateTime, fmtNum } from '../lib/format';
 import {
   fetchBillingDeadLetters, fetchFunnelMetrics, fetchMyCapabilities,
@@ -14,6 +14,8 @@ const WINDOWS = [
   { key: '365', label: 'שנה', days: 365 },
 ] as const;
 
+type WindowKey = typeof WINDOWS[number]['key'];
+
 /** A rate is a percentage; everything else is a count or a number of days. */
 function metricValue(metric: FunnelMetric): string {
   if (!metric.measured || metric.value === null) return '—';
@@ -23,7 +25,7 @@ function metricValue(metric: FunnelMetric): string {
 }
 
 export default function Funnel() {
-  const [windowKey, setWindowKey] = useState('90');
+  const [windowKey, setWindowKey] = useState<WindowKey>('90');
   const days = WINDOWS.find((option) => option.key === windowKey)?.days ?? 90;
 
   const { data, loading, error } = useQuery(
@@ -41,7 +43,7 @@ export default function Funnel() {
 
   const capabilities: PlatformCapability[] = data?.capabilities ?? [];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonCards count={4} cols={4} title />;
   if (error) return <ErrorNote message={error} />;
   if (!capabilities.includes('usage.view')) {
     return (
@@ -60,25 +62,26 @@ export default function Funnel() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="page-title flex items-center gap-2"><TrendingUp size={22} /> משפך ההצטרפות</h1>
-        <div role="group" aria-label="טווח זמן" className="ms-auto flex flex-wrap gap-1">
-          {WINDOWS.map((option) => (
-            <button key={option.key} type="button" aria-pressed={windowKey === option.key}
-              className={windowKey === option.key ? 'chip-filter-active' : 'chip-filter'}
-              onClick={() => setWindowKey(option.key)}>
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <PageHeader
+        title={<span className="flex items-center gap-2"><TrendingUp size={ICON.xl} aria-hidden="true" /> משפך ההצטרפות</span>}
+        actions={
+          <ToggleGroup
+            label="טווח זמן"
+            items={WINDOWS.map((option) => ({ key: option.key, label: option.label }))}
+            value={windowKey}
+            onChange={setWindowKey}
+          />
+        }
+      />
 
       {/* An unattributable money event is a work queue, not a statistic, so it sits above the
           numbers — and only when there is one. Nothing renders on a clean day. */}
+      {/* Stays a <section> rather than <Card>: the labelled landmark is the point, and Card is a
+          plain div with no way to carry aria-labelledby. Same classes, same object. */}
       {deadLetters.length > 0 && (
-        <section className="card card-pad space-y-3" aria-labelledby="dead-letters-heading">
+        <Card className="space-y-3" as="section" aria-labelledby="dead-letters-heading">
           <h2 id="dead-letters-heading" className="section-title flex items-center gap-2 text-alert-fg">
-            <AlertTriangle size={17} /> אירועי חיוב שלא שויכו ללקוח
+            <AlertTriangle size={ICON.md} aria-hidden="true" /> אירועי חיוב שלא שויכו ללקוח
           </h2>
           <p className="text-sm text-ink-muted">
             אירועים שהגיעו מספק החיוב ולא נמצא להם ארגון מקושר. הם נשמרו ולא בוצעה בהם שום פעולה —
@@ -99,10 +102,10 @@ export default function Funnel() {
               </li>
             ))}
           </ul>
-        </section>
+        </Card>
       )}
 
-      <section className="card card-pad space-y-3" aria-labelledby="funnel-heading">
+      <Card className="space-y-3" as="section" aria-labelledby="funnel-heading">
         <h2 id="funnel-heading" className="section-title">מדדים</h2>
         <dl className="grid gap-4 sm:grid-cols-3">
           {measured.map((metric) => (
@@ -112,12 +115,12 @@ export default function Funnel() {
             </div>
           ))}
         </dl>
-      </section>
+      </Card>
 
       {/* Named, not hidden. A stage this system cannot see is a fact about our instrumentation,
           and omitting it invites somebody to fill the gap with a zero later. */}
       {unmeasured.length > 0 && (
-        <section className="card card-pad space-y-2" aria-labelledby="unmeasured-heading">
+        <Card className="space-y-2" as="section" aria-labelledby="unmeasured-heading">
           <h2 id="unmeasured-heading" className="section-title">שלבים שאינם נמדדים</h2>
           <ul className="space-y-1.5">
             {unmeasured.map((metric) => (
@@ -128,7 +131,7 @@ export default function Funnel() {
               </li>
             ))}
           </ul>
-        </section>
+        </Card>
       )}
     </div>
   );

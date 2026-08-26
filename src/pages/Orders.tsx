@@ -6,7 +6,7 @@ import { Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle, Penc
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { Breadcrumbs, DataTable, StatusBadge, useToast, ConfirmDialog, LifecycleStrip, Modal, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, Note, type Column } from '../components/ui';
+import { Breadcrumbs, DataTable, StatusBadge, useToast, ConfirmDialog, LifecycleStrip, Modal, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, Note, EmptyState, Card, ICON, type Column } from '../components/ui';
 import { PO_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, formatQuantity, formatUnit, productLabel, todayISO } from '../lib/format';
 import { orderWhatsAppLink, markOrderSentToSupplier, needsSentConfirmation } from '../lib/share';
@@ -157,7 +157,7 @@ export function OrdersList() {
     <div className="space-y-4">
       <PageHeader title="הזמנות רכש"
         meta={`${rows.length} הזמנות בתצוגה · ${data?.orders.length ?? 0} בסך הכול`}
-        actions={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={15} /> טיוטה חדשה</button>} />
+        actions={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={ICON.sm} aria-hidden="true" /> טיוטה חדשה</button>} />
 
       {canWrite && !!data?.drafts.length && (
         <section aria-labelledby="my-drafts-title" className="border-y border-line-strong bg-surface">
@@ -175,12 +175,12 @@ export function OrdersList() {
                   </div>
                   <div className="ms-auto flex gap-2">
                     <button type="button" className="btn-secondary" onClick={() => navigate(`/orders/new?draft=${draft.id}`)}>המשך עריכה</button>
-                    <button type="button" className="btn-ghost text-alert-fg" onClick={() => setDraftCancelTarget(draft)}>ביטול</button>
+                    <button type="button" className="btn-danger" onClick={() => setDraftCancelTarget(draft)}>ביטול</button>
                   </div>
                 </div>
               ))}
             </div>
-          ) : <div className="px-4 py-6 text-sm text-ink-muted">אין טיוטות פעילות.</div>}
+          ) : <EmptyState title="אין טיוטות פעילות" subtitle="טיוטה שתתחיל ולא תסיים תחכה לך כאן." icon={<FileText size={ICON.hero} />} />}
         </section>
       )}
 
@@ -224,7 +224,7 @@ export function OrdersList() {
           </select>
         }
         emptyTitle="עדיין אין הזמנות רכש" emptySubtitle="אפשר ליצור טיוטה חדשה כדי להתחיל את תהליך הרכש"
-        emptyAction={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={15} /> טיוטה חדשה</button>} />
+        emptyAction={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={ICON.sm} aria-hidden="true" /> טיוטה חדשה</button>} />
 
       <WhatsAppSendDialog order={waTarget} orgName={org?.name ?? ''}
         onClose={(openedText) => {
@@ -366,15 +366,15 @@ export function OrderDetail() {
         : primaryKey === 'confirm' ? 'תיעוד אישור הספק'
           : primaryKey === 'receive' ? 'קבלת הסחורה' : undefined;
   const primaryAction = primaryKey === 'ready' ? (
-    <button className="btn-primary" disabled={busy} onClick={() => void setStatus('ready', 'סימון הזמנה כמוכנה לשליחה')}><CheckCircle2 size={15} /> סימון כמוכנה לשליחה</button>
+    <button className="btn-primary" disabled={busy} onClick={() => void setStatus('ready', 'סימון הזמנה כמוכנה לשליחה')}><CheckCircle2 size={ICON.sm} aria-hidden="true" /> סימון כמוכנה לשליחה</button>
   ) : primaryKey === 'sent' ? (
-    <button className="btn-primary" disabled={busy} onClick={() => setSentConfirmOpen(true)}><Send size={15} /> סימון כנשלחה לספק</button>
+    <button className="btn-primary" disabled={busy} onClick={() => setSentConfirmOpen(true)}><Send size={ICON.sm} aria-hidden="true" /> סימון כנשלחה לספק</button>
   ) : primaryKey === 'whatsapp' ? (
-    <button className="btn-primary" disabled={busy} onClick={() => sendWhatsApp()}><MessageCircle size={15} /> פתיחה ב-WhatsApp</button>
+    <button className="btn-primary" disabled={busy} onClick={() => sendWhatsApp()}><MessageCircle size={ICON.sm} aria-hidden="true" /> פתיחה ב-WhatsApp</button>
   ) : primaryKey === 'confirm' ? (
-    <button className="btn-primary" disabled={busy} onClick={() => setSupplierConfirmOpen(true)}><CheckCircle2 size={15} /> הספק אישר</button>
+    <button className="btn-primary" disabled={busy} onClick={() => setSupplierConfirmOpen(true)}><CheckCircle2 size={ICON.sm} aria-hidden="true" /> הספק אישר</button>
   ) : primaryKey === 'receive' ? (
-    <button className="btn-primary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={15} /> קבלת סחורה</button>
+    <button className="btn-primary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={ICON.sm} aria-hidden="true" /> קבלת סחורה</button>
   ) : null;
   // Only observed/current stages are included. Purchase orders are normally created as `ready`,
   // and a fully received order did not necessarily pass through `confirmed` or `partial`, so
@@ -396,16 +396,16 @@ export function OrderDetail() {
         primaryAction={primaryAction}
         secondaryActions={<>
           {canWrite && ['draft', 'sent'].includes(order.status) && waLink && primaryKey !== 'whatsapp' && (
-            <button className="btn-secondary" disabled={busy} onClick={() => sendWhatsApp()}><MessageCircle size={15} /> {order.status === 'sent' ? 'פתיחה חוזרת ב-WhatsApp' : 'פתיחה ב-WhatsApp'}</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => sendWhatsApp()}><MessageCircle size={ICON.sm} aria-hidden="true" /> {order.status === 'sent' ? 'פתיחה חוזרת ב-WhatsApp' : 'פתיחה ב-WhatsApp'}</button>
           )}
           {/* When WhatsApp is the primary action the confirmation still has to be reachable on its
               own: the order may have gone out by phone or email, or the operator may have dismissed
               the prompt after sending. Opening WhatsApp is not what records the send. */}
           {canWrite && primaryKey === 'whatsapp' && (
-            <button className="btn-secondary" disabled={busy} onClick={() => setSentConfirmOpen(true)}><Send size={15} /> סמן כנשלחה לספק</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => setSentConfirmOpen(true)}><Send size={ICON.sm} aria-hidden="true" /> סמן כנשלחה לספק</button>
           )}
           {canWrite && order.status === 'sent' && (
-            <button className="btn-secondary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={15} /> קבלת סחורה</button>
+            <button className="btn-secondary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={ICON.sm} aria-hidden="true" /> קבלת סחורה</button>
           )}
           {/* G1, finding 14 — the same URL Receiving.tsx:638 builds, from the order this time.
               An invoice can only be linked to an order through these parameters (InvoiceNew.tsx
@@ -416,19 +416,19 @@ export function OrderDetail() {
               from the supplier, so the action is to upload it, not to type it. */}
           {canWrite && !['draft', 'cancelled'].includes(order.status) && (
             <button className="btn-secondary" onClick={() => navigate('/documents')}>
-              <FileText size={15} aria-hidden="true" /> העלאת החשבונית שהתקבלה
+              <FileText size={ICON.sm} aria-hidden="true" /> העלאת החשבונית שהתקבלה
             </button>
           )}
-          <button className="btn-secondary" onClick={() => window.print()}><Printer size={15} /> הדפסה</button>
+          <button className="btn-secondary" onClick={() => window.print()}><Printer size={ICON.sm} aria-hidden="true" /> הדפסה</button>
           {canWrite && !['received', 'cancelled'].includes(order.status) && (
-            <button className="btn-ghost text-alert-fg" onClick={() => setConfirm({ status: 'cancelled', label: 'ביטול הזמנה' })}><XCircle size={15} /> ביטול</button>
+            <button type="button" className="btn-danger" onClick={() => setConfirm({ status: 'cancelled', label: 'ביטול הזמנה' })}><XCircle size={ICON.sm} aria-hidden="true" /> ביטול</button>
           )}
         </>}
         lifecycle={order.status === 'cancelled' ? undefined : <LifecycleStrip steps={lifecycleSteps} current={order.status} nextAction={nextAction} />} />
 
       {order.confirmed_at && (
         <Note tone="done" className="no-print">
-          <CheckCircle2 size={15} className="mt-0.5 shrink-0" />
+          <CheckCircle2 size={ICON.sm} className="mt-0.5 shrink-0" />
           <span>
             הספק אישר את קבלת ההזמנה ב-{fmtDateTime(order.confirmed_at)}
             {order.confirmation_note && <span className="text-done-fg"> · {order.confirmation_note}</span>}
@@ -453,7 +453,7 @@ export function OrderDetail() {
       )}
 
       {/* Printable order sheet */}
-      <div className="card card-pad print-area">
+      <Card className="print-area">
         <div className="hidden print:block mb-4">
           <h2 className="text-xl font-semibold">{`הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`}</h2>
           <div className="text-sm mt-1">ספק: {order.supplier.name} · תאריך: {fmtDate(order.created_at)} {order.expected_date && `· אספקה מבוקשת: ${fmtDate(order.expected_date)}`}</div>
@@ -470,7 +470,7 @@ export function OrderDetail() {
           ))}
           <li className="flex items-center justify-between pt-3 font-semibold"><span>סה״כ להזמנה</span><span className="num">{fmtMoneyExact(total)}</span></li>
         </ul>
-        <div className="hidden overflow-x-auto lg:block print:block print:overflow-visible">
+        <div className="table-scroll hidden overflow-x-auto lg:block print:block print:overflow-visible" tabIndex={0} role="region" aria-label="שורות ההזמנה">
         <table className="w-full">
           <thead className="table-head border-b border-line-soft">
             <tr>
@@ -505,7 +505,7 @@ export function OrderDetail() {
         </table>
         </div>
         {order.notes && <div className="mt-3 text-sm text-ink-soft">הערות: {order.notes}</div>}
-      </div>
+      </Card>
 
       <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)}
         onConfirm={(reason) => confirm && void cancelOrder(reason)}
@@ -547,7 +547,7 @@ export function OrderDetail() {
               setConfirmExpected('');
             }
           })()}>
-            <CheckCircle2 size={15} /> אישור
+            <CheckCircle2 size={ICON.sm} aria-hidden="true" /> אישור
           </button>
         </div>
       </Modal>

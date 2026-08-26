@@ -10,7 +10,7 @@ import {
   type DocumentScanState,
   type ScanCorners,
 } from '../../lib/useDocumentScanning';
-import { Note, useToast } from '../ui';
+import { ICON, Note, useToast } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
 
 const DEFAULT_CORNERS: ScanCorners = [[0.05, 0.05], [0.95, 0.05], [0.95, 0.95], [0.05, 0.95]];
@@ -116,7 +116,7 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, rec
               move(index, x + change[0], y + change[1]);
             }}
           >
-            <CornerDownLeft size={19} aria-hidden="true" />
+            <CornerDownLeft size={ICON.lg} aria-hidden="true" />
           </button>
         ))}
       </div>
@@ -128,7 +128,7 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, rec
           which is where the hand already is. */}
       <div className="flex justify-end">
         <button type="button" className="btn-primary" disabled={saving || !valid || readOnly} onClick={() => void submit()}>
-          {saving ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <ScanLine size={17} aria-hidden="true" />}
+          {saving ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <ScanLine size={ICON.md} aria-hidden="true" />}
           {saving ? 'שומר ומעבד…' : 'יצירת סריקה מהפינות'}
         </button>
       </div>
@@ -185,7 +185,7 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <ScanLine size={19} className="text-action" aria-hidden="true" />
+            <ScanLine size={ICON.lg} className="text-action" aria-hidden="true" />
             <h2 id="document-scan-title" className="section-title">הכנת סריקה לקריאה</h2>
           </div>
           <p className="mt-1 break-words text-sm text-ink-muted"><bdi>{fileName}</bdi></p>
@@ -202,7 +202,7 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
       {urlError && <Note tone="alert" role="alert">{urlError}</Note>}
       {(state.status === 'queued' || state.status === 'processing') && (
         <Note tone="info" role="status" className="flex items-center gap-2">
-          <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" />
+          <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />
           <span className="min-w-0 flex-1">מזהה גבולות, מיישר פרספקטיבה ומסיר צללים ורעש. החילוץ יתחיל רק לאחר אישור התצוגה.</span>
         </Note>
       )}
@@ -260,11 +260,11 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
                   is the exception path and sits beside it. */}
               <div className="flex flex-wrap gap-2">
               <button type="button" className="btn-secondary" disabled={accepting || readOnly} onClick={() => setEditingCorners(true)}>
-                <Pencil size={17} aria-hidden="true" /> תיקון גבולות
+                <Pencil size={ICON.md} aria-hidden="true" /> תיקון גבולות
               </button>
               <PrimaryDecision label="אישור הסריקה והמשך לחילוץ">
                 <button type="button" className="btn-primary" disabled={accepting || readOnly} onClick={() => void accept()}>
-                  {accepting ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <Check size={17} aria-hidden="true" />}
+                  {accepting ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <Check size={ICON.md} aria-hidden="true" />}
                   {accepting ? 'מאשר…' : 'אישור והמשך לחילוץ'}
                 </button>
               </PrimaryDecision>

@@ -2,27 +2,42 @@ import { Bell } from 'lucide-react';
 import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { useUnreadNotifications } from '../lib/notifications';
+import { ICON } from './ui';
 
-export default function NotificationBell({ onShell = false }: { onShell?: boolean }) {
+/**
+ * The alert door, in the desktop end-cluster and in the phone header.
+ *
+ * An `onShell` prop used to switch the bell onto the dark Onyx ramp (`shell-ink-soft`, a `shell`
+ * ring on the badge). T7.3k made both clusters light — no caller has passed it since — so the two
+ * branches were one live style and one that nothing could reach.
+ */
+export default function NotificationBell() {
   const { profile } = useAuth();
   const allowed = profile?.role === 'owner' || profile?.role === 'office';
-  const unread = useUnreadNotifications(allowed);
+  const { count: unread, failed } = useUnreadNotifications(allowed);
   if (!allowed) return null;
 
-  const label = unread && unread > 0 ? `${unread} התראות חדשות` : 'התראות';
+  /* THREE states, not two (26.08.2026 audit). A bell with no chip is a claim — "nothing is
+     waiting" — and the hook used to make that claim after a FAILED read as readily as after a
+     successful empty one. The count itself stays absent, because inventing a number would be
+     worse; what changes is the name the control answers to, so a person who hovers, or a screen
+     reader, is told the difference. Loading deliberately keeps the plain name: it lasts a moment,
+     and a skeleton in the chrome would flash on every route change. */
+  const label = failed ? 'התראות — לא ניתן לבדוק כרגע אם יש חדשות'
+    : unread && unread > 0 ? `${unread} התראות חדשות`
+      : 'התראות';
   return (
     <Link to="/alerts" aria-label={label} title={label}
-      className={`relative grid size-[44px] shrink-0 place-items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
-        onShell
-          ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
-          : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
-      }`}>
-      <Bell size={19} aria-hidden="true" />
+      data-notification-state={failed ? 'unknown' : unread == null ? 'loading' : unread > 0 ? 'unread' : 'clear'}
+      className="btn-ghost btn-icon relative rounded-full">
+      <Bell size={ICON.xl} aria-hidden="true" />
       {!!unread && unread > 0 && (
-        <span aria-hidden="true"
-          className={`absolute -end-1 -top-1 min-w-5 border px-1 py-0.5 text-center text-xs font-semibold leading-none num ${
-            onShell ? 'border-shell bg-alert-solid text-on-solid' : 'border-surface bg-alert-solid text-on-solid'
-          }`}>
+        /* `.badge-alert` IS this pair — `badge bg-alert-solid text-on-solid` (index.css) — so the
+           count chip stops being the one badge in the product written out by hand. What it was
+           before: a square with no radius class, no `badge` geometry, and a `border` in a
+           vocabulary that has no border token for a count chip; the border existed only to cut the
+           chip out of the surface behind it, which a `ring` in a real token does honestly. */
+        <span aria-hidden="true" className="badge-alert num absolute -end-1 -top-1 min-w-5 justify-center px-1 ring-2 ring-topbar">
           {unread > 99 ? '99+' : unread}
         </span>
       )}

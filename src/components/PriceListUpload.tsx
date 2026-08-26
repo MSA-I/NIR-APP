@@ -400,7 +400,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
           </Note>
           {preview.skipped.length > 0 && (
             <details className="text-sm">
-              <summary className="link cursor-pointer">פירוט השורות שדולגו</summary>
+              <summary className="link flex min-h-11 cursor-pointer items-center">פירוט השורות שדולגו</summary>
               <ul className="mt-2 space-y-1 text-ink-soft">
                 {groupSkipped(preview.skipped).map(({ reason: skipReason, rows: skipRows }) => (
                   <li key={skipReason}>
@@ -411,7 +411,8 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
               </ul>
             </details>
           )}
-          <div className="max-h-64 overflow-y-auto border border-line-soft rounded-lg">
+          <div className="table-scroll max-h-64 overflow-auto rounded-lg border border-line-soft"
+            role="region" tabIndex={0} aria-label="תצוגה מקדימה של שורות המחירון; ניתן לגלול בתוך הטבלה">
             <table className="w-full">
               <thead className="table-head sticky top-0"><tr><th scope="col" className="th">מוצר</th><th scope="col" className="th">מחיר</th><th scope="col" className="th">התאמה</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
@@ -428,8 +429,8 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
             </table>
           </div>
           {newRows.length > 0 && (
-            <label className="flex items-center gap-2 text-sm text-ink-mid">
-              <input type="checkbox" className="rounded" checked={createNew} onChange={(e) => setCreateNew(e.target.checked)} />
+            <label className="flex min-h-11 items-center gap-2 text-sm text-ink-mid">
+              <input type="checkbox" className="rounded shrink-0" checked={createNew} onChange={(e) => setCreateNew(e.target.checked)} />
               צור {newRows.length === 1 ? 'מוצר חדש אחד' : <>‏<span className="num">{newRows.length}</span> מוצרים חדשים</>} בקטלוג ועדכן את מחירם
             </label>
           )}

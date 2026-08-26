@@ -382,7 +382,13 @@ async function quickActionsContract(browser) {
   const roleLabels = {
     owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'בקרת מסמכים'],
     office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'מסמכים'],
-    accountant: ['מרכז הבקרה', 'חשבוניות', 'תשלומים'],
+    // 'תשלומים לביצוע', not 'תשלומים'. The bar used to hand-write the second, which is
+    // `/payments`'s canonical name, while its own target is `/pay` — so for the ONE role that
+    // holds both screens, the bar's "תשלומים" opened the execution queue and the drawer's
+    // "תשלומים", one swipe away, opened the ledger of payments already made. The labels now come
+    // from `routePresentation`, which has always called `/pay` 'תשלומים לביצוע'. This line was the
+    // old collision written down as an expectation; it is the canonical name now.
+    accountant: ['מרכז הבקרה', 'חשבוניות', 'תשלומים לביצוע'],
   };
   const roleTargets = {
     owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/documents/operations'],
@@ -404,7 +410,14 @@ async function quickActionsContract(browser) {
         `${role}: .mobile-action-bar is not the named role=group`);
       await assertMobileSpeedDialHidden(page, `${role}/390`);
       const items = bar.locator('.mobile-action');
-      assert.deepEqual((await items.allTextContents()).map((label) => label.trim()), expectedLabels,
+      // The visible label lives in its own span, and reading the whole item swept the unfiled-
+      // documents badge in with it — `office` read 'מסמכים7'. The badge is `aria-hidden` and its count
+      // is already spelled out in the item's `aria-label`, so those digits were never part of the
+      // name; they were part of the DOM text this line happened to read.
+      const labels = bar.locator('.mobile-action .mobile-action-label');
+      assert.equal(await labels.count(), await items.count(),
+        `${role}: a mobile action carries no label span`);
+      assert.deepEqual((await labels.allTextContents()).map((label) => label.trim()), expectedLabels,
         `${role}: wrong mobile action labels or order`);
         const targets = await items.evaluateAll((nodes) => nodes.map((node) => {
         const href = node.getAttribute('href');
@@ -641,7 +654,13 @@ async function goldenScreens(browser) {
   captureConsole(loginPage, 'golden:login');
   try {
     await loginPage.goto(`${baseURL}/login`);
-    await loginPage.getByRole('heading', { name: 'InPlace' }).waitFor();
+    // The screen's OWN name, at level 1. This waited for a heading called 'InPlace' back when the
+    // brand lockup was the auth screens' only <h1> and the actual subject was demoted to <h2> or a
+    // bare <p> — a page whose one top-level heading names the vendor tells a screen-reader user
+    // nothing about where they are. The lockup is an <img> with the product name as its alt now,
+    // and the <h1> is the task. Asserting the task is also the stronger claim: 'InPlace' rendered
+    // on every auth screen alike, so it could not tell login from signup from password reset.
+    await loginPage.getByRole('heading', { level: 1, name: 'כניסה לחשבון' }).waitFor();
     for (const [label, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844]]) {
       await loginPage.setViewportSize({ width, height });
       await auditAccessibility(loginPage, `golden:login:${label}`);
@@ -1461,7 +1480,11 @@ async function orderSupplierComparison(browser) {
     await reminder.waitFor({ state: 'hidden' });
     await page.waitForURL((url) => url.pathname === '/orders/new' && url.searchParams.has('draft'), { timeout: 25_000 });
     await waitForSaved();
-    assert((await page.locator(`[aria-label="כמות ${product}"]`).innerText()).includes('3'), 'reminder did not restore quantity 3 to the cart');
+    // The cart quantity is an editable `input[type=number]` since the steppers converged, so it
+    // lives in `value` and not in a text node — `innerText` on a spinbutton is always empty.
+    // Reading it by role also pins WHAT the control is, which the raw attribute selector did not.
+    assert(await page.getByRole('spinbutton', { name: `כמות ${product}` }).inputValue() === '3',
+      'reminder did not restore quantity 3 to the cart');
 
     const restoredStepTwoSave = waitForDraftSave();
     await page.getByRole('button', { name: 'המשך לספקים' }).click();
@@ -1722,8 +1745,37 @@ async function settingsFalseSuccess(browser) {
     await login(page, 'owner');
     await page.goto(`${baseURL}/settings`);
     await settle(page);
-    const userRow = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'השבתה' }) }).first();
-    await userRow.getByRole('button', { name: 'השבתה' }).click();
+    /*
+     * The roster is a DataTable now, and its row actions are the shared ActionMenu (`rowActions`,
+     * the connection ADR-0007 gave the table). So 'השבתה' is no longer a button sitting in the
+     * row: it is one of that row's TWO actions — 'שינוי תפקיד' and 'השבתה'/'הפעלה' — behind a
+     * permanently visible 44px kebab named after the person. That is the sanctioned surface, not a
+     * hover reveal: DESIGN.md's ActionMenu section requires a destructive action to be visible
+     * whenever the menu is open, and it is.
+     *
+     * What this scenario is actually about is unchanged and is asserted below: a failed mutation
+     * must not close the dialog, must not claim success, and must not repaint the row. Only the
+     * two clicks that reach the dialog moved.
+     */
+    const userRow = page.getByRole('row').filter({ has: page.getByRole('button', { name: /^פעולות עבור / }) }).first();
+    /*
+     * Scroll FIRST, then click — and the order is load-bearing, not tidiness.
+     *
+     * `ActionMenu` closes on scroll by design (DESIGN.md: the anchor moved, so closing is honest
+     * and cheaper than repositioning). The roster sits far down a long settings page, so
+     * `.click()` scrolls the row into view itself — and Chromium dispatches that scroll's event on
+     * the next frame, which is AFTER the click's handlers have already opened the menu. The menu
+     * then closes itself and the run reports a menu that "never opened". Measured here at 1024x768
+     * on 26.08.2026. Scrolling and letting it settle first removes a scroll the automation
+     * invents; it does not stand in for anything a person does.
+     */
+    await userRow.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(250);
+    await userRow.getByRole('button', { name: /^פעולות עבור / }).click();
+    // The menu is portalled to document.body, so it is addressed on the page, not inside the row.
+    const deactivate = page.getByRole('menuitem', { name: 'השבתה' });
+    await deactivate.waitFor({ timeout: 10_000 });
+    await deactivate.click();
     const dialog = page.getByRole('dialog', { name: 'השבתת משתמש' });
     await dialog.getByRole('textbox', { name: /סיבה/ }).fill('בדיקת כשל רשת מקומי');
     await dialog.getByRole('button', { name: 'השבתה' }).click();
@@ -2665,40 +2717,65 @@ async function navigationOrderAndActiveState(browser) {
     const topNav = page.locator('header nav[aria-label="ניווט ראשי"]:visible');
     await topNav.first().waitFor();
     assert.equal(await topNav.count(), 1, 'the desktop shell rendered more than one visible top navigation');
+    /*
+     * The bar is read as an ORDERED SEQUENCE of the things a person can see on it — a link, or a
+     * group's trigger — not as a flat list of every visible `<a>`.
+     *
+     * The flat reader could not tell the daily row from the bar. That was harmless only while
+     * every named group was a dropdown, because then the only visible links WERE the daily ones.
+     * A named group holding exactly one destination is not a dropdown (DESIGN.md:548, „דיסקלוזר
+     * מעל פריט אחד הוא דלת עם מכסה"), so 'המנוי' renders as a plain link — and the flat reader
+     * counted it as a seventh daily destination. Adding it to the expected array would have made
+     * this assertion state the opposite of the architecture it exists to guard.
+     */
     const nav = await topNav.evaluate((node) => {
-      const readLinks = (hiddenOk) => [...node.querySelectorAll('a')]
-        .filter((link) => hiddenOk || !link.closest('[hidden]'))
-        .map((link) => ({
-          label: (link.querySelector('span')?.textContent || '').trim(),
-          path: new URL(link.href).pathname,
-          current: link.getAttribute('aria-current'),
-        }));
+      const readLink = (link) => ({
+        label: (link.querySelector('span')?.textContent || '').trim(),
+        path: new URL(link.href).pathname,
+        current: link.getAttribute('aria-current'),
+      });
+      const bar = [];
+      for (const el of node.querySelectorAll('a, button[aria-expanded]')) {
+        if (el.tagName === 'BUTTON') bar.push({ kind: 'group', label: (el.textContent || '').trim() });
+        // A closed group's destinations live in its `hidden` panel; they are not on the bar.
+        else if (!el.closest('[hidden]')) bar.push({ kind: 'link', ...readLink(el) });
+      }
       return {
-        topLevel: readLinks(false),
-        all: readLinks(true),
+        bar,
+        all: [...node.querySelectorAll('a')].map(readLink),
         groups: [...node.querySelectorAll('button[aria-expanded]')].map((b) => (b.textContent || '').trim()),
       };
     });
+    // Daily work is the leading run of links, the one section with no name — everything from the
+    // first group trigger onward is a group, named, and not daily work.
+    const firstGroupAt = nav.bar.findIndex((entry) => entry.kind === 'group');
+    const daily = (firstGroupAt === -1 ? nav.bar : nav.bar.slice(0, firstGroupAt));
 
     // FIRST, not merely present. The control centre is section 12's answer to "what needs me now",
     // and a link that is somewhere in the menu is not the same claim as the one the plan made.
     assert.deepEqual(
-      { label: nav.topLevel[0] && nav.topLevel[0].label, path: nav.topLevel[0] && nav.topLevel[0].path },
+      { label: daily[0] && daily[0].label, path: daily[0] && daily[0].path },
       { label: 'מרכז הבקרה', path: '/dashboard' },
-      `the first navigation link is not the control centre: ${JSON.stringify(nav.topLevel.slice(0, 2))}`,
+      `the first navigation link is not the control centre: ${JSON.stringify(daily.slice(0, 2))}`,
     );
 
     // Daily work stays visible at top level. Management and control remain available behind
     // dropdowns without making all of their modules compete with the daily routes.
-    assert.deepEqual(nav.topLevel.map((item) => item.path),
+    assert.deepEqual(daily.map((item) => item.path),
       ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
-      `wrong owner daily navigation: ${JSON.stringify(nav.topLevel)}`);
-    // 'המנוי' joined the catalogue on 25.08.2026 and therefore appears here too: the desktop
-    // top bar renders every NAMED section as a dropdown, so a group added for the phone drawer is
-    // not a phone-only change. Last, after the two work groups, which is where the contract the
-    // tenant runs under belongs relative to the business it runs.
-    assert.deepEqual(nav.groups, ['ניהול', 'בקרה', 'המנוי'],
+      `wrong owner daily navigation: ${JSON.stringify(nav.bar)}`);
+    // Two dropdowns, and only two. 'המנוי' is NOT among them and must not become one: it holds a
+    // single destination, and a disclosure over one item is a door with a lid.
+    assert.deepEqual(nav.groups, ['ניהול', 'בקרה'],
       `wrong navigation dropdown groups or order: ${JSON.stringify(nav.groups)}`);
+    // 'המנוי' joined the catalogue on 25.08.2026 as its own group — last, after the two work
+    // groups, because the three groups above it are the business the tenant runs and this is the
+    // contract they run it under. On a bar with no group headers, "its own group, last, not
+    // collapsible" is exactly this: a plain link, after both dropdowns, carrying the group's word.
+    // Both halves are load-bearing. Behind a disclosure it is a door with a lid; ahead of the
+    // dropdowns it has silently rejoined the daily row.
+    assert.deepEqual(nav.bar[nav.bar.length - 1], { kind: 'link', label: 'המנוי', path: '/settings/subscription', current: null },
+      `'המנוי' is not the last entry on the bar as its own non-collapsible group: ${JSON.stringify(nav.bar)}`);
     assert.equal(nav.all.some((item) => item.path === '/documents/archive'), false,
       'the low-frequency archive still competes in the main navigation');
     assert.equal(nav.all.filter((item) => item.current === 'page').length, 0,

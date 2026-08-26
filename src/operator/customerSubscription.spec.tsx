@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../components/ui';
 import CustomerSubscription from './CustomerSubscription';
 import type {
-  OrgEntitlement, OrgSubscription, PlatformCapability, SubscriptionPlan,
+  BillingEventRow, OrgEntitlement, OrgSubscription, PlatformCapability, SubscriptionPlan,
 } from '../lib/platform';
 
 vi.mock('../auth/AuthContext', () => ({ useAuth: () => ({ session: null }) }));
@@ -52,6 +52,7 @@ const renderSection = (
   capabilities: PlatformCapability[],
   entitlements: OrgEntitlement[] = [entitlement()],
   sub: OrgSubscription | null = subscription,
+  billingEvents: BillingEventRow[] = [],
 ) => render(
   <MemoryRouter>
     <ToastProvider>
@@ -60,7 +61,7 @@ const renderSection = (
         subscription={sub}
         entitlements={entitlements}
         plans={plans}
-        billingEvents={[]}
+        billingEvents={billingEvents}
         may={(capability) => capabilities.includes(capability)}
         busy={false}
         run={() => {}}
@@ -119,5 +120,82 @@ describe('מנוי והרשאות בכרטיס הלקוח', () => {
     expect(screen.getByText(/קריאה בלבד/)).toBeInTheDocument();
     expect(screen.getByText(/אירוע תשלום מוצלח וחתום/)).toBeInTheDocument();
     expect(screen.getByText(/אין מעבר אוטומטי/)).toBeInTheDocument();
+  });
+
+  /**
+   * Every numeric entitlement carries a unit and only `bytes` was ever translated, so `40` appeared
+   * where `40 מסמכים` belonged. An operator reading a column of bare integers has to remember which
+   * row counts documents and which counts users.
+   */
+  it('מציג את היחידה של כל הרשאה מספרית, לא רק של בתים', () => {
+    renderSection(['billing.view'], [
+      entitlement({ unit: 'documents', unlimited: false, numeric_limit: 40 }),
+      entitlement({ entitlement_key: 'users.max', label: 'משתמשים', unit: 'users', unlimited: false, numeric_limit: 5 }),
+      entitlement({ entitlement_key: 'storage.bytes', label: 'אחסון', unit: 'bytes', unlimited: false, numeric_limit: 1024 }),
+    ]);
+    expect(screen.getByText('40 מסמכים')).toBeInTheDocument();
+    expect(screen.getByText('5 משתמשים')).toBeInTheDocument();
+    expect(screen.getByText('1,024 בתים')).toBeInTheDocument();
+  });
+
+  it('יחידה שאין לה תרגום מוצגת כמות שהיא, ולא נעלמת', () => {
+    renderSection(['billing.view'], [
+      entitlement({ unit: 'widgets', unlimited: false, numeric_limit: 7 }),
+    ]);
+    expect(screen.getByText('7 widgets')).toBeInTheDocument();
+  });
+
+  /**
+   * A dangling "חיוב " with nothing after it is indistinguishable from a missing value. The column's
+   * CHECK constrains the interval today, but the rendering must not depend on that staying true —
+   * `CustomerUsage` already had this right with `?? period_source`.
+   */
+  it('מחזור חיוב שאין לו תרגום אינו מותיר «חיוב» תלוי באוויר', () => {
+    // The cast is the point of the test: the TYPE says two intervals, the column's CHECK is what
+    // a future migration would widen, and this asserts the renderer survives that day.
+    renderSection(['billing.view'], [entitlement()],
+      { ...subscription, billing_interval: 'quarterly' as OrgSubscription['billing_interval'] });
+    expect(screen.getByText('חיוב quarterly')).toBeInTheDocument();
+  });
+});
+
+/**
+ * B7: the events list printed `subscription.past_due` and `paddle` verbatim into an otherwise
+ * Hebrew console — machine keys an operator has to decode on the one panel where the question is
+ * usually "did this customer's payment fail, and when".
+ */
+describe('אירועים מספק החיוב', () => {
+  const event = (over: Partial<BillingEventRow> = {}): BillingEventRow => ({
+    id: 'evt-1',
+    provider: 'paddle',
+    event_type: 'subscription.updated',
+    status: 'stored',
+    received_at: '2026-08-20T09:00:00.000Z',
+    correlation_id: null,
+    ...over,
+  });
+
+  it('מתרגם את סוג האירוע ואת שם הספק', () => {
+    renderSection(['billing.view'], [entitlement()], subscription, [
+      event(),
+      event({ id: 'evt-2', event_type: 'subscription.past_due' }),
+    ]);
+    expect(screen.getByText('עדכון פרטי מנוי')).toBeInTheDocument();
+    expect(screen.getByText('כשל בחיוב חידוש')).toBeInTheDocument();
+    expect(screen.getAllByText('Paddle')).toHaveLength(2);
+    expect(screen.queryByText('subscription.updated')).not.toBeInTheDocument();
+    expect(screen.queryByText('paddle')).not.toBeInTheDocument();
+  });
+
+  it('סוג אירוע שאינו מוכר מוצג כמות שהוא — 0187 שולח אותו ל-dead letter, לא מסתיר אותו', () => {
+    renderSection(['billing.view'], [entitlement()], subscription, [
+      event({ event_type: 'subscription.reincarnated' }),
+    ]);
+    expect(screen.getByText('subscription.reincarnated')).toBeInTheDocument();
+  });
+
+  it('שומר את המפתח הגולמי ב-title, כדי שאפשר יהיה להצליב מול לוח הבקרה של הספק', () => {
+    renderSection(['billing.view'], [entitlement()], subscription, [event()]);
+    expect(screen.getByTitle('subscription.updated · paddle')).toBeInTheDocument();
   });
 });

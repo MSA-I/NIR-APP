@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileSpreadsheet, Loader2, RefreshCw } from 'lucide-react';
 import { generateDocumentExport, type DocumentExportResult } from '../../lib/documentExport';
-import { Note } from '../ui';
+import { ICON, Note } from '../ui';
 import { resolveExportTemplateWinner, type ReviewSnapshot } from './model';
 
 interface DocumentExportPreviewProps {
@@ -71,7 +71,7 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
           <h2 id="document-export-title" className="section-title">תצוגה מקדימה לייצוא</h2>
           <p className="mt-1 text-sm text-ink-muted">התצוגה נוצרת בזמן אמת באמצעות מנוע הייצוא המאושר. היא אינה שומרת קובץ ואינה משנה נתונים.</p>
         </div>
-        <FileSpreadsheet className="text-action" size={24} aria-hidden="true" />
+        <FileSpreadsheet className="text-action" size={ICON.xl} aria-hidden="true" />
       </div>
 
       <>
@@ -84,7 +84,7 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
                 "אינה שומרת קובץ ואינה משנה נתונים" — its own words — must not carry the same
                 weight as the button that records the document. */}
             <button type="button" className="btn-secondary shrink-0" onClick={() => void buildPreview()} disabled={busy}>
-              {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <RefreshCw size={17} aria-hidden="true" />} הפקת תצוגה מקדימה
+              {busy ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <RefreshCw size={ICON.md} aria-hidden="true" />} הפקת תצוגה מקדימה
             </button>
           </div>
 
@@ -105,11 +105,11 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
               <p className="mt-2 break-all text-xs text-ink-muted">טביעת מקור: <span dir="ltr" className="tech-id">{result.checksum}</span></p>
               {/* role="region" is what makes aria-label announceable: a bare div has no role, so the
                   name was silently dropped by screen readers and the scroll container arrived unnamed. */}
-              <div className="mt-3 max-w-full overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label="תצוגת טבלת הייצוא; ניתן לגלול בתוך הטבלה">
+              <div className="mt-3 table-scroll overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label="תצוגת טבלת הייצוא; ניתן לגלול בתוך הטבלה">
                 <table className="min-w-full bg-surface">
                   <thead className="table-head">
                     <tr className="border-b border-line">
-                      {result.columns.map((column) => <th key={column.key} className="th">{column.label}</th>)}
+                      {result.columns.map((column) => <th key={column.key} scope="col" className="th">{column.label}</th>)}
                     </tr>
                   </thead>
                   <tbody>

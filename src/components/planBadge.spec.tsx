@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrgScopeProvider } from '../lib/query/orgScope';
-import { PlanBadge } from './PlanBadge';
+import { PlanBadge, planTierClass } from './PlanBadge';
 
 /**
  * The tier mark in the phone top bar (owner report 25.08.2026).
@@ -31,6 +31,10 @@ const renderBadge = (org: string | null = 'org-1') => render(
   <MemoryRouter><OrgScopeProvider org={org}><PlanBadge /></OrgScopeProvider></MemoryRouter>,
 );
 
+const renderCompact = () => render(
+  <MemoryRouter><OrgScopeProvider org="org-1"><PlanBadge compact /></OrgScopeProvider></MemoryRouter>,
+);
+
 beforeEach(() => {
   role = 'owner';
   rpc.mockResolvedValue(plan('free', 'חינם'));
@@ -43,15 +47,17 @@ describe('תג דרגת המנוי', () => {
       ['basic', 'בסיס', 'plan-badge-basic'],
       ['pro', 'פרו', 'plan-badge-pro'],
       ['premium', 'פרימיום', 'plan-badge-premium'],
-      // Above premium on the ladder, so it wears the gold rather than a quieter sixth treatment
-      // that would read as a demotion.
+      // Above premium on the ladder, so it wears the ONYX rather than a quieter sixth treatment
+      // that would read as a demotion. (Gold left the ladder in the owner's second ruling of
+      // 26.08.2026: the metals are silver → oceanic → onyx, and the sheen moved up with them.)
       ['business', 'ביזנס', 'plan-badge-premium'],
     ] as const) {
       rpc.mockResolvedValue(plan(key, label));
       const { unmount } = renderBadge();
       const badge = await screen.findByTestId('plan-badge');
       expect(badge).toHaveTextContent(label);
-      expect(badge.className).toContain(css);
+      // The CHIP wears the metal; the LINK around it is only the tap target.
+      expect(screen.getByTestId('plan-badge-chip').className).toContain(css);
       unmount();
     }
   });
@@ -60,6 +66,65 @@ describe('תג דרגת המנוי', () => {
     renderBadge();
     expect(await screen.findByTestId('plan-badge'))
       .toHaveAttribute('href', '/settings/subscription');
+  });
+
+  /**
+   * The audit measured the chip at ~26px inside a row of 44px controls — both hard to hit and a
+   * visible break in the cluster. The height belongs on the LINK: growing the pill itself would
+   * produce a badge shaped like a button, which is why the two are separate elements.
+   */
+  it('שטח הנגיעה הוא הקישור, לא הצ׳יפ', async () => {
+    renderBadge();
+    const trigger = await screen.findByTestId('plan-badge');
+    expect(trigger.className).toContain('plan-badge-trigger');
+    expect(trigger.className).not.toContain('plan-badge-free');
+    expect(screen.getByTestId('plan-badge-chip').className).not.toContain('plan-badge-trigger');
+  });
+
+  /**
+   * `compact` is the mark ON A TEXT LINE — the dashboard greeting and the phone header's subtitle
+   * — where the trigger's 44px floor punches a hole through a 20px line.
+   *
+   * Two files were reaching through this component to do it with
+   * `[&_.plan-badge-trigger]:min-h-0`, and a rule written twice is a rule that drifts. The prop
+   * also does what neither copy could: an outside override can only SUBTRACT the inflation, so it
+   * left the target at whatever the label happened to measure. The chip carries its own 24×24
+   * floor here — WCAG 2.5.8 Target Size (Minimum), AA.
+   */
+  it('`compact` מוריד את רצפת ה-44px מהקישור ומצמיד לצ׳יפ רצפת 24×24', async () => {
+    renderCompact();
+    const trigger = await screen.findByTestId('plan-badge');
+    const chip = screen.getByTestId('plan-badge-chip');
+    // The 44px inflation is off the LINK…
+    expect(trigger.className).toContain('min-h-0');
+    expect(trigger.className).toContain('min-w-0');
+    // …and the floor moved onto the CHIP rather than disappearing.
+    expect(chip.className).toContain('min-h-6');
+    expect(chip.className).toContain('min-w-6');
+    // The mark is still the mark, and still the way in.
+    expect(trigger.className).toContain('plan-badge-trigger');
+    expect(chip.className).toContain('plan-badge-free');
+    expect(trigger).toHaveAttribute('href', '/settings/subscription');
+    expect(trigger).toHaveAccessibleName('המנוי שלי — חינם');
+  });
+
+  it('ברירת המחדל אינה נוגעת ברצפת המגע של שורת הפעולות', async () => {
+    renderBadge();
+    const trigger = await screen.findByTestId('plan-badge');
+    expect(trigger.className).toBe('plan-badge-trigger');
+    expect(screen.getByTestId('plan-badge-chip').className).not.toContain('min-h-6');
+  });
+
+  /**
+   * `aria-label` and `title` used to carry the identical string, which a screen reader announces
+   * once as the name and again as the description. The label survives because it says what the mark
+   * DOES; the tooltip repeated a word already legible in the chip.
+   */
+  it('נקרא פעם אחת — שם נגיש אחד ולא תיאור שמכפיל אותו', async () => {
+    renderBadge();
+    const trigger = await screen.findByTestId('plan-badge');
+    expect(trigger).toHaveAccessibleName('המנוי שלי — חינם');
+    expect(trigger).not.toHaveAttribute('title');
   });
 
   it('אינו מוצג למי שאינו בעלים, ואינו שואל את השרת בכלל', async () => {
@@ -95,5 +160,30 @@ describe('תג דרגת המנוי', () => {
     renderBadge();
     await waitFor(() => expect(rpc).toHaveBeenCalled());
     expect(screen.queryByTestId('plan-badge')).toBeNull();
+  });
+});
+
+/**
+ * ONE MAP, ONE FALLBACK — DESIGN.md:503, which says the mark a person taps in the header is the
+ * mark they find on their own row in the plans screen.
+ *
+ * The table used to exist twice, character for character, here and in `OrgSubscriptionPanel`. The
+ * copies were identical in the five rungs they both knew and DIFFERENT where it counts: an
+ * unrecognised key rendered nothing here and a `plan-badge-free` chip there — so `legacy`, the
+ * pre-cutover holding pen (#164), would have been advertised on one surface as if it were the free
+ * plan. The export is what makes a second copy impossible; this is what pins the fallback.
+ */
+describe('מפת המדרגות המשותפת', () => {
+  it('נותנת חזות לכל מדרגה בסולם, ו-`business` חוזר על העליונה', () => {
+    expect(planTierClass('free')).toBe('plan-badge-free');
+    expect(planTierClass('basic')).toBe('plan-badge-basic');
+    expect(planTierClass('pro')).toBe('plan-badge-pro');
+    expect(planTierClass('premium')).toBe('plan-badge-premium');
+    expect(planTierClass('business')).toBe(planTierClass('premium'));
+  });
+
+  it('מדרגה שאין לה חזות אינה לובשת חזות מושאלת', () => {
+    expect(planTierClass('legacy')).toBeNull();
+    expect(planTierClass('whatever')).toBeNull();
   });
 });

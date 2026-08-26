@@ -31,3 +31,6 @@ deno.lock
 
 # Local screenshots from scripts/portal-visual-check.cjs (manual visual verification)
 .portal-shots/
+
+# Local screenshots from scripts/subscription-visual-check.cjs (manual visual verification)
+.plan-shots/

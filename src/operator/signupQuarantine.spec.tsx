@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../components/ui';
@@ -33,9 +34,12 @@ const candidate = (over: Partial<AbandonedSignupCandidate> = {}): AbandonedSignu
   ...over,
 });
 
+// PageHeader reads the location to resolve its route description, so the screen needs a router.
 const renderScreen = () => render(
   <QueryClientProvider client={createAppQueryClient()}>
-    <ToastProvider><SignupQuarantine /></ToastProvider>
+    <MemoryRouter initialEntries={['/admin/signups']}>
+      <ToastProvider><SignupQuarantine /></ToastProvider>
+    </MemoryRouter>
   </QueryClientProvider>,
 );
 

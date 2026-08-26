@@ -7,7 +7,7 @@ import { TrendingUp, TrendingDown, Upload, History, Pencil, X, FileCheck2, Scrol
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, Modal, useToast, ErrorNote, PageHeader, StatusBadge, Note, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, Modal, useToast, ErrorNote, PageHeader, StatusBadge, Note, SkeletonTable, EmptyState, Card, ICON, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
 import { fmtDate, fmtMoneyExact, fmtMoneyRounded, formatUnit, productLabel, todayISO } from '../lib/format';
@@ -140,8 +140,8 @@ export default function PriceLists() {
         const pct = changePct(r);
         if (!r.previous_price || pct === 0) return <span className="text-ink-faint">—</span>;
         return pct > 0
-          ? <span className="inline-flex items-center gap-1 text-trend-up-fg font-medium"><TrendingUp size={14} />‎+{pct.toFixed(1)}%</span>
-          : <span className="inline-flex items-center gap-1 text-trend-down-fg font-medium"><TrendingDown size={14} />‎{pct.toFixed(1)}%</span>;
+          ? <span className="inline-flex items-center gap-1 text-trend-up-fg font-medium"><TrendingUp size={ICON.xs} aria-hidden="true" />‎+{pct.toFixed(1)}%</span>
+          : <span className="inline-flex items-center gap-1 text-trend-down-fg font-medium"><TrendingDown size={ICON.xs} aria-hidden="true" />‎{pct.toFixed(1)}%</span>;
       },
     },
     { key: 'date', header: 'בתוקף מ־', priority: 2, sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
@@ -157,8 +157,8 @@ export default function PriceLists() {
         meta={`${data?.length ?? 0} מחירי ספקים · ${(data ?? []).filter((row) => row.previous_price != null && row.current_price > row.previous_price).length} התייקרויות`}
         actions={canWrite ? (
           <div className="flex flex-wrap gap-2">
-            <button className="btn-secondary" onClick={() => setImportOpen(true)}><Upload size={15} /> ייבוא רב־ספקים מ־Excel</button>
-            <button className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={15} /> העלאת מחירון</button>
+            <button className="btn-secondary" onClick={() => setImportOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> ייבוא רב־ספקים מ־Excel</button>
+            <button className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> העלאת מחירון</button>
           </div>
         ) : (
           /* „מנהל רכש”, not „משרד”: PRODUCT.md:13 and status.ts's ROLE_LABEL both name `office`
@@ -168,7 +168,7 @@ export default function PriceLists() {
         )} />
 
       {comparison && (
-        <section className="card card-pad" aria-label={`השוואת מחירים — ${productLabel(comparison.product)}`}>
+        <Card as="section" aria-label={`השוואת מחירים — ${productLabel(comparison.product)}`}>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div className="text-sm text-ink-muted">
               <bdi className="text-base font-semibold text-ink">{productLabel(comparison.product)}</bdi>
@@ -192,7 +192,7 @@ export default function PriceLists() {
               <>אין כרגע הצעה זמינה למוצר זה מספק פעיל</>
             )}
           </div>
-        </section>
+        </Card>
       )}
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => (
@@ -220,7 +220,7 @@ export default function PriceLists() {
           <>
             {productFilter && (
               <button className="btn-ghost text-sm text-action flex items-center gap-1" onClick={() => setProductFilter('')} title="הסרת סינון מוצר">
-                <X size={14} /> {activeProductName ?? 'מוצר'}
+                <X size={ICON.xs} aria-hidden="true" /> {activeProductName ?? 'מוצר'}
               </button>
             )}
             <select className="input w-auto!" aria-label="סינון מחירונים לפי ספק" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
@@ -235,12 +235,12 @@ export default function PriceLists() {
         }
         emptyTitle="עדיין אין מחירי ספקים"
         emptySubtitle="העלה מחירון ראשון כדי להתחיל להשוות מחירים ושינויים"
-        emptyAction={canWrite && <button className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={15} /> העלאת מחירון</button>} />
+        emptyAction={canWrite && <button className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> העלאת מחירון</button>} />
 
       {canWrite && (
         <section className="card p-4" aria-labelledby="price-submissions-heading">
           <div className="flex items-center gap-2 mb-3">
-            <FileCheck2 size={18} className="text-action" aria-hidden="true" />
+            <FileCheck2 size={ICON.md} className="text-action" aria-hidden="true" />
             <h2 id="price-submissions-heading" className="section-title">הגשות מחירון חודשיות</h2>
           </div>
           {submissionsLoading ? <p className="text-sm text-ink-muted">טוען קבלות הגשה…</p>
@@ -303,13 +303,14 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
         );
       })()}
       {data?.length ? (
-        /* The one raw <table> in the app that had no scroll wrapper. `.th`/`.td` carry
-           whitespace-nowrap globally (index.css), so a table without a wrapper widens the
-           document instead of scrolling inside itself — two short columns were the only reason
-           this had not shown up yet. */
-        <div className="overflow-x-auto">
+        /* Stays a raw <table> rather than a DataTable: it lives inside a Modal, and DataTable
+           would add a pagination bar and a column picker to a two-column reading list. What it
+           was missing is the rest of the raw-table contract — `.th`/`.td` carry whitespace-nowrap
+           globally (index.css), so a table without a scroller widens the document instead of
+           scrolling inside itself, and the scroller was reachable by mouse only. */
+        <div className="table-scroll overflow-x-auto" tabIndex={0} role="region" aria-label="היסטוריית מחירים">
         <table className="w-full">
-          <thead className="table-head"><tr><th className="th">תאריך</th><th className="th">מחיר</th></tr></thead>
+          <thead className="table-head"><tr><th scope="col" className="th">תאריך</th><th scope="col" className="th">מחיר</th></tr></thead>
           <tbody className="divide-y divide-line-soft">
             {data.map((h) => (
               <tr key={h.id}><td className="td">{fmtDate(h.effective_date)}</td><td className="td num">{fmtMoneyExact(h.price)}</td></tr>
@@ -317,7 +318,7 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
           </tbody>
         </table>
         </div>
-      ) : <div className="text-sm text-ink-muted py-4 text-center">אין רשומות היסטוריה</div>}
+      ) : <EmptyState title="אין רשומות היסטוריה" subtitle="לא נרשם עדיין שינוי מחיר למוצר הזה אצל הספק." icon={<History size={ICON.hero} />} />}
     </Modal>
   );
 }
@@ -352,7 +353,7 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
         <div><label className="label" htmlFor="price-list-price">מחיר חדש (₪)</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
         <div><label className="label" htmlFor="price-list-date">בתוקף מתאריך</label><input id="price-list-date" type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="rounded" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> זמין אצל הספק</label>
-        <div><label className="label">סיבת העדכון (רשות)</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+        <div><label className="label" htmlFor="price-list-reason">סיבת העדכון (רשות)</label><input id="price-list-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
         <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
@@ -435,7 +436,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       ) : preview.length ? (
         <div className="space-y-4">
           <div className="text-sm text-ink-soft">{preview.length} שורות זוהו. ההתאמה מתבצעת לפי שם ספק ושם מוצר מדויקים.</div>
-          <div className="max-h-64 overflow-y-auto border border-line-soft rounded-lg">
+          <div className="table-scroll max-h-64 overflow-auto rounded-lg border border-line-soft" tabIndex={0} role="region" aria-label="תצוגה מקדימה של שורות המחירון">
             <table className="w-full">
               <thead className="table-head sticky top-0"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">מוצר</th><th scope="col" className="th">מחיר</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
@@ -445,7 +446,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
               </tbody>
             </table>
           </div>
-          <div><label className="label">סיבת הייבוא (רשות)</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+          <div><label className="label" htmlFor="price-list-import-reason">סיבת הייבוא (רשות)</label><input id="price-list-import-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
           <div className="flex justify-end gap-2">
             <button className="btn-secondary" disabled={busy} onClick={() => setPreview([])}>חזרה</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>{busy ? 'מייבא...' : 'אישור וייבוא'}</button>
@@ -454,7 +455,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       ) : (
         <div className="text-center py-8">
           <p className="text-sm text-ink-soft mb-4">בחר קובץ Excel או CSV עם העמודות: <b>ספק</b>, <b>מוצר</b>, <b>מחיר</b></p>
-          <button className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
+          <button className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={ICON.sm} aria-hidden="true" /> בחירת קובץ</button>
           <input ref={fileRef} type="file" hidden accept=".xlsx,.xls,.csv" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
         </div>
       )}

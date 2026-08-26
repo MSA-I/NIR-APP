@@ -16,6 +16,13 @@ import Pricing from './Pricing';
  * They are the positive control for the absence: the catalogue hands this page real prices in
  * both currencies and both intervals, so a page that rendered any of them fails the test below.
  * An absence proved against a fixture with nothing in it would prove nothing.
+ *
+ * THE PAGE BECAME PLAN CARDS ON 26.08.2026 and the assertions moved with it, one for one. It was a
+ * horizontally scrolling comparison TABLE and is now the same `PlanCard` grid `/settings/
+ * subscription` draws, so every `columnheader` below is a card and every `row` is a feature row
+ * inside one. Two tests changed in KIND rather than in selector, and both are called out where
+ * they sit: the scroll-region accessibility test (the trap it guarded no longer exists) and the
+ * loading-wrapper test (it pinned a literal width, which a redesign is allowed to change).
  */
 const rpc = vi.fn();
 vi.mock('../lib/supabase', () => ({ supabase: { rpc: (...args: unknown[]) => rpc(...args) } }));
@@ -82,14 +89,18 @@ beforeEach(() => {
 });
 
 const renderPage = () => render(<MemoryRouter><Pricing /></MemoryRouter>);
-const settle = () => waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
+const settle = () => screen.findByTestId('plan-cards');
+/** One rung's card, addressed the way every other surface addresses one. */
+const card = (planKey: string) =>
+  screen.getByTestId('plan-cards').querySelector(`[data-plan="${planKey}"]`) as HTMLElement;
 
 describe('דף המסלולים הציבורי', () => {
   it('מציג בדיוק את ארבעת המסלולים הציבוריים, ואת «ביזנס» בכלל לא', async () => {
     renderPage();
-    await settle();
+    const cards = await settle();
+    expect(cards.querySelectorAll(':scope > li')).toHaveLength(4);
     for (const label of ['חינם', 'בסיס', 'פרו', 'פרימיום']) {
-      expect(screen.getByRole('columnheader', { name: new RegExp(label) })).toBeInTheDocument();
+      expect(screen.getByText(label)).toBeInTheDocument();
     }
     expect(screen.queryByText(/ביזנס/)).not.toBeInTheDocument();
     expect(screen.queryByText(/דברו איתנו/)).not.toBeInTheDocument();
@@ -106,7 +117,14 @@ describe('דף המסלולים הציבורי', () => {
     for (const amount of ['449', '4,490', '149', '1,490', '69', '790']) {
       expect(screen.queryAllByText(new RegExp(amount))).toHaveLength(0);
     }
-    expect(screen.queryByRole('row', { name: /מחיר/ })).not.toBeInTheDocument();
+    // And the figure slot on a card holds a QUOTA, not a price — 500 documents on premium, which
+    // is the number the server enforces and not the 449 it also happened to hand us.
+    expect(card('premium').textContent).toMatch(/500/);
+    // No card carries a price line of any kind. The page may still SAY where the price is given —
+    // that sentence lives in the notice above the grid and is asserted by its own test.
+    for (const planKey of ['free', 'basic', 'pro', 'premium']) {
+      expect(card(planKey).textContent).not.toMatch(/מחיר/);
+    }
   });
 
   it('אינו מציג בורר מחזור חיוב — פקד שבלי מחיר אינו משנה דבר', async () => {
@@ -130,27 +148,31 @@ describe('דף המסלולים הציבורי', () => {
   it('מציג מכסה שאינה נמדדת כמקף — לא כאפס ולא כהבטחה', async () => {
     renderPage();
     await settle();
-    const users = screen.getByRole('row', { name: /משתמשים/ });
-    expect(within(users).getAllByText('—')).toHaveLength(4);
-    expect(within(users).queryByText('0')).not.toBeInTheDocument();
+    // One card per plan now, so the four cells of the old «משתמשים» row are one row in each card.
+    for (const planKey of ['free', 'basic', 'pro', 'premium']) {
+      const users = within(card(planKey)).getByText(/משתמשים/);
+      expect(users.textContent).toMatch('—');
+      expect(within(users).queryByText('0')).not.toBeInTheDocument();
+    }
   });
 
   it('מציג את המכסה שהשרת אוכף, ולא את המספר שבטבלת ההחלטות', async () => {
     renderPage();
     await settle();
-    const documents = screen.getByRole('row', { name: /מסמכים/ });
     // 300 is the fixture's synthetic value, 200 is #197's decided one. The page must print the
     // former: it reports the catalogue, never the decision table.
-    expect(within(documents).getByText('300')).toBeInTheDocument();
-    expect(within(documents).queryByText('200')).not.toBeInTheDocument();
+    expect(within(card('pro')).getByText('300')).toBeInTheDocument();
+    expect(within(card('pro')).queryByText('200')).not.toBeInTheDocument();
   });
 
   it('מכסה שהשרת מדווח כלא־נמדדת מוצגת כמקף, גם כשההחלטה נוקבת במספר', async () => {
     renderPage();
     await settle();
-    const assistant = screen.getByRole('row', { name: /ריצות עוזר/ });
-    expect(within(assistant).getAllByText('—')).toHaveLength(4);
-    expect(within(assistant).queryByText('100')).not.toBeInTheDocument();
+    for (const planKey of ['free', 'basic', 'pro', 'premium']) {
+      const assistant = within(card(planKey)).getByText(/ריצות עוזר/);
+      expect(assistant.textContent).toMatch('—');
+      expect(within(assistant).queryByText('100')).not.toBeInTheDocument();
+    }
   });
 
   it('אינו מפרסם את תקרות האחסון ואינו חושף את מינימום הביזנס', async () => {
@@ -170,17 +192,107 @@ describe('דף המסלולים הציבורי', () => {
     expect(screen.queryByText(/תחסכו|חיסכון של|המחיר עולה בעוד|נותרו רק/)).not.toBeInTheDocument();
   });
 
+  /**
+   * #202: «המסלולים מקבלים הדגשה שיווקית סטטית עולה, ופרימיום הוא הנחשק ביותר. ההדגשה אינה מבוססת
+   * על נתוני הדייר». The emphasis is now BOTH the approved words and the inverted onyx fill, and
+   * the fill is the reason this test also names the map: `planEmphasis` is one table read by this
+   * page and by the account ladder, so the two surfaces cannot come to point at different rungs.
+   */
   it('נותן לפרימיום הדגשה סטטית — לא הדגשה שנגזרת מנתוני לקוח', async () => {
     renderPage();
     await settle();
-    const premium = screen.getByRole('columnheader', { name: /פרימיום/ });
-    expect(within(premium).getByText('המקיף ביותר')).toBeInTheDocument();
+    expect(within(card('premium')).getByText('המקיף ביותר')).toBeInTheDocument();
+    expect(card('premium').className).toMatch(/bg-tier-onyx/);
+    for (const planKey of ['free', 'basic', 'pro']) {
+      expect(card(planKey).className).not.toMatch(/bg-tier-onyx/);
+      expect(within(card(planKey)).queryByText('המקיף ביותר')).not.toBeInTheDocument();
+    }
+  });
+
+  /**
+   * A stranger holds no rung, so nothing on this page may claim one. The account ladder's per-row
+   * state chips ("המסלול הנוכחי", "מדרגה מעל") are exactly the sentences that would be a lie here,
+   * and no action either: a "choose this plan" control would be a selection affordance for a
+   * selection that does not exist, which is the same rule `OrgSubscriptionPanel` keeps by having
+   * no purchase path at all.
+   */
+  it('אינו טוען שלמבקר יש מסלול, ואינו מציע לבחור אחד', async () => {
+    renderPage();
+    const cards = await settle();
+    expect(screen.queryByText(/המסלול הנוכחי|מדרגה מעל|מדרגה מתחת/)).not.toBeInTheDocument();
+    expect(cards.querySelectorAll('button')).toHaveLength(0);
   });
 
   it('אומר שהקטלוג לא נטען, במקום להציג מחיר מומצא', async () => {
     rpc.mockResolvedValue({ data: null, error: { message: 'boom' } });
     renderPage();
     expect(await screen.findByText(/לא ניתן לטעון את המסלולים/)).toBeInTheDocument();
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('plan-cards')).not.toBeInTheDocument();
+  });
+
+  /**
+   * THIS TEST CHANGED SIDES, AND THAT IS THE POINT. It used to pin `tabIndex={0}` and a named
+   * `role="region"` on the table's `overflow-x-auto` box — the minimum that makes a sideways
+   * scroll reachable by a keyboard, because a visitor using one could otherwise read the free
+   * column and never learn the other three existed. WCAG 2.1 AA is the stated target in
+   * `PRODUCT.md`.
+   *
+   * The cards removed the scroll instead of taming it: four rungs stack on a phone and every quota
+   * row is inside the card it belongs to. So the assertion is now that NO horizontal scroll
+   * container is on the page at all — the stronger form of the same guarantee, and one that fails
+   * the moment somebody reintroduces a sideways box.
+   */
+  it('אין קופסת גלילה לצדדים שמסתירה מסלולים ממקלדת', async () => {
+    renderPage();
+    const cards = await settle();
+    expect(document.querySelectorAll('.overflow-x-auto')).toHaveLength(0);
+    expect(screen.queryByRole('region', { name: /השוואת המסלולים/ })).not.toBeInTheDocument();
+    // Every rung is reachable by reading, not by scrolling: each card holds its own quota rows.
+    expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/עמודי OCR/);
+  });
+
+  /**
+   * The loader used to return a bare centred spinner with no `main`, no max width and no vertical
+   * padding, while both other states wrapped themselves in one. The landmark, the width and the top
+   * offset all changed at the moment the catalogue landed, which is a page that jumps under the
+   * reader.
+   *
+   * It pinned the literal `max-w-4xl`, which made a width change look like a regression — and the
+   * ladder legitimately needed a wider measure. The property worth keeping is that the three states
+   * agree, so the test now compares the loading wrapper to the loaded one instead of to a constant.
+   */
+  it('מצב הטעינה יושב באותה מסגרת כמו התוכן, כדי שהדף לא יקפוץ', async () => {
+    const pending: Array<(value: unknown) => void> = [];
+    rpc.mockImplementation(() => new Promise((resolve) => { pending.push(resolve); }));
+    const { unmount } = renderPage();
+    const loadingMain = await screen.findByRole('main');
+    expect(within(loadingMain).getByRole('status')).toBeInTheDocument();
+    const loadingClass = loadingMain.className;
+    // Owner ruling 26.08.2026: «אם יש לי כבר שלד אין צורך בסמל הזה». The spinner is gone and the
+    // ladder's own shape holds the height — same geometry as the rows it stands for, from the file
+    // that owns the row. The TITLE is not data, so it is painted for real in all three states.
+    expect(within(loadingMain).getByTestId('pricing-skeleton')).toBeInTheDocument();
+    expect(within(loadingMain).getByRole('heading', { name: 'מסלולים' })).toBeInTheDocument();
+    // Four rungs (#194 keeps `ביזנס` off this page) and NO action bar — these cards carry no
+    // action, so a placeholder for one would promise a control the loaded page never shows.
+    expect(within(loadingMain).getByTestId('pricing-skeleton').querySelectorAll('li'))
+      .toHaveLength(4);
+    expect(within(loadingMain).queryByRole('button')).toBeNull();
+    // The availability notice is fixed prose, not data — #208's currency rule is as true before
+    // the RPC answers as after. It is also the block that was still moving the page: the ladder
+    // began 90px higher while loading until it was painted here too.
+    expect(within(loadingMain).getByText(/המחיר אינו מפורסם בדף הזה/)).toBeInTheDocument();
+    // Settle the hanging RPCs so the component is not left mid-update when the test ends.
+    for (const resolve of pending) resolve({ data: [], error: null });
+    await waitFor(() => expect(screen.getByRole('main').className).toBe(loadingClass));
+    unmount();
+
+    rpc.mockImplementation((name: string) => {
+      if (name === 'get_public_plan_catalogue') return Promise.resolve({ data: CATALOGUE, error: null });
+      return Promise.resolve({ data: QUOTAS, error: null });
+    });
+    renderPage();
+    await settle();
+    expect(screen.getByRole('main').className).toBe(loadingClass);
   });
 });

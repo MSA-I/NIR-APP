@@ -47,6 +47,13 @@ export const DOMAIN = {
   // there is no single table whose name would describe it. Sub-key it by role so two active
   // personas asking the same question of different RLS projections never share a cache entry.
   dashboard: 'dashboard',
+  // The commercial surface: `my_subscription`, `my_upgrade_options`, `my_plan_grant`,
+  // `get_public_plan_quotas` and `organization_usage_snapshot`. One domain rather than five,
+  // because they are read together by one screen and invalidated together by one plan change.
+  // The usage snapshot lives here and NOT under `organization` on purpose: it is the read that
+  // ADR-0003 names as the motivating duplicate, fetched once by the quota note and once by the
+  // plans panel on the same screen, and a shared key is the whole fix.
+  subscription: 'subscription',
 } as const;
 
 export type Domain = (typeof DOMAIN)[keyof typeof DOMAIN];

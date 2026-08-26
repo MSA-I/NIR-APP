@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { Modal } from '../../components/ui';
+import { ICON, Modal } from '../../components/ui';
 import { fmtMoneyExact } from '../../lib/format';
 import type { ResolutionOption, SplitSupplier, SupplierGroup } from '../../lib/orderSplit';
 import type { Product } from '../../lib/types';
@@ -39,8 +39,8 @@ export default function MinimumFixPanel({
       {group ? (
         <div className={passed ? 'note-done mb-4' : 'note-await mb-4'}>
           {passed
-            ? <CheckCircle2 size={17} className="mt-0.5 shrink-0" aria-hidden="true" />
-            : <AlertTriangle size={17} className="mt-0.5 shrink-0" aria-hidden="true" />}
+            ? <CheckCircle2 size={ICON.md} className="mt-0.5 shrink-0" aria-hidden="true" />
+            : <AlertTriangle size={ICON.md} className="mt-0.5 shrink-0" aria-hidden="true" />}
           <div className="grid flex-1 gap-1 text-sm sm:grid-cols-3">
             <Metric label="סכום נוכחי" value={fmtMoneyExact(group.subtotal)} />
             <Metric label="מינימום" value={fmtMoneyExact(group.supplier.minOrderAmount)} />

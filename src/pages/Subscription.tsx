@@ -1,5 +1,5 @@
 import { CreditCard } from 'lucide-react';
-import { PageHeader } from '../components/ui';
+import { ICON, PageHeader } from '../components/ui';
 import { OrgSubscriptionPanel } from '../components/OrgSubscriptionPanel';
 import { PlanLimitNote } from '../components/PlanLimitNote';
 
@@ -24,11 +24,15 @@ import { PlanLimitNote } from '../components/PlanLimitNote';
  */
 export default function Subscription() {
   return (
-    <div className="max-w-4xl space-y-5">
+    /* `max-w-6xl`, and the width is the ladder's, not the prose's. At `4xl` five plan cards were
+       178px wide on a laptop — narrower than the button inside them — which is half of why they
+       read as boxes rather than as products. The state card and the usage note above still hold
+       their own measure through their internal `card-pad`, so nothing else stretches. */
+    <div className="max-w-6xl space-y-5">
       {/* No `meta`: `PageHeader` already prints the route's own description from the shared
           catalogue, and a second line saying the same thing in different words was exactly the
           cramped duplicated prose this package went out to remove. */}
-      <PageHeader title={<span className="flex items-center gap-2"><CreditCard size={22} /> המנוי שלי</span>} />
+      <PageHeader title={<span className="flex items-center gap-2"><CreditCard size={ICON.xl} /> המנוי שלי</span>} />
       <PlanLimitNote metricKey="documents.monthly" />
       <OrgSubscriptionPanel />
     </div>

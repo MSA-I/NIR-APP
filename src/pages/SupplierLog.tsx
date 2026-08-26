@@ -35,7 +35,7 @@ import { ScrollText, Tags, Truck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useParamState } from '../lib/useParamState';
-import { DataTable, ErrorNote, Modal, PageHeader, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, ErrorNote, Modal, PageHeader, SkeletonTable, ICON, type Column } from '../components/ui';
 import { fmtDateTime } from '../lib/format';
 import { fieldChanges, renderValue } from '../lib/supplierLogChanges';
 import type { AuditLog } from '../lib/types';
@@ -182,8 +182,8 @@ export default function SupplierLog() {
       render: (r) => (
         <span className="inline-flex items-center gap-1.5 text-ink-soft">
           {r.entity_type === 'supplier_products'
-            ? <Tags size={14} aria-hidden="true" />
-            : <Truck size={14} aria-hidden="true" />}
+            ? <Tags size={ICON.xs} aria-hidden="true" />
+            : <Truck size={ICON.xs} aria-hidden="true" />}
           {ENTITY_LABEL[r.entity_type]}
         </span>
       ),
@@ -243,7 +243,7 @@ export default function SupplierLog() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title={<span className="flex items-center gap-2"><ScrollText size={22} aria-hidden="true" /> יומן עדכון ספקים</span>}
+        title={<span className="flex items-center gap-2"><ScrollText size={ICON.xl} aria-hidden="true" /> יומן עדכון ספקים</span>}
         meta={`${rows.length} עדכונים בתצוגה · 400 האחרונים`} />
 
       {/* 0175: financial rows are legal-entity scoped; organization/identity/platform rows remain

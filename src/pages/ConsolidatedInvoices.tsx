@@ -11,6 +11,8 @@ import {
   Note,
   PageHeader,
   SkeletonTable,
+  Card,
+  ICON,
   useToast,
   type Column,
 } from '../components/ui';
@@ -256,7 +258,7 @@ export default function ConsolidatedInvoices() {
       />
 
       {canWrite && (
-        <section aria-labelledby="consolidated-intake-title" className="card card-pad space-y-4">
+        <Card as="section" aria-labelledby="consolidated-intake-title" className="space-y-4">
           <div>
             <h2 id="consolidated-intake-title" className="section-title">קליטת חשבונית מרכזת</h2>
             <p className="mt-1 text-sm text-ink-soft">בחרו ספק וישות משפטית, ואז צלמו או העלו את כל עמודי החשבונית בפעולה אחת.</p>
@@ -288,11 +290,11 @@ export default function ConsolidatedInvoices() {
           <div className="flex flex-col gap-2 sm:flex-row">
             <button type="button" className="btn-primary min-h-11 w-full sm:w-auto" disabled={busy || !supplierId || !legalEntityId}
               onClick={() => captureRef.current?.click()}>
-              <Camera size={17} aria-hidden="true" /> צילום מסמכים
+              <Camera size={ICON.md} aria-hidden="true" /> צילום מסמכים
             </button>
             <button type="button" className="btn-secondary min-h-11 w-full sm:w-auto" disabled={busy || !supplierId || !legalEntityId}
               onClick={() => uploadRef.current?.click()}>
-              <Upload size={17} aria-hidden="true" /> העלאת מסמכים
+              <Upload size={ICON.md} aria-hidden="true" /> העלאת מסמכים
             </button>
             <input ref={captureRef} type="file" className="sr-only" accept={DOCUMENT_UPLOAD_ACCEPT} capture="environment" multiple
               aria-label="צילום עמודי חשבונית מרכזת" onChange={(event) => receiveFiles(event.currentTarget.files)} />
@@ -313,7 +315,7 @@ export default function ConsolidatedInvoices() {
               </div>
             </Note>
           )}
-        </section>
+        </Card>
       )}
 
       {!canWrite && (
@@ -423,7 +425,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
         </div>
         {canWrite && workspace.anchor && (
           <button type="button" className="btn-secondary min-h-11" disabled={refreshing} onClick={onRefresh}>
-            <RefreshCw size={16} aria-hidden="true" /> {refreshing ? 'מרענן…' : 'רענון התאמה'}
+            <RefreshCw size={ICON.sm} aria-hidden="true" className={refreshing ? 'animate-spin ' : ''} /> רענון התאמה
           </button>
         )}
       </div>
@@ -437,8 +439,8 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
               {primaryPage?.job_id && canWrite && (
                 <button type="button" className="btn-primary min-h-11"
                   disabled={retryingReview} onClick={() => void retryReview()}>
-                  <RefreshCw size={16} aria-hidden="true" />
-                  {retryingReview ? 'בודק מחדש…' : 'בדיקה מחדש'}
+                    <RefreshCw size={ICON.sm} aria-hidden="true" className={retryingReview ? 'animate-spin ' : ''} />
+                  בדיקה מחדש
                 </button>
               )}
               {primaryPage && (
@@ -458,7 +460,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
         </Note>
       )}
       {workspace.pages.length > 0 && (
-        <section aria-labelledby="consolidated-pages-title" className="card card-pad space-y-3">
+        <Card as="section" aria-labelledby="consolidated-pages-title" className="space-y-3">
           <h3 id="consolidated-pages-title" className="section-title">עמודי החבילה</h3>
           <ul className="divide-y divide-line-soft">
             {workspace.pages.map((page) => (
@@ -477,7 +479,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
               </li>
             ))}
           </ul>
-        </section>
+        </Card>
       )}
       {workspace.warnings.length > 0 && (
         <Note tone="await" role="status">
@@ -490,17 +492,17 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
         </Note>
       )}
 
-      <div className="card overflow-hidden">
+      <Card pad={false} clip>
         <dl className="grid grid-cols-1 divide-y divide-line-soft sm:grid-cols-3 sm:divide-x sm:divide-y-0 sm:divide-x-reverse">
           <div className="p-4"><dt className="text-xs text-ink-muted">סכום העוגן</dt><dd className="mt-1 text-lg font-semibold">{money(workspace.anchor?.total_amount ?? null)}</dd></div>
           <div className="p-4"><dt className="text-xs text-ink-muted">חשבוניות ביניים</dt><dd className="mt-1 text-lg font-semibold">{money(interimTotal)}</dd></div>
           <div className="p-4"><dt className="text-xs text-ink-muted">קבלות שהושלמו</dt><dd className="mt-1 text-lg font-semibold">{money(receiptTotal)}</dd></div>
         </dl>
-      </div>
+      </Card>
 
-      <section aria-labelledby="consolidated-anchor-title" className="card card-pad space-y-3">
+      <Card as="section" aria-labelledby="consolidated-anchor-title" className="space-y-3">
         <div className="flex items-center gap-2">
-          <FileCheck2 size={18} className="text-action" aria-hidden="true" />
+          <FileCheck2 size={ICON.md} className="text-action" aria-hidden="true" />
           <h3 id="consolidated-anchor-title" className="section-title">עוגן החוב</h3>
         </div>
         {workspace.anchor ? (
@@ -519,7 +521,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
           </div>
           </div>
         ) : <Note tone="idle">העמודים נקלטו, והחשבונית המרכזת עדיין ממתינה לקריאה ולעיגון.</Note>}
-      </section>
+      </Card>
 
       <section aria-labelledby="consolidated-sources-title" className="space-y-3">
         <div>

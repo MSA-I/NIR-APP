@@ -1,15 +1,18 @@
 import { useNavigate } from 'react-router';
-import { useEffect } from 'react';
-import { RefreshCw, ChevronLeft, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { RefreshCw, ChevronLeft, ShieldCheck, TriangleAlert, BellOff } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';
 import { useParamState } from '../lib/useParamState';
 import { buildSummary, type Summary } from '../lib/summary';
 import type { AlertSeverity } from '../lib/alerts';
 import { fmtDateTime } from '../lib/format';
-import { SkeletonCards, ErrorNote, Note, PageHeader } from '../components/ui';
+import { SkeletonCards, ErrorNote, Note, PageHeader, Card, EmptyState, ToggleGroup, ICON } from '../components/ui';
 import { PushSection } from '../components/PushSettings';
 import { useAuth } from '../auth/AuthContext';
-import { markAllNotificationsRead } from '../lib/notifications';
+import {
+  markAllNotificationsRead, readNotifications, groupNotifications,
+  NOTIFICATION_FEED_LIMIT, type NotificationRow,
+} from '../lib/notifications';
 
 /** Full actionable queue. The dashboard owns the business summary and links here for detail. */
 
@@ -30,12 +33,33 @@ export default function Alerts() {
   const { profile } = useAuth();
   const { data, loading, fetching, error, refetch } = useQuery<Summary>(() => buildSummary(), []);
   const [sevFilter, setSevFilter] = useParamState('severity');
+  const userId = profile?.id ?? null;
+  /* The delivered notifications — what the BELL counted. Separate query on purpose: it answers a
+     different question from `buildSummary()` (what was sent to me, vs what is true right now), it
+     must not be able to blank the scan when it fails, and the scan must not be able to hide it. */
+  const feed = useQuery<NotificationRow[]>(
+    () => (userId ? readNotifications(userId) : Promise.resolve([])),
+    [userId],
+  );
 
-  // Opening the canonical alerts screen acknowledges everything delivered to the bell.
-  // Wait for a successful load so a network failure never clears unseen work.
+  const feedGroups = feed.data ? groupNotifications(feed.data) : null;
+  /* WHAT WAS NEW WHEN THIS VISIT STARTED, frozen once. The rows are marked read a moment after
+     they render, so reading `read_at` live would erase the marking under the reader's eyes. */
+  const newOnArrival = useRef<Set<string> | null>(null);
+  if (newOnArrival.current === null && feedGroups) {
+    newOnArrival.current = new Set(feedGroups.filter((group) => group.unread > 0).map((group) => group.key));
+  }
+
+  /* Acknowledging is gated on the FEED, not on the scan (26.08.2026 audit).
+     It used to fire on `data.complete` — a successful *summary* load — so the count was cleared by
+     a screen that had not displayed a single one of the rows it was clearing. Now the receipt says
+     what actually happened: these rows were put on screen, therefore they are read. A feed that
+     failed to load clears nothing. */
   useEffect(() => {
-    if (data?.complete && !fetching && !error && profile) void markAllNotificationsRead(profile.id);
-  }, [data, fetching, error, profile]);
+    if (!userId || feed.loading || feed.fetching || feed.error || !feed.data) return;
+    if (!feed.data.some((row) => row.read_at === null)) return;
+    void markAllNotificationsRead(userId);
+  }, [userId, feed.data, feed.loading, feed.fetching, feed.error]);
 
   if (loading) return <SkeletonCards count={5} cols={5} title />;
   if (error && !data) return <ErrorNote message={error} />;
@@ -52,13 +76,16 @@ export default function Alerts() {
             נבדק {fmtDateTime(data.generatedAt)}{fetching ? ' · מתעדכן כעת' : ''}
           </span>
         } actions={<button className="btn-secondary" onClick={() => void refetch()} disabled={fetching}>
-          <RefreshCw size={15} className={fetching ? 'animate-spin' : ''} />
+          {/* One refresh mark for the whole product: RefreshCw at ICON.sm, spinning while the
+              view is refetching, label unchanged. The busy state stays INSIDE the button
+              (DESIGN.md:554) instead of only greying it out. */}
+              <RefreshCw size={ICON.sm} aria-hidden="true" className={fetching ? 'animate-spin ' : ''} />
           רענון
         </button>} />
 
       {(error || !data.complete) && (
         <Note tone="alert">
-          <TriangleAlert size={16} className="mt-0.5 shrink-0" />
+          <TriangleAlert size={ICON.sm} className="mt-0.5 shrink-0" />
           <span>
             {error ?? `הסריקה חלקית: ${data.failures.map((failure) => failure.label).join(', ')}. הממצאים שכן נטענו מוצגים, אך אי אפשר לקבוע שהכול תקין.`}
           </span>
@@ -69,27 +96,29 @@ export default function Alerts() {
         <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2">
           <h2 className="section-title">דורש טיפול</h2>
           {present.length > 1 && (
-            <div className="flex flex-wrap gap-1" role="group" aria-label="סינון התראות לפי סוג">
-              <button type="button" onClick={() => setSevFilter('')} aria-pressed={!sevFilter}
-                className={`${!sevFilter ? 'badge-info' : 'badge-idle'} cursor-pointer`}>הכל</button>
-              {present.map((s) => (
-                <button key={s} type="button" onClick={() => setSevFilter(s)} aria-pressed={sevFilter === s}
-                  className={`${sevFilter === s ? SEVERITY_BADGE[s] : 'badge-idle'} cursor-pointer`}>
-                  {SEVERITY_LABEL[s]}
-                </button>
-              ))}
-            </div>
+            /* Was a BADGE wearing `cursor-pointer` — no height floor, no focus ring, and the
+               pressed chip took its colour from severity, so the control changed shape as well
+               as state. ToggleGroup is the one pick-one-of-N control; severity colour still
+               rides the row badge below, where it describes an alert rather than a filter. */
+            <ToggleGroup<string>
+              label="סינון התראות לפי סוג"
+              value={sevFilter}
+              onChange={setSevFilter}
+              className="gap-1"
+              items={[{ key: '', label: 'הכל' }, ...present.map((s) => ({ key: s as string, label: SEVERITY_LABEL[s] }))]} />
           )}
         </div>
         {data.complete && data.alerts.length === 0 ? (
           // Deliberately not a row of zeros: "nothing found" is a different statement from
           // "we measured seven things and they were all zero", and only the first is true.
-          <div className="card card-pad flex items-center gap-3 text-sm text-ink-soft">
-            <ShieldCheck size={18} className="text-done-fg shrink-0" />
-            לא נמצאו התראות פתוחות בבדיקות שהמערכת יודעת להריץ.
-          </div>
+          <Card pad={false}>
+            <EmptyState
+              icon={<ShieldCheck size={ICON.hero} className="text-done-fg" />}
+              title="לא נמצאו התראות פתוחות"
+              subtitle="בבדיקות שהמערכת יודעת להריץ לא נמצאה התראה פתוחה." />
+          </Card>
         ) : shown.length > 0 ? (
-          <div className="card divide-y divide-line-soft overflow-hidden">
+          <Card pad={false} clip className="divide-y divide-line-soft">
             {shown.map((a) => (
               <button key={a.code} onClick={() => navigate(a.to)}
                 className="w-full text-start flex items-center gap-3 px-4 py-3 row-hover cursor-pointer">
@@ -98,18 +127,22 @@ export default function Alerts() {
                   <span className="block text-sm font-medium text-ink-body">{a.title}</span>
                   <span className="block text-xs text-ink-muted mt-0.5">{a.detail}</span>
                 </span>
-                <ChevronLeft size={16} className="text-ink-ghost shrink-0" />
+                <ChevronLeft size={ICON.sm} className="text-ink-ghost shrink-0" aria-hidden="true" />
               </button>
             ))}
-          </div>
+          </Card>
         ) : data.alerts.length > 0 ? (
-          <div className="card card-pad text-sm text-ink-soft">
-            אין התראות מסוג זה. <button type="button" className="text-action underline" onClick={() => setSevFilter('')}>הצג הכל</button>
-          </div>
+          <Card pad={false}>
+            <EmptyState title="אין התראות מסוג זה"
+              action={<button type="button" className="btn-secondary" onClick={() => setSevFilter('')}>הצג הכל</button>} />
+          </Card>
         ) : (
-          <div className="card card-pad text-sm text-ink-soft">
-            הסריקה לא הושלמה, ולכן אין אפשרות לקבוע שאין התראות פתוחות.
-          </div>
+          <Card pad={false}>
+            <EmptyState
+              icon={<TriangleAlert size={ICON.hero} className="text-await-fg" />}
+              title="הסריקה לא הושלמה"
+              subtitle="ולכן אין אפשרות לקבוע שאין התראות פתוחות." />
+          </Card>
         )}
       </div>
 
@@ -119,6 +152,59 @@ export default function Alerts() {
         אינו נבדק: מלאי נמוך (אין מעקב כמויות במערכת) · חריגה בתקציב (לא הוגדר תקציב).
         מועדי פירעון נבדקים רק על דרישות תשלום שהוזן להן תאריך.
       </p>
+
+      {/* WHAT THE BELL COUNTED. Until 26.08.2026 the bell's number and this screen described two
+          different catalogues — the number came from delivered `notifications` rows, the list above
+          from a live scan — and the rows themselves were rendered nowhere in the product. So a
+          count of 23 opened a page that mentioned none of them and then cleared the number. */}
+      <div>
+        <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className="section-title">נשלח אליך</h2>
+          {/* The cap is honest only because the screen prints it, and the grouping only because
+              the screen prints how many times each condition was announced. */}
+          <span className="text-xs text-ink-muted">
+            {`עד ${NOTIFICATION_FEED_LIMIT} ההודעות האחרונות לחשבון הזה, מקובצות לפי הנושא`}
+          </span>
+        </div>
+        {feed.loading ? (
+          <SkeletonCards count={3} cols={3} />
+        ) : feed.error ? (
+          <ErrorNote message={feed.error} />
+        ) : feedGroups && feedGroups.length > 0 ? (
+          <Card pad={false} clip className="divide-y divide-line-soft">
+            {feedGroups.map((group) => (
+              <button key={group.key} onClick={() => navigate(group.latest.target_url)}
+                className="w-full text-start flex items-center gap-3 px-4 py-3 row-hover cursor-pointer">
+                <span className={`${SEVERITY_BADGE[group.latest.severity]} shrink-0`}>
+                  {SEVERITY_LABEL[group.latest.severity]}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-ink-body">
+                    {group.latest.title}
+                    {/* Frozen at arrival — see `newOnArrival`. Without it the mark would vanish
+                        mid-read, the moment the acknowledgement lands. */}
+                    {newOnArrival.current?.has(group.key) && <span className="badge-info ms-2 align-middle">חדש</span>}
+                  </span>
+                  <span className="block text-xs text-ink-muted mt-0.5">{group.latest.body}</span>
+                  <span className="block text-xs text-ink-muted mt-0.5">
+                    {group.occurrences > 1
+                      ? `נשלחה ${group.occurrences} פעמים · האחרונה ${fmtDateTime(new Date(group.latest.created_at))}`
+                      : fmtDateTime(new Date(group.latest.created_at))}
+                  </span>
+                </span>
+                <ChevronLeft size={ICON.sm} className="text-ink-ghost shrink-0" aria-hidden="true" />
+              </button>
+            ))}
+          </Card>
+        ) : (
+          <Card pad={false}>
+            <EmptyState
+              icon={<BellOff size={ICON.hero} className="text-ink-ghost" />}
+              title="לא נשלחו אליך הודעות"
+              subtitle="הודעות נשלחות על חשד לכפילות, על מועד פירעון, על עליית מחיר במחירון ועל עיבוד מסמכים שנעצר." />
+          </Card>
+        )}
+      </div>
 
       {/* Canonical per-device notification setting: /alerts is available to owner and office. */}
       <PushSection />

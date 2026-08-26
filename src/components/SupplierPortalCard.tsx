@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Link2, Copy, MessageCircle, RefreshCcw, XCircle, Inbox } from 'lucide-react';
-import { ConfirmDialog, Note, StatusBadge, useToast } from './ui';
+import { Link2, Copy, Loader2, RefreshCcw, Send, XCircle, Inbox } from 'lucide-react';
+import { ConfirmDialog, ICON, Note, StatusBadge, useToast } from './ui';
 import { useQuery } from '../lib/useQuery';
 import { fmtDateTime } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
@@ -98,14 +98,14 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
     <div className="card p-4 no-print">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink">
-          <Link2 size={15} aria-hidden="true" /> פורטל ספק
+          <Link2 size={ICON.sm} aria-hidden="true" /> פורטל ספק
         </h2>
         {state && <StatusBadge meta={SUPPLIER_LINK_STATE[state]} />}
       </div>
 
       {proposal && (
         <Note tone={proposal.status === 'submitted' ? 'await' : 'info'} className="mt-3">
-          <Inbox size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <Inbox size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             הספק שלח תשובה דרך הפורטל ({fmtDateTime(proposal.submitted_at)}) ·{' '}
             {SUPPLIER_PROPOSAL_STATUS[proposal.status].label}.{' '}
@@ -129,12 +129,12 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
             <input className="input num" dir="ltr" readOnly value={freshUrl} aria-label="קישור פורטל הספק"
               onFocus={(e) => e.currentTarget.select()} />
             <button type="button" className="btn-secondary shrink-0" onClick={() => void copyFreshUrl()}>
-              <Copy size={15} /> העתקה
+              <Copy size={ICON.sm} aria-hidden="true" /> העתקה
             </button>
           </div>
           {(order.supplier.whatsapp || order.supplier.phone) && (
             <button type="button" className="btn-secondary" onClick={openWhatsAppWithLink}>
-              <MessageCircle size={15} /> פתיחת WhatsApp עם ההזמנה והקישור
+              <Send size={ICON.sm} aria-hidden="true" /> פתיחת WhatsApp עם ההזמנה והקישור
             </button>
           )}
         </div>
@@ -159,13 +159,16 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
           {(!link || state === 'expired' || (state === 'live' && !freshUrl)) && (
             <button type="button" className={link ? 'btn-secondary' : 'btn-primary'} disabled={busy}
               onClick={() => setIssueOpen(true)}>
-              {link ? <><RefreshCcw size={15} /> הנפקת קישור חדש (מבטלת את הקודם)</> : <><Link2 size={15} /> הנפקת קישור לספק</>}
+                {busy ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" />
+                : link ? <RefreshCcw size={ICON.sm} aria-hidden="true" /> : <Link2 size={ICON.sm} aria-hidden="true" />}
+              {link ? 'הנפקת קישור חדש (מבטלת את הקודם)' : 'הנפקת קישור לספק'}
             </button>
           )}
           {link && state === 'live' && (
-            <button type="button" className="btn-ghost text-alert-fg" disabled={busy}
+            <button type="button" className="btn-danger" disabled={busy}
               onClick={() => setRevokeOpen(true)}>
-              <XCircle size={15} /> ביטול הקישור
+                {busy ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" /> : <XCircle size={ICON.sm} aria-hidden="true" />}
+              ביטול הקישור
             </button>
           )}
         </div>

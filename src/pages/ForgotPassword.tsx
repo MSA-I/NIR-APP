@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Loader2, MailQuestion } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { Card, ICON } from '../components/ui';
 import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
 
@@ -43,18 +44,18 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-action p-4">
+    <div className="min-h-dvh flex items-center justify-center bg-action px-4 py-6 sm:py-10">
       <div className="w-full max-w-sm">
+        {/* Same shape as the other three standalone auth screens: the lockup is the mark, and the
+            screen's own name is its single <h1>, in the app's one title class. */}
         <div className="text-center mb-8">
-          <h1>
-            <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="184" height="40"
-              className="mx-auto h-auto w-44" />
-          </h1>
-          <p className="text-shell-ink-dim mt-1 text-sm">איפוס סיסמה</p>
+          <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="184" height="40"
+            className="mx-auto h-auto w-44" />
+          <h1 className="page-title mt-2 text-shell-ink">איפוס סיסמה</h1>
         </div>
         {sent ? (
-          <div className="card card-pad space-y-3 text-center">
-            <MailQuestion size={28} className="mx-auto text-ink-muted" aria-hidden />
+          <Card className="space-y-3 text-center">
+            <MailQuestion size={ICON.hero} className="mx-auto text-ink-muted" aria-hidden />
             <p className="text-sm">
               אם הכתובת רשומה במערכת, נשלח אליה קישור לאיפוס הסיסמה. הקישור תקף לשעה.
             </p>
@@ -62,20 +63,22 @@ export default function ForgotPassword() {
               לא הגיע מייל? בדקו את תיקיית הספאם, או פנו למפעיל המערכת.
             </p>
             <Link to="/login" className="btn-secondary w-full">חזרה למסך הכניסה</Link>
-          </div>
+          </Card>
         ) : (
-          <form onSubmit={(e) => void onSubmit(e)} className="card card-pad space-y-4">
+          <Card as="form" onSubmit={(e: FormEvent) => void onSubmit(e)} className="space-y-4">
             <p className="text-sm text-ink-muted">
               הזינו את כתובת האימייל שאיתה נרשמתם — יישלח אליה קישור להגדרת סיסמה חדשה.
             </p>
             <div>
               <label className="label" htmlFor="email">אימייל</label>
               <input id="email" type="email" className="input" dir="ltr" autoComplete="username"
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? 'forgot-password-problem' : undefined}
                 value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
-            {error && <div role="alert" className="text-sm text-alert-fg">{error}</div>}
+            {error && <div id="forgot-password-problem" role="alert" className="text-sm text-alert-fg">{error}</div>}
             <button type="submit" className="btn-primary w-full" disabled={busy || !email.trim()}>
-              {busy ? <Loader2 size={16} className="animate-spin" /> : <MailQuestion size={15} />}
+              {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <MailQuestion size={ICON.sm} aria-hidden="true" />}
               שליחת קישור איפוס
             </button>
             <div className="text-center">
@@ -83,7 +86,7 @@ export default function ForgotPassword() {
                 חזרה למסך הכניסה
               </Link>
             </div>
-          </form>
+          </Card>
         )}
       </div>
     </div>

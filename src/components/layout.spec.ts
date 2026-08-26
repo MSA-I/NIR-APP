@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NAV_SECTIONS, drawerSectionsForRole, footerItemsForRole, pageTitleFor, sectionsForRole } from './Layout';
 import { isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
 import type { ActiveRole } from '../lib/types';
-import { routePresentationTitle } from '../lib/routePresentation';
+import { routePresentationTitle, STATIC_ROUTE_TITLES } from '../lib/routePresentation';
 
 const ACTIVE_ROLES: ActiveRole[] = ['owner', 'office', 'accountant'];
 const pathsFor = (role: ActiveRole | undefined) =>
@@ -44,6 +44,20 @@ describe('מעטפת הניווט', () => {
     // It sits in the footer, beside /settings, precisely so it does NOT compete with daily work,
     // which is what the rest of this test protects.
     expect(footerItemsForRole('owner').map((item) => item.to)).toEqual(['/onboarding', '/settings']);
+  });
+
+  /**
+   * DESIGN.md:507 — "דיסקלוזר מעל פריט אחד הוא דלת עם מכסה". The data half of the rule: which
+   * named groups hold exactly one destination, so the shell knows to render them as a plain link.
+   * `layoutActiveState.spec.tsx` asserts the rendered half.
+   */
+  it('קבוצה בעלת שם עם יעד אחד היא קישור, לא דיסקלוזר', () => {
+    const singles = (role: ActiveRole) => sectionsForRole(role)
+      .filter((section) => section.section && section.items.length === 1)
+      .map((section) => section.section);
+    expect(singles('owner')).toEqual(['המנוי']);
+    expect(singles('accountant')).toEqual(['ניהול']);
+    expect(singles('office')).toEqual([]);
   });
 
   it('לרואה החשבון נשאר מסלול הביצוע', () => {
@@ -89,6 +103,10 @@ describe('מעטפת הניווט', () => {
   });
 });
 
+const QUICK_ACTION_LINKS = (['owner', 'office', 'accountant'] as const)
+  .flatMap((role) => quickActionsFor(role))
+  .filter((action) => action.kind === 'link');
+
 describe('סרגל הפעולות המהירות במובייל', () => {
   it('מחזיר פעולות מסך תפקידיות כשהצילום נמצא בדיוק באמצע', () => {
     // 'invoice' (→ /invoices/new) left this bar in G1, 10.08.2026: this application receives
@@ -97,6 +115,37 @@ describe('סרגל הפעולות המהירות במובייל', () => {
     expect(quickActionsFor('owner').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'document-operations']);
     expect(quickActionsFor('office').map((item) => item.key)).toEqual(['order', 'dashboard', 'capture', 'receive', 'documents']);
     expect(quickActionsFor('accountant').map((item) => item.key)).toEqual(['dashboard', 'invoices', 'pay']);
+  });
+
+  /**
+   * The accountant's bar said 'תשלומים' for `/pay` while the drawer, one swipe away, said
+   * 'תשלומים' for `/payments`. Two screens, one word, for the single role whose work is the
+   * difference between "still to be transferred" and "already paid". The catalogue had always
+   * named them apart; only this bar was writing its own labels.
+   */
+  it('תווית בסרגל היא שם המסך הקנוני, ואין שתי מילים זהות לשני מסכים', () => {
+    const SHORT_FORMS: Record<string, string> = { '/documents': 'מסמכים' };
+    for (const action of QUICK_ACTION_LINKS) {
+      const path = action.to!.split('?')[0];
+      expect(action.label).toBe(SHORT_FORMS[path] ?? routePresentationTitle(path));
+    }
+    // The two payment screens must not collide anywhere a single role can see both. One label may
+    // repeat across surfaces — that is the same screen named twice — but never over two routes.
+    expect(routePresentationTitle('/pay')).not.toBe(routePresentationTitle('/payments'));
+    const byLabel = new Map<string, Set<string>>();
+    for (const { label, to } of [
+      ...quickActionsFor('accountant').filter((a) => a.kind === 'link').map((a) => ({ label: a.label, to: a.to!.split('?')[0] })),
+      ...sectionsForRole('accountant').flatMap((s) => s.items).map((i) => ({ label: i.label, to: i.to })),
+    ]) {
+      byLabel.set(label, (byLabel.get(label) ?? new Set()).add(to));
+    }
+    expect([...byLabel].filter(([, paths]) => paths.size > 1)).toEqual([]);
+  });
+
+  it('כל תווית קיצור מצביעה על מסלול שקיים בקטלוג ההצגה', () => {
+    for (const action of QUICK_ACTION_LINKS) {
+      expect(Object.keys(STATIC_ROUTE_TITLES)).toContain(action.to!.split('?')[0]);
+    }
   });
 
   it('מחזיר את כל יעדי הניווט למגירה תחת שכבת עבודה שוטפת', () => {

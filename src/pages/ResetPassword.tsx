@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { KeyRound, Loader2 } from 'lucide-react';
+import { Card, ICON } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
 import { toHebrewError } from '../lib/errors';
@@ -82,64 +83,70 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-action p-4">
+    <div className="min-h-dvh flex items-center justify-center bg-action px-4 py-6 sm:py-10">
       <div className="w-full max-w-sm">
+        {/* Same shape as the other three standalone auth screens: the lockup is the mark, and the
+            screen's own name is its single <h1>, in the app's one title class. */}
         <div className="text-center mb-8">
-          <h1>
-            <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="184" height="40"
-              className="mx-auto h-auto w-44" />
-          </h1>
-          <p className="text-shell-ink-dim mt-1 text-sm">הגדרת סיסמה חדשה</p>
+          <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="184" height="40"
+            className="mx-auto h-auto w-44" />
+          <h1 className="page-title mt-2 text-shell-ink">הגדרת סיסמה חדשה</h1>
         </div>
 
         {state === 'checking' && (
-          <div className="card card-pad text-center">
-            <Loader2 size={22} className="animate-spin mx-auto text-ink-muted" aria-hidden />
+          <Card className="text-center">
+            <Loader2 size={ICON.xl} className="animate-spin mx-auto text-ink-muted" aria-hidden />
             <p className="text-sm text-ink-muted mt-2">בודק את קישור האיפוס…</p>
-          </div>
+          </Card>
         )}
 
         {state === 'invalid' && (
-          <div className="card card-pad space-y-3 text-center">
+          <Card className="space-y-3 text-center">
             <p className="text-sm">הקישור אינו תקין או שפג תוקפו. קישור איפוס תקף לשעה וניתן לשימוש פעם אחת.</p>
             <Link to="/forgot-password" className="btn-primary w-full">שליחת קישור חדש</Link>
             <Link to="/login" className="text-sm text-ink-muted hover:text-ink underline underline-offset-2">
               חזרה למסך הכניסה
             </Link>
-          </div>
+          </Card>
         )}
 
         {state === 'ready' && (
-          <form onSubmit={(event) => void onSubmit(event)} className="card card-pad space-y-4">
+          <Card as="form" onSubmit={(event: FormEvent) => void onSubmit(event)} className="space-y-4">
             <div>
               <label className="label" htmlFor="reset-password-new">
                 סיסמה חדשה ({MIN_PASSWORD_LENGTH} תווים לפחות)
               </label>
+              {/* `passwordProblem` judges the pair, so both boxes are marked and both point at the
+                  one message — the field that failed is no longer left for the reader to guess. */}
               <input id="reset-password-new" type="password" className="input" dir="ltr"
                 autoComplete="new-password" value={password}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? 'reset-password-problem' : undefined}
                 onChange={(event) => { setPassword(event.target.value); setError(null); }} required />
             </div>
             <div>
               <label className="label" htmlFor="reset-password-confirm">אימות סיסמה</label>
               <input id="reset-password-confirm" type="password" className="input" dir="ltr"
                 autoComplete="new-password" value={confirm}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? 'reset-password-problem' : undefined}
                 onChange={(event) => { setConfirm(event.target.value); setError(null); }} required />
             </div>
-            {error && <div role="alert" className="text-sm text-alert-fg">{error}</div>}
+            {error && <div id="reset-password-problem" role="alert" className="text-sm text-alert-fg">{error}</div>}
             <button type="submit" className="btn-primary w-full" disabled={busy || !password || !confirm}>
-              {busy ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={15} />}
+              {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <KeyRound size={ICON.sm} aria-hidden="true" />}
               החלפת סיסמה
             </button>
-          </form>
+          </Card>
         )}
 
         {state === 'done' && (
-          <div className="card card-pad space-y-3 text-center">
+          <Card className="space-y-3 text-center">
             <p className="text-sm">{error ?? 'הסיסמה הוחלפה. מנתק את החיבורים הישנים ומעביר למסך הכניסה…'}</p>
             <button className="btn-primary w-full" onClick={() => navigate('/login', { replace: true })}>
               חזרה למסך הכניסה
             </button>
-          </div>
+          </Card>
         )}
       </div>
     </div>

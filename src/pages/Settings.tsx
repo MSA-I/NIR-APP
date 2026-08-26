@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { toHebrewError } from "../lib/errors";
 import { Link } from 'react-router';
-import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, KeyRound, ClipboardCheck, ImageUp, Download, Undo2, LogOut } from 'lucide-react';
+import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, KeyRound, ClipboardCheck, ImageUp, Download, Undo2, UserCog, LogOut } from 'lucide-react';
 import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { PageHeader, SkeletonCards, useToast, ErrorNote, Note, DataTable, Disclosure, StatusBadge, ConfirmDialog, Modal, type Column } from '../components/ui';
+import { Card, PageHeader, SkeletonCards, useToast, ErrorNote, ICON, Note, DataTable, Disclosure, StatusBadge, SubPanel, ConfirmDialog, Modal, type Column } from '../components/ui';
+import { ActionMenu, type ActionMenuItem } from '../components/ActionMenu';
 import { ExportTemplatesPanel } from '../components/ExportTemplatesPanel';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVITATION_STATUS } from '../lib/status';
@@ -384,44 +385,68 @@ export default function Settings() {
       ),
       sortValue: (r) => r.last_sent_at,
     },
-    {
-      key: 'actions', header: '',
-      render: (r) => {
-        const status = invitationStatusOf(r);
-        if (!canWrite || status === 'accepted' || status === 'revoked') return null;
-        return (
-          <div className="flex gap-1">
-            <button className="btn-ghost py-1! text-xs" onClick={() => setResendTarget(r)}>
-              <Send size={13} /> שליחה מחדש
-            </button>
-            <button className="btn-ghost py-1! text-xs text-alert-fg hover:bg-alert-wash" onClick={() => setRevokeTarget(r)}>
-              <Ban size={13} /> ביטול
-            </button>
-          </div>
-        );
-      },
-    },
   ];
 
   /**
-   * The two row actions, defined once and rendered by both the roster and the attention strip.
+   * The invitation row actions. They used to be a DataTable COLUMN called `actions` that
+   * hand-rolled two quiet buttons — beside a table that has had a `rowActions` prop for exactly
+   * this since ADR-0007. The gates are unchanged: a read-only organization sees none, and an
+   * invitation already accepted or revoked has nothing left to do.
+   */
+  function invitationActions(r: Invitation): ActionMenuItem[] {
+    const status = invitationStatusOf(r);
+    const settled = status === 'accepted' || status === 'revoked';
+    return [
+      { key: 'resend', label: 'שליחה מחדש', icon: Send, hidden: !canWrite || settled, onSelect: () => setResendTarget(r) },
+      { key: 'revoke', label: 'ביטול', icon: Ban, tone: 'danger', hidden: !canWrite || settled, onSelect: () => setRevokeTarget(r) },
+    ];
+  }
+
+  /**
+   * The two user row actions, defined once and rendered by both the roster table and the
+   * attention strip — the same division of labour as before, now expressed as menu items instead
+   * of a second local function called `rowActions` that shadowed the DataTable prop of that name.
    * The gates are the existing ones, unchanged: only an owner acting on somebody else sees them,
    * a deactivated row loses "שינוי תפקיד", and re-activation is offered only for a role the
    * product still assigns — which is what keeps a retired account from being switched back on.
    */
-  function rowActions(u: Profile) {
-    if (!canWrite || u.id === profile?.id) return null;
-    return (
-      <div className="flex flex-wrap gap-1">
-        {u.active && (
-          <button className="btn-ghost py-1! text-xs" onClick={() => openRoleChange(u)}>שינוי תפקיד</button>
-        )}
-        {(u.active || (isActiveRole(u.role) && ASSIGNABLE_ROLES.includes(u.role))) && (
-          <button className="btn-ghost py-1! text-xs" onClick={() => setAccessTarget(u)}>{u.active ? 'השבתה' : 'הפעלה'}</button>
-        )}
-      </div>
-    );
+  function userActions(u: Profile): ActionMenuItem[] {
+    const mine = !canWrite || u.id === profile?.id;
+    return [
+      {
+        key: 'role', label: 'שינוי תפקיד', icon: UserCog,
+        hidden: mine || !u.active,
+        onSelect: () => openRoleChange(u),
+      },
+      {
+        key: 'access', label: u.active ? 'השבתה' : 'הפעלה',
+        icon: u.active ? Ban : Undo2,
+        tone: u.active ? 'danger' : 'default',
+        hidden: mine || !(u.active || (isActiveRole(u.role) && ASSIGNABLE_ROLES.includes(u.role))),
+        onSelect: () => setAccessTarget(u),
+      },
+    ];
   }
+
+  const userColumns: Column<Profile>[] = [
+    {
+      key: 'name', header: 'שם', priority: 1,
+      render: (u) => (
+        <span className="font-medium">
+          {u.full_name}
+          {u.id === profile?.id && <span className="ms-2 text-xs text-ink-muted">(אתה)</span>}
+        </span>
+      ),
+      sortValue: (u) => u.full_name ?? '',
+    },
+    { key: 'role', header: 'תפקיד', render: (u) => roleLabels[u.role] ?? u.role, sortValue: (u) => u.role },
+    { key: 'phone', header: 'טלפון', className: 'num', render: (u) => <span dir="ltr">{u.phone ?? '—'}</span> },
+    {
+      key: 'status', header: 'סטטוס', mobileLabel: null,
+      render: (u) => (u.active ? <span className="badge-done">פעיל</span> : <span className="badge-idle">מושבת</span>),
+      sortValue: (u) => (u.active ? 0 : 1),
+    },
+  ];
 
   if (loading) return <SkeletonCards count={3} cols={3} title />;
   if (error) return <ErrorNote message={error} />;
@@ -455,11 +480,11 @@ export default function Settings() {
           (19.08.2026) and the subscription moved to /settings/subscription (25.08.2026); the
           header kept advertising both. A meta line that names areas the screen no longer has
           sends people scrolling for something that is not there. */}
-      <PageHeader title={<span className="flex items-center gap-2"><SettingsIcon size={22} /> הגדרות מערכת</span>}
+      <PageHeader title={<span className="flex items-center gap-2"><SettingsIcon size={ICON.xl} aria-hidden="true" /> הגדרות מערכת</span>}
         meta="עסק, צוות ואבטחה"
-        actions={<Link className="btn-secondary" to="/onboarding"><ClipboardCheck size={16} /> רשימת הקמה</Link>} />
+        actions={<Link className="btn-secondary" to="/onboarding"><ClipboardCheck size={ICON.sm} aria-hidden="true" /> רשימת הקמה</Link>} />
 
-      <div className="card card-pad space-y-4">
+      <Card className="space-y-4">
         <h2 className="section-title">הגדרות עסק</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="sm:col-span-3"><label className="label" htmlFor="settings-org-name">שם הארגון לתצוגה</label><input id="settings-org-name" className="input" maxLength={120} value={orgName} disabled={!canWrite} onChange={(e) => setOrgName(e.target.value)} /></div>
@@ -468,23 +493,23 @@ export default function Settings() {
           <div><label className="label" htmlFor="settings-tolerance">סטיית סכום מותרת (₪)</label><input id="settings-tolerance" type="number" step="0.5" className="input num" value={tolerance} disabled={!canWrite} onChange={(e) => setTolerance(e.target.value)} /></div>
         </div>
         {canWrite && <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>שמירה</button></div>}
-      </div>
+      </Card>
 
-      <div className="card card-pad space-y-4">
+      <Card className="space-y-4">
         <div>
-          <h2 className="section-title flex items-center gap-2"><ImageUp size={17} /> לוגו הארגון</h2>
+          <h2 className="section-title flex items-center gap-2"><ImageUp size={ICON.md} aria-hidden="true" /> לוגו הארגון</h2>
           <p className="mt-1 text-sm text-ink-muted">PNG, JPEG או WebP עד 2MB. הלוגו מופיע בסרגל המערכת ובהדפסת הדוח החודשי.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {logoUrl ? <img src={logoUrl} alt={`לוגו ${orgName}`} className="h-14 w-28 rounded-lg border border-line bg-white object-contain p-1" /> : <div className="flex h-14 w-28 items-center justify-center rounded-lg border border-dashed border-line text-xs text-ink-muted">ללא לוגו</div>}
           {canWrite && <label className="btn-secondary cursor-pointer">
-            <ImageUp size={15} /> {logoPath ? 'החלפת לוגו' : 'העלאת לוגו'}
+            <ImageUp size={ICON.sm} aria-hidden="true" /> {logoPath ? 'החלפת לוגו' : 'העלאת לוגו'}
             <input type="file" className="sr-only" accept={BRAND_LOGO_TYPES.join(',')} disabled={logoBusy}
               onChange={(event) => { void uploadLogo(event.target.files?.[0]); event.currentTarget.value = ''; }} />
           </label>}
           {canWrite && logoPath && <button type="button" className="btn-ghost" disabled={logoBusy} onClick={() => void removeLogo()}>הסרת לוגו</button>}
         </div>
-      </div>
+      </Card>
 
       {/* The commercial subscription moved to `/settings/subscription` (owner report 25.08.2026)
           and is reached from its own drawer group. It is NOT reduced to a link here: this screen
@@ -508,16 +533,16 @@ export default function Settings() {
           the report, not in the owner's settings. */}
       {canWrite && org && isOffice && <ExportTemplatesPanel orgId={org.id} />}
 
-      <div className="card card-pad space-y-4">
+      <Card className="space-y-4">
         <div>
-          <h2 className="section-title flex items-center gap-2"><LogOut size={17} /> סיום שירות וייצוא מידע</h2>
+          <h2 className="section-title flex items-center gap-2"><LogOut size={ICON.md} aria-hidden="true" /> סיום שירות וייצוא מידע</h2>
           <p className="mt-1 text-sm text-ink-muted">
             בקשת סיום שירות מעבירה את הארגון מיד למצב קריאה בלבד. המידע נשאר זמין לצפייה, והמערכת מכינה ייצוא של הנתונים העסקיים ב־CSV וב־JSON יחד עם מסמכי המקור.
           </p>
         </div>
         {offboardingError && <ErrorNote message={offboardingError} />}
         {offboarding && (
-          <div className="rounded-2xl bg-surface-sunken px-4 py-3 text-sm">
+          <SubPanel className="text-sm">
             <div className="font-medium text-ink">{OFFBOARDING_STATUS_LABELS[offboarding.status]}</div>
             <div className="mt-1 text-ink-muted">
               הבקשה נפתחה ב־<span className="num">{fmtDateTime(offboarding.requested_at)}</span>. אפשר לבטל עד <span className="num">{fmtDateTime(offboarding.cancellation_deadline)}</span>.
@@ -535,33 +560,33 @@ export default function Settings() {
             {offboarding.status === 'export_failed' && (
               <div role="alert" className="mt-2 text-alert-fg">הכנת הייצוא לא הושלמה. מנהל השירות יכול להפעיל ניסיון חוזר בטוח.</div>
             )}
-          </div>
+          </SubPanel>
         )}
         <div className="flex flex-wrap justify-end gap-2">
           {!offboardingOpen && (
             <button type="button" className="btn-secondary text-alert-fg" disabled={offboardingBusy}
               onClick={() => setOffboardingAction('request')}>
-              <LogOut size={15} /> בקשת סיום שירות
+              <LogOut size={ICON.sm} aria-hidden="true" /> בקשת סיום שירות
             </button>
           )}
           {offboarding?.status === 'export_ready' && (
             <button type="button" className="btn-primary" disabled={offboardingBusy}
               onClick={() => setOffboardingAction('download')}>
-              <Download size={15} /> יצירת קישור הורדה
+              <Download size={ICON.sm} aria-hidden="true" /> יצירת קישור הורדה
             </button>
           )}
           {offboardingOpen && offboarding.can_owner_cancel && (
             <button type="button" className="btn-secondary" disabled={offboardingBusy}
               onClick={() => setOffboardingAction('cancel')}>
-              <Undo2 size={15} /> ביטול בקשת הסיום
+              <Undo2 size={ICON.sm} aria-hidden="true" /> ביטול בקשת הסיום
             </button>
           )}
         </div>
-      </div>
+      </Card>
 
-      <div className="card card-pad space-y-4">
+      <Card className="space-y-4">
         <div>
-          <h2 className="section-title flex items-center gap-2"><KeyRound size={17} /> החלפת הסיסמה שלך</h2>
+          <h2 className="section-title flex items-center gap-2"><KeyRound size={ICON.md} aria-hidden="true" /> החלפת הסיסמה שלך</h2>
           {/* OPEN-DECISIONS #114, decided 09.08.2026: employees recover their own password via
               "שכחתי סיסמה" on the login screen (ForgotPassword → ResetPassword). An org owner
               still cannot reset another user's password — that stays closed by decision, and the
@@ -580,45 +605,45 @@ export default function Settings() {
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 sm:items-end">
           <div>
             <label className="label" htmlFor="new-password">סיסמה חדשה ({MIN_PASSWORD_LENGTH} תווים לפחות)</label>
+            {/* `passwordProblem` judges the PAIR, so both fields are marked and both point at the
+                one message. A banner nobody's field is tied to leaves a screen-reader user to
+                guess which of the two boxes the sentence is about. */}
             <input id="new-password" type="password" className="input" dir="ltr" autoComplete="new-password"
+              aria-invalid={passwordError ? true : undefined}
+              aria-describedby={passwordError ? 'settings-password-problem' : undefined}
               value={newPassword} onChange={(e) => { setNewPassword(e.target.value); setPasswordError(null); }} />
           </div>
           <div>
             <label className="label" htmlFor="confirm-password">אימות סיסמה</label>
             <input id="confirm-password" type="password" className="input" dir="ltr" autoComplete="new-password"
+              aria-invalid={passwordError ? true : undefined}
+              aria-describedby={passwordError ? 'settings-password-problem' : undefined}
               value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); setPasswordError(null); }} />
           </div>
           <button className="btn-primary" disabled={passwordBusy || !newPassword || !confirmPassword}
             onClick={() => void changePassword()}>החלפה</button>
         </div>
-        {passwordError && <ErrorNote message={passwordError} />}
-      </div>
+        {passwordError && <div id="settings-password-problem"><ErrorNote message={passwordError} /></div>}
+      </Card>
 
-      <div className="card overflow-hidden">
-        <div className="px-4 py-3 border-b border-line-soft section-title flex items-center gap-2"><Users size={17} /> משתמשים והרשאות</div>
-        <div
-          className="overflow-x-auto [contain:layout]"
-          role="region"
-          aria-label="טבלת משתמשים והרשאות"
-          tabIndex={0}
-        >
-        <table className="w-full">
-          <thead className="table-head"><tr><th scope="col" className="th">שם</th><th scope="col" className="th">תפקיד</th><th scope="col" className="th">טלפון</th><th scope="col" className="th">סטטוס</th><th scope="col" className="th"><span className="sr-only">פעולות</span></th></tr></thead>
-          <tbody className="divide-y divide-line-soft">
-            {roster.map((u) => (
-              <tr key={u.id}>
-                <td className="td font-medium">{u.full_name}{u.id === profile?.id && <span className="text-xs text-ink-muted ms-2">(אתה)</span>}</td>
-                <td className="td">{roleLabels[u.role]}</td>
-                <td className="td" dir="ltr">{u.phone ?? '—'}</td>
-                <td className="td">{u.active ? <span className="badge-done">פעיל</span> : <span className="badge-idle">מושבת</span>}</td>
-                <td className="td">{rowActions(u)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
+      {/* A labelled <section>, not a bare card: the roster is now a DataTable, which brings its
+          own card, its own scroll region and a phone-card branch the hand-rolled table never had.
+          The section is what still names the whole surface for a screen reader. */}
+      <section className="space-y-2" aria-labelledby="settings-users-heading">
+        <h2 id="settings-users-heading" className="section-title flex items-center gap-2">
+          <Users size={ICON.md} aria-hidden="true" /> משתמשים והרשאות
+        </h2>
+        <DataTable
+          tableLabel="משתמשים"
+          rows={roster}
+          columns={userColumns}
+          rowActions={userActions}
+          rowLabel={(u) => u.full_name ?? u.id}
+          emptyTitle="אין משתמשים ברשימה"
+          emptySubtitle="עובד שיצטרף דרך הזמנה יופיע כאן"
+        />
         {historicalActive.length > 0 && (
-          <div className="border-t border-line-soft p-4">
+          <SubPanel>
             <Note tone="await" role="status">
               <span className="min-w-0 flex-1">
                 תפקיד היסטורי — יש להעביר לתפקיד פעיל או להשבית. החשבונות האלה אינם יכולים להיכנס למערכת, והם נשארים כאן עד שיוכרעו.
@@ -629,22 +654,28 @@ export default function Settings() {
                 <li key={u.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
                   <span className="font-medium text-ink">{u.full_name}</span>
                   <span className="text-sm text-ink-muted">{roleLabels[u.role] ?? u.role}</span>
-                  <span className="ms-auto">{rowActions(u)}</span>
+                  {/* Same items as the table row, same menu — this strip is a second view of a
+                      roster row, not a second set of controls. */}
+                  <span className="ms-auto"><ActionMenu items={userActions(u)} label={`פעולות עבור ${u.full_name ?? u.id}`} /></span>
                 </li>
               ))}
             </ul>
-          </div>
+          </SubPanel>
         )}
-      </div>
+      </section>
 
       {/* חוק החשיפה המדורגת: an account that closed is history, and history is read-only. The
           fold keeps it out of the roster's way while leaving it findable — including by
           find-in-page, which a native <details> still answers. */}
       {archived.length > 0 && (
-        <div className="card overflow-hidden">
+        <Card pad={false} clip>
           <Disclosure title="ארכיון משתמשים" count={archived.length}
             summary="תפקידים שפרשו מהמוצר — לקריאה בלבד">
-            <div className="overflow-x-auto [contain:layout]" role="region" aria-label="טבלת ארכיון משתמשים" tabIndex={0}>
+            {/* Stays a raw table on purpose: it is read-only history behind a fold, and a
+                DataTable here would put a search box, a page footer and a row count inside a
+                closed <details>. It carries the full table contract instead — `.table-scroll`,
+                `.th`/`.td` with `scope`, and a focusable, named scroll region. */}
+            <div className="table-scroll overflow-x-auto [contain:layout]" role="region" aria-label="טבלת ארכיון משתמשים" tabIndex={0}>
               <table className="w-full">
                 <thead className="table-head"><tr><th scope="col" className="th">שם</th><th scope="col" className="th">תפקיד</th><th scope="col" className="th">טלפון</th><th scope="col" className="th">סטטוס</th></tr></thead>
                 <tbody className="divide-y divide-line-soft">
@@ -660,12 +691,12 @@ export default function Settings() {
               </table>
             </div>
           </Disclosure>
-        </div>
+        </Card>
       )}
 
-      {canWrite && <div className="card card-pad space-y-4">
+      {canWrite && <Card className="space-y-4">
         <div>
-          <h2 className="section-title flex items-center gap-2"><MailPlus size={17} /> הזמנת עובד</h2>
+          <h2 className="section-title flex items-center gap-2"><MailPlus size={ICON.md} aria-hidden="true" /> הזמנת עובד</h2>
           <p className="text-sm text-ink-muted mt-1">
             נשלח מייל עם קישור אישי להגדרת שם וסיסמה. הקישור תקף 7 ימים.
           </p>
@@ -677,6 +708,8 @@ export default function Settings() {
           <div>
             <label className="label" htmlFor="inviteEmail">אימייל</label>
             <input id="inviteEmail" type="email" className="input" dir="ltr" placeholder="name@example.com"
+              aria-invalid={inviteError ? true : undefined}
+              aria-describedby={inviteError ? 'invite-email-problem' : undefined}
               value={inviteEmail} onChange={(e) => { setInviteEmail(e.target.value); setInviteError(null); }} />
           </div>
           <div>
@@ -690,9 +723,9 @@ export default function Settings() {
             {inviting ? 'שולח…' : 'שליחת הזמנה'}
           </button>
         </div>
-        {inviteError && <ErrorNote message={inviteError} />}
+        {inviteError && <div id="invite-email-problem"><ErrorNote message={inviteError} /></div>}
         {inviteNotice && <Note tone="await">{inviteNotice}</Note>}
-      </div>}
+      </Card>}
 
       <div className="space-y-2">
         <h2 className="section-title">הזמנות</h2>
@@ -701,7 +734,9 @@ export default function Settings() {
           columns={inviteColumns}
           searchable
           searchFn={(r, q) => r.email.toLowerCase().includes(q)}
+          tableLabel="הזמנות"
           searchLabel="חיפוש בהזמנות עובדים"
+          rowActions={invitationActions}
           rowLabel={(r) => `הזמנה עבור ${r.email}`}
           emptyTitle="לא נשלחו הזמנות"
           emptySubtitle="הזמנה שנשלחה תופיע כאן עם הסטטוס והתוקף שלה"

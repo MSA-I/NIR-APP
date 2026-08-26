@@ -2,7 +2,7 @@ import { useId, useRef, useState } from 'react';
 import { AlertTriangle, Check, FileSpreadsheet, LockKeyhole } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toHebrewError } from '../lib/errors';
-import { useToast } from '../components/ui';
+import { Card, ICON, SubPanel, useToast } from '../components/ui';
 
 export interface ProductNameRepairCandidate {
   candidate_id: string;
@@ -49,7 +49,7 @@ export function ProductNameRepairReview({ queue, dryRunProduced, onApplied }: {
   if (!dryRunProduced) {
     return (
       <div className="note-idle" role="status">
-        <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+        <AlertTriangle size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1">
           לא הופק דוח dry-run לתיקון שמות ממקור. עד שיופק — לא ידוע כמה שמות דורשים תיקון, ואין כאן טענה על אפס.
         </span>
@@ -57,7 +57,7 @@ export function ProductNameRepairReview({ queue, dryRunProduced, onApplied }: {
     );
   }
   if (queue.length === 0) {
-    return <div className="note-done" role="status"><Check size={16} aria-hidden="true" />אין תיקוני מקור ממתינים.</div>;
+    return <div className="note-done" role="status"><Check size={ICON.sm} aria-hidden="true" />אין תיקוני מקור ממתינים.</div>;
   }
   return (
     <section className="space-y-4" aria-labelledby="source-name-repair-heading">
@@ -110,7 +110,7 @@ function RepairCard({ candidate, onApplied }: {
   }
 
   return (
-    <li className="card card-pad space-y-4" data-testid={`repair-${candidate.candidate_id}`}>
+    <Card as="li" className="space-y-4" data-testid={`repair-${candidate.candidate_id}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <p className="text-xs text-ink-muted">השם השמור</p>
@@ -122,14 +122,14 @@ function RepairCard({ candidate, onApplied }: {
       </div>
 
       {candidate.proposed_name && (
-        <div className="rounded-lg bg-surface-sunken p-3">
+        <SubPanel>
           <p className="text-xs text-ink-muted">השם שנקרא מהמקור</p>
           <p className="mt-1 break-words font-medium text-ink"><bdi>{candidate.proposed_name}</bdi></p>
-        </div>
+        </SubPanel>
       )}
 
       <div className="note-idle items-start">
-        <FileSpreadsheet size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+        <FileSpreadsheet size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
         <div className="min-w-0 space-y-1 text-sm">
           <p><span className="font-medium">מקור:</span> <bdi>{candidate.source_file_name}</bdi>
             {candidate.source_row != null && <> · שורה <span className="num">{candidate.source_row}</span></>}</p>
@@ -143,8 +143,8 @@ function RepairCard({ candidate, onApplied }: {
       {!ready ? (
         <div className="note-await items-start">
           {candidate.status === 'unchanged'
-            ? <LockKeyhole size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-            : <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />}
+            ? <LockKeyhole size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
+            : <AlertTriangle size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />}
           <p>{candidate.reason_code ? REASON[candidate.reason_code] : 'אין ראיה מספקת לאישור שינוי.'}</p>
         </div>
       ) : (
@@ -155,10 +155,10 @@ function RepairCard({ candidate, onApplied }: {
               value={reason} onChange={(event) => setReason(event.target.value)} />
           </div>
           <button type="button" className="btn-primary" disabled={busy} onClick={() => void apply()}>
-            <Check size={16} aria-hidden="true" /> אישור התיקון
+            <Check size={ICON.sm} aria-hidden="true" /> אישור התיקון
           </button>
         </div>
       )}
-    </li>
+    </Card>
   );
 }

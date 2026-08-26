@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router';
 import { useEffect, type ReactNode } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { PageLoader } from '../components/ui';
+import { RecordSkeleton } from '../components/ui';
 import Admin from '../pages/Admin';
 import OperatorShell from './OperatorShell';
 import AutonomyPolicies from './AutonomyPolicies';
@@ -31,7 +31,7 @@ function DocumentRedirect({ to }: { to: string }) {
   useEffect(() => {
     window.location.replace(to);
   }, [to]);
-  return <PageLoader />;
+  return <RecordSkeleton />;
 }
 
 /**
@@ -42,7 +42,7 @@ function DocumentRedirect({ to }: { to: string }) {
  */
 function PlatformGuard({ children }: { children: ReactNode }) {
   const { session, loading, isPlatformAdmin } = useAuth();
-  if (loading) return <PageLoader />;
+  if (loading) return <RecordSkeleton />;
   if (!session) return <DocumentRedirect to="/login" />;
   if (!isPlatformAdmin) return <DocumentRedirect to="/" />;
   return <>{children}</>;

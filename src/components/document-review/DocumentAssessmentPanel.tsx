@@ -4,7 +4,7 @@ import { AlertTriangle, Check, CircleCheck, Info, Loader2, ShieldAlert } from 'l
 import { supabase } from '../../lib/supabase';
 import { toHebrewError } from '../../lib/errors';
 import { fmtMoneyExact, fmtNum } from '../../lib/format';
-import { Disclosure, Note, useToast } from '../ui';
+import { Disclosure, ICON, Note, useToast } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
 import {
   advisoryFindings,
@@ -53,7 +53,7 @@ function FindingRow({ group }: { group: FindingGroup }) {
     : finding.severity === 'info' ? Info : ShieldAlert;
   return (
     <li className="flex items-start gap-2 text-sm">
-      <Icon size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+      <Icon size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
       <span>
         {findingLabel(finding)}
         {lines.length === 1 && (
@@ -158,13 +158,13 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
       {/* The two states, as two sentences with two icons. Never one word covering both. */}
       <div className="card p-4">
         <p className="flex items-start gap-2 text-sm text-ink-body">
-          <CircleCheck size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+          <CircleCheck size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
           <span>{storedSentence}</span>
         </p>
         <p className="mt-2 flex items-start gap-2 text-sm text-ink-body">
           {read.data_approved
-            ? <CircleCheck size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
-            : <Info size={16} aria-hidden="true" className="mt-0.5 shrink-0" />}
+            ? <CircleCheck size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
+            : <Info size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />}
           <span>{approvedSentence}</span>
         </p>
       </div>
@@ -285,7 +285,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
           {effects.map((effect, index) => (
             <li key={index} className="flex items-start gap-2 text-sm text-ink-body">
               {effect.happens
-                ? <Check size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+                ? <Check size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
                 : <span aria-hidden="true" className="mt-0.5 shrink-0 text-ink-muted">✕</span>}
               <span>{effect.text}</span>
             </li>
@@ -328,7 +328,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
               disabled={busy || !canSubmit(read, supplierId)}
               onClick={() => void submit()}
             >
-              {busy && <Loader2 size={16} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />}
+              {busy && <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" />}
               אישור המסמך
             </button>
           </PrimaryDecision>
@@ -360,7 +360,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
             >
               {linesOpen && (
                 <div
-                  className="max-w-full overflow-x-auto rounded-lg border border-line"
+                  className="table-scroll overflow-x-auto rounded-lg border border-line"
                   role="region"
                   tabIndex={0}
                   aria-label="שורות המסמך מול ההזמנה, הקבלה והמחירון; ניתן לגלול בתוך הטבלה"
