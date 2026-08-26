@@ -942,6 +942,43 @@ test("the system prompt names every canonical key without weakening the injectio
     SYSTEM_PROMPT,
     /Never match or fill a missing line key from a product name/,
   );
+  // A PDF text layer hands back right-to-left text in the order the glyphs sat on the page, and
+  // measured on production that is where every mangled catalogue name came from: 93 of 271 names
+  // carry a digit welded onto a Hebrew letter, and 0 of them carry the letter-level reversal the
+  // worker's own guard already repairs. The extraction is faithful; it is the page that is
+  // sideways. This model reads Hebrew and is the only stage that can put a name back in reading
+  // order, so the instruction lives here -- and it is bounded in three directions, because an
+  // unbounded one would license rewriting the catalogue.
+  assert.match(SYSTEM_PROMPT, /in READING order/);
+  assert.match(SYSTEM_PROMPT, /reorder and re-space what is there/);
+  // (1) It may not invent, translate or drop words.
+  assert.match(
+    SYSTEM_PROMPT,
+    /Never translate, correct spelling, expand an abbreviation, add a word, or drop one/,
+  );
+  // (2) An unclear case falls back to the raw value rather than to a guess -- the same rule
+  // `OPEN-DECISIONS.md` applies to every other unknown.
+  assert.match(
+    SYSTEM_PROMPT,
+    /return the value exactly as it arrived rather than guessing/,
+  );
+  // (3) It reaches product_name and description and NOTHING else. A catalogue number or a
+  // barcode reordered into "reading order" is a different product, and an amount reordered is a
+  // different number -- both would pass every downstream check while being silently wrong.
+  assert.match(
+    SYSTEM_PROMPT,
+    /applies to product_name and description only, and to no other key/,
+  );
+  assert.match(
+    SYSTEM_PROMPT,
+    /every catalogue number, barcode, quantity, unit and amount stays exactly as printed/,
+  );
+  // The blanket copy-exactly clause and the rule above must not read as contradicting each
+  // other; whichever the model resolved in favour of, one of the two would be dead text.
+  assert.match(
+    SYSTEM_PROMPT,
+    /The single exception is the reading-order rule above/,
+  );
   assert.match(
     SYSTEM_PROMPT,
     /Never normalize or infer a unit or packaging conversion/,
@@ -1054,6 +1091,11 @@ const PROMPT_DIGESTS: Record<string, string> = {
     "ce5afb034b2322d56eac4696372c5137670e2c4f3463cb00b7a50d9653b4a98e",
   "interpret-document-v11":
     "b1a6f4f553b20a79af057034060ead8abc2d32375f5ad8b3d4c987a4f1b78112",
+  // v12 adds the reading-order rule for product_name and description. Every earlier digest stays:
+  // a row stored under v11 was interpreted by a prompt that copied a sideways name verbatim, and
+  // the ledger has to keep saying so.
+  "interpret-document-v12":
+    "76e7caf0ad719994372917f4c9bcced77beaab95c2740d91b398e5e8919d63c2",
 };
 
 // CRLF is folded before hashing, and the reason is a checkout hazard rather than tidiness: this
