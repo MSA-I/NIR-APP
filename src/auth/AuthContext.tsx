@@ -108,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // A watchdog rather than a Promise.race, because the only requirement is that `loading`
     // cannot stick. supabase-js resolves the auth token before it issues *any* request, so a
     // wedged token refresh hangs every call below without ever rejecting — the `finally` that
-    // clears `loading` is then never reached, and `Guard` renders PageLoader forever on every
+    // clears `loading` is then never reached, and `Guard` renders its skeleton forever on every
     // route. That is exactly what stranded sessions held open across the 10.08 deploy.
     // Firing this converts the hang into the ordinary bootstrap failure the `catch` below
     // already renders, which carries both "ניסיון חוזר" and sign-out. It does not cure the

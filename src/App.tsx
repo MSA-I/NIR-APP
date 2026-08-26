@@ -1,7 +1,7 @@
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router';
 import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { useAuth, homeFor } from './auth/AuthContext';
-import { PageLoader, useToast } from './components/ui';
+import { RecordSkeleton, useToast } from './components/ui';
 import { toHebrewError } from './lib/errors';
 import { reportError } from './lib/observability';
 import { isActiveRole, type ActiveRole } from './lib/types';
@@ -93,7 +93,7 @@ function LazyPageBoundary({ children }: { children: ReactNode }) {
 
 function Guard({ roles, children, write = false }: { roles: readonly ActiveRole[]; children: ReactNode; write?: boolean }) {
   const { session, profile, loading, organizationAccess = ACTIVE_ORGANIZATION_ACCESS } = useAuth();
-  if (loading) return <PageLoader />;
+  if (loading) return <RecordSkeleton />;
   if (!session || !profile) return <Navigate to="/login" replace />;
   if (!isActiveRole(profile.role) || !roles.includes(profile.role)) return <Navigate to={homeFor(profile.role)} replace />;
   if (write && !organizationAccess.canWrite) return <ReadOnlyUnavailable />;
@@ -126,7 +126,7 @@ function OperatorHandoff() {
   useEffect(() => {
     window.location.replace('/operator');
   }, []);
-  return <PageLoader />;
+  return <RecordSkeleton />;
 }
 
 const STAFF: readonly ActiveRole[] = ['owner', 'office'];
@@ -266,10 +266,10 @@ export default function App() {
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route element={session || loading ? <Layout /> : <Navigate to="/login" replace />}>
         {/* One Suspense boundary for every lazy page, nested under the Layout so the shell
-            (nav, requires-attention strip) stays mounted and only the content area shows
-            PageLoader while a page chunk loads. */}
-        <Route element={<LazyPageBoundary><Suspense fallback={<PageLoader />}><Outlet /></Suspense></LazyPageBoundary>}>
-        <Route path="/" element={loading ? <PageLoader /> : <Navigate to={homeFor(profile?.role)} replace />} />
+            (nav, requires-attention strip) stays mounted and only the content area shows a
+            skeleton while a page chunk loads. */}
+        <Route element={<LazyPageBoundary><Suspense fallback={<RecordSkeleton />}><Outlet /></Suspense></LazyPageBoundary>}>
+        <Route path="/" element={loading ? <RecordSkeleton /> : <Navigate to={homeFor(profile?.role)} replace />} />
 
         <Route path={APP_ROUTE_POLICY.dashboard.path} element={<Guard roles={APP_ROUTE_POLICY.dashboard.roles}><DashboardHome /></Guard>} />
 

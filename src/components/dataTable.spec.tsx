@@ -107,6 +107,35 @@ describe('DataTable — client mode', () => {
     expect(container.querySelector('th[aria-sort="descending"]')).toBeTruthy();
   });
 
+  /*
+   * The sort direction is a decorative chevron, not a character in the label (adopted from
+   * originui's TanStack table headers). Before this the header rendered a literal ` ↑`, which
+   * landed in the button's ACCESSIBLE NAME: a screen reader read the arrow on top of the
+   * `aria-sort` it already announces, and the name changed on every sort — which is why the test
+   * above still has to reach for the header by regex. An EXACT name is the assertion that bites:
+   * put the glyph back and this fails on the third sort state at the latest.
+   */
+  it('keeps the sortable header\'s accessible name stable across all three sort states', () => {
+    const rows: Row[] = [{ id: '1', name: 'אאא', amount: 1 }];
+    render(<DataTable rows={rows} columns={clientColumns} />);
+    const exactly = () => screen.getByRole('button', { name: 'שם' });
+
+    expect(exactly()).toBeInTheDocument();            // unsorted
+    fireEvent.click(exactly());
+    expect(exactly()).toBeInTheDocument();            // ascending
+    fireEvent.click(exactly());
+    expect(exactly()).toBeInTheDocument();            // descending
+  });
+
+  it('never puts a sort arrow into the header text', () => {
+    const { container } = render(<DataTable rows={makeRows(2)} columns={clientColumns} />);
+    fireEvent.click(screen.getByRole('button', { name: 'סכום' }));
+    const head = container.querySelector('thead')!;
+    expect(head.textContent).not.toMatch(/[↑↓]/);
+    // The direction is still SHOWN — an svg marks the active column, it is just not text.
+    expect(head.querySelector('th[aria-sort="ascending"] svg')).toBeTruthy();
+  });
+
   it('renders the record counter unconditionally, as a polite live region', () => {
     render(<DataTable rows={makeRows(3)} columns={clientColumns} />);
     // A single page — the old component hid the counter here.

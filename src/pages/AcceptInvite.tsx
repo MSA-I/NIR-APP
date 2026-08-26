@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Loader2, UserPlus, AlertCircle, MailCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { Card, ICON } from '../components/ui';
 import { homeFor } from '../auth/AuthContext';
 import { resolveRoleLabels } from '../lib/status';
 import { toHebrewError } from '../lib/errors';
@@ -96,9 +97,9 @@ export default function AcceptInvite() {
   if (loading) {
     return (
       <Shell>
-        <div className="card card-pad flex justify-center py-10 text-ink-faint">
-          <Loader2 className="animate-spin" size={26} />
-        </div>
+        <Card className="flex justify-center py-10 text-ink-faint">
+          <Loader2 className="animate-spin" size={ICON.xl} aria-hidden="true" />
+        </Card>
       </Shell>
     );
   }
@@ -125,8 +126,9 @@ export default function AcceptInvite() {
 
   return (
     <Shell>
-      <form onSubmit={(e) => void onSubmit(e)} className="card card-pad space-y-4">
+      <Card as="form" onSubmit={(e: FormEvent) => void onSubmit(e)} className="space-y-4">
         <div className="pb-1 border-b border-line-soft">
+          {/* h2 under the shell's h1 — the shell names the task, this names the business. */}
           <h2 className="section-title">הצטרפות ל{lookup.org_name}</h2>
           <p className="text-sm text-ink-muted mt-1">
             התפקיד שהוגדר עבורך: <strong className="text-ink-mid">
@@ -140,29 +142,42 @@ export default function AcceptInvite() {
           <label className="label" htmlFor="invite-email">אימייל</label>
           <input id="invite-email" className="input" dir="ltr" value={lookup.email ?? ''} disabled readOnly />
         </div>
-        <div>
-          <label className="label" htmlFor="fullName">שם מלא</label>
-          <input id="fullName" className="input" autoComplete="name" required
-            value={fullName} onChange={(e) => setFullName(e.target.value)} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="fullName">שם מלא</label>
+            <input id="fullName" className="input" autoComplete="name" required
+              value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          </div>
+          <div>
+            <label className="label" htmlFor="phone">טלפון (אופציונלי)</label>
+            <input id="phone" className="input" dir="ltr" autoComplete="tel"
+              value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </div>
         </div>
-        <div>
-          <label className="label" htmlFor="phone">טלפון (אופציונלי)</label>
-          <input id="phone" className="input" dir="ltr" autoComplete="tel"
-            value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </div>
-        <div>
-          <label className="label" htmlFor="password">סיסמה ({MIN_PASSWORD_LENGTH} תווים לפחות)</label>
-          <input id="password" type="password" className="input" dir="ltr" autoComplete="new-password" required
-            value={password} onChange={(e) => setPassword(e.target.value)} />
-        </div>
-        <div>
-          <label className="label" htmlFor="confirm">אימות סיסמה</label>
-          <input id="confirm" type="password" className="input" dir="ltr" autoComplete="new-password" required
-            value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="password">סיסמה ({MIN_PASSWORD_LENGTH} תווים לפחות)</label>
+            {/* Both boxes carry the mark: `passwordProblem` judges the pair, so naming one of
+                them would be a claim the check does not make. */}
+            <input id="password" type="password" className="input" dir="ltr" autoComplete="new-password" required
+              aria-invalid={formError ? true : undefined}
+              aria-describedby={formError ? 'accept-invite-problem' : undefined}
+              value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+          <div>
+            <label className="label" htmlFor="confirm">אימות סיסמה</label>
+            <input id="confirm" type="password" className="input" dir="ltr" autoComplete="new-password" required
+              aria-invalid={formError ? true : undefined}
+              aria-describedby={formError ? 'accept-invite-problem' : undefined}
+              value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          </div>
         </div>
 
-        <label className="flex items-start gap-2 text-sm text-ink-mid">
-          <input type="checkbox" className="rounded mt-0.5" checked={consent}
+        {/* The consent gate. `min-h-11` is not decoration here: this is the control that decides
+            whether a legal agreement was given, and it was the smallest tap target on the screen
+            an invited employee ever sees. */}
+        <label className="flex min-h-11 cursor-pointer items-start gap-2 py-1 text-sm text-ink-mid">
+          <input type="checkbox" className="mt-1 size-4 shrink-0 rounded accent-action" checked={consent}
             onChange={(e) => setConsent(e.target.checked)} />
           <span>
             קראתי ואני מסכים/ה ל<Link className="link" to="/terms" target="_blank">תנאי השימוש</Link>{' '}
@@ -170,13 +185,13 @@ export default function AcceptInvite() {
           </span>
         </label>
 
-        {formError && <div role="alert" className="text-sm text-alert-fg">{formError}</div>}
+        {formError && <div id="accept-invite-problem" role="alert" className="text-sm text-alert-fg">{formError}</div>}
 
         <button type="submit" className="btn-primary w-full" disabled={busy || !consent}>
-          {busy ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={15} />}
+          {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <UserPlus size={ICON.sm} aria-hidden="true" />}
           השלמת ההצטרפות
         </button>
-      </form>
+      </Card>
     </Shell>
   );
 }
@@ -190,13 +205,14 @@ const INVALID_MESSAGE: Record<string, string> = {
 
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-action p-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-dvh flex items-center justify-center bg-action px-4 py-6 sm:py-10">
+      <div className="w-full max-w-sm sm:max-w-md">
+        {/* Same shape as the other three standalone auth screens: the lockup is the mark, the
+            screen's own name is its single <h1>, and the tagline stays a paragraph under it. */}
         <div className="text-center mb-8">
-          <h1>
-            <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="184" height="40"
-              className="mx-auto h-auto w-44" />
-          </h1>
+          <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="184" height="40"
+            className="mx-auto h-auto w-44" />
+          <h1 className="page-title mt-2 text-shell-ink">הצטרפות לעסק</h1>
           <p className="text-shell-ink-soft mt-1 text-sm">רכש, חשבוניות ותשלומים במקום אחד</p>
         </div>
         {children}
@@ -208,15 +224,15 @@ function Shell({ children }: { children: ReactNode }) {
 function Notice({ title, message, tone = 'warn' }: { title: string; message: string; tone?: 'warn' | 'info' }) {
   const Icon = tone === 'info' ? MailCheck : AlertCircle;
   return (
-    <div className="card card-pad space-y-3">
+    <Card className="space-y-3">
       <div className="flex items-start gap-2.5">
-        <Icon size={19} className={tone === 'info' ? 'text-done-fg shrink-0 mt-0.5' : 'text-await-fg shrink-0 mt-0.5'} />
+        <Icon size={ICON.md} aria-hidden="true" className={tone === 'info' ? 'text-done-fg shrink-0 mt-0.5' : 'text-await-fg shrink-0 mt-0.5'} />
         <div>
           <div className="font-semibold text-ink">{title}</div>
           <p className="text-sm text-ink-soft mt-1 leading-relaxed">{message}</p>
         </div>
       </div>
       <Link to="/login" className="btn-secondary w-full">מעבר למסך ההתחברות</Link>
-    </div>
+    </Card>
   );
 }

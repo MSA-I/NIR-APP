@@ -8,7 +8,7 @@ import { Plus, Loader2, Send, CheckCircle2, ShieldAlert, XCircle, Pencil } from 
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ConfirmDialog, Disclosure, ErrorNote, Note, PageHeader, SkeletonTable, type Column } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ConfirmDialog, Disclosure, ErrorNote, Note, PageHeader, SkeletonTable, SubPanel, ICON, type Column } from '../components/ui';
 import { CheckList } from './Invoices';
 import { runPaymentRequestChecks, type CheckResult } from '../lib/checks';
 import { summarizeChecks, type ChecksSummary } from '../lib/checkSummary';
@@ -134,7 +134,7 @@ export default function PaymentRequests() {
           {/* The owner's emergency execution route was removed (G4, 10.08.2026). An approved
               request is executed on /pay, with the same step-up, the same mandatory reason and
               the same audit row the emergency path had. */}
-          {isOffice && <button className="btn-primary" onClick={() => setManualCreateOpen(true)}><Plus size={16} /> דרישה חדשה</button>}
+          {isOffice && <button className="btn-primary" onClick={() => setManualCreateOpen(true)}><Plus size={ICON.sm} aria-hidden="true" /> דרישה חדשה</button>}
         </>} />
       <DataTable rows={rows} columns={columns} searchable
         emptyTitle="אין דרישות תשלום"
@@ -393,22 +393,24 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
             {invoicesError ? <ErrorNote message={invoicesError} /> : invoicesLoading ? (
               <Note tone="idle">טוען חשבוניות ויתרות…</Note>
             ) : invoices?.length ? (
-              <div className="border border-line rounded-lg divide-y divide-line-soft max-h-56 overflow-y-auto">
+              <div className="max-h-56 divide-y divide-line-soft overflow-y-auto rounded-lg border border-line" tabIndex={0} role="region" aria-label="חשבוניות פתוחות לבחירה — רשימה נגללת">
                 {invoices.map((inv) => {
                   const checked = inv.id in chosen;
                   return (
-                    <div key={inv.id} className="flex items-center gap-3 px-3 py-2 text-sm">
-                      <input type="checkbox" className="rounded" checked={checked}
-                        aria-label={`בחירת חשבונית ${inv.invoice_number} של ${supplierName} להקצאה בדרישת התשלום`}
-                        onChange={(e) => setChosen((c) => {
-                          const next = { ...c };
-                           if (e.target.checked) next[inv.id] = inv.allocationAmount; else delete next[inv.id];
-                          return next;
-                        })} />
-                      <span className="flex-1">
-                        חשבונית <b dir="ltr" className="num">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}
-                        {inv.review_status !== 'approved' && <span className="badge-await ms-2">טרם אושרה</span>}
-                      </span>
+                    <div key={inv.id} className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 text-sm">
+                      <label className="flex min-h-11 min-w-0 flex-1 basis-full cursor-pointer items-center gap-3 sm:basis-auto">
+                        <input type="checkbox" className="size-5 shrink-0 accent-action" checked={checked}
+                          aria-label={`בחירת חשבונית ${inv.invoice_number} של ${supplierName} להקצאה בדרישת התשלום`}
+                          onChange={(e) => setChosen((c) => {
+                            const next = { ...c };
+                            if (e.target.checked) next[inv.id] = inv.allocationAmount; else delete next[inv.id];
+                            return next;
+                          })} />
+                        <span className="min-w-0 break-words">
+                          חשבונית <b dir="ltr" className="num">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}
+                          {inv.review_status !== 'approved' && <span className="badge-await ms-2">טרם אושרה</span>}
+                        </span>
+                      </label>
                       <span className="text-ink-muted text-xs num">
                         {isOwner ? 'יתרה' : 'סכום חשבונית'} {fmtMoneyExact(inv.allocationAmount)}
                       </span>
@@ -436,10 +438,10 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
           </fieldset>
         )}
 
-        <div className="flex items-center justify-between rounded-lg bg-surface-sunken px-4 py-3">
+        <SubPanel className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <span className="text-sm text-ink-soft">סכום הדרישה</span>
           <span className="kpi-value-compact num">{fmtMoneyExact(amount)}</span>
-        </div>
+        </SubPanel>
 
         <div><label className="label" htmlFor="payment-request-notes">הערות</label><input id="payment-request-notes" className="input" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
         <div><label className="label" htmlFor="payment-request-reason">סיבת יצירת הדרישה *</label><input id="payment-request-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
@@ -448,11 +450,11 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
         {checkError && <Note tone="alert">{checkError}</Note>}
         {checks && <CheckList checks={checks} />}
 
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
           <button className="btn-secondary" disabled={busy || amount <= 0 || !checksReady || !!suppliersError || !!invoicesError} onClick={() => void save(false)}>שמירה כטיוטה</button>
           <button className={hasCritical ? 'btn-danger' : 'btn-primary'} disabled={busy || amount <= 0 || !checksReady || !!suppliersError || !!invoicesError} onClick={() => void save(true)}>
-            {busy ? <Loader2 size={15} className="animate-spin" /> : hasCritical ? <ShieldAlert size={15} /> : <Send size={15} />}
+            {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : hasCritical ? <ShieldAlert size={ICON.sm} aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />}
             {hasCritical ? 'שמירה (יסומן כחשד לכפילות)' : 'שליחה לאישור'}
           </button>
         </div>
@@ -747,7 +749,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
             <div className="text-sm font-medium text-ink-soft mb-1.5">חשבוניות מקושרות</div>
             <ul className="divide-y divide-line-soft border border-line-soft rounded-lg text-sm">
               {links.map((l) => (
-                <li key={l.invoice_id} className="flex justify-between px-3 py-2">
+                <li key={l.invoice_id} className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2">
                   <span>חשבונית <b dir="ltr" className="num">{l.invoice.invoice_number}</b> · {fmtDate(l.invoice.invoice_date)}</span>
                   <span className="num font-medium">{fmtMoneyExact(l.amount_allocated)}</span>
                 </li>
@@ -761,7 +763,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
           {(checkError || linksError) && <Note tone="alert">{checkError ?? linksError}</Note>}
           {checks && summary ? <CheckSummary summary={summary} checks={checks} /> : checking && (
             <div role="status" className="flex items-center gap-2 text-sm text-ink-muted">
-              <Loader2 size={16} className="animate-spin text-ink-faint" aria-hidden="true" /> בודק את הדרישה…
+              <Loader2 size={ICON.sm} className="animate-spin text-ink-faint" aria-hidden="true" /> בודק את הדרישה…
             </div>
           )}
         </div>
@@ -777,7 +779,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
                 <div><dt className="text-ink-muted">נטו אינפורמטיבי לאחר זיכויים</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount - openCreditTotal)}</dd></div>
               </dl>
               <label className="flex min-h-11 items-start gap-2 text-sm font-medium">
-                <input type="checkbox" className="mt-1" checked={creditOverrideAcknowledged}
+                <input type="checkbox" className="mt-1 size-5 shrink-0 accent-action" checked={creditOverrideAcknowledged}
                   onChange={(event) => setCreditOverrideAcknowledged(event.target.checked)} />
                 <span>קראתי והבנתי שהזיכויים לא יקוזזו אוטומטית</span>
               </label>
@@ -788,35 +790,35 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         {isOffice && (
           <div className="flex flex-wrap justify-end gap-2 pt-1">
             {['draft'].includes(pr.status) && (
-              <button className="btn-primary" disabled={busy} onClick={() => requestTransition('pending_approval')}><Send size={15} /> שליחה לאישור</button>
+              <button className="btn-primary" disabled={busy} onClick={() => requestTransition('pending_approval')}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />} שליחה לאישור</button>
             )}
             {['pending_approval', 'suspected_duplicate', 'investigation'].includes(pr.status) && (
               overAllocated ? (
                 <button className="btn-secondary" disabled aria-label="אישור חסום — ההקצאה גבוהה מהיתרה שנותרה">
-                  <CheckCircle2 size={15} /> אישור הדרישה
+                  <CheckCircle2 size={ICON.sm} aria-hidden="true" /> אישור הדרישה
                 </button>
               ) : openCreditTotal > 0 ? (
                 <>
                   <button className="btn-secondary" disabled aria-label="אישור רגיל חסום בגלל זיכויים פתוחים">
-                    <CheckCircle2 size={15} /> אישור הדרישה
+                    <CheckCircle2 size={ICON.sm} aria-hidden="true" /> אישור הדרישה
                   </button>
                   <button className="btn-primary" disabled={busy || !checksReady || !creditOverrideAcknowledged}
                     onClick={() => setCreditOverrideOpen(true)}>
-                    <ShieldAlert size={15} /> אישור חריג ללא קיזוז הזיכוי
+                    <ShieldAlert size={ICON.sm} aria-hidden="true" /> אישור חריג ללא קיזוז הזיכוי
                   </button>
                 </>
               ) : (
                 <button className={hasCritical ? 'btn-danger' : 'btn-primary'} disabled={busy || !checksReady}
                   onClick={() => requestTransition('approved', hasCritical)}>
-                  <CheckCircle2 size={15} /> {hasCritical ? 'אישור למרות האזהרות' : 'אישור הדרישה'}
+                  <CheckCircle2 size={ICON.sm} aria-hidden="true" /> {hasCritical ? 'אישור למרות האזהרות' : 'אישור הדרישה'}
                 </button>
               )
             )}
             {['approved'].includes(pr.status) && (
-              <button className="btn-primary" disabled={busy} onClick={() => requestTransition('sent_for_execution')}><Send size={15} /> העברה לגורם המבצע</button>
+              <button className="btn-primary" disabled={busy} onClick={() => requestTransition('sent_for_execution')}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />} העברה לגורם המבצע</button>
             )}
             {!['cancelled', 'executed', 'matched'].includes(pr.status) && (
-              <button className="btn-ghost text-alert-fg" disabled={busy} onClick={() => requestTransition('cancelled')}><XCircle size={15} /> ביטול</button>
+              <button className="btn-danger" disabled={busy} onClick={() => requestTransition('cancelled')}><XCircle size={ICON.sm} aria-hidden="true" /> ביטול</button>
             )}
           </div>
         )}

@@ -1,5 +1,6 @@
 import { Activity, Camera, CreditCard, FileText, FolderOpen, LayoutDashboard, PackageCheck, ShoppingCart, type LucideIcon } from 'lucide-react';
 import { isActiveRole, type ActiveRole, type Role } from './types';
+import { staticRouteTitle } from './routePresentation';
 
 export interface QuickAction {
   key: string;
@@ -10,24 +11,45 @@ export interface QuickAction {
   to?: string;
 }
 
+/**
+ * The bar's labels are the SCREENS' names, read from the presentation catalogue, not typed here.
+ *
+ * `/pay` was hand-written as 'תשלומים' — which is `/payments`'s canonical name. Both screens are in
+ * an accountant's drawer, so the phone bar's "תשלומים" opened the execution queue while the
+ * drawer's "תשלומים" one swipe away opened the ledger of payments already made. Two different
+ * screens, one word, for the role whose job is the difference between them. `routePresentation`
+ * has always called `/pay` 'תשלומים לביצוע'; the bar simply was not asking.
+ *
+ * One deliberate short form survives, and it is declared rather than hidden in a literal: the bar's
+ * label box is two lines of `text-xs`, so `/documents` shows its short name the same way the
+ * desktop pill does (`NAV_SHORT_LABELS` in Layout). Every other entry is the catalogue's own name.
+ */
+const BAR_SHORT_LABELS: Partial<Record<string, string>> = {
+  '/documents': 'מסמכים',
+};
+
+const barLabel = (path: Parameters<typeof staticRouteTitle>[0]) =>
+  BAR_SHORT_LABELS[path] ?? staticRouteTitle(path);
+
 // The role-aware quick-action bar, phone only since the desktop speed-dial was removed
 // (09.08.2026). Order is canonical and is asserted in layout.spec.ts.
 const QUICK_ACTIONS: readonly QuickAction[] = [
-  { key: 'order', label: 'הזמנה חדשה', icon: ShoppingCart, kind: 'link', to: '/orders/new?fresh=1', roles: ['owner', 'office'] },
-  { key: 'dashboard', label: 'מרכז הבקרה', icon: LayoutDashboard, kind: 'link', to: '/dashboard', roles: ['owner', 'office', 'accountant'] },
+  { key: 'order', label: barLabel('/orders/new'), icon: ShoppingCart, kind: 'link', to: '/orders/new?fresh=1', roles: ['owner', 'office'] },
+  { key: 'dashboard', label: barLabel('/dashboard'), icon: LayoutDashboard, kind: 'link', to: '/dashboard', roles: ['owner', 'office', 'accountant'] },
+  // The one action with no route of its own: it opens the camera, so no catalogue entry names it.
   { key: 'capture', label: 'צילום מסמך', icon: Camera, kind: 'capture', roles: ['owner', 'office'] },
-  { key: 'receive', label: 'קבלת סחורה', icon: PackageCheck, kind: 'link', to: '/receiving', roles: ['owner', 'office'] },
+  { key: 'receive', label: barLabel('/receiving'), icon: PackageCheck, kind: 'link', to: '/receiving', roles: ['owner', 'office'] },
   // Keep five items for both procurement roles so capture stays in the exact middle. Document
   // operations is owner-only; office receives the permitted document gallery in the same slot.
-  { key: 'document-operations', label: 'בקרת מסמכים', icon: Activity, kind: 'link', to: '/documents/operations', roles: ['owner'] },
-  { key: 'documents', label: 'מסמכים', icon: FolderOpen, kind: 'link', to: '/documents', roles: ['office'] },
+  { key: 'document-operations', label: barLabel('/documents/operations'), icon: Activity, kind: 'link', to: '/documents/operations', roles: ['owner'] },
+  { key: 'documents', label: barLabel('/documents'), icon: FolderOpen, kind: 'link', to: '/documents', roles: ['office'] },
   // "חשבונית חדשה" was removed here (G1, 10.08.2026). This application RECEIVES supplier
   // invoices; it does not issue them to anyone. The action that replaces it already sits two rows
   // up: `capture` — photograph the invoice that arrived. `/invoices/new` still exists as a route,
   // reachable from a document that has been reviewed, which is the only way an invoice should
   // come into being.
-  { key: 'invoices', label: 'חשבוניות', icon: FileText, kind: 'link', to: '/invoices', roles: ['accountant'] },
-  { key: 'pay', label: 'תשלומים', icon: CreditCard, kind: 'link', to: '/pay', roles: ['accountant'] },
+  { key: 'invoices', label: barLabel('/invoices'), icon: FileText, kind: 'link', to: '/invoices', roles: ['accountant'] },
+  { key: 'pay', label: barLabel('/pay'), icon: CreditCard, kind: 'link', to: '/pay', roles: ['accountant'] },
 ];
 
 const FOCUS_PATHS = ['/orders/new', '/invoices/new', '/receiving/:orderId'] as const;

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { Plus, Minus, PackageCheck, Save, CheckCircle2, FileText, Camera, ChevronDown } from 'lucide-react';
+import { PackageCheck, Save, CheckCircle2, FileText, Camera, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { Breadcrumbs, useToast, StatusBadge, EmptyState, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonList, Note, ConfirmDialog } from '../components/ui';
+import { Breadcrumbs, Card, useToast, StatusBadge, EmptyState, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonList, Note, ConfirmDialog, Stepper, ICON } from '../components/ui';
 import { useAuth } from '../auth/AuthContext';
 import { DocumentList } from '../components/FileUpload';
 import { deliveryNoteLines, matchDeliveryLineProduct } from '../components/document-review/model';
@@ -375,7 +375,7 @@ export function ReceivingList() {
             </div>
             {attention.length
               ? attention.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} localDraft={isLocalDraft(order.id)} machineDraft={machineDrafts?.get(order.id) ?? null} onOpen={() => openOrder(order.id)} />)
-              : <div className="card card-pad text-sm text-ink-soft">אין קבלות שדורשות פעולה כרגע.</div>}
+              : <div className="card"><EmptyState title="אין קבלות שדורשות פעולה כרגע" subtitle="הזמנה שמגיע מועד האספקה שלה תופיע כאן." icon={<PackageCheck size={ICON.hero} />} /></div>}
           </section>
 
           {remaining.length > 0 && (
@@ -383,7 +383,7 @@ export function ReceivingList() {
               <details className="group sm:hidden">
                 <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-2 text-sm font-medium text-action hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
                   הצג הכל ({filtered.length})
-                  <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
+                  <ChevronDown size={ICON.sm} className="transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
                 </summary>
                 <div className="space-y-3 pt-2">
                   {remaining.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} localDraft={isLocalDraft(order.id)} machineDraft={machineDrafts?.get(order.id) ?? null} onOpen={() => openOrder(order.id)} />)}
@@ -904,15 +904,15 @@ export function ReceiveOrder() {
         data-testid="receiving-completion"
         data-sync-state={donePendingSync ? 'pending' : 'synced'}
       >
-        <CheckCircle2 size={48} className={donePendingSync ? 'text-await-fg mx-auto' : 'text-done-fg mx-auto'} />
-        <h1 className="text-xl font-semibold text-ink">{donePendingSync ? 'הקבלה שמורה במכשיר' : 'הקבלה נשמרה!'}</h1>
+        <CheckCircle2 size={ICON.hero} className={donePendingSync ? 'text-await-fg mx-auto' : 'text-done-fg mx-auto'} />
+        <h1 className="page-title">{donePendingSync ? 'הקבלה שמורה במכשיר' : 'הקבלה נשמרה!'}</h1>
         <p className="text-sm text-ink-muted">{donePendingSync
           ? 'השרת עדיין לא אישר את הקבלה. היא והתמונות שתצלם יישלחו לפי הסדר כשהחיבור יחזור.'
           : 'עכשיו אפשר לצלם את החשבונית או תעודת המשלוח ולצרף אותה לקבלה.'}</p>
         <OfflineQueueStatus />
-        <div className="card card-pad text-start">
+        <Card className="text-start">
           <DocumentList entityType="goods_receipt" entityId={doneReceiptId} capture />
-        </div>
+        </Card>
         <div className="flex flex-col sm:flex-row gap-2 justify-center">
           {/* Was "הזנת חשבונית להזמנה זו" → /invoices/new (G1, 10.08.2026). Nobody at a delivery
               types an invoice; the invoice is a piece of paper in their hand. The capture control
@@ -920,7 +920,7 @@ export function ReceiveOrder() {
               where it is read and approved. */}
           <button className="btn-primary" disabled={donePendingSync}
             onClick={() => navigate('/documents')}>
-            <FileText size={15} aria-hidden="true" /> לצילום החשבונית שהתקבלה
+            <FileText size={ICON.sm} aria-hidden="true" /> לצילום החשבונית שהתקבלה
           </button>
           <button className="btn-secondary" onClick={() => navigate('/receiving')}>חזרה לקבלת סחורה</button>
         </div>
@@ -954,7 +954,7 @@ export function ReceiveOrder() {
       <div>
         <RecordHeader
           breadcrumbs={<Breadcrumbs items={[{ label: 'קבלת סחורה', to: '/receiving' }, { label: `הזמנה #${order.number}` }]} />}
-          title={<span className="flex items-center gap-2"><PackageCheck size={22} /> קבלת סחורה</span>}
+          title={<span className="flex items-center gap-2"><PackageCheck size={ICON.xl} aria-hidden="true" /> קבלת סחורה</span>}
           status={<StatusBadge meta={PO_STATUS[order.status]} />}
           meta={<><span>{order.supplier.name}</span><span>הזמנה <span className="num">#{order.number}</span></span><span><span className="num">{progress.done}</span> מתוך <span className="num">{progress.total}</span> פריטים עודכנו</span></>} />
         {data?.draft && <div className="mt-1 text-xs text-await-fg">נטענה טיוטת קבלה שנשמרה קודם</div>}
@@ -1078,15 +1078,16 @@ export function ReceiveOrder() {
 
             <div className="flex items-center gap-2 mt-3">
               <span className="text-sm text-ink-soft w-16">התקבל:</span>
-              <button className="btn-secondary p-3!" onClick={() => setLine(item.id, { qty: Math.max(0, line.qty - 1) }, item)} aria-label={`הפחתת הכמות שהתקבלה עבור ${productLabel(item.product)}`}><Minus size={18} /></button>
-              <input type="number" min={0} step="any" inputMode="decimal"
-                ref={(element) => { qtyInputs.current[item.id] = element; }}
-                className="input w-24! num text-center text-lg! py-2.5! font-semibold"
-                aria-label={`כמות שהתקבלה עבור ${productLabel(item.product)}`}
-                value={line.qty} onChange={(e) => setLine(item.id, { qty: Math.max(0, Number(e.target.value) || 0) }, item)} />
-              <button className="btn-secondary p-3!" onClick={() => setLine(item.id, { qty: line.qty + 1 }, item)} aria-label={`הגדלת הכמות שהתקבלה עבור ${productLabel(item.product)}`}><Plus size={18} /></button>
+              {/* The field keeps its own size. This is the number the screen exists to capture,
+                  read at arm's length by someone holding a crate — a deliberate difference, not
+                  drift, so convergence does not get to delete it. */}
+              <Stepper value={line.qty} min={0} inputStep="any"
+                inputClassName="w-24! text-lg! py-2.5! font-semibold"
+                label={`כמות שהתקבלה עבור ${productLabel(item.product)}`}
+                inputRef={(element) => { qtyInputs.current[item.id] = element; }}
+                onChange={(next) => setLine(item.id, { qty: next }, item)} />
               {line.qty !== remaining && (
-                <button className="btn-ghost text-xs" aria-label={`סימון מלוא הכמות שנותרה עבור ${productLabel(item.product)}: ${formatQuantity(remaining, item.product.unit)}`} onClick={() => setLine(item.id, { qty: remaining }, item)}>מלא ({formatQuantity(remaining, item.product.unit)})</button>
+                <button type="button" className="btn-ghost btn-sm" aria-label={`סימון מלוא הכמות שנותרה עבור ${productLabel(item.product)}: ${formatQuantity(remaining, item.product.unit)}`} onClick={() => setLine(item.id, { qty: remaining }, item)}>מלא ({formatQuantity(remaining, item.product.unit)})</button>
               )}
             </div>
 
@@ -1128,13 +1129,13 @@ export function ReceiveOrder() {
             documents folder unattached, and it is the completion screen that ties it to THIS
             receipt. Saying only that keeps the sentence honest in both directions. */}
         <div className="hidden sm:flex items-center text-xs text-ink-muted me-auto ps-2">
-          <Camera size={14} className="me-1" /> אפשר לצלם עכשיו — הצילום נשמר בתיקיית המסמכים; צירופו לקבלה זו מיד לאחר סיומה
+          <Camera size={ICON.xs} className="me-1" aria-hidden="true" /> אפשר לצלם עכשיו — הצילום נשמר בתיקיית המסמכים; צירופו לקבלה זו מיד לאחר סיומה
         </div>
         <button className="btn-secondary flex-1 sm:flex-none" disabled={busy || !receiptKey} onClick={() => void save(false)}>
-          <Save size={15} /> שמירת ביניים
+          <Save size={ICON.sm} aria-hidden="true" /> שמירת ביניים
         </button>
-        <button className="btn-primary flex-1 sm:flex-none px-6!" disabled={busy || !receiptKey} onClick={() => void save(true)}>
-          <CheckCircle2 size={16} /> סיום קבלה ({progress.total} פריטים)
+        <button type="button" className="btn-primary flex-1 sm:flex-none" disabled={busy || !receiptKey} onClick={() => void save(true)}>
+          <CheckCircle2 size={ICON.sm} aria-hidden="true" /> סיום קבלה ({progress.total} פריטים)
         </button>
       </div>
 

@@ -121,6 +121,23 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
     expect(document.querySelector('nav[aria-label="ניווט ראשי"] details')).toBeNull();
   });
 
+  /**
+   * DESIGN.md:507 — "דיסקלוזר מעל פריט אחד הוא דלת עם מכסה". 'המנוי' held exactly one route
+   * (`/settings/subscription`) and still shipped as a button with a chevron and a panel, so the
+   * owner's subscription screen cost two clicks and a disclosure to reach. The rendered half of
+   * the rule: no `aria-expanded` trigger for a one-item group, and the destination is a link in
+   * the bar itself. `layout.spec.ts` asserts which groups those are.
+   */
+  it('קבוצה בת פריט אחד היא קישור בגלולה, לא כפתור עם מכסה', () => {
+    renderAt('/dashboard');
+    const bar = document.querySelector('nav[aria-label="ניווט ראשי"]')!;
+    expect(bar.querySelector('#top-nav-group-המנוי')).toBeNull();
+    expect([...bar.querySelectorAll('button[aria-expanded]')].map((b) => b.textContent?.trim()))
+      .toEqual(['ניהול', 'בקרה']);
+    const subscription = within(bar as HTMLElement).getByRole('link', { name: 'המנוי' });
+    expect(subscription).toHaveAttribute('href', '/settings/subscription');
+  });
+
   it('כותרת הדפדפן מפרידה מסך, דייר ומוצר', async () => {
     renderAt('/orders/abc');
     await waitFor(() => expect(document.title).toBe('פרטי הזמנה — ארגון בדיקה · InPlace'));
@@ -154,7 +171,10 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
     renderAt('/invoices/abc');
     const backLink = screen.getByRole('link', { name: 'חזרה לחשבוניות' });
     expect(backLink).toHaveAttribute('href', '/invoices');
-    expect(backLink).not.toHaveClass('mobile-shell-mark');
+    // `.mobile-shell-mark` was deleted with the bar's brand mark (26.08.2026, owner), so asserting
+    // its absence could only ever pass. What matters here is that the back control is a CONTROL:
+    // it is the one occupant of the identity cell that must not collapse when the title arrives.
+    expect(backLink).toHaveClass('btn-icon');
   });
 });
 

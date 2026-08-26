@@ -11,7 +11,7 @@ import { assistantAuthorizationFingerprint, useAssistantRunSession } from '../li
 import NotificationBell from './NotificationBell';
 import FeedbackButton from './FeedbackButton';
 import { PlanBadge } from './PlanBadge';
-import { ConfirmDialog, useDialogLayer, useToast } from './ui';
+import { ConfirmDialog, ICON, useDialogLayer, useToast } from './ui';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
 import { pendingOfflineWork } from '../lib/offlineQueue';
 import { isActiveRole, type ActiveRole } from '../lib/types';
@@ -82,6 +82,11 @@ const NAV_SHORT_LABELS: Partial<Record<string, string>> = {
   '/orders': 'הזמנות',
   '/receiving': 'קבלה',
   '/documents': 'מסמכים',
+  // 'המנוי' used to be the GROUP's name, printed on a disclosure trigger over a single route
+  // (DESIGN.md:507 forbids exactly that shape). The group is now a plain link on this surface, and
+  // this entry is what keeps the word on the bar identical to the one the owner approved — the
+  // drawer, the panel and the page title all still say 'המנוי שלי'.
+  '/settings/subscription': 'המנוי',
 };
 
 // Four work groups — מסמכים / רכש / כספים / בקרה — under two ungrouped links that need no
@@ -234,16 +239,11 @@ export function drawerSectionsForRole(role: ActiveRole | undefined): NavSection[
   ));
 }
 
-/**
- * Whether the sidebar's group headers earn their space — exported so the rule can be asserted
- * against `sectionsForRole` output rather than inferred from a mounted shell.
- *
- * Group headers only pay for themselves once there is more than one item to organise. The count is
- * over named sections only; `/dashboard` lives in the unnamed leading section.
- */
-export function showNavHeaders(sections: readonly NavSection[]): boolean {
-  return sections.filter((s) => s.section).reduce((n, s) => n + s.items.length, 0) > 1;
-}
+/* `showNavHeaders` lived here until 26.08.2026: an exported predicate about whether group headers
+   earn their space, asserted by a spec and consulted by no renderer at all. The rule it stood for
+   is not gone — it is enforced where it is visible instead: a NAMED group holding exactly one
+   destination renders as a plain link rather than a disclosure (DESIGN.md:507, "דיסקלוזר מעל פריט
+   אחד הוא דלת עם מכסה"), which `topNavGroup`'s caller below decides and the drawer inherits. */
 
 export function pageTitleFor(pathname: string): string {
   return routePresentationTitle(pathname) ?? APP_NAME;
@@ -279,13 +279,17 @@ export default function Layout() {
      Disclosure-nav pattern — aria-expanded button + a list of real links, no menu roles. */
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const topNavRef = useRef<HTMLElement>(null);
+  const phoneHeaderRef = useRef<HTMLElement>(null);
+  /* Is the page ALREADY saying which screen this is? See `useEffect` below. `false` is the safe
+     value in every direction — unknown, unobservable, no heading at all — because it means the bar
+     names the screen, and a bar that stays blank is the failure nobody sees. */
+  const [pageHeadingVisible, setPageHeadingVisible] = useState(false);
   const [pendingOffline, setPendingOffline] = useState<{ actions: number; uploads: number } | null>(null);
-  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const role = isActiveRole(profile?.role) ? profile.role : undefined;
   const canSearch = canGlobalSearch(role);
-  // Feedback is now a product surface for every active account, not a rollout flag that can make
-  // the user's screenshot option disappear between sessions.
-  const feedbackOn = !!profile;
+  // Feedback is a product surface for every active account, not a rollout flag that can make the
+  // user's screenshot option disappear between sessions. `FeedbackButton` renders nothing without a
+  // profile, so the shell no longer keeps a second always-true copy of that condition.
   // Unfiled-documents pill (0014): counted only for staff who can act on that queue. The
   // Only procurement staff can act on the gallery queue. A known count > 0 is required,
   // so null (loading) and 0 never fabricate an all-clear or workload.
@@ -296,6 +300,43 @@ export default function Layout() {
     : null;
   const currentTitle = pageTitleFor(location.pathname);
   const routeBack = routeBackPresentation(location.pathname);
+
+  /**
+   * The mark at the start of every shell surface — ONE writing of it, at three sizes.
+   *
+   * OUR mark is `/favicon.svg`: the bare symbol on a transparent ground (owner, 26.08.2026 —
+   * "הלוגו צריך להיות ללא הריבוע הכהה הוא צריך להיות כמו ה FAVICON"). Until now all three sites
+   * pointed at `/icons/icon-192.png`, which is the HOME-SCREEN icon: the same symbol pressed onto
+   * a dark rounded square. Dropped into the header it became a dark tile inside a white plate
+   * inside a pill — three nested shapes for one mark, and the darkest object on the phone bar.
+   *
+   * A TENANT logo keeps the plate, and that is not an inconsistency. A business uploads a PNG
+   * that may be transparent, may be light-on-dark, and is not ours to redraw; `bg-white` +
+   * `ring-line-soft` is the neutral card it needs to sit on any surface (DESIGN.md records that
+   * literal as deliberate for exactly this case). Our own symbol is a known shape in a known ink
+   * and needs no card — so it does not get one.
+   *
+   * `rounded-lg`, never a circle: `object-contain` inside `rounded-full` crops the ends off a wide
+   * wordmark, which is the shape most business logos have.
+   */
+  /* THE LADDER, in one place, after the owner shrank it and then removed a rung on 26.08.2026:
+       drawer  32px (`size-8`)  — was 40. A whole row to itself, above the product and tenant
+                                  names, so it stays the larger of the two.
+       bar     28px (`size-7`)  — was 32. The DESKTOP pill only: the owner crossed the mark off
+                                  the phone and tablet bar, so 'bar' now has exactly one caller.
+     The 40px drawer mark was sized when the mark was a dark tile that needed the area to read;
+     bare on paper at 32 it reads at a glance and stops dominating the two lines of text beside
+     it. The name 'bar' is kept rather than renamed to 'desktop' because the size is the pill's,
+     not the breakpoint's — if the mark ever returns to a phone surface it returns at 28. */
+  const brandMark = (size: 'bar' | 'drawer') => {
+    const px = size === 'drawer' ? 32 : 28;
+    const box = size === 'drawer' ? 'size-8' : 'size-7';
+    return orgLogoUrl
+      ? <img src={orgLogoUrl} alt="" width={px} height={px}
+        className={`${box} shrink-0 rounded-lg bg-white object-contain p-0.5 ring-1 ring-line-soft`} />
+      : <img src="/favicon.svg" alt="" width={px} height={px}
+        className={`${box} shrink-0 object-contain`} />;
+  };
 
   const sections = sectionsForRole(role);
   const drawerSections = drawerSectionsForRole(role);
@@ -374,6 +415,66 @@ export default function Layout() {
   }, [openGroup]);
   useEffect(() => { setOpenGroup(null); }, [location.pathname]);
 
+  /**
+   * The phone bar prints the screen name ONLY while the page is not already printing it.
+   *
+   * The owner asked for the title gone — it duplicates the page's own `<h1>` at the top of every
+   * screen, which is where he was looking. Measured before deleting it: of the owner's 27
+   * navigation destinations, **22 have no entry in the bottom action bar**, and the back arrow
+   * covers only 10 record-screen patterns, names the PARENT rather than the current screen, and
+   * carries that name in `aria-label` only — invisible to a sighted person. So on 22 screens
+   * "delete the title" means "nothing on the phone says where you are once the page scrolls".
+   * Both readings are right, and they are right about different moments: at the top the title is
+   * redundant, and once the heading leaves it is the only thing left. So it follows the heading.
+   *
+   * THE TARGET IS `#main h1.page-title`, which both `PageHeader` and `RecordHeader` render — not
+   * a new contract, the one that already exists. `rootMargin` is the bar's own measured height —
+   * read at runtime, deliberately not written down here, because it varies with the safe-area
+   * inset and measured 69px on the fixture I checked — so the name appears exactly as the heading
+   * slides under the bar rather than a bar-height later.
+   *
+   * REBOUND ON MUTATION, NOT JUST ON ROUTE. Screens return a skeleton first (`if (loading) return
+   * <SkeletonCards …>`), so on a fresh route the heading does not exist yet at effect time. A
+   * route-only binding would observe nothing, keep the fail-safe, and print the title forever on
+   * exactly the screens that load slowest. The `MutationObserver` rebinds when the real heading
+   * arrives, and re-checks identity so a re-render does not thrash the observer.
+   *
+   * NO OBSERVER, NO HEADING, NO ANSWER → SHOW. jsdom has no `IntersectionObserver` and five specs
+   * render this shell in it; a screen may legitimately have no `h1`. Both land on the same branch
+   * as "the heading is off screen", which is the only branch where being wrong is harmless.
+   */
+  useEffect(() => {
+    setPageHeadingVisible(false);
+    if (typeof IntersectionObserver === 'undefined') return;
+    const main = document.getElementById('main');
+    if (!main) return;
+    const barHeight = Math.round(phoneHeaderRef.current?.getBoundingClientRect().height ?? 0);
+    /* `undefined` = never bound, `null` = bound to "there is no heading". Starting at `null` made
+       the first `bind()` short-circuit on `null === null` and skip its own else branch, so the
+       "no heading → name the screen" assignment was dead code on the first pass and only ever ran
+       when a heading was REMOVED. Harmless by luck — the effect had just set the same value — and
+       invisible to a test, which is how it was found: inverting that branch left the suite green. */
+    let observed: Element | null | undefined;
+    const seen = new IntersectionObserver((entries) => {
+      for (const entry of entries) setPageHeadingVisible(entry.isIntersecting);
+    }, { rootMargin: `-${barHeight}px 0px 0px 0px`, threshold: 0 });
+    const bind = () => {
+      const heading = main.querySelector('h1.page-title');
+      if (heading === observed) return;
+      if (observed) seen.unobserve(observed);
+      observed = heading;
+      if (heading) seen.observe(heading);
+      else setPageHeadingVisible(false);
+    };
+    bind();
+    const grown = new MutationObserver(bind);
+    grown.observe(main, { childList: true, subtree: true });
+    return () => {
+      grown.disconnect();
+      seen.disconnect();
+    };
+  }, [location.pathname]);
+
   // Route changes announce themselves through the tab title and move keyboard focus past the
   // persistent navigation shell. Query-only filter changes keep focus where the user left it.
   // The focus move fires only on an actual pathname change: the title also re-renders when
@@ -421,30 +522,28 @@ export default function Layout() {
     if (result.pushWarning) toast(result.pushWarning, 'error');
   }
 
-  /* Three navigation surfaces, one vocabulary: the dark mobile drawer keeps the paper-pill
-     active state; the light floating pill and the LIGHT dropdown panels (T7.3h, owner: "להפוך
-     את הצבעים" — panels flipped from deep oceanic to paper) both mark the active item with the
-     small OCEANIC pill — the blue is the marker, the surface is bright. */
-  const linkCls = (isActive: boolean, surface: 'shell' | 'pill' | 'panel' = 'shell') => (surface === 'shell'
+  /* TWO navigation surfaces, one vocabulary — not three. A `'shell'` variant (dark Onyx rows,
+     `bg-shell-ink` active state) survived here until 26.08.2026 with no caller left: T7.3k turned
+     the phone drawer into paper (`bg-topbar`) and it renders `'panel'` like every dropdown, while
+     the desktop sidebar it was written for became the floating pill in T7.2. Its `.section-glyph`
+     accent on the active icon went with it — on the two remaining surfaces the accent equals the
+     active pill's own colour, which is why the panel branch already had the icon inherit.
+     What is left is what ships: the LIGHT dropdown/drawer row and the floating pill, both marking
+     the active item with the small OCEANIC pill — the blue is the marker, the surface is bright. */
+  const linkCls = (isActive: boolean, surface: 'pill' | 'panel' = 'panel') => (surface === 'panel'
     ? `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
-      isActive ? 'bg-shell-ink text-shell font-medium' : 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
+      isActive ? 'bg-action text-on-solid font-medium' : 'text-ink-body hover:bg-surface-hover hover:text-ink'
     }`
-    : surface === 'panel'
-      ? `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
-        isActive ? 'bg-action text-on-solid font-medium' : 'text-ink-body hover:bg-surface-hover hover:text-ink'
-      }`
-      : `relative flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
-        isActive ? 'bg-action text-on-solid font-medium' : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
-      }`);
+    : `relative flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
+      isActive ? 'bg-action text-on-solid font-medium' : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
+    }`);
 
-  /* Section identity in navigation (T7.2). The floating pill is TEXT-only (the reference's), so
-     the accent cannot ride an icon there; the active pill-item carries the SAME `.section-mark`
-     rule the page titles use — a 28×3px accent underline, sitting on the pill's paper surface
-     (the accents clear 5:1 on paper, and fail on Onyx, which is why the mark hangs BELOW the dark
-     active pill rather than inside it). On the dark surfaces (drawer/panels) the icon still takes
-     `.section-glyph` exactly as before. Both consumers are the two the CSS contract already pins. */
-  const navLinks = (items: readonly NavItem[], opts?: { surface?: 'shell' | 'pill' | 'panel' }) => items.map((item) => {
-    const surface = opts?.surface ?? 'shell';
+  /* Section identity in navigation (T7.2) is DATA here, not decoration: `data-section` rides every
+     nav link and `<main>`, and the one visible consumer is `.section-mark` under a page title. The
+     pill is TEXT-only, and on the light panel the icon inherits — a `.section-glyph` accent would
+     be the active oceanic pill's own colour. So no navigation surface paints the accent. */
+  const navLinks = (items: readonly NavItem[], opts?: { surface?: 'pill' | 'panel' }) => items.map((item) => {
+    const surface = opts?.surface ?? 'panel';
     const active = isRouteFamilyActive(location.pathname, item.to);
     const section = active ? sectionOf(item.to) : null;
     const pillLabel = NAV_SHORT_LABELS[item.to] ?? item.label;
@@ -452,9 +551,7 @@ export default function Layout() {
       <Link key={item.to} to={item.to} className={linkCls(active, surface)} aria-current={active ? 'page' : undefined}
         data-section={section ?? undefined} title={surface === 'pill' && pillLabel !== item.label ? item.label : undefined}
         onClick={() => setOpenGroup(null)}>
-        {/* Light panel (T7.3h): the icon inherits — a section-glyph accent would vanish on the
-            active item's oceanic pill (accent == pill color). */}
-        {surface !== 'pill' && <item.icon size={17} aria-hidden="true" className={surface === 'shell' && section ? 'section-glyph' : undefined} />}
+        {surface !== 'pill' && <item.icon size={ICON.md} aria-hidden="true" />}
         <span className="min-w-0 flex-1 truncate">{surface === 'pill' ? pillLabel : item.label}</span>
         {item.to === '/documents' && inboxCount != null && inboxCount > 0 && (
           <span className="badge num bg-action-soft text-action-on-soft ms-auto">{inboxCount}</span>
@@ -467,70 +564,114 @@ export default function Layout() {
   });
 
   /**
-   * `expandGroups` — the desktop sidebar shows every group open (owner decision 09.08.2026).
-   *
-   * Both navigation surfaces stay fully expanded by owner decision. The phone drawer scrolls as
-   * one direct list; no destination requires opening a disclosure first.
+   * ONE sign-out control, written once (26.08.2026). The drawer's copy was `text-xs` with a 13px
+   * glyph and no horizontal padding; the desktop account menu's was `text-sm`, a 14px glyph and
+   * `px-3`. Two treatments of the single most consequential control in the shell is one too many,
+   * and the drawer's had a second problem: at `px-1` the account block sat ~35px start-ward of
+   * every nav label above it (`px-3`), so the person's own name was the one row in the list that
+   * did not line up with the list.
    */
+  const signOutRow = (
+    <button type="button" onClick={() => void handleSignOut()}
+      className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-sm text-ink-soft transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset">
+      <LogOut size={ICON.md} aria-hidden="true" /> התנתקות
+    </button>
+  );
+
+  /* The phone's account block — the person, and nothing about the contract.
+     The tier mark passed through here for one round and the owner corrected the premise: a plan
+     is a property of the TENANT, not of the person signed in, and parking it beside a name and a
+     role said the opposite. It now rides the phone header's second line and, on desktop, the
+     column under the brand pill — both places where the ORGANISATION is what is being named. */
   const accountBlock = (
-    <div className="px-1 pt-3">
-      <div className="text-sm text-ink font-medium">{profile?.full_name}</div>
-      <div className="text-xs text-ink-muted mb-2">{role ? roleLabels[role] : ''}</div>
-      <button className="flex min-h-11 items-center gap-1.5 rounded-lg text-xs text-ink-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => void handleSignOut()}>
-        <LogOut size={13} /> התנתקות
-      </button>
+    <div className="pt-3">
+      <div className="px-3 text-sm font-medium text-ink">{profile?.full_name}</div>
+      <div className="mb-2 px-3 text-xs text-ink-muted">{role ? roleLabels[role] : ''}</div>
+      {signOutRow}
     </div>
   );
 
-  const sidebar = (displaySections: readonly NavSection[], navLabel: string, expandGroups = false, stickyFooter = true) => (
+  /**
+   * The phone drawer, and ONLY the phone drawer (26.08.2026).
+   *
+   * This helper carried two parameters describing a second caller that no longer exists: the fixed
+   * desktop sidebar became the floating top pill in T7.2, so `expandGroups` was always `true` (the
+   * `<details>` branch unreachable) and `stickyFooter` always `false` (the pinned bottom strip
+   * unreachable). What that strip DID carry is kept: DESIGN.md:509 wants the owner's settings area
+   * separated from the destinations, and the rule now rides the drawer's own footer section.
+   */
+  const sidebar = (displaySections: readonly NavSection[], navLabel: string) => (
     <div className="flex flex-col h-full">
       {/* The mark is a door. Every product trains people that the logo goes home, and here it went
           nowhere — a 40px target in the corner of every screen that silently did nothing. It is a
           Link rather than a decorated div so it lands in the tab order, announces itself and
           honours a middle click; the image stays alt="" because the accessible name belongs to the
           link, and repeating it would make a screen reader say the brand twice. */}
-      <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
-        className="flex items-center gap-3 border-b border-line-soft px-4 py-4 pe-12 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset lg:pe-4">
-        <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="40" height="40"
-          className="size-10 shrink-0 rounded-lg bg-white object-contain p-0.5 ring-1 ring-line-soft" />
-        <div className="min-w-0">
-          <div className="text-base font-semibold text-ink">{APP_NAME}</div>
-          <div className="truncate text-xs text-ink-muted" title={orgName || undefined}>{orgName || 'ניהול רכש ותשלומים'}</div>
-        </div>
-      </Link>
+      {/* THE TIER MARK LIVES HERE NOW (owner, 26.08.2026 — he X'd it off the phone bar and circled
+          this line). It is the third placement and the first one that agrees with his own stated
+          reason from the round before: a plan is a property of the TENANT, and this is the only
+          place in the phone shell where the tenant is actually named — under the brand mark, above
+          the org name, not beside the person.
+          THE ROW IS NO LONGER ONE LINK, and it cannot be: `PlanBadge` is a `<Link>` to
+          `/settings/subscription`, and an anchor inside an anchor is invalid HTML that browsers
+          resolve by closing the outer one early — the brand link would silently stop covering its
+          own text. So the header is a flex row, the home link wraps only the mark and the names,
+          and the chip is its sibling. `pe-12` still clears the absolutely-positioned close button,
+          which is why the chip lands inside that reserve rather than under the X. */}
+      <div className="flex items-center gap-3 border-b border-line-soft px-4 py-4 pe-12 lg:pe-4">
+        {/* The mark is a door. Every product trains people that the logo goes home, and here it went
+            nowhere — a 40px target in the corner of every screen that silently did nothing. It is a
+            Link rather than a decorated div so it lands in the tab order, announces itself and
+            honours a middle click; the image stays alt="" because the accessible name belongs to
+            the link, and repeating it would make a screen reader say the brand twice. */}
+        <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
+          className="-m-2 flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset">
+          {brandMark('drawer')}
+          <div className="min-w-0">
+            <div className="text-base font-semibold text-ink">{APP_NAME}</div>
+            <div className="truncate text-xs text-ink-muted" title={orgName || undefined}>{orgName || 'ניהול רכש ותשלומים'}</div>
+          </div>
+        </Link>
+        <PlanBadge compact />
+      </div>
       <nav aria-label={navLabel} className="scrollbar-hidden flex-1 overflow-y-auto px-3 py-3 space-y-3">
-        {[...displaySections, ...(stickyFooter || footerItems.length === 0 ? [] : [{ section: 'החשבון והמערכת', items: footerItems }])].map((s, i) => (
-          s.collapsible && !expandGroups ? (
-            <details key={`${s.section}-${location.pathname}`} className="group" open={s.items.some((item) => isRouteFamilyActive(location.pathname, item.to)) || undefined}>
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-3 text-xs font-semibold text-ink-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
-                {s.section}<ChevronDown size={15} aria-hidden="true" className="transition-transform group-open:rotate-180" />
-              </summary>
-              <div className="mt-0.5 space-y-0.5">{navLinks(s.items, { surface: 'panel' })}</div>
-            </details>
-          ) : (
-            <div key={s.section || i}>
-              {s.section && <div className="px-3 pb-1 text-xs font-semibold text-ink-muted">{s.section}</div>}
-              <div className="space-y-0.5">{navLinks(s.items, { surface: 'panel' })}</div>
-            </div>
-          )
+        {/* FLAT ON PURPOSE — and the product currently says so three different ways, which is the
+            finding, not the fix (26.08.2026).
+            · `DESIGN.md:483-484` describes staged disclosure here: 'ניהול' and 'בקרה' CLOSED on
+              arrival, the group holding the active screen opened automatically.
+            · `NavSection.collapsible` is set on exactly those two groups (Layout.tsx) and asserted
+              in `layout.spec.ts` — data with no renderer anywhere.
+            · `layoutActiveState.spec.tsx` asserts the opposite as a contract: `closest('details')`
+              must be null for the group headers AND for the active link.
+            A `<details open>` per collapsible group is one small block of markup and was written
+            and reverted here, because it fails that spec on the FIRST line — the assertion forbids
+            the element, not the closed state. Which of the three is the intended contract is an
+            owner question, and answering it silently in a shell refactor is exactly how a
+            navigation surface changes under people without a decision behind it. */}
+        {displaySections.map((s, i) => (
+          <div key={s.section || i}>
+            {s.section && <div className="px-3 pb-1 text-xs font-semibold text-ink-muted">{s.section}</div>}
+            <div className="space-y-0.5">{navLinks(s.items, { surface: 'panel' })}</div>
+          </div>
         ))}
         {/* On a phone the account block travels WITH the menu instead of pinning to the bottom.
             The drawer is 100dvh of overlay: a fixed strip there is a second bar competing with the
-            list scrolling behind it, and on a short viewport it ate the last destinations. On the
-            desktop sidebar the strip is right — that column is permanent, has room, and the strip
-            is the one place the signed-in identity lives. Same markup, different anchoring. */}
-        {/* The note trigger, in the drawer because the phone top bar gave its slot to the tier
-            mark (owner report 25.08.2026). It sits with the account rather than with the
-            destinations: it goes nowhere, it opens a dialog. */}
-        {!stickyFooter && feedbackOn && <FeedbackButton variant="menu" />}
-        {!stickyFooter && accountBlock}
-      </nav>
-      {stickyFooter && (
-        <div className="border-t border-line-soft px-3 py-3">
-          {footerItems.length > 0 && <div className="mb-2 space-y-0.5">{navLinks(footerItems, { surface: 'panel' })}</div>}
+            list scrolling behind it, and on a short viewport it ate the last destinations.
+            The rule above it is the separation DESIGN.md:509 asks for — the owner's settings area
+            is not one more work destination — and it is drawn here rather than by a pinned strip.
+            The note trigger sits with the account because the phone top bar gave its slot to the
+            tier mark (owner report 25.08.2026): it goes nowhere, it opens a dialog. */}
+        <div className="border-t border-line-soft pt-3">
+          {footerItems.length > 0 && (
+            <>
+              <div className="px-3 pb-1 text-xs font-semibold text-ink-muted">החשבון והמערכת</div>
+              <div className="space-y-0.5">{navLinks(footerItems, { surface: 'panel' })}</div>
+            </>
+          )}
+          <FeedbackButton variant="menu" />
           {accountBlock}
         </div>
-      )}
+      </nav>
     </div>
   );
 
@@ -550,20 +691,21 @@ export default function Layout() {
     `relative flex min-h-10 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
       active || open ? 'bg-action text-on-solid font-medium' : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
     }`;
+  /* `holdsInboxLink` stood here until 26.08.2026, mirroring the unfiled-documents count onto a
+     group trigger when the group contained `/documents`. No group ever can: `/documents` is daily
+     work and lives in the UNNAMED leading section for both roles that hold it, so the condition
+     was constant false. The count still renders where it is true — on the link itself, in the
+     drawer, and now on the phone action bar. */
   const topNavGroup = (s: NavSection) => {
     const open = openGroup === s.section;
     const active = groupContainsActive(s.items);
-    const holdsInboxLink = s.items.some((item) => item.to === '/documents');
     return (
       <div key={s.section} className="relative">
         <button type="button" id={`top-nav-group-${s.section}`} aria-expanded={open}
           className={groupTriggerCls(active, open)}
           onClick={() => setOpenGroup(open ? null : s.section)}>
           <span className="whitespace-nowrap">{s.section}</span>
-          {holdsInboxLink && inboxCount != null && inboxCount > 0 && (
-            <span className="badge num bg-action-soft text-action-on-soft">{inboxCount}</span>
-          )}
-          <ChevronDown size={14} aria-hidden="true" className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+          <ChevronDown size={ICON.xs} aria-hidden="true" className={`transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
         {/* Mounted always, hidden when closed: the active link keeps existing in the DOM (the
             accessibility contract in layoutActiveState.spec queries it), and reopening costs
@@ -590,15 +732,25 @@ export default function Layout() {
       </button>
       {/* Mounted always, hidden when closed — same reasoning as the nav groups: the settings
           link must exist for the active-state contract even while the menu is shut.
-          T7.3h: light paper panel, same as the nav dropdowns. */}
-      <div hidden={!accountOpen} className="absolute end-0 top-full z-50 mt-2 w-64 rounded-2xl bg-surface p-3 shadow-menu ring-1 ring-line-soft">
+          T7.3h: light paper panel, same as the nav dropdowns.
+
+          `data-no-capture` (26.08.2026) is load-bearing the moment the note trigger moves in here,
+          and it is NOT the same guard the drawer gets for free. The phone drawer is
+          `role="dialog"`, which `SKIP_SELECTOR` in `lib/screenshot.ts` already skips; this panel is
+          a plain div, so without this attribute a note sent from the account menu would arrive as
+          a photograph of the account menu — the exact failure the drawer placement was designed
+          around, in different clothing.
+          The panel does NOT need to close first, and must not: `Modal` portals to the document
+          root, so the dialog is not a descendant of this box, and `hidden` here can never hide it.
+          The phone's first attempt at this closed the drawer and unmounted the component
+          mid-click; nothing here unmounts, because `hidden` is not removal. */}
+      <div hidden={!accountOpen} data-no-capture className="absolute end-0 top-full z-50 mt-2 w-64 rounded-2xl bg-surface p-3 shadow-menu ring-1 ring-line-soft">
         <div className="text-sm font-medium text-ink">{profile?.full_name}</div>
         <div className="text-xs text-ink-muted">{role ? roleLabels[role] : ''}{orgName ? ` · ${orgName}` : ''}</div>
         {footerItems.length > 0 && <div className="mt-2 space-y-0.5">{navLinks(footerItems, { surface: 'panel' })}</div>}
-        <button className="mt-2 flex min-h-11 w-full items-center gap-1.5 rounded-lg px-3 text-sm text-ink-soft hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-          onClick={() => void handleSignOut()}>
-          <LogOut size={14} /> התנתקות
-        </button>
+        {/* The same row the drawer shows, in the surface that IS the drawer on this width. */}
+        <div className="mt-2"><FeedbackButton variant="menu" /></div>
+        <div className="mt-2">{signOutRow}</div>
       </div>
     </div>
   );
@@ -622,28 +774,92 @@ export default function Layout() {
           pill, bell, feedback and the avatar disc — sitting straight on the background. */}
       <header ref={topNavRef} className="hidden lg:block sticky top-0 z-40 bg-topbar/75 backdrop-blur-sm no-print">
         <div className="mx-auto flex min-h-[4.25rem] max-w-[1400px] items-center gap-3 px-4 py-2">
+          {/* THE TIER MARK IS NOT HERE, and it was, for one round (owner, 26.08.2026: first "מתחת
+              ללוגו של המותג", then — looking at it — the greeting line instead). Under the pill it
+              floated in dead space between the header and the page, belonging to neither. It now
+              rides the dashboard's title block (`Dashboard.tsx`), which is the same slot the phone
+              gives it: the line directly under the screen title. What survives from the first
+              ruling is the negative — it must NOT stand with the account controls, because there
+              it described the person instead of the tenant.
+              It also cost the navigation 19px of the row while it was here, which is 19px the
+              1100px band did not have. */}
           <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
-            className="flex shrink-0 items-center gap-2 rounded-full bg-surface/85 py-1 ps-1.5 pe-3 shadow-card ring-1 ring-line-soft transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus xl:pe-4">
-            <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="32" height="32"
-              className="size-8 shrink-0 rounded-full bg-white object-contain p-0.5" />
-            <span className="hidden text-sm font-semibold text-ink xl:block">{APP_NAME}</span>
+            /* HEIGHT PINNED TO THE SEARCH FIELD, not left to the padding (owner: "הבועה צריכה
+               להתאים בגודלה לאותו גודל של התיבת חיפוש"). `.input` is `min-h-11`; `h-11` here is
+               the same 44px from the same token, so the two ends of the row cannot drift apart
+               when the mark inside changes. `min-w-11` keeps it a circle below 2xl, where it
+               holds the mark alone; the end padding belongs to the WORD and only exists where
+               the word does. */
+            className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full bg-surface/85 px-1.5 shadow-card ring-1 ring-line-soft transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus 2xl:pe-4">
+            {/* 28px, down from 32 (owner: "תקטין את הגודל של הלוגו"). This pill is now the ONLY
+                bar carrying the mark — the owner crossed it off the phone and tablet header the
+                same day — and the drawer, which has a whole row to itself, runs it at 32. */}
+            {brandMark('bar')}
+            {/* The product word costs 62px, and between 1280 and 1535 that is the difference
+                between one navigation row and two (measured 26.08.2026, owner account). The MARK
+                is the home link at every width and `aria-label` still carries the name. */}
+            <span className="hidden text-sm font-semibold text-ink 2xl:block">{APP_NAME}</span>
           </Link>
+          {/* The row's three blocks are logo · navigation · utilities, and the outer two are
+              `shrink-0`. Until 26.08.2026 the middle one could not shrink either — a flex item's
+              default `min-width: auto` plus `whitespace-nowrap` children — so at 1024 the owner's
+              nav simply overflowed its container and pushed the logo clean off the start edge,
+              with the first destination clipped by the viewport. The figures this once carried,
+              "739px natural, 531px available", were a snapshot of that day's utilities cluster and
+              are no longer either quantity: the nav measures 723px natural today (nine items,
+              unchanged) and 1024 now has 635px available, because the note trigger and the tier
+              mark left the end cluster. Kept as history, not as constants.
+              `min-w-0` + `flex-wrap` is the fix: the pill takes a second line when the row cannot
+              hold it rather than evicting the brand. Nothing is hidden, nothing scrolls, and no
+              destination was removed to make it fit. Measured after: one row from 1280 up. */}
           <div className="flex min-w-0 flex-1 justify-center">
             <nav aria-label="ניווט ראשי"
-              className="flex items-center gap-0.5 rounded-full bg-surface/90 p-1.5 shadow-card ring-1 ring-line-soft backdrop-blur">
+              /* `rounded-[1.625rem]` IS `rounded-full` for the row this pill actually is, and it is
+                 not a compromise: 26px is exactly half the one-row height (p-1.5 = 12 + a 40px
+                 `min-h-10` item = 52), so at every width that fits on one line — 1152 and up,
+                 measured — this renders pixel-for-pixel as the capsule it has always been.
+                 What changes is the wrap. `rounded-full` on a 94px two-row box resolves to a 47px
+                 radius and the pill balloons into a lozenge with items floating inside the curve;
+                 that is what the owner saw and called "גולש". At 26px the same two rows read as a
+                 contained panel that meant to have two rows. */
+              className="flex min-w-0 flex-wrap items-center justify-center gap-0.5 rounded-[1.625rem] bg-surface/90 p-1.5 shadow-card ring-1 ring-line-soft backdrop-blur">
               {sections.map((s) => (
-                s.section
-                  ? topNavGroup(s)
-                  : <div key="primary" className="flex items-center gap-0.5">{navLinks(s.items, { surface: 'pill' })}</div>
+                // A NAMED group holding exactly one destination is not a disclosure — DESIGN.md:507,
+                // "דיסקלוזר מעל פריט אחד הוא דלת עם מכסה". That is 'המנוי' for an owner and 'ניהול'
+                // for an accountant: both were a button, a chevron and a panel over a single link.
+                // The group's name is kept as the link's short label (NAV_SHORT_LABELS) so the word
+                // on the bar does not change, only the number of clicks to reach the screen.
+                !s.section || s.items.length === 1
+                  ? <div key={s.section || 'primary'} className="flex flex-wrap items-center justify-center gap-0.5">{navLinks(s.items, { surface: 'pill' })}</div>
+                  : topNavGroup(s)
               ))}
             </nav>
           </div>
+          {/* ONE end-cluster, one order, both surfaces (owner, 26.08.2026: "צריך להיות מסודר
+              מחדש והסדר צריך להיות תואם למובייל"). From the logical start:
+              חיפוש · עוזר · פעמון · חשבון. The phone renders the first THREE of exactly that
+              sequence and stops — it has no account disc, because on a phone the account is the
+              drawer. Nothing is reordered between the two and nothing is grouped differently.
+              What left this cluster and why:
+              · שליחת הערה → the account menu, where it already lives on the phone (drawer). The
+                25.08.2026 ruling now holds on BOTH surfaces instead of only one.
+              · דרגת המנוי → under the brand pill. It described the tenant while standing next to
+                the person's avatar. */}
           <div className="flex shrink-0 items-center gap-1.5">
-            {canSearch && <div className="w-44 xl:w-64 [&_input]:rounded-full [&_input]:bg-surface/90"><GlobalSearch /></div>}
+            {/* The TRIGGER stays compact; the results panel no longer inherits its width (see
+                GlobalSearch — a row there carries icon + title + subtitle + badge + money). */}
+            {/* THREE widths, because the band that has to pay for the tier mark is a real band.
+                The utilities cluster and the logo are `shrink-0`, so every pixel this trigger takes
+                comes out of the navigation pill's line budget — and between 1024 and 1279 that
+                pill is already wrapping (the documented trade-off: it takes a second line rather
+                than evict the brand). Admitting the tier mark at `w-44` pushed 1024 from two lines
+                to THREE and the sticky header from 110px to 152px, measured. At `w-32` the trigger
+                still reads as a search field and the band is back to two. Nothing is lost with it:
+                the results panel stopped inheriting this width (see below), and ⌘K reaches it. */}
+            {canSearch && <div className="w-32 xl:w-44 2xl:w-64 [&_input]:rounded-full [&_input]:bg-surface/90"><GlobalSearch /></div>}
             {/* Self-gated on assistant.ui (fail-closed); renders nothing while the flag is off. */}
             <AssistantPanel session={assistantSession} />
             <NotificationBell />
-            {feedbackOn && <FeedbackButton />}
             {topAccountMenu}
           </div>
         </div>
@@ -652,47 +868,105 @@ export default function Layout() {
       {/* Mobile top bar */}
       {/* T7.3j: the phone shell joins the desktop language — cool-gray translucent bar, paper
           drawer with the oceanic active pill. */}
-      <header className="phone-safe-header lg:hidden sticky top-0 z-40 bg-topbar/75 backdrop-blur-sm text-ink border-b border-line-soft flex min-w-0 items-center no-print">
-        <button ref={menuButtonRef} type="button"
-          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+      <header ref={phoneHeaderRef} className="phone-safe-header lg:hidden sticky top-0 z-40 bg-topbar/75 backdrop-blur-sm text-ink border-b border-line-soft flex min-w-0 items-center no-print">
+        {/* `btn-ghost btn-icon` rather than a fourth hand-written spelling of 44px. The audit
+            counted `size-[44px]`, `min-h-11 min-w-11`, `min-h-[44px] min-w-[44px]` and `size-11`
+            in this one shell, all meaning the same thing. */}
+        <button type="button"
+          className="btn-ghost btn-icon rounded-full"
           onClick={openMobileMenu} aria-label="פתיחת תפריט" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
-          <Menu size={22} />
+          <Menu size={ICON.xl} aria-hidden="true" />
         </button>
-        <div className="mobile-shell-identity flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2">
-          {/* Only the mark is the link, not the whole block: the text beside it is the CURRENT
-              page's title, and wrapping that in a "go to dashboard" link would make the screen
-              name its own destination — the one place a logo home-link reliably confuses people. */}
-          {routeBack ? (
-            <Link to={routeBack.to} aria-label={routeBack.label} title={routeBack.label}
-              className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-              <ArrowRight size={21} aria-hidden="true" />
-            </Link>
-          ) : (
-            <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
-              className="mobile-shell-mark flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-              <img src={orgLogoUrl ?? '/icons/icon-192.png'} alt="" width="28" height="28"
-                className="size-7 rounded-md bg-white object-contain p-px ring-1 ring-shell-ink/15" />
-            </Link>
-          )}
-          <div className="min-w-0 leading-tight">
-            <div className="truncate text-sm font-semibold" title={currentTitle}>{currentTitle}</div>
-            <div className="mobile-shell-subtitle truncate text-xs text-shell-ink-dim" title={orgName || APP_NAME}>{APP_NAME}{orgName ? ` · ${orgName}` : ''}</div>
+        {/* `h-11`, not `min-h-11`: the row's contents CHANGE as the page scrolls, and a bar that
+            grows under a moving finger is worse than either state on its own. A fixed 44px is the
+            touch floor the hamburger and the action icons already impose, so pinning it costs
+            nothing and makes the height unable to move. Measured across the transition, not only
+            at its endpoints: 27 samples, one value. */}
+        <div className="mobile-shell-identity flex h-11 min-w-0 flex-1 items-center px-2">
+          {/* WHAT IS LEFT IN THIS ROW, AND WHY IT IS NEARLY EMPTY (owner, 26.08.2026, third
+              pass over this bar). He crossed out the tier chip and the brand mark on the phone and
+              tablet bar. Both had a reason to be here an hour ago and neither survives his mark:
+              the chip identifies the TENANT and now does that in the drawer header, where the
+              tenant is actually named; the mark is a home link that the drawer header and the
+              bottom action bar both already carry.
+              So AT REST this row holds nothing at all on a top-level screen — the page's own
+              <h1> is directly below it saying the same thing, which is the duplication he objected
+              to in the first place. It fills only once that heading scrolls under the bar, and
+              then with one thing: where you are.
+
+              THE BACK ARROW IS NOT A MARK AND DOES NOT LEAVE. It is the primary way out of a
+              record screen and it is a control, so it holds the lead cell at every scroll
+              position. It is the only occupant that survived this pass.
+
+              WHAT THE ROW STOPPED DOING. Until this ruling the name arrived by pushing a chip
+              toward the end of the row — one motion, one cause. With nothing left to push, that
+              choreography has no subject: the lead cell's collapsing `max-width`, the trailing
+              cell and its per-role branching are all deleted rather than left running on an empty
+              row. What remains is the reveal itself, two tracks wide, because the name still has
+              to arrive from somewhere and a title that simply blinks into a sticky bar mid-scroll
+              reads as a glitch. `0fr` -> `1fr` wipes it in from the leading edge, which under
+              `dir="rtl"` is out from behind the menu button.
+
+              LOGICAL AXIS, NOT `translate`. `translate-x` is physical: it does not mirror under
+              `dir="rtl"` and would send the name the wrong way. Grid tracks run along the inline
+              axis, so this needs no direction test and no second code path. */}
+          <div
+            className={`grid h-11 min-w-0 flex-1 items-center transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none ${
+              pageHeadingVisible ? 'grid-cols-[auto_0fr]' : 'grid-cols-[auto_1fr]'
+            }`}
+            data-shell-identity={pageHeadingVisible ? 'quiet' : 'screen'}>
+            {/* Empty on a top-level screen, which costs nothing: an `auto` track with no content
+                measures zero, so the name starts flush against the menu button. */}
+            <div data-shell-lead>
+              {routeBack && (
+                <Link to={routeBack.to} aria-label={routeBack.label} title={routeBack.label}
+                  className="btn-ghost btn-icon rounded-full">
+                  <ArrowRight size={ICON.xl} aria-hidden="true" />
+                </Link>
+              )}
+            </div>
+            {/* Always mounted — a track cannot animate from nothing — and taken out of the
+                accessibility tree while it has no width, because in that state the page's own
+                `<h1>` is the authoritative copy and exposing both is reading the screen name
+                twice. */}
+            <div className="min-w-0 overflow-hidden">
+              <span data-shell-title aria-hidden={pageHeadingVisible}
+                className="block truncate text-sm font-semibold" title={currentTitle}>{currentTitle}</span>
+            </div>
           </div>
         </div>
         {/* T7.3k (owner, images #33-34 "אתה רואה את ההבדלים בשפה?"): the desktop language —
             bare round icon targets in dark ink straight on the bar, no boxed cluster. */}
-        {/* Owner report 25.08.2026: the note trigger left this cluster and the tier mark took its
-            slot. The note is not gone — it is a row in the drawer, where the same click also has
-            room for a word. Four icon targets and a phone title do not fit on a 390px bar, and
-            the one of them a person uses least often is the one that moves. */}
-        <div className="mobile-shell-actions flex shrink-0 items-center gap-0.5">
+        {/* THREE marks beside the title, and the rule that decides which three (owner, 26.08.2026:
+            "זה צפוף מידי צריך לחשוב מה להוריד מה להשאיר במובייל"). The same test that moved the
+            note trigger out on 25.08.2026 — how often is it used, and does it exist anywhere else
+            — is what moves the TIER MARK out now, because on 25.08 it was applied to three
+            candidates and the fourth was the one being let in.
+            · חיפוש stays: on a phone this icon is the ONLY door to it. There is no ⌘K.
+            · פעמון stays: it is the only place the unread count is stated at all, and a count
+              you have to open a menu to see is a count nobody reads.
+            · העוזר stays: it opens a surface that exists nowhere else in the phone shell.
+            · דרגת המנוי goes: it is the one STATUS in a row of doors, the rarest thing a person
+              needs (you check which plan you are on monthly, not hourly), and the only one already
+              one tap away — the drawer's 'המנוי' group, and now the account block itself, where a
+              plan belongs beside the name and the role. It was also the loudest colour here.
+            Measured at 390px, owner account: four targets left the title 30px of a 76px word and
+            it rendered "מר…". */}
+        {/* `mobile-shell-actions` was a class name with no rule anywhere in the stylesheet, like
+            `mobile-shell-subtitle` on the line above. Its sibling `mobile-shell-identity` is real
+            and still carries a narrow-phone rule, which is what made the dead ones look
+            load-bearing.
+            `mobile-shell-mark` WAS the third real one and is now the fourth dead one: the owner
+            removed the mark from this bar on 26.08.2026, so nothing wears that class any more and
+            its `@media (max-width: 22.499rem) { display: none }` rule in `index.css` can never
+            match. The rule is the integrator's to delete — reported, not silently orphaned. */}
+        <div className="flex shrink-0 items-center gap-0.5">
+          {canSearch && (
+            <button type="button" className="btn-ghost btn-icon rounded-full" onClick={() => setSearchOpen(true)}
+              aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={ICON.xl} aria-hidden="true" /></button>
+          )}
           <AssistantPanel session={assistantSession} />
           <NotificationBell />
-          <PlanBadge />
-          {canSearch && (
-            <button className="grid size-[44px] shrink-0 place-items-center rounded-full text-ink-soft transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => setSearchOpen(true)}
-              aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={21} /></button>
-          )}
         </div>
       </header>
       {searchOpen && <GlobalSearch variant="mobile" onClose={() => setSearchOpen(false)} />}
@@ -710,8 +984,14 @@ export default function Layout() {
               The top bar can stay translucent because only the light canvas scrolls under it. */}
           <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label="תפריט ראשי"
             tabIndex={-1} className="phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-topbar border-e border-line-soft focus:outline-none" onClick={(e) => e.stopPropagation()}>
-            <button className="absolute top-2 end-2 flex items-center justify-center min-w-11 min-h-11 rounded-lg text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={20} /></button>
-            {sidebar(drawerSections, 'יעדים נוספים', true, false)}
+            {/* Positioned INSIDE the safe-area padding, not on top of it. `absolute top-2 end-2`
+                measured from the panel's border box, so on a notched device the drawer's
+                `padding-block-start: env(safe-area-inset-top)` slid the list down and left the
+                close button sitting under the notch. The phone header solves the same problem with
+                `max(0.75rem, env(safe-area-inset-top))`; this does it with the same expression. */}
+            <button type="button" className="btn-ghost btn-icon absolute end-2 rounded-full" style={{ insetBlockStart: 'max(0.5rem, env(safe-area-inset-top))' }}
+              onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={ICON.lg} aria-hidden="true" /></button>
+            {sidebar(drawerSections, 'יעדים נוספים')}
           </aside>
         </div>
       )}
@@ -744,9 +1024,10 @@ export default function Layout() {
         </div>
       </main>
 
-      {/* Role-aware quick actions — direct mobile bar and desktop speed dial. The component
-          self-gates by role and focused route; Layout never wraps public pages. */}
-      <Fab />
+      {/* Role-aware quick actions — the phone bar. The component self-gates by role and by write
+          access; Layout never wraps public pages. The unfiled-documents count is handed down
+          rather than queried a second time — this shell already holds the live value. */}
+      <Fab inboxCount={inboxCount} />
 
       {/* Unsynced receiving work + logout. The counts are named rather than summarised: "2 פעולות"
           and "1 העלאה" are different work, and a person deciding whether to sign out on a phone

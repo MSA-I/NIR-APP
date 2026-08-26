@@ -1,10 +1,10 @@
 import { Fragment, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { FileSpreadsheet, Printer, Send, CheckCircle2, LockKeyhole, Download } from 'lucide-react';
+import { FileSpreadsheet, Printer, Send, CheckCircle2, LockKeyhole, Download, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { StatusBadge, useToast, ConfirmDialog, ErrorNote, PageHeader, SkeletonCards, Note, Modal } from '../components/ui';
+import { StatusBadge, useToast, ConfirmDialog, ErrorNote, PageHeader, SkeletonCards, Note, Modal, Card, EmptyState, ICON } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
 import { addCalendarDays, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange, safeMonthISO } from '../lib/format';
@@ -317,7 +317,9 @@ export default function Reports() {
   }, new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]);
   // A disabled button looks clickable but does nothing; the title says why it is blocked.
   const exportBlockedReason = fetching ? 'הנתונים נטענים…' : error ? 'שגיאה בטעינת הנתונים' : null;
-  const metricLinkClass = 'card card-pad card-link-hover block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
+  // Card now renders whatever element it is told to (`as`), so the tiles stop composing the
+  // card class string by hand; what stays here is only what makes a LINK out of one.
+  const metricLinkClass = 'card-link-hover block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
   const selectedLegalEntity = lockedReports?.legalEntities.find(
     (unit) => unit.id === lockedReports.selectedUnitId,
   ) ?? null;
@@ -341,8 +343,8 @@ export default function Reports() {
           <label className="sr-only" htmlFor="monthly-report-month">חודש הדוח</label>
           {/* The native clear affordance emits '' — keep the previous month instead of a broken query. */}
           <input id="monthly-report-month" type="month" className="input w-auto!" value={month} onChange={(e) => { if (e.target.value) setMonth(e.target.value); }} />
-          <button className="btn-secondary" disabled={busy || fetching || !!error} title={exportBlockedReason ?? 'הורדת הדוח כקובץ Excel'} onClick={() => void exportExcel()}><FileSpreadsheet size={15} /> ייצוא Excel</button>
-          <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הדפסת הדוח או שמירה כ-PDF'} onClick={() => window.print()}><Printer size={15} /> הדפסה / PDF</button>
+          <button className="btn-secondary" disabled={busy || fetching || !!error} title={exportBlockedReason ?? 'הורדת הדוח כקובץ Excel'} onClick={() => void exportExcel()}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={ICON.sm} aria-hidden="true" />} ייצוא Excel</button>
+          <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הדפסת הדוח או שמירה כ-PDF'} onClick={() => window.print()}><Printer size={ICON.sm} aria-hidden="true" /> הדפסה / PDF</button>
         </div>} />
 
       {/* The product summary is a sibling report, reached from here rather than from the main
@@ -400,16 +402,16 @@ export default function Reports() {
             <div className="mt-4 flex flex-wrap justify-end gap-2">
               <button type="button" className="btn-secondary" disabled={busy} onClick={() => setSnapshotOpen(false)}>ביטול</button>
               <button type="button" className="btn-primary" disabled={busy || !selectedLegalEntity} onClick={() => { setSnapshotOpen(false); setSnapshotReauthOpen(true); }}>
-                <LockKeyhole size={15} /> {latestSnapshot ? 'יצירת גרסה חדשה' : 'יצירת דוח סופי נעול'}
+                <LockKeyhole size={ICON.sm} aria-hidden="true" /> {latestSnapshot ? 'יצירת גרסה חדשה' : 'יצירת דוח סופי נעול'}
               </button>
             </div>
           </Modal>
 
-          <section className="card card-pad no-print" aria-labelledby="locked-reports-title">
+          <Card as="section" className="no-print" aria-labelledby="locked-reports-title">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 id="locked-reports-title" className="section-title flex items-center gap-2"><LockKeyhole size={16} /> דוחות סופיים נעולים</h2>
+                  <h2 id="locked-reports-title" className="section-title flex items-center gap-2"><LockKeyhole size={ICON.sm} aria-hidden="true" /> דוחות סופיים נעולים</h2>
                   <span className="badge-done">דוח סופי נעול</span>
                 </div>
                 <p className="mt-1 text-xs text-ink-muted">כל גרסה שייכת לישות משפטית אחת, נשמרת במסד הנתונים ואינה משתנה יחד עם הדוח החי.</p>
@@ -433,7 +435,7 @@ export default function Reports() {
                   <button type="button" className="btn-primary self-end" disabled={busy || !!snapshotBlockedReason}
                     title={snapshotBlockedReason ?? 'יצירת גרסה סופית נעולה'}
                     onClick={() => { setSnapshotPreviewAt(new Date()); setSnapshotOpen(true); }}>
-                    <LockKeyhole size={15} /> יצירת דוח סופי לרו״ח
+                    <LockKeyhole size={ICON.sm} aria-hidden="true" /> יצירת דוח סופי לרו״ח
                   </button>
                 )}
               </div>
@@ -482,7 +484,7 @@ export default function Reports() {
                           const delivery = lockedReports.deliveries.find((item) => item.snapshot_id === snapshot.id);
                           return delivery ? (
                             <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-done-fg">
-                              <CheckCircle2 size={13} /> הועבר לרו״ח {fmtDateTime(delivery.sent_at)} · {delivery.sent_by_name} · {delivery.reason}
+                              <CheckCircle2 size={ICON.xs} aria-hidden="true" /> הועבר לרו״ח {fmtDateTime(delivery.sent_at)} · {delivery.sent_by_name} · {delivery.reason}
                             </div>
                           ) : null;
                         })()}
@@ -490,11 +492,11 @@ export default function Reports() {
                       <div className="flex flex-wrap gap-2 self-start sm:self-auto">
                         {canMutateExport && !lockedReports.deliveries.some((item) => item.snapshot_id === snapshot.id) && (
                           <button type="button" className="btn-primary" disabled={busy} onClick={() => setSendSnapshot(snapshot)}>
-                            <Send size={15} /> סימון כהועבר לרו״ח
+                            {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />} סימון כהועבר לרו״ח
                           </button>
                         )}
                         <button type="button" className="btn-secondary" onClick={() => downloadSnapshot(snapshot)}>
-                          <Download size={15} /> הורדת גרסה {snapshot.version}
+                          <Download size={ICON.sm} aria-hidden="true" /> הורדת גרסה {snapshot.version}
                         </button>
                       </div>
                     </li>
@@ -502,7 +504,7 @@ export default function Reports() {
                 </ul>
               ) : !lockedReportsFetching && <p className="mt-4 text-sm text-ink-muted">אין עדיין דוח סופי נעול לחודש ולישות המשפטית שנבחרו.</p>
             )}
-          </section>
+          </Card>
         </>
       )}
 
@@ -515,15 +517,15 @@ export default function Reports() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">חשבוניות</div><div className="kpi-value-compact num">{data.invoices.length}</div></Link>
-          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(totals.invoices)}</div></Link>
-          <Link className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(totals.vat)}</div></Link>
-          <Link className={metricLinkClass} to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className={`kpi-value-compact num text-start ${totals.paid ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(totals.paid)}</div></Link>
-          <Link className={metricLinkClass} to={`/invoices?month=${month}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`kpi-value-compact num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Link>
-          <Link className={metricLinkClass} to={`/bank?month=${month}&status=unmatched`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`kpi-value-compact num ${totals.unmatchedBank ? 'text-alert-fg' : ''}`}>{totals.unmatchedBank}</div></Link>
-          <Link className={metricLinkClass} to={`/bank?month=${month}&status=suggested`}><div className="text-xs text-ink-muted">התאמות שממתינות לאישור</div><div className={`kpi-value-compact num ${totals.suggestedBank ? 'text-await-fg' : ''}`}>{totals.suggestedBank}</div></Link>
-          <Link className={metricLinkClass} to={`/credits?month=${month}&status=all`}><div className="text-xs text-ink-muted">זיכויים בחודש</div><div className="kpi-value-compact num">{data.credits.length}</div></Link>
-          <Link className={metricLinkClass} to="/exceptions?status=open"><div className="text-xs text-ink-muted">חריגים פתוחים</div><div className={`kpi-value-compact num ${data.exceptions.length ? 'text-await-fg' : ''}`}>{data.exceptions.length}</div></Link>
+          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">חשבוניות</div><div className="kpi-value-compact num">{data.invoices.length}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(totals.invoices)}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(totals.vat)}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className={`kpi-value-compact num text-start ${totals.paid ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(totals.paid)}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`kpi-value-compact num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/bank?month=${month}&status=unmatched`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`kpi-value-compact num ${totals.unmatchedBank ? 'text-alert-fg' : ''}`}>{totals.unmatchedBank}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/bank?month=${month}&status=suggested`}><div className="text-xs text-ink-muted">התאמות שממתינות לאישור</div><div className={`kpi-value-compact num ${totals.suggestedBank ? 'text-await-fg' : ''}`}>{totals.suggestedBank}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/credits?month=${month}&status=all`}><div className="text-xs text-ink-muted">זיכויים בחודש</div><div className="kpi-value-compact num">{data.credits.length}</div></Card>
+          <Card as={Link} className={metricLinkClass} to="/exceptions?status=open"><div className="text-xs text-ink-muted">חריגים פתוחים</div><div className={`kpi-value-compact num ${data.exceptions.length ? 'text-await-fg' : ''}`}>{data.exceptions.length}</div></Card>
         </div>
 
         {data.exceptions.length > 0 && (
@@ -537,7 +539,7 @@ export default function Reports() {
           </Note>
         )}
 
-        <div className="card overflow-hidden">
+        <Card pad={false} clip>
           <div className="px-4 py-3 border-b border-line-soft section-title">חשבוניות {fmtMonth(`${month}-01`)}</div>
           <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="חשבוניות בדוח">
             {data.invoices.map((i) => (
@@ -564,7 +566,7 @@ export default function Reports() {
                 {i.notes && <p className="mt-3 break-words text-xs text-ink-muted">{i.notes}</p>}
               </li>
             ))}
-            {!data.invoices.length && <li className="p-4 text-center text-sm text-ink-muted">אין חשבוניות בחודש זה</li>}
+            {!data.invoices.length && <li><EmptyState title="אין חשבוניות בחודש זה" /></li>}
             {/* A total row standing over no rows is not information — the empty sentence above
                 already said everything there is to say about this month. */}
             {totals.hasInvoices && (
@@ -573,7 +575,7 @@ export default function Reports() {
               </li>
             )}
           </ul>
-          <div className="report-table-wrap hidden overflow-x-auto xl:block print:block">
+          <div className="report-table-wrap table-scroll hidden overflow-x-auto xl:block print:block" tabIndex={0} role="region" aria-label="חשבוניות בדוח — טבלה נגללת">
             <table className="report-invoices w-full">
               {/* Widths apply in PRINT only, where the table is `table-layout: fixed`: A4 landscape
                   at 9mm margins leaves 279mm, and left to itself the browser hands ספק half of it
@@ -637,7 +639,7 @@ export default function Reports() {
                 {/* This table is also the printed sheet the accountant receives. Without this row
                     a first month printed a header, an empty body and a ₪0.00 total line. */}
                 {!data.invoices.length && (
-                  <tr><td className="td py-6 text-center text-ink-muted" colSpan={11}>אין חשבוניות בחודש זה</td></tr>
+                  <tr><td className="td" colSpan={11}><EmptyState className="print:hidden" title="אין חשבוניות בחודש זה" /><span className="hidden text-ink-muted print:inline">אין חשבוניות בחודש זה</span></td></tr>
                 )}
               </tbody>
               {totals.hasInvoices && (
@@ -653,10 +655,10 @@ export default function Reports() {
               )}
             </table>
           </div>
-        </div>
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="card overflow-hidden">
+          <Card pad={false} clip>
             <div className="px-4 py-3 border-b border-line-soft section-title">תשלומים לפי ספק</div>
             <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="תשלומים לפי ספק">
               {paymentsBySupplier.map(([name, sum]) => (
@@ -665,22 +667,22 @@ export default function Reports() {
                   <span className="num shrink-0 font-medium">{fmtMoneyExact(sum)}</span>
                 </li>
               ))}
-              {!paymentsBySupplier.length && <li className="p-4 text-center text-sm text-ink-muted">אין תשלומים בחודש זה</li>}
+              {!paymentsBySupplier.length && <li><EmptyState title="אין תשלומים בחודש זה" /></li>}
             </ul>
-            <div className="report-table-wrap hidden overflow-x-auto xl:block print:block">
+            <div className="report-table-wrap table-scroll hidden overflow-x-auto xl:block print:block" tabIndex={0} role="region" aria-label="תשלומים לפי ספק — טבלה נגללת">
             <table className="w-full">
               <thead className="table-head"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סכום ששולם</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {paymentsBySupplier.map(([name, sum]) => (
                   <tr key={name}><td className="td">{name}</td><td className="td num font-medium">{fmtMoneyExact(sum)}</td></tr>
                 ))}
-                {!paymentsBySupplier.length && <tr><td colSpan={2} className="td text-ink-muted text-center py-6">אין תשלומים בחודש זה</td></tr>}
+                {!paymentsBySupplier.length && <tr><td className="td" colSpan={2}><EmptyState className="print:hidden" title="אין תשלומים בחודש זה" /><span className="hidden text-ink-muted print:inline">אין תשלומים בחודש זה</span></td></tr>}
               </tbody>
             </table>
             </div>
-          </div>
+          </Card>
 
-          <div className="card overflow-hidden">
+          <Card pad={false} clip>
             <div className="px-4 py-3 border-b border-line-soft section-title">זיכויים</div>
             <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="זיכויים בדוח">
               {data.credits.map((c) => (
@@ -695,9 +697,9 @@ export default function Reports() {
                   <div className="mt-3"><StatusBadge meta={CREDIT_STATUS[c.status]} /></div>
                 </li>
               ))}
-              {!data.credits.length && <li className="p-4 text-center text-sm text-ink-muted">אין זיכויים בחודש זה</li>}
+              {!data.credits.length && <li><EmptyState title="אין זיכויים בחודש זה" /></li>}
             </ul>
-            <div className="report-table-wrap hidden overflow-x-auto xl:block print:block">
+            <div className="report-table-wrap table-scroll hidden overflow-x-auto xl:block print:block" tabIndex={0} role="region" aria-label="זיכויים בדוח — טבלה נגללת">
             <table className="w-full">
               <thead className="table-head"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סיבה</th><th scope="col" className="th">סכום</th><th scope="col" className="th">סטטוס</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
@@ -709,11 +711,11 @@ export default function Reports() {
                     <td className="td"><StatusBadge meta={CREDIT_STATUS[c.status]} /></td>
                   </tr>
                 ))}
-                {!data.credits.length && <tr><td colSpan={4} className="td text-ink-muted text-center py-6">אין זיכויים בחודש זה</td></tr>}
+                {!data.credits.length && <tr><td className="td" colSpan={4}><EmptyState className="print:hidden" title="אין זיכויים בחודש זה" /><span className="hidden text-ink-muted print:inline">אין זיכויים בחודש זה</span></td></tr>}
               </tbody>
             </table>
             </div>
-          </div>
+          </Card>
         </div>
       </div>
     </div>

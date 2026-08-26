@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { APP_NAME } from '../lib/branding';
+import { Card } from '../components/ui';
 
 /**
  * Terms of service + privacy policy (package 7, owner decision 09.08.2026: the agent drafts).
@@ -42,16 +43,18 @@ export const TERMS_VERSION = '2026-08-24';
 
 function LegalShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh bg-action py-8 px-4">
+    <div className="min-h-dvh bg-action px-4 py-6 sm:py-10">
       <div className="max-w-2xl mx-auto space-y-4">
+        {/* The lockup is the product's mark, not this document's title. It used to be the page's
+            only <h1>, which left the actual subject — „תנאי שימוש" — as an <h2> with no h1 above
+            it. The mark keeps its alt text and stops being a heading; the title becomes the h1.
+            Same treatment on all four standalone auth screens. */}
         <div className="text-center">
-          <h1>
-            <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="166" height="36"
-              className="mx-auto h-auto w-40" />
-          </h1>
+          <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="166" height="36"
+            className="mx-auto h-auto w-40" />
         </div>
-        <div className="card card-pad space-y-4">
-          <h2 className="page-title">{title}</h2>
+        <Card className="space-y-4">
+          <h1 className="page-title">{title}</h1>
           <p className="text-xs text-ink-muted">גרסה: {TERMS_VERSION}</p>
           <div className="space-y-4 text-sm leading-relaxed text-ink-mid [&_h3]:font-semibold [&_h3]:text-ink [&_h3]:mt-2">
             {children}
@@ -61,7 +64,7 @@ function LegalShell({ title, children }: { title: string; children: React.ReactN
             <Link className="link" to="/privacy">מדיניות פרטיות</Link>
             <Link className="link" to="/login">מסך הכניסה</Link>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

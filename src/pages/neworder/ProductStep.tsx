@@ -1,4 +1,5 @@
-import { Check, Minus, Plus, Search, ShoppingCart, X } from 'lucide-react';
+import { Check, Plus, Search, ShoppingCart, X } from 'lucide-react';
+import { ICON, Stepper, ToggleGroup } from '../../components/ui';
 import type { NextOrderItem } from '../../lib/nextOrderItems';
 import type { Category, Product, SupplierProduct } from '../../lib/types';
 import { fmtMoneyExact, formatQuantity, formatUnit, productLabel } from '../../lib/format';
@@ -53,13 +54,13 @@ export default function ProductStep({ products, categories, offersByProduct, car
     <div className="space-y-4">
       {nextOrderItems.length > 0 && (
         <section className="note-info block" aria-labelledby="next-order-title">
-          <div className="flex items-start gap-2"><ShoppingCart size={17} className="mt-0.5 shrink-0" aria-hidden="true" /><div><h2 id="next-order-title" className="font-semibold">נשמרו להזמנה הבאה</h2><p className="mt-0.5 text-xs">אפשר להחזיר את הפריטים לסל בכמות שנשמרה או להתעלם מהם.</p></div></div>
+          <div className="flex items-start gap-2"><ShoppingCart size={ICON.md} className="mt-0.5 shrink-0" aria-hidden="true" /><div><h2 id="next-order-title" className="font-semibold">נשמרו להזמנה הבאה</h2><p className="mt-0.5 text-xs">אפשר להחזיר את הפריטים לסל בכמות שנשמרה או להתעלם מהם.</p></div></div>
           <div className="mt-3 divide-y divide-info-line border-y border-info-line">
             {nextOrderItems.map((item) => (
               <div key={item.id} className="flex flex-wrap items-center gap-2 py-2">
                 <div className="min-w-0 flex-1"><div className="font-medium text-ink-body"><bdi>{productLabel(item.product)}</bdi></div><div className="text-xs">כמות <span className="num font-semibold">{formatQuantity(item.qty, item.product.unit)}</span></div></div>
-                <button type="button" className="btn-secondary" disabled={nextOrderBusyId !== null} onClick={() => onAddNextOrderItem(item)}><Plus size={15} aria-hidden="true" /> הוסף להזמנה</button>
-                <button type="button" className="btn-ghost" disabled={nextOrderBusyId !== null} onClick={() => onDismissNextOrderItem(item)}><X size={15} aria-hidden="true" /> התעלם</button>
+                <button type="button" className="btn-secondary" disabled={nextOrderBusyId !== null} onClick={() => onAddNextOrderItem(item)}><Plus size={ICON.sm} aria-hidden="true" /> הוסף להזמנה</button>
+                <button type="button" className="btn-ghost" disabled={nextOrderBusyId !== null} onClick={() => onDismissNextOrderItem(item)}><X size={ICON.sm} aria-hidden="true" /> התעלם</button>
               </div>
             ))}
           </div>
@@ -74,21 +75,17 @@ export default function ProductStep({ products, categories, offersByProduct, car
             <span className="text-sm text-ink-muted"><span className="num font-semibold text-ink">{cart.length}</span> מוצרים נבחרו</span>
             {onCreateProduct && (
               <button type="button" className="btn-secondary" onClick={onCreateProduct}>
-                <Plus size={15} aria-hidden="true" /> מוצר חדש
+                <Plus size={ICON.sm} aria-hidden="true" /> מוצר חדש
               </button>
             )}
           </div>
         </div>
         <div className="relative">
-          <Search size={15} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint" aria-hidden="true" />
+          <Search size={ICON.sm} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint" aria-hidden="true" />
           <input className="input ps-9!" aria-label="חיפוש מוצר" placeholder="חיפוש מוצר..." value={q} onChange={(event) => setQ(event.target.value)} />
         </div>
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="סינון לפי קטגוריה">
-          <button type="button" aria-pressed={!cat} className={`chip-filter ${!cat ? 'chip-filter-active' : ''}`} onClick={() => setCat('')}>הכול</button>
-          {categories.map((category) => (
-            <button type="button" key={category.id} aria-pressed={cat === category.id} className={`chip-filter ${cat === category.id ? 'chip-filter-active' : ''}`} onClick={() => setCat(category.id)}>{category.name}</button>
-          ))}
-        </div>
+        <ToggleGroup label="סינון לפי קטגוריה" value={cat} onChange={setCat}
+          items={[{ key: '', label: 'הכול' }, ...categories.map((category) => ({ key: category.id, label: category.name }))]} />
       </div>
 
       <div className="max-h-[32rem] divide-y divide-line-soft overflow-y-auto">
@@ -103,23 +100,28 @@ export default function ProductStep({ products, categories, offersByProduct, car
                 onClick={() => { if (carted) onRemove(product.id); else onAdd(product); }}>
                 {/* Choosing is not completing. This box wore the done family, which claims a step
                     finished; a picker has nothing finished on it. The action family is what the
-                    house already uses for a chosen option — `.chip-filter-active` above is the
-                    same bg-action/text-on-solid pair, and the row's own bg-surface-selected is
-                    documented as "chosen option". Meaning does not rest on the hue either way:
+                    house already uses for a chosen option — the category ToggleGroup above paints
+                    its selected chip `.chip-filter-active`, the same bg-action/text-on-solid pair
+                    (the class moved into the primitive; it is no longer spelled out in this file),
+                    and the row's own bg-surface-selected is documented as "chosen option".
+                    Meaning does not rest on the hue either way:
                     the glyph appears only when carted, aria-pressed sits on the parent, the label
                     names the action, and the quantity stepper exists only for a chosen product. */}
-                <span className={`grid size-6 shrink-0 place-items-center rounded-lg border ${carted ? 'border-action bg-action text-on-solid' : 'border-line text-transparent'}`} aria-hidden="true"><Check size={14} /></span>
+                <span className={`grid size-6 shrink-0 place-items-center rounded-lg border ${carted ? 'border-action bg-action text-on-solid' : 'border-line text-transparent'}`} aria-hidden="true"><Check size={ICON.xs} /></span>
                 <span className="min-w-0 flex-1"><bdi className="block break-words text-sm font-medium text-ink-body sm:truncate">{productLabel(product)}</bdi><span className="text-xs text-ink-muted">{formatUnit(product.unit)}</span></span>
                 <span className={`shrink-0 text-xs text-ink-muted ${offers.length ? 'num' : ''}`}>{offers.length ? fmtMoneyExact(offers[0].current_price) : 'אין ספק'}</span>
               </button>
-              {/* overflow-hidden is load-bearing: the group carries the radius and clips its two
-                  square size-11 children, which would otherwise poke out of the rounded box. */}
+              {/* The shared Stepper (components/ui). `min={1}` is the one deliberate behaviour
+                  change in this convergence: the old raw control had no floor, so decrementing
+                  from 1 reached 0 and NewOrder mapped qty 0 to REMOVE_PRODUCT. That was the
+                  legacy way out of the cart, and the spec beside this file records it as the
+                  problem the row-as-toggle fixed (owner report, 19.08.2026) — the row is the
+                  documented remove affordance now. A floor of 1 also keeps the newly editable
+                  input safe: clearing it clamps to 1 instead of deleting the line mid-keystroke. */}
               {carted && (
-                <div className="me-3 flex shrink-0 items-center overflow-hidden rounded-lg border border-line-strong bg-surface sm:me-4" role="group" aria-label={`כמות ${productLabel(product)}`}>
-                  <button type="button" className="grid size-11 place-items-center hover:bg-surface-hover" aria-label={`הפחתת כמות ${productLabel(product)}`} onClick={() => onQty(product.id, carted.qty - 1)}><Minus size={14} /></button>
-                  <span className="min-w-10 border-x border-line py-2 text-center text-sm font-semibold num">{carted.qty}</span>
-                  <button type="button" className="grid size-11 place-items-center hover:bg-surface-hover" aria-label={`הוספת כמות ${productLabel(product)}`} onClick={() => onQty(product.id, carted.qty + 1)}><Plus size={14} /></button>
-                </div>
+                <Stepper className="me-3 shrink-0 sm:me-4" value={carted.qty} min={1}
+                  label={`כמות ${productLabel(product)}`}
+                  onChange={(next) => onQty(product.id, next)} />
               )}
             </div>
           );
@@ -133,7 +135,7 @@ export default function ProductStep({ products, categories, offersByProduct, car
               <>
                 <p className="mt-1">אפשר להוסיף את המוצר עכשיו, לבחור לו ספק ומחיר, ולהמשיך בהזמנה.</p>
                 <button type="button" className="btn-primary mt-3" onClick={onCreateProduct}>
-                  <Plus size={15} aria-hidden="true" /> מוצר חדש{q.trim() ? ` — ${q.trim()}` : ''}
+                  <Plus size={ICON.sm} aria-hidden="true" /> מוצר חדש{q.trim() ? ` — ${q.trim()}` : ''}
                 </button>
               </>
             )}

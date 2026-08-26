@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { ExternalLink, FileText, Loader2 } from 'lucide-react';
-import { Note } from '../ui';
+import { ICON, Note } from '../ui';
 
 // Lazy on purpose: pdf.js is ~1MB of rendering engine that image documents never need. The
 // import happens only when a PDF actually reaches the viewer, and lands in its own chunk.
@@ -80,8 +80,8 @@ export function DocumentSourceViewer({
           )}
           <button type="button" className="btn-secondary" disabled={openingSource} onClick={onOpenSource}>
             {openingSource
-              ? <Loader2 className="animate-spin" size={17} aria-hidden="true" />
-              : <ExternalLink size={17} aria-hidden="true" />}
+            ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />
+              : <ExternalLink size={ICON.md} aria-hidden="true" />}
             {openingSource ? 'פותח…' : 'פתיחת המקור'}
           </button>
         </div>
@@ -106,7 +106,7 @@ export function DocumentSourceViewer({
           </Suspense>
         ) : (
           <div className="flex min-h-64 flex-col items-center justify-center gap-3 p-6 text-center text-ink-muted">
-            <FileText size={36} aria-hidden="true" />
+            <FileText size={ICON.hero} aria-hidden="true" />
             <p>{sourceUrl ? 'לקובץ זה אין תצוגה מקדימה בדפדפן. אפשר לפתוח את המקור בקישור שמעל.' : 'טוען קישור מאובטח למקור…'}</p>
           </div>
         )}

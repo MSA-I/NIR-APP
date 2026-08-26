@@ -15,6 +15,7 @@ import {
   type AssistantRunSession,
 } from '../lib/assistant/runSession';
 import AssistantDialog from './assistant/AssistantDialog';
+import { ICON } from './ui';
 
 /**
  * העוזר של InPlace — the trigger and its dialog.
@@ -125,7 +126,23 @@ export default function AssistantPanel({ session: sharedSession }: {
       <button
         ref={triggerRef}
         type="button"
-        className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full bg-action px-0 text-on-solid transition-colors hover:bg-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        /* BARE, not a filled oceanic disc (owner report 26.08.2026, ruled the same day).
+           DESIGN.md:466 and :531 genuinely contradicted each other here — one says the shell
+           cluster is bare dark-ink marks with no box, the other says oceanic marks the command
+           that opens a check — and neither was safe to pick on styling grounds, which is why this
+           line sat as `btn-primary` with the contradiction written above it instead of a decision.
+           What settled it was not the document: the owner looked at the phone header and said
+           "יש מספר צבעים צריך לסדר גם את זה". This trigger was one of FIVE treatments in that one
+           row, and on desktop it and the account avatar were two identical filled oceanic discs
+           with bare ink icons between them. The cluster wins; oceanic still marks the check
+           command, inside the panel — the send button, the question bubble, the active source link
+           — which honours both lines instead of deleting one.
+           THE COUNTER-ARGUMENT IS ON RECORD, in DESIGN.md beside the assistant section: this is the
+           only control in that cluster that STARTS something rather than opening a place. If a fill
+           ever returns, that is the reason, and it returns as a named exception — not quietly.
+           `btn-ghost btn-icon` keeps the 44px target exactly as it was (`btn` → min-h-11,
+           `btn-icon` → min-w-11 shrink-0); only the fill changes. */
+        className="btn-ghost btn-icon rounded-full"
         aria-label={label}
         title={label}
         aria-controls="inplace-assistant-panel"
@@ -140,7 +157,7 @@ export default function AssistantPanel({ session: sharedSession }: {
             The sparkle alone is the trigger, on every width — so `gap-2` and the `lg:px-3` that
             only existed to seat the text go with it. `aria-label`/`title` still carry the full
             name, so nothing is lost to a screen reader or to a hover. */}
-        <Sparkles size={19} aria-hidden="true" data-assistant-trigger-icon="sparkles" />
+        <Sparkles size={ICON.xl} aria-hidden="true" data-assistant-trigger-icon="sparkles" />
       </button>
       {open && (
         <AssistantDialog

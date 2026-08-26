@@ -13,6 +13,7 @@ import {
   Skeleton,
   SkeletonTable,
   useToast,
+  ICON,
   type Column,
 } from '../components/ui';
 import { ok, toHebrewError } from '../lib/errors';
@@ -305,7 +306,7 @@ export default function Inventory() {
         actions={
           <button type="button" className="btn-secondary" disabled={balances.fetching || movements.fetching}
             onClick={() => { void balances.refetch(); void movements.refetch(); }} aria-label="רענון נתוני מלאי ותנועות">
-            <RefreshCw size={16} className={balances.fetching || movements.fetching ? 'animate-spin' : ''} aria-hidden="true" /> רענון
+              <RefreshCw size={ICON.sm} className={balances.fetching || movements.fetching ? 'animate-spin ' : ''} aria-hidden="true" /> רענון
           </button>
         } />
 
@@ -358,7 +359,7 @@ export default function Inventory() {
              would be a false statement about a count that was never possible. */
           <DataTable rows={rows} columns={balanceColumns} searchable pageSize={20}
             searchLabel="חיפוש מוצר במלאי"
-            emptyIcon={<Package size={36} />}
+            emptyIcon={<Package size={ICON.hero} />}
             emptyTitle="עדיין אין מוצרים פעילים"
             emptySubtitle="יתרת מלאי נמדדת לכל מוצר פעיל. אחרי הוספת מוצרים, ספירה פיזית ראשונה היא זו שנותנת להם יתרה."
             emptyAction={<Link className="btn-secondary" to="/products">מעבר למוצרים</Link>}
@@ -368,7 +369,7 @@ export default function Inventory() {
             onClearFilters={() => setFilter('')}
             toolbar={
               <label className="flex items-center gap-2 text-sm text-ink-soft">
-                <SlidersHorizontal size={16} aria-hidden="true" />
+                <SlidersHorizontal size={ICON.sm} aria-hidden="true" />
                 <span className="sr-only">סינון מצב מלאי</span>
                 <select className="input w-auto!" aria-label="סינון מצב מלאי" value={filter} onChange={(event) => setFilter(event.target.value)}>
                   <option value="">כל המוצרים</option>
@@ -405,7 +406,7 @@ export default function Inventory() {
           {movements.fetching && movements.data && <span className="text-xs text-ink-muted" role="status">מעדכן תנועות…</span>}
           <span className="ms-auto flex items-center gap-2 text-xs text-ink-muted">
             {latestMovementAt && <span>אחרונה: <span className="num">{fmtDateTime(latestMovementAt)}</span></span>}
-            <ChevronDown size={16} className="shrink-0 text-ink-ghost transition-transform duration-200 ease-out group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+            <ChevronDown size={ICON.sm} className="shrink-0 text-ink-ghost transition-transform duration-200 ease-out group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
           </span>
         </summary>
         <div className="border-t border-line-soft pb-4 pt-3">

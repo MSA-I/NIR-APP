@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Check, Trash2, X } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';
-import { ConfirmDialog, ErrorNote, Note, PageLoader, useToast } from '../components/ui';
+import { Card, ConfirmDialog, ErrorNote, ICON, Note, PageHeader, SkeletonTable, useToast } from '../components/ui';
 import { fmtDate, fmtNum } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import {
@@ -30,8 +30,8 @@ const GATES: { key: keyof PurgeCandidate; label: string }[] = [
 
 function GateMark({ ok }: { ok: boolean }) {
   return ok
-    ? <Check size={16} className="text-ok" aria-label="עומד בתנאי" />
-    : <X size={16} className="text-alert-fg" aria-label="אינו עומד בתנאי" />;
+    ? <Check size={ICON.sm} className="text-ok" aria-label="עומד בתנאי" />
+    : <X size={ICON.sm} className="text-alert-fg" aria-label="אינו עומד בתנאי" />;
 }
 
 export default function PurgeCandidates() {
@@ -74,7 +74,7 @@ export default function PurgeCandidates() {
     setNonce((value) => value + 1);
   }
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable rows={6} cols={6} />;
   if (error) return <ErrorNote message={error} />;
   if (!capabilities.includes('offboarding.handle')) {
     return (
@@ -100,9 +100,9 @@ export default function PurgeCandidates() {
 
   return (
     <div className="space-y-6">
-      <h1 className="page-title flex items-center gap-2">
-        <Trash2 size={22} /> מחיקה סופית לאחר סיום שירות
-      </h1>
+      <PageHeader
+        title={<span className="flex items-center gap-2"><Trash2 size={ICON.xl} aria-hidden="true" /> מחיקה סופית לאחר סיום שירות</span>}
+      />
 
       <Note tone="alert">
         <span className="min-w-0 flex-1">
@@ -111,39 +111,50 @@ export default function PurgeCandidates() {
         </span>
       </Note>
 
-      <section className="card p-4">
-        <h2 className="section-title mb-3">מועמדים</h2>
+      <Card className="space-y-3">
+        <h2 className="section-title">מועמדים</h2>
         {candidates.length === 0 ? (
           <p className="text-sm text-ink-muted">אין ארגונים בתהליך סיום שירות עם ייצוא שהושלם.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-ink-muted">
-                  <th className="text-start py-2"><span className="sr-only">בחירה</span></th>
-                  <th className="text-start py-2">ארגון</th>
-                  <th className="text-start py-2">הבקשה הוגשה</th>
+          // A four-gate matrix is the one shape DataTable's mobile CARDS cannot carry: collapsing
+          // the gates into a label:value list is exactly the „one eligible tick" #261 forbids. So
+          // it stays the app's other sanctioned model — a keyboard-reachable scroll region, the
+          // same one DataTable renders for `mobile="scroll"`.
+          <div className="table-scroll overflow-x-auto" role="region"
+            aria-label="מועמדים למחיקה סופית — ניתן לגלול אופקית" tabIndex={0}>
+            <table className="w-full">
+              <thead className="table-head border-b border-line-soft">
+                <tr>
+                  <th scope="col" className="th"><span className="sr-only">בחירה</span></th>
+                  <th scope="col" className="th">ארגון</th>
+                  <th scope="col" className="th">הבקשה הוגשה</th>
                   {GATES.map((gate) => (
-                    <th key={String(gate.key)} className="text-start py-2">{gate.label}</th>
+                    <th key={String(gate.key)} scope="col" className="th">{gate.label}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-line-soft">
                 {candidates.map((row) => (
-                  <tr key={row.org_id} className="border-t border-hairline">
-                    <td className="py-2">
-                      <input
-                        type="checkbox"
-                        aria-label={`בחירת ${row.organization_name} לאצווה`}
-                        disabled={!row.eligible}
-                        checked={selected.has(row.org_id)}
-                        onChange={() => toggle(row.org_id)}
-                      />
+                  <tr key={row.org_id}>
+                    <td className="td">
+                      {/* The box itself stays 16px — the app's one checkbox size (ColumnChecklist)
+                          — and the LABEL carries the 44px target around it, so the tap area meets
+                          the floor without a checkbox that looks like a different control. */}
+                      <label className="flex min-h-11 min-w-11 cursor-pointer items-center justify-center">
+                        <input
+                          type="checkbox"
+                          className="size-4 shrink-0 accent-action"
+                          aria-label={`בחירת ${row.organization_name} לאצווה`}
+                          disabled={!row.eligible}
+                          checked={selected.has(row.org_id)}
+                          onChange={() => toggle(row.org_id)}
+                        />
+                      </label>
                     </td>
-                    <td className="py-2">{row.organization_name}</td>
-                    <td className="py-2">{fmtDate(row.requested_at)}</td>
+                    <td className="td">{row.organization_name}</td>
+                    <td className="td num">{fmtDate(row.requested_at)}</td>
                     {GATES.map((gate) => (
-                      <td key={String(gate.key)} className="py-2">
+                      <td key={String(gate.key)} className="td">
                         <GateMark ok={Boolean(row[gate.key])} />
                       </td>
                     ))}
@@ -154,29 +165,29 @@ export default function PurgeCandidates() {
           </div>
         )}
 
-        <div className="mt-3 flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm text-ink-muted">
             {fmtNum(eligible.length)} עומדים בכל ארבעת התנאים · {fmtNum(selected.size)} נבחרו
           </span>
           <button
             type="button"
-            className="btn-danger"
+            className="btn-danger sm:ms-auto"
             disabled={selected.size === 0}
             onClick={() => setConfirming(true)}
           >
             אישור אצווה
           </button>
         </div>
-      </section>
+      </Card>
 
-      <section className="card p-4">
-        <h2 className="section-title mb-3">אצוות שאושרו</h2>
+      <Card className="space-y-3">
+        <h2 className="section-title">אצוות שאושרו</h2>
         {batches.length === 0 ? (
           <p className="text-sm text-ink-muted">לא אושרה אף אצווה.</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="divide-y divide-line-soft">
             {batches.map((batch) => (
-              <li key={batch.id} className="border-t border-hairline pt-2 text-sm">
+              <li key={batch.id} className="py-2 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="min-w-0 flex-1">{batch.reason}</span>
                   <span className="text-ink-muted">{fmtDate(batch.approved_at)}</span>
@@ -189,7 +200,7 @@ export default function PurgeCandidates() {
             ))}
           </ul>
         )}
-      </section>
+      </Card>
 
       <ConfirmDialog
         open={confirming}

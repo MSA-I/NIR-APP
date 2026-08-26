@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { supabase } from '../lib/supabase';
-import { ErrorNote, Note, PageLoader } from '../components/ui';
+import { ErrorNote, Note } from '../components/ui';
+import { planTierClass } from '../components/PlanBadge';
+import {
+  HEADLINE_QUOTA_KEY, PLAN_LIST, PlanCard, PlanLadderSkeleton, planEmphasis, type PlanFeatureRow,
+} from '../components/PlanCard';
 import { fmtNum } from '../lib/format';
 
 /**
@@ -31,6 +35,35 @@ import { fmtNum } from '../lib/format';
  *    unmeasured quota renders `—`. Never `0`: zero is also a claim about reality.
  * 4. It does not offer a billing-interval toggle. The toggle existed to switch WHICH PRICE was
  *    shown; with no price shown it would be a control that changes nothing on the page.
+ *
+ * ─── AND FROM 26.08.2026 IT IS BUILT THE WAY THE ACCOUNT SCREEN IS BUILT ──────────────────────
+ *
+ * This page used to be a horizontally scrolling comparison TABLE, while `/settings/subscription`
+ * showed sunken boxes. Two constructions, one product, and a visitor who signed up met a
+ * different-looking ladder on the other side of the login screen than the one that convinced
+ * them. Both are now `PlanCard` on `PLAN_LIST` — one rung per ROW, in tier order, so the eye
+ * climbs the ladder instead of scanning a shelf of equals (owner ruling 26.08.2026). Same tier
+ * metals, same four blocks in the same order along the row, same check-glyph entitlements, same
+ * inverted onyx on the rung #202 emphasises.
+ *
+ * WHAT STILL DIFFERS, AND ONLY THIS — because it is what the two surfaces may SAY:
+ *   * The figure. Signed in it is the PRICE; here it is the published documents quota, which is
+ *     the largest true number this page owns. A price-shaped slot holding «—» on a public page
+ *     would be a page about a price it refuses to give.
+ *   * There is NO ACTION on a row. A "בחרו מסלול" button would be a selection control for a
+ *     selection that does not exist — the same reason `OrgSubscriptionPanel` renders no purchase
+ *     affordance at all (#217/#224). The single CTA under the list opens an account, which is the
+ *     one thing a visitor can actually do, and it keeps #203's approved wording. Every row lacks
+ *     it equally, so no row is left 44px short of its neighbours.
+ *   * There is no "מדרגה מעל / מתחת" chip. A stranger holds no rung, so there is nothing to be
+ *     above or below.
+ *
+ * THE TABLE'S ONE REAL VIRTUE WENT WITH IT AND CAME BACK BETTER. It existed to compare every
+ * quota across every plan, and it did that inside a `overflow-x-auto` box that needed `tabIndex`
+ * and a `role="region"` name just so a keyboard could reach the columns a phone could not show.
+ * Each rung carries the identical entitlements — every key the catalogue returns, in the
+ * catalogue's own order, with `—` wherever nothing is measured — laid along its own row, and the
+ * rungs stack instead of scrolling sideways. The scroll trap is not fixed; it is gone.
  */
 interface PlanRow {
   plan_key: string;
@@ -48,12 +81,13 @@ interface QuotaRow {
 }
 
 /**
- * #202 requires a STATIC ascending emphasis with Premium the most desirable. Static is the whole
- * point: it is keyed to a plan, never derived from the reader's own usage, and it changes no
- * permission. The wording is provisional under #203 — the final marketing round happens after
- * live evidence.
+ * One wrapper for all three states. They each used to render their own outer element and only two
+ * of them agreed: the loader returned a bare centred spinner with no `main`, no max width and no
+ * vertical padding, so the whole page jumped — a different width, a different top offset and a
+ * landmark appearing from nowhere — at the moment the catalogue landed. One constant, three
+ * bodies, and a spec that compares the states to each other rather than to a literal width.
  */
-const EMPHASIS: Record<string, string> = { premium: 'המקיף ביותר' };
+const PAGE_WRAPPER = 'mx-auto max-w-6xl space-y-6 px-4 py-12';
 
 export default function Pricing() {
   const [state, setState] = useState<{
@@ -84,7 +118,7 @@ export default function Pricing() {
   }, []);
 
   /**
-   * One column per plan, in the server's tier order. The catalogue lists each plan once per
+   * One card per plan, in the server's tier order. The catalogue lists each plan once per
    * currency and the ladder is identical across them, so the first row per plan wins.
    */
   const plans = useMemo(() => {
@@ -102,68 +136,129 @@ export default function Pricing() {
     () => [...new Set(state.quotas.map((row) => row.entitlement_key))],
     [state.quotas],
   );
+
+  const quotaOf = (planKey: string, key: string) =>
+    state.quotas.find((entry) => entry.plan_key === planKey && entry.entitlement_key === key);
   const quotaLabel = (key: string) =>
     state.quotas.find((row) => row.entitlement_key === key)?.label ?? key;
 
-  const quotaCell = (planKey: string, key: string) => {
-    const row = state.quotas.find((entry) => entry.plan_key === planKey && entry.entitlement_key === key);
-    // Unmeasured is the honest state of `users.max` and `suppliers.max` today (DEBT §56). We do
-    // not publish, and therefore do not promise, a number nothing enforces.
-    if (!row || !row.measured) return <span className="text-ink-muted">—</span>;
-    if (row.unlimited) return 'ללא הגבלה';
-    if (row.numeric_limit === null) return <span className="text-ink-muted">—</span>;
-    return <span className="num">{fmtNum(row.numeric_limit)}</span>;
+  /**
+   * A quota as one feature row. Unmeasured is the honest state of `users.max` and `suppliers.max`
+   * today (DEBT §56): we do not publish, and therefore do not promise, a number nothing enforces.
+   * It renders `—` and wears the dash glyph rather than a tick, because a check mark asserts that
+   * the rung includes something and this row asserts nothing at all. Never `0`.
+   */
+  const featureRow = (planKey: string, key: string): PlanFeatureRow => {
+    const row = quotaOf(planKey, key);
+    const label = quotaLabel(key);
+    if (!row || !row.measured || (!row.unlimited && row.numeric_limit === null)) {
+      // Same shape as a measured row — value then label — so a column of rows stays a column.
+      // No colour class of its own: the row already wears the card's tone, and a hardcoded
+      // `text-ink-muted` here would be invisible on the inverted fill.
+      return { key, text: <><span>—</span> {label}</>, affirmative: false };
+    }
+    if (row.unlimited) return { key, text: `${label} ללא הגבלה`, affirmative: true };
+    return {
+      key,
+      text: <><span className="num font-medium">{fmtNum(row.numeric_limit)}</span> {label}</>,
+      affirmative: true,
+    };
   };
 
   const hasUnmeasured = state.quotas.some((row) => !row.measured);
 
-  if (state.loading) return <PageLoader />;
+  /**
+   * THE TITLE IS NOT DATA, so it is never a placeholder and never absent. It was inside the loaded
+   * branch alone, which meant the loading state had no heading at all: the page opened with an
+   * empty band, the `h1` appeared when the catalogue landed, and everything below it moved down by
+   * its height. Written once, rendered by all three states.
+   */
+  const header = (
+    <header className="space-y-2">
+      <h1 className="page-title">מסלולים</h1>
+      <p className="text-ink-body">אותה שליטה. קצב שמתאים לעסק שלך.</p>
+    </header>
+  );
+
+  /**
+   * AND NEITHER IS THE AVAILABILITY NOTICE, which is why it is painted while the catalogue is still
+   * in flight rather than faked or withheld. It is fixed prose: it states #208's currency rule and
+   * the owner's ruling that no amount reaches a public surface, neither of which depends on a row
+   * coming back. Every word of it is as true before the RPC answers as after.
+   *
+   * It is also, measurably, the block that was still moving the page. With the title alone held in
+   * place the ladder began 90px higher while loading than it did once the notice arrived (135px vs
+   * 225px at 1280); painting it here takes that to 0. Nothing below the ladder is hoisted with it —
+   * a block that appears BELOW the reader's content extends the page, it does not shove it.
+   */
+  const notice = (
+    <Note tone="info">
+      <span className="min-w-0 flex-1">
+        כל היכולות פתוחות בכל המסלולים; ההבדל הוא נפח בלבד. המחיר אינו מפורסם בדף הזה — הוא נמסר
+        בתוך החשבון, בשלב המעבר למסלול בתשלום, במטבע שנקבע לפי כתובת החיוב המאומתת מול ספק
+        הסליקה ולא לפי מיקום משוער. פתיחת חשבון והמסלול החינמי אינם דורשים אמצעי תשלום.
+      </span>
+    </Note>
+  );
+
+  /**
+   * NO SPINNER (owner ruling 26.08.2026: «אם יש לי כבר שלד אין צורך בסמל הזה»). `PageLoader` was a
+   * centred figure with `py-24` and nothing under it, so this page discarded the full height of the
+   * ladder while it loaded and everything jumped into place at once when the catalogue arrived.
+   * `PlanLadderSkeleton` is the ladder's own geometry, from the file that owns the row.
+   *
+   * FOUR ROWS AND NO ACTION BAR, because that is what THIS page resolves into: #194 keeps `ביזנס`
+   * off the public catalogue, and these cards carry no action at all — a fifth row or an action
+   * slot would be a placeholder for something the loaded page never shows.
+   */
+  if (state.loading) {
+    return (
+      <main className={PAGE_WRAPPER}>
+        {header}
+        {notice}
+        <PlanLadderSkeleton rows={4} action={false} testId="pricing-skeleton" />
+      </main>
+    );
+  }
   if (state.error) {
-    return <main className="mx-auto max-w-3xl px-4 py-12"><ErrorNote message={state.error} /></main>;
+    return <main className={PAGE_WRAPPER}>{header}<ErrorNote message={state.error} /></main>;
   }
 
   return (
-    <main className="mx-auto max-w-4xl space-y-5 px-4 py-12">
-      <header className="space-y-2">
-        <h1 className="page-title">מסלולים</h1>
-        <p className="text-ink-body">אותה שליטה. קצב שמתאים לעסק שלך.</p>
-      </header>
+    <main className={PAGE_WRAPPER}>
+      {header}
 
-      <Note tone="info">
-        <span className="min-w-0 flex-1">
-          כל היכולות פתוחות בכל המסלולים; ההבדל הוא נפח בלבד. המחיר אינו מפורסם בדף הזה — הוא נמסר
-          בתוך החשבון, בשלב המעבר למסלול בתשלום, במטבע שנקבע לפי כתובת החיוב המאומתת מול ספק
-          הסליקה ולא לפי מיקום משוער. פתיחת חשבון והמסלול החינמי אינם דורשים אמצעי תשלום.
-        </span>
-      </Note>
+      {notice}
 
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-line">
-              <th scope="col" className="p-3 text-start font-medium text-ink-body">מסלול</th>
-              {plans.map((plan) => (
-                <th key={plan.plan_key} scope="col" className="p-3 text-start font-medium text-ink">
-                  <span className="block">{plan.label}</span>
-                  {EMPHASIS[plan.plan_key] && (
-                    <span className="badge-info mt-1 inline-block">{EMPHASIS[plan.plan_key]}</span>
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {quotaKeys.map((key) => (
-              <tr key={key} className="border-b border-line-soft last:border-0">
-                <th scope="row" className="p-3 text-start font-normal text-ink-body">{quotaLabel(key)}</th>
-                {plans.map((plan) => (
-                  <td key={plan.plan_key} className="p-3 text-ink-body">{quotaCell(plan.plan_key, key)}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ul data-testid="plan-cards" className={PLAN_LIST}>
+        {plans.map((plan) => {
+          const headline = quotaOf(plan.plan_key, HEADLINE_QUOTA_KEY);
+          const emphasis = planEmphasis(plan.plan_key);
+          const measured = !!headline && headline.measured;
+          return (
+            <PlanCard
+              key={plan.plan_key}
+              planKey={plan.plan_key}
+              label={plan.label}
+              /* The same map the header chip and the account ladder read — DESIGN.md:503. */
+              tierClass={planTierClass(plan.plan_key)}
+              chips={emphasis ? [emphasis] : []}
+              /* The headline quota AS the figure, with the server's own label as its unit on the
+                 same baseline. `unlimited` has no number to print, so the words carry the slot. */
+              figure={!measured ? '—'
+                : headline.unlimited ? 'ללא הגבלה'
+                  : fmtNum(headline.numeric_limit)}
+              figureTone={!measured ? 'quiet' : headline.unlimited ? 'compact' : 'anchor'}
+              figureNote={measured && !headline.unlimited ? quotaLabel(HEADLINE_QUOTA_KEY) : undefined}
+              /* Every remaining entitlement the catalogue returns — the comparison the table used
+                 to hold, one plan at a time and with no sideways scroll to trap a keyboard. */
+              features={quotaKeys
+                .filter((key) => key !== HEADLINE_QUOTA_KEY)
+                .map((key) => featureRow(plan.plan_key, key))}
+            />
+          );
+        })}
+      </ul>
 
       <p className="text-sm text-ink-muted">
         המכסות נספרות בתקופת שימוש חודשית של הארגון. חריגה עוצרת עיבוד חדש בלבד — שום מסמך אינו

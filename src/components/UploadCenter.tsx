@@ -22,7 +22,7 @@ import {
 import { documentUiStatus } from '../lib/documentStatus';
 import type { StatusMeta } from '../lib/status';
 import { setUploadBatchDelegate, type UploadBatchResult } from '../lib/uploadBatch';
-import { Note, StatusBadge } from './ui';
+import { ICON, Note, StatusBadge } from './ui';
 import { DocumentStatusBadge } from './DocumentStatusBadge';
 
 /* ================= queue model ================= */
@@ -685,7 +685,7 @@ export function UploadCenter() {
           {pendingCount > 0 && <span className="ms-1.5 text-xs text-ink-muted"><span className="num">{pendingCount}</span> בתהליך</span>}
         </span>
         {settledCount > 0 && (
-          <button type="button" className="btn-ghost min-h-11 px-2!" onClick={clearSettledUploadCenterEntries}>
+          <button type="button" className="btn-ghost btn-sm" onClick={clearSettledUploadCenterEntries}>
             ניקוי שהסתיימו
           </button>
         )}
@@ -716,7 +716,7 @@ export function UploadCenter() {
                   ? <DocumentStatusBadge status={processingStatus} />
                   : <StatusBadge meta={displayMeta(entry, stage)} />}
                 {entry.canRetry && !processingStatus && (
-                  <button type="button" className="btn-ghost min-h-11 px-2!"
+                  <button type="button" className="btn-ghost btn-sm"
                     onClick={() => retryUploadCenterEntry(entry.id)}>
                     {entry.status === 'registered'
                       ? 'שליחה מחדש לעיבוד'
@@ -724,10 +724,10 @@ export function UploadCenter() {
                   </button>
                 )}
                 {entry.canCancel && (
-                  <button type="button" className="btn-ghost min-h-11 min-w-11 p-1.5! text-ink-faint hover:text-alert-fg"
+                  <button type="button" className="btn-ghost btn-icon text-alert-fg hover:bg-alert-soft"
                     aria-label={`ביטול העלאת ${entry.fileName}`}
                     onClick={() => cancelUploadCenterEntry(entry.id)}>
-                    <X size={14} />
+                    <X size={ICON.sm} />
                   </button>
                 )}
               </div>
@@ -747,7 +747,7 @@ export function UploadCenter() {
               )}
               {entry.storedSafely && entry.status !== 'registered' && entry.status !== 'uploading' && (
                 <div className="mt-1 flex items-center gap-1.5 text-xs text-ink-soft">
-                  <ShieldCheck size={13} className="shrink-0" />
+                  <ShieldCheck size={ICON.xs} className="shrink-0" />
                   קובץ המקור נשמר בבטחה — אין להעלות אותו שוב; נותר רק להשלים את הרישום.
                 </div>
               )}

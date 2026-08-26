@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pencil } from 'lucide-react';
-import { Modal, StatusBadge } from '../components/ui';
+import { Card, ICON, Modal, StatusBadge } from '../components/ui';
 import { fmtDate } from '../lib/format';
 import { ONBOARDING_SOURCE, ONBOARDING_STEP_STATE } from '../lib/status';
 import { setOnboardingStep, type OnboardingStep, type PlatformCapability } from '../lib/platform';
@@ -34,7 +34,7 @@ export default function CustomerOnboarding({ orgId, steps, may, busy, run }: {
   const done = steps.filter((step) => step.state === 'completed').length;
 
   return (
-    <section className="card card-pad space-y-3" aria-labelledby="onboarding-heading">
+    <Card className="space-y-3" as="section" aria-labelledby="onboarding-heading">
       <div className="flex flex-wrap items-center gap-2">
         <h2 id="onboarding-heading" className="section-title">הקמה והפעלה</h2>
         <span className="text-sm text-ink-muted num">{done} / {steps.length}</span>
@@ -60,9 +60,9 @@ export default function CustomerOnboarding({ orgId, steps, may, busy, run }: {
             {/* Only where the product produced no evidence: a step the customer actually completed
                 has nothing for an operator to record. */}
             {may('onboarding.edit') && step.source !== 'product_event' && (
-              <button type="button" className="btn-ghost ms-auto py-1! text-xs"
+              <button type="button" className="btn-ghost btn-sm ms-auto"
                 onClick={() => setEditing(step)}>
-                <Pencil size={13} /> רישום
+                <Pencil size={ICON.xs} aria-hidden="true" /> רישום
               </button>
             )}
           </li>
@@ -81,7 +81,7 @@ export default function CustomerOnboarding({ orgId, steps, may, busy, run }: {
           }}
         />
       )}
-    </section>
+    </Card>
   );
 }
 

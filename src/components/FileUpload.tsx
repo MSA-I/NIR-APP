@@ -3,7 +3,8 @@ import { Camera, FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { Link } from 'react-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
-import { useToast, Skeleton, ConfirmDialog, ErrorNote, Modal, Note } from './ui';
+import { useToast, Skeleton, ConfirmDialog, ErrorNote, ICON, Modal, Note } from './ui';
+import { ActionMenu } from './ActionMenu';
 import {
   WEAK_CAPTURE_LABEL,
   WEAK_CAPTURE_PROCEED_LABEL,
@@ -944,7 +945,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <span className="text-sm font-medium text-ink-soft flex items-center gap-1.5"><Paperclip size={15} /> מסמכים מצורפים</span>
+        <span className="text-sm font-medium text-ink-soft flex items-center gap-1.5"><Paperclip size={ICON.sm} /> מסמכים מצורפים</span>
         {/* The "סוג" select that stood here — delivery note / invoice / other, chosen before the
             camera opened — is gone. This is the receiving screen: the person holding the phone is
             standing at the truck with the paper in the other hand, and the one question they
@@ -953,8 +954,8 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
             still seeds a value from the entity, and 0084's trigger replaces it with what the
             document says. */}
         {canUploadNow && <div className="flex flex-wrap items-center gap-2">
-          <button className="btn-secondary py-1.5!" disabled={busy || screening || retryFiles.length > 0} onClick={() => inputRef.current?.click()}>
-              {busy || screening ? <Loader2 size={15} className="animate-spin" /> : capture ? <Camera size={15} /> : <Paperclip size={15} />}
+          <button className="btn-secondary btn-sm" disabled={busy || screening || retryFiles.length > 0} onClick={() => inputRef.current?.click()}>
+            {busy || screening ? <Loader2 size={ICON.sm} className="animate-spin" /> : capture ? <Camera size={ICON.sm} /> : <Paperclip size={ICON.sm} />}
               {capture ? 'צילום / העלאה' : 'העלאת קובץ'}
           </button>
         </div>}
@@ -990,7 +991,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
               <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs">נכשלו: {uploadSummary.failed.join(', ')}</span>
                 {retryFiles.length > 0 && (
-                  <button type="button" className="btn-ghost min-h-11" disabled={busy} onClick={() => void uploadFiles(retryFiles, uploadSummary)}>
+                  <button type="button" className="btn-ghost btn-sm" disabled={busy} onClick={() => void uploadFiles(retryFiles, uploadSummary)}>
                     ניסיון חוזר לנכשלים בלבד
                   </button>
                 )}
@@ -1023,7 +1024,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
             const stage = processing.data ? processing.snapshots[d.id]?.stage ?? 'unprocessed' : null;
             return (
               <li key={d.id} className="flex min-h-14 flex-wrap items-center gap-2 px-3 py-2 text-sm">
-                <FileText size={15} className="shrink-0 text-ink-faint" />
+                <FileText size={ICON.sm} className="shrink-0 text-ink-faint" />
                 <button className="link min-w-32 flex-1 truncate text-start" onClick={() => void open(d)}><bdi>{d.file_name}</bdi></button>
                 <span className="hidden text-xs text-ink-muted sm:inline">{documentKindLabel(d.document_kind)}</span>
                 {/* G1, finding 20 — same badge, same four human states as the documents folder.
@@ -1038,16 +1039,30 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
                   </span>
                 )}
                 <span className="text-xs text-ink-muted">{fmtDateTime(d.created_at)}</span>
+                {/* Converged on AttachmentsPanel's shape, which is the one the design system
+                    describes: navigation stays a real `<Link>` (an ActionMenuItem is
+                    `onSelect: () => void`, so moving it into the menu would trade an `href` —
+                    middle-click, open-in-new-tab, `data-document-review-link` — for a
+                    programmatic navigate), and the loose row BUTTON goes into the one menu.
+                    That button was the real defect: `btn-ghost p-1.5! min-w-11 min-h-11` for a
+                    size the base had no name for, and `hover:text-alert-fg` — a destructive
+                    action that only admitted what it was once the pointer was already on it
+                    (DESIGN.md:586). In the menu it is `tone="danger"`: alert-coloured, always. */}
                 {canReview && (
-                  <Link to={`/documents/${d.id}/review`} className="btn-ghost min-h-11 px-2!" data-document-review-link>
+                  <Link to={`/documents/${d.id}/review`} className="btn-ghost btn-sm" data-document-review-link>
                     בדיקה
                   </Link>
                 )}
-                {canDelete && (
-                  <button className="btn-ghost p-1.5! min-w-11 min-h-11 text-ink-faint hover:text-alert-fg" onClick={() => setPending(d)} aria-label="מחיקה">
-                    <Trash2 size={14} />
-                  </button>
-                )}
+                <ActionMenu label={`פעולות עבור ${d.file_name}`} items={[
+                  {
+                    key: 'delete',
+                    label: 'מחיקה',
+                    icon: Trash2,
+                    tone: 'danger',
+                    hidden: !canDelete,
+                    onSelect: () => setPending(d),
+                  },
+                ]} />
               </li>
             );
           })}

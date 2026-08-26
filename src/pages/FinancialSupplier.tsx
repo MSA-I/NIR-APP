@@ -1,11 +1,11 @@
 import { Link, useParams } from 'react-router';
-import { ArrowRight, Banknote, ReceiptText } from 'lucide-react';
+import { Banknote, ReceiptText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fetchAll } from '../lib/supabasePaging';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { fmtDate, fmtMoneyRounded, todayISO } from '../lib/format';
 import { BANK_TX_STATUS, CREDIT_STATUS, INVOICE_PAYMENT_STATUS, PAYMENT_REQUEST_STATUS, SUPPLIER_STATUS } from '../lib/status';
-import { EmptyState, ErrorNote, Note, PageLoader, StatusBadge } from '../components/ui';
+import { Breadcrumbs, Card, EmptyState, ErrorNote, Note, RecordHeader, RecordSkeleton, StatusBadge, ICON } from '../components/ui';
 
 type SupplierFinance = { id: string; name: string; tax_id: string | null; payment_terms: string | null; status: string };
 type InvoiceRow = { id: string; invoice_number: string; invoice_date: string; total_amount: number; payment_status: string };
@@ -89,34 +89,33 @@ export default function FinancialSupplier() {
     return { supplier, invoices, credits, payments, requests, bank, balanceByInvoice, allocatedByPayment, openBalance, dueExposure, bankStatusCounts, activity };
   }, [id]);
 
-  if (loading) return <PageLoader />;
+  if (loading) return <RecordSkeleton />;
   if (error || !data) return <ErrorNote message={error ?? 'הספק לא נמצא'} />;
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Link className="link inline-flex items-center gap-1 text-sm" to="/dashboard"><ArrowRight size={14} /> מרכז הבקרה</Link>
-          <h1 className="page-title mt-2">כרטיס ספק פיננסי — {data.supplier.name}</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-muted">
-            <StatusBadge meta={SUPPLIER_STATUS[data.supplier.status]} />
+      <RecordHeader
+        breadcrumbs={<Breadcrumbs items={[{ label: 'מרכז הבקרה', to: '/dashboard' }, { label: `כרטיס ספק פיננסי — ${data.supplier.name}` }]} />}
+        title={`כרטיס ספק פיננסי — ${data.supplier.name}`}
+        status={<StatusBadge meta={SUPPLIER_STATUS[data.supplier.status]} />}
+        meta={(
+          <>
             <span>עוסק / חברה: <span className="num">{data.supplier.tax_id ?? '—'}</span></span>
             <span>תנאי תשלום: {data.supplier.payment_terms ?? '—'}</span>
-          </div>
-        </div>
-      </div>
+          </>
+        )} />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="card card-pad"><div className="text-sm text-ink-muted">יתרה פתוחה</div><div className="mt-1 kpi-value num">{fmtMoneyRounded(data.openBalance)}</div></div>
-        <div className="card card-pad"><div className="text-sm text-ink-muted">חשיפה שהגיעה למועד</div><div className="mt-1 kpi-value num">{fmtMoneyRounded(data.dueExposure)}</div></div>
-        <div className="card card-pad"><div className="text-sm text-ink-muted">תנועות בנק לא מותאמות</div><div className="mt-1 kpi-value num">{data.bankStatusCounts.unmatched}</div></div>
-        <div className="card card-pad"><div className="text-sm text-ink-muted">התאמות שממתינות לאישור</div><div className="mt-1 kpi-value num">{data.bankStatusCounts.suggested}</div></div>
+        <Card><div className="text-sm text-ink-muted">יתרה פתוחה</div><div className="mt-1 kpi-value num">{fmtMoneyRounded(data.openBalance)}</div></Card>
+        <Card><div className="text-sm text-ink-muted">חשיפה שהגיעה למועד</div><div className="mt-1 kpi-value num">{fmtMoneyRounded(data.dueExposure)}</div></Card>
+        <Card><div className="text-sm text-ink-muted">תנועות בנק לא מותאמות</div><div className="mt-1 kpi-value num">{data.bankStatusCounts.unmatched}</div></Card>
+        <Card><div className="text-sm text-ink-muted">התאמות שממתינות לאישור</div><div className="mt-1 kpi-value num">{data.bankStatusCounts.suggested}</div></Card>
       </div>
 
       {data.dueExposure === null && <Note tone="info">אין במערכת מועדי פירעון שמאפשרים לחשב חשיפה שהגיעה למועד; לכן מוצג — ולא אפס.</Note>}
 
-      <section className="card card-pad" aria-labelledby="finance-invoices">
-        <h2 id="finance-invoices" className="section-title flex items-center gap-2"><ReceiptText size={18} /> חשבוניות זמינות לתפקיד</h2>
+      <Card as="section" aria-labelledby="finance-invoices">
+        <h2 id="finance-invoices" className="section-title flex items-center gap-2"><ReceiptText size={ICON.md} aria-hidden="true" /> חשבוניות זמינות לתפקיד</h2>
         {!data.invoices.length ? <EmptyState title="אין חשבוניות זמינות לספק" /> : (
           <div className="mt-3 divide-y divide-line">
             {data.invoices.map((invoice) => {
@@ -128,20 +127,20 @@ export default function FinancialSupplier() {
             })}
           </div>
         )}
-      </section>
+      </Card>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <section className="card card-pad" aria-labelledby="finance-payments">
-          <h2 id="finance-payments" className="section-title flex items-center gap-2"><Banknote size={18} /> תשלומים והקצאות</h2>
+        <Card as="section" aria-labelledby="finance-payments">
+          <h2 id="finance-payments" className="section-title flex items-center gap-2"><Banknote size={ICON.md} aria-hidden="true" /> תשלומים והקצאות</h2>
           {!data.payments.length ? <EmptyState title="אין תשלומים לספק" /> : <div className="mt-3 divide-y divide-line">
             {data.payments.map((payment) => <div key={payment.id} className="flex min-h-12 items-center justify-between gap-3 py-2 text-sm">
               <span>תשלום <span className="num">#{payment.number}</span><span className="block text-xs text-ink-muted num">{fmtDate(payment.paid_date)} · {payment.method ?? '—'}</span></span>
               <span className="text-end num">{fmtMoneyRounded(payment.amount)}<span className="block text-xs text-ink-muted">הוקצה: {fmtMoneyRounded(data.allocatedByPayment.get(payment.id) ?? 0)}</span></span>
             </div>)}
           </div>}
-        </section>
+        </Card>
 
-        <section className="card card-pad" aria-labelledby="finance-credits">
+        <Card as="section" aria-labelledby="finance-credits">
           <h2 id="finance-credits" className="section-title">זיכויים</h2>
           {!data.credits.length ? <EmptyState title="אין זיכויים לספק" /> : <div className="mt-3 divide-y divide-line">
             {data.credits.map((credit) => <div key={credit.id} className="flex min-h-12 items-center justify-between gap-3 py-2 text-sm">
@@ -149,10 +148,10 @@ export default function FinancialSupplier() {
               <span className="text-end"><StatusBadge meta={CREDIT_STATUS[credit.status]} /><span className="ms-2 num">{fmtMoneyRounded(credit.amount)}</span></span>
             </div>)}
           </div>}
-        </section>
+        </Card>
       </div>
 
-      <section className="card card-pad" aria-labelledby="finance-requests">
+      <Card as="section" aria-labelledby="finance-requests">
         <h2 id="finance-requests" className="section-title">דרישות תשלום</h2>
         {!data.requests.length ? <EmptyState title="אין דרישות תשלום מאושרות לספק" /> : <div className="mt-3 divide-y divide-line">
           {data.requests.map((request) => <div key={request.id} className="flex min-h-12 items-center justify-between gap-3 py-2 text-sm">
@@ -160,9 +159,9 @@ export default function FinancialSupplier() {
             <span className="text-end"><StatusBadge meta={PAYMENT_REQUEST_STATUS[request.status]} /><span className="ms-2 num">{fmtMoneyRounded(request.amount)}</span></span>
           </div>)}
         </div>}
-      </section>
+      </Card>
 
-      <section className="card card-pad" aria-labelledby="finance-bank">
+      <Card as="section" aria-labelledby="finance-bank">
         <div className="flex items-center justify-between gap-3">
           <h2 id="finance-bank" className="section-title">התאמת בנק</h2>
           <Link className="link text-sm" to="/bank">למסך ההתאמות</Link>
@@ -173,9 +172,9 @@ export default function FinancialSupplier() {
             <span className="text-end"><StatusBadge meta={BANK_TX_STATUS[row.status]} /><span className="ms-2 num">{fmtMoneyRounded(row.amount)}</span></span>
           </Link>)}
         </div>}
-      </section>
+      </Card>
 
-      <section className="card card-pad" aria-labelledby="finance-activity">
+      <Card as="section" aria-labelledby="finance-activity">
         <h2 id="finance-activity" className="section-title">פעילות פיננסית אחרונה</h2>
         {!data.activity.length ? <EmptyState title="אין פעילות פיננסית להצגה" /> : <div className="mt-3 divide-y divide-line">
           {data.activity.map((row, index) => <div key={`${row.label}-${row.date}-${index}`} className="flex min-h-11 items-center justify-between gap-3 py-2 text-sm">
@@ -183,7 +182,7 @@ export default function FinancialSupplier() {
             <span className="num">{fmtMoneyRounded(row.amount)}</span>
           </div>)}
         </div>}
-      </section>
+      </Card>
     </div>
   );
 }

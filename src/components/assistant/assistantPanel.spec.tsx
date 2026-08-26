@@ -217,6 +217,40 @@ describe('העוזר של InPlace — הפאנל', () => {
     expect(trigger().querySelector('[data-assistant-trigger-icon="sparkles"]')).not.toBeNull();
   });
 
+  it('הכותרת שומרת את שם המוצר ואת „לקריאה בלבד" גם כשכפתור „בדיקה חדשה" נוכח', async () => {
+    // 26.08.2026: the subtitle used to share the header row with the controls and carried
+    // `truncate`. At 27.5rem, with „בדיקה חדשה" present, what the ellipsis ate was the END of the
+    // sentence — „בדיקה תפעולית מבוססת ר…" — i.e. exactly the two words DESIGN.md requires the
+    // header to keep. A promise about what the surface may do cannot be the clipped half.
+    desktopMode = true;
+    ask.mockResolvedValue(makeResult());
+    renderPanel();
+    await openDialog();
+    await askQuestion();
+    expect(await screen.findByRole('button', { name: 'בדיקה חדשה' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'העוזר של InPlace' })).toBeInTheDocument();
+    const subtitle = screen.getByText('בדיקה תפעולית מבוססת ראיות · לקריאה בלבד');
+    expect(subtitle.className).not.toContain('truncate');
+  });
+
+  it('בזמן ריצה מוצג סימן חיים בעמדת התשובה — נקודות בלי שם, בלי דמות ובלי טקסט נראה', async () => {
+    const pendingRun = deferred<AssistantRunResult>();
+    ask.mockReturnValue(pendingRun.promise);
+    renderPanel();
+    const panel = await openDialog();
+    await askQuestion();
+    await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
+
+    const typing = panel.querySelector('[data-assistant-typing]');
+    expect(typing).not.toBeNull();
+    expect(typing?.children).toHaveLength(3);
+    // The visible mark is decoration over a state; the sentence is what assistive tech is told.
+    // Nothing here may name, personify or impersonate an author (DESIGN.md:515).
+    expect(typing).toHaveAttribute('aria-hidden', 'true');
+    expect(typing?.textContent).toBe('');
+    expect(screen.getByText('בודק את הנתונים המורשים')).toBeInTheDocument();
+  });
+
   it('ב-1024 ומעלה המשטח docked ו-non-modal: אין aria-modal ואין נעילת body', async () => {
     desktopMode = true;
     renderPanel();

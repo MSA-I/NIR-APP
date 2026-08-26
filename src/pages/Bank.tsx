@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, Note, type ServerColumn } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, Note, EmptyState, SubPanel, ICON, type ServerColumn } from '../components/ui';
 import { BANK_TX_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, addCalendarDays } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
@@ -177,9 +177,9 @@ export default function Bank() {
       {error && <ErrorNote message={error} />}
       {imports.error && <ErrorNote message={imports.error} />}
       {fetching && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
-      <PageHeader title={<span className="flex items-center gap-2"><Landmark size={22} /> התאמות בנק</span>}
+      <PageHeader title={<span className="flex items-center gap-2"><Landmark size={ICON.xl} aria-hidden="true" /> התאמות בנק</span>}
         meta={`${data.total} תנועות${activeFilters ? ` · ${activeFilters} מסננים פעילים` : ''}`}
-        actions={canOperateBank && <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={15} /> ייבוא תדפיס בנק</button>} />
+        actions={canOperateBank && <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> ייבוא תדפיס בנק</button>} />
 
       {imports.data?.length ? (
         <div className="text-xs text-ink-muted">
@@ -255,12 +255,12 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
   return (
     <Modal open onClose={onClose} title="הסרת התאמת בנק" busy={busy} statusMessage={busy ? 'מסיר את התאמת הבנק' : undefined}>
       <div className="space-y-4">
-        <div className="rounded-lg bg-surface-sunken border border-line px-4 py-3 text-sm">
+        <SubPanel className="border border-line text-sm">
           <div className="flex flex-wrap justify-between gap-2">
             <span>{fmtDate(tx.tx_date)} · {tx.description}</span>
             <span className="font-semibold num">{fmtMoneyExact(tx.amount)}</span>
           </div>
-        </div>
+        </SubPanel>
         <Note tone="await">הסרת ההתאמה מחזירה את תנועת הבנק לטיפול ואת דרישת התשלום לסטטוס ״בוצעה״. התשלום והקצאותיו אינם מתבטלים. התאמה ישירה לחשבונית דורשת תיקון כספי נפרד.</Note>
         <div>
           <label className="label" htmlFor="bank-unmatch-reason">סיבה להסרת ההתאמה *</label>
@@ -269,7 +269,7 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
         <div className="flex justify-end gap-2">
           <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
           <button className="btn-danger" disabled={busy} onClick={() => void unmatch()}>
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <Unlink size={15} />} הסרת התאמה
+            {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Unlink size={ICON.sm} aria-hidden="true" />} הסרת התאמה
           </button>
         </div>
       </div>
@@ -371,15 +371,15 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         <div className="text-center py-8">
           <p className="text-sm text-ink-soft mb-4">ייבוא מתבצע רק מתבנית XLSX קנונית בגרסה {BANK_IMPORT_TEMPLATE_VERSION}. אין מיפוי עמודות או ניחוש מבנה.</p>
           <div className="flex flex-wrap justify-center gap-2">
-            <button className="btn-secondary" type="button" onClick={downloadTemplate}><Download size={16} /> הורדת התבנית העדכנית</button>
-            <button className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת XLSX</button>
+            <button className="btn-secondary" type="button" onClick={downloadTemplate}><Download size={ICON.sm} aria-hidden="true" /> הורדת התבנית העדכנית</button>
+            <button className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={ICON.sm} aria-hidden="true" /> בחירת XLSX</button>
           </div>
           <input ref={fileRef} type="file" hidden accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
         </div>
       ) : (
         <div className="space-y-4">
           <div className="text-sm text-ink-soft">{fileName} · {rawRows.length} תנועות · תבנית v{BANK_IMPORT_TEMPLATE_VERSION}</div>
-          <div className="max-h-48 overflow-auto border border-line-soft rounded-lg">
+          <div className="table-scroll max-h-48 overflow-auto rounded-lg border border-line-soft" tabIndex={0} role="region" aria-label="תצוגה מקדימה של תדפיס הבנק — טבלה נגללת">
             <table className="w-full">
               {/* The overrides that used to force .th to 11px and .td to 12px are gone. This is the
                   preview a person reads before importing bank transactions — business data — and
@@ -400,11 +400,11 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
               </tbody>
             </table>
           </div>
-          <div><label className="label">סיבת הייבוא (רשות)</label><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+          <div><label className="label" htmlFor="bank-import-reason">סיבת הייבוא (רשות)</label><input id="bank-import-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
           <div className="flex justify-end gap-2">
             <button className="btn-secondary" disabled={busy} onClick={() => { setRawRows([]); setFileName(''); setFileHash(''); }}>קובץ אחר</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>
-              {busy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />} ייבוא
+              {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Upload size={ICON.sm} aria-hidden="true" />} ייבוא
             </button>
           </div>
         </div>
@@ -610,13 +610,13 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   return (
     <Modal open onClose={onClose} title="התאמת תנועת בנק" wide busy={busy} statusMessage={busy ? 'שומר את התאמת הבנק' : undefined}>
       <div className="space-y-4">
-        <div className="rounded-lg bg-surface-sunken border border-line px-4 py-3 text-sm">
+        <SubPanel className="border border-line text-sm">
           <div className="flex flex-wrap justify-between gap-2">
             <span>{fmtDate(tx.tx_date)} · {tx.description}</span>
             <span className="font-semibold num">{fmtMoneyExact(tx.amount)}</span>
           </div>
           {tx.reference && <div className="text-xs text-ink-muted mt-1">אסמכתא: <span dir="ltr">{tx.reference}</span></div>}
-        </div>
+        </SubPanel>
 
         <div className="flex items-end gap-2">
           {/* id and placeholder are unchanged on purpose — `#bank-match-supplier` and the
@@ -638,38 +638,40 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
               {data?.candidates.length ? (
                 <div className="space-y-2">
                   {data.candidates.map((c) => (
-                    <div key={`${c.kind}-${c.id}`} className="flex items-center gap-3 rounded-lg border border-line px-3 py-2.5 text-sm">
-                      <Link2 size={15} className="text-info-fg shrink-0" />
-                      <span className="flex-1">{c.label}</span>
+                    <div key={`${c.kind}-${c.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-line px-3 py-2.5 text-sm">
+                      <Link2 size={ICON.sm} className="text-info-fg shrink-0" aria-hidden="true" />
+                      <span className="min-w-0 flex-1 basis-full break-words sm:basis-auto">{c.label}</span>
                       <span className={c.confidence >= 0.85 ? 'badge-done' : c.confidence >= 0.7 ? 'badge-await' : 'badge-idle'}>
                         ביטחון {(c.confidence * 100).toFixed(0)}%
                       </span>
-                      <button className="btn-primary py-1.5!" aria-label={`אישור ${c.label} עבור ${transactionLabel}`} disabled={busy} onClick={() => void confirmCandidate(c)}>
-                        <CheckCircle2 size={14} /> אישור
+                      <button className="btn-primary btn-sm" aria-label={`אישור ${c.label} עבור ${transactionLabel}`} disabled={busy} onClick={() => void confirmCandidate(c)}>
+                        <CheckCircle2 size={ICON.sm} aria-hidden="true" /> אישור
                       </button>
                     </div>
                   ))}
                 </div>
-              ) : <div className="text-sm text-ink-muted">אין הצעות אוטומטיות — ניתן להתאים ידנית מטה</div>}
+              ) : <EmptyState compact title="אין הצעות התאמה אוטומטיות" subtitle="אפשר להתאים ידנית בהמשך המסך." />}
             </div>
 
             <fieldset>
               <legend className="text-sm font-medium text-ink-soft mb-1.5">התאמה ידנית — פיצול בין חשבוניות פתוחות</legend>
               {data?.openInvoices.length ? (
-                <div className="border border-line rounded-lg divide-y divide-line-soft max-h-48 overflow-y-auto">
+                <div className="max-h-48 divide-y divide-line-soft overflow-y-auto rounded-lg border border-line" tabIndex={0} role="region" aria-label="חשבוניות פתוחות לבחירה — רשימה נגללת">
                   {data.openInvoices.map((inv) => {
                     const checked = inv.id in chosenInvoices;
                     return (
-                      <div key={inv.id} className="flex items-center gap-3 px-3 py-2 text-sm">
-                        <input type="checkbox" className="rounded" checked={checked}
-                          aria-label={`בחירת חשבונית ${inv.invoice_number} של ${supplierName} להקצאה עבור ${transactionLabel}`}
-                          onChange={(e) => setChosenInvoices((c) => {
-                            const next = { ...c };
-                            if (e.target.checked) next[inv.id] = Math.min(inv.balance, tx.amount - chosenSum > 0 ? tx.amount - chosenSum : inv.balance);
-                            else delete next[inv.id];
-                            return next;
-                          })} />
-                        <span className="flex-1">חשבונית <b dir="ltr" className="num">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}</span>
+                      <div key={inv.id} className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 text-sm">
+                        <label className="flex min-h-11 min-w-0 flex-1 basis-full cursor-pointer items-center gap-3 sm:basis-auto">
+                          <input type="checkbox" className="size-5 shrink-0 accent-action" checked={checked}
+                            aria-label={`בחירת חשבונית ${inv.invoice_number} של ${supplierName} להקצאה עבור ${transactionLabel}`}
+                            onChange={(e) => setChosenInvoices((c) => {
+                              const next = { ...c };
+                              if (e.target.checked) next[inv.id] = Math.min(inv.balance, tx.amount - chosenSum > 0 ? tx.amount - chosenSum : inv.balance);
+                              else delete next[inv.id];
+                              return next;
+                            })} />
+                          <span className="min-w-0 break-words">חשבונית <b dir="ltr" className="num">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}</span>
+                        </label>
                         <span className="text-xs text-ink-muted">יתרה <span className="num">{fmtMoneyExact(inv.balance)}</span></span>
                         {checked && (
                           <input type="number" step="0.01" className="input w-28! num" value={chosenInvoices[inv.id]}
@@ -680,7 +682,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                     );
                   })}
                 </div>
-              ) : <div className="text-sm text-ink-muted">אין חשבוניות פתוחות לספק</div>}
+              ) : <EmptyState compact title="אין חשבוניות פתוחות לספק" subtitle="בלי חשבונית פתוחה אין למה להקצות את התנועה." />}
               {chosenSum > 0 && (
                 <div className="flex items-center justify-between mt-2 text-sm">
                   <span className={Math.abs(chosenSum - tx.amount) > 1 ? 'text-await-fg' : 'text-done-fg'}>
@@ -694,9 +696,9 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
         )}
 
         <div className="flex flex-wrap justify-between gap-2 pt-2 border-t border-line-soft">
-          <button className="btn-ghost text-ink-muted" disabled={busy} onClick={() => void ignore()}><EyeOff size={15} /> לא רלוונטית (לא ספק)</button>
+          <button className="btn-ghost text-ink-muted" disabled={busy} onClick={() => void ignore()}><EyeOff size={ICON.sm} aria-hidden="true" /> לא רלוונטית (לא ספק)</button>
           <button className="btn-secondary text-await-fg" disabled={busy} onClick={() => void openException()}>
-            <AlertTriangle size={15} /> פתיחת חריג לבירור
+            <AlertTriangle size={ICON.sm} aria-hidden="true" /> פתיחת חריג לבירור
           </button>
         </div>
       </div>

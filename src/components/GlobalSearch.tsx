@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Search, Loader2, X, Truck, Package, FileText, ClipboardList, CreditCard, RotateCcw, FilePen, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { StatusBadge, useDialogLayer } from './ui';
+import { ICON, StatusBadge, useDialogLayer } from './ui';
 import { SUPPLIER_STATUS, PO_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, type StatusMeta } from '../lib/status';
 import { fmtMoneyExact } from '../lib/format';
 import { isActiveRole, type ActiveRole, type Role, type SearchHit, type SearchEntity as EntityType } from '../lib/types';
@@ -203,7 +203,7 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
 
   const field = (
     <div className="relative w-full">
-      <Search size={16} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint pointer-events-none" />
+      <Search size={ICON.sm} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint pointer-events-none" aria-hidden="true" />
       <input
         ref={inputRef}
         type="text"
@@ -225,7 +225,7 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
       />
       {loading && (
         <span role="status" className="absolute top-1/2 -translate-y-1/2 end-3 text-ink-faint">
-          <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+          <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />
           <span className="sr-only">מחפש</span>
         </span>
       )}
@@ -245,7 +245,7 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
         return (
           <li key={g.entity} role="group" aria-label={g.meta.label}>
             <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-xs font-semibold text-ink-muted">
-              <Icon size={13} /> {g.meta.label}
+              <Icon size={ICON.xs} aria-hidden="true" /> {g.meta.label}
             </div>
             <ul role="presentation">
               {g.items.map(({ hit, index }) => (
@@ -261,13 +261,21 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
                   // pointer is over" were the same pixel — with a keyboard, indistinguishable.
                   className={`flex items-center gap-3 px-3 py-2 cursor-pointer ${index === activeIndex ? 'bg-surface-selected' : 'hover:bg-surface-hover'}`}
                 >
-                  <Icon size={15} className="shrink-0 text-ink-faint" />
+                  <Icon size={ICON.sm} className="shrink-0 text-ink-faint" aria-hidden="true" />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-ink-body truncate" dir={LTR_TITLE[hit.entity] ? 'ltr' : undefined}>{hit.title}</div>
                     {hit.subtitle && <div className="text-xs text-ink-muted truncate">{hit.subtitle}</div>}
                   </div>
-                  <StatusBadge meta={metaFor(hit)} />
-                  {hit.amount != null && <span className="num text-sm text-ink-mid shrink-0">{fmtMoneyExact(hit.amount)}</span>}
+                  {/* The trailing block is ONE unit, not two loose siblings. A result row is
+                      media · (title + subtitle) · trailing, and the status badge had no `shrink-0`
+                      of its own — so in the narrow panel it was the flex item that gave way, and
+                      "ממתין לאישור" arrived as a squeezed chip beside a money figure that had
+                      protected itself. Grouping them also stops the badge and the amount drifting
+                      apart as the row widens: they end together, against the row's END edge. */}
+                  <span className="flex shrink-0 items-center justify-end gap-2">
+                    <StatusBadge meta={metaFor(hit)} />
+                    {hit.amount != null && <span className="num text-sm text-ink-mid">{fmtMoneyExact(hit.amount)}</span>}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -283,7 +291,7 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
         className="phone-safe-dialog lg:hidden fixed inset-0 z-50 bg-surface flex flex-col focus:outline-none">
         <div className="flex items-center gap-2 border-b border-line p-3">
           {field}
-          <button className="btn-ghost p-2!" onClick={() => closeMobileSearch()} aria-label="סגירה"><X size={20} /></button>
+          <button type="button" className="btn-ghost btn-icon rounded-full" onClick={() => closeMobileSearch()} aria-label="סגירה"><X size={ICON.lg} aria-hidden="true" /></button>
         </div>
         <div className="flex-1 overflow-y-auto">{panelBody}</div>
         <div aria-live="polite" className="sr-only">{liveMsg}</div>
@@ -295,7 +303,13 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
     <div className="relative w-full max-w-xl">
       {field}
       {panelOpen && (
-        <div className="absolute top-full inset-x-0 mt-1 card shadow-menu max-h-[70vh] overflow-y-auto">
+        /* THE PANEL IS NOT THE TRIGGER'S WIDTH. `inset-x-0` tied it to whatever box the shell put
+           the field in — 176px in the desktop header — while every row inside packs an icon, a
+           title, a subtitle, a status badge and a money figure. So the results of a search were
+           rendered into a column narrower than one result. The trigger stays compact (it is
+           competing for space in a navigation row); the panel anchors its inline-END to the
+           field's and grows toward the page, never narrower than the field itself. */
+        <div className="absolute end-0 top-full mt-1 w-[26rem] min-w-full card shadow-menu max-h-[70vh] overflow-y-auto">
           {panelBody}
         </div>
       )}

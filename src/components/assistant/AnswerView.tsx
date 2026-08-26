@@ -16,7 +16,7 @@ import { assistantSourceRouteDecision } from '../../lib/assistant/routeAccess';
 import { sendAssistantFeedback } from '../../lib/assistant/client';
 import { toHebrewError } from '../../lib/errors';
 import { fmtDate, fmtDateTime, fmtMoneyExact, fmtNum } from '../../lib/format';
-import { Disclosure, Note } from '../ui';
+import { Disclosure, ICON, Note } from '../ui';
 
 /**
  * Renders one settled assistant answer, blocks in server order.
@@ -95,7 +95,7 @@ function SourceLink({ source, onNavigate, active = false }: {
       aria-current={active ? 'page' : undefined}
       className={`inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-xs font-medium text-action-on-soft underline underline-offset-2 hover:bg-surface-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-focus ${active ? 'bg-surface-selected text-ink' : ''}`}
     >
-      <ChevronLeft size={14} aria-hidden="true" />
+      <ChevronLeft size={ICON.sm} aria-hidden="true" />
       פתיחת מקור: {source.label}
     </Link>
   );
@@ -172,18 +172,18 @@ function DraftBlock({ text, facts, sources, sourceIsCurrent, onNavigate }: {
   return (
     <section
       aria-label={ASSISTANT_DRAFT_LABEL}
-      className="rounded-xl border-s-2 border-action-line bg-action-wash p-3"
+      className="rounded-2xl border-s-2 border-action-line bg-action-wash p-3"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-xs font-medium text-ink-soft">
-          <NotepadText size={14} aria-hidden="true" /> {ASSISTANT_DRAFT_LABEL}
+          <NotepadText size={ICON.sm} aria-hidden="true" /> {ASSISTANT_DRAFT_LABEL}
         </h3>
         <button
           type="button"
-          className="btn-ghost gap-1 px-2! py-1! text-xs"
+          className="btn-ghost btn-sm"
           onClick={() => void copyDraft()}
         >
-          <Copy size={13} aria-hidden="true" /> העתקת הטיוטה
+          <Copy size={ICON.xs} aria-hidden="true" /> העתקת הטיוטה
         </button>
       </div>
       <p dir="auto" className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink-body">
@@ -226,18 +226,18 @@ function FeedbackControl({ runId }: { runId: string }) {
   if (state === 'sent') {
     return (
       <p className="flex items-center gap-1.5 text-xs text-ink-muted">
-        <Check size={13} className="text-done-fg" aria-hidden="true" /> המשוב נרשם. תודה.
+        <Check size={ICON.xs} className="text-done-fg" aria-hidden="true" /> המשוב נרשם. תודה.
       </p>
     );
   }
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-xs text-ink-muted">האם התשובה עזרה?</span>
-      <button type="button" className="btn-ghost gap-1 px-2! py-1! text-xs" disabled={state === 'busy'} onClick={() => void send(true)}>
-        <ThumbsUp size={13} aria-hidden="true" /> מועיל
+      <button type="button" className="btn-ghost btn-sm" disabled={state === 'busy'} onClick={() => void send(true)}>
+        <ThumbsUp size={ICON.xs} aria-hidden="true" /> מועיל
       </button>
-      <button type="button" className="btn-ghost gap-1 px-2! py-1! text-xs" disabled={state === 'busy'} onClick={() => void send(false)}>
-        <ThumbsDown size={13} aria-hidden="true" /> לא מועיל
+      <button type="button" className="btn-ghost btn-sm" disabled={state === 'busy'} onClick={() => void send(false)}>
+        <ThumbsDown size={ICON.xs} aria-hidden="true" /> לא מועיל
       </button>
       {error && <span role="alert" className="text-xs text-alert-fg">{error}</span>}
     </div>
@@ -305,7 +305,7 @@ export default function AnswerView({ result, role, onNavigate }: {
           );
         }
         return (
-          <div key={index} className="rounded-xl bg-surface-sunken p-3">
+          <div key={index} className="rounded-2xl bg-surface-sunken p-3">
             <p className="text-sm leading-relaxed text-ink-body">{block.text}</p>
             <EvidenceTrail facts={facts} sources={sources} sourceIsCurrent={sourceIsCurrent} onNavigate={onNavigate} />
           </div>
@@ -351,7 +351,7 @@ export default function AnswerView({ result, role, onNavigate }: {
       )}
 
       {result.tools_used.length > 0 && (
-        <div className="rounded-xl ring-1 ring-line-soft">
+        <div className="rounded-2xl ring-1 ring-line-soft">
           <Disclosure title="היקף הבדיקה" count={result.tools_used.length}>
             <ul className="space-y-1 text-xs text-ink-muted">
               {result.tools_used.map((tool) => (

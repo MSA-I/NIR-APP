@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../components/ui';
@@ -30,9 +31,12 @@ const row = (over: Partial<PurgeCandidate> = {}): PurgeCandidate => ({
   ...over,
 });
 
+// PageHeader reads the location to resolve its route description, so the screen needs a router.
 const renderScreen = () => render(
   <QueryClientProvider client={createAppQueryClient()}>
-    <ToastProvider><PurgeCandidates /></ToastProvider>
+    <MemoryRouter initialEntries={['/admin/purge']}>
+      <ToastProvider><PurgeCandidates /></ToastProvider>
+    </MemoryRouter>
   </QueryClientProvider>,
 );
 

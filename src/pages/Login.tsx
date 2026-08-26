@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { Eye, EyeOff, Loader2, Lock } from 'lucide-react';
+import { Card, ICON } from '../components/ui';
 import { useAuth, homeFor } from '../auth/AuthContext';
 import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
@@ -105,17 +106,17 @@ export default function Login() {
     <main className="flex min-h-dvh flex-col items-center justify-center bg-canvas px-4 py-5 sm:px-6 lg:py-7">
       {/* `dir=ltr` fixes the physical split from the reference: aurora on the visual left, form on
           the visual right. Each panel restores RTL for its Hebrew content. */}
-      <div className="card w-full max-w-[75rem] overflow-hidden">
+      <Card pad={false} clip className="w-full max-w-[75rem]">
         <div dir="ltr" className="lg:grid lg:min-h-[min(50rem,calc(100dvh-5rem))] lg:grid-cols-2">
           {/* Nothing is authenticated here, so there is no tenant to name. On a phone the visual
               collapses to a compact banner so the form still owns the first fold. */}
           <section aria-label="זהות InPlace" dir="rtl" className="aurora-pane h-48 lg:h-auto">
             <canvas ref={auroraRef} aria-hidden="true" className="absolute inset-0 size-full" />
             <div className="relative z-10 flex h-full flex-col justify-between p-6 sm:p-8 lg:p-10 xl:p-12">
-              <h1>
-                <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="156" height="34"
-                  className="h-auto w-36 sm:w-40" />
-              </h1>
+              {/* The lockup is the mark, not this screen's title — the <h1> is „כניסה לחשבון"
+                  in the form panel, so the page has exactly one h1 and it names the task. */}
+              <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="156" height="34"
+                className="h-auto w-36 sm:w-40" />
               <div>
                 {/* shell-ink, never -soft or -dim: on the ramp's brightest stop those measure
                     3.62:1 and worse, while shell-ink holds 4.83:1. */}
@@ -144,7 +145,9 @@ export default function Login() {
             className="flex items-center bg-surface px-6 py-8 sm:px-10 sm:py-10 lg:px-12 xl:px-16">
             <div className="mx-auto w-full max-w-md">
               <div>
-                <h2 id="login-heading" className="text-3xl font-semibold text-ink">כניסה לחשבון</h2>
+                {/* `page-title` is the app's one title class; `text-3xl` is a utility, so it wins
+                    over the component layer and the hero size is unchanged. */}
+                <h1 id="login-heading" className="page-title text-3xl">כניסה לחשבון</h1>
                 <p className="mt-2 text-sm text-ink-muted">
                   אין לכם חשבון?{' '}
                   <Link to="/signup" className="font-medium text-action underline-offset-2 hover:underline">
@@ -156,9 +159,16 @@ export default function Login() {
               {params.get('reset') === 'success' && (
                 <p role="status" className="note-done">הסיסמה הוחלפה וכל החיבורים נותקו. אפשר להתחבר מחדש.</p>
               )}
+              {/* Both credential fields are marked and both point at the one banner. A sign-in
+                  failure never names which of the two was wrong — saying so would be a member
+                  directory — so marking one field and not the other would be a claim the server
+                  did not make. What was missing was any link at all: the banner announced itself
+                  and left the fields unmarked. */}
               <div>
                 <label className="label" htmlFor="email">אימייל</label>
                 <input id="email" type="email" className="input" dir="ltr" autoComplete="username"
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? 'login-problem' : undefined}
                   value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
               <div>
@@ -169,11 +179,13 @@ export default function Login() {
                     or the padding is reserved on one side and the button sits on the other. */}
                 <div className="relative" dir="ltr">
                   <input id="password" type={showPassword ? 'text' : 'password'} className="input pe-12" autoComplete="current-password"
+                    aria-invalid={error ? true : undefined}
+                    aria-describedby={error ? 'login-problem' : undefined}
                     value={password} onChange={(e) => setPassword(e.target.value)} required />
                   <button type="button" onClick={() => setShowPassword((current) => !current)}
                     className="absolute inset-y-0 end-0 flex min-h-11 min-w-11 items-center justify-center rounded-lg text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                     aria-label={showPassword ? 'הסתרת סיסמה' : 'הצגת סיסמה'} aria-pressed={showPassword}>
-                    {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+                    {showPassword ? <EyeOff size={ICON.md} aria-hidden="true" /> : <Eye size={ICON.md} aria-hidden="true" />}
                   </button>
                 </div>
                 {/* Under the field at every width (owner, 19.08.2026). The reference parks it on
@@ -184,7 +196,7 @@ export default function Login() {
                   שכחתי סיסמה
                 </Link>
               </div>
-              {error && <div role="alert" className="note-alert">{error}</div>}
+              {error && <div id="login-problem" role="alert" className="note-alert">{error}</div>}
               {import.meta.env.DEV && demoAccounts.length > 0 && (
                 <details className="rounded-lg border border-shell-ink/15 bg-shell-ink/5 px-3 py-2 text-start">
                   <summary className="min-h-11 cursor-pointer content-center text-sm font-medium text-ink">
@@ -196,7 +208,7 @@ export default function Login() {
                   <div className="grid grid-cols-2 gap-2">
                     {demoAccounts.map((account) => (
                       <button key={account.role} type="button"
-                        className="btn-secondary min-h-11 justify-center px-2 text-xs"
+                        className="btn-secondary btn-sm justify-center"
                         aria-label={`כניסה כ${account.label}`}
                         disabled={busy}
                         onClick={() => {
@@ -211,7 +223,7 @@ export default function Login() {
                 </details>
               )}
               <button type="submit" className="btn-primary w-full" disabled={busy}>
-                {busy ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Lock size={15} aria-hidden="true" />}
+                {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Lock size={ICON.sm} aria-hidden="true" />}
                 {busy ? 'מתחבר…' : 'התחברות'}
               </button>
               {providers.length > 0 && (
@@ -244,7 +256,7 @@ export default function Login() {
             </div>
           </section>
         </div>
-      </div>
+      </Card>
       {/* Outside the card now, on the page canvas — flex+gap rather than space-x-3, because the
           app is RTL and space-x uses the physical axis. */}
       <div className="mt-5 flex justify-center gap-3 text-xs text-ink-muted">

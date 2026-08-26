@@ -228,9 +228,56 @@
      separates it from the await pill by structure and not only by hue. The rung's NAME is always
      printed inside the mark, so the meaning never rests on colour at all.
      Three stops because one flat fill has no metal in it: highlight, body, edge. */
-  --color-tier-gold: oklch(76% 0.135 88);          /* the body of the chip */
-  --color-tier-gold-soft: oklch(89% 0.085 92);     /* the lit edge */
-  --color-tier-gold-deep: oklch(58% 0.105 78);     /* the shaded edge and the border */
+  /* OWNER RULING 26.08.2026, second pass: **gold is out of the ladder entirely.** It was the one
+     warm note in an Onyx / Wheat / Oceanic wrapper and it read as a sticker rather than as a rung.
+     Pro takes an oceanic metal instead, so the three rungs now run cool-neutral (silver) → brand
+     (oceanic) → ink (onyx), which is the same journey the product itself makes.
+     Chroma 0.075 is the ceiling that keeps this readable as a METAL and not as the action colour:
+     `--color-action` is 0.058 at L 33.7%, and a chip at L 76% with the same hue reads as a lighter
+     tint of the button, not as a separate object. The lightness ladder is unchanged — 89 / 76 / 61
+     — so the rung keeps the exact weight gold had and nothing below it shifts. */
+  --color-tier-oceanic: oklch(76% 0.075 209);      /* the body of the chip */
+  --color-tier-oceanic-soft: oklch(89% 0.045 209); /* the lit edge */
+  --color-tier-oceanic-deep: oklch(61% 0.070 209); /* the shaded edge and the border */
+
+  /* Silver, mirroring gold stop for stop (owner ruling 26.08.2026: basic=silver, pro=gold,
+     premium=black). Same three lightnesses as gold — 89 / 76 / 61 — so the two rungs differ by
+     metal and never by weight; a silver chip sitting lighter than gold would read as a lesser
+     THING rather than a lesser TIER. Hue 271 and chroma under 0.05 are sampled from the
+     reference the owner supplied: real silver is a cool, nearly-desaturated blue-gray, and
+     pushing the chroma up turns it into a periwinkle pill that collides with info.
+     Gold shipped its deep stop at 58%, and it moved to 61% for both metals: lettering sits on
+     the last stop of the gradient, and 58% measured 4.19:1 against onyx — under AA for 12px
+     text. 61% measures 4.55:1 (gold) and 4.50:1 (silver), and still clears 3:1 as a border. */
+  --color-tier-silver: oklch(76% 0.045 271);       /* the body of the chip */
+  --color-tier-silver-soft: oklch(89% 0.028 271);  /* the lit edge */
+  --color-tier-silver-deep: oklch(61% 0.040 271);  /* the shaded edge and the border */
+
+  /* Onyx — the top rung, and the one chip that inverts. Gold and silver are light fills with
+     onyx lettering; this is a dark fill with on-solid lettering, which is exactly why it reads
+     as ABOVE them instead of as a third metal beside them. The stops therefore run the other
+     way: soft is the LIT edge and so the lightest, deep is the shaded edge.
+     38.8% is not a taste choice — it is the ceiling that keeps white lettering at AA across the
+     whole gradient (measured 9.71:1; 56.5% is where it would begin to fail). Hue 272-293 keeps
+     the cool cast of the shell, so the chip belongs to Onyx and is not a second black. */
+  --color-tier-onyx: oklch(28.5% 0.024 278);       /* the body of the chip */
+  --color-tier-onyx-soft: oklch(38.8% 0.023 272);  /* the lit edge */
+  --color-tier-onyx-deep: oklch(19% 0.020 293);    /* the shaded edge and the border */
+
+  /* ---- The rainbow edge — ONE button, and a NAMED EXCEPTION to two rules (owner ruling
+     26.08.2026) ----
+     It breaks "Don't לפזר גוון מותג נוסף" (five hues where the wrapper uses one) and
+     "אנימציה שאינה מצב — אסור בחוקה" (the loop reports nothing). It is registered here, beside
+     the pro sheen, for the same reason that one is: an exception that is written down stays one
+     mark; an exception that is merely tolerated becomes a habit. The bound is narrow — it may
+     dress the plan-upgrade action and nothing else, it never carries meaning (the label does),
+     and it stops dead under reduced motion with the static band still fully legible.
+     Values are Magic UI's, already authored in oklch, so they enter the palette unconverted. */
+  --color-rainbow-1: oklch(66.2% 0.225 25.9);
+  --color-rainbow-2: oklch(60.4% 0.26 302);
+  --color-rainbow-3: oklch(69.6% 0.165 251);
+  --color-rainbow-4: oklch(80.2% 0.134 225);
+  --color-rainbow-5: oklch(90.7% 0.231 133);
 
   /* ---- Section 6: one color language ----
      Four meanings: done=הושלם/תקין · await=ממתין לטיפול · alert=חריגה/דחוף · info=מידע.
@@ -383,6 +430,92 @@ body {
   .btn-danger { @apply btn bg-alert-solid text-on-solid hover:bg-alert-on-soft; }
   .btn-ghost { @apply btn text-ink-soft hover:bg-canvas; }
 
+  /* ---- The size scale `btn` was missing (26.08.2026) ----
+     The audit counted 32 `!`-flagged padding overrides across 20 files — `p-1.5!`, `p-2!`,
+     `py-1!`, `px-6!` and so on. That many overrides is not carelessness; it is the base saying
+     it has one size and the product needing three. Declared AFTER the variants so equal
+     specificity resolves in source order and `btn-ghost btn-sm` narrows rather than fights.
+     Neither modifier touches `min-h-11`: a control may get quieter, never harder to hit. */
+  .btn-sm { @apply px-2.5 py-1 text-xs gap-1; }
+  /* A destructive action that is NOT the main thing on its screen — cancel an order, revoke a
+     link, override a block. Three sites were hand-composing `btn-ghost text-alert-fg`, which is
+     the right instinct: `btn-danger`'s solid fill would give a rare owner action the prominence
+     of a primary one, while a plain ghost hides that it destroys something. This is the middle
+     rung, and it satisfies DESIGN.md:586-587 — the alert colour is present at rest, not on hover. */
+  .btn-danger-quiet { @apply btn text-alert-fg hover:bg-alert-wash; }
+  /* ---- A control that is disabled as a STANDING state, not a momentary one (26.08.2026) ----
+     `btn`'s `disabled:opacity-50` is right for a button that is briefly unavailable — mid-save,
+     mid-request — where the dim says "wait". It is wrong for a control that is disabled as a
+     policy and will stay that way for weeks: the plan-upgrade actions, which cannot fire until
+     billing opens. There the person still has to READ what the button would do, and half strength
+     took the label from 9.60:1 to 2.53:1 — under AA, on the only affordance on its row.
+     This was measured rather than guessed, and the measurement is the reason it is a variant and
+     not a colour choice: at 50% over a paper row a fill must composite below L 0.29 to clear 3:1,
+     which is `--color-ink` and nothing lighter. A near-black outline on four buttons is exactly
+     what T7.1 banned. The dim did not narrow the options; it removed all of them.
+     Still `disabled` — not `aria-disabled`. It is genuinely inoperable and must stay in the
+     accessibility tree as such; what changes is only that it stays readable. */
+  .btn-standby { @apply btn bg-action-soft text-action-on-soft disabled:opacity-100; }
+  .btn-icon { @apply min-w-11 shrink-0 px-0 py-0; }
+
+  /* ---- The rainbow edge, the plan-upgrade action only (owner ruling 26.08.2026) ----
+     Ported from Magic UI. Two things changed on the way in and neither was optional: the
+     original hardcodes `#121213` / `#ffffff` / `rgba(18,18,19,.6)`, which `check:tokens` fails
+     the build on, so the body is `--color-shell`; and it shipped at 36px, under the touch floor,
+     so it inherits `btn` and its `min-h-11` instead of carrying its own height.
+     The band is TWO stacked backgrounds on one element: an opaque body clipped to the padding
+     box, and the moving spectrum clipped to the border box — which is what paints a 2px
+     travelling edge without a second element. The glow under the button is `::before`, sitting
+     mostly outside the box, blurred. Registered as an exception beside the tokens themselves. */
+  .btn-rainbow {
+    @apply btn relative text-on-solid;
+    border: 2px solid transparent;
+    background-image:
+      linear-gradient(var(--color-shell), var(--color-shell)),
+      linear-gradient(90deg, var(--color-rainbow-1), var(--color-rainbow-5), var(--color-rainbow-3), var(--color-rainbow-4), var(--color-rainbow-2));
+    background-size: 200%;
+    background-clip: padding-box, border-box;
+    background-origin: border-box;
+    animation: rainbow 2s linear infinite;
+  }
+  .btn-rainbow:hover { filter: brightness(1.08); }
+  /* The body is `--color-shell` (L 19.57%), which reads as a hole punched in a light card — the
+     effect the port was built for. On the onyx plan card (L 28.5%) the same body measures 1.27:1
+     against its own background, so the 2px band carries the entire boundary and the most emphatic
+     control on the screen becomes the quietest. On a dark surface the body inverts to paper: the
+     band still travels, and the button is a light shape on a dark card instead of a dark shape
+     lost in one. */
+  .plan-badge-premium ~ * .btn-rainbow,
+  [data-state='featured'] .btn-rainbow {
+    background-image:
+      linear-gradient(var(--color-surface), var(--color-surface)),
+      linear-gradient(90deg, var(--color-rainbow-1), var(--color-rainbow-5), var(--color-rainbow-3), var(--color-rainbow-4), var(--color-rainbow-2));
+    @apply text-ink;
+  }
+  .btn-rainbow::before {
+    content: '';
+    position: absolute;
+    inset-block-end: -20%;
+    /* `inset-inline-start: 50%` + `translate: -50%` is the LTR way to centre, and it does not
+       survive RTL: `translate` is a physical axis, so it pushes the glow the same direction in
+       both. Measured on the built stylesheet at 390px — used `left: -29.9px`, translated to
+       **-119.6px**, i.e. 120px past the button's start edge, and a real 82px of horizontal
+       document overflow on the subscription screen. It shipped with the original port.
+       `inset-inline` centres by symmetric insets, with no percentage translate to mirror. */
+    inset-inline: 20%;
+    z-index: 0;
+    block-size: 20%;
+    background-image: linear-gradient(90deg, var(--color-rainbow-1), var(--color-rainbow-5), var(--color-rainbow-3), var(--color-rainbow-4), var(--color-rainbow-2));
+    background-size: 200%;
+    filter: blur(0.75rem);
+    animation: rainbow 2s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes rainbow {
+    from { background-position: 0%; }
+    to   { background-position: 200%; }
+  }
+
   /* 16px on phones prevents Safari from zooming the whole page when an input receives focus. */
   .input { @apply min-h-11 w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-base sm:text-sm text-ink-body placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-focus focus:border-focus disabled:bg-surface-sunken; }
   .label { @apply block text-sm font-medium text-ink-soft mb-1; }
@@ -430,37 +563,66 @@ body {
      absolutely positioned overlay that must be clipped to the pill. */
   .plan-badge { @apply badge relative overflow-hidden px-2.5 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus; }
   .plan-badge-free { @apply bg-surface-sunken text-ink-soft; }
+  /* OWNER RULING 26.08.2026 — the ladder is now three metals: basic silver, pro gold, premium
+     onyx. What changed is which rung wears the gold, not what gold means; the token trio moved
+     up one step and `business` keeps reusing the top rung so it never reads as a downgrade.
+     All three share one geometry — lit edge, body, shaded edge on a 135deg run — so the rungs
+     differ by metal alone. The first two are light fills with onyx lettering; onyx inverts to a
+     dark fill with on-solid lettering, which is what makes it read as ABOVE them rather than as
+     a third metal beside them. */
   .plan-badge-basic {
-    @apply text-action-on-soft;
-    border: 1px solid var(--color-action-line);
-    background-image: linear-gradient(135deg, var(--color-action-wash) 0%, var(--color-action-soft) 100%);
+    @apply text-shell;
+    border: 1px solid var(--color-tier-silver-deep);
+    background-image: linear-gradient(135deg,
+      var(--color-tier-silver-soft) 0%,
+      var(--color-tier-silver) 45%,
+      var(--color-tier-silver-deep) 100%);
   }
   .plan-badge-pro {
-    @apply text-on-solid;
-    border: 1px solid var(--color-action-solid);
-    background-image: linear-gradient(135deg, var(--color-action-solid) 0%, var(--color-action) 100%);
+    @apply text-shell;
+    border: 1px solid var(--color-tier-oceanic-deep);
+    background-image: linear-gradient(135deg,
+      var(--color-tier-oceanic-soft) 0%,
+      var(--color-tier-oceanic) 45%,
+      var(--color-tier-oceanic-deep) 100%);
   }
   .plan-badge-premium {
-    @apply text-shell;
-    border: 1px solid var(--color-tier-gold-deep);
+    @apply text-on-solid;
+    border: 1px solid var(--color-tier-onyx-deep);
     background-image: linear-gradient(135deg,
-      var(--color-tier-gold-soft) 0%,
-      var(--color-tier-gold) 45%,
-      var(--color-tier-gold-deep) 100%);
+      var(--color-tier-onyx-soft) 0%,
+      var(--color-tier-onyx) 45%,
+      var(--color-tier-onyx-deep) 100%);
   }
 
-  /* Pro's travelling sheen. OWNER RULING 25.08.2026, and it is an EXPLICIT, NAMED EXCEPTION to
+  /* The tap target, not the chip. In the phone header the mark is a link into the plans screen,
+     and the audit measured the chip itself at ~26px inside a row of 44px controls — both hard to
+     hit and a visible break in the cluster. The height belongs on the LINK: growing the chip to
+     44px would make a badge that looks like a button. */
+  .plan-badge-trigger { @apply inline-flex min-h-11 min-w-11 items-center justify-center; }
+  /* The chip was sized for the header cluster, where it sits beside 44px controls and has to stay
+     out of their way. On a plan card it is the card's own mark, at the top of its own block, and
+     at header size it reads as a label that fell off something larger. Same three metals, same
+     geometry, one step up. */
+  .plan-badge-lg { @apply px-3.5 py-1.5 text-sm; }
+
+  /* The travelling sheen — **moved from pro to premium, 26.08.2026 (owner)**. It always belonged
+     to the top rung: a glint is what a person reads as "the expensive one", and spending it on the
+     middle rung left the rung above it with nothing to say for itself. On onyx the pass goes back
+     to a low percentage — the fill is dark again, which is the condition the original 42% was tuned
+     for — where over a light fill it had needed 70% to show at all.
+     OWNER RULING 25.08.2026, and it is an EXPLICIT, NAMED EXCEPTION to
      "אנימציה שאינה מצב — אסור בחוקה" (DESIGN.md §Don't): nothing about this loop reports a change
      in the system. The exception is bounded so it stays one mark and not a new habit — a single
      element, one slow pass, no layout property, no colour that means anything, and it stops dead
      under reduced-motion with the pill's static gradient still fully legible underneath. */
-  .plan-badge-pro::after {
+  .plan-badge-premium::after {
     content: '';
     position: absolute;
     inset: 0;
     background-image: linear-gradient(105deg,
       transparent 35%,
-      color-mix(in oklab, var(--color-on-solid) 42%, transparent) 50%,
+      color-mix(in oklab, var(--color-on-solid) 38%, transparent) 50%,
       transparent 65%);
     background-size: 260% 100%;
     background-repeat: no-repeat;
@@ -500,11 +662,13 @@ body {
   [data-section="procurement"],
   [data-section="money"] { --section-accent: var(--color-section-accent); }
 
-  /* The section glyph — the icon of the active navigation item. It sits INSIDE the active item's
-     paper pill, never on the dark shell: the accents measure 5.0–5.7:1 on paper and only ~2.2:1
-     on `shell`, so a rail drawn straight onto the sidebar would be an invisible decoration. The
-     `currentColor` fallback means an item with no domain simply keeps the pill's ink. */
-  .section-glyph { color: var(--section-accent, currentColor); }
+  /* `.section-glyph` used to be the second consumer here — the icon of the active navigation item,
+     tinted inside its paper pill. It was removed on 26.08.2026 after the audit found it could not
+     render: the class was applied only when `linkCls` was called with `surface === 'shell'`, and
+     no caller has passed `'shell'` since T7.2 turned the dark sidebar into the floating pill. The
+     pill is text-only and the drawer is no longer dark, so there was no icon left to tint.
+     The accent therefore has exactly ONE expression now: the short rule below. That is a smaller
+     claim than the two the language was written around, and it is the honest one. */
 
   /* The section mark — a short rule under the page title, the paper-side half of the same cue.
      28×3px cannot be read as a divider, and it carries no meaning the `h1` beside it does not
@@ -581,8 +745,13 @@ body {
 .phone-safe-main {
   padding-inline-start: max(1rem, env(safe-area-inset-right));
   padding-inline-end: max(1rem, env(safe-area-inset-left));
-  /* Clear the raised capture puck's full envelope, not only the bar rectangle. */
-  padding-block-end: calc(var(--mobile-action-bar-size) + env(safe-area-inset-bottom) + 1.5rem);
+  /* Clear the raised capture puck's full envelope, not only the bar rectangle.
+     The reserve was 1.5rem and the puck protrudes 1.75rem (see .mobile-action-puck below), so
+     the dome covered the last 4px of the last record — the exact thing DESIGN.md:603-604
+     promises it will not. 1.5rem was correct when the puck sat at -1.25rem; the offset moved
+     and the reserve did not. 2rem rather than 1.75rem, so --shadow-fab clears too. The
+     landscape block lowers the puck to -0.75rem, where this costs 4px of dead space. */
+  padding-block-end: calc(var(--mobile-action-bar-size) + env(safe-area-inset-bottom) + 2rem);
 }
 
 /* A 320px shell cannot carry menu + home mark + two-line identity + three utilities without
@@ -599,7 +768,6 @@ body {
     padding-inline: 0.25rem;
   }
 
-  .mobile-shell-mark { display: none; }
 }
 
 .phone-safe-drawer,
@@ -778,7 +946,7 @@ body {
  * at the truck was the defect; covering the save button would have been a worse one.
  *
  * The clearance is `.mobile-overlay-stack`'s, verbatim and for the same reason: the raised capture
- * puck protrudes 1.25rem above the bar, so bar-height alone would leave it overlapping this bar's
+ * puck protrudes 1.75rem above the bar, so bar-height alone would leave it overlapping this bar's
  * lower edge. `.mobile-action-bar` is `lg:hidden`, so from 64rem up there is nothing to clear and
  * the taskbar returns to the bottom edge with its own safe-area padding.
  *
@@ -802,7 +970,7 @@ body {
 }
 
 .mobile-overlay-stack {
-  /* +2rem clears the raised capture puck, which protrudes 1.25rem above the bar */
+  /* +2rem clears the raised capture puck, which protrudes 1.75rem above the bar */
   inset-block-end: calc(var(--mobile-action-bar-size) + env(safe-area-inset-bottom) + 2rem);
 }
 
@@ -859,7 +1027,14 @@ body {
     box-shadow: var(--shadow-menu);
   }
 
-  body:has(.assistant-surface[data-assistant-mode="docked"]) #main {
+  /* The docked panel is `fixed`, so anything it overlaps has to reserve room for itself. `#main`
+     did; the read-only and offboarding banners did not, because they are SIBLINGS of `#main`
+     rather than children of it — and the panel covered them edge to edge for its full 27.5rem.
+     Measured 440×45 of a `role="alert"` band hidden behind it (26.08.2026).
+     A banner that says "you cannot write right now" is the last thing that may be obscured by a
+     panel, and the assistant is read-only itself, so the two are on screen together by design. */
+  body:has(.assistant-surface[data-assistant-mode="docked"]) #main,
+  body:has(.assistant-surface[data-assistant-mode="docked"]) > #root [role="alert"].no-print {
     padding-inline-end: 29rem;
   }
 }
@@ -995,6 +1170,7 @@ html { transition: --glow-x 0.45s ease-out, --glow-y 0.45s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
   .animate-spin { animation-duration: 1.5s; }
+
   .btn-primary, .btn-secondary, .btn-danger, .btn-ghost, .card-link-hover {
     transition-duration: 0.01ms !important;
   }
@@ -1006,10 +1182,21 @@ html { transition: --glow-x 0.45s ease-out, --glow-y 0.45s ease-out; }
   /* Pro's sheen is the one loop in the product that reports nothing, so it is also the one that
      may vanish completely: the pill's static gradient carries the whole mark without it. Hidden
      rather than merely paused, because a sheen frozen mid-pass reads as a rendering fault. */
-  .plan-badge-pro::after { animation: none; display: none; }
+  .plan-badge-premium::after { animation: none; display: none; }
+  /* The rainbow edge stops but does NOT vanish, and the difference from the sheen above is
+     the point: the sheen is an overlay on top of a pill that is complete without it, while
+     this band IS the button border. Removed, the control would lose its outline. Frozen, it
+     is a static multicolour edge — still the most emphatic button on the screen, which is the
+     whole reason it was chosen, and with nothing moving. The blurred glow freezes with it. */
+  .btn-rainbow, .btn-rainbow::before { animation: none; }
 }
 
 @media print {
+  /* `.table-scroll` carries `contain: inline-size paint`, and paint containment clips the box and
+     makes it monolithic — which is exactly what breaks `.monthly-report .report-table-wrap`'s
+     `overflow: visible` and truncates the report at the page break. On screen the containment is
+     what stops a wide table pushing page width; on paper there is no viewport to protect. */
+  .table-scroll { contain: none !important; }
   .no-print { display: none !important; }
   body { background: white; }
   .table-head { background: white !important; }

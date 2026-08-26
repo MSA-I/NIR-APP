@@ -4,7 +4,7 @@ import { fmtDateTime, formatQuantity } from '../lib/format';
 import { RECEIPT_LINE_STATUS } from '../lib/status';
 import { receiptClock, type ReceiptConflictCode } from '../lib/offlineQueue';
 import type { OfflineReceiptLine, ReceiptLineStatusValue } from '../lib/offlineDb';
-import { Modal, Note } from './ui';
+import { Modal, Note, ToggleGroup } from './ui';
 
 /**
  * The decision screen a rejected goods receipt opens (ADR-0006:40-42, `OFFLINE-SYNC-DESIGN.md` §5).
@@ -402,35 +402,42 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
           </div>
         </dl>
 
-        <div className="overflow-x-auto">
+        {/* A wide table is a keyboard-scrollable region, not a mouse-only viewport — the same
+            contract DataTable's scroller carries. `.table-scroll` also contains the inline size,
+            which is what stops the widest product name from pushing the dialog past 390px.
+            `.th`/`.td` are the shared cell classes: without `.th` these headers were dark ink on
+            the oceanic `.table-head` bar, because that rule is scoped to `.th`. `whitespace-normal`
+            is a deliberate local narrowing of `.td` for the two cells that hold prose. */}
+        <div className="table-scroll overflow-x-auto" role="region" tabIndex={0}
+          aria-label="השוואת הכמויות בין המכשיר לשרת; ניתן לגלול בתוך הטבלה">
           <table className="w-full text-sm">
             <caption className="sr-only">השוואת הכמויות בין המכשיר לשרת</caption>
             <thead className="table-head">
-              <tr className="border-b border-line text-start text-xs text-ink-soft">
-                <th scope="col" className="py-2 text-start font-medium">פריט</th>
-                <th scope="col" className="py-2 text-start font-medium">במכשיר</th>
-                <th scope="col" className="py-2 text-start font-medium">בשרת</th>
+              <tr className="border-b border-line">
+                <th scope="col" className="th">פריט</th>
+                <th scope="col" className="th">במכשיר</th>
+                <th scope="col" className="th">בשרת</th>
                 {showLineDecision && (
-                  <th scope="col" className="py-2 text-start font-medium">ההכרעה</th>
+                  <th scope="col" className="th">ההכרעה</th>
                 )}
               </tr>
             </thead>
             <tbody>
               {conflict.lines.map((line) => (
                 <tr key={line.orderItemId} className="border-b border-line-soft align-top">
-                  <td className="py-2 pe-2">
+                  <td className="td whitespace-normal">
                     <div className="text-ink"><bdi>{line.productName}</bdi></div>
                     <div className="text-xs text-ink-muted">
                       הוזמן <span className="num">{formatQuantity(line.orderedQty, line.unit)}</span>
                     </div>
                   </td>
-                  <td className="py-2 pe-2">
+                  <td className="td">
                     <span className="num">{line.localQty}</span>{' '}
                     <span className="text-xs text-ink-muted">
                       {RECEIPT_LINE_STATUS[line.localStatus]?.label ?? line.localStatus}
                     </span>
                   </td>
-                  <td className="py-2 pe-2">
+                  <td className="td whitespace-normal">
                     <div>
                       נותר לקבלה: <span className="num">{line.serverRemaining ?? '—'}</span>
                     </div>
@@ -442,21 +449,30 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
                     </div>
                   </td>
                   {showLineDecision && (
-                    <td className="py-2">
-                      <div className="flex flex-wrap gap-1.5">
-                        {([['local', 'המכשיר'], ['server', 'השרת']] as const).map(([value, label]) => (
-                          <button key={value} type="button"
-                            className={`rounded-lg border min-h-11 px-3 text-xs font-medium transition-colors ${
-                              choice[line.orderItemId] === value
-                                ? 'bg-action text-on-solid border-action'
-                                : 'border-line text-ink-soft hover:bg-surface-hover'}`}
-                            aria-pressed={choice[line.orderItemId] === value}
-                            aria-label={`${label} עבור ${line.productName}`}
-                            onClick={() => setChoice((current) => ({ ...current, [line.orderItemId]: value }))}>
-                            {label}
-                          </button>
-                        ))}
-                      </div>
+                    <td className="td">
+                      {/* One of the app's three hand-rolled pick-one controls; now the shared
+                          ToggleGroup. The per-line identity stays inside each button's accessible
+                          name — a screen-reader user meeting one chip out of context still hears
+                          which product it decides. */}
+                      <ToggleGroup
+                        label={`ההכרעה עבור ${line.productName}`}
+                        value={choice[line.orderItemId]}
+                        onChange={(value) => setChoice((current) => ({ ...current, [line.orderItemId]: value }))}
+                        items={([['local', 'המכשיר'], ['server', 'השרת']] as const).map(([value, label]) => ({
+                          key: value,
+                          // Two spans, not one string with a hidden tail: the accessible-name
+                          // algorithm trims every text node before joining them, so a leading
+                          // space would be eaten and the name would read "המכשירעבור עגבניות".
+                          // The whole sentence is therefore ONE text node in the sr-only span,
+                          // and the visible chip is aria-hidden.
+                          label: (
+                            <>
+                              <span aria-hidden="true">{label}</span>
+                              <span className="sr-only">{`${label} עבור ${line.productName}`}</span>
+                            </>
+                          ),
+                        }))}
+                      />
                     </td>
                   )}
                 </tr>

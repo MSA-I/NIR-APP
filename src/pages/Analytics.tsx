@@ -1,7 +1,7 @@
 import { Star } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { ErrorNote, DataTable, PageHeader, SkeletonTable, type Column } from '../components/ui';
+import { ErrorNote, DataTable, PageHeader, SkeletonTable, ICON, type Column } from '../components/ui';
 import { fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreTone } from '../components/supplier-metrics';
 import { fmtMoneyExact, fmtNum } from '../lib/format';
 
@@ -46,7 +46,7 @@ export default function Analytics() {
   const columns: Column<Row>[] = [
     { key: 'name', header: 'ספק', render: (r) => <span className="font-medium">{r.name}</span>, sortValue: (r) => r.name },
     { key: 'rating', header: 'דירוג', className: 'num', sortValue: (r) => r.rating ?? 0,
-      render: (r) => r.rating != null ? <span className="inline-flex items-center gap-1"><Star size={13} className="fill-star text-star" />{r.rating}</span> : '—' },
+      render: (r) => r.rating != null ? <span className="inline-flex items-center gap-1"><Star size={ICON.xs} className="fill-star text-star" aria-hidden="true" />{r.rating}</span> : '—' },
     { key: 'lead', header: 'זמן אספקה', className: 'num', sortValue: (r) => r.m?.avg_lead_days ?? Number.MAX_SAFE_INTEGER,
       render: (r) => fmtLeadDays(r.m?.avg_lead_days) },
     { key: 'otd', header: 'עמידה בזמנים', className: 'num', sortValue: (r) => r.m?.on_time_pct ?? -1,

@@ -6,7 +6,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
-import { ConfirmDialog, ErrorNote, Note, useToast } from '../components/ui';
+import { Card, ConfirmDialog, ErrorNote, ICON, Note, useToast } from '../components/ui';
 
 /**
  * The organization's autonomy switches, in the order a file meets them: a mixed PDF is split
@@ -109,10 +109,10 @@ function PolicyCard({
   }
 
   return (
-    <article className="card card-pad space-y-4" data-testid={`autonomy-policy-${definition.key}`}>
+    <Card className="space-y-4" as="article" data-testid={`autonomy-policy-${definition.key}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h3 className="section-title flex items-center gap-2">
-          <Icon size={18} aria-hidden="true" /> {definition.title}
+          <Icon size={ICON.md} aria-hidden="true" /> {definition.title}
         </h3>
         <span className={policy.autonomy_enabled ? 'badge-alert' : 'badge-idle'}>
           {policy.autonomy_enabled ? 'מופעלת' : 'כבויה'}
@@ -154,7 +154,7 @@ function PolicyCard({
           disabled={busy || (!policy.autonomy_enabled && policy.kill_switch)}
           onClick={() => setPendingEnable(!policy.autonomy_enabled)}
         >
-          {busy && <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" />}
+          {busy && <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />}
           {policy.autonomy_enabled ? 'כיבוי' : 'הפעלה'}
         </button>
       </div>
@@ -174,7 +174,7 @@ function PolicyCard({
           if (pendingEnable !== null) void apply(pendingEnable, reason ?? '');
         }}
       />
-    </article>
+    </Card>
   );
 }
 
@@ -191,7 +191,7 @@ export function AutonomyPolicyPanel({ orgId, orgName }: { orgId: string; orgName
     return POLICIES.map(({ key }) => rows.find((row) => row.policy_key === key) ?? null);
   }, [orgId]);
 
-  if (loading) return <div className="card card-pad text-sm text-ink-muted">טוען את מדיניות האוטונומיה…</div>;
+  if (loading) return <Card className="text-sm text-ink-muted">טוען את מדיניות האוטונומיה…</Card>;
   if (error) return <ErrorNote message={error} />;
   if (!data || data.some((policy) => !policy)) {
     return <ErrorNote message="מדיניות האוטונומיה אינה זמינה." />;

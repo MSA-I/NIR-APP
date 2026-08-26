@@ -3,7 +3,7 @@ import { Banknote, ReceiptText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useQuery } from '../../lib/useQuery';
 import { fetchAll } from '../../lib/supabasePaging';
-import { AttentionZone, SkeletonCards, ErrorNote, type AttentionItem } from '../../components/ui';
+import { AttentionZone, SkeletonCards, ErrorNote, ICON, type AttentionItem } from '../../components/ui';
 import { Scorecard, type ScoreItem } from '../../components/supplier-metrics';
 import { CategoryDonut, GroupedBarChart, SpendBarChart, money, type LinePoint } from '../../components/charts';
 import { comparisonSeries } from '../../lib/theme';
@@ -113,8 +113,8 @@ export default function AccountantDashboard() {
 
   return (
     <DashboardFrame title="מרכז הבקרה — הנהלת חשבונות" actions={<>
-      <Link to="/pay" className="btn-primary"><Banknote size={16} /> תשלומים</Link>
-      <Link to="/invoices" className="btn-secondary"><ReceiptText size={16} /> חשבוניות</Link>
+      <Link to="/pay" className="btn-primary"><Banknote size={ICON.sm} aria-hidden="true" /> תשלומים</Link>
+      <Link to="/invoices" className="btn-secondary"><ReceiptText size={ICON.sm} aria-hidden="true" /> חשבוניות</Link>
     </>}>
       <AttentionZone items={data.attention} />
       <Scorecard items={data.kpis} />

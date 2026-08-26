@@ -10,7 +10,7 @@ import type {
   DocumentInterpretationType, DocumentPacket, DocumentPacketSegment, DocumentProcessingSnapshot,
 } from '../../lib/useDocumentProcessing';
 import type { Tone } from '../../lib/status';
-import { Note } from '../ui';
+import { ICON, Note, SubPanel } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
 import { confidenceLabel, DOCUMENT_TYPE_LABELS } from './model';
 import { AUTOMATIC_SPLIT_PAGE_CEILING, PAID_OCR_PAGE_CAP } from './serverLimits';
@@ -115,7 +115,7 @@ function SegmentGroup({ id, testId, title, count, tone, summary, open, onOpenCha
         <span className="font-medium text-ink-body">{title}</span>
         <span className={`badge-${tone} num`}>{count}</span>
         <span className="ms-auto min-w-0 text-end text-xs text-ink-muted">{summary}</span>
-        <ChevronDown size={16} aria-hidden="true"
+        <ChevronDown size={ICON.sm} aria-hidden="true"
           className="shrink-0 text-ink-ghost transition-transform duration-200 ease-out group-open:rotate-180 motion-reduce:transition-none" />
       </summary>
       <div className="border-t border-line-soft px-3 pb-4 pt-3 sm:px-4">{open && children}</div>
@@ -135,7 +135,7 @@ function SegmentEditor({ draft, stored, pageCount, editable, busy, attention, on
   onChange: (patch: Partial<SegmentDraft>) => void;
 }) {
   return (
-    <article className="rounded-2xl bg-surface-sunken p-3">
+    <SubPanel as="article">
       <div className="grid gap-3 sm:grid-cols-[6rem_6rem_minmax(0,1fr)]">
         <label>
           <span className="label">עמוד ראשון</span>
@@ -166,7 +166,7 @@ function SegmentEditor({ draft, stored, pageCount, editable, busy, attention, on
           </Link>
         )}
       </div>
-    </article>
+    </SubPanel>
   );
 }
 
@@ -365,7 +365,7 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
           </label>
           <PrimaryDecision className="mt-3" label="אישור פיצול החבילה">
             <button type="button" className="btn-primary" disabled={busy} onClick={() => void approve()}>
-              {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <CheckCircle2 size={17} aria-hidden="true" />}
+              {busy ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <CheckCircle2 size={ICON.md} aria-hidden="true" />}
               {busy ? 'יוצר מסמכים נפרדים…' : 'אישור הפיצול ויצירת המסמכים'}
             </button>
           </PrimaryDecision>
@@ -376,7 +376,7 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
         <div className="mt-4 border-t border-line pt-4" data-testid="packet-decision">
           <PrimaryDecision label="יצירת המסמכים הנפרדים">
             <button type="button" className="btn-primary" disabled={busy} onClick={() => void retryMaterialization()}>
-              {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <FileStack size={17} aria-hidden="true" />}
+              {busy ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <FileStack size={ICON.md} aria-hidden="true" />}
               {busy ? 'יוצר מסמכים נפרדים…' : 'יצירת המסמכים הנפרדים'}
             </button>
           </PrimaryDecision>
@@ -394,8 +394,8 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
             <button type="button" className="btn-ghost" onClick={toggleAllGroups}
               aria-expanded={anyGroupOpen} aria-controls={groupIds} data-testid="packet-fold-all">
               {anyGroupOpen
-                ? <ChevronsDownUp size={17} aria-hidden="true" />
-                : <ChevronsUpDown size={17} aria-hidden="true" />}
+                ? <ChevronsDownUp size={ICON.md} aria-hidden="true" />
+                : <ChevronsUpDown size={ICON.md} aria-hidden="true" />}
               {anyGroupOpen ? 'קיפול כל החלקים' : 'פתיחת כל החלקים'}
             </button>
           </div>

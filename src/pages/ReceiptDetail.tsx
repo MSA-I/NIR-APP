@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router';
 import { FileText } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { Breadcrumbs, EmptyState, ErrorNote, Note, RecordHeader, RecordSkeleton, StatusBadge } from '../components/ui';
+import { Breadcrumbs, Card, EmptyState, ErrorNote, Note, RecordHeader, RecordSkeleton, StatusBadge, ICON } from '../components/ui';
 import { DocumentList } from '../components/FileUpload';
 import OfflineQueueStatus from '../components/OfflineQueueStatus';
 import { fmtDate, formatQuantity, productLabel } from '../lib/format';
@@ -104,11 +104,11 @@ export default function ReceiptDetail() {
         primaryAction={canOpenOrder && (
           /* Retargeted from /invoices/new (G1, 10.08.2026): an invoice is received, not entered. */
           <Link className="btn-primary inline-flex" to="/documents">
-            <FileText size={15} aria-hidden="true" /> העלאת החשבונית שהתקבלה
+            <FileText size={ICON.sm} aria-hidden="true" /> העלאת החשבונית שהתקבלה
           </Link>
         )} />
 
-      <section className="card card-pad" aria-labelledby="receipt-details-title">
+      <Card as="section" aria-labelledby="receipt-details-title">
         <h2 id="receipt-details-title" className="section-title">פרטי הקבלה</h2>
         <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <div>
@@ -144,16 +144,16 @@ export default function ReceiptDetail() {
             </Note>
           </div>
         )}
-      </section>
+      </Card>
 
-      <section className="card card-pad space-y-3" aria-labelledby="receipt-documents-title">
+      <Card as="section" className="space-y-3" aria-labelledby="receipt-documents-title">
         <div>
           <h2 id="receipt-documents-title" className="section-title">מסמכי הקבלה</h2>
           <p className="mt-1 text-sm text-ink-muted">אפשר לצלם גם ללא חיבור; הקובץ נשמר במכשיר ונשלח כשהרשת חוזרת.</p>
         </div>
         <OfflineQueueStatus />
         <DocumentList entityType="goods_receipt" entityId={receipt.id} capture />
-      </section>
+      </Card>
 
       <section className="card overflow-hidden" aria-labelledby="receipt-lines-title">
         <div className="border-b border-line-soft px-4 py-3">

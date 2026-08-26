@@ -8,7 +8,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, PageLoader, useToast, ErrorNote, ConfirmDialog, EmptyState, Note, type Column } from '../components/ui';
+import { Card, DataTable, SkeletonList, useToast, ErrorNote, ConfirmDialog, EmptyState, Note, PageHeader, SubPanel, ICON, type Column } from '../components/ui';
 import {
   readSheet, autoMapColumns, mapRows, cellText, cellNumber, skipRow, nameKey, groupSkipped,
   type FieldSpec, type MapResult, type SheetData, type SheetRow,
@@ -155,7 +155,7 @@ export default function Onboarding() {
     await refetch();
   }
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonList rows={4} />;
   if (error) return <ErrorNote message={error} />;
 
   const step = STEPS[progress.step];
@@ -173,21 +173,18 @@ export default function Onboarding() {
 
   return (
     <div className="space-y-5 max-w-4xl">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="page-title">הקמת המערכת</h1>
-          <p className="text-sm text-ink-muted mt-1">
-            ארבעה שלבים קצרים שממלאים את המערכת בנתוני העסק. אפשר לדלג על כל שלב ולהשלים אותו מאוחר יותר.
-          </p>
-        </div>
-        <Link className="btn-ghost text-ink-muted whitespace-nowrap" to="/dashboard">
-          כניסה למערכת <ChevronLeft size={15} />
-        </Link>
-      </div>
+      <PageHeader
+        title="הקמת המערכת"
+        description="ארבעה שלבים קצרים שממלאים את המערכת בנתוני העסק. אפשר לדלג על כל שלב ולהשלים אותו מאוחר יותר."
+        actions={(
+          <Link className="btn-ghost text-ink-muted whitespace-nowrap" to="/dashboard">
+            כניסה למערכת <ChevronLeft size={ICON.sm} aria-hidden="true" />
+          </Link>
+        )} />
 
       <Stepper current={progress.step} doneByData={doneByData} skipped={progress.skipped} onSelect={goTo} />
 
-      <div className="card card-pad">
+      <Card>
         {step.key === 'business' && <BusinessStep onSaved={() => { void afterCommit(); advance(); }} />}
         {step.key === 'categories' && <CategoriesStep onSaved={() => { void afterCommit(); advance(); }} />}
         {step.key === 'suppliers' && <SuppliersStep onDone={() => { void afterCommit(); advance(); }} />}
@@ -200,15 +197,15 @@ export default function Onboarding() {
             onFinish={() => update({ completedAt: new Date().toISOString() })}
           />
         )}
-      </div>
+      </Card>
 
       <div className="flex items-center justify-between">
         <button className="btn-secondary" disabled={progress.step === 0} onClick={() => goTo(progress.step - 1)}>
-          <ChevronRight size={15} /> חזרה
+          <ChevronRight size={ICON.sm} aria-hidden="true" /> חזרה
         </button>
         {step.key !== 'done' && (
           <button className="btn-ghost text-ink-muted" onClick={skipCurrent}>
-            דילוג על השלב <ChevronLeft size={15} />
+            דילוג על השלב <ChevronLeft size={ICON.sm} aria-hidden="true" />
           </button>
         )}
       </div>
@@ -241,7 +238,7 @@ function Stepper({ current, doneByData, skipped, onSelect }: {
                 ${active ? 'bg-action-wash/60' : 'hover:bg-surface-hover'}`}>
               <span className={`flex size-8 shrink-0 items-center justify-center rounded-full
                 ${done ? 'bg-done-soft text-done-fg' : active ? 'bg-action text-on-solid' : 'bg-idle-soft text-ink-faint'}`}>
-                {done ? <Check size={16} /> : <Icon size={16} />}
+                {done ? <Check size={ICON.sm} aria-hidden="true" /> : <Icon size={ICON.sm} aria-hidden="true" />}
               </span>
               <span className="min-w-0">
                 <span className={`block text-sm truncate ${active ? 'font-semibold text-ink' : 'text-ink-mid'}`}>
@@ -313,7 +310,7 @@ function BusinessStep({ onSaved }: { onSaved: () => void }) {
   return (
     <div className="space-y-5">
       <StepHeading
-        icon={<Building2 size={18} />}
+        icon={<Building2 size={ICON.md} aria-hidden="true" />}
         title="פרטי העסק"
         subtitle="השם מופיע בכל מסמך שהמערכת מפיקה. שיעור המע״מ נשמר בנפרד בכל חשבונית, כך ששינוי עתידי לא משנה חשבוניות קיימות."
       />
@@ -346,7 +343,7 @@ function BusinessStep({ onSaved }: { onSaved: () => void }) {
       </div>
       <div className="flex justify-end">
         <button className="btn-primary" disabled={busy} onClick={() => void save()}>
-          {busy && <Loader2 size={15} className="animate-spin" />} שמירה והמשך
+          {busy && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />} שמירה והמשך
         </button>
       </div>
     </div>
@@ -434,7 +431,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
     }
   }
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonList rows={4} />;
   if (error) return <ErrorNote message={error} />;
 
   const suggestions = CATEGORY_SUGGESTIONS.filter((s) => !taken.has(nameKey(s)));
@@ -442,7 +439,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
   return (
     <div className="space-y-5">
       <StepHeading
-        icon={<Tags size={18} />}
+        icon={<Tags size={ICON.md} aria-hidden="true" />}
         title="קטגוריות"
         subtitle="קטגוריות מקבצות מוצרים וספקים לצורכי סינון ודוחות. אפשר להתחיל בלי אף קטגוריה ולהוסיף בהמשך."
       />
@@ -453,7 +450,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
         <input className="input" aria-label="שם קטגוריה חדשה" placeholder="שם קטגוריה" value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(draft); } }} />
-        <button className="btn-secondary whitespace-nowrap" onClick={() => add(draft)}><Plus size={15} /> הוספה</button>
+        <button className="btn-secondary whitespace-nowrap" onClick={() => add(draft)}><Plus size={ICON.sm} aria-hidden="true" /> הוספה</button>
       </div>
 
       {suggestions.length > 0 && (
@@ -461,9 +458,9 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
           <div className="text-xs font-medium text-ink-muted mb-2">הצעות — לחיצה מוסיפה לרשימה</div>
           <div className="flex flex-wrap gap-1.5">
             {suggestions.map((s) => (
-              <button key={s} aria-label={`הוספת הקטגוריה ${s}`} onClick={() => add(s)}
-                className="rounded-lg border border-line-strong px-2.5 py-1.5 text-xs text-ink-soft hover:bg-surface-hover cursor-pointer">
-                <Plus size={12} className="inline -mt-px me-1" />{s}
+              <button key={s} type="button" aria-label={`הוספת הקטגוריה ${s}`} onClick={() => add(s)}
+                className="btn-secondary btn-sm">
+                <Plus size={ICON.xs} aria-hidden="true" />{s}
               </button>
             ))}
           </div>
@@ -481,9 +478,9 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
                 value={c.name}
                 onChange={(e) => setItems(list.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
               {!c.id && <span className="badge-info shrink-0">חדשה</span>}
-              <button className="btn-ghost p-1.5! shrink-0" aria-label={`הסרת ${c.name}`}
+              <button type="button" className="btn-ghost btn-icon" aria-label={`הסרת ${c.name}`}
                 onClick={() => setItems(list.filter((_, j) => j !== i))}>
-                <X size={15} />
+                <X size={ICON.sm} aria-hidden="true" />
               </button>
             </li>
           ))}
@@ -492,7 +489,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
 
       <div className="flex justify-end">
         <button className="btn-primary" disabled={busy} onClick={() => void save()}>
-          {busy && <Loader2 size={15} className="animate-spin" />} שמירה והמשך
+          {busy && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />} שמירה והמשך
         </button>
       </div>
     </div>
@@ -585,7 +582,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
         {parsed && parsed.skipped.length > 0 && <SkippedPanel skipped={parsed.skipped} />}
         <div className="flex justify-between">
           <button className="btn-secondary" onClick={reset}>ייבוא קובץ נוסף</button>
-          <button className="btn-primary" onClick={onDone}>המשך <ChevronLeft size={15} /></button>
+          <button type="button" className="btn-primary" onClick={onDone}>המשך <ChevronLeft size={ICON.sm} aria-hidden="true" /></button>
         </div>
       </div>
     );
@@ -611,10 +608,10 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
 
         <div className="flex justify-between gap-2">
           <button className="btn-secondary" disabled={busy} onClick={() => setParsed(null)}>
-            <ChevronRight size={15} /> חזרה למיפוי
+            <ChevronRight size={ICON.sm} aria-hidden="true" /> חזרה למיפוי
           </button>
           <button className="btn-primary" disabled={busy || parsed.valid.length === 0} onClick={() => setConfirming(true)}>
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />} אישור וייבוא
+            {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Upload size={ICON.sm} aria-hidden="true" />} אישור וייבוא
           </button>
         </div>
 
@@ -652,7 +649,10 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
           ))}
         </div>
 
-        <div className="overflow-x-auto border border-line rounded-lg">
+        {/* Not a DataTable: the columns come from whatever sheet the user picked, and the rows
+            have no id — DataTable needs `T extends { id: string }`. So it stays raw and carries
+            the raw-table contract instead: a keyboard-reachable scroller with a name. */}
+        <div className="table-scroll overflow-x-auto border border-line rounded-lg" tabIndex={0} role="region" aria-label="תצוגה מקדימה של הקובץ">
           <table className="w-full">
             <thead className="table-head"><tr>{sheet.headers.map((h) => <th key={h} scope="col" className="th">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-line-soft">
@@ -666,7 +666,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
         <div className="flex justify-between gap-2">
           <button className="btn-secondary" onClick={reset}>קובץ אחר</button>
           <button className="btn-primary" disabled={missingRequired.length > 0} onClick={buildPreview}>
-            תצוגה מקדימה <ChevronLeft size={15} />
+            תצוגה מקדימה <ChevronLeft size={ICON.sm} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -678,9 +678,9 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
     <div className="space-y-4">
       {children}
       <div className="rounded-lg border border-dashed border-line-strong py-10 text-center">
-        <FileSpreadsheet size={30} className="text-ink-ghost mx-auto mb-3" />
+        <FileSpreadsheet size={ICON.hero} className="text-ink-ghost mx-auto mb-3" aria-hidden="true" />
         <p className="text-sm text-ink-soft mb-4">בחר קובץ Excel (xlsx/xls) או CSV. תוכל להתאים עמודות ולראות תצוגה מקדימה לפני שמירה.</p>
-        <button className="btn-primary" onClick={() => fileRef.current?.click()}><Upload size={16} /> בחירת קובץ</button>
+        <button className="btn-primary" onClick={() => fileRef.current?.click()}><Upload size={ICON.sm} aria-hidden="true" /> בחירת קובץ</button>
         <input ref={fileRef} type="file" hidden accept=".xlsx,.xls,.csv"
           onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
       </div>
@@ -694,7 +694,7 @@ function SkippedPanel({ skipped }: { skipped: { row: number; reason: string }[] 
     <Note tone="await">
       <div className="w-full">
         <div className="flex items-center gap-2 text-sm font-medium">
-          <AlertTriangle size={15} /> {skipped.length === 1 ? 'שורה אחת דולגה' : `${skipped.length} שורות דולגו`}
+          <AlertTriangle size={ICON.sm} aria-hidden="true" /> {skipped.length === 1 ? 'שורה אחת דולגה' : `${skipped.length} שורות דולגו`}
         </div>
         <ul className="mt-2 space-y-1 text-xs">
           {groups.map((g) => (
@@ -818,13 +818,13 @@ function SuppliersStep({ onDone }: { onDone: () => void }) {
     { key: 'min', header: 'מינ׳ הזמנה', className: 'num', render: (r) => (r.min_order_amount != null ? r.min_order_amount.toFixed(2) : '—') },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonList rows={4} />;
   if (error) return <ErrorNote message={error} />;
 
   return (
     <div className="space-y-5">
       <StepHeading
-        icon={<Truck size={18} />}
+        icon={<Truck size={ICON.md} aria-hidden="true" />}
         title="ייבוא ספקים"
         subtitle="העלה את רשימת הספקים מקובץ קיים. ספק שכבר קיים במערכת באותו שם לא ייווצר פעמיים."
       />
@@ -1031,13 +1031,13 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
     },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonList rows={4} />;
   if (error) return <ErrorNote message={error} />;
 
   return (
     <div className="space-y-5">
       <StepHeading
-        icon={<Package size={18} />}
+        icon={<Package size={ICON.md} aria-hidden="true" />}
         title="ייבוא מוצרים ומחירון"
         subtitle="אותו קובץ יכול להכיל גם את המוצרים וגם מחיר לכל ספק. קטגוריה שאינה קיימת עדיין תיווצר אוטומטית."
       />
@@ -1087,32 +1087,32 @@ function DoneStep({ counts, skipped, onGoToStep, onFinish }: {
   return (
     <div className="space-y-5">
       <StepHeading
-        icon={<CheckCircle2 size={18} />}
+        icon={<CheckCircle2 size={ICON.md} aria-hidden="true" />}
         title="הכול מוכן"
         subtitle="זה מה שיש כרגע במערכת. אפשר להתחיל לעבוד ולהשלים את השאר בכל רגע."
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {tiles.map((t) => (
-          <Link key={t.label} to={t.to} className="card card-pad card-link-hover">
+          <Card as={Link} key={t.label} to={t.to} className="card-link-hover">
             <div className="text-xs font-medium text-ink-muted">{t.label}</div>
             <div className="kpi-value num text-start text-ink mt-1">{t.value}</div>
-          </Link>
+          </Card>
         ))}
       </div>
 
       {pending.length > 0 && (
-        <div className="rounded-2xl bg-surface-sunken px-4 py-3">
+        <SubPanel>
           <div className="text-sm font-medium text-ink-mid">שלבים שדילגת עליהם</div>
           <div className="flex flex-wrap gap-2 mt-2">
             {pending.map((s) => (
-              <button key={s.key} className="btn-secondary py-1.5! text-xs"
+              <button key={s.key} type="button" className="btn-secondary btn-sm"
                 onClick={() => onGoToStep(STEPS.findIndex((x) => x.key === s.key))}>
                 {s.label}
               </button>
             ))}
           </div>
-        </div>
+        </SubPanel>
       )}
 
       <div className="rounded-lg border border-line px-4 py-3 text-sm text-ink-soft">
@@ -1126,7 +1126,7 @@ function DoneStep({ counts, skipped, onGoToStep, onFinish }: {
 
       <div className="flex justify-end">
         <button className="btn-primary" onClick={() => { onFinish(); navigate('/dashboard'); }}>
-          כניסה למערכת <ChevronLeft size={15} />
+          כניסה למערכת <ChevronLeft size={ICON.sm} aria-hidden="true" />
         </button>
       </div>
     </div>

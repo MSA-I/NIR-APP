@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, createContext, useContext, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, createContext, useContext, type ElementType, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router';
-import { ChevronRight, ChevronLeft, ChevronDown, Search, X, Loader2, Inbox, Bell, Check, Columns3, SlidersHorizontal, AlertTriangle } from 'lucide-react';
+import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Search, X, Loader2, Inbox, Bell, Check, Columns3, SlidersHorizontal, AlertTriangle, Minus, Plus } from 'lucide-react';
 import {
   useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel,
   type ColumnDef, type SortingState,
@@ -19,19 +19,95 @@ export function StatusBadge({ meta }: { meta: StatusMeta | undefined }) {
   return <span className={`badge-${meta.tone}`}>{meta.label}</span>;
 }
 
-/* ---------- Spinner / loaders ---------- */
-// Kept for the auth gates and for regions with no content shape worth mirroring.
-// Anything that resolves into a known layout should use a Skeleton* below instead —
-// a centred spinner discards the page title and collapses the height, so the whole
-// screen jumps when data lands.
-export function PageLoader() {
-  return (
-    <div role="status" aria-live="polite" className="flex items-center justify-center py-24 text-ink-faint">
-      <Loader2 className="animate-spin" size={28} aria-hidden="true" />
-      <span className="sr-only">טוען</span>
-    </div>
-  );
+/* ---------- The icon scale ---------- */
+/**
+ * lucide sizes, named. The audit counted nine different values in use — 15×158, 16×104, 17×59,
+ * 13×41, 14×32, 18×26, 22×18, 19×8, 20×5 — with the same concept regularly appearing at three of
+ * them: `Trash2` at 13/14/15/22, `Plus` at 12/14/15/16. That is not a taste problem, it is the
+ * absence of a scale: with nothing to name, every author picks a plausible number.
+ *
+ * The six rungs are chosen to cost almost nothing to adopt: `sm`, `md` and `xs` are literally the
+ * three most-used values today, so 258 of the existing sites land on a rung without moving a
+ * pixel. Pass `ICON.sm`, never a bare number.
+ */
+export const ICON = {
+  /** dense operator rows, inline meta lines */
+  xs: 13,
+  /** the default: buttons, row actions, menu items */
+  sm: 15,
+  /** section headings, panel titles */
+  md: 17,
+  /** mobile action bar, prominent controls */
+  lg: 20,
+  /** shell chrome — the phone header cluster */
+  xl: 22,
+  /** empty states and other single large marks */
+  hero: 36,
+} as const;
+
+/* ---------- Card / SubPanel ---------- */
+/**
+ * `.card` and `.card-pad` are CSS utilities (index.css), and for a long time that was the whole
+ * API: every screen composed the class string by hand. The audit found 161 uses spread across 65
+ * distinct strings — `card card-pad`, `card card-pad space-y-4`, `card p-4`, `card card-pad
+ * space-y-3`, `card overflow-hidden` — which is five different paddings and rhythms for what a
+ * reader sees as one object. This is that object.
+ *
+ * `clip` is for a card whose child paints to the edge (a table, an image strip); without it the
+ * child's corners escape the 24px radius.
+ *
+ * `as` exists because a card is a look, not a role. Plenty of them are really a `<section>` with
+ * an `aria-labelledby`, or an `<li>` inside a list — and a primitive that could only emit a bare
+ * `<div>` would have forced every one of those to opt out and go on composing the class string by
+ * hand, which is the drift this component exists to end. Remaining props are spread onto the
+ * element, so `aria-*`, `id` and handlers all pass through.
+ */
+export function Card({ pad = true, clip = false, as: Tag = 'div', className = '', children, ...rest }: {
+  /** `false` for a card that supplies its own padding, e.g. one wrapping a table. */
+  pad?: boolean;
+  /** Clip children to the card's radius. */
+  clip?: boolean;
+  /**
+   * The element or component to render. `section` and `li` keep a landmark or a list item; a
+   * router `Link` makes the whole tile the target, which is what the dashboard's stat tiles and
+   * the report's metric tiles actually are. Defaults to `div`.
+   */
+  as?: ElementType;
+  className?: string;
+  children: ReactNode;
+} & Record<string, unknown>) {
+  return <Tag className={`card ${pad ? 'card-pad' : ''} ${clip ? 'overflow-hidden' : ''} ${className}`} {...rest}>{children}</Tag>;
 }
+
+/**
+ * The quiet panel *inside* a card — a recessed group that is part of the card, not a second card.
+ * It had no primitive at all, so `rounded-2xl bg-surface-sunken p-3` was copy-pasted into 19
+ * places. Deliberately not a `Card`: nesting a surface inside a surface reads as two objects.
+ *
+ * `as` for the same reason `Card` has it: four of the nine sites this replaced were an `<article>`
+ * wrapping an `<h4>`, and a primitive that could only emit a `<div>` would have quietly stripped
+ * their role. Remaining props spread onto the element.
+ */
+export function SubPanel({ as: Tag = 'div', className = '', children, ...rest }: {
+  /** The element or component to render — `article`, `section`, `li`… Defaults to `div`. */
+  as?: ElementType;
+  className?: string;
+  children: ReactNode;
+} & Record<string, unknown>) {
+  return <Tag className={`rounded-2xl bg-surface-sunken p-3 sm:p-4 ${className}`} {...rest}>{children}</Tag>;
+}
+
+/* ---------- Loading ----------
+ * There is no page spinner, deliberately. It existed until 26.08.2026 and the owner removed it:
+ * "אם יש לי כבר שלד אין צורך בסמל הזה". The argument the old component's own comment was making
+ * against itself — a centred spinner throws away the page title and collapses the height, so the
+ * whole screen jumps when data lands — turned out to apply to every one of its twenty call sites,
+ * including the auth gates it claimed to exist for. Each became the Skeleton* that mirrors the
+ * shape the screen is about to be, and the component and its figure were deleted rather than left
+ * as an option, because an option is an invitation.
+ * Nothing here needs to be replaced. Pick the shape: SkeletonTable, SkeletonCards, SkeletonList,
+ * RecordSkeleton — or write the shape the screen actually has.
+ */
 
 /* ---------- Skeletons ---------- */
 export function Skeleton({ className = '' }: { className?: string }) {
@@ -175,7 +251,7 @@ export function Breadcrumbs({ items }: { items: readonly BreadcrumbItem[] }) {
                   {item.label}
                 </span>
               )}
-              {!current && <ChevronLeft size={13} aria-hidden="true" className="shrink-0 text-ink-ghost" />}
+              {!current && <ChevronLeft size={ICON.xs} aria-hidden="true" className="shrink-0 text-ink-ghost" />}
             </li>
           );
         })}
@@ -342,7 +418,7 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
                 {step.label}
                 {isCurrent && <span className="sr-only">{isStopped ? ' — השלב שנעצר' : ' — השלב הנוכחי'}</span>}
               </span>
-              {index < steps.length - 1 && <ChevronLeft size={14} className="mx-2 shrink-0 text-ink-ghost" aria-hidden="true" />}
+              {index < steps.length - 1 && <ChevronLeft size={ICON.sm} className="mx-2 shrink-0 text-ink-ghost" aria-hidden="true" />}
             </li>
           );
         })}
@@ -373,10 +449,19 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
   );
 }
 
-export function EmptyState({ title, subtitle, action, icon }: { title: string; subtitle?: string; action?: ReactNode; icon?: ReactNode }) {
+/**
+ * `compact` is for an empty state inside something — a panel in a dialog, a sub-section of a card.
+ * The page-sized form spends 128px of padding and a 36px mark saying nothing is here, which is
+ * right when the empty thing IS the screen and far too heavy when it is one block within it.
+ * `className` is the escape hatch for the print rule: the monthly report is also the page the
+ * accountant receives, and a large centred mark is not what belongs on A4.
+ */
+export function EmptyState({ title, subtitle, action, icon, compact = false, className = '' }: {
+  title: string; subtitle?: string; action?: ReactNode; icon?: ReactNode; compact?: boolean; className?: string;
+}) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <span aria-hidden="true" className="mb-3 text-ink-ghost">{icon ?? <Inbox size={36} />}</span>
+    <div className={`flex flex-col items-center justify-center text-center ${compact ? 'py-6' : 'py-16'} ${className}`}>
+      <span aria-hidden="true" className={compact ? 'mb-2 text-ink-ghost' : 'mb-3 text-ink-ghost'}>{icon ?? <Inbox size={compact ? ICON.lg : ICON.hero} />}</span>
       <div className="text-ink-soft font-medium">{title}</div>
       {subtitle && <div className="text-sm text-ink-muted mt-1">{subtitle}</div>}
       {action && <div className="mt-4">{action}</div>}
@@ -420,11 +505,279 @@ export function Disclosure({ title, count, tone = 'idle', summary, name, classNa
         <span className="font-medium text-ink-body">{title}</span>
         {count != null && <span className={`badge-${tone} num`}>{count}</span>}
         {summary != null && <span className="ms-auto min-w-0 text-end text-xs text-ink-muted">{summary}</span>}
-        <ChevronDown size={16} aria-hidden="true"
+        <ChevronDown size={ICON.sm} aria-hidden="true"
           className={`shrink-0 text-ink-ghost transition-transform duration-200 ease-out group-open:rotate-180 motion-reduce:transition-none ${summary == null ? 'ms-auto' : ''}`} />
       </summary>
       <div className="border-t border-line-soft px-3 pb-4 pt-3 sm:px-4">{children}</div>
     </details>
+  );
+}
+
+/* ---------- Tabs ---------- */
+export interface TabItem { key: string; label: ReactNode }
+
+/** `tabId`/`panelId` are exported so a caller wiring its own panels cannot drift from the list. */
+export const tabId = (prefix: string, key: string) => `${prefix}-tab-${key}`;
+export const panelId = (prefix: string, key: string) => `${prefix}-panel-${key}`;
+
+/**
+ * The app's one tablist. Until now there was none, so the single tab set in the product (the
+ * supplier card) hand-rolled it, and three *other* screens hand-rolled segmented controls that are
+ * not tabs at all — see ToggleGroup below for those.
+ *
+ * Roving tabindex per WAI-ARIA: exactly one tab is in the tab order and the arrows move between
+ * them. The arrows are swapped for RTL on purpose — ArrowLeft advances, because in a right-to-left
+ * strip the next tab is the one to the left. Focus moves on the following frame, since the element
+ * being focused may not exist until the state change has rendered.
+ *
+ * Renders the strip only. Panels stay with the caller, wired through panelId, so a heavy panel is
+ * still the caller's to mount or skip.
+ */
+export function Tabs({ items, value, onChange, label, idPrefix, className = '' }: {
+  items: readonly TabItem[];
+  value: string;
+  onChange: (key: string) => void;
+  /** Names the strip for a screen reader, e.g. "מידע עבור ספק X". */
+  label: string;
+  /** Namespaces the generated ids; must match what the caller passes to panelId. */
+  idPrefix: string;
+  className?: string;
+}) {
+  function onKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, index: number) {
+    let next = index;
+    if (event.key === 'ArrowLeft') next = (index + 1) % items.length;
+    else if (event.key === 'ArrowRight') next = (index - 1 + items.length) % items.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = items.length - 1;
+    else return;
+    event.preventDefault();
+    onChange(items[next].key);
+    requestAnimationFrame(() => document.getElementById(tabId(idPrefix, items[next].key))?.focus());
+  }
+  return (
+    <div role="tablist" aria-label={label} className={`no-print flex gap-1 overflow-x-auto border-b border-line ${className}`}>
+      {items.map((item, index) => (
+        <button key={item.key} id={tabId(idPrefix, item.key)} role="tab" type="button"
+          aria-selected={value === item.key} aria-controls={panelId(idPrefix, item.key)}
+          tabIndex={value === item.key ? 0 : -1}
+          onKeyDown={(event) => onKeyDown(event, index)} onClick={() => onChange(item.key)}
+          className={`-mb-px min-h-11 border-b-2 px-4 py-2 text-sm whitespace-nowrap ${value === item.key ? 'border-action-solid font-medium text-action' : 'border-transparent text-ink-muted hover:text-ink-mid'}`}>
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The panel half of Tabs. Render it only for the active key; it carries the aria wiring. */
+export function TabPanel({ idPrefix, tabKey, className = '', children }: {
+  idPrefix: string; tabKey: string; className?: string; children: ReactNode;
+}) {
+  return <div role="tabpanel" id={panelId(idPrefix, tabKey)} aria-labelledby={tabId(idPrefix, tabKey)} className={className}>{children}</div>;
+}
+
+/* ---------- ToggleGroup ---------- */
+/**
+ * Pick one of N, where nothing swaps a panel: a status filter, a billing interval, a decision on a
+ * receiving line. Not Tabs — a tab controls a region and owes it aria-controls; this owes nothing
+ * and simply reports which option is pressed.
+ *
+ * The audit found fifteen implementations of this control across thirteen distinct class strings.
+ * Seven of them applied chip-filter-active INSTEAD of chip-filter, and since the base rule is where
+ * min-h-11, the radius, the padding and the focus ring live, those seven had the *selected* chip be
+ * the one with no height floor and no focus ring. Here the modifier can only ever add.
+ *
+ * Two modes, because two of the fifteen were never pick-one at all — a supplier's delivery days is
+ * a set, not a choice. Pass a `T` for single select, a `readonly T[]` for multi; `onChange` reports
+ * the key that was pressed either way, and the caller owns the set arithmetic. `aria-pressed` is
+ * correct for both: these are toggle buttons reporting their own state, not radios owning a region.
+ *
+ * Not every pick-one control belongs here. A group whose selected item is coloured by MEANING —
+ * a receiving line that is full / partial / missing — must keep its tone map: this paints the
+ * selection in the one action colour, which would flatten five statuses into one.
+ */
+export function ToggleGroup<T extends string>({ items, value, onChange, label, className = '' }: {
+  /**
+   * `className` is per-item on purpose: a filter strip may hide a rare chip below `sm`.
+   * `testId` is here because converting a hand-rolled control should never cost its selectors —
+   * a primitive that forces every caller to rewrite its tests is a primitive people route around.
+   */
+  items: readonly { key: T; label: ReactNode; disabled?: boolean; className?: string; testId?: string }[];
+  /** A key for pick-one; an array of keys for multi-select. */
+  value: T | readonly T[];
+  onChange: (key: T) => void;
+  label: string;
+  className?: string;
+}) {
+  const selected = (key: T) => (Array.isArray(value) ? (value as readonly T[]).includes(key) : value === key);
+  return (
+    <div role="group" aria-label={label} className={`flex flex-wrap gap-2 ${className}`}>
+      {items.map((item) => (
+        <button key={item.key} type="button" data-testid={item.testId} disabled={item.disabled} aria-pressed={selected(item.key)}
+          onClick={() => onChange(item.key)}
+          className={`chip-filter ${selected(item.key) ? 'chip-filter-active' : ''} disabled:cursor-not-allowed disabled:opacity-50 ${item.className ?? ''}`}>
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ---------- Stepper ---------- */
+/**
+ * Press-and-hold cadence on the ± buttons, at the values react-aria's NumberField has measured
+ * into its own steppers: 400ms before the first repeat, then one every 60ms.
+ *
+ * Adopted as behaviour, not as a dependency. The candidate
+ * (originui/input/number-input-with-plus-minus-buttons) gets this by delegating to
+ * `react-aria-components`' NumberField — which would have brought its own DOM, its own focus
+ * ring and its own 36px sizing to replace a control that already clamps at both bounds, already
+ * holds the 44px floor, already carries `inputRef`/`inputStep`/`inputClassName` for two live call
+ * sites, and is already tested. The repeat loop is the only part of it we did not have.
+ */
+const HOLD_REPEAT_DELAY_MS = 400;
+const HOLD_REPEAT_TICK_MS = 60;
+
+/**
+ * One quantity control. There were two, sharing no code: the cart used a raw size-11 grid with 14px
+ * icons and a read-only span, receiving used btn-secondary p-3! with 18px icons and a number input
+ * — and neither disabled at the floor, so the minus key kept firing at zero.
+ *
+ * The value stays an input: typing 24 beats pressing plus twenty-four times, and the read-only
+ * variant was the smaller of the two behaviours. Clamping is expressed as disabled rather than
+ * silently swallowed in the handler, because a control that accepts a press and does nothing
+ * teaches the user that the app is unreliable.
+ */
+export function Stepper({ value, onChange, min = 0, max, step = 1, inputStep, label, disabled = false, inputRef, inputClassName = '', className = '' }: {
+  value: number;
+  onChange: (next: number) => void;
+  min?: number;
+  max?: number;
+  /** The button increment. Fractional steps are fine. */
+  step?: number;
+  /**
+   * The input's own `step` attribute, when it differs from the button increment. Receiving weighs
+   * goods — ק"ג, ליטר — so its field must accept 2.5 while the buttons still move by 1. Without
+   * this the field declares a constraint the domain does not have: the value is still accepted and
+   * saved, but `checkValidity()` reports false, which stays latent only until someone wraps the
+   * control in a `<form>` or styles `:invalid`. Pass `'any'` for a continuous quantity.
+   */
+  inputStep?: number | 'any';
+  /** Names the group for a screen reader, e.g. "כמות עבור עגבניות". */
+  label: string;
+  disabled?: boolean;
+  /**
+   * A handle on the number input. Receiving needs it: a barcode scan that matches a line scrolls to
+   * that line and focuses its quantity field. A primitive with no handle would have killed that
+   * silently — the control would still look right and the scanner would just stop working.
+   */
+  inputRef?: Ref<HTMLInputElement>;
+  /**
+   * Extra classes for the number input itself. `className` lands on the wrapper, and the one
+   * legitimate reason to reach past it is emphasis: on the receiving screen this figure is read at
+   * arm's length by someone holding a crate, so it is `w-24! text-lg! font-semibold` there and the
+   * shared default everywhere else. Convergence removes accidental difference, not deliberate
+   * difference — and the alternative, an arbitrary descendant variant on the wrapper, would bake
+   * this component's internal DOM into a call site and resolve by an important-vs-important
+   * specificity race.
+   */
+  inputClassName?: string;
+  className?: string;
+}) {
+  const clamp = (n: number) => Math.min(max ?? Infinity, Math.max(min, n));
+  const atMin = value <= min;
+  const atMax = max != null && value >= max;
+
+  // Set only while the person has the field open and empty — see the input's onChange below.
+  const [emptied, setEmptied] = useState(false);
+  // Any press of ± is a new number, so it also closes an empty field: without this, stepping while
+  // the field is blank would move the real quantity behind a box that still looks empty.
+  const stepTo = (next: number) => { setEmptied(false); onChange(next); };
+
+  // The repeat loop reads the value from a ref rather than from the closure: a tick fires every
+  // 60ms and must see the value the previous tick produced, not the one captured when the press
+  // began. Synced on every render so a parent that clamps differently — or refuses the change —
+  // stalls the loop instead of running away from the truth.
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const holdTimers = useRef<{ delay?: ReturnType<typeof setTimeout>; tick?: ReturnType<typeof setInterval> }>({});
+  const stopHold = useCallback(() => {
+    clearTimeout(holdTimers.current.delay);
+    clearInterval(holdTimers.current.tick);
+    holdTimers.current = {};
+  }, []);
+  useEffect(() => stopHold, [stopHold]);
+
+  /**
+   * `onClick` still owns the single step, so a tap is exactly one step and keyboard activation —
+   * which produces a click with no pointerdown at all — is untouched. The hold adds only the
+   * REPEATS, and only after the delay. Release is listened for on the window because the button
+   * disables itself the instant the value reaches its bound, and a disabled button fires no
+   * pointerup: without this, holding minus down to zero would leave the loop running.
+   */
+  const startHold = (delta: number) => {
+    if (disabled) return;
+    setEmptied(false);
+    stopHold();
+    const end = () => {
+      stopHold();
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    holdTimers.current.delay = setTimeout(() => {
+      holdTimers.current.tick = setInterval(() => {
+        const next = clamp(valueRef.current + delta);
+        if (next === valueRef.current) { end(); return; }
+        valueRef.current = next;
+        onChange(next);
+      }, HOLD_REPEAT_TICK_MS);
+    }, HOLD_REPEAT_DELAY_MS);
+  };
+
+  return (
+    <div role="group" aria-label={label} className={`flex items-center gap-1.5 ${className}`}>
+      {/* `select-none touch-manipulation`: a press-and-hold on a phone is also the gesture for
+          select-text and the callout menu, and neither belongs on a quantity button. */}
+      <button type="button" className="btn-secondary btn-icon select-none touch-manipulation" disabled={disabled || atMin}
+        aria-label={`הפחתה — ${label}`} onPointerDown={() => startHold(-step)} onClick={() => stepTo(clamp(value - step))}>
+        <Minus size={ICON.sm} aria-hidden="true" />
+      </button>
+      <input ref={inputRef} type="number" className={`input num w-20! text-center ${inputClassName}`} value={emptied ? '' : value} min={min} max={max} step={inputStep ?? step}
+        inputMode="decimal" disabled={disabled} aria-label={label}
+        onChange={(event) => {
+          /*
+           * An empty field is not a number, and `Number('')` is 0 — not NaN. The old guard tested
+           * only for NaN, so clearing the field reported a real zero, which the clamp turned into
+           * `min`: someone who cleared the quantity to type 24 got `min` the instant the field
+           * emptied and then typed into a value they never chose.
+           *
+           * Refusing to report the empty string is necessary but NOT sufficient, and this is the
+           * part that is easy to get wrong — React re-syncs a controlled input's DOM value back to
+           * `value` after an input event that produced no state change, so a handler that merely
+           * returns leaves the field refilling itself with the old number, caret after it, and the
+           * same trap one keystroke later. Measured before `emptied` existed: clearing a field
+           * showing 5 and typing "24" reported 524.
+           *
+           * `emptied` is that one keystroke of local truth. While it is set the field renders
+           * empty; a real number clears it, and so does blur — a field left blank returns to the
+           * quantity rather than staying a hole. Genuine out-of-range input is still clamped;
+           * the clamp was never the defect. A `type="number"` input also reports '' for a value
+           * the browser cannot parse yet ("2e", "-"), so those hold the field open too.
+           */
+          const raw = event.target.value;
+          if (raw.trim() === '') { setEmptied(true); return; }
+          setEmptied(false);
+          const next = Number(raw);
+          if (!Number.isNaN(next)) onChange(clamp(next));
+        }}
+        onBlur={() => setEmptied(false)} />
+      <button type="button" className="btn-secondary btn-icon select-none touch-manipulation" disabled={disabled || atMax}
+        aria-label={`הוספה — ${label}`} onPointerDown={() => startHold(step)} onClick={() => stepTo(clamp(value + step))}>
+        <Plus size={ICON.sm} aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 
@@ -511,7 +864,7 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
         {item.amount != null && item.amount > 0 && (
           <span className={`num text-sm ${muted ? 'font-medium text-ink-soft' : 'font-semibold text-ink-mid'}`}>{fmtMoneyRounded(item.amount)}</span>
         )}
-        <ChevronLeft size={16} className="text-ink-ghost shrink-0" aria-hidden="true" />
+        <ChevronLeft size={ICON.sm} className="text-ink-ghost shrink-0" aria-hidden="true" />
       </Link>
     </li>
   );
@@ -574,7 +927,7 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
           (Dashboard.tsx carried a third copy in its `meta` line; that one is already gone.) */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="section-title flex items-center gap-2">
-          <Bell size={18} aria-hidden="true"
+          <Bell size={ICON.md} aria-hidden="true"
             className={actionRows.length === 0 ? 'text-ink-ghost' : headlineTone === 'alert' ? 'text-alert-fg' : 'text-await-fg'} />
           דורש טיפול היום
           {actionRows.length > 0 && (
@@ -610,7 +963,7 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
       {(noticeRows.length > 0 || unknownRows.length > 0 || clear.length > 0) && (
         <details className="group mt-2 border-t border-line-soft">
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm text-ink-muted hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
-            <ChevronLeft size={16} className="shrink-0 transition-transform group-open:-rotate-90" aria-hidden="true" />
+            <ChevronLeft size={ICON.sm} className="shrink-0 transition-transform group-open:-rotate-90" aria-hidden="true" />
             <span className="font-medium text-ink-soft">מידע נוסף</span>
             {/* The count rides its label — a badge orphaned at the far edge reads as debris. */}
             <span className="badge-idle num">{noticeRows.length + unknownRows.length + clear.length}</span>
@@ -637,7 +990,7 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
           {clear.length > 0 && (
             <div className="mt-2 pt-2 border-t border-line-soft flex flex-wrap gap-x-4 gap-y-1.5 pb-1 text-xs text-ink-muted">
               {clear.map((i) => (
-                <span key={i.key} className="inline-flex items-center gap-1"><Check size={13} className="text-done-fg shrink-0" aria-hidden="true" /> {i.clearLabel ?? i.label}</span>
+                <span key={i.key} className="inline-flex items-center gap-1"><Check size={ICON.xs} className="text-done-fg shrink-0" aria-hidden="true" /> {i.clearLabel ?? i.label}</span>
               ))}
             </div>
           )}
@@ -843,7 +1196,7 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
         <div className="flex items-center justify-between px-5 py-4 border-b border-line-soft">
           <h3 ref={titleRef} id={titleId} tabIndex={-1} className="font-semibold text-ink focus:outline-none">{title}</h3>
           <button type="button" className="btn-ghost p-1.5! min-w-11 min-h-11" disabled={closeDisabled}
-            onClick={() => requestClose()} aria-label="סגירה"><X size={18} /></button>
+            onClick={() => requestClose()} aria-label="סגירה"><X size={ICON.md} /></button>
         </div>
         <div className="dialog-safe-body p-5 overflow-y-auto">
           {description && <p id={descriptionId} className="text-sm text-ink-soft mb-4">{description}</p>}
@@ -882,7 +1235,7 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
             is empty the ledger gets a sentence naming the action instead of a forced "asdf". */}
         <button className={danger ? 'btn-danger' : 'btn-primary'} disabled={busy}
           onClick={() => onConfirm(requireReason ? reasonOr(reason, title) : undefined)}>
-          {busy ? <><Loader2 size={16} className="animate-spin" aria-hidden="true" /><span>מעבד…</span></> : confirmLabel}
+            {busy ? <><Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /><span>מעבד…</span></> : confirmLabel}
         </button>
       </div>
     </Modal>
@@ -975,6 +1328,13 @@ interface DataTableCommonProps<T> {
   rows: T[];
   onRowClick?: (row: T) => void;
   searchLabel?: string;
+  /**
+   * Names this table's scroll region. A screen with more than one table produced that many
+   * identically-named regions, which is worse than no name: a screen reader offers the user a
+   * choice between three things called the same thing. Pass what the table holds — `'משתמשים'`,
+   * `'הזמנות'` — and it becomes `"<label> — ניתן לגלול אופקית"`.
+   */
+  tableLabel?: string;
   emptyTitle?: string;
   emptySubtitle?: string;
   emptyAction?: ReactNode;
@@ -1170,7 +1530,7 @@ function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
     <>
       <button ref={triggerRef} type="button" className="btn-secondary" aria-haspopup="dialog" aria-expanded={open}
         onClick={() => (open ? close() : setOpen(true))}>
-        <Columns3 size={15} aria-hidden="true" /> עמודות
+        <Columns3 size={ICON.sm} aria-hidden="true" /> עמודות
       </button>
       {open && createPortal(
         <div ref={panelRef} role="dialog" aria-label="בחירת עמודות" tabIndex={-1}
@@ -1196,7 +1556,7 @@ function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
  */
 export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
   const {
-    rows, columns, onRowClick, searchLabel = 'חיפוש בטבלה',
+    rows, columns, onRowClick, searchLabel = 'חיפוש בטבלה', tableLabel,
     emptyTitle = 'אין נתונים להצגה', emptySubtitle, emptyAction, emptyIcon, toolbar, mobile = 'cards',
     mobileTitle, mobileTrailing, rowActions, rowLabel,
     error = null, activeFilters = 0, onClearFilters, columnPicker,
@@ -1372,7 +1732,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
 
   const searchBox = (server ? !!serverSearch : searchable) && (
     <div className="relative flex-1 min-w-44 max-w-xs">
-      <Search size={15} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint" />
+      <Search size={ICON.sm} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint" />
       {server ? (
         <input className="input ps-9!" aria-label={searchLabel} placeholder="חיפוש..." value={searchText}
           onChange={(e) => emitSearch(e.target.value)} />
@@ -1463,7 +1823,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
           {/* The cards-to-table switch stays at `lg`, matching the shell (readiness package 5):
               at `md` the desktop table rendered inside the phone frame. */}
           <div className={mobile === 'cards' ? 'table-scroll overflow-x-auto hidden lg:block' : 'table-scroll overflow-x-auto'}
-            role="region" aria-label="טבלת נתונים — ניתן לגלול אופקית" tabIndex={0}>
+            role="region" aria-label={`${tableLabel ?? 'טבלת נתונים'} — ניתן לגלול אופקית`} tabIndex={0}>
             <table className="w-full">
               <thead className="table-head border-b border-line-soft">
                 <tr>
@@ -1495,7 +1855,17 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
                         {onSortClick ? (
                           <button type="button" className="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
                             onClick={onSortClick}>
-                            {c.header}{ariaSort === 'ascending' ? ' ↑' : ariaSort === 'descending' ? ' ↓' : ''}
+                            {/* The direction is a decorative chevron, not a text arrow — taken from
+                                originui's TanStack table headers. The arrow used to be a literal
+                                ` ↑` inside the label, which put it in the button's ACCESSIBLE NAME:
+                                a screen reader read "סכום up arrow" on top of the `aria-sort` it
+                                already announces, and the name changed every time the column was
+                                sorted, so no caller could address the header by an exact string
+                                (dataTable.spec had to match it by regex). `aria-hidden` restores a
+                                stable name and leaves aria-sort as the single source of direction. */}
+                            {c.header}
+                            {ariaSort === 'ascending' ? <ChevronUp size={ICON.xs} aria-hidden="true" className="shrink-0" />
+                              : ariaSort === 'descending' ? <ChevronDown size={ICON.xs} aria-hidden="true" className="shrink-0" /> : null}
                           </button>
                         ) : c.header}
                       </th>
@@ -1561,7 +1931,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
                 // places at a time, so no id inside it can duplicate (gate B6).
                 <button type="button" className="btn-secondary" aria-haspopup="dialog" aria-expanded={sheetOpen}
                   onClick={() => setSheetOpen(true)}>
-                  <SlidersHorizontal size={15} aria-hidden="true" /> סינון ותצוגה
+                  <SlidersHorizontal size={ICON.sm} aria-hidden="true" /> סינון ותצוגה
                   {activeFilters > 0 && <span className="badge num bg-action-soft text-action-on-soft">{activeFilters}</span>}
                 </button>
               ) : null}
@@ -1582,17 +1952,17 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
                 An unavailable count never reaches here: it throws upstream (queryResult.ts). */}
             <span className="flex items-center gap-2">
               <span aria-live="polite">{filteredCount} רשומות</span>
-              {server?.fetching && <Loader2 size={14} className="animate-spin text-ink-faint" aria-hidden="true" />}
+                {server?.fetching && <Loader2 size={ICON.sm} className="animate-spin text-ink-faint" aria-hidden="true" />}
             </span>
             {pages > 1 && (
               <div className="flex items-center gap-1">
                 <button className="btn-ghost p-1.5! min-w-11 min-h-11" disabled={currentPage === 0}
                   onClick={() => (server ? server.onPageChange(server.page - 1) : setPage((p) => p - 1))}
-                  aria-label="הקודם"><ChevronRight size={16} /></button>
+                  aria-label="הקודם"><ChevronRight size={ICON.sm} /></button>
                 <span className="px-2">{currentPage + 1} / {pages}</span>
                 <button className="btn-ghost p-1.5! min-w-11 min-h-11" disabled={currentPage >= pages - 1}
                   onClick={() => (server ? server.onPageChange(server.page + 1) : setPage((p) => p + 1))}
-                  aria-label="הבא"><ChevronLeft size={16} /></button>
+                  aria-label="הבא"><ChevronLeft size={ICON.sm} /></button>
               </div>
             )}
           </div>

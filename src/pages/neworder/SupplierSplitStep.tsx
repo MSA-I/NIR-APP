@@ -10,6 +10,7 @@ import {
   type SplitInput,
   type SplitLine,
 } from '../../lib/orderSplit';
+import { ICON } from '../../components/ui';
 import type { Product, Supplier, SupplierProduct } from '../../lib/types';
 import MinimumFixPanel from './MinimumFixPanel';
 import SupplierGroupCard from './SupplierGroupCard';
@@ -132,7 +133,7 @@ export default function SupplierSplitStep({
                 <div className="text-sm"><span className="text-ink-muted">כמות </span><b className="num">{formatQuantity(item.qty, item.product.unit)}</b></div>
                 <div className="text-xs text-ink-muted">{resolved?.supplierId ? supplierById.get(resolved.supplierId)?.name ?? 'ספק לא זמין' : 'טרם הוקצה ספק'}</div>
                 <div className="num text-sm font-semibold">{fmtMoneyExact(resolved?.lineTotal)}</div>
-                <button type="button" className="grid size-11 place-items-center rounded-lg text-ink-faint hover:bg-surface-hover hover:text-alert-fg" onClick={() => onRemove(item.productId)} aria-label={`הסרת ${productLabel(item.product)}`}><Trash2 size={15} /></button>
+                <button type="button" className="btn-ghost btn-icon text-alert-fg" onClick={() => onRemove(item.productId)} aria-label={`הסרת ${productLabel(item.product)}`}><Trash2 size={ICON.sm} aria-hidden="true" /></button>
               </div>
             );
           })}
@@ -152,7 +153,7 @@ export default function SupplierSplitStep({
       />
 
       <section aria-labelledby="supplier-split-title" className="border-y border-line-strong bg-surface">
-        <div className="flex items-center gap-2 border-b border-line-soft px-3 py-3 sm:px-4"><Split size={17} aria-hidden="true" /><h2 id="supplier-split-title" className="section-title">פיצול הזמנות לספקים</h2></div>
+        <div className="flex items-center gap-2 border-b border-line-soft px-3 py-3 sm:px-4"><Split size={ICON.md} aria-hidden="true" /><h2 id="supplier-split-title" className="section-title">פיצול הזמנות לספקים</h2></div>
         <div className="divide-y divide-line-strong">
           {split.groups.map((group) => (
             <SupplierGroupCard
@@ -206,7 +207,7 @@ function BlockedSurface({ blocked, cartByProduct, offersByProduct, supplierById,
   return (
     <section className="note-alert block" aria-labelledby="blocked-lines-title">
       <div className="flex items-start gap-2">
-        <AlertTriangle size={17} className="mt-0.5 shrink-0" aria-hidden="true" />
+        <AlertTriangle size={ICON.md} className="mt-0.5 shrink-0" aria-hidden="true" />
         <div><h2 id="blocked-lines-title" className="font-semibold">יש פריטים שדורשים תיקון לפני אישור</h2><p className="mt-0.5 text-xs">לא ניתן ליצור הזמנה עד שלכל פריט יש ספק וכמות תקפים.</p></div>
       </div>
       <div className="mt-3 divide-y divide-alert-line border-y border-alert-line">
@@ -229,14 +230,14 @@ function BlockedSurface({ blocked, cartByProduct, offersByProduct, supplierById,
                 {line.status === 'pin_below_min_qty' && requiredQty != null && <span className="badge-await mt-1">הצמדה לא תקפה · מינימום <span className="num ms-1">{requiredQty}</span></span>}
               </div>
               {line.status === 'pin_below_min_qty' && requiredQty != null && (
-                <button type="button" className="btn-secondary text-xs" onClick={() => onQty(line.productId, requiredQty)}>
+                <button type="button" className="btn-secondary btn-sm" onClick={() => onQty(line.productId, requiredQty)}>
                   הגדל ל-<span className="num">{requiredQty}</span>{addedCost != null ? <> · <span className="num">+{fmtMoneyExact(addedCost)}</span></> : null}
                 </button>
               )}
-              {line.status === 'no_usable_offer' && requiredQty != null && <button type="button" className="btn-secondary text-xs" onClick={() => onQty(line.productId, requiredQty)}>הגדל ל-<span className="num">{requiredQty}</span></button>}
-              {line.status === 'pin_supplier_gone' && pinnedSupplierId && <button type="button" className="btn-secondary text-xs" onClick={() => onAlternatives(pinnedSupplierId)}>הצג ספקים חלופיים</button>}
-              {(line.status === 'pin_below_min_qty' || line.status === 'pin_supplier_gone') && <button type="button" className="btn-ghost text-xs" onClick={() => onUnpin(line.productId)}>חזרה לבחירה אוטומטית</button>}
-              <button type="button" className="btn-ghost text-xs" onClick={() => onRemove(line.productId)}>הסר</button>
+              {line.status === 'no_usable_offer' && requiredQty != null && <button type="button" className="btn-secondary btn-sm" onClick={() => onQty(line.productId, requiredQty)}>הגדל ל-<span className="num">{requiredQty}</span></button>}
+              {line.status === 'pin_supplier_gone' && pinnedSupplierId && <button type="button" className="btn-secondary btn-sm" onClick={() => onAlternatives(pinnedSupplierId)}>הצג ספקים חלופיים</button>}
+              {(line.status === 'pin_below_min_qty' || line.status === 'pin_supplier_gone') && <button type="button" className="btn-ghost btn-sm" onClick={() => onUnpin(line.productId)}>חזרה לבחירה אוטומטית</button>}
+              <button type="button" className="btn-ghost btn-sm text-alert-fg" onClick={() => onRemove(line.productId)}><Trash2 size={ICON.xs} aria-hidden="true" /> הסר</button>
             </div>
           );
         })}
@@ -325,7 +326,7 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, onChoo
                           auto assignment, which may legitimately land on this same supplier. The
                           badge beside it then flips 'מוצמד' → 'בחירה אוטומטית', so the pair still
                           reads as one true sentence instead of a button that did nothing. */}
-                      {isPinned && <button type="button" className="btn-ghost m-1 shrink-0 text-xs" onClick={() => onUnpin(item.productId)}>חזרה לבחירה אוטומטית</button>}
+                      {isPinned && <button type="button" className="btn-ghost btn-sm m-1 shrink-0" onClick={() => onUnpin(item.productId)}>חזרה לבחירה אוטומטית</button>}
                     </div>
                   );
                 })}

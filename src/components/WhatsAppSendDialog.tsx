@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { MessageCircle, ImageDown, Share2 } from 'lucide-react';
-import { Modal, Note, useToast } from './ui';
+import { ImageDown, Loader2, Send, Share2 } from 'lucide-react';
+import { ICON, Modal, Note, useToast } from './ui';
 import { openOrderWhatsApp, shareOrderImage, canShareFiles, type WhatsAppOrder } from '../lib/share';
 import { renderOrderImage, orderImageFileName } from '../lib/orderImage';
 
@@ -81,12 +81,16 @@ export function WhatsAppSendDialog({ order, orgName, portalUrl, onClose }: {
           </span>
         </Note>
 
-        <button className="btn-primary w-full justify-center" onClick={openText}>
-          <MessageCircle size={16} /> 1. שליחת הודעת הטקסט
+        <button className="btn-primary w-full" onClick={openText}>
+          <Send size={ICON.sm} aria-hidden="true" /> 1. שליחת הודעת הטקסט
         </button>
 
-        <button className="btn-secondary w-full justify-center" onClick={() => void sendImage()} disabled={image.state !== 'ready'}>
-          {filesSupported ? <Share2 size={16} /> : <ImageDown size={16} />}
+        <button className="btn-secondary w-full" onClick={() => void sendImage()} disabled={image.state !== 'ready'}>
+          {/* DESIGN.md:554 — a button that is not yet actionable says so inside itself, rather
+              than only greying out and leaving the explanation to a paragraph below. */}
+          {image.state === 'rendering'
+          ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" />
+            : filesSupported ? <Share2 size={ICON.sm} aria-hidden="true" /> : <ImageDown size={ICON.sm} aria-hidden="true" />}
           {filesSupported ? '2. שיתוף תמונת ההזמנה' : '2. הורדת תמונת ההזמנה'}
         </button>
         {!filesSupported && image.state === 'ready' && (

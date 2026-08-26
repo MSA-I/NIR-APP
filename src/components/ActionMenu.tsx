@@ -2,6 +2,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { createPortal } from 'react-dom';
 import { MoreVertical } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+// ui.tsx already imports this module (DataTable's rowActions), so this is a cycle — an inert one:
+// ICON is only ever read inside render, long after both modules finish evaluating.
+import { ICON } from './ui';
 
 export interface ActionMenuItem {
   key: string;
@@ -121,14 +124,23 @@ export function ActionMenu({ items, label = 'פעולות' }: { items: ActionMen
 
   return (
     <>
-      <button ref={triggerRef} type="button" className="btn-ghost min-h-11 min-w-11 rounded-none! p-1.5!"
+      <button ref={triggerRef} type="button" className="btn-ghost btn-icon rounded-none!"
         aria-haspopup="menu" aria-expanded={open} aria-label={label}
         onClick={() => (open ? close() : setOpen(true))}>
-        <MoreVertical size={16} aria-hidden="true" />
+        <MoreVertical size={ICON.sm} aria-hidden="true" />
       </button>
       {open && createPortal(
         <div ref={menuRef} role="menu" aria-orientation="vertical" aria-label={label}
           onKeyDown={onMenuKeyDown}
+          // Physical `left`, not `insetInlineStart`, and it stays that way. `pos.left` is a
+          // PHYSICAL viewport coordinate: it comes out of getBoundingClientRect() above, already
+          // resolved against the document direction and already clamped against window.innerWidth.
+          // On a fixed element in an RTL document `inset-inline-start` computes as `right`, so
+          // handing it this number would mirror the menu to the opposite edge of the screen —
+          // the logical property would make the code read right and behave wrong. The logical
+          // intent lives one level up, in the measurement (align the menu's inline-end edge to
+          // the trigger's), which is the only place that can express it without a second
+          // direction branch and a scrollbar-width correction.
           style={{ position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, visibility: pos ? 'visible' : 'hidden' }}
           className="z-50 min-w-40 max-w-64 max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain border border-line bg-surface py-1 shadow-menu">
           {visible.map((it) => (
@@ -147,7 +159,7 @@ export function ActionMenu({ items, label = 'פעולות' }: { items: ActionMen
                 close(true); // restore focus first, so a modal the action opens records the trigger as its opener
                 it.onSelect();
               }}>
-              {it.icon && <it.icon size={15} className="shrink-0" aria-hidden="true" />}
+              {it.icon && <it.icon size={ICON.sm} className="shrink-0" aria-hidden="true" />}
               <span className="min-w-0 truncate">{it.label}</span>
             </button>
           ))}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { Loader2, Plug, Plus, RefreshCw, ShieldCheck, ShieldAlert } from 'lucide-react';
 import {
-  ConfirmDialog, EmptyState, ErrorNote, Modal, Note, PageHeader, SkeletonList, useToast,
+  Card, ConfirmDialog, EmptyState, ErrorNote, ICON, Modal, Note, PageHeader, SkeletonList, useToast,
 } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { fmtDateTime } from '../lib/format';
@@ -130,11 +130,11 @@ export default function WebhookSettings() {
           <div className="flex gap-2">
             <button type="button" className="btn-secondary" disabled={busy}
               onClick={() => void load()}>
-              <RefreshCw size={15} /> רענון
+              <RefreshCw size={ICON.sm} aria-hidden="true" /> רענון
             </button>
             <button type="button" className="btn-primary" disabled={busy}
               onClick={() => { setDraftError(null); setDraft({ url: '', eventTypes: [], secret: '', description: '', reason: '' }); }}>
-              <Plus size={15} /> חיבור חדש
+              <Plus size={ICON.sm} aria-hidden="true" /> חיבור חדש
             </button>
           </div>
         }
@@ -144,7 +144,7 @@ export default function WebhookSettings() {
 
       {rows && rows.length === 0 && !loadError && (
         <EmptyState
-          icon={<Plug size={20} />}
+          icon={<Plug size={ICON.hero} />}
           title="אין עדיין חיבורי webhook"
           subtitle="אפשר לרשום נקודת קצה HTTPS, לבחור אילו אירועים יישלחו אליה, ולאמת אותה לפני ההפעלה."
         />
@@ -293,7 +293,7 @@ function SubscriptionCard({ row, busy, onVerify, onToggle }: {
         (type) => WEBHOOK_EVENT_CHOICES.find((choice) => choice.value === type)?.label ?? type);
 
   return (
-    <article aria-label={row.url} className="card card-pad space-y-3">
+    <Card className="space-y-3" as="article" aria-label={row.url}>
       <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-ink break-all" dir="ltr">{row.url}</p>
@@ -322,8 +322,8 @@ function SubscriptionCard({ row, busy, onVerify, onToggle }: {
 
       {!verified && (
         <Note tone="idle">
-          <ShieldAlert size={16} className="mt-0.5 shrink-0" />
-          <span>
+          <ShieldAlert size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">
             לפני הפעלה יש להוכיח בעלות על נקודת הקצה. המערכת תשלח אליה בקשה חתומה אחת, ועליה
             להחזיר את קוד האימות שקיבלה.
             {row.verification_state === 'pending' && row.verification_expires_at
@@ -335,7 +335,7 @@ function SubscriptionCard({ row, busy, onVerify, onToggle }: {
 
       <div className="flex flex-wrap gap-2">
         <button type="button" className="btn-secondary" disabled={busy} onClick={onVerify}>
-          {busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}
+          {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <ShieldCheck size={ICON.sm} aria-hidden="true" />}
           אימות נקודת הקצה
         </button>
         {/* Absent, not disabled, while unverified: the missing thing is a different action, and a
@@ -351,7 +351,7 @@ function SubscriptionCard({ row, busy, onVerify, onToggle }: {
           </button>
         )}
       </div>
-    </article>
+    </Card>
   );
 }
 
@@ -378,6 +378,12 @@ function RegistrationModal({ draft, error, busy, onChange, onClose, onSubmit }: 
   const secretId = useId();
   const descriptionId = useId();
   const reasonId = useId();
+  const problemId = useId();
+  // The same two checks `submitDraft` runs, evaluated live so the FIELD carries its own validity
+  // instead of one shared banner standing over four boxes with nothing tying it to any of them.
+  // Only a typed value is judged: an untouched field is not a mistake yet.
+  const urlProblem = draft.url.trim().length > 0 && webhookUrlRejection(draft.url) !== null;
+  const secretProblem = draft.secret.length > 0 && webhookSecretRejection(draft.secret) !== null;
 
   function toggleEvent(value: string): void {
     const next = draft.eventTypes.includes(value)
@@ -393,8 +399,10 @@ function RegistrationModal({ draft, error, busy, onChange, onClose, onSubmit }: 
         <div>
           <label className="label" htmlFor={urlId}>כתובת נקודת הקצה (HTTPS) *</label>
           <input id={urlId} className="input" dir="ltr" inputMode="url" autoComplete="off"
+            aria-invalid={urlProblem || undefined}
+            aria-describedby={`${urlId}-rule${error ? ` ${problemId}` : ''}`}
             value={draft.url} onChange={(event) => onChange({ ...draft, url: event.target.value })} />
-          <p className="mt-1 text-xs text-ink-muted">
+          <p id={`${urlId}-rule`} className={`mt-1 text-xs ${urlProblem ? 'text-alert-fg' : 'text-ink-muted'}`}>
             רק HTTPS על פורט 443, שם דומיין ציבורי, בלי שם משתמש או סיסמה בכתובת.
           </p>
         </div>
@@ -404,12 +412,17 @@ function RegistrationModal({ draft, error, busy, onChange, onClose, onSubmit }: 
           <p className="mb-2 text-xs text-ink-muted">
             בלי בחירה יישלחו כל סוגי האירועים. בחירה מצמצמת את מה שיוצא מהעסק — עדיף לבחור.
           </p>
-          <div className="flex flex-wrap gap-1">
+          {/* NOT ToggleGroup: this is multi-select — every event type toggles on its own, and
+              ToggleGroup models „pick one of N". What it did share with the fifteen hand-rolled
+              copies was the real bug, and that is fixed here: `chip-filter-active` is a MODIFIER.
+              The base rule is where min-h-11, the radius, the padding and the focus ring live, so
+              swapping it out left the SELECTED chip with no height floor and no focus ring. */}
+          <div className="flex flex-wrap gap-2">
             {WEBHOOK_EVENT_CHOICES.map((choice) => {
               const on = draft.eventTypes.includes(choice.value);
               return (
                 <button key={choice.value} type="button" aria-pressed={on}
-                  className={on ? 'chip-filter-active' : 'chip-filter'}
+                  className={`chip-filter ${on ? 'chip-filter-active' : ''}`}
                   onClick={() => toggleEvent(choice.value)}>
                   {choice.label}
                 </button>
@@ -424,8 +437,10 @@ function RegistrationModal({ draft, error, busy, onChange, onClose, onSubmit }: 
               secrets store and there is no read path back, so a browser that remembers it would
               be the only copy anyone could recover — and not one we control. */}
           <input id={secretId} className="input" type="password" dir="ltr" autoComplete="new-password"
+            aria-invalid={secretProblem || undefined}
+            aria-describedby={`${secretId}-rule${error ? ` ${problemId}` : ''}`}
             value={draft.secret} onChange={(event) => onChange({ ...draft, secret: event.target.value })} />
-          <p className="mt-1 text-xs text-ink-muted">
+          <p id={`${secretId}-rule`} className={`mt-1 text-xs ${secretProblem ? 'text-alert-fg' : 'text-ink-muted'}`}>
             לפחות {MIN_WEBHOOK_SECRET_LENGTH} תווים. הסוד נשמר במאגר סודות ואינו ניתן לקריאה חוזרת —
             יש לשמור עותק אצלך, איתו מאמתים את חתימת ההודעות.
           </p>
@@ -443,7 +458,7 @@ function RegistrationModal({ draft, error, busy, onChange, onClose, onSubmit }: 
             onChange={(event) => onChange({ ...draft, reason: event.target.value })} />
         </div>
 
-        {error && <ErrorNote message={error} />}
+        {error && <div id={problemId}><ErrorNote message={error} /></div>}
 
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>

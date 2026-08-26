@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { INBOX_CHANGED_EVENT } from '../components/QuickCapture';
-import { ConfirmDialog, DataTable, ErrorNote, Modal, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
+import { ConfirmDialog, DataTable, ErrorNote, ICON, Modal, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
 import { PlanLimitNote } from '../components/PlanLimitNote';
 import { DocumentRemovalDialog } from '../components/DocumentRemovalDialog';
 import { ok, toHebrewError } from '../lib/errors';
@@ -219,7 +219,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
       <label className="mb-3 block">
         <span className="sr-only">חיפוש יעד לשיוך</span>
         <span className="relative block">
-          <Search size={15} className="absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint" aria-hidden="true" />
+          <Search size={ICON.sm} className="absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint" aria-hidden="true" />
           <input className="input ps-9!" value={q} onChange={(event) => setQ(event.target.value)}
             placeholder={target === 'invoice' ? 'חיפוש לפי מספר חשבונית...' : 'חיפוש לפי מספר קבלה או ספק...'} />
         </span>
@@ -350,7 +350,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
         <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
         {(!uploadSummary || files.length > 0) && (
           <button type="button" className="btn-primary" disabled={busy || files.length === 0} onClick={() => void submit()}>
-            {busy ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+            {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Upload size={ICON.sm} aria-hidden="true" />}
             {uploadSummary?.failed.length ? 'ניסיון חוזר לנכשלים בלבד' : 'העלאה'}
           </button>
         )}
@@ -731,7 +731,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       // file name did not.
       render: (doc) => (
         <span className="flex min-w-0 items-center gap-2">
-          <FileText size={16} className="shrink-0 text-ink-faint" aria-hidden="true" />
+          <FileText size={ICON.sm} className="shrink-0 text-ink-faint" aria-hidden="true" />
           <span className="min-w-0 truncate font-medium text-ink-body"><bdi>{doc.file_name}</bdi></span>
         </span>
       ),
@@ -803,16 +803,16 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             0075 — file_document accepts ('archive', null) for owner/office, with a reason and an
             audit row — it simply has no control on this screen, because the intended filer is
             the interpretation layer (task C2, not yet written). */}
-      <PageHeader title={<span className="flex items-center gap-2"><HeadingIcon size={22} /> {archive ? 'ארכיון מסמכים' : 'תיקיית המסמכים'}</span>}
+      <PageHeader title={<span className="flex items-center gap-2"><HeadingIcon size={ICON.xl} aria-hidden="true" /> {archive ? 'ארכיון מסמכים' : 'תיקיית המסמכים'}</span>}
         meta={!archive ? 'כל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.' : undefined}
         actions={<>
           {canUpload && !archive && (
             <button type="button" className="btn-primary" onClick={() => setUploadOpen(true)}>
-              <Upload size={16} /> העלאת מסמך
+              <Upload size={ICON.sm} /> העלאת מסמך
             </button>
           )}
           <Link className="btn-secondary" to={archive ? '/documents' : '/documents/archive'}>
-            {archive ? <FolderOpen size={16} /> : <Archive size={16} />}{archive ? 'חזרה לתיקיית המסמכים' : 'ארכיון'}
+            {archive ? <FolderOpen size={ICON.sm} /> : <Archive size={ICON.sm} />}{archive ? 'חזרה לתיקיית המסמכים' : 'ארכיון'}
           </Link>
         </>} />
 
@@ -834,7 +834,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           <label>
             <span className="label">שם קובץ</span>
             <span className="relative block">
-              <Search size={15} className="absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint" aria-hidden="true" />
+              <Search size={ICON.sm} className="absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint" aria-hidden="true" />
               <input type="search" className="input ps-9!" value={q} onChange={(event) => setQ(event.target.value)} placeholder="חיפוש מסמך..." />
             </span>
           </label>
@@ -844,8 +844,12 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         <details className="group mt-3 border-t border-line-soft pt-2">
           <summary className="-mx-2 flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm font-medium text-action hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
             מסננים נוספים
-            {advancedFilterCount > 0 && <span className="badge badge-info num">{advancedFilterCount}</span>}
-            <ChevronDown size={16} className="ms-auto transition-transform group-open:rotate-180" aria-hidden="true" />
+            {/* `badge-info` already applies `badge` — stacking both was one class saying the same
+                thing twice, and the pair invited a reader to think `badge` was load-bearing. */}
+            {advancedFilterCount > 0 && <span className="badge-info num">{advancedFilterCount}</span>}
+            {/* This chevron sits outside the reduced-motion block's reach, so it carries its own
+                opt-out: `prefers-reduced-motion` must still cancel the rotation. */}
+            <ChevronDown size={ICON.sm} className="ms-auto transition-transform motion-reduce:transition-none group-open:rotate-180" aria-hidden="true" />
           </summary>
           <div className="grid grid-cols-1 gap-3 pt-3 sm:grid-cols-2 lg:grid-cols-4">
             <label>
@@ -875,7 +879,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             )}
             <label><span className="label">מתאריך</span><input type="date" className="input num" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
             <label><span className="label">עד תאריך</span><input type="date" className="input num" value={to} onChange={(event) => setTo(event.target.value)} /></label>
-            <div className="flex items-end"><button type="button" className="btn-ghost min-h-11" disabled={!hasFilters} onClick={resetFilters}><X size={15} /> ניקוי מסננים</button></div>
+            <div className="flex items-end"><button type="button" className="btn-ghost min-h-11" disabled={!hasFilters} onClick={resetFilters}><X size={ICON.sm} /> ניקוי מסננים</button></div>
           </div>
         </details>
         {!loading && data && (
@@ -892,7 +896,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             <span>{processing.error} הנתונים שכבר נטענו נשארו מוצגים.</span>
             <button data-testid="documents-processing-retry" type="button" className="btn-secondary min-h-11"
               disabled={processing.fetching} onClick={() => void processing.refetch()}>
-              <RefreshCw size={16} aria-hidden="true" /> ניסיון חוזר
+              <RefreshCw size={ICON.sm} aria-hidden="true" /> ניסיון חוזר
             </button>
           </div>
         </Note>
@@ -915,6 +919,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       {processing.fetching && processing.data && <div className="text-xs text-ink-muted" role="status">סטטוסי העיבוד מתעדכנים…</div>}
       {error && !data ? <ErrorNote message={error} /> : loading ? <SkeletonTable cols={6} /> : (
         <DataTable rows={filtered} columns={columns} pageSize={20}
+          tableLabel={archive ? 'ארכיון מסמכים' : 'תיקיית המסמכים'}
           rowLabel={(doc) => `מסמך ${doc.file_name}`}
           onRowClick={(doc) => review(doc)}
           mobileTitle={(doc) => <bdi>{doc.file_name}</bdi>}
@@ -928,6 +933,10 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           rowActions={(doc) => {
             const snapshot = processing.snapshots[doc.id];
             const autoAction = autoActionFor(doc);
+            // The icon vocabulary these three screens share: `FileSearch` opens the review
+            // workspace, `Eye` shows the ORIGINAL file, `RefreshCw` runs processing again,
+            // `RotateCcw` undoes an automatic decision, `Undo2` returns a record to where it came
+            // from. FileSearch and Eye on the same row are two different acts, not drift.
             return [
               { key: 'review', label: 'בדיקת מסמך', icon: FileSearch, hidden: !snapshot?.job, onSelect: () => review(doc) },
               { key: 'enqueue', label: 'שליחה לעיבוד', icon: RefreshCw, hidden: !canEnqueue || snapshot?.stage !== 'unprocessed', onSelect: () => setRetryDoc(doc) },

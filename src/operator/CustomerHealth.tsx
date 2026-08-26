@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
-import { StatusBadge } from '../components/ui';
+import { Card, ICON, StatusBadge } from '../components/ui';
 import { fmtDate } from '../lib/format';
 import { CUSTOMER_HEALTH } from '../lib/status';
 import type { CustomerHealth as Health } from '../lib/platform';
@@ -24,7 +24,7 @@ export default function CustomerHealth({ health }: { health: Health | null }) {
   if (!health) return null;
 
   return (
-    <section className="card card-pad space-y-3" aria-labelledby="health-heading">
+    <Card className="space-y-3" as="section" aria-labelledby="health-heading">
       <div className="flex flex-wrap items-center gap-2">
         <h2 id="health-heading" className="section-title">מצב הלקוח</h2>
         <StatusBadge meta={CUSTOMER_HEALTH[health.status]} />
@@ -46,7 +46,7 @@ export default function CustomerHealth({ health }: { health: Health | null }) {
             const Icon = SEVERITY_ICON[signal.severity] ?? Info;
             return (
               <li key={signal.code} className="flex items-start gap-2 text-sm">
-                <Icon size={15} aria-hidden="true"
+                <Icon size={ICON.sm} aria-hidden="true"
                   className={`mt-0.5 shrink-0 ${SEVERITY_CLASS[signal.severity] ?? ''}`} />
                 <span className="min-w-0 flex-1 text-ink-body">{signal.detail}</span>
               </li>
@@ -54,6 +54,6 @@ export default function CustomerHealth({ health }: { health: Health | null }) {
           })}
         </ul>
       )}
-    </section>
+    </Card>
   );
 }

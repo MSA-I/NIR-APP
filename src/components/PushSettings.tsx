@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BellRing, SlidersHorizontal } from 'lucide-react';
-import { useToast, Note, Skeleton } from './ui';
+import { ICON, Note, Skeleton, useToast } from './ui';
 import { getPushStatus, subscribePush, unsubscribePush, isIOS, isStandalone, type PushStatus } from '../lib/push';
 import { useQuery } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
@@ -74,7 +74,7 @@ function PushDeviceCard() {
   return (
     <div className="card card-pad space-y-4">
       <div>
-        <h2 className="section-title flex items-center gap-2"><BellRing size={17} /> התראות דחיפה</h2>
+        <h2 className="section-title flex items-center gap-2"><BellRing size={ICON.md} /> התראות דחיפה</h2>
         <p className="text-sm text-ink-muted mt-1">
           התראה מיידית למכשיר זה על עליית מחיר, חשד לחשבונית כפולה ותשלום שמתקרב לפירעון או עבר אותו.
         </p>
@@ -167,7 +167,7 @@ export function NotificationMatrix() {
     <div className="card card-pad space-y-4">
       <div>
         <h2 className="section-title flex items-center gap-2">
-          <SlidersHorizontal size={17} /> אילו התראות מגיעות אליי
+          <SlidersHorizontal size={ICON.md} /> אילו התראות מגיעות אליי
         </h2>
         <p className="text-sm text-ink-muted mt-1">
           ההגדרה היא שלך בלבד ותקפה בכל המכשירים. כברירת מחדל הכול פעיל.

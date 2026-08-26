@@ -152,13 +152,14 @@ describe('הקיר בין שתי שפות הצבע', () => {
   });
 
   it('המבטא מוצג רק כסמל וכ-rule, ואף פעם לא כמילוי מתחת לטקסט', () => {
-    // `.section-glyph` colours a glyph; `.section-mark` is a 3px rule with no text in it. Any
-    // third consumer of the accent would have to argue for itself here before it could ship.
+    // `.section-mark` is a 3px rule with no text in it. It is the accent's ONLY consumer since
+    // 26.08.2026: `.section-glyph` was removed once the audit showed it had been unreachable
+    // since T7.2 (applied only under `surface === 'shell'`, which no caller passes any more).
+    // Any second consumer would have to argue for itself here before it could ship.
     const consumers = [...rules.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
       .filter((rule) => rule[2].includes('var(--section-accent'))
       .map((rule) => rule[1].trim());
-    expect(consumers.sort()).toEqual(['.section-glyph', '[data-section] .section-mark']);
-    expect(ruleBodies(/^\.section-glyph$/)[0]).toContain('color: var(--section-accent');
+    expect(consumers.sort()).toEqual(['[data-section] .section-mark']);
 
     // The tokens live in `@theme` because DESIGN.md says every colour token does, and Tailwind
     // therefore also generates `bg-section-money`, `border-section-money` and friends. Nothing may

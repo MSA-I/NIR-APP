@@ -3,7 +3,8 @@ import { Link, useParams } from 'react-router';
 import { ArrowRight, Building2, MessageSquarePlus, Pencil, Trash2 } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';
 import {
-  Disclosure, ErrorNote, Modal, Note, PageLoader, StatusBadge, ConfirmDialog, useToast,
+  Card, Disclosure, ErrorNote, ICON, Modal, Note, RecordHeader, RecordSkeleton, StatusBadge, SubPanel,
+  ConfirmDialog, useToast,
 } from '../components/ui';
 import { fmtDate, fmtDateTime, fmtNum } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
@@ -102,7 +103,7 @@ export default function CustomerDetail() {
     }
   }
 
-  if (loading) return <PageLoader />;
+  if (loading) return <RecordSkeleton />;
   if (error) return <ErrorNote message={error} />;
   if (!may('customer.view')) {
     return (
@@ -124,18 +125,25 @@ export default function CustomerDetail() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <Link to="/admin/customers" className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink">
-          <ArrowRight size={15} aria-hidden="true" /> חזרה לרשימת הלקוחות
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="page-title flex items-center gap-2"><Building2 size={22} /> {detail.name}</h1>
-          <StatusBadge meta={ORG_STATUS[detail.status]} />
-          {detail.access_mode === 'offboarding' && (
-            <span className="badge-await">בתהליך סיום שירות</span>
-          )}
-        </div>
-      </div>
+      {/* RecordHeader, not PageHeader: this is one record with a status beside its name. The back
+          link rides the `breadcrumbs` slot rather than becoming <Breadcrumbs> — the operator
+          console has one list above this screen, and a one-item trail says less than the link. */}
+      <RecordHeader
+        breadcrumbs={
+          <Link to="/admin/customers" className="inline-flex min-h-11 items-center gap-1 text-sm text-ink-muted hover:text-ink">
+            <ArrowRight size={ICON.sm} aria-hidden="true" /> חזרה לרשימת הלקוחות
+          </Link>
+        }
+        title={<span className="flex items-center gap-2"><Building2 size={ICON.xl} aria-hidden="true" /> {detail.name}</span>}
+        status={
+          <>
+            <StatusBadge meta={ORG_STATUS[detail.status]} />
+            {detail.access_mode === 'offboarding' && (
+              <span className="badge-await">בתהליך סיום שירות</span>
+            )}
+          </>
+        }
+      />
 
       {detail.open_follow_up_count > 0 && (
         <Note tone="await">
@@ -145,13 +153,13 @@ export default function CustomerDetail() {
         </Note>
       )}
 
-      <section className="card card-pad space-y-3" aria-labelledby="overview-heading">
+      <Card className="space-y-3" as="section" aria-labelledby="overview-heading">
         <div className="flex flex-wrap items-center gap-2">
           <h2 id="overview-heading" className="section-title">תמונת מצב</h2>
           {may('customer.edit') && (
-            <button type="button" className="btn-ghost ms-auto py-1! text-xs"
+            <button type="button" className="btn-ghost btn-sm ms-auto"
               onClick={() => setEditingAccount(true)}>
-              <Pencil size={13} /> עריכת פרטי החשבון
+              <Pencil size={ICON.xs} aria-hidden="true" /> עריכת פרטי החשבון
             </button>
           )}
         </div>
@@ -168,7 +176,7 @@ export default function CustomerDetail() {
         <p className="text-xs text-ink-muted">
           חלק מאבני הדרך אינן ניתנות למדידה בסכימה הזו ומסומנות ככאלה במקום להיראות כלא-בוצעו.
         </p>
-      </section>
+      </Card>
 
       <CustomerHealth health={data?.health ?? null} />
 
@@ -195,7 +203,7 @@ export default function CustomerDetail() {
 
       {may('usage.view') && <CustomerUsage rows={data?.usage ?? []} />}
 
-      <section className="card card-pad space-y-3" aria-labelledby="contacts-heading">
+      <Card className="space-y-3" as="section" aria-labelledby="contacts-heading">
         <h2 id="contacts-heading" className="section-title">אנשי קשר</h2>
         <p className="text-sm text-ink-muted">
           רשומות פנימיות לניהול הקשר — אינן משתמשי המערכת של הלקוח ואינן מעניקות גישה.
@@ -221,14 +229,14 @@ export default function CustomerDetail() {
                 )}
                 {may('customer.edit') && (
                   <span className="ms-auto flex gap-1">
-                    <button type="button" className="btn-ghost py-1! text-xs"
+                    <button type="button" className="btn-ghost btn-sm"
                       onClick={() => setEditingContact({ kind, existing: contact })}>
-                      <Pencil size={13} /> {contact ? 'עריכה' : 'הוספה'}
+                      <Pencil size={ICON.xs} aria-hidden="true" /> {contact ? 'עריכה' : 'הוספה'}
                     </button>
                     {contact && (
-                      <button type="button" className="btn-ghost py-1! text-xs text-alert-fg"
+                      <button type="button" className="btn-ghost btn-sm text-alert-fg"
                         onClick={() => setRemovingContact(contact)}>
-                        <Trash2 size={13} /> הסרה
+                        <Trash2 size={ICON.xs} aria-hidden="true" /> הסרה
                       </button>
                     )}
                   </span>
@@ -237,20 +245,20 @@ export default function CustomerDetail() {
             );
           })}
         </ul>
-      </section>
+      </Card>
 
       {may('notes.view') && (
-        <section className="card card-pad space-y-3" aria-labelledby="notes-heading">
+        <Card className="space-y-3" as="section" aria-labelledby="notes-heading">
           <h2 id="notes-heading" className="section-title">הערות פנימיות</h2>
           <p className="text-sm text-ink-muted">
             נכתבות לעינינו בלבד, אינן נחשפות ללקוח ואינן ניתנות לעריכה או למחיקה לאחר השמירה.
           </p>
 
           {may('notes.add') && (
-            <div className="space-y-2 rounded-lg bg-surface-sunken p-3">
+            <SubPanel className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <label className="sr-only" htmlFor="note-kind">סוג הרשומה</label>
-                <select id="note-kind" className="input w-auto" value={noteDraft.kind}
+                <select id="note-kind" className="input w-full sm:w-auto" value={noteDraft.kind}
                   onChange={(event) => setNoteDraft({ ...noteDraft, kind: event.target.value, due: '' })}>
                   <option value="note">הערה</option>
                   <option value="support">פנייה מהלקוח</option>
@@ -259,7 +267,7 @@ export default function CustomerDetail() {
                 {noteDraft.kind === 'follow_up' && (
                   <>
                     <label className="text-sm text-ink-muted" htmlFor="note-due">לטיפול עד</label>
-                    <input id="note-due" type="date" className="input w-auto" value={noteDraft.due}
+                    <input id="note-due" type="date" className="input w-full sm:w-auto" value={noteDraft.due}
                       onChange={(event) => setNoteDraft({ ...noteDraft, due: event.target.value })} />
                   </>
                 )}
@@ -270,7 +278,7 @@ export default function CustomerDetail() {
                 value={noteDraft.body}
                 onChange={(event) => setNoteDraft({ ...noteDraft, body: event.target.value })} />
               <div className="flex justify-end">
-                <button type="button" className="btn-primary py-1.5! text-sm"
+                <button type="button" className="btn-primary btn-sm"
                   disabled={busy || noteDraft.body.trim().length < 2
                     || (noteDraft.kind === 'follow_up' && !noteDraft.due)}
                   onClick={() => void run(() => addInternalNote({
@@ -279,10 +287,10 @@ export default function CustomerDetail() {
                     body: noteDraft.body,
                     followUpDueAt: noteDraft.kind === 'follow_up' ? noteDraft.due : null,
                   }), 'הרשומה נשמרה')}>
-                  <MessageSquarePlus size={15} /> שמירה
+                  <MessageSquarePlus size={ICON.sm} aria-hidden="true" /> שמירה
                 </button>
               </div>
-            </div>
+            </SubPanel>
           )}
 
           {notes.length === 0 ? (
@@ -305,14 +313,14 @@ export default function CustomerDetail() {
                     <p className="text-sm text-ink-muted">סגירה: {note.resolution}</p>
                   )}
                   {note.kind === 'follow_up' && !note.resolved_at && may('notes.add') && (
-                    <button type="button" className="btn-ghost py-1! text-xs"
+                    <button type="button" className="btn-ghost btn-sm"
                       onClick={() => setResolving(note)}>סגירת המעקב</button>
                   )}
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </Card>
       )}
 
       <Disclosure title="יומן פעולות הפלטפורמה" className="card">
@@ -493,17 +501,23 @@ function ContactModal({ busy, kind, existing, onClose, onSubmit }: {
           <div>
             <label className="label" htmlFor="contact-email">אימייל</label>
             <input id="contact-email" type="email" dir="ltr" className="input" value={form.email}
+              aria-invalid={!reachable || undefined}
+              aria-describedby={!reachable ? 'contact-reachable-problem' : undefined}
               onChange={(event) => setForm({ ...form, email: event.target.value })} />
           </div>
           <div>
             <label className="label" htmlFor="contact-phone">טלפון</label>
             <input id="contact-phone" type="tel" dir="ltr" className="input" value={form.phone}
+              aria-invalid={!reachable || undefined}
+              aria-describedby={!reachable ? 'contact-reachable-problem' : undefined}
               onChange={(event) => setForm({ ...form, phone: event.target.value })} />
           </div>
         </div>
         <div>
           <label className="label" htmlFor="contact-channel">ערוץ מועדף</label>
           <select id="contact-channel" className="input" value={form.channel}
+            aria-invalid={!channelReachable || undefined}
+            aria-describedby={!channelReachable ? 'contact-channel-problem' : undefined}
             onChange={(event) => setForm({ ...form, channel: event.target.value })}>
             <option value="">ללא העדפה</option>
             <option value="email">אימייל</option>
@@ -511,7 +525,7 @@ function ContactModal({ busy, kind, existing, onClose, onSubmit }: {
             <option value="whatsapp">וואטסאפ</option>
           </select>
           {!channelReachable && (
-            <p className="mt-1 text-xs text-alert-fg">
+            <p id="contact-channel-problem" className="mt-1 text-xs text-alert-fg">
               נבחר ערוץ מועדף שאין עבורו כתובת — יש למלא אימייל או טלפון בהתאם.
             </p>
           )}
@@ -522,7 +536,7 @@ function ContactModal({ busy, kind, existing, onClose, onSubmit }: {
             onChange={(event) => setForm({ ...form, reason: event.target.value })} />
         </div>
         {!reachable && (
-          <p className="text-xs text-alert-fg">איש קשר ללא אימייל וללא טלפון אינו ניתן לשמירה.</p>
+          <p id="contact-reachable-problem" className="text-xs text-alert-fg">איש קשר ללא אימייל וללא טלפון אינו ניתן לשמירה.</p>
         )}
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>

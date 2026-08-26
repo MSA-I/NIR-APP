@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { MailWarning, ShieldAlert } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';
-import { ConfirmDialog, ErrorNote, Note, PageLoader, useToast } from '../components/ui';
+import { Card, ConfirmDialog, ErrorNote, ICON, Note, PageHeader, SkeletonTable, useToast } from '../components/ui';
 import { fmtDate, fmtNum } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import {
@@ -60,7 +60,7 @@ export default function SignupQuarantine() {
     setNonce((value) => value + 1);
   }
 
-  if (loading) return <PageLoader />;
+  if (loading) return <SkeletonTable rows={6} cols={5} />;
   if (error) return <ErrorNote message={error} />;
   if (!capabilities.includes('customer.view')) {
     return (
@@ -78,9 +78,9 @@ export default function SignupQuarantine() {
 
   return (
     <div className="space-y-6">
-      <h1 className="page-title flex items-center gap-2">
-        <MailWarning size={22} /> הרשמות שלא אושרו
-      </h1>
+      <PageHeader
+        title={<span className="flex items-center gap-2"><MailWarning size={ICON.xl} aria-hidden="true" /> הרשמות שלא אושרו</span>}
+      />
 
       <Note tone="info">
         <span className="min-w-0 flex-1">
@@ -89,75 +89,79 @@ export default function SignupQuarantine() {
         </span>
       </Note>
 
-      <section className="card p-4">
-        <h2 className="section-title mb-3">מועמדים אחרי 30 יום</h2>
+      <Card className="space-y-3">
+        <h2 className="section-title">מועמדים אחרי 30 יום</h2>
         {candidates.length === 0 ? (
           <p className="text-sm text-ink-muted">אין ארגונים שהבעלים שלהם לא אישר מייל מעל 30 יום.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-ink-muted">
-                  <th className="text-start py-2">ארגון</th>
-                  <th className="text-start py-2">נפתח</th>
-                  <th className="text-start py-2 num">ימים</th>
-                  <th className="text-start py-2">מצב</th>
-                  <th className="text-start py-2 num">תזכורות שלא נשלחו</th>
+          // A read-only report, kept as a scroll region rather than moved to DataTable: the
+          // screen's other half is the queue an operator acts on, and giving the REPORT a search
+          // box, pagination and a row count would make it read like the work list beside it.
+          <div className="table-scroll overflow-x-auto" role="region"
+            aria-label="מועמדים אחרי 30 יום — ניתן לגלול אופקית" tabIndex={0}>
+            <table className="w-full">
+              <thead className="table-head border-b border-line-soft">
+                <tr>
+                  <th scope="col" className="th">ארגון</th>
+                  <th scope="col" className="th">נפתח</th>
+                  <th scope="col" className="th num">ימים</th>
+                  <th scope="col" className="th">מצב</th>
+                  <th scope="col" className="th num">תזכורות שלא נשלחו</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-line-soft">
                 {candidates.map((row) => (
-                  <tr key={row.org_id} className="border-t border-hairline">
-                    <td className="py-2">{row.organization_name}</td>
-                    <td className="py-2">{fmtDate(row.created_at)}</td>
-                    <td className="py-2 num">{fmtNum(row.days_since_signup)}</td>
-                    <td className="py-2">
+                  <tr key={row.org_id}>
+                    <td className="td">{row.organization_name}</td>
+                    <td className="td num">{fmtDate(row.created_at)}</td>
+                    <td className="td num">{fmtNum(row.days_since_signup)}</td>
+                    <td className="td">
                       {row.disposition === 'quarantine_required'
                         ? <span className="text-alert-fg">פעילות עסקית — בידוד</span>
                         : <span className="text-ink-muted">ריק — מועמד לניקוי</span>}
                     </td>
-                    <td className="py-2 num">{fmtNum(row.reminders_not_sent)}</td>
+                    <td className="td num">{fmtNum(row.reminders_not_sent)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-      </section>
+      </Card>
 
-      <section className="card p-4">
-        <h2 className="section-title mb-3 flex items-center gap-2">
-          <ShieldAlert size={18} /> תור בידוד
+      <Card className="space-y-3">
+        <h2 className="section-title flex items-center gap-2">
+          <ShieldAlert size={ICON.md} aria-hidden="true" /> תור בידוד
         </h2>
-        <p className="mb-3 text-sm text-ink-muted">
+        <p className="text-sm text-ink-muted">
           ארגונים עם פעילות עסקית שהבעלים שלהם לא אישר מייל. הם אינם נמחקים אוטומטית לעולם —
           אדם מכריע.
         </p>
         {openQueue.length === 0 ? (
           <p className="text-sm text-ink-muted">אין ארגונים בבידוד.</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="divide-y divide-line-soft">
             {openQueue.map((entry) => (
-              <li key={entry.id} className="flex flex-wrap items-center gap-2 border-t border-hairline pt-2">
+              <li key={entry.id} className="flex flex-wrap items-center gap-2 py-2">
                 <span className="min-w-0 flex-1 font-medium text-ink">{entry.organization_name}</span>
                 <span className="text-xs text-ink-muted">נפתח {fmtDate(entry.opened_at)}</span>
                 {capabilities.includes('customer.edit') && (
-                  <>
-                    <button type="button" className="btn-secondary"
+                  <span className="flex flex-wrap gap-2">
+                    <button type="button" className="btn-secondary btn-sm"
                       onClick={() => setPending({ entry, resolution: 'released' })}>
                       שחרור
                     </button>
-                    <button type="button" className="btn-secondary"
+                    <button type="button" className="btn-secondary btn-sm"
                       onClick={() => setPending({ entry, resolution: 'escalated' })}>
                       הסלמה
                     </button>
-                  </>
+                  </span>
                 )}
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </Card>
 
       <ConfirmDialog
         open={!!pending}

@@ -25,19 +25,20 @@ const offer: SupplierProduct = {
   updated_at: '2026-08-01T00:00:00Z',
 };
 
-function renderStep(cartProductIds: readonly string[]) {
+function renderStep(cartProductIds: readonly string[], qty = 2) {
   const onAdd = vi.fn();
   const onRemove = vi.fn();
+  const onQty = vi.fn();
   render(
     <ProductStep
       products={[tomato, cucumber]}
       categories={[]}
       offersByProduct={new Map([['p1', [offer]]])}
-      cart={cartProductIds.map((id) => ({ product: id === 'p1' ? tomato : cucumber, qty: 2 }))}
+      cart={cartProductIds.map((id) => ({ product: id === 'p1' ? tomato : cucumber, qty }))}
       q="" setQ={() => {}} cat="" setCat={() => {}}
       onAdd={onAdd}
       onRemove={onRemove}
-      onQty={() => {}}
+      onQty={onQty}
       onContinue={() => {}}
       nextOrderItems={[]}
       nextOrderBusyId={null}
@@ -46,7 +47,7 @@ function renderStep(cartProductIds: readonly string[]) {
       onCreateProduct={null}
     />,
   );
-  return { onAdd, onRemove };
+  return { onAdd, onRemove, onQty };
 }
 
 describe('ProductStep — the row is a real toggle', () => {
@@ -83,5 +84,57 @@ describe('ProductStep — the row is a real toggle', () => {
 
     expect(onRemove.mock.calls).toEqual([['p1']]);
     expect(onAdd.mock.calls).toEqual([[cucumber]]);
+  });
+});
+
+// The cart stepper's floor. This is a real behaviour change and it is recorded here so that
+// restoring the old floor fails a test rather than passing silently.
+//
+// Before the shared Stepper, the quantity control had no `min`, so pressing minus at 1 reached 0
+// — and NewOrder maps qty 0 to REMOVE_PRODUCT. That was the legacy way out of the cart, and the
+// header of this very file records it as the problem the row-as-toggle fixed (owner report,
+// 19.08.2026). The floor of 1 also protects the newly editable input: clearing the field clamps
+// to 1 instead of deleting the line under the user mid-keystroke.
+describe('ProductStep — the quantity stepper has a floor of 1', () => {
+  const minusName = 'הפחתה — כמות עגבניות';
+  const plusName = 'הוספה — כמות עגבניות';
+
+  it('the minus is disabled at qty 1, so decrementing can no longer empty the line', async () => {
+    const { onQty } = renderStep(['p1'], 1);
+    const minus = screen.getByRole('button', { name: minusName });
+
+    expect(minus).toBeDisabled();
+
+    await userEvent.click(minus);
+    expect(onQty).not.toHaveBeenCalled();
+  });
+
+  it('the minus is live above the floor', async () => {
+    const { onQty } = renderStep(['p1'], 3);
+    const minus = screen.getByRole('button', { name: minusName });
+
+    expect(minus).toBeEnabled();
+
+    await userEvent.click(minus);
+    expect(onQty).toHaveBeenCalledWith('p1', 2);
+  });
+
+  it('the plus still raises the quantity', async () => {
+    const { onQty } = renderStep(['p1'], 1);
+
+    await userEvent.click(screen.getByRole('button', { name: plusName }));
+
+    expect(onQty).toHaveBeenCalledWith('p1', 2);
+  });
+
+  // The floor is only defensible because removal has somewhere else to live. If the row ever
+  // stops removing, the floor becomes a trap and this test is the one that says so.
+  it('removal still happens through the row toggle', async () => {
+    const { onRemove, onQty } = renderStep(['p1'], 1);
+
+    await userEvent.click(screen.getByRole('button', { name: 'ביטול בחירת עגבניות' }));
+
+    expect(onRemove).toHaveBeenCalledWith('p1');
+    expect(onQty).not.toHaveBeenCalled();
   });
 });

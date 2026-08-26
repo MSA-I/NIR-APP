@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Banknote, Calculator, ChevronLeft, FileSpreadsheet, Printer, ReceiptText, type LucideIcon } from 'lucide-react';
+import { Banknote, Calculator, ChevronLeft, FileSpreadsheet, Loader2, Printer, ReceiptText, type LucideIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useParamState } from '../lib/useParamState';
-import { DataTable, EmptyState, ErrorNote, Modal, Note, PageHeader, SkeletonCards, StatusBadge, useToast, type Column } from '../components/ui';
+import { DataTable, EmptyState, ErrorNote, ICON, Modal, Note, PageHeader, SkeletonCards, StatusBadge, ToggleGroup, useToast, type Column } from '../components/ui';
 import { INVOICE_PAYMENT_STATUS } from '../lib/status';
 import { toHebrewError } from '../lib/errors';
 import {
@@ -34,6 +34,9 @@ type RawOrderItem = {
   product: { category_id: string | null } | { category_id: string | null }[] | null;
 };
 type SupplierRow = { id: string; name: string; count: number; total: number };
+
+/** The one id the two date inputs point at when the range is refused. */
+const RANGE_ERROR_ID = 'expenses-range-error';
 
 type PresetKey = 'month' | 'prevMonth' | 'quarter' | 'year';
 const PRESETS: { key: PresetKey; label: string }[] = [
@@ -73,7 +76,7 @@ function StripStat({ title, value, context, icon: Icon }: {
     <div className="min-h-20 border-t border-line-soft px-4 py-3 first:border-t-0 sm:border-s sm:border-t-0 sm:px-5 sm:first:border-s-0">
       <div className="flex items-center gap-2">
         <span className="grid size-8 shrink-0 place-items-center border border-line-soft bg-surface-sunken text-idle-fg" aria-hidden="true">
-          <Icon size={16} />
+          <Icon size={ICON.sm} />
         </span>
         <span className="text-xs font-medium text-ink-muted">{title}</span>
       </div>
@@ -262,6 +265,12 @@ export default function Expenses() {
   ];
 
   const drillInvoices = drill ? data.invoices.filter((i) => i.supplier_id === drill.id) : [];
+  // Which quick range the current from/to happens to equal — '' once the dates were typed by hand,
+  // which is how ToggleGroup renders "no chip pressed" without inventing a sixth option.
+  const activePreset: PresetKey | '' = PRESETS.find((preset) => {
+    const range = presetRange(preset.key);
+    return from === range.from && to === range.to;
+  })?.key ?? '';
 
   return (
     <div className="space-y-4">
@@ -269,37 +278,37 @@ export default function Expenses() {
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <PageHeader className="no-print" title="ריכוז הוצאות" actions={
         <div className="flex flex-wrap items-center gap-2">
-          <button className="btn-secondary" onClick={() => void exportExcel()} disabled={exporting || !hasInvoices || fetching || !!error || data.invalidRange} title={excelBlockedReason ?? 'הורדת הריכוז כקובץ Excel'}><FileSpreadsheet size={15} /> ייצוא Excel</button>
-          <button className="btn-secondary" disabled={fetching || !!error || data.invalidRange} onClick={() => window.print()} title={rangeBlockedReason ?? 'הדפסת הריכוז או שמירה כ-PDF'}><Printer size={15} /> הדפסה / PDF</button>
+          <button className="btn-secondary" onClick={() => void exportExcel()} disabled={exporting || !hasInvoices || fetching || !!error || data.invalidRange} title={excelBlockedReason ?? 'הורדת הריכוז כקובץ Excel'}>{exporting ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={ICON.sm} aria-hidden="true" />} ייצוא Excel</button>
+          <button className="btn-secondary" disabled={fetching || !!error || data.invalidRange} onClick={() => window.print()} title={rangeBlockedReason ?? 'הדפסת הריכוז או שמירה כ-PDF'}><Printer size={ICON.sm} aria-hidden="true" /> הדפסה / PDF</button>
         </div>
       } />
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-line-soft bg-surface px-3 py-3 no-print sm:px-4">
-        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="טווחי תאריכים מהירים">
-          {PRESETS.map((p) => {
-            const r = presetRange(p.key);
-            const active = from === r.from && to === r.to;
-            return (
-              <button key={p.key} className={`chip-filter sm:min-h-9 ${active ? 'chip-filter-active' : ''}`}
-                aria-pressed={active} onClick={() => setRange(r.from, r.to)}>
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Was `chip-filter sm:min-h-9` — a deliberate drop to 36px above the sm breakpoint, which
+            contradicts "44px on every viewport". ToggleGroup owns the geometry now. */}
+        <ToggleGroup<PresetKey | ''>
+          label="טווחי תאריכים מהירים"
+          className="gap-1"
+          value={activePreset}
+          onChange={(key) => { if (!key) return; const range = presetRange(key); setRange(range.from, range.to); }}
+          items={PRESETS.map((preset) => ({ key: preset.key, label: preset.label }))} />
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-1.5 text-xs text-ink-soft">
             מ־
-            <input type="date" className="input w-auto!" value={from} onChange={(e) => setRange(e.target.value, to)} />
+            {/* The range error is a claim about THESE two fields, so it is bound to them rather
+                than left to a note floating below the toolbar. */}
+            <input type="date" className="input w-auto!" value={from} onChange={(e) => setRange(e.target.value, to)}
+              aria-invalid={invalidRange || undefined} aria-describedby={invalidRange ? RANGE_ERROR_ID : undefined} />
           </label>
           <label className="flex items-center gap-1.5 text-xs text-ink-soft">
             עד
-            <input type="date" className="input w-auto!" value={to} onChange={(e) => setRange(from, e.target.value)} />
+            <input type="date" className="input w-auto!" value={to} onChange={(e) => setRange(from, e.target.value)}
+              aria-invalid={invalidRange || undefined} aria-describedby={invalidRange ? RANGE_ERROR_ID : undefined} />
           </label>
         </div>
       </div>
 
-      {data.invalidRange && <Note tone="alert">תאריך ההתחלה חייב להיות מוקדם מתאריך הסיום או זהה לו.</Note>}
+      {data.invalidRange && <div id={RANGE_ERROR_ID}><Note tone="alert" role="alert">תאריך ההתחלה חייב להיות מוקדם מתאריך הסיום או זהה לו.</Note></div>}
 
       {!data.invalidRange && <div className="print-area space-y-4">
         <div className="hidden print:block">
@@ -337,7 +346,7 @@ export default function Expenses() {
                       </span>
                     </span>
                     <strong className="num shrink-0 text-sm text-ink-body">{fmtMoneyExact(supplier.total)}</strong>
-                    <ChevronLeft size={16} className="shrink-0 text-ink-ghost" aria-hidden="true" />
+                    <ChevronLeft size={ICON.sm} className="shrink-0 text-ink-ghost" aria-hidden="true" />
                   </button>
                 ))}
               </div>

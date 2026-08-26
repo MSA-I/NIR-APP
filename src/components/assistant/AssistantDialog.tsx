@@ -20,7 +20,7 @@ import { fmtDateTime } from '../../lib/format';
 import { useAuth } from '../../auth/AuthContext';
 import { isActiveRole } from '../../lib/types';
 import { APP_ROUTE_POLICY, appRouteAllowsRole } from '../../lib/routePolicy';
-import { ConfirmDialog, ErrorNote, Note, Skeleton, useDialogLayer } from '../ui';
+import { ConfirmDialog, ErrorNote, ICON, Note, Skeleton, useDialogLayer } from '../ui';
 import AnswerView from './AnswerView';
 
 /**
@@ -67,6 +67,24 @@ const ROLE_EXAMPLES = {
 
 function needsFallback(rawError: string): boolean {
   return FALLBACK_CODES.some((code) => rawError.includes(code));
+}
+
+/**
+ * One question, as its author.
+ *
+ * Three sites render it — a settled turn, the question still in flight, and the question whose
+ * run failed — and before this they were three copies of one string of classes. The bubble sits
+ * at the logical `end` in `bg-action` and squares the corner nearest its own edge, which is what
+ * separates a question from an answer without an avatar, a name or a label (DESIGN.md:539-542).
+ */
+function UserTurn({ question }: { question: string }) {
+  return (
+    <div className="page-fade flex justify-end">
+      <p className="max-w-[85%] rounded-3xl rounded-ee-sm bg-action px-4 py-2.5 text-sm font-medium leading-relaxed text-on-solid shadow-card">
+        {question}
+      </p>
+    </div>
+  );
 }
 
 /**
@@ -125,15 +143,15 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
             >
               <span className="min-w-0 flex-1 truncate text-sm text-ink-body">{conversation.title}</span>
               <span className="num shrink-0 text-xs text-ink-muted">{fmtDateTime(conversation.updated_at)}</span>
-              {openingId === conversation.id && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
+                {openingId === conversation.id && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />}
             </button>
             <button
               type="button"
-              className="btn-ghost p-1.5! min-h-11 min-w-11"
+              className="btn-ghost btn-icon rounded-full"
               aria-label={`מחיקת הבדיקה ${conversation.title}`}
               onClick={() => setPendingDelete(conversation.id)}
             >
-              <Trash2 size={14} aria-hidden="true" />
+              <Trash2 size={ICON.sm} aria-hidden="true" />
             </button>
           </li>
         ))}
@@ -205,6 +223,16 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
   const closeForProductNavigation = () => {
     if (!desktop) onMobileSourceNavigate();
   };
+  /** `result` is `turns.at(-1)`, so this reads "nothing asked yet under this authorization". */
+  const nothingAskedYet = !pending && !result && !errorText;
+
+  /**
+   * The sentence that describes the whole surface. It is the target of `aria-describedby`, so it
+   * has to exist in every state — but visually it is the empty state's one line of guidance and
+   * nothing more. Once the thread has content it keeps doing its job for a screen reader and
+   * stops restating itself above every answer.
+   */
+  const description = 'העוזר מציג רק נתונים שהמערכת מדדה, ולכל ממצא מצרף עדכניות ומקור לבדיקה.';
 
   return createPortal(
     <div
@@ -218,33 +246,51 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
       tabIndex={-1}
       className="assistant-surface page-fade phone-safe-dialog z-50 flex flex-col bg-surface focus:outline-none no-print"
     >
-        <div className="flex items-center gap-2 border-b border-line-soft px-4 py-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-action-wash text-action" aria-hidden="true">
-            <Sparkles size={19} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 id={titleId} className="truncate font-semibold text-ink">העוזר של {APP_NAME}</h2>
-            <p className="truncate text-xs text-ink-muted">בדיקה תפעולית מבוססת ראיות · לקריאה בלבד</p>
-          </div>
-          {(result || conversationId) && (
-            <button
-              type="button"
-              className="btn-ghost gap-1 px-2! py-1! text-xs"
-              disabled={pending}
-              onClick={resetConversation}
-            >
-              <RotateCcw size={13} aria-hidden="true" /> בדיקה חדשה
+        {/* Band 1 of 3 — the titled header. A plain <div> and not <header>: the panel root is a
+            `div` carrying an ARIA role rather than a sectioning element, so a nested <header>
+            would map to a second `banner` landmark on the page. */}
+        <div className="shrink-0 border-b border-line-soft bg-surface px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-action-wash text-action" aria-hidden="true">
+              <Sparkles size={ICON.lg} />
+            </span>
+            <h2 id={titleId} className="min-w-0 flex-1 truncate font-semibold text-ink">העוזר של {APP_NAME}</h2>
+            {(result || conversationId) && (
+              <button
+                type="button"
+                className="btn-ghost btn-sm"
+                disabled={pending}
+                onClick={resetConversation}
+              >
+                <RotateCcw size={ICON.xs} aria-hidden="true" /> בדיקה חדשה
+              </button>
+            )}
+            <button type="button" className="btn-ghost btn-icon rounded-full" onClick={() => requestClose()} aria-label="סגירת הבדיקה">
+              <X size={ICON.lg} aria-hidden="true" />
             </button>
-          )}
-          <button type="button" className="btn-ghost p-1.5! min-h-11 min-w-11" onClick={() => requestClose()} aria-label="סגירת הבדיקה">
-            <X size={18} aria-hidden="true" />
-          </button>
+          </div>
+          {/* Its own row, indented to the title's start (mark 2.5rem + gap 0.5rem = `ps-12`), and
+              never truncated. On the same line as the controls it was the first thing to clip, and
+              what clipped was the end of the sentence: at 27.5rem with „בדיקה חדשה” present the
+              subtitle read „בדיקה תפעולית מבוססת ר…”, which drops exactly the two words the header
+              is required to keep. A promise about what the surface may do cannot be the part that
+              ellipsis eats. */}
+          <p className="mt-0.5 text-xs leading-snug text-ink-muted ps-12">בדיקה תפעולית מבוססת ראיות · לקריאה בלבד</p>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto p-4">
-          <p id={descriptionId} className="text-xs text-ink-muted">
-            העוזר מציג רק נתונים שהמערכת מדדה, ולכל ממצא מצרף עדכניות ומקור לבדיקה.
-          </p>
+        {/* Band 2 of 3 — the scrolling conversation, one tonal step below the header and the
+            composer so the answers read as paper laid ON the thread instead of as more frame.
+            DESIGN.md:541 records the inverse (the answer on `surface-sunken`); the code has
+            painted the answer on `.card` since the thread landed. Reported, not silently kept. */}
+        {/* `safe center` and not plain `justify-center`: the empty state is the only child while
+            the thread is empty, and centring it inside a scroll container is exactly the case
+            where ordinary centring puts the overflow above the scrollport and makes it
+            unreachable. `safe` falls back to start-alignment the moment the content is taller
+            than the panel, and a browser that does not know the keyword drops the declaration
+            and lands on the same top-aligned layout. */}
+        <div className={`flex-1 space-y-4 overflow-y-auto bg-surface-sunken p-4 ${
+          nothingAskedYet ? 'flex flex-col [justify-content:safe_center]' : ''}`}>
+          {!nothingAskedYet && <p id={descriptionId} className="sr-only">{description}</p>}
 
           {/*
             The conversation as a thread: every question the person asked and every answer that
@@ -256,12 +302,8 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
             <ol className="space-y-5" aria-label="השיחה עם העוזר">
               {turns.map((turn) => (
                 <li key={turn.result.run_id} className="space-y-2">
-                  <div className="flex justify-end">
-                    <p className="max-w-[85%] rounded-3xl rounded-ee-sm bg-action px-3 py-2 text-sm font-medium leading-relaxed text-on-solid">
-                      {turn.question}
-                    </p>
-                  </div>
-                  <div className="card rounded-ss-sm p-3">
+                  <UserTurn question={turn.question} />
+                  <div className="card page-fade rounded-ss-sm p-3">
                     <p className="mb-2 text-xs text-ink-muted">
                       עודכן ל־<span className="num">{fmtDateTime(turn.result.as_of)}</span>
                     </p>
@@ -279,31 +321,28 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
           )}
 
           {/* The question that is still in flight sits at the end of the thread, as its author. */}
-          {pending && submittedQuestion && (
-            <div className="flex justify-end">
-              <p className="max-w-[85%] rounded-3xl rounded-ee-sm bg-action px-3 py-2 text-sm font-medium leading-relaxed text-on-solid">
-                {submittedQuestion}
-              </p>
-            </div>
-          )}
+          {pending && submittedQuestion && <UserTurn question={submittedQuestion} />}
 
+          {/* In flight: three dots in the ANSWER's bubble position — the reference's one honest
+              idea about waiting, and the only thing on screen saying the run is still going.
+              It reports state and nothing else: the dots are `aria-hidden`, the `role="status"`
+              sentence is what assistive tech hears, and neither carries a name, an avatar or an
+              "…is typing" (DESIGN.md:515). The pulse keeps running under reduced motion for the
+              same reason index.css:1163 keeps `.animate-spin` running — stopping the only live
+              signal reads as a hang — and at 2s it is already calmer than the slowed spinner. */}
           {pending && (
-            <div role="status" aria-busy="true" className="card space-y-2 rounded-ss-sm p-3">
+            <div role="status" aria-busy="true" className="page-fade flex justify-start">
               <span className="sr-only">בודק את הנתונים המורשים</span>
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-5/6" />
-              <Skeleton className="h-4 w-2/3" />
+              <span data-assistant-typing className="card flex items-center gap-1.5 rounded-ss-sm px-4 py-4" aria-hidden="true">
+                <span className="size-2 animate-pulse rounded-full bg-action [animation-delay:0ms]" />
+                <span className="size-2 animate-pulse rounded-full bg-action [animation-delay:200ms]" />
+                <span className="size-2 animate-pulse rounded-full bg-action [animation-delay:400ms]" />
+              </span>
             </div>
           )}
 
           {/* A failed run leaves no turn, so its question would otherwise vanish with the error. */}
-          {!pending && errorText && submittedQuestion && (
-            <div className="flex justify-end">
-              <p className="max-w-[85%] rounded-3xl rounded-ee-sm bg-action px-3 py-2 text-sm font-medium leading-relaxed text-on-solid">
-                {submittedQuestion}
-              </p>
-            </div>
-          )}
+          {!pending && errorText && submittedQuestion && <UserTurn question={submittedQuestion} />}
 
           {!pending && errorText && (
             <div className="space-y-3">
@@ -330,24 +369,37 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
             </div>
           )}
 
-          {!pending && !result && !errorText && (
-            <section aria-labelledby={`${titleId}-start`}>
-              <h3 id={`${titleId}-start`} className="section-title">מה תרצה לבדוק?</h3>
-              <p className="mt-1 text-sm text-ink-muted">אפשר להתחיל מדוגמה שמתאימה להרשאות שלך.</p>
-              <div className="mt-3 flex flex-col gap-2">
-                {examples.map((example) => (
-                  <button
-                    key={example}
-                    type="button"
-                    className="min-h-11 rounded-lg bg-action-wash px-3 text-start text-sm font-medium text-action-on-soft transition-colors hover:bg-action-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                    onClick={() => setQuestion(example)}
-                  >
-                    {example}
-                  </button>
-                ))}
+          {/* A real empty state instead of a blank area: the mark, the question this surface
+              exists to ask, one line of guidance — and only then the openings this role is
+              actually allowed to take. */}
+          {nothingAskedYet && (
+            <section aria-labelledby={`${titleId}-start`} className="page-fade mx-auto w-full max-w-sm">
+              <div className="flex flex-col items-center pt-2 text-center">
+                <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-action-wash text-action" aria-hidden="true">
+                  <Sparkles size={ICON.xl} />
+                </span>
+                <h3 id={`${titleId}-start`} className="section-title mt-3">מה תרצה לבדוק?</h3>
+                <p id={descriptionId} className="mt-1 text-sm leading-relaxed text-ink-muted">{description}</p>
               </div>
+              {examples.length > 0 && (
+                <>
+                  <p className="mt-6 text-xs font-medium text-ink-muted">אפשר להתחיל מדוגמה שמתאימה להרשאות שלך.</p>
+                  <div className="mt-2 flex flex-col gap-2">
+                    {examples.map((example) => (
+                      <button
+                        key={example}
+                        type="button"
+                        className="min-h-11 rounded-2xl bg-action-wash px-4 text-start text-sm font-medium text-action-on-soft transition-colors hover:bg-action-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                        onClick={() => setQuestion(example)}
+                      >
+                        {example}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
               {isEnabled(ASSISTANT_FLAG_KEYS.history) && (
-                <div className="mt-5">
+                <div className="mt-6">
                   <ConversationHistory
                     authorizationFingerprint={authorizationFingerprint}
                     onOpen={(restored, expected) => restoreHistory(restored, expected)}
@@ -358,16 +410,21 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
           )}
         </div>
 
+        {/* Band 3 of 3 — the composer, pinned. The send control sits INSIDE the field's trailing
+            edge, so the pill IS the field: `.input` keeps the 3:1 boundary and owns the focus
+            ring (focus belongs to the control that receives it, not to a wrapper), `rounded-3xl`
+            is the house 24px, and `pe-14` is the lane the button stands in. Empty and in-flight
+            are the button's two disabled states, which `btn` already paints. */}
         <form
-          className="border-t border-line-soft p-3"
+          className="shrink-0 border-t border-line-soft bg-surface p-3"
           onSubmit={(event) => {
             event.preventDefault();
             void submit(location.pathname);
           }}
         >
-          <div className="flex items-end gap-2">
+          <div className="relative">
             <textarea
-              className="input min-h-11 flex-1 resize-none"
+              className="input resize-none rounded-3xl pe-14"
               rows={2}
               maxLength={ASSISTANT_QUESTION_MAX_CHARS}
               placeholder={examples[0] ?? 'מה תרצה לבדוק?'}
@@ -382,10 +439,15 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
                 }
               }}
             />
-            <button type="submit" className="btn-primary min-h-11" disabled={pending || !question.trim()}>
+            <button
+              type="submit"
+              className="btn-primary btn-icon absolute bottom-1.5 end-1.5 rounded-full"
+              aria-label={pending ? 'שולח' : 'בדיקה'}
+              disabled={pending || !question.trim()}
+            >
               {pending
-                ? <><Loader2 size={16} className="animate-spin" aria-hidden="true" /><span className="sr-only">שולח</span></>
-                : <><Send size={16} aria-hidden="true" /> בדיקה</>}
+                ? <Loader2 size={ICON.md} className="animate-spin" aria-hidden="true" />
+                : <Send size={ICON.md} aria-hidden="true" />}
             </button>
           </div>
         </form>

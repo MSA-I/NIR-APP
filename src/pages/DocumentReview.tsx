@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { DocumentReviewWorkspace } from '../components/document-review/DocumentReviewWorkspace';
 import { DocumentScanPreview } from '../components/document-review/DocumentScanPreview';
-import { ErrorNote, Note, PageLoader } from '../components/ui';
+import { ErrorNote, ICON, Note, RecordHeader, RecordSkeleton } from '../components/ui';
 import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { isActiveRole } from '../lib/types';
@@ -137,31 +137,32 @@ export default function DocumentReview() {
   }, [interpretError, currentJob, hasInterpretation]);
 
   if (!documentId) return <ErrorNote message="מזהה המסמך חסר." />;
-  if (processing.loading || scanning.loading || !profile) return <PageLoader />;
+  if (processing.loading || scanning.loading || !profile) return <RecordSkeleton />;
   if (!isActiveRole(profile.role)) return <ErrorNote message="התפקיד ההיסטורי אינו מורשה להשתמש במסך הזה." />;
   if (processing.error && !snapshot) return <ErrorNote message={processing.error} />;
   if (!snapshot) return <ErrorNote message="המסמך אינו זמין או שאין לך הרשאה לצפות בו." />;
 
   return (
     <div className="min-w-0 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0 space-y-2">
-          {/* Was `hidden lg:inline-flex`. Below 1024px — the primary target — that left the phone
-              with no way out of this screen but the browser's own back gesture, on the one screen
-              a person reaches by tapping a row in a list they want to return to. `btn-ghost` is a
-              44px inline target at every width, so there was nothing to hide it for. */}
+      {/* RecordHeader, not PageHeader: this screen is ONE document, and the file name is the
+          record's identity rather than a page subtitle. It also keeps the catalogue description
+          out — PageHeader would have added a sentence this header did not have before. */}
+      <RecordHeader
+        breadcrumbs={
+          /* Was `hidden lg:inline-flex`. Below 1024px — the primary target — that left the phone
+             with no way out of this screen but the browser's own back gesture, on the one screen
+             a person reaches by tapping a row in a list they want to return to. `btn-ghost` is a
+             44px inline target at every width, so there was nothing to hide it for. */
           <BackAction fallback="/documents" label="חזרה למסמכים" carrySearch />
-          <div>
-            <h1 className="page-title">בדיקת מסמך</h1>
-            <p className="mt-1 break-words text-sm text-ink-muted"><bdi>{snapshot.document?.file_name ?? 'מסמך שהועלה'}</bdi></p>
-          </div>
-        </div>
-        {processing.fetching && (
+        }
+        title="בדיקת מסמך"
+        meta={<span className="min-w-0 break-words"><bdi>{snapshot.document?.file_name ?? 'מסמך שהועלה'}</bdi></span>}
+        secondaryActions={processing.fetching ? (
           <span className="inline-flex min-h-11 items-center gap-2 text-sm text-ink-muted" role="status">
-            <RefreshCw className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> מעדכן נתונים
+            <RefreshCw className="animate-spin" size={ICON.md} aria-hidden="true" /> מעדכן נתונים
           </span>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {processing.error && (
         <Note tone="alert" role="alert" className="flex-wrap">
@@ -190,7 +191,7 @@ export default function DocumentReview() {
           </span>
           {canWrite && (
             <button type="button" className="btn-primary min-h-11" disabled={enqueuing} onClick={() => void enqueue()}>
-              <RefreshCw className={enqueuing ? 'animate-spin motion-reduce:animate-none' : ''} size={17} aria-hidden="true" />
+              <RefreshCw className={enqueuing ? 'animate-spin ' : ''} size={ICON.md} aria-hidden="true" />
               {enqueuing ? 'שולח לעיבוד…' : 'שליחה לעיבוד'}
             </button>
           )}
@@ -199,7 +200,7 @@ export default function DocumentReview() {
 
       {interpreting && (
         <Note tone="info" role="status" className="flex items-center gap-2">
-          <RefreshCw className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" />
+          <RefreshCw className="animate-spin" size={ICON.md} aria-hidden="true" />
           <span>מפרש את המסמך…</span>
         </Note>
       )}

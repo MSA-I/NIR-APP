@@ -21,6 +21,7 @@ import { Star } from 'lucide-react';
 import type { SupplierMetrics } from '../lib/types';
 import type { Tone } from '../lib/status';
 import { chartTheme } from '../lib/theme';
+import { ICON } from './ui';
 import { useId } from 'react';
 
 export type { SupplierMetrics };  // re-exported so Suppliers.tsx's existing import keeps resolving
@@ -105,7 +106,7 @@ export function RatingStars({ value, onChange, label = 'דירוג ספק' }: { 
         aria-label={value != null ? `דירוג ${value} מתוך 5` : 'ספק לא דורג'}
         title={value != null ? `דירוג ${value} מתוך 5` : 'לא דורג'}>
         {stars.map((n) => (
-          <Star key={n} size={15} aria-hidden="true"
+          <Star key={n} size={ICON.sm} aria-hidden="true"
             className={value != null && n <= value ? 'fill-star text-star' : EMPTY_STAR} />
         ))}
         {/* The figure in plain sight, not only in the aria-label: five glyphs is a counting task,
@@ -117,11 +118,15 @@ export function RatingStars({ value, onChange, label = 'דירוג ספק' }: { 
 
   return (
     <span role="radiogroup" aria-label={label} className="inline-flex items-center gap-0.5">
+      {/* Each star is a radio, and a radio is a control: 44×44 like every other one (DESIGN.md).
+          The glyph stays 20px — the target grew, the picture did not. The previous 24px label was
+          the smallest hit area left in the interface once the "נקה" button below was fixed, and
+          the note beside that button cited the rule while the five stars kept breaking it. */}
       {stars.map((n) => (
-        <label key={n} className="cursor-pointer rounded-sm p-0.5 leading-none focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus">
+        <label key={n} className="inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-lg leading-none focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus">
           <input className="sr-only" type="radio" name={groupName} value={n} checked={value === n}
             aria-label={`${n} כוכבים`} onChange={() => onChange(n)} />
-          <Star size={20} aria-hidden="true"
+          <Star size={ICON.lg} aria-hidden="true"
             className={value != null && n <= value ? 'fill-star text-star' : `${EMPTY_STAR} hover:text-star-hover`} />
         </label>
       ))}

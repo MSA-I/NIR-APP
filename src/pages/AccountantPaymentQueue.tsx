@@ -3,7 +3,7 @@ import { reasonOr } from '../lib/reason';
 import { Landmark, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { useToast, StatusBadge, Modal, EmptyState, ErrorNote, PageHeader, SkeletonList, Note } from '../components/ui';
+import { useToast, StatusBadge, Modal, EmptyState, ErrorNote, PageHeader, SkeletonList, Note, Card, SubPanel, ICON } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { DocumentList } from '../components/FileUpload';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
@@ -279,16 +279,16 @@ export default function AccountantPaymentQueue() {
         meta={`${pending.length} העברות ממתינות לביצוע`} />
 
       {!pending.length ? (
-        <div className="card"><EmptyState title="אין העברות שממתינות לביצוע" subtitle="דרישות תשלום מאושרות יופיעו כאן" /></div>
+        <Card pad={false}><EmptyState title="אין העברות שממתינות לביצוע" subtitle="דרישות תשלום מאושרות יופיעו כאן" /></Card>
       ) : (
         <div className="space-y-3">
           {pending.map((r) => (
-            <button key={r.id} className="card card-link-hover w-full text-start p-4" onClick={() => setSelected(r)}>
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-ink">{r.supplier.name}</span>
-                <span className="kpi-value-compact num">{fmtMoneyExact(r.amount)}</span>
+            <Card as="button" key={r.id} pad={false} className="card-link-hover w-full text-start p-4 sm:p-5" onClick={() => setSelected(r)}>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <span className="min-w-0 break-words font-semibold text-ink">{r.supplier.name}</span>
+                <span className="kpi-value-compact num shrink-0">{fmtMoneyExact(r.amount)}</span>
               </div>
-              <div className="flex items-center gap-3 mt-1.5 text-sm text-ink-muted">
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-ink-muted">
                 <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} />
                 {r.due_date && <span>לתשלום עד {fmtDate(r.due_date)}</span>}
                 <span>{r.invoices.length} חשבוניות</span>
@@ -298,7 +298,7 @@ export default function AccountantPaymentQueue() {
                   אושר בחריגה ללא קיזוז זיכויים בסך <span className="num font-semibold">{fmtMoneyExact(r.open_credit_override_total)}</span>
                 </div>
               )}
-            </button>
+            </Card>
           ))}
         </div>
       )}
@@ -306,17 +306,17 @@ export default function AccountantPaymentQueue() {
       {done.length > 0 && (
         <div>
           <h2 className="section-title mb-2 text-ink-muted">בוצעו לאחרונה</h2>
-          <div className="card divide-y divide-line-soft">
+          <Card pad={false} className="divide-y divide-line-soft">
             {done.slice(0, 8).map((r) => (
-              <div key={r.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <span>{r.supplier.name}</span>
-                <span className="flex items-center gap-3">
+              <div key={r.id} className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+                <span className="min-w-0 break-words">{r.supplier.name}</span>
+                <span className="flex shrink-0 items-center gap-3">
                   <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} />
                   <span className="num font-medium">{fmtMoneyExact(r.amount)}</span>
                 </span>
               </div>
             ))}
-          </div>
+          </Card>
         </div>
       )}
 
@@ -412,7 +412,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
     return (
       <Modal open onClose={onDone} title="ההעברה נרשמה">
         <div className="text-center mb-4">
-          <CheckCircle2 size={40} className="text-done-fg mx-auto mb-2" />
+          <CheckCircle2 size={ICON.hero} className="text-done-fg mx-auto mb-2" aria-hidden="true" />
           <p className="text-sm text-ink-soft">אפשר לצרף עכשיו אישור העברה (צילום מסך / PDF).</p>
         </div>
         <DocumentList entityType="payment" entityId={paymentId} capture />
@@ -424,10 +424,10 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
   return (
     <Modal open onClose={onClose} title={`ביצוע העברה — ${pr.supplier.name}`} busy={busy} statusMessage={busy ? 'רושם את ההעברה' : undefined}>
       <div className="space-y-4">
-        <div className="rounded-lg bg-surface-sunken border border-line px-4 py-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-ink-mid mb-1"><Landmark size={15} /> פרטי חשבון להעברה</div>
+        <SubPanel className="border border-line">
+          <div className="flex items-center gap-2 text-sm font-medium text-ink-mid mb-1"><Landmark size={ICON.sm} aria-hidden="true" /> פרטי חשבון להעברה</div>
           <div className="text-sm text-ink-body text-start" dir="ltr">{pr.supplier.bank_details ?? 'לא הוזנו פרטי בנק'}</div>
-        </div>
+        </SubPanel>
 
         {/* The queue records a completed transfer; it never claims to perform the bank action. */}
         {!pr.supplier.bank_details && (
@@ -442,7 +442,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           הכפתור בתחתית המסך <b>מתעד</b> העברה שכבר בוצעה בבנק — הוא אינו מבצע אותה. אין ללחוץ עליו לפני שההעברה נעשתה בפועל.
         </p>
 
-        <dl className="text-sm space-y-1.5">
+        <dl className="text-sm space-y-1.5 [&>div]:flex-wrap [&>div]:gap-x-4 [&>div]:gap-y-0.5">
           <div className="flex justify-between"><dt className="text-ink-muted">סכום מאושר</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount)}</dd></div>
           {/* `—`, never `0`: while the credits load, or while the selection is invalid, the offset
               is unknown — and an unknown offset printed as ₪0.00 is a claim that none was taken. */}
@@ -466,7 +466,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           )}
         </dl>
 
-        <div className="rounded-2xl bg-surface-sunken p-4">
+        <SubPanel>
           <h3 className="text-sm font-medium text-ink-soft">זיכויים זמינים לקיזוז</h3>
           {creditsLoading && <p className="mt-2 text-sm text-ink-muted" role="status">טוען יתרות זיכוי…</p>}
           {creditsError && <p className="mt-2 text-sm text-alert-fg" role="alert">{creditsError}</p>}
@@ -612,11 +612,11 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
               </Note>
             </div>
           )}
-        </div>
+        </SubPanel>
 
         <hr className="border-line-soft" />
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div><label className="label" htmlFor="payment-execution-date">תאריך ביצוע</label><input id="payment-execution-date" type="date" className="input" value={f.paid_date} onChange={(e) => setF((s) => ({ ...s, paid_date: e.target.value }))} /></div>
           <div><label className="label" htmlFor="payment-execution-amount">סכום להעברה בפועל</label><input id="payment-execution-amount" type="number" className="input num" value={allocationPreview?.cashAmount ?? ''} readOnly /></div>
         </div>
@@ -632,7 +632,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           <p id={ALLOCATION_ERROR_ID} className="text-sm text-alert-fg" role="alert">{allocationError}</p>
         )}
 
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
           <button
             className="btn-primary"
@@ -641,7 +641,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
             aria-describedby={allocationError ? ALLOCATION_ERROR_ID : undefined}
             onClick={requestExecute}
           >
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} ההעברה בוצעה
+            {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={ICON.sm} aria-hidden="true" />} ההעברה בוצעה
           </button>
         </div>
       </div>

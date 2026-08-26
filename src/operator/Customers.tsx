@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router';
 import { Building2, Lock, PauseCircle, PlayCircle } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';
 import {
-  DataTable, ErrorNote, Modal, Note, SkeletonTable, StatusBadge, useToast,
-  type ServerColumn,
+  DataTable, ErrorNote, ICON, Modal, Note, PageHeader, SkeletonTable, StatusBadge, ToggleGroup,
+  useToast, type ServerColumn,
 } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { fmtDate, fmtNum } from '../lib/format';
@@ -134,7 +134,7 @@ function LifecycleDialog({
 
       <div className="mb-4">
         <label className="label flex items-center gap-1.5" htmlFor={internalId}>
-          <Lock size={14} aria-hidden="true" />
+          <Lock size={ICON.xs} aria-hidden="true" />
           הערה פנימית — Platform בלבד
         </label>
         <p className="mb-1 text-xs text-ink-muted">
@@ -231,11 +231,16 @@ export default function Customers() {
 
   const columns: ServerColumn<PlatformCustomer>[] = [
     {
-      key: 'name', header: 'ארגון', priority: 1,
+      // `priority: 3` (desktop only), not 1: `mobileTitle` below already renders the name as the
+      // card's headline, and DataTable excludes the first column from the card's detail grid only
+      // when there is NO mobileTitle. With both set the phone card printed the organization twice
+      // — once as the headline and once as „ארגון: מסעדת הגפן".
+      key: 'name', header: 'ארגון', priority: 3,
       render: (row) => <span className="font-medium text-ink">{row.name}</span>,
     },
     {
-      key: 'status', header: 'מצב', mobileLabel: null,
+      // Same duplication, same cause: `mobileTrailing` already carries the status badge.
+      key: 'status', header: 'מצב', mobileLabel: null, priority: 3,
       render: (row) => (
         <div>
           <StatusBadge meta={ORG_STATUS[row.status]} />
@@ -282,7 +287,7 @@ export default function Customers() {
 
   return (
     <div className="space-y-4">
-      <h1 className="page-title flex items-center gap-2"><Building2 size={22} /> לקוחות</h1>
+      <PageHeader title={<span className="flex items-center gap-2"><Building2 size={ICON.xl} aria-hidden="true" /> לקוחות</span>} />
 
       <DataTable
         rows={data?.rows ?? []}
@@ -301,10 +306,23 @@ export default function Customers() {
           fetching,
         }}
         onRowClick={(row) => navigate(`/admin/customers/${row.id}`)}
+        tableLabel="לקוחות"
         searchLabel="חיפוש בלקוחות"
         rowLabel={(row) => `לקוח ${row.name}`}
         mobileTitle={(row) => row.name}
-        mobileTrailing={(row) => <StatusBadge meta={ORG_STATUS[row.status]} />}
+        // The trailing slot now carries what the desktop `status` column carries, because that
+        // column is desktop-only: the badge AND the offboarding stage, which is the one fact on
+        // this row that changes what an operator does next.
+        mobileTrailing={(row) => (
+          <span className="flex flex-col items-end gap-0.5 text-end">
+            <StatusBadge meta={ORG_STATUS[row.status]} />
+            {row.offboarding_status && OPEN_OFFBOARDING.has(row.offboarding_status) && (
+              <span className="text-xs text-ink-muted">
+                {OFFBOARDING_LABEL[row.offboarding_status] ?? row.offboarding_status}
+              </span>
+            )}
+          </span>
+        )}
         emptyTitle="אין לקוחות"
         emptySubtitle="לקוח חדש נפתח במסך ניהול הפלטפורמה"
         activeFilters={activeFilters}
@@ -328,23 +346,19 @@ export default function Customers() {
         ]}
         toolbar={
           <div className="flex flex-wrap items-center gap-2">
-            <div role="group" aria-label="סינון לפי מצב" className="flex flex-wrap gap-1">
-              {STATUS_FILTERS.map((filter) => (
-                <button
-                  key={filter.key}
-                  type="button"
-                  aria-pressed={statusKey === filter.key}
-                  className={statusKey === filter.key ? 'chip-filter-active' : 'chip-filter'}
-                  onClick={() => { setStatusKey(filter.key); setPage(0); }}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
+            <ToggleGroup
+              label="סינון לפי מצב"
+              items={STATUS_FILTERS.map((filter) => ({ key: filter.key, label: filter.label }))}
+              value={statusKey}
+              onChange={(key) => { setStatusKey(key); setPage(0); }}
+            />
             <label className="sr-only" htmlFor="customer-attention">סינון לפי דורש טיפול</label>
             <select
               id="customer-attention"
-              className="input w-auto"
+              // Full width inside the phone's filter sheet, content width beside the chips on a
+              // desktop toolbar — the sheet is a column, and a content-width select there sat in
+              // the middle of an empty row.
+              className="input w-full sm:w-auto"
               value={attentionKey}
               onChange={(event) => { setAttentionKey(event.target.value); setPage(0); }}
             >

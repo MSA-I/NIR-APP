@@ -18,20 +18,40 @@ export interface NotificationRow {
 
 export const NOTIFICATIONS_READ_EVENT = 'sf:notifications-read';
 
-export function useUnreadNotifications(enabled = true): number | null {
+/** How many delivered notifications `/alerts` reads before grouping. Recent, not complete. */
+export const NOTIFICATION_FEED_LIMIT = 50;
+
+/**
+ * What the bell knows.
+ *
+ * `count` is `null` for "not known", and `failed` says WHICH kind of not-known it is. Until
+ * 26.08.2026 the hook returned a bare `number | null` and swallowed the error branch entirely
+ * (`if (!error) setCount(...)`), so a failed read left the bell sitting on `null` forever — and a
+ * bell with no badge is a positive claim that nothing is waiting. Loading is allowed to look like
+ * silence, because it lasts a moment and nobody asked the chrome a question; a failure is not,
+ * because it lasts until the next focus and it is the exact state in which unseen work is most
+ * likely to exist.
+ */
+export interface UnreadNotifications {
+  count: number | null;
+  failed: boolean;
+}
+
+export function useUnreadNotifications(enabled = true): UnreadNotifications {
   const { profile } = useAuth();
-  const [count, setCount] = useState<number | null>(null);
+  const [state, setState] = useState<UnreadNotifications>({ count: null, failed: false });
 
   const load = useCallback(async () => {
-    if (!enabled || !profile) { setCount(null); return; }
+    if (!enabled || !profile) { setState({ count: null, failed: false }); return; }
     const { count: next, error } = await supabase.from('notifications')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', profile.id).is('read_at', null);
-    if (!error) setCount(next ?? 0);
+    // A later success clears the failure — this is one live reading, not a sticky banner.
+    setState(error ? { count: null, failed: true } : { count: next ?? 0, failed: false });
   }, [enabled, profile]);
 
   useEffect(() => {
-    if (!enabled || !profile) { setCount(null); return; }
+    if (!enabled || !profile) { setState({ count: null, failed: false }); return; }
     void load();
     // Layout renders separate mobile and desktop bells; each subscription needs its own
     // channel instance. Reusing one topic makes the second hook add callbacks after the
@@ -52,7 +72,74 @@ export function useUnreadNotifications(enabled = true): number | null {
     };
   }, [enabled, profile, load]);
 
-  return count;
+  return state;
+}
+
+/**
+ * The delivered notifications themselves — the rows the bell has been counting since 0017 and
+ * that nothing in the product ever rendered (26.08.2026 audit; `NotificationRow` was an exported
+ * interface with no consumer).
+ *
+ * WHY THIS EXISTS AT ALL. The bell counts rows in `notifications`. `/alerts` renders
+ * `buildSummary()`, a LIVE scan of standing conditions (`alerts.ts`). They are two different
+ * catalogues that merely overlap: `document_processing_stalled` — the one operational event, and
+ * the only code present in the demo tenant — has no scan at all, so a bell reading "23" opened a
+ * page that never mentioned document processing, and then silently marked all 23 read. That is
+ * the owner's "נראה שיש מלא דברים שחסרים", and it is a reporting gap, not a missing feature.
+ *
+ * RECENT, NOT COMPLETE, AND THE SCREEN SAYS SO. `0142` writes one row per hour for as long as
+ * processing is stuck (`dedupe_key` carries the hour), so an unbounded list is the same sentence
+ * printed twenty times. The cap is honest only because the screen prints it.
+ */
+export async function readNotifications(userId: string): Promise<NotificationRow[]> {
+  const { data, error } = await supabase.from('notifications')
+    .select('id, org_id, user_id, event_code, entity_key, severity, title, body, target_url, created_at, read_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(NOTIFICATION_FEED_LIMIT);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as NotificationRow[];
+}
+
+/** One standing condition, and every time it was announced inside the window. */
+export interface NotificationGroup {
+  key: string;
+  /** The newest announcement — its wording carries the current figures. */
+  latest: NotificationRow;
+  /** How many times this same condition was sent inside the window. Never fewer than 1. */
+  occurrences: number;
+  /** How many of those were still unread when the window was read. */
+  unread: number;
+}
+
+/**
+ * Collapse repeat announcements of the SAME condition.
+ *
+ * A standing condition is re-announced on a schedule — `0142` writes one row per hour for as long
+ * as document processing is stuck, its `dedupe_key` carrying the hour — so a raw feed prints the
+ * same sentence twenty times and buries every other event under it. The demo tenant is the proof:
+ * 23 rows, one condition. `event_code` + `entity_key` IS the identity of the condition (the pair
+ * every producer since 0017 writes), so grouping on it summarises rather than interprets, and the
+ * count is printed on screen so nothing is hidden — the reader is told it happened 23 times.
+ *
+ * Order is preserved: groups come back ranked by their newest member, which is the order the rows
+ * arrived in.
+ */
+export function groupNotifications(rows: readonly NotificationRow[]): NotificationGroup[] {
+  const groups = new Map<string, NotificationGroup>();
+  for (const row of rows) {
+    const key = `${row.event_code}::${row.entity_key}`;
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, { key, latest: row, occurrences: 1, unread: row.read_at === null ? 1 : 0 });
+      continue;
+    }
+    existing.occurrences += 1;
+    if (row.read_at === null) existing.unread += 1;
+    // The caller reads newest-first, but a group must not depend on that to name its own latest.
+    if (row.created_at > existing.latest.created_at) existing.latest = row;
+  }
+  return [...groups.values()];
 }
 
 export async function markAllNotificationsRead(userId: string): Promise<void> {

@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { ErrorNote, SkeletonList } from '../components/ui';
+import { Card, ErrorNote, PageHeader, SkeletonList } from '../components/ui';
 import { ORG_STATUS } from '../lib/status';
 import type { PlatformOrg } from '../lib/platform';
 import { AutonomyPolicyPanel } from './AutonomyPolicyPanel';
@@ -24,8 +24,8 @@ export default function AutonomyPolicies() {
 
   return (
     <div className="space-y-4">
-      <h1 className="page-title">אוטונומיית מסמכים</h1>
-      <div className="card card-pad max-w-md">
+      <PageHeader title="אוטונומיית מסמכים" />
+      <Card className="max-w-md">
         <label className="label" htmlFor={pickerId}>ארגון</label>
         <select
           id={pickerId}
@@ -40,7 +40,7 @@ export default function AutonomyPolicies() {
             </option>
           ))}
         </select>
-      </div>
+      </Card>
       {selected
         ? <AutonomyPolicyPanel orgId={selected.id} orgName={selected.name} />
         : <p className="text-sm text-ink-muted">יש לבחור ארגון כדי לצפות במדיניות האוטונומיה שלו ולשנות אותה.</p>}

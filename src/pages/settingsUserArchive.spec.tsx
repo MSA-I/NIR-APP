@@ -94,29 +94,63 @@ function renderSettings(rows: Array<Record<string, unknown>>) {
   );
 }
 
-const roster = () => screen.getByRole('region', { name: 'טבלת משתמשים והרשאות' });
+/**
+ * The roster is a DataTable now, so two things changed for these queries and neither is a change
+ * of claim. `roster()` names the whole labelled surface (table + attention strip), and
+ * `rosterRows()` narrows to the table's own scroll region — which is what the "these rows are not
+ * in the roster" assertions have always meant, and what keeps them honest now that the strip is a
+ * sibling inside the same section. The two row actions moved from a pair of inline buttons into
+ * the shared ActionMenu, which portals its menu to <body>, so the items are asserted at `screen`
+ * level after the row's trigger is opened.
+ */
+const roster = () => screen.getByRole('region', { name: 'משתמשים והרשאות' });
+const rosterRows = () => within(roster()).getByRole('region', { name: 'משתמשים — ניתן לגלול אופקית' });
 const archive = () => screen.getByRole('region', { name: 'טבלת ארכיון משתמשים' });
+
+/** Opens the row-action menu of one roster/strip row and returns nothing — the items are global. */
+const openRowMenu = async (scope: HTMLElement, name: RegExp) => {
+  await userEvent.setup().click(within(scope).getAllByRole('button', { name })[0]);
+};
 
 describe('/settings — users, attention strip and archive', () => {
   it('lists only the assignable roles in the roster', async () => {
     renderSettings([OFFICE, PAYER_ARCHIVED, PAYER_STILL_ACTIVE]);
 
-    await screen.findByText('רות משרד');
-    const table = roster();
+    await screen.findAllByText('רות משרד');
+    const table = rosterRows();
     expect(within(table).getByText('רות משרד')).toBeInTheDocument();
     expect(within(table).getByText(ACTIVE_ROLE_LABEL.office)).toBeInTheDocument();
     // Its actions are intact — which is also what makes the archive's "no buttons" a real claim
     // rather than a query that cannot see inside a table to begin with.
-    expect(within(table).getByRole('button', { name: 'שינוי תפקיד' })).toBeInTheDocument();
-    expect(within(table).getByRole('button', { name: 'השבתה' })).toBeInTheDocument();
+    await openRowMenu(table, /פעולות עבור רות משרד/);
+    expect(await screen.findByRole('menuitem', { name: 'שינוי תפקיד' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'השבתה' })).toBeInTheDocument();
     // Neither historical row belongs to the roster, whatever its active flag says.
     expect(within(table).queryByText('דנה תשלומים')).toBeNull();
     expect(within(table).queryByText('עמית תשלומים')).toBeNull();
   });
 
+  /**
+   * Three tables live on this screen — roster, invitations, archive — and DataTable used to name
+   * every scroll region "טבלת נתונים". Three identically-named regions is worse than no name: the
+   * rotor offers a choice between three things called the same thing. `tableLabel` is what fixes
+   * that, so the claim worth pinning is not which label each table got, it is that no two regions
+   * on the screen share one.
+   */
+  it('names every region on the screen distinctly', async () => {
+    renderSettings([OFFICE, PAYER_ARCHIVED, PAYER_STILL_ACTIVE]);
+    await screen.findAllByText('רות משרד');
+
+    const names = screen.getAllByRole('region').map((region) =>
+      region.getAttribute('aria-label')
+      ?? document.getElementById(region.getAttribute('aria-labelledby') ?? '')?.textContent?.trim()
+      ?? '');
+    expect(names.length).toBeGreaterThan(2);
+    expect(new Set(names).size).toBe(names.length);
+  });
   it('archives the deactivated historical account, read-only and folded', async () => {
     renderSettings([OFFICE, PAYER_ARCHIVED, PAYER_STILL_ACTIVE]);
-    await screen.findByText('רות משרד');
+    await screen.findAllByText('רות משרד');
 
     const details = screen.getByText('ארכיון משתמשים').closest('details');
     expect(details).not.toBeNull();
@@ -136,23 +170,26 @@ describe('/settings — users, attention strip and archive', () => {
 
   it('raises the historical-but-active account as work, with both row actions', async () => {
     renderSettings([OFFICE, PAYER_ARCHIVED, PAYER_STILL_ACTIVE]);
-    await screen.findByText('רות משרד');
+    await screen.findAllByText('רות משרד');
 
     const strip = screen.getByRole('status').parentElement!;
     expect(within(strip).getByText(/תפקיד היסטורי/)).toBeInTheDocument();
     expect(within(strip).getByText('עמית תשלומים')).toBeInTheDocument();
     expect(within(strip).getByText(HISTORICAL_ROLE_LABEL.payer)).toBeInTheDocument();
     expect(within(strip).queryByText('דנה תשלומים')).toBeNull();
-    expect(within(strip).getByRole('button', { name: 'שינוי תפקיד' })).toBeInTheDocument();
-    expect(within(strip).getByRole('button', { name: 'השבתה' })).toBeInTheDocument();
+    // The strip renders the SAME menu items as the roster row — one definition, two surfaces.
+    await openRowMenu(strip, /פעולות עבור עמית תשלומים/);
+    expect(await screen.findByRole('menuitem', { name: 'שינוי תפקיד' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'השבתה' })).toBeInTheDocument();
   });
 
   it('opens the reassignment dialog on an active role, which is the way out of the strip', async () => {
     renderSettings([OFFICE, PAYER_ARCHIVED, PAYER_STILL_ACTIVE]);
-    await screen.findByText('רות משרד');
+    await screen.findAllByText('רות משרד');
 
     const strip = screen.getByRole('status').parentElement!;
-    await userEvent.setup().click(within(strip).getByRole('button', { name: 'שינוי תפקיד' }));
+    await openRowMenu(strip, /פעולות עבור עמית תשלומים/);
+    await userEvent.setup().click(await screen.findByRole('menuitem', { name: 'שינוי תפקיד' }));
 
     await screen.findByText('שינוי תפקיד — עמית תשלומים');
     // Preselected on an assignable role: the retired one is not an option the server would take.
@@ -169,7 +206,7 @@ describe('/settings — users, attention strip and archive', () => {
    */
   it('no longer carries the subscription — it moved to a screen and a menu group of its own', async () => {
     renderSettings([OFFICE]);
-    await screen.findByText('רות משרד');
+    await screen.findAllByText('רות משרד');
 
     expect(screen.queryByRole('region', { name: 'מסלול ומנוי' })).toBeNull();
     expect(screen.queryByTestId('current-plan')).toBeNull();
@@ -178,7 +215,7 @@ describe('/settings — users, attention strip and archive', () => {
 
   it('shows neither extra surface when every profile holds an assignable role', async () => {
     renderSettings([OFFICE]);
-    await screen.findByText('רות משרד');
+    await screen.findAllByText('רות משרד');
 
     expect(screen.queryByText('ארכיון משתמשים')).toBeNull();
     expect(screen.queryByText(/תפקיד היסטורי/)).toBeNull();

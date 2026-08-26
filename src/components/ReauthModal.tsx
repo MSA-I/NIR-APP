@@ -3,7 +3,7 @@ import { Loader2, ShieldCheck } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
-import { Modal, ErrorNote } from './ui';
+import { Modal, ErrorNote, ICON } from './ui';
 import { toHebrewError } from '../lib/errors';
 
 /**
@@ -98,6 +98,7 @@ export function ReauthModal({
 }: ReauthModalProps) {
   const { session } = useAuth();
   const passwordId = useId();
+  const errorId = useId();
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -171,14 +172,20 @@ export function ReauthModal({
             dir="ltr"
             className="input"
             value={password}
+            /* The only failure this dialog can report is about this field: a wrong password, or a
+               session that can no longer be verified. So the field carries the invalid state and
+               points at the sentence that explains it, instead of leaving a sighted-only red box
+               below an input that still announces itself as fine. */
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
             onChange={(e) => { setPassword(e.target.value); setError(null); }}
           />
         </div>
-        {error && <ErrorNote message={error} />}
+        {error && <div id={errorId}><ErrorNote message={error} /></div>}
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary" disabled={busy} onClick={onCancel}>ביטול</button>
           <button type="submit" className="btn-primary" disabled={busy || !password}>
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} אישור זהות
+            {busy ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" /> : <ShieldCheck size={ICON.sm} aria-hidden="true" />} אישור זהות
           </button>
         </div>
       </form>

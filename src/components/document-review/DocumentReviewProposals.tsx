@@ -6,7 +6,7 @@ import { toHebrewError } from '../../lib/errors';
 import { fmtDateTime } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
 import type { DocumentAnnotation, DocumentFeedback, DocumentLearningRule, InterpretationContract } from '../../lib/useDocumentProcessing';
-import { Disclosure, Note, useToast } from '../ui';
+import { Disclosure, ICON, Note, SubPanel, useToast } from '../ui';
 import {
   ANNOTATION_SOURCE_LABELS,
   DOCUMENT_TYPE_LABELS,
@@ -179,7 +179,7 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
           </label>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" className="btn-primary" disabled={busy || selectedType === effectiveType} onClick={() => void saveCorrection()}>
-              {busy && <Loader2 className="animate-spin" size={17} aria-hidden="true" />} שמירת התיקון
+              {busy && <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />} שמירת התיקון
             </button>
             <button type="button" className="btn-secondary" disabled={busy} onClick={() => { setCorrecting(false); setChosenType(null); setReason(''); }}>
               ביטול
@@ -386,7 +386,7 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
           else void openCreditDraft();
         }}
       >
-        {busy ? <Loader2 className="animate-spin" size={17} aria-hidden="true" /> : <FilePlus2 size={17} aria-hidden="true" />} {action.label}
+        {busy ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <FilePlus2 size={ICON.md} aria-hidden="true" />} {action.label}
       </button>
     </div>
   );
@@ -452,13 +452,13 @@ function FeedbackControls({ annotation, onRefetch }: {
       </label>
       <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" className="btn-primary" disabled={!!busy} onClick={() => void submit('accepted')}>
-          {busy === 'accepted' ? <Loader2 className="animate-spin" size={17} aria-hidden="true" /> : <Check size={17} aria-hidden="true" />} אישור הצעה
+          {busy === 'accepted' ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <Check size={ICON.md} aria-hidden="true" />} אישור הצעה
         </button>
         <button type="button" className="btn-secondary" disabled={!!busy} onClick={() => void submit('corrected')}>
-          {busy === 'corrected' ? <Loader2 className="animate-spin" size={17} aria-hidden="true" /> : <RotateCcw size={17} aria-hidden="true" />} תיקון הצעה
+          {busy === 'corrected' ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <RotateCcw size={ICON.md} aria-hidden="true" />} תיקון הצעה
         </button>
         <button type="button" className="btn-danger" disabled={!!busy} onClick={() => void submit('rejected')}>
-          {busy === 'rejected' ? <Loader2 className="animate-spin" size={17} aria-hidden="true" /> : <X size={17} aria-hidden="true" />} דחייה
+          {busy === 'rejected' ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <X size={ICON.md} aria-hidden="true" />} דחייה
         </button>
       </div>
     </div>
@@ -545,10 +545,10 @@ function RuleControls({ rule, onRefetch }: {
       </label>
       <div className="mt-3 flex flex-wrap gap-2">
         <button className="btn-secondary" disabled={!!busy}>
-          {busy === 'correct' && <Loader2 className="animate-spin" size={17} aria-hidden="true" />} יצירת גרסה מתוקנת
+          {busy === 'correct' && <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />} יצירת גרסה מתוקנת
         </button>
         <button type="button" className="btn-danger" disabled={!!busy} onClick={() => void disableRule()}>
-          {busy === 'disable' && <Loader2 className="animate-spin" size={17} aria-hidden="true" />} השבתת כלל
+          {busy === 'disable' && <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />} השבתת כלל
         </button>
       </div>
     </form>
@@ -603,7 +603,7 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
         <p className="mt-3 text-sm text-ink-soft">{routing.lineSummary}</p>
         {machineReason && (
           <Note tone="info" className="mt-3" role="status" data-testid="filing-reason">
-            <Info className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
+            <Info className="mt-0.5 shrink-0" size={ICON.md} aria-hidden="true" />
             <span><strong>למה לא נכתב ליעד:</strong> {machineReason}</span>
           </Note>
         )}
@@ -633,7 +633,7 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
             check out loud instead of leaving the reviewer to infer it from a word. */}
         {supplierCaution && (
           <Note tone="await" className="mt-3" role="status">
-            <ShieldAlert className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
+            <ShieldAlert className="mt-0.5 shrink-0" size={ICON.md} aria-hidden="true" />
             <span>{supplierCaution}</span>
           </Note>
         )}
@@ -646,7 +646,7 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
           finding. The sentence names the count and what to do, so it stands on its own. */}
       {inconsistentRows > 0 && (
         <Note tone="alert" role="alert">
-          <ShieldAlert className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
+          <ShieldAlert className="mt-0.5 shrink-0" size={ICON.md} aria-hidden="true" />
           <span>
             ב־<span className="num">{inconsistentRows}</span> שורות הכפל אינו מסתדר: כמות × מחיר ליחידה
             אינו שווה לסכום השורה. בדוק אותן מול המסמך לפני אישור.
@@ -684,12 +684,12 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
           <Disclosure className="border-t border-line-soft" title="שורות מוצעות"
             count={interpretation.payload.line_items.length} onToggle={setLinesOpen}>
             {linesOpen && (
-              <div className="max-w-full overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label="טבלת שורות מוצעות; ניתן לגלול בתוך הטבלה">
+              <div className="table-scroll overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label="טבלת שורות מוצעות; ניתן לגלול בתוך הטבלה">
                 <table className="min-w-full bg-surface">
                   <thead className="table-head">
                     <tr className="border-b border-line">
-                      <th className="th">שורת מקור</th>
-                      <th className="th">ערכים מוצעים</th>
+                      <th scope="col" className="th">שורת מקור</th>
+                      <th scope="col" className="th">ערכים מוצעים</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -728,7 +728,7 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
               {snapshot.annotations.map((annotation) => {
                 const feedback = feedbackByAnnotation.get(annotation.id);
                 return (
-                  <article key={annotation.id} className="rounded-2xl bg-surface-sunken p-3">
+                  <SubPanel as="article" key={annotation.id}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
                         <h4 className="break-words font-semibold text-ink-body">{annotation.label}</h4>
@@ -750,7 +750,7 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
                     {!feedback && annotation.active && annotation.source !== 'user' && snapshot.job?.status === 'review' && (
                       <FeedbackControls annotation={annotation} onRefetch={onRefetch} />
                     )}
-                  </article>
+                  </SubPanel>
                 );
               })}
             </div>
@@ -764,7 +764,7 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
               {snapshot.ruleApplications.map((application) => {
                 const rule = ruleById.get(application.rule_id);
                 return (
-                  <article key={application.id} className="rounded-2xl bg-surface-sunken p-3">
+                  <SubPanel as="article" key={application.id}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
                         <h4 className="break-words font-semibold text-ink-body">{rule ? `${rule.label} (${rule.tag_key})` : `כלל ${application.rule_id}`}</h4>
@@ -774,7 +774,7 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
                       <span className="badge-done">כלל v{application.rule_version}</span>
                     </div>
                     {rule && snapshot.job?.status === 'review' && <RuleControls rule={rule} onRefetch={onRefetch} />}
-                  </article>
+                  </SubPanel>
                 );
               })}
             </div>

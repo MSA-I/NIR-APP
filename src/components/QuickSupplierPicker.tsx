@@ -30,6 +30,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { QuickCreateSupplier, type QuickCreatedSupplier } from './QuickCreateSupplier';
+import { ICON } from './ui';
 
 /** All any supplier `<option>` needs. Every caller's row type is a superset of it. */
 export type SupplierOption = { id: string; name: string };
@@ -214,7 +215,7 @@ export function SupplierSelectField({
         {picker.canCreate && (
           <button type="button" className="btn-secondary shrink-0" disabled={disabled}
             aria-describedby={offered ? buttonHintId : undefined} onClick={picker.openDialog}>
-            <Plus size={16} aria-hidden="true" /> ספק חדש
+            <Plus size={ICON.sm} aria-hidden="true" /> ספק חדש
           </button>
         )}
       </div>

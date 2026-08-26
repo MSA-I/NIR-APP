@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ScanLine } from 'lucide-react';
 import { useFeatureFlags } from '../lib/flags';
 import { matchDeliveryLineProduct, type DeliveryNoteLine } from './document-review/model';
-import { Modal, Note } from './ui';
+import { ICON, Modal, Note } from './ui';
 
 /**
  * Barcode-assisted goods receiving (הכרעה #102, OPEN-DECISIONS #102).
@@ -245,7 +245,7 @@ export default function BarcodeScanControl({ entries, onPick }: {
   return (
     <>
       <button type="button" className="btn-secondary min-h-11" onClick={() => setOpen(true)}>
-        <ScanLine size={16} /> סריקת ברקוד
+        <ScanLine size={ICON.sm} /> סריקת ברקוד
       </button>
       {open && <ScannerDialog entries={entries} onClose={() => setOpen(false)} onPick={onPick} />}
     </>

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, FileSpreadsheet, Info } from 'lucide-react';
+import { AlertTriangle, FileSpreadsheet, Info, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { fmtDate, fmtMoneyExact, fmtNum, formatUnit, todayISO } from '../lib/format';
-import { DataTable, ErrorNote, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
+import { Card, DataTable, ErrorNote, ICON, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
 import { useAuth } from '../auth/AuthContext';
 import { toHebrewError } from '../lib/errors';
 import {
@@ -169,11 +169,11 @@ export default function ProductPurchaseSummary() {
         meta={data ? `${rows.length} מוצרים · ${data.from} עד ${data.to}` : undefined}
         actions={<button className="btn-secondary" type="button" onClick={() => void exportExcel()}
           disabled={exporting || loading || !!error || !data || rows.length === 0 || from > to}>
-          <FileSpreadsheet size={15} aria-hidden="true" />
+            {exporting ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={ICON.sm} aria-hidden="true" />}
           {exporting ? 'מכין קובץ…' : 'ייצוא Excel'}
         </button>} />
 
-      <div className="flex flex-wrap items-end gap-3 card p-3">
+      <Card pad={false} className="flex flex-wrap items-end gap-3 p-3">
         <div>
           <label className="label" htmlFor="summary-from">מתאריך</label>
           <input id="summary-from" type="date" className="input num" value={from}
@@ -184,13 +184,13 @@ export default function ProductPurchaseSummary() {
           <input id="summary-to" type="date" className="input num" value={to}
             onChange={(event) => setTo(event.target.value)} />
         </div>
-      </div>
+      </Card>
 
       {/* The counting rule, stated on the screen rather than left in a migration comment. A person
           comparing this to their own spreadsheet needs to know which number they are looking at. */}
       <Note tone="info">
         <p className="flex items-start gap-2 text-sm">
-          <Info size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+          <Info size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
           <span>
             „נרכש בפועל” נספר <strong>פעם אחת</strong> לכל משלוח: קבלה שהושלמה גוברת על החשבונית,
             והחשבונית משמשת רק כשאין ראיית קבלה. „הוזמן” אינו נספר כרכישה.
@@ -203,7 +203,7 @@ export default function ProductPurchaseSummary() {
       {data && data.unmapped_invoice_lines > 0 && (
         <Note tone="await" role="status">
           <p className="flex items-start gap-2 text-sm">
-            <AlertTriangle size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+            <AlertTriangle size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
             <span>
               <span className="num">{data.unmapped_invoice_lines}</span> שורות חשבונית בסך
               <span className="num"> {fmtMoneyExact(data.unmapped_invoice_amount)}</span> לא שויכו

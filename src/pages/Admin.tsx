@@ -3,7 +3,8 @@ import { toHebrewError } from "../lib/errors";
 import { Building2, ShieldCheck, Plus, Copy, MessageSquare, Archive, RefreshCw, Undo2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { DataTable, Modal, useToast, ErrorNote, SkeletonTable, SkeletonList, type Column } from '../components/ui';
+import { DataTable, ICON, Modal, Note, PageHeader, useToast, ErrorNote, SkeletonTable, SkeletonList, type Column } from '../components/ui';
+import type { ActionMenuItem } from '../components/ActionMenu';
 import { ReauthModal } from '../components/ReauthModal';
 import { fmtDate, fmtDateTime, fmtNum } from '../lib/format';
 import { ROLE_LABEL } from '../lib/status';
@@ -144,28 +145,29 @@ export default function Admin() {
     },
     { key: 'requested', header: 'מועד הבקשה', render: (r) => fmtDate(r.requested_at), sortValue: (r) => r.requested_at },
     { key: 'attempts', header: 'ניסיונות ייצוא', className: 'num', render: (r) => fmtNum(r.export_attempts), sortValue: (r) => r.export_attempts },
-    {
-      key: 'actions', header: '', render: (r) => (
-        <div className="flex flex-wrap justify-end gap-1">
-          {r.status === 'requested' && (
-            <button type="button" className="btn-primary py-1! text-xs" onClick={() => setOffboardingPending({ request: r, action: 'approve' })}>
-              אישור והכנת ייצוא
-            </button>
-          )}
-          {['approved', 'export_building', 'export_failed'].includes(r.status) && (
-            <button type="button" className="btn-secondary py-1! text-xs" onClick={() => setOffboardingPending({ request: r, action: 'build' })}>
-              <RefreshCw size={13} /> {r.status === 'export_failed' ? 'ניסיון חוזר' : r.status === 'export_building' ? 'בדיקה והמשך' : 'הכנת ייצוא'}
-            </button>
-          )}
-          {!['cancelled', 'reactivated'].includes(r.status) && (
-            <button type="button" className="btn-ghost py-1! text-xs" onClick={() => setOffboardingPending({ request: r, action: 'reactivate' })}>
-              <Undo2 size={13} /> הפעלה מחדש
-            </button>
-          )}
-        </div>
-      ),
-    },
   ];
+
+  /** The same three gates the hand-rolled `actions` column carried, as the table's own row menu. */
+  function offboardingActions(r: PlatformOffboardingRequest): ActionMenuItem[] {
+    return [
+      {
+        key: 'approve', label: 'אישור והכנת ייצוא',
+        hidden: r.status !== 'requested',
+        onSelect: () => setOffboardingPending({ request: r, action: 'approve' }),
+      },
+      {
+        key: 'build', icon: RefreshCw,
+        label: r.status === 'export_failed' ? 'ניסיון חוזר' : r.status === 'export_building' ? 'בדיקה והמשך' : 'הכנת ייצוא',
+        hidden: !['approved', 'export_building', 'export_failed'].includes(r.status),
+        onSelect: () => setOffboardingPending({ request: r, action: 'build' }),
+      },
+      {
+        key: 'reactivate', label: 'הפעלה מחדש', icon: Undo2,
+        hidden: ['cancelled', 'reactivated'].includes(r.status),
+        onSelect: () => setOffboardingPending({ request: r, action: 'reactivate' }),
+      },
+    ];
+  }
 
   if (loading) return <SkeletonTable cols={5} />;
   if (error) return <ErrorNote message={error} />;
@@ -177,12 +179,14 @@ export default function Admin() {
           counts on the server, and shows the columns this one never could. A second table of the
           same rows here would be two answers to one question. Provisioning stays -- it is an
           action, not a list. */}
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="page-title flex items-center gap-2"><ShieldCheck size={22} /> ניהול פלטפורמה</h1>
-        <button className="btn-primary ms-auto flex items-center gap-1.5" onClick={() => setCreating(true)}>
-          <Plus size={16} /> ארגון חדש
-        </button>
-      </div>
+      <PageHeader
+        title={<span className="flex items-center gap-2"><ShieldCheck size={ICON.xl} aria-hidden="true" /> ניהול פלטפורמה</span>}
+        actions={
+          <button className="btn-primary" onClick={() => setCreating(true)}>
+            <Plus size={ICON.sm} aria-hidden="true" /> ארגון חדש
+          </button>
+        }
+      />
 
       <FeedbackNotes />
 
@@ -190,7 +194,7 @@ export default function Admin() {
 
       <section className="space-y-3" aria-labelledby="offboarding-heading">
         <div>
-          <h2 id="offboarding-heading" className="section-title flex items-center gap-2"><Archive size={17} /> סיום שירות וייצוא דיירים</h2>
+          <h2 id="offboarding-heading" className="section-title flex items-center gap-2"><Archive size={ICON.md} aria-hidden="true" /> סיום שירות וייצוא דיירים</h2>
           <p className="mt-1 text-sm text-ink-muted">אישור מפעיל מתחיל הכנת ייצוא מבוקר. התהליך אינו מוחק מידע ואינו חוסם צפייה של הלקוח.</p>
         </div>
         <DataTable
@@ -198,7 +202,9 @@ export default function Admin() {
           columns={offboardingColumns}
           searchable
           searchFn={(row, query) => row.organization_name.toLowerCase().includes(query)}
+          tableLabel="בקשות סיום שירות"
           searchLabel="חיפוש בבקשות סיום שירות"
+          rowActions={offboardingActions}
           rowLabel={(row) => `בקשת סיום שירות של ${row.organization_name}`}
           emptyTitle="אין בקשות סיום שירות"
           emptySubtitle="בקשות שיוגשו בידי בעלי ארגונים יופיעו כאן"
@@ -320,10 +326,11 @@ function FeedbackNotes() {
 
   return (
     <section className="space-y-2">
-      <h2 className="section-title flex items-center gap-2"><MessageSquare size={18} /> הערות מלקוחות</h2>
+      <h2 className="section-title flex items-center gap-2"><MessageSquare size={ICON.md} aria-hidden="true" /> הערות מלקוחות</h2>
       <DataTable
         rows={data ?? []}
         columns={columns}
+        tableLabel="הערות מלקוחות"
         rowLabel={(r) => `הערה מ-${r.organizations?.name ?? 'ארגון לא מזוהה'}`}
         emptyTitle="אין הערות"
         emptySubtitle="כפתור ההערות מופיע רק בארגון שהדגל feedback.notes דלוק בו"
@@ -351,9 +358,11 @@ function CredentialRow({ label, value, onCopy, onCopyError }: {
       <label className="label" htmlFor={inputId}>{label}</label>
       <div className="flex items-center gap-2">
         <input id={inputId} className="input" readOnly value={value} dir="ltr" />
-        <button className="btn-secondary p-2!" aria-label={`העתקת ${label}`}
+        {/* `btn-icon`, not `p-2!`: the override zeroed the padding on one axis only, so the button
+            was 44px tall and 36px wide — under the floor on the axis nobody measured. */}
+        <button className="btn-secondary btn-icon" aria-label={`העתקת ${label}`}
           onClick={() => void copy()}>
-          <Copy size={16} />
+          <Copy size={ICON.sm} aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -380,10 +389,12 @@ function NewOrgModal({ open, busy, onClose, onSubmit }: {
   return (
     <Modal open={open} onClose={close} title="הקמת ארגון חדש" wide busy={busy}>
       <div className="space-y-4">
-        <div className="flex items-start gap-2 rounded-lg bg-surface-sunken border border-line px-3 py-2.5 text-sm text-ink-soft">
-          <Building2 size={16} className="mt-0.5 shrink-0 text-ink-faint" />
-          <span>נוצרים ארגון, משתמש בעלים וקטגוריות בסיס. הפעולה מבוטלת במלואה אם שלב כלשהו נכשל.</span>
-        </div>
+        {/* `Note tone="idle"` — a neutral statement, and the one box the system already has for
+            it. The hand-rolled version was a fifth spelling of `.note-idle`. */}
+        <Note tone="idle">
+          <Building2 size={ICON.sm} className="mt-0.5 shrink-0 text-ink-faint" aria-hidden="true" />
+          <span className="min-w-0 flex-1">נוצרים ארגון, משתמש בעלים וקטגוריות בסיס. הפעולה מבוטלת במלואה אם שלב כלשהו נכשל.</span>
+        </Note>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">

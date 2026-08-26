@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
 import { useParamState } from '../lib/useParamState';
-import { DataTable, ErrorNote, Modal, PageHeader, SkeletonTable, useToast, type ServerColumn } from '../components/ui';
+import { DataTable, ErrorNote, Modal, PageHeader, SkeletonTable, useToast, ICON, type ServerColumn } from '../components/ui';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import type { Payment } from '../lib/types';
 import {
@@ -165,7 +165,7 @@ export default function Payments() {
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
-      <PageHeader title={<span className="flex items-center gap-2"><CreditCard size={22} /> תשלומים</span>}
+      <PageHeader title={<span className="flex items-center gap-2"><CreditCard size={ICON.xl} aria-hidden="true" /> תשלומים</span>}
         meta={`${data.total} תשלומים שנרשמו${activeFilters ? ' · תצוגה מסוננת' : ''}`} />
       <DataTable rows={data.rows} columns={columns}
         error={error}
@@ -192,9 +192,9 @@ export default function Payments() {
           <>
             {data.narrowed && <span className="text-xs text-await-fg" role="status">{SUPPLIER_SEARCH_NARROWED}</span>}
             {focused ? (
-              <button className="btn-secondary" onClick={() => patchParams({ id: '', page: '' })}><X size={14} /> מציג תשלום #{focused.number}</button>
+              <button className="btn-secondary" onClick={() => patchParams({ id: '', page: '' })}><X size={ICON.sm} aria-hidden="true" /> מציג תשלום #{focused.number}</button>
             ) : monthFilter ? (
-              <button className="btn-secondary" onClick={() => patchParams({ month: '', page: '' })}><X size={14} /> תשלומי חודש <span dir="ltr">{monthFilter}</span></button>
+              <button className="btn-secondary" onClick={() => patchParams({ month: '', page: '' })}><X size={ICON.sm} aria-hidden="true" /> תשלומי חודש <span dir="ltr">{monthFilter}</span></button>
             ) : null}
           </>
         }

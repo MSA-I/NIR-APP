@@ -42,7 +42,7 @@
 import { useId, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, Info, Pencil, RotateCcw, SkipForward } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useToast } from '../components/ui';
+import { Card, ICON, useToast } from '../components/ui';
 import { toHebrewError } from '../lib/errors';
 import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
 import {
@@ -137,12 +137,12 @@ export function ProductNameReview({ queue, onApproved }: {
 
       {queue === null ? (
         <div className="note-idle" role="status">
-          <Info size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <Info size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
           <p>הקטלוג לא נטען, ולכן לא ידוע כמה שמות ממתינים לאישור.</p>
         </div>
       ) : pending.length === 0 ? (
         <div className="note-done" role="status">
-          <Check size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <Check size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
           <p>
             {skipped.size > 0
               ? 'כל מה שנותר בתור דולג.'
@@ -166,7 +166,7 @@ export function ProductNameReview({ queue, onApproved }: {
             המוצרים האלה יופיעו שוב בכניסה הבאה.
           </p>
           <button type="button" className="btn-ghost" onClick={() => setSkipped(new Set())}>
-            <RotateCcw size={16} aria-hidden="true" /> החזרת המדולגים לתור
+            <RotateCcw size={ICON.sm} aria-hidden="true" /> החזרת המדולגים לתור
           </button>
         </div>
       )}
@@ -211,7 +211,7 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
   const unchanged = verdict.kind === 'proposal' && verdict.displayName === product.name.trim();
 
   return (
-    <li className="card card-pad space-y-4" data-testid={`review-${product.id}`}
+    <Card as="li" className="space-y-4" data-testid={`review-${product.id}`}
       data-verdict={verdict.kind}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
@@ -255,7 +255,7 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
 
       {verdict.kind === 'conflict' && (
         <div className="note-await" data-testid="review-conflict">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <AlertTriangle size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
           <div className="space-y-2">
             <p>{conflictSentence(verdict)}</p>
             <div>
@@ -272,7 +272,7 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
 
       {verdict.kind === 'blocked' && (
         <div className="note-idle" data-testid="review-blocked">
-          <Info size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <Info size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
           <p>{BLOCKED_SENTENCE[verdict.reason]}</p>
         </div>
       )}
@@ -307,7 +307,7 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
           {verdict.kind === 'proposal' && (
             <button type="button" className="btn-primary" disabled={busy}
               onClick={() => void commit(verdict.displayName, APPROVE_ACTION)}>
-              <Check size={16} aria-hidden="true" /> אישור
+              <Check size={ICON.sm} aria-hidden="true" /> אישור
             </button>
           )}
           <button type="button" className="btn-secondary" disabled={busy}
@@ -315,14 +315,14 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
               value: verdict.kind === 'proposal' ? verdict.displayName : '',
               reason: '',
             })}>
-            <Pencil size={16} aria-hidden="true" /> עריכה ואישור
+            <Pencil size={ICON.sm} aria-hidden="true" /> עריכה ואישור
           </button>
           <button type="button" className="btn-ghost" disabled={busy}
             onClick={() => onSkip(product.id)}>
-            <SkipForward size={16} aria-hidden="true" /> דילוג
+            <SkipForward size={ICON.sm} aria-hidden="true" /> דילוג
           </button>
         </div>
       )}
-    </li>
+    </Card>
   );
 }

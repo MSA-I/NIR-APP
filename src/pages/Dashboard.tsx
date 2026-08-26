@@ -1,9 +1,9 @@
 import { Link } from 'react-router';
 import { type ReactNode } from 'react';
-import { ArrowUpLeft, Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RotateCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
+import { ArrowUpLeft, Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RefreshCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { unwrap, useQuery } from '../lib/useQuery';
-import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, type AttentionItem } from '../components/ui';
+import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, Card, ICON, type AttentionItem } from '../components/ui';
 import { EXCEPTION_TYPE, PO_STATUS, SEVERITY } from '../lib/status';
 import {
   addCalendarDays, BUSINESS_TIME_ZONE, dateStartInstant, daysInCalendarMonth,
@@ -16,6 +16,7 @@ import { mergeWeeklyComparison, topCategoriesWithOther } from '../lib/dashboardS
 import { CategoryDonut, ComparisonLineChart, money, moneyShort, SpendBarChart, TrendSparkline } from '../components/charts';
 import { fetchAll } from '../lib/supabasePaging';
 import { useAuth } from '../auth/AuthContext';
+import { PlanBadge } from '../components/PlanBadge';
 
 // audit round 2: glance values are whole-shekel by convention — the three money-strip tiles round to
 // whole ₪ so they read consistently at a glance (₪8,131 not ₪14,842.6). Tables elsewhere keep exact
@@ -62,7 +63,7 @@ function DeltaChip({ value }: { value: number }) {
       className="ms-auto inline-flex items-center gap-1 text-xs font-medium text-ink-mid"
       title="מול אותם ימים בחודש הקודם"
     >
-      {Icon && <Icon size={13} aria-hidden="true" />}
+      {Icon && <Icon size={ICON.xs} aria-hidden="true" />}
       <span className="num" dir="ltr">{rounded > 0 ? '+' : ''}{rounded}%</span>
       <span className="sr-only">מול אותם ימים בחודש הקודם</span>
     </span>
@@ -99,13 +100,15 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
     aux,
   ].filter(Boolean).join('. ');
   return (
-    <Link
+    <Card
+      as={Link}
+      pad={false}
       to={to}
       aria-label={linkLabel}
-      className="card card-link-hover block min-h-24 px-4 py-3.5 sm:px-5"
+      className="card-link-hover block min-h-24 px-4 py-3.5 sm:px-5"
     >
       <div className="flex items-center gap-2">
-        <Icon size={17} className="shrink-0 text-ink-muted" aria-hidden="true" />
+        <Icon size={ICON.md} className="shrink-0 text-ink-muted" aria-hidden="true" />
         <span className="text-xs font-medium text-ink-muted">{title}</span>
         {delta != null && <DeltaChip value={delta} />}
       </div>
@@ -121,7 +124,7 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
           <span className="min-w-0 text-end leading-snug">{aux ?? 'מגמת 8 שבועות'}</span>
         )}
       </div>
-    </Link>
+    </Card>
   );
 }
 
@@ -139,7 +142,7 @@ function OperationsDisclosure({ title, count, summary, empty, children }: {
   if (count === 0) {
     return (
       <div className="flex min-h-11 items-center gap-2 border-t border-line-soft py-2.5 text-sm text-ink-muted first:border-t-0">
-        <Check size={15} className="shrink-0 text-done-fg" aria-hidden="true" />
+        <Check size={ICON.sm} className="shrink-0 text-done-fg" aria-hidden="true" />
         <span>{empty}</span>
         <span className="badge-idle num ms-auto">0</span>
       </div>
@@ -152,7 +155,7 @@ function OperationsDisclosure({ title, count, summary, empty, children }: {
         <span className="font-medium text-ink-body">{title}</span>
         <span className="badge-idle num">{count}</span>
         {summary && <span className="ms-auto min-w-0 text-end text-xs text-ink-muted">{summary}</span>}
-        <ChevronDown size={16} className="shrink-0 text-ink-ghost transition-transform group-open:rotate-180" aria-hidden="true" />
+        <ChevronDown size={ICON.sm} className="shrink-0 text-ink-ghost transition-transform motion-reduce:transition-none group-open:rotate-180" aria-hidden="true" />
       </summary>
       <div className="border-t border-line-soft pb-4 pt-2">{children}</div>
     </details>
@@ -162,10 +165,11 @@ function OperationsDisclosure({ title, count, summary, empty, children }: {
 // T7 (Crextio-reference layout): the role queues moved out of the folded operational snapshot into
 // the dashboard's single dark surface — the Onyx contrast card, the analogue of the reference's
 // dark report tile. Same six queues, same counts, same links; only the container changed, so
-// nothing is duplicated (the disclosure that held them was removed). The count pill wears the
-// neutral shell surface, not a tone: it answers "how many", never "how urgent" (חוק צ'יפ הספירה
-// applies; on the dark shell the petrol count chip is unreadable, so the shell-ink pill is the
-// dark-surface rendering of the same neutral claim).
+// nothing is duplicated (the disclosure that held them was removed). The count pill is now the
+// app's canonical "how many" chip — `badge` + bg-action-soft/text-action-on-soft, the pair
+// ui.tsx already uses for the filter count — instead of a private shell-ink spelling. It still
+// answers "how many", never "how urgent" (חוק צ'יפ הספירה); a light chip carries its own
+// contrast on the Onyx card, which the 10%-alpha shell-ink pill did not.
 function RoleQueueCard({ queue, total, className = '' }: {
   queue: {
     receiving: number; invoicesToReview: number; prDrafts: number;
@@ -189,10 +193,12 @@ function RoleQueueCard({ queue, total, className = '' }: {
     <section className={`relative rounded-3xl bg-shell p-4 text-shell-ink shadow-dashboard sm:p-5 ${className}`} aria-labelledby="role-queues-title">
       {/* The reference's corner circle-chip: a round paper-on-dark arrow to the full queue. */}
       <Link to="/alerts" aria-label="לכל ההתראות והמשימות"
-        className="absolute end-4 top-4 grid size-9 place-items-center rounded-full bg-shell-ink/10 text-shell-ink transition-colors hover:bg-shell-ink/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-        <ArrowUpLeft size={16} aria-hidden="true" />
+        className="group absolute end-3 top-3 grid size-11 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+        <span className="grid size-9 place-items-center rounded-full bg-shell-ink/10 text-shell-ink transition-colors group-hover:bg-shell-ink/20">
+          <ArrowUpLeft size={ICON.sm} aria-hidden="true" />
+        </span>
       </Link>
-      <h2 id="role-queues-title" className="section-title pe-10 text-shell-ink">משימות לפי תפקיד</h2>
+      <h2 id="role-queues-title" className="section-title pe-16 text-shell-ink">משימות לפי תפקיד</h2>
       <div className="mt-1.5 flex items-baseline gap-2">
         <span className="kpi-hero num text-shell-ink">{total}</span>
         <span className="text-xs text-shell-ink-dim">משימות פתוחות בכל התורים</span>
@@ -211,7 +217,7 @@ function RoleQueueCard({ queue, total, className = '' }: {
                   {row.count > DOT_CAP && <span className="text-xs text-shell-ink-dim">+</span>}
                 </span>
               )}
-              <span className="num inline-flex min-w-8 shrink-0 items-center justify-center rounded-full bg-shell-ink/10 px-2.5 py-0.5 text-xs font-medium text-shell-ink">{row.count}</span>
+              <span className="badge num min-w-8 shrink-0 justify-center bg-action-soft text-action-on-soft">{row.count}</span>
             </Link>
           </li>
         ))}
@@ -264,7 +270,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
   ) : null;
 
   return (
-    <section className={className} aria-labelledby="deliveries-title">
+    <Card as="section" className={className} aria-labelledby="deliveries-title">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
         <h2 id="deliveries-title" className="section-title">אספקות היום ומחר</h2>
         <p className="text-xs text-ink-muted">ספקים שאמורים לספק סחורה</p>
@@ -273,7 +279,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
       {total === 0 ? (
         <div className="mt-2 border-t border-line-soft pt-2">
           <div className="flex min-h-11 items-center gap-2 text-sm text-ink-muted">
-            <Check size={15} className="shrink-0 text-done-fg" aria-hidden="true" />
+            <Check size={ICON.sm} className="shrink-0 text-done-fg" aria-hidden="true" />
             <span>אין אספקות מתוכננות להיום ומחר</span>
             <span className="badge-idle num ms-auto">0</span>
           </div>
@@ -289,7 +295,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
                 <span className="text-xs text-ink-muted">{group.suppliers === 1 ? 'ספק' : 'ספקים'}</span>
               </span>
             ))}
-            <ChevronDown size={16} className="ms-auto shrink-0 text-ink-ghost transition-transform group-open:rotate-180" aria-hidden="true" />
+            <ChevronDown size={ICON.sm} className="ms-auto shrink-0 text-ink-ghost transition-transform group-open:rotate-180" aria-hidden="true" />
           </summary>
           <div className="border-t border-line-soft pb-2 pt-2">
             {groups.map((group) => (
@@ -297,7 +303,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
                 <div className="mb-1 text-xs font-medium text-ink-muted">{group.label}</div>
                 {group.rows.length === 0 ? (
                   <div className="flex items-center gap-1.5 py-1 text-xs text-ink-muted">
-                    <Check size={13} className="shrink-0 text-done-fg" aria-hidden="true" /> {group.emptyLabel}
+                    <Check size={ICON.xs} className="shrink-0 text-done-fg" aria-hidden="true" /> {group.emptyLabel}
                   </div>
                 ) : (
                   <ul className="divide-y divide-line-soft">
@@ -327,7 +333,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
           </div>
         </details>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -357,7 +363,7 @@ function DashboardSkeleton() {
       {/* hero money strip: three separate stat cards (T7.3c) */}
       <div className="order-first grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 lg:order-1 lg:col-span-12">
         {Array.from({ length: 3 }, (_, i) => (
-          <div key={i} className="card min-h-24 px-4 py-3.5 sm:px-5">
+          <Card key={i} pad={false} className="min-h-24 px-4 py-3.5 sm:px-5">
             <div className="flex items-center gap-2">
               <Skeleton className="size-4 rounded" />
               <Skeleton className="h-3 w-24" />
@@ -366,12 +372,12 @@ function DashboardSkeleton() {
               <Skeleton className="h-8 w-32" />
               <Skeleton className="h-3 w-20" />
             </div>
-          </div>
+          </Card>
         ))}
       </div>
 
       {/* AttentionZone card: header + dense rows (badge · label · amount) */}
-      <div className="card card-pad order-2 lg:col-span-6">
+      <Card className="order-2 lg:col-span-6">
         <div className="flex items-center justify-between mb-2">
           <Skeleton className="h-5 w-40" />
           <Skeleton className="h-3 w-28" />
@@ -385,17 +391,17 @@ function DashboardSkeleton() {
             </div>
           ))}
         </div>
-      </div>
+      </Card>
 
       {/* deliveries card: heading + the two-count summary row */}
-      <div className="card card-pad order-3 lg:col-span-3">
+      <Card className="order-3 lg:col-span-3">
         <Skeleton className="h-5 w-40" />
         <div className="mt-2 flex min-h-11 items-center gap-6 py-3">
           <Skeleton className="h-6 w-20" />
           <Skeleton className="h-6 w-20" />
           <Skeleton className="ms-auto h-4 w-4" />
         </div>
-      </div>
+      </Card>
 
       {/* the dark role-queue tile — promised quiet (sunken), not dark, while loading */}
       <div className="order-4 rounded-3xl bg-surface-sunken p-4 sm:p-5 lg:col-span-3">
@@ -415,11 +421,11 @@ function DashboardSkeleton() {
       <div className="order-5 lg:col-span-12">
         <Skeleton className="h-5 w-24" />
         <div className="mt-3 grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
-          <div className="card card-pad lg:col-span-5">
+          <Card className="lg:col-span-5">
             <Skeleton className="h-4 w-36" />
             <Skeleton className="mt-3 h-48 w-full rounded-lg" />
-          </div>
-          <div className="card card-pad lg:col-span-4">
+          </Card>
+          <Card className="lg:col-span-4">
             <Skeleton className="h-4 w-32" />
             <Skeleton className="mx-auto mt-4 size-36 rounded-full" />
             <div className="mx-auto mt-3 flex justify-center gap-3">
@@ -427,23 +433,23 @@ function DashboardSkeleton() {
               <Skeleton className="h-3 w-16" />
               <Skeleton className="h-3 w-16" />
             </div>
-          </div>
-          <div className="card card-pad lg:col-span-3">
+          </Card>
+          <Card className="lg:col-span-3">
             <Skeleton className="h-4 w-32" />
             <Skeleton className="mx-auto mt-4 size-28 rounded-full" />
             <Skeleton className="mx-auto mt-3 h-3 w-28" />
-          </div>
-          <div className="card card-pad lg:col-span-12">
+          </Card>
+          <Card className="lg:col-span-12">
             <Skeleton className="h-4 w-44" />
             <Skeleton className="mt-3 h-48 w-full rounded-lg" />
-          </div>
+          </Card>
         </div>
       </div>
 
       {/* operational snapshot: heading + one card of folded rows */}
       <div className="order-6 lg:col-span-12">
         <Skeleton className="h-5 w-44" />
-        <div className="card card-pad mt-3">
+        <Card className="mt-3">
           {Array.from({ length: 3 }, (_, i) => (
             <div key={i} className="flex min-h-11 items-center gap-3 border-t border-line-soft first:border-t-0">
               <Skeleton className="h-4 w-40" />
@@ -451,7 +457,7 @@ function DashboardSkeleton() {
               <Skeleton className="ms-auto h-3 w-28" />
             </div>
           ))}
-        </div>
+        </Card>
       </div>
       </div>
     </div>
@@ -460,6 +466,11 @@ function DashboardSkeleton() {
 
 export default function Dashboard() {
   const { profile } = useAuth();
+  /* The tier mark on the greeting line is owner-only, and the gate is repeated HERE rather than
+     left to `PlanBadge`'s own: the component renders null for everyone else, but the line that
+     holds it must not exist at all for them — a truthy `meta` node that renders nothing still
+     draws an empty band under the heading. */
+  const isOwner = profile?.role === 'owner';
   const { data, loading, error, refetch, fetching } = useQuery(async () => {
     const now = new Date();
     const todayISO = businessTodayISO();
@@ -777,7 +788,39 @@ export default function Dashboard() {
           סוגי טיפול" and whose own empty state says "אין משימות דחופות כרגע" — the same count and
           the same sentence, twice, in one glance. The one that survives is the one attached to the
           rows it counts. Nothing is lost: both branches are still rendered, by AttentionZone. */}
-      <PageHeader title={<span className="font-normal">{pageTitle}</span>} meta={firstName ? 'מרכז הבקרה' : undefined}
+      {/* THE TIER MARK RIDES THE GREETING (owner, 26.08.2026 — he circled this line and moved it
+          here from the shell header, where under the brand pill it floated between the header and
+          the page and belonged to neither).
+          WHY `meta` AND NOT `actions` OR A NEW `PageHeader` SLOT:
+          · `meta` is the line directly UNDER the page title — the same slot the phone gives it,
+            where it replaces `InPlace · <org>`. So the two surfaces agree in position, which is
+            the whole point of this round.
+          · `actions` is the opposite end of the row and already holds a freshness readout and a
+            refresh control. A tenant's contract is neither.
+          · A `badge` slot on `PageHeader` would put an OWNER-ONLY mark on the primitive every
+            screen in the product uses. A slot used once is a slot that invites five more.
+          IT DOES NOT REPLACE THE SCREEN NAME, it stands beside it: `'מרכז הבקרה'` on this line is
+          what keeps the greeting from desyncing the wayfinding catalogue (see `pageTitle` above),
+          and the phone's line was carrying product identity, not a screen name.
+          NO GAP FOR ANYONE WHO GETS NOTHING: the whole line is still gated on `firstName`, and the
+          chip on `isOwner`, so a non-owner renders the identical string this passed before and an
+          owner on a rung with no look renders it too — never an empty 20px band under the heading.
+          `compact` drops the 44px action-row touch floor, which on a 20px text line is a 24px hole
+          under a heading, and pins the chip's own hit area at 24×24 instead (WCAG 2.5.8 AA). */}
+      <PageHeader title={<span className="font-normal">{pageTitle}</span>}
+        meta={firstName
+          ? <span className="flex flex-wrap items-center gap-2">
+            מרכז הבקרה
+            {/* DESKTOP ONLY, and the first build without this printed the chip TWICE on a phone
+                dashboard — once on the header's subtitle line and again here, 120px apart. The
+                header slot is the PHONE's ruling and it holds on every screen; this line is the
+                DESKTOP's, where the shell header carries no tier mark at all. One chip per
+                surface. (It still mounts below `lg` and costs one `my_subscription()` call there;
+                `PlanBadge` self-gates on the tenant scope, so hiding is the cheap correct fix and
+                unmounting would need a viewport hook this screen does not have.) */}
+            {isOwner && <span className="hidden lg:inline-flex"><PlanBadge compact /></span>}
+          </span>
+          : undefined}
         actions={<div className="flex items-center gap-2 text-xs text-ink-muted">
           <span aria-live="polite" aria-atomic="true">
             {data?.fetchedAt && (
@@ -786,9 +829,9 @@ export default function Dashboard() {
               </span>
             )}
           </span>
-          <button className="btn-ghost min-h-11 min-w-11 p-2!" onClick={() => void refetch()} disabled={fetching}
+          <button className="btn-ghost btn-icon" onClick={() => void refetch()} disabled={fetching}
             aria-label="רענון נתוני מרכז הבקרה" title="רענון">
-            <RotateCw size={15} className={fetching ? 'animate-spin' : ''} />
+              <RefreshCw size={ICON.sm} aria-hidden="true" className={fetching ? 'animate-spin ' : ''} />
           </button>
         </div>} />
 
@@ -835,7 +878,7 @@ export default function Dashboard() {
             className="lg:order-2 lg:col-span-6 [--dash-step-mobile:1] [--dash-step:1]" />
 
           <DeliveriesZone today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount}
-            className="card card-pad lg:order-3 lg:col-span-3 [--dash-step-mobile:2] [--dash-step:2]" />
+            className="lg:order-3 lg:col-span-3 [--dash-step-mobile:2] [--dash-step:2]" />
 
           {/* Section 12 on a phone: the manager opens the app and sees a figure. The strip is
               FIRST on screen below lg; from lg it is the full-width hero row of the grid.
@@ -866,7 +909,7 @@ export default function Dashboard() {
             <h2 id="trends-title" className="section-title">מגמות</h2>
 
             <div className="mt-3 grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
-              <section className="card card-pad lg:col-span-5" aria-labelledby="monthly-trend-title">
+              <Card as="section" className="lg:col-span-5" aria-labelledby="monthly-trend-title">
                 {/* Reference header anatomy (image 3): title at the start, two summary CELLS at the
                     end — this month beside last month, separated by a logical hairline; the MoM
                     percent rides the current-month cell. Both figures come from byMonth, so the
@@ -907,13 +950,13 @@ export default function Dashboard() {
                 <SpendBarChart
                   points={data.monthly.map((point) => ({ key: point.month, label: point.label, total: point.total }))}
                   ariaLabel={monthlyAria} emptyMessage="אין נתוני חשבוניות לתקופה" />
-              </section>
+              </Card>
 
-              <section className="card card-pad lg:col-span-4" aria-labelledby="category-trend-title">
+              <Card as="section" className="lg:col-span-4" aria-labelledby="category-trend-title">
                 <h3 id="category-trend-title" className="text-sm font-semibold text-ink-body">תמהיל הרכש החודש</h3>
                 <p className="text-xs text-ink-muted">ארבע הקטגוריות הגדולות וכל היתר</p>
                 <CategoryDonut slices={data.categories} total={categoryTotal} ariaLabel={categoriesAria} emptyMessage={categoryEmptyMessage} />
-              </section>
+              </Card>
 
               {/* Owner review, defect 11: this slot used to hold a radial ring over "כיסוי תאריכי
                   פירעון" — how many active requests carry a due date. That is data hygiene, not a
@@ -927,7 +970,7 @@ export default function Dashboard() {
                   either side of it, a tile with no graphic at all read as a slot that had failed
                   to render. It gets a two-segment split bar, NOT the ring back: the objection
                   above was never "no graphic", it was "not a percentage of a window we chose". */}
-              <section className="card card-pad lg:col-span-3" aria-labelledby="due-window-title">
+              <Card as="section" className="lg:col-span-3" aria-labelledby="due-window-title">
                 <h3 id="due-window-title" className="text-sm font-semibold text-ink-body">לתשלום בשבוע הקרוב</h3>
                 <p className="text-xs text-ink-muted">דרישות תשלום פעילות, כולל מה שכבר באיחור</p>
                 {data.dueWindow == null ? (
@@ -968,9 +1011,9 @@ export default function Dashboard() {
                     </Link>
                   </div>
                 )}
-              </section>
+              </Card>
 
-              <section className="card card-pad lg:col-span-12" aria-labelledby="weekly-trend-title">
+              <Card as="section" className="lg:col-span-12" aria-labelledby="weekly-trend-title">
                 <h3 id="weekly-trend-title" className="text-sm font-semibold text-ink-body">רכש מול תשלומים</h3>
                 <p className="text-xs text-ink-muted">שמונה השבועות האחרונים</p>
                 {/* The series names ride the ends of their own lines now — no legend row. The
@@ -983,7 +1026,7 @@ export default function Dashboard() {
                 <ComparisonLineChart points={weeklyHasActivity ? weeklyComparison : []} xKey="week"
                   series={comparisonSeries({ key: 'purchases', name: 'רכש' }, { key: 'payments', name: 'תשלומים' })}
                   ariaLabel={weeklyAria} emptyMessage="אין רכש או תשלומים בשמונת השבועות האחרונים" />
-              </section>
+              </Card>
             </div>
           </section>
 
@@ -993,12 +1036,12 @@ export default function Dashboard() {
               card above, so nothing here is said twice. */}
           <section className="lg:order-6 lg:col-span-12 [--dash-step-mobile:5] [--dash-step:5]" aria-labelledby="operations-title">
             <h2 id="operations-title" className="section-title">תמונת מצב תפעולית</h2>
-            <div className="card card-pad mt-3">
+            <Card className="mt-3">
               <OperationsDisclosure title="חריגים פתוחים" count={data.exceptionCount}
                 summary={data.queue.highExceptions ? `${data.queue.highExceptions} בחומרה גבוהה` : undefined}
                 empty="אין חריגים פתוחים כרגע">
                 <div className="flex justify-end">
-                  <Link to="/exceptions?status=open" className="btn-ghost min-h-11 text-xs">לכל החריגים <ChevronLeft size={13} /></Link>
+                  <Link to="/exceptions?status=open" className="btn-ghost min-h-11 text-xs">לכל החריגים <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
                 </div>
                 <ul className="divide-y divide-line-soft">
                   {data.exceptions.map((exception) => (
@@ -1038,7 +1081,7 @@ export default function Dashboard() {
                 summary={data.priceIncreases[0] ? `עלייה מרבית ${data.priceIncreases[0].pct.toFixed(1)}%` : undefined}
                 empty="אין התייקרויות אחרונות">
                 <div className="flex justify-end">
-                  <Link to="/prices?increases=1" className="btn-ghost min-h-11 text-xs">לכל המחירונים <ChevronLeft size={13} /></Link>
+                  <Link to="/prices?increases=1" className="btn-ghost min-h-11 text-xs">לכל המחירונים <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
                 </div>
                 <ul className="divide-y divide-line-soft">
                   {data.priceIncreases.map((price, index) => (
@@ -1054,7 +1097,7 @@ export default function Dashboard() {
                               figure and its arrow both speak trend-*. The span used to be alert-fg
                               with a trend-up arrow inside it — two languages in one number. */}
                           <span className="inline-flex items-center gap-1 font-medium text-trend-up-fg num" dir="ltr">
-                            <TrendingUp size={13} aria-hidden="true" />+{price.pct.toFixed(1)}%
+                            <TrendingUp size={ICON.xs} aria-hidden="true" />+{price.pct.toFixed(1)}%
                           </span>
                         </span>
                       </Link>
@@ -1067,7 +1110,7 @@ export default function Dashboard() {
                 summary={data.topBalances[0] ? `${data.topBalances[0].name} · ${fmtMoneyExact(data.topBalances[0].balance)}` : undefined}
                 empty="אין יתרות פתוחות">
                 <div className="flex justify-end">
-                  <Link to="/suppliers?balance=open" className="btn-ghost min-h-11 text-xs">לכל הספקים <ChevronLeft size={13} /></Link>
+                  <Link to="/suppliers?balance=open" className="btn-ghost min-h-11 text-xs">לכל הספקים <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
                 </div>
                 <ul className="divide-y divide-line-soft">
                   {data.topBalances.map((balance) => (
@@ -1080,7 +1123,7 @@ export default function Dashboard() {
                   ))}
                 </ul>
               </OperationsDisclosure>
-            </div>
+            </Card>
           </section>
         </div>
       )}

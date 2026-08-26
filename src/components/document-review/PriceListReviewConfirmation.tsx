@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { reasonOr } from '../../lib/reason';
 import { CheckCircle2, Loader2, Plus } from 'lucide-react';
 import { Link } from 'react-router';
@@ -6,11 +6,14 @@ import { toHebrewError } from '../../lib/errors';
 import { supabase } from '../../lib/supabase';
 import type { PriceListPredictedLine } from '../../lib/useDocumentProcessing';
 import { useAuth } from '../../auth/AuthContext';
-import { ConfirmDialog, Note } from '../ui';
+import { ConfirmDialog, ICON, Note, SubPanel } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
 import { PriceListAutomationReadiness } from './PriceListAutomationReadiness';
 import { FILING_REASON_LABELS, type ReviewSnapshot } from './model';
 import { bidiIsolate, formatUnit, normalizeUnitInput } from '../../lib/format';
+
+/** The one create-product refusal that is about the NAME FIELD rather than about the server. */
+const NEW_PRODUCT_NAME_REQUIRED = 'יש להזין שם למוצר החדש.';
 
 interface PriceListReviewConfirmationProps {
   snapshot: ReviewSnapshot;
@@ -251,6 +254,7 @@ export function PriceListReviewConfirmation({
   // Rendered inside the per-line form — the shared error Note sits below all the lines,
   // far off-screen on a long price list, so a failure there would look like a dead button.
   const [createError, setCreateError] = useState<string | null>(null);
+  const createErrorId = useId();
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -436,7 +440,7 @@ export function PriceListReviewConfirmation({
   // so the server invariant "האישור אינו יוצר מוצרים" stays intact — creation is its own user act.
   async function createProduct(index: number) {
     const name = newProductName.trim();
-    if (!name) { setCreateError('יש להזין שם למוצר החדש.'); return; }
+    if (!name) { setCreateError(NEW_PRODUCT_NAME_REQUIRED); return; }
     if (!profile) return;
     setBusyCreate(true);
     setCreateError(null);
@@ -709,7 +713,7 @@ export function PriceListReviewConfirmation({
       )}
 
       {autoDecision && (
-        <div className="mt-4 rounded-2xl bg-surface-sunken p-3">
+        <SubPanel className="mt-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-semibold text-ink-body">תוצאת הקליטה האוטומטית</h3>
             <span className={autoDecision.reverted_at
@@ -742,7 +746,7 @@ export function PriceListReviewConfirmation({
               </button>
               )}
           </div>
-        </div>
+        </SubPanel>
       )}
 
       {!autoDecision && !showControls && detailsToggle && (
@@ -751,7 +755,7 @@ export function PriceListReviewConfirmation({
 
       {recoveryLoading && !receipt && (
         <Note tone="info" role="status" className="mt-4">
-          <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" />
+          <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />
           <span className="min-w-0 flex-1">בודק אם כבר נשמרה קבלת הגשה לפירוש הזה.</span>
         </Note>
       )}
@@ -775,7 +779,7 @@ export function PriceListReviewConfirmation({
           </span>
           {canReplay && (
             <button type="button" className="btn-secondary" disabled={busy} onClick={() => void submitPayload(attemptedPayload)}>
-              {busy && <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" />}
+              {busy && <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />}
               שחזור קבלה באותו אישור
             </button>
           )}
@@ -797,7 +801,7 @@ export function PriceListReviewConfirmation({
         <div className="mt-4 border-t border-line pt-4" data-testid="price-list-intake-action">
           {catalogLoading ? (
             <p className="flex items-center gap-2 text-sm text-ink-muted" role="status">
-              <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" />
+              <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />
               מתאים את השורות לקטלוג המוצרים…
             </p>
           ) : (
@@ -845,7 +849,7 @@ export function PriceListReviewConfirmation({
               <button type="button" className="btn-primary" data-testid="price-list-intake-confirm"
                 disabled={busy || selectedCount === 0 || catalogLoading || !!catalogError || products.length === 0}
                 onClick={() => void confirmPriceList()}>
-                {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" size={17} aria-hidden="true" /> : <CheckCircle2 size={17} aria-hidden="true" />}
+                  {busy ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <CheckCircle2 size={ICON.md} aria-hidden="true" />}
                 {busy ? 'קולט את המחירון…' : <>קליטת <span className="num">{selectedCount}</span> המחירים שנבחרו</>}
               </button>
             </PrimaryDecision>
@@ -869,7 +873,7 @@ export function PriceListReviewConfirmation({
       <div id="price-list-line-details" className="mt-4 space-y-3">
         {showControls && pendingIndexes.length > 0 && (
           <label className="flex min-h-11 items-center gap-3 text-sm text-ink-body">
-            <input type="checkbox" className="size-5" checked={onlyUnmatched}
+            <input type="checkbox" className="size-5 shrink-0" checked={onlyUnmatched}
               data-testid="price-list-unmatched-filter"
               onChange={(event) => { setOnlyUnmatched(event.target.checked); setPage(0); }} />
             הצג רק את <span className="num">{pendingIndexes.length}</span> השורות שדורשות טיפול
@@ -877,7 +881,7 @@ export function PriceListReviewConfirmation({
         )}
         {showControls && markableOnPage.length > 0 && (
           <label className="flex min-h-11 items-center gap-3 text-sm text-ink-body">
-            <input type="checkbox" className="size-5" checked={allMarkedOnPage} disabled={busy}
+            <input type="checkbox" className="size-5 shrink-0" checked={allMarkedOnPage} disabled={busy}
               data-testid="price-list-page-select-all"
               onChange={(event) => setApprovedOnPage(event.target.checked)} />
             סימון <span className="num">{markableOnPage.length}</span> השורות המוכנות בעמוד הזה
@@ -894,7 +898,7 @@ export function PriceListReviewConfirmation({
             ? products.find((product) => product.id === prediction.product_id)?.name ?? null
             : null;
           return (
-            <article key={`${item.source_row ?? 'none'}-${index}`} className="rounded-2xl bg-surface-sunken p-3">
+            <SubPanel as="article" key={`${item.source_row ?? 'none'}-${index}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold text-ink-body">שורה <span className="num">{index + 1}</span></h3>
                 <div className="flex items-center gap-2">
@@ -908,7 +912,7 @@ export function PriceListReviewConfirmation({
                   <span className="text-xs text-ink-muted">שורת מקור <span className="num">{item.source_row ?? '—'}</span></span>
                 </div>
               </div>
-              <div className="mt-3 rounded-2xl bg-surface-sunken p-3">
+              <SubPanel className="mt-3">
                   <dl className="grid gap-2 sm:grid-cols-2">
                     {Object.entries(item.values).map(([key, value]) => (
                       <div key={key} className="min-w-0 rounded-lg bg-surface-sunken p-2">
@@ -941,7 +945,7 @@ export function PriceListReviewConfirmation({
                   {showControls && (
                     <div className="mt-3 border-t border-line pt-3">
                   <label className="flex min-h-11 items-center gap-3 font-medium text-ink-body">
-                    <input type="checkbox" className="size-5" checked={draft.approved} onChange={(event) => updateDraft(index, { approved: event.target.checked })} disabled={busy} />
+                    <input type="checkbox" className="size-5 shrink-0" checked={draft.approved} onChange={(event) => updateDraft(index, { approved: event.target.checked })} disabled={busy} />
                     אני מאשר שורה זו לקליטה
                   </label>
                   {/* Live regardless of the tick above: describing the line is the work, approving
@@ -971,40 +975,43 @@ export function PriceListReviewConfirmation({
                       conclusion before the work. Creating it now also carries the price this row
                       printed into the field, which is what completes the line in one act. */}
                   {newProductFor === index ? (
-                      <div className="mt-3 rounded-2xl bg-surface-sunken p-3">
+                      <SubPanel className="mt-3">
                         <div className="grid gap-3 sm:grid-cols-2">
                           <label>
                             <span className="label">שם המוצר החדש *</span>
-                            <input className="input" maxLength={120} value={newProductName} onChange={(event) => setNewProductName(event.target.value)} disabled={busyCreate} />
+                            <input className="input" maxLength={120} value={newProductName} disabled={busyCreate}
+                              aria-invalid={createError === NEW_PRODUCT_NAME_REQUIRED || undefined}
+                              aria-describedby={createError ? createErrorId : undefined}
+                              onChange={(event) => setNewProductName(event.target.value)} />
                           </label>
                           <label>
                             <span className="label">יחידת מידה</span>
                             <input className="input" maxLength={30} value={newProductUnit} onChange={(event) => setNewProductUnit(event.target.value)} disabled={busyCreate} />
                           </label>
                         </div>
-                        {createError && <Note tone="alert" role="alert" className="mt-3">{createError}</Note>}
+                        {createError && <div id={createErrorId}><Note tone="alert" role="alert" className="mt-3">{createError}</Note></div>}
                         <div className="mt-3 flex justify-end gap-2">
                           <button type="button" className="btn-secondary" disabled={busyCreate} onClick={() => { setNewProductFor(null); setCreateError(null); }}>ביטול</button>
                           <button type="button" className="btn-primary" disabled={busyCreate} onClick={() => void createProduct(index)}>
-                            {busyCreate && <Loader2 className="animate-spin motion-reduce:animate-none" size={15} aria-hidden="true" />}
+                            {busyCreate && <Loader2 className="animate-spin" size={ICON.sm} aria-hidden="true" />}
                             יצירת המוצר והתאמת השורה
                           </button>
                         </div>
-                      </div>
+                      </SubPanel>
                     ) : (
                       <button type="button" className="btn-ghost mt-2 text-sm text-action" disabled={busy || busyCreate}
                         onClick={() => { setNewProductFor(index); setNewProductName(guessLineName(item.values)); setNewProductUnit('יח׳'); setCreateError(null); }}>
-                        <Plus size={14} aria-hidden="true" /> המוצר לא קיים בקטלוג? יצירת מוצר חדש מהשורה
+                        <Plus size={ICON.sm} aria-hidden="true" /> המוצר לא קיים בקטלוג? יצירת מוצר חדש מהשורה
                       </button>
                     )}
                   <label className="mt-3 flex min-h-11 items-center gap-3 text-sm text-ink-body">
-                    <input type="checkbox" className="size-5" checked={draft.available} onChange={(event) => updateDraft(index, { available: event.target.checked })} disabled={busy} />
+                    <input type="checkbox" className="size-5 shrink-0" checked={draft.available} onChange={(event) => updateDraft(index, { available: event.target.checked })} disabled={busy} />
                     המוצר זמין אצל הספק
                   </label>
                     </div>
                   )}
-              </div>
-            </article>
+              </SubPanel>
+            </SubPanel>
           );
         })}
         {pager}

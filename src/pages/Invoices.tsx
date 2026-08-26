@@ -7,7 +7,7 @@ import { toHebrewError } from '../lib/errors';
 import { useQuery } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, ErrorNote, SkeletonTable, Note, ConfirmDialog, PageHeader, useToast, type ServerColumn } from '../components/ui';
+import { DataTable, StatusBadge, ErrorNote, SkeletonTable, Note, ConfirmDialog, PageHeader, useToast, ToggleGroup, ICON, type ServerColumn } from '../components/ui';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import { canShare, shareInvoice } from '../lib/share';
@@ -67,7 +67,7 @@ export function CheckList({ checks }: { checks: CheckResult[] }) {
         const Icon = icon[c.severity];
         return (
           <Note key={i} tone={tone[c.severity]}>
-            <Icon size={16} className="mt-0.5 shrink-0" />
+            <Icon size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
             <span>{c.message}</span>
           </Note>
         );
@@ -278,18 +278,22 @@ export function InvoicesList() {
         meta={`${data.total} חשבוניות${activeFilters ? ` · ${activeFilters} מסננים פעילים` : ''}`}
         actions={canCreate && (
           <button className="btn-primary" onClick={() => navigate('/documents')}>
-            <Plus size={16} aria-hidden="true" /> העלאת מסמך שהתקבל
+            <Plus size={ICON.sm} aria-hidden="true" /> העלאת מסמך שהתקבל
           </button>
         )} />
-      <div role="group" aria-label="סינון חשבוניות לפי שלב הבדיקה" className="flex flex-wrap gap-1.5">
-        {REVIEW_FILTER_OPTIONS.map(([value, label]) => (
-          <button key={value || 'all'} type="button" aria-pressed={reviewFilter === value}
-            onClick={() => patchParams({ review: value, page: '' })}
-            className={`${MOBILE_PRIMARY_REVIEW_FILTERS.has(value) || reviewFilter === value ? '' : 'max-sm:hidden'} chip-filter ${reviewFilter === value ? 'chip-filter-active' : ''}`}>
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* ToggleGroup owns the chip geometry; the per-item className is what keeps the phone
+          strip to the stages that start or unblock work — a secondary stage stays hidden below
+          `sm` unless it is the active one, and every stage remains in the filter sheet. */}
+      <ToggleGroup<string>
+        label="סינון חשבוניות לפי שלב הבדיקה"
+        className="gap-1.5"
+        value={reviewFilter}
+        onChange={(value) => patchParams({ review: value, page: '' })}
+        items={REVIEW_FILTER_OPTIONS.map(([value, label]) => ({
+          key: value,
+          label,
+          className: MOBILE_PRIMARY_REVIEW_FILTERS.has(value) || reviewFilter === value ? '' : 'max-sm:hidden',
+        }))} />
       <DataTable rows={data.rows} columns={columns}
         emptyTitle="אין חשבוניות עדיין"
         emptySubtitle={canCreate

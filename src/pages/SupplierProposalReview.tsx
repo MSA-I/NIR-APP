@@ -6,7 +6,7 @@ import { useQuery } from '../lib/useQuery';
 import { supabase } from '../lib/supabase';
 import { unwrap } from '../lib/useQuery';
 import {
-  Breadcrumbs, ConfirmDialog, ErrorNote, Note, RecordHeader, RecordSkeleton, StatusBadge, useToast,
+  Breadcrumbs, ConfirmDialog, ErrorNote, Note, RecordHeader, RecordSkeleton, StatusBadge, useToast, ICON,
 } from '../components/ui';
 import { SUPPLIER_PROPOSAL_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime, fmtMoneyExact, formatQuantity } from '../lib/format';
@@ -145,7 +145,7 @@ export default function SupplierProposalReview() {
             disabled={busy || !allDecided || reasonMissing}
             onClick={() => void submitDecision()}
           >
-            <CheckCircle2 size={15} /> רישום ההחלטה
+            <CheckCircle2 size={ICON.sm} aria-hidden="true" /> רישום ההחלטה
           </button>
         ) : !pending && canWrite && proposal.status !== 'rejected' && !proposal.revision_order_id
           && !['partial', 'received', 'cancelled'].includes(order.status) ? (
@@ -155,7 +155,7 @@ export default function SupplierProposalReview() {
               disabled={busy}
               onClick={() => setRevisionConfirmOpen(true)}
             >
-              <GitBranchPlus size={15} /> יצירת רוויזיה מהשינויים שאושרו
+              <GitBranchPlus size={ICON.sm} aria-hidden="true" /> יצירת רוויזיה מהשינויים שאושרו
             </button>
           ) : undefined}
       />
@@ -208,10 +208,10 @@ export default function SupplierProposalReview() {
       {pending && canWrite && changedLines.length > 0 && (
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn-secondary" onClick={() => setAll('accepted')}>
-            <CheckCircle2 size={15} /> אישור כל השורות
+            <CheckCircle2 size={ICON.sm} aria-hidden="true" /> אישור כל השורות
           </button>
           <button type="button" className="btn-secondary" onClick={() => setAll('rejected')}>
-            <XCircle size={15} /> דחיית כל השורות
+            <XCircle size={ICON.sm} aria-hidden="true" /> דחיית כל השורות
           </button>
         </div>
       )}
@@ -301,7 +301,7 @@ function VerdictPicker({ value, onChange }: { value: Verdict | undefined; onChan
         aria-pressed={value === 'accepted'}
         onClick={() => onChange('accepted')}
       >
-        <CheckCircle2 size={15} /> אישור
+        <CheckCircle2 size={ICON.sm} aria-hidden="true" /> אישור
       </button>
       <button
         type="button"
@@ -309,7 +309,7 @@ function VerdictPicker({ value, onChange }: { value: Verdict | undefined; onChan
         aria-pressed={value === 'rejected'}
         onClick={() => onChange('rejected')}
       >
-        <XCircle size={15} /> דחייה
+        <XCircle size={ICON.sm} aria-hidden="true" /> דחייה
       </button>
     </div>
   );

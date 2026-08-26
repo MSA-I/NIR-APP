@@ -2,6 +2,7 @@ import { CheckCircle2, Loader2 } from 'lucide-react';
 import { fmtDate, fmtMoneyExact } from '../../lib/format';
 import type { OrderSplit } from '../../lib/orderSplit';
 import type { Product } from '../../lib/types';
+import { ICON } from '../../components/ui';
 
 interface SummaryStepProps {
   split: OrderSplit;
@@ -64,7 +65,7 @@ export default function SummaryStep({ split, products, singleSupplierName, produ
       <div className="flex flex-wrap justify-end gap-2 border-t border-line-strong bg-surface px-3 py-3 sm:px-4">
         <button type="button" className="btn-secondary" disabled={busy} onClick={onBack}>חזרה לעריכת ספקים</button>
         <button type="button" className="btn-primary" disabled={busy || savings.splitTotal === null} onClick={onConfirm}>
-          {busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} אשר ושלח הזמנות
+          {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={ICON.sm} aria-hidden="true" />} אשר ושלח הזמנות
         </button>
       </div>
     </div>

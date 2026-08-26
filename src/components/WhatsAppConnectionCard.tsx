@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { MessageCircle, Link2, Power, ShieldOff } from 'lucide-react';
-import { ErrorNote, Modal, Note, StatusBadge, useToast } from './ui';
+import { ErrorNote, ICON, Modal, Note, StatusBadge, useToast } from './ui';
 import { ReauthModal } from './ReauthModal';
 import { useQuery } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
@@ -43,6 +43,10 @@ const STATUS_TONE: Record<WhatsAppConnectionStatus, StatusMeta['tone']> = {
   error: 'alert',
 };
 
+/** The one refusal on this card that is about a FIELD rather than about the server, so it is the
+    one the reason inputs below mark themselves invalid for. */
+const REASON_REQUIRED = 'יש לנמק את הפעולה — הנימוק נרשם ביומן הביקורת.';
+
 type PendingAction =
   | { kind: 'configure' }
   | { kind: 'enable'; enabled: boolean }
@@ -58,6 +62,9 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stepUpFor, setStepUpFor] = useState<PendingAction | null>(null);
+  const cardErrorId = useId();
+  const modalErrorId = useId();
+  const reasonInvalid = error === REASON_REQUIRED || undefined;
 
   const [provider, setProvider] = useState<WhatsAppProvider>('twilio');
   const [providerAccountId, setProviderAccountId] = useState('');
@@ -86,7 +93,7 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
   function requestStepUp(action: PendingAction) {
     setError(null);
     if (!reason.trim()) {
-      setError('יש לנמק את הפעולה — הנימוק נרשם ביומן הביקורת.');
+      setError(REASON_REQUIRED);
       return;
     }
     setStepUpFor(action);
@@ -139,13 +146,13 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="whatsapp-connection-heading"
           className="flex items-center gap-1.5 text-sm font-medium text-ink">
-          <MessageCircle size={15} aria-hidden="true" /> חיבור WhatsApp של הארגון
+          <MessageCircle size={ICON.sm} aria-hidden="true" /> חיבור WhatsApp של הארגון
         </h2>
         <div className="flex items-center gap-2">
           {statusMeta ? <StatusBadge meta={statusMeta} /> : <span className="text-sm text-ink-muted">לא מחובר</span>}
           {isOwner && (
             <button type="button" className="btn-secondary" onClick={openWizard}>
-              <Link2 size={15} /> {summary.configured ? 'החלפת חיבור' : 'חיבור מספר הארגון'}
+              <Link2 size={ICON.sm} aria-hidden="true" /> {summary.configured ? 'החלפת חיבור' : 'חיבור מספר הארגון'}
             </button>
           )}
         </div>
@@ -189,7 +196,7 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
         הודעות נכנסות אינן נקלטות בהשקה: הערוץ משמש לשליחה יוצאת ולמעקב מסירה בלבד.
       </p>
 
-      {error && !editing && <div className="mt-3"><ErrorNote message={error} /></div>}
+      {error && !editing && <div className="mt-3" id={cardErrorId}><ErrorNote message={error} /></div>}
 
       {isOwner && summary.configured && (
         <div className="mt-3 space-y-2">
@@ -198,16 +205,18 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
               סיבת הפעולה (חובה — תתועד ביומן הביקורת)
             </label>
             <input id="whatsapp-connection-reason" className="input" value={reason}
+              aria-invalid={reasonInvalid}
+              aria-describedby={reasonInvalid ? cardErrorId : undefined}
               onChange={(event) => setReason(event.target.value)} />
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" className="btn-secondary" disabled={busy}
               onClick={() => requestStepUp({ kind: 'enable', enabled: connection?.status !== 'active' })}>
-              <Power size={15} /> {connection?.status === 'active' ? 'השבתת הערוץ' : 'הפעלת הערוץ'}
+              <Power size={ICON.sm} aria-hidden="true" /> {connection?.status === 'active' ? 'השבתת הערוץ' : 'הפעלת הערוץ'}
             </button>
             <button type="button" className="btn-danger" disabled={busy}
               onClick={() => requestStepUp({ kind: 'revoke' })}>
-              <ShieldOff size={15} /> ביטול החיבור ומחיקת הסוד
+              <ShieldOff size={ICON.sm} aria-hidden="true" /> ביטול החיבור ומחיקת הסוד
             </button>
           </div>
         </div>
@@ -272,9 +281,11 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
               סיבת החיבור (חובה — תתועד ביומן הביקורת)
             </label>
             <input id="whatsapp-configure-reason" className="input" value={reason}
+              aria-invalid={reasonInvalid}
+              aria-describedby={reasonInvalid ? modalErrorId : undefined}
               onChange={(event) => setReason(event.target.value)} />
           </div>
-          {error && <ErrorNote message={error} />}
+          {error && <div id={modalErrorId}><ErrorNote message={error} /></div>}
           <div className="flex justify-end gap-2">
             <button type="button" className="btn-secondary" disabled={busy}
               onClick={() => setEditing(false)}>ביטול</button>
