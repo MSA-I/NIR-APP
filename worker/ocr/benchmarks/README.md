@@ -113,3 +113,53 @@ CER, table-cell F1 with RTL cell order preserved, document-type macro F1,
 supplier precision, mark precision/recall, p50/p95 seconds per page, peak VRAM,
 failures, OOMs, contract failures, and soak evidence. It does not select a model
 while any mandatory metric or target-hardware evidence is missing.
+
+
+
+## A/B against a hosted provider — `ab_mistral.py`
+
+
+
+`run.py` measures engines that run on our own hardware. `ab_mistral.py` answers the other
+
+question: whether a HOSTED provider reads our documents better than the production adapter does.
+
+It is a measurement instrument, imports nothing from the worker at runtime, and is excluded from
+
+the image by `.dockerignore`.
+
+
+
+Its commands are split so that exactly one of them touches the network or a credential:
+
+
+
+| command | network | key | what it does |
+
+|---|---|---|---|
+
+| `plan` | no | no | corpus manifest and OCR page budget; does not import `src` |
+
+| `render` | no | no | production-faithful page PNGs (needs cv2 and `pdftoppm`) |
+
+| `fetch` | **yes** | **yes** | the only billed step; caches raw provider envelopes |
+
+| `derive` | no | no | envelopes to `ExtractionContract` v1; free and re-runnable |
+
+| `self-test` | no | no | adapter mapping against recorded envelopes |
+
+
+
+That split is what makes credential isolation structural rather than a runtime guard: `render`
+
+shells out to `pdftoppm`, which inherits `os.environ`, and it runs BEFORE any key is loaded.
+
+`fetch` loads a key and spawns nothing.
+
+
+
+`ab_mistral_adapter.py` is the mapping under test, `ab_mistral_truth.py` builds and checks ground
+
+truth, and `ab_mistral_triage.py` groups disagreements for human adjudication. Corpus, envelopes
+
+and run outputs stay outside Git under the same rule as the rest of this directory.
