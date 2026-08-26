@@ -28,10 +28,18 @@
 עונה על השאלה. **להפרדה גם ביניהם צריך מפתח שלישי ועריכת `ocr.env` על ה-VPS דרך SSH** —
 הקובץ אינו בריפו ואין אליו גישה מסקריפט מקומי.
 
-**‏Mistral קיים ואינו בשימוש.** נמדד ב-`document_interpretations` בייצור: 52 ריצות בין 02.08
-ל-25.08, **כולן** `provider = openai`, ‏`model = gpt-5.6-terra`. אפס Mistral. המנוע קיים
-כ-canary (`run-ocr-worker.sh --canary mistral`) ולא כברירת מחדל, ולכן מפתח Mistral אינו מייצג
-הוצאה היום.
+**‏Mistral הוא מנוע ה-OCR הפעיל — ומשלם.** הטענה ההפוכה, שנרשמה כאן קודם באותו יום, נמדדה
+על `document_interpretations` בלבד ולכן ענתה על השאלה הלא נכונה. **שני השלבים משתמשים בספקים
+שונים:**
+
+| שלב | טבלה | ספק בפועל |
+|---|---|---|
+| תמלול עמודים (OCR, ‏worker על VPS) | `document_extractions` | ‏**Mistral** מ-18.08.2026: 6 ריצות, האחרונה 25.08. לפניו OpenAI `gpt-5.6-terra`, ‏50 ריצות |
+| פירוש התוכן (Edge) | `document_interpretations` | ‏**OpenAI** `gpt-5.6-terra` — 52 ריצות, ‏100% |
+
+‏`resource_metadata` של שלוש ההרצות האחרונות אומר `{"adapter": "mistral", "worker_version": "2"}`,
+כלומר ה-worker שבייצור **הועבר ל-Mistral** ואינו canary. **מפתח Mistral מייצג הוצאה פעילה**,
+ואת חשבון ה-OCR רואים בלוח של Mistral — לא בזה של OpenAI.
 
 **‏`OCR_WORKER_TOKEN` אינו מפתח ספק** ואינו עולה כסף — הוא סוד משותף שבו ה-worker מזדהה מול
 ה-Edge. אין לו קשר לחשבון AI.
