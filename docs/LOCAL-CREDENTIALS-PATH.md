@@ -9,6 +9,32 @@
 | ‏Resend — שליחה בלבד | `AI\API\Resend api.txt` (זהו גם ה־SMTP password של Supabase Auth) |
 | ‏Resend — גישה מלאה | `AI\API\RESEND-Full.txt` (ניהול דומיינים; אין להשתמש בו לשליחה) |
 | ‏Cloudflare — ‏DNS/‏Zone | `AI\API\CF-TOKEN-DOMAINS.txt` |
+| ‏OpenAI — **העוזר בלבד** | `AI\API\NIR-API-OPENAI-ASSISTENS.txt` → הסוד `AI_ASSISTANT_API_KEY` |
+| ‏OpenAI — פירוש מסמכים ו-OCR | `AI\API\NIR-API-OPENAI.txt` → הסוד `OPENAI_API_KEY` |
+| ‏Mistral — מנוע OCR חלופי | `AI\API\NIR-AP-MISTRAL.txt` → `MISTRAL_API_KEY` ב-`ocr.env` של ה-VPS |
+| ‏טוקן ה-worker (**אינו מפתח ספק**) | `AI\API\NIR-OCR-WORKER-TOKEN.txt` → `OCR_WORKER_TOKEN` |
+
+## הפרדת עלויות בין העוזר לעיבוד המסמכים (26.08.2026)
+
+עד 26.08.2026 ‏`AI_ASSISTANT_API_KEY` ו-`OPENAI_API_KEY` בייצור נשאו **את אותו מפתח בדיוק**
+(נמדד: אותו digest ב-`GET /v1/projects/{ref}/secrets`). המשתנים היו נפרדים, החשבון לא — ולכן
+לא היה אפשר לדעת כמה עולה העוזר וכמה עולה עיבוד המסמכים.
+
+**מה שהופרד:** ‏`AI_ASSISTANT_API_KEY` מצביע עכשיו על מפתח ייעודי משלו. ‏`OPENAI_API_KEY` לא
+נגע. אימות: שני ה-digests שונים, והעוזר ענה חי אחרי ההחלפה.
+
+**מה שעדיין משותף, במכוון:** שלב הפירוש (`interpret-document`, ‏Edge) ושלב התמלול
+(`worker/ocr` על ה-VPS) חולקים את `NIR-API-OPENAI.txt`. שניהם „עיבוד מסמכים", ולכן חשבון אחד
+עונה על השאלה. **להפרדה גם ביניהם צריך מפתח שלישי ועריכת `ocr.env` על ה-VPS דרך SSH** —
+הקובץ אינו בריפו ואין אליו גישה מסקריפט מקומי.
+
+**‏Mistral קיים ואינו בשימוש.** נמדד ב-`document_interpretations` בייצור: 52 ריצות בין 02.08
+ל-25.08, **כולן** `provider = openai`, ‏`model = gpt-5.6-terra`. אפס Mistral. המנוע קיים
+כ-canary (`run-ocr-worker.sh --canary mistral`) ולא כברירת מחדל, ולכן מפתח Mistral אינו מייצג
+הוצאה היום.
+
+**‏`OCR_WORKER_TOKEN` אינו מפתח ספק** ואינו עולה כסף — הוא סוד משותף שבו ה-worker מזדהה מול
+ה-Edge. אין לו קשר לחשבון AI.
 
 הנתיב הקודם `NIR-APP-DOCS\NIR-TOKEN-SUPABASE.txt` **אינו קיים יותר.** ‏`scripts/db-query.ps1`
 קורא את הטוקן ממשתנה הסביבה `SUPABASE_ACCESS_TOKEN` ולכן לא נשבר, אך כל סקריפט שקורא את הקובץ
