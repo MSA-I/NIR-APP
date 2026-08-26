@@ -410,7 +410,14 @@ async function quickActionsContract(browser) {
         `${role}: .mobile-action-bar is not the named role=group`);
       await assertMobileSpeedDialHidden(page, `${role}/390`);
       const items = bar.locator('.mobile-action');
-      assert.deepEqual((await items.allTextContents()).map((label) => label.trim()), expectedLabels,
+      // The visible label lives in its own span, and reading the whole item swept the unfiled-
+      // documents badge in with it — `office` read 'מסמכים7'. The badge is `aria-hidden` and its count
+      // is already spelled out in the item's `aria-label`, so those digits were never part of the
+      // name; they were part of the DOM text this line happened to read.
+      const labels = bar.locator('.mobile-action .mobile-action-label');
+      assert.equal(await labels.count(), await items.count(),
+        `${role}: a mobile action carries no label span`);
+      assert.deepEqual((await labels.allTextContents()).map((label) => label.trim()), expectedLabels,
         `${role}: wrong mobile action labels or order`);
         const targets = await items.evaluateAll((nodes) => nodes.map((node) => {
         const href = node.getAttribute('href');
