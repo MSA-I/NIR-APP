@@ -1,4 +1,4 @@
-# Loads (or reloads) the SupplyFlow demo tenant. ASCII only (PS 5.1 reads no-BOM files as ANSI).
+# Loads (or reloads) the InPlace demo tenant. ASCII only (PS 5.1 reads no-BOM files as ANSI).
 #
 # The demo org is a normal tenant that happens to be full of showcase data. Loading it does
 # not touch any other organization. Live use still requires an explicit target and override.

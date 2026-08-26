@@ -34,7 +34,7 @@ function Enter-QaMutex {
   try {
     try { $acquired = $mutex.WaitOne(0) }
     catch [System.Threading.AbandonedMutexException] { $acquired = $true }
-    if (-not $acquired) { throw "The shared SupplyFlow QA/quality mutex is held by another process." }
+    if (-not $acquired) { throw "The shared InPlace QA/quality mutex is held by another process." }
     return $mutex
   }
   catch {

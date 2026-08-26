@@ -587,7 +587,7 @@ body {
 
 /* A 320px shell cannot carry menu + home mark + two-line identity + three utilities without
    sacrificing the current page title. The drawer still carries the product mark and the middle
-   text still names SupplyFlow; only the redundant mark yields at this narrow edge. */
+   text still names InPlace; only the redundant mark yields at this narrow edge. */
 @media (max-width: 22.499rem) {
   .phone-safe-header {
     padding-inline-start: max(0.75rem, env(safe-area-inset-right));

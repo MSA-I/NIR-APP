@@ -201,7 +201,7 @@ function downloadPortal(
     }</nav>`;
   const document = `<!doctype html>
 <html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ייצוא מידע — SupplyFlow</title><style>
+<title>ייצוא מידע — InPlace</title><style>
 body{font-family:Arial,sans-serif;max-width:64rem;margin:0 auto;padding:2rem;color:#172126;background:#f7f5ef}main{background:#fff;border:1px solid #ddd8cc;border-radius:12px;padding:1.5rem}h1{font-size:1.5rem;margin-top:0}p{line-height:1.6}ul{list-style:none;padding:0;display:grid;gap:.75rem}li{border:1px solid #e4e0d7;border-radius:8px;padding:1rem;display:grid;gap:.4rem}a{color:#075d66;font-weight:700;overflow-wrap:anywhere}small{color:#59666c}code{font-size:.75rem;overflow-wrap:anywhere;color:#59666c}.machine{display:inline-block;margin-top:1rem}nav{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin:1rem 0}</style></head>
 <body><main><h1>ייצוא המידע שלך</h1><p>הקבצים נבנו מחלקים חתומים. כל קישור נבדק מחדש בזמן ההורדה ואינו נשמר במטמון.</p>
 ${pagination}<ul>${artifacts}</ul><a class="machine" href="${

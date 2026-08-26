@@ -1,4 +1,4 @@
-# SupplyFlow — תכנון offline וסנכרון
+# InPlace — תכנון offline וסנכרון
 
 > **חריג מתוחם, לא ביטול החלטה.** קרא קודם את הכותרת של `public/sw.js`.
 

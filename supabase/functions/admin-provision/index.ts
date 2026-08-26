@@ -4,7 +4,7 @@
  * This is the FIRST and ONLY exception to "no middle tier" (docs/ARCHITECTURE.md:5).
  * The reason is narrow and specific: creating an auth user requires the Supabase
  * `service_role` key, that key bypasses every RLS policy in the database, and it therefore
- * must never be shipped to a browser. Everything else in SupplyFlow still goes straight from
+ * must never be shipped to a browser. Everything else in InPlace still goes straight from
  * the SPA to PostgREST under RLS.
  *
  * Because this function holds `service_role`, its own authorization check IS the security

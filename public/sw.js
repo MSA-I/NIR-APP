@@ -1,4 +1,4 @@
-/* SupplyFlow service worker — Web Push delivery + APP-SHELL cache (never data).
+/* InPlace service worker — Web Push delivery + APP-SHELL cache (never data).
  *
  * Only the static shell is cached. API, Auth, Storage, Edge Function and Realtime
  * responses always stay network-authoritative.
@@ -88,9 +88,9 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: 'SupplyFlow', body: event.data ? event.data.text() : '' };
+    data = { title: 'InPlace', body: event.data ? event.data.text() : '' };
   }
-  const title = data.title || 'SupplyFlow';
+  const title = data.title || 'InPlace';
   event.waitUntil(self.registration.showNotification(title, {
     body: data.body || '',
     dir: 'rtl',

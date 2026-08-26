@@ -12,7 +12,7 @@
 //
 // Required environment (see supabase secrets set):
 //   RESEND_API_KEY    -- Resend API key
-//   INVITE_FROM_EMAIL -- verified sender, e.g. "SupplyFlow <invites@example.co.il>"
+//   INVITE_FROM_EMAIL -- verified sender, e.g. "InPlace <invites@example.co.il>"
 //   APP_BASE_URL      -- e.g. https://app.example.co.il  (NOT taken from the request body:
 //                        a client-supplied base URL would let a caller aim the token elsewhere)
 //   ALLOWED_ORIGINS   -- optional, comma-separated; defaults to APP_BASE_URL. Add the dev
@@ -147,7 +147,7 @@ function emailHtml(orgName: string, roleLabel: string, link: string, expiresAt: 
   <body style="margin:0;padding:24px;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;">
       <tr><td style="padding:28px 28px 8px;">
-        <div style="font-size:18px;font-weight:bold;">הוזמנת ל-SupplyFlow</div>
+        <div style="font-size:18px;font-weight:bold;">הוזמנת ל-InPlace</div>
       </td></tr>
       <tr><td style="padding:0 28px 20px;font-size:14px;line-height:1.7;">
         <p style="margin:12px 0;">${esc(orgName)} הזמינו אותך להצטרף למערכת ניהול הרכש, החשבוניות והתשלומים.</p>
@@ -166,7 +166,7 @@ function emailHtml(orgName: string, roleLabel: string, link: string, expiresAt: 
 
 function emailText(orgName: string, roleLabel: string, link: string): string {
   return [
-    `הוזמנת ל-SupplyFlow`,
+    `הוזמנת ל-InPlace`,
     ``,
     `${orgName} הזמינו אותך להצטרף למערכת ניהול הרכש, החשבוניות והתשלומים.`,
     `התפקיד שהוגדר עבורך: ${roleLabel}.`,
@@ -319,7 +319,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           body: JSON.stringify({
             from: fromEmail,
             to: [issued.email],
-            subject: `הוזמנת להצטרף ל-${issued.org_name} ב-SupplyFlow`,
+            subject: `הוזמנת להצטרף ל-${issued.org_name} ב-InPlace`,
             html: emailHtml(issued.org_name, roleLabel, link, issued.expires_at),
             text: emailText(issued.org_name, roleLabel, link),
           }),

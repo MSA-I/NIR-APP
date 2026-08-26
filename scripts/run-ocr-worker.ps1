@@ -1,4 +1,4 @@
-# Builds and runs the OCR worker pool that serves a live SupplyFlow project.
+# Builds and runs the OCR worker pool that serves a live InPlace project.
 #
 # This file exists because the production worker had no committed launch path. It was started by
 # hand, so docker-compose.ocr.yml described an image tag that was not the one running, nothing

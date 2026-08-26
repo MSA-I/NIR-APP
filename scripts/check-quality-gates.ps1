@@ -83,7 +83,7 @@ function Enter-QaMutex {
   try {
     try { $acquired = $mutex.WaitOne(0) }
     catch [System.Threading.AbandonedMutexException] { $acquired = $true }
-    if (-not $acquired) { throw "The shared SupplyFlow QA/quality mutex is held by another process." }
+    if (-not $acquired) { throw "The shared InPlace QA/quality mutex is held by another process." }
     return $mutex
   }
   catch {
@@ -281,7 +281,7 @@ function Invoke-DependencyAudit {
   $unexpectedAdvisories = @($advisories | Where-Object { $_ -ne $allowedAdvisory })
   $packageJson = Get-Content -LiteralPath (Join-Path $repoRoot "package.json") -Raw -Encoding UTF8
 
-  # This advisory is limited to React Router RSC Actions. SupplyFlow is a Vite SPA; fail this
+  # This advisory is limited to React Router RSC Actions. InPlace is a Vite SPA; fail this
   # exception closed if framework/RSC packages appear or if any other high finding is reported.
   if (-not $high.Count -or $unexpectedPackages.Count -or $unexpectedAdvisories.Count `
       -or $advisories.Count -ne 1 -or $packageJson -match '"@react-router/') {

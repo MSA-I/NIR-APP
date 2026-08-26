@@ -1,6 +1,6 @@
 ---
 name: migration-reviewer
-description: Reviews new or changed SQL in supabase/migrations/ against SupplyFlow's iron data-model and tenancy rules. Use after writing a migration and before running it against the remote project. Read-only — it reports, it does not edit.
+description: Reviews new or changed SQL in supabase/migrations/ against InPlace's iron data-model and tenancy rules. Use after writing a migration and before running it against the remote project. Read-only — it reports, it does not edit.
 tools: Read, Grep, Glob, Bash
 model: inherit
 ---

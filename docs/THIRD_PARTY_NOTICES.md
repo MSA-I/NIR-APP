@@ -1,6 +1,6 @@
-# Third-Party Notices — SupplyFlow
+# Third-Party Notices — InPlace
 
-SupplyFlow uses the open-source components listed below. Every entry's license was read from the
+InPlace uses the open-source components listed below. Every entry's license was read from the
 package's own `package.json` in `node_modules` at the resolved version, not from a registry summary.
 
 **Policy.** Only permissive licenses (MIT, ISC, BSD, Apache-2.0) are accepted. **GPL, AGPL,
@@ -69,7 +69,7 @@ Last verified: **2026-08-13**, against the resolved tree in `node_modules` after
   stopped publishing CE to npm. Apache-2.0. Because it is not a registry dependency, `npm audit`
   cannot report advisories for it; upgrades must be tracked manually against the SheetJS changelog.
 - **`react-router` 8.3.0** previously triggered `GHSA-qwww-vcr4-c8h2` for an RSC Actions runtime
-  SupplyFlow does not install. The quality gate retains a fail-closed exception for that advisory
+  InPlace does not install. The quality gate retains a fail-closed exception for that advisory
   alone if a registry reports it; the resolved tree currently returns zero vulnerabilities.
 - **`playwright-core`** is a project `devDependency` on purpose. Unlike `playwright`, it does not
   download browsers at install time — the gate launches the system-installed Chrome/Edge. It was

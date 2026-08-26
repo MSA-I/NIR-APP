@@ -2,7 +2,7 @@
 
 ## Noto Sans Hebrew
 
-SupplyFlow includes local Hebrew and Latin WOFF2 subsets of Noto Sans Hebrew, version 50 from
+InPlace includes local Hebrew and Latin WOFF2 subsets of Noto Sans Hebrew, version 50 from
 Google Fonts. Noto Sans Hebrew is licensed under the SIL Open Font License 1.1. The full license is
 stored at `public/fonts/noto/OFL.txt`.
 

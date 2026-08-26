@@ -1,4 +1,4 @@
--- SupplyFlow — neutral baseline seed.
+-- InPlace — neutral baseline seed.
 --
 -- A real tenant receives one organization and generic starter categories only. Demo business
 -- data lives under supabase/demo and is loaded explicitly. The tenant is addressed by an

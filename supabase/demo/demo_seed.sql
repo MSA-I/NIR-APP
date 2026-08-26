@@ -1,4 +1,4 @@
--- SupplyFlow — neutral demo tenant package.
+-- InPlace — neutral demo tenant package.
 --
 -- This is NOT what a real new tenant gets. It exists to *show the product working* —
 -- sales demos, and developing against realistic data. The neutral baseline a real

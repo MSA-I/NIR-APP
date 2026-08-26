@@ -1,4 +1,4 @@
--- SupplyFlow — tenant isolation audit.
+-- InPlace — tenant isolation audit.
 --
 -- Answers two questions about whatever is currently in the database:
 --   (A) how many rows each organization owns, per table;
