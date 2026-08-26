@@ -1,6 +1,6 @@
 # DEBT-REGISTER — חוב פתוח ומגבלות ידועות
 
-עודכן: 22.08.2026 — יישור הכרעות הבעלים מול חוב המימוש הפעיל.
+עודכן: 26.08.2026 — §66, מחיקת דייר נעצרת על שומרי החסינות.
 
 הקובץ מכיל רק חוב פעיל. סעיפים שנסגרו, תכניות קמפיין וראיות היסטוריות נשמרים ב־Git history.
 שאלה עסקית יושבת ב־`OPEN-DECISIONS.md`; כאן מתועדת רק המגבלה, הראיה והצעד הבא.
@@ -631,6 +631,94 @@ Hebrew and clears the field" — עם `Unable to find an element with the text: 
 - **הצעד הזול הבא:** בעבודת ה-browser, לאסוף את `docker logs` של `supabase_kong` ו-`supabase_rest`
   לארטיפקט `browser-evidence` **כשהיא נכשלת**. זה לא מתקן דבר, אבל הופך את הסבב הבא מניחוש
   למדידה — ובלי זה כל השערה על המקור היא ניחוש ראשון.
+
+### §66 — מחיקת דייר נעצרת על שומרי החסינות: הפורקן המשותף אינו עובד לדייר שהשתמש במוצר
+
+- **מצב (נמדד 26.08.2026, stack מקומי):** ‏`private.delete_tenant_rows` (‏`0196:474`) — הפורקן
+  המדורג שגוזר את סדר המחיקה מגרף המפתחות הזרים החי — **נעצר על טבלאות ראיות שחוסמות DELETE ללא
+  תנאי**. שתי עצירות הוכחו בהרצה, לא בקריאה:
+
+  ```
+  ERROR:  organization_external_egress_evidence_immutable
+  CONTEXT: SQL statement "delete from private.organization_external_egress_evidence where org_id = $1"
+           PL/pgSQL function private.delete_tenant_rows(uuid) line 57 at EXECUTE
+
+  ERROR:  invoice_three_way_evidence_immutable
+  CONTEXT: SQL statement "delete from public.invoice_three_way_approval_snapshots where org_id = $1"
+           PL/pgSQL function private.delete_tenant_rows(uuid) line 57 at EXECUTE
+  ```
+
+  שתיהן התקבלו מקריאה ל־`private.delete_tenant_rows('11111111-1111-4111-8111-111111111111')`
+  בתוך `begin … rollback`, על ארגון הדמו כפי שהוא (‏14 חשבוניות, ‏15 שורות egress evidence,
+  ‏9 snapshots של three-way).
+
+- **הצרכן האמיתי אינו הדמו.** אותה פונקציה בדיוק היא מה ש־`public.execute_organization_purge_batch`
+  (‏`0197:483`) מריץ כדי להסיר דייר בייצור, ומה שניקוי ההרשמות הנטושות (‏`0196:1030`) מריץ.
+  המשמעות: **מחיקת לקוח עובדת רק על חשבון שלא השתמש במוצר.** לקוח שעבד — ובפרט כל לקוח שהשתמש
+  בעוזר או בהתאמת שלושת הצדדים — ייעצר. זו אינה תקלה של קובץ fixture.
+
+- **למה אי אפשר פשוט לדלג על הטבלאות:** ‏`organization_external_egress_evidence` מחזיקה מפתח זר
+  ל־`organizations` עם `ON DELETE RESTRICT`, ו־`organization_export_access_events` מחזיקה כזה
+  ל־`organization_offboarding_requests`. שורה שנשארת = שורת הארגון אינה ניתנת למחיקה לעולם.
+
+- **הדפוס הנכון כבר קיים במערכת, והוא לא הושלם.** ‏`0175:347` נתן ליומן הביקורת חסינות זהה **עם
+  חלון purge מוצהר** — ‏`app.audit_purge = 'organization_teardown'`, ‏GUC מקומי־לטרנזקציה, בדיקת
+  שם ולא בדיקת תפקיד. ‏`delete_tenant_rows` מספק באותו אופן שני שומרים נוספים
+  (‏`app.p1_financial_writer`, ‏`app.organization_lifecycle_writer`, ‏`0196:495-510`). כלומר הכוונה
+  התכנונית ברורה: הפורקן מספק שומרים **בשם**, בלי להחליש אותם. מי שלא קיבל את החלון פשוט לא נכלל
+  ב־0196.
+
+- **היקף מדוד:** ‏**33 פונקציות שומר** נושאות `raise exception`, יורות על `BEFORE DELETE` בטבלה עם
+  `org_id`, ואין בגוף שלהן חלון purge ולא אחד משני ה־GUC שהפורקן מספק. שלוש מהן זוהו פרטנית
+  (‏`reject_organization_external_egress_evidence_change`,
+  ‏`reject_organization_export_access_event_change`, ‏`invoice_three_way_immutable_guard`);
+  היתר לא נבדקו אחת־אחת, ולכן **33 הוא מספר המועמדים, לא מספר החוסמים המוכחים** — חלקן שומרי
+  עמודות שאינם מסרבים ל־DELETE. השאילתה שמייצרת את הרשימה (ניתנת להרצה חוזרת):
+
+  ```sql
+  with del_trig as (
+    select distinct p.oid, n.nspname||'.'||p.proname as fn
+    from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace ns on ns.oid = c.relnamespace
+    join pg_proc p on p.oid = t.tgfoid
+    join pg_namespace n on n.oid = p.pronamespace
+    join pg_attribute a on a.attrelid = c.oid and a.attname = 'org_id'
+                       and a.attnum > 0 and not a.attisdropped
+    where not t.tgisinternal and ns.nspname in ('public','private')
+      and (t.tgtype & 8) > 0 and (t.tgtype & 2) > 0
+  )
+  select fn from del_trig
+  where position('organization_teardown' in pg_get_functiondef(oid)) = 0
+    and position('raise exception' in pg_get_functiondef(oid)) > 0
+    and position('p1_financial_writer' in pg_get_functiondef(oid)) = 0
+    and position('organization_lifecycle_writer' in pg_get_functiondef(oid)) = 0
+  order by 1;
+  ```
+
+- **מה נעשה ומה **לא** נעשה במכוון:** נכתבה מיגרציה שפותחת את החלון לשני שומרי ה־offboarding
+  בדפוס ההחלפה־בעוגן של `0200`, היא הוחלה מקומית ועברה את כל הטענות שלה — **ואז בוטלה, ומסד
+  הנתונים המקומי הוחזר לקדמותו** (‏`0` פונקציות נושאות `organization_teardown` מעבר ל־`0175`).
+  הסיבה: חלון חלקי אינו פותר דבר — הכשל עובר מיד לשומר הבא — ופתיחת הרשאת מחיקה על כלל טבלאות
+  הראיות היא הכרעת בעלים על משטח אבטחה, לא תיקון fixture.
+
+- **מה כן שונה בקוד:** ‏`supabase/demo/demo_reset.sql` הוחלף מרשימה ידנית (‏32 טבלאות מתוך
+  ‏132 הנושאות `org_id`, שנשברה על `invoice_three_way_overrides`) להאצלה לפורקן המשותף. הוא נכשל
+  היום — אבל **בהודעה שנוקבת בשם השומר שסירב ובדרך העוקפת**, במקום בשגיאת מפתח זר אקראית. כשהחלון
+  יושלם הוא יתחיל לעבוד ללא עריכה.
+
+- **הדרך שעובדת היום לטעינה מחדש של הדמו מקומית:** ‏`supabase db reset` ואז `npm run demo:restore`
+  (‏`scripts/restore-demo-local.ps1`). זהו גם מה שהשער עושה בעצמו בסוף ריצה מקומית.
+
+- **ראיה:** ‏`0196_abandoned_signup_cleanup.sql:474,495-510,1030` ·
+  ‏`0197_offboarding_purge_executor.sql:481-484` · ‏`0175_legal_entity_audit_scope.sql:335-360` ·
+  ‏`0103_tenant_offboarding_export.sql:577-588,689-700` · ‏`supabase/demo/demo_reset.sql`.
+
+- **הצעד הזול הבא (דורש הכרעת בעלים):** מיגרציה אחת שמוסיפה את אותו חלון `organization_teardown`
+  לכל שומר שמסרב ל־DELETE ללא תנאי — החלפה בעוגן פר־פונקציה כמו `0200`, ‏UPDATE נשאר מסורב ללא
+  תנאי — ולצידה **טענת שער חדשה: דייר זרוע מלא נמחק עד הסוף**. בלי הטענה הזו הפער חוזר בשקט עם
+  טבלת הראיות הבאה שתתווסף. השינוי נוגע במסד הנתונים ובמשטח הרשמי של החסינות, ולכן מחייב את
+  שורת „‏Migration / חוזה DB" במטריצת ה־rollout במלואה.
 
 ### §65 — ‏PR שהבסיס שלו אינו `main` מקבל **אפס** בדיקות
 
