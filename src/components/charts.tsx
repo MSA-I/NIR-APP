@@ -30,7 +30,16 @@ export const moneyShort = (v: number) => (Math.abs(v) >= 1000 ? fmtMoneyCompact(
  * tooltip props; renders nothing when inactive. Series color appears as a dot beside the name —
  * text itself stays in shell ink (text wears text tokens, not series colors).
  */
-type TooltipEntry = { name?: string; value?: number | string | null; color?: string; fill?: string };
+/** `payload` is the DATUM behind the hovered mark, which recharts attaches to every entry. It is
+ *  the only thing on the entry that identifies WHICH bucket is under the pointer — `value` cannot,
+ *  because two buckets are allowed to hold the same amount. */
+type TooltipEntry = {
+  name?: string;
+  value?: number | string | null;
+  color?: string;
+  fill?: string;
+  payload?: { key?: string };
+};
 
 export function DarkTooltip({ active, payload, label, formatter, colorFor }: {
   active?: boolean;
@@ -148,13 +157,11 @@ export function TrendSparkline({ points, label }: { points: DashboardWeeklyPoint
 
 export type BarPoint = { key: string; label: string; total: number };
 
-/** Vertical bar chart, rank-colored (T7.3k, owner on image #24): the HIGHEST bucket wears the
- *  darkest ramp step, the LOWEST positive bucket the palest, and everything between the middle
- *  one. Named owner exception to "color follows the entity, never its rank" — here the color IS
- *  the ranking, restated by the ARIA text and the tooltip values. The three steps are one hue
- *  (series-1's) at three lightnesses since 25.08.2026: the ranking still reads, and the chart
- *  no longer speaks a different colour language than the donut beside it. Thin, rounded marks;
- *  empty → emptyMessage, not empty axes. */
+/** Vertical bar chart, one categorical colour per bucket (owner, 26.08.2026 — the bars are to
+ *  wear "the colours of the month's purchase mix", i.e. the donut's palette). This REPLACES the
+ *  rank ramp of T7.3k/25.08: the fill no longer says which month was the biggest, the bar's own
+ *  height does, and the tooltip and ARIA sentence carry the figures. See `bucketFill` for the
+ *  trade written out. Thin, rounded marks; empty → emptyMessage, not empty axes. */
 export function SpendBarChart({
   points, ariaLabel, emptyMessage, className = 'mt-2 h-32 sm:h-48', maxBarSize = 32, valueFormatter = fmtMoneyExact,
 }: {
@@ -166,15 +173,22 @@ export function SpendBarChart({
   valueFormatter?: (v: number) => string;
 }) {
   const t = chartTheme();
-  const positive = points.filter((p) => p.total > 0).map((p) => p.total);
-  const max = positive.length ? Math.max(...positive) : 0;
-  const min = positive.length ? Math.min(...positive) : 0;
-  const rankFill = (total: number) => {
-    if (total <= 0) return t.barLow;
-    if (total === max) return t.barHigh;      // deep oceanic — the highest
-    if (total === min) return t.barLow;       // pale oceanic — the lowest
-    return t.bar;                             // the primary series hue — the middle
-  };
+  /* One bucket, one colour, taken from the SAME categorical palette the donut beside it uses
+     (owner report 26.08.2026: "שהצבע בדאשבורד באזור של המגמות בהוצאות רכש שיהיה כמו הצבעים של
+     תמהיל הרכש החודש"). The colour is keyed to the bucket's POSITION, so a month keeps its
+     colour while the window holds and two neighbouring bars never land on the same hue.
+
+     What this trades away, stated rather than discovered: the three-step ramp that used to live
+     here painted the highest month deep and the lowest pale, so the fill itself ranked them. It
+     no longer does. The ranking was never the only carrier — the bar HEIGHT is the magnitude, and
+     the tooltip and the ARIA sentence both still read the exact figures — but a reader who used
+     to get rank from the fill now gets identity from it instead. That is the owner's call and it
+     is the same call the donut already makes.
+
+     `barLow` stays for a zero/negative bucket: nothing measured is not a category, and giving it
+     a palette hue would claim it is one. */
+  const bucketFill = (total: number, index: number) =>
+    (total <= 0 ? t.barLow : t.categorical[index % t.categorical.length]);
   return (
     <ChartViewport className={className} label={ariaLabel}>
       {(animation) => points.length ? (
@@ -185,11 +199,17 @@ export function SpendBarChart({
             <CartesianGrid vertical={false} stroke={t.grid} />
             <XAxis dataKey="key" tick={{ fontSize: 12, fill: t.tick }} axisLine={false} tickLine={false} />
             <YAxis hide />
+            {/* The tooltip swatch is looked up by the bucket's KEY, not by its value: two months
+                can hold the same amount, and matching on the number would have painted the swatch
+                of whichever one recharts happened to find first. */}
             <Tooltip cursor={false} isAnimationActive={animation.active}
-              content={<DarkTooltip formatter={valueFormatter} colorFor={(entry) => rankFill(Number(entry.value ?? 0))} />} />
+              content={<DarkTooltip formatter={valueFormatter} colorFor={(entry) => {
+                const index = points.findIndex((p) => p.key === entry.payload?.key);
+                return bucketFill(Number(entry.value ?? 0), index < 0 ? 0 : index);
+              }} />} />
             <Bar dataKey="total" name="סה״כ" radius={[8, 8, 0, 0]} maxBarSize={maxBarSize}
               isAnimationActive={animation.active} animationDuration={550} animationEasing="ease-out" onAnimationEnd={animation.finish}>
-              {points.map((p) => <Cell key={p.key} fill={rankFill(p.total)} />)}
+              {points.map((p, index) => <Cell key={p.key} fill={bucketFill(p.total, index)} />)}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
@@ -318,12 +338,52 @@ export type LinePoint = Record<string, string | number | null>;
  *  with a hairline to spare, and nothing wider is used — every extra pixel drags a label further
  *  from the line it names. */
 const END_LABEL_GAP = 18;
-/** Top of the plot area: `margin.top` is 8, and a 12px baseline puts the glyph fully inside it. */
-const END_LABEL_MIN_Y = 12;
+/** Radius of the terminal dot, and the gap between it and the first glyph of the name. */
+const END_DOT_R = 4;
+
+type EndPoint = { x: number; y: number } | null;
+
+/**
+ * Where the series names go: at their own dot, and level with it.
+ *
+ * Owner report 26.08.2026 — the line should end in a small dot and the words "רכש" / "תשלומים"
+ * should sit at those dots' height, so that a dot moving takes its word with it. That is the
+ * whole rule, and for any pair of lines further apart than one label box it is the entire
+ * function: `y` in, `y` out.
+ *
+ * The exception is two lines ending on nearly the same value — which is exactly the shape this
+ * chart has whenever purchases and payments converge, so it is the common case and not a corner.
+ * There the two boxes would sit on top of each other and something has to give, and WHICH WAY IT
+ * GIVES IS NOT A FREE CHOICE: below the lowest line end is the date axis, so a name nudged down
+ * lands on a tick (measured on /dashboard — both series finish at zero, and "תשלומים" came to
+ * rest across "19/07"). So a colliding stack opens UPWARDS. The lowest name keeps its dot's exact
+ * height and each one above it rises only as far as the one below forces. Nothing is ever drawn
+ * below a dot, every name stays in its line's vertical order, and the whole arrangement still
+ * travels with the data.
+ *
+ * An earlier version of this spread the pair symmetrically about its midpoint and then slid the
+ * block clear of the axis. The slide cancelled the symmetry every time — for two series it always
+ * bites — so the symmetry was arithmetic nobody could observe. This is the same output, said once.
+ *
+ * Two is what `comparisonSeries()` produces and what the component documents; the loop is written
+ * for n anyway because writing it for two would have cost the same and read worse.
+ */
+export function endLabels(points: readonly EndPoint[]) {
+  const placed = points
+    .map((point, index) => (point ? { index, x: point.x, y: point.y } : null))
+    .filter((entry): entry is { index: number; x: number; y: number } => entry !== null)
+    .sort((a, b) => a.y - b.y);
+  for (let i = placed.length - 2; i >= 0; i -= 1) {
+    const ceiling = placed[i + 1].y - END_LABEL_GAP;
+    if (placed[i].y > ceiling) placed[i].y = ceiling;
+  }
+  return placed;
+}
 
 /** 1–2 smooth layered areas over a shared x-axis — the reference's "Sale Activity" rendering
- *  (T7.2): NO grid, NO dots, a soft gradient wash under each line (~28% at the stroke fading
- *  to 0; `dash` series draw dashed per T7.3g), and the series NAME as a small ink label at the line's end —
+ *  (T7.2): NO grid, no dots ALONG the line, a soft gradient wash under each line (~28% at the
+ *  stroke fading to 0; `dash` series draw dashed per T7.3g), and the series NAME beside a
+ *  terminal dot at the line's end, level with it (owner 26.08.2026, see `endLabels`) —
  *  identity never rests on color alone, and no legend box is needed. Empty (no non-null point) →
  *  emptyMessage; with the fully-fetched-window zero policy, callers pass [] when the whole window
  *  has no activity so two flat zero lines never fabricate a chart. `legend` kept for callers that
@@ -345,13 +405,8 @@ export function ComparisonLineChart({
   const gradientBase = `cmpArea${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const hasData = points.length > 0 && points.some((point) => series.some((s) => point[s.key] != null));
   const lastIndex = points.length - 1;
-  // Recharts renders each series' LabelList in series order, so by the time series N draws its end
-  // label the earlier ones have already recorded theirs — which is all it takes to step a colliding
-  // one clear. This replaces a fixed `- index * 14` offset that only ever helped when two lines
-  // ended on the SAME value, and actively caused the collision when they ended ~14px apart: the
-  // offset cancelled the real separation exactly. Measured on /dashboard at 390px before the fix —
-  // "רכש" and "תשלומים" 3px apart with intersecting boxes.
-  const endLabelY = useRef<(number | null)[]>([]);
+  // Where each series' line ENDS, filled in as recharts renders the series in order.
+  const endPointY = useRef<EndPoint[]>([]);
   return (
     <>
       {legend && (
@@ -386,28 +441,42 @@ export function ComparisonLineChart({
                   strokeDasharray={s.dash ? '7 5' : undefined}
                   fill={`url(#${gradientBase}${index})`} dot={false} connectNulls={false}
                   isAnimationActive={animation.active} animationDuration={550} animationEasing="ease-out" onAnimationEnd={animation.finish}>
-                  {/* The series name rides the END of its own line, in ink (never the series hue).
-                      A label only moves off its own line when an earlier one is already sitting
-                      there, and it moves in the direction it was already heading, so the lower
-                      line keeps the lower label. */}
+                  {/* The line ENDS in a dot, and its name sits at the dot's height — one node, so
+                      the two cannot drift apart: both read the same `y`, which is the y recharts
+                      computed for the series' last point. Move the data and both move together.
+
+                      The dot is the series hue with a surface-coloured collar, the same treatment
+                      the donut's 2px gaps use, so two dots that land on top of each other still
+                      read as two. The NAME stays chart ink and never takes the hue: identity is
+                      the word, colour only makes finding it faster.
+
+                      The one case where the name leaves its dot is two dots closer than a label
+                      box. Then BOTH names step half a box from their own dot — the upper one up,
+                      the lower one down — which keeps each name attached to the line it belongs
+                      to. The old rule moved only the later series and left it at a height its
+                      line never reached. `dominantBaseline` is what makes "same height" true in
+                      pixels rather than approximately: without it the text hangs from its
+                      baseline and sits ~4px low. */}
                   <LabelList dataKey={s.key} content={({ x, y, index: pointIndex }) => {
                     if (pointIndex !== lastIndex) return null;
-                    if (typeof x !== 'number' || typeof y !== 'number') {
-                      endLabelY.current[index] = null;
-                      return null;
-                    }
-                    let labelY = y + 4;
-                    for (let earlier = 0; earlier < index; earlier += 1) {
-                      const taken = endLabelY.current[earlier];
-                      if (taken == null || Math.abs(labelY - taken) >= END_LABEL_GAP) continue;
-                      // Upward by preference: below the last line is the x-axis tick row, and a
-                      // label pushed down lands on the dates. Downward only when up would leave
-                      // the plot, which needs both lines to end hard against the top.
-                      const up = taken - END_LABEL_GAP;
-                      labelY = up >= END_LABEL_MIN_Y ? up : taken + END_LABEL_GAP;
-                    }
-                    endLabelY.current[index] = labelY;
-                    return <text x={x + 8} y={labelY} fontSize={12} fontWeight={500} fill={t.label} textAnchor="start">{s.name}</text>;
+                    const end = typeof x === 'number' && typeof y === 'number' ? { x, y } : null;
+                    endPointY.current[index] = end;
+                    // Every dot is drawn by its own series. The NAMES are all drawn from the last
+                    // series' turn, because that is the first moment in the pass where every end
+                    // point is known — and knowing all of them is what lets a colliding pair split
+                    // symmetrically instead of the later one alone being pushed off its line.
+                    const names = index === series.length - 1 ? endLabels(endPointY.current) : [];
+                    return (
+                      <g>
+                        {end && <circle cx={end.x} cy={end.y} r={END_DOT_R} fill={s.color} stroke={t.surface} strokeWidth={2} />}
+                        {names.map((label) => (
+                          <text key={series[label.index].key} x={label.x + END_DOT_R + 6} y={label.y}
+                            dominantBaseline="middle" fontSize={12} fontWeight={500} fill={t.label} textAnchor="start">
+                            {series[label.index].name}
+                          </text>
+                        ))}
+                      </g>
+                    );
                   }} />
                 </Area>
               ))}

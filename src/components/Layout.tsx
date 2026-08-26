@@ -1,5 +1,5 @@
 import { Link, Outlet, useNavigate, useLocation, useSearchParams } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, Menu, X, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight, ScrollText } from 'lucide-react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, X, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight, ScrollText } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
@@ -873,9 +873,31 @@ export default function Layout() {
             counted `size-[44px]`, `min-h-11 min-w-11`, `min-h-[44px] min-w-[44px]` and `size-11`
             in this one shell, all meaning the same thing. */}
         <button type="button"
-          className="btn-ghost btn-icon rounded-full"
+          className="btn-ghost btn-icon group rounded-full"
           onClick={openMobileMenu} aria-label="פתיחת תפריט" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
-          <Menu size={ICON.xl} aria-hidden="true" />
+          {/* The three lines fold into an X while the drawer comes in (owner, 26.08.2026, with the
+              reference component). It is drawn here rather than taken from lucide because lucide
+              ships `Menu` and `X` as two finished icons, and the thing being asked for is the
+              TRANSITION between them — three strokes that rotate and meet, which needs the three
+              strokes to be the same three nodes in both states.
+
+              The state comes from `aria-expanded` on the button, not from a second prop: the
+              attribute already has to be correct for assistive tech, so binding the animation to
+              it makes a wrong icon and a wrong announcement the same bug instead of two.
+              `group-aria-expanded:*` is what reads it, so the button carries `group`.
+
+              The two outer lines translate 7px out and rotate 315°/135° back through centre; the
+              middle one only rotates 45° and lands under the first, which is why its easing
+              overshoots more (the reference's own numbers, kept). `transition-*` and not an
+              animation, so the reverse plays for free on close. Reduced motion is handled with
+              every other transition in index.css's `prefers-reduced-motion` block. */}
+          <svg viewBox="0 0 24 24" width={ICON.xl} height={ICON.xl} fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            className="menu-toggle pointer-events-none" aria-hidden="true">
+            <path d="M4 12L20 12" className="origin-center -translate-y-[7px] transition-all duration-300 [transition-timing-function:cubic-bezier(.5,.85,.25,1.1)] group-aria-expanded:translate-y-0 group-aria-expanded:rotate-[315deg]" />
+            <path d="M4 12H20" className="origin-center transition-all duration-300 [transition-timing-function:cubic-bezier(.5,.85,.25,1.8)] group-aria-expanded:rotate-45" />
+            <path d="M4 12H20" className="origin-center translate-y-[7px] transition-all duration-300 [transition-timing-function:cubic-bezier(.5,.85,.25,1.1)] group-aria-expanded:translate-y-0 group-aria-expanded:rotate-[135deg]" />
+          </svg>
         </button>
         {/* `h-11`, not `min-h-11`: the row's contents CHANGE as the page scrolls, and a bar that
             grows under a moving finger is worse than either state on its own. A fixed 44px is the
@@ -977,13 +999,19 @@ export default function Layout() {
           scrim is a half-opaque sheet over all of it. The panel inside is already skipped by the
           capture because it is `role="dialog"`; the scrim is not, and without this a note sent
           from the menu would arrive as a picture of the screen behind a grey wash. */}
+      {/* `drawer-scrim` / `drawer-enter` (26.08.2026). Not decoration: the drawer covers the whole
+          viewport INCLUDING the trigger, so with an instant mount the icon's fold to an X happened
+          behind an opaque sheet and nobody ever saw it. 280ms of travel is the window in which the
+          animation the owner asked for is actually on screen. Entry only — React unmounts the
+          subtree on close, so there is no exit to animate, and adding a presence library to buy
+          one is not worth a frame of drawer. */}
       {mobileOpen && (
-        <div data-no-capture className="lg:hidden fixed inset-0 z-50 bg-shell/50 no-print" onClick={() => closeMobileMenu()}>
+        <div data-no-capture className="drawer-scrim lg:hidden fixed inset-0 z-50 bg-shell/50 no-print" onClick={() => closeMobileMenu()}>
           {/* T7.3k fix (owner, image #29): OPAQUE light gray — translucency here sat over the
               dark backdrop and the page behind it, and the blend read as a murky blue tint.
               The top bar can stay translucent because only the light canvas scrolls under it. */}
           <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label="תפריט ראשי"
-            tabIndex={-1} className="phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-topbar border-e border-line-soft focus:outline-none" onClick={(e) => e.stopPropagation()}>
+            tabIndex={-1} className="drawer-enter phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-topbar border-e border-line-soft focus:outline-none" onClick={(e) => e.stopPropagation()}>
             {/* Positioned INSIDE the safe-area padding, not on top of it. `absolute top-2 end-2`
                 measured from the panel's border box, so on a notched device the drawer's
                 `padding-block-start: env(safe-area-inset-top)` slid the list down and left the

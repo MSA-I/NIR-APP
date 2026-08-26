@@ -27,7 +27,15 @@
 
 ## 03 — צבעי הלוגו
 
-- **Primary symbol / dark tile** — `#0D222F`.
+- **Primary symbol — הבלוק העליון** — `#0D222F`.
+- **Primary symbol — הבלוק התחתון** — `#003F47`, הוא `--color-action` (Oceanic), צבע המותג של
+  המוצר. הכרעת בעלים 26.08.2026: „בלוגו לשנות שצבע אחד של חלק יהיה בצבע כהה והחלק התחתון יהיה
+  בצבע הכחול של האפליקציה”. חל על `inplace-symbol.svg`, ‏`public/favicon.svg` ועל הסמל שבתוך
+  ‏`inplace-lockup.svg` — כלומר על כל מקום שבו הסמל מופיע על משטח בהיר.
+  **מה לא השתנה:** ‏`inplace-symbol-paper.svg` / `inplace-lockup-paper.svg` נשארים paper-white
+  לחלוטין — הם נועדו למשטח כהה, ושם דו-גוניות בשני צבעים כהים אינה נראית; ‏`inplace-app-icon`
+  ואייקוני ה-PNG נשארים סמל paper-white על אריח כהה, וזהו נכס אחר עם תפקיד אחר (מסך הבית).
+- **Dark tile** — `#0D222F`.
 - **Accent variation** — `#05394F`.
 - **Wordmark / muted variation** — `#3E3E40`.
 - **Paper / inverse mark** — `#FBFBFB`.

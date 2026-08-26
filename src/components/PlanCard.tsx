@@ -122,10 +122,30 @@ export const planEmphasis = (planKey: string): string | null => PLAN_EMPHASIS[pl
  */
 export const HEADLINE_QUOTA_KEY = 'documents.monthly';
 
+/**
+ * WHICH OF THE TWO ARRANGEMENTS THIS RUNG IS DRAWN IN (owner ruling, 26.08.2026 — later the same
+ * day as the list ruling below, and this is what it changed).
+ *
+ * The ruling that produced `PLAN_LIST` rejected a grid, and its reasons are still on record in
+ * that constant. The owner then gave a reference image and settled the two questions the first
+ * grid had got wrong: **grid on the wide viewport, one rung per line on the phone**, and **only on
+ * `/settings/subscription`** — the public `/pricing` ladder stays a list, because it is a
+ * comparison rather than a place you act.
+ *
+ * `'row'` is the four blocks side by side from `lg`. `'grid'` keeps the STACKED arrangement at
+ * every width — which is exactly what the row already becomes below `lg`, so the phone layout the
+ * owner asked to keep is the layout that was already there and no second design exists for it.
+ * The only thing `'grid'` adds is what a column needs and a row does not: the card fills its
+ * track's height and the action sits at the bottom, so the buttons across five cards of different
+ * text lengths land on one line.
+ */
+export type PlanCardLayout = 'row' | 'grid';
+
 export function PlanCard({
   planKey, label, tierClass, current = false, chips = [],
-  standing, figure, figureTone = 'anchor', figureNote, action, features,
+  standing, figure, figureTone = 'anchor', figureNote, action, features, layout = 'row',
 }: {
+  layout?: PlanCardLayout;
   /** Emitted as `data-plan`, which is how both spec files and the browser gate address a rung. */
   planKey: string;
   label: string;
@@ -214,14 +234,16 @@ export function PlanCard({
          `overflow` clips descendants, never the element's own box-shadow or outline. */
       clip
       data-plan={planKey}
+      data-layout={layout}
       data-state={current ? 'current' : featured ? 'featured' : 'default'}
-      className={`relative flex flex-col gap-4 p-5 sm:p-6 lg:flex-row lg:items-center lg:gap-8 ${
-        featured ? 'z-10 bg-tier-onyx shadow-dialog' : current ? 'z-10 bg-surface-selected' : ''
+      className={`relative flex flex-col gap-4 p-5 sm:p-6 ${
+        layout === 'grid' ? 'h-full' : 'lg:flex-row lg:items-center lg:gap-8'
+      } ${featured ? 'z-10 bg-tier-onyx shadow-dialog' : current ? 'z-10 bg-surface-selected' : ''
       } ${current ? tone.currentOutline : ''}`}
     >
       {/* 1 — WHICH RUNG. Fixed width from `lg` so the marks form a column the eye can run down;
              that column IS the ladder. Below `lg` it is simply the first block in the stack. */}
-      <div className="min-w-0 lg:w-60 lg:shrink-0">
+      <div className={`min-w-0 ${layout === 'grid' ? '' : 'lg:w-60 lg:shrink-0'}`}>
         <div className="flex flex-wrap items-center gap-2">
           {tierClass
             // The header's chip at row scale (`.plan-badge-lg`). On the inverted fill it gains a
@@ -244,7 +266,8 @@ export function PlanCard({
              `NumberFlow` is exactly that — a figure that rolls up in a financial system reads as a
              slot machine. */}
       <p data-testid="plan-figure"
-        className="flex flex-wrap items-baseline gap-x-2 gap-y-1 lg:w-56 lg:shrink-0">
+        className={`flex flex-wrap items-baseline gap-x-2 gap-y-1 ${
+          layout === 'grid' ? '' : 'lg:w-56 lg:shrink-0'}`}>
         <span className={figureClass}>{figure}</span>
         {figureNote && <span className={`text-sm ${tone.muted}`}>{figureNote}</span>}
       </p>
@@ -257,7 +280,11 @@ export function PlanCard({
              what you get. The slack goes to the margin before the action instead, where an empty
              gap is what separates a statement from a control. */}
       {features.length > 0 && (
-        <ul className="flex min-w-0 flex-wrap gap-x-6 gap-y-2">
+        /* In a column the entitlements are a LIST, one per line, which is the reference's own
+           check-glyph block and what the extra vertical room is for. In a row they wrap inline
+           beside the price — see the note above about a single entitlement marooned in 300px. */
+        <ul className={`flex min-w-0 gap-x-6 gap-y-2 ${
+          layout === 'grid' ? 'flex-col' : 'flex-wrap'}`}>
           {features.map((row) => (
             <li key={row.key} className={`flex items-start gap-2 text-sm ${tone.body}`}>
               {row.affirmative
@@ -273,7 +300,12 @@ export function PlanCard({
              control belongs on a line that is read start-to-end. A rung with no action passes a
              spacer of the button's own height so the rows keep an even rhythm rather than one of
              them sitting 44px shorter than its neighbours. */}
-      {action && <div className="lg:ms-auto lg:w-52 lg:shrink-0">{action}</div>}
+      {/* `mt-auto` in a column is the counterpart of `ms-auto` in a row: the same rule — the
+          control sits at the far end of the reading direction — and it is what puts five buttons
+          on one line when the cards above them are different heights. */}
+      {action && (
+        <div className={layout === 'grid' ? 'mt-auto' : 'lg:ms-auto lg:w-52 lg:shrink-0'}>{action}</div>
+      )}
     </Card>
   );
 }
@@ -287,6 +319,25 @@ export function PlanCard({
  * its own fill and elevation, stacked.
  */
 export const PLAN_LIST = 'flex flex-col gap-3';
+
+/**
+ * THE SAME LADDER AS COLUMNS, for `/settings/subscription` only (owner ruling, 26.08.2026, with a
+ * reference image: «רשת באתר המותאם · שורה במובייל · רק מה שבאפליקציה בהגדרות»).
+ *
+ * ONE COLUMN UNTIL `lg`, which is the phone half of the ruling and costs nothing: a one-column
+ * grid IS the stacked list, so there is no second layout to keep in step — the same cards, the
+ * same order, the same gap.
+ *
+ * `xl:grid-cols-5` and not `lg:`, because the first grid's real defect was arithmetic and it is
+ * still true: five tracks need room. At `lg` (64rem) five columns are ~11rem each and every chip
+ * wraps; the ladder therefore goes 1 → 2 → 5 and skips the widths in between, and the page's own
+ * container was widened to `max-w-7xl` so that `xl` actually has 5 × ~14rem to give.
+ *
+ * `items-stretch` (grid's default, stated because it is load-bearing) plus `h-full` on the card is
+ * what lets `mt-auto` line the five actions up: without the stretch each card is only as tall as
+ * its own text and the buttons stagger.
+ */
+export const PLAN_GRID = 'grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5 xl:gap-4';
 
 /**
  * THE LADDER'S OWN LOADING SHAPE, for BOTH surfaces that draw the ladder.
@@ -311,7 +362,7 @@ export const PLAN_LIST = 'flex flex-col gap-3';
  *     painted for real rather than faked.
  */
 export function PlanLadderSkeleton({
-  rows = 5, action = true, heading = false, testId,
+  rows = 5, action = true, heading = false, testId, layout = 'row',
 }: {
   rows?: number;
   /** Draw the action-slot bar. False on `/pricing`, whose cards carry no action. */
@@ -319,24 +370,31 @@ export function PlanLadderSkeleton({
   /** Stand in for a section title INSIDE the region. The page `h1` is never faked. */
   heading?: boolean;
   testId?: string;
+  /** Must match the layout the caller then renders, or the page jumps when the data lands. */
+  layout?: PlanCardLayout;
 }) {
+  const grid = layout === 'grid';
   return (
     <div role="status" aria-busy="true" className="space-y-4" data-testid={testId}>
       {/* One accessible name for the whole region — a screen reader meets "טוען", not a wall of
           empty boxes. Every `Skeleton` below is `aria-hidden`. */}
       <span className="sr-only">טוען</span>
       {heading && <Skeleton className="h-6 w-28" />}
-      <ul className={PLAN_LIST}>
+      <ul className={grid ? PLAN_GRID : PLAN_LIST}>
         {Array.from({ length: rows }, (_, index) => (
           <li key={index}
-            className="card flex flex-col gap-4 p-5 sm:p-6 lg:flex-row lg:items-center lg:gap-8">
-            <div className="space-y-2 lg:w-60 lg:shrink-0">
+            className={`card flex flex-col gap-4 p-5 sm:p-6 ${
+              grid ? 'h-full' : 'lg:flex-row lg:items-center lg:gap-8'}`}>
+            <div className={`space-y-2 ${grid ? '' : 'lg:w-60 lg:shrink-0'}`}>
               <Skeleton className="h-7 w-20 rounded-full" />
               <Skeleton className="h-4 w-28" />
             </div>
-            <Skeleton className="h-9 w-24 lg:shrink-0" />
-            <Skeleton className="h-4 w-40 flex-1" />
-            {action && <Skeleton className="h-11 w-full rounded-lg lg:w-52 lg:shrink-0" />}
+            <Skeleton className={`h-9 w-24 ${grid ? '' : 'lg:shrink-0'}`} />
+            <Skeleton className={grid ? 'h-4 w-40' : 'h-4 w-40 flex-1'} />
+            {action && (
+              <Skeleton className={`h-11 w-full rounded-lg ${
+                grid ? 'mt-auto' : 'lg:w-52 lg:shrink-0'}`} />
+            )}
           </li>
         ))}
       </ul>

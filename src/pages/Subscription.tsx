@@ -24,11 +24,13 @@ import { PlanLimitNote } from '../components/PlanLimitNote';
  */
 export default function Subscription() {
   return (
-    /* `max-w-6xl`, and the width is the ladder's, not the prose's. At `4xl` five plan cards were
+    /* `max-w-7xl`, and the width is the ladder's, not the prose's. At `4xl` five plan cards were
        178px wide on a laptop — narrower than the button inside them — which is half of why they
-       read as boxes rather than as products. The state card and the usage note above still hold
+       read as boxes rather than as products. `6xl` (72rem) was enough while the ladder was a
+       column of rows; the grid of 26.08.2026 needs five tracks side by side, and 80rem is what
+       gives each of them ~14rem after the gaps. The state card and the usage note above still hold
        their own measure through their internal `card-pad`, so nothing else stretches. */
-    <div className="max-w-6xl space-y-5">
+    <div className="max-w-7xl space-y-5">
       {/* No `meta`: `PageHeader` already prints the route's own description from the shared
           catalogue, and a second line saying the same thing in different words was exactly the
           cramped duplicated prose this package went out to remove. */}
