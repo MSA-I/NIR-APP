@@ -59,10 +59,51 @@ function useAssistantDesktopMode(): boolean {
   return desktop;
 }
 
+/**
+ * The openings each role is offered — six per role since 26.08.2026 (owner: "צריך להוסיף יותר
+ * הצעות מבחינת השאלות"). Two was not a menu, it was a pair of samples, and a person who wanted
+ * neither of them was left facing an empty box with no idea what this surface can be asked.
+ *
+ * EVERY ENTRY IS CHECKED AGAINST THE TOOL THAT WOULD ANSWER IT, and against that tool's
+ * `requiredRoles` in `supabase/functions/assistant/tools/`. That check is the reason the
+ * accountant's list changes rather than only growing: it used to offer "כמה כסף ממתין לזיכוי?",
+ * which is `get_open_credits`, and that tool is `["owner", "office"]`. The panel was handing the
+ * accountant a question the server would refuse — a suggested dead end, which is worse than no
+ * suggestion, because the person reasonably reads the refusal as the assistant being broken.
+ *
+ * The mapping, so the next edit can be checked the same way:
+ *   get_open_alerts, get_purchase_metrics, explain_invoice_block, find_entity, get_product_help,
+ *   compare_order_receipt_invoice   -> all three roles
+ *   get_business_summary, get_open_credits, get_monthly_price_rises, get_payment_exposure,
+ *   get_supplier_performance, get_inventory_risk, get_orders_awaiting_confirmation,
+ *   get_purchase_comparison, get_dashboard_snapshot, draft_supplier_reminder -> owner + office
+ *   get_unmatched_bank_transactions -> owner + accountant
+ */
 const ROLE_EXAMPLES = {
-  owner: ['כמה כסף ממתין לזיכוי?', 'כמה חשבוניות נקלטו ב־7 הימים האחרונים?'],
-  office: ['למה החשבונית חסומה?', 'אילו הזמנות נשלחו ולא אושרו?'],
-  accountant: ['אילו תנועות בנק אינן מותאמות?', 'כמה כסף ממתין לזיכוי?'],
+  owner: [
+    'מה דורש טיפול עכשיו?',
+    'איך נראית תמונת המצב העסקית החודש?',
+    'כמה כסף ממתין לזיכוי?',
+    'אילו מוצרים התייקרו החודש?',
+    'מה החשיפה לתשלומים בשבוע הקרוב?',
+    'אילו תנועות בנק אינן מותאמות?',
+  ],
+  office: [
+    'מה דורש טיפול עכשיו?',
+    'למה החשבונית חסומה?',
+    'אילו הזמנות נשלחו ולא אושרו?',
+    'אילו מוצרים התייקרו החודש?',
+    'אילו ספקים מאחרים באספקה?',
+    'אילו פריטים במלאי בסיכון?',
+  ],
+  accountant: [
+    'אילו תנועות בנק אינן מותאמות?',
+    'מה דורש טיפול עכשיו?',
+    'למה החשבונית חסומה?',
+    'כמה חשבוניות נקלטו ב־7 הימים האחרונים?',
+    'האם ההזמנה, הקבלה והחשבונית מתאימות זו לזו?',
+    'איפה רואים חשבוניות שממתינות לאישור?',
+  ],
 } as const;
 
 function needsFallback(rawError: string): boolean {
@@ -101,25 +142,29 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
 
-  if (loading) {
-    return (
-      <div role="status" aria-busy="true" className="space-y-2">
-        <span className="sr-only">טוען שיחות קודמות</span>
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-4 w-2/3" />
-      </div>
-    );
-  }
+  /* The heading is OUTSIDE the loading branch (owner report 26.08.2026, the assistant's bugs).
+     Only the sighted reader was left without it: the loading state announced "טוען שיחות קודמות"
+     to assistive tech and drew two anonymous grey bars for everyone else, hanging under the
+     example chips with nothing saying what they were. They read as a rendering failure — which
+     on a surface whose whole promise is "what you see was measured" is the worst possible thing
+     for an empty rectangle to imply. Same heading, both states, so the bars are captioned. */
   if (error) return <ErrorNote message={error} />;
-  if (!data || data.length === 0) return null;
+  if (!loading && (!data || data.length === 0)) return null;
 
   return (
     <div>
       <h3 className="mb-1 text-xs font-medium text-ink-muted">בדיקות קודמות</h3>
+      {loading && (
+        <div role="status" aria-busy="true" className="space-y-2 py-1">
+          <span className="sr-only">טוען שיחות קודמות</span>
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
+      )}
       {openError && <ErrorNote message={openError} />}
       {deleteError && <ErrorNote message={deleteError} />}
       <ul className="divide-y divide-line-soft">
-        {data.map((conversation) => (
+        {(data ?? []).map((conversation) => (
           <li key={conversation.id} className="flex min-h-11 items-center gap-2 py-1">
             <button
               type="button"
@@ -251,7 +296,14 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
             would map to a second `banner` landmark on the page. */}
         <div className="shrink-0 border-b border-line-soft bg-surface px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-action-wash text-action" aria-hidden="true">
+            {/* SOLID oceanic, not the pale wash it wore before (owner report 26.08.2026: the
+                assistant "carries colours from the old palette"). The wash is a cool
+                near-white — `action-wash` is oklch(96.6% .011 195) — and this panel is painted
+                on warm cream paper (`surface-sunken`, hue 80). Two near-whites from opposite
+                sides of neutral in one 40px square is what read as a leftover from another
+                palette: too little chroma to be a brand mark, enough to fight the paper. The
+                brand keeps its one place in the header by being the brand, at full strength. */}
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-action text-on-solid" aria-hidden="true">
               <Sparkles size={ICON.lg} />
             </span>
             <h2 id={titleId} className="min-w-0 flex-1 truncate font-semibold text-ink">העוזר של {APP_NAME}</h2>
@@ -375,7 +427,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
           {nothingAskedYet && (
             <section aria-labelledby={`${titleId}-start`} className="page-fade mx-auto w-full max-w-sm">
               <div className="flex flex-col items-center pt-2 text-center">
-                <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-action-wash text-action" aria-hidden="true">
+                <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-action text-on-solid" aria-hidden="true">
                   <Sparkles size={ICON.xl} />
                 </span>
                 <h3 id={`${titleId}-start`} className="section-title mt-3">מה תרצה לבדוק?</h3>
@@ -384,12 +436,16 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
               {examples.length > 0 && (
                 <>
                   <p className="mt-6 text-xs font-medium text-ink-muted">אפשר להתחיל מדוגמה שמתאימה להרשאות שלך.</p>
+                  {/* Paper on paper, not a wash. Six of these stacked in the old cool tint turned
+                      the empty state into a block of colour that belonged to no other screen; as
+                      cards on the sunken band they read the way every other list of choices in
+                      the product reads, and the hover is the app's one neutral pointer step. */}
                   <div className="mt-2 flex flex-col gap-2">
                     {examples.map((example) => (
                       <button
                         key={example}
                         type="button"
-                        className="min-h-11 rounded-2xl bg-action-wash px-4 text-start text-sm font-medium text-action-on-soft transition-colors hover:bg-action-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                        className="row-hover min-h-11 rounded-2xl border border-line-soft bg-surface px-4 text-start text-sm font-medium text-ink-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                         onClick={() => setQuestion(example)}
                       >
                         {example}
@@ -424,7 +480,12 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
         >
           <div className="relative">
             <textarea
-              className="input resize-none rounded-3xl pe-14"
+              /* `rounded-2xl`, not `3xl`: measured, not tasted. The field is 58px tall and the
+                 send disc is the 44px touch minimum, which leaves 7px of margin — and a 24px
+                 corner eats 24px of the edge, so the disc crossed the curve by 2.4px at the
+                 bottom-start corner and appeared to hang outside the pill. 16px leaves the disc
+                 4.8px of clear straight edge at its widest point. */
+              className="input resize-none rounded-2xl pe-14"
               rows={2}
               maxLength={ASSISTANT_QUESTION_MAX_CHARS}
               placeholder={examples[0] ?? 'מה תרצה לבדוק?'}
@@ -439,9 +500,15 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
                 }
               }}
             />
+            {/* CENTRED in the field, not pinned to its bottom corner (owner report 26.08.2026).
+                `bottom-1.5 end-1.5` put a 44px disc 6px from a corner whose radius is 24px, so
+                the disc crossed the curve and hung outside the pill — the composer looked broken
+                rather than styled. Centring keeps it inside the straight part of the edge at any
+                field height, which is the property that matters here: the textarea is two rows
+                today and a taller composer must not reintroduce the overhang. */}
             <button
               type="submit"
-              className="btn-primary btn-icon absolute bottom-1.5 end-1.5 rounded-full"
+              className="btn-primary btn-icon absolute end-2.5 top-1/2 -translate-y-1/2 rounded-full"
               aria-label={pending ? 'שולח' : 'בדיקה'}
               disabled={pending || !question.trim()}
             >

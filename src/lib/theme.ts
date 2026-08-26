@@ -10,6 +10,10 @@ type ChartTheme = {
   grid: string;
   tick: string;
   label: string;
+  /** The card the charts are drawn on. Used as a COLLAR around a mark that may land on top of
+   *  another one — the terminal dots of the comparison lines — the same trick the donut's 2px
+   *  paddingAngle plays, so two coincident marks still read as two. */
+  surface: string;
   trendUp: string;
   trendDown: string;
   flat: string;
@@ -41,6 +45,7 @@ export function chartTheme() {
       grid: v('--color-chart-grid'),
       tick: v('--color-chart-tick'),
       label: v('--color-chart-label'),
+      surface: v('--color-surface'),
       trendUp: v('--color-trend-up-fg'),
       trendDown: v('--color-trend-down-fg'),
       // A line in a chart belongs to the chart layer. `flat` used to read --color-ink-faint,

@@ -43,9 +43,21 @@
      here". As a hover it measured 1.07:1 against the card and was served at 40% opacity on top of
      that — a state the eye cannot find on white paper. And "chosen" had no token at all, so the
      active option in global search wore the hover class and the two states were the same pixel.
-     Hover is 3.6 L below the card; selected is 4.1 L below hover. Pressed reuses selected. */
-  --color-surface-hover: oklch(95.6% 0.018 200);   /* row/list/summary under the pointer */
-  --color-surface-selected: oklch(91.5% 0.028 202); /* chosen option, active nav pill, pressed */
+     Hover is 3.6 L below the card; selected is 4.1 L below hover. Pressed reuses selected.
+
+     NEUTRAL, not tinted (owner report 26.08.2026: "יש צבע תכלת כזה כשאני עושה HOVER מעל אובייקט
+     ... הוא לא קשור בכלל לצבעי המערכת"). These two started life at hue 200 — the action family —
+     because they were carved out of `action-wash`, and they kept the brand's chroma without
+     keeping its job. A pointer landing on a row is not a brand moment: it says "this one", and
+     the only thing it needs to say it with is a step of lightness. At chroma 0.018/0.028 the step
+     read as a pale cyan wash over warm wheat paper, which is two colour families in one hover.
+     LIGHTNESS IS UNCHANGED (95.6 / 91.5) on purpose: every contrast figure this file records for
+     ink over a hovered row was measured against those two numbers, so dropping the chroma cannot
+     move them. The hue moves to 80 — the canvas/line family — so the step reads as the paper
+     getting slightly deeper, and the residual chroma is the smallest that keeps it from looking
+     like a dead grey patch on a warm surface. */
+  --color-surface-hover: oklch(95.6% 0.004 80);    /* row/list/summary under the pointer */
+  --color-surface-selected: oklch(91.5% 0.006 80); /* chosen option, active nav pill, pressed */
 
   --color-line: oklch(89.5% 0.022 78);             /* dividers vs canvas (cards carry none) */
   --color-line-soft: oklch(93.5% 0.017 78);        /* row separators, inner dividers */
@@ -1072,6 +1084,22 @@ body {
 @keyframes page-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .page-fade { animation: page-fade 0.15s ease-out; }
 @media (prefers-reduced-motion: reduce) { .page-fade { animation: none; } }
+
+/* The phone drawer's entrance (26.08.2026). It exists so the trigger's three lines are VISIBLE
+   while they fold into an X: the drawer is a full-viewport overlay that covers the button it was
+   opened from, so an instant mount hid the whole animation behind an opaque sheet. `translate` is
+   PHYSICAL and the value is chosen for this app's one direction: `<html dir="rtl">` puts the
+   drawer's `start-0` edge on the right, so it enters from +100% (rightwards). An LTR host would
+   need the sign flipped — there is none, and a `:dir()` pair for a case that does not exist is
+   the kind of generality the token rule exists to refuse. Reduced motion keeps the panel and
+   drops the travel: the drawer is a place, not a signal, so it loses nothing by being there. */
+@keyframes drawer-enter { from { translate: 100% 0; } to { translate: 0 0; } }
+@keyframes drawer-scrim { from { opacity: 0; } to { opacity: 1; } }
+.drawer-enter { animation: drawer-enter 0.28s cubic-bezier(0.32, 0.72, 0, 1); }
+.drawer-scrim { animation: drawer-scrim 0.28s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .drawer-enter, .drawer-scrim { animation: none; }
+}
 
 /* ---- Ambient glow (T7) — the wheat canvas carries two very soft radial washes, one warm and
    one oceanic, that drift toward the pointer. The registered properties make the drift ease
