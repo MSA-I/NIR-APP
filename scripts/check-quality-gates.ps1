@@ -1481,6 +1481,18 @@ finally {
       Write-Gate "Final isolated database reset"
       try { Reset-LocalDatabase }
       catch { $cleanupErrors += "Final local database reset failed: $($_.Exception.Message)" }
+
+      # The reset above drops the demo tenant, and this run rewrote the three demo passwords to
+      # a per-run random seed. Both are deliberate; together they leave a stack nobody can sign
+      # in to. CLAUDE.md makes restoring it a duty of whoever ran the reset -- doing it here is
+      # the only version of that duty that cannot be forgotten. Best-effort by design: -Quiet
+      # exits 0 when there is no external manifest, which is the normal state in CI.
+      Write-Gate "Restore the local demo accounts"
+      try {
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "restore-demo-local.ps1") -Quiet
+        if ($LASTEXITCODE -ne 0) { throw "restore-demo-local.ps1 exited with code $LASTEXITCODE." }
+      }
+      catch { $cleanupErrors += "Local demo restore failed: $($_.Exception.Message)" }
     }
     if ($startedSupabase) {
       $previousPreference = $ErrorActionPreference

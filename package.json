@@ -20,6 +20,7 @@
     "verify": "npm run check:dead-code && npm run check:tokens && npm run check:typography && npm run check:money && npm run check:exemptions && npm run check:supplier-columns && npm run check:assistant-no-send && npm run check:assistant-tool-schemas && npm run check:anchored-replacements && npm run test",
     "check": "npm run build && npm run verify",
     "quality": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-quality-gates.ps1",
+    "demo:restore": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restore-demo-local.ps1",
     "preview": "vite preview",
     "test": "vitest run"
   },

@@ -165,4 +165,15 @@ for (const t of [...timings].sort((a, b) => b.seconds - a.seconds)) {
 }
 console.log(`${total.toFixed(1).padStart(8)}s         TOTAL across ${timings.length} stages, ${failures} failed`);
 
+// This runner resets the database, which drops the demo tenant with it. On CI that is the end
+// of the story; on a developer machine it leaves a stack nobody can sign in to. The restore is
+// Windows-and-manifest-only and -Quiet exits 0 when either is absent, so CI no-ops here. It is
+// deliberately outside the failure count: a failed restore must not turn a red suite green or
+// a green suite red.
+if (process.platform === 'win32' && !process.env.CI) {
+  const restoreScript = path.join(repoRoot, 'scripts', 'restore-demo-local.ps1');
+  console.log('\n== Restoring the local demo accounts');
+  run('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', restoreScript, '-Quiet']);
+}
+
 process.exit(failures ? 1 : 0);

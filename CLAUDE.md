@@ -47,12 +47,16 @@
 `supplyflow-p0` הוא stack משותף. כל סוכן שמריץ `supabase db reset`, מריץ SQL suite שמכיל
 `Reset-LocalDatabase`, בונה מחדש את מסד הנתונים או מחליף סיסמאות fixture — **אחראי להחזיר
 את סביבת הדמו לפני handoff**. ממתינים לאיפוס האחרון ולשחרור מנעול ה-QA; אין לשחזר באמצע gate.
-קוראים בזמן ריצה את המניפסט החיצוני שמוגדר ב-`docs/LOCAL-CREDENTIALS-PATH.md`, מריצים
-`scripts/create-users.ps1` מול `http://127.0.0.1:55431`, ואם ארגון/פרופילי הדמו חסרים טוענים
-את `supabase/demo/demo_seed.sql` **מגרסה שתואמת ל-migration head החי** — לעולם לא seed ישן.
-לפני סיום מוכיחים password grant אמיתי לשלושת `owner`/`office`/`accountant`, שלושה profiles
-פעילים בתפקיד הנכון, זהויות retired חסומות, וכניסה בלחיצה דרך `localhost:5200`. ‏HTTP 200 או
-עצם הופעת הכפתורים אינם הוכחה. אין להדפיס או לשמור סיסמה, token או service key. ‏Production מחוץ
+השחזור עצמו הוא פקודה אחת: **`npm run demo:restore`** (‏`scripts/restore-demo-local.ps1`).
+היא קוראת בזמן ריצה את המניפסט החיצוני שמוגדר ב-`docs/LOCAL-CREDENTIALS-PATH.md`, מריצה את
+`scripts/create-users.ps1` מול `http://127.0.0.1:55431`, טוענת את `supabase/demo/demo_seed.sql`
+**מהעץ העובד** רק אם ארגון הדמו חסר — לעולם לא seed ישן — ומסיימת בהוכחה: password grant אמיתי
+לשלושת `owner`/`office`/`accountant` ושלושה profiles פעילים בתפקיד הנכון. היא מסרבת לכל יעד שאינו
+`http://127.0.0.1:55431`, ואינה מדפיסה סיסמאות. ‏`check-quality-gates.ps1` ו-`ci-sql-suites.mjs`
+מריצים אותה בעצמם בסוף ריצה מקומית, ולכן שער שהסתיים כרגיל כבר אינו משאיר stack בלי חשבונות;
+עדיין מוודאים לפני handoff שהיא באמת רצה ועברה. הסקריפט אינו בודק שהזהויות שפרשו חסומות ואינו
+בודק כניסה בלחיצה דרך `localhost:5200` — את שתי אלה מאמתים ידנית. ‏HTTP 200 או עצם הופעת
+הכפתורים אינם הוכחה. אין להדפיס או לשמור סיסמה, token או service key. ‏Production מחוץ
 לתחום. לבדיקת parser בלבד של `scripts/ci-sql-suites.mjs` משתמשים ב-`--list`; ללא הדגל הסקריפט
 מבצע את הסוויטה ועלול לאפס את ה-stack.
 
