@@ -122,10 +122,23 @@ select pg_temp.p70_assert(
        or entitlement.numeric_limit is distinct from decision.decided_limit),
   'a decided quota did not reach the catalogue');
 
--- #196: tiers differ by volume only. A boolean that is false anywhere gates a capability by plan.
+-- #274 superseded #196: capabilities now climb monotonically with the ladder. A higher rung may
+-- add a capability, but may never remove one a lower rung already includes.
 select pg_temp.p70_assert(
-  not exists (select 1 from plan_entitlements where kind = 'boolean' and boolean_value is not true),
-  'a capability was gated by plan -- #196 forbids it');
+  not exists (
+    select 1
+    from plan_entitlements lower_entitlement
+    join subscription_plans lower_plan on lower_plan.plan_key = lower_entitlement.plan_key
+    join plan_entitlements upper_entitlement
+      on upper_entitlement.entitlement_key = lower_entitlement.entitlement_key
+     and upper_entitlement.kind = 'boolean'
+    join subscription_plans upper_plan on upper_plan.plan_key = upper_entitlement.plan_key
+    where lower_entitlement.kind = 'boolean'
+      and lower_plan.active and upper_plan.active
+      and lower_plan.tier_order < upper_plan.tier_order
+      and lower_entitlement.boolean_value
+      and not upper_entitlement.boolean_value),
+  'a higher plan removes a capability included below it');
 -- Every rung answers for every entitlement, or effective_entitlement() says `unavailable` and 0155
 -- reads that as a refusal on the customer's first document.
 select pg_temp.p70_assert(

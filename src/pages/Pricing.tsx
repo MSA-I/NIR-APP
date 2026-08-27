@@ -7,6 +7,7 @@ import {
   HEADLINE_QUOTA_KEY, PLAN_LIST, PlanCard, PlanLadderSkeleton, planEmphasis, type PlanFeatureRow,
 } from '../components/PlanCard';
 import { fmtNum } from '../lib/format';
+import type { PlanFeatureRowData } from '../lib/planEntitlements';
 
 /**
  * The public plan ladder — what each plan LETS YOU DO, with no figure attached.
@@ -91,25 +92,31 @@ const PAGE_WRAPPER = 'mx-auto max-w-6xl space-y-6 px-4 py-12';
 
 export default function Pricing() {
   const [state, setState] = useState<{
-    catalogue: PlanRow[]; quotas: QuotaRow[]; error: string | null; loading: boolean;
-  }>({ catalogue: [], quotas: [], error: null, loading: true });
+    catalogue: PlanRow[];
+    quotas: QuotaRow[];
+    features: PlanFeatureRowData[];
+    error: string | null;
+    loading: boolean;
+  }>({ catalogue: [], quotas: [], features: [], error: null, loading: true });
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [catalogue, quotas] = await Promise.all([
+      const [catalogue, quotas, features] = await Promise.all([
         supabase.rpc('get_public_plan_catalogue'),
         supabase.rpc('get_public_plan_quotas'),
+        supabase.rpc('get_public_plan_features'),
       ]);
       if (cancelled) return;
-      if (catalogue.error || quotas.error) {
-        setState({ catalogue: [], quotas: [], loading: false,
+      if (catalogue.error || quotas.error || features.error) {
+        setState({ catalogue: [], quotas: [], features: [], loading: false,
           error: 'לא ניתן לטעון את המסלולים כרגע.' });
         return;
       }
       setState({
         catalogue: (catalogue.data ?? []) as PlanRow[],
         quotas: (quotas.data ?? []) as QuotaRow[],
+        features: (features.data ?? []) as PlanFeatureRowData[],
         error: null,
         loading: false,
       });
@@ -194,9 +201,9 @@ export default function Pricing() {
   const notice = (
     <Note tone="info">
       <span className="min-w-0 flex-1">
-        כל היכולות פתוחות בכל המסלולים; ההבדל הוא נפח בלבד. המחיר אינו מפורסם בדף הזה — הוא נמסר
-        בתוך החשבון, בשלב המעבר למסלול בתשלום, במטבע שנקבע לפי כתובת החיוב המאומתת מול ספק
-        הסליקה ולא לפי מיקום משוער. פתיחת חשבון והמסלול החינמי אינם דורשים אמצעי תשלום.
+        המסלולים נבדלים גם בנפח וגם ביכולות. המחיר אינו מפורסם בדף הזה לפני ההשקה; בתוך החשבון
+        מוצג מחיר לפי שפת הממשק, בעוד שהחיוב בפועל נקבע רק לפי כתובת החיוב המאומתת מול ספק
+        הסליקה. פתיחת חשבון והמסלול החינמי אינם דורשים אמצעי תשלום.
       </span>
     </Note>
   );
@@ -235,6 +242,16 @@ export default function Pricing() {
           const headline = quotaOf(plan.plan_key, HEADLINE_QUOTA_KEY);
           const emphasis = planEmphasis(plan.plan_key);
           const measured = !!headline && headline.measured;
+          const capabilityRows = state.features
+            .filter((row) => row.plan_key === plan.plan_key)
+            .sort((a, b) => a.display_order - b.display_order)
+            .map((row): PlanFeatureRow => ({
+              key: row.entitlement_key,
+              text: row.plan_key === 'free' && row.intro_included && !row.included
+                ? `${row.label} — פתוח ב־30 הימים הראשונים`
+                : row.label,
+              affirmative: row.included || (row.plan_key === 'free' && row.intro_included),
+            }));
           return (
             <PlanCard
               key={plan.plan_key}
@@ -254,7 +271,8 @@ export default function Pricing() {
                  to hold, one plan at a time and with no sideways scroll to trap a keyboard. */
               features={quotaKeys
                 .filter((key) => key !== HEADLINE_QUOTA_KEY)
-                .map((key) => featureRow(plan.plan_key, key))}
+                .map((key) => featureRow(plan.plan_key, key))
+                .concat(capabilityRows)}
             />
           );
         })}

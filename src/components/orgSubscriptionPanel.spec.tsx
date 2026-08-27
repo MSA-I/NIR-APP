@@ -120,8 +120,41 @@ const PLAN_QUOTAS = [
   { plan_key: 'basic', entitlement_key: 'documents.monthly', label: 'מסמכים', unit: 'מסמכים', unlimited: false, numeric_limit: 40, measured: true },
   { plan_key: 'pro', entitlement_key: 'documents.monthly', label: 'מסמכים', unit: 'מסמכים', unlimited: false, numeric_limit: 150, measured: true },
   { plan_key: 'premium', entitlement_key: 'documents.monthly', label: 'מסמכים', unit: 'מסמכים', unlimited: false, numeric_limit: 375, measured: true },
-  { plan_key: 'free', entitlement_key: 'users.max', label: 'משתמשים', unit: 'משתמשים', unlimited: false, numeric_limit: null, measured: false },
+  ...['free', 'basic', 'pro', 'premium'].map((plan_key, index) => ({
+    plan_key, entitlement_key: 'users.max', label: 'משתמשים', unit: 'משתמשים',
+    unlimited: false, numeric_limit: [1, 5, 15, 30][index], measured: true,
+  })),
+  ...['free', 'basic', 'pro', 'premium'].map((plan_key, index) => ({
+    plan_key, entitlement_key: 'branches.max', label: 'סניפים', unit: 'סניפים',
+    unlimited: false, numeric_limit: [1, 1, 1, 10][index], measured: true,
+  })),
 ];
+
+const PRICE_CATALOGUE = [
+  ...priced('ILS', { free: 0, basic: 69, pro: 249, premium: 449 },
+    { free: 0, basic: 690, pro: 2490, premium: 4490 }).filter((row) => !row.contact_sales),
+  ...priced('USD', { free: 0, basic: 20, pro: 79, premium: 149 },
+    { free: 0, basic: 200, pro: 790, premium: 1490 }).filter((row) => !row.contact_sales),
+];
+
+const PLAN_FEATURES = OPTIONS.flatMap((plan) => [
+  {
+    plan_key: plan.plan_key,
+    entitlement_key: 'documents.automation',
+    label: 'קריאה אוטומטית של מסמכים',
+    display_order: 10,
+    included: plan.tier_order >= 2,
+    intro_included: plan.plan_key === 'free',
+  },
+  {
+    plan_key: plan.plan_key,
+    entitlement_key: 'bank.reconciliation',
+    label: 'התאמות בנק',
+    display_order: 60,
+    included: plan.tier_order >= 3,
+    intro_included: false,
+  },
+]);
 
 const USAGE = [
   { metric_key: 'documents.monthly', label: 'מסמכים', used: 180, usage_limit: 200, unlimited: false, measured: true, remaining: 20, percent_used: 90, period_end: '2026-09-04T00:00:00.000Z' },
@@ -132,6 +165,7 @@ function mockServer(
   sub: Record<string, unknown> | null,
   options: OptionFixture[] = OPTIONS,
   planGrant: Record<string, unknown> | null = grant(),
+  catalogue: OptionFixture[] = PRICE_CATALOGUE,
 ) {
   rpc.mockImplementation((name: string) => {
     if (name === 'my_subscription') return Promise.resolve({ data: sub ? [sub] : [], error: null });
@@ -139,6 +173,8 @@ function mockServer(
     if (name === 'my_plan_grant') return Promise.resolve({ data: planGrant, error: null });
     if (name === 'organization_usage_snapshot') return Promise.resolve({ data: USAGE, error: null });
     if (name === 'get_public_plan_quotas') return Promise.resolve({ data: PLAN_QUOTAS, error: null });
+    if (name === 'my_plan_features') return Promise.resolve({ data: PLAN_FEATURES, error: null });
+    if (name === 'get_public_plan_catalogue') return Promise.resolve({ data: catalogue, error: null });
     return Promise.resolve({ data: null, error: null });
   });
 }
@@ -153,6 +189,7 @@ const testClient = () => new QueryClient({
 });
 
 beforeEach(() => {
+  document.documentElement.lang = 'he';
   mockServer(subscription());
   invoke.mockResolvedValue({ data: { checkout_url: 'https://pay.example/x', checkout_attempt_id: 'att-1' }, error: null });
   vi.stubGlobal('open', vi.fn());
@@ -177,14 +214,14 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     expect(screen.queryByText(/דמי הקמה/)).not.toBeInTheDocument();
   });
 
-  it('בלי מדינת חיוב מאומתת — אינו טוען מטבע ואינו מציג מחיר מנוחש', async () => {
+  it('מציג בעברית את קטלוג ישראל גם בלי מדינת חיוב, בלי להפוך אותו למטבע החיוב', async () => {
     renderPanel();
     await settle();
     // The sentence lives in the availability notice now rather than in a second box of its own:
     // "nothing can be bought yet" and "which is why the amounts are dashes" are one fact, and on a
     // Free organization both notices used to render one under the other saying it twice.
     const availability = await screen.findByTestId('billing-availability');
-    expect(availability.textContent).toMatch(/כתובת החיוב המאומתת/);
+    expect(availability.textContent).toMatch(/עברית בשקלים/);
     expect(screen.queryByRole('combobox', { name: /מטבע/ })).not.toBeInTheDocument();
     /**
      * A SENTENCE, NOT FOUR DASHES — owner ruling 26.08.2026, «משפט קצר במקום מקף». The claim this
@@ -199,30 +236,30 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     const cards = screen.getByTestId('plan-cards');
     const priceOf = (planKey: string) =>
       cards.querySelector(`[data-plan="${planKey}"] [data-testid="plan-figure"]`)?.textContent ?? '';
-    for (const planKey of ['basic', 'pro', 'premium']) {
-      expect(priceOf(planKey)).toBe('המחיר נמסר במעבר למסלול בתשלום');
-      // Scoped to the PRICE SLOT, not the whole row: the entitlement beside it legitimately
-      // carries a figure — the published documents quota — and that is not a price.
-      expect(priceOf(planKey)).not.toMatch(/[₪$]|\d/);
-      expect(priceOf(planKey)).not.toMatch(/שגיאה|טוען|נכשל|לא ניתן|בהמתנה/);
-    }
+    expect(priceOf('basic')).toMatch(/69/);
+    expect(priceOf('pro')).toMatch(/249/);
+    expect(priceOf('premium')).toMatch(/449/);
     // The FREE rung is not a withheld price, and must not borrow the sentence for one: there is
     // nothing to disclose later. `ביזנס` answers the slot with its own words (#194/#201).
     expect(priceOf('free')).toBe('ללא עלות');
     expect(priceOf('business')).toBe('דברו איתנו');
   });
 
-  it('עם מדינת חיוב מאומתת בישראל — מציג את קטלוג השקלים בלבד', async () => {
+  it('שפת הממשק קובעת תצוגה בלבד: אנגלית מציגה USD גם כשמטבע החיוב המאומת הוא ILS', async () => {
+    document.documentElement.lang = 'en';
     mockServer(
       subscription({ billing_country: 'IL', billing_country_verified: true, catalogue_currency: 'ILS' }),
-      priced('ILS', { basic: 69, pro: 249, premium: 449 }),
     );
     renderPanel();
     await settle();
-    expect(await screen.findByText(/69/)).toBeInTheDocument();
-    expect(screen.getByText(/249/)).toBeInTheDocument();
-    expect(screen.getByText(/449/)).toBeInTheDocument();
-    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+    const cards = await settle();
+    const priceOf = (planKey: string) =>
+      cards.querySelector(`[data-plan="${planKey}"] [data-testid="plan-figure"]`)?.textContent ?? '';
+    expect(priceOf('basic')).toMatch(/20/);
+    expect(priceOf('pro')).toMatch(/79/);
+    expect(priceOf('premium')).toMatch(/149/);
+    expect(screen.getByTestId('display-currency-note').textContent).toMatch(/בדולרים/);
+    expect(screen.getByTestId('display-currency-note').textContent).toMatch(/ILS/);
   });
 
   /**
@@ -233,7 +270,7 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
    * any migration that turns one off. A card promising "ייצוא ✗ בחינם" would sell a difference
    * the server does not enforce.
    */
-  it('מציג כרטיס לכל מסלול עם המכסה שמותר לפרסם, ובלי טבלת יכולות שאינה נאכפת', async () => {
+  it('מציג בכל כרטיס את המכסות ואת סולם היכולות שהשרת אוכף', async () => {
     renderPanel();
     const cards = await settle();
 
@@ -242,14 +279,16 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     expect(cards.querySelectorAll(':scope > li')).toHaveLength(5);
     expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/20/);
     expect(cards.querySelector('[data-plan="premium"]')?.textContent).toMatch(/375/);
+    expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/קריאה אוטומטית.*30 הימים/);
+    expect(cards.querySelector('[data-plan="basic"]')?.textContent).toMatch(/קריאה אוטומטית/);
+    expect(cards.querySelector('[data-plan="pro"]')?.textContent).toMatch(/התאמות בנק/);
     // Business is a conversation and carries a contractual quota, never a published number.
-    expect(cards.querySelector('[data-plan="business"]')?.textContent).toMatch(/מכסה חוזית/);
+    expect(cards.querySelector('[data-plan="business"]')?.textContent).toMatch(/מכסות מותאמות בחוזה/);
     // The rung the organization is actually on is marked, and offers itself no upgrade to itself.
     expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/המסלול הנוכחי/);
     expect(cards.querySelector('[data-plan="free"]')?.querySelector('button')).toBeNull();
 
-    // No capability matrix. These are #274's promised differences; none of them is enforced yet.
-    expect(screen.queryByText(/ייצוא Excel|התאמות בנק|לוח ביצועי ספקים/)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/התאמות בנק/).length).toBeGreaterThan(0);
   });
 
   /**
@@ -605,14 +644,14 @@ describe('מצבי הקצה של הטעינה', () => {
 });
 
 describe('בורר מחזור החיוב', () => {
-  it('אינו מוצג כשאין מטבע מאומת — פקד שאינו משנה דבר', async () => {
+  it('מוצג גם בלי מטבע חיוב מאומת כי הוא מחליף בין שני מחירי התצוגה', async () => {
     // `Pricing.tsx` removed its own toggle on exactly this ground. Here the amounts are all «—»
     // because `private.record_billing_country` has no production caller, so pressing either chip
     // changes not one character on screen.
     renderPanel();
     await settle();
     for (const label of ['חודשי', 'שנתי']) {
-      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
     }
   });
 

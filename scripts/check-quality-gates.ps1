@@ -1048,6 +1048,7 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supabase\tests\p25_tenant_offboarding_export.sql",
     "supabase\tests\p26_price_baseline.sql",
     "supabase\tests\p78_price_newest_effective_date.sql",
+    "supabase\tests\p79_plan_capability_ladder.sql",
     "supabase\tests\p27_document_supplier_resolution.sql",
     "supabase\tests\p28_document_order_resolution.sql",
     "supabase\tests\p29_document_reconciliation_assessment.sql",
@@ -1318,6 +1319,7 @@ try {
     Invoke-SqlTest "supabase\tests\p25_tenant_offboarding_export.sql" "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p26_price_baseline.sql" "Contractual price baseline as of the document date, reversal ordering, undisclosed fallbacks and read-only guarantee"
     Invoke-SqlTest "supabase\tests\p78_price_newest_effective_date.sql" "Newest effective date wins the present: a backdated price records history and answers the as-of baseline for its own period, but never moves current_price -- on both the single write and the bulk import"
+    Invoke-SqlTest "supabase\tests\p79_plan_capability_ladder.sql" "The plan ladder is monotonic and enforced: Free gets the Basic capability set for the existing 30-day clock then falls back, automatic interpretation spends its own quota once, user and branch limits refuse at the write, protected Data API paths fail closed, and both display catalogues remain separate from the verified billing currency"
     Invoke-SqlTest "supabase\tests\p27_document_supplier_resolution.sql" "Deterministic supplier resolution from document evidence: rung order, ambiguity, tenancy and the model's guess as advisory only"
     Invoke-SqlTest "supabase\tests\p28_document_order_resolution.sql" "Per-subtype order resolution: an invoice is never matched by the single open order, a delivery note may be, and no tier ever chooses among candidates"
     Invoke-SqlTest "supabase\tests\p29_document_reconciliation_assessment.sql" "Four-source document assessment: baseline as of the document date, draft receipts are not arrivals, absence from a partial document is not a shortage, and assessing writes nothing"

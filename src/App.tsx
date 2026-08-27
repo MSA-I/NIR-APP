@@ -7,6 +7,7 @@ import { reportError } from './lib/observability';
 import { isActiveRole, type ActiveRole } from './lib/types';
 import { ACTIVE_ORGANIZATION_ACCESS } from './lib/organizationAccess';
 import { APP_ROUTE_POLICY } from './lib/routePolicy';
+import { capabilityValue, usePlanEntitlements } from './lib/planEntitlements';
 
 // Eager: the auth shell that must paint before (or regardless of) a resolved session.
 // Layout is the persistent chrome around every tenant screen; Login/AcceptInvite are the
@@ -91,13 +92,35 @@ function LazyPageBoundary({ children }: { children: ReactNode }) {
   return <LazyRouteErrorBoundary key={pathname}>{children}</LazyRouteErrorBoundary>;
 }
 
-function Guard({ roles, children, write = false }: { roles: readonly ActiveRole[]; children: ReactNode; write?: boolean }) {
+function Guard({ roles, children, write = false, capability }: {
+  roles: readonly ActiveRole[];
+  children: ReactNode;
+  write?: boolean;
+  capability?: string;
+}) {
   const { session, profile, loading, organizationAccess = ACTIVE_ORGANIZATION_ACCESS } = useAuth();
+  const entitlements = usePlanEntitlements(!!capability);
   if (loading) return <RecordSkeleton />;
   if (!session || !profile) return <Navigate to="/login" replace />;
   if (!isActiveRole(profile.role) || !roles.includes(profile.role)) return <Navigate to={homeFor(profile.role)} replace />;
   if (write && !organizationAccess.canWrite) return <ReadOnlyUnavailable />;
+  if (capability && entitlements.isLoading) return <RecordSkeleton />;
+  if (capability && capabilityValue(entitlements.data, capability) !== true) {
+    return <PlanCapabilityUnavailable />;
+  }
   return <>{children}</>;
+}
+
+function PlanCapabilityUnavailable() {
+  return (
+    <div role="alert" className="card card-pad mx-auto max-w-xl text-center">
+      <h1 className="page-title">היכולת אינה כלולה במסלול</h1>
+      <p className="mt-2 text-sm text-ink-soft">
+        המסך נשאר סגור גם בבקשה ישירה לשרת. אפשר לראות באיזה מסלול הוא נפתח במסך המנוי.
+      </p>
+      <a className="btn-primary mt-5" href="/settings/subscription">למסלולים ולמחירים</a>
+    </div>
+  );
 }
 
 function ReadOnlyUnavailable() {
@@ -295,7 +318,7 @@ export default function App() {
         <Route path={APP_ROUTE_POLICY.invoiceDetail.path} element={<Guard roles={APP_ROUTE_POLICY.invoiceDetail.roles}><InvoiceDetail /></Guard>} />
         <Route path="/documents" element={<Guard roles={STAFF}><DocumentsGallery /></Guard>} />
         <Route path="/documents/operations" element={<Guard roles={['owner']}><DocumentOperations /></Guard>} />
-        <Route path="/documents/consolidated-invoices" element={<Guard roles={READERS}><ConsolidatedInvoices /></Guard>} />
+        <Route path="/documents/consolidated-invoices" element={<Guard roles={READERS} capability="invoices.consolidated"><ConsolidatedInvoices /></Guard>} />
         {/* The same register, narrowed to what the interpretation layer could not place. A second
             component would be a second answer to "what is a document row", so the gallery takes a
             prop instead and this route is the only thing that turns it on. */}
@@ -306,24 +329,24 @@ export default function App() {
         <Route path={APP_ROUTE_POLICY.credits.path} element={<Guard roles={APP_ROUTE_POLICY.credits.roles}><Credits /></Guard>} />
         <Route path={APP_ROUTE_POLICY.paymentRequests.path} element={<Guard roles={APP_ROUTE_POLICY.paymentRequests.roles}><PaymentRequests /></Guard>} />
         <Route path={APP_ROUTE_POLICY.payments.path} element={<Guard roles={APP_ROUTE_POLICY.payments.roles}><Payments /></Guard>} />
-        <Route path="/pay" element={<Guard roles={['accountant']} write><AccountantPaymentQueue /></Guard>} />
+        <Route path="/pay" element={<Guard roles={['accountant']} write capability="payments.accountant_queue"><AccountantPaymentQueue /></Guard>} />
 
-        <Route path={APP_ROUTE_POLICY.bank.path} element={<Guard roles={APP_ROUTE_POLICY.bank.roles}><Bank /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.bank.path} element={<Guard roles={APP_ROUTE_POLICY.bank.roles} capability="bank.reconciliation"><Bank /></Guard>} />
         <Route path={APP_ROUTE_POLICY.exceptions.path} element={<Guard roles={APP_ROUTE_POLICY.exceptions.roles}><Exceptions /></Guard>} />
         <Route path={APP_ROUTE_POLICY.alerts.path} element={<Guard roles={APP_ROUTE_POLICY.alerts.roles}><Alerts /></Guard>} />
         <Route path={APP_ROUTE_POLICY.expenses.path} element={<Guard roles={APP_ROUTE_POLICY.expenses.roles}><Expenses /></Guard>} />
-        <Route path="/reports" element={<Guard roles={['owner', 'accountant']}><Reports /></Guard>} />
+        <Route path="/reports" element={<Guard roles={['owner', 'accountant']} capability="reports.advanced"><Reports /></Guard>} />
         {/* The product purchase summary reads spend per product — the tenant's commercial
             position — so its readers are the money roles, matching get_product_purchase_summary's
             own role check rather than being wider than it. */}
         <Route path={APP_ROUTE_POLICY.productReport.path} element={<Guard roles={APP_ROUTE_POLICY.productReport.roles}><ProductPurchaseSummary /></Guard>} />
-        <Route path={APP_ROUTE_POLICY.analytics.path} element={<Guard roles={APP_ROUTE_POLICY.analytics.roles}><Analytics /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.analytics.path} element={<Guard roles={APP_ROUTE_POLICY.analytics.roles} capability="reports.advanced"><Analytics /></Guard>} />
         {/* owner only, and not by preference: audit_logs is owner+accountant (0031:208) while the
             supplier, price-row and product names it has to resolve are owner+office (0133:128-172).
             The intersection is one role, and an accountant would read a wall of UUIDs. */}
         <Route path="/supplier-log" element={<Guard roles={['owner']}><SupplierLog /></Guard>} />
         <Route path="/settings" element={<Guard roles={['owner']}><Settings /></Guard>} />
-        <Route path="/settings/webhooks" element={<Guard roles={['owner']}><WebhookSettings /></Guard>} />
+        <Route path="/settings/webhooks" element={<Guard roles={['owner']} capability="integrations.api"><WebhookSettings /></Guard>} />
         <Route path="/settings/subscription" element={<Guard roles={['owner']}><Subscription /></Guard>} />
         <Route path="/onboarding" element={<Guard roles={['owner']} write><Onboarding /></Guard>} />
 

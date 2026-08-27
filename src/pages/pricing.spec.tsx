@@ -68,22 +68,31 @@ const QUOTAS = [
   ...['free', 'basic', 'pro', 'premium'].map((plan, index) =>
     quota(plan, 'documents.monthly', 'מסמכים', [25, 50, 300, 500][index])),
   ...['free', 'basic', 'pro', 'premium'].map((plan, index) =>
-    quota(plan, 'ocr_pages.monthly', 'עמודי OCR', [500, 500, 6000, 5000][index])),
-  // Unmeasured, so the page cannot publish #198's 20/40/100/250. The #197 ruling did not cover
-  // the assistant quota — re-verify this against the catalogue when the contract names land.
-  ...['free', 'basic', 'pro', 'premium'].map((plan) =>
-    quota(plan, 'assistant_runs.monthly', 'ריצות עוזר', null, { measured: false })),
-  // DEBT §56 — nothing measures these either.
-  ...['free', 'basic', 'pro', 'premium'].map((plan) =>
-    quota(plan, 'users.max', 'משתמשים', null, { measured: false })),
-  ...['free', 'basic', 'pro', 'premium'].map((plan) =>
-    quota(plan, 'suppliers.max', 'ספקים', null, { measured: false })),
+    quota(plan, 'users.max', 'משתמשים', [1, 5, 15, 30][index], { unit: 'users' })),
+  ...['free', 'basic', 'pro', 'premium'].map((plan, index) =>
+    quota(plan, 'branches.max', 'סניפים', [1, 1, 1, 10][index], { unit: 'branches' })),
 ];
+
+const FEATURES = ['free', 'basic', 'pro', 'premium'].flatMap((planKey, tier) => [
+  {
+    plan_key: planKey, entitlement_key: 'documents.automation', label: 'קריאה אוטומטית של מסמכים',
+    display_order: 10, included: tier >= 1, intro_included: tier === 0,
+  },
+  {
+    plan_key: planKey, entitlement_key: 'bank.reconciliation', label: 'התאמות בנק',
+    display_order: 60, included: tier >= 2, intro_included: false,
+  },
+  {
+    plan_key: planKey, entitlement_key: 'integrations.api', label: 'חיבור למערכות אחרות',
+    display_order: 100, included: tier >= 3, intro_included: false,
+  },
+]);
 
 beforeEach(() => {
   rpc.mockImplementation((name: string) => {
     if (name === 'get_public_plan_catalogue') return Promise.resolve({ data: CATALOGUE, error: null });
     if (name === 'get_public_plan_quotas') return Promise.resolve({ data: QUOTAS, error: null });
+    if (name === 'get_public_plan_features') return Promise.resolve({ data: FEATURES, error: null });
     return Promise.resolve({ data: null, error: { message: `unexpected rpc ${name}` } });
   });
 });
@@ -145,14 +154,13 @@ describe('דף המסלולים הציבורי', () => {
     expect(screen.queryByRole('button', { name: /^מטבע/ })).not.toBeInTheDocument();
   });
 
-  it('מציג מכסה שאינה נמדדת כמקף — לא כאפס ולא כהבטחה', async () => {
+  it('מציג מכסות משתמשים וסניפים רק אחרי שהשרת מודד ואוכף אותן', async () => {
     renderPage();
     await settle();
     // One card per plan now, so the four cells of the old «משתמשים» row are one row in each card.
     for (const planKey of ['free', 'basic', 'pro', 'premium']) {
       const users = within(card(planKey)).getByText(/משתמשים/);
-      expect(users.textContent).toMatch('—');
-      expect(within(users).queryByText('0')).not.toBeInTheDocument();
+      expect(users.textContent).toMatch(/\d/);
     }
   });
 
@@ -165,14 +173,13 @@ describe('דף המסלולים הציבורי', () => {
     expect(within(card('pro')).queryByText('200')).not.toBeInTheDocument();
   });
 
-  it('מכסה שהשרת מדווח כלא־נמדדת מוצגת כמקף, גם כשההחלטה נוקבת במספר', async () => {
+  it('מציג את מדרגות היכולת וחלון ההיכרות מתוך חוזה השרת', async () => {
     renderPage();
     await settle();
-    for (const planKey of ['free', 'basic', 'pro', 'premium']) {
-      const assistant = within(card(planKey)).getByText(/ריצות עוזר/);
-      expect(assistant.textContent).toMatch('—');
-      expect(within(assistant).queryByText('100')).not.toBeInTheDocument();
-    }
+    expect(card('free').textContent).toMatch(/קריאה אוטומטית.*30 הימים/);
+    expect(within(card('basic')).getByText('קריאה אוטומטית של מסמכים')).toBeInTheDocument();
+    expect(within(card('pro')).getByText('התאמות בנק')).toBeInTheDocument();
+    expect(within(card('premium')).getByText('חיבור למערכות אחרות')).toBeInTheDocument();
   });
 
   it('אינו מפרסם את תקרות האחסון ואינו חושף את מינימום הביזנס', async () => {
@@ -248,7 +255,7 @@ describe('דף המסלולים הציבורי', () => {
     expect(document.querySelectorAll('.overflow-x-auto')).toHaveLength(0);
     expect(screen.queryByRole('region', { name: /השוואת המסלולים/ })).not.toBeInTheDocument();
     // Every rung is reachable by reading, not by scrolling: each card holds its own quota rows.
-    expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/עמודי OCR/);
+    expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/משתמשים/);
   });
 
   /**

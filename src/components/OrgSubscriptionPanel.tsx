@@ -6,6 +6,11 @@ import { fmtDate, fmtNum, fmtPlanPrice } from '../lib/format';
 import { SUBSCRIPTION_STATUS } from '../lib/status';
 import { DOMAIN, key } from '../lib/query/keys';
 import { useOrgScope } from '../lib/query/orgScope';
+import {
+  displayCurrencyForLanguage,
+  type PlanCataloguePriceRow,
+  type PlanFeatureRowData,
+} from '../lib/planEntitlements';
 import { planTierClass } from './PlanBadge';
 import {
   HEADLINE_QUOTA_KEY, PLAN_GRID, PlanCard, PlanLadderSkeleton, planEmphasis, type PlanFeatureRow,
@@ -263,6 +268,16 @@ export function OrgSubscriptionPanel() {
     queryFn: () => rows<PlanQuotaRow>('get_public_plan_quotas'),
     enabled,
   });
+  const featuresQuery = useQuery({
+    queryKey: key(org, DOMAIN.subscription, 'plan-features'),
+    queryFn: () => rows<PlanFeatureRowData>('my_plan_features'),
+    enabled,
+  });
+  const catalogueQuery = useQuery({
+    queryKey: key(org, DOMAIN.subscription, 'display-prices'),
+    queryFn: () => rows<PlanCataloguePriceRow>('get_public_plan_catalogue'),
+    enabled,
+  });
   /**
    * LAZY, and the dialog is the only reader. This snapshot answers "how much of the current period
    * is gone", which is #220's disclosure before a cancellation — a question most people on this
@@ -276,9 +291,16 @@ export function OrgSubscriptionPanel() {
   const options = optionsQuery.data ?? [];
   // A quota read that fails costs the cards one line each; it must not cost the whole panel.
   const planQuotas = quotasQuery.data ?? [];
+  const planFeatures = featuresQuery.data ?? [];
+  const displayPrices = catalogueQuery.data ?? [];
   const grant = grantQuery.data ?? null;
-  const loading = enabled && (subscriptionQuery.isLoading || optionsQuery.isLoading);
-  const failed = !!(subscriptionQuery.error || optionsQuery.error);
+  const loading = enabled && (
+    subscriptionQuery.isLoading || optionsQuery.isLoading || featuresQuery.isLoading
+    || catalogueQuery.isLoading
+  );
+  const failed = !!(
+    subscriptionQuery.error || optionsQuery.error || featuresQuery.error || catalogueQuery.error
+  );
 
   /**
    * `schedule_subscription_change`, `cancel_subscription_at_period_end` and `resume_subscription`
@@ -287,13 +309,18 @@ export function OrgSubscriptionPanel() {
    * failure mode this program has already paid for once. So there are no handlers here and no
    * call sites: an orphan RPC name in the source is a real defect, not a placeholder.
    */
-  const currency = subscription?.billing_country_verified ? subscription.catalogue_currency : null;
+  const billingCurrency = subscription?.billing_country_verified ? subscription.catalogue_currency : null;
+  const displayCurrency = displayCurrencyForLanguage(document.documentElement.lang);
   // The server's interval until the reader says otherwise. Derived rather than copied into state by
   // an effect: a second source of the same fact is a second thing that can be stale.
   const interval: Interval =
     intervalChoice ?? (subscription?.billing_interval === 'yearly' ? 'yearly' : 'monthly');
-  const amountOf = (option: UpgradeOption) =>
-    (interval === 'yearly' ? option.yearly_amount : option.monthly_amount);
+  const amountOf = (option: UpgradeOption) => {
+    const price = displayPrices.find(
+      (row) => row.plan_key === option.plan_key && row.currency === displayCurrency,
+    );
+    return interval === 'yearly' ? price?.yearly_amount ?? null : price?.monthly_amount ?? null;
+  };
   /** The rung this organization stands on, for "is that card up or down from here". */
   const currentTier = options.find((option) => option.plan_key === subscription?.plan_key)?.tier_order ?? null;
   /**
@@ -420,7 +447,8 @@ export function OrgSubscriptionPanel() {
                   && 'רכישת מסלול בתשלום עדיין אינה מתבצעת מהמסך הזה. הפרטים והמכסות למטה מעודכנים.'}
                 {availability === 'indeterminate'
                   && 'לא ניתן לקבוע כרגע אם רכישת מסלול זמינה. זה אינו אומר שהיא חסומה — רענון או ניסיון מאוחר יותר יראה את המצב העדכני.'}
-                {!currency && ' המחיר נקבע במטבע של כתובת החיוב המאומתת אצל ספק הסליקה — לא לפי מיקום משוער ולא לפי בחירת מטבע — ולכן הוא נמסר במעבר למסלול בתשלום ולא מוצג כאן מראש.'}
+                {' '}המחירים למטה מוצגים לפי שפת הממשק: עברית בשקלים ואנגלית בדולרים. זו תצוגה
+                בלבד; החיוב בפועל והמס נקבעים לפי מדינת החיוב המאומתת אצל ספק הסליקה.
               </span>
             </Note>
 
@@ -460,25 +488,23 @@ export function OrgSubscriptionPanel() {
                 surface it is a property of the organization's billing — and because the reference's
                 switch is a `@radix-ui/react-switch`, which this repo does not have and is not
                 adding for a control that is already spelled `chip-filter`. */}
-            {currency && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-ink-body" id="subscription-interval-label">מחזור חיוב</span>
-                <div className="flex gap-2" role="group" aria-labelledby="subscription-interval-label">
-                  {INTERVALS.map(([value, label]) => (
-                    <button key={value} type="button" aria-pressed={interval === value}
-                      className={`chip-filter ${interval === value ? 'chip-filter-active' : ''}`}
-                      onClick={() => setIntervalChoice(value)}>{label}</button>
-                  ))}
-                </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-ink-body" id="subscription-interval-label">מחזור חיוב</span>
+              <div className="flex gap-2" role="group" aria-labelledby="subscription-interval-label">
+                {INTERVALS.map(([value, label]) => (
+                  <button key={value} type="button" aria-pressed={interval === value}
+                    className={`chip-filter ${interval === value ? 'chip-filter-active' : ''}`}
+                    onClick={() => setIntervalChoice(value)}>{label}</button>
+                ))}
               </div>
-            )}
+            </div>
 
-            {currency && (
-              <p className="text-sm text-ink-muted">
-                המחירים בקטלוג שנקבע לכתובת החיוב המאומתת שלך, לפני מס. ספק הסליקה מחשב וגובה את המס
-                המקומי.
-              </p>
-            )}
+            <p className="text-sm text-ink-muted" data-testid="display-currency-note">
+              מוצג קטלוג {displayCurrency === 'ILS' ? 'ישראל בשקלים' : 'גלובלי בדולרים'}, לפני מס.
+              {billingCurrency
+                ? ` מטבע החיוב המאומת כרגע הוא ${billingCurrency}.`
+                : ' מטבע החיוב טרם אומת ואינו נגזר ממטבע התצוגה.'}
+            </p>
 
             {/* THE LIFECYCLE CONTROLS BELONG TO A SUBSCRIPTION, AND A GRANT IS NOT ONE.
                 #204 forbids putting cancellation out of reach, and that rule is about a customer
@@ -550,9 +576,6 @@ export function OrgSubscriptionPanel() {
             {[...options].sort((a, b) => a.tier_order - b.tier_order).map((option) => {
               const current = option.plan_key === subscription.plan_key;
               const amount = amountOf(option);
-              const quota = planQuotas.find(
-                (row) => row.plan_key === option.plan_key && row.entitlement_key === HEADLINE_QUOTA_KEY,
-              );
               /**
                * UP OR DOWN, READ FROM `tier_order` — which was already fetched, already on the
                * card, and already used to sort this list. The label used to be "שדרוג ל…"
@@ -563,7 +586,28 @@ export function OrgSubscriptionPanel() {
                */
               const isUpgrade = currentTier !== null && option.tier_order > currentTier;
               /** An amount only exists once a billing country has been verified (#208). */
-              const hasAmount = !option.contact_sales && currency !== null && amount !== null;
+              const hasAmount = !option.contact_sales && amount !== null;
+              const quotaRows = option.contact_sales
+                ? [{ key: HEADLINE_QUOTA_KEY, text: 'מכסות מותאמות בחוזה', affirmative: true }]
+                : planQuotas
+                  .filter((row) => row.plan_key === option.plan_key && row.measured)
+                  .map((row) => ({
+                    key: row.entitlement_key,
+                    text: row.unlimited
+                      ? `${row.label} ללא הגבלה`
+                      : <><span className="num font-medium">{fmtNum(row.numeric_limit)}</span> {row.label}</>,
+                    affirmative: true,
+                  }));
+              const capabilityRows = planFeatures
+                .filter((row) => row.plan_key === option.plan_key)
+                .sort((a, b) => a.display_order - b.display_order)
+                .map((row) => ({
+                  key: row.entitlement_key,
+                  text: row.plan_key === 'free' && row.intro_included && !row.included
+                    ? `${row.label} — פתוח ב־30 הימים הראשונים`
+                    : row.label,
+                  affirmative: row.included || (row.plan_key === 'free' && row.intro_included),
+                }));
 
               return (
                 <PlanCard
@@ -621,7 +665,7 @@ export function OrgSubscriptionPanel() {
                   // #194 and #201: a conversation, never a figure — and never at price size.
                   figure={option.contact_sales ? 'דברו איתנו'
                     : !option.paid ? 'ללא עלות'
-                      : hasAmount ? fmtPlanPrice(amount, currency) : PRICE_AT_UPGRADE}
+                      : hasAmount ? fmtPlanPrice(amount, displayCurrency) : PRICE_AT_UPGRADE}
                   figureTone={option.contact_sales || !option.paid ? 'compact'
                     : hasAmount ? 'anchor' : 'quiet'}
                   /* The period rides the price's own baseline, and only when there IS a price to
@@ -672,23 +716,7 @@ export function OrgSubscriptionPanel() {
                   /* The server's own wording, not a restatement: `/pricing` prints the same string
                      from the same function, and a card that reworded it would be the second place a
                      customer could read a different sentence about one entitlement. */
-                  features={[option.contact_sales
-                    ? { key: HEADLINE_QUOTA_KEY, text: 'מכסה חוזית, נקבעת מול השירות', affirmative: true }
-                    : !quota || !quota.measured
-                      /* Still a dash, and deliberately: the owner's ruling replaced the five
-                         PRICE dashes, which were a column of them in the slot the eye reads as
-                         the amount. This is ONE entitlement inside a row of real ones, which is
-                         the case the dash rule was written for — an unmeasured quota (DEBT §56)
-                         must not be dressed as `0`, and it must not be dressed as a promise
-                         either. */
-                      ? { key: HEADLINE_QUOTA_KEY, text: <><span>—</span> {quota?.label ?? 'מסמכים'}</>, affirmative: false }
-                      : quota.unlimited
-                        ? { key: HEADLINE_QUOTA_KEY, text: `${quota.label} ללא הגבלה`, affirmative: true }
-                        : {
-                          key: HEADLINE_QUOTA_KEY,
-                          text: <><span className="num font-medium">{fmtNum(quota.numeric_limit)}</span> {quota.label}</>,
-                          affirmative: true,
-                        }] satisfies PlanFeatureRow[]}
+                  features={[...quotaRows, ...capabilityRows] satisfies PlanFeatureRow[]}
                 />
               );
             })}

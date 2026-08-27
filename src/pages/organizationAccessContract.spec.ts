@@ -42,7 +42,7 @@ describe('organization access after Trial retirement', () => {
     expect(auth).toContain("document.addEventListener('visibilitychange', onVisibility)");
     expect(app).toContain('if (write && !organizationAccess.canWrite)');
     for (const path of ['/orders/new', '/receiving/:orderId', '/invoices/new', '/pay', '/onboarding']) {
-      expect(app).toMatch(new RegExp(`path="${path.replace('/', '\\/')}"[^\n]+<Guard[^\n]+ write>`));
+      expect(app).toMatch(new RegExp(`path="${path.replace('/', '\\/')}"[^\n]+<Guard[^\n]+ write(?:\\s[^>]*)?>`));
     }
     for (const retiredCopy of ['תקופת הניסיון', 'ימי חסד', 'Grace', 'Trial']) {
       expect(layout).not.toContain(retiredCopy);
