@@ -14,9 +14,9 @@
  *   4. One answer for every outcome that involves an email address, so this endpoint cannot be
  *      used to discover who already has an account.
  *
- * What it deliberately does not do: send its own email. Supabase Auth owns the confirmation
- * message; DEBT §25 (no verified sender domain) is why it is not branded yet, and inventing a
- * second mailer here would make that worse rather than better.
+ * It never invents a second mailer: Supabase Auth owns the confirmation link and hands it to the
+ * configured SMTP provider. `auth.admin.createUser` does not trigger that delivery, so the
+ * password branch requests it explicitly after tenant provisioning succeeds.
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -25,6 +25,7 @@ import {
   provisionTenant,
   validateProvisionInput,
 } from '../_shared/provision.ts';
+import { sendSignupConfirmation } from './confirmation.ts';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -258,8 +259,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (!outcome.ok) {
     await admin.rpc('service_mark_signup_rejected', { p_email_hash: emailHash });
 
-    // An address that already exists gets the SAME answer as a fresh signup. Anything else turns
-    // this endpoint into a way to enumerate who has an account.
+    // The response stays identical to a fresh signup. The confirmation screen offers Auth's
+    // public, rate-limited resend without making this endpoint reveal confirmation state.
     if (outcome.failure.kind === 'email_taken') {
       return json({ status: 'pending_confirmation', message: NEUTRAL_ANSWER }, 202);
     }
@@ -281,6 +282,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
     p_properties: {},
     p_idempotency_key: outcome.result.org_id,
   });
+
+  const { error: confirmationError } = await sendSignupConfirmation(
+    admin,
+    input.ownerEmail.trim().toLowerCase(),
+  );
+  if (confirmationError) {
+    // Never return provider wording or the address from this anonymous endpoint. A second submit
+    // reaches the neutral confirmation screen, whose public Auth resend can retry without another org.
+    console.error('signup confirmation delivery failed', {
+      code: (confirmationError as { code?: unknown }).code ?? 'auth_resend_failed',
+    });
+    return json({
+      error: {
+        code: 'confirmation_delivery_failed',
+        message: 'החשבון נוצר, אך לא הצלחנו לשלוח את מייל האישור. יש לנסות שוב בעוד דקה.',
+      },
+    }, 503);
+  }
 
   // The organization id is deliberately absent from the response. The visitor cannot use it
   // before confirming their email, and an anonymous endpoint that hands out tenant identifiers

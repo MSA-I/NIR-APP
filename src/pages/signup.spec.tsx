@@ -7,6 +7,7 @@ import Signup from './Signup';
 const invoke = vi.fn();
 const getSession = vi.fn();
 const signInWithOAuth = vi.fn();
+const resend = vi.fn();
 
 /**
  * `enabledFederatedProviders` reads `import.meta.env` at module scope, which Vite has already
@@ -41,6 +42,7 @@ vi.mock('../lib/supabase', () => ({
     auth: {
       getSession: () => getSession(),
       signInWithOAuth: (...a: unknown[]) => signInWithOAuth(...a),
+      resend: (...a: unknown[]) => resend(...a),
     },
   },
 }));
@@ -83,6 +85,7 @@ beforeEach(() => {
   invoke.mockResolvedValue({ data: { status: 'pending_confirmation', message: NEUTRAL }, error: null });
   getSession.mockResolvedValue({ data: { session: null } });
   signInWithOAuth.mockResolvedValue({ error: null });
+  resend.mockResolvedValue({ data: {}, error: null });
   federated.providers = [];
   federated.start.mockClear();
   auth.state = { session: null, profile: null, loading: false };
@@ -107,6 +110,38 @@ describe('פתיחת חשבון', () => {
     await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
     expect(await screen.findByText(/בדקו את תיבת הדואר/)).toBeInTheDocument();
     expect(screen.getByText(new RegExp(NEUTRAL))).toBeInTheDocument();
+  });
+
+  it('שולח שוב מייל אישור בלי לשלוח מחדש סיסמה או פרטי עסק', async () => {
+    const user = await fill();
+    await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
+    await user.click(await screen.findByRole('button', { name: 'שלחו שוב' }));
+
+    await waitFor(() => expect(resend).toHaveBeenCalledWith({
+      type: 'signup',
+      email: 'owner@example.test',
+    }));
+    expect(await screen.findByText('מייל אישור חדש נשלח.')).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('מציג כשל ברור כששליחה חוזרת לא התקבלה ב-Supabase Auth', async () => {
+    resend.mockResolvedValue({ data: null, error: { message: 'rate limited' } });
+    const user = await fill();
+    await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
+    await user.click(await screen.findByRole('button', { name: 'שלחו שוב' }));
+
+    expect(await screen.findByText(/לא הצלחנו לשלוח מייל אישור חדש/)).toBeInTheDocument();
+  });
+
+  it('משחרר את כפתור השליחה החוזרת גם בכשל רשת', async () => {
+    resend.mockRejectedValue(new Error('network offline'));
+    const user = await fill();
+    await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
+    await user.click(await screen.findByRole('button', { name: 'שלחו שוב' }));
+
+    expect(await screen.findByText(/לא הצלחנו לשלוח מייל אישור חדש/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'שלחו שוב' })).toBeEnabled();
   });
 
   it('אינו מאפשר שליחה עם סיסמה קצרה מדי', async () => {
