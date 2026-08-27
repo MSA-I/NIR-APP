@@ -21,7 +21,7 @@ import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/organizationAccess';
 import { isRouteFamilyActive, sectionOf } from '../lib/quickActions';
 import { routeBackPresentation, routePresentationTitle, staticRouteTitle, type StaticRoutePath } from '../lib/routePresentation';
 import { tourNavigationAnchor, type ProductTourStep } from '../lib/productTourRegistry';
-import { OwnerProductTour, type OwnerProductTourHandle } from './product-tour/ProductTour';
+import { OwnerProductTour, useProductTourLocale, type OwnerProductTourHandle } from './product-tour/ProductTour';
 
 export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: ActiveRole[] }
 export interface NavSection { section: string; items: NavItem[]; collapsible?: boolean }
@@ -253,6 +253,7 @@ export function pageTitleFor(pathname: string): string {
 
 export default function Layout() {
   useGlowPointer();
+  const productTourLocale = useProductTourLocale();
   const { session, profile, org, roleLabels, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, accessStatus = 'unknown', signOut } = useAuth();
   const assistantSession = useAssistantRunSession(assistantAuthorizationFingerprint({
     userId: session?.user.id,
@@ -615,7 +616,7 @@ export default function Layout() {
   const tourLauncherRow = role === 'owner' ? (
     <button type="button" onClick={startOwnerTour}
       className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-sm text-ink-soft transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset">
-      <CircleHelp size={ICON.md} aria-hidden="true" /> מדריך שימוש
+      <CircleHelp size={ICON.md} aria-hidden="true" /> {productTourLocale === 'en' ? 'Product guide' : 'מדריך שימוש'}
     </button>
   ) : null;
 

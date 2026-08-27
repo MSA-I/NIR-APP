@@ -27,9 +27,12 @@ describe('owner first-run product tour registry', () => {
   it('resolves every instruction from the canonical product-help registry', () => {
     expect(productTourRegistryDefects(OWNER_FIRST_RUN_TOUR, PRODUCT_HELP_ENTRIES)).toEqual([]);
     for (const step of OWNER_FIRST_RUN_TOUR) {
-      const copy = resolveProductTourCopy(step);
-      expect(copy.title.length).toBeGreaterThan(0);
-      expect(copy.body.length).toBeGreaterThan(0);
+      for (const locale of ['he', 'en'] as const) {
+        const copy = resolveProductTourCopy(step, PRODUCT_HELP_ENTRIES, locale);
+        expect(copy.title.length, `${locale}:${step.id}`).toBeGreaterThan(0);
+        expect(copy.body.length, `${locale}:${step.id}`).toBeGreaterThan(0);
+        if (locale === 'en') expect(copy.title, step.id).not.toMatch(/[א-ת]/);
+      }
     }
   });
 

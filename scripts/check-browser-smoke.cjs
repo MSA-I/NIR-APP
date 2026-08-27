@@ -3882,8 +3882,8 @@ async function ownerProductTour(browser) {
       }
     });
     if (mobile) await page.getByRole('button', { name: 'פתיחת תפריט', exact: true }).click();
-    else await page.getByRole('button', { name: /תפריט החשבון/ }).click();
-    await page.getByRole('button', { name: 'מדריך שימוש', exact: true }).click();
+    else await page.getByRole('button', { name: /תפריט החשבון|account menu/i }).click();
+    await page.getByRole('button', { name: /מדריך שימוש|Product guide/i }).click();
     await waitStep(page, 'welcome', 'dashboard-heading');
   };
 
@@ -3962,6 +3962,35 @@ async function ownerProductTour(browser) {
     assert(metrics.documentWidth - metrics.clientWidth <= 1, 'owner tour overflows at 390px');
   } finally {
     await closeContext(mobile);
+  }
+
+  // Compatibility proof for the application-wide LocaleProvider developed in parallel. It owns
+  // html[lang]/html[dir]; the tour observes those canonical attributes and must not invent a
+  // second language state or wait for the next route change.
+  const english = await browser.newContext({
+    locale: 'en-US', serviceWorkers: 'block', viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce',
+  });
+  const englishPage = await english.newPage();
+  captureConsole(englishPage, 'owner-product-tour:en:1440');
+  try {
+    await login(englishPage, 'owner');
+    await settle(englishPage);
+    await englishPage.evaluate(() => {
+      document.documentElement.lang = 'en';
+      document.documentElement.dir = 'ltr';
+    });
+    await launch(englishPage, false);
+    await englishPage.getByRole('heading', {
+      name: 'Business control center — what needs attention now', exact: true,
+    }).waitFor();
+    await englishPage.getByText('1 of 16', { exact: true }).waitFor();
+    await englishPage.getByRole('button', { name: 'Next', exact: true }).waitFor();
+    await englishPage.getByRole('button', { name: 'Skip guide', exact: true }).waitFor();
+    await auditAccessibility(englishPage, 'owner-product-tour:en:1440', 'en', 'ltr');
+    await englishPage.screenshot({ path: path.join(outDir, 'owner-tour-1440-welcome-en.png') });
+    report.screenshots.push('owner-tour-1440-welcome-en.png');
+  } finally {
+    await closeContext(english);
   }
 }
 

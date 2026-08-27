@@ -43,6 +43,7 @@ describe('owner product tour integration contract', () => {
     expect(browserGate).toContain('async function ownerProductTour');
     expect(browserGate).toContain("run('owner first-run product tour");
     expect(browserGate).toContain('owner-tour-1440-welcome.png');
+    expect(browserGate).toContain('owner-tour-1440-welcome-en.png');
     expect(browserGate).toContain('owner-tour-390-navigation.png');
   });
 });

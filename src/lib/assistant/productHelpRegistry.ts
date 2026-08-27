@@ -435,10 +435,10 @@ const ENTRIES: readonly ProductHelpEntry[] = [
   /* --------------------------------------------------------------------------
    * English translations.
    *
-   * The UI itself is Hebrew, so a translated step still quotes the Hebrew control it tells you to
-   * press — an English sentence naming an English button that does not exist would be exactly the
-   * kind of unfollowable instruction #192 exists to prevent. Route and roles are pinned to the
-   * Hebrew original by the guard.
+   * Hebrew remains the base locale. English rows share the same ids, routes and roles, and name
+   * controls in the English UI being delivered by the application-wide locale system. A route or
+   * permission disagreement between locales fails the guard rather than publishing an instruction
+   * that cannot be followed.
    * ------------------------------------------------------------------------*/
   {
     id: 'see_what_needs_attention',
@@ -491,6 +491,182 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     ],
     source: 'src/pages/Invoices.tsx · src/lib/routePresentation.ts',
     updated_at: '2026-08-24',
+  },
+  {
+    id: 'see_business_state_now',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office'],
+    route: 'dashboard',
+    label: 'Business control center — what needs attention now',
+    steps: [
+      'Open the business control center to see what needs attention now, what may cost money, and the current state of the business.',
+      'Open the Alerts screen for the complete work queue; the control center summarizes it and links to the relevant records.',
+    ],
+    source: 'src/lib/routePresentation.ts · src/pages/Alerts.tsx · docs/ASSISTANT.md §7',
+    updated_at: '2026-08-27',
+  },
+  {
+    id: 'see_dashboard_attention',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner'],
+    route: 'dashboard',
+    label: 'What needs attention now',
+    steps: [
+      'The Needs attention area groups exceptions and tasks by urgency. Select a row to handle it at its source, or open Alerts for the full queue.',
+    ],
+    source: 'src/pages/Dashboard.tsx · src/components/ui.tsx',
+    updated_at: '2026-08-27',
+  },
+  {
+    id: 'use_global_search',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner'],
+    route: 'dashboard',
+    label: 'Search across the product',
+    steps: [
+      'Use the search field in the header to reach a supplier, product, order, invoice, or document without navigating through each screen.',
+    ],
+    source: 'src/components/GlobalSearch.tsx · src/components/Layout.tsx',
+    updated_at: '2026-08-27',
+  },
+  {
+    id: 'navigate_product_workspace',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner'],
+    route: 'dashboard',
+    label: 'Navigate between work areas',
+    steps: [
+      'Navigation separates daily work, management, and control. On a phone, open the menu button; on desktop, use the links and groups in the header.',
+    ],
+    source: 'src/components/Layout.tsx',
+    updated_at: '2026-08-27',
+  },
+  {
+    id: 'add_supplier',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner'],
+    route: 'suppliers',
+    label: 'Add your first supplier',
+    steps: [
+      'Open Suppliers to build the list of businesses your organization purchases from.',
+      'Select New supplier and enter the supplier details. Bank details use a separate protected flow and are not required to get started.',
+    ],
+    source: 'src/pages/Suppliers.tsx',
+    updated_at: '2026-08-27',
+  },
+  {
+    id: 'upload_price_list',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office'],
+    route: 'prices',
+    label: 'Upload a supplier price list',
+    steps: [
+      'On Price lists, select Upload price list to import a file for one supplier.',
+      'For an Excel file containing several suppliers, select Multi-supplier Excel import, review the preview, and then confirm the import.',
+      'Price-list uploads are available only to owners and procurement managers.',
+    ],
+    source: 'src/pages/PriceLists.tsx',
+    updated_at: '2026-08-27',
+  },
+  {
+    id: 'explain_purchase_order_flow',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner'],
+    route: 'newOrder',
+    label: 'Build a purchase order',
+    steps: [
+      'Open New order to choose the products and quantities needed now.',
+      'The flow moves from product selection to supplier comparison and review. The product shows price, availability, and minimums before any orders are created.',
+    ],
+    source: 'src/pages/neworder/NewOrder.tsx · src/pages/neworder/SupplierSplitStep.tsx',
+    updated_at: '2026-08-27',
+  },
+  {
+    id: 'receive_goods',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner'],
+    route: 'receiving',
+    label: 'Receive goods and record exceptions',
+    steps: [
+      'On Receiving, choose an order awaiting receipt, record what arrived, and mark shortages, damage, or returns. Exceptions remain visible for follow-up.',
+    ],
+    source: 'src/pages/Receiving.tsx',
+    updated_at: '2026-08-27',
+  },
+  {
+    id: 'upload_document',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner'],
+    route: 'documents',
+    label: 'Upload a business document',
+    steps: [
+      'On Documents, select Upload document and choose a file or photo. The original is preserved, and the extracted result is reviewed before it becomes a business fact.',
+    ],
+    source: 'src/pages/DocumentsInbox.tsx · src/components/FileUpload.tsx',
+    updated_at: '2026-08-27',
+  },
+  {
+    id: 'open_a_payment_request',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office'],
+    route: 'paymentRequests',
+    label: 'Create a payment request',
+    steps: [
+      'On Payment requests, select New request.',
+      'A request is opened for a supplier with unpaid invoices and is linked to those invoices.',
+      'Send it for approval, then transfer the approved request to the person who executes payments.',
+      'Use the active and due-date filters to track requests due today, overdue, or due within seven days.',
+    ],
+    source: 'src/pages/PaymentRequests.tsx',
+    updated_at: '2026-08-27',
+  },
+  {
+    id: 'prepare_monthly_report',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner'],
+    route: 'reports',
+    label: 'Review and close the month',
+    steps: [
+      'On the monthly report, choose a month, review exceptions and missing data, and only then create a locked final version for export or delivery to the accountant.',
+    ],
+    source: 'src/pages/Reports.tsx',
+    updated_at: '2026-08-27',
+  },
+  {
+    id: 'start_owner_onboarding',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner'],
+    route: 'onboarding',
+    label: 'Start setting up the business',
+    steps: [
+      'Select Open setup wizard and start with the business details. The wizard continues to categories, suppliers, products, and price lists, and you can stop and return at any stage.',
+    ],
+    source: 'src/pages/Dashboard.tsx · src/pages/Onboarding.tsx',
+    updated_at: '2026-08-27',
   },
 ];
 

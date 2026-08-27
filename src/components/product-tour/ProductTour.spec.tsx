@@ -45,6 +45,8 @@ function renderTour({
 
 beforeEach(() => {
   localStorage.clear();
+  document.documentElement.lang = 'he';
+  document.documentElement.dir = 'rtl';
   vi.restoreAllMocks();
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
     x: 80, y: 80, top: 80, left: 80, right: 280, bottom: 130, width: 200, height: 50,
@@ -53,6 +55,22 @@ beforeEach(() => {
 });
 
 describe('OwnerProductTour', () => {
+  it('switches the open guide to English when the application locale changes', async () => {
+    renderTour();
+    expect(await screen.findByText('1 מתוך 16')).toBeInTheDocument();
+
+    act(() => {
+      document.documentElement.lang = 'en';
+      document.documentElement.dir = 'ltr';
+    });
+
+    expect(await screen.findByText('1 of 16')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Business control center — what needs attention now' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Skip guide' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close guide' })).toBeInTheDocument();
+  });
+
   it('matches the highlighted element corner radii instead of drawing a fixed rounded box', async () => {
     renderTour({
       children: <>

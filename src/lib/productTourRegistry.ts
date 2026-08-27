@@ -1,4 +1,4 @@
-import type { ProductHelpEntry } from './assistant/contracts.ts';
+import type { ProductHelpEntry, ProductHelpLocale } from './assistant/contracts.ts';
 import { PRODUCT_HELP_ENTRIES } from './assistant/productHelpRegistry.ts';
 import { APP_ROUTE_POLICY } from './routePolicy.ts';
 
@@ -122,10 +122,11 @@ export function saveProductTourProgress(orgId: string, userId: string, progress:
 export function resolveProductTourCopy(
   step: ProductTourStep,
   entries: readonly ProductHelpEntry[] = PRODUCT_HELP_ENTRIES,
+  locale: ProductHelpLocale = 'he',
 ): { title: string; body: string } {
-  const entry = entries.find((candidate) => candidate.locale === 'he' && candidate.id === step.helpId);
+  const entry = entries.find((candidate) => candidate.locale === locale && candidate.id === step.helpId);
   if (!entry || !entry.roles.includes('owner') || !entry.steps[step.helpStep]) {
-    throw new Error(`invalid owner product-tour copy: ${step.id}`);
+    throw new Error(`invalid owner product-tour copy: ${locale}:${step.id}`);
   }
   return { title: entry.label, body: entry.steps[step.helpStep] };
 }
@@ -139,18 +140,20 @@ export function productTourRegistryDefects(
   for (const step of steps) {
     if (ids.has(step.id)) defects.push(`duplicate_step:${step.id}`);
     ids.add(step.id);
-    const entry = entries.find((candidate) => candidate.locale === 'he' && candidate.id === step.helpId);
-    if (!entry) {
-      defects.push(`missing_help:${step.id}:${step.helpId}`);
-      continue;
+    for (const locale of ['he', 'en'] as const satisfies readonly ProductHelpLocale[]) {
+      const entry = entries.find((candidate) => candidate.locale === locale && candidate.id === step.helpId);
+      if (!entry) {
+        defects.push(`missing_help:${locale}:${step.id}:${step.helpId}`);
+        continue;
+      }
+      if (!entry.roles.includes('owner')) defects.push(`help_not_for_owner:${locale}:${step.id}`);
+      const route = APP_ROUTE_POLICY[entry.route as keyof typeof APP_ROUTE_POLICY];
+      if (!route) defects.push(`help_route_missing:${locale}:${step.id}:${entry.route}`);
+      else if (route.path !== (step.destination ?? step.route)) {
+        defects.push(`route_mismatch:${locale}:${step.id}:${route.path}:${step.destination ?? step.route}`);
+      }
+      if (!entry.steps[step.helpStep]) defects.push(`help_step_missing:${locale}:${step.id}:${step.helpStep}`);
     }
-    if (!entry.roles.includes('owner')) defects.push(`help_not_for_owner:${step.id}`);
-    const route = APP_ROUTE_POLICY[entry.route as keyof typeof APP_ROUTE_POLICY];
-    if (!route) defects.push(`help_route_missing:${step.id}:${entry.route}`);
-    else if (route.path !== (step.destination ?? step.route)) {
-      defects.push(`route_mismatch:${step.id}:${route.path}:${step.destination ?? step.route}`);
-    }
-    if (!entry.steps[step.helpStep]) defects.push(`help_step_missing:${step.id}:${step.helpStep}`);
   }
   return defects;
 }

@@ -10,6 +10,7 @@ import {
 import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowRight, RotateCcw, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
+import type { ProductHelpLocale } from '../../lib/assistant/contracts.ts';
 import type { ActiveRole } from '../../lib/types.ts';
 import {
   OWNER_FIRST_RUN_TOUR,
@@ -29,6 +30,70 @@ const VIEWPORT_GAP = 16;
 
 const viewportWidth = () => document.documentElement.clientWidth || window.innerWidth;
 const viewportHeight = () => document.documentElement.clientHeight || window.innerHeight;
+
+interface ProductTourUiCopy {
+  progress: (current: number, total: number) => string;
+  liveProgress: (current: number, total: number, title: string) => string;
+  missingTitle: string;
+  missingBody: string;
+  close: string;
+  retry: string;
+  skipStep: string;
+  clickHint: string;
+  skipGuide: string;
+  back: string;
+  next: string;
+}
+
+const PRODUCT_TOUR_UI: Record<ProductHelpLocale, ProductTourUiCopy> = {
+  he: {
+    progress: (current, total) => `${current} מתוך ${total}`,
+    liveProgress: (current, total, title) => `צעד ${current} מתוך ${total}: ${title}`,
+    missingTitle: 'האלמנט לא זמין במסך הזה',
+    missingBody: 'ייתכן שהמסך עדיין נטען או שהפקד אינו זמין במצב הנוכחי. אפשר לנסות שוב או להמשיך לצעד הבא.',
+    close: 'סגירת המדריך',
+    retry: 'נסה שוב',
+    skipStep: 'דלג על השלב',
+    clickHint: 'לחיצה על האזור המודגש תמשיך לצעד הבא.',
+    skipGuide: 'דלג על המדריך',
+    back: 'חזרה',
+    next: 'הבא',
+  },
+  en: {
+    progress: (current, total) => `${current} of ${total}`,
+    liveProgress: (current, total, title) => `Step ${current} of ${total}: ${title}`,
+    missingTitle: 'This element is not available on this screen',
+    missingBody: 'The screen may still be loading, or this control may not be available in the current state. Try again or continue to the next step.',
+    close: 'Close guide',
+    retry: 'Try again',
+    skipStep: 'Skip step',
+    clickHint: 'Select the highlighted area to continue to the next step.',
+    skipGuide: 'Skip guide',
+    back: 'Back',
+    next: 'Next',
+  },
+};
+
+const productTourLocaleFromDocument = (): ProductHelpLocale => (
+  document.documentElement.lang.toLowerCase().startsWith('en') ? 'en' : 'he'
+);
+
+/**
+ * Compatibility bridge for the application-wide LocaleProvider being developed in parallel.
+ * That provider owns html[lang] and html[dir]; observing the canonical DOM attribute keeps this
+ * branch independent of its not-yet-merged module and switches an already-open guide immediately.
+ */
+export function useProductTourLocale(): ProductHelpLocale {
+  const [locale, setLocale] = useState<ProductHelpLocale>(productTourLocaleFromDocument);
+  useEffect(() => {
+    const sync = () => setLocale(productTourLocaleFromDocument());
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+    return () => observer.disconnect();
+  }, []);
+  return locale;
+}
 
 type TourProfile = { id: string; org_id: string; role: ActiveRole };
 
@@ -145,6 +210,8 @@ export const OwnerProductTour = forwardRef<OwnerProductTourHandle, OwnerProductT
   function OwnerProductTour({ profile, onPrepareStep }, ref) {
     const location = useLocation();
     const navigate = useNavigate();
+    const locale = useProductTourLocale();
+    const ui = PRODUCT_TOUR_UI[locale];
     const identityKey = profile?.role === 'owner' ? `${profile.org_id}:${profile.id}` : null;
     const [progress, setProgress] = useState<ProductTourProgress | null>(() => (
       profile?.role === 'owner' ? loadProductTourProgress(profile.org_id, profile.id) : null
@@ -163,7 +230,12 @@ export const OwnerProductTour = forwardRef<OwnerProductTourHandle, OwnerProductT
       ? Math.max(0, OWNER_FIRST_RUN_TOUR.findIndex((candidate) => candidate.id === progress.stepId))
       : 0;
     const step = OWNER_FIRST_RUN_TOUR[stepIndex];
-    const copy = useMemo(() => resolveProductTourCopy(step), [step]);
+    const copy = useMemo(
+      () => resolveProductTourCopy(step, undefined, locale),
+      [locale, step],
+    );
+    const BackIcon = locale === 'he' ? ArrowRight : ArrowLeft;
+    const NextIcon = locale === 'he' ? ArrowLeft : ArrowRight;
 
     const store = useCallback((next: ProductTourProgress) => {
       setProgress(next);
@@ -337,15 +409,15 @@ export const OwnerProductTour = forwardRef<OwnerProductTourHandle, OwnerProductT
       <div className="product-tour-popover product-tour-popover-fallback" role="dialog" aria-modal="false" aria-labelledby="product-tour-missing-title">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-xs font-medium text-ink-muted">{stepIndex + 1} מתוך {OWNER_FIRST_RUN_TOUR.length}</div>
-            <h2 id="product-tour-missing-title" className="mt-1 text-lg font-semibold text-ink">האלמנט לא זמין במסך הזה</h2>
+            <div className="text-xs font-medium text-ink-muted">{ui.progress(stepIndex + 1, OWNER_FIRST_RUN_TOUR.length)}</div>
+            <h2 id="product-tour-missing-title" className="mt-1 text-lg font-semibold text-ink">{ui.missingTitle}</h2>
           </div>
-          <button type="button" className="btn-ghost btn-icon" onClick={dismiss} aria-label="סגירת המדריך"><X size={ICON.md} aria-hidden="true" /></button>
+          <button type="button" className="btn-ghost btn-icon" onClick={dismiss} aria-label={ui.close}><X size={ICON.md} aria-hidden="true" /></button>
         </div>
-        <p className="mt-3 text-sm leading-6 text-ink-body">ייתכן שהמסך עדיין נטען או שהפקד אינו זמין במצב הנוכחי. אפשר לנסות שוב או להמשיך לצעד הבא.</p>
+        <p className="mt-3 text-sm leading-6 text-ink-body">{ui.missingBody}</p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
-          <button type="button" className="btn-secondary" onClick={resolveTarget}><RotateCcw size={ICON.sm} aria-hidden="true" /> נסה שוב</button>
-          <button type="button" className="btn-primary" onClick={finishOrAdvance}>דלג על השלב</button>
+          <button type="button" className="btn-secondary" onClick={resolveTarget}><RotateCcw size={ICON.sm} aria-hidden="true" /> {ui.retry}</button>
+          <button type="button" className="btn-primary" onClick={finishOrAdvance}>{ui.skipStep}</button>
         </div>
       </div>
     ) : rect && measuredStepId === step.id ? (
@@ -367,26 +439,26 @@ export const OwnerProductTour = forwardRef<OwnerProductTourHandle, OwnerProductT
         <div className="product-tour-popover" style={popoverStyle(rect)} role="dialog" aria-modal="false" aria-labelledby="product-tour-title" aria-describedby="product-tour-body">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-xs font-medium text-ink-muted">{stepIndex + 1} מתוך {OWNER_FIRST_RUN_TOUR.length}</div>
+              <div className="text-xs font-medium text-ink-muted">{ui.progress(stepIndex + 1, OWNER_FIRST_RUN_TOUR.length)}</div>
               <h2 id="product-tour-title" className="mt-1 text-lg font-semibold text-ink">{copy.title}</h2>
             </div>
-            <button type="button" className="btn-ghost btn-icon" onClick={dismiss} aria-label="סגירת המדריך"><X size={ICON.md} aria-hidden="true" /></button>
+            <button type="button" className="btn-ghost btn-icon" onClick={dismiss} aria-label={ui.close}><X size={ICON.md} aria-hidden="true" /></button>
           </div>
           <p id="product-tour-body" className="mt-3 text-sm leading-6 text-ink-body">{copy.body}</p>
           {step.advance === 'click' && (
-            <p className="mt-3 text-sm font-medium text-action" aria-live="polite">לחיצה על האזור המודגש תמשיך לצעד הבא.</p>
+            <p className="mt-3 text-sm font-medium text-action" aria-live="polite">{ui.clickHint}</p>
           )}
           <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
-            <button type="button" className="btn-ghost min-h-11" onClick={dismiss}>דלג על המדריך</button>
+            <button type="button" className="btn-ghost min-h-11" onClick={dismiss}>{ui.skipGuide}</button>
             <div className="flex gap-2">
-              {stepIndex > 0 && <button type="button" className="btn-secondary" onClick={goBack}><ArrowRight size={ICON.sm} aria-hidden="true" /> חזרה</button>}
+              {stepIndex > 0 && <button type="button" className="btn-secondary" onClick={goBack}><BackIcon size={ICON.sm} aria-hidden="true" /> {ui.back}</button>}
               {step.advance === 'next' && (
-                <button ref={nextButtonRef} type="button" className="btn-primary" onClick={finishOrAdvance}>הבא <ArrowLeft size={ICON.sm} aria-hidden="true" /></button>
+                <button ref={nextButtonRef} type="button" className="btn-primary" onClick={finishOrAdvance}>{ui.next} <NextIcon size={ICON.sm} aria-hidden="true" /></button>
               )}
             </div>
           </div>
         </div>
-        <span className="sr-only" aria-live="polite">צעד {stepIndex + 1} מתוך {OWNER_FIRST_RUN_TOUR.length}: {copy.title}</span>
+        <span className="sr-only" aria-live="polite">{ui.liveProgress(stepIndex + 1, OWNER_FIRST_RUN_TOUR.length, copy.title)}</span>
       </>
     ) : null;
 

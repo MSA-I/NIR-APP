@@ -683,6 +683,8 @@ markup אסור — ‏`bidiIsolate` מ־`src/lib/format.ts` עוטף ב־FSI/PD
 ומובייל. לחיצה אמיתית מותרת רק לניווט ולפתיחת משטח; שמירה, העלאה, אישור וכתיבה עסקית לעולם אינן
 צעד אוטומטי. עוגן חסר עובר למצב recovery עם ניסיון חוזר ודילוג במקום לנעול את המסך. ‏Escape
 מסיים את הסיור, כל יעד ופקד הוא 44px לפחות, ו־`prefers-reduced-motion` מבטל את settle הקצר.
+הטקסט, labels, מונה הצעדים וכיוון החצים קוראים את `html[lang]`; עברית היא RTL ואנגלית LTR.
+`LocaleProvider` הוא בעל מצב השפה היחיד — הסיור צופה ב־attribute הקנוני ואינו מחזיק מתג שפה משלו.
 
 ### Buttons
 Primary אוקיאני · Secondary **טונאלי ללא מסגרת (T7.1)** — ‏`surface-sunken` עם hover ‏`line-soft`;
