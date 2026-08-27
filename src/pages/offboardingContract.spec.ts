@@ -1,3 +1,4 @@
+import { he } from '../lib/i18n/dictionaries/he';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -17,7 +18,10 @@ describe('tenant offboarding UI contract', () => {
     expect(organizationAccess).not.toContain("mode === 'trial'");
     expect(organizationAccess).not.toContain("mode === 'grace'");
     expect(layout).toContain("organizationAccess.mode === 'offboarding'");
-    expect(layout).toContain('הארגון נמצא בתהליך סיום שירות');
+    // The notice moved into the dictionary, so the claim moves with it: the layout must render
+    // that key, and the key must still carry the sentence this contract is about.
+    expect(layout).toContain("t('nav.text_13')");
+    expect(he.nav.text_13).toContain('הארגון נמצא בתהליך סיום שירות');
     expect(auth).toContain('refreshOrganizationAccess: () => Promise<void>');
   });
 

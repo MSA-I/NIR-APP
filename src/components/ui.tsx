@@ -126,9 +126,10 @@ export function Skeleton({ className = '' }: { className?: string }) {
 // One wrapper for every skeleton: screen readers get a single "טוען" instead of
 // narrating a wall of empty boxes.
 function SkeletonRegion({ children }: { children: ReactNode }) {
+  const { t } = useT();
   return (
     <div role="status" aria-busy="true" className="space-y-4">
-      <span className="sr-only">טוען</span>
+      <span className="sr-only">{t('ui.text')}</span>
       {children}
     </div>
   );
@@ -244,8 +245,9 @@ export interface BreadcrumbItem {
 }
 
 export function Breadcrumbs({ items }: { items: readonly BreadcrumbItem[] }) {
+  const { t } = useT();
   return (
-    <nav aria-label="פירורי לחם" className="text-xs text-ink-muted">
+    <nav aria-label={t('ui.aria_label')} className="text-xs text-ink-muted">
       <ol className="flex min-w-0 items-center gap-1.5">
         {items.map((item, index) => {
           const current = index === items.length - 1;
@@ -363,6 +365,7 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
    */
   progress?: { done: number; total: number; label: string };
 }) {
+  const { t } = useT();
   const currentIndex = steps.findIndex((step) => step.key === current);
   const percent = progress && progress.total > 0
     ? Math.min(100, Math.max(0, Math.round((progress.done / progress.total) * 100)))
@@ -386,7 +389,7 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
           style={{ width: `${stepPercent}%` }}
         />
       </div>
-      <ol aria-label="שלבי התהליך" className="flex min-w-0 flex-wrap items-center gap-y-2 overflow-x-auto pb-1">
+      <ol aria-label={t('ui.aria_label_2')} className="flex min-w-0 flex-wrap items-center gap-y-2 overflow-x-auto pb-1">
         {steps.map((step, index) => {
           const isCurrent = index === currentIndex;
           const isComplete = currentIndex >= 0 && index < currentIndex;
@@ -425,7 +428,7 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
                   {isStopped ? <AlertTriangle size={11} /> : isComplete ? <Check size={11} /> : null}
                 </span>
                 {step.label}
-                {isCurrent && <span className="sr-only">{isStopped ? ' — השלב שנעצר' : ' — השלב הנוכחי'}</span>}
+                {isCurrent && <span className="sr-only">{isStopped ? t('ui.text_2') : t('ui.text_3')}</span>}
               </span>
               {index < steps.length - 1 && <ChevronLeft size={ICON.sm} className="mx-2 shrink-0 text-ink-ghost" aria-hidden="true" />}
             </li>
@@ -451,7 +454,7 @@ export function LifecycleStrip({ steps, current, nextAction, failed = false, det
       {nextAction && (
         <div className="mt-2 border-t border-line-soft pt-2 text-sm text-ink-body">
           {/* The label steps back; the action itself keeps the body ink from the wrapper. */}
-          <span className="font-medium text-ink-muted">הפעולה הבאה:</span> {nextAction}
+          <span className="font-medium text-ink-muted">{t('ui.text_4')}</span> {nextAction}
         </div>
       )}
     </div>
@@ -951,6 +954,7 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
    *  entrance step, which differs between phone and desktop since the money band moves. */
   className?: string;
 }) {
+  const { t } = useT();
   const clear = items.filter((i) => i.count === 0);
   const unknownRows = items.filter((i) => i.count == null);
   // Rank the active rows by tone severity; the original index is the tiebreaker, so same-tone
@@ -981,10 +985,10 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
         <h2 className="section-title flex items-center gap-2">
           <Bell size={ICON.md} aria-hidden="true"
             className={actionRows.length === 0 ? 'text-ink-ghost' : headlineTone === 'alert' ? 'text-alert-fg' : 'text-await-fg'} />
-          דורש טיפול היום
+          {t('ui.text_5')}
           {actionRows.length > 0 && (
             <span className={`${headlineTone === 'alert' ? 'badge-alert' : 'badge-await'} num`}>
-              {actionRows.length}<span className="sr-only"> סוגי טיפול</span>
+              {actionRows.length}<span className="sr-only"> {t('ui.text_6')}</span>
             </span>
           )}
         </h2>
@@ -1007,23 +1011,23 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
            brand-new organization has two unmeasurable rows by design, so the largest card on its
            first screen used to render a heading above nothing at all. Neutral ink, and no number:
            the count already rides the disclosure badge four lines below. */
-        <div className="text-sm text-ink-soft py-1">אין משימות דחופות מבין המדדים שנמדדו — מדדים שאין להם נתונים מרוכזים תחת „מידע נוסף”.</div>
+        <div className="text-sm text-ink-soft py-1">{t('ui.text_7')}</div>
       ) : (
-        <div className="text-sm text-done-fg py-1">אין משימות דחופות כרגע</div>
+        <div className="text-sm text-done-fg py-1">{t('ui.text_8')}</div>
       )}
 
       {(noticeRows.length > 0 || unknownRows.length > 0 || clear.length > 0) && (
         <details className="group mt-2 border-t border-line-soft">
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm text-ink-muted hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
             <ChevronLeft size={ICON.sm} className="shrink-0 transition-transform group-open:-rotate-90" aria-hidden="true" />
-            <span className="font-medium text-ink-soft">מידע נוסף</span>
+            <span className="font-medium text-ink-soft">{t('ui.text_9')}</span>
             {/* The count rides its label — a badge orphaned at the far edge reads as debris. */}
             <span className="badge-idle num">{noticeRows.length + unknownRows.length + clear.length}</span>
           </summary>
 
           {noticeRows.length > 0 && (
             <div className="pt-2">
-              <div className="text-xs font-medium text-ink-muted mb-1">לידיעה</div>
+              <div className="text-xs font-medium text-ink-muted mb-1">{t('ui.text_10')}</div>
               <ul className="divide-y divide-line-soft">
                 {noticeRows.map((i) => <AttentionRow key={i.key} item={i} muted />)}
               </ul>
@@ -1032,7 +1036,7 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
 
           {unknownRows.length > 0 && (
             <div className="mt-2 pt-2 border-t border-line-soft">
-              <div className="text-xs font-medium text-ink-muted mb-1">לא ניתן למדידה</div>
+              <div className="text-xs font-medium text-ink-muted mb-1">{t('ui.text_11')}</div>
               <ul className="divide-y divide-line-soft">
                 {unknownRows.map((i) => <AttentionRow key={i.key} item={i} muted />)}
               </ul>
@@ -1201,6 +1205,7 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
   description?: string;
   statusMessage?: string;
 }) {
+  const { t } = useT();
   const { panelRef, requestClose, isTop } = useDialogLayer<HTMLDivElement>({ open, onClose, busy, allowCloseWhileBusy });
   const titleRef = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
@@ -1248,7 +1253,7 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
         <div className="flex items-center justify-between px-5 py-4 border-b border-line-soft">
           <h3 ref={titleRef} id={titleId} tabIndex={-1} className="font-semibold text-ink focus:outline-none">{title}</h3>
           <button type="button" className="btn-ghost p-1.5! min-w-11 min-h-11" disabled={closeDisabled}
-            onClick={() => requestClose()} aria-label="סגירה"><X size={ICON.md} /></button>
+            onClick={() => requestClose()} aria-label={t('ui.aria_label_3')}><X size={ICON.md} /></button>
         </div>
         <div className="dialog-safe-body p-5 overflow-y-auto">
           {description && <p id={descriptionId} className="text-sm text-ink-soft mb-4">{description}</p>}
@@ -1261,10 +1266,12 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
   );
 }
 
-export function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel = 'אישור', reasonLabel = OPTIONAL_REASON_LABEL, danger, requireReason, busy }: {
+export function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel, reasonLabel = OPTIONAL_REASON_LABEL, danger, requireReason, busy }: {
   open: boolean; onClose: () => void; onConfirm: (reason?: string) => void;
   title: string; message: string; confirmLabel?: string; reasonLabel?: string; danger?: boolean; requireReason?: boolean; busy?: boolean;
 }) {
+  const { t } = useT();
+  const confirmText = confirmLabel ?? t('ui.ConfirmDialog');
   const [reason, setReason] = useState('');
   const reasonId = useId();
   useEffect(() => { if (open) setReason(''); }, [open]);
@@ -1281,13 +1288,13 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
         </div>
       )}
       <div className="flex gap-2 justify-end">
-        <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
+        <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>{t('ui.text_12')}</button>
         {/* The reason no longer blocks the button (owner, 11.08.2026). `requireReason` now means
             "this action records a reason", not "this action interrogates the user" — when the box
             is empty the ledger gets a sentence naming the action instead of a forced "asdf". */}
         <button className={danger ? 'btn-danger' : 'btn-primary'} disabled={busy}
           onClick={() => onConfirm(requireReason ? reasonOr(reason, title) : undefined)}>
-            {busy ? <><Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /><span>מעבד…</span></> : confirmLabel}
+            {busy ? <><Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /><span>{t('ui.text_13')}</span></> : confirmText}
         </button>
       </div>
     </Modal>
@@ -1500,8 +1507,9 @@ interface ColumnPickerOption {
 /** Native checkboxes inside their labels: accessible names and state announcements for free,
     no ids to collide between the picker's popover and sheet renderings (only one is mounted). */
 function ColumnChecklist({ options }: { options: ColumnPickerOption[] }) {
+  const { t } = useT();
   return (
-    <div role="group" aria-label="בחירת עמודות" className="flex flex-col">
+    <div role="group" aria-label={t('ui.aria_label_4')} className="flex flex-col">
       {options.map((o) => (
         <label key={o.key}
           className={`flex min-h-11 items-center gap-2.5 rounded-lg px-2 text-sm ${o.disabled ? 'text-ink-faint cursor-default' : 'text-ink-body cursor-pointer hover:bg-surface-hover'}`}>
@@ -1518,6 +1526,7 @@ function ColumnChecklist({ options }: { options: ColumnPickerOption[] }) {
     card is overflow-hidden — and reuses its measure-then-place pattern (end-edge aligned,
     flipped above when the viewport has no room below, clamped inside). */
 function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
+  const { t } = useT();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -1585,7 +1594,7 @@ function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
         <Columns3 size={ICON.sm} aria-hidden="true" /> עמודות
       </button>
       {open && createPortal(
-        <div ref={panelRef} role="dialog" aria-label="בחירת עמודות" tabIndex={-1}
+        <div ref={panelRef} role="dialog" aria-label={t('ui.aria_label_5')} tabIndex={-1}
           style={{ position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, visibility: pos ? 'visible' : 'hidden' }}
           className="z-50 min-w-44 max-w-64 max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain border border-line bg-surface p-2 shadow-menu">
           <ColumnChecklist options={options} />
@@ -1607,9 +1616,10 @@ function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
  * `tsc` over the unchanged pages is the compatibility proof.
  */
 export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
+  const { t } = useT();
   const {
-    rows, columns, onRowClick, searchLabel = 'חיפוש בטבלה', tableLabel,
-    emptyTitle = 'אין נתונים להצגה', emptySubtitle, emptyAction, emptyIcon, toolbar, mobile = 'cards',
+    rows, columns, onRowClick, searchLabel = t('ui.text_14'), tableLabel,
+    emptyTitle = t('ui.text_15'), emptySubtitle, emptyAction, emptyIcon, toolbar, mobile = 'cards',
     mobileTitle, mobileTrailing, rowActions, rowLabel,
     error = null, activeFilters = 0, onClearFilters, columnPicker,
   } = props;
@@ -1786,10 +1796,10 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
     <div className="relative flex-1 min-w-44 max-w-xs">
       <Search size={ICON.sm} className="absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint" />
       {server ? (
-        <input className="input ps-9!" aria-label={searchLabel} placeholder="חיפוש..." value={searchText}
+        <input className="input ps-9!" aria-label={searchLabel} placeholder={t('ui.placeholder')} value={searchText}
           onChange={(e) => emitSearch(e.target.value)} />
       ) : (
-        <input className="input ps-9!" aria-label={searchLabel} placeholder="חיפוש..." value={q}
+        <input className="input ps-9!" aria-label={searchLabel} placeholder={t('ui.placeholder_2')} value={q}
           onChange={(e) => setQ(e.target.value)} />
       )}
     </div>
@@ -1802,8 +1812,8 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
     <div className="p-4"><Note tone="alert" role="alert">{error}</Note></div>
   ) : isEmpty ? (
     hasActiveFilters ? (
-      <EmptyState title="אין תוצאות לסינון הנוכחי" subtitle="שנה את הסינון או נקה אותו כדי לראות רשומות"
-        action={<button type="button" className="btn-secondary" onClick={clearFilters}>נקה סינון</button>} />
+      <EmptyState title={t('ui.title')} subtitle={t('ui.subtitle')}
+        action={<button type="button" className="btn-secondary" onClick={clearFilters}>{t('ui.text_16')}</button>} />
     ) : (
       <EmptyState title={emptyTitle} subtitle={emptySubtitle} action={emptyAction} icon={emptyIcon} />
     )
@@ -1923,7 +1933,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
                       </th>
                     );
                   })}
-                  {rowActions && <th scope="col" className="th w-12"><span className="sr-only">פעולות</span></th>}
+                  {rowActions && <th scope="col" className="th w-12"><span className="sr-only">{t('ui.text_17')}</span></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-line-soft">
@@ -1974,7 +1984,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
                   {toolbar}
                   {pickerOptions && <ColumnPickerPopover options={pickerOptions} />}
                   {hasActiveFilters && (
-                    <button type="button" className="btn-ghost" onClick={clearFilters}>נקה סינון</button>
+                    <button type="button" className="btn-ghost" onClick={clearFilters}>{t('ui.text_18')}</button>
                   )}
                 </>
               ) : sheetHasContent ? (
@@ -2010,11 +2020,11 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
               <div className="flex items-center gap-1">
                 <button className="btn-ghost p-1.5! min-w-11 min-h-11" disabled={currentPage === 0}
                   onClick={() => (server ? server.onPageChange(server.page - 1) : setPage((p) => p - 1))}
-                  aria-label="הקודם"><ChevronRight size={ICON.sm} /></button>
+                  aria-label={t('ui.aria_label_6')}><ChevronRight size={ICON.sm} /></button>
                 <span className="px-2">{currentPage + 1} / {pages}</span>
                 <button className="btn-ghost p-1.5! min-w-11 min-h-11" disabled={currentPage >= pages - 1}
                   onClick={() => (server ? server.onPageChange(server.page + 1) : setPage((p) => p + 1))}
-                  aria-label="הבא"><ChevronLeft size={ICON.sm} /></button>
+                  aria-label={t('ui.aria_label_7')}><ChevronLeft size={ICON.sm} /></button>
               </div>
             )}
           </div>
@@ -2023,18 +2033,18 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
       {enterprise && !isDesktop && (
         // The one mobile sheet, over the existing dialog layer (extracted, not rewritten):
         // Modal already runs on useDialogLayer and renders as a bottom sheet on phones.
-        <Modal open={sheetOpen} onClose={() => setSheetOpen(false)} title="סינון ותצוגה">
+        <Modal open={sheetOpen} onClose={() => setSheetOpen(false)} title={t('ui.title_2')}>
           <div className="space-y-5">
             {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
             {pickerOptions && (
               <div>
-                <div className="label">עמודות</div>
+                <div className="label">{t('ui.text_19')}</div>
                 <ColumnChecklist options={pickerOptions} />
               </div>
             )}
             {hasActiveFilters && (
               <button type="button" className="btn-secondary w-full" onClick={() => { clearFilters(); setSheetOpen(false); }}>
-                נקה סינון
+                {t('ui.text_20')}
               </button>
             )}
           </div>

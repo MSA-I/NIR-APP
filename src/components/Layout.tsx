@@ -1,4 +1,5 @@
 import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 import { Link, Outlet, useNavigate, useLocation, useSearchParams } from 'react-router';
 import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, X, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight, ScrollText } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -79,14 +80,14 @@ function navItem(to: StaticRoutePath, icon: typeof LayoutDashboard, roles: Activ
    the dropdown panels, the page titles and the routePresentation catalogue keep the full names,
    so nothing desyncs. A path with no entry here simply shows its full label. */
 const NAV_SHORT_LABELS: Partial<Record<string, string>> = {
-  '/orders': 'הזמנות',
-  '/receiving': 'קבלה',
-  '/documents': 'מסמכים',
+  '/orders': 'nav.text',
+  '/receiving': 'nav.text_2',
+  '/documents': 'nav.text_3',
   // 'המנוי' used to be the GROUP's name, printed on a disclosure trigger over a single route
   // (DESIGN.md:507 forbids exactly that shape). The group is now a plain link on this surface, and
   // this entry is what keeps the word on the bar identical to the one the owner approved — the
   // drawer, the panel and the page title all still say 'המנוי שלי'.
-  '/settings/subscription': 'המנוי',
+  '/settings/subscription': 'nav.text_4',
 };
 
 // Four work groups — מסמכים / רכש / כספים / בקרה — under two ungrouped links that need no
@@ -118,7 +119,7 @@ export const NAV_SECTIONS: NavSection[] = [
     // Documents stand apart from כספים because a scanned page is not yet a financial fact: it is
     // read and filed first, and only then becomes an invoice or a credit. The queue that does the
     // reading belongs beside the ledgers it feeds, not inside them.
-    section: 'מסמכים',
+    section: 'nav.text_5',
     items: [
       navItem('/documents/operations', Activity, ['owner']),
       navItem('/documents/consolidated-invoices', FileCheck2, ['owner', 'office', 'accountant']),
@@ -127,7 +128,7 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    section: 'רכש',
+    section: 'nav.text_6',
     items: [
       navItem('/orders', ClipboardList, ['owner', 'office']),
       navItem('/receiving', PackageCheck, ['owner', 'office']),
@@ -138,7 +139,7 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    section: 'כספים',
+    section: 'nav.text_7',
     items: [
       navItem('/invoices', FileText, ['owner', 'office', 'accountant']),
       navItem('/credits', RotateCcw, ['owner', 'office', 'accountant']),
@@ -149,7 +150,7 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    section: 'בקרה',
+    section: 'nav.text_8',
     items: [
       navItem('/alerts', Bell, ['owner', 'office']),
       navItem('/exceptions', AlertTriangle, ['owner', 'office', 'accountant']),
@@ -250,7 +251,7 @@ export function pageTitleFor(pathname: string): string {
 }
 
 export default function Layout() {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   useGlowPointer();
   const { session, profile, org, roleLabels, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, accessStatus = 'unknown', signOut } = useAuth();
   const assistantSession = useAssistantRunSession(assistantAuthorizationFingerprint({
@@ -500,7 +501,7 @@ export default function Layout() {
     if (detail.pending.length) {
       const saved = await Promise.all(detail.pending);
       if (saved.some((result) => !result)) {
-        toast('לא ניתן להתנתק לפני שמירת טיוטת ההזמנה. יש לנסות שוב.', 'error');
+        toast(t('nav.toast'), 'error');
         return;
       }
     }
@@ -547,7 +548,9 @@ export default function Layout() {
     const surface = opts?.surface ?? 'panel';
     const active = isRouteFamilyActive(location.pathname, item.to);
     const section = active ? sectionOf(item.to) : null;
-    const pillLabel = NAV_SHORT_LABELS[item.to] ?? item.label;
+    // The table holds a KEY (module scope cannot call a hook); it is resolved here, where one has.
+    const shortKey = NAV_SHORT_LABELS[item.to];
+    const pillLabel = shortKey ? t(shortKey as TKey) : item.label;
     return (
       <Link key={item.to} to={item.to} className={linkCls(active, surface)} aria-current={active ? 'page' : undefined}
         data-section={section ?? undefined} title={surface === 'pill' && pillLabel !== item.label ? item.label : undefined}
@@ -630,7 +633,7 @@ export default function Layout() {
           {brandMark('drawer')}
           <div className="min-w-0">
             <div className="text-base font-semibold text-ink">{APP_NAME}</div>
-            <div className="truncate text-xs text-ink-muted" title={orgName || undefined}>{orgName || 'ניהול רכש ותשלומים'}</div>
+            <div className="truncate text-xs text-ink-muted" title={orgName || undefined}>{orgName || t('nav.text_9')}</div>
           </div>
         </Link>
         <PlanBadge compact />
@@ -665,7 +668,7 @@ export default function Layout() {
         <div className="border-t border-line-soft pt-3">
           {footerItems.length > 0 && (
             <>
-              <div className="px-3 pb-1 text-xs font-semibold text-ink-muted">החשבון והמערכת</div>
+              <div className="px-3 pb-1 text-xs font-semibold text-ink-muted">{t('nav.text_10')}</div>
               <div className="space-y-0.5">{navLinks(footerItems, { surface: 'panel' })}</div>
             </>
           )}
@@ -767,7 +770,7 @@ export default function Layout() {
           like a primary button at the logical start, z-above the top bar (z-40). */}
       <a href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:start-3 focus:z-50 focus:rounded-lg focus:bg-action focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-on-solid focus:shadow-menu focus:outline-none focus:ring-2 focus:ring-focus">
-        דלג לתוכן
+        {t('nav.text_11')}
       </a>
       {/* Desktop navigation (T7.2, reference layout) — no bar. Floating pills on the glowing
           canvas: an outlined logo pill at the start, a centered WHITE pill holding the text-only
@@ -814,7 +817,7 @@ export default function Layout() {
               hold it rather than evicting the brand. Nothing is hidden, nothing scrolls, and no
               destination was removed to make it fit. Measured after: one row from 1280 up. */}
           <div className="flex min-w-0 flex-1 justify-center">
-            <nav aria-label="ניווט ראשי"
+            <nav aria-label={t('nav.aria_label')}
               /* `rounded-[1.625rem]` IS `rounded-full` for the row this pill actually is, and it is
                  not a compromise: 26px is exactly half the one-row height (p-1.5 = 12 + a 40px
                  `min-h-10` item = 52), so at every width that fits on one line — 1152 and up,
@@ -875,7 +878,7 @@ export default function Layout() {
             in this one shell, all meaning the same thing. */}
         <button type="button"
           className="btn-ghost btn-icon group rounded-full"
-          onClick={openMobileMenu} aria-label="פתיחת תפריט" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
+          onClick={openMobileMenu} aria-label={t('nav.aria_label_2')} aria-expanded={mobileOpen} aria-controls="mobile-navigation">
           {/* The three lines fold into an X while the drawer comes in (owner, 26.08.2026, with the
               reference component). It is drawn here rather than taken from lucide because lucide
               ships `Menu` and `X` as two finished icons, and the thing being asked for is the
@@ -986,7 +989,7 @@ export default function Layout() {
         <div className="flex shrink-0 items-center gap-0.5">
           {canSearch && (
             <button type="button" className="btn-ghost btn-icon rounded-full" onClick={() => setSearchOpen(true)}
-              aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={ICON.xl} aria-hidden="true" /></button>
+              aria-label={t('nav.aria_label_3')} aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={ICON.xl} aria-hidden="true" /></button>
           )}
           <AssistantPanel session={assistantSession} />
           <NotificationBell />
@@ -1011,7 +1014,7 @@ export default function Layout() {
           {/* T7.3k fix (owner, image #29): OPAQUE light gray — translucency here sat over the
               dark backdrop and the page behind it, and the blend read as a murky blue tint.
               The top bar can stay translucent because only the light canvas scrolls under it. */}
-          <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label="תפריט ראשי"
+          <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label={t('nav.aria_label_4')}
             tabIndex={-1} className="drawer-enter phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-topbar border-e border-line-soft focus:outline-none" onClick={(e) => e.stopPropagation()}>
             {/* Positioned INSIDE the safe-area padding, not on top of it. `absolute top-2 end-2`
                 measured from the panel's border box, so on a notched device the drawer's
@@ -1019,8 +1022,8 @@ export default function Layout() {
                 close button sitting under the notch. The phone header solves the same problem with
                 `max(0.75rem, env(safe-area-inset-top))`; this does it with the same expression. */}
             <button type="button" className="btn-ghost btn-icon absolute end-2 rounded-full" style={{ insetBlockStart: 'max(0.5rem, env(safe-area-inset-top))' }}
-              onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={ICON.lg} aria-hidden="true" /></button>
-            {sidebar(drawerSections, 'יעדים נוספים')}
+              onClick={() => closeMobileMenu()} aria-label={t('nav.aria_label_5')}><X size={ICON.lg} aria-hidden="true" /></button>
+            {sidebar(drawerSections, t('nav.sidebar'))}
           </aside>
         </div>
       )}
@@ -1028,12 +1031,12 @@ export default function Layout() {
       {/* The utility header merged into the top bar (T7.1); search/bell/feedback live there now. */}
       {accessStatus !== 'unknown' && organizationAccess.mode === 'read_only' && (
         <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:px-6">
-          הגישה לכתיבה אינה זמינה כרגע. המידע הקיים נשמר וזמין לצפייה ולייצוא; לפרטים יש לפנות למנהל המערכת.
+          {t('nav.text_12')}
         </div>
       )}
       {accessStatus !== 'unknown' && organizationAccess.mode === 'offboarding' && (
         <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:px-6">
-          הארגון נמצא בתהליך סיום שירות והמערכת במצב קריאה בלבד. המידע נשמר וזמין לצפייה ולייצוא. בעל הארגון יכול לבטל את הבקשה בתוך 30 ימים ממועד הגשתה.
+          {t('nav.text_13')}
         </div>
       )}
       {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring.
@@ -1062,13 +1065,13 @@ export default function Layout() {
           and "1 העלאה" are different work, and a person deciding whether to sign out on a phone
           with no signal needs to know which of the two they are about to leave behind. */}
       <ConfirmDialog open={pendingOffline !== null} danger
-        title="יש נתונים שטרם סונכרנו"
+        title={t('nav.title')}
         message={pendingOffline
           ? `במכשיר הזה ממתינות ${pendingOffline.actions} פעולות קבלה ו-${pendingOffline.uploads} העלאות שלא נשלחו לשרת. `
-            + 'התנתקות מוחקת את הסשן, והפעולות האלה יישלחו רק לאחר התחברות מחדש באותו מכשיר ובאותו דפדפן. '
-            + 'מומלץ להתחבר לרשת, לסנכרן, ורק אז להתנתק.'
+            + t('nav.text_14')
+            + t('nav.text_15')
           : ''}
-        confirmLabel="התנתקות בכל זאת"
+        confirmLabel={t('nav.confirmLabel')}
         onClose={() => setPendingOffline(null)}
         onConfirm={() => { setPendingOffline(null); void handleSignOut(true); }} />
     </div>

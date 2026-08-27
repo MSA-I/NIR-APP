@@ -52,7 +52,7 @@ function RiskCell({ m }: { m?: SupplierMetrics }) {
   if (!ex && !cr) return <span className="text-ink-ghost">—</span>;
   return (
     <span className="flex items-center gap-1">
-      {/* Singular is not a rounding error in Hebrew: the plural form read t('suppliers.text') on every
+      {/* Singular is not a rounding error in Hebrew: the plural form read "1 חריגים" on every
           supplier that had exactly one, in both the table and the mobile card. */}
       {ex > 0 && <span className="badge-alert">{ex} {ex === 1 ? t('suppliers.text_2') : t('suppliers.text_3')}</span>}
       {cr > 0 && <span className="badge-await">{cr} {cr === 1 ? t('suppliers.text_4') : t('suppliers.text_5')}</span>}
@@ -719,7 +719,7 @@ export function SupplierCard() {
           ? <button className="btn-primary" onClick={() => setUploadOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> {t('suppliers.setUploadOpen')}</button>
           : null}
         secondaryActions={canWrite && <>
-            {/* Named, not buried: t('suppliers.text_42') is the task, and it used to be four steps
+            {/* Named, not buried: "החליף מספר חשבון" is the task, and it used to be four steps
                 inside a form of twenty fields. Navigates rather than calling setEditing directly,
                 so the address is the one another screen can link to. */}
             <button className="btn-secondary" onClick={() => navigate(`/suppliers/${s.id}?edit=bank`)}>
