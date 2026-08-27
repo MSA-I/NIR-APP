@@ -11,7 +11,8 @@
     "src/operator/Funnel.tsx": "Owner decision, 27.08.2026: the internal operator console is not translated. It is used by the InPlace team only and is not sold to a tenant, so translating it serves no end user. These counts stay pinned where they are rather than dropping to zero; see GATES.md ABANDON: P2-G4 and DEBT-REGISTER.md.",
     "src/operator/OperatorShell.tsx": "Owner decision, 27.08.2026: the internal operator console is not translated. It is used by the InPlace team only and is not sold to a tenant, so translating it serves no end user. These counts stay pinned where they are rather than dropping to zero; see GATES.md ABANDON: P2-G4 and DEBT-REGISTER.md.",
     "src/operator/PurgeCandidates.tsx": "Owner decision, 27.08.2026: the internal operator console is not translated. It is used by the InPlace team only and is not sold to a tenant, so translating it serves no end user. These counts stay pinned where they are rather than dropping to zero; see GATES.md ABANDON: P2-G4 and DEBT-REGISTER.md.",
-    "src/operator/SignupQuarantine.tsx": "Owner decision, 27.08.2026: the internal operator console is not translated. It is used by the InPlace team only and is not sold to a tenant, so translating it serves no end user. These counts stay pinned where they are rather than dropping to zero; see GATES.md ABANDON: P2-G4 and DEBT-REGISTER.md."
+    "src/operator/SignupQuarantine.tsx": "Owner decision, 27.08.2026: the internal operator console is not translated. It is used by the InPlace team only and is not sold to a tenant, so translating it serves no end user. These counts stay pinned where they are rather than dropping to zero; see GATES.md ABANDON: P2-G4 and DEBT-REGISTER.md.",
+    "src/pages/PaymentRequests.tsx": "Iron rule, docs/HANDOFF-english-language-20260827.md §9: audit_logs is evidence and is never translated. The seven lines that stay are the audit reasons this screen writes — reasonOr(reason, ...) at creation, the PAYMENT_REQUEST_ACTION_LABEL table the approver falls back to, and the exceptional-approval reason — all of which travel into p_reason / p_override_reason and land in audit_logs. Translating them would rewrite a ledger entry in a language the ledger was not written in. Everything a person reads on this screen is extracted."
   },
   "counts": {
     "src/App.tsx": 18,
@@ -149,7 +150,7 @@
     "src/pages/neworder/SupplierSplitStep.tsx": 43,
     "src/pages/Onboarding.tsx": 132,
     "src/pages/Orders.tsx": 27,
-    "src/pages/PaymentRequests.tsx": 116,
+    "src/pages/PaymentRequests.tsx": 7,
     "src/pages/Payments.tsx": 28,
     "src/pages/PriceLists.tsx": 14,
     "src/pages/Pricing.tsx": 13,

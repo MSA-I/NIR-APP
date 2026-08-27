@@ -36,7 +36,7 @@ type PaymentInvoiceCandidate = {
 export default function PaymentRequests() {
   const [params, setParams] = useSearchParams();
   const { profile, organizationAccess } = useAuth();
-  const { statusLabel , errorText } = useT();
+  const { errorText, statusLabel, t } = useT();
   const toast = useToast();
   const [statusFilter, setStatusFilter] = useParamState('status', 'active');
   const [dueFilter, setDueFilter] = useParamState('due');
@@ -110,17 +110,17 @@ export default function PaymentRequests() {
     setBusyCancel(false);
     if (res.error) { setCancelTarget(null); toast(errorText(res.error.message), 'error'); return; }
     setCancelTarget(null);
-    toast('הדרישה בוטלה');
+    toast(t('paymentRequests.toast'));
     void refetch();
   }
 
   const columns: Column<Row>[] = [
-    { key: 'num', header: 'מס׳', priority: 3, className: 'num', sortValue: (r) => r.number, render: (r) => `#${r.number}` },
-    { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
-    { key: 'amount', header: 'סכום', mobileLabel: null, className: 'num', sortValue: (r) => r.amount, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
-    { key: 'due', header: 'יעד', sortValue: (r) => r.due_date ?? '', render: (r) => fmtDate(r.due_date) },
-    { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} /> },
-    { key: 'created', header: 'נוצרה', priority: 3, sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
+    { key: 'num', header: t('paymentRequests.numHeader'), priority: 3, className: 'num', sortValue: (r) => r.number, render: (r) => `#${r.number}` },
+    { key: 'supplier', header: t('paymentRequests.text'), priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
+    { key: 'amount', header: t('paymentRequests.fmtMoneyExact'), mobileLabel: null, className: 'num', sortValue: (r) => r.amount, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
+    { key: 'due', header: t('paymentRequests.fmtDate'), sortValue: (r) => r.due_date ?? '', render: (r) => fmtDate(r.due_date) },
+    { key: 'status', header: t('paymentRequests.text_2'), priority: 3, render: (r) => <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} /> },
+    { key: 'created', header: t('paymentRequests.fmtDate_2'), priority: 3, sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
   ];
 
   if (loading) return <SkeletonTable cols={6} />;
@@ -129,28 +129,28 @@ export default function PaymentRequests() {
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
-      {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
-      <PageHeader title="דרישות תשלום" meta={`${rows.length} דרישות בתצוגה`}
+      {fetching && data && <div className="text-xs text-ink-muted" role="status">{t('paymentRequests.text_3')}</div>}
+      <PageHeader title={t('paymentRequests.pageTitle')} meta={t('paymentRequests.pageMeta', { count: rows.length })}
         actions={<>
           {/* The owner's emergency execution route was removed (G4, 10.08.2026). An approved
               request is executed on /pay, with the same step-up, the same mandatory reason and
               the same audit row the emergency path had. */}
-          {isOffice && <button className="btn-primary" onClick={() => setManualCreateOpen(true)}><Plus size={ICON.sm} aria-hidden="true" /> דרישה חדשה</button>}
+          {isOffice && <button className="btn-primary" onClick={() => setManualCreateOpen(true)}><Plus size={ICON.sm} aria-hidden="true" /> {t('paymentRequests.setManualCreateOpen')}</button>}
         </>} />
       <DataTable rows={rows} columns={columns} searchable
-        emptyTitle="אין דרישות תשלום"
-        emptySubtitle={'דרישת תשלום נפתחת מול ספק שיש לו חשבוניות פתוחות, ונקשרת אליהן.'}
+        emptyTitle={t('paymentRequests.emptyTitle')}
+        emptySubtitle={t('paymentRequests.text_4')}
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || String(r.number).includes(q)}
-        searchLabel="חיפוש בדרישות תשלום"
-        rowLabel={(r) => `דרישת תשלום מספר ${r.number} עבור ${r.supplier.name}`}
+        searchLabel={t('paymentRequests.searchLabel')}
+        rowLabel={(r) => t('paymentRequests.rowLabel', { number: r.number, supplier: r.supplier.name })}
         onRowClick={(r) => setSelected(r)}
         mobile="cards"
         mobileTitle={(r) => <>#{r.number} · {r.supplier.name}</>}
         mobileTrailing={(r) => <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} />}
         rowActions={(r) => [
-          { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setSelected(r) },
+          { key: 'edit', label: t('paymentRequests.setSelected'), icon: Pencil, onSelect: () => setSelected(r) },
           {
-            key: 'cancel', label: 'ביטול', icon: XCircle, tone: 'danger',
+            key: 'cancel', label: t('paymentRequests.text_5'), icon: XCircle, tone: 'danger',
             hidden: !isOffice || ['cancelled', 'executed', 'matched'].includes(r.status),
             onSelect: () => setCancelTarget(r),
           },
@@ -164,18 +164,18 @@ export default function PaymentRequests() {
                   next.delete('id');
                   return next;
                 }, { replace: true });
-              }}>הצג את כל הדרישות</button>
+              }}>{t('paymentRequests.text_6')}</button>
             )}
-            <select className="input w-auto!" aria-label="סינון דרישות תשלום לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="active">דרישות פעילות</option>
-              <option value="all">הכל</option>
+            <select className="input w-auto!" aria-label={t('paymentRequests.aria_label')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="active">{t('paymentRequests.text_7')}</option>
+              <option value="all">{t('paymentRequests.text_8')}</option>
               {Object.entries(PAYMENT_REQUEST_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
             </select>
-            <select className="input w-auto!" aria-label="סינון דרישות תשלום לפי מועד יעד" value={dueFilter} onChange={(e) => setDueFilter(e.target.value)}>
-              <option value="">כל מועדי היעד</option>
-              <option value="today">יעד היום</option>
-              <option value="overdue">באיחור</option>
-              <option value="soon">עד 7 ימים, כולל איחורים</option>
+            <select className="input w-auto!" aria-label={t('paymentRequests.aria_label_2')} value={dueFilter} onChange={(e) => setDueFilter(e.target.value)}>
+              <option value="">{t('paymentRequests.text_9')}</option>
+              <option value="today">{t('paymentRequests.text_10')}</option>
+              <option value="overdue">{t('paymentRequests.text_11')}</option>
+              <option value="soon">{t('paymentRequests.text_12')}</option>
             </select>
           </>
         } />
@@ -191,7 +191,7 @@ export default function PaymentRequests() {
 
       <ConfirmDialog open={!!cancelTarget} onClose={() => setCancelTarget(null)}
         onConfirm={(reason) => void cancelRequest(reason)}
-        title="ביטול דרישת תשלום" message="הביטול יתועד ביומן הביקורת."
+        title={t('paymentRequests.title')} message={t('paymentRequests.message')}
         danger requireReason busy={busyCancel} />
     </div>
   );
@@ -201,7 +201,7 @@ export default function PaymentRequests() {
 function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
   presetInvoiceId: string | null; onClose: () => void; onSaved: () => void;
 }) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [supplierId, setSupplierId] = useState('');
@@ -260,13 +260,13 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
         .eq('id', presetInvoiceId).eq('financial_role', 'payable').is('deleted_at', null).neq('payment_status', 'paid').maybeSingle();
       if (cancelled) return;
       if (invoiceResult.error || !invoiceResult.data) {
-        toast('החשבונית שבקישור אינה זמינה או שכבר שולמה.', 'error');
+        toast(t('paymentRequests.toast_2'), 'error');
         onClose();
         return;
       }
       const inv = invoiceResult.data as { id: string; supplier_id: string; total_amount: number; payment_status: string };
       if (!isOwner && inv.payment_status !== 'unpaid') {
-        toast('חשבונית ששולמה חלקית אינה זמינה לדרישת תשלום של מנהל הרכש.', 'error');
+        toast(t('paymentRequests.toast_3'), 'error');
         onClose();
         return;
       }
@@ -275,14 +275,14 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
         const balanceResult = await supabase.from('invoice_balances').select('balance').eq('invoice_id', inv.id).maybeSingle();
         if (cancelled) return;
         if (balanceResult.error || !balanceResult.data) {
-          toast('טעינת יתרת החשבונית שבקישור נכשלה.', 'error');
+          toast(t('paymentRequests.toast_4'), 'error');
           onClose();
           return;
         }
         allocationAmount = (balanceResult.data as { balance: number }).balance;
       }
       if (allocationAmount <= 0) {
-        toast('לחשבונית שבקישור אין יתרה פתוחה.', 'error');
+        toast(t('paymentRequests.toast_5'), 'error');
         onClose();
         return;
       }
@@ -290,7 +290,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
       setChosen({ [inv.id]: allocationAmount });
     })().catch(() => {
       if (!cancelled) {
-        toast('טעינת החשבונית שבקישור נכשלה.', 'error');
+        toast(t('paymentRequests.toast_6'), 'error');
         onClose();
       }
     });
@@ -313,32 +313,32 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
     setCheckError(null);
     if (!checkFingerprint) { setChecking(false); return; }
     setChecking(true);
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       void runPaymentRequestChecks({ supplier_id: supplierId, amount, invoiceIds }).then((results) => {
         if (checkSequence.current === sequence && latestFingerprint.current === checkFingerprint) {
           setChecked({ fingerprint: checkFingerprint, results });
         }
       }).catch(() => {
-        if (checkSequence.current === sequence) setCheckError('בדיקות הכפילות נכשלו. לא ניתן לשמור עד לניסיון חוזר מוצלח.');
+        if (checkSequence.current === sequence) setCheckError(t('paymentRequests.setCheckError'));
       }).finally(() => {
         if (checkSequence.current === sequence) setChecking(false);
       });
     }, 400);
     return () => {
-      clearTimeout(t);
+      clearTimeout(timer);
       if (checkSequence.current === sequence) checkSequence.current += 1;
     };
   }, [checkFingerprint]);
 
   const checks = checked?.fingerprint === checkFingerprint ? checked.results : null;
   const hasCritical = checks?.some((c) => c.severity === 'critical') ?? false;
-  const supplierName = supplierPicker.suppliers.find((supplier) => supplier.id === supplierId)?.name ?? 'הספק הנבחר';
+  const supplierName = supplierPicker.suppliers.find((supplier) => supplier.id === supplierId)?.name ?? t('paymentRequests.find');
   const checksReady = checkFingerprint != null && checks != null && !checking && !checkError;
 
   async function save(toApproval: boolean) {
-    if (!supplierId || amount <= 0) { toast('בחר ספק וחשבוניות לתשלום', 'error'); return; }
+    if (!supplierId || amount <= 0) { toast(t('paymentRequests.toast_7'), 'error'); return; }
     if (!checkFingerprint || !checksReady) {
-      toast(checkError ?? 'יש להמתין לסיום בדיקות הכפילות', 'error');
+      toast(checkError ?? t('paymentRequests.toast_8'), 'error');
       return;
     }
     setBusy(true);
@@ -348,10 +348,10 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
         freshChecks = await runPaymentRequestChecks({ supplier_id: supplierId, amount, invoiceIds });
       } catch (checkFailure) {
         setChecked(null);
-        setCheckError('בדיקות הכפילות נכשלו. הדרישה לא נשמרה.');
+        setCheckError(t('paymentRequests.setCheckError_2'));
         throw checkFailure;
       }
-      if (latestFingerprint.current !== checkFingerprint) throw new Error('פרטי הדרישה השתנו במהלך הבדיקה. יש להמתין לבדיקה העדכנית.');
+      if (latestFingerprint.current !== checkFingerprint) throw new Error(t('paymentRequests.Error'));
       setChecked({ fingerprint: checkFingerprint, results: freshChecks });
       setCheckError(null);
       const pr = unwrap(await supabase.rpc('create_payment_request', {
@@ -366,9 +366,9 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
       })) as { payment_request_id: string; number: number; status: PaymentRequestStatus };
 
       if (pr.status === 'suspected_duplicate') {
-        toast('הדרישה נשמרה עם חשד לכפילות ונפתח חריג לבדיקה', 'error');
+        toast(t('paymentRequests.toast_9'), 'error');
       } else {
-        toast(toApproval ? 'הדרישה נשלחה לאישור' : 'הדרישה נשמרה כטיוטה');
+        toast(toApproval ? t('paymentRequests.toast_10') : t('paymentRequests.toast_11'));
       }
       onSaved();
     } catch (e) {
@@ -379,46 +379,46 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
   }
 
   return (
-    <Modal open onClose={onClose} title="דרישת תשלום חדשה" wide busy={busy} statusMessage={busy ? 'שומר את דרישת התשלום' : undefined}>
+    <Modal open onClose={onClose} title={t('paymentRequests.title_2')} wide busy={busy} statusMessage={busy ? t('paymentRequests.text_13') : undefined}>
       <div className="space-y-4">
         {suppliersError && <ErrorNote message={suppliersError} />}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <SupplierSelectField picker={supplierPicker} className="sm:col-span-2"
-            id="payment-request-supplier" label="ספק *" placeholder="בחר ספק..."
+            id="payment-request-supplier" label={t('paymentRequests.label')} placeholder={t('paymentRequests.placeholder')}
             value={supplierId} disabled={suppliersLoading || !!suppliersError} />
-          <div><label className="label" htmlFor="payment-request-due-date">תאריך יעד</label><input id="payment-request-due-date" type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
+          <div><label className="label" htmlFor="payment-request-due-date">{t('paymentRequests.setDueDate')}</label><input id="payment-request-due-date" type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
         </div>
 
         {supplierId && (
           <fieldset>
-            <legend className="label">חשבוניות פתוחות לתשלום</legend>
+            <legend className="label">{t('paymentRequests.text_14')}</legend>
             {invoicesError ? <ErrorNote message={invoicesError} /> : invoicesLoading ? (
-              <Note tone="idle">טוען חשבוניות ויתרות…</Note>
+              <Note tone="idle">{t('paymentRequests.text_15')}</Note>
             ) : invoices?.length ? (
-              <div className="max-h-56 divide-y divide-line-soft overflow-y-auto rounded-lg border border-line" tabIndex={0} role="region" aria-label="חשבוניות פתוחות לבחירה — רשימה נגללת">
+              <div className="max-h-56 divide-y divide-line-soft overflow-y-auto rounded-lg border border-line" tabIndex={0} role="region" aria-label={t('paymentRequests.aria_label_3')}>
                 {invoices.map((inv) => {
                   const checked = inv.id in chosen;
                   return (
                     <div key={inv.id} className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 text-sm">
                       <label className="flex min-h-11 min-w-0 flex-1 basis-full cursor-pointer items-center gap-3 sm:basis-auto">
                         <input type="checkbox" className="size-5 shrink-0 accent-action" checked={checked}
-                          aria-label={`בחירת חשבונית ${inv.invoice_number} של ${supplierName} להקצאה בדרישת התשלום`}
+                          aria-label={t('paymentRequests.invoicePickLabel', { invoice: inv.invoice_number, supplier: supplierName })}
                           onChange={(e) => setChosen((c) => {
                             const next = { ...c };
                             if (e.target.checked) next[inv.id] = inv.allocationAmount; else delete next[inv.id];
                             return next;
                           })} />
                         <span className="min-w-0 break-words">
-                          חשבונית <b dir="ltr" className="num">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}
-                          {inv.review_status !== 'approved' && <span className="badge-await ms-2">טרם אושרה</span>}
+                          {t('paymentRequests.fmtDate_4')} <b dir="ltr" className="num">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}
+                          {inv.review_status !== 'approved' && <span className="badge-await ms-2">{t('paymentRequests.text_16')}</span>}
                         </span>
                       </label>
                       <span className="text-ink-muted text-xs num">
-                        {isOwner ? 'יתרה' : 'סכום חשבונית'} {fmtMoneyExact(inv.allocationAmount)}
+                        {isOwner ? t('paymentRequests.fmtMoneyExact_2') : t('paymentRequests.fmtMoneyExact_3')} {fmtMoneyExact(inv.allocationAmount)}
                       </span>
                       {checked && (
                         <input type="number" step="0.01" className="input w-28! num" value={chosen[inv.id]}
-                          aria-label={`סכום ההקצאה לחשבונית ${inv.invoice_number} של ${supplierName}`}
+                          aria-label={t('paymentRequests.allocationAmountLabel', { invoice: inv.invoice_number, supplier: supplierName })}
                           onChange={(e) => setChosen((c) => ({ ...c, [inv.id]: Number(e.target.value) || 0 }))} />
                       )}
                     </div>
@@ -434,30 +434,30 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
                  Whether an advance to a supplier SHOULD be possible is a business question and
                  stays one: OPEN-DECISIONS #113. This sentence only stops the lie. */
               <div className="text-sm text-ink-muted border border-dashed rounded-lg px-3 py-4 text-center">
-                אין חשבוניות פתוחות לספק זה. דרישת תשלום חייבת להיקשר לחשבונית קיימת, ולכן לא ניתן לשמור דרישה לספק זה כרגע.
+                {t('paymentRequests.text_17')}
               </div>
             )}
           </fieldset>
         )}
 
         <SubPanel className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-          <span className="text-sm text-ink-soft">סכום הדרישה</span>
+          <span className="text-sm text-ink-soft">{t('paymentRequests.text_18')}</span>
           <span className="kpi-value-compact num">{fmtMoneyExact(amount)}</span>
         </SubPanel>
 
-        <div><label className="label" htmlFor="payment-request-notes">הערות</label><input id="payment-request-notes" className="input" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-        <div><label className="label" htmlFor="payment-request-reason">סיבת יצירת הדרישה *</label><input id="payment-request-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+        <div><label className="label" htmlFor="payment-request-notes">{t('paymentRequests.setNotes')}</label><input id="payment-request-notes" className="input" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+        <div><label className="label" htmlFor="payment-request-reason">{t('paymentRequests.setReason')}</label><input id="payment-request-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
 
-        {checking && <Note tone="idle">בודק כפילויות ויתרות עדכניות…</Note>}
+        {checking && <Note tone="idle">{t('paymentRequests.text_19')}</Note>}
         {checkError && <Note tone="alert">{checkError}</Note>}
         {checks && <CheckList checks={checks} />}
 
         <div className="flex flex-wrap justify-end gap-2">
-          <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-          <button className="btn-secondary" disabled={busy || amount <= 0 || !checksReady || !!suppliersError || !!invoicesError} onClick={() => void save(false)}>שמירה כטיוטה</button>
+          <button className="btn-secondary" disabled={busy} onClick={onClose}>{t('paymentRequests.text_20')}</button>
+          <button className="btn-secondary" disabled={busy || amount <= 0 || !checksReady || !!suppliersError || !!invoicesError} onClick={() => void save(false)}>{t('paymentRequests.save')}</button>
           <button className={hasCritical ? 'btn-danger' : 'btn-primary'} disabled={busy || amount <= 0 || !checksReady || !!suppliersError || !!invoicesError} onClick={() => void save(true)}>
             {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : hasCritical ? <ShieldAlert size={ICON.sm} aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />}
-            {hasCritical ? 'שמירה (יסומן כחשד לכפילות)' : 'שליחה לאישור'}
+            {hasCritical ? t('paymentRequests.text_21') : t('paymentRequests.text_22')}
           </button>
         </div>
       </div>
@@ -503,30 +503,31 @@ const paymentRequestActionLabel = (status: PaymentRequestStatus) =>
  * itself; reshaping the shared component would push a fix onto three screens nobody complained about.
  */
 function CheckSummary({ summary, checks }: { summary: ChecksSummary; checks: CheckResult[] }) {
+  const { t } = useT();
   const [detailOpen, setDetailOpen] = useState(false);
   const blocked = summary.blocking.length > 0;
 
   const counts: string[] = [];
   if (summary.blocking.length) {
-    counts.push(summary.blocking.length === 1 ? 'חסימה אחת' : `${summary.blocking.length} חסימות`);
+    counts.push(summary.blocking.length === 1 ? t('paymentRequests.blockingOne') : t('paymentRequests.blockingMany', { count: summary.blocking.length }));
   }
   if (summary.warnings.length) {
-    counts.push(summary.warnings.length === 1 ? 'אזהרה אחת' : `${summary.warnings.length} אזהרות`);
+    counts.push(summary.warnings.length === 1 ? t('paymentRequests.warningOne') : t('paymentRequests.warningMany', { count: summary.warnings.length }));
   }
   if (summary.info.length) {
-    counts.push(summary.info.length === 1 ? 'הערה אחת' : `${summary.info.length} הערות`);
+    counts.push(summary.info.length === 1 ? t('paymentRequests.infoOne') : t('paymentRequests.infoMany', { count: summary.info.length }));
   }
 
   // Tone carries the state a second time, never the first: every line below says it in words too,
   // because a summary whose meaning lives in a colour has no meaning for a colour-blind approver.
   const tone = blocked ? 'alert' : summary.warnings.length ? 'await' : 'done';
   const headline = blocked
-    ? 'לא ניתן לאשר את הדרישה במצבה הנוכחי.'
+    ? t('paymentRequests.text_23')
     : summary.warnings.length
-      ? 'אין ממצא חוסם. יש אזהרות שכדאי לעבור עליהן לפני האישור.'
+      ? t('paymentRequests.text_24')
       : checks.length
-        ? 'אין ממצא חוסם. הבדיקות החזירו הערות מידע בלבד.'
-        : 'כל הבדיקות האוטומטיות עברו ללא ממצאים.';
+        ? t('paymentRequests.text_25')
+        : t('paymentRequests.text_26');
 
   // The action gets its own line only when no blocking sentence already ends with it.
   // `allocation_vs_balance` carries its remedy inside its own message (checks.ts:174-180), and
@@ -547,9 +548,9 @@ function CheckSummary({ summary, checks }: { summary: ChecksSummary; checks: Che
             {summary.blocking.map((check, index) => <li key={index}>{check.message}</li>)}
           </ul>
         )}
-        {unsaidAction && <p><span className="font-medium">פעולה נדרשת:</span> {unsaidAction}</p>}
+        {unsaidAction && <p><span className="font-medium">{t('paymentRequests.text_27')}</span> {unsaidAction}</p>}
         {checks.length > 0 && (
-          <Disclosure title="פירוט הבדיקות" count={checks.length} tone={tone}
+          <Disclosure title={t('paymentRequests.title_3')} count={checks.length} tone={tone}
             className="-mx-4 -mb-3 mt-2 border-t border-line-soft" onToggle={setDetailOpen}>
             {detailOpen ? <CheckList checks={checks} /> : null}
           </Disclosure>
@@ -563,7 +564,7 @@ function CheckSummary({ summary, checks }: { summary: ChecksSummary; checks: Che
 export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
   pr: Row; isOffice: boolean; onClose: () => void; onChanged: () => void;
 }) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const toast = useToast();
   const [checks, setChecks] = useState<CheckResult[] | null>(null);
   const [checking, setChecking] = useState(false);
@@ -605,7 +606,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
     }).then((results) => {
       if (checkSequence.current === sequence && latestFingerprint.current === checkFingerprint) setChecks(results);
     }).catch(() => {
-      if (checkSequence.current === sequence) setCheckError('בדיקות האישור נכשלו. לא ניתן לאשר את הדרישה.');
+      if (checkSequence.current === sequence) setCheckError(t('paymentRequests.setCheckError_3'));
     }).finally(() => {
       if (checkSequence.current === sequence) setChecking(false);
     });
@@ -625,7 +626,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
     let freshOpenCreditTotal = 0;
     if (status === 'approved') {
       if (!checkFingerprint || !links || checks == null || checking || checkError || linksError) {
-        toast(checkError ?? linksError ?? 'יש להמתין לסיום בדיקות האישור', 'error');
+        toast(checkError ?? linksError ?? t('paymentRequests.toast_12'), 'error');
         return;
       }
     }
@@ -635,7 +636,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         const freshChecks = await runPaymentRequestChecks({
           id: pr.id, supplier_id: pr.supplier_id, amount: pr.amount, invoiceIds: links.map((link) => link.invoice_id),
         });
-        if (latestFingerprint.current !== checkFingerprint) throw new Error('פרטי הדרישה השתנו במהלך הבדיקה.');
+        if (latestFingerprint.current !== checkFingerprint) throw new Error(t('paymentRequests.Error_2'));
         setChecks(freshChecks);
         setCheckError(null);
         freshOpenCreditTotal = freshChecks.find((check) => check.code === 'open_credit')?.amount ?? 0;
@@ -649,26 +650,26 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         // copy of one sentence the owner asked us to stop printing (19.08.2026).
         if (freshChecks.some((check) => check.code === 'allocation_vs_balance')) {
           setBusy(false);
-          toast('בדיקות הדרישה עודכנו — האישור נחסם', 'error');
+          toast(t('paymentRequests.toast_13'), 'error');
           return;
         }
       } catch (failure) {
         setChecks(null);
-        setCheckError('בדיקות האישור נכשלו. הדרישה לא אושרה.');
+        setCheckError(t('paymentRequests.setCheckError_4'));
         setBusy(false);
-        toast(failure instanceof Error ? failure.message : 'בדיקות האישור נכשלו', 'error');
+        toast(failure instanceof Error ? failure.message : t('paymentRequests.toast_14'), 'error');
         return;
       }
       if (withCreditOverride && freshOpenCreditTotal !== openCreditTotal) {
         setCreditOverrideAcknowledged(false);
         setCreditOverrideOpen(false);
         setBusy(false);
-        toast('סכום הזיכויים השתנה. יש לעבור שוב על האזהרה ולאשר את הסכום המעודכן.', 'error');
+        toast(t('paymentRequests.toast_15'), 'error');
         return;
       }
       if (!withCreditOverride && freshOpenCreditTotal > 0) {
         setBusy(false);
-        toast('לספק קיימים זיכויים פתוחים. נדרש אישור חריג מפורש עם סיבה.', 'error');
+        toast(t('paymentRequests.toast_16'), 'error');
         return;
       }
     }
@@ -696,7 +697,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
     setTransitionTarget(null);
     setCreditOverrideOpen(false);
     setCreditOverrideAcknowledged(false);
-    toast('הסטטוס עודכן');
+    toast(t('paymentRequests.toast_17'));
     onChanged();
   }
 
@@ -726,47 +727,47 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
   const overAllocated = summary?.blocking.some((c) => c.code === 'allocation_vs_balance') ?? false;
 
   return (
-    <Modal open onClose={onClose} title={`דרישת תשלום #${pr.number} — ${pr.supplier.name}`} wide busy={busy} statusMessage={busy ? 'מעדכן את דרישת התשלום' : undefined}>
+    <Modal open onClose={onClose} title={t('paymentRequests.detailTitle', { number: pr.number, supplier: pr.supplier.name })} wide busy={busy} statusMessage={busy ? t('paymentRequests.detailBusy') : undefined}>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge meta={PAYMENT_REQUEST_STATUS[pr.status]} />
           <span className="kpi-value-compact num">{fmtMoneyExact(pr.amount)}</span>
-          {pr.due_date && <span className="text-sm text-ink-muted">יעד: {fmtDate(pr.due_date)}</span>}
-          {pr.approved_at && <span className="text-sm text-ink-muted">אושר על ידי {pr.approver?.full_name ?? 'משתמש לא זמין'} · {fmtDate(pr.approved_at)}</span>}
+          {pr.due_date && <span className="text-sm text-ink-muted">{t('paymentRequests.dueLabel')} {fmtDate(pr.due_date)}</span>}
+          {pr.approved_at && <span className="text-sm text-ink-muted">{t('paymentRequests.approvedByLabel')} {pr.approver?.full_name ?? t('paymentRequests.fmtDate_3')} · {fmtDate(pr.approved_at)}</span>}
         </div>
         {pr.notes && <div className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-3 py-2">{pr.notes}</div>}
         {pr.open_credit_override_total != null && (
           <Note tone="alert">
             <span className="min-w-0 flex-1">
-              <strong>הדרישה אושרה באישור חריג ללא קיזוז הזיכוי.</strong>{' '}
-              בעת האישור היו זיכויים פתוחים בסך <span className="num">{fmtMoneyExact(pr.open_credit_override_total)}</span>, והם לא קוזזו אוטומטית.
-              <span className="block mt-1">סיבת אישור החריגה: {pr.open_credit_override_reason}</span>
+              <strong>{t('paymentRequests.text_29')}</strong>{' '}
+              {t('paymentRequests.creditOverrideBefore')}<span className="num">{fmtMoneyExact(pr.open_credit_override_total)}</span>{t('paymentRequests.creditOverrideAfter')}
+              <span className="block mt-1">{t('paymentRequests.creditOverrideReasonLabel')} {pr.open_credit_override_reason}</span>
             </span>
           </Note>
         )}
 
         {linksError ? <ErrorNote message={linksError} /> : linksLoading ? (
-          <div role="status" className="text-sm text-ink-muted">טוען חשבוניות מקושרות…</div>
+          <div role="status" className="text-sm text-ink-muted">{t('paymentRequests.text_30')}</div>
         ) : links?.length ? (
           <div>
-            <div className="text-sm font-medium text-ink-soft mb-1.5">חשבוניות מקושרות</div>
+            <div className="text-sm font-medium text-ink-soft mb-1.5">{t('paymentRequests.text_31')}</div>
             <ul className="divide-y divide-line-soft border border-line-soft rounded-lg text-sm">
               {links.map((l) => (
                 <li key={l.invoice_id} className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2">
-                  <span>חשבונית <b dir="ltr" className="num">{l.invoice.invoice_number}</b> · {fmtDate(l.invoice.invoice_date)}</span>
+                  <span>{t('paymentRequests.fmtDate_4')} <b dir="ltr" className="num">{l.invoice.invoice_number}</b> · {fmtDate(l.invoice.invoice_date)}</span>
                   <span className="num font-medium">{fmtMoneyExact(l.amount_allocated)}</span>
                 </li>
               ))}
             </ul>
           </div>
-        ) : <div className="text-sm text-await-fg">דרישה ללא חשבוניות מקושרות</div>}
+        ) : <div className="text-sm text-await-fg">{t('paymentRequests.text_32')}</div>}
 
         <div>
-          <div className="text-sm font-medium text-ink-soft mb-1.5">בדיקות לפני אישור</div>
+          <div className="text-sm font-medium text-ink-soft mb-1.5">{t('paymentRequests.text_33')}</div>
           {(checkError || linksError) && <Note tone="alert">{checkError ?? linksError}</Note>}
           {checks && summary ? <CheckSummary summary={summary} checks={checks} /> : checking && (
             <div role="status" className="flex items-center gap-2 text-sm text-ink-muted">
-              <Loader2 size={ICON.sm} className="animate-spin text-ink-faint" aria-hidden="true" /> בודק את הדרישה…
+              <Loader2 size={ICON.sm} className="animate-spin text-ink-faint" aria-hidden="true" /> {t('paymentRequests.checkingRequest')}
             </div>
           )}
         </div>
@@ -774,17 +775,17 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         {openCreditTotal > 0 && !overAllocated && (
           <Note tone="alert">
             <div className="space-y-3">
-              <p className="font-semibold">לספק קיימים זיכויים פתוחים שטרם קוזזו. אישור זה אינו מקזז את הזיכויים ואינו משנה את סכום הדרישה.</p>
+              <p className="font-semibold">{t('paymentRequests.text_34')}</p>
               <dl className="grid gap-2 text-sm sm:grid-cols-2">
-                <div><dt className="text-ink-muted">ספק</dt><dd className="font-medium">{pr.supplier.name}</dd></div>
-                <div><dt className="text-ink-muted">סך זיכויים פתוחים</dt><dd className="font-semibold num">{fmtMoneyExact(openCreditTotal)}</dd></div>
-                <div><dt className="text-ink-muted">סכום דרישת התשלום</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount)}</dd></div>
-                <div><dt className="text-ink-muted">נטו אינפורמטיבי לאחר זיכויים</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount - openCreditTotal)}</dd></div>
+                <div><dt className="text-ink-muted">{t('paymentRequests.text_35')}</dt><dd className="font-medium">{pr.supplier.name}</dd></div>
+                <div><dt className="text-ink-muted">{t('paymentRequests.fmtMoneyExact_4')}</dt><dd className="font-semibold num">{fmtMoneyExact(openCreditTotal)}</dd></div>
+                <div><dt className="text-ink-muted">{t('paymentRequests.fmtMoneyExact_5')}</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount)}</dd></div>
+                <div><dt className="text-ink-muted">{t('paymentRequests.fmtMoneyExact_6')}</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount - openCreditTotal)}</dd></div>
               </dl>
               <label className="flex min-h-11 items-start gap-2 text-sm font-medium">
                 <input type="checkbox" className="mt-1 size-5 shrink-0 accent-action" checked={creditOverrideAcknowledged}
                   onChange={(event) => setCreditOverrideAcknowledged(event.target.checked)} />
-                <span>קראתי והבנתי שהזיכויים לא יקוזזו אוטומטית</span>
+                <span>{t('paymentRequests.text_36')}</span>
               </label>
             </div>
           </Note>
@@ -793,35 +794,35 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         {isOffice && (
           <div className="flex flex-wrap justify-end gap-2 pt-1">
             {['draft'].includes(pr.status) && (
-              <button className="btn-primary" disabled={busy} onClick={() => requestTransition('pending_approval')}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />} שליחה לאישור</button>
+              <button className="btn-primary" disabled={busy} onClick={() => requestTransition('pending_approval')}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />} {t('paymentRequests.text_22')}</button>
             )}
             {['pending_approval', 'suspected_duplicate', 'investigation'].includes(pr.status) && (
               overAllocated ? (
-                <button className="btn-secondary" disabled aria-label="אישור חסום — ההקצאה גבוהה מהיתרה שנותרה">
-                  <CheckCircle2 size={ICON.sm} aria-hidden="true" /> אישור הדרישה
+                <button className="btn-secondary" disabled aria-label={t('paymentRequests.aria_label_4')}>
+                  <CheckCircle2 size={ICON.sm} aria-hidden="true" /> {t('paymentRequests.text_38')}
                 </button>
               ) : openCreditTotal > 0 ? (
                 <>
-                  <button className="btn-secondary" disabled aria-label="אישור רגיל חסום בגלל זיכויים פתוחים">
-                    <CheckCircle2 size={ICON.sm} aria-hidden="true" /> אישור הדרישה
+                  <button className="btn-secondary" disabled aria-label={t('paymentRequests.aria_label_5')}>
+                    <CheckCircle2 size={ICON.sm} aria-hidden="true" /> {t('paymentRequests.text_38')}
                   </button>
                   <button className="btn-primary" disabled={busy || !checksReady || !creditOverrideAcknowledged}
                     onClick={() => setCreditOverrideOpen(true)}>
-                    <ShieldAlert size={ICON.sm} aria-hidden="true" /> אישור חריג ללא קיזוז הזיכוי
+                    <ShieldAlert size={ICON.sm} aria-hidden="true" /> {t('paymentRequests.title_4')}
                   </button>
                 </>
               ) : (
                 <button className={hasCritical ? 'btn-danger' : 'btn-primary'} disabled={busy || !checksReady}
                   onClick={() => requestTransition('approved', hasCritical)}>
-                  <CheckCircle2 size={ICON.sm} aria-hidden="true" /> {hasCritical ? 'אישור למרות האזהרות' : 'אישור הדרישה'}
+                  <CheckCircle2 size={ICON.sm} aria-hidden="true" /> {hasCritical ? t('paymentRequests.text_37') : t('paymentRequests.text_38')}
                 </button>
               )
             )}
             {['approved'].includes(pr.status) && (
-              <button className="btn-primary" disabled={busy} onClick={() => requestTransition('sent_for_execution')}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />} העברה לגורם המבצע</button>
+              <button className="btn-primary" disabled={busy} onClick={() => requestTransition('sent_for_execution')}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />} {t('paymentRequests.sendToPayer')}</button>
             )}
             {!['cancelled', 'executed', 'matched'].includes(pr.status) && (
-              <button className="btn-danger" disabled={busy} onClick={() => requestTransition('cancelled')}><XCircle size={ICON.sm} aria-hidden="true" /> ביטול</button>
+              <button className="btn-danger" disabled={busy} onClick={() => requestTransition('cancelled')}><XCircle size={ICON.sm} aria-hidden="true" /> {t('paymentRequests.requestTransition')}</button>
             )}
           </div>
         )}
@@ -829,16 +830,16 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
 
       <ConfirmDialog open={transitionTarget !== null} onClose={() => setTransitionTarget(null)}
         onConfirm={(reason) => transitionTarget && void setStatus(transitionTarget, reason)}
-        title={transitionTarget === 'cancelled' ? 'ביטול דרישת תשלום' : 'עדכון דרישת תשלום'}
-        message="המעבר והסיבה יישמרו יחד ביומן הביקורת."
+        title={transitionTarget === 'cancelled' ? t('paymentRequests.text_39') : t('paymentRequests.text_40')}
+        message={t('paymentRequests.message_2')}
         danger={transitionTarget === 'cancelled' || (transitionTarget === 'approved' && hasCritical)}
         requireReason busy={busy} />
       <ConfirmDialog open={creditOverrideOpen} onClose={() => setCreditOverrideOpen(false)}
         onConfirm={(reason) => void setStatus('approved', reason, true)}
-        title="אישור חריג ללא קיזוז הזיכוי"
-        message="לספק קיימים זיכויים פתוחים שטרם קוזזו. אישור זה אינו מקזז את הזיכויים ואינו משנה את סכום הדרישה. ההחלטה והסיבה יישמרו ביומן הביקורת."
-        confirmLabel="אישור חריג ללא קיזוז הזיכוי"
-        reasonLabel="סיבת אישור החריגה"
+        title={t('paymentRequests.title_4')}
+        message={t('paymentRequests.message_3')}
+        confirmLabel={t('paymentRequests.confirmLabel')}
+        reasonLabel={t('paymentRequests.reasonLabel')}
         danger requireReason busy={busy} />
     </Modal>
   );
