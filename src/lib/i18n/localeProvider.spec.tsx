@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LOCALE_STORAGE_KEY, LocaleProvider, useT } from './LocaleProvider';
 
 /** Reports what the provider decided, in a form the assertions can read off the DOM. */
@@ -109,6 +109,39 @@ describe('LocaleProvider — switching', () => {
     render(<LocaleProvider><Probe /></LocaleProvider>);
     expect(screen.getByTestId('dynamic')).toHaveTextContent('שפת הממשק');
     expect(screen.getByTestId('dynamic-miss')).toHaveTextContent('null');
+  });
+});
+
+describe('errorText', () => {
+  function Boom({ thrown }: { thrown: unknown }) {
+    const { errorText } = useT();
+    return <span data-testid="failure">{errorText(thrown)}</span>;
+  }
+
+  it('reads a failure in the language the reader is actually using', () => {
+    render(<LocaleProvider initialLocale="he"><Boom thrown={new Error('not_authorized')} /></LocaleProvider>);
+    expect(screen.getByTestId('failure')).toHaveTextContent('אין לך הרשאה לבצע את הפעולה הזו.');
+
+    render(<LocaleProvider initialLocale="en"><Boom thrown={new Error('not_authorized')} /></LocaleProvider>);
+    expect(screen.getAllByTestId('failure')[1]).toHaveTextContent('You do not have permission to do this.');
+  });
+
+  it('falls back to a sentence, never to a raw key or a blank', () => {
+    render(<LocaleProvider initialLocale="en"><Boom thrown={new Error('something nobody mapped')} /></LocaleProvider>);
+    const text = screen.getByTestId('failure').textContent ?? '';
+    expect(text).toBe('That did not work. If it keeps happening, contact support.');
+    expect(text).not.toMatch(/^[a-z_]+$/);
+  });
+
+  it('keeps the raw message out of the user sentence and in the console, where a developer needs it', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(<LocaleProvider initialLocale="en"><Boom thrown={new Error('duplicate key value violates unique constraint')} /></LocaleProvider>);
+      expect(screen.getByTestId('failure')).toHaveTextContent('That record already exists.');
+      expect(spy).toHaveBeenCalledWith('[supplyflow]', 'duplicate key value violates unique constraint');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

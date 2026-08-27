@@ -40,7 +40,6 @@ import {
   type ConsolidatedMatchChannel,
   type ConsolidatedPageResume,
 } from '../lib/consolidatedInvoices';
-import { toHebrewError } from '../lib/errors';
 import { fmtDate, fmtDateTime, fmtMoneyExact, fmtNum } from '../lib/format';
 import { INVOICE_REVIEW_STATUS, RECEIPT_STATUS } from '../lib/status';
 import { supabase } from '../lib/supabase';
@@ -97,6 +96,7 @@ const matchChannels: readonly ConsolidatedMatchChannel[] = [
 ];
 
 export default function ConsolidatedInvoices() {
+  const { errorText } = useT();
   const { profile, organizationAccess } = useAuth();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -185,7 +185,7 @@ export default function ConsolidatedInvoices() {
         supplierName: selectedSupplierName,
         describe: (item) => ({ name: item.file.name, type: item.mimeType, size: item.file.size }),
         classifyFailure: (_item, error) => ({
-          message: toHebrewError(error),
+          message: errorText(error),
           retryable: false,
           storedSafely: error instanceof Error && /register_consolidated_invoice_page/i.test(error.message),
         }),
@@ -210,7 +210,7 @@ export default function ConsolidatedInvoices() {
       setParams({ case: completed.case_id }, { replace: true });
       void cases.refetch();
     } catch (error) {
-      setUploadError(toHebrewError(error));
+      setUploadError(errorText(error));
     } finally {
       setBusy(false);
       if (captureRef.current) captureRef.current.value = '';
@@ -240,7 +240,7 @@ export default function ConsolidatedInvoices() {
       void workspace.refetch();
       void cases.refetch();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setRefreshing(false);
     }
@@ -367,7 +367,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
   onRefresh: () => void;
   onReload: () => Promise<unknown>;
 }) {
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const toast = useToast();
   const navigate = useNavigate();
   const [retryingReview, setRetryingReview] = useState(false);
@@ -379,7 +379,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
       if (error || !data?.signedUrl) throw error ?? new Error('signed URL missing');
       window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     }
   };
   const sourceRows: SourceRow[] = workspace.sources.map((source) => ({ ...source, id: `${source.source_type}:${source.source_id}` }));
@@ -398,7 +398,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
       await onReload();
       toast('המסמך נבדק מחדש מול כללי המרכזת המעודכנים.');
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setRetryingReview(false);
     }

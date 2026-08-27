@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useId, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Building2, Lock, PauseCircle, PlayCircle } from 'lucide-react';
@@ -8,7 +9,6 @@ import {
 } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { fmtDate, fmtNum } from '../lib/format';
-import { toHebrewError } from '../lib/errors';
 import { ORG_STATUS } from '../lib/status';
 import {
   fetchLifecycleReasonCodes, fetchMyCapabilities, fetchPlatformCustomers,
@@ -176,6 +176,7 @@ interface PendingLifecycle {
 }
 
 export default function Customers() {
+  const { errorText } = useT();
   const toast = useToast();
   const navigate = useNavigate();
   const [statusKey, setStatusKey] = useState('all');
@@ -219,7 +220,7 @@ export default function Customers() {
     } catch (rpcError) {
       setBusy(false);
       setReauth(false);
-      toast(toHebrewError((rpcError as Error).message), 'error');
+      toast(errorText((rpcError as Error).message), 'error');
       return;
     }
     setBusy(false);

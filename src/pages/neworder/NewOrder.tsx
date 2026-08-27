@@ -1,3 +1,4 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Check, CheckCircle2, Clock3, Loader2, MessageCircle, XCircle } from 'lucide-react';
@@ -6,7 +7,6 @@ import { useQuery, unwrap } from '../../lib/useQuery';
 import { useAuth } from '../../auth/AuthContext';
 import { ConfirmDialog, ErrorNote, Modal, RecordSkeleton, PageHeader, ICON, useToast } from '../../components/ui';
 import { useCategories } from '../Suppliers';
-import { toHebrewError } from '../../lib/errors';
 import {
   cancelOrderDraft,
   finalizeOrderDraft,
@@ -114,6 +114,7 @@ const draftSignature = (draft: DraftSnapshot) => JSON.stringify([
 ]);
 
 export default function NewOrder() {
+  const { errorText } = useT();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const fromOrderId = params.get('from');
@@ -194,7 +195,7 @@ export default function NewOrder() {
         setNextOrderItems(visible);
         if (visible.length !== items.length) toast('פריט לא פעיל שנשמר להזמנה הבאה דולג');
       })
-      .catch((failure) => { if (active) toast(toHebrewError(failure), 'error'); });
+      .catch((failure) => { if (active) toast(errorText(failure), 'error'); });
     return () => { active = false; };
   // Intentionally load once per organization. useToast returns a new callback after each toast.
   }, [org?.id]);
@@ -472,7 +473,7 @@ export default function NewOrder() {
           if (draftSignature(latestDraftRef.current!) !== signature) savePendingRef.current = true;
           else if (mountedRef.current) setSaveStatus('saved');
         } catch (saveFailure) {
-          const message = toHebrewError(saveFailure);
+          const message = errorText(saveFailure);
           if (mountedRef.current) { setSaveError(message); setSaveStatus('error'); }
           return false;
         }
@@ -493,7 +494,7 @@ export default function NewOrder() {
       await dismissNextOrderItem(item.id);
       if (active) setNextOrderItems((current) => current.filter((candidate) => candidate.id !== item.id));
     })()
-      .catch((failure) => { if (active) toast(toHebrewError(failure), 'error'); })
+      .catch((failure) => { if (active) toast(errorText(failure), 'error'); })
       .finally(() => {
         if (!active) return;
         setPendingNextOrderAdd(null);
@@ -605,7 +606,7 @@ export default function NewOrder() {
         dispatch({ type: 'DEFER_PRODUCT', productId: option.productId });
         toast('הפריט נשמר להזמנה הבאה');
       })
-      .catch((failure) => toast(toHebrewError(failure), 'error'));
+      .catch((failure) => toast(errorText(failure), 'error'));
   }
 
   function addNextOrderItem(item: NextOrderItem) {
@@ -627,7 +628,7 @@ export default function NewOrder() {
       await dismissNextOrderItem(item.id);
       setNextOrderItems((current) => current.filter((candidate) => candidate.id !== item.id));
     } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+      toast(errorText(failure), 'error');
     } finally {
       setNextOrderBusyId(null);
     }
@@ -644,7 +645,7 @@ export default function NewOrder() {
       toast('הטיוטה בוטלה');
       navigate('/orders');
     } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+      toast(errorText(failure), 'error');
     } finally {
       setBusy(false);
       setCancelOpen(false);
@@ -694,7 +695,7 @@ export default function NewOrder() {
         setStep(2);
         toast('אחד הספקים אינו זמין עוד. יש לבחור ספק מחדש.', 'error');
       } else {
-        toast(toHebrewError(failure), 'error');
+        toast(errorText(failure), 'error');
       }
     } finally {
       setBusy(false);

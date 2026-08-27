@@ -5,6 +5,7 @@
 //     unmatched product names become NEW products only after an explicit user opt-in, never silently.
 // Prices are still written only by the sanctioned RPCs — this file adds no new writer.
 
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useMemo, useRef, useState } from 'react';
 import { reasonOr } from '../lib/reason';
 import { useNavigate } from 'react-router';
@@ -175,6 +176,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
   onClose: () => void;
   onImported?: () => void;
 }) {
+  const { errorText } = useT();
   const navigate = useNavigate();
   const toast = useToast();
   const { profile, organizationAccess } = useAuth();
@@ -281,7 +283,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
             source: 'מחירון ספק',
             supplierName: supplierName ?? null,
             classifyFailure: (_item, error) => ({
-              message: error instanceof PriceDocumentError ? error.message : toHebrewError(error),
+              message: error instanceof PriceDocumentError ? error.message : errorText(error),
               retryable: false,
             }),
           },
@@ -299,7 +301,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
       }
     } catch (error) {
       if (error instanceof TusUploadCancelledError) return;
-      toast(error instanceof PriceDocumentError ? error.message : toHebrewError(error), 'error');
+      toast(error instanceof PriceDocumentError ? error.message : errorText(error), 'error');
     } finally {
       setBusy(false);
     }
@@ -348,7 +350,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
       ].filter(Boolean).join(' '));
       onImported?.();
     } catch (error) {
-      toast(error instanceof PriceDocumentError ? error.message : toHebrewError(error), 'error');
+      toast(error instanceof PriceDocumentError ? error.message : errorText(error), 'error');
     } finally {
       setBusy(false);
     }
@@ -363,7 +365,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
       markUploadCenterDocumentRegistered(registered.document_id);
       navigate(`/documents/${registered.document_id}/review`);
     } catch (registrationError) {
-      toast(registrationError instanceof PriceDocumentError ? registrationError.message : toHebrewError(registrationError), 'error');
+      toast(registrationError instanceof PriceDocumentError ? registrationError.message : errorText(registrationError), 'error');
     } finally {
       setBusy(false);
     }

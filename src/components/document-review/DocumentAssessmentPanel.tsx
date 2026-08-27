@@ -1,8 +1,8 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { reasonOr } from '../../lib/reason';
 import { AlertTriangle, Check, CircleCheck, Info, Loader2, ShieldAlert } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { toHebrewError } from '../../lib/errors';
 import { fmtMoneyExact, fmtNum } from '../../lib/format';
 import { Disclosure, ICON, Note, useToast } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
@@ -70,6 +70,7 @@ function FindingRow({ group }: { group: FindingGroup }) {
 }
 
 export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAssessmentPanelProps) {
+  const { errorText } = useT();
   const [read, setRead] = useState<DocumentReviewRead | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,7 +95,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
     });
     setLoading(false);
     if (result.error) {
-      setLoadError(toHebrewError(result.error));
+      setLoadError(errorText(result.error));
       return;
     }
     setLoadError(null);
@@ -136,7 +137,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
     });
     setBusy(false);
     if (result.error) {
-      toast(toHebrewError(result.error), 'error');
+      toast(errorText(result.error), 'error');
       return;
     }
     toast('המסמך אושר ונרשם', 'success');

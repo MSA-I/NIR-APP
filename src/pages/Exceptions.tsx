@@ -1,6 +1,5 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState } from 'react';
-import { toHebrewError } from "../lib/errors";
 import { useNavigate } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { AlertTriangle } from 'lucide-react';
@@ -155,7 +154,7 @@ export default function Exceptions() {
 function ExceptionDetail({ row, canWrite, canOpenProcurement, onClose, onChanged, onNavigate }: {
   row: Row; canWrite: boolean; canOpenProcurement: boolean; onClose: () => void; onChanged: () => void; onNavigate: (p: string) => void;
 }) {
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [note, setNote] = useState('');
@@ -174,7 +173,7 @@ function ExceptionDetail({ row, canWrite, canOpenProcurement, onClose, onChanged
       resolution_note: note.trim() || null,
     }).eq('id', row.id);
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     await logAction({ orgId: row.org_id, action: `exception:${status}`, entityType: 'exceptions', entityId: row.id, reason: note.trim() || undefined });
     toast('החריג עודכן');
     onChanged();

@@ -4,7 +4,6 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { Plus, AlertTriangle, AlertOctagon, Info, Eye, Share2, Printer, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { toHebrewError } from '../lib/errors';
 import { useQuery } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
 import { useAuth } from '../auth/AuthContext';
@@ -107,7 +106,7 @@ const MOBILE_PRIMARY_REVIEW_FILTERS = new Set(['', 'received', 'pending_approval
 export function InvoicesList() {
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const toast = useToast();
   const [, setParams] = useSearchParams();
   const [reviewFilter] = useParamState('review');
@@ -244,7 +243,7 @@ export function InvoicesList() {
       p_reason: reason?.trim() || null,
     });
     setBusyDelete(false);
-    if (res.error) { setDeleteTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { setDeleteTarget(null); toast(errorText(res.error.message), 'error'); return; }
     setDeleteTarget(null);
     toast('החשבונית נמחקה');
     void refetch();

@@ -1,7 +1,7 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Check, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { toHebrewError } from '../lib/errors';
 import { ConfirmDialog, ICON, Modal, Note, SubPanel, useToast } from './ui';
 
 /**
@@ -46,6 +46,7 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
   onClose: () => void;
   onRemoved: () => void;
 }) {
+  const { errorText } = useT();
   const [impact, setImpact] = useState<RemovalImpact | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<'document_only' | 'document_and_derived'>('document_only');
@@ -58,7 +59,7 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
     const result = await supabase.rpc('get_document_removal_impact', {
       p_document_id: documentId,
     });
-    if (result.error) { setLoadError(toHebrewError(result.error)); return; }
+    if (result.error) { setLoadError(errorText(result.error)); return; }
     setLoadError(null);
     setImpact(result.data as RemovalImpact);
   }, [documentId]);
@@ -78,7 +79,7 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
     });
     setBusy(false);
     setConfirming(false);
-    if (result.error) { toast(toHebrewError(result.error), 'error'); return; }
+    if (result.error) { toast(errorText(result.error), 'error'); return; }
     const answer = result.data as { already_removed?: boolean; undone_count?: number };
     toast(answer.already_removed
       ? 'המסמך כבר הוסר'

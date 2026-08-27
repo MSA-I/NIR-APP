@@ -1,7 +1,6 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useState } from 'react';
 import { Eye, RotateCcw } from 'lucide-react';
-import { toHebrewError } from '../lib/errors';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { supabase } from '../lib/supabase';
@@ -120,7 +119,7 @@ export default function Credits() {
 function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
   credit: Row; onClose: () => void; onChanged: () => void; onOpenInvoice: (id: string) => void; canWrite: boolean;
 }) {
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
 
@@ -140,7 +139,7 @@ function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
       p_reason: transition?.label ?? 'עדכון סטטוס זיכוי',
     });
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     toast('סטטוס הזיכוי עודכן');
     onChanged();
   }

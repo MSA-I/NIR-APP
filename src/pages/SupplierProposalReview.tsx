@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { CheckCircle2, XCircle, GitBranchPlus } from 'lucide-react';
@@ -10,7 +11,6 @@ import {
 } from '../components/ui';
 import { SUPPLIER_PROPOSAL_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime, fmtMoneyExact, formatQuantity } from '../lib/format';
-import { toHebrewError } from '../lib/errors';
 import {
   createRevisionFromProposal, decideProposal, fetchProposal, type ProposalWithLines,
 } from '../lib/supplierPortal';
@@ -32,6 +32,7 @@ function lineChanged(line: SupplierOrderProposalLine): boolean {
 }
 
 export default function SupplierProposalReview() {
+  const { errorText } = useT();
   const { proposalId } = useParams<{ proposalId: string }>();
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
@@ -91,7 +92,7 @@ export default function SupplierProposalReview() {
       toast('ההחלטה נרשמה ותועדה ביומן הביקורת');
       void refetch();
     } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+      toast(errorText(failure), 'error');
     } finally {
       setBusy(false);
     }
@@ -106,7 +107,7 @@ export default function SupplierProposalReview() {
       toast('נוצרה רוויזיה חדשה של ההזמנה');
       navigate(`/orders/${newOrderId}`);
     } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+      toast(errorText(failure), 'error');
       setBusy(false);
       setRevisionConfirmOpen(false);
     }

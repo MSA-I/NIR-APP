@@ -1,6 +1,5 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState } from 'react';
-import { toHebrewError } from '../lib/errors';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { Loader2, Send, CheckCircle2, RotateCcw, SearchCheck, FilePenLine } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -214,6 +213,7 @@ export async function readAllowedInvoiceTransitions(
 }
 
 export default function InvoiceDetail() {
+  const { errorText } = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
@@ -263,7 +263,7 @@ export default function InvoiceDetail() {
       allocations,
       allowedTransitions,
       threeWay: threeWayResult.error ? null : threeWayResult.data as ThreeWayAssessment,
-      threeWayError: threeWayResult.error ? toHebrewError(threeWayResult.error.message) : null,
+      threeWayError: threeWayResult.error ? errorText(threeWayResult.error.message) : null,
     };
   }, [id, isProcurementManager]);
 
@@ -347,7 +347,7 @@ export default function InvoiceDetail() {
       p_reason: reasonOr(reason, reviewActionLabel(status)),
     });
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     setReviewTarget(null);
     toast('הסטטוס עודכן');
     void refetch();
@@ -377,7 +377,7 @@ export default function InvoiceDetail() {
     });
     setBusy(false);
     setOverrideReauthOpen(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     setOverrideReason('');
     setOverrideIdempotencyKey(crypto.randomUUID());
     toast('עקיפת חסימת ההתאמה נרשמה ביומן הביקורת');
@@ -658,7 +658,7 @@ function CreditFromInvoice({ invoice, draft, onClose, onSaved }: {
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const toast = useToast();
   const [creditRequestId] = useState(() => crypto.randomUUID());
   // The reason is never prefilled. `credit_reason` says why the business is owed money -- missing,
@@ -681,7 +681,7 @@ function CreditFromInvoice({ invoice, draft, onClose, onSaved }: {
       p_audit_reason: 'פתיחת דרישת זיכוי מחשבונית',
     });
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     onSaved();
   }
 

@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { Link, Outlet, useNavigate, useLocation, useSearchParams } from 'react-router';
 import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, X, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight, ScrollText } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -15,7 +16,6 @@ import { ConfirmDialog, ICON, useDialogLayer, useToast } from './ui';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
 import { pendingOfflineWork } from '../lib/offlineQueue';
 import { isActiveRole, type ActiveRole } from '../lib/types';
-import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/organizationAccess';
 import { isRouteFamilyActive, sectionOf } from '../lib/quickActions';
@@ -250,6 +250,7 @@ export function pageTitleFor(pathname: string): string {
 }
 
 export default function Layout() {
+  const { errorText } = useT();
   useGlowPointer();
   const { session, profile, org, roleLabels, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, accessStatus = 'unknown', signOut } = useAuth();
   const assistantSession = useAssistantRunSession(assistantAuthorizationFingerprint({
@@ -515,7 +516,7 @@ export default function Layout() {
     }
     const result = await signOut();
     if (result.error) {
-      toast(toHebrewError(result.error), 'error');
+      toast(errorText(result.error), 'error');
       return;
     }
     navigate('/login');

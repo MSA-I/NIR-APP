@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useMemo, useState } from 'react';
 import { AlertTriangle, FileSpreadsheet, Info, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -5,7 +6,6 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { fmtDate, fmtMoneyExact, fmtNum, formatUnit, todayISO } from '../lib/format';
 import { Card, DataTable, ErrorNote, ICON, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
 import { useAuth } from '../auth/AuthContext';
-import { toHebrewError } from '../lib/errors';
 import {
   downloadRenderedWorkbook,
   productPurchaseTemplateValues,
@@ -58,6 +58,7 @@ function monthStart(): string {
 }
 
 export default function ProductPurchaseSummary() {
+  const { errorText } = useT();
   const { org } = useAuth();
   const toast = useToast();
   const [from, setFrom] = useState(monthStart);
@@ -156,7 +157,7 @@ export default function ProductPurchaseSummary() {
       }
       toast('קובץ ה-Excel הורד');
     } catch (exportError) {
-      toast(toHebrewError(exportError), 'error');
+      toast(errorText(exportError), 'error');
     } finally {
       setExporting(false);
     }

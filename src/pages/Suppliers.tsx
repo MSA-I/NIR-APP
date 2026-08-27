@@ -5,7 +5,6 @@ import { useParamState } from '../lib/useParamState';
 import { Plus, Phone, Mail, MapPin, Clock, Truck, Star, TrendingUp, TrendingDown, Pencil, Trash2, Upload, Landmark } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { toHebrewError } from '../lib/errors';
 import { useAuth } from '../auth/AuthContext';
 import { Breadcrumbs, Card, DataTable, StatusBadge, useToast, Modal, ErrorNote, Note, ConfirmDialog, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, SubPanel, Tabs, TabPanel, ToggleGroup, ICON, type Column } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
@@ -61,7 +60,7 @@ function RiskCell({ m }: { m?: SupplierMetrics }) {
 }
 
 export function SuppliersList() {
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
   const toast = useToast();
@@ -139,7 +138,7 @@ export function SuppliersList() {
     ]);
     const err = balRes.error ?? poRes.error;
     // If the check itself failed we cannot prove the supplier is safe to delete — refuse.
-    if (err) { toast(toHebrewError(err.message), 'error'); return; }
+    if (err) { toast(errorText(err.message), 'error'); return; }
     const openBalance = (balRes.data as { open_balance: number } | null)?.open_balance ?? 0;
     if (openBalance > 0) {
       toast('לא ניתן למחוק ספק שיש לו יתרה פתוחה. יש לסגור את היתרה לפני המחיקה.', 'error');
@@ -162,7 +161,7 @@ export function SuppliersList() {
       p_reason: reason ?? null,
     });
     setBusyDelete(false);
-    if (res.error) { setDeleteTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { setDeleteTarget(null); toast(errorText(res.error.message), 'error'); return; }
     setDeleteTarget(null);
     toast('הספק נמחק');
     void refetch();
@@ -253,7 +252,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
    */
   focus?: 'bank';
 }) {
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -316,7 +315,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         bic: current.bic ?? '',
       });
     }).catch((error) => {
-      if (!cancelled) setBankLoadError(toHebrewError(error));
+      if (!cancelled) setBankLoadError(errorText(error));
     });
     return () => { cancelled = true; };
   }, [supplier]);
@@ -383,7 +382,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
       try {
         nextBank = bankPayload();
       } catch (error) {
-        toast(toHebrewError(error), 'error');
+        toast(errorText(error), 'error');
         return;
       }
     }
@@ -407,7 +406,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
     if (supplier) {
       const res = await supabase.from('suppliers').update(row).eq('id', supplier.id);
       setBusy(false);
-      if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+      if (res.error) { toast(errorText(res.error.message), 'error'); return; }
       if (nextBank !== undefined) { setBankStep({ nextBank, supplierId: supplier.id }); return; }
       toast('הספק עודכן');
       onSaved();
@@ -415,7 +414,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
       const res = await supabase.from('suppliers')
         .insert({ ...row, org_id: profile!.org_id }).select('id').single();
       setBusy(false);
-      if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+      if (res.error) { toast(errorText(res.error.message), 'error'); return; }
       // `nextBank` truthiness, not `!== undefined`: on a NEW supplier `null` means the user opened
       // the bank select and chose "ללא פרטי בנק", i.e. saved nothing. There is no prior value to
       // clear on a row that was just inserted bank-less, so demanding a reason and a password
@@ -443,7 +442,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
     });
     setBankBusy(false);
     // On failure the reason dialog stays open for a retry; the other fields are already saved.
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     toast('פרטי הבנק עודכנו ונרשמו ביומן הביקורת');
     setBankStep(null);
     onSaved();

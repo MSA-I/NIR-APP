@@ -1,9 +1,9 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { NavLink, Outlet } from 'react-router';
 import { useState } from 'react';
 import { LogOut, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { ICON, useToast } from '../components/ui';
-import { toHebrewError } from '../lib/errors';
 
 /**
  * The operator console's own chrome — deliberately NOT the tenant Layout. Layout is a tenant
@@ -22,6 +22,7 @@ const NAV = [
 ] as const;
 
 export default function OperatorShell() {
+  const { errorText } = useT();
   const { signOut, session } = useAuth();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -31,7 +32,7 @@ export default function OperatorShell() {
     const result = await signOut();
     setBusy(false);
     if (result.error) {
-      toast(toHebrewError(result.error), 'error');
+      toast(errorText(result.error), 'error');
       return;
     }
     if (result.pushWarning) toast(result.pushWarning, 'error');

@@ -5,7 +5,6 @@ import { Link2, Copy, Loader2, RefreshCcw, Send, XCircle, Inbox } from 'lucide-r
 import { ConfirmDialog, ICON, Note, StatusBadge, useToast } from './ui';
 import { useQuery } from '../lib/useQuery';
 import { fmtDateTime } from '../lib/format';
-import { toHebrewError } from '../lib/errors';
 import { SUPPLIER_LINK_STATE, SUPPLIER_PROPOSAL_STATUS } from '../lib/status';
 import {
   buildPortalUrl, fetchOrderLink, fetchOrderProposal, issueOrderLink, linkState, revokeOrderLink,
@@ -25,7 +24,7 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
   orgName: string;
   canWrite: boolean;
 }) {
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const navigate = useNavigate();
   const toast = useToast();
   const [issueOpen, setIssueOpen] = useState(false);
@@ -55,7 +54,7 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
       setIssueOpen(false);
       void refetch();
     } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+      toast(errorText(failure), 'error');
     } finally {
       setBusy(false);
     }
@@ -71,7 +70,7 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
       setRevokeOpen(false);
       void refetch();
     } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+      toast(errorText(failure), 'error');
     } finally {
       setBusy(false);
     }

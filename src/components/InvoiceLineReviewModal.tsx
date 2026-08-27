@@ -1,7 +1,7 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { toHebrewError } from '../lib/errors';
 import { fmtMoneyExact, formatQuantity, formatUnit, normalizeUnitInput } from '../lib/format';
 import { ICON, Modal, Note, useToast } from './ui';
 
@@ -93,6 +93,7 @@ export function InvoiceLineReviewModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { errorText } = useT();
   const toast = useToast();
   const [lines, setLines] = useState<DraftLine[]>(
     assessment.lines.length ? assessment.lines.map(toDraft) : [toDraft()],
@@ -180,7 +181,7 @@ export function InvoiceLineReviewModal({
     });
     setBusy(null);
     if (result.error) {
-      toast(toHebrewError(result.error.message), 'error');
+      toast(errorText(result.error.message), 'error');
       return;
     }
     toast('שורות החשבונית נשמרו כגרסת ראיה חדשה');
@@ -234,7 +235,7 @@ export function InvoiceLineReviewModal({
     });
     setBusy(null);
     if (result.error) {
-      toast(toHebrewError(result.error.message), 'error');
+      toast(errorText(result.error.message), 'error');
       return;
     }
     toast('הקצאת השורות להזמנות נשמרה ונבדקה מחדש');

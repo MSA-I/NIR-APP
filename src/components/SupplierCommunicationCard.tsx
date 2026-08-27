@@ -1,8 +1,8 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { MessageSquareText, Pencil } from 'lucide-react';
 import { ICON, Modal, StatusBadge, useToast } from './ui';
 import { useQuery } from '../lib/useQuery';
-import { toHebrewError } from '../lib/errors';
 import { COMMUNICATION_CHANNEL } from '../lib/status';
 import {
   fetchSupplierCommunicationPreferences,
@@ -23,6 +23,7 @@ export function SupplierCommunicationCard({ supplierId, supplierEmail, supplierP
   supplierPhone: string | null;
   canWrite: boolean;
 }) {
+  const { errorText } = useT();
   const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -62,7 +63,7 @@ export function SupplierCommunicationCard({ supplierId, supplierEmail, supplierP
       setEditing(false);
       void refetch();
     } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+      toast(errorText(failure), 'error');
     } finally {
       setBusy(false);
     }

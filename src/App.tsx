@@ -1,8 +1,8 @@
+import { useT } from './lib/i18n/LocaleProvider';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router';
 import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { useAuth, homeFor } from './auth/AuthContext';
 import { RecordSkeleton, useToast } from './components/ui';
-import { toHebrewError } from './lib/errors';
 import { reportError } from './lib/observability';
 import { isActiveRole, type ActiveRole } from './lib/types';
 import { ACTIVE_ORGANIZATION_ACCESS } from './lib/organizationAccess';
@@ -149,6 +149,7 @@ function DashboardHome() {
  * deactivated user or a missing profile, so it must not guess which one it is.
  */
 function AccountUnavailable() {
+  const { errorText } = useT();
   const { signOut } = useAuth();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -158,7 +159,7 @@ function AccountUnavailable() {
     const result = await signOut();
     setBusy(false);
     if (result.error) {
-      toast(toHebrewError(result.error), 'error');
+      toast(errorText(result.error), 'error');
       return;
     }
     if (result.pushWarning) toast(result.pushWarning, 'error');
@@ -181,6 +182,7 @@ function AccountUnavailable() {
 }
 
 function BootstrapUnavailable() {
+  const { errorText } = useT();
   const { bootstrapError, retryBootstrap, signOut } = useAuth();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -190,7 +192,7 @@ function BootstrapUnavailable() {
     const result = await signOut();
     setBusy(false);
     if (result.error) {
-      toast(toHebrewError(result.error), 'error');
+      toast(errorText(result.error), 'error');
       return;
     }
     if (result.pushWarning) toast(result.pushWarning, 'error');

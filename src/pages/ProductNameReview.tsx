@@ -39,11 +39,11 @@
  * that actually makes the decision explicable a year later. Manual entry keeps an *optional* box,
  * because a conflict or a reversed name is the one place a human sentence is worth something.
  */
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useId, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, Info, Pencil, RotateCcw, SkipForward } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Card, ICON, useToast } from '../components/ui';
-import { toHebrewError } from '../lib/errors';
 import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
 import {
   MAX_DISPLAY_NAME_LENGTH,
@@ -180,6 +180,7 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
   onApproved: (productId: string) => void;
   onSkip: (productId: string) => void;
 }) {
+  const { errorText } = useT();
   const toast = useToast();
   const fieldId = useId();
   const [busy, setBusy] = useState(false);
@@ -203,7 +204,7 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
       p_reason: reasonOr(typedReason, action),
     });
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     toast('השם הקנוני נשמר');
     onApproved(product.id);
   }

@@ -1,10 +1,10 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useState } from 'react';
 import { BellRing, SlidersHorizontal } from 'lucide-react';
 import { ICON, Note, Skeleton, useToast } from './ui';
 import { getPushStatus, subscribePush, unsubscribePush, isIOS, isStandalone, type PushStatus } from '../lib/push';
 import { useQuery } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
-import { toHebrewError } from '../lib/errors';
 import {
   NOTIFICATION_EVENT_LABELS,
   readNotificationPreferences,
@@ -136,6 +136,7 @@ function deliveryLine(preference: NotificationPreference): string {
  * discover which switch silences the audit trail.
  */
 export function NotificationMatrix() {
+  const { errorText } = useT();
   const toast = useToast();
   const { data, loading, error, refetch } = useQuery<NotificationPreference[]>(
     () => readNotificationPreferences(),
@@ -157,7 +158,7 @@ export function NotificationMatrix() {
       await refetch();
       toast('העדפת ההתראה נשמרה');
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setPending(null);
     }

@@ -10,7 +10,6 @@ import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, Note, EmptyState, SubPanel, ICON, type ServerColumn } from '../components/ui';
 import { BANK_TX_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, addCalendarDays } from '../lib/format';
-import { toHebrewError } from '../lib/errors';
 import type { BankTransaction, BankImport } from '../lib/types';
 import { useParamState } from '../lib/useParamState';
 import { SupplierSelectField, useQuickSupplier } from '../components/QuickSupplierPicker';
@@ -234,6 +233,7 @@ export default function Bank() {
 }
 
 function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => void; onChanged: () => void }) {
+  const { errorText } = useT();
   const toast = useToast();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -248,7 +248,7 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
       toast('ההתאמה הוסרה. התשלום נשאר רשום במערכת.');
       onChanged();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setBusy(false);
     }
@@ -281,6 +281,7 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
 
 /* ================= Canonical XLSX import: signature -> preview -> atomic command ================= */
 function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const { errorText } = useT();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState('');
@@ -356,7 +357,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         ? `הקובץ כבר יובא קודם. נמצאו ${imported.row_count} תנועות בייבוא הקיים.`
         : `יובאו ${imported.row_count} תנועות בעסקה אחת.`);
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -428,6 +429,7 @@ interface Candidate {
 function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
   tx: TxRow; tolerance: number; days: number; onClose: () => void; onChanged: () => void;
 }) {
+  const { errorText } = useT();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [supplierId, setSupplierId] = useState(tx.supplier_id ?? '');
@@ -502,11 +504,11 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
         p_supplier_id: supplierId || null,
         p_reason: reasonOr(reason, 'פעולה'),
       });
-      if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+      if (res.error) { toast(errorText(res.error.message), 'error'); return; }
       toast(supplierId ? 'הספק שויך לתנועה' : 'שיוך הספק הוסר מהתנועה');
       void refetch();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setBusy(false);
     }
@@ -529,7 +531,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
       toast('ההתאמה אושרה');
       onChanged();
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -552,7 +554,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
       toast('ההתאמה הידנית נשמרה');
       onChanged();
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -566,7 +568,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
       p_reason: reasonOr(reason, 'פתיחת החריג'),
     });
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     toast('נפתח חריג לבירור');
     onChanged();
   }
@@ -578,11 +580,11 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
         p_bank_transaction_id: tx.id,
         p_reason: reasonOr(reason, 'סימון התנועה'),
       });
-      if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+      if (res.error) { toast(errorText(res.error.message), 'error'); return; }
       toast('התנועה סומנה כלא רלוונטית');
       onChanged();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setBusy(false);
     }

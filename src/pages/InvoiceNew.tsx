@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState } from 'react';
 import { reasonOr } from '../lib/reason';
 import { Link, useNavigate, useSearchParams } from 'react-router';
@@ -9,7 +10,6 @@ import { Breadcrumbs, PageHeader, RecordSkeleton, useToast, ConfirmDialog, Error
 import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
 import { fmtDate, todayISO } from '../lib/format';
-import { toHebrewError } from '../lib/errors';
 import type { Supplier } from '../lib/types';
 import { type PageResponse, fetchAll } from '../lib/supabasePaging';
 import { invoiceCheckFingerprint } from '../lib/checkFingerprint';
@@ -27,6 +27,7 @@ import {
 } from '../lib/invoiceLinkedContext';
 
 export default function InvoiceNew() {
+  const { errorText } = useT();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { org, profile } = useAuth();
@@ -266,7 +267,7 @@ export default function InvoiceNew() {
       setDirty(false);
       navigate(`/invoices/${inv.invoice_id}`);
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
     }

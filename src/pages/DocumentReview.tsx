@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { RefreshCw } from 'lucide-react';
 import { BackAction } from '../components/BackAction';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -26,6 +27,7 @@ async function interpretErrorMessage(error: unknown): Promise<string> {
 }
 
 export default function DocumentReview() {
+  const { errorText } = useT();
   const { documentId } = useParams<{ documentId: string }>();
   const [params] = useSearchParams();
   const { profile, organizationAccess } = useAuth();
@@ -73,7 +75,7 @@ export default function DocumentReview() {
       window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
       await refetch();
     } catch (error) {
-      setEnqueueError(toHebrewError(error));
+      setEnqueueError(errorText(error));
     } finally {
       setEnqueuing(false);
     }
@@ -92,7 +94,7 @@ export default function DocumentReview() {
       window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
       await refetch();
     } catch (error) {
-      setReprocessError(toHebrewError(error));
+      setReprocessError(errorText(error));
     } finally {
       setReprocessing(false);
     }
@@ -107,7 +109,7 @@ export default function DocumentReview() {
       const response = await supabase.functions.invoke('interpret-document', { body: { jobId: id } });
       if (response.error) setInterpretError({ jobId: id, message: await interpretErrorMessage(response.error) });
     } catch (error) {
-      setInterpretError({ jobId: id, message: toHebrewError(error) });
+      setInterpretError({ jobId: id, message: errorText(error) });
     } finally {
       setInterpreting(false);
       await refetch();

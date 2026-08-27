@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Archive, ChevronDown, Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, RotateCcw, Search, Trash2, Undo2, Upload, X } from 'lucide-react';
@@ -8,7 +9,7 @@ import { INBOX_CHANGED_EVENT } from '../components/QuickCapture';
 import { ConfirmDialog, DataTable, ErrorNote, ICON, Modal, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
 import { PlanLimitNote } from '../components/PlanLimitNote';
 import { DocumentRemovalDialog } from '../components/DocumentRemovalDialog';
-import { ok, toHebrewError } from '../lib/errors';
+import { ok } from '../lib/errors';
 import { fmtDate, fmtDateTime, todayISO } from '../lib/format';
 import type { DocumentRow } from '../lib/types';
 import {
@@ -153,6 +154,7 @@ function isUnfiled(doc: DocumentRow) {
 function RefileModal({ doc, target, onClose, onDone }: {
   doc: DocumentRow; target: RefileTarget; onClose: () => void; onDone: () => void | Promise<unknown>;
 }) {
+  const { errorText } = useT();
   const toast = useToast();
   const [q, setQ] = useState('');
   const [dq, setDq] = useState('');
@@ -207,7 +209,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
       window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
       await onDone();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setBusy(false);
     }
@@ -252,6 +254,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
 function UploadModal({ suppliers, onClose, onDone }: {
   suppliers: SupplierOption[]; onClose: () => void; onDone: () => void | Promise<unknown>;
 }) {
+  const { errorText } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [files, setFiles] = useState<File[]>([]);
@@ -289,7 +292,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
         onClose();
       }
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setBusy(false);
     }
@@ -365,6 +368,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
  *  `entity_type='archive'`: the documents interpretation could not place, which no one files by
  *  hand. One component either way, so "what is a document row" has a single answer. */
 export default function DocumentsGallery({ archive = false }: { archive?: boolean }) {
+  const { errorText } = useT();
   const [removalDoc, setRemovalDoc] = useState<DocumentRow | null>(null);
   const { profile, organizationAccess } = useAuth();
   const toast = useToast();
@@ -621,7 +625,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       setRetryDoc(null);
       window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setRetrying(false);
     }
@@ -644,7 +648,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
       await refetch();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setRescuing(false);
     }
@@ -677,7 +681,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
       await Promise.all([refetch(), refetchAutoActions()]);
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setReverting(false);
     }
@@ -699,7 +703,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
       await refetch();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setDeleting(false);
     }

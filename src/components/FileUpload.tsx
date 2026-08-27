@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState } from 'react';
 import { Camera, FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { Link } from 'react-router';
@@ -729,6 +730,7 @@ export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDi
 export function DocumentList({ entityType, entityId, canUpload = true, capture }: {
   entityType: string; entityId: string; canUpload?: boolean; capture?: boolean;
 }) {
+  const { errorText } = useT();
   const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -873,7 +875,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
         succeeded: [],
         failed: files.map((item) => ({ item, error: e })),
       }));
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
       busyRef.current = false;
@@ -936,7 +938,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
       setPending(null);
       await refetch();
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setDeleting(false);
     }

@@ -1,9 +1,9 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Loader2, MailQuestion } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Card, ICON } from '../components/ui';
-import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
 
 /**
@@ -21,6 +21,7 @@ import { APP_NAME } from '../lib/branding';
  * rate-limit failure is the one worth naming in the user's language.
  */
 export default function ForgotPassword() {
+  const { errorText } = useT();
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -37,7 +38,7 @@ export default function ForgotPassword() {
     if (err) {
       setError(/rate limit|too many/i.test(err.message)
         ? 'נשלחו יותר מדי בקשות איפוס. יש להמתין מספר דקות ולנסות שוב.'
-        : toHebrewError(err.message));
+        : errorText(err.message));
       return;
     }
     setSent(true);

@@ -1,9 +1,9 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { Check, Trash2, X } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';
 import { Card, ConfirmDialog, ErrorNote, ICON, Note, PageHeader, SkeletonTable, useToast } from '../components/ui';
 import { fmtDate, fmtNum } from '../lib/format';
-import { toHebrewError } from '../lib/errors';
 import {
   approvePurgeBatch, fetchMyCapabilities, fetchPurgeBatches, fetchPurgeCandidates,
   type PlatformCapability, type PurgeBatch, type PurgeCandidate,
@@ -35,6 +35,7 @@ function GateMark({ ok }: { ok: boolean }) {
 }
 
 export default function PurgeCandidates() {
+  const { errorText } = useT();
   const toast = useToast();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
@@ -64,7 +65,7 @@ export default function PurgeCandidates() {
       await approvePurgeBatch({ orgIds: [...selected], reason });
     } catch (rpcError) {
       setBusy(false);
-      toast(toHebrewError((rpcError as Error).message), 'error');
+      toast(errorText((rpcError as Error).message), 'error');
       return;
     }
     setBusy(false);

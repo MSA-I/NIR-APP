@@ -15,7 +15,6 @@ import ReceiptConflictDialog, {
 } from '../components/ReceiptConflictDialog';
 import { PO_STATUS, RECEIPT_LINE_STATUS, type Tone } from '../lib/status';
 import { fmtDate, fmtDateTime, formatQuantity, productLabel, todayISO } from '../lib/format';
-import { toHebrewError } from '../lib/errors';
 import {
   claimLegacyReceiptRecovery, createReceiptDraftAutosaver, ensureReceiptKey, getOpenOrder, getReceiptDraft,
   inspectLegacyReceiptRecovery, isOpenOrderStale,
@@ -410,6 +409,7 @@ const REASON_COMPLETE = 'השלמת קבלת סחורה';
 const REASON_DRAFT = 'שמירת ביניים של קבלת סחורה';
 
 export function ReceiveOrder() {
+  const { errorText } = useT();
   const { orderId } = useParams<{ orderId: string }>();
   const [params] = useSearchParams();
   const documentId = params.get('document');
@@ -662,7 +662,7 @@ export function ReceiveOrder() {
       setLocalDraftPending(true);
     }).catch((autosaveError) => {
       if (lastDraftFingerprint.current === fingerprint) lastDraftFingerprint.current = null;
-      toast(toHebrewError(autosaveError), 'error');
+      toast(errorText(autosaveError), 'error');
     });
   }, [doneReceiptId, lines, openCredits, order, receiptKey, toast]);
 
@@ -683,7 +683,7 @@ export function ReceiveOrder() {
       void draftAutosaver.current.flush().then(() => {
         navigate(`${url.pathname}${url.search}${url.hash}`);
       }).catch((saveError) => {
-        toast(`${toHebrewError(saveError)} לא ניתן לעבור מסך לפני שמירת טיוטת הקבלה.`, 'error');
+        toast(`${errorText(saveError)} לא ניתן לעבור מסך לפני שמירת טיוטת הקבלה.`, 'error');
       });
     };
     window.addEventListener('beforeunload', beforeUnload);
@@ -750,7 +750,7 @@ export function ReceiveOrder() {
       toast('הטיוטה הישנה שויכה לחשבון הנוכחי ושוחזרה.');
       await refetch();
     } catch (recoveryError) {
-      toast(toHebrewError(recoveryError), 'error');
+      toast(errorText(recoveryError), 'error');
     } finally {
       setRecoveringLegacy(false);
     }
@@ -849,7 +849,7 @@ export function ReceiveOrder() {
     try {
       await send(complete, currentLines(), complete ? REASON_COMPLETE : REASON_DRAFT);
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -889,7 +889,7 @@ export function ReceiveOrder() {
       setConflict(null);
       await send(conflictComplete, resolution.lines, `${base} · הכרעת קונפליקט: ${resolution.explanation}`);
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -1169,7 +1169,7 @@ export function ReceiveOrder() {
       p_reason: reason,
     });
     setExceptionBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     setExceptionOpen(false);
     toast((res.data as { idempotent?: boolean } | null)?.idempotent
       ? 'כבר קיים חריג פתוח על ההזמנה הזו — לא נפתח חריג כפול'

@@ -8,7 +8,6 @@ import {
   ConfirmDialog, useToast,
 } from '../components/ui';
 import { fmtDate, fmtDateTime, fmtNum } from '../lib/format';
-import { toHebrewError } from '../lib/errors';
 import {
   CONTACT_CHANNEL, CUSTOMER_CONTACT_KIND, CUSTOMER_NOTE_KIND, ORG_STATUS, PLATFORM_EVENT_ACTION,
 } from '../lib/status';
@@ -39,7 +38,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 }
 
 export default function CustomerDetail() {
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const { orgId = '' } = useParams();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -99,7 +98,7 @@ export default function CustomerDetail() {
       setNoteDraft({ kind: 'note', body: '', due: '' });
       await refetch();
     } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+      toast(errorText(failure), 'error');
     } finally {
       setBusy(false);
     }

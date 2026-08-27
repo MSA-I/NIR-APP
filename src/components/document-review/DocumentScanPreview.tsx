@@ -1,6 +1,6 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState } from 'react';
 import { Check, CornerDownLeft, Loader2, Pencil, ScanLine } from 'lucide-react';
-import { toHebrewError } from '../../lib/errors';
 import { supabase } from '../../lib/supabase';
 import {
   acceptDocumentScan,
@@ -47,6 +47,7 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, rec
   readOnly: boolean;
   recovery?: boolean;
 }) {
+  const { errorText } = useT();
   const [corners, setCorners] = useState<ScanCorners>(
     state.manual_corners ?? state.detected_corners ?? DEFAULT_CORNERS,
   );
@@ -72,7 +73,7 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, rec
       toast('הפינות נשמרו. נוצרת סריקה חדשה.', 'success');
       await onChanged();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setSaving(false);
     }
@@ -137,6 +138,7 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, rec
 }
 
 export function DocumentScanPreview({ state, originalStoragePath, fileName, onChanged, readOnly }: Props) {
+  const { errorText } = useT();
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [scanUrl, setScanUrl] = useState<string | null>(null);
   const [urlError, setUrlError] = useState<string | null>(null);
@@ -174,7 +176,7 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
       toast('הסריקה אושרה והמסמך נשלח לחילוץ.', 'success');
       await onChanged();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setAccepting(false);
     }

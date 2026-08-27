@@ -1,5 +1,5 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { toHebrewError } from "../lib/errors";
 import { Link, useNavigate } from 'react-router';
 import {
   Building2, Tags, Truck, Package, CheckCircle2, Upload, Check, X, Plus,
@@ -89,11 +89,6 @@ function chunk<T>(arr: T[], size: number): T[][] {
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
 }
-
-// Was `e instanceof Error ? e.message : 'אירעה שגיאה בלתי צפויה'` — which put the raw message on the
-// reachable branch and the Hebrew on the one a Supabase error never takes. Every caller below
-// (:424, :540, :562, and the two spliced into Hebrew sentences) inherited that.
-const errMsg = toHebrewError;
 
 /* ================= page ================= */
 
@@ -263,6 +258,7 @@ function Stepper({ current, doneByData, skipped, onSelect }: {
 /* ================= step 1 — business details ================= */
 
 function BusinessStep({ onSaved }: { onSaved: () => void }) {
+  const { errorText } = useT();
   const { profile, org } = useAuth();
   const toast = useToast();
   const business = (org?.settings as unknown as { business?: OrgBusiness } | undefined)?.business ?? {};
@@ -302,7 +298,7 @@ function BusinessStep({ onSaved }: { onSaved: () => void }) {
       },
     }).eq('id', profile!.org_id);
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     toast('פרטי העסק נשמרו');
     onSaved();
   }
@@ -366,6 +362,7 @@ const CATEGORY_SUGGESTIONS = ['חומרי גלם', 'ציוד', 'חומרי ני�
 interface CategoryDraft { id: string | null; name: string }
 
 function CategoriesStep({ onSaved }: { onSaved: () => void }) {
+  const { errorText } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const { data, loading, error } = useQuery<Category[]>(async () =>
@@ -425,7 +422,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
       toast('הקטגוריות נשמרו');
       onSaved();
     } catch (e) {
-      setSaveError(errMsg(e));
+      setSaveError(errorText(e));
     } finally {
       setBusy(false);
     }
@@ -512,6 +509,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
   onDone: () => void;
   children?: ReactNode;
 }) {
+  const { errorText } = useT();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [sheet, setSheet] = useState<SheetData | null>(null);
@@ -541,7 +539,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
       setCols(autoMapColumns(data.headers, fields));
       setParsed(null);
     } catch (e) {
-      toast(errMsg(e), 'error');
+      toast(errorText(e), 'error');
     }
   }
 
@@ -563,7 +561,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
       setReport(nextReport);
       setConfirming(false);
     } catch (e) {
-      setFailure(errMsg(e));
+      setFailure(errorText(e));
     } finally {
       setBusy(false);
     }
@@ -875,6 +873,7 @@ interface CatalogIndex {
 }
 
 function ProductsStep({ onDone }: { onDone: () => void }) {
+  const { errorText } = useT();
   const { profile } = useAuth();
   const index = useRef<CatalogIndex>({ products: new Map(), suppliers: new Map(), categories: new Map() });
 
@@ -996,7 +995,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
       });
       if (imported.error) {
         priceFailures.push(...priceRows.map((row) => row.sourceRow));
-        priceBatchError = errMsg(imported.error);
+        priceBatchError = errorText(imported.error);
       } else {
         const result = imported.data as { created: number; updated: number; unchanged: number };
         pricesSet = result.created + result.updated;

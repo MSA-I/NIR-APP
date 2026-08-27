@@ -1,10 +1,10 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { KeyRound, Loader2 } from 'lucide-react';
 import { Card, ICON } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
-import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
 
 type LinkState = 'checking' | 'ready' | 'invalid' | 'done';
@@ -20,6 +20,7 @@ type LinkState = 'checking' | 'ready' | 'invalid' | 'done';
  * link rather than a spinner that never resolves.
  */
 export default function ResetPassword() {
+  const { errorText } = useT();
   const navigate = useNavigate();
   const [state, setState] = useState<LinkState>('checking');
   const [password, setPassword] = useState('');
@@ -68,7 +69,7 @@ export default function ResetPassword() {
     const { error: updateError } = await supabase.auth.updateUser({ password });
     setBusy(false);
     if (updateError) {
-      setError(toHebrewError(updateError.message));
+      setError(errorText(updateError.message));
       return;
     }
     setState('done');

@@ -1,10 +1,10 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Loader2, ShieldCheck } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { Modal, ErrorNote, ICON } from './ui';
-import { toHebrewError } from '../lib/errors';
 
 /**
  * Client-side mirror of `assert_recent_password_authentication` (extracted from `0031:788-805`,
@@ -96,6 +96,7 @@ export function ReauthModal({
   title = 'אימות זהות לפעולה רגישה',
   skipWhenFresh = true,
 }: ReauthModalProps) {
+  const { errorText } = useT();
   const { session } = useAuth();
   const passwordId = useId();
   const errorId = useId();
@@ -145,7 +146,7 @@ export function ReauthModal({
     } catch (e) {
       // Own Hebrew messages pass through untouched; raw supabase/Postgres strings get mapped.
       const raw = e instanceof Error ? e.message : String(e);
-      setError(/[֐-׿]/.test(raw) ? raw : toHebrewError(e));
+      setError(/[֐-׿]/.test(raw) ? raw : errorText(e));
     } finally {
       setBusy(false);
     }

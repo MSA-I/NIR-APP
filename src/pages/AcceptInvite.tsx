@@ -6,7 +6,6 @@ import { supabase } from '../lib/supabase';
 import { Card, ICON } from '../components/ui';
 import { homeFor } from '../auth/AuthContext';
 import { resolveRoleLabels } from '../lib/status';
-import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
 import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
 import {
@@ -17,7 +16,7 @@ import { TERMS_VERSION } from './Legal';
 
 /** Public route — the invitee has no account and no session when they land here. */
 export default function AcceptInvite() {
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
 
@@ -45,7 +44,7 @@ export default function AcceptInvite() {
         if (!cancelled) setLookup(res);
       } catch (e) {
         // Raw otherwise, on the screen where an invited employee first meets the product.
-        if (!cancelled) setLookupError(toHebrewError(e));
+        if (!cancelled) setLookupError(errorText(e));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -75,7 +74,7 @@ export default function AcceptInvite() {
         setFormError(
           /Invalid login credentials/i.test(error.message)
             ? 'קיים כבר חשבון לכתובת הזו, והסיסמה שהוזנה אינה נכונה.'
-            : toHebrewError(error),
+            : errorText(error),
         );
         return;
       }

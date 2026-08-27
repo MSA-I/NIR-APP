@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useMemo, useState } from 'react';
 import { reasonOr } from '../lib/reason';
 import { useParamState } from '../lib/useParamState';
@@ -16,7 +17,7 @@ import {
   ICON,
   type Column,
 } from '../components/ui';
-import { ok, toHebrewError } from '../lib/errors';
+import { ok } from '../lib/errors';
 import { fmtDate, fmtDateTime, fmtMoneyRounded, fmtNum, formatQuantity, formatUnit } from '../lib/format';
 import { supabase } from '../lib/supabase';
 import { fetchAll } from '../lib/supabasePaging';
@@ -439,6 +440,7 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { errorText } = useT();
   const toast = useToast();
   const copy = COMMAND_COPY[command];
   const [commandId] = useState(() => crypto.randomUUID());
@@ -487,7 +489,7 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
       toast(result?.idempotent ? 'הפעולה כבר נשמרה קודם; הנתונים רועננו.' : 'תנועת המלאי נשמרה.');
       onSaved();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setBusy(false);
     }

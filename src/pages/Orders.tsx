@@ -1,6 +1,5 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { toHebrewError } from "../lib/errors";
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle, Pencil, Copy, Plus, FileText } from 'lucide-react';
@@ -58,7 +57,7 @@ export function orderLifecycle(status: PoStatus, wasSent: boolean, wasConfirmed:
 }
 
 export function OrdersList() {
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const navigate = useNavigate();
   const { profile, org, organizationAccess } = useAuth();
   const toast = useToast();
@@ -102,7 +101,7 @@ export function OrdersList() {
       p_reason: reason ?? null,
     });
     setBusy(false);
-    if (res.error) { setCancelTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { setCancelTarget(null); toast(errorText(res.error.message), 'error'); return; }
     setCancelTarget(null);
     toast('ההזמנה בוטלה');
     void refetch();
@@ -132,7 +131,7 @@ export function OrdersList() {
       setDraftCancelTarget(null);
       void refetch();
     } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+      toast(errorText(failure), 'error');
     } finally {
       setBusy(false);
     }
@@ -263,6 +262,7 @@ type FullOrder = PurchaseOrder & {
 };
 
 export function OrderDetail() {
+  const { errorText } = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, org, organizationAccess } = useAuth();
@@ -313,7 +313,7 @@ export function OrderDetail() {
       p_confirmation_note: confirmationNote,
       p_expected_date: expectedDate,
     });
-    if (res.error) { setBusy(false); toast(toHebrewError(res.error.message), 'error'); return false; }
+    if (res.error) { setBusy(false); toast(errorText(res.error.message), 'error'); return false; }
     setBusy(false);
     setConfirm(null);
     toast('הסטטוס עודכן');
@@ -329,7 +329,7 @@ export function OrderDetail() {
       p_reason: reason ?? null,
     });
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     setConfirm(null);
     toast('ההזמנה בוטלה');
     void refetch();

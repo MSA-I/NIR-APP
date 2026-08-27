@@ -1,3 +1,4 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { Check, ChevronLeft, Copy, NotepadText, ThumbsDown, ThumbsUp } from 'lucide-react';
@@ -14,7 +15,6 @@ import {
 } from '../../lib/assistant/contracts';
 import { assistantSourceRouteDecision } from '../../lib/assistant/routeAccess';
 import { sendAssistantFeedback } from '../../lib/assistant/client';
-import { toHebrewError } from '../../lib/errors';
 import { fmtDate, fmtDateTime, fmtMoneyExact, fmtNum } from '../../lib/format';
 import { Disclosure, ICON, Note } from '../ui';
 
@@ -207,6 +207,7 @@ function DraftBlock({ text, facts, sources, sourceIsCurrent, onNavigate }: {
 }
 
 function FeedbackControl({ runId }: { runId: string }) {
+  const { errorText } = useT();
   const [state, setState] = useState<'idle' | 'busy' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -218,7 +219,7 @@ function FeedbackControl({ runId }: { runId: string }) {
       setState('sent');
     } catch (e) {
       // Write path: translated here, where it is shown (the useQuery.ts convention).
-      setError(toHebrewError(e));
+      setError(errorText(e));
       setState('idle');
     }
   }

@@ -40,10 +40,11 @@
  * the more dangerous lie.
  */
 
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
-import { ok, toHebrewError } from '../lib/errors';
+import { ok } from '../lib/errors';
 import { unwrap } from '../lib/useQuery';
 import { fetchAll } from '../lib/supabasePaging';
 import { nameKey } from '../lib/nameKey';
@@ -95,6 +96,7 @@ export function QuickCreateProduct({ suppliers, initialName, onClose, onCreated 
   /** Fires after BOTH writes succeed. The product is real and it has a price for `supplierId`. */
   onCreated: (product: Product) => void | Promise<void>;
 }) {
+  const { errorText } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [name, setName] = useState(initialName ?? '');
@@ -122,7 +124,7 @@ export function QuickCreateProduct({ suppliers, initialName, onClose, onCreated 
     if (!Number.isFinite(parsedPrice) || parsedPrice <= 0 || parsedPrice > 1_000_000) {
       setError(PRICE_REQUIRED); return;
     }
-    if (!profile?.org_id) { setError(toHebrewError(new Error('not_authorized'))); return; }
+    if (!profile?.org_id) { setError(errorText(new Error('not_authorized'))); return; }
 
     setBusy(true);
     setError(null);
@@ -168,8 +170,8 @@ export function QuickCreateProduct({ suppliers, initialName, onClose, onCreated 
       await onCreated(product);
     } catch (failure) {
       setError(pendingProduct.current
-        ? `${toHebrewError(failure)} — המוצר נוצר בקטלוג אך עדיין ללא מחיר לספק. אפשר לנסות שוב, או להשלים את המחיר במסך המחירונים.`
-        : toHebrewError(failure));
+        ? `${errorText(failure)} — המוצר נוצר בקטלוג אך עדיין ללא מחיר לספק. אפשר לנסות שוב, או להשלים את המחיר במסך המחירונים.`
+        : errorText(failure));
     } finally {
       setBusy(false);
     }

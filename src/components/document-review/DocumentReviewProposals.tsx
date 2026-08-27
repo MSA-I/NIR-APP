@@ -1,8 +1,8 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { reasonOr } from '../../lib/reason';
 import { useNavigate } from 'react-router';
 import { Check, FilePlus2, Info, Loader2, RotateCcw, ShieldAlert, X } from 'lucide-react';
-import { toHebrewError } from '../../lib/errors';
 import { fmtDateTime } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
 import type { DocumentAnnotation, DocumentFeedback, DocumentLearningRule, InterpretationContract } from '../../lib/useDocumentProcessing';
@@ -72,6 +72,7 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
   canDecide: boolean;
   onRefetch: () => Promise<boolean>;
 }) {
+  const { errorText } = useT();
   const toast = useToast();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -127,7 +128,7 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
         toast('הקשר הבדיקה השתנה מאז פתיחת הטופס. הנתונים ירועננו; יש לבדוק ולנסות שוב.', 'error');
         await onRefetch();
       } else {
-        toast(toHebrewError(error), 'error');
+        toast(errorText(error), 'error');
       }
     } finally {
       setBusy(false);
@@ -333,6 +334,7 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
   documentId: string;
   interpretation: NonNullable<ReviewSnapshot['interpretation']>;
 }) {
+  const { errorText } = useT();
   const navigate = useNavigate();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -356,7 +358,7 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
       .eq('supplier_id', supplierId).eq('invoice_number', draft.creditedInvoiceNumber)
       .eq('financial_role', 'payable').is('deleted_at', null).limit(2);
     setBusy(false);
-    if (found.error) { toast(toHebrewError(found.error.message), 'error'); return; }
+    if (found.error) { toast(errorText(found.error.message), 'error'); return; }
     const rows = (found.data ?? []) as { id: string }[];
     if (rows.length !== 1) {
       toast(rows.length === 0
@@ -402,6 +404,7 @@ function FeedbackControls({ annotation, onRefetch }: {
   annotation: DocumentAnnotation;
   onRefetch: () => Promise<boolean>;
 }) {
+  const { errorText } = useT();
   const toast = useToast();
   const [reason, setReason] = useState('');
   const [tagKey, setTagKey] = useState(annotation.tag_key);
@@ -428,7 +431,7 @@ function FeedbackControls({ annotation, onRefetch }: {
       else toast(`${success}, אך רענון המסך נכשל. יש לרענן ידנית.`, 'error');
       setReason('');
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setBusy(null);
     }
@@ -469,6 +472,7 @@ function RuleControls({ rule, onRefetch }: {
   rule: DocumentLearningRule;
   onRefetch: () => Promise<boolean>;
 }) {
+  const { errorText } = useT();
   const toast = useToast();
   const [tagKey, setTagKey] = useState(rule.tag_key);
   const [label, setLabel] = useState(rule.label);
@@ -492,7 +496,7 @@ function RuleControls({ rule, onRefetch }: {
       await finish('הכלל הושבת');
       setReason('');
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setBusy(null);
     }
@@ -520,7 +524,7 @@ function RuleControls({ rule, onRefetch }: {
       await finish('נוצרה גרסה מתוקנת של הכלל');
       setReason('');
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setBusy(null);
     }

@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { reasonOr } from '../lib/reason';
 import { Landmark, CheckCircle2, Loader2 } from 'lucide-react';
@@ -8,7 +9,7 @@ import { ReauthModal } from '../components/ReauthModal';
 import { DocumentList } from '../components/FileUpload';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
 import { bidiIsolate, fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
-import { ALLOCATION_REFUSAL_MESSAGES, toHebrewError } from '../lib/errors';
+import { ALLOCATION_REFUSAL_MESSAGES } from '../lib/errors';
 import type { PaymentRequest } from '../lib/types';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -326,6 +327,7 @@ export default function AccountantPaymentQueue() {
 }
 
 function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; onDone: () => void }) {
+  const { errorText } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [f, setF] = useState({ paid_date: todayISO(), reference: '', notes: '', reason: '' });
@@ -402,7 +404,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
       setPaymentId(payment.payment_id);
       toast('ההעברה נרשמה בהצלחה');
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
     }

@@ -1,8 +1,8 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { reasonOr } from '../lib/reason';
 import { useParamState } from '../lib/useParamState';
-import { toHebrewError } from "../lib/errors";
 import { TrendingUp, TrendingDown, Upload, History, Pencil, X, FileCheck2, ScrollText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -324,6 +324,7 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
 }
 
 function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => void; onSaved: () => void }) {
+  const { errorText } = useT();
   const toast = useToast();
   const [price, setPrice] = useState(row.current_price.toString());
   const [date, setDate] = useState(todayISO());
@@ -342,7 +343,7 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
       p_available: available,
       p_reason: reasonOr(reason, 'עדכון המחיר'),
     });
-    if (upd.error) { setBusy(false); toast(toHebrewError(upd.error.message), 'error'); return; }
+    if (upd.error) { setBusy(false); toast(errorText(upd.error.message), 'error'); return; }
     setBusy(false);
     onSaved();
   }
@@ -365,6 +366,7 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
 
 /** Import price list: expects columns ספק / מוצר / מחיר (or supplier/product/price). */
 function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const { errorText } = useT();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<{ supplier: string; product: string; price: number }[]>([]);
@@ -420,7 +422,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       })) as { updated: number; created: number; unchanged: number };
       setReport(`עודכנו ${imported.updated} מחירים, נוצרו ${imported.created} רשומות חדשות, ${imported.unchanged} ללא שינוי.`);
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
     }

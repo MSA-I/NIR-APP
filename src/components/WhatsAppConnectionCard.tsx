@@ -1,9 +1,9 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useId, useState } from 'react';
 import { MessageCircle, Link2, Power, ShieldOff } from 'lucide-react';
 import { ErrorNote, ICON, Modal, Note, StatusBadge, useToast } from './ui';
 import { ReauthModal } from './ReauthModal';
 import { useQuery } from '../lib/useQuery';
-import { toHebrewError } from '../lib/errors';
 import type { StatusMeta } from '../lib/status';
 import {
   configureWhatsAppConnection,
@@ -53,6 +53,7 @@ type PendingAction =
   | { kind: 'revoke' };
 
 export function WhatsAppConnectionCard({ role }: { role: string | null | undefined }) {
+  const { errorText } = useT();
   const toast = useToast();
   const isOwner = role === 'owner';
   const { data: connection, loading, refetch } = useQuery(() => fetchWhatsAppConnection(), []);
@@ -129,7 +130,7 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
       setReason('');
       void refetch();
     } catch (failure) {
-      setError(toHebrewError(failure));
+      setError(errorText(failure));
     } finally {
       setBusy(false);
     }

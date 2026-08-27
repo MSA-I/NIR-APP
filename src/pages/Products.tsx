@@ -1,6 +1,6 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { toHebrewError } from '../lib/errors';
 import { Plus, Pencil, Copy, Power, Upload, History } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
@@ -20,6 +20,7 @@ interface ProductRow extends Product {
 }
 
 export default function Products() {
+  const { errorText } = useT();
   const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -123,7 +124,7 @@ export default function Products() {
       p_reason: reason ?? null,
     });
     setBusyToggle(false);
-    if (res.error) { setToggleTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { setToggleTarget(null); toast(errorText(res.error.message), 'error'); return; }
     setToggleTarget(null);
     toast(next ? 'המוצר הופעל' : 'המוצר הושבת');
     void refetch();
@@ -272,6 +273,7 @@ function ProductForm({ product, initial, onClose, onSaved }: {
   initial?: Product;
   onClose: () => void; onSaved: () => void;
 }) {
+  const { errorText } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const { data: categories } = useCategories();
@@ -296,7 +298,7 @@ function ProductForm({ product, initial, onClose, onSaved }: {
       ? await supabase.from('products').update(row).eq('id', product.id)
       : await supabase.from('products').insert({ ...row, org_id: profile!.org_id, active: f.active });
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     toast(product ? 'המוצר עודכן' : 'המוצר נוצר');
     onSaved();
   }

@@ -135,7 +135,7 @@ function zero() {
  * reason the Hebrew line count is pinned — a migration with no ratchet stops at whatever fraction
  * the day ran out on, and nobody notices which fraction that was.
  */
-const LEGACY_ERROR_CALLS = 204;
+const LEGACY_ERROR_CALLS = 51;
 
 function legacyErrors() {
   const files = [];

@@ -2,7 +2,6 @@ import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { reasonOr } from '../lib/reason';
 import { reasonDemandFor } from '../lib/transitionIntent';
-import { toHebrewError } from '../lib/errors';
 import { useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { Plus, Loader2, Send, CheckCircle2, ShieldAlert, XCircle, Pencil } from 'lucide-react';
@@ -37,7 +36,7 @@ type PaymentInvoiceCandidate = {
 export default function PaymentRequests() {
   const [params, setParams] = useSearchParams();
   const { profile, organizationAccess } = useAuth();
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const toast = useToast();
   const [statusFilter, setStatusFilter] = useParamState('status', 'active');
   const [dueFilter, setDueFilter] = useParamState('due');
@@ -109,7 +108,7 @@ export default function PaymentRequests() {
       p_reason: reason?.trim() || null,
     });
     setBusyCancel(false);
-    if (res.error) { setCancelTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { setCancelTarget(null); toast(errorText(res.error.message), 'error'); return; }
     setCancelTarget(null);
     toast('הדרישה בוטלה');
     void refetch();
@@ -202,6 +201,7 @@ export default function PaymentRequests() {
 function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
   presetInvoiceId: string | null; onClose: () => void; onSaved: () => void;
 }) {
+  const { errorText } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [supplierId, setSupplierId] = useState('');
@@ -372,7 +372,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
       }
       onSaved();
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -563,6 +563,7 @@ function CheckSummary({ summary, checks }: { summary: ChecksSummary; checks: Che
 export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
   pr: Row; isOffice: boolean; onClose: () => void; onChanged: () => void;
 }) {
+  const { errorText } = useT();
   const toast = useToast();
   const [checks, setChecks] = useState<CheckResult[] | null>(null);
   const [checking, setChecking] = useState(false);
@@ -691,7 +692,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         p_reason: auditReason,
       });
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     setTransitionTarget(null);
     setCreditOverrideOpen(false);
     setCreditOverrideAcknowledged(false);

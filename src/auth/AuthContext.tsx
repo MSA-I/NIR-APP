@@ -7,7 +7,6 @@ import { OrgScopeProvider } from '../lib/query/orgScope';
 import { resolveRoleLabels } from '../lib/status';
 import { useT } from '../lib/i18n/LocaleProvider';
 import { cleanupPushBeforeSignOut } from '../lib/push';
-import { toHebrewError } from '../lib/errors';
 import {
   getRememberedOfflineBootstrap,
   offlineAccessProjectionFromServer,
@@ -68,7 +67,7 @@ const AuthContext = createContext<AuthState>(null as unknown as AuthState);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   // AuthProvider sits INSIDE LocaleProvider (src/main.tsx), so a language already exists here.
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
@@ -194,7 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setOfflineBootstrap(false);
             setAccess(READ_ONLY_ORGANIZATION_ACCESS);
             setAccessStatus('unknown');
-            setBootstrapError(toHebrewError('account_role_retired'));
+            setBootstrapError(errorText('account_role_retired'));
           } else if (cached) {
             // IndexedDB holds only scope keys, role and the server access projection. A minimal
             // profile is enough for the receiving guard; no Organization object is synthesized.
@@ -224,7 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setOfflineBootstrap(false);
             setAccess(READ_ONLY_ORGANIZATION_ACCESS);
             setAccessStatus('unknown');
-            setBootstrapError(toHebrewError(error));
+            setBootstrapError(errorText(error));
           }
         }
       } finally {

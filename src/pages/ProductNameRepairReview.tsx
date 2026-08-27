@@ -1,7 +1,7 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useId, useRef, useState } from 'react';
 import { AlertTriangle, Check, FileSpreadsheet, LockKeyhole } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { toHebrewError } from '../lib/errors';
 import { Card, ICON, SubPanel, useToast } from '../components/ui';
 
 export interface ProductNameRepairCandidate {
@@ -80,6 +80,7 @@ function RepairCard({ candidate, onApplied }: {
   candidate: ProductNameRepairCandidate;
   onApplied: (candidateId: string) => void;
 }) {
+  const { errorText } = useT();
   const reasonId = useId();
   const toast = useToast();
   // One command identity per candidate card. A failed response must replay the same command,
@@ -104,7 +105,7 @@ function RepairCard({ candidate, onApplied }: {
       p_reason: typedReason,
     });
     setBusy(false);
-    if (result.error) { toast(toHebrewError(result.error.message), 'error'); return; }
+    if (result.error) { toast(errorText(result.error.message), 'error'); return; }
     toast('שם המוצר תוקן ונרשם ביומן הביקורת');
     onApplied(candidate.candidate_id);
   }

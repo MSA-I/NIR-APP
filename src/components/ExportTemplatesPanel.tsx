@@ -1,7 +1,7 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useCallback, useState } from 'react';
 import { CheckCircle2, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { toHebrewError } from '../lib/errors';
 import { useQuery, unwrap } from '../lib/useQuery';
 import {
   EXPORT_DEFINITIONS,
@@ -64,6 +64,7 @@ async function sha256Hex(file: File): Promise<string> {
 }
 
 export function ExportTemplatesPanel({ orgId }: { orgId: string }) {
+  const { errorText } = useT();
   const toast = useToast();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [rejection, setRejection] = useState<string | null>(null);
@@ -92,7 +93,7 @@ export function ExportTemplatesPanel({ orgId }: { orgId: string }) {
     } catch (caught) {
       // A rejected workbook is not an error state of the panel — it is an answer, and it names what
       // to do next. See WORKBOOK_REJECTION_MESSAGE.
-      setRejection(caught instanceof WorkbookRejected ? caught.message : toHebrewError(caught));
+      setRejection(caught instanceof WorkbookRejected ? caught.message : errorText(caught));
     }
   }, []);
 
@@ -133,7 +134,7 @@ export function ExportTemplatesPanel({ orgId }: { orgId: string }) {
       setDraft(null);
       await refetch();
     } catch (caught) {
-      toast(toHebrewError(caught), 'error');
+      toast(errorText(caught), 'error');
     } finally {
       setBusy(false);
     }

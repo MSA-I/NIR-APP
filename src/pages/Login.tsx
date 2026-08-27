@@ -4,7 +4,6 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { Eye, EyeOff, Loader2, Lock } from 'lucide-react';
 import { Card, ICON } from '../components/ui';
 import { useAuth, homeFor } from '../auth/AuthContext';
-import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
 import { startAurora } from '../lib/loginAurora';
 import {
@@ -46,7 +45,7 @@ function localDemoAccounts(supabaseUrl: string | undefined, seed: string | undef
 
 export default function Login() {
   const { signIn, session, profile, loading } = useAuth();
-  const { dir } = useT();
+  const { dir , errorText } = useT();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [email, setEmail] = useState('');
@@ -79,7 +78,7 @@ export default function Login() {
       // FIRST screen a customer meets could answer in English: "Email not confirmed", "Email logins
       // are disabled", "Failed to fetch". toHebrewError already maps all of those (errors.ts:211-220)
       // and falls back to Hebrew for anything it does not recognise — it was simply never called.
-      setError(toHebrewError(err));
+      setError(errorText(err));
     } else {
       navigate('/', replaceOpts);
     }

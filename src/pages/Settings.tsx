@@ -1,5 +1,5 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
-import { toHebrewError } from "../lib/errors";
 import { Link } from 'react-router';
 import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, KeyRound, ClipboardCheck, ImageUp, Download, Undo2, UserCog, LogOut } from 'lucide-react';
 import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
@@ -71,6 +71,7 @@ async function logoUploadSessionKey(orgId: string, file: File): Promise<string> 
 }
 
 export default function Settings() {
+  const { errorText } = useT();
   const { profile, org, roleLabels, organizationAccess, refreshOrganizationAccess } = useAuth();
   const canWrite = organizationAccess?.canWrite ?? true;
   // The two roles 0126's template commands accept. Named once, used by the panel gate below.
@@ -156,7 +157,7 @@ export default function Settings() {
       }
       await Promise.all([refetchOffboarding(), refreshOrganizationAccess()]);
     } catch (actionError) {
-      toast(toHebrewError(actionError), 'error');
+      toast(errorText(actionError), 'error');
     } finally {
       setOffboardingBusy(false);
     }
@@ -181,7 +182,7 @@ export default function Settings() {
       },
     }).eq('id', profile!.org_id);
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     toast('ההגדרות נשמרו — ייכנסו לתוקף בכניסה הבאה');
   }
 
@@ -217,7 +218,7 @@ export default function Settings() {
       if (keyName && brandFailureAllowsNewCorrelation(error)) {
         window.sessionStorage.removeItem(keyName);
       }
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setLogoBusy(false);
     }
@@ -248,7 +249,7 @@ export default function Settings() {
       if (brandFailureAllowsNewCorrelation(error)) {
         window.sessionStorage.removeItem(keyName);
       }
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setLogoBusy(false);
     }
@@ -265,7 +266,7 @@ export default function Settings() {
     setPasswordBusy(true);
     const res = await supabase.auth.updateUser({ password: newPassword });
     setPasswordBusy(false);
-    if (res.error) { setPasswordError(toHebrewError(res.error.message)); return; }
+    if (res.error) { setPasswordError(errorText(res.error.message)); return; }
     setNewPassword('');
     setConfirmPassword('');
     toast('הסיסמה הוחלפה. היא תידרש בכניסה הבאה.');
@@ -281,7 +282,7 @@ export default function Settings() {
       p_reason: reason?.trim() ?? '',
     });
     setDialogBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     toast(u.active ? 'המשתמש הושבת' : 'המשתמש הופעל');
     setAccessTarget(null);
     void refetch();
@@ -311,7 +312,7 @@ export default function Settings() {
       p_reason: roleReason.trim(),
     });
     setDialogBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     toast(`התפקיד עודכן ל${roleLabels[nextRole] ?? nextRole}`);
     setRoleTarget(null);
     void refetch();

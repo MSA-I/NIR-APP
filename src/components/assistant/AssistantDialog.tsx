@@ -1,3 +1,4 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router';
@@ -13,7 +14,6 @@ import {
 } from '../../lib/assistant/client';
 import type { AssistantHistoryView } from '../../lib/assistant/contracts';
 import type { AssistantRunSession } from '../../lib/assistant/runSession';
-import { toHebrewError } from '../../lib/errors';
 import { useFeatureFlags } from '../../lib/flags';
 import { APP_NAME } from '../../lib/branding';
 import { fmtDateTime } from '../../lib/format';
@@ -136,6 +136,7 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
   authorizationFingerprint: string;
   onOpen: (turns: AssistantHistoryView[], expectedAuthorizationFingerprint: string) => void;
 }) {
+  const { errorText } = useT();
   const { data, loading, error, refetch } = useAssistantConversations(authorizationFingerprint);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -182,7 +183,7 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
                   })
                   .catch((e) => {
                     setOpeningId(null);
-                    setOpenError(toHebrewError(e));
+                    setOpenError(errorText(e));
                   });
               }}
             >
@@ -216,7 +217,7 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
           if (!id) return;
           void deleteAssistantConversation(id)
             .then(() => refetch())
-            .catch((e) => setDeleteError(toHebrewError(e)));
+            .catch((e) => setDeleteError(errorText(e)));
         }}
       />
     </div>

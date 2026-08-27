@@ -4,7 +4,6 @@ import { Loader2, Mail, RotateCcw, Send } from 'lucide-react';
 import { ConfirmDialog, ICON, Note, StatusBadge, useToast } from './ui';
 import { useQuery } from '../lib/useQuery';
 import { fmtDateTime } from '../lib/format';
-import { toHebrewError } from '../lib/errors';
 import { EMAIL_MESSAGE_STATUS } from '../lib/status';
 import {
   EMAIL_CHANNEL_STATE,
@@ -36,7 +35,7 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
   canWrite: boolean;
 }) {
   const toast = useToast();
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const { profile } = useAuth();
   const [sendOpen, setSendOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -75,7 +74,7 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
       setSendOpen(false);
       void refetch();
     } catch (failed) {
-      toast(toHebrewError(failed), 'error');
+      toast(errorText(failed), 'error');
     } finally {
       setBusy(false);
     }
@@ -90,7 +89,7 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
       setResetOpen(false);
       void refetch();
     } catch (failed) {
-      toast(toHebrewError(failed), 'error');
+      toast(errorText(failed), 'error');
     } finally {
       setBusy(false);
     }

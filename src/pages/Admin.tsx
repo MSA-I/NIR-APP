@@ -1,6 +1,5 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useId, useState } from 'react';
-import { toHebrewError } from "../lib/errors";
 import { Building2, ShieldCheck, Plus, Copy, MessageSquare, Archive, RefreshCw, Undo2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -56,6 +55,7 @@ const emptyForm = (): NewOrgForm => ({
 });
 
 export default function Admin() {
+  const { errorText } = useT();
   const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [handover, setHandover] = useState<{ email: string; password: string; result: ProvisionResult } | null>(null);
@@ -106,7 +106,7 @@ export default function Admin() {
       setOffboardingPending(null);
       await refetch();
     } catch (actionError) {
-      toast(toHebrewError(actionError), 'error');
+      toast(errorText(actionError), 'error');
     } finally {
       setBusy(false);
     }
@@ -125,7 +125,7 @@ export default function Admin() {
     });
     setBusy(false);
 
-    if (!res.ok) { toast(toHebrewError(res.message), 'error'); return; }
+    if (!res.ok) { toast(errorText(res.message), 'error'); return; }
     setCreating(false);
     setHandover({ email: form.ownerEmail.trim(), password: form.password, result: res.result });
     void refetch();

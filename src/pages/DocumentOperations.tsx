@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Camera, FileSearch, RefreshCw, Upload } from 'lucide-react';
 import { Link, useNavigate } from 'react-router';
@@ -16,7 +17,7 @@ import {
   type Column,
 } from '../components/ui';
 import { DocumentStatusBadge } from '../components/DocumentStatusBadge';
-import { ok, toHebrewError } from '../lib/errors';
+import { ok } from '../lib/errors';
 import { fmtDateTime, fmtMoneyRounded, fmtNum } from '../lib/format';
 import { supabase } from '../lib/supabase';
 import { DOCUMENT_PROCESSING_CHANGED_EVENT, useDocumentProcessing } from '../lib/useDocumentProcessing';
@@ -106,6 +107,7 @@ function fmtDuration(ms: number | null) {
 }
 
 export default function DocumentOperations() {
+  const { errorText } = useT();
   const { organizationAccess, profile } = useAuth();
   const canWrite = organizationAccess?.canWrite ?? true;
   const canRecoverStuck = canWrite && profile?.role === 'owner';
@@ -192,7 +194,7 @@ export default function DocumentOperations() {
       window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
       await Promise.all([operations.refetch(), attempts.refetch()]);
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setReprocessing(false);
     }
@@ -223,7 +225,7 @@ export default function DocumentOperations() {
       window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
       await Promise.all([operations.refetch(), attempts.refetch(), currentProcessing.refetch()]);
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setRecovering(false);
     }

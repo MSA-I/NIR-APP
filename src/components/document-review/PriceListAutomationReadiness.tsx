@@ -1,8 +1,8 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { fmtMoneyExact } from '../../lib/format';
-import { toHebrewError } from '../../lib/errors';
 import { supabase } from '../../lib/supabase';
 import { ICON, Note } from '../ui';
 
@@ -126,6 +126,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
   /** The document's price list has already been taken in; preparation and qualification are closed. */
   ingested: boolean;
 }) {
+  const { errorText } = useT();
   const { profile } = useAuth();
   const allowed = profile?.role === 'owner' || profile?.role === 'office';
   const [queue, setQueue] = useState<CalibrationQueue | null>(null);
@@ -153,14 +154,14 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
       supabase.rpc('get_qualified_product_creation_dry_run', { p_interpretation_id: interpretationId }),
     ]).then(([queueResult, dryRunResult]) => {
       if (cancelled) return;
-      if (queueResult.status === 'rejected') setQueueError(toHebrewError(queueResult.reason));
+      if (queueResult.status === 'rejected') setQueueError(errorText(queueResult.reason));
       else setQueue(queueResult.value);
       if (dryRunResult.status === 'rejected') {
-        setDryRunError(`בדיקת הכשירות נכשלה: ${toHebrewError(dryRunResult.reason)}`);
+        setDryRunError(`בדיקת הכשירות נכשלה: ${errorText(dryRunResult.reason)}`);
         return;
       }
       if (dryRunResult.value.error) {
-        setDryRunError(`בדיקת הכשירות נכשלה: ${toHebrewError(dryRunResult.value.error.message)}`);
+        setDryRunError(`בדיקת הכשירות נכשלה: ${errorText(dryRunResult.value.error.message)}`);
         return;
       }
       const result = dryRunResult.value.data as QualifiedProductDryRun;
@@ -220,7 +221,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
     });
     setBusyAction(null);
     if (response.error) {
-      setActionError((current) => ({ ...current, [shadowRunId]: toHebrewError(response.error.message) }));
+      setActionError((current) => ({ ...current, [shadowRunId]: errorText(response.error.message) }));
       return;
     }
     setPrepared((current) => ({ ...current, [shadowRunId]: response.data as PreparationReceipt }));
@@ -241,7 +242,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
     });
     setBusyAction(null);
     if (response.error) {
-      setActionError((current) => ({ ...current, [shadowRunId]: toHebrewError(response.error.message) }));
+      setActionError((current) => ({ ...current, [shadowRunId]: errorText(response.error.message) }));
       return;
     }
     setReviewed((current) => ({ ...current, [shadowRunId]: response.data as ReviewReceipt }));

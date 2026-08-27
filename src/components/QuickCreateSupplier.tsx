@@ -36,7 +36,7 @@ import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
-import { ok, toHebrewError } from '../lib/errors';
+import { ok } from '../lib/errors';
 import { fetchAll } from '../lib/supabasePaging';
 import { nameKey } from '../lib/nameKey';
 import { SUPPLIER_STATUS } from '../lib/status';
@@ -106,7 +106,7 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
   onCreated: (supplier: QuickCreatedSupplier) => void;
 }) {
   const { profile } = useAuth();
-  const { statusLabel } = useT();
+  const { statusLabel , errorText } = useT();
   const toast = useToast();
   const [name, setName] = useState('');
   const [taxId, setTaxId] = useState('');
@@ -138,7 +138,7 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
     if (!name.trim()) { setError(NAME_REQUIRED); return; }
     // No org means no tenant to write into. `not_authorized` is the honest existing mapping —
     // and it keeps a null profile from becoming an unhandled TypeError mid-save.
-    if (!profile?.org_id) { setError(toHebrewError(new Error('not_authorized'))); return; }
+    if (!profile?.org_id) { setError(errorText(new Error('not_authorized'))); return; }
 
     setBusy(true);
     setError(null);
@@ -168,7 +168,7 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
       toast('הספק נוצר');
       onCreated(row);
     } catch (failure) {
-      setError(toHebrewError(failure));
+      setError(errorText(failure));
     } finally {
       setBusy(false);
     }

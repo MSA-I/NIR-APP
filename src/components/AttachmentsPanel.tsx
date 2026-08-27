@@ -1,9 +1,10 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { Eye, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { fmtDate, fmtDateTime } from '../lib/format';
-import { ok, toHebrewError } from '../lib/errors';
+import { ok } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import type { DocumentRow } from '../lib/types';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -38,6 +39,7 @@ interface AttachmentItem {
 /** One invoice document register: direct invoice files and linked delivery notes share the
  *  same rows, vocabulary and actions instead of living in nested cards and galleries. */
 export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string; receipts: LinkedReceipt[] }) {
+  const { errorText } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -115,7 +117,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
         succeeded: [],
         failed: files.map((item) => ({ item, error: e })),
       }));
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -148,7 +150,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
       setPendingDelete(null);
       await refetch();
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setDeleting(false);
     }

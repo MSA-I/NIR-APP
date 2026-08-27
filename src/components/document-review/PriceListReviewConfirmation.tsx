@@ -1,3 +1,4 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { reasonOr } from '../../lib/reason';
 import { CheckCircle2, Loader2, Plus } from 'lucide-react';
@@ -231,6 +232,7 @@ export function PriceListReviewConfirmation({
   actorId,
   onRefetch,
 }: PriceListReviewConfirmationProps) {
+  const { errorText } = useT();
   const interpretation = snapshot.interpretation;
   const lineItems = interpretation?.payload.line_items ?? [];
   const autoDecision = snapshot.priceListDecision;
@@ -354,7 +356,7 @@ export function PriceListReviewConfirmation({
         options.sort((left, right) => left.name.localeCompare(right.name, 'he'));
         if (!cancelled) setProducts(options);
       } catch (loadError) {
-        if (!cancelled) setCatalogError(toHebrewError(loadError));
+        if (!cancelled) setCatalogError(errorText(loadError));
       } finally {
         if (!cancelled) setCatalogLoading(false);
       }
@@ -376,7 +378,7 @@ export function PriceListReviewConfirmation({
       if (storedReceipt) setReceipt(storedReceipt);
       else setRecoveryError('המשימה הושלמה, אך לא נמצאה קבלה תואמת לפירוש הנוכחי. לא ניתן לבנות הגשה חדשה במצב זה.');
     }).catch((loadError) => {
-      if (!cancelled) setRecoveryError(`לא ניתן לשחזר את קבלת ההגשה: ${toHebrewError(loadError)}`);
+      if (!cancelled) setRecoveryError(`לא ניתן לשחזר את קבלת ההגשה: ${errorText(loadError)}`);
     }).finally(() => {
       if (!cancelled) setRecoveryLoading(false);
     });
@@ -456,7 +458,7 @@ export function PriceListReviewConfirmation({
       updateDraft(index, { productId: product.id, ...(price === null ? {} : { priceText: price }) });
       setNewProductFor(null);
     } catch (insertError) {
-      setCreateError(toHebrewError(insertError));
+      setCreateError(errorText(insertError));
     } finally {
       setBusyCreate(false);
     }
@@ -491,7 +493,7 @@ export function PriceListReviewConfirmation({
     });
     setRevertBusy(false);
     if (result.error) {
-      setError(toHebrewError(result.error.message));
+      setError(errorText(result.error.message));
       return;
     }
     setRevertOpen(false);
@@ -525,13 +527,13 @@ export function PriceListReviewConfirmation({
         if (recovery !== 'found') {
           setError(recovery === 'failed'
             ? 'השרת השיב, אך לא ניתן לקרוא או לשחזר את הקבלה. ניסיון נוסף ישתמש בדיוק באותו אישור.'
-            : receiptError instanceof Error ? receiptError.message : toHebrewError(receiptError));
+            : receiptError instanceof Error ? receiptError.message : errorText(receiptError));
         }
       }
     } catch (submitError) {
       const recovery = await recoverAfterSubmission(payload.interpretationId);
       if (recovery !== 'found') {
-        const message = submitError instanceof Error ? submitError.message : toHebrewError(submitError);
+        const message = submitError instanceof Error ? submitError.message : errorText(submitError);
         setError(recovery === 'failed'
           ? `${message} לא ניתן היה לוודא אם נשמרה קבלה; ניסיון נוסף ישתמש בדיוק באותו אישור.`
           : message);

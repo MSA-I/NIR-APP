@@ -1,10 +1,10 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import {
   CheckCircle2, ChevronDown, ChevronsDownUp, ChevronsUpDown, FileStack, Loader2,
 } from 'lucide-react';
 import { Link } from 'react-router';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toHebrewError } from '../../lib/errors';
 import { reasonOr } from '../../lib/reason';
 import type {
   DocumentInterpretationType, DocumentPacket, DocumentPacketSegment, DocumentProcessingSnapshot,
@@ -171,6 +171,7 @@ function SegmentEditor({ draft, stored, pageCount, editable, busy, attention, on
 }
 
 export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
+  const { errorText } = useT();
   const packet = snapshot.packet;
   const [drafts, setDrafts] = useState(() => draftsFromSnapshot(snapshot));
   const [reason, setReason] = useState('');
@@ -287,7 +288,7 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
       await materialize(currentPacket.id);
       await onRefetch();
     } catch (approveError) {
-      setError(toHebrewError(approveError));
+      setError(errorText(approveError));
     } finally {
       setBusy(false);
     }
@@ -300,7 +301,7 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
       await materialize(currentPacket.id);
       await onRefetch();
     } catch (materializeError) {
-      setError(toHebrewError(materializeError));
+      setError(errorText(materializeError));
     } finally {
       setBusy(false);
     }

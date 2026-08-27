@@ -55,7 +55,7 @@ export default function Reports() {
   const orgLogoUrl = org?.logo_path
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
     : null;
-  const { statusLabel, tDynamic } = useT();
+  const { statusLabel, tDynamic , errorText } = useT();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   // The month lives in the URL beside the legal entity, so leaving for an invoice and coming back
@@ -241,7 +241,7 @@ export default function Reports() {
       }
       toast('קובץ ה-Excel הורד');
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -258,7 +258,7 @@ export default function Reports() {
       );
       toast(`גרסה ${snapshot.version} הורדה מה-snapshot הנעול`);
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     }
   }
 
@@ -300,7 +300,7 @@ export default function Reports() {
       toast(`גרסה ${snapshot.version} סומנה כהועברה לרו״ח`);
       void refetchLockedReports();
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
     }
