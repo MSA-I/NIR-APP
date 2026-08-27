@@ -5,6 +5,8 @@ import './index.css';
 import App from './App';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './auth/AuthContext';
+import { LocaleProvider } from './lib/i18n/LocaleProvider';
+import { ProfileLocaleSync } from './lib/i18n/profileLocale';
 import { ToastProvider } from './components/ui';
 import { initObservability } from './lib/observability';
 import { createAppQueryClient } from './lib/query/client';
@@ -60,11 +62,17 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AuthProvider>
-          <ToastProvider bottomNotice={<ServiceWorkerUpdateNotice />}>
-            <App />
-          </ToastProvider>
-        </AuthProvider>
+        {/* Outside AuthProvider on purpose: /login renders before there is a profile to ask, so
+            the language and the direction have to be settled before auth resolves. A signed-in
+            person's saved choice arrives afterwards through ProfileLocaleSync. */}
+        <LocaleProvider>
+          <AuthProvider>
+            <ProfileLocaleSync />
+            <ToastProvider bottomNotice={<ServiceWorkerUpdateNotice />}>
+              <App />
+            </ToastProvider>
+          </AuthProvider>
+        </LocaleProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

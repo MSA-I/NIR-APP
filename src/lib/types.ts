@@ -1,4 +1,5 @@
 // Row types matching supabase/migrations/0001_init.sql (hand-maintained, pragmatic subset)
+import type { Locale } from './i18n/locale';
 
 export type Role = 'owner' | 'kitchen' | 'office' | 'payer' | 'accountant' | 'supplier';
 
@@ -23,6 +24,9 @@ export interface Profile {
   phone: string | null;
   active: boolean;
   supplier_id: string | null; // historical supplier-agent association; never grants an active login
+  // Interface language this person chose (0213). `null` is a third state, not Hebrew: it means
+  // they never chose, so the browser keeps deciding. See src/lib/i18n/locale.ts.
+  locale: Locale | null;
 }
 
 export type OrgStatus = 'active' | 'suspended';
