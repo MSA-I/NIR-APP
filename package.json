@@ -22,7 +22,9 @@
     "quality": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-quality-gates.ps1",
     "demo:restore": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restore-demo-local.ps1",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "owner-decisions": "node scripts/owner-decisions-server.mjs --open",
+    "test:owner-decisions": "node --test tools/owner-decisions/tests/*.test.mjs && node -e \"console.log('owner-decisions tests passed')\""
   },
   "dependencies": {
     "@sentry/react": "^10.69.0",
