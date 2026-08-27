@@ -36,6 +36,11 @@ export function ProfileLocaleSync() {
  * Resolves `false` rather than throwing, because the only sensible caller response is a toast.
  */
 export async function saveProfileLocale(profileId: string, locale: Locale): Promise<boolean> {
-  const { error } = await supabase.from('profiles').update({ locale }).eq('id', profileId);
-  return !error;
+  // `.select('id')` and not a bare update: PostgREST reports an update that matched ZERO rows as a
+  // success, so an RLS policy quietly filtering the row out would read here as "saved". Asking for
+  // the affected row back turns "nothing happened" into something this function can see — which is
+  // the difference between a language that did not persist and a language that reported that it did.
+  const { data, error } = await supabase
+    .from('profiles').update({ locale }).eq('id', profileId).select('id');
+  return !error && (data?.length ?? 0) === 1;
 }

@@ -34,6 +34,18 @@
 -- not require `manage_profile_access`, must not demand owner, and must not write an audit row --
 -- an audit row per language toggle would be noise in the ledger that records who was granted what.
 --
+-- AND THE SECOND GATE, WHICH IS EASY TO MISS: 0042's COLUMN-LEVEL GRANT.
+-- `0042_profile_self_service_acl.sql` revokes UPDATE on every column of `profiles` and then grants
+-- it back to exactly five: full_name, phone, role, active, supplier_id. So a new column is closed
+-- TWICE over -- once by the trigger, once by the ACL -- and satisfying only the trigger produces a
+-- write that fails with `42501 permission denied for table profiles` at HTTP 403.
+--
+-- That is not a hypothetical. The first version of this migration patched the trigger only, and
+-- the switch looked like it worked: the screen changed language, the choice survived a reload from
+-- localStorage, and `profiles.locale` stayed NULL for every row. It took clearing localStorage in a
+-- live session to expose it. Two independent gates on a privileged table is the design working;
+-- the lesson is that BOTH have to be argued, in the same migration, or the feature ships half-saved.
+--
 -- ANCHORED REPLACEMENT (the 0137/0145/0148/0168/0207 pattern): read the LIVE definition, normalise
 -- \r, replace named anchors, fail loudly if an anchor moved or matched a different number of times.
 -- `profiles_guard_privileged_columns` has already been redefined once (0006 -> 0020); pasting
@@ -96,6 +108,11 @@ begin
 end
 $profile_locale$;
 
+-- The second gate: 0042's column ACL. Additive and narrow — this grants UPDATE on `locale` alone
+-- and touches none of the other five, so the self-service surface widens by exactly one column
+-- whose only power is which language a person reads their own screen in.
+grant update (locale) on table public.profiles to authenticated;
+
 -- A6: a tenant export knows the exact shape of every table it copies, and adding a column is
 -- schema drift until someone says what the export does with it. `locale` is EXPORTED, not
 -- excluded: it is the person's own stated preference, it is part of what "everything we hold
@@ -142,6 +159,23 @@ begin
   if position('''locale''' in v_def) = 0 then
     raise exception '0213: the column guard still treats locale as privileged, so no browser '
       'could ever write it -- the anchored replacement did not take';
+  end if;
+
+  -- The second gate, asserted separately from the first because passing one and failing the other
+  -- is exactly the state this migration was written in before it was measured. `has_column_privilege`
+  -- rather than a probe as the wrong role: reading as a denied role segfaults this backend.
+  if not has_column_privilege('authenticated', 'public.profiles', 'locale', 'update') then
+    raise exception '0213: authenticated cannot UPDATE profiles.locale -- 0042''s column ACL still '
+      'closes it, so the switch would change the screen and save nothing';
+  end if;
+
+  -- ...and the five columns 0042 granted are untouched. A migration that widened the self-service
+  -- surface by accident would pass every check above.
+  if (select count(*) from information_schema.column_privileges
+       where table_schema = 'public' and table_name = 'profiles'
+         and grantee = 'authenticated' and privilege_type = 'UPDATE') <> 6 then
+    raise exception '0213: the profiles self-service ACL is no longer exactly 0042''s five columns '
+      'plus locale -- something else was granted along the way';
   end if;
 
   -- The constraint really refuses an unsupported language, tested rather than trusted.
