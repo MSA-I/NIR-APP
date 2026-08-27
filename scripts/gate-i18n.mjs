@@ -10,9 +10,10 @@
  *   node scripts/gate-i18n.mjs dictionaries -- he and en agree, and neither ships a blank
  *   node scripts/gate-i18n.mjs abandon      -- the operator-console skip is recorded, not forgotten
  *   node scripts/gate-i18n.mjs zero         -- extraction is FINISHED: nothing left but the exceptions
+ *   node scripts/gate-i18n.mjs legacy-errors -- how many screens still show failures in Hebrew only
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
@@ -22,6 +23,8 @@ const read = (relative) => readFileSync(path.join(root, relative), 'utf8');
 const EXTRACTED = [
   'src/lib/status.ts',
   'src/lib/useDocumentProcessing.ts',
+  'src/lib/errors.ts',
+  'src/lib/assistant/errorCodes.ts',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */
@@ -124,7 +127,49 @@ function zero() {
   console.log('GATE_I18N_ZERO_OK');
 }
 
-const COMMANDS = { ratchet, extracted, dictionaries, abandon, zero };
+/**
+ * The number of call sites still resolving a failure in Hebrew regardless of the reader.
+ *
+ * `toHebrewError` is a transitional shim: it names what it does, so nothing is hidden, but a screen
+ * that still calls it shows Hebrew to an English reader. The count is pinned here for the same
+ * reason the Hebrew line count is pinned — a migration with no ratchet stops at whatever fraction
+ * the day ran out on, and nobody notices which fraction that was.
+ */
+const LEGACY_ERROR_CALLS = 204;
+
+function legacyErrors() {
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.tsx?$/.test(entry.name)) files.push(full);
+    }
+  };
+  walk(path.join(root, 'src'));
+
+  let found = 0;
+  const perFile = [];
+  for (const file of files) {
+    const relative = path.relative(root, file).split(path.sep).join('/');
+    if (relative === 'src/lib/errors.ts') continue; // the definition itself
+    const hits = (readFileSync(file, 'utf8').match(/\btoHebrewError\(/g) ?? []).length;
+    if (hits) { found += hits; perFile.push([relative, hits]); }
+  }
+
+  if (found > LEGACY_ERROR_CALLS) {
+    fail(`gate-i18n: ${found} toHebrewError call(s), up from the pinned ${LEGACY_ERROR_CALLS}. `
+      + 'A new screen was written against the Hebrew-only shim instead of useT().errorText.');
+  }
+  if (found < LEGACY_ERROR_CALLS) {
+    fail(`gate-i18n: ${found} toHebrewError call(s), down from the pinned ${LEGACY_ERROR_CALLS}. `
+      + `Good — lower the pin in scripts/gate-i18n.mjs to ${found} and commit it with the conversion.`);
+  }
+  console.log(`gate-i18n: ${found} call site(s) across ${perFile.length} file(s) still resolve failures in Hebrew only`);
+  console.log('GATE_I18N_LEGACY_ERRORS_OK');
+}
+
+const COMMANDS = { ratchet, extracted, dictionaries, abandon, zero, legacyErrors, 'legacy-errors': legacyErrors };
 const command = COMMANDS[process.argv[2]];
 if (!command) fail(`gate-i18n: unknown subcommand ${process.argv[2] ?? '(none)'}; expected one of ${Object.keys(COMMANDS).join(', ')}`);
 command();

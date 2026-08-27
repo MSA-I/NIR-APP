@@ -4,6 +4,7 @@ import { he } from './dictionaries/he';
 import type { Dictionary } from './dictionaries/he';
 import { dirFor, resolveLocale, type Locale } from './locale';
 import { translate, tryTranslate, type TKey } from './t';
+import { toErrorKey } from '../errors';
 
 /**
  * Owns three things and nothing else: which locale this session is in, the copy of that answer in
@@ -74,6 +75,12 @@ interface LocaleState {
    * key at a customer, and `StatusBadge` already declines to draw a badge it has no meta for.
    */
   statusLabel: (metaOrKey: { key: string } | string | null | undefined) => string;
+  /**
+   * The sentence for a thrown value, in the reader's language. Takes the error itself rather than
+   * a key so a call site reads `errorText(e)` — the same shape the code already had — and so the
+   * raw message still reaches the console on the way past.
+   */
+  errorText: (error: unknown) => string;
   /** Switches the screen and remembers it locally. Persisting to the profile is the caller's job. */
   setLocale: (next: Locale) => void;
   /** Adopts a locale that came from somewhere authoritative (a profile) without echoing it back. */
@@ -108,6 +115,12 @@ function resolveStatus(dictionary: Dictionary, metaOrKey: { key: string } | stri
   return tryTranslate(dictionary, `status.${key}`) ?? '';
 }
 
+/** Keeps the key-resolution in one place: `toErrorKey` decides WHICH failure, this decides its words. */
+function resolveError(dictionary: Dictionary, error: unknown): string {
+  const key = toErrorKey(error);
+  return tryTranslate(dictionary, `errors.${key}`) ?? dictionary.errors.fallback;
+}
+
 const FALLBACK_DICTIONARY = he as unknown as Dictionary;
 const LocaleContext = createContext<LocaleState>({
   locale: 'he',
@@ -115,6 +128,7 @@ const LocaleContext = createContext<LocaleState>({
   t: (key, vars) => translate(FALLBACK_DICTIONARY, key, vars),
   tDynamic: (key) => tryTranslate(FALLBACK_DICTIONARY, key),
   statusLabel: (metaOrKey) => resolveStatus(FALLBACK_DICTIONARY, metaOrKey),
+  errorText: (error) => resolveError(FALLBACK_DICTIONARY, error),
   setLocale: () => {},
   adoptLocale: () => {},
 });
@@ -161,6 +175,7 @@ export function LocaleProvider({
       t: (key, vars) => translate(dictionary, key, vars),
       tDynamic: (key) => tryTranslate(dictionary, key),
       statusLabel: (metaOrKey) => resolveStatus(dictionary, metaOrKey),
+      errorText: (error) => resolveError(dictionary, error),
       setLocale,
       adoptLocale,
     };

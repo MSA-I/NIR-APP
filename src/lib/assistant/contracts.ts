@@ -719,7 +719,6 @@ export const AssistantRunResultSchema = z
  */
 export {
   ASSISTANT_ERROR_CODES,
-  ASSISTANT_ERROR_MESSAGES,
   type AssistantErrorCode,
 } from './errorCodes.ts';
 

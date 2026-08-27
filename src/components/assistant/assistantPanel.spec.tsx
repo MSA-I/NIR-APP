@@ -1,3 +1,4 @@
+import { he } from '../../lib/i18n/dictionaries/he';
 import { readFileSync } from 'node:fs';
 import { MemoryRouter } from 'react-router';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -6,7 +7,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AssistantPanel from '../AssistantPanel';
 import {
   ASSISTANT_DRAFT_LABEL,
-  ASSISTANT_ERROR_MESSAGES,
   type AssistantRunResult,
 } from '../../lib/assistant/contracts';
 import { fmtMoneyExact } from '../../lib/format';
@@ -577,7 +577,7 @@ describe('העוזר של InPlace — הפאנל', () => {
     renderPanel();
     await openDialog();
     await askQuestion();
-    expect(await screen.findByText(ASSISTANT_ERROR_MESSAGES.assistant_limit_reached)).toBeInTheDocument();
+    expect(await screen.findByText(he.errors.assistant_limit_reached)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'מסך ההתראות' })).toHaveAttribute('href', '/alerts');
   });
 
@@ -588,7 +588,7 @@ describe('העוזר של InPlace — הפאנל', () => {
     renderPanel();
     await openDialog();
     await askQuestion('מה מצב הספקים?');
-    expect(await screen.findByText(ASSISTANT_ERROR_MESSAGES.assistant_provider_timeout)).toBeInTheDocument();
+    expect(await screen.findByText(he.errors.assistant_provider_timeout)).toBeInTheDocument();
     expect(ask).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText('שאלה לבדיקה')).toHaveValue('מה מצב הספקים?');
 
@@ -619,7 +619,7 @@ describe('העוזר של InPlace — הפאנל', () => {
     renderPanel();
     await openDialog();
     await askQuestion();
-    await screen.findByText(ASSISTANT_ERROR_MESSAGES.assistant_limit_reached);
+    await screen.findByText(he.errors.assistant_limit_reached);
 
     expect(screen.queryByRole('link', { name: 'מסך ההתראות' })).toBeNull();
     expect(screen.getByRole('link', { name: 'מרכז הבקרה' })).toHaveAttribute('href', '/dashboard');

@@ -1,3 +1,4 @@
+import { he } from '../i18n/dictionaries/he';
 import { createElement, type ReactNode } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,7 +10,7 @@ import {
   sendAssistantFeedback,
   useAssistantConversations,
 } from './client';
-import { ASSISTANT_ERROR_MESSAGES, type AssistantRunResult } from './contracts';
+import { type AssistantRunResult } from './contracts';
 import { toHebrewError } from '../errors';
 import { OrgScopeProvider } from '../query/orgScope';
 
@@ -209,19 +210,19 @@ describe('askAssistant', () => {
     await expect(askAssistant({ question: 'שאלה', conversation_id: null, route: null }))
       .rejects.toThrow('assistant_unauthenticated');
     expect(toHebrewError(new Error('assistant_unauthenticated')))
-      .toBe(ASSISTANT_ERROR_MESSAGES.assistant_unauthenticated);
+      .toBe(he.errors.assistant_unauthenticated);
   });
 });
 
 describe('מילון השגיאות — ניסוח אחד, לא שניים', () => {
   it('קוד עוזר מתורגם למשפט הקנוני מ-ASSISTANT_ERROR_MESSAGES', () => {
     expect(toHebrewError(new Error('assistant_limit_reached')))
-      .toBe(ASSISTANT_ERROR_MESSAGES.assistant_limit_reached);
+      .toBe(he.errors.assistant_limit_reached);
   });
 
   it('assistant_provider_timeout אינו נבלע בתבנית ה-timeout הגנרית — הסדר ב-PATTERNS הוא החוזה', () => {
     const text = toHebrewError(new Error('assistant_provider_timeout'));
-    expect(text).toBe(ASSISTANT_ERROR_MESSAGES.assistant_provider_timeout);
+    expect(text).toBe(he.errors.assistant_provider_timeout);
     expect(text).not.toBe('הפעולה ארכה זמן רב מדי. נסה שוב.');
   });
 
@@ -229,9 +230,9 @@ describe('מילון השגיאות — ניסוח אחד, לא שניים', () 
     // assistant_persistence_failed נוסף אחרי שה-PATTERNS נכתבו; אם המשפט הקנוני חוזר, ההפקה
     // האוטומטית עובדת וכשל שמירה לא ידווח כהצלחה מחוץ למכסה.
     expect(toHebrewError(new Error('assistant_persistence_failed')))
-      .toBe(ASSISTANT_ERROR_MESSAGES.assistant_persistence_failed);
+      .toBe(he.errors.assistant_persistence_failed);
     expect(toHebrewError(new Error('assistant_invalid_request')))
-      .toBe(ASSISTANT_ERROR_MESSAGES.assistant_invalid_request);
+      .toBe(he.errors.assistant_invalid_request);
   });
 });
 

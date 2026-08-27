@@ -4,7 +4,7 @@ import {
   partitionSupplierCredits,
   type SupplierCreditBalance,
 } from './AccountantPaymentQueue';
-import { ALLOCATION_REFUSAL_MESSAGES, toHebrewError } from '../lib/errors';
+import { ALLOCATION_REFUSAL_MESSAGES, toErrorKey, toHebrewError } from '../lib/errors';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -278,7 +278,9 @@ describe('the Hebrew the accountant reads when the credit allocation is refused'
 
   it.each(Object.keys(ALLOCATION_REFUSAL_MESSAGES))(
     'says the same thing about %s inline as it does through toHebrewError', (code) => {
-      expect(toHebrewError(new Error(code))).toBe(ALLOCATION_REFUSAL_MESSAGES[code]);
+      // Both sides are dictionary KEYS now, which is the claim this test always made: the inline
+      // refusal and the thrown one name the same failure, so they cannot drift into two wordings.
+      expect(toErrorKey(new Error(code))).toBe(ALLOCATION_REFUSAL_MESSAGES[code]);
     });
 
   it('no longer maps the refusal 0173 removed', () => {
