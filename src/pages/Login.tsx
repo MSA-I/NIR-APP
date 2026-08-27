@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { Eye, EyeOff, Loader2, Lock } from 'lucide-react';
 import { Card, ICON } from '../components/ui';
 import { useAuth, homeFor } from '../auth/AuthContext';
+import { useT } from '../lib/i18n/LocaleProvider';
 import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
 import { startAurora } from '../lib/loginAurora';
@@ -45,6 +46,7 @@ function localDemoAccounts(supabaseUrl: string | undefined, seed: string | undef
 
 export default function Login() {
   const { signIn, session, profile, loading } = useAuth();
+  const { dir } = useT();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [email, setEmail] = useState('');
@@ -105,12 +107,17 @@ export default function Login() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center bg-canvas px-4 py-5 sm:px-6 lg:py-7">
       {/* `dir=ltr` fixes the physical split from the reference: aurora on the visual left, form on
-          the visual right. Each panel restores RTL for its Hebrew content. */}
+          the visual right. That is a composition, not a reading order, so it stays pinned in both
+          languages — brand-left/form-right is as ordinary in English as it is in Hebrew.
+          Each panel then restores the SESSION's direction, so the content inside it reads the way
+          the person does. These used to be a hardcoded `dir="rtl"`, which pinned the login form to
+          RTL even for an English browser and made the one screen that renders before auth the one
+          screen that could not follow the language. */}
       <Card pad={false} clip className="w-full max-w-[75rem]">
         <div dir="ltr" className="lg:grid lg:min-h-[min(50rem,calc(100dvh-5rem))] lg:grid-cols-2">
           {/* Nothing is authenticated here, so there is no tenant to name. On a phone the visual
               collapses to a compact banner so the form still owns the first fold. */}
-          <section aria-label="זהות InPlace" dir="rtl" className="aurora-pane h-48 lg:h-auto">
+          <section aria-label="זהות InPlace" dir={dir} className="aurora-pane h-48 lg:h-auto">
             <canvas ref={auroraRef} aria-hidden="true" className="absolute inset-0 size-full" />
             <div className="relative z-10 flex h-full flex-col justify-between p-6 sm:p-8 lg:p-10 xl:p-12">
               {/* The lockup is the mark, not this screen's title — the <h1> is „כניסה לחשבון"
@@ -141,7 +148,7 @@ export default function Login() {
               </ul>
             </div>
           </section>
-          <section aria-labelledby="login-heading" dir="rtl"
+          <section aria-labelledby="login-heading" dir={dir}
             className="flex items-center bg-surface px-6 py-8 sm:px-10 sm:py-10 lg:px-12 xl:px-16">
             <div className="mx-auto w-full max-w-md">
               <div>

@@ -10,6 +10,7 @@ import { Card, PageHeader, SkeletonCards, useToast, ErrorNote, ICON, Note, DataT
 import { ActionMenu, type ActionMenuItem } from '../components/ActionMenu';
 import { ExportTemplatesPanel } from '../components/ExportTemplatesPanel';
 import { ReauthModal } from '../components/ReauthModal';
+import { LanguageSetting } from '../lib/i18n/LanguageSetting';
 import { INVITATION_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime, fmtNum } from '../lib/format';
 import {
@@ -494,6 +495,9 @@ export default function Settings() {
         </div>
         {canWrite && <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>שמירה</button></div>}
       </Card>
+
+      {/* Every role, not just owner: this is the language a person reads their own screen in. */}
+      <LanguageSetting />
 
       <Card className="space-y-4">
         <div>

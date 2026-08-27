@@ -144,5 +144,17 @@ export function LocaleProvider({
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
 }
 
+/**
+ * Resolves a key in a NAMED locale rather than the current one.
+ *
+ * It exists because of an ordering bug the tests caught: a handler that calls `setLocale('en')`
+ * and then reports something is still holding the `t` it closed over at render time, which is the
+ * OLD language. So the person switches to English and the message about the switch arrives in
+ * Hebrew. Anything an event handler says ABOUT a locale change has to be resolved against the
+ * locale it is changing to, and this is that lookup.
+ */
+export const translateIn = (locale: Locale, key: TKey, vars?: Record<string, string | number>): string =>
+  translate(DICTIONARIES[locale], key, vars);
+
 /** The one way a component asks what language it is in. See the context default above for why it never throws. */
 export const useT = (): LocaleState => useContext(LocaleContext);
