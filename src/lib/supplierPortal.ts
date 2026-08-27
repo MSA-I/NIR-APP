@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { toHebrewError } from './errors';
 import type { SupplierOrderLink, SupplierOrderProposal, SupplierOrderProposalLine } from './types';
 
 // Tenant-side surface of the supplier portal (0167): issuing and revoking links, reading the
@@ -26,7 +25,7 @@ export async function fetchOrderLink(orderId: string): Promise<SupplierOrderLink
     .eq('purchase_order_id', orderId)
     .is('revoked_at', null)
     .maybeSingle();
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return res.data as SupplierOrderLink | null;
 }
 
@@ -42,7 +41,7 @@ export async function issueOrderLink(orderId: string, reason: string): Promise<I
     p_order_id: orderId,
     p_reason: reason,
   });
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return res.data as IssuedLink;
 }
 
@@ -51,7 +50,7 @@ export async function revokeOrderLink(linkId: string, reason: string): Promise<v
     p_link_id: linkId,
     p_reason: reason,
   });
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
 }
 
 export type ProposalWithLines = SupplierOrderProposal & { lines: SupplierOrderProposalLine[] };
@@ -63,7 +62,7 @@ export async function fetchOrderProposal(orderId: string): Promise<ProposalWithL
     .order('submitted_at', { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   if (!res.data) return null;
   const proposal = res.data as ProposalWithLines;
   proposal.lines.sort((a, b) => a.position - b.position);
@@ -75,7 +74,7 @@ export async function fetchProposal(proposalId: string): Promise<ProposalWithLin
     .select('*, lines:supplier_order_proposal_lines(*)')
     .eq('id', proposalId)
     .maybeSingle();
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   if (!res.data) return null;
   const proposal = res.data as ProposalWithLines;
   proposal.lines.sort((a, b) => a.position - b.position);
@@ -95,7 +94,7 @@ export async function decideProposal(proposalId: string, input: ProposalDecision
     p_accept_delivery_date: input.acceptDeliveryDate,
     p_reason: input.reason,
   });
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
 }
 
 export async function createRevisionFromProposal(proposalId: string, reason: string): Promise<string> {
@@ -103,6 +102,6 @@ export async function createRevisionFromProposal(proposalId: string, reason: str
     p_proposal_id: proposalId,
     p_reason: reason,
   });
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return res.data as string;
 }

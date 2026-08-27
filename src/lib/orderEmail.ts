@@ -128,7 +128,7 @@ export async function fetchSupplierCommunicationPreferences(
     .select('*')
     .eq('supplier_id', supplierId)
     .maybeSingle();
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return res.data as SupplierCommunicationPreferences | null;
 }
 
@@ -154,7 +154,7 @@ export async function setSupplierCommunicationPreferences(
     p_reminders_allowed: input.remindersAllowed,
     p_reason: input.reason,
   });
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
 }
 
 export async function fetchOrderEmailMessage(orderId: string): Promise<EmailOrderMessage | null> {
@@ -163,7 +163,7 @@ export async function fetchOrderEmailMessage(orderId: string): Promise<EmailOrde
     .eq('order_id', orderId)
     .eq('kind', 'order')
     .maybeSingle();
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return res.data as EmailOrderMessage | null;
 }
 
@@ -205,5 +205,5 @@ export async function resetOrderEmailMessage(messageId: string, reason: string):
     p_message_id: messageId,
     p_reason: reason,
   });
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
 }

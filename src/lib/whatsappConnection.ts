@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { toHebrewError } from './errors';
 
 /**
  * Tenant-side surface of the WhatsApp provider connection (0191 over 0028/0029).
@@ -136,7 +135,7 @@ export function toConnectionView(payload: ConnectionStatusPayload | null): Whats
 
 export async function fetchWhatsAppConnection(): Promise<WhatsAppConnectionView> {
   const res = await supabase.rpc('get_whatsapp_connection_status');
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return toConnectionView(res.data as ConnectionStatusPayload | null);
 }
 
@@ -158,7 +157,7 @@ export async function configureWhatsAppConnection(
     p_language_code: input.languageCode,
     p_reason: input.reason,
   });
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return toConnectionView(res.data as ConnectionStatusPayload | null);
 }
 
@@ -170,12 +169,12 @@ export async function setWhatsAppConnectionEnabled(
     p_enabled: enabled,
     p_reason: reason,
   });
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return toConnectionView(res.data as ConnectionStatusPayload | null);
 }
 
 export async function revokeWhatsAppConnection(reason: string): Promise<WhatsAppConnectionView> {
   const res = await supabase.rpc('revoke_whatsapp_provider_connection', { p_reason: reason });
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return toConnectionView(res.data as ConnectionStatusPayload | null);
 }

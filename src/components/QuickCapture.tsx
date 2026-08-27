@@ -1,8 +1,8 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from './ui';
-import { toHebrewError } from '../lib/errors';
 import {
   DOCUMENT_UPLOAD_ACCEPT,
   WeakCaptureDialog,
@@ -51,6 +51,7 @@ export function quickCaptureReviewTarget(
 export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
   openCapture: () => void; element: ReactNode; busy: boolean; retryCount: number;
 } {
+  const { errorText } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const location = useLocation();
@@ -105,7 +106,7 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
       );
       if (reviewTarget) navigate(reviewTarget);
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       if (inputRef.current) inputRef.current.value = '';
       setBusy(false);

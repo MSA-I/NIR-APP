@@ -1,5 +1,5 @@
+import { useT } from '../i18n/LocaleProvider';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { toHebrewError } from '../errors';
 import { askAssistant } from './client';
 import type { AssistantHistoryView, AssistantRunResult } from './contracts';
 
@@ -77,6 +77,7 @@ export function assistantAuthorizationFingerprint(
 export function useAssistantRunSession(
   authorizationFingerprint = 'assistant-authorization-unscoped',
 ): AssistantRunSession {
+  const { errorText: resolveError } = useT();
   const [question, setQuestion] = useState('');
   const [submittedQuestion, setSubmittedQuestion] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -144,7 +145,7 @@ export function useAssistantRunSession(
         ) return false;
         const raw = error instanceof Error ? error.message : String(error);
         setRawError(raw);
-        setErrorText(toHebrewError(error));
+        setErrorText(resolveError(error));
         setAnnouncement('הבקשה נכשלה');
         return false;
       } finally {
