@@ -33,6 +33,7 @@ const monthLabel = (value: string) => new Intl.DateTimeFormat('he-IL', {
 }).format(new Date(`${value.slice(0, 7)}-01T00:00:00Z`));
 
 export default function PriceLists() {
+  const { t } = useT();
   const { profile, organizationAccess } = useAuth();
   const canWrite = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
   /**
@@ -116,13 +117,13 @@ export default function PriceLists() {
   const changePct = (r: Row) => r.previous_price ? ((r.current_price - r.previous_price) / r.previous_price) * 100 : 0;
 
   const columns: Column<Row>[] = [
-    { key: 'product', header: 'מוצר', priority: 3, sortValue: (r) => productLabel(r.product), render: (r) => <bdi className="font-medium text-ink">{productLabel(r.product)}</bdi> },
-    { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
-    { key: 'unit', header: 'יחידה', priority: 3, render: (r) => formatUnit(r.product.unit) },
-    { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
+    { key: 'product', header: t('priceLists.productLabel'), priority: 3, sortValue: (r) => productLabel(r.product), render: (r) => <bdi className="font-medium text-ink">{productLabel(r.product)}</bdi> },
+    { key: 'supplier', header: t('priceLists.text'), priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
+    { key: 'unit', header: t('priceLists.formatUnit'), priority: 3, render: (r) => formatUnit(r.product.unit) },
+    { key: 'price', header: t('priceLists.fmtMoneyExact'), className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
     // Comparison-only column: how far each offer stands from the cheapest eligible one.
     ...(productFilter ? [{
-      key: 'delta', header: 'הפרש מהזול', className: 'num',
+      key: 'delta', header: t('priceLists.text_2'), className: 'num',
       render: (r: Row) => {
         const cheapest = comparison?.cheapest;
         if (!cheapest || !r.available) return <span className="text-ink-faint">—</span>;
@@ -133,9 +134,9 @@ export default function PriceLists() {
         return <span className="text-trend-up-fg">‎+{fmtMoneyExact(diff)}{pct != null ? ` (+${pct.toFixed(1)}%)` : ''}</span>;
       },
     } satisfies Column<Row>] : []),
-    { key: 'prev', header: 'מחיר קודם', priority: 3, className: 'num', render: (r) => fmtMoneyExact(r.previous_price) },
+    { key: 'prev', header: t('priceLists.fmtMoneyExact_2'), priority: 3, className: 'num', render: (r) => fmtMoneyExact(r.previous_price) },
     {
-      key: 'change', header: 'שינוי', sortValue: changePct,
+      key: 'change', header: t('priceLists.text_3'), sortValue: changePct,
       render: (r) => {
         const pct = changePct(r);
         if (!r.previous_price || pct === 0) return <span className="text-ink-faint">—</span>;
@@ -144,8 +145,8 @@ export default function PriceLists() {
           : <span className="inline-flex items-center gap-1 text-trend-down-fg font-medium"><TrendingDown size={ICON.xs} aria-hidden="true" />‎{pct.toFixed(1)}%</span>;
       },
     },
-    { key: 'date', header: 'בתוקף מ־', priority: 2, sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
-    { key: 'avail', header: 'זמינות', priority: 3, render: (r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} /> },
+    { key: 'date', header: t('priceLists.fmtDate'), priority: 2, sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
+    { key: 'avail', header: t('priceLists.text_4'), priority: 3, render: (r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} /> },
   ];
 
   if (loading) return <SkeletonTable cols={5} />;
@@ -153,18 +154,18 @@ export default function PriceLists() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="מחירונים"
+      <PageHeader title={t('priceLists.title')}
         meta={`${data?.length ?? 0} מחירי ספקים · ${(data ?? []).filter((row) => row.previous_price != null && row.current_price > row.previous_price).length} התייקרויות`}
         actions={canWrite ? (
           <div className="flex flex-wrap gap-2">
-            <button className="btn-secondary" onClick={() => setImportOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> ייבוא רב־ספקים מ־Excel</button>
-            <button className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> העלאת מחירון</button>
+            <button className="btn-secondary" onClick={() => setImportOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> {t('priceLists.setImportOpen')}</button>
+            <button className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> {t('priceLists.setDocumentOpen')}</button>
           </div>
         ) : (
           /* „מנהל רכש”, not „משרד”: PRODUCT.md:13 and status.ts's ROLE_LABEL both name `office`
              that way, and this screen used the other word while the sentence beside it used this
              one. One role, one word. */
-          <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמנהל הרכש בלבד.</span>
+          <span className="text-sm text-ink-muted">{t('priceLists.text_5')}</span>
         )} />
 
       {comparison && (
@@ -182,14 +183,14 @@ export default function PriceLists() {
                 הזול ביותר: <bdi className="font-medium">{comparison.cheapest.supplier.name}</bdi>
                 {' — '}<span className="num font-semibold">{fmtMoneyExact(comparison.cheapest.current_price)}</span>
                 {comparison.delta != null && comparison.delta > 0 && (
-                  <> · זול ב-<span className="num">{fmtMoneyExact(comparison.delta)}</span>
+                  <> {t('priceLists.fmtMoneyExact_3')}<span className="num">{fmtMoneyExact(comparison.delta)}</span>
                     {comparison.deltaPct != null ? ` (${comparison.deltaPct.toFixed(1)}%)` : ''} מהמחיר הבא</>
                 )}
-                {comparison.delta === 0 && <> · המחיר הבא זהה</>}
+                {comparison.delta === 0 && <> {t('priceLists.text_6')}</>}
               </>
             ) : (
               // No eligible offer is a fact worth stating, not an empty header.
-              <>אין כרגע הצעה זמינה למוצר זה מספק פעיל</>
+              <>{t('priceLists.text_7')}</>
             )}
           </div>
         </Card>
@@ -202,48 +203,48 @@ export default function PriceLists() {
           || r.product.name.toLowerCase().includes(q)
           || r.supplier.name.toLowerCase().includes(q)
         )}
-        searchLabel="חיפוש במחירונים"
+        searchLabel={t('priceLists.searchLabel')}
         rowLabel={(r) => `${productLabel(r.product)} אצל ${r.supplier.name}`}
         mobileTitle={(r) => <><bdi>{productLabel(r.product)}</bdi> · <bdi>{r.supplier.name}</bdi></>}
         mobileTrailing={(r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} />}
         rowActions={(r) => [
-          { key: 'history', label: 'היסטוריית מחירים', icon: History, onSelect: () => setHistoryFor(r) },
+          { key: 'history', label: t('priceLists.setHistoryFor'), icon: History, onSelect: () => setHistoryFor(r) },
           {
-            key: 'log', label: 'מי עדכן', icon: ScrollText, hidden: !canReadSupplierLog,
+            key: 'log', label: t('priceLists.text_8'), icon: ScrollText, hidden: !canReadSupplierLog,
             onSelect: () => navigate(`/supplier-log?entity=supplier_products&supplier=${r.supplier_id}`),
           },
-          { key: 'edit', label: 'עדכון מחיר', icon: Pencil, hidden: !canWrite, onSelect: () => setEditFor(r) },
+          { key: 'edit', label: t('priceLists.setEditFor'), icon: Pencil, hidden: !canWrite, onSelect: () => setEditFor(r) },
         ]}
         activeFilters={[supplierFilter, productFilter, onlyIncreases ? '1' : ''].filter(Boolean).length}
         onClearFilters={() => { setSupplierFilter(''); setProductFilter(''); setIncreasesStr(''); }}
         toolbar={
           <>
             {productFilter && (
-              <button className="btn-ghost text-sm text-action flex items-center gap-1" onClick={() => setProductFilter('')} title="הסרת סינון מוצר">
-                <X size={ICON.xs} aria-hidden="true" /> {activeProductName ?? 'מוצר'}
+              <button className="btn-ghost text-sm text-action flex items-center gap-1" onClick={() => setProductFilter('')} title={t('priceLists.title_2')}>
+                <X size={ICON.xs} aria-hidden="true" /> {activeProductName ?? t('priceLists.text_9')}
               </button>
             )}
-            <select className="input w-auto!" aria-label="סינון מחירונים לפי ספק" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
-              <option value="">כל הספקים</option>
+            <select className="input w-auto!" aria-label={t('priceLists.aria_label')} value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
+              <option value="">{t('priceLists.text_10')}</option>
               {suppliers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
             </select>
             <label className="flex items-center gap-1.5 text-sm text-ink-soft">
               <input type="checkbox" className="rounded" checked={onlyIncreases} onChange={(e) => setIncreasesStr(e.target.checked ? '1' : '')} />
-              רק התייקרויות
+              {t('priceLists.text_11')}
             </label>
           </>
         }
-        emptyTitle="עדיין אין מחירי ספקים"
-        emptySubtitle="העלה מחירון ראשון כדי להתחיל להשוות מחירים ושינויים"
-        emptyAction={canWrite && <button className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> העלאת מחירון</button>} />
+        emptyTitle={t('priceLists.emptyTitle')}
+        emptySubtitle={t('priceLists.emptySubtitle')}
+        emptyAction={canWrite && <button className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> {t('priceLists.setDocumentOpen_2')}</button>} />
 
       {canWrite && (
         <section className="card p-4" aria-labelledby="price-submissions-heading">
           <div className="flex items-center gap-2 mb-3">
             <FileCheck2 size={ICON.md} className="text-action" aria-hidden="true" />
-            <h2 id="price-submissions-heading" className="section-title">הגשות מחירון חודשיות</h2>
+            <h2 id="price-submissions-heading" className="section-title">{t('priceLists.text_12')}</h2>
           </div>
-          {submissionsLoading ? <p className="text-sm text-ink-muted">טוען קבלות הגשה…</p>
+          {submissionsLoading ? <p className="text-sm text-ink-muted">{t('priceLists.text_13')}</p>
             : submissionsError ? <ErrorNote message={submissionsError} />
               : submissions?.length ? (
                 <div className="divide-y divide-line-soft">
@@ -254,19 +255,19 @@ export default function PriceLists() {
                         <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
                       </div>
                       <div className="mt-1 text-sm text-ink-muted break-words">
-                        {submission.file_name ?? 'הגשה מדור קודם'} · נקלטו <span className="num">{submission.accepted_count}</span> · ללא שינוי <span className="num">{submission.unchanged_count}</span> · נדחו <span className="num">{submission.rejected_count}</span>
+                        {submission.file_name ?? t('priceLists.text_14')} · נקלטו <span className="num">{submission.accepted_count}</span> {t('priceLists.text_15')} <span className="num">{submission.unchanged_count}</span> {t('priceLists.text_16')} <span className="num">{submission.rejected_count}</span>
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : <p className="text-sm text-ink-muted">עדיין אין הגשות חודשיות.</p>}
+              ) : <p className="text-sm text-ink-muted">{t('priceLists.text_17')}</p>}
         </section>
       )}
 
       {historyFor && <PriceHistoryModal row={historyFor} onClose={() => setHistoryFor(null)} />}
       {editFor && (
         <EditPriceModal row={editFor} onClose={() => setEditFor(null)}
-          onSaved={() => { setEditFor(null); toast('המחיר עודכן'); void refetch(); }} />
+          onSaved={() => { setEditFor(null); toast(t('priceLists.setEditFor_2')); void refetch(); }} />
       )}
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} onDone={() => { setImportOpen(false); void refetch(); }} />}
       {documentOpen && (
@@ -277,25 +278,26 @@ export default function PriceLists() {
 }
 
 function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) {
+  const { t } = useT();
   const { data } = useQuery<PriceHistory[]>(async () =>
     unwrap(await supabase.from('price_history').select('*').eq('supplier_product_id', row.id).order('effective_date', { ascending: false })), [row.id]);
   return (
     <Modal open onClose={onClose} title={`היסטוריית מחירים — ${productLabel(row.product)} (${row.supplier.name})`}>
       {data && data.length >= 2 && (() => {
-        const t = chartTheme();
+        const theme = chartTheme();
         const asc = [...data].reverse();
         const first = asc[0].price;
         const last = asc[asc.length - 1].price;
-        const stroke = last > first ? t.trendUp : last < first ? t.trendDown : t.flat;
+        const stroke = last > first ? theme.trendUp : last < first ? theme.trendDown : theme.flat;
         const chartData = asc.map((h) => ({ date: fmtDate(h.effective_date), price: h.price }));
         return (
           <div dir="ltr" className="mb-4 h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
-                <CartesianGrid stroke={t.grid} strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{ fill: t.tick, fontSize: 11 }} tickLine={false} axisLine={{ stroke: t.grid }} minTickGap={24} />
-                <YAxis tick={{ fill: t.tick, fontSize: 11 }} tickLine={false} axisLine={false} width={52} tickFormatter={(v: number) => fmtMoneyRounded(v)} />
-                <Tooltip formatter={(v: number) => [fmtMoneyExact(v), 'מחיר']} />
+                <CartesianGrid stroke={theme.grid} strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="date" tick={{ fill: theme.tick, fontSize: 11 }} tickLine={false} axisLine={{ stroke: theme.grid }} minTickGap={24} />
+                <YAxis tick={{ fill: theme.tick, fontSize: 11 }} tickLine={false} axisLine={false} width={52} tickFormatter={(v: number) => fmtMoneyRounded(v)} />
+                <Tooltip formatter={(v: number) => [fmtMoneyExact(v), t('priceLists.fmtMoneyExact_4')]} />
                 <Line type="stepAfter" dataKey="price" stroke={stroke} strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -308,9 +310,9 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
            was missing is the rest of the raw-table contract — `.th`/`.td` carry whitespace-nowrap
            globally (index.css), so a table without a scroller widens the document instead of
            scrolling inside itself, and the scroller was reachable by mouse only. */
-        <div className="table-scroll overflow-x-auto" tabIndex={0} role="region" aria-label="היסטוריית מחירים">
+        <div className="table-scroll overflow-x-auto" tabIndex={0} role="region" aria-label={t('priceLists.aria_label_2')}>
         <table className="w-full">
-          <thead className="table-head"><tr><th scope="col" className="th">תאריך</th><th scope="col" className="th">מחיר</th></tr></thead>
+          <thead className="table-head"><tr><th scope="col" className="th">{t('priceLists.text_18')}</th><th scope="col" className="th">{t('priceLists.text_19')}</th></tr></thead>
           <tbody className="divide-y divide-line-soft">
             {data.map((h) => (
               <tr key={h.id}><td className="td">{fmtDate(h.effective_date)}</td><td className="td num">{fmtMoneyExact(h.price)}</td></tr>
@@ -318,13 +320,13 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
           </tbody>
         </table>
         </div>
-      ) : <EmptyState title="אין רשומות היסטוריה" subtitle="לא נרשם עדיין שינוי מחיר למוצר הזה אצל הספק." icon={<History size={ICON.hero} />} />}
+      ) : <EmptyState title={t('priceLists.title_3')} subtitle={t('priceLists.subtitle')} icon={<History size={ICON.hero} />} />}
     </Modal>
   );
 }
 
 function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => void; onSaved: () => void }) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const toast = useToast();
   const [price, setPrice] = useState(row.current_price.toString());
   const [date, setDate] = useState(todayISO());
@@ -334,14 +336,14 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
 
   async function save() {
     const p = Number(price);
-    if (!p || p <= 0) { toast('מחיר לא תקין', 'error'); return; }
+    if (!p || p <= 0) { toast(t('priceLists.toast'), 'error'); return; }
     setBusy(true);
     const upd = await supabase.rpc('set_supplier_product_price', {
       p_supplier_product_id: row.id,
       p_price: p,
       p_effective_date: date,
       p_available: available,
-      p_reason: reasonOr(reason, 'עדכון המחיר'),
+      p_reason: reasonOr(reason, t('priceLists.reasonOr')),
     });
     if (upd.error) { setBusy(false); toast(errorText(upd.error.message), 'error'); return; }
     setBusy(false);
@@ -351,14 +353,14 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
   return (
     <Modal open onClose={onClose} title={`עדכון מחיר — ${productLabel(row.product)} (${row.supplier.name})`} busy={busy} statusMessage={busy ? 'שומר את המחיר' : undefined}>
       <div className="space-y-4">
-        <div><label className="label" htmlFor="price-list-price">מחיר חדש (₪)</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
-        <div><label className="label" htmlFor="price-list-date">בתוקף מתאריך</label><input id="price-list-date" type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="rounded" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> זמין אצל הספק</label>
-        <div><label className="label" htmlFor="price-list-reason">סיבת העדכון (רשות)</label><input id="price-list-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+        <div><label className="label" htmlFor="price-list-price">{t('priceLists.setPrice')}</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
+        <div><label className="label" htmlFor="price-list-date">{t('priceLists.setDate')}</label><input id="price-list-date" type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="rounded" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> {t('priceLists.setAvailable')}</label>
+        <div><label className="label" htmlFor="price-list-reason">{t('priceLists.setReason')}</label><input id="price-list-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
-        <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-        <button className="btn-primary" disabled={busy} onClick={() => void save()}>שמירה</button>
+        <button className="btn-secondary" disabled={busy} onClick={onClose}>{t('priceLists.text_20')}</button>
+        <button className="btn-primary" disabled={busy} onClick={() => void save()}>{t('priceLists.save')}</button>
       </div>
     </Modal>
   );
@@ -366,7 +368,7 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
 
 /** Import price list: expects columns ספק / מוצר / מחיר (or supplier/product/price). */
 function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<{ supplier: string; product: string; price: number }[]>([]);
@@ -379,21 +381,21 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       const sheet = await readSheet(file);
       // exact header names only, as before — this screen has no column-mapping step to correct a wrong guess
       const cols = {
-        supplier: matchColumn(sheet.headers, ['ספק', 'supplier'], false),
-        product: matchColumn(sheet.headers, ['מוצר', 'product'], false),
-        price: matchColumn(sheet.headers, ['מחיר', 'price'], false),
+        supplier: matchColumn(sheet.headers, [t('priceLists.matchColumn'), 'supplier'], false),
+        product: matchColumn(sheet.headers, [t('priceLists.matchColumn_2'), 'product'], false),
+        price: matchColumn(sheet.headers, [t('priceLists.matchColumn_3'), 'price'], false),
       };
       const { valid } = mapRows(sheet.rows, (r) => {
         const supplier = cellText(r, cols.supplier);
         const product = cellText(r, cols.product);
         const price = cellNumber(r, cols.price) ?? 0;
-        if (!supplier || !product || price <= 0) return skipRow('חסר ספק, מוצר או מחיר תקין');
+        if (!supplier || !product || price <= 0) return skipRow(t('priceLists.skipRow'));
         return { supplier, product, price };
       });
-      if (!valid.length) { toast('לא נמצאו שורות תקינות. נדרשות עמודות: ספק, מוצר, מחיר', 'error'); return; }
+      if (!valid.length) { toast(t('priceLists.toast_2'), 'error'); return; }
       setPreview(valid);
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'שגיאה בקריאת הקובץ', 'error');
+      toast(e instanceof Error ? e.message : t('priceLists.toast_3'), 'error');
     }
   }
 
@@ -418,7 +420,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       const imported = unwrap(await supabase.rpc('import_supplier_prices', {
         p_rows: rows,
         p_effective_date: todayISO(),
-        p_reason: reasonOr(reason, 'ייבוא המחירון'),
+        p_reason: reasonOr(reason, t('priceLists.reasonOr_2')),
       })) as { updated: number; created: number; unchanged: number };
       setReport(`עודכנו ${imported.updated} מחירים, נוצרו ${imported.created} רשומות חדשות, ${imported.unchanged} ללא שינוי.`);
     } catch (e) {
@@ -429,18 +431,18 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   }
 
   return (
-    <Modal open onClose={onClose} title="ייבוא מחירון מ־Excel / CSV" wide busy={busy} statusMessage={report ?? (busy ? 'מייבא את המחירון' : undefined)}>
+    <Modal open onClose={onClose} title={t('priceLists.title_4')} wide busy={busy} statusMessage={report ?? (busy ? t('priceLists.text_21') : undefined)}>
       {report ? (
         <div className="space-y-4">
           <Note tone="done">{report}</Note>
-          <div className="flex justify-end"><button className="btn-primary" onClick={onDone}>סיום</button></div>
+          <div className="flex justify-end"><button className="btn-primary" onClick={onDone}>{t('priceLists.text_22')}</button></div>
         </div>
       ) : preview.length ? (
         <div className="space-y-4">
           <div className="text-sm text-ink-soft">{preview.length} שורות זוהו. ההתאמה מתבצעת לפי שם ספק ושם מוצר מדויקים.</div>
-          <div className="table-scroll max-h-64 overflow-auto rounded-lg border border-line-soft" tabIndex={0} role="region" aria-label="תצוגה מקדימה של שורות המחירון">
+          <div className="table-scroll max-h-64 overflow-auto rounded-lg border border-line-soft" tabIndex={0} role="region" aria-label={t('priceLists.aria_label_3')}>
             <table className="w-full">
-              <thead className="table-head sticky top-0"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">מוצר</th><th scope="col" className="th">מחיר</th></tr></thead>
+              <thead className="table-head sticky top-0"><tr><th scope="col" className="th">{t('priceLists.text_23')}</th><th scope="col" className="th">{t('priceLists.text_24')}</th><th scope="col" className="th">{t('priceLists.text_25')}</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {preview.slice(0, 100).map((r, i) => (
                   <tr key={i}><td className="td">{r.supplier}</td><td className="td">{r.product}</td><td className="td num">{fmtMoneyExact(r.price)}</td></tr>
@@ -448,16 +450,16 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
               </tbody>
             </table>
           </div>
-          <div><label className="label" htmlFor="price-list-import-reason">סיבת הייבוא (רשות)</label><input id="price-list-import-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+          <div><label className="label" htmlFor="price-list-import-reason">{t('priceLists.setReason_2')}</label><input id="price-list-import-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
           <div className="flex justify-end gap-2">
-            <button className="btn-secondary" disabled={busy} onClick={() => setPreview([])}>חזרה</button>
-            <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>{busy ? 'מייבא...' : 'אישור וייבוא'}</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => setPreview([])}>{t('priceLists.setPreview')}</button>
+            <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>{busy ? t('priceLists.runImport') : t('priceLists.runImport_2')}</button>
           </div>
         </div>
       ) : (
         <div className="text-center py-8">
-          <p className="text-sm text-ink-soft mb-4">בחר קובץ Excel או CSV עם העמודות: <b>ספק</b>, <b>מוצר</b>, <b>מחיר</b></p>
-          <button className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={ICON.sm} aria-hidden="true" /> בחירת קובץ</button>
+          <p className="text-sm text-ink-soft mb-4">{t('priceLists.text_26')} <b>{t('priceLists.text_27')}</b>, <b>{t('priceLists.text_28')}</b>, <b>{t('priceLists.text_29')}</b></p>
+          <button className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={ICON.sm} aria-hidden="true" /> {t('priceLists.click')}</button>
           <input ref={fileRef} type="file" hidden accept=".xlsx,.xls,.csv" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
         </div>
       )}

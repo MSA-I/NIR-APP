@@ -157,12 +157,13 @@ function ReceivingOrderCard({ order, today, localDraft, machineDraft, onOpen }: 
   machineDraft: MachineDraft | null;
   onOpen: () => void;
 }) {
+  const { t } = useT();
   const attentionReason = order.status === 'partial'
-    ? 'קבלה חלקית'
+    ? t('receiving.text')
     : order.expected_date && order.expected_date < today
-      ? 'מועד האספקה עבר'
+      ? t('receiving.text_2')
       : order.expected_date === today
-        ? 'אספקה היום'
+        ? t('receiving.text_3')
         : null;
 
   return (
@@ -173,14 +174,14 @@ function ReceivingOrderCard({ order, today, localDraft, machineDraft, onOpen }: 
         <StatusBadge meta={PO_STATUS[order.status]} />
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-ink-muted">
-        <span>הזמנה <span className="num">#{order.number}</span></span>
+        <span>{t('receiving.text_4')} <span className="num">#{order.number}</span></span>
         <span className="num">{order.items.length} פריטים</span>
         {order.expected_date && <span>אספקה: {fmtDate(order.expected_date)}</span>}
       </div>
       {attentionReason && <div className="mt-2 text-xs font-medium text-await-fg">{attentionReason}</div>}
       {/* A receipt recorded on this device that the server has not accepted yet. Shown on the card
           because the person who typed it needs to see it from the list, not only after opening. */}
-      {localDraft && <div className="mt-1 text-xs font-medium text-alert-fg">טיוטה מקומית — טרם סונכרנה</div>}
+      {localDraft && <div className="mt-1 text-xs font-medium text-alert-fg">{t('receiving.text_5')}</div>}
       {machineDraft && (
         <div className="mt-1 text-xs font-medium text-await-fg">
           טיוטה אוטומטית מתעודת משלוח — {machineDraft.matchedCount} שורות מוכנות לאישור
@@ -189,7 +190,7 @@ function ReceivingOrderCard({ order, today, localDraft, machineDraft, onOpen }: 
               open — a real link, on the weakest evidence of the three, and the person standing at
               the delivery is the only one who can see whether it is the right order. */}
           {machineDraft.orderMatchedBy === 'single_open_order'
-            && ' · ההזמנה נבחרה כיחידה הפתוחה — כדאי לוודא'}
+            && t('receiving.text_6')}
         </div>
       )}
     </button>
@@ -198,7 +199,7 @@ function ReceivingOrderCard({ order, today, localDraft, machineDraft, onOpen }: 
 
 /* ============ List of orders awaiting receiving — mobile-first cards ============ */
 export function ReceivingList() {
-  const { statusLabel } = useT();
+  const { statusLabel, t } = useT();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const documentId = params.get('document');
@@ -326,29 +327,29 @@ export function ReceivingList() {
         <Note tone={data.stale ? 'alert' : 'await'}>
           <span className="min-w-0 flex-1">
             הרשימה מוצגת מהמכשיר, לא מהשרת. נקראה לאחרונה ב<span className="num">{fmtDateTime(data.readAt ? new Date(data.readAt) : null)}</span>
-            {data.stale && ' — הנתונים מיושנים (מעל 24 שעות)'}. מופיעות כאן רק הזמנות שנפתחו במכשיר הזה בעבר.
+            {data.stale && t('receiving.text_7')}. מופיעות כאן רק הזמנות שנפתחו במכשיר הזה בעבר.
           </span>
         </Note>
       )}
       {documentId && (
         <Note tone={source ? 'await' : 'alert'}>
           {source
-            ? <>קליטה מתעודת המשלוח {source.fileName ? <strong>{source.fileName}</strong> : 'שנסרקה'}
-                {supplierName ? <> של <strong>{supplierName}</strong></> : null}. בחר את ההזמנה שאליה הסחורה הגיעה — הכמויות ימולאו מהתעודה.</>
-            : 'לא נמצא פירוש לתעודת המשלוח שביקשת לקלוט. אפשר להמשיך ולבחור הזמנה, אך הכמויות לא ימולאו מראש.'}
+            ? <>קליטה מתעודת המשלוח {source.fileName ? <strong>{source.fileName}</strong> : t('receiving.text_8')}
+                {supplierName ? <> {t('receiving.text_9')} <strong>{supplierName}</strong></> : null}. בחר את ההזמנה שאליה הסחורה הגיעה — הכמויות ימולאו מהתעודה.</>
+            : t('receiving.text_10')}
         </Note>
       )}
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <div>
-          <label className="sr-only" htmlFor="receiving-search">חיפוש הזמנה לקבלה</label>
+          <label className="sr-only" htmlFor="receiving-search">{t('receiving.text_11')}</label>
           <input id="receiving-search" type="search" className="input min-h-11"
-            placeholder="חיפוש לפי ספק או מספר הזמנה"
+            placeholder={t('receiving.placeholder')}
             value={search} onChange={(event) => setSearch(event.target.value)} />
         </div>
-        <select className="input min-h-11 sm:w-auto!" aria-label="סינון הזמנות לקבלה"
+        <select className="input min-h-11 sm:w-auto!" aria-label={t('receiving.aria_label')}
           value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-          <option value="all">כל הסטטוסים</option>
-          <option value="attention">דורש פעולה</option>
+          <option value="all">{t('receiving.text_12')}</option>
+          <option value="attention">{t('receiving.text_13')}</option>
           {/* Read from PO_STATUS rather than retyped, so the filter cannot drift from the badge
               beside it — which is exactly what happened to "נשלחה" before it became "נשלחה לספק". */}
           <option value="sent">{statusLabel(PO_STATUS.sent)}</option>
@@ -360,23 +361,23 @@ export function ReceivingList() {
       {!orders.length ? (
         <div className="card"><EmptyState title="אין הזמנות שממתינות לקבלה" subtitle={`הזמנות בסטטוס ${statusLabel(PO_STATUS.sent)} / ${statusLabel(PO_STATUS.confirmed)} יופיעו כאן`} /></div>
       ) : !filtered.length ? (
-        <div className="card"><EmptyState title="לא נמצאו הזמנות" subtitle="אפשר לשנות את החיפוש או הסינון" /></div>
+        <div className="card"><EmptyState title={t('receiving.title')} subtitle={t('receiving.subtitle')} /></div>
       ) : !focusedQueue ? (
         // section, not div: aria-label on a roleless div is dropped by screen readers, so this list
         // of results arrived unnamed. Matches the labelled section in the focused-queue branch below.
-        <section className="space-y-3" aria-label="תוצאות קבלת סחורה">
+        <section className="space-y-3" aria-label={t('receiving.aria_label_2')}>
           {filtered.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} localDraft={isLocalDraft(order.id)} machineDraft={machineDrafts?.get(order.id) ?? null} onOpen={() => openOrder(order.id)} />)}
         </section>
       ) : (
         <>
           <section className="space-y-3" aria-labelledby="receiving-attention-title">
             <div className="flex items-center justify-between gap-2">
-              <h2 id="receiving-attention-title" className="section-title">דורש פעולה</h2>
+              <h2 id="receiving-attention-title" className="section-title">{t('receiving.text_14')}</h2>
               <span className="badge-await num">{attention.length}</span>
             </div>
             {attention.length
               ? attention.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} localDraft={isLocalDraft(order.id)} machineDraft={machineDrafts?.get(order.id) ?? null} onOpen={() => openOrder(order.id)} />)
-              : <div className="card"><EmptyState title="אין קבלות שדורשות פעולה כרגע" subtitle="הזמנה שמגיע מועד האספקה שלה תופיע כאן." icon={<PackageCheck size={ICON.hero} />} /></div>}
+              : <div className="card"><EmptyState title={t('receiving.title_2')} subtitle={t('receiving.subtitle_2')} icon={<PackageCheck size={ICON.hero} />} /></div>}
           </section>
 
           {remaining.length > 0 && (
@@ -391,7 +392,7 @@ export function ReceivingList() {
                 </div>
               </details>
               <section className="hidden space-y-3 sm:block" aria-labelledby="receiving-other-title">
-                <h2 id="receiving-other-title" className="section-title">הזמנות נוספות</h2>
+                <h2 id="receiving-other-title" className="section-title">{t('receiving.text_15')}</h2>
                 {remaining.map((order) => <ReceivingOrderCard key={order.id} order={order} today={today} localDraft={isLocalDraft(order.id)} machineDraft={machineDrafts?.get(order.id) ?? null} onOpen={() => openOrder(order.id)} />)}
               </section>
             </>
@@ -405,11 +406,11 @@ export function ReceivingList() {
 /* ============ Receive a specific order — large touch targets, minimal typing ============ */
 interface LineState { qty: number; status: ReceiptLineStatus; notes: string }
 
-const REASON_COMPLETE = 'השלמת קבלת סחורה';
-const REASON_DRAFT = 'שמירת ביניים של קבלת סחורה';
+const REASON_COMPLETE_KEY = 'receiving.text_16';
+const REASON_DRAFT_KEY = 'receiving.text_17';
 
 export function ReceiveOrder() {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const { orderId } = useParams<{ orderId: string }>();
   const [params] = useSearchParams();
   const documentId = params.get('document');
@@ -629,7 +630,7 @@ export function ReceiveOrder() {
           serverReceiptAt: null,
           serverActorName: '—',
           serverOrderStatus: null,
-          rereadError: 'לא ניתן היה לקרוא מחדש את נתוני ההזמנה מהשרת. הטיוטה והקונפליקט נשמרו במכשיר.',
+          rereadError: t('receiving.text_18'),
         }));
         if (!cancelled) setConflict(hydratedConflict);
       }
@@ -747,7 +748,7 @@ export function ReceiveOrder() {
     try {
       const recovered = await claimLegacyReceiptRecovery(order.id);
       if (!recovered) throw new Error('legacy_receipt_recovery_missing');
-      toast('הטיוטה הישנה שויכה לחשבון הנוכחי ושוחזרה.');
+      toast(t('receiving.toast'));
       await refetch();
     } catch (recoveryError) {
       toast(errorText(recoveryError), 'error');
@@ -801,9 +802,9 @@ export function ReceiveOrder() {
           // second unconditional delete here: another tab may have persisted a newer draft while
           // the server request was in flight, and the finalizer deliberately preserves that row.
           setDoneReceiptId(outcome.receiptId);
-          toast('הקבלה הושלמה');
+          toast(t('receiving.toast_2'));
         } else {
-          toast('נשמרה טיוטת קבלה — אפשר להמשיך מאוחר יותר');
+          toast(t('receiving.toast_3'));
           navigate('/receiving');
         }
         return;
@@ -847,7 +848,7 @@ export function ReceiveOrder() {
     if (!order || !receiptKey) return;
     setBusy(true);
     try {
-      await send(complete, currentLines(), complete ? REASON_COMPLETE : REASON_DRAFT);
+      await send(complete, currentLines(), t(complete ? REASON_COMPLETE_KEY : REASON_DRAFT_KEY));
     } catch (e) {
       toast(errorText(e), 'error');
     } finally {
@@ -861,12 +862,12 @@ export function ReceiveOrder() {
     try {
       if (resolution.kind === 'keep-local') {
         setConflict(null);
-        toast('הטיוטה נשמרה במכשיר. אפשר להכריע מאוחר יותר.');
+        toast(t('receiving.toast_4'));
         return;
       }
       if (resolution.kind === 'discard-local') {
         if (!conflictQueueRef) {
-          toast('מצב הקונפליקט השתנה. לא נמחקו נתונים; יש לפתוח את הקבלה מחדש.', 'error');
+          toast(t('receiving.toast_5'), 'error');
           return;
         }
         const discarded = await offlineQueue.discardAction(
@@ -875,17 +876,17 @@ export function ReceiveOrder() {
         if (!discarded) {
           setConflict(null);
           setConflictQueueRef(null);
-          toast('הטיוטה השתנתה בחלון אחר ולכן לא נמחקה. יש לפתוח את הקבלה מחדש.', 'error');
+          toast(t('receiving.toast_6'), 'error');
           return;
         }
         setConflict(null);
         setConflictQueueRef(null);
         setLocalDraftPending(false);
-        toast('הטיוטה המקומית נמחקה. הנתונים בשרת נשארו כפי שהם.');
+        toast(t('receiving.toast_7'));
         navigate('/receiving');
         return;
       }
-      const base = conflictComplete ? REASON_COMPLETE : REASON_DRAFT;
+      const base = t(conflictComplete ? REASON_COMPLETE_KEY : REASON_DRAFT_KEY);
       setConflict(null);
       await send(conflictComplete, resolution.lines, `${base} · הכרעת קונפליקט: ${resolution.explanation}`);
     } catch (e) {
@@ -896,7 +897,7 @@ export function ReceiveOrder() {
   }
 
   if (loading) return <RecordSkeleton />;
-  if (error || !order) return <ErrorNote message={error ?? 'הזמנה לא נמצאה'} />;
+  if (error || !order) return <ErrorNote message={error ?? t('receiving.text_19')} />;
 
   /* completion screen: attach invoice photo + optional invoice creation */
   if (doneReceiptId) {
@@ -907,10 +908,10 @@ export function ReceiveOrder() {
         data-sync-state={donePendingSync ? 'pending' : 'synced'}
       >
         <CheckCircle2 size={ICON.hero} className={donePendingSync ? 'text-await-fg mx-auto' : 'text-done-fg mx-auto'} />
-        <h1 className="page-title">{donePendingSync ? 'הקבלה שמורה במכשיר' : 'הקבלה נשמרה!'}</h1>
+        <h1 className="page-title">{donePendingSync ? t('receiving.text_20') : t('receiving.text_21')}</h1>
         <p className="text-sm text-ink-muted">{donePendingSync
-          ? 'השרת עדיין לא אישר את הקבלה. היא והתמונות שתצלם יישלחו לפי הסדר כשהחיבור יחזור.'
-          : 'עכשיו אפשר לצלם את החשבונית או תעודת המשלוח ולצרף אותה לקבלה.'}</p>
+          ? t('receiving.text_22')
+          : t('receiving.text_23')}</p>
         <OfflineQueueStatus />
         <Card className="text-start">
           <DocumentList entityType="goods_receipt" entityId={doneReceiptId} capture />
@@ -924,15 +925,15 @@ export function ReceiveOrder() {
             onClick={() => navigate('/documents')}>
             <FileText size={ICON.sm} aria-hidden="true" /> לצילום החשבונית שהתקבלה
           </button>
-          <button className="btn-secondary" onClick={() => navigate('/receiving')}>חזרה לקבלת סחורה</button>
+          <button className="btn-secondary" onClick={() => navigate('/receiving')}>{t('receiving.navigate')}</button>
         </div>
       </div>
     );
   }
 
   const statusButtons: { key: ReceiptLineStatus; label: string }[] = [
-    { key: 'full', label: 'מלא' }, { key: 'partial', label: 'חלקי' }, { key: 'missing', label: 'חסר' },
-    { key: 'damaged', label: 'פגום' }, { key: 'returned', label: 'הוחזר' },
+    { key: 'full', label: t('receiving.text_24') }, { key: 'partial', label: t('receiving.text_25') }, { key: 'missing', label: t('receiving.text_26') },
+    { key: 'damaged', label: t('receiving.text_27') }, { key: 'returned', label: t('receiving.text_28') },
   ];
   // Single source: the tone comes from RECEIPT_LINE_STATUS (lib/status.ts), so re-colouring
   // a status there recolours both the selected button and the card border here (§4.5).
@@ -956,14 +957,14 @@ export function ReceiveOrder() {
       <div>
         <RecordHeader
           breadcrumbs={<Breadcrumbs items={[{ label: 'קבלת סחורה', to: '/receiving' }, { label: `הזמנה #${order.number}` }]} />}
-          title={<span className="flex items-center gap-2"><PackageCheck size={ICON.xl} aria-hidden="true" /> קבלת סחורה</span>}
+          title={<span className="flex items-center gap-2"><PackageCheck size={ICON.xl} aria-hidden="true" /> {t('receiving.text_29')}</span>}
           status={<StatusBadge meta={PO_STATUS[order.status]} />}
-          meta={<><span>{order.supplier.name}</span><span>הזמנה <span className="num">#{order.number}</span></span><span><span className="num">{progress.done}</span> מתוך <span className="num">{progress.total}</span> פריטים עודכנו</span></>} />
-        {data?.draft && <div className="mt-1 text-xs text-await-fg">נטענה טיוטת קבלה שנשמרה קודם</div>}
-        {localDraftPending && <div className="mt-1 text-xs font-medium text-alert-fg" data-testid="receiving-local-draft">טיוטה מקומית — נשמרה במכשיר וטרם סונכרנה</div>}
+          meta={<><span>{order.supplier.name}</span><span>{t('receiving.text_30')} <span className="num">#{order.number}</span></span><span><span className="num">{progress.done}</span> {t('receiving.text_31')} <span className="num">{progress.total}</span> {t('receiving.text_32')}</span></>} />
+        {data?.draft && <div className="mt-1 text-xs text-await-fg">{t('receiving.text_33')}</div>}
+        {localDraftPending && <div className="mt-1 text-xs font-medium text-alert-fg" data-testid="receiving-local-draft">{t('receiving.text_34')}</div>}
         {receiptKey && !receiptKey.persisted && (
           <div className="mt-1 text-xs text-alert-fg">
-            לא ניתן לשמור טיוטה במכשיר הזה. אין להסתמך על עבודה לא-מקוונת כאן.
+            {t('receiving.text_35')}
           </div>
         )}
       </div>
@@ -974,14 +975,14 @@ export function ReceiveOrder() {
         <Note tone="await">
           <div className="space-y-2">
             <p>
-              נמצאה במכשיר טיוטה מהגרסה הקודמת ללא שיוך ארגון או משתמש
-              {data.legacyRecovery.queuedActions > 0 && <> · <span className="num">{data.legacyRecovery.queuedActions}</span> פעולות ממתינות</>}
-              {data.legacyRecovery.pendingPhotos > 0 && <> · <span className="num">{data.legacyRecovery.pendingPhotos}</span> תמונות ממתינות</>}.
-              השחזור ישייך אותה לחשבון הנוכחי.
+              {t('receiving.text_36')}
+              {data.legacyRecovery.queuedActions > 0 && <> · <span className="num">{data.legacyRecovery.queuedActions}</span> {t('receiving.text_37')}</>}
+              {data.legacyRecovery.pendingPhotos > 0 && <> · <span className="num">{data.legacyRecovery.pendingPhotos}</span> {t('receiving.text_38')}</>}.
+              {t('receiving.text_39')}
             </p>
             <button type="button" className="btn-secondary" disabled={recoveringLegacy}
               onClick={() => void recoverLegacyWork()}>
-              {recoveringLegacy ? 'משחזר…' : 'שחזור — זו העבודה שלי'}
+              {recoveringLegacy ? t('receiving.text_40') : t('receiving.text_41')}
             </button>
           </div>
         </Note>
@@ -991,7 +992,7 @@ export function ReceiveOrder() {
         <Note tone={data.stale ? 'alert' : 'await'}>
           <span className="min-w-0 flex-1">
             ההזמנה מוצגת מהמכשיר. נקראה ב<span className="num">{fmtDateTime(data.readAt ? new Date(data.readAt) : null)}</span>
-            {data.stale && ' — מעל 24 שעות, ייתכן שהכמויות בשרת השתנו מאז'}. הקבלה תישלח כשיהיה חיבור.
+            {data.stale && t('receiving.text_42')}. הקבלה תישלח כשיהיה חיבור.
           </span>
         </Note>
       )}
@@ -1013,8 +1014,8 @@ export function ReceiveOrder() {
               {scan.kind === 'none' && (
                 <>
                   {' '}הקוד אינו מוכר בשורות ההזמנה. אם המוצר חסר בקטלוג אפשר להוסיף אותו במסך{' '}
-                  <Link className="link" to="/products">מוצרים</Link>{' '}— אך מוצר שנוסף עכשיו עדיין אינו חלק מההזמנה הזו,
-                  ולכן לא ניתן לקלוט אותו בקבלה הנוכחית.
+                  <Link className="link" to="/products">{t('receiving.text_43')}</Link>{' '}— אך מוצר שנוסף עכשיו עדיין אינו חלק מההזמנה הזו,
+                  {t('receiving.text_44')}
                 </>
               )}
             </span>
@@ -1029,13 +1030,13 @@ export function ReceiveOrder() {
         <Note tone={data.delivered.supplierMismatch ? 'alert' : data.delivered.unmatched.length ? 'await' : 'info'}>
           <div className="space-y-1">
             {data.delivered.supplierMismatch && (
-              <div className="font-medium">שים לב: תעודת המשלוח שויכה לספק אחר מספק ההזמנה. בדוק שזו ההזמנה הנכונה.</div>
+              <div className="font-medium">{t('receiving.text_45')}</div>
             )}
             {data?.draft
-              ? <div>נטענה טיוטה שנשמרה קודם, ולכן הכמויות שבה גוברות על תעודת המשלוח.</div>
+              ? <div>{t('receiving.text_46')}</div>
               : <div>
                   הכמויות מולאו מתעודת המשלוח עבור <span className="num">{data.delivered.matchedQty.size}</span> פריטים.
-                  שאר השורות נשארו בכמות שהוזמנה. בדוק מול הסחורה שהגיעה בפועל לפני שמירה.
+                  {t('receiving.text_47')}
                 </div>}
             {/* #116, decided 09.08.2026 — G1 left this paragraph action-less because no manual
                 exception command existed and promising one would have lied. The command exists
@@ -1044,14 +1045,14 @@ export function ReceiveOrder() {
               <div>
                 שורות בתעודה שלא זוהו במחירון הספק ולכן לא מולאו: {data.delivered.unmatched.join(', ')}.
                 <span className="block mt-1">
-                  פריט שהגיע ואינו בהזמנה אינו יכול להתווסף לקבלה הזו — הקבלה נשמרת מול שורות ההזמנה בלבד.
+                  {t('receiving.text_48')}
                   {canOpenException
-                    ? ' אפשר לפתוח חריג לבירור — הוא יופיע במסך החריגים בשיוך למנהל הרכש.'
-                    : ' יש לרשום את הפער בהערה של שורה קרובה ולעדכן את מנהל הרכש — פתיחת חריג לבירור זמינה למנהל ולמנהל הרכש בלבד.'}
+                    ? t('receiving.text_49')
+                    : t('receiving.text_50')}
                 </span>
                 {canOpenException && (
                   <button className="btn-secondary mt-2" onClick={() => setExceptionOpen(true)}>
-                    פתיחת חריג לבירור
+                    {t('receiving.text_51')}
                   </button>
                 )}
               </div>
@@ -1072,14 +1073,14 @@ export function ReceiveOrder() {
                 <div className="font-semibold text-ink"><bdi>{productLabel(item.product)}</bdi></div>
                 <div className="text-xs text-ink-muted mt-0.5">
                   הוזמן: <span className="num">{formatQuantity(item.qty, item.product.unit)}</span>
-                  {item.received_qty > 0 && <> · התקבל בעבר: <span className="num">{formatQuantity(item.received_qty, item.product.unit)}</span></>}
+                  {item.received_qty > 0 && <> {t('receiving.formatQuantity')} <span className="num">{formatQuantity(item.received_qty, item.product.unit)}</span></>}
                 </div>
               </div>
               <StatusBadge meta={RECEIPT_LINE_STATUS[line.status]} />
             </div>
 
             <div className="flex items-center gap-2 mt-3">
-              <span className="text-sm text-ink-soft w-16">התקבל:</span>
+              <span className="text-sm text-ink-soft w-16">{t('receiving.text_52')}</span>
               {/* The field keeps its own size. This is the number the screen exists to capture,
                   read at arm's length by someone holding a crate — a deliberate difference, not
                   drift, so convergence does not get to delete it. */}
@@ -1113,7 +1114,7 @@ export function ReceiveOrder() {
             </div>
 
             {line.status !== 'full' && (
-              <input className="input mt-2.5" placeholder="הערה (למשל: הגיע מופשר, אריזה קרועה...)"
+              <input className="input mt-2.5" placeholder={t('receiving.placeholder_2')}
                 aria-label={`הערה לקבלת ${productLabel(item.product)}`}
                 value={line.notes} onChange={(e) => setLine(item.id, { notes: e.target.value })} />
             )}
@@ -1123,15 +1124,15 @@ export function ReceiveOrder() {
 
       <label className="flex items-center gap-2 text-sm text-ink-mid px-1">
         <input type="checkbox" className="rounded" checked={openCredits} onChange={(e) => setOpenCredits(e.target.checked)} />
-        פתיחת דרישות זיכוי אוטומטית לחוסרים, לפריטים פגומים ולהחזרות
+        {t('receiving.text_53')}
       </label>
       {/* #49, decided 09.08.2026: damaged/returned joined the same automation (0087). The
           credit is the full unusable quantity at the order's snapshot price. */}
-      <p className="px-1 text-xs text-ink-muted">פריט פגום או שהוחזר אינו נספר כאספקה תקינה; כשהתיבה מסומנת נפתחת עליו דרישת זיכוי אוטומטית לפי מחיר ההזמנה.</p>
+      <p className="px-1 text-xs text-ink-muted">{t('receiving.text_54')}</p>
       {/* sticky action bar */}
       {/* lg:ms-60 cleared with the sidebar (T7.1 top navigation): the bar spans the full width. */}
       <div className="phone-taskbar fixed inset-x-0 bg-surface border-t border-line p-3 flex gap-2 z-30">
-        {busy && <span className="sr-only" role="status" aria-live="polite">שומר את הקבלה</span>}
+        {busy && <span className="sr-only" role="status" aria-live="polite">{t('receiving.text_55')}</span>}
         {/* Rewritten with finding 7: the camera is no longer suppressed on this route, so "צילום
             החשבונית יתאפשר מיד לאחר סיום הקבלה" became false the moment the FAB kept its capture
             action. What is still true is the narrower claim — the shot taken now lands in the
@@ -1154,9 +1155,9 @@ export function ReceiveOrder() {
 
       <ConfirmDialog open={exceptionOpen} onClose={() => setExceptionOpen(false)}
         onConfirm={(reason) => void openManualException(reason ?? '')}
-        title="פתיחת חריג לבירור"
+        title={t('receiving.title_3')}
         message={`ייפתח חריג "פריט שלא הוזמן" על הזמנה #${order?.number ?? ''}. הוא יופיע במסך החריגים בשיוך למנהל הרכש.`}
-        confirmLabel="פתיחת חריג" requireReason busy={exceptionBusy} />
+        confirmLabel={t('receiving.confirmLabel')} requireReason busy={exceptionBusy} />
     </div>
   );
 
@@ -1172,8 +1173,8 @@ export function ReceiveOrder() {
     if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     setExceptionOpen(false);
     toast((res.data as { idempotent?: boolean } | null)?.idempotent
-      ? 'כבר קיים חריג פתוח על ההזמנה הזו — לא נפתח חריג כפול'
-      : 'החריג נפתח ויופיע במסך החריגים');
+      ? t('receiving.text_56')
+      : t('receiving.text_57'));
   }
 }
 

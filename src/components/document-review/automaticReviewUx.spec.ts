@@ -1,3 +1,4 @@
+import { he } from '../../lib/i18n/dictionaries/he';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -28,8 +29,12 @@ describe('automatic document review UX', () => {
 
   it('allows a completed price list to be reprocessed without deleting its previous result', () => {
     expect(documentsInbox).toContain("['failed', 'review', 'completed'].includes(snapshot.stage)");
-    expect(documentsInbox).toContain('ניסיון חדש שומר את תוצאות העיבוד הקודמות');
-    expect(documentsInbox).toContain("p_reason: 'עיבוד מחדש ביוזמת המשתמש ממסך המסמכים'");
+    // The sentence moved into the dictionary, so the claim moves with it: the screen renders
+    // the key, and the key still carries the promise this contract is about.
+    expect(documentsInbox).toContain("t('documents.text_72')");
+    expect(he.documents.text_72).toContain('ניסיון חדש שומר את תוצאות העיבוד הקודמות');
+    expect(documentsInbox).toContain("p_reason: t('documents.text_31')");
+    expect(he.documents.text_31).toBe('עיבוד מחדש ביוזמת המשתמש ממסך המסמכים');
     expect(documentsInbox).not.toContain("requireReason={processing.snapshots[retryDoc?.id ?? '']?.stage !== 'unprocessed'}");
     expect(reprocessMigration).toContain("j.status in ('queued', 'leased', 'extracted', 'interpreting')");
     expect(reprocessMigration).not.toMatch(/j\.status in \([^)]*'review'/);
@@ -38,7 +43,8 @@ describe('automatic document review UX', () => {
   it('opens every document row in review while source viewing stays an explicit signed-link action', () => {
     expect(documentsInbox).toContain('onRowClick={(doc) => review(doc)}');
     expect(documentsInbox).toContain('navigate(`/documents/${encodeURIComponent(doc.id)}/review${query}`)');
-    expect(documentsInbox).toContain("{ key: 'view', label: 'צפייה במקור'");
+    expect(documentsInbox).toContain("{ key: 'view', label: t('documents.open')");
+    expect(he.documents.open).toBe('צפייה במקור');
     expect(documentsInbox).toContain("supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300)");
     expect(documentsInbox).not.toContain('onRowClick={(doc) => void open(doc)}');
   });
