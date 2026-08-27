@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* The subscription plan card, and the ONLY stylesheet in this project outside this file.
+ *
+ * Owner ruling 27.08.2026 (OPEN-DECISIONS #277): the plan card is the one surface allowed to leave
+ * the palette, and it is drawn identically here and on the marketing site — so it is authored once,
+ * in `src/styles/plan-card.css`, and copied there rather than reimplemented. It therefore carries
+ * absolute colour values, which every other file in this project is forbidden. `check:tokens`
+ * knows about exactly this file and refuses any second stylesheet under `src/`. */
+@import "./styles/plan-card.css";
+
 /* Free production-safe default. Both files are subsets of the same variable face and are served
    locally, so typography never depends on a third-party request at runtime. */
 @font-face {

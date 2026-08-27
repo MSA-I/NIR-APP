@@ -6,10 +6,9 @@ import { fmtDate, fmtNum, fmtPlanPrice } from '../lib/format';
 import { SUBSCRIPTION_STATUS } from '../lib/status';
 import { DOMAIN, key } from '../lib/query/keys';
 import { useOrgScope } from '../lib/query/orgScope';
-import { planTierClass } from './PlanBadge';
 import {
-  HEADLINE_QUOTA_KEY, PLAN_GRID, PlanCard, PlanLadderSkeleton, planEmphasis, type PlanFeatureRow,
-} from './PlanCard';
+  HEADLINE_QUOTA_KEY, PLAN_TRAY, PlanTicket, PlanTicketSkeleton, RECOMMENDED_PLAN,
+} from './PlanTicket';
 import { usageSnapshotQuery, type UsageRow } from './PlanLimitNote';
 import { ErrorNote, ICON, Modal, Note, Skeleton, StatusBadge } from './ui';
 
@@ -162,59 +161,23 @@ interface PlanQuotaRow {
 const PRICE_AT_UPGRADE = 'המחיר נמסר במעבר למסלול בתשלום';
 
 /**
- * THE LADDER'S ACTIONS, AND THE ONE MEASUREMENT THAT DECIDES HOW THEY LOOK.
+ * THE LADDER'S ACTIONS NOW BELONG TO THE TICKET, and the two classes that used to live here are
+ * gone with the card that wore them.
  *
- * Owner report, 26.08.2026: the four «מעבר ל…» buttons read as broken and the promoted
- * «שדרוג לפרימיום» rendered as a muddy grey lozenge with a smeared band under it. Both complaints
- * have the SAME cause, and it is not the palette — it is `@utility btn`'s `disabled:opacity-50`.
- * Every one of these buttons is `disabled` (there is no `billing-checkout` function and no signed
- * provider event to open a paid entitlement with, #217), so every one of them is painted at half
- * strength, and half strength is what a reader has been trained to read as "broken".
+ * `PLAN_ACTION_QUIET` (`btn-standby w-full`) and `PLAN_ACTION_UPGRADE` (`btn-rainbow`) were the
+ * answer to an owner report of 26.08.2026 — the buttons read as broken — and the fix was to lift
+ * `@utility btn`'s `disabled:opacity-50`, which was halving four disabled controls into grey. That
+ * finding is still true and `.btn-standby` still carries it in `index.css` for every other surface.
  *
- * MEASURED against the built stylesheet, at 390 and 1280, on the real rows:
+ * What changed on 27.08.2026 is the SURFACE UNDER the button. Both of those classes were measured
+ * against `--color-surface`, a near-white card; three of the ticket's four faces are near black and
+ * the fourth is cream, so neither figure transfers. `btn-rainbow` in particular was a named,
+ * bounded exception granted for a promoted button sitting on paper — carrying it onto onyx would be
+ * widening an exception by accident, which is how a named exception stops being bounded.
  *
- *   the four quiet rungs, on the paper surface (`--color-surface`, rgb 255,252,248)
- *     label `ink-mid` on `action-wash`   9.60:1 at full strength  ->  2.53:1 under the dim
- *     the lozenge itself vs the row      1.08:1                   ->  1.04:1
- *   the promoted rung, on the onyx fill (`--color-tier-onyx`, rgb 39,41,54)
- *     the paper body vs the row         14.09:1                   ->  4.71:1, i.e. rgb(147,147,151)
- *     the travelling 2px band                                        keeps 47–54% of its chroma
- *     the blurred `::before` halo below                              peaks at 6.4:1 against the
- *       row while the button's own body sits at 4.71 — the DECORATION outshining the CONTROL is
- *       exactly the "smeared band" in the report, and it is a consequence of the dim, not of the
- *       dark surface. `index.css`'s paper body for `[data-state='featured']` already works; it was
- *       simply being halved back into grey.
- *
- * AND NO PALETTE CAN RESCUE IT WHILE THE DIM IS ON. At 50% over the paper row, a colour has to
- * composite below L 0.29 to clear 3:1 — which is `--color-ink` (3.42:1) and nothing lighter:
- * `action-line` falls from 3.48 to 1.75. A near-black outline on four buttons is the exact
- * separation T7.1 bans (DESIGN.md:202 — Secondary is «טונאלי ללא מסגרת»). So the dim is not one
- * factor among several; it forecloses every legal treatment, and lifting it is the whole fix.
- *
- * WHAT REPLACES IT AS THE "NOT AVAILABLE" SIGNAL, because opacity was doing that job:
- * `cursor: not-allowed` (still on `.btn:disabled`), the `title` on every button, the `disabled`
- * attribute itself — which is what a screen reader announces and what makes the control genuinely
- * inert — and the sentence under the ladder that says the billing path has not opened. The
- * guarantee #217 rests on has never been the opacity or even the attribute: it is that THIS FILE
- * INVOKES NO EDGE FUNCTION. Legibility and inertness were never the same property.
- *
- * `action-soft` rather than `action-wash` for the quiet rungs — one tonal step deeper, already in
- * the vocabulary (it is `btn-secondary`'s own hover), no border. It roughly doubles the lozenge's
- * separation from the row (ΔL 0.163 vs 0.073) and takes the label to 10.21:1. The lozenge still
- * measures 1.19:1 against the paper and cannot do better: WCAG 1.4.11's 3:1 is unreachable for a
- * borderless tonal control on a near-white surface, and it exempts inactive components anyway. The
- * affordance is carried by the label, which is how a tertiary control has always worked here.
- *
- * ONE DEFINITION, and `/pricing` needs none of it — that ladder renders no action at all.
- * The variant now has its named home: `.btn-standby` in `index.css`, beside `btn-danger-quiet`.
- * Both are the same shape of decision — a real control that is deliberately not the primary one —
- * and `.btn-standby` carries the `disabled:opacity-100` with it, so the reason travels with the
- * class instead of being re-derived at each call site.
+ * The ticket's own pill is `.plan-card__cta` in `src/styles/plan-card.css`, next to the faces it is
+ * measured against, and it is shared with the marketing site for the same reason the card is.
  */
-/** A sideways move, a downgrade, or «פנייה לשירות» — a real control, deliberately not promoted. */
-const PLAN_ACTION_QUIET = 'btn-standby w-full';
-/** The rung the ladder points at. `btn-rainbow` stays the owner's named exception, undimmed. */
-const PLAN_ACTION_UPGRADE = 'btn-rainbow disabled:opacity-100 w-full';
 
 const INTERVALS = [['monthly', 'חודשי'], ['yearly', 'שנתי']] as const;
 type Interval = (typeof INTERVALS)[number][0];
@@ -517,7 +480,7 @@ export function OrgSubscriptionPanel() {
           SAME shape `/pricing` loads into, from `PlanCard.tsx`, so the placeholder cannot drift
           from the row it stands for. Five rungs and an action on each: that is what this surface
           resolves into. */}
-      {loading && <PlanLadderSkeleton heading layout="grid" testId="subscription-skeleton" />}
+      {loading && <PlanTicketSkeleton heading testId="subscription-skeleton" />}
 
       {/* THE LADDER, AS ITS OWN REGION OF REAL CARDS (owner report 25.08.2026: "התוכניות השונות עם
           האופציה לשדרוג, כמו בכל אפליקציה נורמלית"; owner verdict 26.08.2026 on what shipped:
@@ -546,7 +509,7 @@ export function OrgSubscriptionPanel() {
         <section aria-labelledby="plan-ladder-heading" className="space-y-4">
           <h2 id="plan-ladder-heading" className="section-title">כל המסלולים</h2>
 
-          <ul data-testid="plan-cards" className={PLAN_GRID}>
+          <ul data-testid="plan-cards" className={PLAN_TRAY}>
             {[...options].sort((a, b) => a.tier_order - b.tier_order).map((option) => {
               const current = option.plan_key === subscription.plan_key;
               const amount = amountOf(option);
@@ -566,32 +529,32 @@ export function OrgSubscriptionPanel() {
               const hasAmount = !option.contact_sales && currency !== null && amount !== null;
 
               return (
-                <PlanCard
-                  layout="grid"
+                <PlanTicket
                   key={option.plan_key}
                   planKey={option.plan_key}
                   label={option.label}
-                  /* One map, one fallback (`planTierClass`). A rung the ladder has no look for
-                     wears no mark on EITHER surface — the header chip and this card used to
-                     disagree, and `plan-badge-free` on an unknown key advertised it as the free
-                     plan. Which card is FEATURED is not decided here at all: `PlanCard` reads the
-                     static emphasis map, because #202 forbids an emphasis keyed to the reader. */
-                  tierClass={planTierClass(option.plan_key)}
-                  current={current}
-                  /* Origin UI's per-item badge slot, carrying exactly what it is for: which rung
-                     this is RELATIVE TO YOURS, then the product's own static emphasis. The first
-                     was `badge-idle` and the second `badge-info`; `idle` and `info` are two of the
-                     five STATUS tones and they belong to data, not to a commercial rung. */
-                  chips={[
+                  /* Origin UI's per-item badge slot is gone with the old card, and what it carried
+                     moves into the ticket's own description line: which rung this is RELATIVE TO
+                     YOURS, then whether it costs money. Both used to be `badge-idle` / `badge-info`
+                     chips; `idle` and `info` are two of the five STATUS tones and they belong to
+                     data, not to a commercial rung — as plain text they cannot borrow a meaning the
+                     product reserves for facts about documents and money.
+                     `option.paid` is the server's own boolean, and it is the only answer to "so
+                     what is this rung" on a screen where no amount shown is a guess. */
+                  who={[
                     ...(currentTier === null ? []
                       : [current ? 'המסלול הנוכחי' : isUpgrade ? 'מדרגה מעל' : 'מדרגה מתחת']),
-                    ...(planEmphasis(option.plan_key) ? [planEmphasis(option.plan_key) as string] : []),
-                  ]}
-                  /* The one thing a row can say about the rung itself without inventing a
-                     product description: whether it costs money. `option.paid` is the server's
-                     own boolean, and it is the only answer to "so what is this rung" on a screen
-                     where no amount is shown that is not a guess. */
-                  standing={option.paid ? 'מסלול בתשלום' : 'לא נדרש אמצעי תשלום'}
+                    option.paid ? 'מסלול בתשלום' : 'לא נדרש אמצעי תשלום',
+                  ].join(' · ')}
+                  /* The rung this organization stands on, as an outline on the ticket. A REPORT and
+                     not a selection — nothing on this screen can be chosen (#217/#224). */
+                  current={current}
+                  /* The badge, from the shared presentation file and from nowhere else, so the two
+                     surfaces cannot point a reader at two different plans. #202 still binds the
+                     part that matters: the emphasis is STATIC and identical for every reader, never
+                     keyed to the tenant's own data. */
+                  badgeLabel={option.plan_key === RECOMMENDED_PLAN ? 'מומלץ' : undefined}
+                  priceLabel="מחיר"
                   /* THE PRICE SLOT, AND THE SENTENCE THAT REPLACED FIVE DASHES (owner ruling
                      26.08.2026: «משפט קצר במקום מקף»). Stacked in a list, five «—» in the column
                      the eye reads as the price read as a broken screen rather than as a withheld
@@ -622,73 +585,53 @@ export function OrgSubscriptionPanel() {
                   figure={option.contact_sales ? 'דברו איתנו'
                     : !option.paid ? 'ללא עלות'
                       : hasAmount ? fmtPlanPrice(amount, currency) : PRICE_AT_UPGRADE}
-                  figureTone={option.contact_sales || !option.paid ? 'compact'
-                    : hasAmount ? 'anchor' : 'quiet'}
-                  /* The period rides the price's own baseline, and only when there IS a price to
-                     bill in one. A period beside the sentence would dress an absence as a monthly
-                     one, and "ללא עלות לחודש" would bill nothing on a cycle. */
-                  figureNote={option.paid && hasAmount
+                  figureIsWords={!(option.paid && hasAmount)}
+                  /* The period sits under the figure, and only when there IS a price to bill in
+                     one. A period beside the sentence would dress an absence as a monthly one, and
+                     "ללא עלות לחודש" would bill nothing on a cycle. */
+                  term={option.paid && hasAmount
                     ? (interval === 'yearly' ? 'לשנה' : 'לחודש') : undefined}
-                  /* Disabled, with the reason said out loud (owner ruling 25.08.2026). There is no
+                  /* The ticket's own pill (`.plan-card__cta`, in the shared stylesheet), because
+                     three of the four faces are near black and the product's `.btn-primary` is
+                     measured against a near-white card surface. `btn-rainbow` went with the old
+                     card: it was a named exception granted for a button sitting on paper, and this
+                     one sits on onyx, violet or gloss.
+
+                     Disabled, with the reason said out loud (owner ruling 25.08.2026). There is no
                      `billing-checkout` function and no signed provider event to open a paid
                      entitlement with (#217), so a live button would either lie or no-op — and #204
-                     forbids hiding the control instead, because a customer must be able to see
-                     that the path exists and why it is shut. THIS COMPONENT CALLS NO EDGE FUNCTION
-                     AT ALL; that absence is the guarantee, not this `disabled`.
+                     forbids hiding the control instead, because a customer must be able to see that
+                     the path exists and why it is shut. THIS COMPONENT CALLS NO EDGE FUNCTION AT
+                     ALL; that absence is the guarantee, not this `disabled`.
 
-                     `btn-rainbow` is the owner's ruling of 26.08.2026 and it is a NAMED, BOUNDED
-                     exception to two design rules — for THIS action and no other. It is bounded
-                     twice over here: only the plan-upgrade button wears it, and only when the card
-                     really is a rung up. A downgrade and a "פנייה לשירות" are different actions and
-                     keep the quiet treatment.
-
-                     BOTH treatments and the measurement behind them are at `PLAN_ACTION_QUIET` /
-                     `PLAN_ACTION_UPGRADE` above — the short version is that `disabled` was costing
-                     these five buttons half their contrast and that is why they read as broken.
-
-                     The current rung has no action and gets a SPACER of the button's own height
-                     instead of nothing, so the list keeps an even rhythm rather than one row
-                     sitting 44px shorter than the rest.
-
-                     The RTL glow bug this call site used to patch — `.btn-rainbow::before`
-                     centring itself with `inset-inline-start: 50%` plus a physical
-                     `translate: -50% 0`, which measured 120px past the button's start edge and
-                     scrolled the whole page sideways — is FIXED IN `index.css` now
-                     (`inset-inline: 20%`, no translate), and the two `before:` utilities that
-                     stood in for it are gone with it. `index.css` also gives the band a paper body
-                     on `[data-state='featured']`; that rule was always correct and was simply
-                     being halved back into grey by the dim. */
+                     The current rung has no action and gets a SPACER of the button's own height, so
+                     the tray keeps an even rhythm rather than one ticket sitting 44px shorter. */
                   action={current
                     ? <div className="min-h-11" aria-hidden />
                     : (
                       <button type="button" disabled title="החיוב עדיין לא נפתח"
-                        className={isUpgrade && !option.contact_sales
-                          ? PLAN_ACTION_UPGRADE : PLAN_ACTION_QUIET}>
+                        className="plan-card__cta">
                         {option.contact_sales
                           ? 'פנייה לשירות'
                           : isUpgrade ? `שדרוג ל${option.label}` : `מעבר ל${option.label}`}
                       </button>
                     )}
-                  /* The server's own wording, not a restatement: `/pricing` prints the same string
-                     from the same function, and a card that reworded it would be the second place a
-                     customer could read a different sentence about one entitlement. */
-                  features={[option.contact_sales
-                    ? { key: HEADLINE_QUOTA_KEY, text: 'מכסה חוזית, נקבעת מול השירות', affirmative: true }
-                    : !quota || !quota.measured
-                      /* Still a dash, and deliberately: the owner's ruling replaced the five
-                         PRICE dashes, which were a column of them in the slot the eye reads as
-                         the amount. This is ONE entitlement inside a row of real ones, which is
-                         the case the dash rule was written for — an unmeasured quota (DEBT §56)
-                         must not be dressed as `0`, and it must not be dressed as a promise
-                         either. */
-                      ? { key: HEADLINE_QUOTA_KEY, text: <><span>—</span> {quota?.label ?? 'מסמכים'}</>, affirmative: false }
-                      : quota.unlimited
-                        ? { key: HEADLINE_QUOTA_KEY, text: `${quota.label} ללא הגבלה`, affirmative: true }
-                        : {
-                          key: HEADLINE_QUOTA_KEY,
-                          text: <><span className="num font-medium">{fmtNum(quota.numeric_limit)}</span> {quota.label}</>,
-                          affirmative: true,
-                        }] satisfies PlanFeatureRow[]}
+                  /* THE HEADLINE QUOTA IN THE TICKET'S OWN QUOTA SLOT — the one number #266 lets a
+                     card publish, with the server's own label above it rather than a restatement:
+                     `/pricing` prints the same string from the same function, and a card that
+                     reworded it would be the second place a customer could read a different
+                     sentence about one entitlement.
+
+                     Still a dash when nothing measures it, and deliberately: the owner's ruling
+                     replaced the five PRICE dashes, which were a column of them in the slot the eye
+                     reads as the amount. An unmeasured quota (DEBT §56) must not be dressed as `0`,
+                     and it must not be dressed as a promise either. */
+                  quotaLabel={option.contact_sales
+                    ? 'מכסה' : (quota?.label ?? 'מסמכים')}
+                  quota={option.contact_sales ? 'חוזית'
+                    : !quota || !quota.measured ? '—'
+                      : quota.unlimited ? 'ללא הגבלה'
+                        : fmtNum(quota.numeric_limit)}
                 />
               );
             })}

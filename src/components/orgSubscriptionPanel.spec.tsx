@@ -6,6 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import { ToastProvider } from './ui';
 import { OrgSubscriptionPanel } from './OrgSubscriptionPanel';
+/* Read, never restated: the promoted rung is a fact of the shared presentation file, and a test
+   that spelled the key out would pass while the two surfaces drifted apart. */
+import { RECOMMENDED_PLAN } from './PlanTicket';
 
 /**
  * The tenant's own subscription surface, held to OPEN-DECISIONS #194, #199–#204, #208, #216–#225,
@@ -242,8 +245,15 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     expect(cards.querySelectorAll(':scope > li')).toHaveLength(5);
     expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/20/);
     expect(cards.querySelector('[data-plan="premium"]')?.textContent).toMatch(/375/);
-    // Business is a conversation and carries a contractual quota, never a published number.
-    expect(cards.querySelector('[data-plan="business"]')?.textContent).toMatch(/מכסה חוזית/);
+    /* Business is a conversation and carries a contractual quota, never a published number
+       (#194/#201). The ticket splits the old sentence into the label and the figure it sits above
+       — «מכסה» / «חוזית» — so the claim is checked where it now lives, and checked HARDER: the
+       quota slot must contain no digit at all, which is the part that would actually leak the
+       internal minimum. */
+    const businessQuota = cards.querySelector('[data-plan="business"] .plan-card__quota');
+    expect(businessQuota?.textContent).toMatch(/חוזית/);
+    expect(businessQuota?.textContent).not.toMatch(/\d/);
+    expect(cards.querySelector('[data-plan="business"]')?.textContent).toMatch(/מכסה/);
     // The rung the organization is actually on is marked, and offers itself no upgrade to itself.
     expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/המסלול הנוכחי/);
     expect(cards.querySelector('[data-plan="free"]')?.querySelector('button')).toBeNull();
@@ -257,14 +267,27 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
    * הדייר», and the same row forbids «המלצה אישית למסלול». The obvious rebuild — invert whichever
    * rung is one step above the reader's own — is a better sales screen and is exactly the thing
    * that sentence bans. This organization is on `free`, so a reader-keyed emphasis would land on
-   * `basic`; it must land on `premium`, for everyone, always.
+   * `basic`; it lands on the ONE rung the shared presentation file names, for everyone, always.
+   *
+   * WHICH RUNG THAT IS changed on 27.08.2026, and the change is recorded rather than assumed: the
+   * owner was shown the two surfaces disagreeing — the marketing site promoted `pro`, this one
+   * promoted `premium` — and ruled «תיישר לפי הדף נחיתה» (#277). So the mark is the cream ticket
+   * face plus the badge. What this test defends is not the plan key: it is that the mark is read
+   * from `src/data/plan-presentation.json` and from nothing about the reader, which is why the
+   * expectation is derived from `RECOMMENDED_PLAN` rather than spelled out. A hard-coded key here
+   * would let the two files drift and still pass.
    */
   it('ההדגשה על הכרטיס היא סטטית ואינה נגזרת מהמסלול של הקורא', async () => {
     renderPanel();
     const cards = await settle();
-    expect(cards.querySelector('[data-plan="premium"]')?.className).toMatch(/bg-tier-onyx/);
-    expect(cards.querySelector('[data-plan="basic"]')?.className).not.toMatch(/bg-tier-onyx/);
-    expect(cards.querySelector('[data-plan="business"]')?.className).not.toMatch(/bg-tier-onyx/);
+    for (const planKey of ['free', 'basic', 'pro', 'premium', 'business']) {
+      const card = cards.querySelector(`[data-plan="${planKey}"]`);
+      const promoted = planKey === RECOMMENDED_PLAN;
+      expect(card?.className.includes('plan-card--paper')).toBe(promoted);
+      expect(/מומלץ/.test(card?.textContent ?? '')).toBe(promoted);
+    }
+    // The reader is on `free`. A reader-keyed emphasis would have promoted the rung above it.
+    expect(RECOMMENDED_PLAN).not.toBe('basic');
   });
 
   /**
@@ -306,12 +329,16 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
    * from this file at all — while the dim that made them unreadable is lifted at the call site.
    */
   /*
-   * This asserted the literal `disabled:opacity-100` until the variant got its named home
-   * (`.btn-standby`, index.css). That spelling was never the contract — the contract is that a
-   * button disabled as a STANDING state stays readable, because `btn`'s own `disabled:opacity-50`
-   * took these labels from 9.60:1 to 2.53:1, under AA, on the only affordance in the row.
-   * So: assert the variant is worn, and assert the variant still defeats the dim — reading the
-   * stylesheet rather than trusting that the class name means what it meant last week.
+   * This asserted `disabled:opacity-100`, then `.btn-standby`, and now `.plan-card__cta`. The
+   * SPELLING was never the contract, and the churn is the proof: what is defended is that a button
+   * disabled as a STANDING state stays readable, because `@utility btn`'s own `disabled:opacity-50`
+   * took these labels from 9.60:1 to 2.53:1 — under AA, on the only affordance in the row.
+   *
+   * The class changed on 27.08.2026 because the SURFACE UNDER IT did (#277): `.btn-standby` is
+   * measured against the near-white card, and three of the ticket's four faces are near black. So
+   * the ticket carries its own pill, in the shared stylesheet, beside the faces it is measured
+   * against. Assert the pill is worn, and assert the pill does not fade — reading the stylesheet
+   * rather than trusting that a class name still means what it meant last week.
    */
   it('הכפתורים המושבתים אינם מעומעמים למחצית — «מושבת» אינו «בלתי קריא»', async () => {
     renderPanel();
@@ -320,11 +347,15 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     expect(buttons.length).toBeGreaterThan(0);
     for (const button of buttons) {
       expect(button).toBeDisabled();
-      expect(button.className).toMatch(new RegExp(`\\b(btn-standby|disabled:opacity-100)\\b`));
+      expect(button.className).toMatch(/plan-card__cta/);
+      // Never `@utility btn`: that is the class that carries `disabled:opacity-50`.
+      expect(button.className).not.toMatch(/(^|\s)btn(\s|-|$)/);
     }
-    // The rule behind the class, so a rename or a deletion in index.css fails here and not on screen.
-    const css = readFileSync('src/index.css', 'utf8');
-    expect(css).toMatch(new RegExp(`\\.btn-standby\\s*\\{[^}]*disabled:opacity-100`));
+    // The rule behind the class, so a rename or a deletion in the shared file fails here and not on
+    // screen. The disabled pill STATES its own colour rather than fading the live one.
+    const css = readFileSync('src/styles/plan-card.css', 'utf8');
+    expect(css).toMatch(/\.plan-card__cta:disabled\s*\{[^}]*color:/);
+    expect(css).not.toMatch(/\.plan-card__cta:disabled\s*\{[^}]*opacity:/);
   });
 
   it('אין שום נתיב רכישה — לא כפתור, לא קריאה לפונקציה, ולא מילה שנשמעת כמו תשלום שבוצע', async () => {
@@ -488,13 +519,20 @@ describe('מסלול שניתן ולא נרכש — מצב חלון ההרצה �
   });
 
   /**
-   * The rainbow edge is an owner-ruled, NAMED exception to two design rules and applies to the
-   * plan-upgrade action only. From the top rung nothing is an upgrade, so nothing wears it.
+   * THE RAINBOW EDGE IS GONE FROM THIS LADDER, and this test is what stops it coming back by
+   * accident. It was an owner-ruled NAMED exception (26.08.2026) granted to the plan-upgrade button
+   * while that button sat on the old card's near-white paper. The ticket of #277 has three near-
+   * black faces and a cream one; carrying the exception onto them would be widening it without a
+   * ruling, which is precisely how a named exception stops being bounded. Every ticket action is
+   * now the one shared pill.
    */
-  it('הקצה הצבעוני שמור לפעולת השדרוג בלבד', async () => {
+  it('הקצה הצבעוני אינו מגיע לכרטיס הכניסה', async () => {
     renderPanel();
     const cards = await settle();
     expect(cards.querySelectorAll('.btn-rainbow')).toHaveLength(0);
+    for (const button of cards.querySelectorAll('button')) {
+      expect(button.className).toMatch(/plan-card__cta/);
+    }
   });
 });
 
@@ -526,18 +564,27 @@ describe('מסלול בתשלום שנרכש באמת', () => {
     expect(await screen.findByText(/תקופת חיוב לא התקבלה/)).toBeInTheDocument();
   });
 
-  it('מדרגה מעל הנוכחית היא «שדרוג», ורק היא לובשת את הקצה הצבעוני', async () => {
+  /**
+   * UP OR DOWN IS SAID IN WORDS, and from 27.08.2026 in words ONLY.
+   *
+   * The claim is unchanged and it is the one that matters: a rung above this organization's own is
+   * «שדרוג» and a rung below it is «מעבר», never both and never the wrong way round — the label was
+   * "שדרוג ל…" unconditionally until `0210` put every organization near the top of the ladder and
+   * the free card started offering an upgrade to less.
+   *
+   * WHAT WENT is the second, colour-borne channel: the rainbow edge that used to mark the upgrade
+   * button alone. It was measured against the old card's near-white paper and the ticket faces are
+   * near black (#277), so it did not transfer. Nothing is lost that a reader needed — the distinction
+   * was never allowed to rest on colour anyway, and the words carry it exactly as they did.
+   */
+  it('מדרגה מעל הנוכחית היא «שדרוג», ומדרגה מתחת היא «מעבר»', async () => {
     renderPanel();
     const cards = await settle();
     expect(cards.querySelector('[data-plan="premium"]')?.textContent).toMatch(/שדרוג לפרימיום/);
     expect(cards.querySelector('[data-plan="basic"]')?.textContent).toMatch(/מעבר לבסיס/);
-    // premium only: business is `contact_sales`, basic and free are below pro.
-    const rainbow = [...cards.querySelectorAll('.btn-rainbow')];
-    expect(rainbow).toHaveLength(1);
-    expect(rainbow[0].textContent).toMatch(/שדרוג לפרימיום/);
-    // A named exception stays named: the contact-sales action is a different action.
-    expect(cards.querySelector('[data-plan="business"]')?.querySelector('button')?.className)
-      .not.toMatch(/btn-rainbow/);
+    expect(cards.querySelector('[data-plan="basic"]')?.textContent).not.toMatch(/שדרוג/);
+    // `ביזנס` is `contact_sales`: a conversation, and neither of the two words (#194/#201).
+    expect(cards.querySelector('[data-plan="business"]')?.textContent).toMatch(/פנייה לשירות/);
   });
 });
 

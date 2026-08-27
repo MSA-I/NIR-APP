@@ -1,3 +1,64 @@
+# Gates: the plan card becomes one design, owned by the marketing site
+
+Branch: `claude/subscriber-cards-design-9249a6`, based on `main@c04d37a`.
+
+OWNS: src/styles/plan-card.css, src/components/PlanTicket.tsx, src/data/plan-presentation.json,
+src/pages/Pricing.tsx, src/components/OrgSubscriptionPanel.tsx, src/index.css,
+scripts/check-design-tokens.ts, DESIGN.md, docs/OPEN-DECISIONS.md, and the two spec files that pin
+the above. `src/components/PlanCard.tsx` is DELETED.
+
+TOUCHES NOTHING IN `LANDING-PAGE-NIR`. Owner instruction, 27.08.2026: «אל תעתיק כלום כרגע לנחיתה
+הנחיתה מבחינת העיצוב היא המקור». Three gates below are abandoned for exactly that reason and say so.
+
+## What the owner asked (four rulings, in the order they were given)
+
+1. The subscription cards take the marketing site's plan-card design, and a mechanism keeps the two
+   in step for design AND prices, both ways.
+2. Desktop is a row of cards; mobile is a vertical list.
+3. Record the ruling so it does not have to be given again.
+4. **Correction to an earlier draft of this plan:** the cream paper STAYS. The plan card is the one
+   surface allowed to leave the app's palette.
+5. **Correction, asked and answered:** where the two surfaces disagreed about which rung is
+   promoted, «תיישר לפי הדף נחיתה» — `pro`, not `premium`.
+
+---
+
+## Acceptance gates
+
+| # | Gate | CHECK / evidence | State |
+|---|---|---|---|
+| G1 | The card is the marketing site's, transcribed rather than reinterpreted | `src/styles/plan-card.css` is `LANDING-PAGE-NIR/src/styles.css:1875-2230` verbatim; the four mechanical edits are enumerated in its header and nothing else differs. Screenshot `pricing-desktop.png`: scalloped edges, side notches, three dotted rules, barcode, four faces | **PASS** |
+| G2 | Desktop is a row, mobile is a vertical list | measured in the live DOM at two viewports: at 1440 four cards at **209px each, side by side**; at 390 four cards at **358px each, stacked**. Screenshots `pricing-desktop.png` / `pricing-phone.png` | **PASS** |
+| G3 | The cream paper survives, and the promoted rung is the marketing site's | `data-face` read live: `pro` = `paper`, bg `rgb(255,252,248)`; `premium` = `violet`; two rungs onyx. The «מומלץ» badge sits on `pro` alone. Specs derive the key from `RECOMMENDED_PLAN`, never spell it out | **PASS** |
+| G4 | The palette exemption is enforced, not merely declared | `check:tokens` gained a fifth scope: exactly two stylesheets may exist under `src/`, and a third fails whatever it contains. Run output names the exemption and its decision number | **PASS** |
+| G5 | The disabled action stays readable on a near-black face | `.plan-card__cta` measured live: `opacity 1`, dashed ring, stated colour. `@utility btn` — which carries `disabled:opacity-50` — reaches no ticket button; the spec asserts both, and reads the stylesheet so a rename fails here rather than on screen | **PASS** |
+| G6 | The rung the organization stands on is visible | first attempt used `outline`, which **computed correctly and rendered nothing**: `mask-composite` clips an outline the same way it clips a border. Now an inset ring on `::before`, the mechanism the card already uses for its edge. Measured `rgb(93,144,150) 0 0 0 2px inset`; zoomed evidence `current-ring.png` shows it beside a plain neighbour | **PASS** |
+| G7 | A sentence in the figure slot cannot paint over its neighbour | `white-space: nowrap` is correct for a price and wrong for «המחיר נמסר במעבר למסלול בתשלום», which rendered as one 640px line inside a 209px card. `--words` now releases it. Before/after in `panel-desktop.png` | **PASS** |
+| G8 | The ruling is written down where the next reader will meet it | `OPEN-DECISIONS #277` (four parts + the emphasis change, which supersedes the half of #202 that names a plan); `DESIGN.md` §token law carries the exemption and says why `@theme` could not have held it | **PASS** |
+| G9 | `npm run build` green | build + typecheck clean | **PASS** |
+| G10 | `npm run verify` green | Knip, `check:tokens`, `check:typography`, `check:money`, `check:exemptions`, `check:supplier-columns`, `check:assistant-no-send`, `check:assistant-tool-schemas`, `check:anchored-replacements`, **1,658 tests / 158 files** | **PASS** |
+| G11 | Prices reach the marketing site from the database instead of being typed | — | **ABANDON: the owner said not to touch that repository in this pass.** The finding stands and is recorded in #277: 249 ₪ is typed in `src/content/*.ts` AND typed again in `scripts/gates/g14-figures.mjs`, so the gate meant to catch a hand-edited price compares one hand-typed copy to another. Cheapest next step: a build-time fetch into `src/data/plan-catalogue.json`, in the shape `extract-tokens.mjs` already uses |
+| G12 | The marketing site's mobile carousel becomes a vertical list | — | **ABANDON: same instruction.** `styles.css:2624` still sets `scroll-snap-type: inline mandatory` there, so ruling (2) holds in the product only. One CSS block when that repository opens |
+| G13 | The shared stylesheet is copied into the marketing site with a drift gate | — | **ABANDON: same instruction, and the direction was corrected mid-flight.** The first design had the product authoring the file and pushing it there; the owner reversed it — the marketing site is the source. A drift gate belongs on this side, comparing the local transcription against that repository, and is not written |
+
+## Verified visually (evidence in the session scratchpad)
+
+`pricing-desktop.png` · `pricing-phone.png` · `panel-desktop.png` · `panel-phone.png` ·
+`current-ring.png` — the public ladder is the real built bundle with the two catalogue RPCs stubbed
+at the network layer; the authenticated ladder is a harness page loading the same built stylesheet,
+because that screen needs a signed-in session and the point under test is the card.
+
+## Not done, and not silently
+
+- **The authenticated screen was not photographed while signed in.** The ticket, its button and the
+  current-rung ring were verified against the real compiled stylesheet through a harness. What that
+  does NOT cover is the live data path — `my_subscription()`, the grant notice, the cancel dialog —
+  which is unchanged code but unphotographed on this branch.
+- **No price is published anywhere new.** #267 and the owner's 25.08 ruling are untouched:
+  `/pricing` still shows the documents quota in the figure slot and no amount at all.
+
+---
+
 # Gates: eight owner UI reports — the palette stops speaking two languages
 
 Branch: `claude/ui-colors-updates-7198bd`, based on `claude/ui-components-cleanup-d8b29b` (owner

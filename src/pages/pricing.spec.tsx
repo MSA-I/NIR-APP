@@ -2,6 +2,9 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Pricing from './Pricing';
+/* Read, never restated: the promoted rung is a fact of the shared presentation file that the
+   marketing site reads too, and a test that spelled the key out would pass while they drifted. */
+import { RECOMMENDED_PLAN } from '../components/PlanTicket';
 
 /**
  * The public pricing page, held to OPEN-DECISIONS #194, #199–#204, #208 and the owner's ruling of
@@ -193,19 +196,27 @@ describe('דף המסלולים הציבורי', () => {
   });
 
   /**
-   * #202: «המסלולים מקבלים הדגשה שיווקית סטטית עולה, ופרימיום הוא הנחשק ביותר. ההדגשה אינה מבוססת
-   * על נתוני הדייר». The emphasis is now BOTH the approved words and the inverted onyx fill, and
-   * the fill is the reason this test also names the map: `planEmphasis` is one table read by this
-   * page and by the account ladder, so the two surfaces cannot come to point at different rungs.
+   * #202: «המסלולים מקבלים הדגשה שיווקית סטטית עולה. ההדגשה אינה מבוססת על נתוני הדייר».
+   *
+   * The emphasis is the cream ticket face plus the «מומלץ» badge, and this test names the SOURCE
+   * rather than the plan: `RECOMMENDED_PLAN` is read from `src/data/plan-presentation.json`, the
+   * one file this page and the account ladder and the marketing site all draw from, so the three
+   * cannot come to point a reader at different rungs. Spelling a key out here would pass happily
+   * while they drifted.
+   *
+   * WHICH rung it is was settled on 27.08.2026 (#277). The two surfaces disagreed — the marketing
+   * site promoted `pro`, the product promoted `premium` per the second half of #202 — and the owner
+   * ruled «תיישר לפי הדף נחיתה». That supersedes the plan named in #202; the rest of #202 stands
+   * and is what the last line here checks: the emphasis is STATIC, and a visitor holds no rung for
+   * it to be keyed to in the first place.
    */
-  it('נותן לפרימיום הדגשה סטטית — לא הדגשה שנגזרת מנתוני לקוח', async () => {
+  it('נותן למסלול אחד הדגשה סטטית — לא הדגשה שנגזרת מנתוני לקוח', async () => {
     renderPage();
     await settle();
-    expect(within(card('premium')).getByText('המקיף ביותר')).toBeInTheDocument();
-    expect(card('premium').className).toMatch(/bg-tier-onyx/);
-    for (const planKey of ['free', 'basic', 'pro']) {
-      expect(card(planKey).className).not.toMatch(/bg-tier-onyx/);
-      expect(within(card(planKey)).queryByText('המקיף ביותר')).not.toBeInTheDocument();
+    for (const planKey of ['free', 'basic', 'pro', 'premium']) {
+      const promoted = planKey === RECOMMENDED_PLAN;
+      expect(card(planKey).className.includes('plan-card--paper')).toBe(promoted);
+      expect(within(card(planKey)).queryByText('מומלץ') !== null).toBe(promoted);
     }
   });
 
