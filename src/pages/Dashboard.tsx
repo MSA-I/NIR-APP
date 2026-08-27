@@ -57,16 +57,17 @@ type ManagementDashboardSnapshot = {
 // stays neutral on purpose: more purchasing is not "good" or "bad", so the trend hues (which are
 // business claims) do not apply here.
 function DeltaChip({ value }: { value: number }) {
+  const { t } = useT();
   const rounded = Math.round(value);
   const Icon = rounded > 0 ? TrendingUp : rounded < 0 ? TrendingDown : null;
   return (
     <span
       className="ms-auto inline-flex items-center gap-1 text-xs font-medium text-ink-mid"
-      title="מול אותם ימים בחודש הקודם"
+      title={t('dashboard.title')}
     >
       {Icon && <Icon size={ICON.xs} aria-hidden="true" />}
       <span className="num" dir="ltr">{rounded > 0 ? '+' : ''}{rounded}%</span>
-      <span className="sr-only">מול אותם ימים בחודש הקודם</span>
+      <span className="sr-only">{t('dashboard.text')}</span>
     </span>
   );
 }
@@ -90,6 +91,7 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
   spark?: WeeklyPoint[];
   sparkLabel?: string;
 }) {
+  const { t } = useT();
   // T7.2 (Crextio strip): the icon sits flat beside the label — no chip box; the tone lives on
   // the figure alone.
   const toneCls = { done: 'text-done-fg', await: 'text-await-fg', idle: 'text-ink' }[tone];
@@ -120,9 +122,9 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
       {/* One context line, never the same sentence twice: the start slot names the period (or the
           delta's baseline), the end slot exists only when it adds a DIFFERENT fact. */}
       <div className="mt-1 flex items-center justify-between gap-3 text-xs text-ink-muted">
-        <span>{delta != null ? 'מול אותם ימים בחודש הקודם' : context}</span>
-        {(aux ?? (hasSpark ? 'מגמת 8 שבועות' : null)) && (
-          <span className="min-w-0 text-end leading-snug">{aux ?? 'מגמת 8 שבועות'}</span>
+        <span>{delta != null ? t('dashboard.text_2') : context}</span>
+        {(aux ?? (hasSpark ? t('dashboard.text_3') : null)) && (
+          <span className="min-w-0 text-end leading-snug">{aux ?? t('dashboard.text_4')}</span>
         )}
       </div>
     </Card>
@@ -179,13 +181,14 @@ function RoleQueueCard({ queue, total, className = '' }: {
   total: number;
   className?: string;
 }) {
+  const { t } = useT();
   const rows = [
-    { label: 'הזמנות ממתינות לקבלת סחורה (ניר)', count: queue.receiving, to: '/orders?status=open' },
-    { label: 'חשבוניות לבדיקה (מזכירות)', count: queue.invoicesToReview, to: '/invoices?review=received' },
-    { label: 'טיוטות דרישת תשלום (מזכירות)', count: queue.prDrafts, to: '/payment-requests' },
-    { label: 'דרישות לאישור הנהלה', count: queue.prPendingApproval, to: '/payment-requests?status=pending_approval' },
-    { label: 'חריגים בחומרה גבוהה (הנהלה)', count: queue.highExceptions, to: '/exceptions?status=open&severity=high' },
-    { label: 'חשבוניות שטרם הועברו לרו״ח', count: queue.notSentToAccountant, to: '/invoices?export=not_sent' },
+    { label: t('dashboard.text_5'), count: queue.receiving, to: '/orders?status=open' },
+    { label: t('dashboard.text_6'), count: queue.invoicesToReview, to: '/invoices?review=received' },
+    { label: t('dashboard.text_7'), count: queue.prDrafts, to: '/payment-requests' },
+    { label: t('dashboard.text_8'), count: queue.prPendingApproval, to: '/payment-requests?status=pending_approval' },
+    { label: t('dashboard.text_9'), count: queue.highExceptions, to: '/exceptions?status=open&severity=high' },
+    { label: t('dashboard.text_10'), count: queue.notSentToAccountant, to: '/invoices?export=not_sent' },
   ];
   // The reference's dot-matrix rendering, on TRUE data: one dot per open task in the queue,
   // capped at 12 (the number beside carries the exact count; the dots are aria-hidden texture).
@@ -193,16 +196,16 @@ function RoleQueueCard({ queue, total, className = '' }: {
   return (
     <section className={`relative rounded-3xl bg-shell p-4 text-shell-ink shadow-dashboard sm:p-5 ${className}`} aria-labelledby="role-queues-title">
       {/* The reference's corner circle-chip: a round paper-on-dark arrow to the full queue. */}
-      <Link to="/alerts" aria-label="לכל ההתראות והמשימות"
+      <Link to="/alerts" aria-label={t('dashboard.aria_label')}
         className="group absolute end-3 top-3 grid size-11 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
         <span className="grid size-9 place-items-center rounded-full bg-shell-ink/10 text-shell-ink transition-colors group-hover:bg-shell-ink/20">
           <ArrowUpLeft size={ICON.sm} aria-hidden="true" />
         </span>
       </Link>
-      <h2 id="role-queues-title" className="section-title pe-16 text-shell-ink">משימות לפי תפקיד</h2>
+      <h2 id="role-queues-title" className="section-title pe-16 text-shell-ink">{t('dashboard.text_11')}</h2>
       <div className="mt-1.5 flex items-baseline gap-2">
         <span className="kpi-hero num text-shell-ink">{total}</span>
-        <span className="text-xs text-shell-ink-dim">משימות פתוחות בכל התורים</span>
+        <span className="text-xs text-shell-ink-dim">{t('dashboard.text_12')}</span>
       </div>
       <ul className="mt-3 space-y-0.5 text-sm">
         {rows.map((row) => (
@@ -255,10 +258,11 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
   noDateCount: number;
   className?: string;
 }) {
+  const { t } = useT();
   const distinctSuppliers = (rows: DeliveryOrder[]) => new Set(rows.map((o) => o.supplier_id)).size;
   const groups = [
-    { key: 'today', label: 'היום', rows: today, suppliers: distinctSuppliers(today), emptyLabel: 'אין אספקות מתוכננות להיום' },
-    { key: 'tomorrow', label: 'מחר', rows: tomorrow, suppliers: distinctSuppliers(tomorrow), emptyLabel: 'אין אספקות מתוכננות למחר' },
+    { key: 'today', label: t('dashboard.distinctSuppliers'), rows: today, suppliers: distinctSuppliers(today), emptyLabel: t('dashboard.distinctSuppliers_2') },
+    { key: 'tomorrow', label: t('dashboard.distinctSuppliers_3'), rows: tomorrow, suppliers: distinctSuppliers(tomorrow), emptyLabel: t('dashboard.distinctSuppliers_4') },
   ];
   const total = today.length + tomorrow.length;
 
@@ -273,15 +277,15 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
   return (
     <Card as="section" className={className} aria-labelledby="deliveries-title">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-        <h2 id="deliveries-title" className="section-title">אספקות היום ומחר</h2>
-        <p className="text-xs text-ink-muted">ספקים שאמורים לספק סחורה</p>
+        <h2 id="deliveries-title" className="section-title">{t('dashboard.text_13')}</h2>
+        <p className="text-xs text-ink-muted">{t('dashboard.text_14')}</p>
       </div>
       {/* Measured zero for both days → the existing all-clear idiom (the zone never hides). */}
       {total === 0 ? (
         <div className="mt-2 border-t border-line-soft pt-2">
           <div className="flex min-h-11 items-center gap-2 text-sm text-ink-muted">
             <Check size={ICON.sm} className="shrink-0 text-done-fg" aria-hidden="true" />
-            <span>אין אספקות מתוכננות להיום ומחר</span>
+            <span>{t('dashboard.text_15')}</span>
             <span className="badge-idle num ms-auto">0</span>
           </div>
           {noDateHint}
@@ -293,7 +297,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
               <span key={group.key} className="flex items-baseline gap-1.5">
                 <span className="text-xs font-medium text-ink-muted">{group.label}</span>
                 <span className={`kpi-value-compact num ${group.suppliers > 0 ? 'text-ink' : 'text-ink-muted'}`}>{group.suppliers}</span>
-                <span className="text-xs text-ink-muted">{group.suppliers === 1 ? 'ספק' : 'ספקים'}</span>
+                <span className="text-xs text-ink-muted">{group.suppliers === 1 ? t('dashboard.text_16') : t('dashboard.text_17')}</span>
               </span>
             ))}
             <ChevronDown size={ICON.sm} className="ms-auto shrink-0 text-ink-ghost transition-transform group-open:rotate-180" aria-hidden="true" />
@@ -347,9 +351,10 @@ const pad = (n: number) => String(n).padStart(2, '0');
 // the money strip, the trend card and the folded detail card. One role="status" region with a single "טוען"
 // for screen readers — SkeletonRegion is not exported, so we compose the house pattern from Skeleton.
 function DashboardSkeleton() {
+  const { t } = useT();
   return (
     <div role="status" aria-busy="true" className="dashboard-depth">
-      <span className="sr-only">טוען</span>
+      <span className="sr-only">{t('dashboard.text_18')}</span>
 
       {/* header: page title + freshness stamp */}
       <div className="flex items-center justify-between">
@@ -466,7 +471,7 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
-  const { statusLabel } = useT();
+  const { statusLabel, t } = useT();
   const { profile } = useAuth();
   /* The tier mark on the greeting line is owner-only, and the gate is repeated HERE rather than
      left to `PlanBadge`'s own: the component renders null for everyone else, but the line that
@@ -667,7 +672,7 @@ export default function Dashboard() {
     for (const it of poItems) {
       const orderDate = localDateKey(it.order.created_at);
       if (orderDate < monthStart || orderDate > todayISO) continue;
-      const cat = it.product?.category?.name ?? 'ללא קטגוריה';
+      const cat = it.product?.category?.name ?? t('dashboard.text_19');
       byCat.set(cat, (byCat.get(cat) ?? 0) + it.qty * it.unit_price);
     }
     const categories = topCategoriesWithOther([...byCat.entries()].map(([name, total]) => ({ name, total })))
@@ -679,16 +684,16 @@ export default function Dashboard() {
     // ── "דורש טיפול היום", ordered by business importance.
     // Tones use section 6's semantic vocabulary: await=ממתין · alert=דחוף · info=מידע · idle=ניטרלי.
     const attention: AttentionItem[] = [
-      { key: 'inv-approval', label: 'חשבוניות הממתינות לאישור', count: invoicesPendingApproval, tone: 'await', to: '/invoices?review=pending_approval', clearLabel: 'אין חשבוניות לאישור' },
-      { key: 'pr-approval', label: 'דרישות תשלום הממתינות לאישור', count: prPendingApproval, tone: 'await', to: '/payment-requests?status=pending_approval', clearLabel: 'אין דרישות לאישור' },
-      { key: 'pay-overdue', label: 'דרישות תשלום באיחור', count: paymentsOverdue, tone: 'alert', to: '/payment-requests?due=overdue', hint: paymentsOverdue == null ? 'אין מספיק תאריכי פירעון כדי למדוד איחורים' : undefined, clearLabel: 'אין תשלומים באיחור' },
-      { key: 'pay-today', label: 'תשלומים לביצוע היום', count: paymentsDueToday, tone: 'await', to: '/payment-requests?due=today', hint: paymentsDueToday == null ? 'לא הוגדרו תאריכי יעד' : undefined, clearLabel: 'אין תשלומים להיום' },
+      { key: 'inv-approval', label: t('dashboard.text_20'), count: invoicesPendingApproval, tone: 'await', to: '/invoices?review=pending_approval', clearLabel: t('dashboard.text_21') },
+      { key: 'pr-approval', label: t('dashboard.text_22'), count: prPendingApproval, tone: 'await', to: '/payment-requests?status=pending_approval', clearLabel: t('dashboard.text_23') },
+      { key: 'pay-overdue', label: t('dashboard.text_24'), count: paymentsOverdue, tone: 'alert', to: '/payment-requests?due=overdue', hint: paymentsOverdue == null ? t('dashboard.text_25') : undefined, clearLabel: t('dashboard.text_26') },
+      { key: 'pay-today', label: t('dashboard.text_27'), count: paymentsDueToday, tone: 'await', to: '/payment-requests?due=today', hint: paymentsDueToday == null ? t('dashboard.text_28') : undefined, clearLabel: t('dashboard.text_29') },
       { key: 'exceptions', label: 'חריגים פתוחים', count: exceptions.length, tone: 'alert', to: '/exceptions?status=open', hint: highExceptions ? `${highExceptions} בחומרה גבוהה` : undefined, clearLabel: 'אין חריגים פתוחים' },
-      { key: 'credits', label: 'זיכויים פתוחים', count: snapshot.credits.count, amount: openCreditsSum, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
+      { key: 'credits', label: t('dashboard.text_30'), count: snapshot.credits.count, amount: openCreditsSum, tone: 'info', to: '/credits?status=active', clearLabel: t('dashboard.text_31') },
       { key: 'commitments', label: 'התחייבויות רכש פתוחות', count: snapshot.openOrders.count, amount: committedSum, tone: 'idle', to: '/orders?status=open', hint: remainingSum > 0 ? `נותר לקבלה ${fmtMoneyRounded(remainingSum)}` : undefined, clearLabel: 'אין התחייבויות פתוחות' },
-      { key: 'late-delivery', label: 'הזמנות באיחור באספקה', count: lateDeliveries, tone: 'alert', to: '/receiving', clearLabel: 'אין הזמנות באיחור' },
-      { key: 'awaiting-confirmation', label: 'הזמנות ממתינות לאישור ספק', count: awaitingConfirmation, tone: 'await', to: '/orders?status=sent', clearLabel: 'כל ההזמנות אושרו' },
-      { key: 'price-increases', label: 'ספקים שהעלו מחירים (30 יום)', count: priceIncreaseSuppliers, tone: 'await', to: '/prices?increases=1', clearLabel: 'אין שינויי מחירים' },
+      { key: 'late-delivery', label: t('dashboard.text_32'), count: lateDeliveries, tone: 'alert', to: '/receiving', clearLabel: t('dashboard.text_33') },
+      { key: 'awaiting-confirmation', label: t('dashboard.text_34'), count: awaitingConfirmation, tone: 'await', to: '/orders?status=sent', clearLabel: t('dashboard.text_35') },
+      { key: 'price-increases', label: t('dashboard.text_36'), count: priceIncreaseSuppliers, tone: 'await', to: '/prices?increases=1', clearLabel: t('dashboard.text_37') },
     ];
 
     return {
@@ -744,7 +749,7 @@ export default function Dashboard() {
   // browser title — so the greeting never desyncs the wayfinding catalogue. full_name can be ''
   // during offline bootstrap; a nameless greeting falls back to the plain screen name.
   const businessHour = Number(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: BUSINESS_TIME_ZONE }).format(new Date()));
-  const dayGreeting = businessHour < 5 ? 'לילה טוב' : businessHour < 12 ? 'בוקר טוב' : businessHour < 18 ? 'צהריים טובים' : 'ערב טוב';
+  const dayGreeting = businessHour < 5 ? t('dashboard.text_38') : businessHour < 12 ? t('dashboard.text_39') : businessHour < 18 ? t('dashboard.text_40') : t('dashboard.text_41');
   const firstName = profile?.full_name?.trim().split(/\s+/)[0] ?? '';
   const pageTitle = firstName ? `${dayGreeting}, ${firstName}` : 'מרכז הבקרה';
   const taskTotal = data ? Object.values(data.queue).reduce((sum, count) => sum + count, 0) : 0;
@@ -778,7 +783,7 @@ export default function Dashboard() {
   )).join('; ')}`;
   const categoryEmptyMessage = data?.categories.length
     ? `נמדד רכש בסכום ${fmtMoneyExact(categoryTotal)}; אין תמהיל חיובי להצגה`
-    : 'אין רכש החודש';
+    : t('dashboard.text_42');
   const categoriesAria = data ? `הוצאות לפי קטגוריה: ${categoryTotal > 0
     ? data.categories.map((category) => `${category.name} ${fmtMoneyExact(category.total)}, ${Math.round((category.total / categoryTotal) * 100)} אחוז`).join(', ')
     : categoryEmptyMessage}` : '';
@@ -812,7 +817,7 @@ export default function Dashboard() {
       <PageHeader title={<span className="font-normal">{pageTitle}</span>}
         meta={firstName
           ? <span className="flex flex-wrap items-center gap-2">
-            מרכז הבקרה
+            {t('dashboard.text_43')}
             {/* DESKTOP ONLY, and the first build without this printed the chip TWICE on a phone
                 dashboard — once on the header's subtitle line and again here, 120px apart. The
                 header slot is the PHONE's ruling and it holds on every screen; this line is the
@@ -832,7 +837,7 @@ export default function Dashboard() {
             )}
           </span>
           <button className="btn-ghost btn-icon" onClick={() => void refetch()} disabled={fetching}
-            aria-label="רענון נתוני מרכז הבקרה" title="רענון">
+            aria-label={t('dashboard.aria_label_2')} title={t('dashboard.title_2')}>
               <RefreshCw size={ICON.sm} aria-hidden="true" className={fetching ? 'animate-spin ' : ''} />
           </button>
         </div>} />
@@ -845,7 +850,7 @@ export default function Dashboard() {
       {error && (
         <Note tone="alert" className="flex items-center justify-between gap-3">
           <span>{error}</span>
-          <button className="btn-ghost min-h-11 shrink-0 whitespace-nowrap" onClick={() => void refetch()}>נסה שוב</button>
+          <button className="btn-ghost min-h-11 shrink-0 whitespace-nowrap" onClick={() => void refetch()}>{t('dashboard.refetch')}</button>
         </Note>
       )}
 
@@ -858,10 +863,10 @@ export default function Dashboard() {
       {data?.firstRun && profile?.role === 'owner' && (
         <Note tone="info" className="flex flex-wrap items-center justify-between gap-3">
           <span className="min-w-0 flex-1">
-            עדיין לא הוגדרו ספקים, ולכן המסכים שלמטה ריקים. אשף ההקמה ממלא קטגוריות, ספקים, מוצרים
-            ומחירון — ידנית או מקובץ Excel קיים — ואפשר לעצור ולהמשיך בכל שלב.
+            {t('dashboard.text_44')}
+            {t('dashboard.text_45')}
           </span>
-          <Link to="/onboarding" className="btn-primary min-h-11 shrink-0 whitespace-nowrap">פתיחת אשף ההקמה</Link>
+          <Link to="/onboarding" className="btn-primary min-h-11 shrink-0 whitespace-nowrap">{t('dashboard.text_46')}</Link>
         </Note>
       )}
 
@@ -876,7 +881,7 @@ export default function Dashboard() {
           order (attention h2 first, deliveries h2 second), so placement is CSS `order` only. */}
       {data && (
         <div className="dash-enter flex flex-col gap-5 lg:grid lg:grid-cols-12 lg:gap-6">
-          <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול"
+          <AttentionZone items={data.attention} totalLabel={t('dashboard.totalLabel')}
             className="lg:order-2 lg:col-span-6 [--dash-step-mobile:1] [--dash-step:1]" />
 
           <DeliveriesZone today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount}
@@ -888,16 +893,16 @@ export default function Dashboard() {
               tiles, on desktop they sit as the reference's stat-card row. Each BandStat is its
               own card now. */}
           <div className="order-first grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 lg:order-1 lg:col-span-12 [--dash-step-mobile:0] [--dash-step:0]">
-            <BandStat title="יתרת חשבוניות פתוחות" value={data.money.openBalance} tone="await" to="/invoices?pay=unpaid"
-              icon={ReceiptText} context="נכון לעכשיו"
+            <BandStat title={t('dashboard.title_3')} value={data.money.openBalance} tone="await" to="/invoices?pay=unpaid"
+              icon={ReceiptText} context={t('dashboard.context')}
               aux={data.money.openBalance == null ? 'אין נתונים זמינים' : `${data.money.openInvoiceCount} חשבוניות פתוחות`} />
             <BandStat title="שולם לספקים החודש" value={data.money.paidMonth} tone="done" to={`/payments?month=${data.money.monthKey}`}
-              icon={Banknote} context="מתחילת החודש" delta={data.money.paidDelta}
-              spark={data.paidWeekly} sparkLabel="מגמת תשלומים לספקים בשמונה השבועות האחרונים" />
-            <BandStat title="נרכש החודש" value={data.money.purchasedMonth} to="/orders?status=all"
-              icon={ShoppingCart} context="מתחילת החודש" delta={data.money.purchasedDelta}
+              icon={Banknote} context={t('dashboard.context_2')} delta={data.money.paidDelta}
+              spark={data.paidWeekly} sparkLabel={t('dashboard.sparkLabel')} />
+            <BandStat title={t('dashboard.title_4')} value={data.money.purchasedMonth} to="/orders?status=all"
+              icon={ShoppingCart} context={t('dashboard.context_3')} delta={data.money.purchasedDelta}
               aux={data.savings != null ? `חיסכון משוער ${fmtMoneyRounded(data.savings)}${data.savingsPct != null ? ` · ${data.savingsPct.toFixed(0)}%` : ''}` : undefined}
-              spark={data.weekly} sparkLabel="מגמת רכש בשמונה השבועות האחרונים" />
+              spark={data.weekly} sparkLabel={t('dashboard.sparkLabel_2')} />
           </div>
 
           <RoleQueueCard queue={data.queue} total={taskTotal}
@@ -908,7 +913,7 @@ export default function Dashboard() {
               board heading still names the region; separation inside it is card + spacing, not
               hairlines. */}
           <section className="lg:order-5 lg:col-span-12 [--dash-step-mobile:4] [--dash-step:4]" aria-labelledby="trends-title">
-            <h2 id="trends-title" className="section-title">מגמות</h2>
+            <h2 id="trends-title" className="section-title">{t('dashboard.text_47')}</h2>
 
             <div className="mt-3 grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
               <Card as="section" className="lg:col-span-5" aria-labelledby="monthly-trend-title">
@@ -918,13 +923,13 @@ export default function Dashboard() {
                     monthly claim survives the on-bar labels' removal. */}
                 <div className="flex min-h-8 flex-wrap items-start justify-between gap-x-4 gap-y-2">
                   <div>
-                    <h3 id="monthly-trend-title" className="text-sm font-semibold text-ink-body">הוצאות רכש לפי חודש</h3>
-                    <p className="text-xs text-ink-muted">חשבוניות שהתקבלו בארבעת החודשים האחרונים</p>
+                    <h3 id="monthly-trend-title" className="text-sm font-semibold text-ink-body">{t('dashboard.text_48')}</h3>
+                    <p className="text-xs text-ink-muted">{t('dashboard.text_49')}</p>
                   </div>
                   {data.headline.current != null && (
                     <div className="flex items-start text-xs">
                       <div className="pe-3 text-end">
-                        <div className="text-ink-muted">החודש</div>
+                        <div className="text-ink-muted">{t('dashboard.text_50')}</div>
                         <div className="flex items-baseline gap-1.5">
                           <span className="num text-sm font-semibold text-ink">{glanceMoney(data.headline.current)}</span>
                           {/* Neutral ink, same reasoning as DeltaChip above: this is the month's
@@ -940,7 +945,7 @@ export default function Dashboard() {
                       </div>
                       {data.headline.previous != null && (
                         <div className="border-s border-line-soft ps-3 text-end">
-                          <div className="text-ink-muted">חודש קודם</div>
+                          <div className="text-ink-muted">{t('dashboard.text_51')}</div>
                           <div className="num text-sm font-semibold text-ink-mid">{glanceMoney(data.headline.previous)}</div>
                         </div>
                       )}
@@ -951,12 +956,12 @@ export default function Dashboard() {
                     neighboring charts in one color read as one chart (owner, T7.3c). */}
                 <SpendBarChart
                   points={data.monthly.map((point) => ({ key: point.month, label: point.label, total: point.total }))}
-                  ariaLabel={monthlyAria} emptyMessage="אין נתוני חשבוניות לתקופה" />
+                  ariaLabel={monthlyAria} emptyMessage={t('dashboard.emptyMessage')} />
               </Card>
 
               <Card as="section" className="lg:col-span-4" aria-labelledby="category-trend-title">
-                <h3 id="category-trend-title" className="text-sm font-semibold text-ink-body">תמהיל הרכש החודש</h3>
-                <p className="text-xs text-ink-muted">ארבע הקטגוריות הגדולות וכל היתר</p>
+                <h3 id="category-trend-title" className="text-sm font-semibold text-ink-body">{t('dashboard.text_52')}</h3>
+                <p className="text-xs text-ink-muted">{t('dashboard.text_53')}</p>
                 <CategoryDonut slices={data.categories} total={categoryTotal} ariaLabel={categoriesAria} emptyMessage={categoryEmptyMessage} />
               </Card>
 
@@ -973,11 +978,11 @@ export default function Dashboard() {
                   to render. It gets a two-segment split bar, NOT the ring back: the objection
                   above was never "no graphic", it was "not a percentage of a window we chose". */}
               <Card as="section" className="lg:col-span-3" aria-labelledby="due-window-title">
-                <h3 id="due-window-title" className="text-sm font-semibold text-ink-body">לתשלום בשבוע הקרוב</h3>
-                <p className="text-xs text-ink-muted">דרישות תשלום פעילות, כולל מה שכבר באיחור</p>
+                <h3 id="due-window-title" className="text-sm font-semibold text-ink-body">{t('dashboard.text_54')}</h3>
+                <p className="text-xs text-ink-muted">{t('dashboard.text_55')}</p>
                 {data.dueWindow == null ? (
                   <p className="mt-4 flex min-h-24 items-center text-sm text-ink-muted sm:min-h-40">
-                    אין דרישות תשלום פעילות עם תאריך פירעון
+                    {t('dashboard.text_56')}
                   </p>
                 ) : (
                   <div className="mt-2 flex min-h-32 flex-col justify-center gap-4 sm:min-h-40">
@@ -1009,15 +1014,15 @@ export default function Dashboard() {
                       </p>
                     </div>
                     <Link className="link self-start text-sm" to="/payment-requests?due=soon">
-                      כל דרישות התשלום בחלון
+                      {t('dashboard.text_57')}
                     </Link>
                   </div>
                 )}
               </Card>
 
               <Card as="section" className="lg:col-span-12" aria-labelledby="weekly-trend-title">
-                <h3 id="weekly-trend-title" className="text-sm font-semibold text-ink-body">רכש מול תשלומים</h3>
-                <p className="text-xs text-ink-muted">שמונה השבועות האחרונים</p>
+                <h3 id="weekly-trend-title" className="text-sm font-semibold text-ink-body">{t('dashboard.text_58')}</h3>
+                <p className="text-xs text-ink-muted">{t('dashboard.text_59')}</p>
                 {/* The series names ride the ends of their own lines now — no legend row. The
                     zero policy keeps the lines continuous, so a window with NO activity at all is
                     passed as [] to keep the honest empty state (two flat zero lines are not data). */}
@@ -1026,8 +1031,8 @@ export default function Dashboard() {
                     lines, which is to say the colour contributed nothing and the dash carried the
                     whole distinction. Owner decision 19.08.2026: spend both carriers. */}
                 <ComparisonLineChart points={weeklyHasActivity ? weeklyComparison : []} xKey="week"
-                  series={comparisonSeries({ key: 'purchases', name: 'רכש' }, { key: 'payments', name: 'תשלומים' })}
-                  ariaLabel={weeklyAria} emptyMessage="אין רכש או תשלומים בשמונת השבועות האחרונים" />
+                  series={comparisonSeries({ key: 'purchases', name: t('dashboard.comparisonSeries') }, { key: 'payments', name: t('dashboard.comparisonSeries_2') })}
+                  ariaLabel={weeklyAria} emptyMessage={t('dashboard.emptyMessage_2')} />
               </Card>
             </div>
           </section>
@@ -1037,13 +1042,13 @@ export default function Dashboard() {
               reads as a tile of the reference grid; the role queues left this fold for the dark
               card above, so nothing here is said twice. */}
           <section className="lg:order-6 lg:col-span-12 [--dash-step-mobile:5] [--dash-step:5]" aria-labelledby="operations-title">
-            <h2 id="operations-title" className="section-title">תמונת מצב תפעולית</h2>
+            <h2 id="operations-title" className="section-title">{t('dashboard.text_60')}</h2>
             <Card className="mt-3">
-              <OperationsDisclosure title="חריגים פתוחים" count={data.exceptionCount}
+              <OperationsDisclosure title={t('dashboard.title_5')} count={data.exceptionCount}
                 summary={data.queue.highExceptions ? `${data.queue.highExceptions} בחומרה גבוהה` : undefined}
-                empty="אין חריגים פתוחים כרגע">
+                empty={t('dashboard.empty')}>
                 <div className="flex justify-end">
-                  <Link to="/exceptions?status=open" className="btn-ghost min-h-11 text-xs">לכל החריגים <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
+                  <Link to="/exceptions?status=open" className="btn-ghost min-h-11 text-xs">{t('dashboard.text_61')} <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
                 </div>
                 <ul className="divide-y divide-line-soft">
                   {data.exceptions.map((exception) => (
@@ -1079,11 +1084,11 @@ export default function Dashboard() {
                 )}
               </OperationsDisclosure>
 
-              <OperationsDisclosure title="מוצרים שהתייקרו לאחרונה" count={data.priceIncreaseCount}
+              <OperationsDisclosure title={t('dashboard.title_6')} count={data.priceIncreaseCount}
                 summary={data.priceIncreases[0] ? `עלייה מרבית ${data.priceIncreases[0].pct.toFixed(1)}%` : undefined}
-                empty="אין התייקרויות אחרונות">
+                empty={t('dashboard.empty_2')}>
                 <div className="flex justify-end">
-                  <Link to="/prices?increases=1" className="btn-ghost min-h-11 text-xs">לכל המחירונים <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
+                  <Link to="/prices?increases=1" className="btn-ghost min-h-11 text-xs">{t('dashboard.text_62')} <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
                 </div>
                 <ul className="divide-y divide-line-soft">
                   {data.priceIncreases.map((price, index) => (
@@ -1094,7 +1099,7 @@ export default function Dashboard() {
                           <span className="ms-2 text-xs text-ink-muted">{price.supplier.name}</span>
                         </span>
                         <span className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 sm:justify-start">
-                          <span className="text-xs text-ink-muted">מ־<span className="num">{fmtMoneyExact(price.previous_price)}</span> ל־<span className="num">{fmtMoneyExact(price.current_price)}</span></span>
+                          <span className="text-xs text-ink-muted">{t('dashboard.fmtMoneyExact')}<span className="num">{fmtMoneyExact(price.previous_price)}</span> {t('dashboard.fmtMoneyExact_2')}<span className="num">{fmtMoneyExact(price.current_price)}</span></span>
                           {/* One vocabulary per element: a price that rose is a DIRECTION, so the
                               figure and its arrow both speak trend-*. The span used to be alert-fg
                               with a trend-up arrow inside it — two languages in one number. */}
@@ -1108,11 +1113,11 @@ export default function Dashboard() {
                 </ul>
               </OperationsDisclosure>
 
-              <OperationsDisclosure title="ספקים עם יתרה פתוחה" count={data.openSupplierCount}
+              <OperationsDisclosure title={t('dashboard.title_7')} count={data.openSupplierCount}
                 summary={data.topBalances[0] ? `${data.topBalances[0].name} · ${fmtMoneyExact(data.topBalances[0].balance)}` : undefined}
-                empty="אין יתרות פתוחות">
+                empty={t('dashboard.empty_3')}>
                 <div className="flex justify-end">
-                  <Link to="/suppliers?balance=open" className="btn-ghost min-h-11 text-xs">לכל הספקים <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
+                  <Link to="/suppliers?balance=open" className="btn-ghost min-h-11 text-xs">{t('dashboard.text_63')} <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
                 </div>
                 <ul className="divide-y divide-line-soft">
                   {data.topBalances.map((balance) => (
