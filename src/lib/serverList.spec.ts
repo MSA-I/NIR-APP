@@ -570,7 +570,7 @@ describe('searchSupplierIds — the two-step cross-table search', () => {
 
     expect(failure).toBeInstanceOf(ServerListError);
     expect((failure as ServerListError).code).toBe('request_failed');
-    expect((failure as ServerListError).hebrew).toBe('אין לך הרשאה לבצע את הפעולה הזו.');
+    expect(toHebrewError(failure as ServerListError)).toBe('אין לך הרשאה לבצע את הפעולה הזו.');
   });
 
   it('composes the screen columns with the supplier arm when there are ids', async () => {
@@ -690,10 +690,11 @@ describe('fetchServerList — errors', () => {
     const error = failure as ServerListError;
     expect(error.code).toBe('request_failed');
     expect(error.status).toBe(403);
-    expect(error.hebrew).toBe('אין לך הרשאה לבצע את הפעולה הזו.');
-    expect(error.hebrew).not.toContain('permission denied');
-    // `useQuery` maps whatever it catches through `toHebrewError` again. Keeping `message` raw is
-    // what stops that second pass from collapsing a specific sentence into the generic fallback.
+    expect(toHebrewError(error)).toBe('אין לך הרשאה לבצע את הפעולה הזו.');
+    expect(toHebrewError(error)).not.toContain('permission denied');
+    // `useQuery` resolves whatever it catches. Keeping `message` raw is what stops that pass from
+    // collapsing a specific sentence into the generic fallback — which is the whole reason the
+    // pre-resolved `.hebrew` field was removed rather than translated.
     expect(toHebrewError(error)).toBe('אין לך הרשאה לבצע את הפעולה הזו.');
   });
 
@@ -704,12 +705,12 @@ describe('fetchServerList — errors', () => {
 
     const error = failure as ServerListError;
     expect(error.code).toBe('count_unavailable');
-    expect(error.hebrew).toBe('לא ניתן לאמת כרגע את מספר הרשומות ברשימה. רענן את המסך ונסה שוב.');
+    expect(toHebrewError(error)).toBe('לא ניתן לאמת כרגע את מספר הרשומות ברשימה. רענן את המסך ונסה שוב.');
     // Named mapping, not the FALLBACK sentence — and the raw message stays mappable upstream.
-    expect(error.hebrew).not.toContain('פנה לתמיכה');
-    expect(toHebrewError(error)).toBe(error.hebrew);
+    expect(toHebrewError(error)).not.toContain('פנה לתמיכה');
+    expect(toHebrewError(error)).toBe(toHebrewError(new Error(error.message)));
     // The sentence says "unverified", never "empty": a 0 here would be a claim about the business.
-    expect(error.hebrew).not.toContain('0');
+    expect(toHebrewError(error)).not.toContain('0');
   });
 
   it('never lets a Postgres string reach the reader', async () => {
@@ -720,7 +721,7 @@ describe('fetchServerList — errors', () => {
 
     const failure = await fetchServerList<Row>(client, request()).catch((e: unknown) => e);
 
-    const hebrew = (failure as ServerListError).hebrew;
+    const hebrew = toHebrewError(failure as ServerListError);
     expect(hebrew).toBe('חסר שדה חובה.');
     expect(hebrew).not.toMatch(/[a-z]{4,}/);
   });

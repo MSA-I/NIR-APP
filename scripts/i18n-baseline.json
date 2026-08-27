@@ -105,7 +105,6 @@
     "src/lib/serverList.ts": 2,
     "src/lib/share.ts": 14,
     "src/lib/supplierLogChanges.ts": 25,
-    "src/lib/tusUpload.ts": 6,
     "src/lib/webhooks.ts": 58,
     "src/lib/whatsappConnection.ts": 8,
     "src/main.tsx": 3,

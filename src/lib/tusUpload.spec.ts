@@ -2,6 +2,7 @@
 // timing, and the exactly-one renew-then-resume on a 403 PATCH. tus-js-client is mocked
 // at module level and supabase is a local stub — zero network calls anywhere.
 
+import { toHebrewError } from './errors';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface FakeUploadOptions {
@@ -192,7 +193,7 @@ describe('reservation renewal timing (price-document flow)', () => {
 });
 
 describe('403 during PATCH — exactly one renew-then-resume', () => {
-  it('renews once, resumes, and surfaces a translated Hebrew error on the second 403', async () => {
+  it('renews once, resumes, and surfaces the refusal condition on the second 403', async () => {
     const { handle, upload } = await startUpload({
       renewal: { documentId: 'doc-1', expiresAt: inMinutes(10) },
     });
@@ -205,19 +206,21 @@ describe('403 during PATCH — exactly one renew-then-resume', () => {
 
     upload.options.onError?.(detailedError(403, 'PATCH'));
     await expect(handle.done).rejects.toBeInstanceOf(TusUploadError);
-    await expect(handle.done).rejects.toThrow(/השרת דחה את ההעלאה/);
+    await expect(handle.done).rejects.toThrow(/tus_upload_forbidden/);
+    // The condition is half the contract; the other half is that it still has a sentence.
+    expect(toHebrewError(new Error('tus_upload_forbidden'))).toMatch(/השרת דחה את ההעלאה/);
     // Still exactly one renewal — the second 403 surfaces instead of looping.
     expect(supabaseState.rpc).toHaveBeenCalledTimes(1);
     expect(upload.started).toBe(2);
   });
 
-  it('surfaces the Hebrew error without resuming when the renew RPC itself fails', async () => {
+  it('surfaces the refusal condition without resuming when the renew RPC itself fails', async () => {
     supabaseState.rpc.mockResolvedValue({ data: null, error: { message: 'reservation_expired' } });
     const { handle, upload } = await startUpload({
       renewal: { documentId: 'doc-1', expiresAt: inMinutes(10) },
     });
     upload.options.onError?.(detailedError(403, 'PATCH'));
-    await expect(handle.done).rejects.toThrow(/השרת דחה את ההעלאה/);
+    await expect(handle.done).rejects.toThrow(/tus_upload_forbidden/);
     expect(upload.started).toBe(1);
   });
 
@@ -232,14 +235,14 @@ describe('403 during PATCH — exactly one renew-then-resume', () => {
       renewal: { documentId: 'doc-1', expiresAt: inMinutes(10) },
     });
     upload.options.onError?.(detailedError(403, 'PATCH'));
-    await expect(handle.done).rejects.toThrow(/המסמך כבר נרשם במערכת — אין להעלות אותו שוב/);
+    await expect(handle.done).rejects.toThrow(/document_upload_reservation_registered/);
     expect(upload.started).toBe(1);
   });
 
   it('does not renew for a 403 outside PATCH or without a renewal option', async () => {
     const creation = await startUpload({ renewal: { documentId: 'doc-1', expiresAt: inMinutes(10) } });
     creation.upload.options.onError?.(detailedError(403, 'POST'));
-    await expect(creation.handle.done).rejects.toThrow(/השרת דחה את ההעלאה/);
+    await expect(creation.handle.done).rejects.toThrow(/tus_upload_forbidden/);
     expect(supabaseState.rpc).not.toHaveBeenCalled();
 
     tusState.instances.length = 0;

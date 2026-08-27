@@ -193,6 +193,12 @@ export const en: Dictionary = {
     assistant_read_only_organization: 'The organisation is read-only, so this cannot be done.',
     assistant_invalid_request: 'That assistant request is not valid.',
     assistant_persistence_failed: 'The answer was not saved, so the run did not complete. You can try again.',
+    tus_upload_forbidden: 'The server refused the upload: the file type is not permitted, the path is unavailable, or the upload reservation expired. Please try again.',
+    tus_upload_conflict: 'A file already exists at that storage path. Refresh the screen and try again.',
+    tus_upload_too_large: 'That file is too large to upload.',
+    document_upload_reservation_registered: 'This document is already registered — do not upload it again.',
+    document_upload_reservation_lifetime_exceeded: 'The upload window has closed. Start the upload again.',
+    document_upload_reservation_unknown: 'That upload reservation no longer exists. Start the upload again.',
   },
 
   status: {

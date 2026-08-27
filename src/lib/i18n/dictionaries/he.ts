@@ -197,6 +197,12 @@ export const he = {
     assistant_read_only_organization: 'הארגון במצב קריאה בלבד, ולכן אי אפשר לבצע את הפעולה.',
     assistant_invalid_request: 'בקשת העוזר אינה תקינה.',
     assistant_persistence_failed: 'התשובה לא נשמרה, ולכן הריצה לא הושלמה. אפשר לנסות שוב.',
+    tus_upload_forbidden: 'השרת דחה את ההעלאה: סוג הקובץ אינו מורשה, הנתיב אינו זמין או שהקצאת ההעלאה פגה. יש לנסות שוב.',
+    tus_upload_conflict: 'קובץ כבר קיים בנתיב הזה באחסון. יש לרענן את המסך ולנסות שוב.',
+    tus_upload_too_large: 'הקובץ גדול מדי להעלאה.',
+    document_upload_reservation_registered: 'המסמך כבר נרשם במערכת — אין להעלות אותו שוב.',
+    document_upload_reservation_lifetime_exceeded: 'חלון ההעלאה הסתיים. יש להתחיל את ההעלאה מחדש.',
+    document_upload_reservation_unknown: 'הקצאת ההעלאה אינה קיימת עוד. יש להתחיל את ההעלאה מחדש.',
   },
 
   status: {

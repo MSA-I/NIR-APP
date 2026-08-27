@@ -10,7 +10,7 @@
  *   node scripts/gate-i18n.mjs dictionaries -- he and en agree, and neither ships a blank
  *   node scripts/gate-i18n.mjs abandon      -- the operator-console skip is recorded, not forgotten
  *   node scripts/gate-i18n.mjs zero         -- extraction is FINISHED: nothing left but the exceptions
- *   node scripts/gate-i18n.mjs legacy-errors -- how many screens still show failures in Hebrew only
+ *   node scripts/gate-i18n.mjs legacy-errors -- how many PRODUCT sites still show failures in Hebrew only
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -25,6 +25,7 @@ const EXTRACTED = [
   'src/lib/useDocumentProcessing.ts',
   'src/lib/errors.ts',
   'src/lib/assistant/errorCodes.ts',
+  'src/lib/tusUpload.ts',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */
@@ -135,7 +136,7 @@ function zero() {
  * reason the Hebrew line count is pinned — a migration with no ratchet stops at whatever fraction
  * the day ran out on, and nobody notices which fraction that was.
  */
-const LEGACY_ERROR_CALLS = 31;
+const LEGACY_ERROR_CALLS = 17;
 
 function legacyErrors() {
   const files = [];
@@ -153,6 +154,10 @@ function legacyErrors() {
   for (const file of files) {
     const relative = path.relative(root, file).split(path.sep).join('/');
     if (relative === 'src/lib/errors.ts') continue; // the definition itself
+    // Specs call it deliberately: they pin the Hebrew wording, and a test that read the sentence
+    // out of the dictionary would pass against a broken dictionary. Counting them here would make
+    // the ratchet punish exactly the assertions that make the migration safe.
+    if (/\.spec\.tsx?$/.test(relative)) continue;
     const hits = (readFileSync(file, 'utf8').match(/\btoHebrewError\(/g) ?? []).length;
     if (hits) { found += hits; perFile.push([relative, hits]); }
   }

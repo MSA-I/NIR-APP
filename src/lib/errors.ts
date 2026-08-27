@@ -385,6 +385,16 @@ const PATTERNS: [RegExp, string][] = [
     'timeout'],
   [/payload too large|exceeded the maximum allowed size/i,
     'payload'],
+  // The upload surface's own conditions. The first three are synthetic codes `tusUpload.ts` raises
+  // for HTTP verdicts that carry no message of their own; the last three are the renewal RPC's real
+  // error strings, which used to be matched by a duplicate table inside that file. One vocabulary,
+  // one place — a second table is a second answer waiting to disagree with this one.
+  [/tus_upload_forbidden/i, 'tus_upload_forbidden'],
+  [/tus_upload_conflict/i, 'tus_upload_conflict'],
+  [/tus_upload_too_large/i, 'tus_upload_too_large'],
+  [/document_upload_reservation_registered/i, 'document_upload_reservation_registered'],
+  [/document_upload_reservation_lifetime_exceeded/i, 'document_upload_reservation_lifetime_exceeded'],
+  [/document_upload_reservation_unknown/i, 'document_upload_reservation_unknown'],
 ];
 
 const FALLBACK = 'fallback';

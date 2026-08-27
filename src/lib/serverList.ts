@@ -37,11 +37,12 @@
  *    reports "no duplicates" exactly when there are some. Migration `0053` answers it properly with
  *    the computed fields `invoice_has_duplicate` and `invoice_without_order`, which are ordinary
  *    boolean predicates here; what stays uninvitable is the client-side computation.
- * 5. **Every failure carries Hebrew.** `ServerListError.hebrew` is `toHebrewError` applied once, at
- *    the throw. See the note on `ServerListError` for why `message` deliberately stays raw.
+ * 5. **Every failure carries its RAW condition.** `ServerListError.message` is the string the
+ *    server actually sent. It used to also carry a pre-resolved Hebrew sentence in a `.hebrew`
+ *    field; nothing in the product ever read it, and resolving at the throw would have fixed the
+ *    language before anyone looked. Callers resolve with `useT().errorText`.
  */
 
-import { toHebrewError } from './errors';
 import { readExactCount } from './queryResult';
 
 /* ------------------------------------------------------------------ predicates */
@@ -190,7 +191,6 @@ export type ServerListErrorCode =
  */
 export class ServerListError extends Error {
   readonly code: ServerListErrorCode;
-  readonly hebrew: string;
   readonly status: number | null;
 
   constructor(code: ServerListErrorCode, raw: string, status: number | null = null) {
@@ -198,7 +198,6 @@ export class ServerListError extends Error {
     this.name = 'ServerListError';
     this.code = code;
     this.status = status;
-    this.hebrew = toHebrewError(raw);
   }
 }
 
