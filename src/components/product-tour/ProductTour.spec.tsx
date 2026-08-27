@@ -53,6 +53,24 @@ beforeEach(() => {
 });
 
 describe('OwnerProductTour', () => {
+  it('matches the highlighted element corner radii instead of drawing a fixed rounded box', async () => {
+    renderTour({
+      children: <>
+        <button data-tour-anchor="dashboard-heading" style={{ borderRadius: '9999px' }}>מרכז הבקרה</button>
+        <div data-tour-first-run="true" />
+      </>,
+    });
+    const spotlight = await waitFor(() => {
+      const element = document.querySelector<HTMLElement>('.product-tour-spotlight');
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    expect(spotlight.style.getPropertyValue('--product-tour-radius-start-start')).toBe('10007px');
+    expect(spotlight.style.getPropertyValue('--product-tour-radius-start-end')).toBe('10007px');
+    expect(spotlight.style.getPropertyValue('--product-tour-radius-end-end')).toBe('10007px');
+    expect(spotlight.style.getPropertyValue('--product-tour-radius-end-start')).toBe('10007px');
+  });
+
   it('auto-starts only for an owner on a real first-run dashboard', async () => {
     renderTour();
     expect(await screen.findByRole('dialog', { name: /מרכז הבקרה/ })).toBeInTheDocument();

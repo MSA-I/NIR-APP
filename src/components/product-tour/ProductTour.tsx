@@ -32,6 +32,17 @@ const viewportHeight = () => document.documentElement.clientHeight || window.inn
 
 type TourProfile = { id: string; org_id: string; role: ActiveRole };
 
+interface SpotlightRadii {
+  startStart: string;
+  startEnd: string;
+  endEnd: string;
+  endStart: string;
+}
+
+const DEFAULT_SPOTLIGHT_RADII: SpotlightRadii = {
+  startStart: '1rem', startEnd: '1rem', endEnd: '1rem', endStart: '1rem',
+};
+
 export interface OwnerProductTourHandle {
   start: () => void;
 }
@@ -75,6 +86,45 @@ function paddedRect(rect: DOMRect): DOMRect {
   return new DOMRect(left, top, Math.max(0, right - left), Math.max(0, bottom - top));
 }
 
+function expandCornerRadius(value: string): string {
+  const normalized = value.trim();
+  if (!normalized) return '1rem';
+  return normalized.replace(/(-?\d+(?:\.\d+)?)px/g, (_, raw: string) => (
+    `${Math.max(0, Number(raw) + SPOTLIGHT_GAP)}px`
+  ));
+}
+
+function spotlightRadii(target: HTMLElement): SpotlightRadii {
+  const style = window.getComputedStyle(target);
+  const rtl = style.direction === 'rtl' || document.documentElement.dir === 'rtl';
+  const shorthandRadius = style.borderRadius.trim();
+  const logicalOrPhysical = (logical: string, physical: string) => {
+    const logicalValue = style.getPropertyValue(logical).trim();
+    const physicalValue = style.getPropertyValue(physical).trim();
+    // jsdom and older Chromium builds expose unsupported logical corners as the string "0";
+    // prefer the resolved physical corner when it carries the actual shape.
+    return physicalValue && physicalValue !== '0px' && physicalValue !== '0'
+      ? physicalValue
+      : logicalValue && logicalValue !== '0px' && logicalValue !== '0'
+        ? logicalValue
+        : shorthandRadius || logicalValue || physicalValue;
+  };
+  return {
+    startStart: expandCornerRadius(logicalOrPhysical(
+      'border-start-start-radius', rtl ? 'border-top-right-radius' : 'border-top-left-radius',
+    )),
+    startEnd: expandCornerRadius(logicalOrPhysical(
+      'border-start-end-radius', rtl ? 'border-top-left-radius' : 'border-top-right-radius',
+    )),
+    endEnd: expandCornerRadius(logicalOrPhysical(
+      'border-end-end-radius', rtl ? 'border-bottom-left-radius' : 'border-bottom-right-radius',
+    )),
+    endStart: expandCornerRadius(logicalOrPhysical(
+      'border-end-start-radius', rtl ? 'border-bottom-right-radius' : 'border-bottom-left-radius',
+    )),
+  };
+}
+
 function logicalInsetStart(left: number, width: number): number {
   return document.documentElement.dir === 'rtl' ? viewportWidth() - left - width : left;
 }
@@ -102,6 +152,7 @@ export const OwnerProductTour = forwardRef<OwnerProductTourHandle, OwnerProductT
     const [hydratedIdentity, setHydratedIdentity] = useState<string | null>(() => identityKey);
     const [target, setTarget] = useState<HTMLElement | null>(null);
     const [rect, setRect] = useState<DOMRect | null>(null);
+    const [radii, setRadii] = useState<SpotlightRadii>(DEFAULT_SPOTLIGHT_RADII);
     const [measuredStepId, setMeasuredStepId] = useState<string | null>(null);
     const [targetMissing, setTargetMissing] = useState(false);
     const nextButtonRef = useRef<HTMLButtonElement>(null);
@@ -178,6 +229,7 @@ export const OwnerProductTour = forwardRef<OwnerProductTourHandle, OwnerProductT
       const found = findTarget(step.anchor);
       setTarget(found);
       setRect(found ? paddedRect(found.getBoundingClientRect()) : null);
+      setRadii(found ? spotlightRadii(found) : DEFAULT_SPOTLIGHT_RADII);
       setMeasuredStepId(found ? step.id : null);
       setTargetMissing(!found);
       if (found) revealTarget(found);
@@ -205,6 +257,7 @@ export const OwnerProductTour = forwardRef<OwnerProductTourHandle, OwnerProductT
         setTarget(found);
         revealTarget(found);
         setRect(paddedRect(found.getBoundingClientRect()));
+        setRadii(spotlightRadii(found));
         setMeasuredStepId(step.id);
         setTargetMissing(false);
         observer.disconnect();
@@ -225,7 +278,10 @@ export const OwnerProductTour = forwardRef<OwnerProductTourHandle, OwnerProductT
 
     useEffect(() => {
       if (!active || !target) return;
-      const measure = () => setRect(paddedRect(target.getBoundingClientRect()));
+      const measure = () => {
+        setRect(paddedRect(target.getBoundingClientRect()));
+        setRadii(spotlightRadii(target));
+      };
       const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
       resize?.observe(target);
       window.addEventListener('resize', measure);
@@ -298,7 +354,16 @@ export const OwnerProductTour = forwardRef<OwnerProductTourHandle, OwnerProductT
         <div className="product-tour-shield" style={{ insetBlockStart: rect.bottom, insetInlineStart: 0, width: '100vw', height: Math.max(0, viewportHeight() - rect.bottom) }} />
         <div className="product-tour-shield" style={{ insetBlockStart: rect.top, insetInlineStart: logicalInsetStart(0, rect.left), width: rect.left, height: rect.height }} />
         <div className="product-tour-shield" style={{ insetBlockStart: rect.top, insetInlineStart: logicalInsetStart(rect.right, Math.max(0, viewportWidth() - rect.right)), width: Math.max(0, viewportWidth() - rect.right), height: rect.height }} />
-        <div className="product-tour-spotlight" aria-hidden="true" style={{ insetBlockStart: rect.top, insetInlineStart: logicalInsetStart(rect.left, rect.width), width: rect.width, height: rect.height }} />
+        <div className="product-tour-spotlight" aria-hidden="true" style={{
+          insetBlockStart: rect.top,
+          insetInlineStart: logicalInsetStart(rect.left, rect.width),
+          width: rect.width,
+          height: rect.height,
+          '--product-tour-radius-start-start': radii.startStart,
+          '--product-tour-radius-start-end': radii.startEnd,
+          '--product-tour-radius-end-end': radii.endEnd,
+          '--product-tour-radius-end-start': radii.endStart,
+        } as React.CSSProperties} />
         <div className="product-tour-popover" style={popoverStyle(rect)} role="dialog" aria-modal="false" aria-labelledby="product-tour-title" aria-describedby="product-tour-body">
           <div className="flex items-start justify-between gap-3">
             <div>

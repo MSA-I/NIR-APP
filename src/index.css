@@ -1235,7 +1235,10 @@ html { transition: --glow-x 0.12s ease-out, --glow-y 0.12s ease-out; }
   z-index: 71;
   pointer-events: none;
   border: 2px solid var(--color-focus);
-  border-radius: 1rem;
+  border-start-start-radius: var(--product-tour-radius-start-start, 1rem);
+  border-start-end-radius: var(--product-tour-radius-start-end, 1rem);
+  border-end-end-radius: var(--product-tour-radius-end-end, 1rem);
+  border-end-start-radius: var(--product-tour-radius-end-start, 1rem);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-focus) 24%, transparent), var(--shadow-card);
 }
 
