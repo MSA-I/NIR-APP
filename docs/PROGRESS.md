@@ -17,7 +17,7 @@
 > הוא מסונן בשער הקיים ככשל סביבתי ידוע ואינו שגיאת מוצר.
 >
 > **גבול מצב:** `codex/owner-first-run-tour-20260827` הוא `LOCAL_VERIFIED / NOT_MERGED /
-> NOT_DEPLOYED`. אין migration, ‏Edge, ‏OCR, כתיבת DB, ‏PR או Production rollout.
+> NOT_DEPLOYED`. אין migration, ‏Edge, ‏OCR, כתיבת DB או Production rollout.
 
 עודכן: 26.08.2026 — **הרולאאוט לייצור בוצע. ייצור על `0211`, ‏Edge ו-Pages נפרסו ואומתו חי.**
 
