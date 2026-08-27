@@ -46,21 +46,22 @@ function otdTone(m: SupplierMetrics | null | undefined): ScoreTone {
 
 // The one decision-support column: open exceptions + open credits, empty (calm) when clean.
 function RiskCell({ m }: { m?: SupplierMetrics }) {
+  const { t } = useT();
   const ex = m?.open_exceptions ?? 0;
   const cr = m?.open_credits ?? 0;
   if (!ex && !cr) return <span className="text-ink-ghost">—</span>;
   return (
     <span className="flex items-center gap-1">
-      {/* Singular is not a rounding error in Hebrew: the plural form read "1 חריגים" on every
+      {/* Singular is not a rounding error in Hebrew: the plural form read t('suppliers.text') on every
           supplier that had exactly one, in both the table and the mobile card. */}
-      {ex > 0 && <span className="badge-alert">{ex} {ex === 1 ? 'חריג' : 'חריגים'}</span>}
-      {cr > 0 && <span className="badge-await">{cr} {cr === 1 ? 'זיכוי' : 'זיכויים'}</span>}
+      {ex > 0 && <span className="badge-alert">{ex} {ex === 1 ? t('suppliers.text_2') : t('suppliers.text_3')}</span>}
+      {cr > 0 && <span className="badge-await">{cr} {cr === 1 ? t('suppliers.text_4') : t('suppliers.text_5')}</span>}
     </span>
   );
 }
 
 export function SuppliersList() {
-  const { statusLabel , errorText } = useT();
+  const { errorText, statusLabel, t } = useT();
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
   const toast = useToast();
@@ -128,7 +129,7 @@ export function SuppliersList() {
     // which this guard would mistake for "no money owed" and let the supplier vanish while
     // invoices are open. Unprovable = refuse, same as a failed check.
     if (!financial) {
-      toast('מחיקת ספק דורשת אימות יתרה פתוחה — זמין לבעלים בלבד', 'error');
+      toast(t('suppliers.toast'), 'error');
       return;
     }
     const [balRes, poRes] = await Promise.all([
@@ -141,11 +142,11 @@ export function SuppliersList() {
     if (err) { toast(errorText(err.message), 'error'); return; }
     const openBalance = (balRes.data as { open_balance: number } | null)?.open_balance ?? 0;
     if (openBalance > 0) {
-      toast('לא ניתן למחוק ספק שיש לו יתרה פתוחה. יש לסגור את היתרה לפני המחיקה.', 'error');
+      toast(t('suppliers.toast_2'), 'error');
       return;
     }
     if ((poRes.count ?? 0) > 0) {
-      toast('לא ניתן למחוק ספק שיש לו הזמנה פעילה. יש לסיים או לבטל את ההזמנה לפני המחיקה.', 'error');
+      toast(t('suppliers.toast_3'), 'error');
       return;
     }
     setDeleteTarget(s);
@@ -163,22 +164,22 @@ export function SuppliersList() {
     setBusyDelete(false);
     if (res.error) { setDeleteTarget(null); toast(errorText(res.error.message), 'error'); return; }
     setDeleteTarget(null);
-    toast('הספק נמחק');
+    toast(t('suppliers.toast_4'));
     void refetch();
   }
 
   const columns: Column<SupplierWithBalance>[] = [
-    { key: 'name', header: 'ספק', priority: 3, sortValue: (r) => r.name, render: (r) => <span className="font-medium text-ink">{r.name}</span> },
-    { key: 'rating', header: 'דירוג', priority: 3, className: 'num', sortValue: (r) => r.rating ?? 0, render: (r) => r.rating != null
+    { key: 'name', header: t('suppliers.text_6'), priority: 3, sortValue: (r) => r.name, render: (r) => <span className="font-medium text-ink">{r.name}</span> },
+    { key: 'rating', header: t('suppliers.text_7'), priority: 3, className: 'num', sortValue: (r) => r.rating ?? 0, render: (r) => r.rating != null
         ? <span className="inline-flex items-center gap-1"><Star size={ICON.xs} className="fill-star text-star" aria-hidden="true" />{r.rating}</span>
         : <span className="text-ink-ghost">—</span> },
-    { key: 'cats', header: 'קטגוריות', priority: 3, render: (r) => <span className="text-ink-muted">{r.categories?.join(', ') || '—'}</span> },
-    { key: 'contact', header: 'איש קשר', priority: 3, render: (r) => r.contact_name || '—' },
-    { key: 'phone', header: 'טלפון', render: (r) => <span dir="ltr">{r.phone || '—'}</span> },
-    { key: 'min', header: 'מינ׳ הזמנה', priority: 3, className: 'num', sortValue: (r) => r.min_order_amount ?? 0, render: (r) => fmtMoneyExact(r.min_order_amount) },
-    { key: 'risk', header: 'התראות', mobileLabel: null, render: (r) => <RiskCell m={r.metrics} /> },
+    { key: 'cats', header: t('suppliers.join'), priority: 3, render: (r) => <span className="text-ink-muted">{r.categories?.join(', ') || '—'}</span> },
+    { key: 'contact', header: t('suppliers.text_8'), priority: 3, render: (r) => r.contact_name || '—' },
+    { key: 'phone', header: t('suppliers.text_9'), render: (r) => <span dir="ltr">{r.phone || '—'}</span> },
+    { key: 'min', header: t('suppliers.fmtMoneyExact'), priority: 3, className: 'num', sortValue: (r) => r.min_order_amount ?? 0, render: (r) => fmtMoneyExact(r.min_order_amount) },
+    { key: 'risk', header: t('suppliers.text_10'), mobileLabel: null, render: (r) => <RiskCell m={r.metrics} /> },
     { key: 'balance', header: 'יתרה פתוחה', sortValue: (r) => r.open_balance ?? 0, render: (r) => <span className={`num ${r.open_balance ? 'text-await-fg font-medium' : ''}`}>{fmtMoneyExact(r.open_balance)}</span>, className: 'num' },
-    { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} /> },
+    { key: 'status', header: t('suppliers.text_11'), priority: 3, render: (r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} /> },
   ];
 
   if (loading) return <SkeletonTable cols={7} />;
@@ -186,43 +187,43 @@ export function SuppliersList() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="ספקים"
+      <PageHeader title={t('suppliers.title')}
         meta={financial
           ? `${data?.length ?? 0} ספקים · ${(data ?? []).filter((supplier) => (supplier.open_balance ?? 0) > 0).length} עם יתרה פתוחה`
           : `${data?.length ?? 0} ספקים`}
-        actions={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> ספק חדש</button>} />
+        actions={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> {t('suppliers.setEditing')}</button>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.contact_name ?? '').toLowerCase().includes(q) || (r.tax_id ?? '').toLowerCase().includes(q)}
-        searchLabel="חיפוש בספקים"
+        searchLabel={t('suppliers.searchLabel')}
         rowLabel={(r) => `ספק ${r.name}`}
         onRowClick={(r) => navigate(`/suppliers/${r.id}`)}
         mobile="cards"
         mobileTitle={(r) => r.name}
         mobileTrailing={(r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} />}
         rowActions={canWrite ? (r) => [
-          { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setEditing(r) },
+          { key: 'edit', label: t('suppliers.setEditing_2'), icon: Pencil, onSelect: () => setEditing(r) },
           ...(canStartSupplierCommerce(r.status) ? [
-            { key: 'price-list', label: 'העלאת מחירון', icon: Upload, onSelect: () => setPriceUploadFor(r) },
+            { key: 'price-list', label: t('suppliers.setPriceUploadFor'), icon: Upload, onSelect: () => setPriceUploadFor(r) },
           ] : []),
-          { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', onSelect: () => void requestDelete(r) },
+          { key: 'delete', label: t('suppliers.requestDelete'), icon: Trash2, tone: 'danger', onSelect: () => void requestDelete(r) },
         ] : undefined}
         activeFilters={(balanceFilter === 'open' ? 1 : 0) + (statusFilter ? 1 : 0)}
         onClearFilters={() => { setBalanceFilter(''); setStatusFilter(''); }}
         toolbar={
           <>
-            <select className="input w-auto!" aria-label="סינון ספקים לפי יתרה פתוחה" value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)}>
-              <option value="">כל הספקים</option>
-              <option value="open">עם יתרה פתוחה</option>
+            <select className="input w-auto!" aria-label={t('suppliers.aria_label')} value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)}>
+              <option value="">{t('suppliers.text_12')}</option>
+              <option value="open">{t('suppliers.text_13')}</option>
             </select>
-            <select className="input w-auto!" aria-label="סינון ספקים לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">כל הסטטוסים</option>
+            <select className="input w-auto!" aria-label={t('suppliers.aria_label_2')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">{t('suppliers.text_14')}</option>
               {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
             </select>
           </>
         }
-        emptyTitle="עדיין אין ספקים"
-        emptySubtitle="הוסף את הספק הראשון כדי להתחיל לנהל רכש, מחירים ויתרות"
-        emptyAction={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> ספק חדש</button>} />
+        emptyTitle={t('suppliers.emptyTitle')}
+        emptySubtitle={t('suppliers.emptySubtitle')}
+        emptyAction={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> {t('suppliers.setEditing_3')}</button>} />
       {editing && <SupplierForm supplier={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refetch(); }} />}
       {priceUploadFor && (
         <PriceListUploadModal supplier={{ id: priceUploadFor.id, name: priceUploadFor.name }}
@@ -231,9 +232,9 @@ export function SuppliersList() {
 
       <ConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}
         onConfirm={(reason) => void deleteSupplier(reason)}
-        title="מחיקת ספק"
+        title={t('suppliers.title_2')}
         message={`הספק ״${deleteTarget?.name ?? ''}״ יוסר מהרשימות (מחיקה רכה — ההיסטוריה הכספית נשמרת). הפעולה תתועד ביומן הביקורת.`}
-        confirmLabel="מחיקה" danger requireReason busy={busyDelete} />
+        confirmLabel={t('suppliers.confirmLabel')} danger requireReason busy={busyDelete} />
     </div>
   );
 }
@@ -252,7 +253,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
    */
   focus?: 'bank';
 }) {
-  const { statusLabel , errorText } = useT();
+  const { errorText, statusLabel, t } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -334,7 +335,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   function bankPayload(): SupplierBankDetails | null {
     if (!bank.kind) return null;
     const accountHolder = bank.account_holder.trim();
-    if (!accountHolder) throw new Error('יש להזין שם בעל חשבון');
+    if (!accountHolder) throw new Error(t('suppliers.Error'));
     if (bank.kind === 'IL') {
       const bankCode = bank.bank_code.replace(/\s+/g, '');
       const branchCode = bank.branch_code.replace(/\s+/g, '');
@@ -342,7 +343,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
       if (!/^\d{1,3}$/.test(bankCode)
           || !/^\d{1,3}$/.test(branchCode)
           || !/^[0-9-]{1,20}$/.test(accountNumber)) {
-        throw new Error('יש להזין מספר בנק, סניף וחשבון ישראליים תקינים');
+        throw new Error(t('suppliers.Error_2'));
       }
       return {
         account_holder: accountHolder,
@@ -361,7 +362,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         || !/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/.test(iban)
         || iban.slice(0, 2) !== countryCode
         || (bic && !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(bic))) {
-      throw new Error('יש להזין קוד מדינה, IBAN ו־BIC תקינים');
+      throw new Error(t('suppliers.Error_3'));
     }
     return {
       account_holder: accountHolder,
@@ -375,10 +376,10 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   }
 
   async function save() {
-    if (!f.name.trim()) { toast('שם ספק הוא שדה חובה', 'error'); return; }
+    if (!f.name.trim()) { toast(t('suppliers.trim'), 'error'); return; }
     let nextBank: SupplierBankDetails | null | undefined;
     if (bankTouched) {
-      if (bankLoadError) { toast('לא ניתן לעדכן פרטי בנק לפני טעינת המידע הקיים', 'error'); return; }
+      if (bankLoadError) { toast(t('suppliers.toast_5'), 'error'); return; }
       try {
         nextBank = bankPayload();
       } catch (error) {
@@ -408,7 +409,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
       setBusy(false);
       if (res.error) { toast(errorText(res.error.message), 'error'); return; }
       if (nextBank !== undefined) { setBankStep({ nextBank, supplierId: supplier.id }); return; }
-      toast('הספק עודכן');
+      toast(t('suppliers.toast_6'));
       onSaved();
     } else {
       const res = await supabase.from('suppliers')
@@ -423,11 +424,11 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
       if (nextBank) {
         // #106: the row exists bank-less; the details now take the same reasoned step-up
         // path a change to an existing supplier takes.
-        toast('הספק נוצר — פרטי הבנק דורשים אימות וסיבה');
+        toast(t('suppliers.toast_7'));
         setBankStep({ nextBank, supplierId: (res.data as { id: string }).id });
         return;
       }
-      toast('הספק נוצר');
+      toast(t('suppliers.toast_8'));
       onSaved();
     }
   }
@@ -443,7 +444,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
     setBankBusy(false);
     // On failure the reason dialog stays open for a retry; the other fields are already saved.
     if (res.error) { toast(errorText(res.error.message), 'error'); return; }
-    toast('פרטי הבנק עודכנו ונרשמו ביומן הביקורת');
+    toast(t('suppliers.toast_9'));
     setBankStep(null);
     onSaved();
   }
@@ -453,25 +454,25 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   function cancelBankStep() {
     setBankStep(null);
     setBankReauth(null);
-    toast('פרטי הבנק לא עודכנו — שאר השדות נשמרו', 'error');
+    toast(t('suppliers.toast_10'), 'error');
     onSaved();
   }
 
-  const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+  const days = [t('suppliers.text_15'), t('suppliers.text_16'), t('suppliers.text_17'), t('suppliers.text_18'), t('suppliers.text_19'), t('suppliers.text_20'), t('suppliers.text_21')];
 
   return (
     <Modal open onClose={onClose} title={supplier ? `עריכת ספק — ${supplier.name}` : 'ספק חדש'} wide busy={busy} statusMessage={busy ? 'שומר את פרטי הספק' : undefined}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div><label className="label" htmlFor="supplier-name">שם הספק *</label><input id="supplier-name" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} /></div>
-        <div><label className="label" htmlFor="supplier-tax-id">ח.פ / עוסק</label><input id="supplier-tax-id" className="input" dir="ltr" value={f.tax_id} onChange={(e) => set('tax_id', e.target.value)} /></div>
-        <div><label className="label" htmlFor="supplier-contact">איש קשר</label><input id="supplier-contact" className="input" value={f.contact_name} onChange={(e) => set('contact_name', e.target.value)} /></div>
-        <div><label className="label" htmlFor="supplier-phone">טלפון</label><input id="supplier-phone" className="input" dir="ltr" value={f.phone} onChange={(e) => set('phone', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-name">{t('suppliers.set')}</label><input id="supplier-name" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-tax-id">{t('suppliers.set_2')}</label><input id="supplier-tax-id" className="input" dir="ltr" value={f.tax_id} onChange={(e) => set('tax_id', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-contact">{t('suppliers.set_3')}</label><input id="supplier-contact" className="input" value={f.contact_name} onChange={(e) => set('contact_name', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-phone">{t('suppliers.set_4')}</label><input id="supplier-phone" className="input" dir="ltr" value={f.phone} onChange={(e) => set('phone', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-whatsapp">WhatsApp</label><input id="supplier-whatsapp" className="input" dir="ltr" value={f.whatsapp} onChange={(e) => set('whatsapp', e.target.value)} /></div>
-        <div><label className="label" htmlFor="supplier-email">אימייל</label><input id="supplier-email" className="input" dir="ltr" value={f.email} onChange={(e) => set('email', e.target.value)} /></div>
-        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-address">כתובת</label><input id="supplier-address" className="input" value={f.address} onChange={(e) => set('address', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-email">{t('suppliers.set_5')}</label><input id="supplier-email" className="input" dir="ltr" value={f.email} onChange={(e) => set('email', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-address">{t('suppliers.set_6')}</label><input id="supplier-address" className="input" value={f.address} onChange={(e) => set('address', e.target.value)} /></div>
         <div>
-          <span className="label">ימי אספקה</span>
-          <ToggleGroup label="ימי אספקה"
+          <span className="label">{t('suppliers.text_22')}</span>
+          <ToggleGroup label={t('suppliers.label')}
             items={days.map((d, i) => ({ key: String(i), label: d }))}
             value={f.delivery_days.map(String)}
             onChange={(key) => {
@@ -481,39 +482,39 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
                 : [...f.delivery_days, day].sort());
             }} />
         </div>
-        <div><label className="label" htmlFor="supplier-cutoff">שעת סגירת הזמנות</label><input id="supplier-cutoff" type="time" className="input" value={f.cutoff_time} onChange={(e) => set('cutoff_time', e.target.value)} /></div>
-        <div><label className="label" htmlFor="supplier-minimum">מינימום הזמנה (₪)</label><input id="supplier-minimum" type="number" className="input num" value={f.min_order_amount} onChange={(e) => set('min_order_amount', e.target.value)} /></div>
-        <div><label className="label" htmlFor="supplier-payment-terms">תנאי תשלום</label><input id="supplier-payment-terms" className="input" placeholder="שוטף + 30" value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-cutoff">{t('suppliers.set_7')}</label><input id="supplier-cutoff" type="time" className="input" value={f.cutoff_time} onChange={(e) => set('cutoff_time', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-minimum">{t('suppliers.set_8')}</label><input id="supplier-minimum" type="number" className="input num" value={f.min_order_amount} onChange={(e) => set('min_order_amount', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-payment-terms">{t('suppliers.text_23')}</label><input id="supplier-payment-terms" className="input" placeholder={t('suppliers.placeholder')} value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} /></div>
         <SubPanel className="sm:col-span-2 space-y-3">
           <div>
-            <label className="label" htmlFor="supplier-bank-kind">סוג פרטי הבנק</label>
+            <label className="label" htmlFor="supplier-bank-kind">{t('suppliers.text_24')}</label>
             <select id="supplier-bank-kind" ref={bankFieldRef} className="input" value={bank.kind}
               onChange={(event) => setBankField('kind', event.target.value)}>
-              <option value="">ללא פרטי בנק</option>
-              <option value="IL">חשבון בישראל</option>
-              <option value="international">חשבון בינלאומי</option>
+              <option value="">{t('suppliers.text_25')}</option>
+              <option value="IL">{t('suppliers.text_26')}</option>
+              <option value="international">{t('suppliers.text_27')}</option>
             </select>
           </div>
           {legacyBank && (
             <Note tone="await">
-              <span className="block font-medium">טקסט ישן לבדיקה בלבד — אינו מקור לתשלום</span>
+              <span className="block font-medium">{t('suppliers.text_28')}</span>
               <span className="block mt-1" dir="ltr">{legacyBank.legacy_bank_details}</span>
-              <span className="block mt-1">יש להזין ולאשר ידנית את השדות המובנים. המערכת אינה מפרשת את הטקסט.</span>
+              <span className="block mt-1">{t('suppliers.text_29')}</span>
             </Note>
           )}
-          {bankLoadError && <ErrorNote message="טעינת פרטי הבנק הקיימים נכשלה. עדכון בנק חסום; שאר פרטי הספק עדיין ניתנים לעריכה." />}
+          {bankLoadError && <ErrorNote message={t('suppliers.message')} />}
           {bank.kind && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-holder">שם בעל החשבון *</label><input id="supplier-bank-holder" className="input" value={bank.account_holder} onChange={(event) => setBankField('account_holder', event.target.value)} /></div>
+              <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-holder">{t('suppliers.setBankField')}</label><input id="supplier-bank-holder" className="input" value={bank.account_holder} onChange={(event) => setBankField('account_holder', event.target.value)} /></div>
               {bank.kind === 'IL' ? (
                 <>
-                  <div><label className="label" htmlFor="supplier-bank-code">מספר בנק *</label><input id="supplier-bank-code" inputMode="numeric" dir="ltr" className="input" value={bank.bank_code} onChange={(event) => setBankField('bank_code', event.target.value)} /></div>
-                  <div><label className="label" htmlFor="supplier-bank-branch">מספר סניף *</label><input id="supplier-bank-branch" inputMode="numeric" dir="ltr" className="input" value={bank.branch_code} onChange={(event) => setBankField('branch_code', event.target.value)} /></div>
-                  <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-account">מספר חשבון *</label><input id="supplier-bank-account" inputMode="numeric" dir="ltr" className="input" value={bank.account_number} onChange={(event) => setBankField('account_number', event.target.value)} /></div>
+                  <div><label className="label" htmlFor="supplier-bank-code">{t('suppliers.setBankField_2')}</label><input id="supplier-bank-code" inputMode="numeric" dir="ltr" className="input" value={bank.bank_code} onChange={(event) => setBankField('bank_code', event.target.value)} /></div>
+                  <div><label className="label" htmlFor="supplier-bank-branch">{t('suppliers.setBankField_3')}</label><input id="supplier-bank-branch" inputMode="numeric" dir="ltr" className="input" value={bank.branch_code} onChange={(event) => setBankField('branch_code', event.target.value)} /></div>
+                  <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-account">{t('suppliers.setBankField_4')}</label><input id="supplier-bank-account" inputMode="numeric" dir="ltr" className="input" value={bank.account_number} onChange={(event) => setBankField('account_number', event.target.value)} /></div>
                 </>
               ) : (
                 <>
-                  <div><label className="label" htmlFor="supplier-bank-country">קוד מדינה (ISO) *</label><input id="supplier-bank-country" maxLength={2} dir="ltr" className="input uppercase" value={bank.country_code} onChange={(event) => setBankField('country_code', event.target.value)} /></div>
+                  <div><label className="label" htmlFor="supplier-bank-country">{t('suppliers.setBankField_5')}</label><input id="supplier-bank-country" maxLength={2} dir="ltr" className="input uppercase" value={bank.country_code} onChange={(event) => setBankField('country_code', event.target.value)} /></div>
                   <div><label className="label" htmlFor="supplier-bank-bic">BIC / SWIFT</label><input id="supplier-bank-bic" dir="ltr" className="input uppercase" value={bank.bic} onChange={(event) => setBankField('bic', event.target.value)} /></div>
                   <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-iban">IBAN *</label><input id="supplier-bank-iban" dir="ltr" className="input uppercase" value={bank.iban} onChange={(event) => setBankField('iban', event.target.value)} /></div>
                 </>
@@ -522,7 +523,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
           )}
         </SubPanel>
         <div>
-          <label className="label" htmlFor="supplier-status">סטטוס</label>
+          <label className="label" htmlFor="supplier-status">{t('suppliers.text_30')}</label>
           <select id="supplier-status" className="input" value={f.status} onChange={(e) => set('status', e.target.value)}
             aria-describedby="supplier-status-hint">
             {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
@@ -534,36 +535,36 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
               an invoice from a supplier deactivated yesterday is the commonest event after
               deactivation, and blocking it would manufacture the dead end #115 warned about. */}
           <p id="supplier-status-hint" className="mt-1 text-xs text-ink-muted">
-            ״לא פעיל״ = לא מזמינים ממנו יותר: הספק מוסתר בהזמנה חדשה ובהעלאת מחירון. בקליטת חשבונית,
-            בדרישת תשלום ובהתאמות בנק הוא ממשיך להופיע, כדי שניתן יהיה לסגור מולו חשבון פתוח.
+            {t('suppliers.text_31')}
+            {t('suppliers.text_32')}
           </p>
         </div>
         <fieldset>
-          <legend className="label">דירוג ספק</legend>
+          <legend className="label">{t('suppliers.text_33')}</legend>
           <div className="pt-1"><RatingStars value={f.rating} onChange={(n) => set('rating', n || null)} /></div>
         </fieldset>
-        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-rating-note">הערת דירוג</label><input id="supplier-rating-note" className="input" placeholder="למה הדירוג הזה?" value={f.rating_note} onChange={(e) => set('rating_note', e.target.value)} /></div>
-        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-notes">הערות</label><textarea id="supplier-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-rating-note">{t('suppliers.text_34')}</label><input id="supplier-rating-note" className="input" placeholder={t('suppliers.placeholder_2')} value={f.rating_note} onChange={(e) => set('rating_note', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-notes">{t('suppliers.set_9')}</label><textarea id="supplier-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
-        <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-        <button className="btn-primary" disabled={busy} onClick={() => void save()}>{busy ? 'שומר…' : 'שמירה'}</button>
+        <button className="btn-secondary" disabled={busy} onClick={onClose}>{t('suppliers.text_35')}</button>
+        <button className="btn-primary" disabled={busy} onClick={() => void save()}>{busy ? t('suppliers.save') : t('suppliers.save_2')}</button>
       </div>
 
       <ConfirmDialog
         open={!!bankStep}
         onClose={cancelBankStep}
         onConfirm={(reason) => setBankReauth(reason ?? '')}
-        title="עדכון פרטי בנק"
+        title={t('suppliers.title_3')}
         message={`פרטי הבנק של ״${supplier?.name ?? f.name}״ ${bankStep?.nextBank ? `יעודכנו לחשבון ${bankStep.nextBank.country_code} שמסתיים ב־${(bankStep.nextBank.account_number ?? bankStep.nextBank.iban ?? '').slice(-4)}` : 'יוסרו'}. השינוי דורש אימות סיסמה טרי ונרשם ביומן הביקורת.`}
-        confirmLabel="אישור העדכון"
+        confirmLabel={t('suppliers.confirmLabel_2')}
         requireReason
         busy={bankBusy}
       />
 
       <ReauthModal
         open={bankReauth !== null}
-        title="אימות זהות לעדכון פרטי בנק"
+        title={t('suppliers.title_4')}
         onConfirm={() => { const reason = bankReauth; setBankReauth(null); void saveBankDetails(reason ?? ''); }}
         onCancel={() => setBankReauth(null)}
       />
@@ -573,7 +574,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
 
 /* ================= Supplier card ================= */
 export function SupplierCard() {
-  const { statusLabel } = useT();
+  const { statusLabel, t } = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
@@ -666,7 +667,7 @@ export function SupplierCard() {
   ]), [data]);
 
   if (loading) return <RecordSkeleton />;
-  if (error || !data) return <ErrorNote message={error ?? 'ספק לא נמצא'} />;
+  if (error || !data) return <ErrorNote message={error ?? t('suppliers.text_36')} />;
   const s = data.supplier;
   const m = data.metrics;
 
@@ -676,29 +677,29 @@ export function SupplierCard() {
     // balance === null means the balance reader is owner-gated for this caller, and a green
     // ₪0.00 there would be a fabricated measurement, not a permission message.
     data.balance === null
-      ? { label: 'יתרה פתוחה', value: '—', sub: 'זמין לבעלים בלבד', tone: 'idle' }
-      : { label: 'יתרה פתוחה', value: fmtMoneyExact(data.balance), tone: data.balance > 0 ? 'await' : 'done' },
+      ? { label: t('suppliers.text_37'), value: '—', sub: t('suppliers.text_38'), tone: 'idle' }
+      : { label: t('suppliers.fmtMoneyExact_2'), value: fmtMoneyExact(data.balance), tone: data.balance > 0 ? 'await' : 'done' },
     {
-      label: 'עמידה בזמנים',
+      label: t('suppliers.text_39'),
       value: m && m.otd_samples > 0 ? fmtPct(m.on_time_pct) : '—',
       sub: m && m.otd_samples > 0 ? `${m.otd_samples} אספקות` : 'אין תאריך אספקה מוזן',
       tone: otdTone(m),
     },
-    { label: 'זמן אספקה ממוצע', value: fmtLeadDays(m?.avg_lead_days ?? null), sub: 'מהשליחה ועד קבלה', tone: 'idle' },
+    { label: t('suppliers.fmtLeadDays'), value: fmtLeadDays(m?.avg_lead_days ?? null), sub: t('suppliers.fmtLeadDays_2'), tone: 'idle' },
     // No supplier_metrics row = the counts were never computed, which is not the same claim as
     // "zero open exceptions". fmtNum(null) renders — so the tile stays honest (constitution §"אין ערכים
     // סטטיים מזויפים"), matching how OTD and lead time above already behave.
     { label: 'חריגים פתוחים', value: fmtNum(m?.open_exceptions ?? null), sub: m ? `${fmtNum(m.exceptions_lifetime)} בסה״כ` : 'טרם חושבו מדדים', tone: (m?.open_exceptions ?? 0) > 0 ? 'alert' : 'idle' },
-    { label: 'זיכויים פתוחים', value: fmtNum(m?.open_credits ?? null), sub: fmtMoneyExact(m?.open_credits_amount ?? null), tone: (m?.open_credits ?? 0) > 0 ? 'await' : 'idle' },
+    { label: t('suppliers.fmtNum'), value: fmtNum(m?.open_credits ?? null), sub: fmtMoneyExact(m?.open_credits_amount ?? null), tone: (m?.open_credits ?? 0) > 0 ? 'await' : 'idle' },
     { label: 'שינויי מחיר (90 הימים האחרונים)', value: fmtNum(m?.price_changes_window ?? null), sub: m ? `${fmtNum(m.priced_items)} פריטים` : 'טרם חושבו מדדים', tone: 'idle' },
-    { label: 'מינימום הזמנה', value: fmtMoneyExact(s.min_order_amount), tone: 'idle' },
-    { label: 'תנאי תשלום', value: s.payment_terms ?? '—', tone: 'idle', numeric: false },
+    { label: t('suppliers.fmtMoneyExact_3'), value: fmtMoneyExact(s.min_order_amount), tone: 'idle' },
+    { label: t('suppliers.text_40'), value: s.payment_terms ?? '—', tone: 'idle', numeric: false },
   ];
 
   return (
     <div className="space-y-4">
       <RecordHeader
-        breadcrumbs={<Breadcrumbs items={[{ label: 'ספקים', to: '/suppliers' }, { label: s.name }]} />}
+        breadcrumbs={<Breadcrumbs items={[{ label: t('suppliers.text_41'), to: '/suppliers' }, { label: s.name }]} />}
         title={s.name}
         status={<><StatusBadge meta={SUPPLIER_STATUS[s.status]} /><span className="inline-flex items-center gap-2">
               <RatingStars value={s.rating} />
@@ -715,16 +716,16 @@ export function SupplierCard() {
             {s.cutoff_time && <span className="flex items-center gap-1"><Clock size={ICON.xs} aria-hidden="true" />סגירת הזמנות {s.cutoff_time.slice(0, 5)}</span>}
           </>}
         primaryAction={canWrite && canStartSupplierCommerce(s.status)
-          ? <button className="btn-primary" onClick={() => setUploadOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> העלאת מחירון</button>
+          ? <button className="btn-primary" onClick={() => setUploadOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> {t('suppliers.setUploadOpen')}</button>
           : null}
         secondaryActions={canWrite && <>
-            {/* Named, not buried: "החליף מספר חשבון" is the task, and it used to be four steps
+            {/* Named, not buried: t('suppliers.text_42') is the task, and it used to be four steps
                 inside a form of twenty fields. Navigates rather than calling setEditing directly,
                 so the address is the one another screen can link to. */}
             <button className="btn-secondary" onClick={() => navigate(`/suppliers/${s.id}?edit=bank`)}>
               <Landmark size={ICON.sm} aria-hidden="true" /> עדכון פרטי בנק
             </button>
-            <button className="btn-secondary" onClick={() => setEditing(true)}>עריכה</button>
+            <button className="btn-secondary" onClick={() => setEditing(true)}>{t('suppliers.setEditing_4')}</button>
           </>} />
 
       <Scorecard items={scoreItems} />
@@ -744,9 +745,9 @@ export function SupplierCard() {
         <TabPanel idPrefix="supplier" tabKey="orders">
         <DataTable rows={data.orders} columns={[
           { key: 'num', header: 'מס׳', className: 'num', render: (r: PurchaseOrder) => `#${r.number}` },
-          { key: 'date', header: 'תאריך', sortValue: (r: PurchaseOrder) => r.created_at, render: (r: PurchaseOrder) => fmtDate(r.created_at) },
-          { key: 'expected', header: 'אספקה צפויה', render: (r: PurchaseOrder) => fmtDate(r.expected_date) },
-          { key: 'status', header: 'סטטוס', render: (r: PurchaseOrder) => <StatusBadge meta={PO_STATUS[r.status]} /> },
+          { key: 'date', header: t('suppliers.fmtDate'), sortValue: (r: PurchaseOrder) => r.created_at, render: (r: PurchaseOrder) => fmtDate(r.created_at) },
+          { key: 'expected', header: t('suppliers.fmtDate_2'), render: (r: PurchaseOrder) => fmtDate(r.expected_date) },
+          { key: 'status', header: t('suppliers.text_43'), render: (r: PurchaseOrder) => <StatusBadge meta={PO_STATUS[r.status]} /> },
         ]} rowLabel={(r) => `הזמנת רכש מספר ${r.number} עבור ${s.name}`} onRowClick={(r) => navigate(`/orders/${r.id}`)} emptyTitle="אין הזמנות לספק זה" />
         </TabPanel>
       )}
@@ -758,17 +759,17 @@ export function SupplierCard() {
           <Note tone="info">
             <span>
               <span className="num">{data.consolidatedCount}</span> מסמכי חשבונית של ספק זה אוחדו לחשבונית
-              מרכזת ואינם מוצגים כאן —{' '}
-              <button className="underline" onClick={() => navigate('/documents/consolidated-invoices')}>לחשבוניות המרכזות</button>
+              {t('suppliers.text_44')}{' '}
+              <button className="underline" onClick={() => navigate('/documents/consolidated-invoices')}>{t('suppliers.navigate')}</button>
             </span>
           </Note>
         )}
         <DataTable rows={data.invoices} columns={[
-          { key: 'num', header: 'מס׳ חשבונית', className: 'num', render: (r: Invoice) => r.invoice_number },
-          { key: 'date', header: 'תאריך', sortValue: (r: Invoice) => r.invoice_date, render: (r: Invoice) => fmtDate(r.invoice_date) },
-          { key: 'total', header: 'סה״כ', className: 'num', sortValue: (r: Invoice) => r.total_amount, render: (r: Invoice) => fmtMoneyExact(r.total_amount) },
-          { key: 'review', header: 'בדיקה', render: (r: Invoice) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
-          { key: 'payment', header: 'תשלום', render: (r: Invoice) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
+          { key: 'num', header: t('suppliers.text_45'), className: 'num', render: (r: Invoice) => r.invoice_number },
+          { key: 'date', header: t('suppliers.fmtDate_3'), sortValue: (r: Invoice) => r.invoice_date, render: (r: Invoice) => fmtDate(r.invoice_date) },
+          { key: 'total', header: t('suppliers.fmtMoneyExact_4'), className: 'num', sortValue: (r: Invoice) => r.total_amount, render: (r: Invoice) => fmtMoneyExact(r.total_amount) },
+          { key: 'review', header: t('suppliers.text_46'), render: (r: Invoice) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
+          { key: 'payment', header: t('suppliers.text_47'), render: (r: Invoice) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
         ]} rowLabel={(r) => `חשבונית ${r.invoice_number} של ${s.name}`} onRowClick={(r) => navigate(`/invoices/${r.id}`)} emptyTitle="אין חשבוניות לספק זה" />
         </TabPanel>
       )}
@@ -776,13 +777,13 @@ export function SupplierCard() {
         <TabPanel idPrefix="supplier" tabKey="payments">
         {data.payments ? (
           <DataTable rows={data.payments} columns={[
-            { key: 'date', header: 'תאריך', sortValue: (r: Payment) => r.paid_date, render: (r: Payment) => fmtDate(r.paid_date) },
-            { key: 'amount', header: 'סכום', className: 'num', sortValue: (r: Payment) => r.amount, render: (r: Payment) => fmtMoneyExact(r.amount) },
-            { key: 'method', header: 'אמצעי', render: (r: Payment) => r.method ?? '—' },
-            { key: 'ref', header: 'אסמכתא', className: 'num', render: (r: Payment) => <span dir="ltr">{r.reference ?? '—'}</span> },
-          ]} emptyTitle="אין תשלומים לספק זה" />
+            { key: 'date', header: t('suppliers.fmtDate_4'), sortValue: (r: Payment) => r.paid_date, render: (r: Payment) => fmtDate(r.paid_date) },
+            { key: 'amount', header: t('suppliers.fmtMoneyExact_5'), className: 'num', sortValue: (r: Payment) => r.amount, render: (r: Payment) => fmtMoneyExact(r.amount) },
+            { key: 'method', header: t('suppliers.text_48'), render: (r: Payment) => r.method ?? '—' },
+            { key: 'ref', header: t('suppliers.text_49'), className: 'num', render: (r: Payment) => <span dir="ltr">{r.reference ?? '—'}</span> },
+          ]} emptyTitle={t('suppliers.emptyTitle_2')} />
         ) : (
-          <Note tone="info">צפייה בתשלומים וביתרה הפתוחה של ספק זמינה לבעלים בלבד.</Note>
+          <Note tone="info">{t('suppliers.text_50')}</Note>
         )}
         </TabPanel>
       )}
@@ -790,10 +791,10 @@ export function SupplierCard() {
         <TabPanel idPrefix="supplier" tabKey="credits">
         <DataTable rows={data.credits} columns={[
           { key: 'num', header: 'מס׳', className: 'num', render: (r: CreditRequest) => `#${r.number}` },
-          { key: 'reason', header: 'סיבה', render: (r: CreditRequest) => statusLabel(CREDIT_REASON[r.reason]) },
-          { key: 'amount', header: 'סכום', className: 'num', sortValue: (r: CreditRequest) => r.amount, render: (r: CreditRequest) => fmtMoneyExact(r.amount) },
-          { key: 'status', header: 'סטטוס', render: (r: CreditRequest) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
-          { key: 'date', header: 'נפתח', sortValue: (r: CreditRequest) => r.created_at, render: (r: CreditRequest) => fmtDate(r.created_at) },
+          { key: 'reason', header: t('suppliers.statusLabel'), render: (r: CreditRequest) => statusLabel(CREDIT_REASON[r.reason]) },
+          { key: 'amount', header: t('suppliers.fmtMoneyExact_6'), className: 'num', sortValue: (r: CreditRequest) => r.amount, render: (r: CreditRequest) => fmtMoneyExact(r.amount) },
+          { key: 'status', header: t('suppliers.text_51'), render: (r: CreditRequest) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
+          { key: 'date', header: t('suppliers.fmtDate_5'), sortValue: (r: CreditRequest) => r.created_at, render: (r: CreditRequest) => fmtDate(r.created_at) },
         ]} rowLabel={(r) => `דרישת זיכוי מספר ${r.number} עבור ${s.name}`} onRowClick={() => navigate('/credits')} emptyTitle="אין זיכויים לספק זה" />
         </TabPanel>
       )}
@@ -826,6 +827,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
   /** null = the viewer's role cannot read the submissions ledger (not the same as "no history"). */
   submissions: SupplierPriceSubmission[] | null;
 }) {
+  const { t } = useT();
   const histBySp = useMemo(() => {
     const map = new Map<string, number[]>();
     for (const h of history) {
@@ -855,11 +857,11 @@ function SupplierPricesTab({ rows, history, submissions }: {
   }, [rows]);
 
   const columns: Column<PricedProduct>[] = [
-    { key: 'product', header: 'מוצר', sortValue: (r) => productLabel(r.product), render: (r) => <bdi className="font-medium text-ink">{productLabel(r.product)}</bdi> },
-    { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
-    { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => fmtMoneyExact(r.previous_price) },
+    { key: 'product', header: t('suppliers.productLabel'), sortValue: (r) => productLabel(r.product), render: (r) => <bdi className="font-medium text-ink">{productLabel(r.product)}</bdi> },
+    { key: 'price', header: t('suppliers.fmtMoneyExact_7'), className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
+    { key: 'prev', header: t('suppliers.fmtMoneyExact_8'), className: 'num', render: (r) => fmtMoneyExact(r.previous_price) },
     {
-      key: 'change', header: 'שינוי', sortValue: changePct,
+      key: 'change', header: t('suppliers.text_52'), sortValue: changePct,
       render: (r) => {
         const pct = changePct(r);
         if (!r.previous_price || pct === 0) return <span className="text-ink-faint">—</span>;
@@ -873,30 +875,30 @@ function SupplierPricesTab({ rows, history, submissions }: {
       },
     },
     {
-      key: 'trend', header: 'מגמה',
+      key: 'trend', header: t('suppliers.text_53'),
       render: (r) => {
         const pts = histBySp.get(r.id) ?? [];
         return pts.length >= 2 ? <PriceSparkline points={pts} /> : <span className="text-ink-ghost">—</span>;
       },
     },
-    { key: 'date', header: 'בתוקף מ־', sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
+    { key: 'date', header: t('suppliers.fmtDate_6'), sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
   ];
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-4 text-sm">
-        <span className="text-ink-soft">התייקרו: <b className="text-trend-up-fg">{summary.up}</b></span>
-        <span className="text-ink-soft">הוזלו: <b className="text-trend-down-fg">{summary.down}</b></span>
+        <span className="text-ink-soft">{t('suppliers.text_54')} <b className="text-trend-up-fg">{summary.up}</b></span>
+        <span className="text-ink-soft">{t('suppliers.text_55')} <b className="text-trend-down-fg">{summary.down}</b></span>
         <span className="text-ink-soft">שינוי חציוני: <b className="num">{summary.median == null ? '—' : `${summary.median > 0 ? '+' : ''}${summary.median.toFixed(1)}%`}</b></span>
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => productLabel(r.product).toLowerCase().includes(q) || r.product.name.toLowerCase().includes(q)}
-        searchLabel="חיפוש במחירון הספק"
-        emptyTitle="אין מחירון לספק זה" />
+        searchLabel={t('suppliers.searchLabel_2')}
+        emptyTitle={t('suppliers.emptyTitle_3')} />
 
       {submissions !== null && (
         <section className="card p-4" aria-labelledby="supplier-card-submissions-heading">
-          <h3 id="supplier-card-submissions-heading" className="section-title mb-3">היסטוריית מחירונים</h3>
+          <h3 id="supplier-card-submissions-heading" className="section-title mb-3">{t('suppliers.text_56')}</h3>
           {submissions.length ? (
             <div className="divide-y divide-line-soft">
               {submissions.map((submission) => (
@@ -906,12 +908,12 @@ function SupplierPricesTab({ rows, history, submissions }: {
                     <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
                   </div>
                   <div className="mt-1 text-sm text-ink-muted break-words">
-                    {submission.file_name ?? 'הגשה מדור קודם'} · נקלטו <span className="num">{submission.accepted_count}</span> · ללא שינוי <span className="num">{submission.unchanged_count}</span> · נדחו <span className="num">{submission.rejected_count}</span>
+                    {submission.file_name ?? t('suppliers.text_57')} · נקלטו <span className="num">{submission.accepted_count}</span> {t('suppliers.text_58')} <span className="num">{submission.unchanged_count}</span> {t('suppliers.text_59')} <span className="num">{submission.rejected_count}</span>
                   </div>
                 </div>
               ))}
             </div>
-          ) : <p className="text-sm text-ink-muted">עדיין לא נקלט מחירון לספק זה.</p>}
+          ) : <p className="text-sm text-ink-muted">{t('suppliers.text_60')}</p>}
         </section>
       )}
     </div>

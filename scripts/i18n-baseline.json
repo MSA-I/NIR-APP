@@ -168,7 +168,7 @@
     "src/pages/Subscription.tsx": 1,
     "src/pages/SupplierLog.tsx": 41,
     "src/pages/SupplierProposalReview.tsx": 44,
-    "src/pages/Suppliers.tsx": 147,
+    "src/pages/Suppliers.tsx": 29,
     "src/pages/WebhookSettings.tsx": 55
   }
 }
