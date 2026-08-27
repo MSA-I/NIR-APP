@@ -75,7 +75,7 @@ const ownerIsFunction = [];
       // A capitalised name is not enough: `const MOVEMENT_LABEL: Record<..> = {` is DATA, and a
       // hook call placed inside it lands in module scope, where hooks cannot run. Only a real
       // function declaration, or an arrow assigned to one, can hold a hook.
-      currentIsFunction = /function/.test(line) || /=\s*\(?[^=]*\)?\s*=>/.test(line);
+      currentIsFunction = /\bfunction\b/.test(line) || /=\s*\(?[^=]*\)?\s*=>/.test(line);
     }
     owner[i] = current;
     ownerIsFunction[i] = currentIsFunction;
