@@ -96,7 +96,18 @@ Plan: `docs/PLAN-english-language-20260827.md`.
 - [ ] P2-G6: extraction is FINISHED — zero Hebrew outside the dictionaries and the documented exceptions
   CHECK: node scripts/gate-i18n.mjs zero
   EXPECT: GATE_I18N_ZERO_OK
-  EVIDENCE: pending — `exit=1`, `gate-i18n: extraction is not finished — 4982 Hebrew line(s) across 148 file(s)`. **This oracle was replaced after the ledger's first run, and the ledger is what caught it.** It originally ran `ratchet`, which passes while thousands of lines remain, so the gate reported MET on its first day with 5,311 lines still hardcoded — the gate's English title and its command were measuring different things. `zero` fails until the count is actually zero.
+  EVIDENCE: pending — `exit=1`, `gate-i18n: extraction is not finished — 3987 Hebrew line(s) across 142 file(s)` (measured 28.08.2026, down from 4,982). **This oracle was replaced after the ledger's first run, and the ledger is what caught it.** It originally ran `ratchet`, which passes while thousands of lines remain, so the gate reported MET on its first day with 5,311 lines still hardcoded — the gate's English title and its command were measuring different things. `zero` fails until the count is actually zero.
+
+  One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
+
+- [ ] P2-G7: an English session shows no Hebrew word anywhere on screen, except what a document put there
+  CHECK: node scripts/check-english-screens.mjs
+  EXPECT: ENGLISH_SCREENS_OK
+  EVIDENCE: pending — the oracle does not exist yet. **Owner instruction, 28.08.2026, verbatim: "כשהמשתמש מחליף שפה לאנגלית אסור שיהיה ולו מילה אחת בעברית במערכת, רק חוץ מאם הוא העלה מסמך בעברית — אז רק מה שיוצא מהמסמך ונכנס למערכת נשאר אותו דבר."**
+
+  This is the gate the whole phase exists to satisfy, and it is deliberately not the same measurement as P2-G6. `zero` reads SOURCE; this reads the rendered DOM of a live English session. The two can disagree in both directions, and each disagreement is a real finding: source Hebrew that never reaches a screen (`PaymentRequests.tsx`'s seven audit reasons) passes here and fails there, and a Hebrew string arriving from the database at runtime fails here and passes there. Only the second kind is a bug this feature owns.
+
+  The exception the owner named is a data class, not a screen: supplier names, raw OCR text, `audit_logs`, comments, and source documents keep the words they arrived with. The oracle must therefore ignore Hebrew inside those surfaces and fail on Hebrew anywhere else — an allow-list of DOM regions, not a global word count, or it will report the supplier list as a failure forever and be switched off.
 
 ABANDON: P2-G4 Owner decision, 27.08.2026 — `src/operator/**` is internal, used by the InPlace team only and not sold to a tenant, so translating it serves no end user. Recorded in three places and checked by `node scripts/gate-i18n.mjs abandon`: this ledger, `docs/DEBT-REGISTER.md §68`, and `__reason` on 12 pinned files in `scripts/i18n-baseline.json`. Handoff: if the console is ever opened to an outside operator it becomes the only unextracted surface and the debt falls due in full.
 
@@ -112,6 +123,14 @@ ABANDON: P2-G4 Owner decision, 27.08.2026 — `src/operator/**` is internal, use
 
 - [ ] P3-G3: the safe-area and drawer mappings flip with `dir`
   EVIDENCE: pending
+
+- [ ] P3-G4: a currency can be chosen in settings, beside the language, and the choice is remembered
+  EVIDENCE: pending — **owner instruction, 28.08.2026: "כשהמשתמש מחליף שפה גם בהגדרות צריך שיהיה אפשרות להחליף מטבע".** This reverses the plan's standing assumption (`OPEN-DECISIONS #14`, and `docs/PLAN-english-language-20260827.md` §3, both of which said the shekel does not move). Scope is being confirmed with the owner before it is built; the three readings differ by two orders of magnitude and are recorded under P3-G5 so the answer lands against a written question rather than a guess.
+
+- [ ] P3-G5: a non-shekel amount is never silently recorded as a shekel
+  CHECK: node scripts/gate-i18n.mjs currency-integrity
+  EXPECT: GATE_I18N_CURRENCY_OK
+  EVIDENCE: pending — the oracle does not exist yet; it is written with P3-G4, not before, because what it must assert depends on which reading of P3-G4 the owner chooses. What is already true and must not regress: `0108:228-233` **rejects** a document printing anything but a shekel (`currency_not_ils`, severity `error`) rather than storing its numbers as shekels, and `src/lib/format.ts:37-52` documents the one existing second currency — subscription catalogue prices — as an **argument supplied by the row**, never a global switch. Whatever P3-G4 becomes, an amount stored in shekels must never be *displayed* as another currency without saying it was converted and when.
 
 ---
 
