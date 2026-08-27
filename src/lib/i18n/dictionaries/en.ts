@@ -392,4 +392,22 @@ export const en: Dictionary = {
     languageOptionEn: 'English',
     languageSaveFailed: 'The language changed on screen but was not saved to your account. Please try again later.',
   },
+  offline: {
+    text: 'Connected',
+    text_2: 'No connection — your work is saved on this device',
+    text_3: 'Actions waiting:',
+    text_4: 'Uploads waiting to sync:',
+    text_5: 'Uploads needing attention:',
+    text_6: 'Last successful sync:',
+    text_7: 'Syncing…',
+    text_8: 'This browser does not allow local storage, so a draft will not survive a refresh or a closed tab. Do not rely on offline work on this device.',
+    text_9: 'Your session has expired. Drafts are saved on this device and are not sent with stale credentials — sign in again, then sync.',
+    text_10: 'Open the receipt screen',
+    text_11: 'Other screens need the network. The app shell stays available, but business data that was not saved through the receiving flow will not be shown from cache.',
+    errorText: 'Needs attention; a general sync will not retry it.',
+    syncNow: 'Sync now',
+    attempts: 'attempts',
+    needsDecision: 'needs a decision.',
+  },
+
 };

@@ -1,3 +1,4 @@
+import { he } from '../lib/i18n/dictionaries/he';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -85,7 +86,10 @@ describe('offline receipt photo wiring', () => {
       status.indexOf('await syncPhotos()'),
     );
     expect(status).not.toContain('syncPhotos(true)');
-    expect(status).toContain('העלאות דורשות טיפול');
+    // The counter's label moved into the dictionary, so the claim moves with it: the source
+    // renders the key, and the key still carries the wording this test is about.
+    expect(status).toContain("t('offline.text_5')");
+    expect(he.offline.text_5).toBe('העלאות דורשות טיפול:');
     expect(status).toContain('!hasSyncableWork');
     expect(status).toContain('queue.pendingActions === 0 && queue.pendingUploads === 0');
     expect(status).toContain('photo.lastError');
