@@ -271,7 +271,10 @@ describe('WebhookSettings — registration', () => {
     await user.type(screen.getByLabelText(/סיבת הפעולה/), 'חיבור ERP');
     await user.click(screen.getByRole('button', { name: /שמירת החיבור/ }));
 
-    await vi.waitFor(() => expect(registerWebhookSubscription).toHaveBeenCalled());
+    // The registration follows ReauthModal's recent-proof effect before it reaches this mock.
+    // Under the full CI worker pool that effect can settle after waitFor's 1s default even though
+    // the focused test is instant; wait for the user-visible chain, not scheduler luck.
+    await vi.waitFor(() => expect(registerWebhookSubscription).toHaveBeenCalled(), { timeout: 5_000 });
     expect(registerWebhookSubscription).toHaveBeenCalledWith(
       expect.objectContaining({ url: 'https://hooks.example.com/inplace', reason: 'חיבור ERP' }),
     );
