@@ -1,3 +1,4 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { FileCheck2, RefreshCw, ScanText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -13,8 +14,8 @@ import { DocumentReviewProposals } from './DocumentReviewProposals';
 import { DocumentSourceViewer } from './DocumentSourceViewer';
 import { PriceListReviewConfirmation } from './PriceListReviewConfirmation';
 import {
-  DOCUMENT_TYPE_LABELS,
-  MARK_KIND_LABELS,
+  DOCUMENT_TYPE_KEYS,
+  MARK_KIND_KEYS,
   bboxDescription,
   confidencePercent,
   fieldKeyLabel,
@@ -32,6 +33,7 @@ interface DocumentReviewWorkspaceProps {
 }
 
 export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialPanel, readOnly = false, reprocessing = false, onReprocess }: DocumentReviewWorkspaceProps) {
+  const { t } = useT();
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [openingSource, setOpeningSource] = useState(false);
@@ -68,7 +70,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
     if (payload) {
       rows.push({
         key: 'document-type',
-        label: `סוג המסמך · ${DOCUMENT_TYPE_LABELS[payload.document_type]}`,
+        label: `סוג המסמך · ${t(DOCUMENT_TYPE_KEYS[payload.document_type])}`,
         confidence: payload.document_type_confidence,
         evidence: [],
       });
@@ -80,7 +82,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
       });
       payload.fields.forEach((field, index) => rows.push({
         key: `field-${index}`,
-        label: `שדה · ${fieldKeyLabel(field.key)}`,
+        label: `שדה · ${fieldKeyLabel(field.key, t)}`,
         confidence: field.confidence,
         evidence: field.evidence_block_ids,
       }));
@@ -122,7 +124,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
       })),
       ...payload.marks.map((mark) => ({
         key: `mark-${mark.id}`,
-        kind: MARK_KIND_LABELS[mark.kind],
+        kind: t(MARK_KIND_KEYS[mark.kind]),
         page: mark.page,
         confidence: mark.confidence,
         bbox: mark.bbox,
@@ -333,7 +335,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
                         <td className="td">{row.kind}</td>
                         <td className="td num">{row.page}</td>
                         <td className="td num">{confidencePercent(row.confidence)}</td>
-                        <td className="td">{bboxDescription(row.bbox)}</td>
+                        <td className="td">{bboxDescription(row.bbox, t)}</td>
                         <td className="td"><span dir="ltr" className="tech-id">{row.id}</span></td>
                       </tr>
                     ))}

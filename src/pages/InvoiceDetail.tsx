@@ -305,7 +305,7 @@ export default function InvoiceDetail() {
       // reviewer types what the paper says.
       setCreditDraft(res.error || !res.data
         ? { amount: '', creditedInvoiceNumber: '', notes: '' }
-        : creditDraftFromInterpretation((res.data as { payload: InterpretationContract }).payload));
+        : creditDraftFromInterpretation((res.data as { payload: InterpretationContract }).payload, t));
       setCreditOpen(true);
       const next = new URLSearchParams(params);
       next.delete('credit');

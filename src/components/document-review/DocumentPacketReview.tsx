@@ -12,7 +12,7 @@ import type {
 import type { Tone } from '../../lib/status';
 import { ICON, Note, SubPanel } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
-import { confidenceLabel, DOCUMENT_TYPE_LABELS } from './model';
+import { confidenceLabel, DOCUMENT_TYPE_KEYS } from './model';
 import { AUTOMATIC_SPLIT_PAGE_CEILING, PAID_OCR_PAGE_CAP } from './serverLimits';
 
 interface Props {
@@ -23,7 +23,7 @@ interface Props {
 
 type SegmentDraft = Pick<DocumentPacketSegment, 'ordinal' | 'start_page' | 'end_page' | 'document_type' | 'confidence'>;
 
-const DOCUMENT_TYPES = Object.keys(DOCUMENT_TYPE_LABELS) as DocumentInterpretationType[];
+const DOCUMENT_TYPES = Object.keys(DOCUMENT_TYPE_KEYS) as DocumentInterpretationType[];
 
 function draftsFromSnapshot(snapshot: DocumentProcessingSnapshot): SegmentDraft[] {
   return snapshot.packetSegments.map(({ ordinal, start_page, end_page, document_type, confidence }) => ({
@@ -134,6 +134,7 @@ function SegmentEditor({ draft, stored, pageCount, editable, busy, attention, on
   attention: string | null;
   onChange: (patch: Partial<SegmentDraft>) => void;
 }) {
+  const { t } = useT();
   return (
     <SubPanel as="article">
       <div className="grid gap-3 sm:grid-cols-[6rem_6rem_minmax(0,1fr)]">
@@ -151,13 +152,13 @@ function SegmentEditor({ draft, stored, pageCount, editable, busy, attention, on
           <span className="label">סוג מסמך</span>
           <select className="input" value={draft.document_type} disabled={!editable || busy}
             onChange={(event) => onChange({ document_type: event.target.value as DocumentInterpretationType })}>
-            {DOCUMENT_TYPES.map((type) => <option key={type} value={type}>{DOCUMENT_TYPE_LABELS[type]}</option>)}
+            {DOCUMENT_TYPES.map((type) => <option key={type} value={type}>{t(DOCUMENT_TYPE_KEYS[type])}</option>)}
           </select>
         </label>
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-ink-muted">
         <span className="flex flex-wrap items-center gap-2">
-          <span>חלק <span className="num">{draft.ordinal}</span> · {confidenceLabel(draft.confidence)}</span>
+          <span>חלק <span className="num">{draft.ordinal}</span> · {confidenceLabel(draft.confidence, t)}</span>
           {attention && <span className="badge-await">{attention}</span>}
         </span>
         {stored?.child_document_id && (

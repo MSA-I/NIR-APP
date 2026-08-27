@@ -9,7 +9,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { ConfirmDialog, ICON, Note, SubPanel } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
 import { PriceListAutomationReadiness } from './PriceListAutomationReadiness';
-import { FILING_REASON_LABELS, type ReviewSnapshot } from './model';
+import { FILING_REASON_KEYS, type ReviewSnapshot } from './model';
 import { bidiIsolate, formatUnit, normalizeUnitInput } from '../../lib/format';
 
 /** The one create-product refusal that is about the NAME FIELD rather than about the server. */
@@ -233,7 +233,7 @@ export function PriceListReviewConfirmation({
   actorId,
   onRefetch,
 }: PriceListReviewConfirmationProps) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const interpretation = snapshot.interpretation;
   const lineItems = interpretation?.payload.line_items ?? [];
   const autoDecision = snapshot.priceListDecision;
@@ -736,9 +736,9 @@ export function PriceListReviewConfirmation({
             <span className="num">{autoDecision.waiting_count}</span> שורות ממתינות ·{' '}
             <span className="num">{autoDecision.created_product_count}</span> מוצרים חדשים נוצרו
           </p>
-          {autoDecision.reason_code && FILING_REASON_LABELS[autoDecision.reason_code] && (
+          {autoDecision.reason_code && FILING_REASON_KEYS[autoDecision.reason_code] && (
             <p className="mt-2 text-sm text-ink-muted">
-              {FILING_REASON_LABELS[autoDecision.reason_code]}
+              {t(FILING_REASON_KEYS[autoDecision.reason_code])}
             </p>
           )}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
@@ -927,8 +927,9 @@ export function PriceListReviewConfirmation({
 
                   {autoLine?.reason_code && (
                     <Note tone="await" className="mt-3">
-                      {FILING_REASON_LABELS[autoLine.reason_code]
-                        ?? 'השורה ממתינה לבדיקה ידנית.'}
+                      {autoLine.reason_code in FILING_REASON_KEYS
+                        ? t(FILING_REASON_KEYS[autoLine.reason_code])
+                        : 'השורה ממתינה לבדיקה ידנית.'}
                     </Note>
                   )}
 
@@ -939,8 +940,8 @@ export function PriceListReviewConfirmation({
                     <Note tone={matched ? 'done' : 'await'} className="mt-3">
                       {matched
                         ? <>הותאם לפי {MATCHED_BY_LABELS[prediction.matched_by ?? ''] ?? 'מפתח שלא נרשם'} למוצר „{matchedProductName ?? '—'}”; המחיר שנקרא <span className="num">{prediction.proposed_unit_price}</span>{prediction.current_unit_price !== null && <> במקום <span className="num">{prediction.current_unit_price}</span></>}</>
-                        : prediction.reason_code && FILING_REASON_LABELS[prediction.reason_code]
-                          ? FILING_REASON_LABELS[prediction.reason_code]
+                        : prediction.reason_code && prediction.reason_code in FILING_REASON_KEYS
+                          ? t(FILING_REASON_KEYS[prediction.reason_code])
                           : 'המערכת לא התאימה את השורה לבד. ההכרעה כאן.'}
                     </Note>
                   )}

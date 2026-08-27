@@ -1,3 +1,7 @@
+import type { TKey } from '../../lib/i18n/t';
+
+type TFn = (key: TKey, vars?: Record<string, string | number>) => string;
+
 import { useT } from '../../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { reasonOr } from '../../lib/reason';
@@ -8,9 +12,9 @@ import { supabase } from '../../lib/supabase';
 import type { DocumentAnnotation, DocumentFeedback, DocumentLearningRule, InterpretationContract } from '../../lib/useDocumentProcessing';
 import { Disclosure, ICON, Note, SubPanel, useToast } from '../ui';
 import {
-  ANNOTATION_SOURCE_LABELS,
-  DOCUMENT_TYPE_LABELS,
-  MARK_KIND_LABELS,
+  ANNOTATION_SOURCE_KEYS,
+  DOCUMENT_TYPE_KEYS,
+  MARK_KIND_KEYS,
   actorName,
   confidenceLabel,
   creditDraftFromInterpretation,
@@ -41,7 +45,7 @@ function valueText(value: string | number | boolean | null): string {
   return String(value);
 }
 
-function annotationTarget(snapshot: ReviewSnapshot, annotation: DocumentAnnotation): string {
+function annotationTarget(snapshot: ReviewSnapshot, annotation: DocumentAnnotation, t: TFn): string {
   if (annotation.target_kind === 'block') {
     const block = snapshot.extraction?.payload.blocks.find(({ id }) => id === annotation.target_id);
     const text = block
@@ -50,7 +54,7 @@ function annotationTarget(snapshot: ReviewSnapshot, annotation: DocumentAnnotati
     return block ? `קטע בעמוד ${block.page}: ${text || 'ללא טקסט'}` : `קטע ${annotation.target_id}`;
   }
   const mark = snapshot.extraction?.payload.marks.find(({ id }) => id === annotation.target_id);
-  return mark ? `${MARK_KIND_LABELS[mark.kind]} בעמוד ${mark.page}` : `סימון ${annotation.target_id}`;
+  return mark ? `${t(MARK_KIND_KEYS[mark.kind])} בעמוד ${mark.page}` : `סימון ${annotation.target_id}`;
 }
 
 /**
@@ -62,9 +66,9 @@ function annotationTarget(snapshot: ReviewSnapshot, annotation: DocumentAnnotati
  * The fallback says plainly that the mark is not in the extraction on screen rather than inventing
  * a location, because a rule application can outlive the extraction revision it fired against.
  */
-function ruleApplicationTarget(snapshot: ReviewSnapshot, targetId: string): string {
+function ruleApplicationTarget(snapshot: ReviewSnapshot, targetId: string, t: TFn): string {
   const mark = snapshot.extraction?.payload.marks.find(({ id }) => id === targetId);
-  return mark ? `${MARK_KIND_LABELS[mark.kind]} בעמוד ${mark.page}` : 'סימון שאינו מופיע בחילוץ הנוכחי';
+  return mark ? `${t(MARK_KIND_KEYS[mark.kind])} בעמוד ${mark.page}` : 'סימון שאינו מופיע בחילוץ הנוכחי';
 }
 
 function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
@@ -72,7 +76,7 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
   canDecide: boolean;
   onRefetch: () => Promise<boolean>;
 }) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const toast = useToast();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -116,7 +120,7 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
       });
       if (result.error) throw new Error(result.error.message);
       const refreshed = await onRefetch();
-      const success = `סוג המסמך תוקן ל${DOCUMENT_TYPE_LABELS[selectedType]}`;
+      const success = `סוג המסמך תוקן ל${t(DOCUMENT_TYPE_KEYS[selectedType])}`;
       if (refreshed) toast(success);
       else toast(`${success}, אך רענון המסך נכשל. יש לרענן ידנית לפני פעולה נוספת.`, 'error');
       setReason('');
@@ -147,8 +151,8 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
 
       <dl className="mt-4 rounded-lg bg-surface-sunken p-3" aria-live="polite">
         <dt className="text-sm font-medium text-ink-soft">הסיווג הפעיל</dt>
-        <dd className="mt-1 text-ink-body">{DOCUMENT_TYPE_LABELS[effectiveType]}</dd>
-        <dd className="mt-1 text-xs text-ink-muted">זיהוי אוטומטי: {confidenceLabel(currentInterpretation.payload.document_type_confidence)}</dd>
+        <dd className="mt-1 text-ink-body">{t(DOCUMENT_TYPE_KEYS[effectiveType])}</dd>
+        <dd className="mt-1 text-xs text-ink-muted">זיהוי אוטומטי: {confidenceLabel(currentInterpretation.payload.document_type_confidence, t)}</dd>
       </dl>
 
       {latest && (
@@ -167,9 +171,9 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
               disabled={busy}
               onChange={(event) => setChosenType(event.target.value as InterpretationContract['document_type'])}
             >
-              {(Object.keys(DOCUMENT_TYPE_LABELS) as InterpretationContract['document_type'][]).map((type) => (
+              {(Object.keys(DOCUMENT_TYPE_KEYS) as InterpretationContract['document_type'][]).map((type) => (
                 <option key={type} value={type}>
-                  {DOCUMENT_TYPE_LABELS[type]}{type === effectiveType ? ' — הסיווג הנוכחי' : ''}
+                  {t(DOCUMENT_TYPE_KEYS[type])}{type === effectiveType ? ' — הסיווג הנוכחי' : ''}
                 </option>
               ))}
             </select>
@@ -334,7 +338,7 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
   documentId: string;
   interpretation: NonNullable<ReviewSnapshot['interpretation']>;
 }) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const navigate = useNavigate();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -346,7 +350,7 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
   // invoice. Resolving it here means the reviewer either lands on the right invoice or is told
   // plainly that it was not found -- never silently on the wrong one.
   async function openCreditDraft() {
-    const draft = creditDraftFromInterpretation(interpretation.payload);
+    const draft = creditDraftFromInterpretation(interpretation.payload, t);
     const supplierId = interpretation.suggested_supplier_id;
     if (!draft.creditedInvoiceNumber || !supplierId) {
       toast('לא זוהתה במסמך החשבונית שאותה מזכים. בחר אותה מהרשימה ופתח ממנה דרישת זיכוי.', 'error');
@@ -560,6 +564,7 @@ function RuleControls({ rule, onRefetch }: {
 }
 
 export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewProposalsProps) {
+  const { t } = useT();
   const navigate = useNavigate();
   const interpretation = snapshot.interpretation;
   const ruleById = useMemo(() => new Map(snapshot.learningRules.map((rule) => [rule.id, rule])), [snapshot.learningRules]);
@@ -586,9 +591,9 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
 
   if (!interpretation) return null;
 
-  const supplierCaution = supplierMatchCaution(interpretation.payload.supplier.confidence);
-  const machineReason = filingReason(snapshot);
-  const routing = documentRoutingSummary(snapshot);
+  const supplierCaution = supplierMatchCaution(interpretation.payload.supplier.confidence, t);
+  const machineReason = filingReason(snapshot, t);
+  const routing = documentRoutingSummary(snapshot, t);
 
   return (
     <section className="space-y-4" data-testid="document-review-proposals" aria-labelledby="document-proposals-title">
@@ -601,7 +606,7 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
           <span className={routing.completed ? 'badge-done' : 'badge-await'}>{routing.completed ? 'שויך' : 'דורש השלמה'}</span>
         </div>
         <dl className="mt-3 grid gap-2 rounded-lg bg-surface-sunken p-3 text-sm sm:grid-cols-2">
-          <div><dt className="text-xs text-ink-muted">סוג שזוהה</dt><dd className="mt-1 font-medium text-ink-body">{DOCUMENT_TYPE_LABELS[interpretation.payload.document_type]}</dd></div>
+          <div><dt className="text-xs text-ink-muted">סוג שזוהה</dt><dd className="mt-1 font-medium text-ink-body">{t(DOCUMENT_TYPE_KEYS[interpretation.payload.document_type])}</dd></div>
           <div><dt className="text-xs text-ink-muted">יעד במערכת</dt><dd className="mt-1 font-medium text-ink-body">{routing.destination}</dd></div>
         </dl>
         <p className="mt-3 text-sm text-ink-soft">{routing.lineSummary}</p>
@@ -630,7 +635,7 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
         <dl className="mt-4 rounded-lg bg-surface-sunken p-3">
           <dt className="text-sm font-medium text-ink-soft">ספק מוצע</dt>
           <dd className="mt-1 break-words text-ink-body">{interpretation.payload.supplier.suggested_name || 'לא זוהה'}</dd>
-          <dd className="mt-1 text-xs text-ink-muted">{confidenceLabel(interpretation.payload.supplier.confidence)}</dd>
+          <dd className="mt-1 text-xs text-ink-muted">{confidenceLabel(interpretation.payload.supplier.confidence, t)}</dd>
         </dl>
         {/* The supplier is the one value on this card whose grade is not the whole message: it is
             carried into the invoice draft as the payee, so anything short of "clearly" states the
@@ -668,13 +673,13 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
             <div className="divide-y divide-line">
               {interpretation.payload.fields.map((field) => (
                 <div key={field.key} className="grid gap-1 py-3 first:pt-0 sm:grid-cols-[minmax(8rem,0.4fr)_minmax(0,1fr)] sm:gap-4">
-                  <div className="font-medium text-ink-soft">{fieldKeyLabel(field.key)}</div>
+                  <div className="font-medium text-ink-soft">{fieldKeyLabel(field.key, t)}</div>
                   <div className="min-w-0">
                     <div className="break-words text-ink-body">{valueText(field.value)}</div>
                     {/* Evidence block ids ("block-heading") named nothing a reviewer could act on.
                         The evidence itself is not lost: the source viewer beside this list is where
                         a value is checked against the document. */}
-                    <div className="mt-1 text-xs text-ink-muted">{confidenceLabel(field.confidence)}</div>
+                    <div className="mt-1 text-xs text-ink-muted">{confidenceLabel(field.confidence, t)}</div>
                   </div>
                 </div>
               ))}
@@ -703,7 +708,7 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
                         <tr key={`${item.source_row ?? 'none'}-${index}`} className="border-b border-line last:border-b-0">
                           <td className="td num">{item.source_row ?? '—'}</td>
                           <td className="td">
-                            <dl className="space-y-1">{Object.entries(item.values).map(([key, value]) => <div key={key}><dt className="inline font-medium">{lineItemKeyLabel(key)}: </dt><dd className="inline">{valueText(value)}</dd></div>)}</dl>
+                            <dl className="space-y-1">{Object.entries(item.values).map(([key, value]) => <div key={key}><dt className="inline font-medium">{lineItemKeyLabel(key, t)}: </dt><dd className="inline">{valueText(value)}</dd></div>)}</dl>
                             {arithmetic && !arithmetic.consistent && (
                               <div className="mt-2 flex flex-wrap items-center gap-2">
                                 <span className="badge-alert">הכפל אינו מסתדר</span>
@@ -736,9 +741,9 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
                         <h4 className="break-words font-semibold text-ink-body">{annotation.label}</h4>
-                        <p className="mt-1 break-words text-sm text-ink-soft">{annotation.tag_key} · {annotationTarget(snapshot, annotation)}</p>
+                        <p className="mt-1 break-words text-sm text-ink-soft">{annotation.tag_key} · {annotationTarget(snapshot, annotation, t)}</p>
                         <p className="mt-1 text-xs text-ink-muted">
-                          {confidenceLabel(annotation.confidence)} · {ANNOTATION_SOURCE_LABELS[annotation.source]} · {fmtDateTime(annotation.created_at)}
+                          {confidenceLabel(annotation.confidence, t)} · {t(ANNOTATION_SOURCE_KEYS[annotation.source])} · {fmtDateTime(annotation.created_at)}
                           {annotation.rule_version ? ` · כלל v${annotation.rule_version}` : ''}
                         </p>
                       </div>
@@ -772,8 +777,8 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
                         <h4 className="break-words font-semibold text-ink-body">{rule ? `${rule.label} (${rule.tag_key})` : `כלל ${application.rule_id}`}</h4>
-                        <p className="mt-1 text-sm text-ink-soft">הופעל על {ruleApplicationTarget(snapshot, application.target_id)}; {confidenceLabel(application.confidence)}</p>
-                        <p className="mt-1 text-sm text-ink-muted"><strong>למה הופעל:</strong> {ruleWhy(rule)}</p>
+                        <p className="mt-1 text-sm text-ink-soft">הופעל על {ruleApplicationTarget(snapshot, application.target_id, t)}; {confidenceLabel(application.confidence, t)}</p>
+                        <p className="mt-1 text-sm text-ink-muted"><strong>למה הופעל:</strong> {ruleWhy(rule, t)}</p>
                       </div>
                       <span className="badge-done">כלל v{application.rule_version}</span>
                     </div>

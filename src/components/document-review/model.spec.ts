@@ -7,6 +7,18 @@ import type {
   ReviewSnapshot,
 } from './model';
 import { bboxDescription, confidenceLabel, confidencePercent, creditDraftFromInterpretation, deliveryNoteLines, documentRoutingSummary, invoiceDraftFromInterpretation, latestCorrections, matchDeliveryLineProduct, paymentConfirmationFacts, sameAmount, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, normalizeInvoiceDate, resolveExportTemplateWinner, resolvedText, ruleWhy, supplierMatchCaution } from './model';
+import { he } from '../../lib/i18n/dictionaries/he';
+import type { Dictionary } from '../../lib/i18n/dictionaries/he';
+import { translate } from '../../lib/i18n/t';
+import type { TKey } from '../../lib/i18n/t';
+
+/**
+ * These functions take the translator now, because the module is pure and cannot hold a hook.
+ * The tests inject the HEBREW one: every assertion below still names the literal sentence, so a
+ * wrong dictionary entry fails here. Comparing `t(key)` to `t(key)` would pass either way.
+ */
+const t = ((key, vars) => translate(he as unknown as Dictionary, key, vars)) as
+  (key: TKey, vars?: Record<string, string | number>) => string;
 
 const correction = (revision: number, text: string): DocumentReviewCorrection => ({
   id: `correction-${revision}`,
@@ -34,7 +46,7 @@ test('routing summary names only a destination proven by the document row', () =
     interpretation: { payload: { document_type: 'invoice', line_items: [{ values: {} }] } },
     document: { entity_type: 'inbox', entity_id: null },
   } as unknown as ReviewSnapshot;
-  assert.deepEqual(documentRoutingSummary(base), {
+  assert.deepEqual(documentRoutingSummary(base, t), {
     completed: false,
     headline: 'המסמך נקרא, אך עדיין לא נכתבה רשומה ביעד',
     destination: 'חשבוניות',
@@ -45,7 +57,7 @@ test('routing summary names only a destination proven by the document row', () =
   assert.equal(documentRoutingSummary({
     ...base,
     document: { entity_type: 'invoice', entity_id: 'invoice-1' },
-  } as unknown as ReviewSnapshot).path, '/invoices/invoice-1');
+  } as unknown as ReviewSnapshot, t).path, '/invoices/invoice-1');
 });
 
 test('review overlays keep immutable evidence and select the newest fenced revision', () => {
@@ -63,43 +75,43 @@ test('review overlays keep immutable evidence and select the newest fenced revis
 });
 
 test('location and rule explanations stay textual', () => {
-  assert.match(bboxDescription([0.1, 0.2, 0.8, 0.9]), /10%–80%/);
+  assert.match(bboxDescription([0.1, 0.2, 0.8, 0.9], t), /10%–80%/);
   // A full-width band is what both production paths emit: FULL_BBOX for digital PDF text, and one
   // band per line from the OpenAI OCR adapter. The constant axis is dropped so the varying one
   // is not buried under "0%–100% לרוחב" on every single row.
-  assert.equal(bboxDescription([0, 0.26, 1, 0.3]), 'מיקום בעמוד: 26%–30% לגובה');
-  assert.equal(bboxDescription([0, 0, 1, 1]), 'פרוס על פני כל העמוד');
+  assert.equal(bboxDescription([0, 0.26, 1, 0.3], t), 'מיקום בעמוד: 26%–30% לגובה');
+  assert.equal(bboxDescription([0, 0, 1, 1], t), 'פרוס על פני כל העמוד');
   assert.match(ruleWhy({
     id: 'rule', org_id: 'org', family_id: 'family', version: 3, user_id: 'user', document_type: 'invoice',
     supplier_id: null, mark_kind: 'check', mark_fingerprint: 'fingerprint', tag_key: 'approved',
     label: 'מאושר', active: true, created_by: 'user', created_at: '2026-07-29T00:00:00Z',
     disabled_at: null, disabled_by: null, disable_reason: null,
-  }), /כלל אישי.*גרסה 3.*טביעת/);
+  }, t), /כלל אישי.*גרסה 3.*טביעת/);
 });
 
 test('confidence reaches the reviewer as words, never as a percentage', () => {
   // The owner's complaint, as an executable rule: no digit and no percent sign may reach the
   // everyday label. If someone reintroduces "רמת ביטחון 87%" this line is what fails.
   for (const value of [1, 0.97, 0.9, 0.89, 0.7, 0.69, 0.42, 0]) {
-    assert.equal(/[0-9%]/.test(confidenceLabel(value)), false, `numeric leak at ${value}`);
+    assert.equal(/[0-9%]/.test(confidenceLabel(value, t)), false, `numeric leak at ${value}`);
   }
   // The thresholds themselves — pinned so that moving them is a deliberate edit with a test diff,
   // not a silent drift. They are a product judgement (see model.ts); nothing here is calibrated.
-  assert.equal(confidenceLabel(0.97), 'זוהה בבירור');
-  assert.equal(confidenceLabel(0.9), 'זוהה בבירור');     // boundary is inclusive
-  assert.equal(confidenceLabel(0.89), 'זוהה חלקית');
-  assert.equal(confidenceLabel(0.7), 'זוהה חלקית');      // boundary is inclusive
-  assert.equal(confidenceLabel(0.69), 'לא ודאי');
+  assert.equal(confidenceLabel(0.97, t), 'זוהה בבירור');
+  assert.equal(confidenceLabel(0.9, t), 'זוהה בבירור');     // boundary is inclusive
+  assert.equal(confidenceLabel(0.89, t), 'זוהה חלקית');
+  assert.equal(confidenceLabel(0.7, t), 'זוהה חלקית');      // boundary is inclusive
+  assert.equal(confidenceLabel(0.69, t), 'לא ודאי');
   // A measured zero is a real statement about the reading and keeps the lowest grade.
-  assert.equal(confidenceLabel(0), 'לא ודאי');
+  assert.equal(confidenceLabel(0, t), 'לא ודאי');
 });
 
 test('an absent confidence says it is unknown and never poses as the lowest grade', () => {
   // CLAUDE.md: a metric with no data shows —, never 0. The verbal equivalent is that "unknown"
   // must not read as "we checked and it was bad", which is a claim about the document.
   for (const missing of [null, undefined, Number.NaN]) {
-    assert.equal(confidenceLabel(missing), 'רמת הזיהוי אינה ידועה');
-    assert.notEqual(confidenceLabel(missing), confidenceLabel(0));
+    assert.equal(confidenceLabel(missing, t), 'רמת הזיהוי אינה ידועה');
+    assert.notEqual(confidenceLabel(missing, t), confidenceLabel(0, t));
     assert.equal(confidencePercent(missing), '—');
   }
   // The number is moved, not deleted: the technical disclosure still prints it.
@@ -113,7 +125,7 @@ test('the disclosure does not round a value across the threshold it is being jud
   // Whole percent turned 0.899 into "90%" on the one surface built for diagnosis, next to a screen
   // saying "זוהה חלקית" against a documented 0.9 cut point — a contradiction created purely by the
   // display. Two decimals, and the trailing zeros stripped so ordinary values stay readable.
-  assert.equal(confidenceLabel(0.899), 'זוהה חלקית');
+  assert.equal(confidenceLabel(0.899, t), 'זוהה חלקית');
   assert.equal(confidencePercent(0.899), '89.9%');
   assert.equal(confidencePercent(0.865), '86.5%');
   assert.equal(confidencePercent(0.8749), '87.49%');
@@ -126,12 +138,12 @@ test('a confidence outside the contract range cannot buy the strongest claim', (
   // Unreachable through every write path today, which is exactly why it would be believed if it
   // ever appeared. Above 1 is a broken payload: it must not read as "זוהה בבירור", and it must not
   // silence the supplier check either.
-  assert.equal(confidenceLabel(1.5), 'רמת הזיהוי אינה ידועה');
-  assert.equal(confidenceLabel(101), 'רמת הזיהוי אינה ידועה');
-  assert.notEqual(supplierMatchCaution(1.5), null);
+  assert.equal(confidenceLabel(1.5, t), 'רמת הזיהוי אינה ידועה');
+  assert.equal(confidenceLabel(101, t), 'רמת הזיהוי אינה ידועה');
+  assert.notEqual(supplierMatchCaution(1.5, t), null);
   // Below 0 is equally broken but falls into the loudest grade, which errs toward more scrutiny.
   // A corrupt number that under-claims needs no guard, so this stays as it is.
-  assert.equal(confidenceLabel(-1), 'לא ודאי');
+  assert.equal(confidenceLabel(-1, t), 'לא ודאי');
   // The disclosure still shows the corruption rather than laundering it into a plausible number.
   assert.equal(confidencePercent(1.5), '150%');
   assert.equal(confidencePercent(-1), '-100%');
@@ -141,16 +153,16 @@ test('a supplier match that is not clear carries an instruction, a field of the 
   // A wrong date is corrected on the next screen; a wrong supplier prefills the payee of an
   // invoice (the draft carries suggested_supplier_id straight into the form), so the same grade
   // has to oblige more here than it does on an ordinary field.
-  assert.equal(supplierMatchCaution(0.97), null);
-  assert.equal(supplierMatchCaution(0.9), null);
-  assert.match(supplierMatchCaution(0.89) ?? '', /לאמת את שם הספק/);
-  assert.match(supplierMatchCaution(0.42) ?? '', /לאמת את שם הספק/);
+  assert.equal(supplierMatchCaution(0.97, t), null);
+  assert.equal(supplierMatchCaution(0.9, t), null);
+  assert.match(supplierMatchCaution(0.89, t) ?? '', /לאמת את שם הספק/);
+  assert.match(supplierMatchCaution(0.42, t) ?? '', /לאמת את שם הספק/);
   // Unknown is not permission to skip the check; it is the reason to run it.
-  assert.match(supplierMatchCaution(null) ?? '', /לאמת את שם הספק/);
-  assert.match(supplierMatchCaution(undefined) ?? '', /לאמת את שם הספק/);
+  assert.match(supplierMatchCaution(null, t) ?? '', /לאמת את שם הספק/);
+  assert.match(supplierMatchCaution(undefined, t) ?? '', /לאמת את שם הספק/);
   // The asymmetry itself: identical number, identical grade, different obligation.
-  assert.equal(confidenceLabel(0.8), 'זוהה חלקית');
-  assert.notEqual(supplierMatchCaution(0.8), null);
+  assert.equal(confidenceLabel(0.8, t), 'זוהה חלקית');
+  assert.notEqual(supplierMatchCaution(0.8, t), null);
 });
 
 test('invoice draft reads what the model offered and guesses nothing else', () => {
@@ -235,7 +247,7 @@ test('credit draft carries the amount and the credited invoice, never the reason
       { source_row: 1, values: { description: 'קולה 1.5 ל׳', quantity: '2' }, evidence_block_ids: [] },
     ],
   } as unknown as Parameters<typeof creditDraftFromInterpretation>[0];
-  const draft = creditDraftFromInterpretation(payload);
+  const draft = creditDraftFromInterpretation(payload, t);
   // The credit note prints a negative total; the sign is carried by the document type, not the row.
   assert.equal(draft.amount, '120.5');
   // The explicit reference beats the credit note's own number.
