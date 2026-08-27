@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate, useLocation, useSearchParams } from 'react-router';
-import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, X, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight, ScrollText } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, X, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight, ScrollText, CircleHelp } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
 import { APP_NAME } from '../lib/branding';
@@ -20,6 +20,8 @@ import { supabase } from '../lib/supabase';
 import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/organizationAccess';
 import { isRouteFamilyActive, sectionOf } from '../lib/quickActions';
 import { routeBackPresentation, routePresentationTitle, staticRouteTitle, type StaticRoutePath } from '../lib/routePresentation';
+import { tourNavigationAnchor, type ProductTourStep } from '../lib/productTourRegistry';
+import { OwnerProductTour, type OwnerProductTourHandle } from './product-tour/ProductTour';
 
 export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: ActiveRole[] }
 export interface NavSection { section: string; items: NavItem[]; collapsible?: boolean }
@@ -280,6 +282,7 @@ export default function Layout() {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const topNavRef = useRef<HTMLElement>(null);
   const phoneHeaderRef = useRef<HTMLElement>(null);
+  const ownerTourRef = useRef<OwnerProductTourHandle>(null);
   /* Is the page ALREADY saying which screen this is? See `useEffect` below. `false` is the safe
      value in every direction — unknown, unobservable, no heading at all — because it means the bar
      names the screen, and a bar that stays blank is the failure nobody sees. */
@@ -355,6 +358,26 @@ export default function Layout() {
     pushedMenuRef.current = true;
     navigate(hereWith(next)); // a PUSH — this entry is what the back gesture returns to
   }
+
+  const prepareOwnerTourStep = useCallback((step: ProductTourStep) => {
+    if (!step.prepare) return;
+    const desktop = window.matchMedia('(min-width: 64rem)').matches;
+    if (desktop) {
+      setOpenGroup(
+        step.prepare === 'management' ? 'ניהול'
+          : step.prepare === 'control' ? 'בקרה'
+            : step.prepare === 'account' ? 'account'
+              : null,
+      );
+      return;
+    }
+    if (mobileOpenRef.current) return;
+    const next = new URLSearchParams(searchParams);
+    next.set(MENU_PARAM, '1');
+    pushedMenuRef.current = true;
+    const search = next.toString();
+    navigate({ pathname: location.pathname, search: search ? `?${search}` : '', hash: location.hash });
+  }, [location.hash, location.pathname, navigate, searchParams]);
 
   const { panelRef: drawerRef, requestClose: closeMobileMenu } = useDialogLayer<HTMLElement>({
     open: mobileOpen,
@@ -549,7 +572,8 @@ export default function Layout() {
     const pillLabel = NAV_SHORT_LABELS[item.to] ?? item.label;
     return (
       <Link key={item.to} to={item.to} className={linkCls(active, surface)} aria-current={active ? 'page' : undefined}
-        data-section={section ?? undefined} title={surface === 'pill' && pillLabel !== item.label ? item.label : undefined}
+        data-section={section ?? undefined} data-tour-anchor={tourNavigationAnchor(item.to)}
+        title={surface === 'pill' && pillLabel !== item.label ? item.label : undefined}
         onClick={() => setOpenGroup(null)}>
         {surface !== 'pill' && <item.icon size={ICON.md} aria-hidden="true" />}
         <span className="min-w-0 flex-1 truncate">{surface === 'pill' ? pillLabel : item.label}</span>
@@ -578,6 +602,23 @@ export default function Layout() {
     </button>
   );
 
+  const startOwnerTour = () => {
+    setOpenGroup(null);
+    if (!mobileOpenRef.current) {
+      ownerTourRef.current?.start();
+      return;
+    }
+    closeMobileMenu();
+    requestAnimationFrame(() => ownerTourRef.current?.start());
+  };
+
+  const tourLauncherRow = role === 'owner' ? (
+    <button type="button" onClick={startOwnerTour}
+      className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-sm text-ink-soft transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset">
+      <CircleHelp size={ICON.md} aria-hidden="true" /> מדריך שימוש
+    </button>
+  ) : null;
+
   /* The phone's account block — the person, and nothing about the contract.
      The tier mark passed through here for one round and the owner corrected the premise: a plan
      is a property of the TENANT, not of the person signed in, and parking it beside a name and a
@@ -587,6 +628,7 @@ export default function Layout() {
     <div className="pt-3">
       <div className="px-3 text-sm font-medium text-ink">{profile?.full_name}</div>
       <div className="mb-2 px-3 text-xs text-ink-muted">{role ? roleLabels[role] : ''}</div>
+      {tourLauncherRow}
       {signOutRow}
     </div>
   );
@@ -750,6 +792,7 @@ export default function Layout() {
         {footerItems.length > 0 && <div className="mt-2 space-y-0.5">{navLinks(footerItems, { surface: 'panel' })}</div>}
         {/* The same row the drawer shows, in the surface that IS the drawer on this width. */}
         <div className="mt-2"><FeedbackButton variant="menu" /></div>
+        {tourLauncherRow && <div className="mt-2">{tourLauncherRow}</div>}
         <div className="mt-2">{signOutRow}</div>
       </div>
     </div>
@@ -813,7 +856,7 @@ export default function Layout() {
               hold it rather than evicting the brand. Nothing is hidden, nothing scrolls, and no
               destination was removed to make it fit. Measured after: one row from 1280 up. */}
           <div className="flex min-w-0 flex-1 justify-center">
-            <nav aria-label="ניווט ראשי"
+            <nav aria-label="ניווט ראשי" data-tour-anchor="primary-navigation"
               /* `rounded-[1.625rem]` IS `rounded-full` for the row this pill actually is, and it is
                  not a compromise: 26px is exactly half the one-row height (p-1.5 = 12 + a 40px
                  `min-h-10` item = 52), so at every width that fits on one line — 1152 and up,
@@ -856,7 +899,7 @@ export default function Layout() {
                 to THREE and the sticky header from 110px to 152px, measured. At `w-32` the trigger
                 still reads as a search field and the band is back to two. Nothing is lost with it:
                 the results panel stopped inheriting this width (see below), and ⌘K reaches it. */}
-            {canSearch && <div className="w-32 xl:w-44 2xl:w-64 [&_input]:rounded-full [&_input]:bg-surface/90"><GlobalSearch /></div>}
+            {canSearch && <div data-tour-anchor="global-search" className="w-32 xl:w-44 2xl:w-64 [&_input]:rounded-full [&_input]:bg-surface/90"><GlobalSearch /></div>}
             {/* Self-gated on assistant.ui (fail-closed); renders nothing while the flag is off. */}
             <AssistantPanel session={assistantSession} />
             <NotificationBell />
@@ -873,6 +916,7 @@ export default function Layout() {
             counted `size-[44px]`, `min-h-11 min-w-11`, `min-h-[44px] min-w-[44px]` and `size-11`
             in this one shell, all meaning the same thing. */}
         <button type="button"
+          data-tour-anchor="primary-navigation"
           className="btn-ghost btn-icon group rounded-full"
           onClick={openMobileMenu} aria-label="פתיחת תפריט" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
           {/* The three lines fold into an X while the drawer comes in (owner, 26.08.2026, with the
@@ -985,6 +1029,7 @@ export default function Layout() {
         <div className="flex shrink-0 items-center gap-0.5">
           {canSearch && (
             <button type="button" className="btn-ghost btn-icon rounded-full" onClick={() => setSearchOpen(true)}
+              data-tour-anchor="global-search"
               aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={ICON.xl} aria-hidden="true" /></button>
           )}
           <AssistantPanel session={assistantSession} />
@@ -1056,6 +1101,10 @@ export default function Layout() {
           access; Layout never wraps public pages. The unfiled-documents count is handed down
           rather than queried a second time — this shell already holds the live value. */}
       <Fab inboxCount={inboxCount} />
+
+      <OwnerProductTour ref={ownerTourRef}
+        profile={profile && role ? { id: profile.id, org_id: profile.org_id, role } : null}
+        onPrepareStep={prepareOwnerTourStep} />
 
       {/* Unsynced receiving work + logout. The counts are named rather than summarised: "2 פעולות"
           and "1 העלאה" are different work, and a person deciding whether to sign out on a phone

@@ -3862,6 +3862,109 @@ async function supplierPortalLocales(browser) {
   }
 }
 
+async function ownerProductTour(browser) {
+  const waitStep = async (page, stepId, anchor) => {
+    await page.waitForFunction(({ stepId, anchor }) => {
+      const layer = document.querySelector(`[data-product-tour-step="${stepId}"]`);
+      const target = [...document.querySelectorAll(`[data-tour-anchor="${anchor}"]`)]
+        .find((node) => node instanceof HTMLElement && node.getBoundingClientRect().width > 0);
+      return !!layer?.querySelector('.product-tour-spotlight')
+        && !!layer.querySelector('.product-tour-popover')
+        && !!target;
+    }, { stepId, anchor }, { timeout: 25_000 });
+  };
+  const next = (page) => page.locator('[data-product-tour-step]')
+    .getByRole('button', { name: 'הבא', exact: true }).click();
+  const launch = async (page, mobile) => {
+    await page.evaluate(() => {
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith('inplace.product-tour.')) localStorage.removeItem(key);
+      }
+    });
+    if (mobile) await page.getByRole('button', { name: 'פתיחת תפריט', exact: true }).click();
+    else await page.getByRole('button', { name: /תפריט החשבון/ }).click();
+    await page.getByRole('button', { name: 'מדריך שימוש', exact: true }).click();
+    await waitStep(page, 'welcome', 'dashboard-heading');
+  };
+
+  const desktop = await browser.newContext({
+    locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce',
+  });
+  const desktopPage = await desktop.newPage();
+  captureConsole(desktopPage, 'owner-product-tour:1440');
+  try {
+    await login(desktopPage, 'owner');
+    await settle(desktopPage);
+    await launch(desktopPage, false);
+    await auditAccessibility(desktopPage, 'owner-product-tour:1440:welcome');
+    await desktopPage.screenshot({ path: path.join(outDir, 'owner-tour-1440-welcome.png') });
+    report.screenshots.push('owner-tour-1440-welcome.png');
+
+    for (const id of ['welcome', 'attention', 'search', 'navigation']) {
+      await desktopPage.locator(`[data-product-tour-step="${id}"]`).waitFor();
+      await next(desktopPage);
+    }
+    await desktopPage.locator('[data-tour-anchor="nav-suppliers"]:visible').click();
+    await desktopPage.locator('[data-product-tour-step="supplier-screen"]').waitFor();
+    await next(desktopPage);
+    await desktopPage.locator('[data-tour-anchor="nav-prices"]:visible').click();
+    await waitStep(desktopPage, 'price-list-screen', 'prices-upload');
+    await auditAccessibility(desktopPage, 'owner-product-tour:1440:prices');
+    await desktopPage.screenshot({ path: path.join(outDir, 'owner-tour-1440-price-list.png') });
+    report.screenshots.push('owner-tour-1440-price-list.png');
+
+    await next(desktopPage);
+    await desktopPage.locator('[data-product-tour-step="open-new-order"]').waitFor();
+    await next(desktopPage);
+    for (const id of [
+      'new-order-screen', 'receiving-screen', 'documents-screen', 'invoices-screen',
+      'payment-requests-screen', 'reports-screen',
+    ]) {
+      await desktopPage.locator(`[data-product-tour-step="${id}"]`).waitFor();
+      await next(desktopPage);
+    }
+    await waitStep(desktopPage, 'start-onboarding', 'onboarding-start');
+    await desktopPage.screenshot({ path: path.join(outDir, 'owner-tour-1440-onboarding.png') });
+    report.screenshots.push('owner-tour-1440-onboarding.png');
+    await desktopPage.locator('[data-tour-anchor="onboarding-start"]:visible').click();
+    await desktopPage.waitForFunction(() => location.pathname === '/onboarding');
+    assert.equal(await desktopPage.locator('[data-product-tour-step]').count(), 0,
+      'owner tour remained open after the onboarding link completed it');
+  } finally {
+    await closeContext(desktop);
+  }
+
+  const mobile = await browser.newContext({
+    locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 390, height: 844 }, reducedMotion: 'reduce',
+  });
+  const mobilePage = await mobile.newPage();
+  captureConsole(mobilePage, 'owner-product-tour:390');
+  try {
+    await login(mobilePage, 'owner');
+    await settle(mobilePage);
+    await launch(mobilePage, true);
+    assert.equal(await mobilePage.locator('.drawer-scrim').count(), 0,
+      'mobile drawer stayed above the first tour step');
+    await auditAccessibility(mobilePage, 'owner-product-tour:390:welcome');
+    await mobilePage.screenshot({ path: path.join(outDir, 'owner-tour-390-welcome.png') });
+    report.screenshots.push('owner-tour-390-welcome.png');
+    for (const id of ['welcome', 'attention', 'search']) {
+      await mobilePage.locator(`[data-product-tour-step="${id}"]`).waitFor();
+      await next(mobilePage);
+    }
+    await waitStep(mobilePage, 'navigation', 'primary-navigation');
+    await mobilePage.screenshot({ path: path.join(outDir, 'owner-tour-390-navigation.png') });
+    report.screenshots.push('owner-tour-390-navigation.png');
+    const metrics = await mobilePage.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    assert(metrics.documentWidth - metrics.clientWidth <= 1, 'owner tour overflows at 390px');
+  } finally {
+    await closeContext(mobile);
+  }
+}
+
 async function run(name, check) {
   if (process.env.QUALITY_ONLY && !name.includes(process.env.QUALITY_ONLY)) {
     const reason = `QUALITY_ONLY=${process.env.QUALITY_ONLY}`;
@@ -3954,6 +4057,7 @@ async function supplierEmailDeliverySurface(browser) {
     await run('overlay stacking and breakpoint reset', () => overlayStacking(browser));
     await run('dashboard, quick actions and dialogs', () => dashboardAndDialogs(browser));
     await run('golden screen visual baseline', () => goldenScreens(browser));
+    await run('owner first-run product tour stays role-safe, responsive and replayable', () => ownerProductTour(browser));
     await run('DataTable, ActionMenu, route focus and mobile search', () => tableKeyboardAndSearch(browser));
     await run('receiving contextual names and accessibility', () => receivingAccessibility(browser));
     await run('offline receiving queues once and keeps its key', () => offlineReceiving(browser));

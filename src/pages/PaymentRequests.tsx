@@ -129,6 +129,7 @@ export default function PaymentRequests() {
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
+      <div data-tour-anchor="payment-requests-overview">
       <PageHeader title="דרישות תשלום" meta={`${rows.length} דרישות בתצוגה`}
         actions={<>
           {/* The owner's emergency execution route was removed (G4, 10.08.2026). An approved
@@ -136,6 +137,7 @@ export default function PaymentRequests() {
               the same audit row the emergency path had. */}
           {isOffice && <button className="btn-primary" onClick={() => setManualCreateOpen(true)}><Plus size={ICON.sm} aria-hidden="true" /> דרישה חדשה</button>}
         </>} />
+      </div>
       <DataTable rows={rows} columns={columns} searchable
         emptyTitle="אין דרישות תשלום"
         emptySubtitle={'דרישת תשלום נפתחת מול ספק שיש לו חשבוניות פתוחות, ונקשרת אליהן.'}

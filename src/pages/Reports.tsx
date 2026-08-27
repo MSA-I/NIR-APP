@@ -336,6 +336,7 @@ export default function Reports() {
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
       {fetching && data && <Note tone="idle">הדוח מתעדכן. הייצוא והסימון מושבתים עד להשלמת הרענון.</Note>}
+      <div data-tour-anchor="reports-overview">
       <PageHeader className="no-print"
         title={<span className="flex flex-wrap items-center gap-2">דוח חודשי לרואת חשבון <span className="badge-idle">דוח חי</span></span>}
         meta={`הנתונים הושלמו ${fmtDateTime(data.generatedAt)} ואינם snapshot טרנזקציוני.`}
@@ -346,6 +347,7 @@ export default function Reports() {
           <button className="btn-secondary" disabled={busy || fetching || !!error} title={exportBlockedReason ?? 'הורדת הדוח כקובץ Excel'} onClick={() => void exportExcel()}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={ICON.sm} aria-hidden="true" />} ייצוא Excel</button>
           <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הדפסת הדוח או שמירה כ-PDF'} onClick={() => window.print()}><Printer size={ICON.sm} aria-hidden="true" /> הדפסה / PDF</button>
         </div>} />
+      </div>
 
       {/* The product summary is a sibling report, reached from here rather than from the main
           navigation: it answers a different question about the same money, and a sub-report that

@@ -319,7 +319,9 @@ export function ReceivingList() {
 
   return (
     <div className="space-y-4 max-w-2xl">
-      <PageHeader title="קבלת סחורה" meta={`${orders.length} הזמנות ממתינות · ${attention.length} דורשות פעולה`} />
+      <div data-tour-anchor="receiving-overview">
+        <PageHeader title="קבלת סחורה" meta={`${orders.length} הזמנות ממתינות · ${attention.length} דורשות פעולה`} />
+      </div>
       <OfflineQueueStatus />
       {data?.fromDevice && (
         <Note tone={data.stale ? 'alert' : 'await'}>

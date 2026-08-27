@@ -189,7 +189,7 @@ export function SuppliersList() {
         meta={financial
           ? `${data?.length ?? 0} ספקים · ${(data ?? []).filter((supplier) => (supplier.open_balance ?? 0) > 0).length} עם יתרה פתוחה`
           : `${data?.length ?? 0} ספקים`}
-        actions={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> ספק חדש</button>} />
+        actions={canWrite && <button data-tour-anchor="suppliers-new" className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> ספק חדש</button>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.contact_name ?? '').toLowerCase().includes(q) || (r.tax_id ?? '').toLowerCase().includes(q)}
         searchLabel="חיפוש בספקים"

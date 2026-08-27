@@ -739,6 +739,7 @@ export default function NewOrder() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
+      <div data-tour-anchor="new-order-flow">
       <PageHeader
         title="הזמנה חדשה"
         description="בחירת מוצרים תחילה, אישור ספקים ומחירים לאחר מכן"
@@ -763,6 +764,7 @@ export default function NewOrder() {
           {split.blocked.length > 0 && <p className="text-xs text-alert-fg sm:text-end">יש <span className="num">{split.blocked.length}</span> פריטים ללא הקצאת ספק תקפה — יש לתקן אותם כדי להמשיך</p>}
           </div>
         )} />
+      </div>
 
       {/* T7.3: the wizard steps speak the floating-pill language — a white pill strip with the
           active step as a solid oceanic pill, replacing the ruled underline tabs.

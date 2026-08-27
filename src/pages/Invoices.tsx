@@ -274,6 +274,7 @@ export function InvoicesList() {
       {/* No "new invoice" action (G1, 10.08.2026). An invoice arrives from a supplier; it is not
           something this business creates. The way one comes into existence is: photograph the
           document, let it be read, approve it. The gallery is where that starts. */}
+      <div data-tour-anchor="invoices-overview">
       <PageHeader title="חשבוניות"
         meta={`${data.total} חשבוניות${activeFilters ? ` · ${activeFilters} מסננים פעילים` : ''}`}
         actions={canCreate && (
@@ -281,6 +282,7 @@ export function InvoicesList() {
             <Plus size={ICON.sm} aria-hidden="true" /> העלאת מסמך שהתקבל
           </button>
         )} />
+      </div>
       {/* ToggleGroup owns the chip geometry; the per-item className is what keeps the phone
           strip to the stages that start or unblock work — a secondary stage stays hidden below
           `sm` unless it is the active one, and every stage remains in the filter sheet. */}
