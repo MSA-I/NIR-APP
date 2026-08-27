@@ -103,7 +103,7 @@ function renderDetail() {
 
 const actionNames = () => screen.getAllByRole('button')
   .map((node) => node.textContent?.trim() ?? '')
-  .filter((label) => INVOICE_REVIEW_ACTIONS.some((action) => action.label === label));
+  .filter((label) => INVOICE_REVIEW_ACTIONS.some((action) => action.auditLabel === label));
 
 const heading = () => screen.findByRole('heading', { name: /חשבונית 7702/ });
 
@@ -153,10 +153,10 @@ describe('InvoiceDetail — the server owns the review graph (migration 0070)', 
     // A failed read is not an empty graph: every action is shown DISABLED, with the reason on
     // screen, because both hiding a legal transition and offering an illegal one are worse.
     await waitFor(() => expect(actionNames()).toEqual(
-      INVOICE_REVIEW_ACTIONS.map((action) => action.label),
+      INVOICE_REVIEW_ACTIONS.map((action) => action.auditLabel),
     ));
     for (const action of INVOICE_REVIEW_ACTIONS) {
-      expect(screen.getByRole('button', { name: new RegExp(action.label) })).toBeDisabled();
+      expect(screen.getByRole('button', { name: new RegExp(action.auditLabel) })).toBeDisabled();
     }
     expect(await screen.findByRole('alert')).toHaveTextContent('עדכון הסטטוס חסום');
     // The invoice itself still rendered: a graph failure must not take the screen down with it.

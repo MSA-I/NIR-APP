@@ -12,7 +12,9 @@
     "src/operator/OperatorShell.tsx": "Owner decision, 27.08.2026: the internal operator console is not translated. It is used by the InPlace team only and is not sold to a tenant, so translating it serves no end user. These counts stay pinned where they are rather than dropping to zero; see GATES.md ABANDON: P2-G4 and DEBT-REGISTER.md.",
     "src/operator/PurgeCandidates.tsx": "Owner decision, 27.08.2026: the internal operator console is not translated. It is used by the InPlace team only and is not sold to a tenant, so translating it serves no end user. These counts stay pinned where they are rather than dropping to zero; see GATES.md ABANDON: P2-G4 and DEBT-REGISTER.md.",
     "src/operator/SignupQuarantine.tsx": "Owner decision, 27.08.2026: the internal operator console is not translated. It is used by the InPlace team only and is not sold to a tenant, so translating it serves no end user. These counts stay pinned where they are rather than dropping to zero; see GATES.md ABANDON: P2-G4 and DEBT-REGISTER.md.",
-    "src/pages/PaymentRequests.tsx": "Iron rule, docs/HANDOFF-english-language-20260827.md §9: audit_logs is evidence and is never translated. The seven lines that stay are the audit reasons this screen writes — reasonOr(reason, ...) at creation, the PAYMENT_REQUEST_ACTION_LABEL table the approver falls back to, and the exceptional-approval reason — all of which travel into p_reason / p_override_reason and land in audit_logs. Translating them would rewrite a ledger entry in a language the ledger was not written in. Everything a person reads on this screen is extracted."
+    "src/pages/PaymentRequests.tsx": "Iron rule, docs/HANDOFF-english-language-20260827.md §9: audit_logs is evidence and is never translated. The seven lines that stay are the audit reasons this screen writes — reasonOr(reason, ...) at creation, the PAYMENT_REQUEST_ACTION_LABEL table the approver falls back to, and the exceptional-approval reason — all of which travel into p_reason / p_override_reason and land in audit_logs. Translating them would rewrite a ledger entry in a language the ledger was not written in. Everything a person reads on this screen is extracted.",
+    "src/pages/InvoiceDetail.tsx": "Iron rule, docs/HANDOFF-english-language-20260827.md §9: audit_logs is evidence and is never translated. The five lines that stay are the audit wording of INVOICE_REVIEW_ACTIONS — each action carries a labelKey the button renders in the reader's language AND an auditLabel that reaches p_reason through reasonOr(). Splitting the two is deliberate: an audit trail whose wording depends on who pressed the button cannot be searched. PaymentRequests.tsx makes the same split for the same reason.",
+    "src/pages/Onboarding.tsx": "Two deliberate classes, neither of them copy this feature owns. (1) CATEGORY_SUGGESTIONS[].name is the value WRITTEN TO categories.name, copied byte-for-byte from starter_categories in supabase/seed.sql — the seed inserts \"on conflict (org_id, name) do nothing\", so a translated value would silently create a second category beside the seeded one. The visible label follows the reader through labelKey; only the stored value stays canonical. (2) The Hebrew words in each FieldSpec aliases[] are what autoMapColumns matches against the HEADER ROW OF AN UPLOADED SPREADSHEET. They are input recognition, not copy: translating them would stop auto-mapping a Hebrew file that maps on the first try today. Every field label that used to sit in the label property was MOVED INTO aliases for exactly that reason, so nothing that used to match stopped matching."
   },
   "counts": {
     "src/App.tsx": 18,
@@ -137,7 +139,7 @@
     "src/pages/FinancialSupplier.tsx": 31,
     "src/pages/ForgotPassword.tsx": 9,
     "src/pages/Inventory.tsx": 6,
-    "src/pages/InvoiceDetail.tsx": 104,
+    "src/pages/InvoiceDetail.tsx": 5,
     "src/pages/InvoiceNew.tsx": 47,
     "src/pages/Invoices.tsx": 39,
     "src/pages/Legal.tsx": 79,
@@ -148,7 +150,7 @@
     "src/pages/neworder/SummaryStep.tsx": 15,
     "src/pages/neworder/SupplierGroupCard.tsx": 13,
     "src/pages/neworder/SupplierSplitStep.tsx": 43,
-    "src/pages/Onboarding.tsx": 132,
+    "src/pages/Onboarding.tsx": 21,
     "src/pages/Orders.tsx": 27,
     "src/pages/PaymentRequests.tsx": 7,
     "src/pages/Payments.tsx": 28,
@@ -162,7 +164,6 @@
     "src/pages/Receiving.tsx": 35,
     "src/pages/Reports.tsx": 95,
     "src/pages/ResetPassword.tsx": 11,
-    "src/pages/Settings.tsx": 110,
     "src/pages/Signup.tsx": 22,
     "src/pages/Subscription.tsx": 1,
     "src/pages/SupplierLog.tsx": 41,
