@@ -4,8 +4,9 @@
 
 ## מסלולי המנוי `0213` — Draft PR, ‏27.08.2026
 
-**מצב: `PARTIAL_LOCAL_VERIFIED / NOT_COMMITTED / NOT_PUSHED / NOT_MERGED / NOT_DEPLOYED`.**
-העבודה בענף המבודד `codex/subscription-plans-20260827`, מבסיס `origin/main` ‏`c04d37a`.
+**מצב: `PARTIAL_LOCAL_VERIFIED / DRAFT_PR_OPEN / NOT_MERGED / NOT_DEPLOYED`.**
+העבודה בענף המבודד `codex/subscription-plans-20260827`, מבסיס `origin/main` ‏`c04d37a`;
+קומיט המימוש הראשון `3a1a516`, ‏Draft PR ‏[#139](https://github.com/MSA-I/NIR-APP/pull/139).
 
 - **מה הוכרע:** ‏`#277` — בתוך החשבון עברית מציגה קטלוג ILS ואנגלית קטלוג USD; זו תצוגה בלבד.
   החיוב והמס נשארים לפי מדינת החיוב המאומתת אצל ה-MoR בהתאם ל-`#208`. ‏`/pricing` הציבורי
@@ -27,9 +28,9 @@
   ‏`support.premium` הוא גבול שירות חיצוני בכוונה. אין לפרסם, למזג או לפרוס את הסולם כגמור לפני
   סגירת שני השערים ב-`GATES.md`.
 
-**גבולות מצב:** המיגרציות נבדקו רק ב-rollback; ה-ledger המקומי והחי לא שונו. אין commit, אין CI,
-אין merge, אין apply ל-DB, אין Pages/Edge deploy ואין הוכחת live. הסטטוס יוחלף רק בראיות PR/SHA
-חדשות.
+**גבולות מצב:** המיגרציות נבדקו רק ב-rollback; ה-ledger המקומי והחי לא שונו. הקוד committed
+ו-pushed ל-Draft PR ‏#139, אך אין עדיין ראיית CI ירוקה ל-SHA הסופי. אין merge, אין apply ל-DB,
+אין Pages/Edge deploy ואין הוכחת live. הסטטוס יוחלף רק בראיות PR/SHA חדשות.
 
 > **קרא את השורה הזו לפני שאתה מתכנן משהו:** ‏`main` וייצור **אינם מסונכרנים עוד**. ‏`main`
 > כולל את `0212_prelaunch_plan_grant_expiry.sql`, אך הראיה החיה האחרונה לייצור היא `0211` בלבד.
