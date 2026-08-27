@@ -46,7 +46,7 @@ const HEX_LITERAL = /#[0-9a-fA-F]{6}\b/g;
  * dashboard, menu, toast, dialog, fab) and every one of them is a color-mix over a brand token.
  * A bare `shadow-lg` opts that surface out of the repaint contract without saying so.
  */
-const STOCK_SHADOW = /shadow-(?:sm|md|lg|xl|2xl|inner)/g;
+const STOCK_SHADOW = /\bshadow-(?:sm|md|lg|xl|2xl|inner)\b/g;
 
 /** Inside index.css a 3-digit hex is a colour too (`color: #fff`); in .ts `#106` is an issue ref. */
 const CSS_COLOUR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\boklch\(/g;

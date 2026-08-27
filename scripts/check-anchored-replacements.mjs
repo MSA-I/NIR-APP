@@ -88,7 +88,7 @@ const CALL = /pg_get_functiondef\s*\(/gi;
 const NORMALISED_WINDOW = 60;
 
 /** A definition read only to be re-executed needs no strip: nothing searches it. */
-const EXECUTED = /execute\s+(?:replace\s*\(\s*)?$/i;
+const EXECUTED = /\bexecute\s+(?:replace\s*\(\s*)?$/i;
 
 const offenders = [];
 const stale = [];
