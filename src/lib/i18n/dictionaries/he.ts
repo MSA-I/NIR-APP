@@ -203,6 +203,12 @@ export const he = {
     document_upload_reservation_registered: 'המסמך כבר נרשם במערכת — אין להעלות אותו שוב.',
     document_upload_reservation_lifetime_exceeded: 'חלון ההעלאה הסתיים. יש להתחיל את ההעלאה מחדש.',
     document_upload_reservation_unknown: 'הקצאת ההעלאה אינה קיימת עוד. יש להתחיל את ההעלאה מחדש.',
+    price_list_confirm_session_expired: 'פג תוקף החיבור. יש להתחבר מחדש לפני אישור המחירון.',
+    price_list_confirm_forbidden: 'אין לך הרשאה לאשר את המחירון הזה.',
+    price_list_confirm_conflict: 'מצב המסמך השתנה. רענן את המסך ובדוק שוב.',
+    price_list_confirm_unavailable: 'שירות קליטת המחירונים אינו זמין כרגע.',
+    monthly_report_snapshot_legal_entity_invalid: 'הישות המשפטית אינה זמינה או אינה בתחום ההרשאה שלך. יש לבחור ישות אחרת.',
+    monthly_report_snapshot_source_unavailable: 'לא ניתן להשלים כעת את צילום המצב. הנתונים לא נשמרו ויש לנסות שוב.',
   },
 
   status: {

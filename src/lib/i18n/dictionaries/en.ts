@@ -199,6 +199,12 @@ export const en: Dictionary = {
     document_upload_reservation_registered: 'This document is already registered — do not upload it again.',
     document_upload_reservation_lifetime_exceeded: 'The upload window has closed. Start the upload again.',
     document_upload_reservation_unknown: 'That upload reservation no longer exists. Start the upload again.',
+    price_list_confirm_session_expired: 'Your session has expired. Sign in again before approving the price list.',
+    price_list_confirm_forbidden: 'You do not have permission to approve this price list.',
+    price_list_confirm_conflict: 'The document state changed. Refresh the screen and check again.',
+    price_list_confirm_unavailable: 'The price-list intake service is unavailable right now.',
+    monthly_report_snapshot_legal_entity_invalid: 'That legal entity is unavailable or outside your permissions. Choose another one.',
+    monthly_report_snapshot_source_unavailable: 'The snapshot cannot be completed right now. Nothing was saved; please try again.',
   },
 
   status: {

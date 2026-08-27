@@ -3,7 +3,6 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { reasonOr } from '../../lib/reason';
 import { CheckCircle2, Loader2, Plus } from 'lucide-react';
 import { Link } from 'react-router';
-import { toHebrewError } from '../../lib/errors';
 import { supabase } from '../../lib/supabase';
 import type { PriceListPredictedLine } from '../../lib/useDocumentProcessing';
 import { useAuth } from '../../auth/AuthContext';
@@ -210,7 +209,7 @@ function hasHttpResponse(error: unknown): boolean {
   return Boolean(context && typeof context.json === 'function' && typeof context.status === 'number');
 }
 
-async function edgeErrorMessage(error: unknown) {
+async function edgeErrorCondition(error: unknown) {
   const context = (error as { context?: Response } | null)?.context;
   if (context && typeof context.json === 'function') {
     try {
@@ -219,12 +218,14 @@ async function edgeErrorMessage(error: unknown) {
         return body.error.detail ? `${body.error.message} (${body.error.detail})` : body.error.message;
       }
     } catch { /* use the transport mapping below */ }
-    if (context.status === 401) return 'פג תוקף החיבור. יש להתחבר מחדש לפני אישור המחירון.';
-    if (context.status === 403) return 'אין לך הרשאה לאשר את המחירון הזה.';
-    if (context.status === 409) return 'מצב המסמך השתנה. רענן את המסך ובדוק שוב.';
-    if (context.status === 404 || context.status >= 500) return 'שירות קליטת המחירונים אינו זמין כרגע.';
+    // Conditions, not sentences: all four are registered in src/lib/errors.ts, so the screen
+    // resolves them like every other failure instead of this file owning four private wordings.
+    if (context.status === 401) return 'price_list_confirm_session_expired';
+    if (context.status === 403) return 'price_list_confirm_forbidden';
+    if (context.status === 409) return 'price_list_confirm_conflict';
+    if (context.status === 404 || context.status >= 500) return 'price_list_confirm_unavailable';
   }
-  return toHebrewError(error);
+  return error instanceof Error ? error.message : String(error);
 }
 
 export function PriceListReviewConfirmation({
@@ -508,7 +509,7 @@ export function PriceListReviewConfirmation({
       const response = await supabase.functions.invoke<SubmissionReceipt>('submit-price-list', { body: payload });
       if (response.error) {
         const responseReceived = hasHttpResponse(response.error);
-        const message = await edgeErrorMessage(response.error);
+        const message = errorText(await edgeErrorCondition(response.error));
         const recovery = await recoverAfterSubmission(payload.interpretationId);
         if (recovery === 'found') return;
         if (responseReceived && recovery === 'missing' && snapshot.job?.status === 'review') {

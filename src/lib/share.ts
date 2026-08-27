@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { toHebrewError } from './errors';
 import { bidiIsolate, fmtDate, fmtMoneyExact, formatQuantity } from './format';
 import { openExternalPopup } from './popup';
 
@@ -101,7 +100,8 @@ export async function markOrderSentToSupplier(orderId: string): Promise<{ error?
     p_confirmation_note: null,
     p_expected_date: null,
   });
-  return res.error ? { error: toHebrewError(res.error.message) } : {};
+  // The condition, not a sentence: WhatsAppSendDialog draws it and resolves it there.
+  return res.error ? { error: res.error.message } : {};
 }
 
 /** True when the Web Share API is available (mobile browsers, some desktops). */

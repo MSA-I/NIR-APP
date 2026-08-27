@@ -7,7 +7,6 @@ import { useAuth } from '../auth/AuthContext';
 import { DocumentReviewWorkspace } from '../components/document-review/DocumentReviewWorkspace';
 import { DocumentScanPreview } from '../components/document-review/DocumentScanPreview';
 import { ErrorNote, ICON, Note, RecordHeader, RecordSkeleton } from '../components/ui';
-import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { isActiveRole } from '../lib/types';
 import { useDocumentScanning } from '../lib/useDocumentScanning';
@@ -15,7 +14,11 @@ import { DOCUMENT_PROCESSING_CHANGED_EVENT, useDocumentProcessing } from '../lib
 
 // interpret-document maps every failure to a Hebrew message server-side, so the body is the
 // message. Only a transport failure needs the generic mapping.
-async function interpretErrorMessage(error: unknown): Promise<string> {
+async function interpretErrorMessage(
+  error: unknown,
+  /** Resolves OUR vocabulary. Never applied to a sentence the server already wrote. */
+  resolve: (error: unknown) => string,
+): Promise<string> {
   const context = (error as { context?: Response } | null)?.context;
   if (context && typeof context.json === 'function') {
     try {
@@ -23,7 +26,7 @@ async function interpretErrorMessage(error: unknown): Promise<string> {
       if (body.error?.message) return body.error.message;
     } catch { /* fall through to the generic mapping */ }
   }
-  return toHebrewError(error);
+  return resolve(error);
 }
 
 export default function DocumentReview() {
@@ -107,7 +110,7 @@ export default function DocumentReview() {
       // The handler is idempotent and short-circuits before the provider call, so a duplicate
       // invocation costs one round trip and zero tokens.
       const response = await supabase.functions.invoke('interpret-document', { body: { jobId: id } });
-      if (response.error) setInterpretError({ jobId: id, message: await interpretErrorMessage(response.error) });
+      if (response.error) setInterpretError({ jobId: id, message: await interpretErrorMessage(response.error, errorText) });
     } catch (error) {
       setInterpretError({ jobId: id, message: errorText(error) });
     } finally {

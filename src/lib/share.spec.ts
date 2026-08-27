@@ -1,3 +1,4 @@
+import { toHebrewError } from './errors';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
@@ -88,12 +89,16 @@ describe('WhatsApp order send', () => {
     }]);
   });
 
-  it('surfaces a Hebrew error when the transition is refused', async () => {
+  it('carries the refusal CONDITION, which still resolves to a sentence at the screen', async () => {
     rpcError = { message: 'purchase_order_status_transition_not_allowed' };
     const result = await markOrderSentToSupplier('order-1');
 
-    expect(result.error).toBeTruthy();
-    expect(result.error).not.toContain('purchase_order_status_transition_not_allowed');
+    // The condition travels rather than a pre-resolved sentence, so the dialog can render it in
+    // whichever language its reader is using. Both halves are asserted: what travelled, and that
+    // it is still something a person can read.
+    expect(result.error).toBe('purchase_order_status_transition_not_allowed');
+    expect(toHebrewError(new Error(result.error!))).not.toContain('purchase_order_status_transition_not_allowed');
+    expect(toHebrewError(new Error(result.error!))).toBeTruthy();
   });
 
   it('carries no price and points at the image message (owner decision 18.08.2026)', () => {

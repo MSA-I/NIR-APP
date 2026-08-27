@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState } from 'react';
 import { ImageDown, Loader2, Send, Share2 } from 'lucide-react';
 import { ICON, Modal, Note, useToast } from './ui';
@@ -30,6 +31,7 @@ export function WhatsAppSendDialog({ order, orgName, portalUrl, onClose }: {
   portalUrl?: string | null;
   onClose: (openedText: boolean) => void;
 }) {
+  const { errorText } = useT();
   const toast = useToast();
   const [image, setImage] = useState<{ state: 'rendering' } | { state: 'ready'; blob: Blob; previewUrl: string } | { state: 'failed' }>({ state: 'rendering' });
   const openedTextRef = useRef(false);
@@ -59,7 +61,7 @@ export function WhatsAppSendDialog({ order, orgName, portalUrl, onClose }: {
 
   function openText() {
     const res = openOrderWhatsApp(order!, orgName, portalUrl);
-    if (res.error) { toast(res.error, 'error'); return; }
+    if (res.error) { toast(errorText(res.error), 'error'); return; }
     openedTextRef.current = true;
   }
 

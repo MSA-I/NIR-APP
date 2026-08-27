@@ -69,7 +69,7 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
       } else if (result.state === 'already_sent' || result.state === 'in_flight') {
         toast('שליחה כבר בתהליך או שהושלמה — המסך יתרענן');
       } else {
-        toast(result.error ?? 'השליחה נכשלה — הניסיון תועד וניתן לנסות שוב', 'error');
+        toast(result.error ? errorText(result.error) : 'השליחה נכשלה — הניסיון תועד וניתן לנסות שוב', 'error');
       }
       setSendOpen(false);
       void refetch();

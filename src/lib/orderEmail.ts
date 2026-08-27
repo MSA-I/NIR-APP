@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { toHebrewError } from './errors';
 import type { StatusMeta } from './status';
 
 // Tenant-side surface of email order delivery (0168), extended by 0190 with what the provider
@@ -195,7 +194,8 @@ export async function sendOrderEmail(orderId: string, reason: string): Promise<S
     } else if (body && typeof body === 'object' && 'error' in body) {
       code = String((body as { error: unknown }).error);
     }
-    return { ok: false, state: 'error', error: toHebrewError(code) };
+    // The code travels; EmailOrderCard resolves it when it draws the toast.
+    return { ok: false, state: 'error', error: code };
   }
   return res.data as SendOrderEmailResult;
 }

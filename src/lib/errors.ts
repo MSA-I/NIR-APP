@@ -395,6 +395,14 @@ const PATTERNS: [RegExp, string][] = [
   [/document_upload_reservation_registered/i, 'document_upload_reservation_registered'],
   [/document_upload_reservation_lifetime_exceeded/i, 'document_upload_reservation_lifetime_exceeded'],
   [/document_upload_reservation_unknown/i, 'document_upload_reservation_unknown'],
+  // Two screens used to keep their own status-to-sentence tables. The conditions live here now,
+  // where a reader can see the whole vocabulary at once instead of hunting it per page.
+  [/price_list_confirm_session_expired/i, 'price_list_confirm_session_expired'],
+  [/price_list_confirm_forbidden/i, 'price_list_confirm_forbidden'],
+  [/price_list_confirm_conflict/i, 'price_list_confirm_conflict'],
+  [/price_list_confirm_unavailable/i, 'price_list_confirm_unavailable'],
+  [/monthly_report_snapshot_legal_entity_invalid|unit_out_of_scope/i, 'monthly_report_snapshot_legal_entity_invalid'],
+  [/monthly_report_snapshot_source_unavailable/i, 'monthly_report_snapshot_source_unavailable'],
 ];
 
 const FALLBACK = 'fallback';

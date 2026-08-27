@@ -10,7 +10,6 @@ import { ReauthModal } from '../components/ReauthModal';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
 import { addCalendarDays, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange, safeMonthISO } from '../lib/format';
 import { useParamState } from '../lib/useParamState';
-import { toHebrewError } from '../lib/errors';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { buildLockedMonthlyWorkbook, buildStyledMonthlyWorkbook, monthlyReportScreenTotals, type MonthlyReportLabels, type MonthlyReportSnapshot } from '../lib/monthlyReport';
 import * as XLSX from 'xlsx';
@@ -33,7 +32,7 @@ interface InvoiceBalanceRow {
   balance: number;
 }
 
-function toSnapshotHebrewError(error: unknown): string {
+function toSnapshotCondition(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
   if (/monthly_report_snapshot_unattributed_bank_transactions/i.test(raw)) {
     return 'לא ניתן ליצור דוח סופי: כל תנועות הבנק בחודש חייבות התאמה מאושרת לחשבונית או לתשלום המשויכים לישות משפטית אחת.';
@@ -41,13 +40,16 @@ function toSnapshotHebrewError(error: unknown): string {
   if (/monthly_report_snapshot_unattributed_(invoices|payments|credits|bank_transactions|exceptions)/i.test(raw)) {
     return 'לא ניתן ליצור דוח סופי: קיימות רשומות ללא שיוך חד־משמעי לישות משפטית. יש להשלים את השיוך לפני ניסיון נוסף.';
   }
+  // Returns the CONDITION, not a sentence. Both of these are already registered in
+  // src/lib/errors.ts, so the screen resolves them exactly like every other failure and this
+  // function stops being a second, page-local error vocabulary.
   if (/monthly_report_snapshot_legal_entity_invalid|unit_out_of_scope/i.test(raw)) {
-    return 'הישות המשפטית אינה זמינה או אינה בתחום ההרשאה שלך. יש לבחור ישות אחרת.';
+    return 'monthly_report_snapshot_legal_entity_invalid';
   }
   if (/monthly_report_snapshot_source_unavailable/i.test(raw)) {
-    return 'לא ניתן להשלים כעת את צילום המצב. הנתונים לא נשמרו ויש לנסות שוב.';
+    return 'monthly_report_snapshot_source_unavailable';
   }
-  return toHebrewError(error);
+  return raw;
 }
 
 export default function Reports() {
@@ -276,7 +278,7 @@ export default function Reports() {
       toast(`דוח סופי נעול גרסה ${snapshot.version} נוצר בהצלחה`);
       void refetchLockedReports();
     } catch (e) {
-      const message = toSnapshotHebrewError(e);
+      const message = errorText(toSnapshotCondition(e));
       // The toast stays for the immediate, announced feedback; the Note is what survives it.
       toast(message, 'error');
       setSnapshotBlock({
