@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const MAX_NOTE_LENGTH = 2_000;
@@ -49,6 +49,9 @@ export function createInitialState(catalog, now = new Date().toISOString()) {
     finalizedAt: null,
     answers: {},
     staleAnswers: {},
+    staleReconsiderations: [],
+    debtPriorities: {},
+    staleDebtPriorities: {},
     staleItems: [],
     reconsiderations: [],
   };
@@ -93,6 +96,10 @@ export function recordReconsideration(state, catalog, payload, now = new Date().
   if (item.requiresOwnerDecision) fail('direct_answer_required');
   const requestedChoice = cleanText(payload.requestedChoice, MAX_NOTE_LENGTH, true, 2);
   const reason = cleanText(payload.reason, MAX_REASON_LENGTH, true);
+  const staleReconsiderations = (state.staleReconsiderations || []).map((request) => (
+    request.key === item.key && !request.supersededAt ? { ...request, supersededAt: now } : request
+  ));
+  const staleAnswerStillOpen = Boolean(state.staleAnswers?.[item.key]);
   return {
     ...state,
     status: 'in_progress',
@@ -111,6 +118,40 @@ export function recordReconsideration(state, catalog, payload, now = new Date().
         requestedAt: now,
       },
     ],
+    staleReconsiderations,
+    staleItems: staleAnswerStillOpen ? state.staleItems : (state.staleItems || []).filter((key) => key !== item.key),
+  };
+}
+
+export function recordDebtPriority(state, catalog, payload, now = new Date().toISOString()) {
+  assertRevision(state, payload.expectedRevision);
+  const item = itemFor(catalog, payload.key);
+  assertSource(item, payload.sourceHash);
+  if (item.type !== 'debt' || item.requiresOwnerDecision) fail('technical_debt_required');
+  if (!['plan_now', 'keep_backlog', 'needs_explanation', 'follow_recommendation'].includes(payload.priority)) fail('invalid_priority');
+  const staleDebtPriorities = { ...(state.staleDebtPriorities || {}) };
+  delete staleDebtPriorities[item.key];
+  const otherStale = Boolean(state.staleAnswers?.[item.key])
+    || (state.staleReconsiderations || []).some((request) => request.key === item.key && !request.supersededAt);
+  return {
+    ...state,
+    status: 'in_progress',
+    revision: state.revision + 1,
+    updatedAt: now,
+    finalizedAt: null,
+    debtPriorities: {
+      ...(state.debtPriorities || {}),
+      [item.key]: {
+        key: item.key,
+        sourceHash: item.sourceHash,
+        priority: payload.priority,
+        resolvedPriority: payload.priority === 'follow_recommendation' ? item.recommendedPriority : payload.priority,
+        selectedAt: now,
+        version: (state.debtPriorities?.[item.key]?.version || 0) + 1,
+      },
+    },
+    staleDebtPriorities,
+    staleItems: otherStale ? state.staleItems : (state.staleItems || []).filter((key) => key !== item.key),
   };
 }
 
@@ -142,22 +183,52 @@ export function reconcileSavedState(saved, catalog, now = new Date().toISOString
   for (const key of Object.keys(staleAnswers)) {
     if (answers[key]) delete staleAnswers[key];
   }
-  const staleItems = Object.keys(staleAnswers).filter((key) => itemMap.get(key)?.requiresOwnerDecision).sort();
+  const reconsiderations = [];
+  const staleReconsiderations = [...(saved.staleReconsiderations || [])];
+  for (const request of saved.reconsiderations || []) {
+    const item = itemMap.get(request.key);
+    if (item && item.sourceHash === request.sourceHash) reconsiderations.push(request);
+    else staleReconsiderations.push({ ...request, staleDetectedAt: request.staleDetectedAt || now, supersededAt: request.supersededAt || null });
+  }
+  const staleItems = [...new Set([
+    ...Object.keys(staleAnswers).filter((key) => itemMap.has(key)),
+    ...staleReconsiderations.filter((request) => !request.supersededAt && itemMap.has(request.key)).map((request) => request.key),
+  ])].sort();
+  const debtPriorities = {};
+  const staleDebtPriorities = { ...(saved.staleDebtPriorities || {}) };
+  for (const [key, priority] of Object.entries(saved.debtPriorities || {})) {
+    const item = itemMap.get(key);
+    if (item && item.sourceHash === priority.sourceHash) debtPriorities[key] = priority;
+    else staleDebtPriorities[key] = priority;
+  }
+  for (const key of Object.keys(staleDebtPriorities)) {
+    if (debtPriorities[key]) delete staleDebtPriorities[key];
+  }
+  const allStaleItems = [...new Set([
+    ...staleItems,
+    ...Object.keys(staleDebtPriorities).filter((key) => itemMap.has(key)),
+  ])].sort();
   const changed = saved.sourceCommit !== catalog.sourceCommit
     || saved.sourceFiles?.decisions !== catalog.sourceFiles?.decisions
     || saved.sourceFiles?.debts !== catalog.sourceFiles?.debts
-    || staleItems.join('|') !== (saved.staleItems || []).join('|');
+    || allStaleItems.join('|') !== (saved.staleItems || []).join('|')
+    || reconsiderations.length !== (saved.reconsiderations || []).length
+    || Object.keys(debtPriorities).length !== Object.keys(saved.debtPriorities || {}).length;
   return {
     ...saved,
     sourceCommit: catalog.sourceCommit,
     sourceFiles: catalog.sourceFiles,
-    status: staleItems.length && saved.status === 'ready_for_planning' ? 'in_progress' : saved.status,
+    status: allStaleItems.length && saved.status === 'ready_for_planning' ? 'in_progress' : saved.status,
     revision: changed ? saved.revision + 1 : saved.revision,
     updatedAt: changed ? now : saved.updatedAt,
-    finalizedAt: staleItems.length ? null : saved.finalizedAt,
+    finalizedAt: allStaleItems.length ? null : saved.finalizedAt,
     answers,
     staleAnswers,
-    staleItems,
+    reconsiderations,
+    staleReconsiderations,
+    debtPriorities,
+    staleDebtPriorities,
+    staleItems: allStaleItems,
   };
 }
 
@@ -190,22 +261,47 @@ function markdownFor(state, catalog) {
     const item = itemMap.get(request.key);
     lines.push(`### ${request.key} — ${item?.plainQuestion || request.key}`, '', `- ההחלטה הקודמת: ${request.previousDecision}`, `- השינוי המבוקש: ${request.requestedChoice}`, `- סיבה: ${request.reason}`, `- זמן: ${request.requestedAt}`, '');
   }
+  lines.push('## עדיפות לחובות טכניים', '');
+  const debtPriorities = Object.values(state.debtPriorities || {});
+  if (!debtPriorities.length) lines.push('טרם סומנו חובות לקידום.');
+  for (const priority of debtPriorities) {
+    const item = itemMap.get(priority.key);
+    const labels = { plan_now: 'לקדם בתוכנית הקרובה', keep_backlog: 'להשאיר בתור', needs_explanation: 'נדרש הסבר נוסף', follow_recommendation: 'לפעול לפי המלצת הסוכן' };
+    const resolved = priority.priority === 'follow_recommendation' ? ` — בפועל: ${labels[priority.resolvedPriority]}` : '';
+    lines.push(`- **${priority.key} — ${item?.plainQuestion || priority.key}:** ${labels[priority.priority]}${resolved} (${priority.selectedAt})`);
+  }
+  lines.push('');
   return `${lines.join('\n')}\n`;
 }
 
-export async function saveStateAtomic(directory, state, catalog) {
+export async function saveStateAtomic(directory, state, catalog, { renameFile = rename, removeFile = rm } = {}) {
   await mkdir(directory, { recursive: true });
   const jsonPath = path.join(directory, 'current.json');
   const markdownPath = path.join(directory, 'current.md');
   const suffix = `${process.pid}-${randomUUID()}`;
   const jsonTemp = `${jsonPath}.${suffix}.tmp`;
   const markdownTemp = `${markdownPath}.${suffix}.tmp`;
-  await Promise.all([
-    writeFile(jsonTemp, `${JSON.stringify(state, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' }),
-    writeFile(markdownTemp, markdownFor(state, catalog), { encoding: 'utf8', flag: 'wx' }),
-  ]);
-  await rename(jsonTemp, jsonPath);
-  await rename(markdownTemp, markdownPath);
+  const warnings = [];
+  try {
+    await Promise.all([
+      writeFile(jsonTemp, `${JSON.stringify(state, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' }),
+      writeFile(markdownTemp, markdownFor(state, catalog), { encoding: 'utf8', flag: 'wx' }),
+    ]);
+    await renameFile(jsonTemp, jsonPath);
+    try {
+      await renameFile(markdownTemp, markdownPath);
+    } catch {
+      warnings.push('markdown_not_updated');
+      await removeFile(markdownTemp, { force: true });
+    }
+  } catch (error) {
+    await Promise.allSettled([
+      removeFile(jsonTemp, { force: true }),
+      removeFile(markdownTemp, { force: true }),
+    ]);
+    throw error;
+  }
+  return { warnings };
 }
 
 export async function loadState(directory, catalog) {

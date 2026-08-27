@@ -24,6 +24,10 @@ test('server autosaves an answer and restores it through the state endpoint', as
   const { url } = await server.start();
   t.after(() => server.close());
 
+  const health = await (await fetch(new URL('/api/health', url))).json();
+  assert.match(health.instanceId, /^[a-f0-9]{24}$/);
+  assert.equal(health.sourceCommit, 'server-test');
+  assert.ok(health.sourceFiles.decisions);
   const catalog = await (await fetch(new URL('/api/catalog', url))).json();
   const state = await (await fetch(new URL('/api/state', url))).json();
   const item = catalog.items.find((candidate) => candidate.key === 'decision:270');

@@ -3,6 +3,10 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const OWNER_CHOICE_DEBTS = new Set(['20', '37', '66']);
+const PLAN_NOW_DEBTS = new Set([
+  '7', '8', '9', '10', '19', '17', '31', '32', '35', '41', '42', '45', '46', '47', '49', '50', '53',
+  '25', '29', '30', '34', '52', '56', '57', '58', '59', '61', '62', '64', '65', '67',
+]);
 
 const TERM_DEFINITIONS = [
   ['DPA', 'הסכם כתוב שמגדיר כיצד ספק חיצוני שומר ומעבד מידע'],
@@ -140,6 +144,72 @@ const PLAIN_REPLACEMENTS = [
   [/\bPR\b/g, 'בקשת שילוב קוד'],
   [/\bmain\b/g, 'ענף הקוד הראשי'],
   [/\bsent\b/gi, 'נשלחה'],
+  [/רשם חריגי/g, 'רשימת הפעולות החריגות'],
+  [/ריקון פונקציה־פונקציה/g, 'בדיקה ותיקון של כל פעולה בנפרד'],
+  [/\bactor\b/gi, 'מי ביצע את הפעולה'],
+  [/\btenant\b/gi, 'הארגון'],
+  [/\bunit\b/gi, 'היחידה העסקית'],
+  [/\btables\b/gi, 'הטבלאות המושפעות'],
+  [/\breason\b/gi, 'הסיבה'],
+  [/latency/gi, 'זמן תגובה'],
+  [/\bprompt\b/gi, 'ההוראות למודל'],
+  [/\bmodel\b/gi, 'המודל'],
+  [/\bversion\b/gi, 'הגרסה'],
+  [/\bcommit\b/gi, 'שינוי קוד אחד'],
+  [/\bguard\b/gi, 'שומר בטיחות'],
+  [/auth-js/gi, 'רכיב ההתחברות'],
+  [/\bsmoke\b/gi, 'בדיקה חיה ממוקדת'],
+  [/false-positive\s*\/\s*false-negative/gi, 'טעויות שבהן המערכת אישרה או פסלה בטעות'],
+  [/false-positive/gi, 'אישור שגוי'],
+  [/false-negative/gi, 'פסילה שגויה'],
+  [/getSession/gi, 'בדיקת מצב הכניסה'],
+  [/navigator\.locks/gi, 'נעילת הדפדפן'],
+  [/\bclient\b/gi, 'רכיב החיבור בדפדפן'],
+  [/round trip/gi, 'פתיחה, שמירה ופתיחה מחדש'],
+  [/\bsubtype\b/gi, 'סוג המסמך המדויק'],
+  [/provenance/gi, 'תיעוד מקור הראיה'],
+  [/duplicate guard/gi, 'מניעת כפילות'],
+  [/\bbalance\b/gi, 'יתרה מחושבת'],
+  [/concurrency/gi, 'פעולות מקבילות'],
+  [/second_pass/gi, 'סבב הקריאה השני'],
+  [/createImageBitmap/gi, 'יכולת הדפדפן לקרוא את התמונה'],
+  [/\benqueue\b/gi, 'שליחה לעיבוד'],
+  [/\bEdge\b/gi, 'שירות השרת'],
+  [/\bDB\b/g, 'מסד הנתונים'],
+  [/TypeScript/gi, 'קוד האפליקציה'],
+  [/backfill/gi, 'תיקון רשומות קיימות'],
+  [/completeness proof/gi, 'הוכחה שכל השורות טופלו'],
+  [/Platform Admin/gi, 'מנהל הפלטפורמה'],
+  [/assertion/gi, 'בדיקת שער'],
+  [/usage(?:\.[a-z0-9_.]+)?/gi, 'נתוני השימוש'],
+  [/SSRF\/DNS\/IP guards/gi, 'חסימה של כתובות רשת מסוכנות'],
+  [/\bSSRF\b/gi, 'גישה אסורה לכתובת פנימית'],
+  [/\bDNS\b/gi, 'רישום הכתובת ברשת'],
+  [/\bIP\b/g, 'כתובת רשת'],
+  [/\bVault\b/gi, 'כספת סודות'],
+  [/verification handshake/gi, 'אימות שהיעד נשלט בידי הלקוח'],
+  [/INVITE_FROM_EMAIL\/ORDERS_FROM_EMAIL/gi, 'כתובות השולח למיילים'],
+  [/SMTP Auth/gi, 'אימות שירות הדוא״ל'],
+  [/\breversal\b/gi, 'ביטול מבוקר'],
+  [/candidate report/gi, 'דוח מועמדים למחיקה'],
+  [/legal hold/gi, 'חובת שימור חוקית'],
+  [/\bexport\b/gi, 'ייצוא הנתונים'],
+  [/PowerShell/gi, 'סקריפט Windows'],
+  [/\bSQL\b/g, 'בדיקת מסד נתונים'],
+  [/\bNode\b/g, 'סקריפט נייד'],
+  [/\brunner\b/gi, 'סביבת הרצה'],
+  [/\bKYC\b/g, 'אימות זהות העסק אצל ספק הגבייה'],
+  [/\bsandbox\b/gi, 'סביבת בדיקה של הספק'],
+  [/report-only/gi, 'דוח בלבד ללא מחיקה'],
+  [/quarantine/gi, 'העברה לבדיקה ידנית'],
+  [/read model/gi, 'נתוני הקריאה של המסך'],
+  [/findByText/gi, 'בדיקה שמחפשת טקסט'],
+  [/userEvent\.setup\(\)/gi, 'הדמיית פעולות משתמש'],
+  [/fake timers/gi, 'שעון בדיקה מדומה'],
+  [/docker logs/gi, 'יומני שירותי המסד'],
+  [/workflow_dispatch/gi, 'הרצה ידנית של שער הבדיקות'],
+  [/\bMFA\b/g, 'אימות בשני שלבים'],
+  [/Twilio sender/gi, 'חיבור שולח ה־WhatsApp'],
 ];
 
 const IMPACTS_BY_CATEGORY = new Map([
@@ -227,6 +297,41 @@ const OVERRIDES = {
   },
 };
 
+const NEXT_ACTION_OVERRIDES = {
+  'debt:8': 'להרחיב את בדיקת הבטיחות כך שתכסה את כל הפקודות העסקיות המבוקרות, בלי לשנות את דרך רישום האירועים.',
+  'debt:9': 'להוסיף בדיקה אוטומטית שמונעת הוספת שינוי למסד אם הוא אינו מריץ מחדש את בדיקות הבטיחות.',
+  'debt:10': 'להחליט בצוות הפיתוח אם להגביל את הספירה לפי תפקיד או להריץ אותה במסלול מוגן, ואז להוכיח שכל התפקידים מקבלים תוצאה נכונה.',
+  'debt:14': 'לפני שמציגים את מסנן הכפילויות במסך נוסף, למדוד את העלות ולבחור אינדקס מתאים, ספירה מתוכננת או ויתור על המסנן.',
+  'debt:15': 'לקבוע רף כמות שורות. מעליו לעבור לאומדן מהיר ולכתוב למשתמש “כ־N” במקום להציג מספר מדויק שאיטי לחשב.',
+  'debt:31': 'לחדש אוטומטית את חלון הזמן בזמן העלאת צילום ארוכה, ולבדוק שאותה תמונה אינה נלקחת לעיבוד פעמיים.',
+  'debt:37': 'לבחור בין רכישת כלי שיודע לשמור עיצוב Excel, שימוש בתבנית מעוצבת שנבדקה, או הישארות עם קובץ תקין ללא צבעי מותג.',
+  'debt:47': 'להפעיל את המתג עבור ארגון בדיקה אחד, להעלות חבילת מסמכים אחת ולוודא שכל מסמך שנוצר ממנה סווג ונקלט נכון.',
+  'debt:49': 'להוסיף מסלול שבו מסמך זיכוי שאדם אישר יוצר זיכוי אמיתי במערכת, עם מקור, מניעת כפילות ורישום ביומן.',
+  'debt:50': 'להוסיף במסך התשלום בחירת זיכוי וקיזוז חלקי, ולבדוק ששתי פעולות מקבילות אינן מקזזות את אותו סכום פעמיים.',
+  'debt:45': 'לבדוק צילום iPhone אמיתי. אם הדפדפן אינו מצליח לקרוא אותו, ליצור עותק שרתי בטוח למדידת איכות ולקריאת המסמך.',
+  'debt:42': 'לבנות לבעל העסק מסך לאישור תוצאות הכיול; רק לאחר שכל השורות אושרו, מנהל הפלטפורמה יוכל להפעיל את האוטומציה.',
+  'debt:41': 'להוסיף את שומר הכתיבה החסר לשתי הטבלאות, ובאותו שינוי להוסיף בדיקה שמונעת מטבלה חדשה להישאר בלי השומר בעתיד.',
+  'debt:53': 'להוסיף חץ קטן ליד גרף שינוי המחיר, כך שכיוון העלייה או הירידה יהיה ברור גם למי שאינו מבחין בין אדום לירוק.',
+  'debt:3': 'לממש רק את מנגנון כללי ההתראות שכבר אושר. לא לבנות מנגנון תהליכים כללי או מערכת דוחות ברקע עד שיופיע צורך אמיתי.',
+  'debt:5': 'לפני פתיחת חיבור לכתובת שהלקוח מזין, לחסום כתובות פנימיות ומסוכנות, לאמת שהלקוח שולט ביעד ולבצע מסירה חיה ליעד בדיקה.',
+  'debt:22': 'כאשר יצטרף ארגון נוסף, להוסיף למנהל הפלטפורמה תצוגה מוגנת של מדיניות האוטומציה בכל ארגון.',
+  'debt:25': 'לאמת בעלות על הדומיין, להגדיר את רשומות הדואר וכתובות השולח, ואז לבצע בדיקת מסירה אמיתית לפני הפעלת מייל ללקוחות.',
+  'debt:29': 'לבנות פעולה מבוקרת שמבטלת את צריכת הכמות של אישור קודם, עם סיבה, מניעת ביצוע כפול ונעילה מתאימה.',
+  'debt:30': 'לבנות תהליך מחיקה מדורג: דוח מועמדים, בדיקת חובת שמירה, ייצוא וגיבוי, אישור מנהל הפלטפורמה ורישום מלא של המחיקה.',
+  'debt:34': 'להעביר את חמש הבדיקות שאינן רצות בענן לצורה שמערכת הבדיקות האוטומטית יכולה להריץ, או להוסיף להן סביבת Windows ייעודית.',
+  'debt:56': 'להתחיל בספירת משתמשים וספקים פעילים לכל ארגון. לאחר מכן להוסיף מדידת נפח אחסון, שהיא המדידה היקרה יותר.',
+  'debt:57': 'לאמת חשבון וסביבת בדיקה אצל ספק הגבייה, ואז לחבר אירועי תשלום חתומים לפקודות שינוי המנוי הקיימות.',
+  'debt:58': 'להתחיל בדוח של ארגונים שלא אימתו דוא״ל, אחר כך לבנות תור בדיקה ומחיקה מבוקרת לארגון ריק בלבד.',
+  'debt:59': 'לתקן את נתוני מרכז הבקרה כך שיבדילו בין אפס אמיתי, מידע חסר וסירוב הרשאה, ולבדוק את שלושת התפקידים הפעילים.',
+  'debt:52': 'לבודד את שתי הבדיקות התנודתיות, להריץ אותן עשר פעמים על מכונה שקטה ולתקן את גורם התזמון המשותף אם הכשל חוזר.',
+  'debt:67': 'כאשר שער הדפדפן נכשל, לשמור אוטומטית את יומני שירותי הנתונים כדי שהכשל הבא יאובחן לפי ראיה ולא באמצעות הרצה חוזרת.',
+  'debt:66': 'להחליט אם לאשר מסלול מחיקה מבוקר. אם יאושר, לפתוח חלון מחיקה צר בכל שומר רלוונטי ולהוכיח שארגון מלא נמחק עד הסוף.',
+  'debt:65': 'להוסיף בדיקה קטנה לכל בקשת שילוב קוד, שמכשילה אותה בגלוי כאשר בסיס הבקשה אינו ענף הקוד הראשי.',
+  'debt:64': 'להוסיף בדיקת פריסה שמסרבת להמשיך כאשר משימת הפירוש מתוזמנת אך הגדרת ההפעלה הסודית חסרה, ולתעד את ההגדרה הידנית.',
+  'debt:63': 'בעת רישום החברה, לחתום על הסכם הגנת המידע מול OpenAI, לשמור את האישור ולהסיר את היתר הטרום־השקה הזמני.',
+  'debt:61': 'בעת חיבור WhatsApp, לעדכן את שער שליחת ההזמנה כך שיכיר גם במסירה מאושרת דרך מייל ולא יחסום אותה.',
+};
+
 function sha256(value) {
   return createHash('sha256').update(value, 'utf8').digest('hex');
 }
@@ -278,6 +383,53 @@ function currentDecisionSummary(value) {
   const first = sentences[0] || plain;
   const summary = first.length < 55 && sentences[1] ? `${first} ${sentences[1]}` : first;
   return truncate(summary, 220);
+}
+
+function extractNextAction(body) {
+  const lines = body.split(/\r?\n/);
+  const candidates = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = lines[index].match(/^(?:-\s*)?\*\*((?:הצעד|מה עושים|שתי הדרכים)[^*]*)\*\*\s*(.*)$/u);
+    if (!match) continue;
+    const content = [match[2]];
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const continuation = lines[cursor];
+      if (!continuation.trim() || /^#{2,3}\s|^(?:-\s*)?\*\*[^*]+\*\*/u.test(continuation)) break;
+      content.push(continuation.replace(/^\s+/, ''));
+    }
+    const labelDetail = match[1].replace(/^(?:הצעד(?: הזול)? הבא(?: הזול)?|מה עושים בינתיים|שתי הדרכים החוצה, ורק הן)\s*[:—-]?\s*/u, '').trim();
+    candidates.push(simplify([labelDetail, ...content].filter(Boolean).join(' ')));
+  }
+  return candidates.at(-1) || '';
+}
+
+function debtResponsibility(nextAction, requiresOwnerDecision) {
+  if (requiresOwnerDecision) return 'אתה בוחר את הכיוון; צוות הפיתוח מתכנן ומממש רק לאחר הבחירה.';
+  if (/הבעלים|רכיש|חתימ|מפעיל את המתג|מאשר/u.test(nextAction)) return 'אתה מבצע או מאשר את הצעד העסקי; צוות הפיתוח מודד ומאמת את התוצאה.';
+  return 'צוות הפיתוח מטפל בצעד הטכני. ממך נדרשת רק קביעת עדיפות.';
+}
+
+function debtCompletionProof(nextAction) {
+  if (/למדוד|להשוות|smoke|בדיק|טסט|סוויט/u.test(nextAction)) return 'החוב נסגר רק כשהפעולה בוצעה והמדידה או הבדיקה המתוארת עברה עם ראיה.';
+  if (/אין שינוי|אין\.|לא לכתוב/u.test(nextAction)) return 'החוב נשאר במעקב עד שתתקבל הכרעה או תופיע ראיה שמצדיקה שינוי.';
+  return 'החוב נסגר רק אחרי מימוש, בדיקה מתאימה ועדכון רשם החובות עם הראיה.';
+}
+
+function debtRecommendation(ids, requiresOwnerDecision) {
+  const planNow = ids.some((id) => PLAN_NOW_DEBTS.has(id));
+  if (requiresOwnerDecision) {
+    return {
+      priority: planNow ? 'plan_now' : 'keep_backlog',
+      reason: 'החוב דורש קודם בחירת כיוון שלך; לאחר הבחירה אפשר לקבוע את מועד המימוש.',
+    };
+  }
+  return planNow ? {
+    priority: 'plan_now',
+    reason: 'החוב משפיע על דיוק, אבטחה, כסף, מחיקה או אמינות הבדיקות. מומלץ להכניס אותו לתוכנית הקרובה.',
+  } : {
+    priority: 'keep_backlog',
+    reason: 'החוב תלוי קודם במדידה, בנפח שימוש או בשירות עתידי. מומלץ להשאיר אותו בתור עד שתהיה הראיה המתאימה.',
+  };
 }
 
 function glossaryFor(source) {
@@ -348,6 +500,9 @@ function debtItem({ heading, body, lineNumber, section }) {
   const sourceTitle = simplify(heading.replace(/^§\s*/, '').replace(/^\d+(?:\s*\/\s*§?\d+)?\s*[—-]?\s*/, ''));
   const override = OVERRIDES[key] || {};
   const requiresOwnerDecision = ids.some((id) => OWNER_CHOICE_DEBTS.has(id));
+  const nextAction = NEXT_ACTION_OVERRIDES[key] || extractNextAction(body);
+  const responsibility = debtResponsibility(nextAction, requiresOwnerDecision);
+  const recommendation = debtRecommendation(ids, requiresOwnerDecision);
   const implications = IMPACTS_BY_CATEGORY.get(section) || [
     'הפער מתועד כדי שלא ייעלם בין משימות אחרות.',
     'טיפול בו דורש מימוש ובדיקה נפרדים לפני שינוי במוצר.',
@@ -369,6 +524,12 @@ function debtItem({ heading, body, lineNumber, section }) {
     implications,
     impactAreas: impactAreas('debt', section, implications),
     whatItDoesNotDo: override.whatItDoesNotDo || 'הצגת החוב אינה משנה את המוצר ואינה מפעילה שירות או כתיבה לנתונים.',
+    nextAction,
+    responsibility,
+    ownerInstruction: requiresOwnerDecision ? 'בחר אחת מהאפשרויות המוצגות. לאחר מכן הסוכן יוכל להפוך אותה לתוכנית מימוש.' : 'אל תבחר פתרון טכני. קבע רק אם לקדם עכשיו, להשאיר בתור או לבקש הסבר נוסף.',
+    completionProof: debtCompletionProof(nextAction),
+    recommendedPriority: recommendation.priority,
+    recommendationReason: recommendation.reason,
     status: requiresOwnerDecision ? 'needs-owner-decision' : 'technical-debt',
     requiresOwnerDecision,
     changeMode: requiresOwnerDecision ? 'direct-answer' : 'information-only',

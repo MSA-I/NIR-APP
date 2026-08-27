@@ -48,13 +48,27 @@ try {
   await assert.doesNotReject(() => page.locator('text=264 הכרעות · 51 חובות').waitFor());
   assert.equal(await page.locator('.decision-card.needs-owner-decision').count(), 4);
 
-  for (const item of catalog.items.filter((candidate) => candidate.requiresOwnerDecision)) {
+  const required = catalog.items.filter((candidate) => candidate.requiresOwnerDecision);
+  const firstItem = required[0];
+  const firstChoice = firstItem.recommendation || firstItem.options[0].id;
+  const firstRadio = page.locator(`input[data-answer-key="${firstItem.key}"][value="${firstChoice}"]`);
+  await firstRadio.focus();
+  await page.keyboard.press('Space');
+  await page.locator('#save-indicator').filter({ hasText: 'נשמר אוטומטית' }).waitFor();
+  assert.equal(await page.evaluate(({ key, value }) => document.activeElement?.dataset.answerKey === key && document.activeElement?.value === value, { key: firstItem.key, value: firstChoice }), true);
+
+  for (const item of required.slice(1)) {
     const choice = item.recommendation || item.options[0].id;
     await page.locator(`input[data-answer-key="${item.key}"][value="${choice}"]`).check();
-    await page.locator('#save-indicator').filter({ hasText: 'נשמר אוטומטית' }).waitFor();
   }
 
   await page.locator('#progress-label').filter({ hasText: '4 מתוך 4' }).waitFor();
+  const debtPriority = page.locator('input[data-debt-priority-key][value="follow_recommendation"]').first();
+  await debtPriority.check();
+  await page.locator('#save-indicator').filter({ hasText: 'נשמר אוטומטית' }).waitFor();
+  const debtCard = debtPriority.locator('xpath=ancestor::article[1]');
+  await debtCard.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(verificationDir, 'owner-decisions-technical-debt.png') });
   assert.equal(await page.locator('#finalize').isEnabled(), true);
   await page.locator('#finalize').click();
   await page.locator('#progress-label').filter({ hasText: 'מוכנות לקריאת הסוכן' }).waitFor();
@@ -82,6 +96,7 @@ try {
   const diskState = JSON.parse(await readFile(path.join(resultsDir, 'current.json'), 'utf8'));
   assert.equal(diskState.status, 'ready_for_planning');
   assert.equal(Object.keys(diskState.answers).length, 4);
+  assert.equal(Object.values(diskState.debtPriorities).filter((entry) => entry.priority === 'follow_recommendation' && entry.resolvedPriority).length, 1);
 } finally {
   await browser.close();
   await server.close();

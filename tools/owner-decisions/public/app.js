@@ -48,6 +48,9 @@ let currentQuery = '';
 let visibleCount = 24;
 const openReconsiderations = new Set();
 const staleKeys = new Set();
+const pendingSelections = new Map();
+const pendingDebtPriorities = new Map();
+let mutationQueue = Promise.resolve();
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -97,7 +100,7 @@ function impactMarkup(item) {
 }
 
 function optionsMarkup(item, answer) {
-  const selection = answer?.selection;
+  const selection = pendingSelections.get(item.key) || answer?.selection;
   const options = item.options.map((option) => `<label class="option">
     <input type="radio" name="choice-${escapeHtml(item.key)}" value="${escapeHtml(option.id)}" data-answer-key="${escapeHtml(item.key)}" ${selection === option.id ? 'checked' : ''}>
     <span class="option-copy"><strong>${escapeHtml(option.label)}</strong>${item.recommendation === option.id ? '<span class="recommended">המלצה</span>' : ''}<small>${escapeHtml(option.implication)}</small></span>
@@ -113,6 +116,31 @@ function optionsMarkup(item, answer) {
 function glossaryMarkup(item) {
   if (!item.glossary.length) return '';
   return `<div class="glossary" aria-label="מילון מונחים">${item.glossary.map((entry) => `<span title="${escapeHtml(entry.explanation)}">${escapeHtml(entry.term)} — ${escapeHtml(entry.explanation)}</span>`).join('')}</div>`;
+}
+
+function debtActionMarkup(item) {
+  if (item.type !== 'debt') return '';
+  const savedPriority = state.debtPriorities?.[item.key]?.priority;
+  const priority = pendingDebtPriorities.get(item.key) || savedPriority;
+  const recommendationLabel = item.recommendedPriority === 'plan_now' ? 'לקדם בתוכנית הקרובה' : 'להשאיר בתור כרגע';
+  const recommendation = item.requiresOwnerDecision ? '' : `<div class="debt-recommendation"><strong>ההמלצה שלי: ${recommendationLabel}</strong><p>${escapeHtml(item.recommendationReason)}</p></div>`;
+  const priorityOptions = item.requiresOwnerDecision ? '' : `<fieldset class="debt-priority-options">
+    <legend>מה אתה רוצה לעשות עם החוב?</legend>
+    <label class="recommended-priority"><input type="radio" name="debt-priority-${escapeHtml(item.key)}" value="follow_recommendation" data-debt-priority-key="${escapeHtml(item.key)}" ${priority === 'follow_recommendation' ? 'checked' : ''}>לפעול לפי ההמלצה — ${recommendationLabel}</label>
+    <label><input type="radio" name="debt-priority-${escapeHtml(item.key)}" value="plan_now" data-debt-priority-key="${escapeHtml(item.key)}" ${priority === 'plan_now' ? 'checked' : ''}>לקדם לתוכנית הקרובה</label>
+    <label><input type="radio" name="debt-priority-${escapeHtml(item.key)}" value="keep_backlog" data-debt-priority-key="${escapeHtml(item.key)}" ${priority === 'keep_backlog' ? 'checked' : ''}>להשאיר בתור</label>
+    <label><input type="radio" name="debt-priority-${escapeHtml(item.key)}" value="needs_explanation" data-debt-priority-key="${escapeHtml(item.key)}" ${priority === 'needs_explanation' ? 'checked' : ''}>צריך הסבר נוסף</label>
+  </fieldset>`;
+  return `<section class="debt-action" aria-label="המשך טיפול בחוב">
+    <div class="debt-next-step"><h4>מה עושים עכשיו</h4><p>${escapeHtml(item.nextAction)}</p></div>
+    ${recommendation}
+    <dl class="debt-meta">
+      <div><dt>מי מטפל</dt><dd>${escapeHtml(item.responsibility)}</dd></div>
+      <div><dt>מה נדרש ממך</dt><dd>${escapeHtml(item.ownerInstruction)}</dd></div>
+      <div><dt>מתי נחשב סגור</dt><dd>${escapeHtml(item.completionProof)}</dd></div>
+    </dl>
+    ${priorityOptions}
+  </section>`;
 }
 
 function reconsiderationMarkup(item) {
@@ -137,6 +165,7 @@ function cardMarkup(item) {
     <div class="why-box"><span class="why-mark" aria-hidden="true">?</span><p><strong>למה זה חשוב:</strong> ${escapeHtml(item.whyItMatters)}</p></div>
     ${stale ? '<p class="stale-warning">מסמך המקור השתנה מאז הבחירה הקודמת. קרא את הנוסח המעודכן ובחר שוב; הבחירה הישנה נשמרה בנפרד.</p>' : ''}
     ${item.requiresOwnerDecision ? optionsMarkup(item, answer) : ''}
+    ${debtActionMarkup(item)}
     ${impactMarkup(item)}
     <p class="boundary-note"><strong>מה לא יקרה אוטומטית:</strong> ${escapeHtml(item.whatItDoesNotDo)}</p>
     <div class="card-actions">
@@ -194,58 +223,102 @@ function renderAll() {
 function errorMessage(error) {
   const messages = {
     source_changed: 'מסמך המקור השתנה. הבחירה לא נשמרה; יש להפעיל מחדש את הכלי כדי לרענן.',
-    revision_conflict: 'נשמר שינוי אחר במקביל. הדף ייטען מחדש כדי למנוע דריסה.',
+    revision_conflict: 'נשמר שינוי אחר במקביל. מצב השמירה נטען מחדש והבחירה תישלח שוב בלי לדרוס מידע.',
     reconsideration_required: 'החלטה קיימת אינה נדרסת. יש לפתוח בקשת שינוי.',
     answers_missing: 'יש להשיב לכל השאלות, גם אם התשובה היא “לא בטוח” או “צריך הסבר נוסף”.',
   };
   return messages[error.code] || 'השמירה נכשלה. שום החלטה קיימת לא שונתה.';
 }
 
-async function saveAnswer(key, selection) {
+function enqueueMutation(operation) {
+  const next = mutationQueue.then(operation, operation);
+  mutationQueue = next.catch(() => {});
+  return next;
+}
+
+async function postMutation(path, payload) {
+  try {
+    return await api(path, { method: 'POST', body: JSON.stringify({ ...payload, expectedRevision: state.revision }) });
+  } catch (error) {
+    if (error.code !== 'revision_conflict') throw error;
+    state = await api('/api/state');
+    return api(path, { method: 'POST', body: JSON.stringify({ ...payload, expectedRevision: state.revision }) });
+  }
+}
+
+function saveAnswer(key, selection) {
   const item = catalog.items.find((candidate) => candidate.key === key);
   if (!item) return;
+  pendingSelections.set(key, selection);
   setSaveStatus('saving', 'שומר בחירה…');
   showMessage('');
-  try {
-    state = await api('/api/answer', {
-      method: 'POST',
-      body: JSON.stringify({ key, selection, sourceHash: item.sourceHash, note: state.answers[key]?.note || '', expectedRevision: state.revision }),
-    });
-    staleKeys.delete(key);
-    setSaveStatus('saved', 'נשמר אוטומטית');
-    elements.live.textContent = `הבחירה עבור ${item.plainQuestion} נשמרה`;
-    renderAll();
-  } catch (error) {
-    if (error.code === 'source_changed') staleKeys.add(key);
-    setSaveStatus('error', 'לא נשמר');
-    showMessage(errorMessage(error));
-    renderAll();
-  }
+  void enqueueMutation(async () => {
+    if (pendingSelections.get(key) !== selection) return;
+    try {
+      state = await postMutation('/api/answer', { key, selection, sourceHash: item.sourceHash, note: state.answers[key]?.note || '' });
+      if (pendingSelections.get(key) === selection) pendingSelections.delete(key);
+      staleKeys.delete(key);
+      setSaveStatus(pendingSelections.size ? 'saving' : 'saved', pendingSelections.size ? 'שומר בחירות…' : 'נשמר אוטומטית');
+      elements.live.textContent = `הבחירה עבור ${item.plainQuestion} נשמרה`;
+      renderProgress();
+    } catch (error) {
+      if (pendingSelections.get(key) === selection) pendingSelections.delete(key);
+      if (error.code === 'source_changed') staleKeys.add(key);
+      setSaveStatus('error', 'לא נשמר');
+      showMessage(errorMessage(error));
+      renderList();
+      renderProgress();
+    }
+  });
+}
+
+function saveDebtPriority(key, priority) {
+  const item = catalog.items.find((candidate) => candidate.key === key);
+  if (!item) return;
+  pendingDebtPriorities.set(key, priority);
+  setSaveStatus('saving', 'שומר עדיפות…');
+  showMessage('');
+  void enqueueMutation(async () => {
+    if (pendingDebtPriorities.get(key) !== priority) return;
+    try {
+      state = await postMutation('/api/debt-priority', { key, priority, sourceHash: item.sourceHash });
+      if (pendingDebtPriorities.get(key) === priority) pendingDebtPriorities.delete(key);
+      staleKeys.delete(key);
+      setSaveStatus(pendingDebtPriorities.size || pendingSelections.size ? 'saving' : 'saved', pendingDebtPriorities.size || pendingSelections.size ? 'שומר בחירות…' : 'נשמר אוטומטית');
+      elements.live.textContent = `העדיפות עבור ${item.plainQuestion} נשמרה`;
+    } catch (error) {
+      if (pendingDebtPriorities.get(key) === priority) pendingDebtPriorities.delete(key);
+      if (error.code === 'source_changed') staleKeys.add(key);
+      setSaveStatus('error', 'לא נשמר');
+      showMessage(errorMessage(error));
+      renderList();
+      renderProgress();
+    }
+  });
 }
 
 async function saveReconsideration(form, key) {
   const item = catalog.items.find((candidate) => candidate.key === key);
   const data = new FormData(form);
   setSaveStatus('saving', 'שומר בקשת שינוי…');
-  try {
-    state = await api('/api/reconsideration', {
-      method: 'POST',
-      body: JSON.stringify({
+  return enqueueMutation(async () => {
+    try {
+      state = await postMutation('/api/reconsideration', {
         key,
         sourceHash: item.sourceHash,
         requestedChoice: data.get('requestedChoice'),
         reason: data.get('reason'),
-        expectedRevision: state.revision,
-      }),
-    });
-    openReconsiderations.delete(key);
-    setSaveStatus('saved', 'בקשת השינוי נשמרה');
-    elements.live.textContent = `בקשת השינוי עבור ${item.plainQuestion} נשמרה`;
-    renderAll();
-  } catch (error) {
-    setSaveStatus('error', 'לא נשמר');
-    showMessage(errorMessage(error));
-  }
+      });
+      staleKeys.delete(key);
+      openReconsiderations.delete(key);
+      setSaveStatus('saved', 'בקשת השינוי נשמרה');
+      elements.live.textContent = `בקשת השינוי עבור ${item.plainQuestion} נשמרה`;
+      renderAll();
+    } catch (error) {
+      setSaveStatus('error', 'לא נשמר');
+      showMessage(errorMessage(error));
+    }
+  });
 }
 
 elements.tabs.addEventListener('click', (event) => {
@@ -271,6 +344,8 @@ elements.loadMore.addEventListener('click', () => {
 elements.list.addEventListener('change', (event) => {
   const input = event.target.closest('[data-answer-key]');
   if (input) void saveAnswer(input.dataset.answerKey, input.value);
+  const debtPriority = event.target.closest('[data-debt-priority-key]');
+  if (debtPriority) saveDebtPriority(debtPriority.dataset.debtPriorityKey, debtPriority.value);
 });
 
 elements.list.addEventListener('click', (event) => {
@@ -290,20 +365,19 @@ elements.list.addEventListener('submit', (event) => {
   void saveReconsideration(form, form.dataset.reconsiderForm);
 });
 
-elements.finalize.addEventListener('click', async () => {
+elements.finalize.addEventListener('click', () => {
   setSaveStatus('saving', 'מסמן כמוכן לתכנון…');
-  try {
-    state = await api('/api/finalize', {
-      method: 'POST',
-      body: JSON.stringify({ expectedRevision: state.revision, sourceCommit: catalog.sourceCommit }),
-    });
-    setSaveStatus('saved', 'מוכן לקריאת הסוכן');
-    elements.live.textContent = 'הבחירות סומנו כמוכנות לתכנון';
-    renderAll();
-  } catch (error) {
-    setSaveStatus('error', 'לא הושלם');
-    showMessage(errorMessage(error));
-  }
+  void enqueueMutation(async () => {
+    try {
+      state = await postMutation('/api/finalize', { sourceCommit: catalog.sourceCommit });
+      setSaveStatus('saved', 'מוכן לקריאת הסוכן');
+      elements.live.textContent = 'הבחירות סומנו כמוכנות לתכנון';
+      renderProgress();
+    } catch (error) {
+      setSaveStatus('error', 'לא הושלם');
+      showMessage(errorMessage(error));
+    }
+  });
 });
 
 async function start() {

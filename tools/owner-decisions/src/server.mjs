@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
@@ -8,6 +9,7 @@ import {
   finalizeState,
   loadState,
   recordAnswer,
+  recordDebtPriority,
   recordReconsideration,
   saveStateAtomic,
 } from './state.mjs';
@@ -80,6 +82,10 @@ function isAllowedOrigin(origin, port) {
   return !origin || origin === `http://127.0.0.1:${port}` || origin === `http://localhost:${port}`;
 }
 
+export function ownerDecisionInstanceId({ rootDir, resultsDir }) {
+  return createHash('sha256').update(`${path.resolve(rootDir)}\0${path.resolve(resultsDir)}`, 'utf8').digest('hex').slice(0, 24);
+}
+
 export function createOwnerDecisionServer({
   rootDir,
   resultsDir,
@@ -96,6 +102,7 @@ export function createOwnerDecisionServer({
   let writeQueue = Promise.resolve();
   const publicDir = path.join(rootDir, 'tools', 'owner-decisions', 'public');
   const brandPath = path.join(rootDir, 'public', 'brand', 'inplace-symbol.svg');
+  const instanceId = ownerDecisionInstanceId({ rootDir, resultsDir });
 
   const provideCatalog = catalogProvider || (() => buildCatalog({ rootDir, sourceCommit }));
 
@@ -150,7 +157,7 @@ export function createOwnerDecisionServer({
     const url = new URL(request.url || '/', `http://${request.headers.host}`);
     try {
       if (request.method === 'GET' && url.pathname === '/api/health') {
-        sendJson(response, 200, { ok: true, sourceCommit: activeCatalog.sourceCommit, status: activeState.status });
+        sendJson(response, 200, { ok: true, sourceCommit: activeCatalog.sourceCommit, sourceFiles: activeCatalog.sourceFiles, instanceId, status: activeState.status });
         return;
       }
       if (request.method === 'GET' && url.pathname === '/api/catalog') {
@@ -172,6 +179,13 @@ export function createOwnerDecisionServer({
         const payload = await readJson(request);
         await ensureSourceUnchanged(payload.key, payload.sourceHash);
         const next = await mutateState((state) => recordReconsideration(state, activeCatalog, payload));
+        sendJson(response, 200, next);
+        return;
+      }
+      if (request.method === 'POST' && url.pathname === '/api/debt-priority') {
+        const payload = await readJson(request);
+        await ensureSourceUnchanged(payload.key, payload.sourceHash);
+        const next = await mutateState((state) => recordDebtPriority(state, activeCatalog, payload));
         sendJson(response, 200, next);
         return;
       }

@@ -124,6 +124,24 @@ h1 { max-width: 780px; margin: 0 0 1rem; font-size: var(--text-kpi-wide); line-h
 .uncertainty-option:has(input:checked) { color: var(--action); background: var(--action-soft); border-style: solid; border-color: var(--action); }
 .uncertainty-option input { margin-inline-end: .35rem; accent-color: var(--action); }
 
+.debt-action { margin-top: 1.25rem; padding-block: 1.1rem; border-block: 1px solid var(--line); }
+.debt-next-step { display: grid; grid-template-columns: minmax(130px, .28fr) 1fr; gap: 1rem; align-items: start; }
+.debt-next-step h4 { margin: 0; font-size: var(--text-body); }
+.debt-next-step p { margin: 0; color: var(--ink-mid); line-height: 1.65; }
+.debt-recommendation { display: grid; grid-template-columns: minmax(130px, .28fr) 1fr; gap: 1rem; margin-top: 1rem; padding: .85rem; color: var(--action); background: var(--action-soft); border-radius: var(--radius-modal); }
+.debt-recommendation strong { font-size: var(--text-label); }
+.debt-recommendation p { margin: 0; color: var(--ink-mid); font-size: var(--text-table); line-height: 1.55; }
+.debt-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 1rem 0 0; overflow: hidden; background: var(--line); border-radius: var(--radius-modal); }
+.debt-meta div { padding: .85rem; background: var(--surface-soft); }
+.debt-meta dt { margin-bottom: .3rem; color: var(--ink); font-size: var(--text-micro); font-weight: 800; }
+.debt-meta dd { margin: 0; color: var(--ink-mid); font-size: var(--text-table); line-height: 1.55; }
+.debt-priority-options { display: flex; flex-wrap: wrap; gap: .55rem; margin: 1rem 0 0; padding: 0; border: 0; }
+.debt-priority-options legend { width: 100%; margin-bottom: .2rem; font-size: var(--text-label); font-weight: 800; }
+.debt-priority-options label { padding: .55rem .75rem; color: var(--ink-mid); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-control); }
+.debt-priority-options label:has(input:checked) { color: var(--action); background: var(--action-soft); border-color: var(--action); }
+.debt-priority-options .recommended-priority { font-weight: 800; }
+.debt-priority-options input { margin-inline-end: .35rem; accent-color: var(--action); }
+
 .impact-section { margin-top: 1.3rem; }
 .impact-section h4 { margin: 0 0 .7rem; font-size: var(--text-body); }
 .impact-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .55rem; }
@@ -177,6 +195,9 @@ h1 { max-width: 780px; margin: 0 0 1rem; font-size: var(--text-kpi-wide); line-h
   .list-heading { align-items: start; }
   .decision-card { border-radius: var(--radius-card); }
   .impact-grid { grid-template-columns: 1fr; }
+  .debt-next-step { grid-template-columns: 1fr; gap: .35rem; }
+  .debt-recommendation { grid-template-columns: 1fr; gap: .35rem; }
+  .debt-meta { grid-template-columns: 1fr; }
   .impact-item { min-height: auto; }
   .final-bar { grid-template-columns: 1fr; gap: .65rem; padding: .7rem 1rem calc(.7rem + env(safe-area-inset-bottom)); }
   .final-progress { grid-template-columns: 1fr; gap: .35rem; }

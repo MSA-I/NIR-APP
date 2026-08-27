@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { createOwnerDecisionServer } from '../tools/owner-decisions/src/server.mjs';
+import { ownerDecisionInstanceId } from '../tools/owner-decisions/src/server.mjs';
 import { resolveResultsDir } from '../tools/owner-decisions/src/paths.mjs';
+import { buildCatalog } from '../tools/owner-decisions/src/catalog.mjs';
+import { matchesExistingServer } from '../tools/owner-decisions/src/launcher.mjs';
 
 const execFileAsync = promisify(execFile);
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,27 +26,37 @@ function openBrowser(target) {
   const child = spawn(command, [target], { detached: true, stdio: 'ignore' });
   child.unref();
 }
-async function existingServer() {
+async function existingServer(expected) {
   try {
     const response = await fetch(new URL('/api/health', url), { signal: AbortSignal.timeout(900) });
     if (!response.ok) return false;
     const health = await response.json();
-    return health?.ok === true;
+    return matchesExistingServer(health, expected) ? 'matching' : 'mismatch';
   } catch {
-    return false;
+    return 'none';
   }
-}
-
-if (await existingServer()) {
-  console.log(`מרכז ההחלטות כבר פעיל: ${url}`);
-  openBrowser(url);
-  process.exit(0);
 }
 
 const [{ stdout: sourceCommit }, resultsDir] = await Promise.all([
   execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: rootDir, windowsHide: true }),
   resolveResultsDir(rootDir),
 ]);
+const currentCatalog = await buildCatalog({ rootDir, sourceCommit: sourceCommit.trim() });
+const expectedServer = {
+  sourceCommit: sourceCommit.trim(),
+  sourceFiles: currentCatalog.sourceFiles,
+  instanceId: ownerDecisionInstanceId({ rootDir, resultsDir }),
+};
+const existing = await existingServer(expectedServer);
+if (existing === 'matching') {
+  console.log(`מרכז ההחלטות כבר פעיל: ${url}`);
+  openBrowser(url);
+  process.exit(0);
+}
+if (existing === 'mismatch') {
+  console.error(`בפורט ${port} פועל מרכז החלטות ממקור או תיקייה אחרים. סגור אותו לפני ההפעלה כדי למנוע שמירה למקור מיושן.`);
+  process.exit(1);
+}
 
 const server = createOwnerDecisionServer({
   rootDir,
