@@ -1,4 +1,10 @@
-// Hebrew labels + badge tones for every status enum in the system.
+// Dictionary KEYS + badge tones for every status enum in the system.
+//
+// The labels used to live here in Hebrew. They now live in src/lib/i18n/dictionaries under the
+// `status` namespace, and this file carries the key that names each one. THE TONE STAYED, and
+// that split is the point: a tone is a CLAIM about the state — this one is finished, that one is
+// waiting on you — and a claim is true in every language. Moving it into a translation file would
+// have let two languages disagree about whether an invoice is a problem.
 //
 // Section 6 — the tone is a *claim*, not a hue:
 //   done  = הושלם / תקין        await = ממתין לטיפול
@@ -7,32 +13,41 @@
 // The transitional `violet` is gone: the 3 statuses that held it (PO.sent, receipt.returned,
 // payment.sent_for_execution) were resolved to info/alert/await (OPEN-DECISIONS #33).
 import type { ActiveRole, Role } from './types';
+import type { Dictionary } from './i18n/dictionaries/he';
 
 export type Tone = 'done' | 'await' | 'alert' | 'info' | 'idle';
-export interface StatusMeta { label: string; tone: Tone }
 
-const m = (label: string, tone: Tone): StatusMeta => ({ label, tone });
+/**
+ * Every key the `status` namespace actually holds. Derived from the dictionary rather than typed
+ * as `string`, so a key with no entry — a typo, or a status added here and forgotten there — is a
+ * `tsc` failure instead of a badge that renders its own key at a customer.
+ */
+export type StatusKey = keyof Dictionary['status'];
+
+export interface StatusMeta { key: StatusKey; tone: Tone }
+
+const m = (key: StatusKey, tone: Tone): StatusMeta => ({ key, tone });
 
 /* ---------- Customer Operations (0152) — the operator console's vocabulary ---------- */
 
 export const CUSTOMER_CONTACT_KIND: Record<string, string> = {
-  primary: 'איש קשר ראשי',
-  billing: 'איש קשר לחיוב',
-  technical: 'איש קשר טכני',
+  primary: 'customerContact_primary',
+  billing: 'customerContact_billing',
+  technical: 'customerContact_technical',
 };
 
 export const CONTACT_CHANNEL: Record<string, string> = {
-  email: 'אימייל',
-  phone: 'טלפון',
-  whatsapp: 'וואטסאפ',
+  email: 'channel_email',
+  phone: 'channel_phone',
+  whatsapp: 'channel_whatsapp',
 };
 
 // A follow-up is a promise with a date on it, so it claims attention until it is closed; a
 // support interaction is information; a plain note asserts nothing.
 export const CUSTOMER_NOTE_KIND: Record<string, StatusMeta> = {
-  note: m('הערה', 'idle'),
-  support: m('פנייה', 'info'),
-  follow_up: m('מעקב', 'await'),
+  note: m('customerNote_note', 'idle'),
+  support: m('customerNote_support', 'info'),
+  follow_up: m('customerNote_follow_up', 'await'),
 };
 
 /**
@@ -41,66 +56,66 @@ export const CUSTOMER_NOTE_KIND: Record<string, StatusMeta> = {
  * action this map has not caught up with is still something that happened.
  */
 export const PLATFORM_EVENT_ACTION: Record<string, string> = {
-  customer_account_set: 'עדכון פרטי החשבון',
-  customer_contact_set: 'עדכון איש קשר',
-  customer_contact_removed: 'הסרת איש קשר',
-  customer_internal_note_added: 'הערה פנימית נוספה',
-  customer_follow_up_resolved: 'מעקב נסגר',
-  subscription_set: 'שינוי מנוי',
-  entitlement_override_granted: 'חריג הרשאה ניתן',
-  entitlement_override_revoked: 'חריג הרשאה בוטל',
-  onboarding_step_recorded: 'שלב הקמה נרשם',
+  customer_account_set: 'platformEvent_customer_account_set',
+  customer_contact_set: 'platformEvent_customer_contact_set',
+  customer_contact_removed: 'platformEvent_customer_contact_removed',
+  customer_internal_note_added: 'platformEvent_customer_internal_note_added',
+  customer_follow_up_resolved: 'platformEvent_customer_follow_up_resolved',
+  subscription_set: 'platformEvent_subscription_set',
+  entitlement_override_granted: 'platformEvent_entitlement_override_granted',
+  entitlement_override_revoked: 'platformEvent_entitlement_override_revoked',
+  onboarding_step_recorded: 'platformEvent_onboarding_step_recorded',
 };
 
 // `past_due` is a claim that money is owed, not a neutral state; `paused` and `canceled` say the
 // relationship stopped without implying which side stopped it.
 export const SUBSCRIPTION_STATUS: Record<string, StatusMeta> = {
-  active: m('פעיל', 'done'),
-  past_due: m('בפיגור תשלום', 'alert'),
-  paused: m('מוקפא', 'await'),
-  canceled: m('בוטל', 'idle'),
+  active: m('subscription_active', 'done'),
+  past_due: m('subscription_past_due', 'alert'),
+  paused: m('subscription_paused', 'await'),
+  canceled: m('subscription_canceled', 'idle'),
 };
 
 // Health is never a score. `unknown` is a real answer -- a customer we cannot judge is not a
 // healthy one -- and it is idle rather than green precisely so nobody reads it as reassurance.
 export const CUSTOMER_HEALTH: Record<string, StatusMeta> = {
-  healthy: m('תקין', 'done'),
-  needs_attention: m('דורש תשומת לב', 'await'),
-  at_risk: m('בסיכון', 'alert'),
-  unknown: m('אין מספיק נתונים', 'idle'),
+  healthy: m('health_healthy', 'done'),
+  needs_attention: m('health_needs_attention', 'await'),
+  at_risk: m('health_at_risk', 'alert'),
+  unknown: m('health_unknown', 'idle'),
 };
 
 export const ONBOARDING_STEP_STATE: Record<string, StatusMeta> = {
-  completed: m('הושלם', 'done'),
-  in_progress: m('בתהליך', 'await'),
-  blocked: m('חסום', 'alert'),
-  skipped: m('דולג', 'idle'),
-  not_started: m('טרם התחיל', 'idle'),
+  completed: m('onboardingStep_completed', 'done'),
+  in_progress: m('onboardingStep_in_progress', 'await'),
+  blocked: m('onboardingStep_blocked', 'alert'),
+  skipped: m('onboardingStep_skipped', 'idle'),
+  not_started: m('onboardingStep_not_started', 'idle'),
 };
 
 export const ONBOARDING_SOURCE: Record<string, string> = {
-  product_event: 'לפי פעולה במוצר',
-  operator_manual: 'נרשם בידי מפעיל',
-  none: '',
+  product_event: 'onboardingSource_product_event',
+  operator_manual: 'onboardingSource_operator_manual',
+  none: 'onboardingSource_none',
 };
 
 export const ORG_STATUS: Record<string, StatusMeta> = {
-  active: m('פעיל', 'done'),
-  suspended: m('מושהה', 'alert'),
+  active: m('org_active', 'done'),
+  suspended: m('org_suspended', 'alert'),
 };
 
 export const INVITATION_STATUS: Record<string, StatusMeta> = {
-  pending: m('ממתינה', 'await'),
-  accepted: m('התקבלה', 'done'),
-  expired: m('פגה', 'idle'),             // פ (idle vs await) — kept at current colour
-  revoked: m('בוטלה', 'idle'),           // §5: an intentional revoke is not an anomaly; red was noise
+  pending: m('invitation_pending', 'await'),
+  accepted: m('invitation_accepted', 'done'),
+  expired: m('invitation_expired', 'idle'),             // פ (idle vs await) — kept at current colour
+  revoked: m('invitation_revoked', 'idle'),           // §5: an intentional revoke is not an anomaly; red was noise
 };
 
 export const SUPPLIER_STATUS: Record<string, StatusMeta> = {
-  active: m('פעיל', 'done'),
-  inactive: m('לא פעיל', 'idle'),
-  problematic: m('בעייתי', 'alert'),
-  pending: m('ממתין לאישור', 'await'),
+  active: m('supplier_active', 'done'),
+  inactive: m('supplier_inactive', 'idle'),
+  problematic: m('supplier_problematic', 'alert'),
+  pending: m('supplier_pending', 'await'),
 };
 
 /** Inactive/pending suppliers stay visible for history and finance, but cannot start commerce. */
@@ -115,147 +130,147 @@ export function canStartSupplierCommerce(status: string): boolean {
 // the stored enum values `ready`/`sent` are untouched: they are wired into RLS, the transition
 // allowlist and every historical audit row. Display text is the client's, per CLAUDE.md.
 export const PO_STATUS: Record<string, StatusMeta> = {
-  draft: m('טיוטה', 'idle'),
-  ready: m('מוכנה לשליחה לספק', 'await'), // יש פעולה מצדנו (OPEN-DECISIONS #33)
-  sent: m('נשלחה לספק', 'info'),          // הכדור אצל הספק — מידע
-  confirmed: m('אושרה', 'done'),         // הספק אישר — הצעד הושלם
-  partial: m('התקבלה חלקית', 'await'),
-  received: m('התקבלה', 'done'),
-  cancelled: m('בוטלה', 'idle'),
+  draft: m('po_draft', 'idle'),
+  ready: m('po_ready', 'await'), // יש פעולה מצדנו (OPEN-DECISIONS #33)
+  sent: m('po_sent', 'info'),          // הכדור אצל הספק — מידע
+  confirmed: m('po_confirmed', 'done'),         // הספק אישר — הצעד הושלם
+  partial: m('po_partial', 'await'),
+  received: m('po_received', 'done'),
+  cancelled: m('po_cancelled', 'idle'),
 };
 
 export const REQUEST_STATUS: Record<string, StatusMeta> = {
-  draft: m('טיוטה', 'idle'),
-  split: m('פוצלה להזמנות', 'done'),
-  cancelled: m('בוטלה', 'idle'),
+  draft: m('request_draft', 'idle'),
+  split: m('request_split', 'done'),
+  cancelled: m('request_cancelled', 'idle'),
 };
 
 // A supplier's structured response to an order (0167). `submitted` is the one state waiting on
 // US — the supplier already acted; everything after it records our decision.
 export const SUPPLIER_PROPOSAL_STATUS: Record<string, StatusMeta> = {
-  submitted: m('ממתינה להחלטה', 'await'),
-  accepted: m('התקבלה במלואה', 'done'),
-  partially_accepted: m('התקבלה חלקית', 'done'),
-  rejected: m('נדחתה', 'idle'),
+  submitted: m('proposal_submitted', 'await'),
+  accepted: m('proposal_accepted', 'done'),
+  partially_accepted: m('proposal_partially_accepted', 'done'),
+  rejected: m('proposal_rejected', 'idle'),
 };
 
 // The supplier-portal link lifecycle (0167), derived from timestamps — not a stored enum.
 export const SUPPLIER_LINK_STATE: Record<string, StatusMeta> = {
-  live: m('פעיל', 'done'),
-  submitted: m('התקבלה תשובה', 'info'),
-  expired: m('פג תוקף', 'idle'),
-  revoked: m('בוטל', 'idle'),
+  live: m('supplierLink_live', 'done'),
+  submitted: m('supplierLink_submitted', 'info'),
+  expired: m('supplierLink_expired', 'idle'),
+  revoked: m('supplierLink_revoked', 'idle'),
 };
 
 // Email order delivery (0168). `accepted` is the provider's word, not proof of reading;
 // `unknown` is an in-flight send whose lease died — frozen for reconciliation, never guessed.
 export const EMAIL_MESSAGE_STATUS: Record<string, StatusMeta> = {
-  queued: m('ממתינה לשליחה', 'idle'),
-  sending: m('נשלחת כעת', 'await'),
-  unknown: m('מצב לא ידוע', 'alert'),
-  accepted: m('נמסרה לספק המייל', 'info'),
-  delivered: m('נמסרה לנמען', 'done'),
-  bounced: m('הוחזרה (כתובת שגויה)', 'alert'),
-  failed: m('נכשלה', 'alert'),
+  queued: m('email_queued', 'idle'),
+  sending: m('email_sending', 'await'),
+  unknown: m('email_unknown', 'alert'),
+  accepted: m('email_accepted', 'info'),
+  delivered: m('email_delivered', 'done'),
+  bounced: m('email_bounced', 'alert'),
+  failed: m('email_failed', 'alert'),
 };
 
 // Supplier communication channel (0168 preferences).
 export const COMMUNICATION_CHANNEL: Record<string, StatusMeta> = {
-  manual: m('ידני בלבד', 'idle'),
-  email: m('מייל', 'info'),
-  whatsapp: m('WhatsApp', 'info'),
-  both: m('מייל ו-WhatsApp', 'info'),
+  manual: m('communication_manual', 'idle'),
+  email: m('communication_email', 'info'),
+  whatsapp: m('communication_whatsapp', 'info'),
+  both: m('communication_both', 'info'),
 };
 
 export const RECEIPT_LINE_STATUS: Record<string, StatusMeta> = {
-  full: m('התקבל מלא', 'done'),
-  partial: m('התקבל חלקית', 'await'),
-  missing: m('חסר', 'alert'),
-  damaged: m('פגום', 'alert'),
-  returned: m('הוחזר', 'alert'),         // חריגה שדורשת זיכוי
+  full: m('receiptLine_full', 'done'),
+  partial: m('receiptLine_partial', 'await'),
+  missing: m('receiptLine_missing', 'alert'),
+  damaged: m('receiptLine_damaged', 'alert'),
+  returned: m('receiptLine_returned', 'alert'),         // חריגה שדורשת זיכוי
 };
 
 export const RECEIPT_STATUS: Record<string, StatusMeta> = {
-  draft: m('טיוטה', 'idle'),
-  completed: m('הושלמה', 'done'),
+  draft: m('receipt_draft', 'idle'),
+  completed: m('receipt_completed', 'done'),
 };
 
 export const INVOICE_REVIEW_STATUS: Record<string, StatusMeta> = {
-  received: m('התקבלה', 'await'),        // an untouched received invoice is waiting for review
-  in_review: m('בבדיקה', 'await'),       // ממתינה להשלמת בדיקה
-  pending_approval: m('ממתינה לאישור', 'await'),
-  approved: m('מאושרת', 'done'),
-  investigation: m('דורשת בירור', 'alert'),
+  received: m('invoiceReview_received', 'await'),        // an untouched received invoice is waiting for review
+  in_review: m('invoiceReview_in_review', 'await'),       // ממתינה להשלמת בדיקה
+  pending_approval: m('invoiceReview_pending_approval', 'await'),
+  approved: m('invoiceReview_approved', 'done'),
+  investigation: m('invoiceReview_investigation', 'alert'),
 };
 
 export const INVOICE_PAYMENT_STATUS: Record<string, StatusMeta> = {
-  unpaid: m('לא שולמה', 'await'),
-  partial: m('שולמה חלקית', 'await'),    // §5: an open balance is open work (aligns with the money-balance idiom)
-  paid: m('שולמה', 'done'),
+  unpaid: m('invoicePayment_unpaid', 'await'),
+  partial: m('invoicePayment_partial', 'await'),    // §5: an open balance is open work (aligns with the money-balance idiom)
+  paid: m('invoicePayment_paid', 'done'),
 };
 
 export const INVOICE_EXPORT_STATUS: Record<string, StatusMeta> = {
-  not_sent: m('טרם הועברה לרו״ח', 'idle'), // פ-5 — kept idle so amber stays a real signal, not most of the month
-  sent: m('הועברה לרו״ח', 'done'),
+  not_sent: m('invoiceExport_not_sent', 'idle'), // פ-5 — kept idle so amber stays a real signal, not most of the month
+  sent: m('invoiceExport_sent', 'done'),
 };
 
 export const CREDIT_REASON: Record<string, string> = {
-  missing: 'חוסר בסחורה',
-  damaged: 'סחורה פגומה',
-  returned: 'החזרת סחורה',
-  wrong_price: 'טעות מחיר',
-  duplicate_charge: 'חיוב כפול',
-  other: 'אחר',
+  missing: 'creditReason_missing',
+  damaged: 'creditReason_damaged',
+  returned: 'creditReason_returned',
+  wrong_price: 'creditReason_wrong_price',
+  duplicate_charge: 'creditReason_duplicate_charge',
+  other: 'creditReason_other',
 };
 
 export const CREDIT_STATUS: Record<string, StatusMeta> = {
-  open: m('פתוח', 'await'),
-  requested: m('נדרש מהספק', 'await'),   // §5: checks.ts counts it as an open credit awaiting offset
-  received: m('התקבל', 'done'),          // פ-6 — kept at current colour (conflicts with checks.ts; see report)
-  offset: m('קוזז בתשלום', 'done'),      // §5: checks.ts already treats offset as a final success state
-  closed: m('נסגר', 'idle'),
+  open: m('credit_open', 'await'),
+  requested: m('credit_requested', 'await'),   // §5: checks.ts counts it as an open credit awaiting offset
+  received: m('credit_received', 'done'),          // פ-6 — kept at current colour (conflicts with checks.ts; see report)
+  offset: m('credit_offset', 'done'),      // §5: checks.ts already treats offset as a final success state
+  closed: m('credit_closed', 'idle'),
 };
 
 export const PAYMENT_REQUEST_STATUS: Record<string, StatusMeta> = {
-  draft: m('טיוטה', 'idle'),
-  pending_approval: m('ממתינה לאישור', 'await'),
-  approved: m('מאושרת', 'await'),                 // אושרה אך הכסף טרם הועבר — ממתין לביצוע
-  sent_for_execution: m('הועברה לביצוע', 'await'), // ממתין להעברה בפועל
-  executed: m('העברה בוצעה', 'done'),             // ההעברה בוצעה
-  matched: m('הותאמה לבנק', 'done'),
-  investigation: m('דורשת בירור', 'alert'),
-  suspected_duplicate: m('חשד לכפילות', 'alert'),
-  cancelled: m('בוטלה', 'idle'),
+  draft: m('paymentRequest_draft', 'idle'),
+  pending_approval: m('paymentRequest_pending_approval', 'await'),
+  approved: m('paymentRequest_approved', 'await'),                 // אושרה אך הכסף טרם הועבר — ממתין לביצוע
+  sent_for_execution: m('paymentRequest_sent_for_execution', 'await'), // ממתין להעברה בפועל
+  executed: m('paymentRequest_executed', 'done'),             // ההעברה בוצעה
+  matched: m('paymentRequest_matched', 'done'),
+  investigation: m('paymentRequest_investigation', 'alert'),
+  suspected_duplicate: m('paymentRequest_suspected_duplicate', 'alert'),
+  cancelled: m('paymentRequest_cancelled', 'idle'),
 };
 
 export const BANK_TX_STATUS: Record<string, StatusMeta> = {
-  unmatched: m('לא מותאמת', 'await'),
-  suggested: m('הצעת התאמה', 'await'),   // §5: a suggested match needs human approval — a task, not information
-  matched: m('מותאמת', 'done'),
-  ignored: m('לא רלוונטית', 'idle'),
+  unmatched: m('bankTx_unmatched', 'await'),
+  suggested: m('bankTx_suggested', 'await'),   // §5: a suggested match needs human approval — a task, not information
+  matched: m('bankTx_matched', 'done'),
+  ignored: m('bankTx_ignored', 'idle'),
 };
 
 export const EXCEPTION_TYPE: Record<string, string> = {
-  payment_without_invoice: 'תשלום ללא חשבונית',
-  invoice_without_payment: 'חשבונית ללא תשלום',
-  amount_mismatch: 'אי-התאמת סכומים',
-  duplicate_payment: 'חשד לתשלום כפול',
-  duplicate_invoice: 'חשד לחשבונית כפולה',
-  unknown_supplier: 'ספק לא מזוהה',
-  unmatched_bank: 'תנועת בנק לא מותאמת',
-  credit_not_deducted: 'זיכוי שלא קוזז',
-  receipt_mismatch: 'פער קבלה מול חשבונית',
+  payment_without_invoice: 'exceptionType_payment_without_invoice',
+  invoice_without_payment: 'exceptionType_invoice_without_payment',
+  amount_mismatch: 'exceptionType_amount_mismatch',
+  duplicate_payment: 'exceptionType_duplicate_payment',
+  duplicate_invoice: 'exceptionType_duplicate_invoice',
+  unknown_supplier: 'exceptionType_unknown_supplier',
+  unmatched_bank: 'exceptionType_unmatched_bank',
+  credit_not_deducted: 'exceptionType_credit_not_deducted',
+  receipt_mismatch: 'exceptionType_receipt_mismatch',
   // 0086 added the enum value §17 planned. The automatic path (0077) still files under
   // receipt_mismatch with details.code='item_not_ordered' — that injection is §17's
   // remaining step; the manual command (0087) uses the honest type from day one.
-  item_not_ordered: 'פריט שלא הוזמן',
+  item_not_ordered: 'exceptionType_item_not_ordered',
 };
 
 export const EXCEPTION_STATUS: Record<string, StatusMeta> = {
-  open: m('פתוח', 'alert'),              // an open exception is an active deviation
-  in_progress: m('בטיפול', 'await'),
-  resolved: m('טופל', 'done'),
-  dismissed: m('נדחה', 'idle'),
+  open: m('exception_open', 'alert'),              // an open exception is an active deviation
+  in_progress: m('exception_in_progress', 'await'),
+  resolved: m('exception_resolved', 'done'),
+  dismissed: m('exception_dismissed', 'idle'),
 };
 
 // Deliberately a DIFFERENT scale from checks.ts/alerts.ts (info/warning/critical): this one
@@ -263,9 +278,9 @@ export const EXCEPTION_STATUS: Record<string, StatusMeta> = {
 // in-memory results. Two vocabularies, two lifetimes — do not "unify" the strings. They already
 // converge where it matters: both map to the same Tone (alert/await/idle|info) for display.
 export const SEVERITY: Record<string, StatusMeta> = {
-  low: m('נמוכה', 'idle'),
-  medium: m('בינונית', 'await'),
-  high: m('גבוהה', 'alert'),
+  low: m('severity_low', 'idle'),
+  medium: m('severity_medium', 'await'),
+  high: m('severity_high', 'alert'),
 };
 
 /**
@@ -275,8 +290,8 @@ export const SEVERITY: Record<string, StatusMeta> = {
  * Colours preserve the previous ones (available=green, unavailable=red).
  */
 export const PRODUCT_AVAILABILITY: Record<'available' | 'unavailable', StatusMeta> = {
-  available: m('זמין', 'done'),
-  unavailable: m('לא זמין', 'alert'),
+  available: m('availability_available', 'done'),
+  unavailable: m('availability_unavailable', 'alert'),
 };
 
 /**
@@ -287,9 +302,9 @@ export const PRODUCT_AVAILABILITY: Record<'available' | 'unavailable', StatusMet
  * where they cannot.
  */
 export const ACTIVE_ROLE_LABEL: Record<ActiveRole, string> = {
-  owner: 'מנהל/בעלים',
-  office: 'מנהל רכש',
-  accountant: 'הנהלת חשבונות',
+  owner: 'role_owner',
+  office: 'role_office',
+  accountant: 'role_accountant',
 };
 
 /**
@@ -303,9 +318,9 @@ export const ACTIVE_ROLE_LABEL: Record<ActiveRole, string> = {
  * the compiler is a better guard of that than a comment is.
  */
 export const HISTORICAL_ROLE_LABEL: Record<Exclude<Role, ActiveRole>, string> = {
-  kitchen: 'מנהל מטבח (היסטורי)',
-  payer: 'מבצע העברות (היסטורי)',
-  supplier: 'ספק (היסטורי)',
+  kitchen: 'role_kitchen',
+  payer: 'role_payer',
+  supplier: 'role_supplier',
 };
 
 /** The union of both, so an archived row still renders a name rather than a raw enum value. */
@@ -326,11 +341,25 @@ export const ROLE_LABEL: Record<string, string> = { ...ACTIVE_ROLE_LABEL, ...HIS
  *
  * Prefer `useAuth().roleLabels` in components; this is the pure function underneath.
  */
-export function resolveRoleLabels(orgSettings: unknown): Record<string, string> {
+export function resolveRoleLabels(
+  orgSettings: unknown,
+  /**
+   * Turns a dictionary key into text. Passed in rather than imported, because this file must stay
+   * a pure map of keys and tones — the moment it could resolve a language it would become a second
+   * place where one gets chosen.
+   */
+  statusLabel: (key: string) => string,
+): Record<string, string> {
+  // A tenant's own word for a role wins over the dictionary in EVERY language. `role_labels` is
+  // vocabulary the organisation chose for itself; translating it would be answering a question
+  // they already answered.
+  const defaults = Object.fromEntries(
+    Object.entries(ROLE_LABEL).map(([role, key]) => [role, statusLabel(key) || key]),
+  );
   const raw = (orgSettings as { role_labels?: unknown } | null | undefined)?.role_labels;
-  if (!raw || typeof raw !== 'object') return ROLE_LABEL;
+  if (!raw || typeof raw !== 'object') return defaults;
   const overrides = raw as Record<string, unknown>;
-  const resolved = { ...ROLE_LABEL };
+  const resolved = { ...defaults };
   for (const role of Object.keys(ACTIVE_ROLE_LABEL)) {
     const value = overrides[role];
     if (typeof value === 'string' && value.trim()) resolved[role] = value.trim();

@@ -23,9 +23,9 @@ type Row = SupplierProduct & {
 type ManagerSubmission = SupplierPriceSubmission & { supplier: Pick<Supplier, 'id' | 'name'> };
 
 const SUBMISSION_STATUS = {
-  accepted: { label: 'נקלט', tone: 'done' },
-  accepted_with_rejections: { label: 'נקלט חלקית', tone: 'await' },
-  rejected: { label: 'נדחה', tone: 'alert' },
+  accepted: { key: 'submission_accepted', tone: 'done' },
+  accepted_with_rejections: { key: 'submission_accepted_with_rejections', tone: 'await' },
+  rejected: { key: 'submission_rejected', tone: 'alert' },
 } as const;
 
 const monthLabel = (value: string) => new Intl.DateTimeFormat('he-IL', {
@@ -126,7 +126,7 @@ export default function PriceLists() {
       render: (r: Row) => {
         const cheapest = comparison?.cheapest;
         if (!cheapest || !r.available) return <span className="text-ink-faint">—</span>;
-        if (r.id === cheapest.id) return <StatusBadge meta={{ label: 'הזול ביותר', tone: 'done' }} />;
+        if (r.id === cheapest.id) return <StatusBadge meta={{ key: 'priceList_cheapest', tone: 'done' }} />;
         const diff = r.current_price - cheapest.current_price;
         if (diff <= 0) return <span className="text-ink-faint">—</span>;
         const pct = cheapest.current_price > 0 ? (diff / cheapest.current_price) * 100 : null;

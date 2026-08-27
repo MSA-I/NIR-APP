@@ -59,7 +59,15 @@ export function attemptUiStatus(attempt: OperationalAttemptState): DocumentUiSta
   return { ...canonical, state: 'unavailable', label: 'מצב לא ידוע', tone: 'idle', description: '', priority: 6 };
 }
 
-export function attemptStatusMeta(attempt: OperationalAttemptState): StatusMeta {
+/**
+ * Returns the LABEL shape, not `StatusMeta`. `attemptUiStatus` composes its text at runtime from
+ * an attempt's state, so there is no fixed dictionary key to name it with — the document-review
+ * surface is its own extraction pass and this is where it will land. `StatusBadge` accepts both
+ * shapes for exactly this reason.
+ */
+export function attemptStatusMeta(
+  attempt: OperationalAttemptState,
+): { label: string; tone: StatusMeta['tone'] } {
   const { label, tone } = attemptUiStatus(attempt);
   return { label, tone };
 }

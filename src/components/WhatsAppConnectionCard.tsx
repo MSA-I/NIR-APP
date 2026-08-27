@@ -137,7 +137,9 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
 
   if (loading) return null;
 
-  const statusMeta: StatusMeta | undefined = connection?.status
+  // Not a StatusMeta: WHATSAPP_CONNECTION_STATUS_LABEL is this card's own vocabulary and has not
+  // been extracted yet, so it is still literal text. StatusBadge takes both shapes on purpose.
+  const statusMeta: { label: string; tone: StatusMeta['tone'] } | undefined = connection?.status
     ? { label: WHATSAPP_CONNECTION_STATUS_LABEL[connection.status], tone: STATUS_TONE[connection.status] }
     : undefined;
 

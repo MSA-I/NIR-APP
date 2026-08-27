@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useState } from 'react';
 import { Eye, RotateCcw } from 'lucide-react';
 import { toHebrewError } from '../lib/errors';
@@ -19,6 +20,7 @@ type Row = Omit<CreditRequest, 'supplier' | 'invoice'> & {
 };
 
 export default function Credits() {
+  const { statusLabel } = useT();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { profile, organizationAccess } = useAuth();
@@ -59,7 +61,7 @@ export default function Credits() {
   const columns: Column<Row>[] = [
     { key: 'num', header: 'מס׳', sortValue: (r) => r.number, render: (r) => `#${r.number}` },
     { key: 'supplier', header: 'ספק', sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
-    { key: 'reason', header: 'סיבה', render: (r) => CREDIT_REASON[r.reason] },
+    { key: 'reason', header: 'סיבה', render: (r) => statusLabel(CREDIT_REASON[r.reason]) },
     { key: 'amount', header: 'סכום', className: 'num', sortValue: (r) => r.amount, render: (r) => fmtMoneyExact(r.amount) },
     { key: 'invoice', header: 'חשבונית', render: (r) => r.invoice ? <span dir="ltr">{r.invoice.invoice_number}</span> : '—' },
     { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
@@ -118,6 +120,7 @@ export default function Credits() {
 function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
   credit: Row; onClose: () => void; onChanged: () => void; onOpenInvoice: (id: string) => void; canWrite: boolean;
 }) {
+  const { statusLabel } = useT();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
 
@@ -145,7 +148,7 @@ function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
   return (
     <Modal open onClose={onClose} title={`זיכוי #${credit.number} — ${credit.supplier.name}`} busy={busy} statusMessage={busy ? 'מעדכן את הזיכוי' : undefined}>
       <dl className="text-sm space-y-2 mb-4">
-        <div className="flex justify-between"><dt className="text-ink-muted">סיבה</dt><dd>{CREDIT_REASON[credit.reason]}</dd></div>
+        <div className="flex justify-between"><dt className="text-ink-muted">סיבה</dt><dd>{statusLabel(CREDIT_REASON[credit.reason])}</dd></div>
         <div className="flex justify-between"><dt className="text-ink-muted">סכום</dt><dd className="num font-semibold">{fmtMoneyExact(credit.amount)}</dd></div>
         <div className="flex justify-between"><dt className="text-ink-muted">סטטוס</dt><dd><StatusBadge meta={CREDIT_STATUS[credit.status]} /></dd></div>
         {credit.invoice && (

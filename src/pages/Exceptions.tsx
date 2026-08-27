@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState } from 'react';
 import { toHebrewError } from "../lib/errors";
 import { useNavigate } from 'react-router';
@@ -56,6 +57,7 @@ function businessDetailLines(details: Record<string, unknown> | null): string[] 
 export default function Exceptions() {
   const navigate = useNavigate();
   const { profile, roleLabels, organizationAccess } = useAuth();
+  const { statusLabel } = useT();
   const [statusFilter, setStatusFilter] = useParamState('status', 'open');
   const [typeFilter, setTypeFilter] = useParamState('type');
   const [severityFilter, setSeverityFilter] = useParamState('severity');
@@ -97,7 +99,7 @@ export default function Exceptions() {
 
   const columns: Column<Row>[] = [
     { key: 'severity', header: 'חומרה', sortValue: (r) => r.severity, render: (r) => <StatusBadge meta={SEVERITY[r.severity]} /> },
-    { key: 'type', header: 'סוג', render: (r) => <span className="text-ink-soft">{EXCEPTION_TYPE[r.type]}</span> },
+    { key: 'type', header: 'סוג', render: (r) => <span className="text-ink-soft">{statusLabel(EXCEPTION_TYPE[r.type])}</span> },
     { key: 'title', header: 'תיאור', render: (r) => <span className="font-medium text-ink max-w-96 truncate inline-block">{r.title}</span> },
     { key: 'supplier', header: 'ספק', render: (r) => r.supplier?.name ?? '—' },
     { key: 'assigned', header: 'באחריות', render: (r) => (r.assigned_role ? roleLabels[r.assigned_role] : '—') },
@@ -130,11 +132,11 @@ export default function Exceptions() {
             </select>
             <select className="input w-auto!" aria-label="סינון חריגים לפי סוג" value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setIdFilter(''); }}>
               <option value="">כל הסוגים</option>
-              {Object.entries(EXCEPTION_TYPE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              {Object.entries(EXCEPTION_TYPE).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
             </select>
             <select className="input w-auto!" aria-label="סינון חריגים לפי חומרה" value={severityFilter} onChange={(e) => { setSeverityFilter(e.target.value); setIdFilter(''); }}>
               <option value="">כל החומרות</option>
-              {Object.entries(SEVERITY).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              {Object.entries(SEVERITY).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
             </select>
           </>
         }
@@ -153,6 +155,7 @@ export default function Exceptions() {
 function ExceptionDetail({ row, canWrite, canOpenProcurement, onClose, onChanged, onNavigate }: {
   row: Row; canWrite: boolean; canOpenProcurement: boolean; onClose: () => void; onChanged: () => void; onNavigate: (p: string) => void;
 }) {
+  const { statusLabel } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [note, setNote] = useState('');
@@ -189,7 +192,7 @@ function ExceptionDetail({ row, canWrite, canOpenProcurement, onClose, onChanged
   const detailLines = businessDetailLines(row.details);
 
   return (
-    <Modal open onClose={onClose} title={EXCEPTION_TYPE[row.type]} busy={busy} statusMessage={busy ? 'מעדכן את החריג' : undefined}>
+    <Modal open onClose={onClose} title={statusLabel(EXCEPTION_TYPE[row.type])} busy={busy} statusMessage={busy ? 'מעדכן את החריג' : undefined}>
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <StatusBadge meta={SEVERITY[row.severity]} />

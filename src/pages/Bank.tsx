@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { reasonOr } from '../lib/reason';
 import { useSearchParams } from 'react-router';
@@ -56,6 +57,7 @@ const SORT_COLUMN: Record<string, string> = { date: 'tx_date' };
 const DEFAULT_SORT: readonly ServerSort[] = [{ column: 'tx_date', ascending: false }];
 
 export default function Bank() {
+  const { statusLabel } = useT();
   const { profile, org, organizationAccess } = useAuth();
   const toast = useToast();
   const [, setParams] = useSearchParams();
@@ -213,7 +215,7 @@ export default function Bank() {
             <select className="input w-auto!" aria-label="סינון תנועות בנק לפי סטטוס" value={statusFilter} onChange={(e) => patchParams({ status: e.target.value, page: '' })}>
               <option value="">כל הסטטוסים</option>
               <option value="attention">דורשות התאמה</option>
-              {Object.entries(BANK_TX_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              {Object.entries(BANK_TX_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
             </select>
             <input type="month" className="input w-auto!" aria-label="סינון תנועות בנק לפי חודש" value={monthFilter} onChange={(e) => patchParams({ month: e.target.value, page: '' })} />
           </>

@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { Fragment, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { FileSpreadsheet, Printer, Send, CheckCircle2, LockKeyhole, Download, Loader2 } from 'lucide-react';
@@ -54,6 +55,7 @@ export default function Reports() {
   const orgLogoUrl = org?.logo_path
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
     : null;
+  const { statusLabel, tDynamic } = useT();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   // The month lives in the URL beside the legal entity, so leaving for an invoice and coming back
@@ -89,12 +91,19 @@ export default function Reports() {
   const canMutateExport = canManageExport && organizationAccess.canWrite;
   const requestedUnitId = searchParams.get('unit');
 
+  // Resolved here, where a language exists, rather than inside the workbook builder: a spreadsheet
+  // exported in the wrong language is a file somebody sends to their accountant.
+  const resolveMetas = (map: Record<string, { key: string }>): Record<string, string> =>
+    Object.fromEntries(Object.entries(map).map(([value, meta]) => [value, statusLabel(meta)]));
+  const resolveKeys = (map: Record<string, string>): Record<string, string> =>
+    Object.fromEntries(Object.entries(map).map(([value, key]) => [value, tDynamic(`status.${key}`) ?? key]));
+
   const reportLabels: MonthlyReportLabels = {
-    invoiceReview: INVOICE_REVIEW_STATUS,
-    invoicePayment: INVOICE_PAYMENT_STATUS,
-    creditReason: CREDIT_REASON,
-    creditStatus: CREDIT_STATUS,
-    exceptionType: EXCEPTION_TYPE,
+    invoiceReview: resolveMetas(INVOICE_REVIEW_STATUS),
+    invoicePayment: resolveMetas(INVOICE_PAYMENT_STATUS),
+    creditReason: resolveKeys(CREDIT_REASON),
+    creditStatus: resolveMetas(CREDIT_STATUS),
+    exceptionType: resolveKeys(EXCEPTION_TYPE),
   };
 
   const { data, loading, fetching, error } = useQuery(async () => {
@@ -533,7 +542,7 @@ export default function Reports() {
             <div className="w-full">
               <h2 className="text-base font-semibold mb-2">חריגים פתוחים כרגע שדורשים טיפול לפני סגירת החודש ({data.exceptions.length})</h2>
               <ul className="space-y-1 list-disc list-inside">
-                {data.exceptions.map((e) => <li key={e.id}>{EXCEPTION_TYPE[e.type]} — {e.title}</li>)}
+                {data.exceptions.map((e) => <li key={e.id}>{statusLabel(EXCEPTION_TYPE[e.type])} — {e.title}</li>)}
               </ul>
             </div>
           </Note>
@@ -605,9 +614,9 @@ export default function Reports() {
                           {/* A mark, not a twelfth column: "הועברה לרו״ח" is one bit per invoice and
                               a whole column of it would cost width the figures need. */}
                           {i.export_status === 'sent' && (
-                            <span className="ms-1 text-done-fg" title={INVOICE_EXPORT_STATUS.sent.label}>
+                            <span className="ms-1 text-done-fg" title={statusLabel(INVOICE_EXPORT_STATUS.sent)}>
                               <span aria-hidden="true">✓</span>
-                              <span className="sr-only">{INVOICE_EXPORT_STATUS.sent.label}</span>
+                              <span className="sr-only">{statusLabel(INVOICE_EXPORT_STATUS.sent)}</span>
                             </span>
                           )}
                         </td>
@@ -690,7 +699,7 @@ export default function Reports() {
                   <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="break-words font-medium text-ink-body">{c.supplier.name}</div>
-                      <div className="mt-0.5 break-words text-xs text-ink-muted">{CREDIT_REASON[c.reason]}</div>
+                      <div className="mt-0.5 break-words text-xs text-ink-muted">{statusLabel(CREDIT_REASON[c.reason])}</div>
                     </div>
                     <span className="num shrink-0 font-medium">{fmtMoneyExact(c.amount)}</span>
                   </div>
@@ -706,7 +715,7 @@ export default function Reports() {
                 {data.credits.map((c) => (
                   <tr key={c.number}>
                     <td className="td">{c.supplier.name}</td>
-                    <td className="td text-ink-muted">{CREDIT_REASON[c.reason]}</td>
+                    <td className="td text-ink-muted">{statusLabel(CREDIT_REASON[c.reason])}</td>
                     <td className="td num">{fmtMoneyExact(c.amount)}</td>
                     <td className="td"><StatusBadge meta={CREDIT_STATUS[c.status]} /></td>
                   </tr>

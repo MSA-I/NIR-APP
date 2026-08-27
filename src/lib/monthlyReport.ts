@@ -62,11 +62,16 @@ export interface MonthlyReportSnapshot {
   content_hash: string;
 }
 
+/**
+ * RESOLVED labels, not the status maps. The maps carry dictionary keys now, and a spreadsheet
+ * builder is the wrong place to be resolving a language — it would need a locale, and a workbook
+ * exported in the wrong one is a file somebody sends to their accountant.
+ */
 export interface MonthlyReportLabels {
-  invoiceReview: Record<string, { label: string } | undefined>;
-  invoicePayment: Record<string, { label: string } | undefined>;
+  invoiceReview: Record<string, string | undefined>;
+  invoicePayment: Record<string, string | undefined>;
   creditReason: Record<string, string | undefined>;
-  creditStatus: Record<string, { label: string } | undefined>;
+  creditStatus: Record<string, string | undefined>;
   exceptionType: Record<string, string | undefined>;
 }
 
@@ -176,14 +181,14 @@ export function buildMonthlyWorkbook(input: {
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.invoices.map((row) => neutralizeSpreadsheetRow({
     'ספק': row.supplier.name, 'מספר חשבונית': row.invoice_number, 'תאריך': row.invoice_date,
     'לפני מע"מ': row.amount_before_vat, 'מע"מ': row.vat_amount, 'סה"כ': row.total_amount,
-    'סטטוס בדיקה': input.labels.invoiceReview[row.review_status]?.label,
-    'סטטוס תשלום': input.labels.invoicePayment[row.payment_status]?.label,
+    'סטטוס בדיקה': input.labels.invoiceReview[row.review_status],
+    'סטטוס תשלום': input.labels.invoicePayment[row.payment_status],
   }))), 'חשבוניות');
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.payments.map((row) => neutralizeSpreadsheetRow({
     'ספק': row.supplier.name, 'תאריך': row.paid_date, 'סכום': row.amount, 'אמצעי': row.method, 'אסמכתא': row.reference,
   }))), 'תשלומים');
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.credits.map((row) => neutralizeSpreadsheetRow({
-    'ספק': row.supplier.name, 'סיבה': input.labels.creditReason[row.reason], 'סכום': row.amount, 'סטטוס': input.labels.creditStatus[row.status]?.label,
+    'ספק': row.supplier.name, 'סיבה': input.labels.creditReason[row.reason], 'סכום': row.amount, 'סטטוס': input.labels.creditStatus[row.status],
   }))), 'זיכויים');
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.exceptions.map((row) => neutralizeSpreadsheetRow({
     'סוג': input.labels.exceptionType[row.type], 'תיאור': row.title, 'ספק': row.supplier?.name ?? '',
@@ -291,16 +296,16 @@ export function buildLockedMonthlyWorkbook(input: {
   // without consulting today's label maps: their frozen raw value is the conservative fallback.
   const frozenLabels: MonthlyReportLabels = {
     invoiceReview: Object.fromEntries(snapshot.invoice_rows.map((row) => [
-      row.review_status, { label: row.review_status_label ?? row.review_status },
+      row.review_status, row.review_status_label ?? row.review_status,
     ])),
     invoicePayment: Object.fromEntries(snapshot.invoice_rows.map((row) => [
-      row.payment_status, { label: row.payment_status_label ?? row.payment_status },
+      row.payment_status, row.payment_status_label ?? row.payment_status,
     ])),
     creditReason: Object.fromEntries(snapshot.credit_rows.map((row) => [
       row.reason, row.reason_label ?? row.reason,
     ])),
     creditStatus: Object.fromEntries(snapshot.credit_rows.map((row) => [
-      row.status, { label: row.status_label ?? row.status },
+      row.status, row.status_label ?? row.status,
     ])),
     exceptionType: Object.fromEntries(snapshot.exception_rows.map((row) => [
       row.type, row.type_label ?? row.type,

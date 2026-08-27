@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useId, useState } from 'react';
 import { toHebrewError } from "../lib/errors";
 import { Building2, ShieldCheck, Plus, Copy, MessageSquare, Archive, RefreshCw, Undo2 } from 'lucide-react';
@@ -262,6 +263,7 @@ interface FeedbackNoteRow {
 }
 
 function FeedbackNotes() {
+  const { statusLabel } = useT();
   const { data, loading, error } = useQuery(async () => unwrap(await supabase
     .from('feedback_notes')
     .select('id, created_at, note, route, role, viewport_width, app_release, sent_at, send_error, organizations(name)')
@@ -286,7 +288,7 @@ function FeedbackNotes() {
       header: 'תפקיד',
       // The vendor's own screen, so the frozen defaults are the right vocabulary here — a tenant's
       // renamed role would say nothing to the reader of this table (status.ts:163-168).
-      render: (r) => ROLE_LABEL[r.role] ?? r.role,
+      render: (r) => statusLabel(ROLE_LABEL[r.role]) || r.role,
     },
     {
       key: 'route',

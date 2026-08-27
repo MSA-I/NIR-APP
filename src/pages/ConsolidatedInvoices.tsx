@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, FileCheck2, RefreshCw, Upload } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -68,12 +69,17 @@ function sourceTypeLabel(source: ConsolidatedInvoiceSource) {
   return 'מסמך תומך שממתין לתיוק';
 }
 
-function sourceStatusLabel(source: ConsolidatedInvoiceSource) {
+function sourceStatusLabel(
+  source: ConsolidatedInvoiceSource,
+  statusLabel: (meta: { key: string } | null | undefined) => string,
+) {
   if (source.late_arrival) return <span className="badge-await">מסמך מאוחר</span>;
   if (source.status === 'filed_as_invoice') return 'תויק כחשבונית ביניים';
   if (source.status === 'filed_as_goods_receipt') return 'תויק כקבלת סחורה';
   if (source.status === 'pending_evidence') return 'ממתין לתיוק';
-  return INVOICE_REVIEW_STATUS[source.status]?.label ?? RECEIPT_STATUS[source.status]?.label ?? source.status;
+  return statusLabel(INVOICE_REVIEW_STATUS[source.status])
+    || statusLabel(RECEIPT_STATUS[source.status])
+    || source.status;
 }
 
 function compactNumber(value: number | null) {
@@ -361,6 +367,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
   onRefresh: () => void;
   onReload: () => Promise<unknown>;
 }) {
+  const { statusLabel } = useT();
   const toast = useToast();
   const navigate = useNavigate();
   const [retryingReview, setRetryingReview] = useState(false);
@@ -407,7 +414,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
     { key: 'number', header: 'מספר', priority: 1, render: (row) => <span className="num" dir="ltr">{row.document_number ?? '—'}</span> },
     { key: 'date', header: 'תאריך', priority: 2, render: (row) => <span className="num">{fmtDate(row.document_date)}</span> },
     { key: 'amount', header: 'סכום', priority: 1, render: (row) => money(row.total_amount) },
-    { key: 'status', header: 'מצב', priority: 2, render: sourceStatusLabel },
+    { key: 'status', header: 'מצב', priority: 2, render: (row) => sourceStatusLabel(row, statusLabel) },
     { key: 'source', header: 'מקור', priority: 1, render: (row) => row.document_id
       ? <button type="button" className="btn-secondary min-h-11" onClick={(event) => { event.stopPropagation(); void openDocument(row.document_id!); }}>צפייה במקור</button>
       : <span className="text-ink-muted">אין קובץ מקושר</span> },

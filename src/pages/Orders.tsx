@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toHebrewError } from "../lib/errors";
 import { useNavigate, useParams, useSearchParams } from 'react-router';
@@ -57,6 +58,7 @@ export function orderLifecycle(status: PoStatus, wasSent: boolean, wasConfirmed:
 }
 
 export function OrdersList() {
+  const { statusLabel } = useT();
   const navigate = useNavigate();
   const { profile, org, organizationAccess } = useAuth();
   const toast = useToast();
@@ -220,7 +222,7 @@ export function OrdersList() {
           <select className="input w-auto!" aria-label="סינון הזמנות רכש לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="open">הזמנות פתוחות</option>
             <option value="all">הכל</option>
-            {Object.entries(PO_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            {Object.entries(PO_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
           </select>
         }
         emptyTitle="עדיין אין הזמנות רכש" emptySubtitle="אפשר ליצור טיוטה חדשה כדי להתחיל את תהליך הרכש"

@@ -7,6 +7,7 @@
 //   2. התג — `data-testid` ו-`data-document-id` לא זזו, ו-`data-stage` נושא את השלב הגולמי, כך
 //      ש-`check-browser-smoke.cjs` ממשיך למדוד מצב אמיתי בזמן שהמשתמש רואה עברית.
 
+import { he } from './i18n/dictionaries/he';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
@@ -40,8 +41,10 @@ describe('שבעת השלבים שורדים מתחת לתצוגה', () => {
     expect(STAGES).toEqual(['unprocessed', 'queued', 'processing', 'extracted', 'review', 'completed', 'failed']);
     // נשארת שונה מהמילון הקנוני בכוונה: „ממתין לפירוש” הוא הבחנה הנדסית שהתקדימות הקנונית מכווצת
     // ל„בעיבוד”, ולכן אין לה תווית מקבילה שאפשר להתיישר אליה.
-    expect(DOCUMENT_PROCESSING_STAGE_META.extracted.label).toBe('ממתין לפירוש');
-    expect(DOCUMENT_PROCESSING_STAGE_META.completed.label).toBe('הושלם');
+    // Through the dictionary now, and still pinning the literal: the assertion names the exact
+    // Hebrew, so a key that quietly changed meaning fails here rather than shipping.
+    expect(he.status[DOCUMENT_PROCESSING_STAGE_META.extracted.key as keyof typeof he.status]).toBe('ממתין לפירוש');
+    expect(he.status[DOCUMENT_PROCESSING_STAGE_META.completed.key as keyof typeof he.status]).toBe('הושלם');
   });
 });
 

@@ -5,6 +5,7 @@ import { isActiveRole, type Organization, type Profile } from '../lib/types';
 import { unwrap } from '../lib/useQuery';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import { resolveRoleLabels } from '../lib/status';
+import { useT } from '../lib/i18n/LocaleProvider';
 import { cleanupPushBeforeSignOut } from '../lib/push';
 import { toHebrewError } from '../lib/errors';
 import {
@@ -66,6 +67,8 @@ interface AuthState {
 const AuthContext = createContext<AuthState>(null as unknown as AuthState);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // AuthProvider sits INSIDE LocaleProvider (src/main.tsx), so a language already exists here.
+  const { statusLabel } = useT();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
@@ -232,7 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; clearTimeout(watchdog); };
   }, [session, bootstrapAttempt]);
 
-  const roleLabels = useMemo(() => resolveRoleLabels(org?.settings), [org?.settings]);
+  const roleLabels = useMemo(() => resolveRoleLabels(org?.settings, statusLabel), [org?.settings, statusLabel]);
 
   async function refreshOrganizationAccess() {
     if (!session || !profile || !org || offlineBootstrap) return;

@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Loader2, UserPlus, AlertCircle, MailCheck } from 'lucide-react';
@@ -16,6 +17,7 @@ import { TERMS_VERSION } from './Legal';
 
 /** Public route — the invitee has no account and no session when they land here. */
 export default function AcceptInvite() {
+  const { statusLabel } = useT();
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
 
@@ -133,7 +135,7 @@ export default function AcceptInvite() {
           <p className="text-sm text-ink-muted mt-1">
             התפקיד שהוגדר עבורך: <strong className="text-ink-mid">
               {/* Never the bare enum: an unrecognised role used to print "office" to the invitee. */}
-              {resolveRoleLabels({ role_labels: lookup.role_labels })[lookup.role ?? ''] ?? '—'}
+              {resolveRoleLabels({ role_labels: lookup.role_labels }, statusLabel)[lookup.role ?? ''] ?? '—'}
             </strong>
           </p>
         </div>

@@ -12,10 +12,10 @@ import { currentMonthISO, fmtMoneyExact, monthRange, safeMonthISO } from './form
 import { monthlyReportTemplateValues } from './reportTemplateExport';
 
 const labels: MonthlyReportLabels = {
-  invoiceReview: { approved: { label: 'מאושרת' } },
-  invoicePayment: { unpaid: { label: 'לא שולמה' } },
+  invoiceReview: { approved: 'מאושרת' },
+  invoicePayment: { unpaid: 'לא שולמה' },
   creditReason: { shortage: 'חוסר' },
-  creditStatus: { open: { label: 'פתוח' } },
+  creditStatus: { open: 'פתוח' },
   exceptionType: { price_mismatch: 'פער מחיר' },
 };
 

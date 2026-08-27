@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Banknote, Calculator, ChevronLeft, FileSpreadsheet, Loader2, Printer, ReceiptText, type LucideIcon } from 'lucide-react';
@@ -88,6 +89,7 @@ function StripStat({ title, value, context, icon: Icon }: {
 
 export default function Expenses() {
   const { profile, org } = useAuth();
+  const { statusLabel } = useT();
   const toast = useToast();
   const defaults = presetRange('month');
   // useParamState seeds from the URL and re-syncs when it changes; the URL is also WRITTEN
@@ -224,7 +226,7 @@ export default function Expenses() {
       }
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.invoices.map((i) => neutralizeSpreadsheetRow({
         'ספק': i.supplier?.name ?? '', 'מספר חשבונית': i.invoice_number, 'תאריך': i.invoice_date,
-        'סה"כ': i.total_amount, 'סטטוס תשלום': INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
+        'סה"כ': i.total_amount, 'סטטוס תשלום': statusLabel(INVOICE_PAYMENT_STATUS[i.payment_status]),
       }))), 'חשבוניות');
       XLSX.writeFile(wb, fileName);
       toast('קובץ ה-Excel הורד');

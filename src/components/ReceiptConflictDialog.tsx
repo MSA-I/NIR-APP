@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { fmtDateTime, formatQuantity } from '../lib/format';
@@ -318,6 +319,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
   onClose: () => void;
   onResolve: (resolution: ReceiptConflictResolution) => void;
 }) {
+  const { statusLabel } = useT();
   const explanationId = useId();
   const [explanation, setExplanation] = useState('');
   const [choice, setChoice] = useState<Record<string, 'local' | 'server'>>({});
@@ -434,7 +436,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
                   <td className="td">
                     <span className="num">{line.localQty}</span>{' '}
                     <span className="text-xs text-ink-muted">
-                      {RECEIPT_LINE_STATUS[line.localStatus]?.label ?? line.localStatus}
+                      {statusLabel(RECEIPT_LINE_STATUS[line.localStatus]) || line.localStatus}
                     </span>
                   </td>
                   <td className="td whitespace-normal">

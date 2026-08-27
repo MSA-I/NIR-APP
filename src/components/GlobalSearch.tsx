@@ -16,8 +16,8 @@ import { useAuth } from '../auth/AuthContext';
 // borrowed from the matching supplier status so it tracks whatever section 6's Tone vocabulary
 // lands on rather than hardcoding a literal that its in-flight rewrite may rename again.
 const PRODUCT_STATUS: Record<string, StatusMeta> = {
-  active: { label: 'פעיל', tone: SUPPLIER_STATUS.active.tone },
-  inactive: { label: 'לא פעיל', tone: SUPPLIER_STATUS.inactive.tone },
+  active: { key: 'supplier_active', tone: SUPPLIER_STATUS.active.tone },
+  inactive: { key: 'supplier_inactive', tone: SUPPLIER_STATUS.inactive.tone },
 };
 
 // --- Per-role display order (NO LONGER THE GATE) ---------------------------------------

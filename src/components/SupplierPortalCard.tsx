@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Link2, Copy, Loader2, RefreshCcw, Send, XCircle, Inbox } from 'lucide-react';
@@ -24,6 +25,7 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
   orgName: string;
   canWrite: boolean;
 }) {
+  const { statusLabel } = useT();
   const navigate = useNavigate();
   const toast = useToast();
   const [issueOpen, setIssueOpen] = useState(false);
@@ -108,7 +110,7 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
           <Inbox size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             הספק שלח תשובה דרך הפורטל ({fmtDateTime(proposal.submitted_at)}) ·{' '}
-            {SUPPLIER_PROPOSAL_STATUS[proposal.status].label}.{' '}
+            {statusLabel(SUPPLIER_PROPOSAL_STATUS[proposal.status])}.{' '}
             <button
               type="button"
               className="underline"

@@ -1,9 +1,9 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { Eye, EyeOff, Loader2, Lock } from 'lucide-react';
 import { Card, ICON } from '../components/ui';
 import { useAuth, homeFor } from '../auth/AuthContext';
-import { useT } from '../lib/i18n/LocaleProvider';
 import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
 import { startAurora } from '../lib/loginAurora';

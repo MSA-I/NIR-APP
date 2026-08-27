@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
@@ -87,10 +88,18 @@ const SORTABLE_COLUMNS: ReadonlySet<string> = new Set(['date']);
 /** DataTable column key → the DB column its index is built on. */
 const SORT_COLUMN: Record<string, string> = { date: 'invoice_date' };
 const DEFAULT_SORT: readonly ServerSort[] = [{ column: 'invoice_date', ascending: false }];
-const REVIEW_FILTER_OPTIONS: ReadonlyArray<readonly [string, string]> = [
-  ['', 'הכל'],
-  ...Object.entries(INVOICE_REVIEW_STATUS).map(([key, value]) => [key, value.label] as const),
-];
+/**
+ * A function rather than a module-level constant: the labels now come from the dictionary, and a
+ * constant evaluated at import time would freeze whichever language happened to load first.
+ */
+function reviewFilterOptions(
+  statusLabel: (meta: { key: string } | null | undefined) => string,
+): ReadonlyArray<readonly [string, string]> {
+  return [
+    ['', 'הכל'],
+    ...Object.entries(INVOICE_REVIEW_STATUS).map(([key, value]) => [key, statusLabel(value)] as const),
+  ];
+}
 // Phone quick filters are the stages that start or unblock work. Every stage remains in the
 // existing filter sheet, and a deep-linked/active secondary stage makes itself visible here.
 const MOBILE_PRIMARY_REVIEW_FILTERS = new Set(['', 'received', 'pending_approval', 'investigation']);
@@ -98,6 +107,7 @@ const MOBILE_PRIMARY_REVIEW_FILTERS = new Set(['', 'received', 'pending_approval
 export function InvoicesList() {
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
+  const { statusLabel } = useT();
   const toast = useToast();
   const [, setParams] = useSearchParams();
   const [reviewFilter] = useParamState('review');
@@ -289,7 +299,7 @@ export function InvoicesList() {
         className="gap-1.5"
         value={reviewFilter}
         onChange={(value) => patchParams({ review: value, page: '' })}
-        items={REVIEW_FILTER_OPTIONS.map(([value, label]) => ({
+        items={reviewFilterOptions(statusLabel).map(([value, label]) => ({
           key: value,
           label,
           className: MOBILE_PRIMARY_REVIEW_FILTERS.has(value) || reviewFilter === value ? '' : 'max-sm:hidden',
@@ -334,7 +344,7 @@ export function InvoicesList() {
             {data.narrowed && <span className="text-xs text-await-fg" role="status">{SUPPLIER_SEARCH_NARROWED}</span>}
             <select className="input w-auto! md:hidden" aria-label="סינון חשבוניות לפי שלב הבדיקה"
               value={reviewFilter} onChange={(e) => patchParams({ review: e.target.value, page: '' })}>
-              {REVIEW_FILTER_OPTIONS.map(([value, label]) => <option key={value || 'all'} value={value}>{label}</option>)}
+              {reviewFilterOptions(statusLabel).map(([value, label]) => <option key={value || 'all'} value={value}>{label}</option>)}
             </select>
             {/* `without-order` is available only on the active invoice-reading surface. */}
             <select className="input w-auto!" aria-label="סינון חשבוניות לפי צורך בטיפול" value={attentionFilter} onChange={(e) => patchParams({ attention: e.target.value, page: '' })}>
@@ -345,13 +355,13 @@ export function InvoicesList() {
             <select className="input w-auto!" aria-label="סינון חשבוניות לפי סטטוס תשלום" value={payFilter} onChange={(e) => patchParams({ pay: e.target.value, page: '' })}>
               <option value="">כל סטטוסי התשלום</option>
               <option value="open">פתוחות לתשלום</option>
-              {Object.entries(INVOICE_PAYMENT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              {Object.entries(INVOICE_PAYMENT_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
             </select>
             <input type="month" className="input w-auto!" aria-label="סינון חשבוניות לפי חודש" value={monthFilter} onChange={(e) => patchParams({ month: e.target.value, page: '' })} />
             {canViewExport && (
               <select className="input w-auto!" aria-label="סינון חשבוניות לפי סטטוס העברה לרואה חשבון" value={exportFilter} onChange={(e) => patchParams({ export: e.target.value, page: '' })}>
                 <option value="">כל סטטוסי הרו״ח</option>
-                {Object.entries(INVOICE_EXPORT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                {Object.entries(INVOICE_EXPORT_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
               </select>
             )}
           </>

@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { reasonOr } from '../lib/reason';
 import { reasonDemandFor } from '../lib/transitionIntent';
@@ -36,6 +37,7 @@ type PaymentInvoiceCandidate = {
 export default function PaymentRequests() {
   const [params, setParams] = useSearchParams();
   const { profile, organizationAccess } = useAuth();
+  const { statusLabel } = useT();
   const toast = useToast();
   const [statusFilter, setStatusFilter] = useParamState('status', 'active');
   const [dueFilter, setDueFilter] = useParamState('due');
@@ -168,7 +170,7 @@ export default function PaymentRequests() {
             <select className="input w-auto!" aria-label="סינון דרישות תשלום לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="active">דרישות פעילות</option>
               <option value="all">הכל</option>
-              {Object.entries(PAYMENT_REQUEST_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              {Object.entries(PAYMENT_REQUEST_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
             </select>
             <select className="input w-auto!" aria-label="סינון דרישות תשלום לפי מועד יעד" value={dueFilter} onChange={(e) => setDueFilter(e.target.value)}>
               <option value="">כל מועדי היעד</option>

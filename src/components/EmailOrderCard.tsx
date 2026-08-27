@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { Loader2, Mail, RotateCcw, Send } from 'lucide-react';
 import { ConfirmDialog, ICON, Note, StatusBadge, useToast } from './ui';
@@ -35,6 +36,7 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
   canWrite: boolean;
 }) {
   const toast = useToast();
+  const { statusLabel } = useT();
   const { profile } = useAuth();
   const [sendOpen, setSendOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -149,7 +151,7 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
           {/* The provider's own word for the stored status, kept visible next to the channel
               claim so the two are never confused with each other. */}
           <p className="text-xs text-ink-faint">
-            מצב אצל ספק המייל: {EMAIL_MESSAGE_STATUS[message.status]?.label ?? '—'}
+            מצב אצל ספק המייל: {statusLabel(EMAIL_MESSAGE_STATUS[message.status]) ?? '—'}
           </p>
         </div>
       ) : (

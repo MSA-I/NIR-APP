@@ -34,7 +34,7 @@ describe('email order delivery boundary', () => {
     for (const status of ['queued', 'sending', 'unknown', 'accepted', 'delivered', 'bounced', 'failed']) {
       expect(EMAIL_MESSAGE_STATUS[status], status).toBeDefined();
     }
-    expect(EMAIL_MESSAGE_STATUS.accepted.label).not.toBe(EMAIL_MESSAGE_STATUS.delivered.label);
+    expect(EMAIL_MESSAGE_STATUS.accepted.key).not.toBe(EMAIL_MESSAGE_STATUS.delivered.key);
     // `read` is deliberately absent: the provider cannot honestly claim it for email.
     expect(EMAIL_MESSAGE_STATUS.read).toBeUndefined();
   });

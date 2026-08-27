@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, createContext, useContext, type ElementType, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { Link, useLocation } from 'react-router';
@@ -14,9 +15,17 @@ import { routePresentationDescription } from '../lib/routePresentation';
 import { ActionMenu, type ActionMenuItem } from './ActionMenu';
 
 /* ---------- StatusBadge ---------- */
-export function StatusBadge({ meta }: { meta: StatusMeta | undefined }) {
+/**
+ * Accepts either shape, and the second one is TRANSITIONAL. `StatusMeta` carries a dictionary key
+ * — that is the extracted vocabulary. `{ label, tone }` is a badge whose text is composed at
+ * runtime and has no fixed key to name it with: `documentUiStatus` builds one out of a stage, an
+ * elapsed time and an entity. Those surfaces get their own extraction pass; until then this keeps
+ * one badge component instead of two, and the `'key' in meta` test says out loud which is which.
+ */
+export function StatusBadge({ meta }: { meta: StatusMeta | { label: string; tone: Tone } | undefined }) {
+  const { statusLabel } = useT();
   if (!meta) return null;
-  return <span className={`badge-${meta.tone}`}>{meta.label}</span>;
+  return <span className={`badge-${meta.tone}`}>{'key' in meta ? statusLabel(meta) : meta.label}</span>;
 }
 
 /* ---------- The icon scale ---------- */

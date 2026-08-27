@@ -93,8 +93,8 @@ const reportWorkbook = buildMonthlyWorkbook({
   orgName: 'ארגון בדיקה', month: '2026-07', generatedAt: new Date('2026-07-22T10:00:00.000Z'),
   data: { invoices: scaleInvoices, payments: [], credits: [], exceptions: [] },
   labels: {
-    invoiceReview: { received: { label: 'נקלטה' } },
-    invoicePayment: { unpaid: { label: 'לא שולמה' } },
+    invoiceReview: { received: 'נקלטה' },
+    invoicePayment: { unpaid: 'לא שולמה' },
     creditReason: {}, creditStatus: {}, exceptionType: {},
   },
 });

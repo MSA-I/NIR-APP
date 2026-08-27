@@ -32,6 +32,7 @@
  * abandon it. They are all editable afterwards in the suppliers screen.
  */
 
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
@@ -87,11 +88,11 @@ type ExistingSupplier = Pick<Supplier, 'id' | 'name' | 'tax_id' | 'status'>;
  * nine filter on `deleted_at` alone, so an inactive supplier is present in almost all of them. A
  * wrong comment on a shared component is worse than none — the next agent reads it as the contract.
  */
-function describeExisting(row: ExistingSupplier) {
+function describeExisting(row: ExistingSupplier, statusLabel: (meta: { key: string } | null | undefined) => string) {
   return [
     row.name,
     row.tax_id ? `ח.פ ${row.tax_id}` : 'ללא ח.פ רשום',
-    SUPPLIER_STATUS[row.status]?.label ?? row.status,
+    statusLabel(SUPPLIER_STATUS[row.status]) || row.status,
   ].join(' · ');
 }
 
@@ -105,6 +106,7 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
   onCreated: (supplier: QuickCreatedSupplier) => void;
 }) {
   const { profile } = useAuth();
+  const { statusLabel } = useT();
   const toast = useToast();
   const [name, setName] = useState('');
   const [taxId, setTaxId] = useState('');
@@ -181,7 +183,7 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
         {duplicate && (
           <Note tone="await" role="alert">
             <div className="font-medium">ספק בשם זה כבר קיים במערכת</div>
-            <div className="mt-1 text-sm">{describeExisting(duplicate)}</div>
+            <div className="mt-1 text-sm">{describeExisting(duplicate, statusLabel)}</div>
           </Note>
         )}
         <div>

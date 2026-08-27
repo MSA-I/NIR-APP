@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { PackageCheck, Save, CheckCircle2, FileText, Camera, ChevronDown } from 'lucide-react';
@@ -198,6 +199,7 @@ function ReceivingOrderCard({ order, today, localDraft, machineDraft, onOpen }: 
 
 /* ============ List of orders awaiting receiving — mobile-first cards ============ */
 export function ReceivingList() {
+  const { statusLabel } = useT();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const documentId = params.get('document');
@@ -350,14 +352,14 @@ export function ReceivingList() {
           <option value="attention">דורש פעולה</option>
           {/* Read from PO_STATUS rather than retyped, so the filter cannot drift from the badge
               beside it — which is exactly what happened to "נשלחה" before it became "נשלחה לספק". */}
-          <option value="sent">{PO_STATUS.sent.label}</option>
-          <option value="confirmed">{PO_STATUS.confirmed.label}</option>
-          <option value="partial">{PO_STATUS.partial.label}</option>
+          <option value="sent">{statusLabel(PO_STATUS.sent)}</option>
+          <option value="confirmed">{statusLabel(PO_STATUS.confirmed)}</option>
+          <option value="partial">{statusLabel(PO_STATUS.partial)}</option>
         </select>
       </div>
 
       {!orders.length ? (
-        <div className="card"><EmptyState title="אין הזמנות שממתינות לקבלה" subtitle={`הזמנות בסטטוס ${PO_STATUS.sent.label} / ${PO_STATUS.confirmed.label} יופיעו כאן`} /></div>
+        <div className="card"><EmptyState title="אין הזמנות שממתינות לקבלה" subtitle={`הזמנות בסטטוס ${statusLabel(PO_STATUS.sent)} / ${statusLabel(PO_STATUS.confirmed)} יופיעו כאן`} /></div>
       ) : !filtered.length ? (
         <div className="card"><EmptyState title="לא נמצאו הזמנות" subtitle="אפשר לשנות את החיפוש או הסינון" /></div>
       ) : !focusedQueue ? (

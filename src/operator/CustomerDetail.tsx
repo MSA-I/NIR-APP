@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ArrowRight, Building2, MessageSquarePlus, Pencil, Trash2 } from 'lucide-react';
@@ -38,6 +39,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 }
 
 export default function CustomerDetail() {
+  const { statusLabel } = useT();
   const { orgId = '' } = useParams();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -213,7 +215,7 @@ export default function CustomerDetail() {
             const contact = contacts.find((row) => row.kind === kind);
             return (
               <li key={kind} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-                <span className="min-w-32 text-xs text-ink-muted">{CUSTOMER_CONTACT_KIND[kind]}</span>
+                <span className="min-w-32 text-xs text-ink-muted">{statusLabel(CUSTOMER_CONTACT_KIND[kind])}</span>
                 {contact ? (
                   <>
                     <span className="font-medium text-ink">{contact.name}</span>
@@ -221,7 +223,7 @@ export default function CustomerDetail() {
                     {contact.email && <span dir="ltr" className="text-sm text-ink-body">{contact.email}</span>}
                     {contact.phone && <span dir="ltr" className="text-sm text-ink-body num">{contact.phone}</span>}
                     {contact.preferred_channel && (
-                      <span className="badge-idle">{CONTACT_CHANNEL[contact.preferred_channel]}</span>
+                      <span className="badge-idle">{statusLabel(CONTACT_CHANNEL[contact.preferred_channel])}</span>
                     )}
                   </>
                 ) : (
@@ -333,7 +335,7 @@ export default function CustomerDetail() {
                 <div className="flex flex-wrap items-center gap-2">
                   {/* An action this map has not caught up with still happened; show it raw. */}
                   <span className="text-sm font-medium text-ink">
-                    {PLATFORM_EVENT_ACTION[event.action] ?? event.action}
+                    {statusLabel(PLATFORM_EVENT_ACTION[event.action]) || event.action}
                   </span>
                   <span className="ms-auto text-xs text-ink-muted" dir="ltr">{event.actor_email}</span>
                   <span className="text-xs text-ink-muted">{fmtDateTime(event.occurred_at)}</span>
@@ -385,7 +387,7 @@ export default function CustomerDetail() {
         busy={busy}
         danger
         requireReason
-        title={`הסרת ${removingContact ? CUSTOMER_CONTACT_KIND[removingContact.kind] : ''}`}
+        title={`הסרת ${removingContact ? statusLabel(CUSTOMER_CONTACT_KIND[removingContact.kind]) : ''}`}
         message="הרשומה תוסר מהתצוגה ותישמר בהיסטוריה — איש הקשר שאליו נכתבו הערות בעבר נשאר חלק מהתיעוד."
         confirmLabel="הסרה"
         onClose={() => setRemovingContact(null)}
@@ -469,6 +471,7 @@ function ContactModal({ busy, kind, existing, onClose, onSubmit }: {
     name: string; title: string; email: string; phone: string; channel: string; reason: string;
   }) => void;
 }) {
+  const { statusLabel } = useT();
   const [form, setForm] = useState({
     name: existing?.name ?? '',
     title: existing?.title ?? '',
@@ -485,7 +488,7 @@ function ContactModal({ busy, kind, existing, onClose, onSubmit }: {
   const ready = !!form.name.trim() && !!form.reason.trim() && reachable && channelReachable;
 
   return (
-    <Modal open onClose={onClose} title={CUSTOMER_CONTACT_KIND[kind]} busy={busy}>
+    <Modal open onClose={onClose} title={statusLabel(CUSTOMER_CONTACT_KIND[kind])} busy={busy}>
       <div className="space-y-3">
         <div>
           <label className="label" htmlFor="contact-name">שם</label>

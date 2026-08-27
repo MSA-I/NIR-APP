@@ -29,9 +29,9 @@ import {
 
 /** Shared display metadata for supplier_price_submissions rows (the per-supplier history ledger). */
 export const SUBMISSION_STATUS = {
-  accepted: { label: 'נקלט', tone: 'done' },
-  accepted_with_rejections: { label: 'נקלט חלקית', tone: 'await' },
-  rejected: { label: 'נדחה', tone: 'alert' },
+  accepted: { key: 'submission_accepted', tone: 'done' },
+  accepted_with_rejections: { key: 'submission_accepted_with_rejections', tone: 'await' },
+  rejected: { key: 'submission_rejected', tone: 'alert' },
 } as const;
 
 export const submissionMonthLabel = (value: string) => new Intl.DateTimeFormat('he-IL', {

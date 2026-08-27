@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState } from 'react';
 import { toHebrewError } from '../lib/errors';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -657,6 +658,7 @@ function CreditFromInvoice({ invoice, draft, onClose, onSaved }: {
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { statusLabel } = useT();
   const toast = useToast();
   const [creditRequestId] = useState(() => crypto.randomUUID());
   // The reason is never prefilled. `credit_reason` says why the business is owed money -- missing,
@@ -689,7 +691,7 @@ function CreditFromInvoice({ invoice, draft, onClose, onSaved }: {
         <div>
           <label className="label" htmlFor="invoice-credit-reason">סיבת הזיכוי</label>
           <select id="invoice-credit-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value as CreditReason)}>
-            {Object.entries(CREDIT_REASON).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            {Object.entries(CREDIT_REASON).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
           </select>
         </div>
         <div><label className="label" htmlFor="invoice-credit-amount">סכום (₪)</label><input id="invoice-credit-amount" type="number" step="0.01" className="input num" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>

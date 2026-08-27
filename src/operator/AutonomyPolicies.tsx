@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useId, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -13,6 +14,7 @@ import { AutonomyPolicyPanel } from './AutonomyPolicyPanel';
  * (platform_get_autonomy_policies, 0147) instead of the tenant-scoped evaluator.
  */
 export default function AutonomyPolicies() {
+  const { statusLabel } = useT();
   const pickerId = useId();
   const [orgId, setOrgId] = useState('');
   const { data: orgs, loading, error } = useQuery(async () =>
@@ -36,7 +38,7 @@ export default function AutonomyPolicies() {
           <option value="">בחירת ארגון…</option>
           {(orgs ?? []).map((org) => (
             <option key={org.id} value={org.id}>
-              {org.name}{org.status !== 'active' ? ` (${ORG_STATUS[org.status].label})` : ''}
+              {org.name}{org.status !== 'active' ? ` (${statusLabel(ORG_STATUS[org.status])})` : ''}
             </option>
           ))}
         </select>

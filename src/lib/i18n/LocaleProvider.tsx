@@ -62,6 +62,18 @@ interface LocaleState {
    * is the rule `status.ts` already states.
    */
   tDynamic: (key: string) => string | null;
+  /**
+   * The label for a `StatusMeta` — the shape `src/lib/status.ts` hands out, which carries a
+   * dictionary key and a tone rather than text.
+   *
+   * Typed as `{ key: string }` rather than importing `StatusMeta`, so this file stays free of the
+   * product's vocabulary. Nothing is lost: the maps in status.ts are checked against `StatusKey`
+   * where they are BUILT, which is the only place a typo can enter.
+   *
+   * `undefined` in, empty string out: a status the map has not caught up with must not render a
+   * key at a customer, and `StatusBadge` already declines to draw a badge it has no meta for.
+   */
+  statusLabel: (metaOrKey: { key: string } | string | null | undefined) => string;
   /** Switches the screen and remembers it locally. Persisting to the profile is the caller's job. */
   setLocale: (next: Locale) => void;
   /** Adopts a locale that came from somewhere authoritative (a profile) without echoing it back. */
@@ -85,12 +97,24 @@ interface LocaleState {
  * app. That is a stronger check than a throw, because it fires at the one place it can go wrong
  * rather than at every place it cannot.
  */
+/**
+ * Accepts a `StatusMeta` or a bare key, because status.ts holds both shapes: the tone-bearing maps
+ * hand out `{ key, tone }`, while the label-only ones (credit reasons, exception types, role names)
+ * are just `Record<value, key>`. One resolver rather than two spellings of the same lookup.
+ */
+function resolveStatus(dictionary: Dictionary, metaOrKey: { key: string } | string | null | undefined): string {
+  if (!metaOrKey) return '';
+  const key = typeof metaOrKey === 'string' ? metaOrKey : metaOrKey.key;
+  return tryTranslate(dictionary, `status.${key}`) ?? '';
+}
+
 const FALLBACK_DICTIONARY = he as unknown as Dictionary;
 const LocaleContext = createContext<LocaleState>({
   locale: 'he',
   dir: 'rtl',
   t: (key, vars) => translate(FALLBACK_DICTIONARY, key, vars),
   tDynamic: (key) => tryTranslate(FALLBACK_DICTIONARY, key),
+  statusLabel: (metaOrKey) => resolveStatus(FALLBACK_DICTIONARY, metaOrKey),
   setLocale: () => {},
   adoptLocale: () => {},
 });
@@ -136,6 +160,7 @@ export function LocaleProvider({
       dir: dirFor(locale),
       t: (key, vars) => translate(dictionary, key, vars),
       tDynamic: (key) => tryTranslate(dictionary, key),
+      statusLabel: (metaOrKey) => resolveStatus(dictionary, metaOrKey),
       setLocale,
       adoptLocale,
     };

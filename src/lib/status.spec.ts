@@ -1,3 +1,4 @@
+import { he } from './i18n/dictionaries/he';
 import { describe, expect, it } from 'vitest';
 import { canStartSupplierCommerce, NEW_COMMERCE_SUPPLIER_STATUSES, PAYMENT_REQUEST_STATUS } from './status';
 
@@ -11,6 +12,6 @@ describe('supplier commerce status', () => {
   });
 
   it('describes an executed payment request as a completed transfer', () => {
-    expect(PAYMENT_REQUEST_STATUS.executed.label).toBe('העברה בוצעה');
+    expect(he.status[PAYMENT_REQUEST_STATUS.executed.key]).toBe('העברה בוצעה');
   });
 });

@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { Link } from 'react-router';
 import { type ReactNode } from 'react';
 import { ArrowUpLeft, Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RefreshCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
@@ -465,6 +466,7 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
+  const { statusLabel } = useT();
   const { profile } = useAuth();
   /* The tier mark on the greeting line is owner-only, and the gate is repeated HERE rather than
      left to `PlanBadge`'s own: the component renders null for everyone else, but the line that
@@ -1049,7 +1051,7 @@ export default function Dashboard() {
                       <Link to={`/exceptions?id=${exception.id}`} className="block min-h-11 rounded-lg px-2 py-2 text-sm hover:bg-surface-hover active:bg-surface-selected">
                         <div className="flex items-center gap-2">
                           <StatusBadge meta={SEVERITY[exception.severity]} />
-                          <span className="text-xs text-ink-muted">{EXCEPTION_TYPE[exception.type]}</span>
+                          <span className="text-xs text-ink-muted">{statusLabel(EXCEPTION_TYPE[exception.type])}</span>
                         </div>
                         <div className="mt-0.5 break-words text-ink-mid sm:truncate">{exception.title}</div>
                       </Link>

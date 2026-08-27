@@ -1,3 +1,4 @@
+import { he } from './i18n/dictionaries/he';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -27,14 +28,15 @@ function message(overrides: Partial<EmailOrderMessage> = {}): EmailOrderMessage 
 describe('the email channel state (#238)', () => {
   it('every channel state has its own Hebrew claim, and failure is not delivery', () => {
     for (const state of ['pending', 'accepted', 'delivered', 'delivery_failed', 'unknown'] as const) {
-      expect(EMAIL_CHANNEL_STATE[state]?.label, state).toBeTruthy();
+      expect(he.status[EMAIL_CHANNEL_STATE[state]?.key as keyof typeof he.status], state).toBeTruthy();
     }
-    const labels = Object.values(EMAIL_CHANNEL_STATE).map((meta) => meta.label);
+    const labels = Object.values(EMAIL_CHANNEL_STATE)
+      .map((meta) => he.status[meta.key as keyof typeof he.status]);
     expect(new Set(labels).size).toBe(labels.length);
     expect(EMAIL_CHANNEL_STATE.delivered.tone).toBe('done');
     expect(EMAIL_CHANNEL_STATE.delivery_failed.tone).toBe('alert');
     // "נמסרה לספק המייל" and "נמסרה לנמען" are different claims and stay different (#187).
-    expect(EMAIL_CHANNEL_STATE.accepted.label).not.toBe(EMAIL_CHANNEL_STATE.delivered.label);
+    expect(EMAIL_CHANNEL_STATE.accepted.key).not.toBe(EMAIL_CHANNEL_STATE.delivered.key);
   });
 
   it('a resend is offered after a bounce, and never while the provider still holds it', () => {

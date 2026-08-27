@@ -57,8 +57,13 @@ describe('the English dictionary', () => {
   });
 
   it('never ships an empty string — a blank is not a translation', () => {
+    // `onboardingSource_none` is the one exception and it is deliberate: it means "no source was
+    // recorded", and the operator console prints nothing rather than a word for nothing. Named
+    // here rather than skipped by a rule, so a second blank cannot join it quietly.
+    const ALLOWED_BLANK = new Set(['onboardingSource_none']);
     for (const namespace of Object.values(en)) {
       for (const [key, value] of Object.entries(namespace)) {
+        if (ALLOWED_BLANK.has(key)) continue;
         expect(value.trim(), key).not.toBe('');
       }
     }

@@ -12,7 +12,19 @@ export type DocumentStatusState =
   | 'historical'
   | 'unavailable';
 
-export interface DocumentUiStatus extends StatusMeta {
+/**
+ * NOT `extends StatusMeta` any more. `StatusMeta` now carries a dictionary KEY, because the whole
+ * status vocabulary moved into src/lib/i18n/dictionaries. This type carries a LABEL, because its
+ * strings are still literal Hebrew composed at runtime — `result()` builds them from a document's
+ * stage, its elapsed seconds and its entity, so there is no fixed key to name them with.
+ *
+ * That is a debt, not a design: the document-review surface is its own extraction pass, and this
+ * type is where it will land. Keeping the two shapes separate is what let the status pass finish
+ * without dragging a second vocabulary in half-done.
+ */
+export interface DocumentUiStatus {
+  label: string;
+  tone: StatusMeta['tone'];
   state: DocumentStatusState;
   /**
    * One sentence the LABEL does not already say — or an empty string.

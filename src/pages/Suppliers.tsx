@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
@@ -60,6 +61,7 @@ function RiskCell({ m }: { m?: SupplierMetrics }) {
 }
 
 export function SuppliersList() {
+  const { statusLabel } = useT();
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
   const toast = useToast();
@@ -215,7 +217,7 @@ export function SuppliersList() {
             </select>
             <select className="input w-auto!" aria-label="סינון ספקים לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">כל הסטטוסים</option>
-              {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
             </select>
           </>
         }
@@ -251,6 +253,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
    */
   focus?: 'bank';
 }) {
+  const { statusLabel } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -523,7 +526,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
           <label className="label" htmlFor="supplier-status">סטטוס</label>
           <select id="supplier-status" className="input" value={f.status} onChange={(e) => set('status', e.target.value)}
             aria-describedby="supplier-status-hint">
-            {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
           </select>
           {/* OPEN-DECISIONS #115, decided 09.08.2026 (owner delegated): `inactive` means
               "לא להזמין ממנו יותר" — the procurement doors close (new order, price-list upload),
@@ -571,6 +574,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
 
 /* ================= Supplier card ================= */
 export function SupplierCard() {
+  const { statusLabel } = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
@@ -787,7 +791,7 @@ export function SupplierCard() {
         <TabPanel idPrefix="supplier" tabKey="credits">
         <DataTable rows={data.credits} columns={[
           { key: 'num', header: 'מס׳', className: 'num', render: (r: CreditRequest) => `#${r.number}` },
-          { key: 'reason', header: 'סיבה', render: (r: CreditRequest) => CREDIT_REASON[r.reason] },
+          { key: 'reason', header: 'סיבה', render: (r: CreditRequest) => statusLabel(CREDIT_REASON[r.reason]) },
           { key: 'amount', header: 'סכום', className: 'num', sortValue: (r: CreditRequest) => r.amount, render: (r: CreditRequest) => fmtMoneyExact(r.amount) },
           { key: 'status', header: 'סטטוס', render: (r: CreditRequest) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
           { key: 'date', header: 'נפתח', sortValue: (r: CreditRequest) => r.created_at, render: (r: CreditRequest) => fmtDate(r.created_at) },

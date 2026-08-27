@@ -13,6 +13,7 @@
  * them would prove the mock, not the screen.
  */
 
+import { he } from '../lib/i18n/dictionaries/he';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -267,7 +268,8 @@ describe('finding 20 — everyday surfaces use the canonical document status', (
    */
   it('the stage table and the badge spell a shared state identically', () => {
     for (const stage of ['queued', 'processing', 'review', 'completed', 'failed'] as const) {
-      expect(DOCUMENT_PROCESSING_STAGE_META[stage].label).toBe(documentUiStatus({ status: stage }).label);
+      expect(he.status[DOCUMENT_PROCESSING_STAGE_META[stage].key as keyof typeof he.status])
+        .toBe(documentUiStatus({ status: stage }).label);
     }
   });
 

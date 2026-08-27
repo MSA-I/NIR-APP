@@ -40,18 +40,18 @@ export type DocumentStageTone = 'idle' | 'await' | 'info' | 'done' | 'alert';
  */
 export const DOCUMENT_PROCESSING_STAGE_META: Record<
   DocumentProcessingStage,
-  { label: string; tone: DocumentStageTone }
+  { key: string; tone: DocumentStageTone }
 > = {
-  unprocessed: { label: 'טרם נשלח לעיבוד', tone: 'idle' },
-  queued: { label: 'ממתין לעיבוד', tone: 'await' },
-  processing: { label: 'בעיבוד', tone: 'info' },
+  unprocessed: { key: 'processingStage_unprocessed', tone: 'idle' },
+  queued: { key: 'processingStage_queued', tone: 'await' },
+  processing: { key: 'processingStage_processing', tone: 'info' },
   // Its own stage because nothing is running here: the text is out and the interpretation is
   // waiting to be requested. Showing "בעיבוד" told people to wait for something that had already
   // stopped, which is the one thing a status badge must never do.
-  extracted: { label: 'ממתין לפירוש', tone: 'info' },
-  review: { label: 'נדרשת בדיקה', tone: 'await' },
-  completed: { label: 'הושלם', tone: 'done' },
-  failed: { label: 'העיבוד נכשל', tone: 'alert' },
+  extracted: { key: 'processingStage_extracted', tone: 'info' },
+  review: { key: 'processingStage_review', tone: 'await' },
+  completed: { key: 'processingStage_completed', tone: 'done' },
+  failed: { key: 'processingStage_failed', tone: 'alert' },
 };
 
 export type DocumentInterpretationType =

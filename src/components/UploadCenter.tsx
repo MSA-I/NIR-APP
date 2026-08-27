@@ -543,12 +543,12 @@ function unregisterSurface(token: object) {
 /* ================= surface ================= */
 
 const UPLOAD_STATE_META: Record<UploadCenterStatus, StatusMeta> = {
-  queued: { label: 'ממתין להעלאה', tone: 'idle' },
-  uploading: { label: 'מעלה', tone: 'info' },
-  stored: { label: 'הועלה אך לא נרשם', tone: 'await' },
-  registered: { label: 'נרשם', tone: 'done' },
-  failed: { label: 'נכשל', tone: 'alert' },
-  canceled: { label: 'בוטל', tone: 'idle' },
+  queued: { key: 'upload_queued', tone: 'idle' },
+  uploading: { key: 'upload_uploading', tone: 'info' },
+  stored: { key: 'upload_stored', tone: 'await' },
+  registered: { key: 'upload_registered', tone: 'done' },
+  failed: { key: 'upload_failed', tone: 'alert' },
+  canceled: { key: 'upload_canceled', tone: 'idle' },
 };
 
 /**
@@ -560,7 +560,10 @@ const UPLOAD_STATE_META: Record<UploadCenterStatus, StatusMeta> = {
  * upload lifecycle therefore keeps its own `נרשם` / `נרשם — העיבוד לא החל` answers; once a
  * job exists, `documentUiStatus` owns the wording and precedence.
  */
-function displayMeta(entry: UploadCenterEntry, stage: DocumentProcessingStage | null): StatusMeta {
+function displayMeta(
+  entry: UploadCenterEntry,
+  stage: DocumentProcessingStage | null,
+): StatusMeta | { label: string; tone: StatusMeta['tone'] } {
   if (entry.status === 'registered') {
     if (stage && stage !== 'unprocessed') return documentUiStatus({ status: stage });
     // "העיבוד לא החל" is a claim about the server, and it is only allowed where the server is
@@ -570,10 +573,10 @@ function displayMeta(entry: UploadCenterEntry, stage: DocumentProcessingStage | 
     // claim stands until a real job supersedes it, which is the branch above. Without one the row
     // says what is certainly true — the document was registered — and the error text underneath
     // says what went wrong, in its own words, as a report rather than as a status.
-    if (entry.error && entry.documentId) return { label: 'נרשם — העיבוד לא החל', tone: 'await' };
+    if (entry.error && entry.documentId) return { key: 'upload_registered_not_started', tone: 'await' };
     return UPLOAD_STATE_META.registered;
   }
-  if (entry.status === 'queued' && entry.waitingForNetwork) return { label: 'ממתין לחיבור', tone: 'await' };
+  if (entry.status === 'queued' && entry.waitingForNetwork) return { key: 'upload_waiting_network', tone: 'await' };
   return UPLOAD_STATE_META[entry.status];
 }
 

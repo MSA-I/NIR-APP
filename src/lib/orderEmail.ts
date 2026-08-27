@@ -42,11 +42,11 @@ export type EmailChannelState =
  *  vocabulary belongs to #238's channel, not to the stored provider status ladder — and the tone
  *  is a claim: `delivered` is the only state that may read as done. */
 export const EMAIL_CHANNEL_STATE: Record<EmailChannelState, StatusMeta> = {
-  pending: { label: 'טרם נמסרה', tone: 'idle' },
-  accepted: { label: 'נמסרה לספק המייל', tone: 'info' },
-  delivered: { label: 'נמסרה לנמען', tone: 'done' },
-  delivery_failed: { label: 'המסירה נכשלה', tone: 'alert' },
-  unknown: { label: 'מצב לא ידוע', tone: 'alert' },
+  pending: { key: 'emailChannel_pending', tone: 'idle' },
+  accepted: { key: 'emailChannel_accepted', tone: 'info' },
+  delivered: { key: 'emailChannel_delivered', tone: 'done' },
+  delivery_failed: { key: 'emailChannel_delivery_failed', tone: 'alert' },
+  unknown: { key: 'emailChannel_unknown', tone: 'alert' },
 };
 
 /** The statuses a resend may be offered from. `accepted`/`delivered` are already with the
