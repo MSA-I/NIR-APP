@@ -80,7 +80,7 @@ Plan: `docs/PLAN-english-language-20260827.md`.
 - [x] P2-G2: every surface listed as extracted really carries zero Hebrew
   CHECK: node scripts/gate-i18n.mjs extracted
   EXPECT: GATE_I18N_EXTRACTED_OK
-  EVIDENCE: exit=0; shell=C:\WINDOWS\system32\cmd.exe; cwd=D:\משה פרוייקטים\פיתוח אתרים\NIR-APP\.claude\worktrees\add-english-language-system-f43d1e; path=e3341b211784/69 entries; output=gate-i18n: 2 extracted surface(s) at zero; 5311 Hebrew line(s) remain elsewhere | GATE_I18N_EXTRACTED_OK
+  EVIDENCE: exit=0; output=gate-i18n: 6 extracted surface(s) at zero; 3996 Hebrew line(s) remain elsewhere | GATE_I18N_EXTRACTED_OK. Re-measured 28.08.2026 after `src/pages/Settings.tsx` reached zero and joined the list. A surface is added to `EXTRACTED` only once it reads zero, so the list growing IS the evidence — the gate fails the moment any listed file takes Hebrew back.
 
 - [x] P2-G3: the whole suite passes, including the specs that had to follow the shape change
   CHECK: npm run -s test
@@ -96,7 +96,7 @@ Plan: `docs/PLAN-english-language-20260827.md`.
 - [ ] P2-G6: extraction is FINISHED — zero Hebrew outside the dictionaries and the documented exceptions
   CHECK: node scripts/gate-i18n.mjs zero
   EXPECT: GATE_I18N_ZERO_OK
-  EVIDENCE: pending — `exit=1`, `gate-i18n: extraction is not finished — 3987 Hebrew line(s) across 142 file(s)` (measured 28.08.2026, down from 4,982). **This oracle was replaced after the ledger's first run, and the ledger is what caught it.** It originally ran `ratchet`, which passes while thousands of lines remain, so the gate reported MET on its first day with 5,311 lines still hardcoded — the gate's English title and its command were measuring different things. `zero` fails until the count is actually zero.
+  EVIDENCE: pending — `exit=1`, `gate-i18n: extraction is not finished — 3634 Hebrew line(s) across 138 file(s)` (measured 28.08.2026 after PaymentRequests, Settings, Onboarding and InvoiceDetail; 4,982 at the start of the phase). **This oracle was replaced after the ledger's first run, and the ledger is what caught it.** It originally ran `ratchet`, which passes while thousands of lines remain, so the gate reported MET on its first day with 5,311 lines still hardcoded — the gate's English title and its command were measuring different things. `zero` fails until the count is actually zero.
 
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 

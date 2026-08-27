@@ -26,6 +26,7 @@ const EXTRACTED = [
   'src/lib/errors.ts',
   'src/lib/assistant/errorCodes.ts',
   'src/lib/tusUpload.ts',
+  'src/pages/Settings.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */
