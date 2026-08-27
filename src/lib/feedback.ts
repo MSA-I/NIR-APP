@@ -1,5 +1,5 @@
-import { supabase } from './supabase';
 import { toHebrewError } from './errors';
+import { supabase } from './supabase';
 import type { ScreenshotCapture } from './screenshot';
 import type { Role } from './types';
 

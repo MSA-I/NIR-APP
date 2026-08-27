@@ -211,6 +211,16 @@ export const he = {
     monthly_report_snapshot_source_unavailable: 'לא ניתן להשלים כעת את צילום המצב. הנתונים לא נשמרו ויש לנסות שוב.',
     offline_finalization_incomplete: 'השרת קיבל את הקבלה, אך הניקוי המקומי לא הושלם. הפעולה נשארה לתיקון בטוח בניסיון הבא.',
     offline_transport_failure: 'השליחה נכשלה בגלל תקלת רשת. הקבלה נשמרה במכשיר ותישלח בניסיון הבא.',
+    invitation_unknown: 'קישור ההזמנה אינו תקין. בקש מהעסק לשלוח הזמנה חדשה.',
+    invitation_expired: 'תוקף ההזמנה פג. בקש מהעסק לשלוח הזמנה חדשה.',
+    invitation_accepted: 'ההזמנה כבר נוצלה. אפשר להתחבר עם הפרטים שהוגדרו.',
+    invitation_revoked: 'ההזמנה בוטלה על ידי העסק.',
+    email_mismatch: 'כתובת האימייל של החשבון אינה תואמת לזו שההזמנה נשלחה אליה.',
+    profile_exists: 'החשבון הזה כבר משויך לעסק במערכת.',
+    org_suspended: 'חשבון העסק מושהה. יש לפנות לעסק שהזמין אותך.',
+    full_name_required: 'יש להזין שם מלא.',
+    not_authenticated: 'ההתחברות נכשלה. נסה שוב.',
+    terms_consent_required: 'להשלמת ההצטרפות יש לאשר את תנאי השימוש ומדיניות הפרטיות.',
   },
 
   status: {

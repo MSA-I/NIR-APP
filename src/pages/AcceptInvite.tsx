@@ -9,7 +9,7 @@ import { resolveRoleLabels } from '../lib/status';
 import { APP_NAME } from '../lib/branding';
 import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
 import {
-  lookupInvitation, acceptInvitation, acceptErrorMessage,
+  lookupInvitation, acceptInvitation, acceptErrorCondition,
   type InvitationLookup,
 } from '../lib/invitations';
 import { TERMS_VERSION } from './Legal';
@@ -89,7 +89,7 @@ export default function AcceptInvite() {
       // was established a moment before the profile existed.
       window.location.replace(homeFor(role));
     } catch (e) {
-      setFormError(acceptErrorMessage(e instanceof Error ? e.message : String(e)));
+      setFormError(errorText(acceptErrorCondition(e instanceof Error ? e.message : String(e))));
     } finally {
       setBusy(false);
     }

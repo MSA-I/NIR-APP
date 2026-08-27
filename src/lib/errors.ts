@@ -408,6 +408,19 @@ const PATTERNS: [RegExp, string][] = [
   // days later in whatever language happened to be active at the moment of the failure.
   [/offline_finalization_incomplete/i, 'offline_finalization_incomplete'],
   [/offline_transport_failure/i, 'offline_transport_failure'],
+  // The invitation codes (0007). They used to be a private map inside invitations.ts, which meant
+  // the invitee — a person who has no account yet and no way to ask anyone — was the one reader
+  // whose failures came from a second vocabulary.
+  [/invitation_unknown/i, 'invitation_unknown'],
+  [/invitation_expired/i, 'invitation_expired'],
+  [/invitation_accepted/i, 'invitation_accepted'],
+  [/invitation_revoked/i, 'invitation_revoked'],
+  [/email_mismatch/i, 'email_mismatch'],
+  [/profile_exists/i, 'profile_exists'],
+  [/org_suspended/i, 'org_suspended'],
+  [/full_name_required/i, 'full_name_required'],
+  [/not_authenticated/i, 'not_authenticated'],
+  [/terms_consent_required/i, 'terms_consent_required'],
 ];
 
 const FALLBACK = 'fallback';

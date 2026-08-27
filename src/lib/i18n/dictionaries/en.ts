@@ -207,6 +207,16 @@ export const en: Dictionary = {
     monthly_report_snapshot_source_unavailable: 'The snapshot cannot be completed right now. Nothing was saved; please try again.',
     offline_finalization_incomplete: 'The server accepted the receipt, but the local cleanup did not finish. The action stays queued for a safe retry.',
     offline_transport_failure: 'The send failed on a network fault. The receipt is saved on this device and will go out on the next attempt.',
+    invitation_unknown: 'This invitation link is not valid. Ask the business to send a new one.',
+    invitation_expired: 'This invitation has expired. Ask the business to send a new one.',
+    invitation_accepted: 'This invitation was already used. Sign in with the details you set.',
+    invitation_revoked: 'The business revoked this invitation.',
+    email_mismatch: 'This account\'s email does not match the address the invitation was sent to.',
+    profile_exists: 'This account already belongs to a business in the system.',
+    org_suspended: 'The business\'s account is suspended. Contact the business that invited you.',
+    full_name_required: 'A full name is required.',
+    not_authenticated: 'Sign-in failed. Please try again.',
+    terms_consent_required: 'To finish joining, accept the terms of use and the privacy policy.',
   },
 
   status: {

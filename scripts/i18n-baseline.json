@@ -84,7 +84,6 @@
     "src/lib/format.ts": 45,
     "src/lib/imageQuality.ts": 13,
     "src/lib/importSheet.ts": 12,
-    "src/lib/invitations.ts": 10,
     "src/lib/monthlyReport.ts": 67,
     "src/lib/nameKey.ts": 1,
     "src/lib/notifications.ts": 8,
