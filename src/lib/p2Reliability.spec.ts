@@ -165,12 +165,12 @@ assert.deepEqual(mergeUploadBatchSummary(firstUploadSummary, retryUpload, String
 
 const alert = { code: 'found' };
 const scan = await settleAlertScans([
-  { code: 'found', label: 'found', run: async () => alert },
-  { code: 'empty', label: 'empty', run: async () => null },
-  { code: 'failed', label: 'failed', run: async () => { throw new Error('private detail'); } },
+  { code: 'found', labelKey: 'alerts.scan_found', run: async () => alert },
+  { code: 'empty', labelKey: 'alerts.scan_empty', run: async () => null },
+  { code: 'failed', labelKey: 'alerts.scan_failed', run: async () => { throw new Error('private detail'); } },
 ]);
 assert.deepEqual(scan.alerts, [alert]);
 assert.equal(scan.complete, false);
-assert.deepEqual(scan.failures, [{ code: 'failed', label: 'failed' }]);
+assert.deepEqual(scan.failures, [{ code: 'failed', labelKey: 'alerts.scan_failed' }]);
 
 });

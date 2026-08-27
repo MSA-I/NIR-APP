@@ -874,6 +874,32 @@ export const he = {
     text_20: 'נקה סינון',
   },
 
+  alerts: {
+    duplicateInvoices_title: '{count} מספרי חשבונית מופיעים יותר מפעם אחת',
+    duplicateInvoices_detail: 'אותו ספק, אותו מספר חשבונית — חשד לחיוב כפול',
+    priceIncrease_title: '{count} מחירים עלו ב-{days} הימים האחרונים',
+    aboveAverage_title: '{count} הצעות מחיר גבוהות מהממוצע ביותר מ-{margin}%',
+    aboveAverage_detail: 'נמדד רק על מוצרים שיש להם שני ספקים ומעלה',
+    invoiceWithoutOrder_title: '{count} חשבוניות ללא הזמנת רכש מקושרת',
+    invoiceWithoutOrder_detail: 'רכישה ישירה יכולה להיות כזו כדין — שווה לוודא שלא נשמט קישור',
+    paymentDue_late: '{count} דרישות תשלום עברו את מועד הפירעון',
+    paymentDue_soon: '{count} דרישות תשלום לפירעון תוך {days} ימים',
+    paymentDue_detail: 'מכסה רק דרישות תשלום שהוזן להן תאריך. לחשבוניות אין מועד פירעון במערכת',
+    ordersAwaiting_title: '{count} הזמנות שנשלחו וטרם אושרו על ידי הספק',
+    ordersAwaiting_detail: 'ההזמנות נשלחו לספק אך טרם התקבל אישור קבלה — כדאי לוודא מולו.',
+    scan_duplicate_invoice: 'חשבוניות כפולות',
+    scan_orders_awaiting_confirmation: 'הזמנות ללא אישור',
+    scan_price_increase: 'עליות מחיר',
+    scan_above_average_price: 'מחירים מעל הממוצע',
+    scan_invoice_without_order: 'חשבוניות ללא הזמנה',
+    scan_payment_due_soon: 'מועדי תשלום',
+    priceIncrease_detail: 'לפי המחירון בלבד. מחירי שורות החשבונית בפועל אינם חלק מהסריקה הזאת',
+  },
+
+  alertsPage: {
+    partialScan: 'הסריקה חלקית: {scans}. הממצאים שכן נטענו מוצגים, אך אי אפשר לקבוע שהכול תקין.',
+  },
+
 } as const;
 
 /**

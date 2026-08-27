@@ -870,4 +870,30 @@ export const en: Dictionary = {
     text_20: 'Clear the filter',
   },
 
+  alerts: {
+    duplicateInvoices_title: '{count} invoice numbers appear more than once',
+    duplicateInvoices_detail: 'Same supplier, same invoice number — a possible duplicate charge',
+    priceIncrease_title: '{count} prices went up in the last {days} days',
+    aboveAverage_title: '{count} offers are more than {margin}% above the average',
+    aboveAverage_detail: 'Measured only on products with two suppliers or more',
+    invoiceWithoutOrder_title: '{count} invoices with no linked purchase order',
+    invoiceWithoutOrder_detail: 'A direct purchase can legitimately be one — worth checking a link was not missed',
+    paymentDue_late: '{count} payment requests are past their due date',
+    paymentDue_soon: '{count} payment requests fall due within {days} days',
+    paymentDue_detail: 'Covers only payment requests that were given a date. Invoices have no due date in the system',
+    ordersAwaiting_title: '{count} orders were sent and the supplier has not confirmed',
+    ordersAwaiting_detail: 'The orders went to the supplier but no confirmation has come back — worth checking with them.',
+    scan_duplicate_invoice: 'Duplicate invoices',
+    scan_orders_awaiting_confirmation: 'Unconfirmed orders',
+    scan_price_increase: 'Price increases',
+    scan_above_average_price: 'Prices above the average',
+    scan_invoice_without_order: 'Invoices with no order',
+    scan_payment_due_soon: 'Payment due dates',
+    priceIncrease_detail: 'From the price list only. The actual invoice line prices are not part of this scan',
+  },
+
+  alertsPage: {
+    partialScan: 'The scan is partial: {scans}. What did load is shown, but nothing here can claim everything is fine.',
+  },
+
 };

@@ -65,16 +65,16 @@ export interface Summary {
   lines: SummaryLine[];
   alerts: Alert[];
   complete: boolean;
-  failures: { code: string; label: string }[];
+  failures: { code: string; labelKey: string }[];
   generatedAt: Date;
 }
 
 export async function buildSummary(): Promise<Summary> {
   const [rows, alertScan] = await Promise.all([fetchMetricRows(), scanAlerts()]);
-  const failures: { code: string; label: string }[] = [...alertScan.failures];
+  const failures: { code: string; labelKey: string }[] = [...alertScan.failures];
   const lines = SUMMARY_METRIC_LINES.map((definition): SummaryLine => {
     const value = metricValue(rows?.get(definition.key));
-    if (value == null) failures.push({ code: definition.key, label: definition.label });
+    if (value == null) failures.push({ code: definition.key, labelKey: definition.label });
     return { ...definition, value };
   });
 

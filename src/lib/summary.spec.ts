@@ -61,7 +61,9 @@ describe('הסיכום העסקי מול המודל השרתי (0165)', () => {
     const summary = await buildSummary();
     expect(summary.lines.find((line) => line.key === 'suppliers_raised')?.value).toBeNull();
     expect(summary.failures).toEqual([
-      { code: 'suppliers_raised', label: 'ספקים שהעלו מחיר ב-30 הימים האחרונים' },
+      // `labelKey` since the failures list carries dictionary keys; the summary metric labels
+      // are their own extraction surface, so this one is still a literal passing through.
+      { code: 'suppliers_raised', labelKey: 'ספקים שהעלו מחיר ב-30 הימים האחרונים' },
     ]);
     expect(summary.complete).toBe(false);
     expect(summary.lines.filter((line) => line.value != null)).toHaveLength(4);
@@ -86,7 +88,7 @@ describe('הסיכום העסקי מול המודל השרתי (0165)', () => {
 
   it('כשלי סריקת ההתראות מצטרפים לפני כשלי המדדים, כמו בהתנהגות המקורית', async () => {
     scanAlerts.mockResolvedValue({
-      alerts: [], complete: false, failures: [{ code: 'scan_x', label: 'סריקה X' }],
+      alerts: [], complete: false, failures: [{ code: 'scan_x', labelKey: 'סריקה X' }],
     });
     rpc.mockResolvedValue({ data: [...allFive().slice(1), row('received_week', null, false)], error: null });
     const summary = await buildSummary();

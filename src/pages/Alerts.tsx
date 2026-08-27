@@ -1,3 +1,5 @@
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 import { useNavigate } from 'react-router';
 import { useEffect, useRef } from 'react';
 import { RefreshCw, ChevronLeft, ShieldCheck, TriangleAlert, BellOff } from 'lucide-react';
@@ -29,6 +31,7 @@ const SEVERITY_LABEL: Record<AlertSeverity, string> = {
 };
 
 export default function Alerts() {
+  const { t, tDynamic } = useT();
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { data, loading, fetching, error, refetch } = useQuery<Summary>(() => buildSummary(), []);
@@ -87,7 +90,7 @@ export default function Alerts() {
         <Note tone="alert">
           <TriangleAlert size={ICON.sm} className="mt-0.5 shrink-0" />
           <span>
-            {error ?? `הסריקה חלקית: ${data.failures.map((failure) => failure.label).join(', ')}. הממצאים שכן נטענו מוצגים, אך אי אפשר לקבוע שהכול תקין.`}
+            {error ?? t('alertsPage.partialScan', { scans: data.failures.map((failure) => tDynamic(failure.labelKey) ?? failure.labelKey).join(', ') })}
           </span>
         </Note>
       )}
@@ -124,8 +127,8 @@ export default function Alerts() {
                 className="w-full text-start flex items-center gap-3 px-4 py-3 row-hover cursor-pointer">
                 <span className={`${SEVERITY_BADGE[a.severity]} shrink-0`}>{SEVERITY_LABEL[a.severity]}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium text-ink-body">{a.title}</span>
-                  <span className="block text-xs text-ink-muted mt-0.5">{a.detail}</span>
+                  <span className="block text-sm font-medium text-ink-body">{t(a.title.key as TKey, a.title.vars)}</span>
+                  <span className="block text-xs text-ink-muted mt-0.5">{t(a.detail.key as TKey, a.detail.vars)}</span>
                 </span>
                 <ChevronLeft size={ICON.sm} className="text-ink-ghost shrink-0" aria-hidden="true" />
               </button>
