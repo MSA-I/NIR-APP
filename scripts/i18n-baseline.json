@@ -150,7 +150,7 @@
     "src/pages/neworder/SummaryStep.tsx": 15,
     "src/pages/neworder/SupplierGroupCard.tsx": 13,
     "src/pages/neworder/SupplierSplitStep.tsx": 43,
-    "src/pages/Onboarding.tsx": 21,
+    "src/pages/Onboarding.tsx": 14,
     "src/pages/Orders.tsx": 27,
     "src/pages/PaymentRequests.tsx": 7,
     "src/pages/Payments.tsx": 28,

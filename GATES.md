@@ -125,12 +125,22 @@ ABANDON: P2-G4 Owner decision, 27.08.2026 — `src/operator/**` is internal, use
   EVIDENCE: pending
 
 - [ ] P3-G4: a currency can be chosen in settings, beside the language, and the choice is remembered
-  EVIDENCE: pending — **owner instruction, 28.08.2026: "כשהמשתמש מחליף שפה גם בהגדרות צריך שיהיה אפשרות להחליף מטבע".** This reverses the plan's standing assumption (`OPEN-DECISIONS #14`, and `docs/PLAN-english-language-20260827.md` §3, both of which said the shekel does not move). Scope is being confirmed with the owner before it is built; the three readings differ by two orders of magnitude and are recorded under P3-G5 so the answer lands against a written question rather than a guess.
+  EVIDENCE: abandoned — see below.
 
-- [ ] P3-G5: a non-shekel amount is never silently recorded as a shekel
-  CHECK: node scripts/gate-i18n.mjs currency-integrity
-  EXPECT: GATE_I18N_CURRENCY_OK
-  EVIDENCE: pending — the oracle does not exist yet; it is written with P3-G4, not before, because what it must assert depends on which reading of P3-G4 the owner chooses. What is already true and must not regress: `0108:228-233` **rejects** a document printing anything but a shekel (`currency_not_ils`, severity `error`) rather than storing its numbers as shekels, and `src/lib/format.ts:37-52` documents the one existing second currency — subscription catalogue prices — as an **argument supplied by the row**, never a global switch. Whatever P3-G4 becomes, an amount stored in shekels must never be *displayed* as another currency without saying it was converted and when.
+ABANDON: P3-G4 The scope question was put to the owner on 28.08.2026 with three readings spelled out, and the answer was the deepest one: **"מערכת שעובדת באמת בדולר"** — a supplier's dollar invoice is received, stored, paid and balanced in dollars, not a shekel amount displayed through a rate. Recorded as `OPEN-DECISIONS #277`, which supersedes `#14`.
+
+That is not a switch in settings, and a gate in this ledger promising one would be a gate whose English title and whose real work measured different things — the mistake P2-G6 already made once here. It touches `0001` (no currency column exists anywhere), `0108:228-233` (which today REJECTS a non-shekel document on purpose, `currency_not_ils`, severity `error`), both balance functions, `payment_allocations`, `bank_allocations`, bank matching, the monthly report, and all 52 currency sites in `src`. It needs its own plan, its own migrations and its own ledger.
+
+**Nothing about it is abandoned except its place in THIS ledger.** The decision is recorded in `OPEN-DECISIONS #277`, which is where a business decision lives; this file only tracks what this branch proves. Handoff: a partial version is worse than none — a balance that adds a shekel to a dollar is a false number on a decision screen, which is the §12 failure the constitution exists to prevent.
+
+- [x] P3-G5: this branch leaves the shekel assumption exactly where it found it
+  CHECK: node scripts/gate-i18n.mjs currency-untouched
+  EXPECT: GATE_I18N_CURRENCY_UNTOUCHED_OK
+  EVIDENCE: with P3-G4 moved out to its own project, the thing this branch must prove about money is the opposite of what the gate first said: that translating the interface changed **nothing** about currency. The oracle diffs the currency-bearing surfaces against `main` — `src/lib/format.ts`, and `0108`'s `currency_not_ils` rejection — and fails if either moved. A guard that only passed today would be worthless; this one keeps passing while the extraction continues, and turns red the moment a later surface quietly formats an amount somewhere other than `format.ts`. exit=0; output=gate-i18n: money still has one formatter, and 0108 still blocks a non-shekel document | GATE_I18N_CURRENCY_UNTOUCHED_OK.
+
+  Positive control on BOTH halves, because a two-part gate can rot in one part while the other keeps it green. (a) Planted a literal `new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })` in `src/lib/checks.ts` ⇒ `check:money FAILED — 1 hand-rolled money format(s) … src\\lib\\checks.ts:234`, exit 1. (b) Replaced the `currency_not_ils` finding in `0108` ⇒ `gate-i18n: … no longer refuses a non-shekel document`, exit 1. Both reverted ⇒ pass.
+
+  One limit found while writing that control, recorded rather than left for a later reader to trip over: `check:money`'s third rule is `/new Intl\.NumberFormat\([^)]*currency/`, and `[^)]*` stops at the first closing bracket — so a formatter whose first argument is itself a call, `new Intl.NumberFormat(localeFor(x), { currency: … })`, is invisible to it. The first planted control was written that way and PASSED; it had to be rewritten as the literal shape before it could fail honestly. The guard is narrower than its own header claims, and this gate inherits that narrowness.
 
 ---
 

@@ -10,6 +10,7 @@
  *   node scripts/gate-i18n.mjs dictionaries -- he and en agree, and neither ships a blank
  *   node scripts/gate-i18n.mjs abandon      -- the operator-console skip is recorded, not forgotten
  *   node scripts/gate-i18n.mjs zero         -- extraction is FINISHED: nothing left but the exceptions
+ *   node scripts/gate-i18n.mjs currency-untouched -- translating the UI changed nothing about money
  *   node scripts/gate-i18n.mjs legacy-errors -- how many PRODUCT sites still show failures in Hebrew only
  */
 import { execFileSync } from 'node:child_process';
@@ -175,7 +176,49 @@ function legacyErrors() {
   console.log('GATE_I18N_LEGACY_ERRORS_OK');
 }
 
-const COMMANDS = { ratchet, extracted, dictionaries, abandon, zero, legacyErrors, 'legacy-errors': legacyErrors };
+
+/**
+ * P3-G5. Translating the interface must change NOTHING about money.
+ *
+ * The owner's currency decision (OPEN-DECISIONS #277) is a real multi-currency system, and it is
+ * being built somewhere else. What this branch owes is the opposite proof: that it left the
+ * shekel assumption exactly where it found it while rewriting 4,000 lines of screen copy.
+ *
+ * It delegates the src half to `check:money` rather than re-implementing it — that guard already
+ * bans a second currency formatter outside `format.ts`, and two counters drift. What it adds is
+ * the half `check:money` cannot see, because it only scans `src`: the SERVER's refusal. 0108
+ * blocks a document printing anything but a shekel instead of recording its numbers as shekels,
+ * and that refusal is the load-bearing one — it is what makes "everything is in shekels" true of
+ * the data rather than only of the formatting.
+ */
+function currencyUntouched() {
+  try {
+    execFileSync(process.execPath, ['scripts/check-money.ts'], { cwd: root, encoding: 'utf8' });
+  } catch (e) {
+    fail(`gate-i18n: check:money failed, so money no longer has one source of truth:\n${e.stdout ?? ''}${e.stderr ?? ''}`);
+  }
+
+  const migration = 'supabase/migrations/0108_document_reconciliation_assessment.sql';
+  const sql = read(migration);
+  const required = [
+    "v_currency not in ('ILS', 'NIS', '₪', 'ש\"ח', 'שח')",
+    "'code', 'currency_not_ils', 'severity', 'error'",
+    'v_blocked := true;',
+  ];
+  const missing = required.filter((needle) => !sql.includes(needle));
+  if (missing.length) {
+    fail(`gate-i18n: ${migration} no longer refuses a non-shekel document. Missing:\n  ${missing.join('\n  ')}`);
+  }
+
+  console.log('gate-i18n: money still has one formatter, and 0108 still blocks a non-shekel document');
+  console.log('GATE_I18N_CURRENCY_UNTOUCHED_OK');
+}
+
+const COMMANDS = {
+  ratchet, extracted, dictionaries, abandon, zero, legacyErrors,
+  'legacy-errors': legacyErrors,
+  currencyUntouched, 'currency-untouched': currencyUntouched,
+};
 const command = COMMANDS[process.argv[2]];
 if (!command) fail(`gate-i18n: unknown subcommand ${process.argv[2] ?? '(none)'}; expected one of ${Object.keys(COMMANDS).join(', ')}`);
 command();

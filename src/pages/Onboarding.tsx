@@ -354,21 +354,34 @@ function BusinessStep({ onSaved }: { onSaved: () => void }) {
 /**
  * Suggestions only — nothing is added until the user clicks.
  *
- * These names are copied verbatim from `starter_categories` in `supabase/seed.sql` so the
- * seed and the wizard offer one list instead of two that drift. Keep them byte-identical:
- * the seed inserts `on conflict (org_id, name) do nothing`, so a stray character (a maqaf
- * instead of a hyphen in "אריזה וחד-פעמי", say) would silently create a duplicate category
- * rather than dedupe against the seeded one.
+ * OWNER DECISION, 28.08.2026: a suggestion is STORED IN THE LANGUAGE IT WAS OFFERED IN. An English
+ * session that clicks "Raw materials" gets a category called `Raw materials`, not `חומרי גלם`.
+ * That is a deliberate exception to the rule that an organisation's own vocabulary is never
+ * translated for it: nothing is being translated here, because nothing existed yet — the click
+ * CREATES the category, and it should be created in the language the person is working in.
+ *
+ * What this costs, recorded rather than discovered later. These names used to be byte-identical
+ * to `starter_categories` in `supabase/seed.sql`, so that an org which ran the seed and then the
+ * wizard deduped through `on conflict (org_id, name) do nothing` instead of ending up with two
+ * rows for one idea. In English that dedupe no longer happens — the seed's row is Hebrew and the
+ * wizard's is English. It is accepted because `seed.sql` is a manual, operator-run baseline
+ * (its own header says so) and not part of tenant signup, so the two rarely meet.
+ *
+ * The Hebrew list stayed byte-identical for the same reason, and is NOT: `seed.sql:49` writes
+ * "אריזה וחד־פעמי" with a MAQAF (U+05BE) and this list writes a HYPHEN-MINUS (U+002D). `nameKey`
+ * strips quotes and collapses whitespace but does not touch dashes, so those two are different
+ * keys and a Hebrew org that met both already gets the duplicate this comment warned about. That
+ * is a pre-existing defect in the seed, reported separately; it is not this feature's to fix.
  */
 const CATEGORY_SUGGESTIONS = [
-  { name: 'חומרי גלם', labelKey: 'onboarding.categoryRawMaterials' },
-  { name: 'ציוד', labelKey: 'onboarding.categoryEquipment' },
-  { name: 'חומרי ניקיון', labelKey: 'onboarding.categoryCleaning' },
-  { name: 'אריזה וחד-פעמי', labelKey: 'onboarding.categoryPackaging' },
-  { name: 'ציוד משרדי', labelKey: 'onboarding.categoryOffice' },
-  { name: 'תחזוקה ותיקונים', labelKey: 'onboarding.categoryMaintenance' },
-  { name: 'שירותים', labelKey: 'onboarding.categoryServices' },
-] as const satisfies readonly { name: string; labelKey: TKey }[];
+  { labelKey: 'onboarding.categoryRawMaterials' },
+  { labelKey: 'onboarding.categoryEquipment' },
+  { labelKey: 'onboarding.categoryCleaning' },
+  { labelKey: 'onboarding.categoryPackaging' },
+  { labelKey: 'onboarding.categoryOffice' },
+  { labelKey: 'onboarding.categoryMaintenance' },
+  { labelKey: 'onboarding.categoryServices' },
+] as const satisfies readonly { labelKey: TKey }[];
 
 interface CategoryDraft { id: string | null; name: string }
 
@@ -442,7 +455,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
   if (loading) return <SkeletonList rows={4} />;
   if (error) return <ErrorNote message={error} />;
 
-  const suggestions = CATEGORY_SUGGESTIONS.filter((s) => !taken.has(nameKey(s.name)));
+  const suggestions = CATEGORY_SUGGESTIONS.filter((s) => !taken.has(nameKey(t(s.labelKey))));
 
   return (
     <div className="space-y-5">
@@ -466,7 +479,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
           <div className="text-xs font-medium text-ink-muted mb-2">{t('onboarding.text_7')}</div>
           <div className="flex flex-wrap gap-1.5">
             {suggestions.map((s) => (
-              <button key={s.name} type="button" aria-label={t('onboarding.addCategoryLabel', { name: t(s.labelKey) })} onClick={() => add(s.name)}
+              <button key={s.labelKey} type="button" aria-label={t('onboarding.addCategoryLabel', { name: t(s.labelKey) })} onClick={() => add(t(s.labelKey))}
                 className="btn-secondary btn-sm">
                 <Plus size={ICON.xs} aria-hidden="true" />{t(s.labelKey)}
               </button>
