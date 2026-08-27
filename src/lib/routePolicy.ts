@@ -18,6 +18,12 @@ const MONEY_ROLES = ['owner', 'accountant'] as const satisfies readonly ActiveRo
  */
 export const APP_ROUTE_POLICY = {
   dashboard: { path: '/dashboard', roles: ACTIVE_ROLES },
+  // The suppliers LIST was the one screen App.tsx guarded with an inline role array instead of a
+  // row here, and the omission was not cosmetic: `route` in the product-help registry must be a
+  // key of this table, so no help entry could describe adding or editing a supplier at all. The
+  // owner asked "אם אני רוצה להכניס ספק ידני איך אני עושה את זה" in production on 27.08.2026 and
+  // was told there was no approved help record for it.
+  suppliers: { path: '/suppliers', roles: STAFF_ROLES },
   supplierDetail: { path: '/suppliers/:id', roles: STAFF_ROLES },
   financialSupplierDetail: { path: '/finance/suppliers/:id', roles: MONEY_ROLES },
   products: { path: '/products', roles: STAFF_ROLES },

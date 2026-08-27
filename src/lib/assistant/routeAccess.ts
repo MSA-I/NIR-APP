@@ -28,6 +28,7 @@ export const ASSISTANT_EXACT_ROUTE_RULES: readonly AssistantExactRouteRule[] = [
   { route: APP_ROUTE_POLICY.credits.path, appRoute: 'credits', entities: ['credit_note', 'organization'] },
   { route: APP_ROUTE_POLICY.inventory.path, appRoute: 'inventory', entities: ['product', 'organization'] },
   { route: APP_ROUTE_POLICY.products.path, appRoute: 'products', entities: ['product'] },
+  { route: APP_ROUTE_POLICY.suppliers.path, appRoute: 'suppliers', entities: ['organization'] },
   { route: APP_ROUTE_POLICY.bank.path, appRoute: 'bank', entities: ['bank_transaction', 'organization'] },
   { route: APP_ROUTE_POLICY.exceptions.path, appRoute: 'exceptions', entities: ['exception', 'organization'] },
   { route: APP_ROUTE_POLICY.expenses.path, appRoute: 'expenses', entities: ['organization'] },
