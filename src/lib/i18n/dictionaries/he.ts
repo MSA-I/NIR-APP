@@ -209,6 +209,8 @@ export const he = {
     price_list_confirm_unavailable: 'שירות קליטת המחירונים אינו זמין כרגע.',
     monthly_report_snapshot_legal_entity_invalid: 'הישות המשפטית אינה זמינה או אינה בתחום ההרשאה שלך. יש לבחור ישות אחרת.',
     monthly_report_snapshot_source_unavailable: 'לא ניתן להשלים כעת את צילום המצב. הנתונים לא נשמרו ויש לנסות שוב.',
+    offline_finalization_incomplete: 'השרת קיבל את הקבלה, אך הניקוי המקומי לא הושלם. הפעולה נשארה לתיקון בטוח בניסיון הבא.',
+    offline_transport_failure: 'השליחה נכשלה בגלל תקלת רשת. הקבלה נשמרה במכשיר ותישלח בניסיון הבא.',
   },
 
   status: {

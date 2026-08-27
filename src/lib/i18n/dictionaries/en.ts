@@ -205,6 +205,8 @@ export const en: Dictionary = {
     price_list_confirm_unavailable: 'The price-list intake service is unavailable right now.',
     monthly_report_snapshot_legal_entity_invalid: 'That legal entity is unavailable or outside your permissions. Choose another one.',
     monthly_report_snapshot_source_unavailable: 'The snapshot cannot be completed right now. Nothing was saved; please try again.',
+    offline_finalization_incomplete: 'The server accepted the receipt, but the local cleanup did not finish. The action stays queued for a safe retry.',
+    offline_transport_failure: 'The send failed on a network fault. The receipt is saved on this device and will go out on the next attempt.',
   },
 
   status: {

@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState } from 'react';
 import { CloudOff, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router';
@@ -23,6 +24,7 @@ import { ICON } from './ui';
  *  - **a manual retry** (:85), which stays even though the queue also resumes by itself.
  */
 export default function OfflineQueueStatus() {
+  const { errorText } = useT();
   const queue = useOfflineQueue();
   const lastAutoAttempt = useRef('');
   const [photoProblems, setPhotoProblems] = useState<{
@@ -144,7 +146,7 @@ export default function OfflineQueueStatus() {
         <ul className="mt-1.5 space-y-1">
           {failures.map((action) => (
             <li key={action.id} className="text-alert-fg">
-              {action.orderLabel}: {action.reason}
+              {action.orderLabel}: {errorText(action.reason)}
               {action.attempts > 0 && <> <span className="num">(ניסיונות: {action.attempts})</span></>}
               {action.conflictCode && (
                 <>
@@ -167,7 +169,7 @@ export default function OfflineQueueStatus() {
         <ul className="mt-1.5 space-y-1">
           {photoProblems.map((photo) => (
             <li key={photo.id} className="text-alert-fg">
-              {photo.fileName}: {photo.reason}{photo.needsAttention && ' נדרשת התערבות; סנכרון כללי לא ינסה שוב.'}{photo.attempts > 0 && <> <span className="num">(ניסיונות: {photo.attempts})</span></>}
+              {photo.fileName}: {errorText(photo.reason)}{photo.needsAttention && ' נדרשת התערבות; סנכרון כללי לא ינסה שוב.'}{photo.attempts > 0 && <> <span className="num">(ניסיונות: {photo.attempts})</span></>}
             </li>
           ))}
         </ul>

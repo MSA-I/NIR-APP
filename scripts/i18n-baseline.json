@@ -89,7 +89,7 @@
     "src/lib/nameKey.ts": 1,
     "src/lib/notifications.ts": 8,
     "src/lib/offlineDb.ts": 4,
-    "src/lib/offlineQueue.ts": 12,
+    "src/lib/offlineQueue.ts": 9,
     "src/lib/orderDrafts.ts": 1,
     "src/lib/orderEmail.ts": 6,
     "src/lib/orderImage.ts": 10,

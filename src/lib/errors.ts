@@ -403,6 +403,11 @@ const PATTERNS: [RegExp, string][] = [
   [/price_list_confirm_unavailable/i, 'price_list_confirm_unavailable'],
   [/monthly_report_snapshot_legal_entity_invalid|unit_out_of_scope/i, 'monthly_report_snapshot_legal_entity_invalid'],
   [/monthly_report_snapshot_source_unavailable/i, 'monthly_report_snapshot_source_unavailable'],
+  // The offline queue's own two outcomes. It persists what it stored to IndexedDB and shows it on
+  // a later visit, so what it stores has to be a condition — a sentence written now would be shown
+  // days later in whatever language happened to be active at the moment of the failure.
+  [/offline_finalization_incomplete/i, 'offline_finalization_incomplete'],
+  [/offline_transport_failure/i, 'offline_transport_failure'],
 ];
 
 const FALLBACK = 'fallback';

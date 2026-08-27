@@ -1,3 +1,4 @@
+import { toHebrewError } from './errors';
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 
@@ -452,8 +453,13 @@ describe('syncing the queue', () => {
     expect(failed.idempotencyKey).toBe('receipt-2');
     expect(failed.attempts).toBe(1);
     expect(failed.state).toBe('failed');
-    expect(failed.reason).toMatch(/[֐-׿]/);
-    expect(failed.reason).not.toMatch(/הסנכרון נכשל/);
+    // The queue stores the RAW condition now, not a sentence: this row goes to IndexedDB and is
+    // drawn on a later visit, so it must not carry a language chosen at the moment of failure.
+    // Both halves are still pinned — what was stored, and that it resolves to real Hebrew when
+    // somebody finally reads it, rather than to the generic sync failure.
+    expect(failed.reason).toBe('Failed to fetch');
+    expect(toHebrewError(new Error(failed.reason!))).toMatch(/[֐-׿]/);
+    expect(toHebrewError(new Error(failed.reason!))).not.toMatch(/הסנכרון נכשל/);
   });
 
   it('counts pending actions and pending uploads separately', async () => {

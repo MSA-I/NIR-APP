@@ -1,7 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { supabase } from './supabase';
 import { unwrap } from './useQuery';
-import { toHebrewError } from './errors';
 import { BUSINESS_TIME_ZONE } from './format';
 import {
   configureOfflineScopeResolver,
@@ -204,6 +203,14 @@ export interface OfflineQueue {
 
 /* ============================ implementation ============================ */
 
+/**
+ * What a failed action stores. The RAW message, deliberately: this string is written to IndexedDB
+ * and drawn on a later visit, and `toErrorKey` would collapse anything it does not recognise into
+ * `fallback` — throwing away the one detail a support conversation needs. The screen that draws it
+ * runs the mapping then, when it also knows the language.
+ */
+const rawCondition = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
 export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
   let snapshot: OfflineQueueSnapshot = { ...EMPTY_SNAPSHOT, storageAvailable: deps.storageAvailable() };
   const listeners = new Set<() => void>();
@@ -366,9 +373,12 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
       const permanentFailure = isPermanentQueueFailure(error);
       const transportFailure = isTransportFailure(error);
       const finalizationFailure = serverAccepted;
+      // Conditions, not sentences. What lands here is written to IndexedDB and drawn on a later
+      // visit — possibly days later, possibly by a different person on the same device — so the
+      // language belongs to whoever opens the screen, not to this moment.
       const failureMessage = finalizationFailure
-        ? 'השרת קיבל את הקבלה, אך הניקוי המקומי לא הושלם. הפעולה נשארה לתיקון בטוח בניסיון הבא.'
-        : toHebrewError(error);
+        ? 'offline_finalization_incomplete'
+        : rawCondition(error);
       const updated = await deps.store.updateClaimedQueuedAction(
         claimed.id!,
         leaseOwner,
@@ -395,15 +405,15 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
       }
       if (conflict) {
         await refresh();
-        return { kind: 'conflict', code: conflict, message: toHebrewError(error) };
+        return { kind: 'conflict', code: conflict, message: rawCondition(error) };
       }
       if (transportFailure) {
-        const reason = 'השליחה נכשלה בגלל תקלת רשת. הקבלה נשמרה במכשיר ותישלח בניסיון הבא.';
+        const reason = 'offline_transport_failure';
         await refresh();
         return { kind: 'queued', reason };
       }
       await refresh();
-      return { kind: 'rejected', message: toHebrewError(error) };
+      return { kind: 'rejected', message: rawCondition(error) };
     }
   }
 
@@ -470,8 +480,8 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
           const conflict = receiptConflictCode(error);
           const permanentFailure = isPermanentQueueFailure(error);
           const failureMessage = serverAccepted
-            ? 'השרת קיבל את הקבלה, אך הניקוי המקומי לא הושלם. הפעולה נשארה לתיקון בטוח בניסיון הבא.'
-            : toHebrewError(error);
+            ? 'offline_finalization_incomplete'
+            : rawCondition(error);
           await deps.store.updateClaimedQueuedAction(
             claimed.id,
             leaseOwner,
