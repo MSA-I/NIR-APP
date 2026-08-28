@@ -114,7 +114,7 @@ const draftSignature = (draft: DraftSnapshot) => JSON.stringify([
 ]);
 
 export default function NewOrder() {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const fromOrderId = params.get('from');
@@ -193,7 +193,7 @@ export default function NewOrder() {
         if (!active) return;
         const visible = items.filter((item) => item.product.active);
         setNextOrderItems(visible);
-        if (visible.length !== items.length) toast('פריט לא פעיל שנשמר להזמנה הבאה דולג');
+        if (visible.length !== items.length) toast(t('newOrder.toast'));
       })
       .catch((failure) => { if (active) toast(errorText(failure), 'error'); });
     return () => { active = false; };
@@ -288,7 +288,7 @@ export default function NewOrder() {
       });
       nextNotes = data.source.notes ?? '';
       nextExpectedDate = data.source.expected_date ?? '';
-      if (skipped) toast(`${skipped} פריטים מההזמנה המקורית דולגו — המוצר כבר אינו קיים`);
+      if (skipped) toast(t('newOrder.skippedItems', { count: skipped }));
     } else if (data.draft) {
       nextCart = data.draft.items.flatMap((item) => {
         if (!item.product?.active) { draftNeedsRepair = true; return []; }
@@ -308,9 +308,9 @@ export default function NewOrder() {
         : 1;
       nextDraftId = data.draft.id;
       nextDraftNumber = data.draft.number;
-      if (draftNeedsRepair) toast('מוצרים שאינם פעילים הוסרו מהטיוטה והיא תישמר מחדש');
+      if (draftNeedsRepair) toast(t('newOrder.toast_2'));
     } else if (explicitDraftId) {
-      toast('הטיוטה לא נמצאה או שאינה שייכת למשתמש הנוכחי', 'error');
+      toast(t('newOrder.toast_3'), 'error');
     }
 
     const snapshot: DraftSnapshot = {
@@ -390,7 +390,7 @@ export default function NewOrder() {
           productId: line.productId,
           productName: (() => {
             const product = state.products[line.productId];
-            return product ? productLabel(product) : 'מוצר';
+            return product ? productLabel(product) : t('newOrder.productLabel');
           })(),
           supplierId: group.supplier.id,
           supplierName: group.supplier.name,
@@ -428,7 +428,7 @@ export default function NewOrder() {
       changes.push({
         ...oldLine,
         newSupplierId: nextMeta?.supplierId ?? null,
-        newSupplierName: nextMeta?.supplierName ?? 'טרם הוקצה ספק',
+        newSupplierName: nextMeta?.supplierName ?? t('newOrder.text'),
         oldUnitPrice,
         newUnitPrice,
         oldLineTotal,
@@ -547,7 +547,7 @@ export default function NewOrder() {
       event.stopPropagation();
       void runSaveQueue().then((saved) => {
         if (saved) navigate(`${url.pathname}${url.search}${url.hash}`);
-        else toast('לא ניתן לעבור מסך לפני שמירת הטיוטה', 'error');
+        else toast(t('newOrder.toast_4'), 'error');
       });
     };
     const flushBeforeSignOut = (event: Event) => {
@@ -572,7 +572,7 @@ export default function NewOrder() {
   async function goToSummary() {
     if (!cart.length || split.blocked.length) return;
     if (await runSaveQueue()) setStep(3);
-    else toast('יש לתקן את שגיאת השמירה לפני אישור ההזמנה', 'error');
+    else toast(t('newOrder.toast_5'), 'error');
   }
 
   function applyResolution(option: ResolutionOption, fromSupplierId: string) {
@@ -604,7 +604,7 @@ export default function NewOrder() {
     void deferProduct(org.id, option.productId, line.qty, latestDraftRef.current?.requestId ?? null)
       .then(() => {
         dispatch({ type: 'DEFER_PRODUCT', productId: option.productId });
-        toast('הפריט נשמר להזמנה הבאה');
+        toast(t('newOrder.toast_6'));
       })
       .catch((failure) => toast(errorText(failure), 'error'));
   }
@@ -613,7 +613,7 @@ export default function NewOrder() {
     setNextOrderBusyId(item.id);
     const product = data?.products.find((candidate) => candidate.id === item.product_id);
     if (!product?.active) {
-      toast('המוצר אינו פעיל עוד ולכן דולג', 'error');
+      toast(t('newOrder.toast_7'), 'error');
       setNextOrderBusyId(null);
       return;
     }
@@ -639,10 +639,10 @@ export default function NewOrder() {
     const saved = await runSaveQueue();
     const requestId = latestDraftRef.current?.requestId;
     try {
-      if (!saved) throw new Error('שמירת הטיוטה נכשלה');
-      if (requestId) await cancelOrderDraft(requestId, reason ?? 'ביטול הטיוטה');
+      if (!saved) throw new Error(t('newOrder.Error'));
+      if (requestId) await cancelOrderDraft(requestId, reason ?? t('newOrder.cancelOrderDraft'));
       finalizedRef.current = true;
-      toast('הטיוטה בוטלה');
+      toast(t('newOrder.toast_8'));
       navigate('/orders');
     } catch (failure) {
       toast(errorText(failure), 'error');
@@ -656,16 +656,16 @@ export default function NewOrder() {
     if (savings.splitTotal === null) return;
     setBusy(true);
     try {
-      if (!await runSaveQueue()) throw new Error('שמירת הטיוטה נכשלה');
+      if (!await runSaveQueue()) throw new Error(t('newOrder.runSaveQueue'));
       const requestId = latestDraftRef.current?.requestId;
-      if (!requestId) throw new Error('הטיוטה טרם נשמרה');
+      if (!requestId) throw new Error(t('newOrder.Error_2'));
       const finalized = await finalizeOrderDraft(requestId, savings.splitTotal);
       finalizedRef.current = true;
       const orders = unwrap(await supabase.from('purchase_orders')
         .select('*, supplier:suppliers(name, phone, whatsapp), items:purchase_order_items(qty, unit_price, product:products(name, unit, sku))')
         .in('id', finalized.order_ids).order('number')) as QueueOrder[];
       setSendQueue(orders);
-      toast(`נוצרו ${finalized.order_count} הזמנות ספק`);
+      toast(t('newOrder.ordersCreated', { count: finalized.order_count }));
     } catch (failure) {
       const raw = failure instanceof Error ? failure.message : String(failure);
       if (raw.includes('draft_price_changed')) {
@@ -680,20 +680,20 @@ export default function NewOrder() {
         const saved = await runSaveQueue(true);
         if (!saved) {
           pendingPriceDiffRef.current = null;
-          toast('המחירים השתנו, אך לא ניתן היה לרענן את הטיוטה. נסו שוב.', 'error');
+          toast(t('newOrder.toast_9'), 'error');
           return;
         }
         if (!await refetch()) {
           pendingPriceDiffRef.current = null;
-          toast('המחירים השתנו, אך לא ניתן היה לרענן אותם. נסו שוב.', 'error');
+          toast(t('newOrder.toast_10'), 'error');
           return;
         }
         setPriceRefreshVersion(refreshId);
-        toast('המחירים השתנו. הסיכום רוענן — יש לעבור עליו ולאשר שוב.', 'error');
+        toast(t('newOrder.toast_11'), 'error');
       } else if (raw.includes('draft_supplier_unavailable')) {
         await refetch();
         setStep(2);
-        toast('אחד הספקים אינו זמין עוד. יש לבחור ספק מחדש.', 'error');
+        toast(t('newOrder.toast_12'), 'error');
       } else {
         toast(errorText(failure), 'error');
       }
@@ -714,18 +714,18 @@ export default function NewOrder() {
     setSendQueue((queue) => queue?.map((row) => row.id === order.id
       ? { ...row, status: 'sent', sent_at: new Date().toISOString() }
       : row) ?? null);
-    toast('ההזמנה סומנה כנשלחה לספק');
+    toast(t('newOrder.toast_13'));
   }
 
   if (loading) return <RecordSkeleton />;
   if (error) return <ErrorNote message={error} />;
   if (!hydrated) return <RecordSkeleton />;
 
-  const saveLabel = saveStatus === 'saving' ? 'שומר…'
-    : saveStatus === 'dirty' ? 'ממתין לשמירה…'
-      : saveStatus === 'saved' ? 'נשמר'
-        : saveStatus === 'error' ? 'השמירה נכשלה'
-          : 'יישמר אוטומטית עם הוספת מוצר';
+  const saveLabel = saveStatus === 'saving' ? t('newOrder.text_2')
+    : saveStatus === 'dirty' ? t('newOrder.text_3')
+      : saveStatus === 'saved' ? t('newOrder.text_4')
+        : saveStatus === 'error' ? t('newOrder.text_5')
+          : t('newOrder.text_6');
 
   /**
    * One source for the three steps. The two renderings below — phone dots and desktop chip strip —
@@ -733,22 +733,22 @@ export default function NewOrder() {
    * enable a step on one width and refuse it on the other.
    */
   const steps = [
-    { number: '01', label: 'מוצרים וכמויות', disabled: false, go: () => setStep(1) },
-    { number: '02', label: 'ספקים וחלוקה', disabled: !cart.length, go: () => setStep(2) },
-    { number: '03', label: 'סיכום ואישור', disabled: !cart.length || split.blocked.length > 0, go: () => void goToSummary() },
+    { number: '01', label: t('newOrder.setStep'), disabled: false, go: () => setStep(1) },
+    { number: '02', label: t('newOrder.setStep_2'), disabled: !cart.length, go: () => setStep(2) },
+    { number: '03', label: t('newOrder.goToSummary'), disabled: !cart.length || split.blocked.length > 0, go: () => void goToSummary() },
   ];
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
       <PageHeader
-        title="הזמנה חדשה"
-        description="בחירת מוצרים תחילה, אישור ספקים ומחירים לאחר מכן"
+        title={t('newOrder.title')}
+        description={t('newOrder.description')}
         meta={(
           <>
           <div className={`flex min-h-6 items-center gap-1.5 text-xs ${saveStatus === 'error' ? 'text-alert-fg' : 'text-ink-muted'}`} role="status" aria-live="polite">
             {saveStatus === 'saving' ? <Loader2 size={ICON.xs} className="animate-spin" aria-hidden="true" /> : saveStatus === 'saved' ? <Check size={ICON.xs} aria-hidden="true" /> : <Clock3 size={ICON.xs} aria-hidden="true" />}
-            <span>{draftNumber ? <>טיוטה <span className="num">#{draftNumber}</span> · </> : null}{saveLabel}</span>
-            {saveStatus === 'error' && <button type="button" className="font-semibold underline" onClick={() => void runSaveQueue()}>ניסיון חוזר</button>}
+            <span>{draftNumber ? <>{t('newOrder.text_7')} <span className="num">#{draftNumber}</span> · </> : null}{saveLabel}</span>
+            {saveStatus === 'error' && <button type="button" className="font-semibold underline" onClick={() => void runSaveQueue()}>{t('newOrder.runSaveQueue_2')}</button>}
           </div>
           {saveError && saveStatus === 'error' && <p role="alert" className="text-xs text-alert-fg">{saveError}</p>}
           </>
@@ -756,12 +756,12 @@ export default function NewOrder() {
         actions={(
           <div className="flex flex-col items-stretch gap-1 sm:items-end">
           <div className="flex flex-wrap gap-2">
-            {(draftId || cart.length > 0) && <button type="button" className="btn-danger" disabled={busy} onClick={() => setCancelOpen(true)}><XCircle size={ICON.sm} aria-hidden="true" /> ביטול טיוטה</button>}
+            {(draftId || cart.length > 0) && <button type="button" className="btn-danger" disabled={busy} onClick={() => setCancelOpen(true)}><XCircle size={ICON.sm} aria-hidden="true" /> {t('newOrder.setCancelOpen')}</button>}
             <button type="button" className="btn-primary" disabled={busy || !cart.length || split.blocked.length > 0} onClick={() => void goToSummary()}>
-              <CheckCircle2 size={ICON.sm} aria-hidden="true" /> סקירה ואישור
+              <CheckCircle2 size={ICON.sm} aria-hidden="true" /> {t('newOrder.reviewAndConfirm')}
             </button>
           </div>
-          {split.blocked.length > 0 && <p className="text-xs text-alert-fg sm:text-end">יש <span className="num">{split.blocked.length}</span> פריטים ללא הקצאת ספק תקפה — יש לתקן אותם כדי להמשיך</p>}
+          {split.blocked.length > 0 && <p className="text-xs text-alert-fg sm:text-end">{t('newOrder.text_8')} <span className="num">{split.blocked.length}</span> {t('newOrder.text_9')}</p>}
           </div>
         )} />
 
@@ -771,7 +771,7 @@ export default function NewOrder() {
           width it wrapped onto a second line, turning the rounded-full plate into a blurred
           ellipse (owner screenshot). `hidden` is display:none, so exactly one rendering is in the
           accessibility tree at a time — no aria-hidden, no six-button announcement. */}
-      <nav aria-label="שלבי הזמנה">
+      <nav aria-label={t('newOrder.aria_label')}>
         <div className="flex items-center gap-2 sm:hidden">
           {steps.map((entry, index) => {
             const active = step === index + 1;
@@ -855,10 +855,9 @@ export default function NewOrder() {
           if (openedText && target) setOpenedInWhatsApp((ids) => new Set(ids).add(target.id));
         }} />
 
-      <Modal open={sendQueue !== null} onClose={() => navigate('/orders')} title="שליחת הזמנות לספקים" busy={sendingId !== null} statusMessage={sendingId ? 'מעדכן את סטטוס ההזמנה' : undefined}>
+      <Modal open={sendQueue !== null} onClose={() => navigate('/orders')} title={t('newOrder.title_2')} busy={sendingId !== null} statusMessage={sendingId ? t('newOrder.navigate') : undefined}>
         <p className="mb-3 text-sm text-ink-soft">
-          לכל ספק נשלחות שתי הודעות: הודעת טקסט ותמונת הזמנה מפורטת. פתיחת WhatsApp מכינה את ההודעה —
-          היא אינה שולחת אותה. אחרי שההודעות נשלחו בפועל יש לסמן זאת כאן, ורק אז ההזמנה תירשם כנשלחה לספק.
+          {t('newOrder.whatsappPreparesOnly')}
         </p>
         <div className="divide-y divide-line-soft border-y border-line-strong">
           {sendQueue?.map((order) => {
@@ -866,63 +865,64 @@ export default function NewOrder() {
             const opened = openedInWhatsApp.has(order.id);
             return (
               <div key={order.id} className="flex flex-wrap items-center gap-2 py-3">
-                <div><div className="font-medium text-ink-body">{order.supplier.name}</div><div className="text-xs text-ink-muted">הזמנה #<span className="num">{order.number}</span></div></div>
+                <div><div className="font-medium text-ink-body">{order.supplier.name}</div><div className="text-xs text-ink-muted">{t('newOrder.text_12')}<span className="num">{order.number}</span></div></div>
                 <div className="ms-auto flex flex-wrap items-center gap-2">
-                  {order.status === 'sent' ? <span className="badge badge-done">נשלחה לספק</span>
+                  {order.status === 'sent' ? <span className="badge badge-done">{t('newOrder.text_13')}</span>
                     : hasWhatsApp ? (
                       <>
                         <button type="button" className={opened ? 'btn-secondary' : 'btn-primary'} disabled={sendingId !== null} onClick={() => sendQueuedOrder(order)}>
-                          <MessageCircle size={ICON.sm} aria-hidden="true" /> {opened ? 'פתיחה מחדש' : 'פתיחת WhatsApp'}
+                          <MessageCircle size={ICON.sm} aria-hidden="true" /> {opened ? t('newOrder.text_14') : t('newOrder.text_15')}
                         </button>
                         {opened && (
                           <button type="button" className="btn-primary" disabled={sendingId !== null} onClick={() => void confirmQueuedOrderSent(order)}>
-                            {sendingId === order.id ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={ICON.sm} aria-hidden="true" />} סמן כנשלחה לספק
+                            {sendingId === order.id ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={ICON.sm} aria-hidden="true" />} {t('newOrder.markAsSent')}
                           </button>
                         )}
                       </>
                     )
-                      : <span className="text-xs text-await-fg">אין מספר זמין · נשארה מוכנה לשליחה</span>}
+                      : <span className="text-xs text-await-fg">{t('newOrder.text_16')}</span>}
                 </div>
               </div>
             );
           })}
         </div>
-        <div className="mt-5 flex justify-end"><button type="button" className="btn-primary" disabled={sendingId !== null} onClick={() => navigate('/orders')}>סיום</button></div>
+        <div className="mt-5 flex justify-end"><button type="button" className="btn-primary" disabled={sendingId !== null} onClick={() => navigate('/orders')}>{t('newOrder.navigate_2')}</button></div>
       </Modal>
 
       <ConfirmDialog open={cancelOpen} onClose={() => setCancelOpen(false)} onConfirm={(reason) => void cancelDraft(reason)}
-        title="ביטול טיוטה" message="הטיוטה תבוטל ולא תופיע עוד להמשך. הפעולה תתועד ביומן הביקורת."
-        confirmLabel="ביטול הטיוטה" danger requireReason busy={busy} />
+        title={t('newOrder.title_3')} message={t('newOrder.message')}
+        confirmLabel={t('newOrder.confirmLabel')} danger requireReason busy={busy} />
     </div>
   );
 }
 
 function PriceDiffModal({ report, onClose }: { report: PriceDiffReport | null; onClose: () => void }) {
+  const { t } = useT();
   const totalDelta = report?.oldTotal != null && report.newTotal != null
     ? moneyFromCents(hundredths(report.newTotal) - hundredths(report.oldTotal))
     : null;
   return (
-    <Modal open={report !== null} onClose={onClose} title="המחירים השתנו" description="הטיוטה רועננה מול המחירים הפעילים. בדקו את השינויים ואשרו את ההזמנה שוב." wide>
+    <Modal open={report !== null} onClose={onClose} title={t('newOrder.title_4')} description={t('newOrder.description_2')} wide>
       {report?.lines.length ? (
         <div className="divide-y divide-line-strong border-y border-line-strong">
           {report.lines.map((line) => (
             <div key={line.productId} className="px-3 py-3 text-sm">
               <div className="flex flex-wrap items-start justify-between gap-2">{/* dir="auto" = <bdi> semantics without a new element: the browser smoke anchors on this
     exact-text node and climbs two parents, so wrapping would break its locator depth. */}
-<strong className="text-ink-body" dir="auto">{line.productName}</strong><span className={line.assignmentMode === 'pinned' ? 'badge-info' : 'badge-idle'}>{line.assignmentMode === 'pinned' ? 'ספק מוצמד — ההצמדה נשמרה' : line.newSupplierId !== line.supplierId ? 'בחירה אוטומטית — הספק השתנה' : 'בחירה אוטומטית'}</span></div>
+<strong className="text-ink-body" dir="auto">{line.productName}</strong><span className={line.assignmentMode === 'pinned' ? 'badge-info' : 'badge-idle'}>{line.assignmentMode === 'pinned' ? t('newOrder.text_17') : line.newSupplierId !== line.supplierId ? t('newOrder.text_18') : t('newOrder.text_19')}</span></div>
               <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-center">
-                <div><span className="block text-xs text-ink-muted">לפני · {line.supplierName}</span><span className="num font-semibold">{fmtMoneyExact(line.oldUnitPrice)}</span> ליחידה</div>
+                <div><span className="block text-xs text-ink-muted">{t('newOrder.priceBefore', { supplier: line.supplierName })}</span><span className="num font-semibold">{fmtMoneyExact(line.oldUnitPrice)}</span> {t('newOrder.fmtMoneyExact')}</div>
                 <span className="text-ink-faint" aria-hidden="true">←</span>
-                <div><span className="block text-xs text-ink-muted">עכשיו · {line.newSupplierName}</span><span className="num font-semibold">{fmtMoneyExact(line.newUnitPrice)}</span> ליחידה</div>
-                <div className={`font-semibold sm:text-end ${line.delta == null ? 'text-ink-muted' : `num ${line.delta > 0 ? 'text-await-fg' : 'text-done-fg'}`}`}>{line.delta == null ? 'לא זמין' : signedMoney(line.delta)}</div>
+                <div><span className="block text-xs text-ink-muted">{t('newOrder.priceNow', { supplier: line.newSupplierName })}</span><span className="num font-semibold">{fmtMoneyExact(line.newUnitPrice)}</span> {t('newOrder.fmtMoneyExact_2')}</div>
+                <div className={`font-semibold sm:text-end ${line.delta == null ? 'text-ink-muted' : `num ${line.delta > 0 ? 'text-await-fg' : 'text-done-fg'}`}`}>{line.delta == null ? t('newOrder.unavailable') : signedMoney(line.delta)}</div>
               </div>
-              <div className="mt-1 text-xs text-ink-muted">סכום שורה: <span className="num">{fmtMoneyExact(line.oldLineTotal)}</span> ← <span className="num font-semibold text-ink">{fmtMoneyExact(line.newLineTotal)}</span></div>
+              <div className="mt-1 text-xs text-ink-muted">{t('newOrder.fmtMoneyExact_3')} <span className="num">{fmtMoneyExact(line.oldLineTotal)}</span> ← <span className="num font-semibold text-ink">{fmtMoneyExact(line.newLineTotal)}</span></div>
             </div>
           ))}
         </div>
-      ) : report ? <div className="note-info">המחירים נבדקו מחדש ולא נמצא שינוי נוסף בשורות ההזמנה.</div> : null}
-      {report && <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-y border-line-strong py-3 text-sm"><span>סכום ההזמנה</span><strong className="num">{fmtMoneyExact(report.oldTotal)} ← {fmtMoneyExact(report.newTotal)}{totalDelta != null ? ` · ${signedMoney(totalDelta)}` : ''}</strong></div>}
-      <div className="mt-5 flex justify-end"><button type="button" className="btn-primary" onClick={onClose}>חזרה לסיכום ולאישור מחדש</button></div>
+      ) : report ? <div className="note-info">{t('newOrder.text_20')}</div> : null}
+      {report && <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-y border-line-strong py-3 text-sm"><span>{t('newOrder.orderTotal')}</span><strong className="num">{fmtMoneyExact(report.oldTotal)} ← {fmtMoneyExact(report.newTotal)}{totalDelta != null ? ` · ${signedMoney(totalDelta)}` : ''}</strong></div>}
+      <div className="mt-5 flex justify-end"><button type="button" className="btn-primary" onClick={onClose}>{t('newOrder.text_21')}</button></div>
     </Modal>
   );
 }

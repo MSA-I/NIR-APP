@@ -39,6 +39,7 @@ const EXTRACTED = [
   'src/components/OrgSubscriptionPanel.tsx',
   'src/lib/webhooks.ts',
   'src/pages/WebhookSettings.tsx',
+  'src/pages/neworder/NewOrder.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */
