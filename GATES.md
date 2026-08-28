@@ -618,6 +618,29 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   CHECK: read a snapshot created before `0214`
   EXPECT: reported as ILS through its `report_version`; `content_hash` unchanged — read, never rewrite
 
+- [ ] P5-G6: the two payment-request COMMANDS carry the currency their money is in
+  ADDED 28.08.2026, during phase 3, from reading the code the client calls. Not a re-plan: the
+  plan's §3 rule ("an amount cannot be rendered without saying which currency it is") is a rule
+  about reading, and these two are writing. Both were measured, both are real:
+  (a) `create_payment_request` (`0073:292`) derives `amount` from the allocations and inserts the
+      request WITHOUT a currency, so a request built from dollar invoices is stored `ILS` by the
+      temporary default. The client now refuses to build a mixed selection (`PaymentRequests.tsx`,
+      commit below), so the browser cannot produce a wrong row — but the RPC still can, and an
+      RPC's correctness may not rest on its caller.
+  (b) `approve_payment_request` (`0073:693-707`) computes `sum(cr.amount)` over the supplier's open
+      credits with no currency clause, and compares that scalar to `p_expected_open_credit_total`.
+      For a supplier holding credits in two currencies that sum is a number with no unit. It is
+      only ever COMPARED, never shown — the screen already lists the credits per currency and
+      withholds the "net after credits" line when the credit is in another currency — so today it
+      fails closed rather than lying. That is the reason it may wait for this phase, not a reason
+      to leave it.
+  CHECK: (a) create a request from two dollar invoices; (b) approve a request for a supplier
+  holding an open credit in ILS and one in USD
+  EXPECT: (a) the row's `currency` is `USD`, derived from the allocated invoices, and a set spanning
+  two currencies is refused `payment_request_currency_mixed`; (b) the override compares the credit
+  total IN THE REQUEST'S CURRENCY, and a credit in another currency neither blocks the plain
+  approval nor is counted into the recorded override total
+
 ---
 
 ## Phase 6 — evidence and rollout

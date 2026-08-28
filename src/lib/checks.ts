@@ -9,9 +9,21 @@ export interface CheckResult {
   severity: CheckSeverity;
   message: string;
   amount?: number;
+  /**
+   * The currency `amount` is in (0217). Present whenever `amount` is, because a caller that reads
+   * the figure back — the payment-request screen subtracts the open-credit total from the request
+   * — has to know it is looking at the same kind of money before it does the arithmetic.
+   */
+  currency?: string;
 }
 
-const AMOUNT_TOLERANCE = 1; // ₪ — treat sub-shekel gaps as rounding
+/**
+ * ONE UNIT of the invoice's own currency, and advisory only: this is the gap below which the
+ * browser stops raising a warning to a person, not a threshold anything is approved by. The
+ * binding tolerance is the server's, per organisation and per currency (`private.money_tolerance`,
+ * 0219, decision #288) — every check that actually blocks reads that one.
+ */
+const AMOUNT_TOLERANCE = 1;
 
 /** Automatic invoice checks required by the spec (duplicates, order/receipt gaps, existing payment paths). */
 export async function runInvoiceChecks(inv: {
@@ -234,6 +246,7 @@ export async function runPaymentRequestChecks(pr: {
       code: 'open_credit',
       severity: 'warning',
       amount: credit.amount,
+      currency: credit.currency,
       message: `זיכויים פתוחים בסך ${fmtMoneyExact(credit.amount, credit.currency)} טרם קוזזו מהדרישה`,
     });
   }
