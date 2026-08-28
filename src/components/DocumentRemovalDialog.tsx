@@ -46,7 +46,7 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
   onClose: () => void;
   onRemoved: () => void;
 }) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const [impact, setImpact] = useState<RemovalImpact | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<'document_only' | 'document_and_derived'>('document_only');
@@ -82,19 +82,19 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
     if (result.error) { toast(errorText(result.error), 'error'); return; }
     const answer = result.data as { already_removed?: boolean; undone_count?: number };
     toast(answer.already_removed
-      ? 'המסמך כבר הוסר'
+      ? t('docRemoval.text')
       : mode === 'document_and_derived'
-        ? `המסמך הוסר, ובוטלו ${answer.undone_count ?? 0} רשומות שנוצרו ממנו`
-        : 'המסמך הוסר. הרשומות שנוצרו ממנו נשארו', 'success');
+        ? t('docRemoval.removedWithUndone', { count: answer.undone_count ?? 0 })
+        : t('docRemoval.text_2'), 'success');
     onClose();
     onRemoved();
   }, [documentId, mode, toast, onClose, onRemoved]);
 
   return (
-    <Modal open={open} onClose={onClose} title="הסרת מסמך" busy={busy}>
+    <Modal open={open} onClose={onClose} title={t('docRemoval.title')} busy={busy}>
       {loadError && <Note tone="alert" role="alert">{loadError}</Note>}
       {!impact && !loadError && (
-        <Note tone="info" role="status">מחשב מה ההסרה תיקח איתה…</Note>
+        <Note tone="info" role="status">{t('docRemoval.text_3')}</Note>
       )}
 
       {impact && (
@@ -103,13 +103,13 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
               who needs to know the file itself survives. */}
           <p className="flex items-start gap-2 text-sm text-ink-body">
             <Check size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
-            <span>הקובץ המקורי והראיות נשמרים בכל מקרה — ההסרה אינה מוחקת אותם.</span>
+            <span>{t('docRemoval.text_4')}</span>
           </p>
 
           {impact.effects.length > 0 && (
             <SubPanel>
               <h3 className="text-sm font-medium text-ink">
-                מה נוצר מהמסמך הזה
+                {t('docRemoval.text_5')}
               </h3>
               <ul className="mt-2 space-y-1 text-sm text-ink-body">
                 {impact.effects.map((effect, index) => (
@@ -122,7 +122,7 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
           {impact.blockers.length > 0 && (
             <Note tone="alert" role="status">
               <div className="min-w-0 flex-1">
-                <p className="font-medium">לא ניתן לבטל את מה שנוצר מהמסמך:</p>
+                <p className="font-medium">{t('docRemoval.text_6')}</p>
                 <ul className="mt-2 space-y-1">
                   {impact.blockers.map((blocker, index) => (
                     <li key={index} className="flex items-start gap-2 text-sm">
@@ -136,13 +136,13 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
           )}
 
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-ink">מה להסיר</legend>
+            <legend className="text-sm font-medium text-ink">{t('docRemoval.text_7')}</legend>
             <label className="flex min-h-11 items-start gap-2 text-sm text-ink-body">
               <input type="radio" name="removal-mode" className="mt-1 shrink-0"
                 checked={mode === 'document_only'}
                 onChange={() => setMode('document_only')} />
               <span>
-                <strong>את המסמך בלבד.</strong> כל מה שנוצר ממנו נשאר כפי שהוא.
+                <strong>{t('docRemoval.text_8')}</strong> {t('docRemoval.documentOnlyBody')}
               </span>
             </label>
             <label className="flex min-h-11 items-start gap-2 text-sm text-ink-body">
@@ -150,10 +150,10 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
                 checked={mode === 'document_and_derived'}
                 onChange={() => setMode('document_and_derived')} />
               <span>
-                <strong>את המסמך וגם לבטל את מה שנוצר ממנו.</strong>
+                <strong>{t('docRemoval.text_9')}</strong>
                 {impact.blockers.length > 0 && (
                   <span className="block text-ink-muted">
-                    יש חסימות למעלה — השרת יבדוק שוב ויסרב אם הן עדיין קיימות.
+                    {t('docRemoval.text_10')}
                   </span>
                 )}
               </span>
@@ -166,8 +166,8 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
               <p className="flex items-start gap-2 text-sm">
                 <AlertTriangle size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
                 <span>
-                  <span className="num">{impact.derived_count}</span> רשומות יבוטלו. חשבונית תימחק
-                  מחיקה רכה וניתן יהיה לראותה ביומן; טיוטת קבלה תבוטל לגמרי.
+                  <span className="num">{impact.derived_count}</span> {t('docRemoval.derivedWillBeUndone')}
+                  {t('docRemoval.text_11')}
                 </span>
               </p>
             </Note>
@@ -175,12 +175,12 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
 
           <div className="flex justify-end gap-2">
             <button type="button" className="btn-secondary" disabled={busy}
-              onClick={onClose}>ביטול</button>
+              onClick={onClose}>{t('docRemoval.text_12')}</button>
             {/* The trigger wears the colour of what it is about to do: undoing derived records is
                 destructive, filing the document away is not (DESIGN.md:552, :586). */}
             <button type="button" className={destructive ? 'btn-danger' : 'btn-primary'}
               disabled={busy} onClick={() => setConfirming(true)}>
-              הסרה
+              {t('docRemoval.text_13')}
             </button>
           </div>
         </div>
@@ -192,11 +192,11 @@ export function DocumentRemovalDialog({ documentId, open, onClose, onRemoved }: 
         danger={destructive}
         requireReason
         busy={busy}
-        confirmLabel="הסרה"
-        title={destructive ? 'הסרת מסמך וביטול מה שנוצר ממנו' : 'הסרת מסמך מתיקיית המסמכים'}
+        confirmLabel={t('docRemoval.confirmLabel')}
+        title={destructive ? t('docRemoval.text_14') : t('docRemoval.text_15')}
         message={destructive
-          ? `${impact?.derived_count ?? 0} רשומות שנוצרו מהמסמך יבוטלו יחד איתו. הקובץ המקורי והראיות נשמרים.`
-          : 'המסמך יוסר מתיקיית המסמכים. כל מה שנוצר ממנו נשאר כפי שהוא, והקובץ המקורי נשמר.'}
+          ? t('docRemoval.confirmDestructive', { count: impact?.derived_count ?? 0 })
+          : t('docRemoval.text_16')}
       />
     </Modal>
   );

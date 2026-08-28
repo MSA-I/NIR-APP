@@ -75,6 +75,7 @@ const EXTRACTED = [
   'src/pages/AcceptInvite.tsx',
   'src/pages/ReceiptDetail.tsx',
   'src/pages/Signup.tsx',
+  'src/components/DocumentRemovalDialog.tsx',
   'src/components/ReceiptConflictDialog.tsx',
   'src/pages/SupplierProposalReview.tsx',
   'src/pages/neworder/SupplierSplitStep.tsx',
