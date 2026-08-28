@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { CreditCard, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
@@ -40,6 +41,7 @@ const SORT_COLUMN: Record<string, string> = { date: 'paid_date' };
 const DEFAULT_SORT: readonly ServerSort[] = [{ column: 'paid_date', ascending: false }];
 
 export default function Payments() {
+  const { t } = useT();
   const toast = useToast();
   const [, setParams] = useSearchParams();
   const [idFilter] = useParamState('id');
@@ -136,23 +138,23 @@ export default function Payments() {
   }, [data, toast, patchParams]);
 
   const columns: ServerColumn<Row>[] = [
-    { key: 'num', header: 'מס׳', render: (r) => `#${r.number}` },
-    { key: 'supplier', header: 'ספק', render: (r) => <span className="font-medium">{r.supplier.name}</span> },
-    { key: 'date', header: 'תאריך', render: (r) => fmtDate(r.paid_date) },
-    { key: 'amount', header: 'סכום', className: 'num', render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
-    { key: 'method', header: 'אמצעי', render: (r) => r.method ?? '—' },
-    { key: 'ref', header: 'אסמכתא', render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
-    { key: 'executor', header: 'בוצע על ידי', priority: 3, render: (r) => r.executor?.full_name ?? '—' },
+    { key: 'num', header: t('payments.numberHeader'), render: (r) => `#${r.number}` },
+    { key: 'supplier', header: t('payments.text'), render: (r) => <span className="font-medium">{r.supplier.name}</span> },
+    { key: 'date', header: t('payments.fmtDate'), render: (r) => fmtDate(r.paid_date) },
+    { key: 'amount', header: t('payments.fmtMoneyExact'), className: 'num', render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
+    { key: 'method', header: t('payments.text_2'), render: (r) => r.method ?? '—' },
+    { key: 'ref', header: t('payments.text_3'), render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
+    { key: 'executor', header: t('payments.text_4'), priority: 3, render: (r) => r.executor?.full_name ?? '—' },
     {
       // Every allocation is listed, hidden invoices included: filtering them away turned a
       // payment whose invoices are all unreadable into '—', which reads as "covered nothing".
-      key: 'invoices', header: 'חשבוניות', priority: 3, render: (r) => (
+      key: 'invoices', header: t('payments.text_5'), priority: 3, render: (r) => (
         <span className="text-ink-muted" dir="ltr">
-          {r.allocations.map((a) => a.invoice?.invoice_number ?? 'לא זמינה').join(', ') || '—'}
+          {r.allocations.map((a) => a.invoice?.invoice_number ?? t('payments.map')).join(', ') || '—'}
         </span>
       ),
     },
-    { key: 'notes', header: 'הערות', priority: 3, render: (r) => <span className="text-ink-muted max-w-56 truncate inline-block">{r.notes ?? ''}</span> },
+    { key: 'notes', header: t('payments.text_6'), priority: 3, render: (r) => <span className="text-ink-muted max-w-56 truncate inline-block">{r.notes ?? ''}</span> },
   ];
 
   if (loading) return <SkeletonTable cols={5} />;
@@ -165,12 +167,14 @@ export default function Payments() {
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
-      <PageHeader title={<span className="flex items-center gap-2"><CreditCard size={ICON.xl} aria-hidden="true" /> תשלומים</span>}
-        meta={`${data.total} תשלומים שנרשמו${activeFilters ? ' · תצוגה מסוננת' : ''}`} />
+      <PageHeader title={<span className="flex items-center gap-2"><CreditCard size={ICON.xl} aria-hidden="true" /> {t('payments.text_7')}</span>}
+        meta={activeFilters
+          ? t('payments.metaFiltered', { count: data.total })
+          : t('payments.meta', { count: data.total })} />
       <DataTable rows={data.rows} columns={columns}
         error={error}
         onRowClick={(row) => setSelected(row)}
-        rowLabel={(r) => `תשלום #${r.number}`}
+        rowLabel={(r) => t('payments.rowLabel', { number: r.number })}
         server={{
           total: data.total,
           page,
@@ -185,20 +189,20 @@ export default function Payments() {
         activeFilters={activeFilters}
         onClearFilters={() => patchParams({ id: '', month: '', q: '', page: '' })}
         columnPicker="payments"
-        searchLabel="חיפוש בתשלומים"
+        searchLabel={t('payments.searchLabel')}
         mobile="cards"
         mobileTitle={(r) => <>#{r.number} · {r.supplier.name}</>}
         toolbar={
           <>
             {data.narrowed && <span className="text-xs text-await-fg" role="status">{SUPPLIER_SEARCH_NARROWED}</span>}
             {focused ? (
-              <button className="btn-secondary" onClick={() => patchParams({ id: '', page: '' })}><X size={ICON.sm} aria-hidden="true" /> מציג תשלום #{focused.number}</button>
+              <button className="btn-secondary" onClick={() => patchParams({ id: '', page: '' })}><X size={ICON.sm} aria-hidden="true" /> {t('payments.showingPayment', { number: focused.number })}</button>
             ) : monthFilter ? (
-              <button className="btn-secondary" onClick={() => patchParams({ month: '', page: '' })}><X size={ICON.sm} aria-hidden="true" /> תשלומי חודש <span dir="ltr">{monthFilter}</span></button>
+              <button className="btn-secondary" onClick={() => patchParams({ month: '', page: '' })}><X size={ICON.sm} aria-hidden="true" /> {t('payments.patchParams')} <span dir="ltr">{monthFilter}</span></button>
             ) : null}
           </>
         }
-        emptyTitle="טרם בוצעו תשלומים" emptySubtitle="תשלומים שבוצעו יופיעו כאן כיומן כספי." />
+        emptyTitle={t('payments.emptyTitle')} emptySubtitle={t('payments.emptySubtitle')} />
       {selected && <PaymentDetail payment={selected} onClose={() => setSelected(null)} />}
     </div>
   );
@@ -213,22 +217,23 @@ export default function Payments() {
  * /payment-requests has no ?id= deep link to send it to.
  */
 function PaymentDetail({ payment, onClose }: { payment: Row; onClose: () => void }) {
+  const { t } = useT();
   return (
-    <Modal open onClose={onClose} title={`תשלום #${payment.number} — ${payment.supplier.name}`}>
+    <Modal open onClose={onClose} title={t('payments.modalTitle', { number: payment.number, supplier: payment.supplier.name })}>
       <div className="space-y-4">
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
-          <div><dt className="text-ink-muted">ספק</dt><dd className="font-medium">{payment.supplier.name}</dd></div>
-          <div><dt className="text-ink-muted">סכום</dt><dd className="font-semibold num">{fmtMoneyExact(payment.amount)}</dd></div>
-          <div><dt className="text-ink-muted">תאריך תשלום</dt><dd className="num">{fmtDate(payment.paid_date)}</dd></div>
-          <div><dt className="text-ink-muted">אמצעי תשלום</dt><dd>{payment.method ?? '—'}</dd></div>
-          <div><dt className="text-ink-muted">אסמכתא</dt><dd dir="ltr">{payment.reference ?? '—'}</dd></div>
-          <div><dt className="text-ink-muted">בוצע על ידי</dt><dd>{payment.executor?.full_name ?? '—'}</dd></div>
+          <div><dt className="text-ink-muted">{t('payments.text_8')}</dt><dd className="font-medium">{payment.supplier.name}</dd></div>
+          <div><dt className="text-ink-muted">{t('payments.fmtMoneyExact_2')}</dt><dd className="font-semibold num">{fmtMoneyExact(payment.amount)}</dd></div>
+          <div><dt className="text-ink-muted">{t('payments.fmtDate_2')}</dt><dd className="num">{fmtDate(payment.paid_date)}</dd></div>
+          <div><dt className="text-ink-muted">{t('payments.text_9')}</dt><dd>{payment.method ?? '—'}</dd></div>
+          <div><dt className="text-ink-muted">{t('payments.text_10')}</dt><dd dir="ltr">{payment.reference ?? '—'}</dd></div>
+          <div><dt className="text-ink-muted">{t('payments.text_11')}</dt><dd>{payment.executor?.full_name ?? '—'}</dd></div>
         </dl>
 
         {payment.notes && <div className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-3 py-2">{payment.notes}</div>}
 
         <div>
-          <div className="text-sm font-medium text-ink-soft mb-1.5">חשבוניות שכוסו בתשלום</div>
+          <div className="text-sm font-medium text-ink-soft mb-1.5">{t('payments.text_12')}</div>
           {payment.allocations.length ? (
             <ul className="divide-y divide-line-soft border border-line-soft rounded-lg text-sm">
               {payment.allocations.map((allocation, index) => (
@@ -236,21 +241,21 @@ function PaymentDetail({ payment, onClose }: { payment: Row; onClose: () => void
                   {allocation.invoice ? (
                     <Link to={`/invoices/${allocation.invoice.id}`} onClick={onClose}
                       className="row-hover flex min-h-11 items-center justify-between gap-3 px-3 py-2">
-                      <span>חשבונית <b dir="ltr" className="num">{allocation.invoice.invoice_number}</b></span>
+                      <span>{t('payments.text_13')} <b dir="ltr" className="num">{allocation.invoice.invoice_number}</b></span>
                       <span className="num font-medium">{fmtMoneyExact(allocation.amount)}</span>
                     </Link>
                   ) : (
                     // Kept, never filtered: this row carries money, and a detail card that hides
                     // part of the sum tells the reader the payment is smaller than it is.
                     <div className="flex min-h-11 items-center justify-between gap-3 px-3 py-2">
-                      <span className="text-await-fg">חשבונית שאינה זמינה לצפייה</span>
+                      <span className="text-await-fg">{t('payments.text_14')}</span>
                       <span className="num font-medium">{fmtMoneyExact(allocation.amount)}</span>
                     </div>
                   )}
                 </li>
               ))}
             </ul>
-          ) : <div className="text-sm text-await-fg">התשלום אינו מקושר לחשבוניות</div>}
+          ) : <div className="text-sm text-await-fg">{t('payments.text_15')}</div>}
         </div>
       </div>
     </Modal>
