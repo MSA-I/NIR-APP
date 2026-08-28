@@ -157,7 +157,18 @@ const out = lines.map((line, i) => {
   // 4. a JSX child on its own line: the commonest shape in this codebase, because the formatter
   //    puts long Hebrew on its own line and leaves `{' '}` or an expression beside it.
   //      `  פעולות ממתינות:{' '}`  ->  `  {t('ns.key')}{' '}`
-  if (!touched) {
+  //
+  //    IT MUST REFUSE ANYTHING THAT LOOKS LIKE CODE. The pattern below only asks for a line
+  //    with no angle brackets and no braces, and a line of an object literal can satisfy that:
+  //
+  //      name: seed?.name ?? '', category_id: seed?.category_id ?? '', unit: seed?.unit ?? 'ק"ג',
+  //
+  //    became `{t('products.text_16')}` — an expression in a place that takes none, with a
+  //    stored default unit deleted alongside it. `tsc` caught the wreckage, but only because
+  //    the result happened to be unparseable; a luckier line would have compiled and shipped.
+  //    A quote character or an operator on the line is enough to say this is not prose, and
+  //    refusing is always the cheap mistake.
+  if (!touched && !/['"`]|=>|\?\?|\?\./.test(next)) {
     const m = next.match(/^(\s*)([^<>{}]*[֐-׿][^<>{}]*?)(\s*)((?:\{[^{}]*\})?)\s*$/);
     if (m && m[2].trim()) {
       const key = nameFor(next, null);

@@ -20,7 +20,7 @@ interface ProductRow extends Product {
 }
 
 export default function Products() {
-  const { errorText, locale } = useT();
+  const { errorText, locale, t } = useT();
   const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -126,28 +126,28 @@ export default function Products() {
     setBusyToggle(false);
     if (res.error) { setToggleTarget(null); toast(errorText(res.error.message), 'error'); return; }
     setToggleTarget(null);
-    toast(next ? 'המוצר הופעל' : 'המוצר הושבת');
+    toast(next ? t('products.toast') : t('products.toast_2'));
     void refetch();
   }
 
   const columns: Column<ProductRow>[] = [
     // The catalogue table shows the approved name; the edit modal below goes on showing the raw
     // one, because that is the field it edits and the one matching and the supplier read.
-    { key: 'name', header: 'מוצר', sortValue: (r) => productLabel(r), render: (r) => <bdi className={`font-medium ${r.active ? 'text-ink' : 'text-ink-muted line-through'}`}>{productLabel(r)}</bdi> },
-    { key: 'cat', header: 'קטגוריה', sortValue: (r) => r.category?.name ?? '', render: (r) => r.category?.name ?? '—' },
-    { key: 'unit', header: 'יחידת מידה', render: (r) => formatUnit(r.unit, locale) },
-    { key: 'sku', header: 'מק״ט', render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
+    { key: 'name', header: t('products.columnName'), sortValue: (r) => productLabel(r), render: (r) => <bdi className={`font-medium ${r.active ? 'text-ink' : 'text-ink-muted line-through'}`}>{productLabel(r)}</bdi> },
+    { key: 'cat', header: t('products.text'), sortValue: (r) => r.category?.name ?? '', render: (r) => r.category?.name ?? '—' },
+    { key: 'unit', header: t('products.formatUnit'), render: (r) => formatUnit(r.unit, locale) },
+    { key: 'sku', header: t('products.text_2'), render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
     // Shows 0, not `—`. The dash means "no data"; a product with no supplier is a measured
     // fact and an actionable one — it cannot be ordered. Hiding it behind the same glyph as
     // "unknown" buried the very rows worth looking at.
-    { key: 'suppliers', header: 'ספקים', className: 'num', sortValue: (r) => r.supplierCount ?? 0, render: (r) => r.supplierCount ?? 0 },
+    { key: 'suppliers', header: t('products.text_3'), className: 'num', sortValue: (r) => r.supplierCount ?? 0, render: (r) => r.supplierCount ?? 0 },
     {
-      key: 'best', header: 'מחיר מיטבי', className: 'num', sortValue: (r) => r.bestPrice ?? 0,
+      key: 'best', header: t('products.text_4'), className: 'num', sortValue: (r) => r.bestPrice ?? 0,
       // The price is exactly the value that invites comparison — it links straight to the
       // cross-supplier view. stopPropagation: the row click underneath opens the edit modal.
       render: (r) => r.bestPrice != null ? (
         <button type="button" className="text-action underline underline-offset-2"
-          title={`השוואת מחירי ${productLabel(r)}`}
+          title={t('products.comparePricesTitle', { product: productLabel(r) })}
           onClick={(event) => { event.stopPropagation(); navigate(`/prices?product=${r.id}`); }}>
           {fmtMoneyExact(r.bestPrice)}
         </button>
@@ -161,24 +161,24 @@ export default function Products() {
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
-      {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
-      <PageHeader title="מוצרים"
+      {fetching && data && <div className="text-xs text-ink-muted" role="status">{t('products.text_5')}</div>}
+      <PageHeader title={t('products.title')}
         meta={repairMode
           // #250: a dry run is a safety measure, never an approval gate. This queue is a list of
           // names a person has to approve one by one, so it is named after that — the term
           // „dry-run" stays with the report that produced it.
           ? repairMeasured === false
-            ? 'לא הופק דוח dry-run'
-            : `${repairCount ?? '—'} שמות ממתינים לתיקון ממקור`
+            ? t('products.text_6')
+            : t('products.namesAwaitingRepair', { count: repairCount ?? '—' })
           : reviewMode
-          ? `${awaitingName ? awaitingName.length : '—'} שמות ממתינים לאישור`
-          : `${rows.length} מוצרים בתצוגה`}
+          ? t('products.namesAwaitingApproval', { count: awaitingName ? awaitingName.length : '—' })
+          : t('products.productsShown', { count: rows.length })}
         actions={<>
           {/* The same owner/office boundary used by the price-list screen. */}
           {canUploadPrices
-            ? <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> העלאת מחירון ספק</button>
-            : <span className="text-sm text-ink-muted">העלאת מחירונים זמינה לבעלים ולמנהל הרכש בלבד.</span>}
-          {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> מוצר חדש</button>}
+            ? <button className="btn-secondary" onClick={() => setUploadOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> {t('products.setUploadOpen')}</button>
+            : <span className="text-sm text-ink-muted">{t('products.text_7')}</span>}
+          {canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> {t('products.setEditing')}</button>}
         </>} />
 
       {/* Only owner/office can call set_product_display_name (0149), so nobody else is offered a
@@ -186,7 +186,7 @@ export default function Products() {
           catalogue is unknown, and a real 0 when the work is genuinely finished — the same
           distinction the ספקים column below already draws. */}
       {canWrite && (
-        <ToggleGroup label="תצוגת מסך המוצרים"
+        <ToggleGroup label={t('products.label')}
           value={reviewMode ? 'review' : repairMode ? 'repair' : 'catalogue'}
           onChange={(mode) => {
             if (mode === 'review') { setReviewMode(true); setRepairMode(false); return; }
@@ -194,9 +194,9 @@ export default function Products() {
             showCatalogue();
           }}
           items={[
-            { key: 'catalogue', label: 'קטלוג' },
-            { key: 'review', label: `שמות לאישור (${awaitingName ? awaitingName.length : '—'})`, testId: 'name-review-toggle' },
-            { key: 'repair', label: `תיקון ממקור (${repairCount ?? '—'})`, testId: 'source-name-repair-toggle' },
+            { key: 'catalogue', label: t('products.text_8') },
+            { key: 'review', label: t('products.tabNamesForApproval', { count: awaitingName ? awaitingName.length : '—' }), testId: 'name-review-toggle' },
+            { key: 'repair', label: t('products.tabRepairFromSource', { count: repairCount ?? '—' }), testId: 'source-name-repair-toggle' },
           ]} />
       )}
 
@@ -209,10 +209,10 @@ export default function Products() {
           onApproved={(id) => setNamedThisSession((current) => new Set(current).add(id))} />
       ) : (
         <DataTable rows={rows} columns={columns} searchable
-          emptyTitle="אין מוצרים עדיין"
+          emptyTitle={t('products.emptyTitle')}
           emptySubtitle={canUploadPrices
-            ? 'הדרך המהירה היא העלאת מחירון — הוא יוצר את המוצרים ואת המחירים יחד.'
-            : 'הוספת מוצרים והעלאת מחירונים זמינות לבעלים ולמנהל הרכש.'}
+            ? t('products.text_9')
+            : t('products.text_10')}
           searchFn={(r, q) => (
             // Both names, deliberately. The raw one is what a supplier invoice and an uploaded
             // price list say, so somebody typing what they are holding still finds the row; the
@@ -221,8 +221,8 @@ export default function Products() {
             || r.name.toLowerCase().includes(q)
             || (r.sku ?? '').toLowerCase().includes(q)
           )}
-          searchLabel="חיפוש במוצרים"
-          rowLabel={(r) => `מוצר ${productLabel(r)}`}
+          searchLabel={t('products.searchLabel')}
+          rowLabel={(r) => t('products.rowLabel', { product: productLabel(r) })}
           onRowClick={canWrite ? (r) => setEditing(r) : undefined}
           rowActions={canWrite ? (r) => [
             /* G1, finding 19. "האם המחיר של המוצר הזה עלה?" is answered well — a history model with
@@ -231,16 +231,21 @@ export default function Products() {
                exactly one emitter in the entire codebase (Dashboard.tsx:752). Since 18.08.2026 the
                global search product hit also lands on /prices?product= (the comparison), and the
                best-price cell above links there too; this row action stays as the named path. */
-            { key: 'prices', label: 'מחירים והיסטוריה', icon: History, onSelect: () => navigate(`/prices?product=${r.id}`) },
-            { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setEditing(r) },
+            { key: 'prices', label: t('products.actionPrices'), icon: History, onSelect: () => navigate(`/prices?product=${r.id}`) },
+            { key: 'edit', label: t('products.setEditing_2'), icon: Pencil, onSelect: () => setEditing(r) },
             // A copy starts with no canonical name of its own: it is a different product, and the
             // name it will be shown under is a decision nobody has made about it yet.
-            { key: 'duplicate', label: 'שכפול', icon: Copy, onSelect: () => setClone({ ...r, name: `${r.name} (עותק)`, display_name: null }) },
-            { key: 'toggle', label: r.active ? 'השבתה' : 'הפעלה', icon: Power, onSelect: () => setToggleTarget(r) },
+            // The suffix stays HEBREW while every label around it translates, and that is the
+            // protected-class rule rather than an oversight: this string is not shown and then
+            // discarded, it is prefilled into `products.name` and saved. The catalogue's words
+            // are the business's own — `name_match_key` is built on them — and an English suffix
+            // on a Hebrew product name would put two languages inside one catalogue row.
+            { key: 'duplicate', label: t('products.actionDuplicate'), icon: Copy, onSelect: () => setClone({ ...r, name: `${r.name} (עותק)`, display_name: null }) },
+            { key: 'toggle', label: r.active ? t('products.setToggleTarget') : t('products.setToggleTarget_2'), icon: Power, onSelect: () => setToggleTarget(r) },
           ] : undefined}
           toolbar={
-            <select className="input w-auto!" aria-label="סינון מוצרים לפי קטגוריה" value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>
-              <option value="">כל הקטגוריות</option>
+            <select className="input w-auto!" aria-label={t('products.aria_label')} value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>
+              <option value="">{t('products.text_11')}</option>
               {categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           } />
@@ -256,11 +261,11 @@ export default function Products() {
 
       <ConfirmDialog open={!!toggleTarget} onClose={() => setToggleTarget(null)}
         onConfirm={(reason) => void toggleActive(reason)}
-        title={toggleTarget?.active ? 'השבתת מוצר' : 'הפעלת מוצר'}
+        title={toggleTarget?.active ? t('products.text_12') : t('products.text_13')}
         message={toggleTarget?.active
-          ? `המוצר ״${toggleTarget ? productLabel(toggleTarget) : ''}״ לא יופיע יותר בהזמנות חדשות. הפעולה תתועד ביומן הביקורת.`
-          : `המוצר ״${toggleTarget ? productLabel(toggleTarget) : ''}״ יחזור להיות זמין להזמנות. הפעולה תתועד ביומן הביקורת.`}
-        confirmLabel={toggleTarget?.active ? 'השבתה' : 'הפעלה'}
+          ? t('products.deactivateConfirm', { product: toggleTarget ? productLabel(toggleTarget) : '' })
+          : t('products.reactivateConfirm', { product: toggleTarget ? productLabel(toggleTarget) : '' })}
+        confirmLabel={toggleTarget?.active ? t('products.text_14') : t('products.text_15')}
         requireReason busy={busyToggle} />
     </div>
   );
@@ -273,13 +278,15 @@ function ProductForm({ product, initial, onClose, onSaved }: {
   initial?: Product;
   onClose: () => void; onSaved: () => void;
 }) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const { data: categories } = useCategories();
   const [busy, setBusy] = useState(false);
   const seed = product ?? initial ?? null;
   const [f, setF] = useState({
+    // `'ק"ג'` is the stored default for a new product, not a label: `products.unit` stays
+    // Hebrew by owner decision #282, and `formatUnit` is what turns it into `kg` on screen.
     name: seed?.name ?? '', category_id: seed?.category_id ?? '', unit: seed?.unit ?? 'ק"ג',
     sku: seed?.sku ?? '', barcode: seed?.barcode ?? '', notes: seed?.notes ?? '',
     active: seed?.active ?? true, min_stock: seed?.min_stock?.toString() ?? '',
@@ -287,7 +294,7 @@ function ProductForm({ product, initial, onClose, onSaved }: {
   const set = (k: string, v: unknown) => setF((s) => ({ ...s, [k]: v }));
 
   async function save() {
-    if (!f.name.trim()) { toast('שם מוצר הוא שדה חובה', 'error'); return; }
+    if (!f.name.trim()) { toast(t('products.trim'), 'error'); return; }
     setBusy(true);
     const row = {
       name: f.name.trim(), category_id: f.category_id || null, unit: normalizeUnitInput(f.unit),
@@ -299,36 +306,36 @@ function ProductForm({ product, initial, onClose, onSaved }: {
       : await supabase.from('products').insert({ ...row, org_id: profile!.org_id, active: f.active });
     setBusy(false);
     if (res.error) { toast(errorText(res.error.message), 'error'); return; }
-    toast(product ? 'המוצר עודכן' : 'המוצר נוצר');
+    toast(product ? t('products.toast_3') : t('products.toast_4'));
     onSaved();
   }
 
   return (
-    <Modal open onClose={onClose} title={product ? `עריכת מוצר — ${product.name}` : 'מוצר חדש'} busy={busy} statusMessage={busy ? 'שומר את המוצר' : undefined}>
+    <Modal open onClose={onClose} title={product ? t('products.editTitle', { product: product.name }) : t('products.newTitle')} busy={busy} statusMessage={busy ? t('products.savingProduct') : undefined}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="sm:col-span-2"><label className="label" htmlFor="product-name">שם המוצר *</label><input id="product-name" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="product-name">{t('products.set')}</label><input id="product-name" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} /></div>
         <div>
-          <label className="label" htmlFor="product-category">קטגוריה</label>
+          <label className="label" htmlFor="product-category">{t('products.text_17')}</label>
           <select id="product-category" className="input" value={f.category_id} onChange={(e) => set('category_id', e.target.value)}>
-            <option value="">ללא</option>
+            <option value="">{t('products.text_18')}</option>
             {categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        <div><label className="label" htmlFor="product-unit">יחידת מידה</label><input id="product-unit" className="input" value={f.unit} onChange={(e) => set('unit', e.target.value)} /></div>
-        <div><label className="label" htmlFor="product-sku">מק״ט</label><input id="product-sku" className="input num" dir="ltr" value={f.sku} onChange={(e) => set('sku', e.target.value)} /></div>
-        <div><label className="label" htmlFor="product-barcode">ברקוד</label><input id="product-barcode" className="input num" dir="ltr" value={f.barcode} onChange={(e) => set('barcode', e.target.value)} /></div>
-        <div><label className="label" htmlFor="product-min-stock">מלאי מינימום (לשימוש עתידי)</label><input id="product-min-stock" type="number" className="input num" value={f.min_stock} onChange={(e) => set('min_stock', e.target.value)} /></div>
+        <div><label className="label" htmlFor="product-unit">{t('products.set_2')}</label><input id="product-unit" className="input" value={f.unit} onChange={(e) => set('unit', e.target.value)} /></div>
+        <div><label className="label" htmlFor="product-sku">{t('products.set_3')}</label><input id="product-sku" className="input num" dir="ltr" value={f.sku} onChange={(e) => set('sku', e.target.value)} /></div>
+        <div><label className="label" htmlFor="product-barcode">{t('products.set_4')}</label><input id="product-barcode" className="input num" dir="ltr" value={f.barcode} onChange={(e) => set('barcode', e.target.value)} /></div>
+        <div><label className="label" htmlFor="product-min-stock">{t('products.set_5')}</label><input id="product-min-stock" type="number" className="input num" value={f.min_stock} onChange={(e) => set('min_stock', e.target.value)} /></div>
         {!product && <div className="flex items-end pb-2">
           <label className="flex items-center gap-2 text-sm text-ink-mid">
             <input type="checkbox" checked={f.active} onChange={(e) => set('active', e.target.checked)} className="rounded" />
-            מוצר פעיל
+            {t('products.text_19')}
           </label>
         </div>}
-        <div className="sm:col-span-2"><label className="label" htmlFor="product-notes">הערות</label><textarea id="product-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="product-notes">{t('products.set_6')}</label><textarea id="product-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
-        <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-        <button className="btn-primary" disabled={busy} onClick={() => void save()}>שמירה</button>
+        <button className="btn-secondary" disabled={busy} onClick={onClose}>{t('products.text_20')}</button>
+        <button className="btn-primary" disabled={busy} onClick={() => void save()}>{t('products.save')}</button>
       </div>
     </Modal>
   );
