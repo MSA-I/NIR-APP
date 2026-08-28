@@ -5,6 +5,13 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { Modal, ErrorNote, ICON } from './ui';
+import type { TKey } from '../lib/i18n/t';
+
+const REAUTH_ERROR_KEY: Readonly<Record<string, TKey>> = {
+  reauth_identity_unavailable: 'reauthModal.identityUnavailable',
+  reauth_identity_changed: 'reauthModal.identityChanged',
+  reauth_session_missing: 'reauthModal.sessionMissing',
+};
 
 /**
  * Client-side mirror of `assert_recent_password_authentication` (extracted from `0031:788-805`,
@@ -93,10 +100,10 @@ export function ReauthModal({
   open,
   onConfirm,
   onCancel,
-  title = 'אימות זהות לפעולה רגישה',
+  title,
   skipWhenFresh = true,
 }: ReauthModalProps) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const { session } = useAuth();
   const passwordId = useId();
   const errorId = useId();
@@ -132,21 +139,20 @@ export function ReauthModal({
     try {
       const expectedUserId = session?.user.id;
       const email = session?.user.email;
-      if (!expectedUserId || !email) throw new Error('לא ניתן לאמת את זהות המשתמש המחובר. יש להתחבר מחדש.');
+      if (!expectedUserId || !email) throw new Error('reauth_identity_unavailable');
       const authResult = await supabase.auth
         .signInWithPassword({ email, password })
         .finally(() => setPassword(''));
       if (authResult.error) throw authResult.error;
       if (authResult.data.user?.id !== expectedUserId) {
         await supabase.auth.signOut();
-        throw new Error('זהות המשתמש השתנתה בזמן האימות. יש להתחבר מחדש.');
+        throw new Error('reauth_identity_changed');
       }
-      if (!authResult.data.session) throw new Error('האימות הצליח אך לא התקבל חיבור טרי. יש להתחבר מחדש.');
+      if (!authResult.data.session) throw new Error('reauth_session_missing');
       onConfirm(authResult.data.session);
     } catch (e) {
-      // Own Hebrew messages pass through untouched; raw supabase/Postgres strings get mapped.
-      const raw = e instanceof Error ? e.message : String(e);
-      setError(/[֐-׿]/.test(raw) ? raw : errorText(e));
+      const key = e instanceof Error ? REAUTH_ERROR_KEY[e.message] : undefined;
+      setError(key ? t(key) : errorText(e));
     } finally {
       setBusy(false);
     }
@@ -158,14 +164,14 @@ export function ReauthModal({
     <Modal
       open
       onClose={onCancel}
-      title={title}
-      description="הפעולה רגישה ודורשת אימות סיסמה טרי של המשתמש המחובר. האימות נרשם ביומן האבטחה."
+      title={title ?? t('reauthModal.title')}
+      description={t('reauthModal.description')}
       busy={busy}
-      statusMessage={busy ? 'מאמת את הזהות' : undefined}
+      statusMessage={busy ? t('reauthModal.verifying') : undefined}
     >
       <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); void confirm(); }}>
         <div>
-          <label className="label" htmlFor={passwordId}>סיסמה לאימות זהות טרי *</label>
+          <label className="label" htmlFor={passwordId}>{t('reauthModal.passwordLabel')}</label>
           <input
             id={passwordId}
             type="password"
@@ -184,9 +190,9 @@ export function ReauthModal({
         </div>
         {error && <div id={errorId}><ErrorNote message={error} /></div>}
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn-secondary" disabled={busy} onClick={onCancel}>ביטול</button>
+          <button type="button" className="btn-secondary" disabled={busy} onClick={onCancel}>{t('reauthModal.cancel')}</button>
           <button type="submit" className="btn-primary" disabled={busy || !password}>
-            {busy ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" /> : <ShieldCheck size={ICON.sm} aria-hidden="true" />} אישור זהות
+            {busy ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" /> : <ShieldCheck size={ICON.sm} aria-hidden="true" />}{' '}{t('reauthModal.confirm')}
           </button>
         </div>
       </form>

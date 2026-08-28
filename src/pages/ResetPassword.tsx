@@ -20,7 +20,7 @@ type LinkState = 'checking' | 'ready' | 'invalid' | 'done';
  * link rather than a spinner that never resolves.
  */
 export default function ResetPassword() {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const navigate = useNavigate();
   const [state, setState] = useState<LinkState>('checking');
   const [password, setPassword] = useState('');
@@ -77,7 +77,7 @@ export default function ResetPassword() {
     setBusy(false);
     if (signedOut.error) {
       await supabase.auth.signOut({ scope: 'local' });
-      setError('הסיסמה הוחלפה, אך לא ניתן היה לנתק את כל החיבורים. יש להתחבר מחדש ולפנות למנהל המערכת אם חיבור ישן עדיין פעיל.');
+      setError(t('resetPasswordTail.signOutFailed'));
       return;
     }
     navigate('/login?reset=success', { replace: true });
@@ -91,22 +91,22 @@ export default function ResetPassword() {
         <div className="text-center mb-8">
           <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="184" height="40"
             className="mx-auto h-auto w-44" />
-          <h1 className="page-title mt-2 text-shell-ink">הגדרת סיסמה חדשה</h1>
+          <h1 className="page-title mt-2 text-shell-ink">{t('resetPasswordTail.title')}</h1>
         </div>
 
         {state === 'checking' && (
           <Card className="text-center">
             <Loader2 size={ICON.xl} className="animate-spin mx-auto text-ink-muted" aria-hidden />
-            <p className="text-sm text-ink-muted mt-2">בודק את קישור האיפוס…</p>
+            <p className="text-sm text-ink-muted mt-2">{t('resetPasswordTail.checking')}</p>
           </Card>
         )}
 
         {state === 'invalid' && (
           <Card className="space-y-3 text-center">
-            <p className="text-sm">הקישור אינו תקין או שפג תוקפו. קישור איפוס תקף לשעה וניתן לשימוש פעם אחת.</p>
-            <Link to="/forgot-password" className="btn-primary w-full">שליחת קישור חדש</Link>
+            <p className="text-sm">{t('resetPasswordTail.invalidLink')}</p>
+            <Link to="/forgot-password" className="btn-primary w-full">{t('resetPasswordTail.sendNewLink')}</Link>
             <Link to="/login" className="text-sm text-ink-muted hover:text-ink underline underline-offset-2">
-              חזרה למסך הכניסה
+              {t('resetPasswordTail.backToLogin')}
             </Link>
           </Card>
         )}
@@ -115,7 +115,7 @@ export default function ResetPassword() {
           <Card as="form" onSubmit={(event: FormEvent) => void onSubmit(event)} className="space-y-4">
             <div>
               <label className="label" htmlFor="reset-password-new">
-                סיסמה חדשה ({MIN_PASSWORD_LENGTH} תווים לפחות)
+                {t('resetPasswordTail.newPasswordLabel', { min: MIN_PASSWORD_LENGTH })}
               </label>
               {/* `passwordProblem` judges the pair, so both boxes are marked and both point at the
                   one message — the field that failed is no longer left for the reader to guess. */}
@@ -126,7 +126,7 @@ export default function ResetPassword() {
                 onChange={(event) => { setPassword(event.target.value); setError(null); }} required />
             </div>
             <div>
-              <label className="label" htmlFor="reset-password-confirm">אימות סיסמה</label>
+              <label className="label" htmlFor="reset-password-confirm">{t('resetPasswordTail.confirmPassword')}</label>
               <input id="reset-password-confirm" type="password" className="input" dir="ltr"
                 autoComplete="new-password" value={confirm}
                 aria-invalid={error ? true : undefined}
@@ -136,16 +136,16 @@ export default function ResetPassword() {
             {error && <div id="reset-password-problem" role="alert" className="text-sm text-alert-fg">{error}</div>}
             <button type="submit" className="btn-primary w-full" disabled={busy || !password || !confirm}>
               {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <KeyRound size={ICON.sm} aria-hidden="true" />}
-              החלפת סיסמה
+              {t('resetPasswordTail.changePassword')}
             </button>
           </Card>
         )}
 
         {state === 'done' && (
           <Card className="space-y-3 text-center">
-            <p className="text-sm">{error ?? 'הסיסמה הוחלפה. מנתק את החיבורים הישנים ומעביר למסך הכניסה…'}</p>
+            <p className="text-sm">{error ?? t('resetPasswordTail.changedRedirecting')}</p>
             <button className="btn-primary w-full" onClick={() => navigate('/login', { replace: true })}>
-              חזרה למסך הכניסה
+              {t('resetPasswordTail.backToLogin')}
             </button>
           </Card>
         )}

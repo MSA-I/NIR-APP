@@ -21,7 +21,7 @@ import { APP_NAME } from '../lib/branding';
  * rate-limit failure is the one worth naming in the user's language.
  */
 export default function ForgotPassword() {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -37,7 +37,7 @@ export default function ForgotPassword() {
     setBusy(false);
     if (err) {
       setError(/rate limit|too many/i.test(err.message)
-        ? 'נשלחו יותר מדי בקשות איפוס. יש להמתין מספר דקות ולנסות שוב.'
+        ? t('forgotPassword.rateLimited')
         : errorText(err.message));
       return;
     }
@@ -52,26 +52,26 @@ export default function ForgotPassword() {
         <div className="text-center mb-8">
           <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="184" height="40"
             className="mx-auto h-auto w-44" />
-          <h1 className="page-title mt-2 text-shell-ink">איפוס סיסמה</h1>
+          <h1 className="page-title mt-2 text-shell-ink">{t('forgotPassword.title')}</h1>
         </div>
         {sent ? (
           <Card className="space-y-3 text-center">
             <MailQuestion size={ICON.hero} className="mx-auto text-ink-muted" aria-hidden />
             <p className="text-sm">
-              אם הכתובת רשומה במערכת, נשלח אליה קישור לאיפוס הסיסמה. הקישור תקף לשעה.
+              {t('forgotPassword.sentNotice')}
             </p>
             <p className="text-sm text-ink-muted">
-              לא הגיע מייל? בדקו את תיקיית הספאם, או פנו למפעיל המערכת.
+              {t('forgotPassword.notReceived')}
             </p>
-            <Link to="/login" className="btn-secondary w-full">חזרה למסך הכניסה</Link>
+            <Link to="/login" className="btn-secondary w-full">{t('forgotPassword.backToLogin')}</Link>
           </Card>
         ) : (
           <Card as="form" onSubmit={(e: FormEvent) => void onSubmit(e)} className="space-y-4">
             <p className="text-sm text-ink-muted">
-              הזינו את כתובת האימייל שאיתה נרשמתם — יישלח אליה קישור להגדרת סיסמה חדשה.
+              {t('forgotPassword.instructions')}
             </p>
             <div>
-              <label className="label" htmlFor="email">אימייל</label>
+              <label className="label" htmlFor="email">{t('forgotPassword.email')}</label>
               <input id="email" type="email" className="input" dir="ltr" autoComplete="username"
                 aria-invalid={error ? true : undefined}
                 aria-describedby={error ? 'forgot-password-problem' : undefined}
@@ -80,11 +80,11 @@ export default function ForgotPassword() {
             {error && <div id="forgot-password-problem" role="alert" className="text-sm text-alert-fg">{error}</div>}
             <button type="submit" className="btn-primary w-full" disabled={busy || !email.trim()}>
               {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <MailQuestion size={ICON.sm} aria-hidden="true" />}
-              שליחת קישור איפוס
+              {t('forgotPassword.sendResetLink')}
             </button>
             <div className="text-center">
               <Link to="/login" className="text-sm text-ink-muted hover:text-ink underline underline-offset-2">
-                חזרה למסך הכניסה
+                {t('forgotPassword.backToLogin')}
               </Link>
             </div>
           </Card>

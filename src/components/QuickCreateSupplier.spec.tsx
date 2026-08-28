@@ -5,6 +5,8 @@ import { http, HttpResponse } from 'msw';
 import { server } from '../test/msw/server';
 import { SUPABASE_URL } from '../test/msw/handlers';
 import { ToastProvider } from './ui';
+import { LocaleProvider } from '../lib/i18n/LocaleProvider';
+import type { Locale } from '../lib/i18n/locale';
 
 /**
  * Real supabase-js against the MSW base URL, exactly as notificationPreferences.spec.tsx does:
@@ -79,13 +81,15 @@ const postgrestError = (status: number, message: string, code: string) =>
  * three and passes in isolation, which is exactly the symptom `src/test/setup.ts` records for
  * ReauthModal. Waiting for the focus makes the ordering deterministic instead of lucky.
  */
-async function renderDialog() {
+async function renderDialog(locale: Locale = 'he') {
   const onCreated = vi.fn();
   const onClose = vi.fn();
   render(
-    <ToastProvider>
-      <QuickCreateSupplier onClose={onClose} onCreated={onCreated} />
-    </ToastProvider>,
+    <LocaleProvider initialLocale={locale}>
+      <ToastProvider>
+        <QuickCreateSupplier onClose={onClose} onCreated={onCreated} />
+      </ToastProvider>
+    </LocaleProvider>,
   );
   await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
   return { onCreated, onClose };
@@ -106,6 +110,14 @@ const dialogControls = () => Array.from(
 );
 
 describe('QuickCreateSupplier — the shared door', () => {
+  it('renders the quick-create contract in English', async () => {
+    await renderDialog('en');
+    expect(screen.getByRole('dialog', { name: 'New supplier' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Supplier name *')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    expect(screen.queryByText('ספק חדש')).toBeNull();
+  });
+
   it('creates the supplier and hands the caller the row it can select immediately', async () => {
     const user = userEvent.setup();
     const bodies = useInsertEndpoint(created);

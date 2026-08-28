@@ -5487,4 +5487,58 @@ export const en: Dictionary = {
     cleanupFailed: 'The notification subscription could not be cleaned up in either the server or browser. Sign-out completed, but turn off notifications in the browser\'s site settings; you can also sign in again and retry.',
   },
 
+  quickCreateSupplier: {
+    createdToast: 'The supplier was created',
+    title: 'New supplier',
+    description: 'Quick creation — name and tax ID only, so you do not leave this screen. Complete the other supplier details on the Suppliers screen.',
+    creating: 'Creating the supplier',
+    duplicateTitle: 'A supplier with this name already exists',
+    nameLabel: 'Supplier name *',
+    taxIdLabel: 'Tax ID / business number',
+    cancel: 'Cancel',
+    created: 'Created',
+    saving: 'Saving…',
+    createAnyway: 'Create anyway',
+    save: 'Save',
+    nameRequired: 'Supplier name is required',
+    taxId: 'Tax ID {taxId}',
+    noTaxId: 'No tax ID recorded',
+  },
+
+  resetPasswordTail: {
+    signOutFailed: 'The password was changed, but not all sessions could be disconnected. Sign in again and contact the system administrator if an old session is still active.',
+    title: 'Set a new password',
+    checking: 'Checking the reset link…',
+    invalidLink: 'The link is invalid or has expired. A reset link is valid for one hour and can be used once.',
+    sendNewLink: 'Send a new link',
+    backToLogin: 'Back to sign in',
+    newPasswordLabel: 'New password (at least {min} characters)',
+    confirmPassword: 'Confirm password',
+    changePassword: 'Change password',
+    changedRedirecting: 'The password was changed. Disconnecting old sessions and taking you to sign in…',
+  },
+
+  forgotPassword: {
+    rateLimited: 'Too many reset requests were sent. Wait a few minutes and try again.',
+    title: 'Reset password',
+    sentNotice: 'If the address is registered, a password reset link was sent to it. The link is valid for one hour.',
+    notReceived: 'No email? Check the spam folder or contact the system operator.',
+    backToLogin: 'Back to sign in',
+    instructions: 'Enter the email address you registered with — a link for setting a new password will be sent to it.',
+    email: 'Email',
+    sendResetLink: 'Send reset link',
+  },
+
+  reauthModal: {
+    identityUnavailable: 'The signed-in user\'s identity could not be verified. Sign in again.',
+    identityChanged: 'The user\'s identity changed during verification. Sign in again.',
+    sessionMissing: 'Verification succeeded but no fresh session was returned. Sign in again.',
+    title: 'Verify identity for a sensitive action',
+    description: 'This sensitive action requires a fresh password verification for the signed-in user. The verification is recorded in the security log.',
+    verifying: 'Verifying identity',
+    passwordLabel: 'Password for fresh identity verification *',
+    cancel: 'Cancel',
+    confirm: 'Verify identity',
+  },
+
 };

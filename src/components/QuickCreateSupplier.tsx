@@ -70,9 +70,6 @@ export function quickSupplierRow(orgId: string, name: string, taxId: string): Qu
   return { org_id: orgId, name: name.trim(), tax_id: taxId.trim() || null };
 }
 
-/** The full supplier form's wording for the same mistake — not a second sentence for one meaning. */
-const NAME_REQUIRED = 'שם ספק הוא שדה חובה';
-
 /** Enough of the existing row to tell the user WHICH supplier it already has. */
 type ExistingSupplier = Pick<Supplier, 'id' | 'name' | 'tax_id' | 'status'>;
 
@@ -88,10 +85,14 @@ type ExistingSupplier = Pick<Supplier, 'id' | 'name' | 'tax_id' | 'status'>;
  * nine filter on `deleted_at` alone, so an inactive supplier is present in almost all of them. A
  * wrong comment on a shared component is worse than none — the next agent reads it as the contract.
  */
-function describeExisting(row: ExistingSupplier, statusLabel: (meta: { key: string } | null | undefined) => string) {
+function describeExisting(
+  row: ExistingSupplier,
+  statusLabel: (meta: { key: string } | null | undefined) => string,
+  t: ReturnType<typeof useT>['t'],
+) {
   return [
     row.name,
-    row.tax_id ? `ח.פ ${row.tax_id}` : 'ללא ח.פ רשום',
+    row.tax_id ? t('quickCreateSupplier.taxId', { taxId: row.tax_id }) : t('quickCreateSupplier.noTaxId'),
     statusLabel(SUPPLIER_STATUS[row.status]) || row.status,
   ].join(' · ');
 }
@@ -106,7 +107,7 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
   onCreated: (supplier: QuickCreatedSupplier) => void;
 }) {
   const { profile } = useAuth();
-  const { statusLabel , errorText } = useT();
+  const { errorText, statusLabel, t } = useT();
   const toast = useToast();
   const [name, setName] = useState('');
   const [taxId, setTaxId] = useState('');
@@ -123,6 +124,7 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
    * the second write without taking the exit away.
    */
   const [created, setCreated] = useState(false);
+  const nameRequired = t('quickCreateSupplier.nameRequired');
   /**
    * The existing supplier whose name matches, once found. Owner decision: a name collision
    * **warns, it does not block** — a real business does sometimes have two genuinely similar
@@ -135,7 +137,7 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
   async function save() {
     // Validated here, before any request: a name of spaces is not the server's problem to explain,
     // and the sentence is the one the full supplier form already uses for the same mistake.
-    if (!name.trim()) { setError(NAME_REQUIRED); return; }
+    if (!name.trim()) { setError(nameRequired); return; }
     // No org means no tenant to write into. `not_authorized` is the honest existing mapping —
     // and it keeps a null profile from becoming an unhandled TypeError mid-save.
     if (!profile?.org_id) { setError(errorText(new Error('not_authorized'))); return; }
@@ -165,7 +167,7 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
       // claim rather than a check: an insert that answers with no row is a failure, not a success.
       if (!row?.id) throw new Error('supplier_insert_no_row');
       setCreated(true);
-      toast('הספק נוצר');
+      toast(t('quickCreateSupplier.createdToast'));
       onCreated(row);
     } catch (failure) {
       setError(errorText(failure));
@@ -175,38 +177,38 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
   }
 
   return (
-    <Modal open onClose={onClose} title="ספק חדש" busy={busy}
-      description="יצירה מהירה — שם וח.פ בלבד, כדי לא לעזוב את המסך. את שאר פרטי הספק משלימים במסך הספקים."
-      statusMessage={busy ? 'יוצר את הספק' : undefined}>
+    <Modal open onClose={onClose} title={t('quickCreateSupplier.title')} busy={busy}
+      description={t('quickCreateSupplier.description')}
+      statusMessage={busy ? t('quickCreateSupplier.creating') : undefined}>
       <div className="space-y-4">
         {error && <ErrorNote message={error} />}
         {duplicate && (
           <Note tone="await" role="alert">
-            <div className="font-medium">ספק בשם זה כבר קיים במערכת</div>
-            <div className="mt-1 text-sm">{describeExisting(duplicate, statusLabel)}</div>
+            <div className="font-medium">{t('quickCreateSupplier.duplicateTitle')}</div>
+            <div className="mt-1 text-sm">{describeExisting(duplicate, statusLabel, t)}</div>
           </Note>
         )}
         <div>
-          <label className="label" htmlFor="quick-supplier-name">שם הספק *</label>
+          <label className="label" htmlFor="quick-supplier-name">{t('quickCreateSupplier.nameLabel')}</label>
           {/* Only the field's own refusal marks the field invalid — a network or permission
               failure is not something wrong with what the user typed. */}
           <input id="quick-supplier-name" className="input" value={name} disabled={spent}
-            aria-invalid={error === NAME_REQUIRED || undefined}
+            aria-invalid={error === nameRequired || undefined}
             /* Editing the name retires the warning, so the next press re-checks the new name
                instead of waving through a collision the user never saw. */
             onChange={(event) => { setName(event.target.value); setDuplicate(null); }} />
         </div>
         <div>
-          <label className="label" htmlFor="quick-supplier-tax-id">ח.פ / עוסק</label>
+          <label className="label" htmlFor="quick-supplier-tax-id">{t('quickCreateSupplier.taxIdLabel')}</label>
           <input id="quick-supplier-tax-id" className="input" dir="ltr" value={taxId} disabled={spent}
             onChange={(event) => setTaxId(event.target.value)} />
         </div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
         {/* Cancel stays live after a create: the exit is never taken away. */}
-        <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
+        <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>{t('quickCreateSupplier.cancel')}</button>
         <button type="button" className="btn-primary" disabled={spent} onClick={() => void save()}>
-          {created ? 'נוצר' : busy ? 'שומר…' : duplicate ? 'צור בכל זאת' : 'שמירה'}
+          {created ? t('quickCreateSupplier.created') : busy ? t('quickCreateSupplier.saving') : duplicate ? t('quickCreateSupplier.createAnyway') : t('quickCreateSupplier.save')}
         </button>
       </div>
     </Modal>

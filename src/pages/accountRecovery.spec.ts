@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { en } from '../lib/i18n/dictionaries/en';
+import { he } from '../lib/i18n/dictionaries/he';
 
 // Line endings are normalized because these are source-text assertions: a CRLF checkout
 // (Windows) and an LF one (Linux CI) must read the same contract. The multi-line assertion
@@ -14,7 +16,9 @@ describe('self-service account recovery contract', () => {
     const forgot = page('ForgotPassword.tsx');
     expect(forgot).toContain('resetPasswordForEmail');
     expect(forgot).toContain('window.location.origin}/reset-password');
-    expect(forgot).toContain('אם קיימת כתובת תואמת');
+    expect(forgot).toContain("t('forgotPassword.sentNotice')");
+    expect(he.forgotPassword.sentNotice).toContain('אם הכתובת רשומה במערכת');
+    expect(en.forgotPassword.sentNotice).toContain('If the address is registered');
   });
 
   it('updates only the active recovery user and revokes sessions', () => {
@@ -22,7 +26,9 @@ describe('self-service account recovery contract', () => {
     expect(reset).toContain('supabase.auth.updateUser({ password })');
     expect(reset).toContain("signOut({ scope: 'global' })");
     expect(reset).toContain('if (signedOut.error) {');
-    expect(reset).toContain('לא ניתן היה לנתק את כל החיבורים');
+    expect(reset).toContain("t('resetPasswordTail.signOutFailed')");
+    expect(he.resetPasswordTail.signOutFailed).toContain('לא ניתן היה לנתק את כל החיבורים');
+    expect(en.resetPasswordTail.signOutFailed).toContain('not all sessions could be disconnected');
     expect(reset.indexOf('return;\n    }\n    navigate')).toBeGreaterThan(-1);
     expect(reset).not.toMatch(/admin|service_role|user_id/i);
   });

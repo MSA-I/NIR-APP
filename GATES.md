@@ -341,6 +341,19 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   Dictionary parity passed at 5,170 keys per locale; `zero` still exits 1 on 191/41, so this gate
   remains open.
 
+  **PROGRESS, 28.08.2026 — quick supplier + password recovery + step-up auth batch in this
+  commit.** The pinned count is now 715 Hebrew line(s) across 73 files; the protected set remains
+  565 lines in 36 files, so the real remainder is **150 lines in 37 files**. These are surfaces
+  81–84 locked at zero. Quick supplier creation translates duplicate evidence while keeping the
+  supplier name and tax id raw. Forgot/reset-password fixed copy follows the reader locale without
+  weakening the anti-enumeration or global-session-revocation contracts. Reauth uses internal error
+  codes mapped at the render boundary, never `Error(t(...))`. The stale-baseline negative control
+  named exactly the four files at 11→0, 10→0, 9→0 and 11→0. Focused suites passed 43/43. The first
+  full run caught `accountRecovery.spec.ts` pinning a sentence in source; the assertion was split
+  into screen key plus exact paired dictionary values, then the full suite passed 1,758/1,758.
+  `npx tsc --noEmit` and `check:jsx-space` passed; dictionary parity passed at 5,212 keys per
+  locale. `zero` still exits 1 on 150/37, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER
