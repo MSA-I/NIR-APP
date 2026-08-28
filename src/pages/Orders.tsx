@@ -1,4 +1,5 @@
 import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
@@ -47,12 +48,12 @@ export function orderPrimaryAction(status: PoStatus, hasWhatsApp: boolean): Orde
 
 export function orderLifecycle(status: PoStatus, wasSent: boolean, wasConfirmed: boolean) {
   return [
-    ...(status === 'draft' ? [{ key: 'draft', label: 'טיוטה' }] : []),
-    ...(status === 'ready' ? [{ key: 'ready', label: 'מוכנה לשליחה לספק' }] : []),
-    ...(wasSent || status === 'sent' ? [{ key: 'sent', label: 'נשלחה לספק' }] : []),
-    ...(wasConfirmed || status === 'confirmed' || status === 'partial' ? [{ key: 'confirmed', label: 'אושרה' }] : []),
-    ...(status === 'partial' ? [{ key: 'partial', label: 'התקבלה חלקית' }] : []),
-    ...(status === 'received' ? [{ key: 'received', label: 'התקבלה' }] : []),
+    ...(status === 'draft' ? [{ key: 'draft', labelKey: 'orders.lifecycleDraft' as TKey }] : []),
+    ...(status === 'ready' ? [{ key: 'ready', labelKey: 'orders.lifecycleReady' as TKey }] : []),
+    ...(wasSent || status === 'sent' ? [{ key: 'sent', labelKey: 'orders.lifecycleSent' as TKey }] : []),
+    ...(wasConfirmed || status === 'confirmed' || status === 'partial' ? [{ key: 'confirmed', labelKey: 'orders.lifecycleConfirmed' as TKey }] : []),
+    ...(status === 'partial' ? [{ key: 'partial', labelKey: 'orders.lifecyclePartial' as TKey }] : []),
+    ...(status === 'received' ? [{ key: 'received', labelKey: 'orders.lifecycleReceived' as TKey }] : []),
   ];
 }
 
@@ -157,7 +158,7 @@ export function OrdersList() {
   return (
     <div className="space-y-4">
       <PageHeader title={t('orders.title')}
-        meta={`${rows.length} הזמנות בתצוגה · ${data?.orders.length ?? 0} בסך הכול`}
+        meta={t('orders.listMeta', { shown: rows.length, total: data?.orders.length ?? 0 })}
         actions={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={ICON.sm} aria-hidden="true" /> {t('orders.navigate')}</button>} />
 
       {canWrite && !!data?.drafts.length && (
@@ -172,10 +173,10 @@ export function OrdersList() {
                 <div key={draft.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-3 sm:px-4">
                   <div className="min-w-0">
                     <div className="font-medium text-ink-body">{t('orders.text_7')} <span className="num">#{draft.number}</span></div>
-                    <div className="text-xs text-ink-muted">עודכנה {fmtDateTime(draft.updated_at)} · <span className="num">{draft.items.length}</span> מוצרים · {fmtMoneyExact(draftTotal(draft))}</div>
+                    <div className="text-xs text-ink-muted">{t('orders.draftUpdated', { at: fmtDateTime(draft.updated_at) })} · <span className="num">{draft.items.length}</span> {t('orders.productsWord')} · {fmtMoneyExact(draftTotal(draft))}</div>
                   </div>
                   <div className="ms-auto flex gap-2">
-                    <button type="button" className="btn-secondary" onClick={() => navigate(`/orders/new?draft=${draft.id}`)}>המשך עריכה</button>
+                    <button type="button" className="btn-secondary" onClick={() => navigate(`/orders/new?draft=${draft.id}`)}>{t('orders.continueEditing')}</button>
                     <button type="button" className="btn-danger" onClick={() => setDraftCancelTarget(draft)}>{t('orders.setDraftCancelTarget')}</button>
                   </div>
                 </div>
@@ -188,14 +189,14 @@ export function OrdersList() {
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || String(r.number).includes(q)}
         searchLabel={t('orders.searchLabel')}
-        rowLabel={(r) => `הזמנת רכש מספר ${r.number} עבור ${r.supplier.name}`}
+        rowLabel={(r) => t('orders.rowLabel', { number: r.number, supplier: r.supplier.name })}
         onRowClick={(r) => navigate(`/orders/${r.id}`)}
         mobile="cards"
         mobileTitle={(r) => <><span className="num">#{r.number}</span> · {r.supplier.name}</>}
         mobileTrailing={(r) => <StatusBadge meta={PO_STATUS[r.status]} />}
         rowActions={(r) => [
-          { key: 'edit', label: 'עריכה', icon: Pencil, hidden: !canWrite, onSelect: () => navigate(`/orders/${r.id}`) },
-          { key: 'duplicate', label: 'שכפול', icon: Copy, hidden: !canWrite, onSelect: () => navigate(`/orders/new?from=${r.id}`) },
+          { key: 'edit', label: t('orders.actionEdit'), icon: Pencil, hidden: !canWrite, onSelect: () => navigate(`/orders/${r.id}`) },
+          { key: 'duplicate', label: t('orders.actionDuplicate'), icon: Copy, hidden: !canWrite, onSelect: () => navigate(`/orders/new?from=${r.id}`) },
           {
             key: 'whatsapp', label: t('orders.text_8'), icon: MessageCircle,
             hidden: !canWrite || !(r.supplier.whatsapp || r.supplier.phone) || !['draft', 'ready', 'sent'].includes(r.status),
@@ -208,7 +209,7 @@ export function OrdersList() {
             hidden: !canWrite || !needsSentConfirmation(r.status),
             onSelect: () => setSentConfirmTarget(r),
           },
-          { key: 'print', label: 'הדפסה', icon: Printer, onSelect: () => navigate(`/orders/${r.id}?print=1`) },
+          { key: 'print', label: t('orders.actionPrint'), icon: Printer, onSelect: () => navigate(`/orders/${r.id}?print=1`) },
           {
             key: 'cancel', label: t('orders.text_10'), icon: XCircle, tone: 'danger',
             hidden: !canWrite || ['received', 'cancelled'].includes(r.status),
@@ -238,7 +239,7 @@ export function OrdersList() {
         onConfirm={() => void confirmSent()}
         title={t('orders.title_3')}
         message={sentConfirmTarget
-          ? `האם ההודעה על הזמנה #${sentConfirmTarget.number} עבור ${sentConfirmTarget.supplier.name} נשלחה בפועל לספק? `
+          ? `${t('orders.sentConfirmQuestion', { number: sentConfirmTarget.number, supplier: sentConfirmTarget.supplier.name })} `
             + t('orders.text_13')
           : ''}
         confirmLabel={t('orders.confirmLabel')} busy={busy} />
@@ -376,23 +377,24 @@ export function OrderDetail() {
   ) : primaryKey === 'confirm' ? (
     <button className="btn-primary" disabled={busy} onClick={() => setSupplierConfirmOpen(true)}><CheckCircle2 size={ICON.sm} aria-hidden="true" /> {t('orders.setSupplierConfirmOpen')}</button>
   ) : primaryKey === 'receive' ? (
-    <button className="btn-primary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={ICON.sm} aria-hidden="true" /> קבלת סחורה</button>
+    <button className="btn-primary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={ICON.sm} aria-hidden="true" /> {t('orders.receiveGoods')}</button>
   ) : null;
   // Only observed/current stages are included. Purchase orders are normally created as `ready`,
   // and a fully received order did not necessarily pass through `confirmed` or `partial`, so
   // rendering the whole theoretical graph as complete
   // would invent history the record does not carry.
-  const lifecycleSteps = orderLifecycle(order.status, !!order.sent_at, !!order.confirmed_at);
+  const lifecycleSteps = orderLifecycle(order.status, !!order.sent_at, !!order.confirmed_at)
+    .map((step) => ({ key: step.key, label: t(step.labelKey) }));
 
   return (
     <div className="space-y-4">
       <RecordHeader className="no-print"
-        breadcrumbs={<Breadcrumbs items={[{ label: 'הזמנות', to: '/orders' }, { label: `#${order.number}` }]} />}
+        breadcrumbs={<Breadcrumbs items={[{ label: t('orders.ordersCrumb'), to: '/orders' }, { label: `#${order.number}` }]} />}
         title={<span>{t('orders.text_20')} <span className="num">#{order.number}</span></span>}
         status={<StatusBadge meta={PO_STATUS[order.status]} />}
-        meta={<><span>{order.supplier.name}</span><span className="num font-semibold text-ink-body">{fmtMoneyExact(total)}</span><span>נוצרה {fmtDateTime(order.created_at)}</span>{order.sent_at && <span>נשלחה {fmtDateTime(order.sent_at)}</span>}{order.revision_number > 1 && order.revised_from_order_id && (
+        meta={<><span>{order.supplier.name}</span><span className="num font-semibold text-ink-body">{fmtMoneyExact(total)}</span><span>{t('orders.createdAt', { at: fmtDateTime(order.created_at) })}</span>{order.sent_at && <span>{t('orders.sentAt', { at: fmtDateTime(order.sent_at) })}</span>}{order.revision_number > 1 && order.revised_from_order_id && (
           <button type="button" className="underline" onClick={() => navigate(`/orders/${order.revised_from_order_id}`)}>
-            רוויזיה <span className="num">{order.revision_number}</span> — להזמנה המקורית
+            {t('orders.revisionWord')} <span className="num">{order.revision_number}</span> {t('orders.toOriginalOrder')}
           </button>
         )}</>}
         primaryAction={primaryAction}
@@ -407,7 +409,7 @@ export function OrderDetail() {
             <button className="btn-secondary" disabled={busy} onClick={() => setSentConfirmOpen(true)}><Send size={ICON.sm} aria-hidden="true" /> {t('orders.setSentConfirmOpen_2')}</button>
           )}
           {canWrite && order.status === 'sent' && (
-            <button className="btn-secondary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={ICON.sm} aria-hidden="true" /> קבלת סחורה</button>
+            <button className="btn-secondary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={ICON.sm} aria-hidden="true" /> {t('orders.receiveGoods')}</button>
           )}
           {/* G1, finding 14 — the same URL Receiving.tsx:638 builds, from the order this time.
               An invoice can only be linked to an order through these parameters (InvoiceNew.tsx
@@ -418,7 +420,7 @@ export function OrderDetail() {
               from the supplier, so the action is to upload it, not to type it. */}
           {canWrite && !['draft', 'cancelled'].includes(order.status) && (
             <button className="btn-secondary" onClick={() => navigate('/documents')}>
-              <FileText size={ICON.sm} aria-hidden="true" /> העלאת החשבונית שהתקבלה
+              <FileText size={ICON.sm} aria-hidden="true" /> {t('orders.uploadInvoiceReceived')}
             </button>
           )}
           <button className="btn-secondary" onClick={() => window.print()}><Printer size={ICON.sm} aria-hidden="true" /> {t('orders.print')}</button>
@@ -441,7 +443,7 @@ export function OrderDetail() {
       {underMin && (
         <Note tone="await" className="no-print">
           <span className="min-w-0 flex-1">
-            שים לב: סכום ההזמנה ({fmtMoneyExact(total)}) נמוך ממינימום ההזמנה של הספק ({fmtMoneyExact(order.supplier.min_order_amount!)}).
+            {t('orders.belowMinimum', { total: fmtMoneyExact(total), minimum: fmtMoneyExact(order.supplier.min_order_amount!) })}
           </span>
         </Note>
       )}
@@ -457,8 +459,10 @@ export function OrderDetail() {
       {/* Printable order sheet */}
       <Card className="print-area">
         <div className="hidden print:block mb-4">
-          <h2 className="text-xl font-semibold">{`הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`}</h2>
-          <div className="text-sm mt-1">ספק: {order.supplier.name} · תאריך: {fmtDate(order.created_at)} {order.expected_date && `· אספקה מבוקשת: ${fmtDate(order.expected_date)}`}</div>
+          <h2 className="text-xl font-semibold">{orgName
+            ? t('orders.printTitleWithOrg', { number: order.number, org: orgName })
+            : t('orders.printTitle', { number: order.number })}</h2>
+          <div className="text-sm mt-1">{t('orders.printSupplier', { supplier: order.supplier.name })} · {t('orders.printDate', { date: fmtDate(order.created_at) })} {order.expected_date && t('orders.printExpected', { date: fmtDate(order.expected_date) })}</div>
         </div>
         <ul className="divide-y divide-line-soft lg:hidden print:hidden" aria-label={t('orders.aria_label_2')}>
           {order.items.map((item) => (
@@ -467,7 +471,7 @@ export function OrderDetail() {
                 <div className="min-w-0"><div className="font-medium text-ink-body"><bdi>{productLabel(item.product)}</bdi></div><div className="mt-1 text-xs text-ink-muted"><span className="num">{formatQuantity(item.qty, item.product.unit, locale)}</span> × <span className="num">{fmtMoneyExact(item.unit_price)}</span></div></div>
                 <span className="num shrink-0 font-semibold">{fmtMoneyExact(item.qty * item.unit_price)}</span>
               </div>
-              {order.status !== 'draft' && <div className="mt-2 text-xs text-ink-muted">התקבל: <span className={`num ${item.received_qty >= item.qty ? 'text-done-fg' : item.received_qty > 0 ? 'text-await-fg' : ''}`}>{item.received_qty}</span> מתוך <span className="num">{item.qty}</span></div>}
+              {order.status !== 'draft' && <div className="mt-2 text-xs text-ink-muted">{t('orders.receivedLabel')} <span className={`num ${item.received_qty >= item.qty ? 'text-done-fg' : item.received_qty > 0 ? 'text-await-fg' : ''}`}>{item.received_qty}</span> {t('orders.outOfWord')} <span className="num">{item.qty}</span></div>}
             </li>
           ))}
           <li className="flex items-center justify-between pt-3 font-semibold"><span>{t('orders.fmtMoneyExact_2')}</span><span className="num">{fmtMoneyExact(total)}</span></li>
@@ -506,7 +510,7 @@ export function OrderDetail() {
           </tfoot>
         </table>
         </div>
-        {order.notes && <div className="mt-3 text-sm text-ink-soft">הערות: {order.notes}</div>}
+        {order.notes && <div className="mt-3 text-sm text-ink-soft">{t('orders.notesLabel')} {order.notes}</div>}
       </Card>
 
       <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)}
@@ -524,7 +528,7 @@ export function OrderDetail() {
       <ConfirmDialog open={sentConfirmOpen} onClose={() => setSentConfirmOpen(false)}
         onConfirm={() => void confirmSent()}
         title={t('orders.title_6')}
-        message={`האם ההודעה על הזמנה #${order.number} עבור ${order.supplier.name} נשלחה בפועל לספק? `
+        message={`${t('orders.sentConfirmQuestion', { number: order.number, supplier: order.supplier.name })} `
           + t('orders.text_28')}
         confirmLabel={t('orders.confirmLabel_3')} busy={busy} />
 
@@ -549,7 +553,7 @@ export function OrderDetail() {
               setConfirmExpected('');
             }
           })()}>
-            <CheckCircle2 size={ICON.sm} aria-hidden="true" /> אישור
+            <CheckCircle2 size={ICON.sm} aria-hidden="true" /> {t('orders.approve')}
           </button>
         </div>
       </Modal>
