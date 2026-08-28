@@ -389,7 +389,7 @@ describe('receiving draft autosave', () => {
       ...base,
       lines: [{ ...line('item-1'), qty_received: 9, status: 'damaged', notes: 'חדש' }],
     });
-    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1), { timeout: 3_000 });
     releaseFirst();
     await Promise.all([first, second, autosaver.flush()]);
     expect(writes.map((draft) => draft.lines[0].notes)).toEqual(['ישן', 'חדש']);

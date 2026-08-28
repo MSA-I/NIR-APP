@@ -181,7 +181,7 @@ describe('WebhookSettings — activation is gated on the handshake', () => {
     await user.type(await screen.findByLabelText(/סיבת הפעולה/), 'חיבור ERP');
     await user.click(screen.getByRole('button', { name: /שליחת אימות/ }));
 
-    await vi.waitFor(() => expect(runWebhookVerification).toHaveBeenCalled());
+    await vi.waitFor(() => expect(runWebhookVerification).toHaveBeenCalled(), { timeout: 3_000 });
     expect(requestWebhookVerification).toHaveBeenCalledWith('sub-1', 'חיבור ERP');
     expect(runWebhookVerification).toHaveBeenCalledWith('ver-1');
   });
@@ -224,7 +224,7 @@ describe('WebhookSettings — activation is gated on the handshake', () => {
     await user.click(within(card).getByRole('button', { name: 'הפעלה' }));
     await user.click(await screen.findByRole('button', { name: /הפעלת החיבור/ }));
 
-    await vi.waitFor(() => expect(setWebhookSubscriptionActive).toHaveBeenCalled());
+    await vi.waitFor(() => expect(setWebhookSubscriptionActive).toHaveBeenCalled(), { timeout: 3_000 });
     const [id, active, reason] = setWebhookSubscriptionActive.mock.calls[0] as [string, boolean, string];
     expect(id).toBe('sub-1');
     expect(active).toBe(true);
@@ -271,12 +271,13 @@ describe('WebhookSettings — registration', () => {
     await user.type(screen.getByLabelText(/סיבת הפעולה/), 'חיבור ERP');
     await user.click(screen.getByRole('button', { name: /שמירת החיבור/ }));
 
-    await vi.waitFor(() => expect(registerWebhookSubscription).toHaveBeenCalled());
+    await vi.waitFor(() => expect(registerWebhookSubscription).toHaveBeenCalled(), { timeout: 3_000 });
     expect(registerWebhookSubscription).toHaveBeenCalledWith(
       expect.objectContaining({ url: 'https://hooks.example.com/inplace', reason: 'חיבור ERP' }),
     );
-    await vi.waitFor(() =>
-      expect(container.textContent ?? '').not.toContain('super-secret-signing-value-0123456789'),
+    await vi.waitFor(
+      () => expect(container.textContent ?? '').not.toContain('super-secret-signing-value-0123456789'),
+      { timeout: 3_000 },
     );
   });
 });

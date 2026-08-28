@@ -18,6 +18,13 @@ import { server } from './msw/server';
 // three times over: wait for the condition, never for a budget.
 configure({ asyncUtilTimeout: 3_000 });
 
+// AND `configure()` DOES NOT REACH `vi.waitFor`. It is vitest's own utility, it keeps a 1s
+// default of its own, and on 28.08.2026 that default failed `webhookSettings.spec.tsx` twice in
+// CI on a branch that does not import anything the file touches — the same picture DEBT §52
+// records for testing-library's waits. There is no global setting for it, so every `vi.waitFor`
+// in the suite carries `{ timeout: 3_000 }` explicitly. If a new one is added without it, it is
+// running on a budget the rest of the suite decided was too small.
+
 // `error` on purpose: a request the handlers do not describe is a test that is lying about what
 // the app does. It must fail loudly rather than reach the network or hang.
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
