@@ -30,6 +30,8 @@
  * behind the same owner check, not next to every row.
  */
 
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 import { useMemo, useState } from 'react';
 import { ScrollText, Tags, Truck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -44,25 +46,26 @@ import type { AuditLog } from '../lib/types';
 const ENTITY_TYPES = ['suppliers', 'supplier_products'] as const;
 type EntityType = (typeof ENTITY_TYPES)[number];
 
-const ENTITY_LABEL: Record<EntityType, string> = {
-  suppliers: 'פרטי ספק',
-  supplier_products: 'מחירון',
+const ENTITY_KEY: Record<EntityType, TKey> = {
+  suppliers: 'supplierLog.entitySuppliers',
+  supplier_products: 'supplierLog.entityPriceList',
 };
 
 /**
  * Both dialects in one map: the generic row-trigger verbs (`insert`/`update`/`delete`) and the
- * named reasoned commands. An action with no entry renders as itself rather than as a blank —
- * a new command should look unfamiliar, not invisible.
+ * named reasoned commands. The KEY of each row is the value in `audit_logs.action` and never
+ * moves; what a reader sees is the dictionary entry it points at. `actionLabel()` below holds
+ * the fallback for an action this table has not learned yet.
  */
-const ACTION_LABEL: Record<string, string> = {
-  insert: 'יצירה',
-  update: 'עדכון',
-  delete: 'מחיקה',
-  supplier_deleted: 'מחיקת ספק',
-  supplier_bank_details_updated: 'עדכון פרטי בנק',
-  supplier_product_price_set: 'עדכון מחיר',
-  supplier_prices_imported: 'קליטת מחירון',
-  price_list_auto_action_reverted: 'ביטול קליטת מחירון אוטומטית',
+const ACTION_KEY: Record<string, TKey> = {
+  insert: 'supplierLog.actionInsert',
+  update: 'supplierLog.actionUpdate',
+  delete: 'supplierLog.actionDelete',
+  supplier_deleted: 'supplierLog.actionSupplierDeleted',
+  supplier_bank_details_updated: 'supplierLog.actionBankDetailsUpdated',
+  supplier_product_price_set: 'supplierLog.actionPriceSet',
+  supplier_prices_imported: 'supplierLog.actionPricesImported',
+  price_list_auto_action_reverted: 'supplierLog.actionAutoReverted',
 };
 
 type Row = AuditLog & {
@@ -89,6 +92,13 @@ const price = (values: Record<string, unknown> | null | undefined) => {
 // and testing it should not require supabase and react-router inside jsdom.
 
 export default function SupplierLog() {
+  const { t } = useT();
+  // An action with no entry renders as itself rather than as a blank — a new command should look
+  // unfamiliar, not invisible — so the fallback is the raw column value, in every language.
+  const actionLabel = (action: string) => {
+    const key = ACTION_KEY[action];
+    return key ? t(key) : action;
+  };
   const [selected, setSelected] = useState<Row | null>(null);
   const [entityFilter, setEntityFilter] = useParamState('entity');
   const [supplierFilter, setSupplierFilter] = useParamState('supplier');
@@ -148,8 +158,8 @@ export default function SupplierLog() {
         actor: log.user_id ? (actorById.get(log.user_id) ?? null) : null,
         supplierId: entityType === 'suppliers' ? log.entity_id : (identity?.supplier_id ?? null),
         subject: entityType === 'supplier_products'
-          ? [identity?.product?.name, supplierName].filter(Boolean).join(' · ') || 'שורת מחירון שנמחקה'
-          : supplierName ?? fallbackName ?? 'ספק שנמחק',
+          ? [identity?.product?.name, supplierName].filter(Boolean).join(' · ') || t('supplierLog.filter')
+          : supplierName ?? fallbackName ?? t('supplierLog.text'),
       };
     });
   });
@@ -170,30 +180,30 @@ export default function SupplierLog() {
 
   const columns: Column<Row>[] = [
     {
-      key: 'time', header: 'מועד', priority: 2, sortValue: (r) => r.created_at,
+      key: 'time', header: t('supplierLog.text_2'), priority: 2, sortValue: (r) => r.created_at,
       render: (r) => <span className="text-ink-muted">{fmtDateTime(r.created_at)}</span>,
     },
     {
-      key: 'subject', header: 'ספק · מוצר', priority: 1, sortValue: (r) => r.subject,
+      key: 'subject', header: t('supplierLog.text_3'), priority: 1, sortValue: (r) => r.subject,
       render: (r) => <bdi className="font-medium text-ink">{r.subject}</bdi>,
     },
     {
-      key: 'kind', header: 'סוג', priority: 3,
+      key: 'kind', header: t('supplierLog.text_4'), priority: 3,
       render: (r) => (
         <span className="inline-flex items-center gap-1.5 text-ink-soft">
           {r.entity_type === 'supplier_products'
             ? <Tags size={ICON.xs} aria-hidden="true" />
             : <Truck size={ICON.xs} aria-hidden="true" />}
-          {ENTITY_LABEL[r.entity_type]}
+          {t(ENTITY_KEY[r.entity_type])}
         </span>
       ),
     },
     {
-      key: 'action', header: 'פעולה', priority: 2,
-      render: (r) => ACTION_LABEL[r.action] ?? r.action,
+      key: 'action', header: t('supplierLog.text_5'), priority: 2,
+      render: (r) => actionLabel(r.action),
     },
     {
-      key: 'change', header: 'שינוי', className: 'num',
+      key: 'change', header: t('supplierLog.text_6'), className: 'num',
       // Every branch says what it means in words. The cell used to read `12.50 ← 14.00` and `—`,
       // which put the entire claim on an arrow and a dash: a reader had to know which side of the
       // arrow was the new price, and a dash never said whether the field was cleared or never set.
@@ -202,11 +212,11 @@ export default function SupplierLog() {
       render: (r) => {
         const before = price(r.old_values);
         const after = price(r.new_values);
-        if (before == null && after == null) return <span className="text-ink-faint">אין נתוני מחיר</span>;
+        if (before == null && after == null) return <span className="text-ink-faint">{t('supplierLog.text_7')}</span>;
         if (after == null || before === after) {
           return (
             <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-ink-muted">
-              <span className="text-xs">ללא שינוי</span>
+              <span className="text-xs">{t('supplierLog.text_8')}</span>
               <bdi>{renderValue(before, 'money')}</bdi>
             </span>
           );
@@ -216,11 +226,11 @@ export default function SupplierLog() {
         return (
           <span className="inline-flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
             <span className="inline-flex items-baseline gap-1 text-ink-muted">
-              <span className="text-xs">לפני</span>
+              <span className="text-xs">{t('supplierLog.text_9')}</span>
               <bdi className={before == null ? 'text-ink-faint' : undefined}>{renderValue(before, 'money')}</bdi>
             </span>
             <span className="inline-flex items-baseline gap-1 text-ink">
-              <span className="text-xs">אחרי</span>
+              <span className="text-xs">{t('supplierLog.text_10')}</span>
               <bdi className="font-semibold">{renderValue(after, 'money')}</bdi>
             </span>
           </span>
@@ -228,12 +238,12 @@ export default function SupplierLog() {
       },
     },
     {
-      key: 'actor', header: 'משתמש', priority: 2,
-      render: (r) => r.actor ?? <span className="text-ink-muted">מערכת</span>,
+      key: 'actor', header: t('supplierLog.text_11'), priority: 2,
+      render: (r) => r.actor ?? <span className="text-ink-muted">{t('supplierLog.text_12')}</span>,
     },
     {
-      key: 'reason', header: 'סיבה', priority: 3,
-      render: (r) => <span className="text-ink-muted">{r.reason ?? 'לא נרשמה סיבה'}</span>,
+      key: 'reason', header: t('supplierLog.text_13'), priority: 3,
+      render: (r) => <span className="text-ink-muted">{r.reason ?? t('supplierLog.text_14')}</span>,
     },
   ];
 
@@ -243,8 +253,8 @@ export default function SupplierLog() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title={<span className="flex items-center gap-2"><ScrollText size={ICON.xl} aria-hidden="true" /> יומן עדכון ספקים</span>}
-        meta={`${rows.length} עדכונים בתצוגה · 400 האחרונים`} />
+        title={<span className="flex items-center gap-2"><ScrollText size={ICON.xl} aria-hidden="true" /> {t('supplierLog.text_15')}</span>}
+        meta={t('supplierLog.meta', { count: rows.length })} />
 
       {/* 0175: financial rows are legal-entity scoped; organization/identity/platform rows remain
           cross-scope. Ambiguous financial history is visible only to a root-scoped reader. */}
@@ -252,10 +262,10 @@ export default function SupplierLog() {
         rows={rows}
         columns={columns}
         onRowClick={(r) => setSelected(r)}
-        rowLabel={(r) => `${ACTION_LABEL[r.action] ?? r.action} · ${r.subject}`}
+        rowLabel={(r) => `${actionLabel(r.action)} · ${r.subject}`}
         mobileTitle={(r) => <bdi>{r.subject}</bdi>}
         searchable
-        searchLabel="חיפוש ביומן"
+        searchLabel={t('supplierLog.searchLabel')}
         searchFn={(r, q) => r.subject.toLowerCase().includes(q)
           || (r.actor ?? '').toLowerCase().includes(q)
           || (r.reason ?? '').toLowerCase().includes(q)}
@@ -263,33 +273,33 @@ export default function SupplierLog() {
         onClearFilters={() => { setEntityFilter(''); setSupplierFilter(''); }}
         toolbar={
           <>
-            <select className="input w-auto!" aria-label="סינון לפי סוג עדכון"
+            <select className="input w-auto!" aria-label={t('supplierLog.aria_label')}
               value={entityFilter} onChange={(e) => setEntityFilter(e.target.value)}>
-              <option value="">כל העדכונים</option>
-              {ENTITY_TYPES.map((type) => <option key={type} value={type}>{ENTITY_LABEL[type]}</option>)}
+              <option value="">{t('supplierLog.text_16')}</option>
+              {ENTITY_TYPES.map((type) => <option key={type} value={type}>{t(ENTITY_KEY[type])}</option>)}
             </select>
-            <select className="input w-auto!" aria-label="סינון לפי ספק"
+            <select className="input w-auto!" aria-label={t('supplierLog.aria_label_2')}
               value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
-              <option value="">כל הספקים</option>
+              <option value="">{t('supplierLog.text_17')}</option>
               {suppliers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
             </select>
           </>
         }
-        emptyTitle="אין עדכוני ספקים ביומן"
-        emptySubtitle="כל שינוי בפרטי ספק ובמחירון נרשם כאן עם המשתמש שביצע אותו והסיבה שנשמרה" />
+        emptyTitle={t('supplierLog.emptyTitle')}
+        emptySubtitle={t('supplierLog.emptySubtitle')} />
 
       {selected && (
         <Modal open onClose={() => setSelected(null)} wide
-          title={`${ACTION_LABEL[selected.action] ?? selected.action} · ${selected.subject}`}>
+          title={`${actionLabel(selected.action)} · ${selected.subject}`}>
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between gap-3">
-              <dt className="text-ink-muted">מועד</dt><dd>{fmtDateTime(selected.created_at)}</dd>
+              <dt className="text-ink-muted">{t('supplierLog.fmtDateTime')}</dt><dd>{fmtDateTime(selected.created_at)}</dd>
             </div>
             <div className="flex justify-between gap-3">
-              <dt className="text-ink-muted">משתמש</dt><dd>{selected.actor ?? 'מערכת'}</dd>
+              <dt className="text-ink-muted">{t('supplierLog.text_19')}</dt><dd>{selected.actor ?? t('supplierLog.text_18')}</dd>
             </div>
             <div className="flex justify-between gap-3">
-              <dt className="text-ink-muted">סוג</dt><dd>{ENTITY_LABEL[selected.entity_type]}</dd>
+              <dt className="text-ink-muted">{t('supplierLog.text_20')}</dt><dd>{t(ENTITY_KEY[selected.entity_type])}</dd>
             </div>
             {selected.reason && (
               <div className="bg-surface-sunken rounded-lg px-3 py-2 text-ink-soft">{selected.reason}</div>
@@ -303,11 +313,11 @@ export default function SupplierLog() {
               the owner read it as noise on sight — UUIDs, org_id, internal column names. That is
               the exact reason the old audit screen was deleted, so it does not come back here. */}
           <div className="mt-4">
-            <div className="text-sm font-medium text-ink-soft mb-1.5">מה השתנה</div>
+            <div className="text-sm font-medium text-ink-soft mb-1.5">{t('supplierLog.text_21')}</div>
             {(() => {
               const changes = fieldChanges(selected.old_values, selected.new_values);
               if (!changes.length) {
-                return <p className="text-sm text-ink-muted">אין שינוי בשדות שהמסך הזה עוקב אחריהם.</p>;
+                return <p className="text-sm text-ink-muted">{t('supplierLog.text_22')}</p>;
               }
               return (
                 <dl className="divide-y divide-line-soft border-y border-line-soft text-sm">
@@ -318,11 +328,11 @@ export default function SupplierLog() {
                       <dt className="text-ink-muted">{change.label}</dt>
                       <dd className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
                         <span className="inline-flex items-baseline gap-1 text-ink-muted">
-                          <span className="text-xs">לפני</span>
+                          <span className="text-xs">{t('supplierLog.text_23')}</span>
                           <bdi>{change.before}</bdi>
                         </span>
                         <span className="inline-flex items-baseline gap-1 text-ink">
-                          <span className="text-xs">אחרי</span>
+                          <span className="text-xs">{t('supplierLog.text_24')}</span>
                           <bdi className="font-medium">{change.after}</bdi>
                         </span>
                       </dd>
