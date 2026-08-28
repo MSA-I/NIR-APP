@@ -2750,6 +2750,8 @@ export const en: Dictionary = {
     privacy6Body: 'Under the Protection of Privacy Law, 5741-1981 (as amended by Amendment 13), you have the right to review the information collected about you, to request correction of incorrect information, and to request deletion subject to obligations under the law. To raise the matter — contact the person responsible at the business that invited you, or the service operator.',
     privacy7Title: '7. Cookies and local storage',
     privacy7Body: 'The Service uses local storage in the browser to manage sign-in and to work offline (goods-receipt drafts and photographs waiting for a connection). No advertising cookies and no third-party tracking are used.',
+    eyebrow: 'Legal',
+    navLabel: 'Legal documents',
   },
 
   admin: {

@@ -1,6 +1,5 @@
 import { Link } from 'react-router';
 import { APP_NAME } from '../lib/branding';
-import { Card } from '../components/ui';
 import { useT } from '../lib/i18n/LocaleProvider';
 
 /**
@@ -68,32 +67,48 @@ import { useT } from '../lib/i18n/LocaleProvider';
  */
 export const TERMS_VERSION = '2026-08-28';
 
+/**
+ * The reading shell, ported from the marketing site's /terms and /privacy (owner instruction,
+ * 28.08.2026). It is the one page in the signed-in product that is a DOCUMENT rather than a
+ * screen: a 44rem measure on the navigation shell's own Onyx, a sticky bar that spans the window
+ * while its contents keep the column, and no card — a card frames a working surface, and there is
+ * nothing here to work with.
+ *
+ * The lockup is the product's mark, not this document's title. It used to be the page's only
+ * <h1>, which left the actual subject as an <h2> with no h1 above it. The mark keeps its alt text
+ * and stops being a heading; the title is the h1 and the clauses are h2, so the outline has no
+ * skipped level.
+ *
+ * Only the SHELL was ported. The marketing site's lede says the Hebrew version is the one that
+ * governs, and `OPEN-DECISIONS #280` retired that sentence: both versions bind. Copying the look
+ * and the copy together would have quietly reinstated the reading the owner did not choose.
+ */
 function LegalShell({ title, children }: { title: string; children: React.ReactNode }) {
   const { t } = useT();
   return (
-    <div className="min-h-dvh bg-action px-4 py-6 sm:py-10">
-      <div className="max-w-2xl mx-auto space-y-4">
-        {/* The lockup is the product's mark, not this document's title. It used to be the page's
-            only <h1>, which left the actual subject — „תנאי שימוש" — as an <h2> with no h1 above
-            it. The mark keeps its alt text and stops being a heading; the title becomes the h1.
-            Same treatment on all four standalone auth screens. */}
-        <div className="text-center">
+    <div className="legal-doc">
+      <header className="legal-doc__bar">
+        <div className="legal-doc__column legal-doc__bar-in">
           <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="166" height="36"
-            className="mx-auto h-auto w-40" />
+            className="h-auto w-32" />
+          <nav className="legal-doc__nav" aria-label={t('legal.navLabel')}>
+            <Link to="/terms">{t('legal.linkTerms')}</Link>
+            <Link to="/privacy">{t('legal.linkPrivacy')}</Link>
+            <Link to="/login">{t('legal.linkLogin')}</Link>
+          </nav>
         </div>
-        <Card className="space-y-4">
-          <h1 className="page-title">{title}</h1>
-          <p className="text-xs text-ink-muted">{t('legal.version', { version: TERMS_VERSION })}</p>
-          <div className="space-y-4 text-sm leading-relaxed text-ink-mid [&_h3]:font-semibold [&_h3]:text-ink [&_h3]:mt-2">
-            {children}
-          </div>
-          <div className="pt-3 border-t border-line-soft flex gap-4 text-sm">
-            <Link className="link" to="/terms">{t('legal.linkTerms')}</Link>
-            <Link className="link" to="/privacy">{t('legal.linkPrivacy')}</Link>
-            <Link className="link" to="/login">{t('legal.linkLogin')}</Link>
-          </div>
-        </Card>
-      </div>
+      </header>
+      <main className="legal-doc__column">
+        <p className="legal-doc__eyebrow">{t('legal.eyebrow')}</p>
+        <h1>{title}</h1>
+        <p className="legal-doc__version">{t('legal.version', { version: TERMS_VERSION })}</p>
+        {children}
+        <div className="legal-doc__foot">
+          <Link to="/terms">{t('legal.linkTerms')}</Link>
+          <Link to="/privacy">{t('legal.linkPrivacy')}</Link>
+          <Link to="/login">{t('legal.linkLogin')}</Link>
+        </div>
+      </main>
     </div>
   );
 }
@@ -102,32 +117,32 @@ export function TermsOfService() {
   const { t } = useT();
   return (
     <LegalShell title={t('legal.termsTitle')}>
-      <section>
-        <h3>{t('legal.terms1Title')}</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.terms1Title')}</h2>
         <p>{t('legal.terms1Body', { app: APP_NAME })}</p>
       </section>
-      <section>
-        <h3>{t('legal.terms2Title')}</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.terms2Title')}</h2>
         <p>{t('legal.terms2Body')}</p>
       </section>
-      <section>
-        <h3>{t('legal.terms3Title')}</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.terms3Title')}</h2>
         <p>{t('legal.terms3Body')}</p>
       </section>
-      <section>
-        <h3>{t('legal.terms4Title')}</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.terms4Title')}</h2>
         <p>{t('legal.terms4Body')}</p>
       </section>
-      <section>
-        <h3>{t('legal.terms5Title')}</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.terms5Title')}</h2>
         <p>{t('legal.terms5Body')}</p>
       </section>
-      <section>
-        <h3>{t('legal.terms6Title')}</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.terms6Title')}</h2>
         <p>{t('legal.terms6Body')}</p>
       </section>
-      <section>
-        <h3>{t('legal.terms7Title')}</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.terms7Title')}</h2>
         <p>{t('legal.terms7Body')}</p>
       </section>
     </LegalShell>
@@ -138,8 +153,8 @@ export function PrivacyPolicy() {
   const { t } = useT();
   return (
     <LegalShell title={t('legal.privacyTitle')}>
-      <section>
-        <h3>{t('legal.privacy1Title')}</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.privacy1Title')}</h2>
         <p>
           <strong>{t('legal.privacy1AccountLabel')}</strong>{' '}{t('legal.privacy1AccountBody')}{' '}
           <strong>{t('legal.privacy1BusinessLabel')}</strong>{' '}{t('legal.privacy1BusinessBody')}{' '}
@@ -147,12 +162,12 @@ export function PrivacyPolicy() {
           <strong>{t('legal.privacy1TechnicalLabel')}</strong>{' '}{t('legal.privacy1TechnicalBody')}
         </p>
       </section>
-      <section>
-        <h3>{t('legal.privacy2Title')}</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.privacy2Title')}</h2>
         <p>{t('legal.privacy2Body')}</p>
       </section>
-      <section>
-        <h3>{t('legal.privacy3Title')}</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.privacy3Title')}</h2>
         <p>{t('legal.privacy3Intro')}</p>
         <p>
           <strong>{t('legal.privacy3TrainingLabel')}</strong>{' '}{t('legal.privacy3TrainingBody')}{' '}
@@ -170,20 +185,20 @@ export function PrivacyPolicy() {
           <strong>{t('legal.privacy3LocationLabel')}</strong>{' '}{t('legal.privacy3LocationBody')}
         </p>
       </section>
-      <section>
-        <h3>{t('legal.privacy4Title')}</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.privacy4Title')}</h2>
         <p>{t('legal.privacy4Body')}</p>
       </section>
-      <section>
-        <h3>{t('legal.privacy5Title')}</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.privacy5Title')}</h2>
         <p>{t('legal.privacy5Body')}</p>
       </section>
-      <section>
-        <h3>{t('legal.privacy6Title')}</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.privacy6Title')}</h2>
         <p>{t('legal.privacy6Body')}</p>
       </section>
-      <section>
-        <h3>{t('legal.privacy7Title')}</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.privacy7Title')}</h2>
         <p>{t('legal.privacy7Body')}</p>
       </section>
     </LegalShell>
