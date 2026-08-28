@@ -248,9 +248,8 @@ export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthly
   const commonKeys = new Set(['org_name', 'period_label', 'period_from', 'period_to', 'generated_at']);
   const moneyKeys = new Set(['net_total', 'vat_total', 'gross_total', 'credits_recognized', 'net_expense']);
   // A missing value stays an empty cell — never 0 (constitution: אפס הוא גם טענה על המציאות).
-  const fieldRows = (definition?.fields ?? [])
-    .filter((field) => !commonKeys.has(field.key))
-    .map((field) => [field.label, summary[field.key] ?? null]);
+  const summaryFields = (definition?.fields ?? []).filter((field) => !commonKeys.has(field.key));
+  const fieldRows = summaryFields.map((field) => [t(field.labelKey), summary[field.key] ?? null]);
 
   const sheet = XLSX.utils.aoa_to_sheet([
     [t('reports.xlTitleMonthly', { org: String(neutralize(input.orgName ?? '—') ?? '') })],
@@ -274,9 +273,11 @@ export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthly
   ]);
   mergeTitleRows(sheet, 2);
   sheet['!cols'] = [{ wch: 28 }, { wch: 20 }, { wch: 16 }];
-  fieldRows.forEach(([label], index) => {
-    const field = definition?.fields.find((candidate) => candidate.label === label);
-    if (!field || !moneyKeys.has(field.key)) return;
+  // Indexed against the same list the rows were built from. Looking the field back up BY ITS
+  // LABEL would have started matching on translated prose, and two fields that read alike in one
+  // language would have taken each other's number format.
+  summaryFields.forEach((field, index) => {
+    if (!moneyKeys.has(field.key)) return;
     const cell = sheet[XLSX.utils.encode_cell({ r: 4 + index, c: 1 })];
     if (cell && cell.t === 'n') cell.z = MONEY_FORMAT;
   });

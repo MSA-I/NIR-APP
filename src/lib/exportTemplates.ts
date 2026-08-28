@@ -18,6 +18,8 @@
  * (`fillTemplateWorkbook`).
  */
 
+import type { TKey } from './i18n/t';
+
 export type ExportKey =
   | 'accountant_monthly_report'
   | 'owner_expense_summary'
@@ -25,68 +27,79 @@ export type ExportKey =
 
 export interface ExportField {
   key: string;
-  label: string;
-  /** What the accountant will see in the cell, so the mapping screen can show an example. */
-  sample: string;
+  labelKey: TKey;
+  /** What the accountant will see in the cell, so the mapping screen can show an example. It is
+   *  a key too: a sample date reads differently in each language, and a sample business name in a
+   *  script the reader cannot read illustrates nothing. */
+  sampleKey: TKey;
 }
 
 export interface ExportDefinition {
   key: ExportKey;
+  /**
+   * The CANONICAL Hebrew name, and the one place on this surface that stays Hebrew: it is the
+   * default `p_name` of the stored template and it composes the `p_reason` written to
+   * `audit_logs`. What a person READS is `titleKey`.
+   */
   title: string;
+  titleKey: TKey;
   /** One sentence: which file this template replaces, in the words of the person choosing. */
-  description: string;
+  descriptionKey: TKey;
   fields: ExportField[];
 }
 
 /** Fields every report carries, because every report is about a period and a business. */
 const COMMON_FIELDS: ExportField[] = [
-  { key: 'org_name', label: 'שם העסק', sample: 'מסעדת לדוגמה בע״מ' },
-  { key: 'period_label', label: 'תקופת הדוח', sample: 'מרץ 2026' },
-  { key: 'period_from', label: 'מתאריך', sample: '01.03.2026' },
-  { key: 'period_to', label: 'עד תאריך', sample: '31.03.2026' },
-  { key: 'generated_at', label: 'תאריך הפקה', sample: '01.04.2026' },
+  { key: 'org_name', labelKey: 'exportTemplates.fieldOrgName', sampleKey: 'exportTemplates.sampleOrgName' },
+  { key: 'period_label', labelKey: 'exportTemplates.fieldPeriodLabel', sampleKey: 'exportTemplates.samplePeriodLabel' },
+  { key: 'period_from', labelKey: 'exportTemplates.fieldPeriodFrom', sampleKey: 'exportTemplates.samplePeriodFrom' },
+  { key: 'period_to', labelKey: 'exportTemplates.fieldPeriodTo', sampleKey: 'exportTemplates.samplePeriodTo' },
+  { key: 'generated_at', labelKey: 'exportTemplates.fieldGeneratedAt', sampleKey: 'exportTemplates.sampleGeneratedAt' },
 ];
 
 export const EXPORT_DEFINITIONS: ExportDefinition[] = [
   {
     key: 'accountant_monthly_report',
     title: 'דוח חודשי לרואה חשבון',
-    description: 'הקובץ שנשלח לרו״ח בסוף כל חודש.',
+    titleKey: 'exportTemplates.accountantMonthlyTitle',
+    descriptionKey: 'exportTemplates.accountantMonthlyDescription',
     fields: [
       ...COMMON_FIELDS,
-      { key: 'invoice_count', label: 'מספר חשבוניות', sample: '42' },
-      { key: 'net_total', label: 'סה״כ לפני מע״מ', sample: '128,400.00' },
-      { key: 'vat_total', label: 'סה״כ מע״מ', sample: '23,112.00' },
-      { key: 'gross_total', label: 'סה״כ כולל מע״מ', sample: '151,512.00' },
-      { key: 'credits_recognized', label: 'זיכויים שקוזזו', sample: '1,240.00' },
-      { key: 'net_expense', label: 'הוצאה נטו', sample: '150,272.00' },
-      { key: 'supplier_count', label: 'מספר ספקים', sample: '15' },
+      { key: 'invoice_count', labelKey: 'exportTemplates.fieldInvoiceCount', sampleKey: 'exportTemplates.sampleInvoiceCount' },
+      { key: 'net_total', labelKey: 'exportTemplates.fieldNetTotal', sampleKey: 'exportTemplates.sampleNetTotal' },
+      { key: 'vat_total', labelKey: 'exportTemplates.fieldVatTotal', sampleKey: 'exportTemplates.sampleVatTotal' },
+      { key: 'gross_total', labelKey: 'exportTemplates.fieldGrossTotal', sampleKey: 'exportTemplates.sampleGrossTotal' },
+      { key: 'credits_recognized', labelKey: 'exportTemplates.fieldCreditsRecognized', sampleKey: 'exportTemplates.sampleCreditsRecognized' },
+      { key: 'net_expense', labelKey: 'exportTemplates.fieldNetExpense', sampleKey: 'exportTemplates.sampleNetExpense' },
+      { key: 'supplier_count', labelKey: 'exportTemplates.fieldSupplierCount', sampleKey: 'exportTemplates.sampleSupplierCount' },
     ],
   },
   {
     key: 'owner_expense_summary',
     title: 'ריכוז הוצאות לבעלים',
-    description: 'ריכוז ההוצאות לפי קטגוריה וספק.',
+    titleKey: 'exportTemplates.ownerExpenseTitle',
+    descriptionKey: 'exportTemplates.ownerExpenseDescription',
     fields: [
       ...COMMON_FIELDS,
-      { key: 'committed_total', label: 'רכש שהוזמן', sample: '160,000.00' },
-      { key: 'gross_total', label: 'הוצאה בפועל ברוטו', sample: '151,512.00' },
-      { key: 'credits_recognized', label: 'זיכויים שקוזזו', sample: '1,240.00' },
-      { key: 'net_expense', label: 'הוצאה נטו', sample: '150,272.00' },
-      { key: 'top_supplier_name', label: 'הספק הגדול ביותר', sample: 'משק ירוק' },
-      { key: 'top_supplier_total', label: 'סכום הספק הגדול ביותר', sample: '31,900.00' },
+      { key: 'committed_total', labelKey: 'exportTemplates.fieldCommittedTotal', sampleKey: 'exportTemplates.sampleCommittedTotal' },
+      { key: 'gross_total', labelKey: 'exportTemplates.fieldGrossExpense', sampleKey: 'exportTemplates.sampleGrossTotal' },
+      { key: 'credits_recognized', labelKey: 'exportTemplates.fieldCreditsRecognized', sampleKey: 'exportTemplates.sampleCreditsRecognized' },
+      { key: 'net_expense', labelKey: 'exportTemplates.fieldNetExpense', sampleKey: 'exportTemplates.sampleNetExpense' },
+      { key: 'top_supplier_name', labelKey: 'exportTemplates.fieldTopSupplierName', sampleKey: 'exportTemplates.sampleTopSupplierName' },
+      { key: 'top_supplier_total', labelKey: 'exportTemplates.fieldTopSupplierTotal', sampleKey: 'exportTemplates.sampleTopSupplierTotal' },
     ],
   },
   {
     key: 'product_purchase_summary',
     title: 'סיכום רכישות מוצרים',
-    description: 'כמה נרכש מכל מוצר, ובכמה.',
+    titleKey: 'exportTemplates.productPurchaseTitle',
+    descriptionKey: 'exportTemplates.productPurchaseDescription',
     fields: [
       ...COMMON_FIELDS,
-      { key: 'product_count', label: 'מספר מוצרים', sample: '88' },
-      { key: 'gross_total', label: 'סה״כ הוצאה', sample: '151,512.00' },
-      { key: 'unmapped_invoice_lines', label: 'שורות שלא שויכו למוצר', sample: '3' },
-      { key: 'unmapped_invoice_amount', label: 'סכום שלא שויך', sample: '820.00' },
+      { key: 'product_count', labelKey: 'exportTemplates.fieldProductCount', sampleKey: 'exportTemplates.sampleProductCount' },
+      { key: 'gross_total', labelKey: 'exportTemplates.fieldTotalExpense', sampleKey: 'exportTemplates.sampleGrossTotal' },
+      { key: 'unmapped_invoice_lines', labelKey: 'exportTemplates.fieldUnmappedLines', sampleKey: 'exportTemplates.sampleUnmappedLines' },
+      { key: 'unmapped_invoice_amount', labelKey: 'exportTemplates.fieldUnmappedAmount', sampleKey: 'exportTemplates.sampleUnmappedAmount' },
     ],
   },
 ];
