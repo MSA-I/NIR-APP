@@ -791,6 +791,15 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   subsume the old keys with the same delete actions, and now replace them as `0024` did before.
   Second, two browser fixtures used non-UUID invoice ids and intercepted the deleted balance-view
   name; they now use valid UUIDs and `invoice_balances_by_currency`. Gate remains open for fresh CI.
+  FOURTH ATTEMPT 28.08.2026: workflow-dispatch run `33199185955` on `37e8d59` passed the complete
+  browser job and 96/98 SQL stages. P9's mutation control still declared `global_search` with the
+  pre-0224 return type; it now includes `currency`. P46 exposed `apply_consolidated_invoice_interpretation`
+  inserting without currency after 0228 removed the default. A writer audit then found the dormant
+  autonomous `apply_document_interpretation` path had the same defect. New forward migration `0242`
+  binds both writers, their rounding, duplicate checks, result and audit facts to immutable evidence
+  currency. The 0242 migration runs inside `BEGIN/ROLLBACK`, its writer audit returns zero missing
+  paths, updated P9 passes, and P14 plus 0242 passes including an unrecognised-currency refusal.
+  Gate remains open until clean CI executes P46 and the full matrix on the new SHA.
 
 - [ ] P6-G2: the rollout matrix rows that were touched were actually executed
   EVIDENCE: pending — the union of `Migration / חוזה DB` and `Frontend` rows requires backup, dry-run + ledger,

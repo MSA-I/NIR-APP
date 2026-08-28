@@ -491,11 +491,12 @@ select pg_temp.p46_assert(
 
 select pg_temp.p46_assert(
   (select invoice_number='P46-ANCHOR' and invoice_date=:'p46_invoice_date'::date
-        and amount_before_vat=100 and vat_amount=18 and total_amount=118
+        and amount_before_vat=100 and vat_amount=18 and total_amount=118 and currency='ILS'
    from public.invoices
    where id=(select anchor_invoice_id from public.consolidated_invoice_cases
-             where org_id='13500000-0000-4000-8000-000000000001')),
-  'page 2 overrode authoritative header fields from primary page 1');
+             where org_id='13500000-0000-4000-8000-000000000001'))
+  and :'p46_applied'::jsonb->>'currency'='ILS',
+  'page 2 overrode authoritative header fields or the anchor lost its evidence currency');
 
 select pg_temp.p46_assert(
   (select count(*)=1 and array_agg(line.line_number order by line.line_number)=array[1]

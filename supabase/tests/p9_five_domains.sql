@@ -1075,14 +1075,14 @@ savepoint p9_search_gate_mutation;
 create or replace function global_search(q text, per_type int default 5)
 returns table (
   entity text, id uuid, title text, subtitle text,
-  status text, amount numeric(12,2), occurred_at date, rank int
+  status text, amount numeric, currency text, occurred_at date, rank int
 )
 language plpgsql stable set search_path = public as $$
 begin
   -- The defect this wave fixed: results chosen without consulting the caller's role.
   return query
   select 'supplier'::text, s.id, s.name, null::text, s.status::text,
-         null::numeric(12,2), null::date, 1
+         null::numeric, null::text, null::date, 1
   from suppliers s
   where s.org_id = auth_org() and s.name ilike '%' || q || '%';
 end $$;
