@@ -1,3 +1,4 @@
+import type { TKey } from '../lib/i18n/t';
 import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Camera, FileSearch, RefreshCw, Upload } from 'lucide-react';
@@ -81,11 +82,11 @@ type AttemptFilter = 'all' | 'attention' | 'processing' | 'completed';
 
 type RecoveryTarget = Pick<DocumentControlAttempt, 'job_id' | 'document_id' | 'file_name'>;
 
-const PRICE_ACTION_LABEL: Record<string, string> = {
-  apply_existing_price: 'בדיקת עדכון מחיר למוצר קיים',
-  create_product: 'בדיקת מוצר חדש',
-  review: 'נדרשת החלטה',
-  rejected_by_policy: 'בדיקת חריגה ממדיניות',
+const PRICE_ACTION_KEYS: Record<string, TKey> = {
+  apply_existing_price: 'documentOps.priceActionApplyExisting',
+  create_product: 'documentOps.priceActionCreateProduct',
+  review: 'documentOps.priceActionReview',
+  rejected_by_policy: 'documentOps.priceActionRejectedByPolicy',
 };
 
 function attemptFilterKey(attempt: DocumentControlAttempt): Exclude<AttemptFilter, 'all'> {
@@ -99,15 +100,15 @@ function isActiveAttempt(attempt: DocumentControlAttempt) {
   return ['queued', 'leased', 'extracted', 'interpreting'].includes(attempt.status);
 }
 
-function fmtDuration(ms: number | null) {
+function fmtDuration(ms: number | null, t: (key: TKey, vars?: Record<string, string | number>) => string) {
   if (ms === null) return '—';
-  if (ms < 1000) return `${fmtNum(ms)} מ״ש`;
-  if (ms < 60_000) return `${fmtNum(ms / 1000)} שנ׳`;
-  return `${fmtNum(ms / 60_000)} דק׳`;
+  if (ms < 1000) return t('documentOps.durationMs', { value: fmtNum(ms) });
+  if (ms < 60_000) return t('documentOps.durationSeconds', { value: fmtNum(ms / 1000) });
+  return t('documentOps.durationMinutes', { value: fmtNum(ms / 60_000) });
 }
 
 export default function DocumentOperations() {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const { organizationAccess, profile } = useAuth();
   const canWrite = organizationAccess?.canWrite ?? true;
   const canRecoverStuck = canWrite && profile?.role === 'owner';
@@ -146,7 +147,7 @@ export default function DocumentOperations() {
       id: snapshot.job.id,
       job_id: snapshot.job.id,
       document_id: snapshot.job.document_id,
-      file_name: attemptNames.get(snapshot.job.document_id) ?? 'מסמך ללא שם זמין',
+      file_name: attemptNames.get(snapshot.job.document_id) ?? t('documentOps.get'),
       status: snapshot.job.status,
       attempt_count: snapshot.job.attempt_count,
       created_at: snapshot.job.created_at,
@@ -189,7 +190,7 @@ export default function DocumentOperations() {
         p_document_id: reprocessTarget.document_id,
         p_reason: reason,
       }));
-      toast('המסמך הוחזר לתור העיבוד.');
+      toast(t('documentOps.toast'));
       setReprocessTarget(null);
       window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
       await Promise.all([operations.refetch(), attempts.refetch()]);
@@ -214,12 +215,12 @@ export default function DocumentOperations() {
       if (response.error) throw new Error(await recoveryInvokeErrorMessage(response) ?? response.error.message);
       const result = response.data as { outcome?: string; job_id?: string; idempotent?: boolean } | null;
       const message = result?.idempotent
-        ? 'השחזור כבר בוצע קודם; מצב המסמך עודכן.'
+        ? t('documentOps.text')
         : result?.outcome === 'requeued'
-          ? 'נפתח ניסיון עיבוד חדש.'
+          ? t('documentOps.text_2')
           : result?.outcome === 'interpretation_recovered'
-            ? 'נמצאה תוצאת פענוח קיימת והמסמך הועבר להמשך טיפול.'
-            : 'העיבוד שוחזר וממשיך מהשלב הבטוח האחרון.';
+            ? t('documentOps.text_3')
+            : t('documentOps.text_4');
       toast(message);
       setRecoveryTarget(null);
       window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
@@ -233,39 +234,39 @@ export default function DocumentOperations() {
 
   const attemptColumns: Column<DocumentControlAttempt>[] = [
     {
-      key: 'document', header: 'מסמך', priority: 1, sortValue: (row) => row.file_name,
+      key: 'document', header: t('documentOps.text_5'), priority: 1, sortValue: (row) => row.file_name,
       render: (row) => <span className="font-medium text-ink">{row.file_name}</span>,
     },
     {
-      key: 'status', header: 'מצב', priority: 1,
+      key: 'status', header: t('documentOps.text_6'), priority: 1,
       sortValue: (row) => attemptUiStatus(row).priority,
       render: (row) => <DocumentStatusBadge status={attemptUiStatus(row)} />,
     },
     {
-      key: 'updated', header: 'עדכון אחרון', priority: 2, sortValue: (row) => row.updated_at,
+      key: 'updated', header: t('documentOps.text_7'), priority: 2, sortValue: (row) => row.updated_at,
       render: (row) => <span className="num">{fmtDateTime(row.updated_at)}</span>,
     },
     {
-      key: 'attempts', header: 'ניסיונות', priority: 2, className: 'num', sortValue: (row) => row.attempt_count,
+      key: 'attempts', header: t('documentOps.text_8'), priority: 2, className: 'num', sortValue: (row) => row.attempt_count,
       render: (row) => <span className="num">{fmtNum(row.attempt_count)}</span>,
     },
   ];
 
   const priceReviewColumns: Column<PriceReviewRow>[] = [
     {
-      key: 'document', header: 'מחירון', priority: 1, sortValue: (row) => row.file_name,
-      render: (row) => <span><strong className="block text-ink">{row.file_name}</strong><span className="text-xs text-ink-muted">{row.supplier_name ?? 'ספק לא זוהה'}</span></span>,
+      key: 'document', header: t('documentOps.text_9'), priority: 1, sortValue: (row) => row.file_name,
+      render: (row) => <span><strong className="block text-ink">{row.file_name}</strong><span className="text-xs text-ink-muted">{row.supplier_name ?? t('documentOps.text_10')}</span></span>,
     },
     {
-      key: 'decision', header: 'מה צריך לבדוק', priority: 1,
-      render: (row) => <span>{row.is_empty_run ? 'המסמך לא החזיר שורות מוצר' : PRICE_ACTION_LABEL[row.predicted_action] ?? 'נדרשת החלטה'}</span>,
+      key: 'decision', header: t('documentOps.text_11'), priority: 1,
+      render: (row) => <span>{row.is_empty_run ? t('documentOps.text_12') : (row.predicted_action in PRICE_ACTION_KEYS ? t(PRICE_ACTION_KEYS[row.predicted_action]) : t('documentOps.text_13'))}</span>,
     },
     {
-      key: 'product', header: 'מוצר', priority: 2,
-      render: (row) => <span><bdi>{row.matched_product_name ?? row.product_name ?? 'לא זוהה מוצר'}</bdi>{row.sku && <span className="block text-xs text-ink-muted num">{row.sku}</span>}</span>,
+      key: 'product', header: t('documentOps.text_14'), priority: 2,
+      render: (row) => <span><bdi>{row.matched_product_name ?? row.product_name ?? t('documentOps.text_15')}</bdi>{row.sku && <span className="block text-xs text-ink-muted num">{row.sku}</span>}</span>,
     },
     {
-      key: 'price', header: 'מחיר נוכחי ← מוצע', priority: 2, className: 'num',
+      key: 'price', header: t('documentOps.text_16'), priority: 2, className: 'num',
       render: (row) => <span className="num">{fmtMoneyRounded(row.current_unit_price)} ← {fmtMoneyRounded(row.proposed_unit_price)}</span>,
     },
   ];
@@ -283,19 +284,19 @@ export default function DocumentOperations() {
           says it. The rule under the header is kept through `className`. */}
       <PageHeader
         className="border-b border-line pb-5"
-        title="בקרת מסמכים"
+        title={t('documentOps.title')}
         actions={
           <>
-            <select className="input w-auto!" aria-label="טווח בקרת מסמכים" value={windowDays}
+            <select className="input w-auto!" aria-label={t('documentOps.aria_label')} value={windowDays}
               onChange={(event) => setWindowDays(Number(event.target.value))}>
-              <option value={7}>7 ימים</option>
-              <option value={30}>30 ימים</option>
-              <option value={90}>90 ימים</option>
+              <option value={7}>{t('documentOps.text_17')}</option>
+              <option value={30}>{t('documentOps.text_18')}</option>
+              <option value={90}>{t('documentOps.text_19')}</option>
             </select>
             <button type="button" className="btn-secondary" onClick={() => void refreshAll()}
               disabled={operations.fetching || attempts.fetching || priceReviews.fetching}
-              aria-label="רענון בקרת מסמכים">
-              <RefreshCw size={ICON.sm} aria-hidden="true" /> רענון
+              aria-label={t('documentOps.aria_label_2')}>
+              <RefreshCw size={ICON.sm} aria-hidden="true" /> {t('documentOps.refresh')}
             </button>
           </>
         }
@@ -303,15 +304,15 @@ export default function DocumentOperations() {
 
       <section aria-labelledby="document-control-overview-title" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
-          <h2 id="document-control-overview-title" className="section-title">מה קורה עכשיו</h2>
-          {metrics && <p className="text-xs text-ink-muted">משך עיבוד ממוצע: <span className="num">{fmtDuration(metrics.average_processing_duration_ms)}</span></p>}
+          <h2 id="document-control-overview-title" className="section-title">{t('documentOps.text_20')}</h2>
+          {metrics && <p className="text-xs text-ink-muted">{t('documentOps.fmtDuration')} <span className="num">{fmtDuration(metrics.average_processing_duration_ms, t)}</span></p>}
         </div>
         {operations.loading && !metrics ? <SkeletonCards count={4} cols={4} /> : metrics && (
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <KpiCard title="דורש טיפול" value={fmtNum(attentionCount)} sub="ממתין להחלטה שלך" tone={attentionCount ? 'await' : 'idle'} />
-            <KpiCard title="בעיבוד" value={fmtNum(processingCount)} sub="בתור או בעבודה עכשיו" tone={processingCount ? 'info' : 'idle'} />
-            <KpiCard title="תקלות" value={fmtNum(failureCount)} sub="נעצר או נכשל" tone={failureCount ? 'alert' : 'idle'} />
-            <KpiCard title="הושלם" value={fmtNum(metrics.documents_completed)} sub={`ב־${windowDays} הימים האחרונים`} tone="done" />
+            <KpiCard title={t('documentOps.title_2')} value={fmtNum(attentionCount)} sub={t('documentOps.sub')} tone={attentionCount ? 'await' : 'idle'} />
+            <KpiCard title={t('documentOps.title_3')} value={fmtNum(processingCount)} sub={t('documentOps.sub_2')} tone={processingCount ? 'info' : 'idle'} />
+            <KpiCard title={t('documentOps.title_4')} value={fmtNum(failureCount)} sub={t('documentOps.sub_3')} tone={failureCount ? 'alert' : 'idle'} />
+            <KpiCard title={t('documentOps.kpiCompleted')} value={fmtNum(metrics.documents_completed)} sub={t('documentOps.lastNDays', { days: windowDays })} tone="done" />
           </div>
         )}
         {operations.error && <Note tone="alert" role="alert">{operations.error}</Note>}
@@ -319,18 +320,18 @@ export default function DocumentOperations() {
 
       <Card className="space-y-4" as="section" aria-labelledby="consolidated-invoices-title">
         <div>
-          <h2 id="consolidated-invoices-title" className="section-title">חשבוניות מרכזות</h2>
-          <p className="mt-1 text-sm text-ink-soft">חשבונית אחת של ספק לחודש משמשת עוגן לכל חשבוניות הביניים ותעודות המשלוח של אותו ספק.</p>
+          <h2 id="consolidated-invoices-title" className="section-title">{t('documentOps.text_21')}</h2>
+          <p className="mt-1 text-sm text-ink-soft">{t('documentOps.text_22')}</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Link className="btn-primary w-full sm:w-auto" to="/documents/consolidated-invoices">
-            <Camera size={ICON.sm} aria-hidden="true" /> צילום מסמכים
+            <Camera size={ICON.sm} aria-hidden="true" /> {t('documentOps.photographDocuments')}
           </Link>
           <Link className="btn-secondary w-full sm:w-auto" to="/documents/consolidated-invoices">
-            <Upload size={ICON.sm} aria-hidden="true" /> העלאת מסמכים
+            <Upload size={ICON.sm} aria-hidden="true" /> {t('documentOps.uploadDocuments')}
           </Link>
           <Link className="btn-secondary w-full sm:w-auto" to="/documents/consolidated-invoices">
-            <FileSearch size={ICON.sm} aria-hidden="true" /> צפייה בהתאמות
+            <FileSearch size={ICON.sm} aria-hidden="true" /> {t('documentOps.viewMatches')}
           </Link>
         </div>
       </Card>
@@ -345,7 +346,7 @@ export default function DocumentOperations() {
           className="note-alert flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p id="document-control-attention-title" className="flex items-center gap-1.5 text-xs font-semibold">
-              <AlertTriangle size={ICON.xs} aria-hidden="true" /> הפריט הדחוף ביותר
+              <AlertTriangle size={ICON.xs} aria-hidden="true" /> {t('documentOps.mostUrgentItem')}
             </p>
             <h2 className="mt-1 truncate text-lg font-semibold text-ink">{currentIssue.file_name}</h2>
             <p className="mt-1">{attemptUiStatus(currentIssue).description}</p>
@@ -353,12 +354,12 @@ export default function DocumentOperations() {
           <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row">
             {canRecoverStuck && attemptUiStatus(currentIssue).state === 'stuck' && (
               <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => setRecoveryTarget(currentIssue)}>
-                <RefreshCw size={ICON.sm} aria-hidden="true" /> שחזור עיבוד
+                <RefreshCw size={ICON.sm} aria-hidden="true" /> {t('documentOps.recoverProcessing')}
               </button>
             )}
             <button type="button" className="btn-secondary w-full sm:w-auto"
               onClick={() => navigate(`/documents/${encodeURIComponent(currentIssue.document_id)}/review`)}>
-              <FileSearch size={ICON.sm} aria-hidden="true" /> פתיחת המסמך
+              <FileSearch size={ICON.sm} aria-hidden="true" /> {t('documentOps.openDocument')}
             </button>
           </div>
         </section>
@@ -366,55 +367,55 @@ export default function DocumentOperations() {
 
       <section aria-labelledby="document-control-recent-title" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
-          <h2 id="document-control-recent-title" className="section-title">מסמכים אחרונים</h2>
-          {attempts.fetching && attempts.data && <span className="text-xs text-ink-muted" role="status">מעדכן מסמכים…</span>}
+          <h2 id="document-control-recent-title" className="section-title">{t('documentOps.text_23')}</h2>
+          {attempts.fetching && attempts.data && <span className="text-xs text-ink-muted" role="status">{t('documentOps.text_24')}</span>}
         </div>
         {attempts.loading && !attempts.data ? <SkeletonTable title={false} cols={4} /> : (
           <DataTable rows={filteredAttempts} columns={attemptColumns} searchable pageSize={20}
-            tableLabel="מסמכים אחרונים"
-            searchLabel="חיפוש מסמך בבקרת מסמכים"
+            tableLabel={t('documentOps.tableLabel')}
+            searchLabel={t('documentOps.searchLabel')}
             searchFn={(row, query) => row.file_name.toLocaleLowerCase('he').includes(query)}
             error={attempts.error}
             activeFilters={filter === 'all' ? 0 : 1}
             onClearFilters={() => setFilter('all')}
-            emptyTitle="אין מסמכים במצב שנבחר"
-            emptySubtitle={filter === 'all' ? 'מסמכים חדשים יופיעו כאן לאחר העלאה.' : 'אפשר לנקות את הסינון ולראות מצבים אחרים.'}
+            emptyTitle={t('documentOps.emptyTitle')}
+            emptySubtitle={filter === 'all' ? t('documentOps.text_25') : t('documentOps.text_26')}
             toolbar={
-              <select className="input w-auto!" aria-label="סינון מסמכים לפי מצב" value={filter}
+              <select className="input w-auto!" aria-label={t('documentOps.aria_label_3')} value={filter}
                 onChange={(event) => setFilter(event.target.value as AttemptFilter)}>
-                <option value="all">כל המצבים</option>
-                <option value="attention">דורש טיפול</option>
-                <option value="processing">בעיבוד</option>
-                <option value="completed">הושלם</option>
+                <option value="all">{t('documentOps.text_27')}</option>
+                <option value="attention">{t('documentOps.text_28')}</option>
+                <option value="processing">{t('documentOps.text_29')}</option>
+                <option value="completed">{t('documentOps.text_30')}</option>
               </select>
             }
             onRowClick={(row) => navigate(`/documents/${encodeURIComponent(row.document_id)}/review`)}
-            rowLabel={(row) => `מסמך ${row.file_name}`}
+            rowLabel={(row) => t('documentOps.documentRowLabel', { file: row.file_name })}
             // One icon per meaning across the document screens: `FileSearch` opens the review
             // workspace, `RefreshCw` sends a document through processing again. `Eye` is reserved
             // for viewing the ORIGINAL file (DocumentsInbox: „צפייה במקור"), and `RotateCcw` for
             // undoing an automatic decision — neither of which is what these three do.
             rowActions={(row) => [
-              { key: 'review', label: 'פתיחת בדיקה', icon: FileSearch, onSelect: () => navigate(`/documents/${encodeURIComponent(row.document_id)}/review`) },
-              { key: 'recover', label: 'שחזור עיבוד', icon: RefreshCw, hidden: !canRecoverStuck || attemptUiStatus(row).state !== 'stuck', onSelect: () => setRecoveryTarget(row) },
-              { key: 'reprocess', label: row.status === 'failed' ? 'ניסיון נוסף' : 'עיבוד מחדש', icon: RefreshCw, hidden: !canWrite || isActiveAttempt(row), onSelect: () => setReprocessTarget(row) },
+              { key: 'review', label: t('documentOps.openReview'), icon: FileSearch, onSelect: () => navigate(`/documents/${encodeURIComponent(row.document_id)}/review`) },
+              { key: 'recover', label: t('documentOps.attemptUiStatus'), icon: RefreshCw, hidden: !canRecoverStuck || attemptUiStatus(row).state !== 'stuck', onSelect: () => setRecoveryTarget(row) },
+              { key: 'reprocess', label: row.status === 'failed' ? t('documentOps.isActiveAttempt') : t('documentOps.isActiveAttempt_2'), icon: RefreshCw, hidden: !canWrite || isActiveAttempt(row), onSelect: () => setReprocessTarget(row) },
             ]}
           />
         )}
       </section>
 
       <section aria-labelledby="document-control-price-title" className="space-y-3">
-        <h2 id="document-control-price-title" className="section-title">מחירונים שממתינים לבדיקה</h2>
+        <h2 id="document-control-price-title" className="section-title">{t('documentOps.text_31')}</h2>
         {priceReviews.loading && !priceReviews.data ? <SkeletonTable title={false} cols={4} /> : (
           <DataTable rows={priceReviews.data ?? []} columns={priceReviewColumns} pageSize={10}
-            tableLabel="מחירונים שממתינים לבדיקה"
+            tableLabel={t('documentOps.tableLabel_2')}
             error={priceReviews.error}
-            emptyTitle="אין כרגע מחירונים שממתינים לבדיקה"
-            emptySubtitle="מחירון חדש שידרוש החלטה יופיע כאן."
+            emptyTitle={t('documentOps.emptyTitle_2')}
+            emptySubtitle={t('documentOps.emptySubtitle')}
             onRowClick={(row) => navigate(`/documents/${encodeURIComponent(row.document_id)}/review`)}
-            rowLabel={(row) => `בדיקת מחירון ${row.file_name}`}
+            rowLabel={(row) => t('documentOps.priceReviewRowLabel', { file: row.file_name })}
             rowActions={(row) => [{
-              key: 'review-price-list', label: 'פתיחת המסמך', icon: FileSearch,
+              key: 'review-price-list', label: t('documentOps.text_32'), icon: FileSearch,
               onSelect: () => navigate(`/documents/${encodeURIComponent(row.document_id)}/review`),
             }]}
           />
@@ -423,12 +424,12 @@ export default function DocumentOperations() {
 
       <ConfirmDialog open={canWrite && reprocessTarget !== null} onClose={() => setReprocessTarget(null)}
         onConfirm={(reason) => void reprocess(reason)} requireReason busy={reprocessing}
-        title="עיבוד המסמך מחדש" message="המסמך יחזור לתור העיבוד. ההיסטוריה הקודמת תישמר."
-        confirmLabel="עיבוד מחדש" />
+        title={t('documentOps.title_5')} message={t('documentOps.message')}
+        confirmLabel={t('documentOps.confirmLabel')} />
       <ConfirmDialog open={canRecoverStuck && recoveryTarget !== null} onClose={() => setRecoveryTarget(null)}
         onConfirm={(reason) => void recoverStuck(reason)} requireReason busy={recovering}
-        title="שחזור עיבוד תקוע" message="השחזור ממשיך מהשלב הבטוח האחרון ואינו מעלה את הקובץ מחדש."
-        confirmLabel="שחזור עיבוד" />
+        title={t('documentOps.title_6')} message={t('documentOps.message_2')}
+        confirmLabel={t('documentOps.confirmLabel_2')} />
     </div>
   );
 }

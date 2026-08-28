@@ -100,6 +100,15 @@ Plan: `docs/PLAN-english-language-20260827.md`.
 
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
+- [ ] P2-G9: the consent documents read in the reader's language — OWNER DECISION REQUIRED
+  EVIDENCE: not started, and deliberately not started by an agent. `src/pages/Legal.tsx` (79 Hebrew lines) is the terms of service and the privacy policy. It is not screen copy: **it is a document people agree to.** `AcceptInvite.tsx` sends `TERMS_VERSION` into `acceptInvitation`, `0089` refuses to create a profile without it and stamps it into `audit_logs`, and the file's own header states the rule — changing the text in a way that matters legally must bump the version, because "an unchanged version over changed terms would make every stored consent a lie".
+
+  **The question extraction cannot answer:** an English reader consents to the English text. When the two texts differ — and a translated legal clause differs from its original more often than a button label does — which one did that person agree to? That is a legal decision about a document drafted against תיקון 13 לחוק הגנת הפרטיות, whose own header already records that it is not legal advice and that a lawyer's review is the owner's call.
+
+  **Three readings, for whoever decides.** (a) Serve the Hebrew document to everyone and say so plainly on the English screen — no ambiguity, and an English reader agrees to a text they may not read. (b) Translate, bump `TERMS_VERSION`, and state in both that the Hebrew governs — the ordinary practice, and the one that keeps a single authority. (c) Two binding versions, one per language — the most respectful and by far the most expensive, because every future edit becomes two legal edits.
+
+  Until it is decided, the file stays Hebrew and pinned, with the reason on its baseline row. **Nothing about this blocks the rest of the extraction**; it is the one surface where being fast is the wrong instinct.
+
 - [ ] P2-G8: the assistant answers a product question in the language it was asked in
   CHECK: node scripts/gate-i18n.mjs help-registry-paired
   EXPECT: GATE_I18N_HELP_PAIRED_OK

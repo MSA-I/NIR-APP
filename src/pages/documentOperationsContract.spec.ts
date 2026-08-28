@@ -127,11 +127,26 @@ describe('document control capability and UX contract', () => {
   });
 
   it('presents the quiet summary-to-tasks-to-details hierarchy with 44px actions', () => {
-    for (const label of ['דורש טיפול', 'בעיבוד', 'תקלות', 'הושלם']) {
-      expect(source).toContain(`title="${label}"`);
+    // Both halves of this claim split when the copy moved. The screen names four tiles by key,
+    // and each key still carries the word — checking only the keys would pass a tile relabelled
+    // in the dictionary, and checking only the words would pass a screen that stopped rendering
+    // them.
+    for (const [key, label] of [
+      ['title_2', 'דורש טיפול'],
+      ['title_3', 'בעיבוד'],
+      ['title_4', 'תקלות'],
+      ['kpiCompleted', 'הושלם'],
+    ] as const) {
+      expect(source).toContain(`title={t('documentOps.${key}')}`);
+      expect(he.documentOps[key]).toBe(label);
     }
-    expect(source.indexOf('מה קורה עכשיו')).toBeLessThan(source.indexOf('הפריט הדחוף ביותר'));
-    expect(source.indexOf('הפריט הדחוף ביותר')).toBeLessThan(source.indexOf('מסמכים אחרונים'));
+    // The ORDER claim is about where things sit on the screen, so it follows the keys — that is
+    // what the source now holds in the same three places.
+    expect(source.indexOf("t('documentOps.text_20')")).toBeLessThan(source.indexOf("t('documentOps.mostUrgentItem')"));
+    expect(source.indexOf("t('documentOps.mostUrgentItem')")).toBeLessThan(source.indexOf("t('documentOps.text_23')"));
+    expect(he.documentOps.text_20).toBe('מה קורה עכשיו');
+    expect(he.documentOps.mostUrgentItem).toBe('הפריט הדחוף ביותר');
+    expect(he.documentOps.text_23).toBe('מסמכים אחרונים');
     expect(source).toContain('grid grid-cols-2 gap-3 lg:grid-cols-4');
     // The 44px floor used to be pinned here as a literal `min-h-11` repeated on every control.
     // It moved to where it belongs: `@utility btn` in index.css sets `min-h-11`, and every

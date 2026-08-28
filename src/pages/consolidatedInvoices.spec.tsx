@@ -64,9 +64,14 @@ describe('consolidated supplier invoice route and intake contract', () => {
 
   it('adds the separate document-control section without changing the bottom action catalogue', () => {
     expect(operations).toContain('id="consolidated-invoices-title"');
-    expect(operations).toContain('צילום מסמכים');
-    expect(operations).toContain('העלאת מסמכים');
-    expect(operations).toContain('צפייה בהתאמות');
+    for (const [key, label] of [
+      ['photographDocuments', 'צילום מסמכים'],
+      ['uploadDocuments', 'העלאת מסמכים'],
+      ['viewMatches', 'צפייה בהתאמות'],
+    ] as const) {
+      expect(operations).toContain(`t('documentOps.${key}')`);
+      expect(he.documentOps[key]).toBe(label);
+    }
     expect(operations).not.toContain('intent=');
   });
 });
