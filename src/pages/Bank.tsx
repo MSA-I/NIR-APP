@@ -160,7 +160,7 @@ export default function Bank() {
   const columns: ServerColumn<TxRow>[] = [
     { key: 'date', header: 'תאריך', render: (r) => fmtDate(r.tx_date) },
     { key: 'desc', header: 'תיאור', render: (r) => <span className="max-w-72 truncate inline-block">{r.description}</span> },
-    { key: 'amount', header: 'סכום', className: 'num', render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
+    { key: 'amount', header: 'סכום', className: 'num', render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount, r.currency)}</span> },
     { key: 'ref', header: 'אסמכתא', className: 'num', render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
     { key: 'supplier', header: 'ספק מזוהה', render: (r) => r.supplier?.name ?? <span className="text-ink-muted">לא זוהה</span> },
     { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={BANK_TX_STATUS[r.status]} /> },
@@ -204,7 +204,7 @@ export default function Bank() {
         onClearFilters={() => patchParams({ id: '', status: '', month: '', q: '', page: '' })}
         columnPicker="bank"
         searchLabel="חיפוש בתנועות בנק"
-        rowLabel={(r) => `תנועת בנק מיום ${fmtDate(r.tx_date)} בסכום ${fmtMoneyExact(r.amount)} עבור ${r.description}`}
+        rowLabel={(r) => `תנועת בנק מיום ${fmtDate(r.tx_date)} בסכום ${fmtMoneyExact(r.amount, r.currency)} עבור ${r.description}`}
         onRowClick={canOperateBank ? (r) => setSelected(r) : undefined}
         toolbar={
           <>
@@ -258,7 +258,7 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
         <SubPanel className="border border-line text-sm">
           <div className="flex flex-wrap justify-between gap-2">
             <span>{fmtDate(tx.tx_date)} · {tx.description}</span>
-            <span className="font-semibold num">{fmtMoneyExact(tx.amount)}</span>
+            <span className="font-semibold num">{fmtMoneyExact(tx.amount, tx.currency)}</span>
           </div>
         </SubPanel>
         <Note tone="await">הסרת ההתאמה מחזירה את תנועת הבנק לטיפול ואת דרישת התשלום לסטטוס ״בוצעה״. התשלום והקצאותיו אינם מתבטלים. התאמה ישירה לחשבונית דורשת תיקון כספי נפרד.</Note>
@@ -441,8 +441,8 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
     const toDate = addCalendarDays(tx.tx_date, days);
 
     // candidate payments: recorded transfers awaiting bank match
-    const payments = await fetchAll<{ id: string; number: number; amount: number; paid_date: string; reference: string | null; payment_request_id: string | null; allocations: { invoice_id: string | null }[] }>((from, to) => supabase.from('payments')
-      .select('id, number, amount, paid_date, reference, payment_request_id, allocations:payment_allocations(invoice_id)')
+    const payments = await fetchAll<{ id: string; number: number; amount: number; currency: string; settlement_amount: number | null; settlement_currency: string | null; paid_date: string; reference: string | null; payment_request_id: string | null; allocations: { invoice_id: string | null }[] }>((from, to) => supabase.from('payments')
+      .select('id, number, amount, currency, settlement_amount, settlement_currency, paid_date, reference, payment_request_id, allocations:payment_allocations(invoice_id)')
       .eq('supplier_id', supplierId).order('paid_date').order('id').range(from, to));
     const matchedAllocations = await fetchAll<{ id: string; payment_id: string | null }>((from, to) => supabase.from('bank_allocations')
       .select('id, payment_id').eq('confirmed', true).order('id').range(from, to));
@@ -452,7 +452,17 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
     const candidates: Candidate[] = [];
     for (const p of payments) {
       if (matchedPaymentIds.has(p.id)) continue;
-      const amountOk = Math.abs(p.amount - tx.amount) <= tolerance;
+      /* THE FIGURE THE STATEMENT LINE IS COMPARED AGAINST IS THE ONE IN THE LINE'S OWN CURRENCY
+         (0217, #286). A payment made in the debt's currency is compared on `amount`; a payment
+         that settled from an account in another currency recorded what actually left that account,
+         and THAT is what the bank line shows. A payment with neither figure in the transaction's
+         currency is not a candidate — comparing 3,100 against 11,500 is not a near miss, it is a
+         comparison of two different things. */
+      const paymentAmountInLineCurrency = p.currency === tx.currency ? p.amount
+        : p.settlement_currency === tx.currency ? p.settlement_amount
+        : null;
+      if (paymentAmountInLineCurrency == null) continue;
+      const amountOk = Math.abs(paymentAmountInLineCurrency - tx.amount) <= tolerance;
       const dateOk = p.paid_date >= fromDate && p.paid_date <= toDate;
       const refOk = !!p.reference && !!tx.reference && p.reference === tx.reference;
       if (!amountOk && !refOk) continue;
@@ -463,27 +473,31 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
       candidates.push({
         kind: 'payment', id: p.id,
         label: `תשלום #${p.number} · ${fmtDate(p.paid_date)}${p.reference ? ` · אסמכתא ${p.reference}` : ''}`,
-        amount: p.amount, confidence: Math.min(0.99, confidence),
+        amount: paymentAmountInLineCurrency, confidence: Math.min(0.99, confidence),
         invoiceIds: p.allocations.map((a) => a.invoice_id).filter(Boolean) as string[],
       });
     }
 
     // candidate open invoices (direct match when no payment was recorded)
-    const invoices = await fetchAll<{ id: string; invoice_number: string; invoice_date: string; total_amount: number }>((from, to) => supabase.from('invoices')
-      .select('id, invoice_number, invoice_date, total_amount')
+    const invoices = await fetchAll<{ id: string; invoice_number: string; invoice_date: string; total_amount: number; currency: string }>((from, to) => supabase.from('invoices')
+      .select('id, invoice_number, invoice_date, total_amount, currency')
       .eq('supplier_id', supplierId).eq('financial_role', 'payable').neq('payment_status', 'paid').is('deleted_at', null)
+      // A statement line settles a debt of the SAME KIND of money. A dollar invoice is not
+      // offered against a shekel line — that route needs a payment carrying both figures (#286),
+      // which is the candidate loop above.
+      .eq('currency', tx.currency)
       .order('invoice_date').order('id').range(from, to));
     const ids = invoices.map((i) => i.id);
-    const bals = ids.length ? await fetchInChunks(ids, (chunk) => fetchAll<{ invoice_id: string; balance: number }>((from, to) => supabase.from('invoice_balances')
-      .select('invoice_id, balance').in('invoice_id', chunk).order('invoice_id').range(from, to))) : [];
-    const balMap = new Map(bals.map((b) => [b.invoice_id, b.balance]));
+    const bals = ids.length ? await fetchInChunks(ids, (chunk) => fetchAll<{ invoice_id: string; balance_in_currency: number }>((from, to) => supabase.from('invoice_balances_by_currency')
+      .select('invoice_id, balance_in_currency').in('invoice_id', chunk).order('invoice_id').range(from, to))) : [];
+    const balMap = new Map(bals.map((b) => [b.invoice_id, b.balance_in_currency]));
     const openInvoices = invoices.map((i) => ({ ...i, balance: balMap.get(i.id) ?? i.total_amount })).filter((i) => i.balance > 0);
 
     for (const inv of openInvoices) {
       if (Math.abs(inv.balance - tx.amount) <= tolerance) {
         candidates.push({
           kind: 'invoice', id: inv.id,
-          label: `חשבונית ${inv.invoice_number} · ${fmtDate(inv.invoice_date)} (יתרה ${fmtMoneyExact(inv.balance)})`,
+          label: `חשבונית ${inv.invoice_number} · ${fmtDate(inv.invoice_date)} (יתרה ${fmtMoneyExact(inv.balance, inv.currency)})`,
           amount: inv.balance, confidence: 0.7, invoiceIds: [inv.id],
         });
       }
@@ -605,7 +619,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
 
   const chosenSum = Object.values(chosenInvoices).reduce((s, v) => s + v, 0);
   const supplierName = data?.suppliers.find((supplier) => supplier.id === supplierId)?.name ?? 'הספק הנבחר';
-  const transactionLabel = `תנועת הבנק מיום ${fmtDate(tx.tx_date)} בסכום ${fmtMoneyExact(tx.amount)}`;
+  const transactionLabel = `תנועת הבנק מיום ${fmtDate(tx.tx_date)} בסכום ${fmtMoneyExact(tx.amount, tx.currency)}`;
 
   return (
     <Modal open onClose={onClose} title="התאמת תנועת בנק" wide busy={busy} statusMessage={busy ? 'שומר את התאמת הבנק' : undefined}>
@@ -613,7 +627,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
         <SubPanel className="border border-line text-sm">
           <div className="flex flex-wrap justify-between gap-2">
             <span>{fmtDate(tx.tx_date)} · {tx.description}</span>
-            <span className="font-semibold num">{fmtMoneyExact(tx.amount)}</span>
+            <span className="font-semibold num">{fmtMoneyExact(tx.amount, tx.currency)}</span>
           </div>
           {tx.reference && <div className="text-xs text-ink-muted mt-1">אסמכתא: <span dir="ltr">{tx.reference}</span></div>}
         </SubPanel>
@@ -672,7 +686,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                             })} />
                           <span className="min-w-0 break-words">חשבונית <b dir="ltr" className="num">{inv.invoice_number}</b> · {fmtDate(inv.invoice_date)}</span>
                         </label>
-                        <span className="text-xs text-ink-muted">יתרה <span className="num">{fmtMoneyExact(inv.balance)}</span></span>
+                        <span className="text-xs text-ink-muted">יתרה <span className="num">{fmtMoneyExact(inv.balance, inv.currency)}</span></span>
                         {checked && (
                           <input type="number" step="0.01" className="input w-28! num" value={chosenInvoices[inv.id]}
                             aria-label={`סכום ההקצאה לחשבונית ${inv.invoice_number} של ${supplierName} עבור ${transactionLabel}`}
@@ -686,7 +700,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
               {chosenSum > 0 && (
                 <div className="flex items-center justify-between mt-2 text-sm">
                   <span className={Math.abs(chosenSum - tx.amount) > 1 ? 'text-await-fg' : 'text-done-fg'}>
-                    הוקצה {fmtMoneyExact(chosenSum)} מתוך {fmtMoneyExact(tx.amount)}
+                    הוקצה {fmtMoneyExact(chosenSum, tx.currency)} מתוך {fmtMoneyExact(tx.amount, tx.currency)}
                   </span>
                   <button className="btn-primary" disabled={busy} onClick={() => void confirmManual()}>אישור התאמה ידנית</button>
                 </div>
