@@ -266,6 +266,19 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   protected by `__reason`+ratchet, not listed as zero in `EXTRACTED`; `zero` still exits 1 on
   327/52, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `PriceLists.tsx` batch in this commit.** The pinned count is now 865
+  Hebrew line(s) across 85 files. The protected set is now 552 lines in 34 files: three parser
+  aliases continue to recognise Hebrew supplier-sheet headers regardless of reader locale, and
+  two fixed `p_reason` defaults continue to land in `audit_logs`. The real remainder is **313
+  lines in 51 files**. Import results now store `{ updated, created, unchanged }` facts and resolve
+  their sentence only while rendering; unresolved row numbers are translated directly without
+  wrapping translated copy in an `Error`; monthly submission labels use the active locale. The
+  stale-baseline negative control measured 14→5 on this file alone. Focused comparison, boundary
+  and reason suites passed 27/27; the full suite passed 1,744/1,744; `npx tsc --noEmit` and
+  `check:jsx-space` passed. Dictionary parity passed at 5,057 keys per locale and the 72 zero
+  surfaces remained locked. This file is protected by `__reason`+ratchet, not listed in
+  `EXTRACTED`; `zero` still exits 1 on 313/51, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

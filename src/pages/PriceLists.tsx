@@ -1,4 +1,5 @@
 import { useT } from '../lib/i18n/LocaleProvider';
+import { INTL_LOCALE, type Locale } from '../lib/i18n/locale';
 import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { reasonOr } from '../lib/reason';
@@ -10,7 +11,7 @@ import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, PageHeader, StatusBadge, Note, SkeletonTable, EmptyState, Card, ICON, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
-import { fmtDate, fmtMoneyExact, fmtMoneyRounded, formatUnit, productLabel, todayISO } from '../lib/format';
+import { bidiIsolate, fmtDate, fmtMoneyExact, fmtMoneyRounded, formatUnit, productLabel, todayISO } from '../lib/format';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { chartTheme } from '../lib/theme';
 import { PRODUCT_AVAILABILITY } from '../lib/status';
@@ -21,6 +22,7 @@ type Row = SupplierProduct & {
   product: { id: string; name: string; display_name: string | null; unit: string };
 };
 type ManagerSubmission = SupplierPriceSubmission & { supplier: Pick<Supplier, 'id' | 'name'> };
+type ImportReport = { updated: number; created: number; unchanged: number };
 
 const SUBMISSION_STATUS = {
   accepted: { key: 'submission_accepted', tone: 'done' },
@@ -28,7 +30,7 @@ const SUBMISSION_STATUS = {
   rejected: { key: 'submission_rejected', tone: 'alert' },
 } as const;
 
-const monthLabel = (value: string) => new Intl.DateTimeFormat('he-IL', {
+const monthLabel = (value: string, locale: Locale) => new Intl.DateTimeFormat(INTL_LOCALE[locale], {
   month: 'long', year: 'numeric', timeZone: 'UTC',
 }).format(new Date(`${value.slice(0, 7)}-01T00:00:00Z`));
 
@@ -155,7 +157,10 @@ export default function PriceLists() {
   return (
     <div className="space-y-4">
       <PageHeader title={t('priceLists.title')}
-        meta={`${data?.length ?? 0} מחירי ספקים · ${(data ?? []).filter((row) => row.previous_price != null && row.current_price > row.previous_price).length} התייקרויות`}
+        meta={t('priceListsTail.meta', {
+          priceCount: data?.length ?? 0,
+          increaseCount: (data ?? []).filter((row) => row.previous_price != null && row.current_price > row.previous_price).length,
+        })}
         actions={canWrite ? (
           <div className="flex flex-wrap gap-2">
             <button className="btn-secondary" onClick={() => setImportOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> {t('priceLists.setImportOpen')}</button>
@@ -169,22 +174,24 @@ export default function PriceLists() {
         )} />
 
       {comparison && (
-        <Card as="section" aria-label={`השוואת מחירים — ${productLabel(comparison.product)}`}>
+        <Card as="section" aria-label={t('priceListsTail.comparisonLabel', { product: productLabel(comparison.product) })}>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div className="text-sm text-ink-muted">
               <bdi className="text-base font-semibold text-ink">{productLabel(comparison.product)}</bdi>
-              {' '}· {formatUnit(comparison.product.unit, locale)} · <span className="num">{comparison.supplierCount}</span> ספקים
+              {' '}· {formatUnit(comparison.product.unit, locale)} · <span className="num">{comparison.supplierCount}</span>{' '}
+              {t('priceListsTail.suppliers')}
             </div>
-            {canWrite && <Link className="text-sm text-action underline" to={`/products?id=${comparison.product.id}`}>עריכת מוצר</Link>}
+            {canWrite && <Link className="text-sm text-action underline" to={`/products?id=${comparison.product.id}`}>{t('priceListsTail.editProduct')}</Link>}
           </div>
           <div className="mt-2 text-sm text-ink-body">
             {comparison.cheapest ? (
               <>
-                הזול ביותר: <bdi className="font-medium">{comparison.cheapest.supplier.name}</bdi>
+                {t('priceListsTail.cheapest')}{' '}<bdi className="font-medium">{comparison.cheapest.supplier.name}</bdi>
                 {' — '}<span className="num font-semibold">{fmtMoneyExact(comparison.cheapest.current_price)}</span>
                 {comparison.delta != null && comparison.delta > 0 && (
                   <> {t('priceLists.fmtMoneyExact_3')}<span className="num">{fmtMoneyExact(comparison.delta)}</span>
-                    {comparison.deltaPct != null ? ` (${comparison.deltaPct.toFixed(1)}%)` : ''} מהמחיר הבא</>
+                    {comparison.deltaPct != null ? ` (${comparison.deltaPct.toFixed(1)}%)` : ''}{' '}
+                    {t('priceListsTail.thanNextPrice')}</>
                 )}
                 {comparison.delta === 0 && <> {t('priceLists.text_6')}</>}
               </>
@@ -204,7 +211,7 @@ export default function PriceLists() {
           || r.supplier.name.toLowerCase().includes(q)
         )}
         searchLabel={t('priceLists.searchLabel')}
-        rowLabel={(r) => `${productLabel(r.product)} אצל ${r.supplier.name}`}
+        rowLabel={(r) => t('priceListsTail.rowLabel', { product: productLabel(r.product), supplier: r.supplier.name })}
         mobileTitle={(r) => <><bdi>{productLabel(r.product)}</bdi> · <bdi>{r.supplier.name}</bdi></>}
         mobileTrailing={(r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} />}
         rowActions={(r) => [
@@ -251,11 +258,11 @@ export default function PriceLists() {
                   {submissions.map((submission) => (
                     <div key={submission.id} className="py-3 first:pt-0 last:pb-0">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="font-medium text-ink">{submission.supplier.name} · {monthLabel(submission.target_month)} · גרסה <span className="num">{submission.revision}</span></div>
+                        <div className="font-medium text-ink"><bdi>{submission.supplier.name}</bdi> · {monthLabel(submission.target_month, locale)} · {t('priceListsTail.version')}{' '}<span className="num">{submission.revision}</span></div>
                         <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
                       </div>
                       <div className="mt-1 text-sm text-ink-muted break-words">
-                        {submission.file_name ?? t('priceLists.text_14')} · נקלטו <span className="num">{submission.accepted_count}</span> {t('priceLists.text_15')} <span className="num">{submission.unchanged_count}</span> {t('priceLists.text_16')} <span className="num">{submission.rejected_count}</span>
+                        {submission.file_name ?? t('priceLists.text_14')} · {t('priceListsTail.accepted')}{' '}<span className="num">{submission.accepted_count}</span> {t('priceLists.text_15')} <span className="num">{submission.unchanged_count}</span> {t('priceLists.text_16')} <span className="num">{submission.rejected_count}</span>
                       </div>
                     </div>
                   ))}
@@ -282,7 +289,10 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
   const { data } = useQuery<PriceHistory[]>(async () =>
     unwrap(await supabase.from('price_history').select('*').eq('supplier_product_id', row.id).order('effective_date', { ascending: false })), [row.id]);
   return (
-    <Modal open onClose={onClose} title={`היסטוריית מחירים — ${productLabel(row.product)} (${row.supplier.name})`}>
+    <Modal open onClose={onClose} title={t('priceListsTail.historyTitle', {
+      product: bidiIsolate(productLabel(row.product)),
+      supplier: bidiIsolate(row.supplier.name),
+    })}>
       {data && data.length >= 2 && (() => {
         const theme = chartTheme();
         const asc = [...data].reverse();
@@ -343,7 +353,7 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
       p_price: p,
       p_effective_date: date,
       p_available: available,
-      p_reason: reasonOr(reason, t('priceLists.reasonOr')),
+      p_reason: reasonOr(reason, 'עדכון המחיר'),
     });
     if (upd.error) { setBusy(false); toast(errorText(upd.error.message), 'error'); return; }
     setBusy(false);
@@ -351,7 +361,10 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
   }
 
   return (
-    <Modal open onClose={onClose} title={`עדכון מחיר — ${productLabel(row.product)} (${row.supplier.name})`} busy={busy} statusMessage={busy ? 'שומר את המחיר' : undefined}>
+    <Modal open onClose={onClose} title={t('priceListsTail.editTitle', {
+      product: bidiIsolate(productLabel(row.product)),
+      supplier: bidiIsolate(row.supplier.name),
+    })} busy={busy} statusMessage={busy ? t('priceListsTail.savingPrice') : undefined}>
       <div className="space-y-4">
         <div><label className="label" htmlFor="price-list-price">{t('priceLists.setPrice')}</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
         <div><label className="label" htmlFor="price-list-date">{t('priceLists.setDate')}</label><input id="price-list-date" type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
@@ -372,7 +385,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<{ supplier: string; product: string; price: number }[]>([]);
-  const [report, setReport] = useState<string | null>(null);
+  const [report, setReport] = useState<ImportReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [reason, setReason] = useState('');
 
@@ -381,9 +394,9 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       const sheet = await readSheet(file);
       // exact header names only, as before — this screen has no column-mapping step to correct a wrong guess
       const cols = {
-        supplier: matchColumn(sheet.headers, [t('priceLists.matchColumn'), 'supplier'], false),
-        product: matchColumn(sheet.headers, [t('priceLists.matchColumn_2'), 'product'], false),
-        price: matchColumn(sheet.headers, [t('priceLists.matchColumn_3'), 'price'], false),
+        supplier: matchColumn(sheet.headers, ['ספק', 'supplier'], false),
+        product: matchColumn(sheet.headers, ['מוצר', 'product'], false),
+        price: matchColumn(sheet.headers, ['מחיר', 'price'], false),
       };
       const { valid } = mapRows(sheet.rows, (r) => {
         const supplier = cellText(r, cols.supplier);
@@ -415,14 +428,15 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         return [{ supplier_id: supplier.id, product_id: product.id, price: row.price, available: true }];
       });
       if (unresolved.length) {
-        throw new Error(`הייבוא בוטל: ספק או מוצר לא נמצאו בשם מדויק בשורות ${unresolved.slice(0, 12).join(', ')}.`);
+        toast(t('priceListsTail.unresolvedRows', { rows: unresolved.slice(0, 12).join(', ') }), 'error');
+        return;
       }
       const imported = unwrap(await supabase.rpc('import_supplier_prices', {
         p_rows: rows,
         p_effective_date: todayISO(),
-        p_reason: reasonOr(reason, t('priceLists.reasonOr_2')),
-      })) as { updated: number; created: number; unchanged: number };
-      setReport(`עודכנו ${imported.updated} מחירים, נוצרו ${imported.created} רשומות חדשות, ${imported.unchanged} ללא שינוי.`);
+        p_reason: reasonOr(reason, 'ייבוא המחירון'),
+      })) as ImportReport;
+      setReport(imported);
     } catch (e) {
       toast(errorText(e), 'error');
     } finally {
@@ -430,16 +444,18 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
     }
   }
 
+  const reportText = report ? t('priceListsTail.importReport', report) : null;
+
   return (
-    <Modal open onClose={onClose} title={t('priceLists.title_4')} wide busy={busy} statusMessage={report ?? (busy ? t('priceLists.text_21') : undefined)}>
+    <Modal open onClose={onClose} title={t('priceLists.title_4')} wide busy={busy} statusMessage={reportText ?? (busy ? t('priceLists.text_21') : undefined)}>
       {report ? (
         <div className="space-y-4">
-          <Note tone="done">{report}</Note>
+          <Note tone="done">{reportText}</Note>
           <div className="flex justify-end"><button className="btn-primary" onClick={onDone}>{t('priceLists.text_22')}</button></div>
         </div>
       ) : preview.length ? (
         <div className="space-y-4">
-          <div className="text-sm text-ink-soft">{preview.length} שורות זוהו. ההתאמה מתבצעת לפי שם ספק ושם מוצר מדויקים.</div>
+          <div className="text-sm text-ink-soft">{t('priceListsTail.previewSummary', { count: preview.length })}</div>
           <div className="table-scroll max-h-64 overflow-auto rounded-lg border border-line-soft" tabIndex={0} role="region" aria-label={t('priceLists.aria_label_3')}>
             <table className="w-full">
               <thead className="table-head sticky top-0"><tr><th scope="col" className="th">{t('priceLists.text_23')}</th><th scope="col" className="th">{t('priceLists.text_24')}</th><th scope="col" className="th">{t('priceLists.text_25')}</th></tr></thead>

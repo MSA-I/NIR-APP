@@ -8,6 +8,8 @@ import { SUPABASE_URL } from '../test/msw/handlers';
 import { createAppQueryClient } from '../lib/query/client';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import { ToastProvider } from '../components/ui';
+import { LocaleProvider } from '../lib/i18n/LocaleProvider';
+import type { Locale } from '../lib/i18n/locale';
 
 /**
  * With ?product= the price-list screen IS the cross-supplier comparison (18.08.2026): cheapest
@@ -57,17 +59,19 @@ function wire() {
   );
 }
 
-function renderAt(path: string) {
+function renderAt(path: string, locale: Locale = 'he') {
   render(
-    <QueryClientProvider client={createAppQueryClient()}>
-      <OrgScopeProvider org="org-test">
-        <ToastProvider>
-          <MemoryRouter initialEntries={[path]}>
-            <Routes><Route path="/prices" element={<PriceLists />} /></Routes>
-          </MemoryRouter>
-        </ToastProvider>
-      </OrgScopeProvider>
-    </QueryClientProvider>,
+    <LocaleProvider initialLocale={locale}>
+      <QueryClientProvider client={createAppQueryClient()}>
+        <OrgScopeProvider org="org-test">
+          <ToastProvider>
+            <MemoryRouter initialEntries={[path]}>
+              <Routes><Route path="/prices" element={<PriceLists />} /></Routes>
+            </MemoryRouter>
+          </ToastProvider>
+        </OrgScopeProvider>
+      </QueryClientProvider>
+    </LocaleProvider>,
   );
 }
 
@@ -105,5 +109,17 @@ describe('PriceLists — ?product= becomes a real comparison', () => {
     expect((await screen.findAllByText('ספק זול')).length).toBeGreaterThan(0);
     expect(screen.queryByRole('region', { name: /השוואת מחירים/ })).toBeNull();
     expect(screen.queryByText('הפרש מהזול')).toBeNull();
+  });
+
+  it('translates comparison copy while keeping catalogue and supplier names raw', async () => {
+    renderAt('/prices?product=p1', 'en');
+
+    const card = await screen.findByRole('region', { name: /Price comparison/ });
+    expect(within(card).getByText(/Cheapest:/)).toBeInTheDocument();
+    expect(within(card).getByText(/than the next price/)).toBeInTheDocument();
+    expect(within(card).getByRole('link', { name: 'Edit product' })).toBeInTheDocument();
+    expect(within(card).getByText('מטליות מיקרופייבר 30*30')).toBeInTheDocument();
+    expect(within(card).getByText('ספק זול')).toBeInTheDocument();
+    expect(within(card).queryByText(/הזול ביותר/)).toBeNull();
   });
 });
