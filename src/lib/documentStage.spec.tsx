@@ -7,6 +7,9 @@
 //   2. התג — `data-testid` ו-`data-document-id` לא זזו, ו-`data-stage` נושא את השלב הגולמי, כך
 //      ש-`check-browser-smoke.cjs` ממשיך למדוד מצב אמיתי בזמן שהמשתמש רואה עברית.
 
+import { he as heDict } from './i18n/dictionaries/he';
+import type { Dictionary as I18nDictionary } from './i18n/dictionaries/he';
+import { translate as i18nTranslate, type TKey as I18nKey } from './i18n/t';
 import { he } from './i18n/dictionaries/he';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -34,6 +37,10 @@ const STAGES = Object.keys(DOCUMENT_PROCESSING_STAGE_META) as DocumentProcessing
 const unfiled = { entity_type: 'inbox', entity_id: null };
 const onInvoice = { entity_type: 'invoice', entity_id: '00000000-0000-4000-8000-000000000001' };
 
+
+/** A key resolved in Hebrew, so every expectation below keeps the exact phrase it asserted. */
+const say = (key: I18nKey | null | undefined): string =>
+  (key ? i18nTranslate(heDict as unknown as I18nDictionary, key) : '');
 describe('שבעת השלבים שורדים מתחת לתצוגה', () => {
   // אם מישהו "יפשט" את החוזה הפנימי בעקבות המסך, נופלות איתו 29 תרחישי דפדפן, סוויטות SQL
   // ופונקציות מסד. הטענה הזו קיימת כדי שהניסיון ייכשל כאן קודם.
@@ -77,7 +84,7 @@ describe('הסינון והתג מבוססים על אותו מצב קנוני',
 
   it('המסנן בודק את התוצאה הקנונית, לא את השלב הגולמי', () => {
     const completedInbox = documentUiStatus({ status: 'completed', document: unfiled });
-    expect(completedInbox.label).toBe('לא משויך');
+    expect(say(completedInbox.labelKey)).toBe('לא משויך');
     expect(documentMatchesStatusFilter(completedInbox, 'unassigned')).toBe(true);
     expect(documentMatchesStatusFilter(completedInbox, 'assigned')).toBe(false);
   });
@@ -87,7 +94,8 @@ describe('הסינון והתג מבוססים על אותו מצב קנוני',
       status: 'completed',
       document: { entity_type: 'archive', entity_id: null },
     });
-    expect(archived).toMatchObject({ state: 'historical', label: 'אורכב', countsAsUnassigned: false });
+    expect(archived).toMatchObject({ state: 'historical', countsAsUnassigned: false });
+    expect(say(archived.labelKey)).toBe('אורכב');
     expect(documentMatchesStatusFilter(archived, 'unassigned')).toBe(false);
     expect(documentMatchesStatusFilter(archived, 'assigned')).toBe(false);
   });
@@ -100,7 +108,7 @@ describe('חוזה התג מול שער הדפדפן', () => {
     const status = documentUiStatus({ status: stage });
     expect(badge.getAttribute('data-document-id')).toBe('doc-1');
     expect(badge.getAttribute('data-stage')).toBe(stage);
-    expect(badge.textContent?.trim()).toBe(status.label);
+    expect(badge.textContent?.trim()).toBe(say(status.labelKey));
     expect(badge.className).toContain(`badge-${status.tone}`);
   });
 
@@ -110,18 +118,18 @@ describe('חוזה התג מול שער הדפדפן', () => {
   it.each(STAGES)('%s — ההסבר נגיש גם בלי ריחוף, ומחוץ לטקסט התג', (stage) => {
     const { container } = render(<ProcessingBadge documentId="doc-4" stage={stage} />);
     const badge = screen.getByTestId('document-processing-status');
-    const description = documentUiStatus({ status: stage }).description;
+    const description = say(documentUiStatus({ status: stage }).descriptionKey);
     if (description) {
       expect(badge.getAttribute('title')).toBe(description);
       // ולא ב-title בלבד: tooltip אינו קיים במגע, והתרחיש מריץ את הדף הזה ב-390px.
       expect(container.querySelector('.sr-only')?.textContent).toBe(description);
-      expect(description).not.toContain(documentUiStatus({ status: stage }).label);
+      expect(description).not.toContain(say(documentUiStatus({ status: stage }).labelKey));
     } else {
       expect(badge.getAttribute('title')).toBeNull();
       expect(container.querySelector('.sr-only')).toBeNull();
     }
     // ומחוץ לתג — check-browser-smoke.cjs מודד את ה-innerText שלו מול תווית אחת.
-    expect(badge.textContent?.trim()).toBe(documentUiStatus({ status: stage }).label);
+    expect(badge.textContent?.trim()).toBe(say(documentUiStatus({ status: stage }).labelKey));
   });
 
   it('שורה שהעיבוד שלה הושלם ושויכה מספרת על היעד בתג עצמו', () => {

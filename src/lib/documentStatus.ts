@@ -1,3 +1,4 @@
+import type { TKey } from './i18n/t.ts';
 import type { StatusMeta } from './status';
 import type { DocumentProcessingJob, DocumentProcessingStatus, DocumentRow } from './types';
 
@@ -23,7 +24,7 @@ export type DocumentStatusState =
  * without dragging a second vocabulary in half-done.
  */
 export interface DocumentUiStatus {
-  label: string;
+  labelKey: TKey;
   tone: StatusMeta['tone'];
   state: DocumentStatusState;
   /**
@@ -34,7 +35,13 @@ export interface DocumentUiStatus {
    * nothing. "המסמך שמור וממתין לתחילת העיבוד" under a badge reading "ממתין לעיבוד" was exactly
    * that. States with nothing to add carry '' and the badge then renders neither attribute.
    */
-  description: string;
+  descriptionKey: TKey | null;
+  /**
+   * Values the description needs, when it has any. Only the machine-filing sentence does — it
+   * names a confidence — and carrying them beside the key is what lets that sentence be one
+   * sentence rather than a Hebrew fragment concatenated at the call site.
+   */
+  descriptionVars?: Record<string, string | number>;
   loading: boolean;
   countsAsUnassigned: boolean;
   priority: number;
@@ -47,7 +54,8 @@ export interface DocumentUiStatus {
    * "עמוד 0 מתוך 0" for those would be a claim about the document that nobody made — the same reason
    * an absent metric renders — rather than 0 (CLAUDE.md).
    */
-  progressLabel: string | null;
+  /** The page counter as NUMBERS. The badge composes the sentence, so word order is not ours. */
+  progress: { done: number; total: number } | null;
 }
 
 export type DocumentStatusFilter =
@@ -58,13 +66,13 @@ export type DocumentStatusFilter =
   | 'unassigned'
   | 'assigned';
 
-export const DOCUMENT_STATUS_FILTERS: ReadonlyArray<{ value: DocumentStatusFilter; label: string }> = [
-  { value: 'stuck', label: 'עיבוד תקוע' },
-  { value: 'failed', label: 'העיבוד נכשל' },
-  { value: 'processing', label: 'בעיבוד או בהמתנה' },
-  { value: 'review', label: 'נדרשת בדיקה' },
-  { value: 'unassigned', label: 'לא משויך' },
-  { value: 'assigned', label: 'משויך' },
+export const DOCUMENT_STATUS_FILTERS: ReadonlyArray<{ value: DocumentStatusFilter; labelKey: TKey }> = [
+  { value: 'stuck', labelKey: 'documentStatus.filterStuck' },
+  { value: 'failed', labelKey: 'documentStatus.filterFailed' },
+  { value: 'processing', labelKey: 'documentStatus.filterProcessing' },
+  { value: 'review', labelKey: 'documentStatus.filterReview' },
+  { value: 'unassigned', labelKey: 'documentStatus.filterUnassigned' },
+  { value: 'assigned', labelKey: 'documentStatus.filterAssigned' },
 ];
 
 const DOCUMENT_STATUS_FILTER_VALUES = new Set(DOCUMENT_STATUS_FILTERS.map(({ value }) => value));
@@ -87,7 +95,8 @@ export interface DocumentStatusInput {
   document?: FilingDocument | null;
   queueAgeSeconds?: number | null;
   autoAssigned?: boolean;
-  autoAssignmentDescription?: string | null;
+  autoAssignmentDescriptionKey?: TKey | null;
+  autoAssignmentDescriptionVars?: Record<string, string | number>;
   evaluatedAt?: number;
   /** Optional canonical answer from a future server contract. When present, it wins. */
   isStuck?: boolean | null;
@@ -109,11 +118,11 @@ const ACTIVE_RAW_STATUSES: ReadonlySet<string> = new Set([
  * לא תקינה" named a component they cannot see and left them with no next step; the fact they can
  * act on is that the file survived and the read can be run again.
  */
-const FAILURE_TEXT: ReadonlyArray<[RegExp, string]> = [
-  [/gateway_invalid_response/i, 'הקובץ נשמר, אך קריאת המסמך נכשלה. אפשר לנסות שוב.'],
-  [/document_deleted/i, 'קובץ המקור הוסר לפני שהעיבוד הושלם.'],
-  [/provider_output_truncated/i, 'קריאת המסמך נעצרה לפני שהתקבלה תוצאה מלאה. אפשר לנסות שוב.'],
-  [/provider_|ocr_|extraction_/i, 'קריאת המסמך לא הושלמה. הקובץ נשמר ואפשר לנסות שוב.'],
+const FAILURE_KEYS: ReadonlyArray<[RegExp, TKey]> = [
+  [/gateway_invalid_response/i, 'documentStatus.failureGatewayInvalid'],
+  [/document_deleted/i, 'documentStatus.failureDocumentDeleted'],
+  [/provider_output_truncated/i, 'documentStatus.failureOutputTruncated'],
+  [/provider_|ocr_|extraction_/i, 'documentStatus.failureProviderGeneric'],
 ];
 
 /**
@@ -122,12 +131,12 @@ const FAILURE_TEXT: ReadonlyArray<[RegExp, string]> = [
  * That is the whole decision the reader has to make — keep waiting, or act. Naming the worker and
  * its expired lease described our architecture; it did not answer the question.
  */
-const STUCK_REASON_TEXT: Record<string, string> = {
-  claim_attempt_limit_reached: 'העיבוד נעצר אחרי כמה ניסיונות ולא ימשיך מעצמו.',
-  claim_attempt_limit_exceeded: 'העיבוד נעצר אחרי כמה ניסיונות ולא ימשיך מעצמו.',
-  active_over_two_hours: 'המסמך בעיבוד יותר משעתיים ואינו מתקדם.',
-  lease_expired: 'העיבוד נפסק באמצע ולא התחדש.',
-  no_progress: 'העיבוד לא התקדם בזמן הצפוי.',
+const STUCK_REASON_KEYS: Record<string, TKey> = {
+  claim_attempt_limit_reached: 'documentStatus.stuckAttemptLimit',
+  claim_attempt_limit_exceeded: 'documentStatus.stuckAttemptLimit',
+  active_over_two_hours: 'documentStatus.stuckOverTwoHours',
+  lease_expired: 'documentStatus.stuckLeaseExpired',
+  no_progress: 'documentStatus.stuckNoProgress',
 };
 
 function ageSeconds(value: string | null | undefined, evaluatedAt: number): number | null {
@@ -147,21 +156,21 @@ function isArchived(document: FilingDocument | null | undefined): boolean {
   return document?.entity_type === 'archive';
 }
 
-function assignedLabel(document: FilingDocument | null | undefined, autoAssigned: boolean): string {
-  if (autoAssigned) return 'שויך אוטומטית';
-  if (document?.entity_type === 'invoice') return 'שויך לחשבונית';
-  if (document?.entity_type === 'goods_receipt') return 'שויך לקבלת סחורה';
-  return 'משויך';
+function assignedLabelKey(document: FilingDocument | null | undefined, autoAssigned: boolean): TKey {
+  if (autoAssigned) return 'documentStatus.assignedAutomatically';
+  if (document?.entity_type === 'invoice') return 'documentStatus.assignedToInvoice';
+  if (document?.entity_type === 'goods_receipt') return 'documentStatus.assignedToReceipt';
+  return 'documentStatus.assignedGeneric';
 }
 
 function result(
   state: DocumentStatusState,
-  label: string,
+  labelKey: TKey,
   tone: StatusMeta['tone'],
-  description: string,
+  descriptionKey: TKey | null,
   loading = false,
   elapsedSeconds: number | null = null,
-  progressLabel: string | null = null,
+  progress: { done: number; total: number } | null = null,
 ): DocumentUiStatus {
   const priorities: Record<DocumentStatusState, number> = {
     stuck: 0,
@@ -176,14 +185,14 @@ function result(
   };
   return {
     state,
-    label,
+    labelKey,
     tone,
-    description,
+    descriptionKey,
     loading,
     countsAsUnassigned: state === 'unassigned',
     priority: priorities[state],
     elapsedSeconds,
-    progressLabel,
+    progress,
   };
 }
 
@@ -194,35 +203,40 @@ function result(
  * or interpreting one is past the pages, so carrying the last counter into those states would keep
  * showing movement after the movement stopped.
  */
-function pageProgressLabel(job: ProcessingJob | null | undefined, status: string): string | null {
+function pageProgress(
+  job: ProcessingJob | null | undefined,
+  status: string,
+): { done: number; total: number } | null {
   if (status !== 'leased') return null;
   const done = job?.progress_done;
   const total = job?.progress_total;
   if (typeof done !== 'number' || typeof total !== 'number') return null;
   if (!Number.isFinite(done) || !Number.isFinite(total) || total <= 0 || done < 0) return null;
-  return `עמוד ${Math.min(done, total)} מתוך ${total}`;
+  // The NUMBERS, not the sentence. "page 3 of 8" is composed where it is drawn, so the module
+  // stops owning a phrase whose word order is not the same in every language.
+  return { done: Math.min(done, total), total };
 }
 
 export function isSupersededProcessingFailure(code: string | null | undefined): boolean {
   return code === 'superseded_for_reprocess' || code === 'superseded_for_stuck_recovery';
 }
 
-export function documentProcessingFailureText(
+export function documentProcessingFailureKey(
   code: string | null | undefined,
   _message?: string | null,
-): string {
+): TKey {
   if (isSupersededProcessingFailure(code)) {
-    return 'ניסיון עיבוד קודם הוחלף בניסיון חדש. זהו אירוע היסטורי, לא כשל פעיל.';
+    return 'documentStatus.failureSuperseded';
   }
   const raw = code ?? '';
-  for (const [pattern, text] of FAILURE_TEXT) if (pattern.test(raw)) return text;
-  return 'עיבוד המסמך לא הושלם. הקובץ המקורי נשמר ואפשר לנסות שוב.';
+  for (const [pattern, key] of FAILURE_KEYS) if (pattern.test(raw)) return key;
+  return 'documentStatus.failureFallback';
 }
 
-export function documentProcessingStuckText(reason: string | null | undefined): string {
+export function documentProcessingStuckKey(reason: string | null | undefined): TKey {
   // The fallback used to recite the heuristic (age, attempt count, "שנשמרו בשרת"). How we
   // concluded it is our business; that the document has stopped and will not restart is theirs.
-  return (reason && STUCK_REASON_TEXT[reason]) ?? 'העיבוד לא התקדם ולא ימשיך מעצמו.';
+  return (reason ? STUCK_REASON_KEYS[reason] : null) ?? 'documentStatus.stuckFallback';
 }
 
 /**
@@ -264,7 +278,7 @@ export function isDocumentProcessingStuck(input: DocumentStatusInput): boolean {
  */
 export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
   if (input.status === null && !input.job) {
-    return result('unavailable', 'סטטוס נטען', 'idle', '');
+    return result('unavailable', 'documentStatus.statusLoading', 'idle', null);
   }
   const status = input.job?.status ?? input.status ?? 'unprocessed';
   const evaluatedAt = input.evaluatedAt ?? Date.now();
@@ -272,16 +286,16 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
     ?? ageSeconds(input.job?.created_at, evaluatedAt);
 
   if (status === 'failed' && isSupersededProcessingFailure(input.job?.last_error_code)) {
-    return result('historical', 'הוחלף בניסיון חדש', 'idle', documentProcessingFailureText(input.job?.last_error_code));
+    return result('historical', 'documentStatus.replacedByNewAttempt', 'idle', documentProcessingFailureKey(input.job?.last_error_code));
   }
   // Everything below picks a label first and a description second, and the description is allowed
   // to be empty. See DocumentUiStatus.description: a sentence that restates the badge is not
   // information, and it is read aloud on every row.
   if (status === 'failed') {
-    return result('failed', 'העיבוד נכשל', 'alert', documentProcessingFailureText(input.job?.last_error_code));
+    return result('failed', 'documentStatus.processingFailed', 'alert', documentProcessingFailureKey(input.job?.last_error_code));
   }
   if (isDocumentProcessingStuck(input)) {
-    return result('stuck', 'עיבוד תקוע', 'alert', documentProcessingStuckText(
+    return result('stuck', 'documentStatus.processingStuck', 'alert', documentProcessingStuckKey(
       input.stuckReason ?? input.job?.stuck_reason,
     ), false, elapsed);
   }
@@ -289,45 +303,55 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
     const queued = status === 'queued';
     return result(
       'processing',
-      queued ? 'ממתין לעיבוד' : 'בעיבוד',
+      queued ? 'documentStatus.waitingToProcess' : 'documentStatus.processing',
       queued ? 'await' : 'info',
       // Both add the same missing fact: nobody is waiting on the reader. A queued document adds
       // the one thing a person who just photographed an invoice wants confirmed — it is saved.
-      queued ? 'הקובץ נשמר. אין צורך בפעולה.' : 'אין צורך בפעולה. המצב יתעדכן מעצמו.',
+      queued ? 'documentStatus.queuedDescription' : 'documentStatus.processingDescription',
       true,
       elapsed,
-      pageProgressLabel(input.job, status),
+      pageProgress(input.job, status),
     );
   }
   if (status === 'review') {
-    return result('review', 'נדרשת בדיקה', 'await', 'הקריאה הסתיימה. צריך לאשר את הנתונים.');
+    return result('review', 'documentStatus.needsReview', 'await', 'documentStatus.needsReviewDescription');
   }
   if (isArchived(input.document)) {
     // `entity_type` is the schema's word for it. Nobody outside this repository files a document
     // against a "יעד עסקי" — they attach it to an invoice or to a goods receipt.
-    return result('historical', 'אורכב', 'idle', 'אין לו שיוך לחשבונית או לקבלת סחורה.');
+    return result('historical', 'documentStatus.archived', 'idle', 'documentStatus.archivedDescription');
   }
   if (isUnassigned(input.document)) {
-    return result('unassigned', 'לא משויך', 'await', 'צריך לשייך אותו לחשבונית או לקבלת סחורה.');
+    return result('unassigned', 'documentStatus.unassigned', 'await', 'documentStatus.unassignedDescription');
   }
   if (input.document) {
     // The only sentence worth carrying here is the supervisory one a machine filing brings with
     // it. "המסמך שויך ליעד עסקי" under a badge reading "שויך לחשבונית" said nothing twice.
-    return result('assigned', assignedLabel(input.document, input.autoAssigned ?? false), 'done',
-      input.autoAssignmentDescription ?? '');
+    const assigned = result('assigned', assignedLabelKey(input.document, input.autoAssigned ?? false), 'done',
+      input.autoAssignmentDescriptionKey ?? null);
+    return input.autoAssignmentDescriptionVars
+      ? { ...assigned, descriptionVars: input.autoAssignmentDescriptionVars }
+      : assigned;
   }
   if (status === 'completed') {
-    return result('completed', 'הושלם', 'done', '');
+    return result('completed', 'documentStatus.completed', 'done', null);
   }
-  return result('unavailable', 'סטטוס לא זמין', 'idle', '');
+  return result('unavailable', 'documentStatus.statusUnavailable', 'idle', null);
 }
 
-export function documentStatusElapsedLabel(seconds: number | null): string | null {
+/**
+ * How long a document has been in this state, as a key and a number rather than a phrase. The
+ * unit and the figure are ordered differently in different languages, so the sentence belongs
+ * where it is drawn.
+ */
+export function documentStatusElapsed(
+  seconds: number | null,
+): { key: TKey; vars?: Record<string, number> } | null {
   if (seconds === null) return null;
-  if (seconds < 60) return 'פחות מדקה';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} דק׳`;
-  if (seconds < 86_400) return `${Math.floor(seconds / 3600)} שע׳`;
-  return `${Math.floor(seconds / 86_400)} ימים`;
+  if (seconds < 60) return { key: 'documentStatus.elapsedUnderMinute' };
+  if (seconds < 3600) return { key: 'documentStatus.elapsedMinutes', vars: { count: Math.floor(seconds / 60) } };
+  if (seconds < 86_400) return { key: 'documentStatus.elapsedHours', vars: { count: Math.floor(seconds / 3600) } };
+  return { key: 'documentStatus.elapsedDays', vars: { count: Math.floor(seconds / 86_400) } };
 }
 
 export function documentMatchesFilingFilter(

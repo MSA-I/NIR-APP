@@ -75,8 +75,9 @@ function autoActionConfidence(action: AutoActionRow): string {
   return `${Math.round(value * 100)}%`;
 }
 
-function autoActionDescription(action: AutoActionRow): string {
-  return `החשבונית נוצרה ושויכה אוטומטית על ידי המערכת מתוך המסמך הזה, ללא אישור אדם, ברמת ביטחון ${autoActionConfidence(action)}.`;
+/** The confidence VALUE. The sentence around it is `documentStatus.autoAssignedByMachine`. */
+function autoActionConfidenceVars(action: AutoActionRow): { confidence: string } {
+  return { confidence: autoActionConfidence(action) };
 }
 
 type InvoicePick = { id: string; invoice_number: string; invoice_date: string; supplier: { name: string } | null };
@@ -124,7 +125,7 @@ export function ProcessingFilterSelect({ value, onChange, includeAssignmentState
       <select data-testid="documents-processing-filter" className="input" value={value}
         onChange={(event) => onChange(event.target.value)}>
         <option value="all">{t('documents.text_3')}</option>
-        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        {options.map((option) => <option key={option.value} value={option.value}>{t(option.labelKey)}</option>)}
       </select>
     </label>
   );
@@ -474,7 +475,8 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       job: processing.snapshots[doc.id]?.job,
       document: doc,
       autoAssigned: autoAction !== null,
-      autoAssignmentDescription: autoAction ? autoActionDescription(autoAction) : null,
+      autoAssignmentDescriptionKey: autoAction ? 'documentStatus.autoAssignedByMachine' : null,
+      autoAssignmentDescriptionVars: autoAction ? autoActionConfidenceVars(autoAction) : undefined,
     });
   };
 

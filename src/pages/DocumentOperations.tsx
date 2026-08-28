@@ -349,7 +349,10 @@ export default function DocumentOperations() {
               <AlertTriangle size={ICON.xs} aria-hidden="true" /> {t('documentOps.mostUrgentItem')}
             </p>
             <h2 className="mt-1 truncate text-lg font-semibold text-ink">{currentIssue.file_name}</h2>
-            <p className="mt-1">{attemptUiStatus(currentIssue).description}</p>
+            <p className="mt-1">{(() => {
+              const key = attemptUiStatus(currentIssue).descriptionKey;
+              return key ? t(key) : null;
+            })()}</p>
           </div>
           <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row">
             {canRecoverStuck && attemptUiStatus(currentIssue).state === 'stuck' && (

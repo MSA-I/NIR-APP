@@ -1,15 +1,21 @@
 import { AlertTriangle, LoaderCircle } from 'lucide-react';
-import { documentStatusElapsedLabel, type DocumentUiStatus } from '../lib/documentStatus';
+import { useT } from '../lib/i18n/LocaleProvider';
+import { documentStatusElapsed, type DocumentUiStatus } from '../lib/documentStatus';
 import { ICON } from './ui';
 
 export function DocumentStatusBadge({ status, ...attributes }: {
   status: DocumentUiStatus;
 } & Omit<React.ComponentPropsWithoutRef<'span'>, 'children'>) {
-  const elapsed = documentStatusElapsedLabel(status.elapsedSeconds);
+  const { t } = useT();
+  const elapsedParts = documentStatusElapsed(status.elapsedSeconds);
+  // The badge is where a status stops being a decision and becomes words, so it is where the keys
+  // resolve. `documentStatus.ts` decides WHICH state this is; it no longer decides in what
+  // language, which is what let the same module be read by a screen, a spec and a spreadsheet.
+  const description = status.descriptionKey ? t(status.descriptionKey, status.descriptionVars) : '';
   return (
     <>
       <span {...attributes} className={`badge-${status.tone} inline-flex items-center gap-1 ${attributes.className ?? ''}`.trim()}
-        title={status.description || undefined} role={status.loading ? 'status' : undefined}
+        title={description || undefined} role={status.loading ? 'status' : undefined}
         aria-live={status.loading ? 'polite' : undefined} aria-busy={status.loading || undefined}>
           {/* The one spinner in the app that STOPS under reduced motion rather than slowing, and it
             predates this sweep: `documentStatus.spec.tsx` pins it as "makes reduced motion static".
@@ -19,20 +25,20 @@ export function DocumentStatusBadge({ status, ...attributes }: {
             stop. The label is what carries the meaning. */}
         {status.loading && <LoaderCircle size={ICON.xs} className="shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
         {status.state === 'stuck' && <AlertTriangle size={ICON.xs} className="shrink-0" aria-hidden="true" />}
-        {status.label}
+        {t(status.labelKey)}
       </span>
       {/* The page counter, wherever the badge is. The lifecycle strip that shows it lives on the
           review screen only, so somebody watching an upload from the inbox or the upload centre saw
           "בעיבוד · 4 דק׳" and had no way to tell a busy queue from a stalled read. */}
-      {status.progressLabel && (
-        <span className="num text-xs text-ink-muted" data-document-status-progress>· {status.progressLabel}</span>
+      {status.progress && (
+        <span className="num text-xs text-ink-muted" data-document-status-progress>· {t('documentStatus.pageProgress', status.progress)}</span>
       )}
-      {elapsed && (status.loading || status.state === 'stuck') && (
-        <span className="num text-xs text-ink-muted" data-document-status-age>· {elapsed}</span>
+      {elapsedParts && (status.loading || status.state === 'stuck') && (
+        <span className="num text-xs text-ink-muted" data-document-status-age>· {t(elapsedParts.key, elapsedParts.vars)}</span>
       )}
       {/* Only when there is a second fact to carry. A state whose description merely repeated the
           badge shipped that repetition to every screen-reader user, on every row. */}
-      {status.description ? <span className="sr-only">{status.description}</span> : null}
+      {description ? <span className="sr-only">{description}</span> : null}
     </>
   );
 }

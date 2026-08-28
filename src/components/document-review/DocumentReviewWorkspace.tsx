@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FileCheck2, RefreshCw, ScanText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { openReservedPopup } from '../../lib/popup';
-import { documentProcessingFailureText, documentUiStatus } from '../../lib/documentStatus';
+import { documentProcessingFailureKey, documentUiStatus } from '../../lib/documentStatus';
 import { ICON, Note, useToast } from '../ui';
 import { DocumentStatusBadge } from '../DocumentStatusBadge';
 import { DocumentAssessmentPanel } from './DocumentAssessmentPanel';
@@ -351,7 +351,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
         <Note tone="alert" role="alert" className="flex-wrap">
           <span className="min-w-0 flex-1">
             <strong>העיבוד נכשל.</strong>{' '}
-            {documentProcessingFailureText(snapshot.job?.last_error_code, snapshot.job?.last_error_message)}
+            {t(documentProcessingFailureKey(snapshot.job?.last_error_code, snapshot.job?.last_error_message))}
           </span>
           {!readOnly && onReprocess && (
             <button type="button" className="btn-secondary" disabled={reprocessing} onClick={onReprocess}>

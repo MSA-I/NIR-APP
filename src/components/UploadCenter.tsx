@@ -10,10 +10,12 @@
 // re-upload — the retry runner re-runs only the failed step. The pattern is adopted from
 // PriceListUpload's pending-registration flow.
 
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Link } from 'react-router';
 import { ShieldCheck, X } from 'lucide-react';
 import { toHebrewError } from '../lib/errors';
+import type { TKey } from '../lib/i18n/t.ts';
 import { TusUploadCancelledError } from '../lib/tusUpload';
 import {
   useDocumentProcessing,
@@ -570,9 +572,16 @@ const UPLOAD_STATE_META: Record<UploadCenterStatus, StatusMeta> = {
 function displayMeta(
   entry: UploadCenterEntry,
   stage: DocumentProcessingStage | null,
+  t: (key: TKey) => string,
 ): StatusMeta | { label: string; tone: StatusMeta['tone'] } {
   if (entry.status === 'registered') {
-    if (stage && stage !== 'unprocessed') return documentUiStatus({ status: stage });
+    // `documentUiStatus` answers with a key; `StatusBadge`'s `{ label, tone }` shape takes words.
+    // Resolving here rather than widening the badge keeps one rule: a key becomes a sentence
+    // inside a component, and never before.
+    if (stage && stage !== 'unprocessed') {
+      const status = documentUiStatus({ status: stage });
+      return { label: t(status.labelKey), tone: status.tone };
+    }
     // "העיבוד לא החל" is a claim about the server, and it is only allowed where the server is
     // actually being asked: the poll below takes document ids, so a row without one is never
     // checked again and the transport error it carries is history the moment it is caught. Left
@@ -614,6 +623,7 @@ function useOnlineStatus() {
  * instance renders (one visible surface), and it disappears while the queue is empty.
  */
 export function UploadCenter() {
+  const { t } = useT();
   const [token] = useState<object>(() => ({}));
   useEffect(() => {
     registerSurface(token);
@@ -724,7 +734,7 @@ export function UploadCenter() {
                 {entry.size > 0 && <span className="num text-xs text-ink-muted">{formatFileSize(entry.size)}</span>}
                 {processingStatus
                   ? <DocumentStatusBadge status={processingStatus} />
-                  : <StatusBadge meta={displayMeta(entry, stage)} />}
+                  : <StatusBadge meta={displayMeta(entry, stage, t)} />}
                 {entry.canRetry && !processingStatus && (
                   <button type="button" className="btn-ghost btn-sm"
                     onClick={() => retryUploadCenterEntry(entry.id)}>

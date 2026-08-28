@@ -13,6 +13,8 @@
  * them would prove the mock, not the screen.
  */
 
+import type { Dictionary as I18nDictionary } from '../lib/i18n/dictionaries/he';
+import { translate as i18nTranslate, type TKey as I18nKey } from '../lib/i18n/t';
 import { he } from '../lib/i18n/dictionaries/he';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -49,6 +51,10 @@ beforeAll(() => {
 
 /* ================= finding 7 — the camera at the truck ================= */
 
+
+/** A key resolved in Hebrew, so every expectation below keeps the phrase it asserted. */
+const say = (key: I18nKey | null | undefined): string =>
+  (key ? i18nTranslate(he as unknown as I18nDictionary, key) : '');
 describe('finding 7 — focused forms keep the full bar without losing capture', () => {
   const FOCUSED = ['/orders/new', '/invoices/new', '/receiving/abc-123'];
 
@@ -254,7 +260,7 @@ describe('finding 20 — everyday surfaces use the canonical document status', (
    */
   it('maps every pipeline stage onto a word a person can act on', () => {
     for (const stage of STAGES) {
-      const label = documentUiStatus({ status: stage, document: { entity_type: 'inbox', entity_id: null } }).label;
+      const label = say(documentUiStatus({ status: stage, document: { entity_type: 'inbox', entity_id: null } }).labelKey);
       expect(label).not.toMatch(/^טרם נשלח לעיבוד$|^ממתין לפירוש$/);
     }
   });
@@ -272,7 +278,7 @@ describe('finding 20 — everyday surfaces use the canonical document status', (
   it('the stage table and the badge spell a shared state identically', () => {
     for (const stage of ['queued', 'processing', 'review', 'completed', 'failed'] as const) {
       expect(he.status[DOCUMENT_PROCESSING_STAGE_META[stage].key as keyof typeof he.status])
-        .toBe(documentUiStatus({ status: stage }).label);
+        .toBe(say(documentUiStatus({ status: stage }).labelKey));
     }
   });
 

@@ -1,3 +1,6 @@
+import { he as heDict } from '../lib/i18n/dictionaries/he';
+import type { Dictionary as I18nDictionary } from '../lib/i18n/dictionaries/he';
+import { translate as i18nTranslate, type TKey as I18nKey } from '../lib/i18n/t';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createElement } from 'react';
@@ -8,7 +11,7 @@ import { ToastProvider } from '../components/ui';
 import { NAV_SECTIONS } from '../components/Layout';
 import { he } from '../lib/i18n/dictionaries/he';
 import {
-  attemptStatusMeta,
+  attemptStatusKey,
   recoveryInvokeErrorMessage,
   selectPrimaryOperationalIssue,
 } from './documentOperationsModel';
@@ -95,6 +98,10 @@ const attempt = (status: string, price_list_outcome: string | null = null) => ({
   price_list_outcome,
 });
 
+
+/** A key resolved in Hebrew, so every expectation below keeps the exact phrase it asserted. */
+const say = (key: I18nKey | null | undefined): string =>
+  (key ? i18nTranslate(heDict as unknown as I18nDictionary, key) : '');
 describe('document control capability and UX contract', () => {
   it('keeps the stable owner-only route while naming it בקרת מסמכים everywhere', () => {
     expect(app).toContain('path="/documents/operations" element={<Guard roles={[\'owner\']}><DocumentOperations /></Guard>}');
@@ -160,12 +167,12 @@ describe('document control capability and UX contract', () => {
   });
 
   it('maps processing states to clear Hebrew meanings', () => {
-    expect(attemptStatusMeta(attempt('queued')).label).toBe('ממתין לעיבוד');
-    expect(attemptStatusMeta(attempt('interpreting')).label).toBe('בעיבוד');
-    expect(attemptStatusMeta(attempt('completed')).label).toBe('הושלם');
-    expect(attemptStatusMeta(attempt('review')).label).toBe('נדרשת בדיקה');
-    expect(attemptStatusMeta(attempt('failed')).label).toBe('העיבוד נכשל');
-    expect(attemptStatusMeta(attempt('completed', 'partially_applied')).label).toBe('הוחל חלקית');
+    expect(say(attemptStatusKey(attempt('queued')).labelKey)).toBe('ממתין לעיבוד');
+    expect(say(attemptStatusKey(attempt('interpreting')).labelKey)).toBe('בעיבוד');
+    expect(say(attemptStatusKey(attempt('completed')).labelKey)).toBe('הושלם');
+    expect(say(attemptStatusKey(attempt('review')).labelKey)).toBe('נדרשת בדיקה');
+    expect(say(attemptStatusKey(attempt('failed')).labelKey)).toBe('העיבוד נכשל');
+    expect(say(attemptStatusKey(attempt('completed', 'partially_applied')).labelKey)).toBe('הוחל חלקית');
   });
 
   it('renders the recovery task at mobile width and announces its result', async () => {
