@@ -863,7 +863,7 @@ export default function Dashboard() {
       {data?.firstRun && profile?.role === 'owner' && (
         <Note tone="info" className="flex flex-wrap items-center justify-between gap-3">
           <span className="min-w-0 flex-1">
-            {t('dashboard.text_44')}
+            {t('dashboard.text_44')}{' '}
             {t('dashboard.text_45')}
           </span>
           <Link to="/onboarding" className="btn-primary min-h-11 shrink-0 whitespace-nowrap">{t('dashboard.text_46')}</Link>

@@ -303,7 +303,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
   return (
     <Modal open onClose={onClose} title={t('documents.title')} busy={busy} statusMessage={busy ? t('documents.text_17') : undefined}>
       <p className="mb-4 text-sm text-ink-muted">
-        {t('documents.text_18')}
+        {t('documents.text_18')}{' '}
         {t('documents.text_19')}
       </p>
       <div className="space-y-3">

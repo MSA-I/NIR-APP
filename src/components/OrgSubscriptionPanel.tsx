@@ -1,3 +1,5 @@
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t.ts';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CreditCard, Undo2 } from 'lucide-react';
@@ -159,7 +161,7 @@ interface PlanQuotaRow {
  * above the ladder states it once, in full; printing it again on every row is the cramped
  * duplicated prose this whole package went out to remove.
  */
-const PRICE_AT_UPGRADE = 'המחיר נמסר במעבר למסלול בתשלום';
+const PRICE_AT_UPGRADE_KEY: TKey = 'orgSubscription.priceAtUpgrade';
 
 /**
  * THE LADDER'S ACTIONS, AND THE ONE MEASUREMENT THAT DECIDES HOW THEY LOOK.
@@ -216,8 +218,11 @@ const PLAN_ACTION_QUIET = 'btn-standby w-full';
 /** The rung the ladder points at. `btn-rainbow` stays the owner's named exception, undimmed. */
 const PLAN_ACTION_UPGRADE = 'btn-rainbow disabled:opacity-100 w-full';
 
-const INTERVALS = [['monthly', 'חודשי'], ['yearly', 'שנתי']] as const;
-type Interval = (typeof INTERVALS)[number][0];
+const INTERVAL_KEYS = [
+  ['monthly', 'orgSubscription.intervalMonthly'],
+  ['yearly', 'orgSubscription.intervalYearly'],
+] as const satisfies readonly (readonly [string, TKey])[];
+type Interval = (typeof INTERVAL_KEYS)[number][0];
 
 const rows = async <T,>(name: string): Promise<T[]> => {
   const { data, error } = await supabase.rpc(name);
@@ -226,6 +231,7 @@ const rows = async <T,>(name: string): Promise<T[]> => {
 };
 
 export function OrgSubscriptionPanel() {
+  const { t } = useT();
   const org = useOrgScope();
   /**
    * THE GATE THAT A BROWSER-GATE RUN ALREADY PAID FOR ONCE. `my_subscription` is one of the two
@@ -330,10 +336,10 @@ export function OrgSubscriptionPanel() {
     <div className="space-y-5">
       <section className="card card-pad space-y-4" aria-labelledby="org-subscription-heading">
         <h2 id="org-subscription-heading" className="section-title flex items-center gap-2">
-          <CreditCard size={ICON.md} /> מסלול ומנוי
+          <CreditCard size={ICON.md} /> {t('orgSubscription.heading')}
         </h2>
 
-        {failed && <ErrorNote message="לא ניתן לטעון את פרטי המסלול כרגע." />}
+        {failed && <ErrorNote message={t('orgSubscription.message')} />}
 
         {/* THE LAYOUT, HELD, WHILE IT LOADS. The body used to be gated on `subscription &&` alone,
             so for the length of the fetch this card was a heading and nothing else — and then five
@@ -346,8 +352,8 @@ export function OrgSubscriptionPanel() {
         {!loading && !failed && !subscription && (
           <Note tone="alert">
             <span className="min-w-0 flex-1" data-testid="subscription-missing">
-              לא נמצאו פרטי מסלול לארגון הזה. אין כאן טענה על חיוב ולא נגרע דבר — זו הגדרה במערכת,
-              ויש לפנות לתמיכה כדי להשלים אותה.
+              {t('orgSubscription.text')}{' '}
+              {t('orgSubscription.text_2')}
             </span>
           </Note>
         )}
@@ -365,8 +371,8 @@ export function OrgSubscriptionPanel() {
               {subscription.is_paid_plan && hasPaid && (
                 <span className="text-sm text-ink-muted">
                   {subscription.current_period_end
-                    ? `התקופה ששולמה מסתיימת ב־${fmtDate(subscription.current_period_end)}`
-                    : 'תקופת חיוב לא התקבלה מספק הסליקה'}
+                    ? t('orgSubscription.paidPeriodEnds', { date: fmtDate(subscription.current_period_end) })
+                    : t('orgSubscription.text_3')}
                 </span>
               )}
             </div>
@@ -381,13 +387,15 @@ export function OrgSubscriptionPanel() {
             {grant?.granted && (
               <Note tone="info">
                 <span className="min-w-0 flex-1" data-testid="plan-grant-window">
-                  מסלול {subscription.plan_label} ניתן לארגון ללא תשלום לתקופת ההרצה שלפני ההשקה,
-                  והוא בתוקף עד {fmtDate(grant.ends_at)}. לא בוצע חיוב, לא נדרש אמצעי תשלום ולא
-                  נפתחה תקופת חיוב.
+                  {t('orgSubscription.grantWindow', {
+                    plan: subscription.plan_label,
+                    date: fmtDate(grant.ends_at),
+                  })}
+                  {' '}
                   {grant.reverts_to_label
-                    ? ` במועד הזה הארגון עובר למסלול ${grant.reverts_to_label}, ומכסות אותו מסלול הן שיחולו מאותו רגע.`
-                    : ' במועד הזה הארגון עובר למסלול הבסיסי, ומכסותיו הן שיחולו מאותו רגע.'}
-                  {' '}שום נתון אינו נמחק וכל מה שנקלט נשאר במקומו; תקופת השימוש והמונים אינם מתאפסים.
+                    ? t('orgSubscription.grantRevertsTo', { plan: grant.reverts_to_label })
+                    : t('orgSubscription.grantRevertsDefault')}
+                  {' '}{t('orgSubscription.grantNothingLost')}
                 </span>
               </Note>
             )}
@@ -395,10 +403,10 @@ export function OrgSubscriptionPanel() {
             {subscription.delinquent && (
               <Note tone="alert" role="alert">
                 <span className="min-w-0 flex-1">
-                  חיוב החידוש לא נגבה, והארגון נמצא במצב קריאה בלבד: אפשר לצפות, לייצא ולהוריד, אך
-                  עיבוד, העלאה וכתיבה חדשה חסומים. היציאה ממצב זה היא אך ורק באמצעות אירוע תשלום
-                  מוצלח וחתום מספק הסליקה — אין מעבר אוטומטי למסלול חינם, אין יציאה אוטומטית בחלוף
-                  הזמן, ושום נתון קיים אינו נמחק.
+                  {t('orgSubscription.text_6')}{' '}
+                  {t('orgSubscription.text_7')}{' '}
+                  {t('orgSubscription.text_8')}{' '}
+                  {t('orgSubscription.text_9')}
                 </span>
               </Note>
             )}
@@ -415,22 +423,26 @@ export function OrgSubscriptionPanel() {
             <Note tone={availability === 'unavailable' ? 'info' : 'idle'}>
               <span className="min-w-0 flex-1" data-testid="billing-availability">
                 {availability === 'unavailable'
-                  && 'רכישת מסלול בתשלום אינה זמינה עדיין. אפשר להמשיך לעבוד במסלול הנוכחי; כשהרכישה תיפתח היא תופיע כאן.'}
+                  && t('orgSubscription.text_10')}
                 {availability === 'available'
-                  && 'רכישת מסלול בתשלום עדיין אינה מתבצעת מהמסך הזה. הפרטים והמכסות למטה מעודכנים.'}
+                  && t('orgSubscription.text_11')}
                 {availability === 'indeterminate'
-                  && 'לא ניתן לקבוע כרגע אם רכישת מסלול זמינה. זה אינו אומר שהיא חסומה — רענון או ניסיון מאוחר יותר יראה את המצב העדכני.'}
-                {!currency && ' המחיר נקבע במטבע של כתובת החיוב המאומתת אצל ספק הסליקה — לא לפי מיקום משוער ולא לפי בחירת מטבע — ולכן הוא נמסר במעבר למסלול בתשלום ולא מוצג כאן מראש.'}
+                  && t('orgSubscription.text_12')}
+                {!currency && t('orgSubscription.text_13')}
               </span>
             </Note>
 
             {subscription.scheduled_plan_key && (
               <Note tone="info">
                 <span className="min-w-0 flex-1">
-                  המעבר ל{subscription.scheduled_plan_label} ייכנס לתוקף בחידוש הבא
-                  {subscription.scheduled_effective_at ? `, ב־${fmtDate(subscription.scheduled_effective_at)}` : ''},
-                  ללא חישוב יחסי ובלי חיוב באמצע התקופה. עד אז המסלול הנוכחי ותנאיו נשארים בתוקף,
-                  ותקופת השימוש והמונים אינם מושפעים.
+                  {subscription.scheduled_effective_at
+                    ? t('orgSubscription.scheduledWithDate', {
+                      plan: subscription.scheduled_plan_label ?? '',
+                      date: fmtDate(subscription.scheduled_effective_at),
+                    })
+                    : t('orgSubscription.scheduledWithoutDate', {
+                      plan: subscription.scheduled_plan_label ?? '',
+                    })}
                 </span>
               </Note>
             )}
@@ -438,9 +450,9 @@ export function OrgSubscriptionPanel() {
             {subscription.cancel_at_period_end && (
               <Note tone="await">
                 <span className="min-w-0 flex-1">
-                  המנוי מסומן לביטול. גישה מלאה עד {fmtDate(subscription.current_period_end)}, ואז
-                  הארגון עובר למסלול חינם — בלי החזר, בלי מחיקה ובלי סיום שירות. אפשר לחזור מהביטול
-                  עד המועד הזה.
+                  {t('orgSubscription.cancelScheduled', {
+                    date: fmtDate(subscription.current_period_end),
+                  })}
                 </span>
               </Note>
             )}
@@ -462,12 +474,12 @@ export function OrgSubscriptionPanel() {
                 adding for a control that is already spelled `chip-filter`. */}
             {currency && (
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-ink-body" id="subscription-interval-label">מחזור חיוב</span>
+                <span className="text-sm text-ink-body" id="subscription-interval-label">{t('orgSubscription.text_18')}</span>
                 <div className="flex gap-2" role="group" aria-labelledby="subscription-interval-label">
-                  {INTERVALS.map(([value, label]) => (
+                  {INTERVAL_KEYS.map(([value, labelKey]) => (
                     <button key={value} type="button" aria-pressed={interval === value}
                       className={`chip-filter ${interval === value ? 'chip-filter-active' : ''}`}
-                      onClick={() => setIntervalChoice(value)}>{label}</button>
+                      onClick={() => setIntervalChoice(value)}>{t(labelKey)}</button>
                   ))}
                 </div>
               </div>
@@ -475,8 +487,8 @@ export function OrgSubscriptionPanel() {
 
             {currency && (
               <p className="text-sm text-ink-muted">
-                המחירים בקטלוג שנקבע לכתובת החיוב המאומתת שלך, לפני מס. ספק הסליקה מחשב וגובה את המס
-                המקומי.
+                {t('orgSubscription.text_19')}{' '}
+                {t('orgSubscription.text_20')}
               </p>
             )}
 
@@ -495,7 +507,7 @@ export function OrgSubscriptionPanel() {
               <div className="flex flex-wrap justify-end gap-2">
                 {subscription.cancel_at_period_end && (
                   <button type="button" className="btn-secondary" disabled>
-                    <Undo2 size={ICON.sm} /> חזרה מהביטול
+                    <Undo2 size={ICON.sm} /> {t('orgSubscription.undoCancel')}
                   </button>
                 )}
                 {/* Reachable, not disabled: opening it is how #220's usage-versus-quota disclosure
@@ -504,7 +516,7 @@ export function OrgSubscriptionPanel() {
                 {!subscription.cancel_at_period_end && (
                   <button type="button" className="btn-secondary text-alert-fg"
                     onClick={() => setConfirmingCancel(true)}>
-                    ביטול המנוי
+                    {t('orgSubscription.text_21')}
                   </button>
                 )}
               </div>
@@ -544,7 +556,7 @@ export function OrgSubscriptionPanel() {
           difference the server does not enforce. */}
       {subscription && (
         <section aria-labelledby="plan-ladder-heading" className="space-y-4">
-          <h2 id="plan-ladder-heading" className="section-title">כל המסלולים</h2>
+          <h2 id="plan-ladder-heading" className="section-title">{t('orgSubscription.text_22')}</h2>
 
           <ul data-testid="plan-cards" className={PLAN_GRID}>
             {[...options].sort((a, b) => a.tier_order - b.tier_order).map((option) => {
@@ -584,14 +596,14 @@ export function OrgSubscriptionPanel() {
                      five STATUS tones and they belong to data, not to a commercial rung. */
                   chips={[
                     ...(currentTier === null ? []
-                      : [current ? 'המסלול הנוכחי' : isUpgrade ? 'מדרגה מעל' : 'מדרגה מתחת']),
+                      : [current ? t('orgSubscription.text_23') : isUpgrade ? t('orgSubscription.text_24') : t('orgSubscription.text_25')]),
                     ...(planEmphasis(option.plan_key) ? [planEmphasis(option.plan_key) as string] : []),
                   ]}
                   /* The one thing a row can say about the rung itself without inventing a
                      product description: whether it costs money. `option.paid` is the server's
                      own boolean, and it is the only answer to "so what is this rung" on a screen
                      where no amount is shown that is not a guess. */
-                  standing={option.paid ? 'מסלול בתשלום' : 'לא נדרש אמצעי תשלום'}
+                  standing={option.paid ? t('orgSubscription.text_26') : t('orgSubscription.text_27')}
                   /* THE PRICE SLOT, AND THE SENTENCE THAT REPLACED FIVE DASHES (owner ruling
                      26.08.2026: «משפט קצר במקום מקף»). Stacked in a list, five «—» in the column
                      the eye reads as the price read as a broken screen rather than as a withheld
@@ -619,16 +631,16 @@ export function OrgSubscriptionPanel() {
                      zero is a true amount here, but a price slot reading `0` on a plan whose whole
                      description is "free" is a figure doing a word's job. */
                   // #194 and #201: a conversation, never a figure — and never at price size.
-                  figure={option.contact_sales ? 'דברו איתנו'
-                    : !option.paid ? 'ללא עלות'
-                      : hasAmount ? fmtPlanPrice(amount, currency) : PRICE_AT_UPGRADE}
+                  figure={option.contact_sales ? t('orgSubscription.text_28')
+                    : !option.paid ? t('orgSubscription.text_29')
+                      : hasAmount ? fmtPlanPrice(amount, currency) : t(PRICE_AT_UPGRADE_KEY)}
                   figureTone={option.contact_sales || !option.paid ? 'compact'
                     : hasAmount ? 'anchor' : 'quiet'}
                   /* The period rides the price's own baseline, and only when there IS a price to
                      bill in one. A period beside the sentence would dress an absence as a monthly
                      one, and "ללא עלות לחודש" would bill nothing on a cycle. */
                   figureNote={option.paid && hasAmount
-                    ? (interval === 'yearly' ? 'לשנה' : 'לחודש') : undefined}
+                    ? (interval === 'yearly' ? t('orgSubscription.text_30') : t('orgSubscription.text_31')) : undefined}
                   /* Disabled, with the reason said out loud (owner ruling 25.08.2026). There is no
                      `billing-checkout` function and no signed provider event to open a paid
                      entitlement with (#217), so a live button would either lie or no-op — and #204
@@ -661,19 +673,19 @@ export function OrgSubscriptionPanel() {
                   action={current
                     ? <div className="min-h-11" aria-hidden />
                     : (
-                      <button type="button" disabled title="החיוב עדיין לא נפתח"
+                      <button type="button" disabled title={t('orgSubscription.title')}
                         className={isUpgrade && !option.contact_sales
                           ? PLAN_ACTION_UPGRADE : PLAN_ACTION_QUIET}>
                         {option.contact_sales
-                          ? 'פנייה לשירות'
-                          : isUpgrade ? `שדרוג ל${option.label}` : `מעבר ל${option.label}`}
+                          ? t('orgSubscription.text_32')
+                          : t(isUpgrade ? 'orgSubscription.upgradeTo' : 'orgSubscription.switchTo', { plan: option.label })}
                       </button>
                     )}
                   /* The server's own wording, not a restatement: `/pricing` prints the same string
                      from the same function, and a card that reworded it would be the second place a
                      customer could read a different sentence about one entitlement. */
                   features={[option.contact_sales
-                    ? { key: HEADLINE_QUOTA_KEY, text: 'מכסה חוזית, נקבעת מול השירות', affirmative: true }
+                    ? { key: HEADLINE_QUOTA_KEY, text: t('orgSubscription.text_33'), affirmative: true }
                     : !quota || !quota.measured
                       /* Still a dash, and deliberately: the owner's ruling replaced the five
                          PRICE dashes, which were a column of them in the slot the eye reads as
@@ -681,9 +693,9 @@ export function OrgSubscriptionPanel() {
                          the case the dash rule was written for — an unmeasured quota (DEBT §56)
                          must not be dressed as `0`, and it must not be dressed as a promise
                          either. */
-                      ? { key: HEADLINE_QUOTA_KEY, text: <><span>—</span> {quota?.label ?? 'מסמכים'}</>, affirmative: false }
+                      ? { key: HEADLINE_QUOTA_KEY, text: <><span>—</span> {quota?.label ?? t('orgSubscription.text_34')}</>, affirmative: false }
                       : quota.unlimited
-                        ? { key: HEADLINE_QUOTA_KEY, text: `${quota.label} ללא הגבלה`, affirmative: true }
+                        ? { key: HEADLINE_QUOTA_KEY, text: t('orgSubscription.quotaUnlimited', { quota: quota.label }), affirmative: true }
                         : {
                           key: HEADLINE_QUOTA_KEY,
                           text: <><span className="num font-medium">{fmtNum(quota.numeric_limit)}</span> {quota.label}</>,
@@ -695,8 +707,8 @@ export function OrgSubscriptionPanel() {
           </ul>
 
           <p className="text-sm text-ink-muted">
-            כפתורי השדרוג אינם פעילים עדיין: החיוב טרם נפתח. שינוי מסלול נעשה כרגע מול השירות, והוא
-            אינו מאפס את תקופת השימוש או את המונים.
+            {t('orgSubscription.text_35')}{' '}
+            {t('orgSubscription.text_36')}
           </p>
         </section>
       )}
@@ -743,24 +755,25 @@ function CancelDialog({ usage, loading, periodEnd, onClose }: {
   periodEnd: string | null;
   onClose: () => void;
 }) {
+  const { t } = useT();
   return (
-    <Modal open onClose={onClose} title="ביטול המנוי">
+    <Modal open onClose={onClose} title={t('orgSubscription.title_2')}>
       <div className="space-y-3">
         <p className="text-sm text-ink-body">
-          הביטול ייכנס לתוקף בסוף התקופה ששולמה{periodEnd ? `, ב־${fmtDate(periodEnd)}` : ''}. עד אז
-          הגישה נשארת מלאה ואפשר לחזור מהביטול. אין החזר, אין מחיקת נתונים ואין סיום שירות.
+          {periodEnd
+            ? t('orgSubscription.cancelEffectiveWithDate', { date: fmtDate(periodEnd) })
+            : t('orgSubscription.cancelEffectiveWithoutDate')}
         </p>
         <p className="text-sm text-ink-body">
-          בגבול התקופה הארגון עובר למסלול חינם. תקופת השימוש והמונים אינם מתאפסים: מה שנצבר בתקופה
-          הנוכחית ימשיך להיספר מול מכסת חינם, ולכן ייתכן שפעולות חדשות ייחסמו עד תחילת התקופה הבאה.
+          {t('orgSubscription.cancelFreeTierCounters')}
         </p>
         <div className="rounded-lg bg-surface-sunken px-4 py-3">
-          <h3 className="text-sm font-medium text-ink-body">השימוש שלך בתקופה הנוכחית</h3>
+          <h3 className="text-sm font-medium text-ink-body">{t('orgSubscription.text_40')}</h3>
           {/* The snapshot is fetched when this dialog opens, not on mount. Holding the row shape
               while it arrives keeps the dialog from growing under the reader's cursor. */}
           {loading ? (
             <div role="status" aria-busy="true" className="mt-2 space-y-2">
-              <span className="sr-only">טוען</span>
+              <span className="sr-only">{t('orgSubscription.text_41')}</span>
               <Skeleton className="h-4 w-48" />
               <Skeleton className="h-4 w-40" />
             </div>
@@ -775,7 +788,7 @@ function CancelDialog({ usage, loading, periodEnd, onClose }: {
                   ) : (
                     <>
                       <span className="num text-ink">{fmtNum(row.used)}</span>
-                      <span className="text-ink-muted">מתוך</span>
+                      <span className="text-ink-muted">{t('orgSubscription.text_42')}</span>
                       <span className="num text-ink">{fmtNum(row.usage_limit)}</span>
                     </>
                   )}
@@ -790,15 +803,15 @@ function CancelDialog({ usage, loading, periodEnd, onClose }: {
             provisional under #203. */}
         <Note tone="await">
           <span className="min-w-0 flex-1">
-            ביטול מהמסך הזה אינו זמין עדיין. שום דבר לא השתנה במנוי שלך כתוצאה מפתיחת החלון הזה.
+            {t('orgSubscription.text_43')}
           </span>
         </Note>
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary" onClick={onClose}>
-            סגירה
+            {t('orgSubscription.text_44')}
           </button>
           <button type="button" className="btn-primary" disabled>
-            ביטול בסוף התקופה
+            {t('orgSubscription.text_45')}
           </button>
         </div>
       </div>

@@ -437,7 +437,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
         {!pr.supplier.bank_details && (
           <Note tone="alert">
             <span>
-              {t('payQueue.text_7')}
+              {t('payQueue.text_7')}{' '}
               {t('payQueue.text_8')}
             </span>
           </Note>
@@ -490,7 +490,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
             <Note tone="info" className="mt-3">
               <span>
                 <span className="num">{unlinkedCredits.length}</span>{t('payQueue.unlinkedCreditsAre')}
-                {t('payQueue.text_22')}
+                {t('payQueue.text_22')}{' '}
                 {t('payQueue.text_23')}
               </span>
             </Note>
@@ -556,7 +556,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
                         {/* Stated before the choice, not after it: the executor writes the link
                             once, so a partial offset today decides where the remainder may go. */}
                         <p id={targetHintId} className="mt-1 text-xs text-ink-muted">
-                          {t('payQueue.text_30')}
+                          {t('payQueue.text_30')}{' '}
                           {t('payQueue.text_31')}
                         </p>
                       </>
@@ -610,7 +610,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
               <Note tone="await">
                 <span>
                   <span className="num">{otherRequestCredits.length}</span>{t('payQueue.otherRequestCreditsAre')}
-                  {t('payQueue.text_34')}
+                  {t('payQueue.text_34')}{' '}
                   {t('payQueue.text_35')}
                 </span>
               </Note>

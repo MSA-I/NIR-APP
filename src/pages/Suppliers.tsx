@@ -535,7 +535,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
               an invoice from a supplier deactivated yesterday is the commonest event after
               deactivation, and blocking it would manufacture the dead end #115 warned about. */}
           <p id="supplier-status-hint" className="mt-1 text-xs text-ink-muted">
-            {t('suppliers.text_31')}
+            {t('suppliers.text_31')}{' '}
             {t('suppliers.text_32')}
           </p>
         </div>

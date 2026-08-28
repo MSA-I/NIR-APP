@@ -823,7 +823,7 @@ export function PriceListReviewConfirmation({
           )}
           {predictionsMissing && !catalogLoading && (
             <Note tone="info" className="mt-3">
-              {t('priceListReview.text_34')}
+              {t('priceListReview.text_34')}{' '}
               {t('priceListReview.text_35')}
             </Note>
           )}

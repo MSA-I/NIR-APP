@@ -438,7 +438,7 @@ export default function InvoiceDetail() {
 
       {isOffice && graphUnavailable && (
         <Note tone="alert" role="alert">
-          {t('invoices.text_4')}
+          {t('invoices.text_4')}{' '}
           {t('invoices.text_5')}
         </Note>
       )}

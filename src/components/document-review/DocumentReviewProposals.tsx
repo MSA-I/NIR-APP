@@ -309,7 +309,7 @@ function PaymentConfirmationMatch({ interpretation }: {
           {matchedPayments.length > 0 && (
             <Note tone="done">
               <span className="min-w-0 flex-1">
-                {t('docReview.matchedPaymentFound', { payments: matchedPayments.map((payment) => t('docReview.paymentRef', { number: payment.number, date: payment.paid_date })).join(', ') })}
+                {t('docReview.matchedPaymentFound', { payments: matchedPayments.map((payment) => t('docReview.paymentRef', { number: payment.number, date: payment.paid_date })).join(', ') })}{' '}
                 {t('docReview.text_16')}
               </span>
             </Note>
@@ -317,7 +317,7 @@ function PaymentConfirmationMatch({ interpretation }: {
           {matchedPayments.length === 0 && matchedRequests.length > 0 && (
             <Note tone="await">
               <span className="min-w-0 flex-1">
-                {t('docReview.matchedRequestFound', { requests: matchedRequests.map((request) => `#${request.number}`).join(', ') })}
+                {t('docReview.matchedRequestFound', { requests: matchedRequests.map((request) => `#${request.number}`).join(', ') })}{' '}
                 {t('docReview.text_17')}
               </span>
             </Note>
