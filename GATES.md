@@ -117,6 +117,14 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   list, in descending order and with what the extractor can and cannot take from each, is in
   `docs/HANDOFF-english-language-20260828-session3.md`. Nothing here is blocked; it is work.
 
+  **PROGRESS, 28.08.2026 — `UploadCenter` batch in this commit.** The pinned count is now 1,093
+  Hebrew line(s) across 98 files; the documented exceptions remain 530 lines in 30 files, so
+  **563 lines in 68 files** remain to extract. `UploadCenter.tsx` is the 59th surface locked at
+  zero. Evidence: its stale-baseline negative control failed on that file alone; `gate-i18n
+  extracted` reported 59 zero surfaces; targeted tests passed 32/32; the full suite passed
+  1,715/1,715; `npx tsc --noEmit` and `check:jsx-space` passed. `zero` still exits 1 on 563/68,
+  so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

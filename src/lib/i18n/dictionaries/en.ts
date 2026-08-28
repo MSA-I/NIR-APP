@@ -5002,4 +5002,28 @@ export const en: Dictionary = {
     createdWithoutPrice: '{error} — the product was created in the catalogue but still has no supplier price. You can try again, or set the price on the price lists screen.',
   },
 
+  uploadCenter: {
+    aria_label: 'Upload center',
+    text: 'Upload center',
+    text_2: 'in progress',
+    text_3: 'Clear completed',
+    text_4: 'You are offline. The upload queue will wait and resume automatically when the connection returns.',
+    text_5: 'Partially completed batch: some files were received and others still need attention.',
+    text_6: 'Retry processing',
+    text_7: 'Complete registration',
+    text_8: 'Try again',
+    text_9: 'The source file is stored safely — do not upload it again; only registration remains.',
+    text_10: 'Go to registered document',
+    offlineAnnouncement: 'You are offline. Uploads will wait and resume automatically when the connection returns.',
+    connectionRestored: 'The connection is back. Uploads are resuming.',
+    defaultFileName: 'File',
+    progressAnnouncement: '{fileName} — {percent}% uploaded',
+    sourceStoredRegistrationPending: '{fileName} — source stored; registration is not complete',
+    uploadCompleted: '{fileName} — upload complete',
+    sourceStoredHandlingIncomplete: '{fileName} — source stored, but processing is incomplete',
+    uploadFailed: '{fileName} — upload failed',
+    cancelUpload: 'Cancel upload of {fileName}',
+    uploadProgress: 'Upload progress — {fileName}',
+  },
+
 };

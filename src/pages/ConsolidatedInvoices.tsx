@@ -186,6 +186,8 @@ export default function ConsolidatedInvoices() {
         });
         context.markRegistered(uploaded.registration.document_id);
       }, {
+        t,
+        errorText,
         source: t('consolidated.text'),
         supplierName: selectedSupplierName,
         describe: (item) => ({ name: item.file.name, type: item.mimeType, size: item.file.size }),

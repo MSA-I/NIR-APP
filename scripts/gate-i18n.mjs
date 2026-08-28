@@ -81,6 +81,7 @@ const EXTRACTED = [
   'src/pages/neworder/SupplierSplitStep.tsx',
   'src/components/assistant/AssistantDialog.tsx',
   'src/lib/documentStatus.ts',
+  'src/components/UploadCenter.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */

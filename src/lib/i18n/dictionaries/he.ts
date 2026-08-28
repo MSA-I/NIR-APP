@@ -5006,6 +5006,30 @@ export const he = {
     createdWithoutPrice: '{error} — המוצר נוצר בקטלוג אך עדיין ללא מחיר לספק. אפשר לנסות שוב, או להשלים את המחיר במסך המחירונים.',
   },
 
+  uploadCenter: {
+    aria_label: 'מרכז ההעלאות',
+    text: 'מרכז ההעלאות',
+    text_2: 'בתהליך',
+    text_3: 'ניקוי שהסתיימו',
+    text_4: 'אין חיבור לרשת. תור ההעלאות ממתין ויימשך אוטומטית כשהחיבור יחזור.',
+    text_5: 'אצווה שהושלמה חלקית: חלק מהקבצים נקלטו וחלק עדיין דורשים טיפול.',
+    text_6: 'שליחה מחדש לעיבוד',
+    text_7: 'השלמת רישום',
+    text_8: 'ניסיון חוזר',
+    text_9: 'קובץ המקור נשמר בבטחה — אין להעלות אותו שוב; נותר רק להשלים את הרישום.',
+    text_10: 'מעבר למסמך הרשום',
+    offlineAnnouncement: 'אין חיבור לרשת. ההעלאות ממתינות ויימשכו אוטומטית כשהחיבור יחזור.',
+    connectionRestored: 'החיבור חזר. ההעלאות ממשיכות.',
+    defaultFileName: 'קובץ',
+    progressAnnouncement: '{fileName} — הועלו {percent}%',
+    sourceStoredRegistrationPending: '{fileName} — המקור נשמר; הרישום טרם הושלם',
+    uploadCompleted: '{fileName} — ההעלאה הושלמה',
+    sourceStoredHandlingIncomplete: '{fileName} — המקור נשמר אך הטיפול לא הושלם',
+    uploadFailed: '{fileName} — ההעלאה נכשלה',
+    cancelUpload: 'ביטול העלאת {fileName}',
+    uploadProgress: 'התקדמות העלאה — {fileName}',
+  },
+
 } as const;
 
 /**

@@ -281,6 +281,8 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
             return outcome.value;
           },
           {
+            t,
+            errorText,
             source: t('priceUpload.text'),
             supplierName: supplierName ?? null,
             classifyFailure: (_item, error) => ({

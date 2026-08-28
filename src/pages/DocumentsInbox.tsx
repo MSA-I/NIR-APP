@@ -276,7 +276,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
       const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, 'inbox', null, file, {
         supplierId: supplierId || null,
         documentDate: documentDate || null,
-      }));
+      }), { t, errorText });
       const failures = result.failed.map(({ item, error }) => ({ item, ...documentUploadFailure(error) }));
       const failed = failures.filter(({ retryable }) => retryable).map(({ item }) => item);
       const registered = failures.filter(({ registered: isRegistered }) => isRegistered).length;

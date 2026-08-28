@@ -797,6 +797,8 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
           enqueueProcessing: canMutateDocuments,
         }, { resume: resumeRef.current.get(file) ?? null }),
         {
+          t,
+          errorText,
           source: t(ENTITY_SOURCE_KEYS[entityType] ?? 'fileUpload.text_8'),
           retry: true,
           classifyFailure: (file, error) => {

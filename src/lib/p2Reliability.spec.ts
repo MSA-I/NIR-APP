@@ -30,6 +30,10 @@ import type { TKey } from '../lib/i18n/t';
  */
 const t = ((key, vars) => translate(he as unknown as Dictionary, key, vars)) as
   (key: TKey, vars?: Record<string, string | number>) => string;
+const uploadI18n = {
+  t,
+  errorText: (error: unknown) => error instanceof Error ? error.message : String(error),
+};
 
 test('calendar, paging, reports and retry reliability contracts', async () => {
 assert.deepEqual(monthRange('2026-07'), { start: '2026-07-01', end: '2026-08-01' });
@@ -166,10 +170,14 @@ await assert.rejects(readExactCount(Promise.resolve({ count: null, error: null }
 
 const firstUpload = await runUploadBatch(['first.pdf', 'second.pdf'], async (name) => {
   if (name === 'second.pdf') throw new Error('network');
-});
+}, uploadI18n);
 assert.deepEqual(firstUpload.succeeded, ['first.pdf']);
 assert.deepEqual(firstUpload.failed.map(({ item }) => item), ['second.pdf']);
-const retryUpload = await runUploadBatch(firstUpload.failed.map(({ item }) => item), async () => undefined);
+const retryUpload = await runUploadBatch(
+  firstUpload.failed.map(({ item }) => item),
+  async () => undefined,
+  uploadI18n,
+);
 assert.deepEqual(retryUpload.succeeded, ['second.pdf']);
 assert.equal(retryUpload.failed.length, 0);
 const firstUploadSummary = mergeUploadBatchSummary(null, firstUpload, String);

@@ -14,7 +14,6 @@ import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Link } from 'react-router';
 import { ShieldCheck, X } from 'lucide-react';
-import { toHebrewError } from '../lib/errors';
 import type { TKey } from '../lib/i18n/t.ts';
 import { TusUploadCancelledError } from '../lib/tusUpload';
 import {
@@ -23,7 +22,11 @@ import {
 } from '../lib/useDocumentProcessing';
 import { documentUiStatus } from '../lib/documentStatus';
 import type { StatusMeta } from '../lib/status';
-import { setUploadBatchDelegate, type UploadBatchResult } from '../lib/uploadBatch';
+import {
+  setUploadBatchDelegate,
+  type UploadBatchI18n,
+  type UploadBatchResult,
+} from '../lib/uploadBatch';
 import { ICON, Note, StatusBadge } from './ui';
 import { DocumentStatusBadge } from './DocumentStatusBadge';
 
@@ -54,7 +57,7 @@ export interface UploadCenterEntry {
   documentId: string | null;
   /** True the moment the source object is durable in storage. */
   storedSafely: boolean;
-  /** Hebrew label of the originating entity/screen. */
+  /** Localized label of the originating entity/screen. */
   source: string | null;
   supplierName: string | null;
   error: string | null;
@@ -91,7 +94,7 @@ export interface UploadFailureShape {
   documentId?: string | null;
 }
 
-export interface UploadCenterBatchOptions<T> {
+export interface UploadCenterBatchOptions<T> extends UploadBatchI18n {
   source?: string | null;
   supplierName?: string | null;
   /**
@@ -125,6 +128,7 @@ interface UploadRecord {
   run: (() => Promise<boolean>) | null;
   abort: (() => void | Promise<void>) | null;
   announced: Set<number>;
+  t: UploadBatchI18n['t'];
 }
 
 const TERMINAL_STATUSES: ReadonlySet<UploadCenterStatus> = new Set(['stored', 'registered', 'failed', 'canceled']);
@@ -191,8 +195,8 @@ function announce(text: string) {
 
 /* ================= ambient task context =================
  *
- * `runUploadBatch` keeps its public signature, so a consumer's `upload(file)` closure has
- * nowhere to accept a reporter. The queue sets the context synchronously around the
+ * A consumer's `upload(file)` closure keeps its one-item signature and has nowhere to accept a
+ * reporter. The queue sets the context synchronously around the
  * runner invocation; `uploadDocument` (and friends) claim it in their own synchronous
  * prologue, before any await, so interleaved batches cannot misattribute it.
  */
@@ -218,13 +222,12 @@ function currentStatus(record: UploadRecord): UploadCenterStatus {
   return record.status;
 }
 
-const OFFLINE_ANNOUNCEMENT = 'אין חיבור לרשת. ההעלאות ממתינות ויימשכו אוטומטית כשהחיבור יחזור.';
-
 /** Offline: the queue waits and says so; it resumes by itself when the network returns. */
 async function waitForOnline(record: UploadRecord) {
   if (isOnline()) return;
   record.waitingForNetwork = true;
-  announce(OFFLINE_ANNOUNCEMENT);
+  const offlineAnnouncement = record.t('uploadCenter.offlineAnnouncement');
+  announce(offlineAnnouncement);
   await new Promise<void>((resolve) => {
     const timer = window.setInterval(check, 2_000);
     function finish() {
@@ -243,21 +246,23 @@ async function waitForOnline(record: UploadRecord) {
   // text just sits there until something overwrites it. "אין חיבור לרשת" is a claim about NOW, so
   // whoever put it there takes it back. Only if it is still the sentence on the channel — a later
   // announcement is a newer truth and must not be undone by an older step finishing.
-  if (announcement === OFFLINE_ANNOUNCEMENT) {
-    announce(isOnline() && record.status !== 'canceled' ? 'החיבור חזר. ההעלאות ממשיכות.' : '');
+  if (announcement === offlineAnnouncement) {
+    announce(isOnline() && record.status !== 'canceled'
+      ? record.t('uploadCenter.connectionRestored')
+      : '');
     return;
   }
   emit();
 }
 
-function defaultDescribe(item: unknown): UploadCenterItemDescriptor {
+function defaultDescribe(item: unknown, t: UploadBatchI18n['t']): UploadCenterItemDescriptor {
   if (typeof File !== 'undefined' && item instanceof File) {
     return { name: item.name, type: item.type, size: item.size };
   }
-  return { name: 'קובץ', type: '', size: 0 };
+  return { name: t('uploadCenter.defaultFileName'), type: '', size: 0 };
 }
 
-function defaultClassify(error: unknown): UploadFailureShape {
+function defaultClassify(error: unknown, errorText: UploadBatchI18n['errorText']): UploadFailureShape {
   const duck = (error ?? {}) as {
     retryable?: unknown;
     registered?: unknown;
@@ -268,15 +273,10 @@ function defaultClassify(error: unknown): UploadFailureShape {
     // ONE branch, and the one it replaced is why. It used to read the message straight off any
     // error that carried its own retry verdict, on the premise that `DocumentUploadError` and
     // `TusUploadError` "author Hebrew messages". They do not: both carry a registered CODE, so
-    // that branch was rendering `tus_upload_forbidden` at a person. `toHebrewError` resolves a
-    // code and a raw failure alike, which is what made the special case unnecessary in the first
-    // place.
-    //
-    // It answers in Hebrew only, and that is a real gap rather than a decision: this runner is
-    // module scope and cannot hold a hook. Every screen that needs the reader's own language
-    // passes its own `classifyFailure` — `FileUpload` does — and the ones that do not are still
-    // mid-extraction. Recorded in the handoff rather than papered over here.
-    message: toHebrewError(error),
+    // that branch was rendering `tus_upload_forbidden` at a person. The injected resolver handles
+    // a code and a raw failure alike, which makes the special case unnecessary. It crosses in
+    // from the component; this helper never calls a hook.
+    message: errorText(error),
     retryable: duck.retryable === true,
     registered: duck.registered === true,
     storedSafely: resume !== null || duck.registered === true,
@@ -303,7 +303,10 @@ async function executeRecord<T>(
       for (const milestone of [25, 50, 75]) {
         if (bounded >= milestone && !record.announced.has(milestone)) {
           record.announced.add(milestone);
-          announce(`${record.fileName} — הועלו ${milestone}%`);
+          announce(record.t('uploadCenter.progressAnnouncement', {
+            fileName: record.fileName,
+            percent: milestone,
+          }));
         }
       }
       emit();
@@ -342,9 +345,9 @@ async function executeRecord<T>(
     record.status = registered || !record.storedSafely ? 'registered' : 'stored';
     if (record.status === 'stored') {
       record.retryable = true;
-      announce(`${record.fileName} — המקור נשמר; הרישום טרם הושלם`);
+      announce(record.t('uploadCenter.sourceStoredRegistrationPending', { fileName: record.fileName }));
     } else {
-      announce(`${record.fileName} — ההעלאה הושלמה`);
+      announce(record.t('uploadCenter.uploadCompleted', { fileName: record.fileName }));
     }
     emit();
     return { ok: true };
@@ -369,8 +372,8 @@ async function executeRecord<T>(
       record.status = 'failed';
     }
     announce(record.storedSafely
-      ? `${record.fileName} — המקור נשמר אך הטיפול לא הושלם`
-      : `${record.fileName} — ההעלאה נכשלה`);
+      ? record.t('uploadCenter.sourceStoredHandlingIncomplete', { fileName: record.fileName })
+      : record.t('uploadCenter.uploadFailed', { fileName: record.fileName }));
     emit();
     return { ok: false, error };
   }
@@ -385,12 +388,13 @@ async function executeRecord<T>(
 export function enqueueUploadCenterBatch<T>(
   items: readonly T[],
   run: (item: T, ctx: UploadCenterTaskContext) => Promise<unknown>,
-  options: UploadCenterBatchOptions<T> = {},
+  options: UploadCenterBatchOptions<T>,
 ): Promise<UploadBatchResult<T>> {
   if (!items.length) return Promise.resolve({ succeeded: [], failed: [] });
   const batchId = nextId('batch');
-  const describe = options.describe ?? defaultDescribe;
-  const classify = options.classifyFailure ?? ((_item: T, error: unknown) => defaultClassify(error));
+  const describe = options.describe ?? ((item: T) => defaultDescribe(item, options.t));
+  const classify = options.classifyFailure
+    ?? ((_item: T, error: unknown) => defaultClassify(error, options.errorText));
   const newRecords: UploadRecord[] = items.map((item) => {
     const descriptor = describe(item);
     return {
@@ -414,6 +418,7 @@ export function enqueueUploadCenterBatch<T>(
       run: null,
       abort: null,
       announced: new Set<number>(),
+      t: options.t,
     };
   });
   for (const record of newRecords) {
@@ -476,7 +481,11 @@ export function enqueueUploadCenterBatch<T>(
 
 // Every `runUploadBatch` call in the browser flows through the Center's queue. See the
 // note on `setUploadBatchDelegate` for why this is a registration and not a static import.
-setUploadBatchDelegate((items, upload) => enqueueUploadCenterBatch(items, (item) => upload(item)));
+setUploadBatchDelegate((items, upload, i18n) => enqueueUploadCenterBatch(
+  items,
+  (item) => upload(item),
+  i18n,
+));
 
 export function retryUploadCenterEntry(id: string) {
   const record = records.find((candidate) => candidate.id === id);
@@ -698,26 +707,26 @@ export function UploadCenter() {
   }
 
   return (
-    <section aria-label="מרכז ההעלאות" data-upload-center className="mb-3 card">
+    <section aria-label={t('uploadCenter.aria_label')} data-upload-center className="mb-3 card">
       <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-line-soft px-3 py-1.5">
         <span className="text-sm font-medium text-ink-soft">
-          מרכז ההעלאות
-          {pendingCount > 0 && <span className="ms-1.5 text-xs text-ink-muted"><span className="num">{pendingCount}</span> בתהליך</span>}
+          {t('uploadCenter.text')}
+          {pendingCount > 0 && <span className="ms-1.5 text-xs text-ink-muted"><span className="num">{pendingCount}</span> {t('uploadCenter.text_2')}</span>}
         </span>
         {settledCount > 0 && (
           <button type="button" className="btn-ghost btn-sm" onClick={clearSettledUploadCenterEntries}>
-            ניקוי שהסתיימו
+            {t('uploadCenter.text_3')}
           </button>
         )}
       </div>
       {!online && pendingCount > 0 && (
         <Note tone="await" role="status" className="m-2">
-          אין חיבור לרשת. תור ההעלאות ממתין ויימשך אוטומטית כשהחיבור יחזור.
+          {t('uploadCenter.text_4')}
         </Note>
       )}
       {partialBatches.size > 0 && (
         <Note tone="await" className="m-2">
-          אצווה שהושלמה חלקית: חלק מהקבצים נקלטו וחלק עדיין דורשים טיפול.
+          {t('uploadCenter.text_5')}
         </Note>
       )}
       <ul className="divide-y divide-line-soft">
@@ -739,13 +748,13 @@ export function UploadCenter() {
                   <button type="button" className="btn-ghost btn-sm"
                     onClick={() => retryUploadCenterEntry(entry.id)}>
                     {entry.status === 'registered'
-                      ? 'שליחה מחדש לעיבוד'
-                      : entry.storedSafely ? 'השלמת רישום' : 'ניסיון חוזר'}
+                      ? t('uploadCenter.text_6')
+                      : entry.storedSafely ? t('uploadCenter.text_7') : t('uploadCenter.text_8')}
                   </button>
                 )}
                 {entry.canCancel && (
                   <button type="button" className="btn-ghost btn-icon text-alert-fg hover:bg-alert-soft"
-                    aria-label={`ביטול העלאת ${entry.fileName}`}
+                    aria-label={t('uploadCenter.cancelUpload', { fileName: entry.fileName })}
                     onClick={() => cancelUploadCenterEntry(entry.id)}>
                     <X size={ICON.sm} />
                   </button>
@@ -759,7 +768,7 @@ export function UploadCenter() {
               {entry.status === 'uploading' && (
                 <div className="mt-1.5">
                   <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.percent ?? 0}
-                    aria-label={`התקדמות העלאה — ${entry.fileName}`}
+                    aria-label={t('uploadCenter.uploadProgress', { fileName: entry.fileName })}
                     className="h-1.5 w-full overflow-hidden rounded-full bg-surface-sunken">
                     <div className="h-full rounded-full bg-action" style={{ width: `${entry.percent ?? 0}%` }} />
                   </div>
@@ -768,13 +777,13 @@ export function UploadCenter() {
               {entry.storedSafely && entry.status !== 'registered' && entry.status !== 'uploading' && (
                 <div className="mt-1 flex items-center gap-1.5 text-xs text-ink-soft">
                   <ShieldCheck size={ICON.xs} className="shrink-0" />
-                  קובץ המקור נשמר בבטחה — אין להעלות אותו שוב; נותר רק להשלים את הרישום.
+                  {t('uploadCenter.text_9')}
                 </div>
               )}
               {entry.error && !processingStatus && <div className="mt-1 text-xs text-alert-fg">{entry.error}</div>}
               {entry.status === 'registered' && entry.documentId && entry.error && !processingStatus && (
                 <Link to={`/documents/${entry.documentId}/review`} className="link text-xs">
-                  מעבר למסמך הרשום
+                  {t('uploadCenter.text_10')}
                 </Link>
               )}
             </li>

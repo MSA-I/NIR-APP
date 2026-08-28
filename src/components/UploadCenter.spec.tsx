@@ -28,14 +28,32 @@ vi.mock('../lib/supabase', async () => {
 
 import {
   UploadCenter,
-  enqueueUploadCenterBatch,
+  enqueueUploadCenterBatch as enqueueUploadCenterBatchRaw,
   cancelUploadCenterEntry,
   getUploadCenterSnapshot,
   resetUploadCenterForTests,
+  type UploadCenterBatchOptions,
   type UploadCenterTaskContext,
 } from './UploadCenter';
-import { runUploadBatch } from '../lib/uploadBatch';
+import { runUploadBatch, type UploadBatchI18n } from '../lib/uploadBatch';
 import { TusUploadCancelledError } from '../lib/tusUpload';
+import { LocaleProvider, translateIn } from '../lib/i18n/LocaleProvider';
+import { toErrorKey, toHebrewError } from '../lib/errors';
+
+const TEST_I18N: UploadBatchI18n = {
+  t: (key, vars) => translateIn('he', key, vars),
+  errorText: toHebrewError,
+};
+const ENGLISH_I18N: UploadBatchI18n = {
+  t: (key, vars) => translateIn('en', key, vars),
+  errorText: (error) => translateIn('en', `errors.${toErrorKey(error)}` as never),
+};
+
+const enqueueUploadCenterBatch = <T,>(
+  items: readonly T[],
+  run: (item: T, context: UploadCenterTaskContext) => Promise<unknown>,
+  options: Omit<UploadCenterBatchOptions<T>, keyof UploadBatchI18n> = {},
+) => enqueueUploadCenterBatchRaw(items, run, { ...options, ...TEST_I18N });
 
 function deferred<T = void>() {
   let resolve!: (value: T) => void;
@@ -50,10 +68,12 @@ function deferred<T = void>() {
 const file = (name: string, size = 4) =>
   new File(['x'.repeat(size)], name, { type: 'application/pdf' });
 
-const renderCenter = () => render(
-  <QueryClientProvider client={createAppQueryClient()}>
-    <MemoryRouter><UploadCenter /></MemoryRouter>
-  </QueryClientProvider>,
+const renderCenter = (locale: 'he' | 'en' = 'he') => render(
+  <LocaleProvider initialLocale={locale}>
+    <QueryClientProvider client={createAppQueryClient()}>
+      <MemoryRouter><UploadCenter /></MemoryRouter>
+    </QueryClientProvider>
+  </LocaleProvider>,
 );
 
 const entries = () => getUploadCenterSnapshot().entries;
@@ -90,7 +110,7 @@ describe('runUploadBatch — signature compatibility through the Center queue', 
       order.push(item.name);
       if (item === bad) throw boom;
       return 'ok';
-    });
+    }, TEST_I18N);
     expect(order).toEqual(['good.pdf', 'bad.pdf']);
     expect(result.succeeded).toEqual([good]);
     expect(result.failed).toEqual([{ item: bad, error: boom }]);
@@ -104,7 +124,7 @@ describe('runUploadBatch — signature compatibility through the Center queue', 
     const batch = runUploadBatch([file('a.pdf'), file('b.pdf')], async (item) => {
       started.push(item.name);
       if (item.name === 'a.pdf') await first.promise;
-    });
+    }, TEST_I18N);
     await waitFor(() => expect(started).toEqual(['a.pdf']));
     expect(started).toEqual(['a.pdf']);
     first.resolve();
@@ -114,6 +134,26 @@ describe('runUploadBatch — signature compatibility through the Center queue', 
 });
 
 describe('state machine and progressbar aria', () => {
+  it('renders the queue, announcements and default failure in English without Hebrew leakage', async () => {
+    server.use(rest('document_processing_jobs', []));
+    renderCenter('en');
+    await act(async () => {
+      await enqueueUploadCenterBatchRaw(
+        [file('ok.pdf'), file('bad.pdf')],
+        async (item, context) => {
+          if (item.name === 'bad.pdf') throw new Error('tus_upload_forbidden');
+          context.markRegistered('doc-ok');
+        },
+        ENGLISH_I18N,
+      );
+    });
+
+    const section = screen.getByRole('region', { name: 'Upload center' });
+    expect(within(section).getByText(/Partially completed batch/)).toBeInTheDocument();
+    expect(within(section).getByText(/server refused the upload/i)).toBeInTheDocument();
+    expect(section.textContent).not.toMatch(/[֐-׿]/);
+  });
+
   it('walks queued → uploading → registered, with aria-valuenow following and spaced announcements', async () => {
     server.use(rest('document_processing_jobs', []));
     renderCenter();

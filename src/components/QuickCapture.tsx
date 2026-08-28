@@ -51,7 +51,7 @@ export function quickCaptureReviewTarget(
 export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
   openCapture: () => void; element: ReactNode; busy: boolean; retryCount: number;
 } {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const location = useLocation();
@@ -71,7 +71,7 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
       const result = await runUploadBatch(files, async (file) => {
         const uploaded = await uploadDocument(profile.org_id, 'inbox', null, file);
         uploadedDocumentIds.push(uploaded.documentId);
-      });
+      }, { t, errorText });
       const failures = result.failed.map(({ item, error }) => ({ item, ...documentUploadFailure(error) }));
       const failed = failures.filter(({ retryable }) => retryable).map(({ item }) => item);
       const registered = failures.filter(({ registered: isRegistered }) => isRegistered).length;
