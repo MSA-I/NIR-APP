@@ -172,8 +172,9 @@ const CONFIDENCE_PARTIAL = 0.7;
  * The percentage was removed from the everyday screens on the owner's instruction — the reviewers
  * are operational product users, and "רמת ביטחון 87%" asks them to do arithmetic on a
  * number nobody calibrated instead of answering the only question they have: do I look at this one
- * harder? It is **not deleted**: `confidencePercent` prints it verbatim inside the "פרטים טכניים"
- * disclosure of the review workspace, one click away, for whoever is diagnosing an extraction.
+ * harder? The number is not lost — `document_extractions` and `document_interpretations` still
+ * store it and the operator console reads it. It simply has no tenant surface any more: the
+ * technical block came off the review workspace entirely (owner report 28.08.2026).
  *
  * The wording is about *reading*, never about *correctness*: `זוהה בבירור` claims the characters
  * came off the page cleanly, not that the value is the right one. Only the human approval step
@@ -196,32 +197,10 @@ export function confidenceLabel(value: number | null | undefined): string {
  *
  * Deliberately not bounded below: a negative is equally broken, but it falls into "לא ודאי", which
  * errs toward more scrutiny rather than less. A corrupt number that under-claims needs no guard.
- * `confidencePercent` prints all of these verbatim — the disclosure exists to show the corruption,
- * not to launder it.
+ * A corrupt number reaches no screen at all now; it reaches this grader, which refuses to grade it.
  */
 function usableConfidence(value: number | null | undefined): value is number {
   return value != null && Number.isFinite(value) && value <= 1;
-}
-
-/**
- * The raw number, for the technical disclosure only — never for an everyday screen.
- *
- * Absent prints — and never 0% (CLAUDE.md: an absent metric shows —, because zero is itself a
- * statement about the reading). A measured zero does print as 0%: something did measure it.
- *
- * Two decimals, trailing zeros stripped, rather than whole percent. Whole percent rounded 0.899 to
- * "90%" on the one surface built for diagnosis, beside a screen grading it "זוהה חלקית" against a
- * documented 0.9 threshold — a contradiction produced entirely by the display. `toFixed` also
- * absorbs the binary-float noise that makes 0.87*100 come out as 87.00000000000001, the same
- * reason `DocumentSourceViewer`'s `pct` exists. Any fixed precision still rounds, so the
- * disclosure says so in words rather than claiming the number is untouched.
- *
- * Values outside the contract's 0–1 print as they are. The disclosure exists to show a broken
- * payload, not to launder it — only `confidenceLabel` refuses to grade one.
- */
-export function confidencePercent(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return '—';
-  return `${Number((value * 100).toFixed(2))}%`;
 }
 
 /**
@@ -240,27 +219,6 @@ export function supplierMatchCaution(value: number | null | undefined): string |
   return usableConfidence(value)
     ? 'הספק לא זוהה בבירור. יש לאמת את שם הספק מול המסמך לפני שמאשרים ממנו חשבונית או תשלום.'
     : 'לא ידוע באיזו ודאות זוהה הספק. יש לאמת את שם הספק מול המסמך לפני שמאשרים ממנו חשבונית או תשלום.';
-}
-
-/**
- * Where on the page a block sits, as prose — the accessible locator that reaches screen readers
- * through the aria-labels of both the overlay shortcuts and the keyboard list, for images and
- * (since wave 6, via react-pdf) for PDF pages alike.
- *
- * An axis that spans the whole page is dropped rather than printed. Both paths that actually run
- * in production are full-width by construction: `parsers.py` gives digital PDF text FULL_BBOX
- * [0,0,1,1], and the OpenAI OCR adapter synthesises one full-width band per line. Printing
- * "0%–100% לרוחב" on every row is noise that hides the one number that varies, and it reaches
- * screen readers through the aria-labels too.
- */
-export function bboxDescription(box: ExtractionContract['blocks'][number]['bbox'] | null): string {
-  if (!box) return 'מיקום התא אינו זמין';
-  const [xMin, yMin, xMax, yMax] = box.map((value) => Math.round(value * 100));
-  const axes = [
-    xMin === 0 && xMax === 100 ? null : `${xMin}%–${xMax}% לרוחב`,
-    yMin === 0 && yMax === 100 ? null : `${yMin}%–${yMax}% לגובה`,
-  ].filter((axis): axis is string => axis !== null);
-  return axes.length ? `מיקום בעמוד: ${axes.join(', ')}` : 'פרוס על פני כל העמוד';
 }
 
 // Keys are chosen by the model, not fixed by the contract, so they are matched by name. Only

@@ -6,7 +6,7 @@ import type {
   DocumentTypeReviewDecision,
   ReviewSnapshot,
 } from './model';
-import { bboxDescription, confidenceLabel, confidencePercent, creditDraftFromInterpretation, deliveryNoteLines, documentRoutingSummary, invoiceDraftFromInterpretation, latestCorrections, matchDeliveryLineProduct, paymentConfirmationFacts, sameAmount, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, normalizeInvoiceDate, resolveExportTemplateWinner, resolvedText, ruleWhy, supplierMatchCaution } from './model';
+import { confidenceLabel, creditDraftFromInterpretation, deliveryNoteLines, documentRoutingSummary, invoiceDraftFromInterpretation, latestCorrections, matchDeliveryLineProduct, paymentConfirmationFacts, sameAmount, latestFeedbackByAnnotation, latestTypeReviewDecision, lineItemArithmetic, normalizeInvoiceDate, resolveExportTemplateWinner, resolvedText, ruleWhy, supplierMatchCaution } from './model';
 
 const correction = (revision: number, text: string): DocumentReviewCorrection => ({
   id: `correction-${revision}`,
@@ -62,13 +62,7 @@ test('review overlays keep immutable evidence and select the newest fenced revis
   });
 });
 
-test('location and rule explanations stay textual', () => {
-  assert.match(bboxDescription([0.1, 0.2, 0.8, 0.9]), /10%–80%/);
-  // A full-width band is what both production paths emit: FULL_BBOX for digital PDF text, and one
-  // band per line from the OpenAI OCR adapter. The constant axis is dropped so the varying one
-  // is not buried under "0%–100% לרוחב" on every single row.
-  assert.equal(bboxDescription([0, 0.26, 1, 0.3]), 'מיקום בעמוד: 26%–30% לגובה');
-  assert.equal(bboxDescription([0, 0, 1, 1]), 'פרוס על פני כל העמוד');
+test('rule explanations stay textual', () => {
   assert.match(ruleWhy({
     id: 'rule', org_id: 'org', family_id: 'family', version: 3, user_id: 'user', document_type: 'invoice',
     supplier_id: null, mark_kind: 'check', mark_fingerprint: 'fingerprint', tag_key: 'approved',
@@ -100,26 +94,7 @@ test('an absent confidence says it is unknown and never poses as the lowest grad
   for (const missing of [null, undefined, Number.NaN]) {
     assert.equal(confidenceLabel(missing), 'רמת הזיהוי אינה ידועה');
     assert.notEqual(confidenceLabel(missing), confidenceLabel(0));
-    assert.equal(confidencePercent(missing), '—');
   }
-  // The number is moved, not deleted: the technical disclosure still prints it.
-  assert.equal(confidencePercent(0.87), '87%');
-  assert.equal(confidencePercent(1), '100%');
-  // A measured zero prints as 0%, because something did measure it. Only absence prints —.
-  assert.equal(confidencePercent(0), '0%');
-});
-
-test('the disclosure does not round a value across the threshold it is being judged by', () => {
-  // Whole percent turned 0.899 into "90%" on the one surface built for diagnosis, next to a screen
-  // saying "זוהה חלקית" against a documented 0.9 cut point — a contradiction created purely by the
-  // display. Two decimals, and the trailing zeros stripped so ordinary values stay readable.
-  assert.equal(confidenceLabel(0.899), 'זוהה חלקית');
-  assert.equal(confidencePercent(0.899), '89.9%');
-  assert.equal(confidencePercent(0.865), '86.5%');
-  assert.equal(confidencePercent(0.8749), '87.49%');
-  // Binary-float noise does not leak: 0.87*100 is 87.00000000000001.
-  assert.equal(confidencePercent(0.87), '87%');
-  assert.equal(confidencePercent(0.62), '62%');
 });
 
 test('a confidence outside the contract range cannot buy the strongest claim', () => {
@@ -132,9 +107,6 @@ test('a confidence outside the contract range cannot buy the strongest claim', (
   // Below 0 is equally broken but falls into the loudest grade, which errs toward more scrutiny.
   // A corrupt number that under-claims needs no guard, so this stays as it is.
   assert.equal(confidenceLabel(-1), 'לא ודאי');
-  // The disclosure still shows the corruption rather than laundering it into a plausible number.
-  assert.equal(confidencePercent(1.5), '150%');
-  assert.equal(confidencePercent(-1), '-100%');
 });
 
 test('a supplier match that is not clear carries an instruction, a field of the same grade does not', () => {
