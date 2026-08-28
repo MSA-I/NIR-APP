@@ -590,18 +590,14 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   contract-preserving fixture correction; its entire 11-test file passed before the full gate.
   The completed full run and money guard above close this gate.
 
-- [ ] P3-G3: a supplier card shows two balances and never their sum
-  EVIDENCE: screenshot of one supplier with ₪12,400 and $3,100 on two lines. An empty list renders
-  `—`, never `0` (constitution).
-  STATUS 28.08.2026: migrations 0217–0226 were applied to the shared local stack under the QA
-  mutex. A persisted owner-scoped fixture proves exactly two balance rows for
-  `ספק ראיית שתי יתרות`: ILS 12,400 and USD 3,100. Visual capture did not complete. Three
-  environmental attempts failed before an assertion could run: missing Playwright-managed
-  Chromium; Chrome reached a Vite process bound to a different host and received
-  `ERR_CONNECTION_REFUSED`; then explicit `127.0.0.1` loaded but `waitUntil: networkidle` timed
-  out because the application keeps network activity alive. Per `CLAUDE.md`, no fourth attempt
-  was made. Next hypothesis: wait for `domcontentloaded` and then the exact supplier-row selector,
-  which is the observable condition this gate needs.
+- [x] P3-G3: a supplier card shows two balances and never their sum
+  EVIDENCE: `artifacts/multi-currency/p3-g3-supplier-balances-full.png` (1440×1000,
+  SHA-256 `b8ca4e87397d18e0b03b8be68817848b629fd4efdca6bc7ae8d9f69bc5569aa3`) and the
+  cropped row `p3-g3-supplier-balances-row.png` (1392×65, SHA-256
+  `c264ab6e50c68f1f91e2d4750f576ebe99e5e72072ed99e3bb5a17fbcc31a2f7`). Browser evidence:
+  `12,400.00 ₪` and `3,100.00 $` render as two block rows at y=337.20 and y=357.50;
+  `15,500` is absent, RTL is active and horizontal overflow is 0. The machine-readable record is
+  `artifacts/multi-currency/p3-g3-supplier-balances.json`.
 
 ---
 
