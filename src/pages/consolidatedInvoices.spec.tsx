@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import ConsolidatedInvoices from './ConsolidatedInvoices';
+import { he } from '../lib/i18n/dictionaries/he';
 
 const page = readFileSync(join(process.cwd(), 'src', 'pages', 'ConsolidatedInvoices.tsx'), 'utf8');
 const service = readFileSync(join(process.cwd(), 'src', 'lib', 'consolidatedInvoices.ts'), 'utf8');
@@ -20,10 +21,17 @@ describe('consolidated supplier invoice route and intake contract', () => {
   });
 
   it('keeps supplier and legal entity mandatory and the previous Jerusalem month read-only', () => {
-    expect(page).toContain('label="ספק קנוני *"');
-    expect(page).toContain('ישות משפטית *');
-    expect(page).toContain('חודש נעול:');
-    expect(page).toContain('לא ניתן לשינוי');
+    // The copy moved into the dictionary, so each claim splits in two: the screen renders that
+    // key, and the key carries that exact wording. Either half alone would pass while the other
+    // was wrong — a screen pointing at the right key with the wrong sentence behind it looks
+    // identical to a correct one from source.
+    expect(page).toContain("label={t('consolidated.label')}");
+    expect(he.consolidated.label).toBe('ספק קנוני *');
+    expect(page).toContain("t('consolidated.text_10')");
+    expect(he.consolidated.text_10).toContain('ישות משפטית *');
+    expect(page).toContain("t('consolidated.lockedMonthLabel'");
+    expect(he.consolidated.lockedMonthLabel).toContain('חודש נעול:');
+    expect(he.consolidated.text_13).toContain('לא ניתן לשינוי');
     expect(service).toContain("timeZone: 'Asia/Jerusalem'");
     expect(service).toContain("supabase.rpc('list_consolidated_invoice_legal_entities'");
   });
@@ -44,8 +52,11 @@ describe('consolidated supplier invoice route and intake contract', () => {
     for (const channel of ['anchor_vs_interim', 'anchor_vs_receipts', 'interim_vs_receipts']) {
       expect(page).toContain(channel);
     }
+    // The five group names are one sentence in the dictionary now, so the claim moves with it:
+    // the screen renders that key, and the key still names every group.
+    expect(page).toContain("t('consolidated.text_41')");
     for (const group of ['מותאם', 'חסר מקור', 'מקור שלא הופיע', 'עמום', 'פערי כמות ומחיר']) {
-      expect(page).toContain(group);
+      expect(he.consolidated.text_41).toContain(group);
     }
     expect(page).toContain('mobile="cards"');
     expect(page).toContain('aria-live="polite"');
