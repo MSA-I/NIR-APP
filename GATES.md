@@ -800,6 +800,13 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   currency. The 0242 migration runs inside `BEGIN/ROLLBACK`, its writer audit returns zero missing
   paths, updated P9 passes, and P14 plus 0242 passes including an unrecognised-currency refusal.
   Gate remains open until clean CI executes P46 and the full matrix on the new SHA.
+  FIFTH ATTEMPT 28.08.2026: workflow-dispatch run `33202260368` on `8e0fb29` passed Browser,
+  Deno/OCR and 96/98 SQL stages. P46's structural pin found the new early currency condition used
+  the same marker as the later blocked-outcome state machine; 0242 now spells the early condition
+  differently without changing behavior, so the pin again targets the original boundary. P68
+  correctly rejected the changed autonomous writer until its authoritative body hash moved; 0242
+  now re-pins it like 0230/0241. Locally, 0242 applies and rolls back, the P46 structural prefix and
+  the full P68 falsification suite pass. Gate remains open for the next exact-SHA run.
 
 - [ ] P6-G2: the rollout matrix rows that were touched were actually executed
   EVIDENCE: pending — the union of `Migration / חוזה DB` and `Frontend` rows requires backup, dry-run + ledger,

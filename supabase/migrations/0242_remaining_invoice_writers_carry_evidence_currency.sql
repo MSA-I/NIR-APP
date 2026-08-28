@@ -72,7 +72,7 @@ begin
     end loop;
   end if;
 
-  if v_block_code is not null then
+  if coalesce(v_block_code,'')<>'' then
     null;
   elsif v_payload ->> 'document_type' <> 'invoice'$replacement$;
   v_count := (length(v_definition)-length(replace(v_definition,v_anchor,'')))/length(v_anchor);
@@ -260,6 +260,14 @@ set reason='service-role-trusted-path; 0242 binds every automatic invoice write 
 where function_signature in (
   'apply_consolidated_invoice_interpretation(uuid,uuid,uuid)',
   'apply_document_interpretation(uuid,uuid,uuid)');
+
+update private.document_automation_authoritative_functions registry
+set body_hash=md5(replace(proc.prosrc,e'\r','')),
+    responsibility=registry.responsibility
+      || ' 0242: autonomous invoice creation and duplicate checks bind to evidence currency.'
+from pg_proc proc
+where proc.oid='public.apply_document_interpretation(uuid,uuid,uuid)'::regprocedure
+  and registry.function_signature='apply_document_interpretation(uuid,uuid,uuid)';
 
 do $assert_0242$
 declare v_body text; v_auto_body text; v_violations text;
