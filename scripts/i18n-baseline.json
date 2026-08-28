@@ -38,7 +38,6 @@
     "src/components/document-review/DocumentPacketReview.tsx": 36,
     "src/components/document-review/DocumentProcessingProgress.tsx": 12,
     "src/components/document-review/DocumentReviewProposals.tsx": 4,
-    "src/components/document-review/DocumentScanPreview.tsx": 37,
     "src/components/document-review/DocumentSourceViewer.tsx": 7,
     "src/components/document-review/model.ts": 16,
     "src/components/document-review/PdfSourceView.tsx": 3,
