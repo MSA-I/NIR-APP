@@ -368,6 +368,52 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   `scripts/check-browser-smoke.cjs` (`:1603`, `:1681`). They mock what the CLIENT asks for, and the
   client still asks for the old name until phase 3. They move with it.
 
+- [x] P2-G7: the summary readers split, and a tolerance stops being a shekel by accident
+  The migration is `supabase/migrations/0219_summary_readers_and_tolerances_per_currency.sql`.
+  CHECK: `p2_active_payment_request_total_by_currency()`, `p2_business_summary_rows_by_currency()`,
+  `credit_request_balance_rows()`, `payment_request_financial_check_signals()`
+  EXPECT: money per currency, an invoice set spanning two currencies refused, and no invented
+  tolerance for a currency nobody configured
+  EVIDENCE, on a fixture of one supplier with a ₪12,400 and a $3,100 invoice and a payment request
+  on each:
+  ```
+  p2_active_payment_request_total_by_currency: ILS 19676.000 · USD 3100.000   (never 22,776)
+  old_total_gone t | old_summary_gone t
+  p2_business_summary_rows_by_currency: expected_payments ILS · expected_payments USD ·
+                                        the three counts with currency NULL
+  mixed set  ⇒ ERROR: payment_request_checks_currency_mismatch
+  ILS set    ⇒ {"currency":"ILS", "amount_matches_open_balance": true,  "open_credit_total_by_currency": []}
+  USD set    ⇒ {"currency":"USD", "amount_matches_open_balance": null,  …}
+  credit_request_balance_rows ⇒ credit … | ILS | 85.000
+  ```
+  **`amount_matches_open_balance` is `null`, not `false`, for the dollar set** and that is the
+  point of `#288`: the ± 1 window in that function was a bare literal and meant "one shekel" only
+  because there was nothing else it could mean. `private.money_tolerance()` reads a per-currency
+  map, falls back to the old scalar **for ILS only**, and returns NULL for a currency nobody has
+  configured. False would claim the amount does not match; null says nobody has decided what
+  matching means here, which is the honest answer and the one the screen already draws as `—`.
+  Two identity keys `0217` left open are closed here, because the readers depend on them: a credit
+  note is tied to its invoice's currency and a payment to its request's. That is why
+  `invoice_financial_check_signals` needed no change at all — summing the credits attached to one
+  invoice is now single-currency by construction. Probe: flipping a credit's currency ⇒
+  foreign-key violation.
+
+- **Phase 3's scope is wider than "the client", and this is where that was decided.** Two
+  server-side consumers still call names this phase deleted: `src/lib/summary.ts:52` and the Edge
+  tool `supabase/functions/assistant/tools/business-summary.ts:74` both call
+  `p2_business_summary_rows`, and both build a `Map` keyed by `metric_key` — the exact
+  silent-overwrite the rename exists to prevent, since `expected_payments` now returns one row per
+  currency. They are NOT patched here: both need the per-currency rendering that phase 3 builds,
+  and splitting one change across two phases is how half of it gets forgotten. Phase 3 covers the
+  React client **and** the assistant tools that read these readers.
+  Recorded with it, because it becomes reachable in phase 4 and not before:
+  `assistant_facts.unit` (`0164`) accepts `('ils','count','percent','date','text')` and the
+  TypeScript twin `FACT_UNITS` (`src/lib/assistant/contracts.ts:214`) is the same closed list. A
+  dollar figure quoted by the assistant needs both widened, plus `provider.ts:178`'s JSON-Schema
+  enum and `AnswerView.tsx:36`'s `case 'ils'`. Until phase 4 no non-ILS row can exist, so nothing
+  is wrong today; the moment one can, this is four files, and it is written down so it is not
+  discovered by a constraint violation in production.
+
 ---
 
 ## Phase 3 — the client
