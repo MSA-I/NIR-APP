@@ -16,6 +16,7 @@
 //    can provoke has a Hebrew sentence; everything else collapses to one honest fallback.
 
 import { supabase } from './supabase';
+import type { TKey } from './i18n/t.ts';
 import { fmtDateTime, fmtNum } from './format';
 
 /** Mirrors the projection of `public.read_webhook_subscriptions()`. No secret, no error text. */
@@ -52,31 +53,31 @@ export const MAX_WEBHOOK_SECRET_LENGTH = 200;
  * acceptable because `p76_owner_webhook_verification.sql` asserts every value below still exists
  * in that table. Add an event there and this list stays legal; rename one and the suite fails.
  */
-export const WEBHOOK_EVENT_CHOICES: ReadonlyArray<{ value: string; label: string }> = [
-  { value: 'supplier.created', label: 'ספק נוצר' },
-  { value: 'supplier.updated', label: 'ספק עודכן' },
-  { value: 'supplier.bank_details_changed', label: 'פרטי בנק של ספק שונו' },
-  { value: 'product.created', label: 'מוצר נוצר' },
-  { value: 'supplier_price.updated', label: 'מחיר ספק עודכן' },
-  { value: 'supplier_price_list.submitted', label: 'מחירון ספק הוגש' },
-  { value: 'purchase_order.created', label: 'הזמנת רכש נוצרה' },
-  { value: 'purchase_order.approved', label: 'הזמנת רכש אושרה' },
-  { value: 'purchase_order.sent', label: 'הזמנת רכש נשלחה' },
-  { value: 'goods_receipt.completed', label: 'קבלת סחורה הושלמה' },
-  { value: 'invoice.created', label: 'חשבונית נוצרה' },
-  { value: 'invoice.approved', label: 'חשבונית אושרה' },
-  { value: 'invoice.review_required', label: 'חשבונית דורשת בדיקה' },
-  { value: 'credit.created', label: 'זיכוי נוצר' },
-  { value: 'payment_request.created', label: 'בקשת תשלום נוצרה' },
-  { value: 'payment_request.approved', label: 'בקשת תשלום אושרה' },
-  { value: 'payment.executed', label: 'תשלום בוצע' },
-  { value: 'bank_transaction.imported', label: 'תנועת בנק יובאה' },
-  { value: 'reconciliation.completed', label: 'התאמה בנקאית הושלמה' },
-  { value: 'document.uploaded', label: 'מסמך הועלה' },
-  { value: 'document.processing_completed', label: 'עיבוד מסמך הושלם' },
-  { value: 'document.processing_failed', label: 'עיבוד מסמך נכשל' },
-  { value: 'month_export.sent', label: 'ייצוא חודשי נשלח' },
-  { value: 'user.access_changed', label: 'הרשאות משתמש שונו' },
+export const WEBHOOK_EVENT_CHOICES: ReadonlyArray<{ value: string; labelKey: TKey }> = [
+  { value: 'supplier.created', labelKey: 'webhooks.eventSupplierCreated' },
+  { value: 'supplier.updated', labelKey: 'webhooks.eventSupplierUpdated' },
+  { value: 'supplier.bank_details_changed', labelKey: 'webhooks.eventSupplierBankDetailsChanged' },
+  { value: 'product.created', labelKey: 'webhooks.eventProductCreated' },
+  { value: 'supplier_price.updated', labelKey: 'webhooks.eventSupplierPriceUpdated' },
+  { value: 'supplier_price_list.submitted', labelKey: 'webhooks.eventSupplierPriceListSubmitted' },
+  { value: 'purchase_order.created', labelKey: 'webhooks.eventPurchaseOrderCreated' },
+  { value: 'purchase_order.approved', labelKey: 'webhooks.eventPurchaseOrderApproved' },
+  { value: 'purchase_order.sent', labelKey: 'webhooks.eventPurchaseOrderSent' },
+  { value: 'goods_receipt.completed', labelKey: 'webhooks.eventGoodsReceiptCompleted' },
+  { value: 'invoice.created', labelKey: 'webhooks.eventInvoiceCreated' },
+  { value: 'invoice.approved', labelKey: 'webhooks.eventInvoiceApproved' },
+  { value: 'invoice.review_required', labelKey: 'webhooks.eventInvoiceReviewRequired' },
+  { value: 'credit.created', labelKey: 'webhooks.eventCreditCreated' },
+  { value: 'payment_request.created', labelKey: 'webhooks.eventPaymentRequestCreated' },
+  { value: 'payment_request.approved', labelKey: 'webhooks.eventPaymentRequestApproved' },
+  { value: 'payment.executed', labelKey: 'webhooks.eventPaymentExecuted' },
+  { value: 'bank_transaction.imported', labelKey: 'webhooks.eventBankTransactionImported' },
+  { value: 'reconciliation.completed', labelKey: 'webhooks.eventReconciliationCompleted' },
+  { value: 'document.uploaded', labelKey: 'webhooks.eventDocumentUploaded' },
+  { value: 'document.processing_completed', labelKey: 'webhooks.eventDocumentProcessingCompleted' },
+  { value: 'document.processing_failed', labelKey: 'webhooks.eventDocumentProcessingFailed' },
+  { value: 'month_export.sent', labelKey: 'webhooks.eventMonthExportSent' },
+  { value: 'user.access_changed', labelKey: 'webhooks.eventUserAccessChanged' },
 ];
 
 /* ---------- the client-side URL hint ---------- */
@@ -130,55 +131,86 @@ export function webhookSecretRejection(secret: string): string | null {
 
 /* ---------- refusals, in Hebrew, never in Postgres ---------- */
 
-const WEBHOOK_ERROR: Record<string, string> = {
-  webhook_url_invalid: 'הכתובת אינה תקינה. יש להזין כתובת HTTPS מלאה.',
-  webhook_url_scheme_rejected: 'רק כתובת HTTPS מתקבלת. כתובת HTTP או פרוטוקול אחר אינם נתמכים.',
-  webhook_url_credentials_rejected: 'אין להטמיע שם משתמש או סיסמה בכתובת. הזדהות נעשית בחתימה.',
-  webhook_url_port_rejected: 'רק פורט 443 מתקבל.',
-  webhook_url_ip_literal_rejected: 'יש להזין שם מארח, לא כתובת IP.',
-  webhook_url_local_name_rejected: 'הכתובת מצביעה על רשת פנימית ואינה מתקבלת.',
-  webhook_url_host_not_dns: 'שם המארח אינו שם דומיין תקין.',
-  webhook_url_private_address: 'שם המארח נפתר לכתובת ברשת פנימית, ולכן הפנייה נחסמה.',
-  webhook_url_unresolvable: 'לא ניתן היה לפתור את שם המארח.',
-  webhook_secret_invalid:
-    `סוד החתימה חייב להיות באורך ${MIN_WEBHOOK_SECRET_LENGTH}–${MAX_WEBHOOK_SECRET_LENGTH} תווים.`,
-  webhook_event_types_invalid: 'רשימת סוגי האירועים אינה תקינה.',
-  webhook_subscription_invalid: 'חסר שדה חובה. יש למלא סיבה לפעולה.',
-  webhook_subscription_unknown: 'המנוי לא נמצא.',
-  webhook_not_authorized: 'רק בעל העסק רשאי לנהל חיבורי webhook.',
-  webhook_organization_read_only: 'חשבון העסק במצב קריאה בלבד ולא ניתן לשנות חיבורים.',
-  webhook_verification_required: 'יש להשלים אימות בעלות על נקודת הקצה לפני הפעלה.',
-  webhook_verification_unknown: 'בקשת האימות לא נמצאה. יש להתחיל אימות חדש.',
-  webhook_verification_settled: 'בקשת האימות כבר הוכרעה. יש להתחיל אימות חדש.',
-  webhook_verification_expired: 'תוקף בקשת האימות פג. יש להתחיל אימות חדש.',
-  webhook_verification_already_dispatched: 'בקשת האימות כבר נשלחה. יש להתחיל אימות חדש.',
-  webhook_verification_endpoint_changed: 'הכתובת השתנתה במהלך האימות. יש להתחיל אימות חדש.',
-  webhook_verification_challenge_mismatch: 'נקודת הקצה לא החזירה את קוד האימות שנשלח אליה.',
-  webhook_verification_challenge_absent: 'נקודת הקצה לא החזירה את כותרת קוד האימות.',
-  webhook_verification_succeeded: 'האימות הושלם.',
-  webhook_verification_failed: 'האימות נכשל.',
-  webhook_verification_unavailable: 'האימות לא הושלם. אפשר לנסות שוב בעוד רגע.',
-  webhook_secret_unresolved: 'סוד החתימה של המנוי אינו זמין. יש לפנות לתמיכה.',
-  webhook_header_invalid: 'האימות לא נשלח בשל כותרת בקשה לא תקינה.',
-  webhook_connect_failed: 'לא ניתן היה ליצור חיבור לנקודת הקצה.',
-  webhook_response_invalid: 'נקודת הקצה החזירה תשובה שאינה תקינה.',
-  webhook_response_timeout: 'נקודת הקצה לא הגיבה בזמן.',
-  fresh_authentication_required: 'הפעולה דורשת אימות סיסמה טרי. יש לאשר את הזהות ולנסות שוב.',
+/**
+ * Every refusal this screen may show, as KEYS rather than sentences (the `errors.ts` precedent).
+ * The map is keyed by the SERVER's code, which is what actually arrives, and the constant is
+ * renamed from `WEBHOOK_ERROR` so no reader could keep compiling while printing a key.
+ */
+const WEBHOOK_ERROR_KEYS: Record<string, TKey> = {
+  webhook_url_invalid: 'webhooks.urlInvalid',
+  webhook_url_scheme_rejected: 'webhooks.urlSchemeRejected',
+  webhook_url_credentials_rejected: 'webhooks.urlCredentialsRejected',
+  webhook_url_port_rejected: 'webhooks.urlPortRejected',
+  webhook_url_ip_literal_rejected: 'webhooks.urlIpLiteralRejected',
+  webhook_url_local_name_rejected: 'webhooks.urlLocalNameRejected',
+  webhook_url_host_not_dns: 'webhooks.urlHostNotDns',
+  webhook_url_private_address: 'webhooks.urlPrivateAddress',
+  webhook_url_unresolvable: 'webhooks.urlUnresolvable',
+  webhook_secret_invalid: 'webhooks.secretInvalid',
+  webhook_event_types_invalid: 'webhooks.eventTypesInvalid',
+  webhook_subscription_invalid: 'webhooks.subscriptionInvalid',
+  webhook_subscription_unknown: 'webhooks.subscriptionUnknown',
+  webhook_not_authorized: 'webhooks.notAuthorized',
+  webhook_organization_read_only: 'webhooks.organizationReadOnly',
+  webhook_verification_required: 'webhooks.verificationRequired',
+  webhook_verification_unknown: 'webhooks.verificationUnknown',
+  webhook_verification_settled: 'webhooks.verificationSettled',
+  webhook_verification_expired: 'webhooks.verificationExpired',
+  webhook_verification_already_dispatched: 'webhooks.verificationAlreadyDispatched',
+  webhook_verification_endpoint_changed: 'webhooks.verificationEndpointChanged',
+  webhook_verification_challenge_mismatch: 'webhooks.verificationChallengeMismatch',
+  webhook_verification_challenge_absent: 'webhooks.verificationChallengeAbsent',
+  webhook_verification_succeeded: 'webhooks.verificationSucceeded',
+  webhook_verification_failed: 'webhooks.verificationFailed',
+  webhook_verification_unavailable: 'webhooks.verificationUnavailable',
+  webhook_secret_unresolved: 'webhooks.secretUnresolved',
+  webhook_header_invalid: 'webhooks.headerInvalid',
+  webhook_connect_failed: 'webhooks.connectFailed',
+  webhook_response_invalid: 'webhooks.responseInvalid',
+  webhook_response_timeout: 'webhooks.responseTimeout',
+  fresh_authentication_required: 'webhooks.freshAuthenticationRequired',
 };
 
-const FALLBACK = 'הפעולה לא הושלמה. אפשר לנסות שוב, ואם התקלה חוזרת יש לפנות לתמיכה.';
+const FALLBACK: TKey = 'webhooks.fallback';
+
+/** What `webhookErrorCode` answers when nothing known is in the text. Never the text itself. */
+export const WEBHOOK_UNMAPPED = 'webhook_unmapped';
+
+/** A refusal the screen can render, and the numbers it needs — never a server sentence. */
+export interface WebhookRefusal {
+  key: TKey;
+  vars?: Record<string, string | number>;
+}
 
 /**
- * Codes to Hebrew. Anything unmapped becomes the fallback — never the raw text, which is the
- * whole point: a Postgres message on this screen can name an internal relation, and a delivery
- * error can carry an upstream response body (#98, #99).
+ * The CODE a failure resolves to, sanitised. Anything unrecognised becomes `WEBHOOK_UNMAPPED` —
+ * never the raw text, which is the whole point: a Postgres message on this screen can name an
+ * internal relation, and a delivery error can carry an upstream response body (#98, #99).
+ *
+ * Split out of the refusal below so a rethrow can carry the code across a boundary instead of a
+ * finished sentence. It had to be: `runWebhookVerification` used to rethrow the HEBREW, and the
+ * screen then looked for a code inside it, found none, and showed the generic fallback. The
+ * specific refusal was being thrown away by the very function that resolved it.
  */
-export function webhookErrorMessage(raw: unknown): string {
+export function webhookErrorCode(raw: unknown): string {
   const text = raw instanceof Error ? raw.message : typeof raw === 'string' ? raw : '';
-  const status = /webhook_verification_status_(\d{3})/.exec(text);
-  if (status) return `נקודת הקצה החזירה סטטוס ${status[1]} ולכן האימות לא הושלם.`;
-  const code = Object.keys(WEBHOOK_ERROR).find((key) => text.includes(key));
-  return code ? WEBHOOK_ERROR[code] : FALLBACK;
+  const status = /webhook_verification_status_\d{3}/.exec(text);
+  if (status) return status[0];
+  return Object.keys(WEBHOOK_ERROR_KEYS).find((key) => text.includes(key)) ?? WEBHOOK_UNMAPPED;
+}
+
+/** The same decision, as a key the reader's own language resolves. */
+export function webhookErrorRefusal(raw: unknown): WebhookRefusal {
+  const code = webhookErrorCode(raw);
+  const status = /^webhook_verification_status_(\d{3})$/.exec(code);
+  if (status) return { key: 'webhooks.verificationStatus', vars: { status: status[1] } };
+  if (code === 'webhook_secret_invalid') {
+    return {
+      key: 'webhooks.secretInvalid',
+      vars: { min: MIN_WEBHOOK_SECRET_LENGTH, max: MAX_WEBHOOK_SECRET_LENGTH },
+    };
+  }
+  return { key: WEBHOOK_ERROR_KEYS[code] ?? FALLBACK };
 }
 
 /* ---------- what the screen is allowed to show ---------- */
@@ -256,7 +288,9 @@ export async function runWebhookVerification(
   const { data, error } = await supabase.functions.invoke('webhook-verify', {
     body: { verificationId },
   });
-  if (error) throw new Error(webhookErrorMessage(error));
+  // The CODE, not the sentence: the screen resolves it in the reader’s language, and a
+  // server string still cannot cross this line.
+  if (error) throw new Error(webhookErrorCode(error));
   const outcome = data as { verified?: boolean; code?: string } | null;
   return {
     verified: outcome?.verified === true,

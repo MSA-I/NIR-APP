@@ -107,7 +107,6 @@
     "src/lib/serverList.ts": 2,
     "src/lib/share.ts": 14,
     "src/lib/supplierLogChanges.ts": 25,
-    "src/lib/webhooks.ts": 58,
     "src/lib/whatsappConnection.ts": 8,
     "src/main.tsx": 3,
     "src/operator/AutonomyPolicies.tsx": 4,
@@ -165,7 +164,6 @@
     "src/pages/Subscription.tsx": 1,
     "src/pages/SupplierLog.tsx": 41,
     "src/pages/SupplierProposalReview.tsx": 44,
-    "src/pages/Suppliers.tsx": 29,
-    "src/pages/WebhookSettings.tsx": 55
+    "src/pages/Suppliers.tsx": 29
   }
 }

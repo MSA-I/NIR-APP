@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useCallback, useEffect, useId, useState } from 'react';
 import { Loader2, Plug, Plus, RefreshCw, ShieldCheck, ShieldAlert } from 'lucide-react';
 import {
@@ -5,6 +6,7 @@ import {
 } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { fmtDateTime } from '../lib/format';
+import type { TKey } from '../lib/i18n/t.ts';
 import {
   MIN_WEBHOOK_SECRET_LENGTH,
   WEBHOOK_EVENT_CHOICES,
@@ -13,7 +15,7 @@ import {
   requestWebhookVerification,
   runWebhookVerification,
   setWebhookSubscriptionActive,
-  webhookErrorMessage,
+  webhookErrorRefusal,
   webhookHealth,
   webhookSecretRejection,
   webhookUrlRejection,
@@ -59,13 +61,30 @@ const VERIFICATION_TONE: Record<WebhookSubscription['verification_state'], strin
   unverified: 'badge-idle',
 };
 
-const VERIFICATION_LABEL: Record<WebhookSubscription['verification_state'], string> = {
-  verified: 'נקודת הקצה אומתה',
-  pending: 'אימות ממתין',
-  unverified: 'טרם אומת',
+/**
+ * A refusal in the reader's own language.
+ *
+ * The translator is a PARAMETER rather than a hook call, because two of the three call sites sit
+ * inside `useCallback`s whose dependency lists are load-bearing: a helper recreated on every render
+ * would re-run the effect that owns the first read. `webhookErrorRefusal` has already decided
+ * WHICH refusal this is and stripped the server's own words; this only chooses the sentence.
+ */
+const refusalText = (
+  t: (key: TKey, vars?: Record<string, string | number>) => string,
+  raw: unknown,
+): string => {
+  const refusal = webhookErrorRefusal(raw);
+  return t(refusal.key, refusal.vars);
+};
+
+const VERIFICATION_LABEL_KEYS: Record<WebhookSubscription['verification_state'], TKey> = {
+  verified: 'webhookSettings.verificationVerified',
+  pending: 'webhookSettings.verificationPending',
+  unverified: 'webhookSettings.verificationUnverified',
 };
 
 export default function WebhookSettings() {
+  const { t } = useT();
   const toast = useToast();
   const [rows, setRows] = useState<WebhookSubscription[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -89,9 +108,9 @@ export default function WebhookSettings() {
     } catch (error) {
       // webhookErrorMessage, not toHebrewError: a load failure here can be a Postgres string
       // naming an internal relation, and this screen is the one place that must never print one.
-      setLoadError(webhookErrorMessage(error));
+      setLoadError(refusalText(t, error));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -101,7 +120,7 @@ export default function WebhookSettings() {
       toast(await action(), 'success');
       await load();
     } catch (error) {
-      toast(webhookErrorMessage(error), 'error');
+      toast(refusalText(t, error), 'error');
     } finally {
       setBusy(false);
     }
@@ -111,7 +130,7 @@ export default function WebhookSettings() {
     if (!draft) return;
     const rejection = webhookUrlRejection(draft.url) ?? webhookSecretRejection(draft.secret);
     if (rejection) {
-      setDraftError(webhookErrorMessage(rejection));
+      setDraftError(refusalText(t, rejection));
       return;
     }
     setDraftError(null);
@@ -124,17 +143,17 @@ export default function WebhookSettings() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="חיבורי webhook"
-        description="שליחה אוטומטית של אירועים עסקיים לנקודת קצה שלך. כל חיבור נחתם, נשלח לפחות פעם אחת, וניתן לכבות אותו בכל רגע."
+        title={t('webhookSettings.title')}
+        description={t('webhookSettings.description')}
         actions={
           <div className="flex gap-2">
             <button type="button" className="btn-secondary" disabled={busy}
               onClick={() => void load()}>
-              <RefreshCw size={ICON.sm} aria-hidden="true" /> רענון
+              <RefreshCw size={ICON.sm} aria-hidden="true" /> {t('webhookSettings.refresh')}
             </button>
             <button type="button" className="btn-primary" disabled={busy}
               onClick={() => { setDraftError(null); setDraft({ url: '', eventTypes: [], secret: '', description: '', reason: '' }); }}>
-              <Plus size={ICON.sm} aria-hidden="true" /> חיבור חדש
+              <Plus size={ICON.sm} aria-hidden="true" /> {t('webhookSettings.newConnection')}
             </button>
           </div>
         }
@@ -145,8 +164,8 @@ export default function WebhookSettings() {
       {rows && rows.length === 0 && !loadError && (
         <EmptyState
           icon={<Plug size={ICON.hero} />}
-          title="אין עדיין חיבורי webhook"
-          subtitle="אפשר לרשום נקודת קצה HTTPS, לבחור אילו אירועים יישלחו אליה, ולאמת אותה לפני ההפעלה."
+          title={t('webhookSettings.title_2')}
+          subtitle={t('webhookSettings.subtitle')}
         />
       )}
 
@@ -166,9 +185,7 @@ export default function WebhookSettings() {
           counts as a full picture would stop looking at the integration log. */}
       {rows && rows.length > 0 && (
         <p className="text-xs text-ink-muted leading-relaxed">
-          המסך מציג מסירה מוצלחת אחרונה וספירות בלבד. תוכן שגיאה מצד נקודת הקצה אינו מוצג כאן
-          במכוון, כדי שלא יגיע לדפדפן טקסט שרת גולמי. סוד החתימה נשמר במאגר סודות ואינו ניתן לקריאה
-          חוזרת — אם אבד, יש לרשום חיבור חדש.
+          {t('webhookSettings.deliveryDisclosure')}
         </p>
       )}
 
@@ -185,7 +202,7 @@ export default function WebhookSettings() {
 
       <ReauthModal
         open={!!pendingRegister}
-        title="אימות זהות לרישום חיבור"
+        title={t('webhookSettings.title_3')}
         onConfirm={() => {
           const input = pendingRegister;
           setPendingRegister(null);
@@ -196,9 +213,9 @@ export default function WebhookSettings() {
               eventTypes: input.eventTypes,
               secret: input.secret,
               description: input.description.trim() || null,
-              reason: input.reason.trim() || 'רישום חיבור webhook',
+              reason: input.reason.trim() || t('webhookSettings.trim'),
             });
-            return 'החיבור נרשם. הוא כבוי עד לאימות נקודת הקצה.';
+            return t('webhookSettings.text_4');
           });
         }}
         onCancel={() => setPendingRegister(null)}
@@ -208,10 +225,10 @@ export default function WebhookSettings() {
         open={!!verifying}
         busy={busy}
         requireReason
-        reasonLabel="סיבת הפעולה"
-        title="אימות נקודת הקצה"
-        message="המערכת תשלח לנקודת הקצה בקשה חתומה אחת. כדי לעבור את האימות, על נקודת הקצה להחזיר סטטוס 2xx ואת כותרת x-inplace-webhook-challenge עם הערך שהתקבל בגוף הבקשה."
-        confirmLabel="שליחת אימות"
+        reasonLabel={t('webhookSettings.reasonLabel')}
+        title={t('webhookSettings.title_4')}
+        message={t('webhookSettings.message')}
+        confirmLabel={t('webhookSettings.confirmLabel')}
         onClose={() => setVerifying(null)}
         onConfirm={(reason) => {
           if (verifying) setPendingVerify({ id: verifying.id, reason: reason ?? '' });
@@ -221,17 +238,17 @@ export default function WebhookSettings() {
 
       <ReauthModal
         open={!!pendingVerify}
-        title="אימות זהות לשליחת אימות"
+        title={t('webhookSettings.title_5')}
         onConfirm={() => {
           const request = pendingVerify;
           setPendingVerify(null);
           if (!request) return;
           void run(async () => {
             const authorized = await requestWebhookVerification(
-              request.id, request.reason.trim() || 'אימות נקודת קצה');
+              request.id, request.reason.trim() || t('webhookSettings.trim_2'));
             const outcome = await runWebhookVerification(authorized.verification_id);
             if (!outcome.verified) throw new Error(outcome.code);
-            return 'נקודת הקצה אומתה. אפשר להפעיל את החיבור.';
+            return t('webhookSettings.text_5');
           });
         }}
         onCancel={() => setPendingVerify(null)}
@@ -242,12 +259,12 @@ export default function WebhookSettings() {
         busy={busy}
         requireReason
         danger={toggling?.next === false}
-        reasonLabel="סיבת הפעולה"
-        title={toggling?.next ? 'הפעלת החיבור' : 'כיבוי החיבור'}
+        reasonLabel={t('webhookSettings.reasonLabel_2')}
+        title={toggling?.next ? t('webhookSettings.text_6') : t('webhookSettings.text_7')}
         message={toggling?.next
-          ? 'מרגע ההפעלה יישלחו אירועים עסקיים של העסק לכתובת שנרשמה. הפעולה נרשמת ביומן האבטחה עם הסיבה.'
-          : 'הכיבוי מפסיק מיד שליחת אירועים חדשים. אירועים שכבר בתור יסתיימו או יגיעו למכתב מת.'}
-        confirmLabel={toggling?.next ? 'הפעלת החיבור' : 'כיבוי החיבור'}
+          ? t('webhookSettings.text_8')
+          : t('webhookSettings.text_9')}
+        confirmLabel={toggling?.next ? t('webhookSettings.text_10') : t('webhookSettings.text_11')}
         onClose={() => setToggling(null)}
         onConfirm={(reason) => {
           if (toggling) {
@@ -259,7 +276,7 @@ export default function WebhookSettings() {
 
       <ReauthModal
         open={!!pendingToggle}
-        title="אימות זהות לשינוי מצב החיבור"
+        title={t('webhookSettings.title_6')}
         onConfirm={() => {
           const request = pendingToggle;
           setPendingToggle(null);
@@ -268,9 +285,9 @@ export default function WebhookSettings() {
             await setWebhookSubscriptionActive(
               request.id,
               request.next,
-              request.reason.trim() || (request.next ? 'הפעלת חיבור webhook' : 'כיבוי חיבור webhook'),
+              request.reason.trim() || (request.next ? t('webhookSettings.trim_3') : t('webhookSettings.trim_4')),
             );
-            return request.next ? 'החיבור הופעל.' : 'החיבור כובה.';
+            return request.next ? t('webhookSettings.text_12') : t('webhookSettings.text_13');
           });
         }}
         onCancel={() => setPendingToggle(null)}
@@ -285,12 +302,16 @@ function SubscriptionCard({ row, busy, onVerify, onToggle }: {
   onVerify: () => void;
   onToggle: (next: boolean) => void;
 }) {
+  const { t } = useT();
   const health = webhookHealth(row);
   const verified = row.verification_state === 'verified';
   const events = row.event_types.length === 0
-    ? ['כל סוגי האירועים']
+    ? [t('webhookSettings.text_14')]
     : row.event_types.map(
-        (type) => WEBHOOK_EVENT_CHOICES.find((choice) => choice.value === type)?.label ?? type);
+        (type) => {
+          const choice = WEBHOOK_EVENT_CHOICES.find((option) => option.value === type);
+          return choice ? t(choice.labelKey) : type;
+        });
 
   return (
     <Card className="space-y-3" as="article" aria-label={row.url}>
@@ -300,10 +321,10 @@ function SubscriptionCard({ row, busy, onVerify, onToggle }: {
           {row.description && <p className="mt-0.5 text-xs text-ink-muted">{row.description}</p>}
         </div>
         <span className={row.active ? 'badge-done' : 'badge-idle'}>
-          {row.active ? 'פעיל' : 'כבוי'}
+          {row.active ? t('webhookSettings.text_15') : t('webhookSettings.text_16')}
         </span>
         <span className={VERIFICATION_TONE[row.verification_state]}>
-          {VERIFICATION_LABEL[row.verification_state]}
+          {t(VERIFICATION_LABEL_KEYS[row.verification_state])}
         </span>
       </div>
 
@@ -314,20 +335,19 @@ function SubscriptionCard({ row, busy, onVerify, onToggle }: {
       </div>
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-        <Metric label="מסירה מוצלחת אחרונה" value={health.lastSuccess} testId="webhook-last-success" />
-        <Metric label="ממתינות למסירה" value={health.pending} testId="webhook-pending" />
-        <Metric label="ניסיונות שנכשלו" value={health.failed} testId="webhook-failed" />
-        <Metric label="הועברו למכתב מת" value={health.deadLettered} testId="webhook-dead-letter" />
+        <Metric label={t('webhookSettings.label')} value={health.lastSuccess} testId="webhook-last-success" />
+        <Metric label={t('webhookSettings.label_2')} value={health.pending} testId="webhook-pending" />
+        <Metric label={t('webhookSettings.label_3')} value={health.failed} testId="webhook-failed" />
+        <Metric label={t('webhookSettings.label_4')} value={health.deadLettered} testId="webhook-dead-letter" />
       </dl>
 
       {!verified && (
         <Note tone="idle">
           <ShieldAlert size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">
-            לפני הפעלה יש להוכיח בעלות על נקודת הקצה. המערכת תשלח אליה בקשה חתומה אחת, ועליה
-            להחזיר את קוד האימות שקיבלה.
+            {t('webhookSettings.provePossession')}
             {row.verification_state === 'pending' && row.verification_expires_at
-              ? ` בקשת אימות פתוחה בתוקף עד ${fmtDateTime(row.verification_expires_at)}.`
+              ? ` ${t('webhookSettings.verificationOpenUntil', { date: fmtDateTime(row.verification_expires_at) })}`
               : ''}
           </span>
         </Note>
@@ -336,18 +356,18 @@ function SubscriptionCard({ row, busy, onVerify, onToggle }: {
       <div className="flex flex-wrap gap-2">
         <button type="button" className="btn-secondary" disabled={busy} onClick={onVerify}>
           {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <ShieldCheck size={ICON.sm} aria-hidden="true" />}
-          אימות נקודת הקצה
+          {t('webhookSettings.text_19')}
         </button>
         {/* Absent, not disabled, while unverified: the missing thing is a different action, and a
             greyed-out button would send the owner looking for a permission problem instead. */}
         {verified && !row.active && (
           <button type="button" className="btn-primary" disabled={busy} onClick={() => onToggle(true)}>
-            הפעלה
+            {t('webhookSettings.text_20')}
           </button>
         )}
         {row.active && (
           <button type="button" className="btn-secondary" disabled={busy} onClick={() => onToggle(false)}>
-            כיבוי
+            {t('webhookSettings.text_21')}
           </button>
         )}
       </div>
@@ -374,6 +394,7 @@ function RegistrationModal({ draft, error, busy, onChange, onClose, onSubmit }: 
   onClose: () => void;
   onSubmit: () => void;
 }) {
+  const { t } = useT();
   const urlId = useId();
   const secretId = useId();
   const descriptionId = useId();
@@ -393,24 +414,24 @@ function RegistrationModal({ draft, error, busy, onChange, onClose, onSubmit }: 
   }
 
   return (
-    <Modal open onClose={onClose} title="חיבור webhook חדש" wide busy={busy}
-      description="החיבור נוצר כבוי. לאחר אימות נקודת הקצה אפשר יהיה להפעיל אותו.">
+    <Modal open onClose={onClose} title={t('webhookSettings.title_7')} wide busy={busy}
+      description={t('webhookSettings.description_2')}>
       <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); onSubmit(); }}>
         <div>
-          <label className="label" htmlFor={urlId}>כתובת נקודת הקצה (HTTPS) *</label>
+          <label className="label" htmlFor={urlId}>{t('webhookSettings.text_22')}</label>
           <input id={urlId} className="input" dir="ltr" inputMode="url" autoComplete="off"
             aria-invalid={urlProblem || undefined}
             aria-describedby={`${urlId}-rule${error ? ` ${problemId}` : ''}`}
             value={draft.url} onChange={(event) => onChange({ ...draft, url: event.target.value })} />
           <p id={`${urlId}-rule`} className={`mt-1 text-xs ${urlProblem ? 'text-alert-fg' : 'text-ink-muted'}`}>
-            רק HTTPS על פורט 443, שם דומיין ציבורי, בלי שם משתמש או סיסמה בכתובת.
+            {t('webhookSettings.text_23')}
           </p>
         </div>
 
         <fieldset>
-          <legend className="label">סוגי אירועים</legend>
+          <legend className="label">{t('webhookSettings.text_24')}</legend>
           <p className="mb-2 text-xs text-ink-muted">
-            בלי בחירה יישלחו כל סוגי האירועים. בחירה מצמצמת את מה שיוצא מהעסק — עדיף לבחור.
+            {t('webhookSettings.text_25')}
           </p>
           {/* NOT ToggleGroup: this is multi-select — every event type toggles on its own, and
               ToggleGroup models „pick one of N". What it did share with the fifteen hand-rolled
@@ -424,7 +445,7 @@ function RegistrationModal({ draft, error, busy, onChange, onClose, onSubmit }: 
                 <button key={choice.value} type="button" aria-pressed={on}
                   className={`chip-filter ${on ? 'chip-filter-active' : ''}`}
                   onClick={() => toggleEvent(choice.value)}>
-                  {choice.label}
+                  {t(choice.labelKey)}
                 </button>
               );
             })}
@@ -432,7 +453,7 @@ function RegistrationModal({ draft, error, busy, onChange, onClose, onSubmit }: 
         </fieldset>
 
         <div>
-          <label className="label" htmlFor={secretId}>סוד חתימה *</label>
+          <label className="label" htmlFor={secretId}>{t('webhookSettings.text_26')}</label>
           {/* type=password and autoComplete=new-password: the value is written straight into the
               secrets store and there is no read path back, so a browser that remembers it would
               be the only copy anyone could recover — and not one we control. */}
@@ -441,19 +462,18 @@ function RegistrationModal({ draft, error, busy, onChange, onClose, onSubmit }: 
             aria-describedby={`${secretId}-rule${error ? ` ${problemId}` : ''}`}
             value={draft.secret} onChange={(event) => onChange({ ...draft, secret: event.target.value })} />
           <p id={`${secretId}-rule`} className={`mt-1 text-xs ${secretProblem ? 'text-alert-fg' : 'text-ink-muted'}`}>
-            לפחות {MIN_WEBHOOK_SECRET_LENGTH} תווים. הסוד נשמר במאגר סודות ואינו ניתן לקריאה חוזרת —
-            יש לשמור עותק אצלך, איתו מאמתים את חתימת ההודעות.
+            {t('webhookSettings.secretRule', { min: MIN_WEBHOOK_SECRET_LENGTH })}
           </p>
         </div>
 
         <div>
-          <label className="label" htmlFor={descriptionId}>תיאור</label>
+          <label className="label" htmlFor={descriptionId}>{t('webhookSettings.text_28')}</label>
           <input id={descriptionId} className="input" value={draft.description}
             onChange={(event) => onChange({ ...draft, description: event.target.value })} />
         </div>
 
         <div>
-          <label className="label" htmlFor={reasonId}>סיבת הפעולה</label>
+          <label className="label" htmlFor={reasonId}>{t('webhookSettings.text_29')}</label>
           <textarea id={reasonId} className="input" rows={2} maxLength={1000} value={draft.reason}
             onChange={(event) => onChange({ ...draft, reason: event.target.value })} />
         </div>
@@ -461,8 +481,8 @@ function RegistrationModal({ draft, error, busy, onChange, onClose, onSubmit }: 
         {error && <div id={problemId}><ErrorNote message={error} /></div>}
 
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-          <button type="submit" className="btn-primary" disabled={busy}>שמירת החיבור</button>
+          <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>{t('webhookSettings.text_30')}</button>
+          <button type="submit" className="btn-primary" disabled={busy}>{t('webhookSettings.text_31')}</button>
         </div>
       </form>
     </Modal>
