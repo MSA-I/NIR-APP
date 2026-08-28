@@ -3,6 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ToastProvider } from './ui';
 import type { WhatsAppOrder } from '../lib/share';
+import { LocaleProvider } from '../lib/i18n/LocaleProvider';
+import type { Locale } from '../lib/i18n/locale';
 
 /**
  * The dialog's contract: two explicit steps, the image button waits for real bytes, a render
@@ -39,11 +41,13 @@ const order: WhatsAppOrder = {
   items: [{ qty: 2, unit_price: 10, product: { name: 'עגבניות', unit: 'ק״ג', sku: null } }],
 };
 
-function renderDialog(onClose = vi.fn()) {
+function renderDialog(onClose = vi.fn(), locale: Locale = 'he') {
   render(
-    <ToastProvider>
-      <WhatsAppSendDialog order={order} orgName="המסעדה" onClose={onClose} />
-    </ToastProvider>,
+    <LocaleProvider initialLocale={locale}>
+      <ToastProvider>
+        <WhatsAppSendDialog order={order} orgName="המסעדה" onClose={onClose} />
+      </ToastProvider>
+    </LocaleProvider>,
   );
   return onClose;
 }
@@ -112,5 +116,15 @@ describe('WhatsAppSendDialog', () => {
     await user.click(screen.getByRole('button', { name: 'סיום' }));
     expect(onClose).toHaveBeenCalledWith(false);
     expect(rpcCalls).toEqual([]);
+  });
+
+  it('renders the manual two-step contract in English without changing order data', async () => {
+    renderDialog(vi.fn(), 'en');
+
+    expect(screen.getByRole('dialog', { name: 'Send order #42 on WhatsApp' })).toBeInTheDocument();
+    expect(screen.getByText(/This is a manual share/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1. Send the text message' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /2\. .*order image/ })).toBeDisabled();
+    expect(screen.queryByText('המסעדה')).toBeNull();
   });
 });

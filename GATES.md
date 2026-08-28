@@ -279,6 +279,17 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   surfaces remained locked. This file is protected by `__reason`+ratchet, not listed in
   `EXTRACTED`; `zero` still exits 1 on 313/51, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `WhatsAppSendDialog.tsx` batch in this commit.** The pinned count is
+  now 852 Hebrew line(s) across 84 files; the protected set remains 552 lines in 34 files, so the
+  real remainder is **300 lines in 50 files**. This is the 73rd surface locked at zero. All dialog
+  copy now follows the reader locale, including the manual-channel warning, both explicit steps,
+  render failure, fallback instructions and preview alternative text. The supplier-facing order
+  message remains deliberately Hebrew in `share.ts`; this screen translates only what the product
+  reader sees. The stale-baseline negative control measured 13→0 on this file alone. Focused
+  dialog/share suites passed 14/14; the full suite passed 1,745/1,745; `npx tsc --noEmit` and
+  `check:jsx-space` passed. Dictionary parity passed at 5,070 keys per locale; `zero` still exits
+  1 on 300/50, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

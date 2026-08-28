@@ -71,23 +71,22 @@ export function WhatsAppSendDialog({ order, orgName, portalUrl, onClose }: {
   async function sendImage() {
     if (image.state !== 'ready') return;
     const result = await shareOrderImage(image.blob, orderImageFileName(order!));
-    if (result === 'downloaded') toast('התמונה נשמרה — גררו אותה לחלון ה-WhatsApp שנפתח וצרפו להודעה');
-    else if (result === 'shared') toast('התמונה שותפה');
+    if (result === 'downloaded') toast(t('whatsAppSendDialog.savedInstructions'));
+    else if (result === 'shared') toast(t('whatsAppSendDialog.shared'));
   }
 
   return (
-    <Modal open title={`שליחת הזמנה #${order.number} ב-WhatsApp`} onClose={() => onClose(openedTextRef.current)}
-      description="שני שלבים: הודעת טקסט, ואחריה תמונת ההזמנה המלאה.">
+    <Modal open title={t('whatsAppSendDialog.title', { number: order.number })} onClose={() => onClose(openedTextRef.current)}
+      description={t('whatsAppSendDialog.description')}>
       <div className="space-y-4">
         <Note tone="idle">
           <span className="min-w-0 flex-1">
-            זהו שיתוף ידני: ההודעה נשלחת מהמכשיר שלכם ואין אישור מסירה מספק. המערכת לא תרשום
-            את השיתוף הזה כמסירה מאומתת.
+            {t('whatsAppSendDialog.manualDeliveryNote')}
           </span>
         </Note>
 
         <button className="btn-primary w-full" onClick={openText}>
-          <Send size={ICON.sm} aria-hidden="true" /> 1. שליחת הודעת הטקסט
+          <Send size={ICON.sm} aria-hidden="true" /> {t('whatsAppSendDialog.sendText')}
         </button>
 
         <button className="btn-secondary w-full" onClick={() => void sendImage()} disabled={image.state !== 'ready'}>
@@ -96,23 +95,23 @@ export function WhatsAppSendDialog({ order, orgName, portalUrl, onClose }: {
           {image.state === 'rendering'
           ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" />
             : filesSupported ? <Share2 size={ICON.sm} aria-hidden="true" /> : <ImageDown size={ICON.sm} aria-hidden="true" />}
-          {filesSupported ? '2. שיתוף תמונת ההזמנה' : '2. הורדת תמונת ההזמנה'}
+          {filesSupported ? t('whatsAppSendDialog.shareImage') : t('whatsAppSendDialog.downloadImage')}
         </button>
         {!filesSupported && image.state === 'ready' && (
-          <p className="text-xs text-ink-muted">התמונה תישמר למחשב — גררו אותה לחלון ה-WhatsApp שנפתח וצרפו אותה להודעה.</p>
+          <p className="text-xs text-ink-muted">{t('whatsAppSendDialog.downloadInstructions')}</p>
         )}
 
         {image.state === 'failed' && (
-          <Note tone="await">לא ניתן היה להפיק את תמונת ההזמנה — ניתן לשלוח את הודעת הטקסט בלבד; היא כוללת את כל הפריטים.</Note>
+          <Note tone="await">{t('whatsAppSendDialog.imageFailed')}</Note>
         )}
-        {image.state === 'rendering' && <p className="text-sm text-ink-muted" role="status">מכין את תמונת ההזמנה…</p>}
+        {image.state === 'rendering' && <p className="text-sm text-ink-muted" role="status">{t('whatsAppSendDialog.renderingImage')}</p>}
         {image.state === 'ready' && (
-          <img src={image.previewUrl} alt={`תצוגה מקדימה של תמונת הזמנה #${order.number}`}
+          <img src={image.previewUrl} alt={t('whatsAppSendDialog.previewAlt', { number: order.number })}
             className="w-full rounded-lg border border-line-soft" />
         )}
 
         <div className="flex justify-end">
-          <button className="btn-ghost" onClick={() => onClose(openedTextRef.current)}>סיום</button>
+          <button className="btn-ghost" onClick={() => onClose(openedTextRef.current)}>{t('whatsAppSendDialog.done')}</button>
         </div>
       </div>
     </Modal>

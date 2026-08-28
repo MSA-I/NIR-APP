@@ -5347,4 +5347,20 @@ export const en: Dictionary = {
     previewSummary: '{count} rows identified. Matching uses exact supplier and product names.',
   },
 
+  whatsAppSendDialog: {
+    savedInstructions: 'The image was saved — drag it into the WhatsApp window that opened and attach it to the message',
+    shared: 'The image was shared',
+    title: 'Send order #{number} on WhatsApp',
+    description: 'Two steps: a text message, followed by the full order image.',
+    manualDeliveryNote: 'This is a manual share: the message is sent from your device and has no provider delivery confirmation. The system will not record this share as verified delivery.',
+    sendText: '1. Send the text message',
+    shareImage: '2. Share the order image',
+    downloadImage: '2. Download the order image',
+    downloadInstructions: 'The image will be saved to your computer — drag it into the WhatsApp window that opened and attach it to the message.',
+    imageFailed: 'The order image could not be produced — you can send the text message alone; it includes every item.',
+    renderingImage: 'Preparing the order image…',
+    previewAlt: 'Preview of order image #{number}',
+    done: 'Done',
+  },
+
 };
