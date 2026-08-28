@@ -91,7 +91,19 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   EVIDENCE: pending
 
 - [ ] P2-G5: paired he/en screenshots per extracted surface, with no raw dictionary key on screen
-  EVIDENCE: partial — `.tmp/shots/p2/orders-he.png` and `orders-en.png` read the live badges: `טיוטה` / `מוכנה לשליחה לספק` against `Draft` / `Ready to send to the supplier`, with `dir` flipping `rtl`/`ltr`. Remaining surfaces pending.
+  EVIDENCE: partial — `.tmp/shots/p2/orders-he.png` and `orders-en.png` read the live badges: `טיוטה` / `מוכנה לשליחה לספק` against `Draft` / `Ready to send to the supplier`, with `dir` flipping `rtl`/`ltr`. `.tmp/shots/p3/inventory-he.png` and `inventory-en.png` add the
+  inventory pair (P3-G2). Remaining surfaces pending: invoices, receipt, documents, price lists,
+  and mobile LTR with the safe area.
+
+  **The inventory pair earned its cost on the first shot, which is the argument for this gate.**
+  Both screenshots showed `nav.routeDesc_inventory` — a raw dictionary key — under the page title,
+  in Hebrew as well as English. `routePresentationDescription` returns a `TKey`, `PageHeader`’s
+  `description` prop is a `ReactNode`, and a `TKey` IS a string: `tsc` was clean, 1,704 tests were
+  green, and every catalogued screen in the product was printing its own key. Every existing
+  `PageHeader` test renders at `/`, which is not in the route catalogue, so no test could reach
+  the branch. Fixed in `8fafbc6` with a test pinned to `/inventory`; positive control on the one
+  expression reverted ⇒ 1 failed, restored ⇒ 11 passed. This is iron rule 7 arriving a second
+  time, and the only thing that caught it was looking at the screen.
 
 - [ ] P2-G6: extraction is FINISHED — zero Hebrew outside the dictionaries and the documented exceptions
   CHECK: node scripts/gate-i18n.mjs zero
@@ -142,8 +154,40 @@ ABANDON: P2-G4 Owner decision, 27.08.2026 — `src/operator/**` is internal, use
 - [ ] P3-G1: the same amount reads correctly in both locales, and stays a shekel in both
   EVIDENCE: pending
 
-- [ ] P3-G2: units read `kg` in English instead of `ק״ג`
-  EVIDENCE: pending — **owner decision 28.08.2026 (`OPEN-DECISIONS #282`): a display translation table only. The database does not change.** `products.unit` stays Hebrew (`0001:92`, default `יח׳`), the Hebrew value remains the key, and there is NO data migration — changing it would move `name_match_key` and the three-way match with it, which the plan forbids outright. What gets added is a second map from the canonical Hebrew form to English, ABOVE the existing 45-entry `UNIT_FORMS` in `src/lib/format.ts:104`, plus `Intl.PluralRules` for the English plural. `formatUnit(unit, quantity)` is the entry point. Required result: an English reader sees `3 kg`, `12 units`, `2 crates`; what is stored is `ק״ג`. **This failure exists today** — `portal/i18n.ts:125` already falls through to the raw `unit?.trim()`. Trap: `check:money` evaluates PER LINE (`scripts/check-money.ts:88-90`), so a formatter broken across two lines is invisible to it.
+- [x] P3-G2: units read `kg` in English instead of `ק״ג`
+  CHECK: npx vitest run src/lib/formatQuantity.spec.ts src/portal/i18n.spec.ts
+  EXPECT: /Tests\s+24 passed/
+  EVIDENCE: live, on one screen, in both languages. `/inventory` signed in as the demo owner, the
+  same eight rows, switched only by the control in /settings: `0 sacks` · `12 kg` · `0 containers` ·
+  `0 units` · `15 trays` · `0 barrels` against `0 שקים` · `12 ק״ג` · `0 מיכלים` · `0 יחידות` ·
+  `15 תבניות` · `0 חביות`, with `<html>` on `lang=en dir=ltr` and `lang=he dir=rtl`.
+  `.tmp/shots/p3/inventory-en.png`, `inventory-he.png`. What is STORED did not move: the same 47
+  products still read `ק"ג`, `מיכל`, `יח'`, `ארגז` in `public.products.unit`, and no migration was written.
+
+  The English word lives on the CANONICAL row of `UNIT_FORMS` rather than in a second map beside
+  it, so an alias cannot drift from the word its canonical form carries — and, not incidentally,
+  that adds no LINE to the file, so `ratchet` still pins `format.ts` at 45 without a baseline bump.
+  The decision below says "a second map ABOVE `UNIT_FORMS`"; this is that map, folded into the row
+  it belongs to. Same 17 canonical forms, one place to read, and no way to add an alias without one.
+
+  `locale` is a REQUIRED parameter of `formatUnit`/`formatQuantity`, deliberately not defaulted to
+  `he`: a default would have let all 43 call sites keep compiling while quietly staying Hebrew on
+  an English screen. The compile errors WERE the list of screens that show a unit. Two of them
+  pass `'he'` on purpose — `share.ts` and `orderImage.ts` are read by the supplier, like the raw
+  product name beside them.
+
+  Positive control: removed `en` from the `ארגז` row ⇒ two failures,
+  `expected '0 ארגז' to be '0 crates'` and `אין אנגלית לצורה ארגז`; restored ⇒ pass. The plural
+  category comes from `Intl.PluralRules`, which is why English reads `0 crates` where `n === 1`
+  would have said `0 crate`.
+
+  One constraint found the hard way, recorded so it is not re-broken: `p2Reliability.spec.ts`
+  imports `format.ts` into a BARE Node process to prove the calendar does not depend on the
+  machine time zone. A value import of `./i18n/t` cannot be resolved there — extensionless
+  TypeScript specifier — and the whole suite went red. The plural rules are built inside
+  `format.ts` instead; only the `Locale` TYPE crosses, because a type import is erased.
+
+  DECISION, unchanged — **owner decision 28.08.2026 (`OPEN-DECISIONS #282`): a display translation table only. The database does not change.** `products.unit` stays Hebrew (`0001:92`, default `יח׳`), the Hebrew value remains the key, and there is NO data migration — changing it would move `name_match_key` and the three-way match with it, which the plan forbids outright. What gets added is a second map from the canonical Hebrew form to English, ABOVE the existing 45-entry `UNIT_FORMS` in `src/lib/format.ts:104`, plus `Intl.PluralRules` for the English plural. `formatUnit(unit, quantity)` is the entry point. Required result: an English reader sees `3 kg`, `12 units`, `2 crates`; what is stored is `ק״ג`. **This failure exists today** — `portal/i18n.ts:125` already falls through to the raw `unit?.trim()`. Trap: `check:money` evaluates PER LINE (`scripts/check-money.ts:88-90`), so a formatter broken across two lines is invisible to it.
 
 - [ ] P3-G3: the safe-area and drawer mappings flip with `dir`
   EVIDENCE: pending
