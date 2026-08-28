@@ -86,11 +86,37 @@ function describeExisting(row: ExistingProduct) {
   return [row.name, row.unit, row.active ? 'פעיל' : 'לא פעיל'].join(' · ');
 }
 
-export function QuickCreateProduct({ suppliers, initialName, onClose, onCreated }: {
+/**
+ * The order wizard was the first caller and its words are still the defaults. The document review
+ * screen is the second (28.08.2026): an invoice line the catalogue has never seen is the SAME dead
+ * end this dialog was built for, arriving from the other direction — and there the document already
+ * names the supplier, the unit and the price, so the dialog opens with them filled in rather than
+ * asking a person to re-type what is printed on the page in front of them.
+ */
+const ORDER_DESCRIPTION = 'המוצר ייווצר בקטלוג, יקבל מחיר אצל הספק שנבחר, ויתווסף להזמנה הזו — ויופיע גם בהזמנות הבאות.';
+const ORDER_SUBMIT_LABEL = 'הוספה להזמנה';
+const ORDER_REASON = 'הוספת מוצר ומחיר מתוך הזמנה חדשה';
+
+export function QuickCreateProduct({
+  suppliers, initialName, initialUnit, initialPrice, initialSupplierId,
+  description = ORDER_DESCRIPTION, submitLabel = ORDER_SUBMIT_LABEL, reasonFallback = ORDER_REASON,
+  onClose, onCreated,
+}: {
   /** The order screen's already-loaded supplier rows; any superset of `{ id, name }`. */
   suppliers: readonly SupplierOption[];
   /** Whatever the user had typed in the product search, so the dialog opens half-filled. */
   initialName?: string;
+  /** The unit as printed on the document, when a caller has one. */
+  initialUnit?: string;
+  /** The unit price as printed on the document, when a caller has one. */
+  initialPrice?: string;
+  /** Pre-selects the supplier when the caller already resolved one (the document review screen). */
+  initialSupplierId?: string;
+  /** What the dialog says it is about to do. The order wizard's sentence is the default. */
+  description?: string;
+  submitLabel?: string;
+  /** The reason written to `price_history` and `audit_logs` when the person leaves the box empty. */
+  reasonFallback?: string;
   onClose: () => void;
   /** Fires after BOTH writes succeed. The product is real and it has a price for `supplierId`. */
   onCreated: (product: Product) => void | Promise<void>;
@@ -98,9 +124,9 @@ export function QuickCreateProduct({ suppliers, initialName, onClose, onCreated 
   const { profile } = useAuth();
   const toast = useToast();
   const [name, setName] = useState(initialName ?? '');
-  const [unit, setUnit] = useState('יח׳');
-  const [supplierId, setSupplierId] = useState('');
-  const [price, setPrice] = useState('');
+  const [unit, setUnit] = useState(initialUnit || 'יח׳');
+  const [supplierId, setSupplierId] = useState(initialSupplierId ?? '');
+  const [price, setPrice] = useState(initialPrice ?? '');
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -159,7 +185,7 @@ export function QuickCreateProduct({ suppliers, initialName, onClose, onCreated 
           available: true,
         }],
         p_effective_date: todayISO(),
-        p_reason: reasonOr(reason, 'הוספת מוצר ומחיר מתוך הזמנה חדשה'),
+        p_reason: reasonOr(reason, reasonFallback),
       }));
 
       pendingProduct.current = null;
@@ -177,7 +203,7 @@ export function QuickCreateProduct({ suppliers, initialName, onClose, onCreated 
 
   return (
     <Modal open onClose={onClose} title="מוצר חדש" busy={busy}
-      description="המוצר ייווצר בקטלוג, יקבל מחיר אצל הספק שנבחר, ויתווסף להזמנה הזו — ויופיע גם בהזמנות הבאות."
+      description={description}
       statusMessage={busy ? 'יוצר את המוצר' : undefined}>
       <div className="space-y-4">
         {error && <ErrorNote message={error} />}
@@ -218,7 +244,7 @@ export function QuickCreateProduct({ suppliers, initialName, onClose, onCreated 
       <div className="flex justify-end gap-2 mt-5">
         <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
         <button type="button" className="btn-primary" disabled={spent} onClick={() => void save()}>
-          {created ? 'נוצר' : busy ? 'שומר…' : duplicate ? 'צור בכל זאת' : 'הוספה להזמנה'}
+          {created ? 'נוצר' : busy ? 'שומר…' : duplicate ? 'צור בכל זאת' : submitLabel}
         </button>
       </div>
     </Modal>

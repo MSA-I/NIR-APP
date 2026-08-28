@@ -6,6 +6,7 @@ import {
   findingLabel,
   formatLineRanges,
   groupFindings,
+  priceSeedRows,
   resolutionLabel,
   reviewedProposal,
   storageAndApprovalSentences,
@@ -181,6 +182,58 @@ describe('reviewedProposal', () => {
     expect(proposal.lines[0].product_id).toBe('p9');
     expect(proposal.lines[0].quantity).toBe('3');
     expect(proposal.order_id).toBeNull();
+  });
+});
+
+describe('an invoice may fill an empty price list, and may never rewrite a full one', () => {
+  const priced = (over: Record<string, unknown>) => ({
+    line_index: 0, description: 'עגבניות', sku: null, barcode: null, product_id: 'p1',
+    product_source: 'catalog', quantity: 2, unit: 'ק"ג', unit_price: 12,
+    discount_amount: 0, vat_rate: 18, line_total: 24, normalized_quantity: 2,
+    normalized_unit_price: 12, baseline_price: null, baseline_source: null,
+    baseline_effective_date: null, overcharge_amount: null, findings: [],
+    ...over,
+  });
+
+  it('seeds a product that has no agreed price yet', () => {
+    const rows = priceSeedRows(read({ assessment: assessment({ lines: [priced({})] }) as never }), {}, 's1');
+    expect(rows).toEqual([{ supplier_id: 's1', product_id: 'p1', price: 12, available: true }]);
+  });
+
+  it('leaves an existing agreed price alone — it is the comparison the variance check needs', () => {
+    // This is the assertion that keeps the feature from removing a control. If a document could
+    // rewrite `baseline_price`, every invoice would agree with itself and "מחיר מעל המחיר המוסכם"
+    // would never fire again.
+    const rows = priceSeedRows(
+      read({ assessment: assessment({ lines: [priced({ baseline_price: 9 })] }) as never }), {}, 's1');
+    expect(rows).toEqual([]);
+  });
+
+  it('uses the reviewer mapping, so a line resolved by hand is priced too', () => {
+    const rows = priceSeedRows(
+      read({ assessment: assessment({ lines: [priced({ product_id: null })] }) as never }),
+      { 0: { product_id: 'p9' } }, 's1');
+    expect(rows).toEqual([{ supplier_id: 's1', product_id: 'p9', price: 12, available: true }]);
+  });
+
+  it('prefers the normalized price, because that is the number a baseline is compared against', () => {
+    const rows = priceSeedRows(
+      read({ assessment: assessment({ lines: [priced({ unit_price: 120, normalized_unit_price: 12 })] }) as never }),
+      {}, 's1');
+    expect(rows[0].price).toBe(12);
+  });
+
+  it('sends each product once, and nothing at all without a supplier or a usable price', () => {
+    const twice = assessment({ lines: [priced({}), priced({ line_index: 1 })] }) as never;
+    expect(priceSeedRows(read({ assessment: twice }), {}, 's1')).toHaveLength(1);
+    expect(priceSeedRows(read({ assessment: twice }), {}, null)).toEqual([]);
+    expect(priceSeedRows(
+      read({ assessment: assessment({ lines: [priced({ unit_price: null, normalized_unit_price: null })] }) as never }),
+      {}, 's1')).toEqual([]);
+    // A zero is not a price a supplier agreed to. It is refused rather than written.
+    expect(priceSeedRows(
+      read({ assessment: assessment({ lines: [priced({ unit_price: 0, normalized_unit_price: 0 })] }) as never }),
+      {}, 's1')).toEqual([]);
   });
 });
 
