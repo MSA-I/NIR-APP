@@ -84,18 +84,33 @@ export interface MonthlyReportLabels {
  * The workbook builders below deliberately keep plain `0`: a numeric cell is what an accountant's
  * own formulas consume, and `—` would turn it into text. The `—` rule governs screens.
  */
+/**
+ * THE MONTH'S FIGURES, ONE TOTAL PER CURRENCY (0217, OPEN-DECISIONS #277).
+ *
+ * This is the accountant's reconciliation screen, so it is the last place a single number may
+ * quietly cover two kinds of money. A month holding ₪12,400 of shekel invoices and $3,100 of
+ * dollar ones has two totals; the four money figures below are therefore lists, each entry a sum
+ * taken inside one currency. The counts stay counts — an invoice is one invoice in any currency.
+ *
+ * An empty list means "no invoices", which is what `hasInvoices` already says and what the screen
+ * renders as an em dash. It is not a zero.
+ */
 export function monthlyReportScreenTotals(data: {
-  invoices: { total_amount: number; amount_before_vat: number; vat_amount: number; payment_status: string }[];
-  payments: { amount: number }[];
+  invoices: { total_amount: number; amount_before_vat: number; vat_amount: number; currency: string; payment_status: string }[];
+  payments: { amount: number; currency: string }[];
   bank: { status: string }[];
 }) {
   const hasInvoices = data.invoices.length > 0;
-  const hasPayments = data.payments.length > 0;
+  const totalsWithin = <T>(rows: readonly T[], currency: (row: T) => string, amount: (row: T) => number) => {
+    const sums = new Map<string, number>();
+    for (const row of rows) sums.set(currency(row), (sums.get(currency(row)) ?? 0) + amount(row));
+    return [...sums].map(([code, value]) => ({ currency: code, amount: value }));
+  };
   return {
-    invoices: hasInvoices ? data.invoices.reduce((s, i) => s + i.total_amount, 0) : null,
-    beforeVat: hasInvoices ? data.invoices.reduce((s, i) => s + i.amount_before_vat, 0) : null,
-    vat: hasInvoices ? data.invoices.reduce((s, i) => s + i.vat_amount, 0) : null,
-    paid: hasPayments ? data.payments.reduce((s, p) => s + p.amount, 0) : null,
+    invoices: totalsWithin(data.invoices, (i) => i.currency, (i) => i.total_amount),
+    beforeVat: totalsWithin(data.invoices, (i) => i.currency, (i) => i.amount_before_vat),
+    vat: totalsWithin(data.invoices, (i) => i.currency, (i) => i.vat_amount),
+    paid: totalsWithin(data.payments, (p) => p.currency, (p) => p.amount),
     unpaidCount: data.invoices.filter((i) => i.payment_status !== 'paid').length,
     unmatchedBank: data.bank.filter((b) => b.status === 'unmatched').length,
     suggestedBank: data.bank.filter((b) => b.status === 'suggested').length,
