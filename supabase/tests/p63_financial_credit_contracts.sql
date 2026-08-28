@@ -737,7 +737,7 @@ begin
     into v_stale
   from pg_catalog.pg_proc proc
   where proc.oid in (
-    'public.execute_payment_request(uuid,date,text,text,text,jsonb,text)'::regprocedure,
+    'public.execute_payment_request(uuid,date,text,text,text,jsonb,numeric,text,text)'::regprocedure,
     'public.p0_invoice_balance_rows_by_currency()'::regprocedure,
     'public.p1_refresh_invoice_payment_statuses(uuid,uuid[])'::regprocedure,
     'public.soft_delete_supplier(uuid,text)'::regprocedure,
@@ -765,7 +765,7 @@ begin
   -- The fail-closed placeholder is not merely unreachable, it is gone. An executor that can still
   -- raise it is one that never learned the 2026-08-23 ruling.
   if position('credit_request_not_linked_to_invoice' in replace(pg_get_functiondef(
-       'public.execute_payment_request(uuid,date,text,text,text,jsonb,text)'::regprocedure
+       'public.execute_payment_request(uuid,date,text,text,text,jsonb,numeric,text,text)'::regprocedure
      ), e'\r', '')) > 0 then
     raise exception
       'P63 financial credit assertion failed: the unlinked-credit placeholder refusal survives';

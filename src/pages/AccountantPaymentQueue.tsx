@@ -118,8 +118,8 @@ export function partitionSupplierCredits(
   };
 }
 
-const agora = (value: number) => Math.round(value * 100);
-const money = (value: number) => value / 100;
+const minorAmount = (value: number, minorUnits: number) => Math.round(value * (10 ** minorUnits));
+const majorAmount = (value: number, minorUnits: number) => value / (10 ** minorUnits);
 
 /** Ties the visible refusal to the control it disables. */
 const ALLOCATION_ERROR_ID = 'payment-execution-allocation-error';
@@ -162,13 +162,14 @@ const allocationRefusal = (error: unknown) =>
 export function buildPaymentAllocations(
   invoices: InvoiceAllocationInput[],
   credits: SelectedCreditAllocation[],
+  minorUnits = 2,
 ): { allocations: PaymentAllocationPayload[]; cashAmount: number; creditAmount: number } {
   // One entry per invoice: the executor rejects two allocations naming the same invoice.
   const cashByInvoice = new Map<string, number>();
   for (const invoice of invoices) {
     cashByInvoice.set(
       invoice.invoice_id,
-      (cashByInvoice.get(invoice.invoice_id) ?? 0) + agora(invoice.amount_allocated),
+      (cashByInvoice.get(invoice.invoice_id) ?? 0) + minorAmount(invoice.amount_allocated, minorUnits),
     );
   }
 
@@ -178,9 +179,9 @@ export function buildPaymentAllocations(
   // already knows its invoice, and sending it again would be a second place to get it wrong.
   const chosenTargetByCredit = new Map<string, string>();
   for (const credit of credits) {
-    const amount = agora(credit.amount);
+    const amount = minorAmount(credit.amount, minorUnits);
     if (amount <= 0) continue;
-    if (amount > agora(credit.remaining)) throw new Error('credit_allocation_exceeds_remaining');
+    if (amount > minorAmount(credit.remaining, minorUnits)) throw new Error('credit_allocation_exceeds_remaining');
     // A credit that already names an invoice is not portable. Moving it would close an invoice
     // the credit note never referred to while the one it did refer to stays open.
     if (credit.invoice_id && credit.target_invoice_id
@@ -210,18 +211,18 @@ export function buildPaymentAllocations(
   for (const [invoiceId, cash] of cashByInvoice) {
     if (cash <= 0) continue; // fully offset by credit — the executor rejects a zero allocation
     cashTotal += cash;
-    allocations.push({ invoice_id: invoiceId, credit_id: null, amount: money(cash) });
+    allocations.push({ invoice_id: invoiceId, credit_id: null, amount: majorAmount(cash, minorUnits) });
   }
   if (cashTotal < 1) throw new Error('payment_cash_amount_required');
 
   for (const credit of credits) {
-    const amount = agora(credit.amount);
+    const amount = minorAmount(credit.amount, minorUnits);
     if (amount > 0) {
       const chosenTarget = chosenTargetByCredit.get(credit.credit_id);
       allocations.push({
         invoice_id: null,
         credit_id: credit.credit_id,
-        amount: money(amount),
+        amount: majorAmount(amount, minorUnits),
         // Present only for a credit that had no invoice: the executor writes the link from it,
         // once, in the same transaction. Spread so the key is absent — not `undefined` — on the
         // linked path, which keeps that payload byte-identical to what it has always sent.
@@ -229,7 +230,11 @@ export function buildPaymentAllocations(
       });
     }
   }
-  return { allocations, cashAmount: money(cashTotal), creditAmount: money(creditTotal) };
+  return {
+    allocations,
+    cashAmount: majorAmount(cashTotal, minorUnits),
+    creditAmount: majorAmount(creditTotal, minorUnits),
+  };
 }
 
 /**
@@ -240,6 +245,7 @@ type Row = Omit<PaymentRequest, 'supplier'> & {
   supplier: { id: string; name: string; bank_details: string | null };
   invoices: { invoice_id: string; amount_allocated: number; invoice: { invoice_number: string } | null }[];
   approver: { full_name: string } | null;
+  minor_units: number;
 };
 type RawRow = Omit<Row, 'supplier'>;
 
@@ -265,19 +271,31 @@ export default function AccountantPaymentQueue() {
       .in('status', ['approved', 'sent_for_execution', 'executed', 'matched'])
       .order('due_date', { ascending: true, nullsFirst: false })) as RawRow[];
     const supplierIds = rows.map((row) => row.supplier_id);
-    const [suppliers, bankAccounts] = await Promise.all([
+    const [suppliers, bankAccounts, currencyRows] = await Promise.all([
       financialSupplierMap(supplierIds),
       financialSupplierBankAccountMap(supplierIds),
+      rows.length
+        ? supabase.from('currencies').select('code, minor_units')
+          .in('code', [...new Set(rows.map((row) => row.currency))])
+        : Promise.resolve({ data: [], error: null }),
     ]);
-    return rows.map<Row>((row) => ({
-      ...row,
-      supplier: {
-        ...(suppliers.get(row.supplier_id) ?? {
-          id: row.supplier_id, name: '—', tax_id: null, payment_terms: null, status: 'active', bank_details: null,
-        }),
-        bank_details: formatSupplierBankAccount(bankAccounts.get(row.supplier_id)),
-      },
-    }));
+    if (currencyRows.error) throw new Error(currencyRows.error.message);
+    const minorUnits = new Map(((currencyRows.data ?? []) as { code: string; minor_units: number }[])
+      .map((currency) => [currency.code, currency.minor_units]));
+    return rows.map<Row>((row) => {
+      const units = minorUnits.get(row.currency);
+      if (units == null) throw new Error(`currency_minor_units_unavailable:${row.currency}`);
+      return {
+        ...row,
+        supplier: {
+          ...(suppliers.get(row.supplier_id) ?? {
+            id: row.supplier_id, name: '—', tax_id: null, payment_terms: null, status: 'active', bank_details: null,
+          }),
+          bank_details: formatSupplierBankAccount(bankAccounts.get(row.supplier_id)),
+        },
+        minor_units: units,
+      };
+    });
   });
 
   if (loading) return <SkeletonList />;
@@ -341,7 +359,10 @@ export default function AccountantPaymentQueue() {
 function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; onDone: () => void }) {
   const { profile } = useAuth();
   const toast = useToast();
-  const [f, setF] = useState({ paid_date: todayISO(), reference: '', notes: '', reason: '' });
+  const [f, setF] = useState({
+    paid_date: todayISO(), reference: '', notes: '', reason: '',
+    settlement_currency: pr.currency, settlement_amount: '',
+  });
   const [reauthOpen, setReauthOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [paymentId, setPaymentId] = useState<string | null>(null);
@@ -353,6 +374,14 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
     unwrap(await supabase.rpc('credit_request_balance_rows', {
       p_supplier_id: pr.supplier.id,
     })) as SupplierCreditBalance[]);
+  const { data: currencyOptions, loading: currenciesLoading, error: currenciesError } = useQuery(async () =>
+    unwrap(await supabase.from('currencies').select('code, minor_units')
+      .eq('active', true).order('code')) as { code: string; minor_units: number }[], []);
+  const crossCurrencySettlement = f.settlement_currency !== pr.currency;
+  const settlementMinorUnits = currencyOptions
+    ?.find((currency) => currency.code === f.settlement_currency)?.minor_units;
+  const settlementStep = settlementMinorUnits === 0 ? '1'
+    : `0.${'0'.repeat(Math.max((settlementMinorUnits ?? 2) - 1, 0))}1`;
 
   const requestInvoiceIds = new Set(pr.invoices.map((invoice) => invoice.invoice_id));
   const invoiceNumberById = new Map(
@@ -382,7 +411,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
   let allocationPreview: ReturnType<typeof buildPaymentAllocations> | null = null;
   let allocationError: string | null = null;
   try {
-    allocationPreview = buildPaymentAllocations(pr.invoices, selectedCredits);
+    allocationPreview = buildPaymentAllocations(pr.invoices, selectedCredits, pr.minor_units);
   } catch (error) {
     allocationPreview = null;
     allocationError = allocationRefusal(error);
@@ -395,6 +424,15 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
     if (!f.reference.trim()) { toast('נדרשת אסמכתת העברה', 'error'); return; }
     if (!allocationPreview) {
       toast(allocationError ?? 'לא ניתן לחשב את פיצול התשלום מהזיכויים שנבחרו', 'error');
+      return;
+    }
+    if (currenciesLoading || currenciesError || settlementMinorUnits == null) {
+      toast(currenciesError ?? 'רשימת המטבעות עדיין אינה זמינה', 'error');
+      return;
+    }
+    if (crossCurrencySettlement
+        && (!Number.isFinite(Number(f.settlement_amount)) || Number(f.settlement_amount) <= 0)) {
+      toast('יש להזין את הסכום שיצא מחשבון הבנק', 'error');
       return;
     }
     setReauthOpen(true);
@@ -410,6 +448,8 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
         p_reference: f.reference.trim(),
         p_notes: f.notes.trim() || null,
         p_allocations: allocationPreview?.allocations ?? [],
+        p_settlement_amount: crossCurrencySettlement ? Number(f.settlement_amount) : null,
+        p_settlement_currency: crossCurrencySettlement ? f.settlement_currency : null,
         p_reason: reasonOr(f.reason, 'ביצוע העברת תשלום'),
       })) as { payment_id: string };
 
@@ -648,7 +688,32 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div><label className="label" htmlFor="payment-execution-date">תאריך ביצוע</label><input id="payment-execution-date" type="date" className="input" value={f.paid_date} onChange={(e) => setF((s) => ({ ...s, paid_date: e.target.value }))} /></div>
-          <div><label className="label" htmlFor="payment-execution-amount">סכום להעברה בפועל</label><input id="payment-execution-amount" type="number" className="input num" value={allocationPreview?.cashAmount ?? ''} readOnly /></div>
+          <div><label className="label" htmlFor="payment-execution-amount">סכום החוב שנפרע ({pr.currency})</label><input id="payment-execution-amount" type="number" className="input num" value={allocationPreview?.cashAmount ?? ''} readOnly /></div>
+          <div>
+            <label className="label" htmlFor="payment-settlement-currency">מטבע חשבון הבנק</label>
+            <select id="payment-settlement-currency" className="input num" dir="ltr"
+              value={f.settlement_currency}
+              onChange={(event) => setF((current) => ({
+                ...current, settlement_currency: event.target.value, settlement_amount: '',
+              }))}>
+              {(currencyOptions ?? []).map((currency) => (
+                <option key={currency.code} value={currency.code}>{currency.code}</option>
+              ))}
+            </select>
+          </div>
+          {crossCurrencySettlement && (
+            <div>
+              <label className="label" htmlFor="payment-settlement-amount">
+                סכום שיצא מהחשבון ({f.settlement_currency}) *
+              </label>
+              <input id="payment-settlement-amount" type="number" min="0" step={settlementStep}
+                className="input num" value={f.settlement_amount}
+                onChange={(event) => setF((current) => ({ ...current, settlement_amount: event.target.value }))} />
+              <p className="mt-1 text-xs text-ink-muted">
+                שער ההמרה נגזר משני הסכומים לצפייה בלבד ואינו נשמר.
+              </p>
+            </div>
+          )}
         </div>
         <div><label className="label" htmlFor="payment-execution-reference">אסמכתת העברה *</label><input id="payment-execution-reference" className="input num" dir="ltr" value={f.reference} onChange={(e) => setF((s) => ({ ...s, reference: e.target.value }))} /></div>
         <div><label className="label" htmlFor="payment-execution-notes">הערות</label><input id="payment-execution-notes" className="input" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></div>

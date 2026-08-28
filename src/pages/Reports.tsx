@@ -222,7 +222,14 @@ export default function Reports() {
       // Strip only what filesystems object to; Hebrew names are fine and are the whole point.
       const slug = org.name.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
       const fileName = `${slug || 'inplace'}-report-${month}.xlsx`;
-      const templated = await renderConfiguredReportTemplate({
+      const reportCurrencies = new Set([
+        ...data.invoices.map((row) => row.currency),
+        ...data.payments.map((row) => row.currency),
+        ...data.credits.map((row) => row.currency),
+      ]);
+      // A custom template exposes one scalar per money field. In a mixed month that shape cannot
+      // state two currencies without adding them, so the currency-aware built-in workbook wins.
+      const templated = reportCurrencies.size > 1 ? null : await renderConfiguredReportTemplate({
         exportKey: 'accountant_monthly_report', orgId: org.id, values,
       });
       if (templated) {
@@ -232,7 +239,7 @@ export default function Reports() {
         // custom template still throws above rather than landing here — that contract is
         // renderConfiguredReportTemplate's, untouched.
         const wb = buildStyledMonthlyWorkbook({
-          orgName: org.name, month, generatedAt: data.generatedAt, data,
+          orgName: org.name, baseCurrency: org.base_currency, month, generatedAt: data.generatedAt, data,
           labels: reportLabels, summary: values,
         });
         XLSX.writeFile(wb, fileName);

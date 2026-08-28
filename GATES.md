@@ -679,37 +679,54 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
 
 ## Phase 5 — bank, payments, reports
 
-- [ ] P5-G1: a shekel statement line settles a dollar invoice only through a payment that recorded both figures (`#286`)
+- [x] P5-G1: a shekel statement line settles a dollar invoice only through a payment that recorded both figures (`#286`)
   CHECK: (a) match a shekel transaction to a payment whose `settlement_currency` is ILS and whose
   `settlement_amount` equals the line within that currency's tolerance; (b) match the same
   transaction straight to a dollar invoice
   EXPECT: (a) matched, the allocation staying in USD so the dollar balance closes in dollars;
   (b) `bank_match_currency_mismatch` with a stated exception reason. The rate is derived on read
   from `settlement_amount / amount` and is stored nowhere.
+  EVIDENCE: P81 executes a USD 3,100 request with settlement ILS 11,470 through the real payment
+  command, matches the ILS bank row to that payment, and keeps the invoice allocation USD. A
+  direct ILS-row-to-USD-invoice attempt returns `bank_match_currency_mismatch`. The derived value
+  is 3.7 and no `exchange_rate`/`fx_rate` column exists. Exit 0 on 0241.
 
-- [ ] P5-G2: a single-currency month is byte-for-byte the workbook it is today, plus one column
+- [x] P5-G2: a single-currency month is byte-for-byte the workbook it is today, plus one column
   CHECK: build a shekel-only month workbook
   EXPECT: the same five sheets with the same names, each money sheet carrying one added `מטבע`
   column reading `ILS`. No split, because there is nothing to split (`#287`, owner 28.08.2026).
+  EVIDENCE: `monthlyReport.spec.ts` observes exactly the five historical sheet names; invoices,
+  payments and credits retain their shape plus a `מטבע` header, and the ILS invoice row reads ILS.
 
-- [ ] P5-G3: a mixed month splits per currency, and no sheet mixes two in one amount column
+- [x] P5-G3: a mixed month splits per currency, and no sheet mixes two in one amount column
   CHECK: build a month holding ILS and USD invoices, payments, credits and bank rows
   EXPECT: one sheet per currency per money surface, named `<sheet> <ISO>`, ordered base currency
   first then ISO code ascending; every amount cell formatted from its own row's currency; the single
   `פרטי הדוח` sheet holding one total row per currency and **no** combined row. Sheet names
   stay within Excel's 31-character limit, and no cell carries a formula — the workbook neutralises
   formulas by policy and this gate must not be the reason that changes.
+  EVIDENCE: the mixed fixture produces `חשבוניות/תשלומים/זיכויים USD` before the ILS twins because
+  USD is the supplied base currency; every row's `מטבע` equals its sheet suffix, every name is at
+  most 31 characters, no cell has `f`, and the summary contains ILS and USD but not 15,500.
+  The locked workbook additionally splits `תנועות בנק USD/ILS` with matching currency columns.
 
-- [ ] P5-G4: the workbook is a pure function of the snapshot, so the hash still means something
+- [x] P5-G4: the workbook is a pure function of the snapshot, so the hash still means something
   CHECK: build the same mixed month twice and compare the two files
   EXPECT: identical sheet set, identical order. Naming and ordering are derived from the data, never
   from insertion order.
+  EVIDENCE: two builds from the same mixed input return an identical ordered `SheetNames` array;
+  base currency wins first, then ISO ascending. The locked builder leaves the supplied snapshot
+  object byte-identical under `JSON.stringify`.
 
-- [ ] P5-G5: an immutable snapshot keeps the meaning it was written with
+- [x] P5-G5: an immutable snapshot keeps the meaning it was written with
   CHECK: read a snapshot created before `0214`
   EXPECT: reported as ILS through its `report_version`; `content_hash` unchanged — read, never rewrite
+  EVIDENCE: 0233 captures all pre-existing snapshot ids/hashes and asserts none changes, writes new
+  snapshots as `monthly-accountant-legal-entity-v3` with `base_currency` and `totals.by_currency`,
+  and freezes currency on every money row. The TypeScript v2 fixture has no currency fields; the
+  locked workbook reads each as ILS and its original `content_hash` remains unchanged.
 
-- [ ] P5-G6: the two payment-request COMMANDS carry the currency their money is in
+- [x] P5-G6: the two payment-request COMMANDS carry the currency their money is in
   ADDED 28.08.2026, during phase 3, from reading the code the client calls. Not a re-plan: the
   plan's §3 rule ("an amount cannot be rendered without saying which currency it is") is a rule
   about reading, and these two are writing. Both were measured, both are real:
@@ -731,6 +748,16 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   two currencies is refused `payment_request_currency_mixed`; (b) the override compares the credit
   total IN THE REQUEST'S CURRENCY, and a credit in another currency neither blocks the plain
   approval nor is counted into the recorded override total
+  EVIDENCE: P81 creates a USD request from two USD invoices and observes USD on request and both
+  junction rows; a USD+ILS set is refused by exact name. With USD 25 and ILS 50 credits, override
+  total is 25. A second USD request with only an ILS credit passes ordinary approval with null
+  override total. The accountant allocation helper additionally preserves KWD 1.234 at three
+  minor units instead of rounding to 1.23.
+
+  PHASE 5 VERIFICATION 28.08.2026: P81, monthly snapshot, P1 financial commands, P4 step-up,
+  P63 credit contracts and P74 MFA suites exit 0 on local migrations through 0241. Vitest:
+  158/158 files, 1674/1674 tests. TypeScript and all static currency/money/A5/Assistant guards
+  exit 0. This is local evidence only; CI and Production remain Phase 6.
 
 ---
 

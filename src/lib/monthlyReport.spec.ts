@@ -113,13 +113,14 @@ describe('accountant workbook — formula injection', () => {
           invoice_number: '@SUM(A1:A9)',
           invoice_date: '2026-08-01',
           amount_before_vat: 100, vat_amount: 18, total_amount: 118,
+          currency: 'ILS',
           review_status: 'approved', payment_status: 'unpaid',
         }],
         payments: [{
           supplier: { name: 'ספק תקין' }, paid_date: '2026-08-02',
-          amount: 118, method: '+972', reference: '-1234',
+          amount: 118, currency: 'ILS', method: '+972', reference: '-1234',
         }],
-        credits: [{ supplier: { name: 'ספק תקין' }, reason: 'shortage', amount: 10, status: 'open' }],
+        credits: [{ supplier: { name: 'ספק תקין' }, reason: 'shortage', amount: 10, currency: 'ILS', status: 'open' }],
         exceptions: [{ type: 'price_mismatch', title: '=1+1', supplier: null }],
       },
       labels,
@@ -150,6 +151,115 @@ describe('accountant workbook — formula injection', () => {
     const [invoice] = sheetOf('חשבוניות');
     expect(invoice['סה"כ']).toBe(118);
     expect(invoice['תאריך']).toBe('2026-08-01');
+  });
+});
+
+describe('accountant workbook — currency is part of every amount', () => {
+  const mixedInput = {
+    orgName: 'מסעדת מטבעות',
+    baseCurrency: 'USD',
+    month: '2026-08',
+    generatedAt: new Date('2026-09-01T00:00:00.000Z'),
+    data: {
+      invoices: [
+        { supplier: { name: 'שקלי' }, invoice_number: 'I-1', invoice_date: '2026-08-01',
+          amount_before_vat: 12400, vat_amount: 0, total_amount: 12400, currency: 'ILS',
+          review_status: 'approved', payment_status: 'unpaid' },
+        { supplier: { name: 'דולרי' }, invoice_number: 'U-1', invoice_date: '2026-08-02',
+          amount_before_vat: 3100, vat_amount: 0, total_amount: 3100, currency: 'USD',
+          review_status: 'approved', payment_status: 'unpaid' },
+      ],
+      payments: [
+        { supplier: { name: 'שקלי' }, paid_date: '2026-08-03', amount: 500,
+          currency: 'ILS', method: 'bank', reference: 'I' },
+        { supplier: { name: 'דולרי' }, paid_date: '2026-08-04', amount: 80,
+          currency: 'USD', method: 'bank', reference: 'U' },
+      ],
+      credits: [
+        { supplier: { name: 'שקלי' }, reason: 'shortage', amount: 10, currency: 'ILS', status: 'open' },
+        { supplier: { name: 'דולרי' }, reason: 'shortage', amount: 5, currency: 'USD', status: 'open' },
+      ],
+      exceptions: [],
+    },
+    labels,
+  };
+
+  it('keeps the five existing sheet names in a single-currency month and adds currency columns', () => {
+    const workbook = buildMonthlyWorkbook({ ...input, baseCurrency: 'ILS' } as never);
+    expect(workbook.SheetNames).toEqual(['פרטי הדוח', 'חשבוניות', 'תשלומים', 'זיכויים', 'חריגים פתוחים כרגע']);
+    const invoiceRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets['חשבוניות']);
+    expect(invoiceRows[0]['מטבע']).toBe('ILS');
+    for (const sheetName of ['חשבוניות', 'תשלומים', 'זיכויים']) {
+      const headerRows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], { header: 1 });
+      expect(headerRows[0]).toContain('מטבע');
+    }
+    const summaryRows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets['פרטי הדוח'], { header: 1 });
+    expect(summaryRows.some((row) => row.includes('ILS'))).toBe(true);
+  });
+
+  it('splits every mixed money surface by currency, base currency first, with no combined total', () => {
+    const first = buildMonthlyWorkbook(mixedInput as never);
+    const second = buildMonthlyWorkbook(mixedInput as never);
+    expect(first.SheetNames).toEqual(second.SheetNames);
+    expect(first.SheetNames).toEqual([
+      'פרטי הדוח',
+      'חשבוניות USD', 'חשבוניות ILS',
+      'תשלומים USD', 'תשלומים ILS',
+      'זיכויים USD', 'זיכויים ILS',
+      'חריגים פתוחים כרגע',
+    ]);
+    expect(first.SheetNames.every((name) => name.length <= 31)).toBe(true);
+
+    for (const name of first.SheetNames.filter((sheet) => /^(חשבוניות|תשלומים|זיכויים) /.test(sheet))) {
+      const currency = name.slice(name.lastIndexOf(' ') + 1);
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(first.Sheets[name]);
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((row) => row['מטבע'] === currency)).toBe(true);
+    }
+    const summaryRows = XLSX.utils.sheet_to_json<unknown[]>(first.Sheets['פרטי הדוח'], { header: 1 });
+    const flat = summaryRows.flat();
+    expect(flat).toContain('ILS');
+    expect(flat).toContain('USD');
+    expect(flat).not.toContain(15500);
+    for (const sheet of Object.values(first.Sheets)) {
+      for (const cell of Object.values(sheet)) {
+        if (cell && typeof cell === 'object' && 'f' in cell) expect(cell.f).toBeUndefined();
+      }
+    }
+  });
+
+  it('reads a pre-currency snapshot as ILS without changing its content hash', () => {
+    const before = snapshot.content_hash;
+    const workbook = buildLockedMonthlyWorkbook({ snapshot });
+    const [invoice] = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets['חשבוניות']);
+    expect(invoice['מטבע']).toBe('ILS');
+    expect(snapshot.content_hash).toBe(before);
+  });
+
+  it('splits locked bank evidence by its own currency without changing the snapshot object', () => {
+    const mixedSnapshot = {
+      ...snapshot,
+      report_version: 'monthly-accountant-legal-entity-v3',
+      base_currency: 'USD',
+      invoice_rows: [
+        { ...snapshot.invoice_rows[0], currency: 'ILS' },
+        { ...snapshot.invoice_rows[0], invoice_number: 'USD-1', currency: 'USD', total_amount: 50 },
+      ],
+      bank_rows: [
+        { ...snapshot.bank_rows[0], currency: 'ILS' },
+        { ...snapshot.bank_rows[0], id: 'bank-usd', reference: 'USD', currency: 'USD', amount: 50 },
+      ],
+    } satisfies MonthlyReportSnapshot;
+    const before = JSON.stringify(mixedSnapshot);
+    const workbook = buildLockedMonthlyWorkbook({ snapshot: mixedSnapshot });
+    expect(workbook.SheetNames).toContain('תנועות בנק USD');
+    expect(workbook.SheetNames).toContain('תנועות בנק ILS');
+    for (const name of ['תנועות בנק USD', 'תנועות בנק ILS']) {
+      const currency = name.slice(-3);
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[name]);
+      expect(rows.every((row) => row['מטבע'] === currency)).toBe(true);
+    }
+    expect(JSON.stringify(mixedSnapshot)).toBe(before);
   });
 });
 

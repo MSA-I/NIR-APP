@@ -148,7 +148,9 @@ interface Ledger { file: string; added: number; drained: number }
 function insertedValueRows(statementBody: string): number {
   const valuesAt = /\bvalues\b/i.exec(statementBody);
   if (!valuesAt) throw new Error('scope exemption INSERT must use explicit VALUES rows');
-  const values = statementBody.slice(valuesAt.index + valuesAt[0].length);
+  const valuesTail = statementBody.slice(valuesAt.index + valuesAt[0].length);
+  const clause = /\bon\s+conflict\b|\breturning\b/i.exec(valuesTail);
+  const values = clause ? valuesTail.slice(0, clause.index) : valuesTail;
   let depth = 0;
   let rows = 0;
   for (const char of values) {

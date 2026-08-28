@@ -126,7 +126,7 @@ as $$
   union all
   select 'path lost the step-up primitive: ' || wired.signature
   from (values
-    ('public.execute_payment_request(uuid,date,text,text,text,jsonb,text)'),
+    ('public.execute_payment_request(uuid,date,text,text,text,jsonb,numeric,text,text)'),
     ('public.execute_emergency_payment_request(uuid,date,text,text,text,jsonb,text)'),
     ('public.manage_profile_access(uuid,user_role,boolean,uuid,text)'),
     ('public.mark_month_export_sent(date,uuid[],text)'),

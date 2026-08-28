@@ -21,6 +21,14 @@ describe('credit allocations in the accountant payment queue', () => {
   const total = (result: ReturnType<typeof buildPaymentAllocations>) =>
     result.allocations.reduce((sum, allocation) => sum + allocation.amount, 0);
 
+  it('uses the request currency minor units instead of assuming agorot', () => {
+    const result = buildPaymentAllocations([
+      { invoice_id: 'invoice-kwd', amount_allocated: 1.234 },
+    ], [], 3);
+    expect(result.cashAmount).toBe(1.234);
+    expect(result.allocations[0].amount).toBe(1.234);
+  });
+
   it('takes the offset off the invoice the credit belongs to, not off the last invoice in the array', () => {
     const result = buildPaymentAllocations(invoices, [
       credit({ credit_id: 'credit-1', invoice_id: 'invoice-a', target_invoice_id: null, amount: 30, remaining: 50 }),

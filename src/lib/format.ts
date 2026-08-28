@@ -71,6 +71,17 @@ export const fmtMoneyRounded = (v: number | null | undefined, currency: string |
 export const fmtMoneyCompact = (v: number | null | undefined, currency: string | null | undefined) =>
   fmtMoney(v, currency, 'compact');
 
+/** ISO currency scale from the same platform formatter that renders it. Null means unsupported. */
+export function currencyMinorUnits(currency: string): number | null {
+  if (!/^[A-Z]{3}$/.test(currency)) return null;
+  try {
+    return new Intl.NumberFormat('en', { style: 'currency', currency })
+      .resolvedOptions().maximumFractionDigits ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Quantities and counts, NOT money — and it keeps variable decimals on purpose. `3` invoices must
  * not render as `3.00`, and `2.5` kg must not render as `3`. The money rule above does not
