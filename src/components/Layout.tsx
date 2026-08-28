@@ -571,8 +571,12 @@ export default function Layout() {
    * the account menu are light paper by an owner ruling of their own (T7.3h, image #18), and one
    * surface class serving both grounds is how one of them ends up unreadable.
    *
-   * The active item wears the oceanic pill on every surface. That is the constant: the blue is
-   * what says "you are here", and it reads on paper and on onyx alike.
+   * THE ACTIVE MARK IS NOT ONE COLOUR ON ALL THREE. On the two light surfaces it is the oceanic
+   * pill, and that has not changed. On onyx it is the LIGHT pill — `shell-ink` ground, `shell`
+   * ink, the same two tokens the surface already uses, flipped (owner, 28.08.2026: "ההדגשה כחולה
+   * בתפריט... שזה יהיה בהיר ולא כחול"). The principle is the constant, not the hue: the mark is
+   * whatever contrasts hardest with the ground it sits on, and oceanic against onyx is two dark
+   * colours a few points apart.
    */
   const linkCls = (isActive: boolean, surface: NavSurface = 'panel') => {
     if (surface === 'pill') {
@@ -580,12 +584,14 @@ export default function Layout() {
         isActive ? 'bg-action text-on-solid font-medium' : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
       }`;
     }
-    const rest = surface === 'shell'
-      ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
-      : 'text-ink-body hover:bg-surface-hover hover:text-ink';
-    return `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
-      isActive ? 'bg-action text-on-solid font-medium' : rest
-    }`;
+    const state = surface === 'shell'
+      ? (isActive
+        ? 'bg-shell-ink text-shell font-medium'
+        : 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink')
+      : (isActive
+        ? 'bg-action text-on-solid font-medium'
+        : 'text-ink-body hover:bg-surface-hover hover:text-ink');
+    return `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${state}`;
   };
 
   /* Section identity in navigation (T7.2) is DATA here, not decoration: `data-section` rides every

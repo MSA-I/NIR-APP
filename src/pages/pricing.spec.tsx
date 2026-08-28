@@ -68,7 +68,7 @@ const QUOTAS = [
   ...['free', 'basic', 'pro', 'premium'].map((plan, index) =>
     quota(plan, 'documents.monthly', 'מסמכים', [25, 50, 300, 500][index])),
   ...['free', 'basic', 'pro', 'premium'].map((plan, index) =>
-    quota(plan, 'ocr_pages.monthly', 'עמודי OCR', [500, 500, 6000, 5000][index])),
+    quota(plan, 'ocr_pages.monthly', 'עמודי סריקה', [500, 500, 6000, 5000][index])),
   // Unmeasured, so the page cannot publish #198's 20/40/100/250. The #197 ruling did not cover
   // the assistant quota — re-verify this against the catalogue when the contract names land.
   ...['free', 'basic', 'pro', 'premium'].map((plan) =>
@@ -248,7 +248,7 @@ describe('דף המסלולים הציבורי', () => {
     expect(document.querySelectorAll('.overflow-x-auto')).toHaveLength(0);
     expect(screen.queryByRole('region', { name: /השוואת המסלולים/ })).not.toBeInTheDocument();
     // Every rung is reachable by reading, not by scrolling: each card holds its own quota rows.
-    expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/עמודי OCR/);
+    expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/עמודי סריקה/);
   });
 
   /**
