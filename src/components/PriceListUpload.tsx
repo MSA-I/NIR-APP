@@ -5,6 +5,7 @@
 //     unmatched product names become NEW products only after an explicit user opt-in, never silently.
 // Prices are still written only by the sanctioned RPCs — this file adds no new writer.
 
+import type { TKey } from '../lib/i18n/t';
 import { useT } from '../lib/i18n/LocaleProvider';
 import { useMemo, useRef, useState } from 'react';
 import { reasonOr } from '../lib/reason';
@@ -64,50 +65,50 @@ function exactKeys(value: Record<string, unknown>, keys: string[]) {
   return Object.keys(value).sort().join('|') === [...keys].sort().join('|');
 }
 
-function parseReservation(value: unknown, orgId: string, supplierId: string): PriceDocumentReservation {
-  if (!value || typeof value !== 'object') throw new PriceDocumentError('השרת החזיר הקצאת העלאה לא תקינה.');
+function parseReservation(value: unknown, orgId: string, supplierId: string, t: (key: TKey, vars?: Record<string, string | number>) => string): PriceDocumentReservation {
+  if (!value || typeof value !== 'object') throw new PriceDocumentError(t('priceUpload.reservationMalformed'));
   const row = value as Record<string, unknown>;
   if (!exactKeys(row, ['document_id', 'storage_path', 'expires_at'])
       || typeof row.document_id !== 'string' || !UUID_PATTERN.test(row.document_id)
       || typeof row.storage_path !== 'string'
       || typeof row.expires_at !== 'string' || !Number.isFinite(Date.parse(row.expires_at))
       || Date.parse(row.expires_at) <= Date.now()) {
-    throw new PriceDocumentError('השרת החזיר הקצאת העלאה לא תקינה.');
+    throw new PriceDocumentError(t('priceUpload.reservationMalformed'));
   }
   const segments = row.storage_path.split('/');
   if (segments.length !== 5 || segments[0] !== orgId || segments[1] !== 'supplier'
       || segments[2] !== supplierId || segments[3] !== row.document_id || !segments[4]) {
-    throw new PriceDocumentError('נתיב ההעלאה שהוחזר אינו תואם לספק ולמסמך.');
+    throw new PriceDocumentError(t('priceUpload.reservationPathMismatch'));
   }
   return row as PriceDocumentReservation;
 }
 
-function parseRegistration(value: unknown, reservation: Pick<PriceDocumentReservation, 'document_id' | 'storage_path'>): PriceDocumentRegistration {
-  if (!value || typeof value !== 'object') throw new PriceDocumentError('השרת לא אישר את רישום המסמך.');
+function parseRegistration(value: unknown, reservation: Pick<PriceDocumentReservation, 'document_id' | 'storage_path'>, t: (key: TKey, vars?: Record<string, string | number>) => string): PriceDocumentRegistration {
+  if (!value || typeof value !== 'object') throw new PriceDocumentError(t('priceUpload.registrationUnconfirmed'));
   const row = value as Record<string, unknown>;
   if (!exactKeys(row, ['document_id', 'job_id', 'storage_path', 'idempotent'])
       || row.document_id !== reservation.document_id
       || typeof row.job_id !== 'string' || !UUID_PATTERN.test(row.job_id)
       || row.storage_path !== reservation.storage_path
       || typeof row.idempotent !== 'boolean') {
-    throw new PriceDocumentError('השרת לא אישר את רישום המסמך.');
+    throw new PriceDocumentError(t('priceUpload.registrationUnconfirmed'));
   }
   return row as PriceDocumentRegistration;
 }
 
-export async function registerPriceDocument(reservation: Pick<PriceDocumentReservation, 'document_id' | 'storage_path'>) {
+export async function registerPriceDocument(reservation: Pick<PriceDocumentReservation, 'document_id' | 'storage_path'>, t: (key: TKey, vars?: Record<string, string | number>) => string) {
   const registered = await supabase.rpc('register_supplier_price_document', { p_document_id: reservation.document_id });
   if (registered.error) throw registered.error;
-  return parseRegistration(registered.data, reservation);
+  return parseRegistration(registered.data, reservation, t);
 }
 
-export async function uploadPriceDocument(orgId: string, supplierId: string, file: File) {
+export async function uploadPriceDocument(orgId: string, supplierId: string, file: File, t: (key: TKey, vars?: Record<string, string | number>) => string) {
   // Claimed in the synchronous prologue, before any await — null outside the Center's queue.
   const center = claimActiveUploadTask();
-  if (!file.size) throw new PriceDocumentError('הקובץ ריק.');
-  if (file.size > 10 * 1024 * 1024) throw new PriceDocumentError('הקובץ גדול מ־10MB.');
+  if (!file.size) throw new PriceDocumentError(t('priceUpload.fileEmpty'));
+  if (file.size > 10 * 1024 * 1024) throw new PriceDocumentError(t('priceUpload.fileTooLarge'));
   const mimeType = priceDocumentMime(file);
-  if (!mimeType) throw new PriceDocumentError('סוג הקובץ אינו נתמך לעיבוד מסמכים.');
+  if (!mimeType) throw new PriceDocumentError(t('priceUpload.fileTypeUnsupported'));
 
   const reserved = await supabase.rpc('reserve_supplier_price_document_upload', {
     p_supplier_id: supplierId,
@@ -115,7 +116,7 @@ export async function uploadPriceDocument(orgId: string, supplierId: string, fil
     p_mime_type: mimeType,
   });
   if (reserved.error) throw reserved.error;
-  const reservation = parseReservation(reserved.data, orgId, supplierId);
+  const reservation = parseReservation(reserved.data, orgId, supplierId, t);
 
   // Resumable upload against the reserved path (wave 6b). The reservation's expires_at
   // drives the proactive renewal on chunk completion, and a 403 mid-PATCH gets exactly
@@ -138,7 +139,7 @@ export async function uploadPriceDocument(orgId: string, supplierId: string, fil
   center?.markStored(reservation.document_id);
 
   try {
-    const registration = await registerPriceDocument(reservation);
+    const registration = await registerPriceDocument(reservation, t);
     center?.markRegistered(registration.document_id);
     return { documentId: registration.document_id, pending: null };
   } catch (registrationError) {
@@ -176,7 +177,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
   onClose: () => void;
   onImported?: () => void;
 }) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const navigate = useNavigate();
   const toast = useToast();
   const { profile, organizationAccess } = useAuth();
@@ -199,7 +200,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
       const row = unwrap(await supabase.from('suppliers').select('id, name, status')
         .eq('id', supplier.id).is('deleted_at', null).single()) as Pick<Supplier, 'id' | 'name' | 'status'>;
       if (!canStartSupplierCommerce(row.status)) {
-        throw new PriceDocumentError('הספק לא פעיל לפעילות מסחרית חדשה. מחירון חדש לא ייקלט.');
+        throw new PriceDocumentError(t('priceUpload.PriceDocumentError'));
       }
       return [row];
     }
@@ -225,7 +226,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
       unit: matchColumn(sheet.headers, ['יחידה', 'יחידת מידה', 'unit'], false),
     };
     if (!cols.product || !cols.price) {
-      throw new PriceDocumentError('נדרשות עמודות "מוצר" ו"מחיר" (העמודה "יחידה" רשות). המחירים ייקלטו עבור הספק שנבחר.');
+      throw new PriceDocumentError(t('priceUpload.columnsRequired'));
     }
     const products = await fetchAll<{ id: string; name: string; active: boolean }>((from, to) =>
       supabase.from('products').select('id, name, active').order('id').range(from, to));
@@ -241,13 +242,13 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
     const { valid, skipped } = mapRows(sheet.rows, (row) => {
       const name = cellText(row, cols.product);
       const price = cellNumber(row, cols.price);
-      if (!name || price == null || price <= 0) return skipRow('חסר שם מוצר או מחיר תקין');
-      if (price > 1_000_000) return skipRow('מחיר מעל הטווח המותר (עד ₪1,000,000)');
+      if (!name || price == null || price <= 0) return skipRow(t('priceUpload.skipRow'));
+      if (price > 1_000_000) return skipRow(t('priceUpload.skipRow_2'));
       const key = nameKey(name);
-      if (seenKeys.has(key)) return skipRow('מוצר חוזר בקובץ — נקלטת ההופעה הראשונה בלבד');
+      if (seenKeys.has(key)) return skipRow(t('priceUpload.has'));
       seenKeys.add(key);
       const match = byName.get(key);
-      if (match && !match.active) return skipRow('המוצר קיים בקטלוג אך אינו פעיל');
+      if (match && !match.active) return skipRow(t('priceUpload.skipRow_3'));
       return {
         name,
         price,
@@ -256,14 +257,14 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
         ambiguous: match === null,
       } satisfies SheetPreviewRow;
     });
-    if (!valid.length) throw new PriceDocumentError('לא נמצאו שורות תקינות בקובץ.');
+    if (!valid.length) throw new PriceDocumentError(t('priceUpload.PriceDocumentError_5'));
     setPreview({ rows: valid, skipped });
   }
 
   async function submit() {
-    if (!canUpload) { toast('אין הרשאה להעלות מחירון', 'error'); return; }
-    if (!supplierId) { toast('יש לבחור ספק למחירון', 'error'); return; }
-    if (!file) { toast('יש לבחור קובץ', 'error'); return; }
+    if (!canUpload) { toast(t('priceUpload.toast'), 'error'); return; }
+    if (!supplierId) { toast(t('priceUpload.toast_2'), 'error'); return; }
+    if (!file) { toast(t('priceUpload.toast_3'), 'error'); return; }
     setBusy(true);
     try {
       if (isSpreadsheet(file.name)) {
@@ -276,11 +277,11 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
         const batch = await enqueueUploadCenterBatch(
           [file],
           async () => {
-            outcome.value = await uploadPriceDocument(orgId, supplierId, file);
+            outcome.value = await uploadPriceDocument(orgId, supplierId, file, t);
             return outcome.value;
           },
           {
-            source: 'מחירון ספק',
+            source: t('priceUpload.text'),
             supplierName: supplierName ?? null,
             classifyFailure: (_item, error) => ({
               message: error instanceof PriceDocumentError ? error.message : errorText(error),
@@ -290,11 +291,11 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
         );
         const result = outcome.value;
         if (batch.failed.length || !result) {
-          throw batch.failed[0]?.error ?? new PriceDocumentError('ההעלאה לא הושלמה.');
+          throw batch.failed[0]?.error ?? new PriceDocumentError(t('priceUpload.PriceDocumentError_6'));
         }
         if (result.pending) {
           setPendingReservation(result.pending);
-          toast(`המקור הועלה, אך רישום המסמך לא הושלם: ${result.registrationError}`, 'error');
+          toast(t('priceUpload.registrationIncomplete', { message: result.registrationError }), 'error');
           return;
         }
         navigate(`/documents/${result.documentId}/review`);
@@ -335,7 +336,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
       }
       const rows = workingRows.filter((r) => r.productId)
         .map((r) => ({ supplier_id: supplierId, product_id: r.productId!, price: r.price, available: true }));
-      if (!rows.length) throw new PriceDocumentError('אין שורות לקליטה. סמן יצירת מוצרים חדשים או תקן את הקובץ.');
+      if (!rows.length) throw new PriceDocumentError(t('priceUpload.PriceDocumentError_7'));
       const imported = unwrap(await supabase.rpc('import_supplier_prices', {
         p_rows: rows,
         p_effective_date: todayISO(),
@@ -343,10 +344,10 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
       })) as { updated: number; created: number; unchanged: number };
       const skippedNew = workingRows.filter((r) => !r.productId && !r.ambiguous).length;
       setReport([
-        `עודכנו ${imported.updated} מחירים, נוצרו ${imported.created} רשומות מחירון, ${imported.unchanged} ללא שינוי.`,
-        createdProducts ? `נוצרו ${createdProducts} מוצרים חדשים בקטלוג.` : '',
-        skippedNew ? `${skippedNew} מוצרים לא מוכרים דולגו (לא אושרה יצירה).` : '',
-        ambiguousRows.length ? `${ambiguousRows.length} שורות דולגו — שם המוצר מופיע פעמיים בקטלוג.` : '',
+        t('priceUpload.importSummary', { updated: imported.updated, created: imported.created, unchanged: imported.unchanged }),
+        createdProducts ? t('priceUpload.productsCreated', { count: createdProducts }) : '',
+        skippedNew ? t('priceUpload.unknownSkipped', { count: skippedNew }) : '',
+        ambiguousRows.length ? t('priceUpload.ambiguousSkipped', { count: ambiguousRows.length }) : '',
       ].filter(Boolean).join(' '));
       onImported?.();
     } catch (error) {
@@ -360,7 +361,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
     if (!pendingReservation) return;
     setBusy(true);
     try {
-      const registered = await registerPriceDocument(pendingReservation);
+      const registered = await registerPriceDocument(pendingReservation, t);
       // Lift the matching Upload Center row out of the pending-registration money state.
       markUploadCenterDocumentRegistered(registered.document_id);
       navigate(`/documents/${registered.document_id}/review`);
@@ -374,57 +375,57 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
   const supplierName = picker.suppliers.find((s) => s.id === supplierId)?.name ?? supplier?.name;
 
   return (
-    <Modal open onClose={onClose} title={supplier ? `העלאת מחירון — ${supplier.name}` : 'העלאת מחירון'}
+    <Modal open onClose={onClose} title={supplier ? t('priceUpload.uploadTitleFor', { supplier: supplier.name }) : t('priceUpload.uploadTitle')}
       wide={!!preview} busy={busy}
-      statusMessage={busy ? (preview ? 'קולט את המחירון' : 'מעבד את הקובץ') : undefined}>
+      statusMessage={busy ? (preview ? t('priceUpload.text_2') : t('priceUpload.text_3')) : undefined}>
       <UploadCenter />
       {report ? (
         <div className="space-y-4">
           <Note tone="done" role="status">{report}</Note>
-          <div className="flex justify-end"><button className="btn-primary" onClick={onClose}>סיום</button></div>
+          <div className="flex justify-end"><button className="btn-primary" onClick={onClose}>{t('priceUpload.text_4')}</button></div>
         </div>
       ) : pendingReservation ? (
         <div className="space-y-4">
-          <Note tone="alert">המקור הועלה, אך רישום המסמך עדיין לא הושלם. אין להעלות אותו שוב; נסה להשלים את הרישום.</Note>
+          <Note tone="alert">{t('priceUpload.text_5')}</Note>
           <div className="flex justify-end gap-2">
-            <button className="btn-secondary" disabled={busy} onClick={onClose}>סגירה</button>
-            <button className="btn-primary" disabled={busy} onClick={() => void retryRegistration()}>ניסיון רישום נוסף</button>
+            <button className="btn-secondary" disabled={busy} onClick={onClose}>{t('priceUpload.text_6')}</button>
+            <button className="btn-primary" disabled={busy} onClick={() => void retryRegistration()}>{t('priceUpload.retryRegistration')}</button>
           </div>
         </div>
       ) : preview ? (
         <div className="space-y-4">
           <Note tone={newRows.length || ambiguousRows.length ? 'await' : 'info'}>
             <span className="min-w-0 flex-1">
-              זוהו <span className="num">{preview.rows.length}</span> שורות עבור {supplierName}: <span className="num">{matchedRows.length}</span> הותאמו למוצרים קיימים,
-              {' '}<span className="num">{newRows.length}</span> מוצרים חדשים{ambiguousRows.length ? <>, <span className="num">{ambiguousRows.length}</span> שמות לא חד־משמעיים (ידולגו)</> : null}.
-              {preview.skipped.length ? <> {preview.skipped.length} שורות דולגו.</> : null}
+              {t('priceUpload.detectedBefore')}<span className="num">{preview.rows.length}</span>{t('priceUpload.rowsForSupplier')} {supplierName}: <span className="num">{matchedRows.length}</span>{t('priceUpload.existingProducts')}
+              {' '}<span className="num">{newRows.length}</span>{t('priceUpload.newProductsWord')}{ambiguousRows.length ? <>, <span className="num">{ambiguousRows.length}</span>{t('priceUpload.duplicateNamesWord')}</> : null}.
+              {preview.skipped.length ? <> {t('priceUpload.rowsSkipped', { count: preview.skipped.length })}</> : null}
             </span>
           </Note>
           {preview.skipped.length > 0 && (
             <details className="text-sm">
-              <summary className="link flex min-h-11 cursor-pointer items-center">פירוט השורות שדולגו</summary>
+              <summary className="link flex min-h-11 cursor-pointer items-center">{t('priceUpload.text_8')}</summary>
               <ul className="mt-2 space-y-1 text-ink-soft">
                 {groupSkipped(preview.skipped).map(({ reason: skipReason, rows: skipRows }) => (
                   <li key={skipReason}>
-                    {skipReason} — שורות <span className="num">{skipRows.slice(0, 12).join(', ')}</span>
-                    {skipRows.length > 12 ? ` ועוד ${skipRows.length - 12}` : ''}
+                    {skipReason}{t('priceUpload.rowsWord')}<span className="num">{skipRows.slice(0, 12).join(', ')}</span>
+                    {skipRows.length > 12 ? t('priceUpload.andMore', { more: skipRows.length - 12 }) : ''}
                   </li>
                 ))}
               </ul>
             </details>
           )}
           <div className="table-scroll max-h-64 overflow-auto rounded-lg border border-line-soft"
-            role="region" tabIndex={0} aria-label="תצוגה מקדימה של שורות המחירון; ניתן לגלול בתוך הטבלה">
+            role="region" tabIndex={0} aria-label={t('priceUpload.aria_label')}>
             <table className="w-full">
-              <thead className="table-head sticky top-0"><tr><th scope="col" className="th">מוצר</th><th scope="col" className="th">מחיר</th><th scope="col" className="th">התאמה</th></tr></thead>
+              <thead className="table-head sticky top-0"><tr><th scope="col" className="th">{t('priceUpload.colProduct')}</th><th scope="col" className="th">{t('priceUpload.colPrice')}</th><th scope="col" className="th">{t('priceUpload.text_11')}</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {preview.rows.slice(0, 100).map((r, i) => (
                   <tr key={i}>
                     <td className="td">{r.name}</td>
                     <td className="td num">{fmtMoneyExact(r.price)}</td>
-                    <td className="td">{r.productId ? <span className="badge-done">מוצר קיים</span>
-                      : r.ambiguous ? <span className="badge-alert">שם כפול בקטלוג</span>
-                        : <span className="badge-await">מוצר חדש</span>}</td>
+                    <td className="td">{r.productId ? <span className="badge-done">{t('priceUpload.text_12')}</span>
+                      : r.ambiguous ? <span className="badge-alert">{t('priceUpload.text_13')}</span>
+                        : <span className="badge-await">{t('priceUpload.text_14')}</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -433,40 +434,40 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
           {newRows.length > 0 && (
             <label className="flex min-h-11 items-center gap-2 text-sm text-ink-mid">
               <input type="checkbox" className="rounded shrink-0" checked={createNew} onChange={(e) => setCreateNew(e.target.checked)} />
-              צור {newRows.length === 1 ? 'מוצר חדש אחד' : <>‏<span className="num">{newRows.length}</span> מוצרים חדשים</>} בקטלוג ועדכן את מחירם
+              {t('priceUpload.createWord')} {newRows.length === 1 ? t('priceUpload.text_15') : <>‏<span className="num">{newRows.length}</span> {t('priceUpload.text_16')}</>}{t('priceUpload.inCatalogueAndUpdate')}
             </label>
           )}
-          <div><label className="label" htmlFor="price-upload-reason">סיבת העדכון (רשות)</label><input id="price-upload-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="מחירון חודשי מהספק" /></div>
+          <div><label className="label" htmlFor="price-upload-reason">{t('priceUpload.setReason')}</label><input id="price-upload-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('priceUpload.placeholder')} /></div>
           <div className="flex justify-end gap-2">
-            <button className="btn-secondary" disabled={busy} onClick={() => { setPreview(null); setCreateNew(false); }}>חזרה</button>
-            <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>{busy ? 'קולט…' : 'אישור ועדכון מחירים'}</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => { setPreview(null); setCreateNew(false); }}>{t('priceUpload.setPreview')}</button>
+            <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>{busy ? t('priceUpload.runImport') : t('priceUpload.runImport_2')}</button>
           </div>
         </div>
       ) : (
         <div className="space-y-4">
           <Note tone="info">
-            קובץ Excel/CSV נקלט מיד לאחר תצוגה מקדימה; PDF, תמונה או Word עוברים זיהוי אוטומטי ומסך בדיקה. כשמדיניות הקליטה מופעלת, שורה לא מותאמת עם שם ומק״ט או ברקוד יכולה ליצור מוצר חדש; אחרת היא ממתינה לאישור.
+            {t('priceUpload.text_17')}
           </Note>
           {suppliersError ? <ErrorNote message={suppliersError} /> : supplier ? null : (
-            <SupplierSelectField picker={picker} id="price-upload-supplier" label="ספק *"
-              placeholder={suppliersLoading ? 'טוען ספקים…' : 'בחירת ספק'}
+            <SupplierSelectField picker={picker} id="price-upload-supplier" label={t('priceUpload.label')}
+              placeholder={suppliersLoading ? t('priceUpload.text_18') : t('priceUpload.text_19')}
               value={supplierId} disabled={suppliersLoading || busy} />
           )}
           <label className="block">
-            <span className="label">קובץ מחירון *</span>
+            <span className="label">{t('priceUpload.text_20')}</span>
             <input ref={fileRef} type="file" className="input" accept={accept} disabled={busy}
               onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             <span className="mt-1 block text-xs text-ink-muted">
-              Excel, CSV, PDF, תמונה או Word, עד 10MB.
+              {t('priceUpload.text_21')}
             </span>
           </label>
-          {suppliersLoading && !supplier && <span className="block text-xs text-ink-muted" role="status">רשימת הספקים נטענת — ההעלאה תתאפשר מיד בסיום.</span>}
+          {suppliersLoading && !supplier && <span className="block text-xs text-ink-muted" role="status">{t('priceUpload.text_22')}</span>}
           <div className="flex justify-end gap-2">
-            <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
+            <button className="btn-secondary" disabled={busy} onClick={onClose}>{t('priceUpload.text_23')}</button>
             <button className="btn-primary" disabled={busy || !!suppliersError || suppliersLoading}
-              title={suppliersLoading ? 'רשימת הספקים נטענת…' : suppliersError ? 'שגיאה בטעינת הספקים' : undefined}
+              title={suppliersLoading ? t('priceUpload.text_24') : suppliersError ? t('priceUpload.text_25') : undefined}
               onClick={() => void submit()}>
-              {file && isSpreadsheet(file.name) ? 'המשך לתצוגה מקדימה' : 'העלאה והמשך לבדיקה'}
+              {file && isSpreadsheet(file.name) ? t('priceUpload.isSpreadsheet') : t('priceUpload.isSpreadsheet_2')}
             </button>
           </div>
         </div>
