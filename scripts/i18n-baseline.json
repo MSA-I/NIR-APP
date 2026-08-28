@@ -67,7 +67,6 @@
     "src/components/SupplierPortalCard.tsx": 28,
     "src/components/ui.tsx": 9,
     "src/components/UploadCenter.tsx": 20,
-    "src/components/WhatsAppConnectionCard.tsx": 35,
     "src/components/WhatsAppSendDialog.tsx": 13,
     "src/lib/assistant/contracts.ts": 6,
     "src/lib/assistant/productHelpRegistry.ts": 84,
