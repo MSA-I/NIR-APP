@@ -214,7 +214,7 @@ export default function OperatorShell() {
           {/* Opaque, not translucent: over the dark scrim a see-through panel reads as a murky
               blue tint — the same finding that made the tenant drawer opaque (T7.3k). */}
           <aside id="operator-navigation" ref={drawerRef} role="dialog" aria-modal="true"
-            aria-label="ניווט מסוף התפעול" tabIndex={-1}
+            aria-label="תפריט מסוף התפעול" tabIndex={-1}
             className="drawer-enter absolute inset-y-0 start-0 flex w-72 flex-col border-e border-line-soft bg-topbar focus:outline-none"
             onClick={(event) => event.stopPropagation()}>
             <button type="button" className="btn-ghost btn-icon absolute end-2 rounded-full"
