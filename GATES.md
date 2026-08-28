@@ -784,6 +784,13 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   then deliberately raises `0227_probe_rollback`; any other error is re-raised. Running that exact
   block against the migrated local DB returned `BEGIN / DO / ROLLBACK`, with no row left behind.
   Gate remains open until the clean-reset CI succeeds on the next SHA.
+  THIRD ATTEMPT 28.08.2026: workflow-dispatch run `33197785269` on `073e1d5` passed clean reset,
+  Assistant/OCR and dependency jobs. Browser ran 43 scenarios: 38 passed and five failed from two
+  root causes. First, `0217` kept nine weaker tenant-only FKs beside the nine currency-composite
+  replacements, so PostgREST found two relationships for allocation embeds; the new keys strictly
+  subsume the old keys with the same delete actions, and now replace them as `0024` did before.
+  Second, two browser fixtures used non-UUID invoice ids and intercepted the deleted balance-view
+  name; they now use valid UUIDs and `invoice_balances_by_currency`. Gate remains open for fresh CI.
 
 - [ ] P6-G2: the rollout matrix rows that were touched were actually executed
   EVIDENCE: pending — the union of `Migration / חוזה DB` and `Frontend` rows requires backup, dry-run + ledger,

@@ -349,6 +349,20 @@ alter table credit_requests    add constraint p0_credit_requests_org_id_currency
 alter table bank_imports       add constraint p0_bank_imports_org_id_currency_key       unique (org_id, id, currency);
 alter table bank_transactions  add constraint p0_bank_transactions_org_id_currency_key  unique (org_id, id, currency);
 
+-- 0024 removed legacy one-column FKs after stronger tenant-composite keys replaced them, because
+-- keeping both makes a PostgREST embed ambiguous. The currency keys below are a strict superset of
+-- these nine tenant-only keys, with identical delete actions; replace them rather than creating a
+-- second relationship between the same tables.
+alter table payment_allocations drop constraint p0_pa_payment_tenant_fk;
+alter table payment_allocations drop constraint p0_pa_invoice_tenant_fk;
+alter table payment_allocations drop constraint p0_pa_credit_tenant_fk;
+alter table payment_request_invoices drop constraint p0_pri2_request_tenant_fk;
+alter table payment_request_invoices drop constraint p0_pri2_invoice_tenant_fk;
+alter table bank_transactions drop constraint p0_bt_import_tenant_fk;
+alter table bank_allocations drop constraint p0_ba_transaction_tenant_fk;
+alter table bank_allocations drop constraint p0_ba_invoice_tenant_fk;
+alter table bank_allocations drop constraint p0_ba_payment_tenant_fk;
+
 -- The mirrored line currency of section 4, locked to its statement.
 alter table bank_transactions
   add constraint bank_transactions_import_currency_fk
@@ -529,6 +543,21 @@ begin
      'bank_transactions_import_currency_fk');
   if v_count <> 9 then
     raise exception '0217: % of the 9 currency-identity foreign keys exist', v_count;
+  end if;
+
+  if exists (
+    select 1
+    from pg_constraint relationship
+    where relationship.contype = 'f'
+      and relationship.conrelid in (
+        'public.payment_allocations'::regclass,
+        'public.payment_request_invoices'::regclass,
+        'public.bank_transactions'::regclass,
+        'public.bank_allocations'::regclass)
+    group by relationship.conrelid, relationship.confrelid
+    having count(*) > 1
+  ) then
+    raise exception '0217: a weaker FK left a PostgREST relationship ambiguous';
   end if;
 
   -- 0058:207-218: a migration that changes tables proves the standing contracts here, not three
