@@ -125,6 +125,16 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   1,715/1,715; `npx tsc --noEmit` and `check:jsx-space` passed. `zero` still exits 1 on 563/68,
   so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `Bank` batch in this commit.** The pinned count is now 1,081 Hebrew
+  line(s) across 98 files. The protected set is now 538 lines in 31 files: `Bank.tsx` keeps one
+  Hebrew supplier-name normalization pattern and seven fixed `audit_logs` defaults. Those seven
+  were restored by their `p_reason` write sites after an earlier extraction had made audit wording
+  depend on the reader locale. Everything the screen reads moved to paired keys, while candidate
+  labels and import results store keys/raw facts instead of resolved sentences. The real remainder
+  is now **543 lines in 67 files**. Evidence: the stale-baseline negative control named `Bank.tsx`
+  alone; the new boundary spec passed 3/3; the full suite passed 1,718/1,718; `npx tsc --noEmit`
+  and `check:jsx-space` passed. `zero` still exits 1 on 543/67, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

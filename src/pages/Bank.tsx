@@ -1,4 +1,5 @@
 import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { reasonOr } from '../lib/reason';
 import { useSearchParams } from 'react-router';
@@ -179,12 +180,18 @@ export default function Bank() {
       {imports.error && <ErrorNote message={imports.error} />}
       {fetching && <div className="text-xs text-ink-muted" role="status">{t('bank.text_6')}</div>}
       <PageHeader title={<span className="flex items-center gap-2"><Landmark size={ICON.xl} aria-hidden="true" /> {t('bank.text_7')}</span>}
-        meta={`${data.total} תנועות${activeFilters ? ` · ${activeFilters} מסננים פעילים` : ''}`}
+        meta={`${t('bank.transactionsMeta', { total: data.total })}${activeFilters
+          ? t('bank.activeFiltersMeta', { count: activeFilters })
+          : ''}`}
         actions={canOperateBank && <button className="btn-primary" onClick={() => setImportOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> {t('bank.setImportOpen')}</button>} />
 
       {imports.data?.length ? (
         <div className="text-xs text-ink-muted">
-          ייבוא אחרון: {imports.data[0].filename} ({imports.data[0].row_count} שורות, {fmtDateTime(imports.data[0].imported_at)})
+          {t('bank.lastImport', {
+            fileName: imports.data[0].filename,
+            rowCount: imports.data[0].row_count,
+            importedAt: fmtDateTime(imports.data[0].imported_at),
+          })}
         </div>
       ) : null}
 
@@ -205,7 +212,11 @@ export default function Bank() {
         onClearFilters={() => patchParams({ id: '', status: '', month: '', q: '', page: '' })}
         columnPicker="bank"
         searchLabel={t('bank.searchLabel')}
-        rowLabel={(r) => `תנועת בנק מיום ${fmtDate(r.tx_date)} בסכום ${fmtMoneyExact(r.amount)} עבור ${r.description}`}
+        rowLabel={(r) => t('bank.transactionRowLabel', {
+          date: fmtDate(r.tx_date),
+          amount: fmtMoneyExact(r.amount),
+          description: r.description,
+        })}
         onRowClick={canOperateBank ? (r) => setSelected(r) : undefined}
         toolbar={
           <>
@@ -243,7 +254,7 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
     try {
       unwrap(await supabase.rpc('unmatch_bank_transaction', {
         p_bank_transaction_id: tx.id,
-        p_reason: reasonOr(reason, t('bank.reasonOr')),
+        p_reason: reasonOr(reason, 'הסרת ההתאמה'),
       }));
       toast(t('bank.toast'));
       onChanged();
@@ -271,7 +282,7 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
         <div className="flex justify-end gap-2">
           <button className="btn-secondary" disabled={busy} onClick={onClose}>{t('bank.text_13')}</button>
           <button className="btn-danger" disabled={busy} onClick={() => void unmatch()}>
-            {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Unlink size={ICON.sm} aria-hidden="true" />} הסרת התאמה
+            {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Unlink size={ICON.sm} aria-hidden="true" />} {t('bank.removeMatch')}
           </button>
         </div>
       </div>
@@ -288,7 +299,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   const [fileHash, setFileHash] = useState('');
   const [rawRows, setRawRows] = useState<CanonicalBankImportRow[]>([]);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
+  const [result, setResult] = useState<{ rowCount: number; idempotent: boolean } | null>(null);
   const [reason, setReason] = useState('');
 
   const importError: Record<string, string> = {
@@ -351,11 +362,9 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         p_file_hash: fileHash,
         p_column_mapping: BANK_IMPORT_CONTRACT,
         p_rows: normalized,
-        p_reason: reasonOr(reason, t('bank.reasonOr_2')),
+        p_reason: reasonOr(reason, 'ייבוא תדפיס הבנק'),
       })) as { row_count: number; idempotent: boolean };
-      setResult(imported.idempotent
-        ? `הקובץ כבר יובא קודם. נמצאו ${imported.row_count} תנועות בייבוא הקיים.`
-        : `יובאו ${imported.row_count} תנועות בעסקה אחת.`);
+      setResult({ rowCount: imported.row_count, idempotent: imported.idempotent });
     } catch (e) {
       toast(errorText(e), 'error');
     } finally {
@@ -363,16 +372,20 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
     }
   }
 
+  const resultText = result
+    ? t(result.idempotent ? 'bank.importAlreadyExists' : 'bank.importSucceeded', { count: result.rowCount })
+    : null;
+
   return (
-    <Modal open onClose={onClose} title={t('bank.title_2')} wide busy={busy} statusMessage={result ?? (busy ? t('bank.text_23') : undefined)}>
+    <Modal open onClose={onClose} title={t('bank.title_2')} wide busy={busy} statusMessage={resultText ?? (busy ? t('bank.text_23') : undefined)}>
       {result ? (
         <div className="space-y-4">
-          <Note tone="done">{result}</Note>
+          <Note tone="done">{resultText}</Note>
           <div className="flex justify-end"><button className="btn-primary" onClick={onDone}>{t('bank.text_24')}</button></div>
         </div>
       ) : !rawRows.length ? (
         <div className="text-center py-8">
-          <p className="text-sm text-ink-soft mb-4">ייבוא מתבצע רק מתבנית XLSX קנונית בגרסה {BANK_IMPORT_TEMPLATE_VERSION}. אין מיפוי עמודות או ניחוש מבנה.</p>
+          <p className="text-sm text-ink-soft mb-4">{t('bank.canonicalTemplateOnly', { version: BANK_IMPORT_TEMPLATE_VERSION })}</p>
           <div className="flex flex-wrap justify-center gap-2">
             <button className="btn-secondary" type="button" onClick={downloadTemplate}><Download size={ICON.sm} aria-hidden="true" /> {t('bank.text_25')}</button>
             <button className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={ICON.sm} aria-hidden="true" /> {t('bank.click')}</button>
@@ -381,7 +394,11 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="text-sm text-ink-soft">{fileName} · {rawRows.length} תנועות · תבנית v{BANK_IMPORT_TEMPLATE_VERSION}</div>
+          <div className="text-sm text-ink-soft">{t('bank.fileSummary', {
+            fileName,
+            count: rawRows.length,
+            version: BANK_IMPORT_TEMPLATE_VERSION,
+          })}</div>
           <div className="table-scroll max-h-48 overflow-auto rounded-lg border border-line-soft" tabIndex={0} role="region" aria-label={t('bank.aria_label_3')}>
             <table className="w-full">
               {/* The overrides that used to force .th to 11px and .td to 12px are gone. This is the
@@ -407,7 +424,7 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
           <div className="flex justify-end gap-2">
             <button className="btn-secondary" disabled={busy} onClick={() => { setRawRows([]); setFileName(''); setFileHash(''); }}>{t('bank.setRawRows')}</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>
-              {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Upload size={ICON.sm} aria-hidden="true" />} ייבוא
+              {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Upload size={ICON.sm} aria-hidden="true" />} {t('bank.importAction')}
             </button>
           </div>
         </div>
@@ -420,7 +437,13 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
 interface Candidate {
   kind: 'payment' | 'invoice';
   id: string;
-  label: string;
+  labelKey: TKey;
+  labelData: {
+    number: string | number;
+    date: string;
+    reference?: string;
+    balance?: number;
+  };
   amount: number;
   confidence: number;
   invoiceIds: string[]; // invoices to mark paid when confirmed
@@ -466,7 +489,12 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
       if (refOk) confidence += 0.15;
       candidates.push({
         kind: 'payment', id: p.id,
-        label: `תשלום #${p.number} · ${fmtDate(p.paid_date)}${p.reference ? ` · אסמכתא ${p.reference}` : ''}`,
+        labelKey: p.reference ? 'bank.paymentCandidateWithReference' : 'bank.paymentCandidate',
+        labelData: {
+          number: p.number,
+          date: p.paid_date,
+          ...(p.reference ? { reference: p.reference } : {}),
+        },
         amount: p.amount, confidence: Math.min(0.99, confidence),
         invoiceIds: p.allocations.map((a) => a.invoice_id).filter(Boolean) as string[],
       });
@@ -487,7 +515,8 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
       if (Math.abs(inv.balance - tx.amount) <= tolerance) {
         candidates.push({
           kind: 'invoice', id: inv.id,
-          label: `חשבונית ${inv.invoice_number} · ${fmtDate(inv.invoice_date)} (יתרה ${fmtMoneyExact(inv.balance)})`,
+          labelKey: 'bank.invoiceCandidate',
+          labelData: { number: inv.invoice_number, date: inv.invoice_date, balance: inv.balance },
           amount: inv.balance, confidence: 0.7, invoiceIds: [inv.id],
         });
       }
@@ -502,7 +531,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
       const res = await supabase.rpc('assign_bank_transaction_supplier', {
         p_bank_transaction_id: tx.id,
         p_supplier_id: supplierId || null,
-        p_reason: reasonOr(reason, t('bank.reasonOr_3')),
+        p_reason: reasonOr(reason, 'פעולה'),
       });
       if (res.error) { toast(errorText(res.error.message), 'error'); return; }
       toast(supplierId ? t('bank.toast_4') : t('bank.toast_5'));
@@ -526,7 +555,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
           ? [{ invoice_id: c.id, amount: Math.min(tx.amount, c.amount) }]
           : [],
         p_confidence: c.confidence,
-        p_reason: reasonOr(reason, t('bank.reasonOr_4')),
+        p_reason: reasonOr(reason, 'אישור ההתאמה'),
       }));
       toast(t('bank.toast_6'));
       onChanged();
@@ -549,7 +578,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
         p_payment_id: directPaymentId,
         p_allocations: entries.map(([invoice_id, amount]) => ({ invoice_id, amount })),
         p_confidence: null,
-        p_reason: reasonOr(reason, t('bank.reasonOr_5')),
+        p_reason: reasonOr(reason, 'אישור ההתאמה'),
       }));
       toast(t('bank.toast_7'));
       onChanged();
@@ -565,7 +594,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
     const res = await supabase.rpc('open_bank_transaction_exception', {
       p_bank_transaction_id: tx.id,
       p_supplier_id: supplierId || null,
-      p_reason: reasonOr(reason, t('bank.reasonOr_6')),
+      p_reason: reasonOr(reason, 'פתיחת החריג'),
     });
     setBusy(false);
     if (res.error) { toast(errorText(res.error.message), 'error'); return; }
@@ -578,7 +607,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
     try {
       const res = await supabase.rpc('ignore_bank_transaction', {
         p_bank_transaction_id: tx.id,
-        p_reason: reasonOr(reason, t('bank.reasonOr_7')),
+        p_reason: reasonOr(reason, 'סימון התנועה'),
       });
       if (res.error) { toast(errorText(res.error.message), 'error'); return; }
       toast(t('bank.toast_9'));
@@ -609,7 +638,19 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
 
   const chosenSum = Object.values(chosenInvoices).reduce((s, v) => s + v, 0);
   const supplierName = data?.suppliers.find((supplier) => supplier.id === supplierId)?.name ?? t('bank.find');
-  const transactionLabel = `תנועת הבנק מיום ${fmtDate(tx.tx_date)} בסכום ${fmtMoneyExact(tx.amount)}`;
+  const transactionLabel = t('bank.transactionLabel', {
+    date: fmtDate(tx.tx_date),
+    amount: fmtMoneyExact(tx.amount),
+  });
+  const labelForCandidate = (candidate: Candidate) => {
+    const vars: Record<string, string | number> = {
+      number: candidate.labelData.number,
+      date: fmtDate(candidate.labelData.date),
+    };
+    if (candidate.labelData.reference) vars.reference = candidate.labelData.reference;
+    if (candidate.labelData.balance !== undefined) vars.balance = fmtMoneyExact(candidate.labelData.balance);
+    return t(candidate.labelKey, vars);
+  };
 
   return (
     <Modal open onClose={onClose} title={t('bank.title_3')} wide busy={busy} statusMessage={busy ? t('bank.text_26') : undefined}>
@@ -641,18 +682,24 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
               <div className="text-sm font-medium text-ink-soft mb-1.5">{t('bank.text_29')}</div>
               {data?.candidates.length ? (
                 <div className="space-y-2">
-                  {data.candidates.map((c) => (
-                    <div key={`${c.kind}-${c.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-line px-3 py-2.5 text-sm">
-                      <Link2 size={ICON.sm} className="text-info-fg shrink-0" aria-hidden="true" />
-                      <span className="min-w-0 flex-1 basis-full break-words sm:basis-auto">{c.label}</span>
-                      <span className={c.confidence >= 0.85 ? 'badge-done' : c.confidence >= 0.7 ? 'badge-await' : 'badge-idle'}>
-                        ביטחון {(c.confidence * 100).toFixed(0)}%
-                      </span>
-                      <button className="btn-primary btn-sm" aria-label={`אישור ${c.label} עבור ${transactionLabel}`} disabled={busy} onClick={() => void confirmCandidate(c)}>
-                        <CheckCircle2 size={ICON.sm} aria-hidden="true" /> אישור
-                      </button>
-                    </div>
-                  ))}
+                  {data.candidates.map((c) => {
+                    const candidateLabel = labelForCandidate(c);
+                    return (
+                      <div key={`${c.kind}-${c.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-line px-3 py-2.5 text-sm">
+                        <Link2 size={ICON.sm} className="text-info-fg shrink-0" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 basis-full break-words sm:basis-auto">{candidateLabel}</span>
+                        <span className={c.confidence >= 0.85 ? 'badge-done' : c.confidence >= 0.7 ? 'badge-await' : 'badge-idle'}>
+                          {t('bank.confidence', { percent: (c.confidence * 100).toFixed(0) })}
+                        </span>
+                        <button className="btn-primary btn-sm" aria-label={t('bank.confirmCandidate', {
+                          candidate: candidateLabel,
+                          transaction: transactionLabel,
+                        })} disabled={busy} onClick={() => void confirmCandidate(c)}>
+                          <CheckCircle2 size={ICON.sm} aria-hidden="true" /> {t('bank.confirm')}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : <EmptyState compact title={t('bank.title_4')} subtitle={t('bank.subtitle')} />}
             </div>
@@ -667,7 +714,11 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                       <div key={inv.id} className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 text-sm">
                         <label className="flex min-h-11 min-w-0 flex-1 basis-full cursor-pointer items-center gap-3 sm:basis-auto">
                           <input type="checkbox" className="size-5 shrink-0 accent-action" checked={checked}
-                            aria-label={`בחירת חשבונית ${inv.invoice_number} של ${supplierName} להקצאה עבור ${transactionLabel}`}
+                            aria-label={t('bank.chooseInvoiceForAllocation', {
+                              invoice: inv.invoice_number,
+                              supplier: supplierName,
+                              transaction: transactionLabel,
+                            })}
                             onChange={(e) => setChosenInvoices((c) => {
                               const next = { ...c };
                               if (e.target.checked) next[inv.id] = Math.min(inv.balance, tx.amount - chosenSum > 0 ? tx.amount - chosenSum : inv.balance);
@@ -679,7 +730,11 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
                         <span className="text-xs text-ink-muted">{t('bank.fmtMoneyExact_2')} <span className="num">{fmtMoneyExact(inv.balance)}</span></span>
                         {checked && (
                           <input type="number" step="0.01" className="input w-28! num" value={chosenInvoices[inv.id]}
-                            aria-label={`סכום ההקצאה לחשבונית ${inv.invoice_number} של ${supplierName} עבור ${transactionLabel}`}
+                            aria-label={t('bank.allocationAmountForInvoice', {
+                              invoice: inv.invoice_number,
+                              supplier: supplierName,
+                              transaction: transactionLabel,
+                            })}
                             onChange={(e) => setChosenInvoices((c) => ({ ...c, [inv.id]: Number(e.target.value) || 0 }))} />
                         )}
                       </div>
@@ -690,7 +745,10 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
               {chosenSum > 0 && (
                 <div className="flex items-center justify-between mt-2 text-sm">
                   <span className={Math.abs(chosenSum - tx.amount) > 1 ? 'text-await-fg' : 'text-done-fg'}>
-                    הוקצה {fmtMoneyExact(chosenSum)} מתוך {fmtMoneyExact(tx.amount)}
+                    {t('bank.allocatedOutOf', {
+                      allocated: fmtMoneyExact(chosenSum),
+                      total: fmtMoneyExact(tx.amount),
+                    })}
                   </span>
                   <button className="btn-primary" disabled={busy} onClick={() => void confirmManual()}>{t('bank.confirmManual')}</button>
                 </div>
@@ -702,7 +760,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
         <div className="flex flex-wrap justify-between gap-2 pt-2 border-t border-line-soft">
           <button className="btn-ghost text-ink-muted" disabled={busy} onClick={() => void ignore()}><EyeOff size={ICON.sm} aria-hidden="true" /> {t('bank.ignore')}</button>
           <button className="btn-secondary text-await-fg" disabled={busy} onClick={() => void openException()}>
-            <AlertTriangle size={ICON.sm} aria-hidden="true" /> פתיחת חריג לבירור
+            <AlertTriangle size={ICON.sm} aria-hidden="true" /> {t('bank.openException')}
           </button>
         </div>
       </div>
