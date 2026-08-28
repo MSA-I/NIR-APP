@@ -1,4 +1,4 @@
--- 0213: the page quota stops calling itself OCR.
+-- 0215: the page quota stops calling itself OCR.
 --
 -- Owner report 28.08.2026, on a sweep for technical language leaking onto tenant screens: "יש אזור
 -- שמראה פרטים טכניים - להסיר את זה, משתמש לא אמור לראות את זה - לבדוק באילו עוד מקומות זה קיים."
@@ -28,7 +28,7 @@ update private.entitlement_definitions
 comment on table private.entitlement_definitions is
   'What can be limited, in what unit, and what a customer is told it is called (0154). The LABEL is '
   'tenant-facing copy and may be reworded without touching the key anything enforces against '
-  '(0213); the key is the contract.';
+  '(0215); the key is the contract.';
 
 do $assert_0213$
 declare
@@ -40,15 +40,15 @@ begin
    where entitlement_key = 'ocr_pages.monthly';
 
   if v_label is null then
-    raise exception '0213: ocr_pages.monthly is not in the definitions at all';
+    raise exception '0215: ocr_pages.monthly is not in the definitions at all';
   end if;
   if v_label <> 'עמודי סריקה בחודש' then
-    raise exception '0213: the page quota is still labelled "%"', v_label;
+    raise exception '0215: the page quota is still labelled "%"', v_label;
   end if;
   -- The acronym must be gone from every tenant-facing label, not only from the row this file
   -- names. A second definition acquiring it later is the same defect arriving through another door.
   if exists (select 1 from private.entitlement_definitions where label ilike '%OCR%') then
-    raise exception '0213: a tenant-facing entitlement label still names OCR';
+    raise exception '0215: a tenant-facing entitlement label still names OCR';
   end if;
 
   -- 0058:207-218 — every migration after 0057 re-runs the scope assertions here rather than
@@ -57,7 +57,7 @@ begin
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0213 scope assertions failed:\n%', v_violations;
+    raise exception e'0215 scope assertions failed:\n%', v_violations;
   end if;
 end
 $assert_0213$;
