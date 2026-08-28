@@ -217,7 +217,7 @@ export default function SupplierLog() {
           return (
             <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-ink-muted">
               <span className="text-xs">{t('supplierLog.text_8')}</span>
-              <bdi>{renderValue(before, 'money')}</bdi>
+              <bdi>{renderValue(before, t, 'money')}</bdi>
             </span>
           );
         }
@@ -227,11 +227,11 @@ export default function SupplierLog() {
           <span className="inline-flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
             <span className="inline-flex items-baseline gap-1 text-ink-muted">
               <span className="text-xs">{t('supplierLog.text_9')}</span>
-              <bdi className={before == null ? 'text-ink-faint' : undefined}>{renderValue(before, 'money')}</bdi>
+              <bdi className={before == null ? 'text-ink-faint' : undefined}>{renderValue(before, t, 'money')}</bdi>
             </span>
             <span className="inline-flex items-baseline gap-1 text-ink">
               <span className="text-xs">{t('supplierLog.text_10')}</span>
-              <bdi className="font-semibold">{renderValue(after, 'money')}</bdi>
+              <bdi className="font-semibold">{renderValue(after, t, 'money')}</bdi>
             </span>
           </span>
         );
@@ -315,7 +315,7 @@ export default function SupplierLog() {
           <div className="mt-4">
             <div className="text-sm font-medium text-ink-soft mb-1.5">{t('supplierLog.text_21')}</div>
             {(() => {
-              const changes = fieldChanges(selected.old_values, selected.new_values);
+              const changes = fieldChanges(selected.old_values, selected.new_values, t);
               if (!changes.length) {
                 return <p className="text-sm text-ink-muted">{t('supplierLog.text_22')}</p>;
               }

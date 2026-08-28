@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { fmtMoneyExact } from './format';
 import { fieldChanges, renderValue } from './supplierLogChanges';
+import { he } from './i18n/dictionaries/he';
+import { translate, type TKey } from './i18n/t';
+
+/** The Hebrew resolver. These assertions pin the Hebrew wording the defect was reported about. */
+const t = (key: TKey) => translate(he, key);
 
 /**
  * These assertions exist because of a specific complaint about /supplier-log: the diff leaned on an
@@ -14,31 +19,31 @@ import { fieldChanges, renderValue } from './supplierLogChanges';
  */
 describe('renderValue', () => {
   it('says the absent value out loud instead of drawing a dash', () => {
-    expect(renderValue(null)).toBe('לא הוגדר');
-    expect(renderValue(undefined)).toBe('לא הוגדר');
-    expect(renderValue('')).toBe('לא הוגדר');
-    expect(renderValue([])).toBe('לא הוגדר');
+    expect(renderValue(null, t)).toBe('לא הוגדר');
+    expect(renderValue(undefined, t)).toBe('לא הוגדר');
+    expect(renderValue('', t)).toBe('לא הוגדר');
+    expect(renderValue([], t)).toBe('לא הוגדר');
     // The point of the change: no branch may fall back to the glyph the defect was about.
-    expect(renderValue(null)).not.toBe('—');
+    expect(renderValue(null, t)).not.toBe('—');
   });
 
   it('formats money through fmtMoneyExact, never on its own', () => {
-    expect(renderValue(14, 'money')).toBe(fmtMoneyExact(14));
-    expect(renderValue(14, 'money')).toContain('14.00');
+    expect(renderValue(14, t, 'money')).toBe(fmtMoneyExact(14));
+    expect(renderValue(14, t, 'money')).toContain('14.00');
     // A numeric string out of jsonb is still money, not text.
-    expect(renderValue('12.5', 'money')).toBe(fmtMoneyExact(12.5));
+    expect(renderValue('12.5', t, 'money')).toBe(fmtMoneyExact(12.5));
     // Zero is a price, not a missing value.
-    expect(renderValue(0, 'money')).toBe(fmtMoneyExact(0));
+    expect(renderValue(0, t, 'money')).toBe(fmtMoneyExact(0));
   });
 
   it('keeps a value that cannot be a number as itself', () => {
-    expect(renderValue('לפי הסכם', 'money')).toBe('לפי הסכם');
+    expect(renderValue('לפי הסכם', t, 'money')).toBe('לפי הסכם');
   });
 
   it('renders booleans and lists as words', () => {
-    expect(renderValue(true, 'bool')).toBe('זמין');
-    expect(renderValue(false, 'bool')).toBe('לא זמין');
-    expect(renderValue(['א', 'ב'])).toBe('א, ב');
+    expect(renderValue(true, t, 'bool')).toBe('זמין');
+    expect(renderValue(false, t, 'bool')).toBe('לא זמין');
+    expect(renderValue(['א', 'ב'], t)).toBe('א, ב');
   });
 });
 
@@ -47,6 +52,7 @@ describe('fieldChanges', () => {
     const changes = fieldChanges(
       { name: 'אלפא', phone: '03-1111111', org_id: 'org-1' },
       { name: 'אלפא', phone: '03-2222222', org_id: 'org-2' },
+      t,
     );
     // `name` did not move and `org_id` is not a tracked field — neither is news.
     expect(changes.map((c) => c.field)).toEqual(['phone']);
@@ -56,20 +62,20 @@ describe('fieldChanges', () => {
   });
 
   it('pairs a price change as before and after, both formatted', () => {
-    const changes = fieldChanges({ current_price: 12.5 }, { current_price: 14 });
+    const changes = fieldChanges({ current_price: 12.5 }, { current_price: 14 }, t);
     expect(changes).toHaveLength(1);
     expect(changes[0].before).toBe(fmtMoneyExact(12.5));
     expect(changes[0].after).toBe(fmtMoneyExact(14));
   });
 
   it('calls a first-time value "not set" rather than leaving the side blank', () => {
-    const changes = fieldChanges(null, { current_price: 14 });
+    const changes = fieldChanges(null, { current_price: 14 }, t);
     expect(changes[0].before).toBe('לא הוגדר');
     expect(changes[0].after).toBe(fmtMoneyExact(14));
   });
 
   it('returns nothing when only untracked columns differ', () => {
-    expect(fieldChanges({ id: 'a', updated_at: '2026-08-01' }, { id: 'a', updated_at: '2026-08-02' }))
+    expect(fieldChanges({ id: 'a', updated_at: '2026-08-01' }, { id: 'a', updated_at: '2026-08-02' }, t))
       .toEqual([]);
   });
 });

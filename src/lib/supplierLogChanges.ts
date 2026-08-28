@@ -14,10 +14,11 @@
  * `—` cell the reader had to decide whether the field was cleared, never filled, or simply not
  * recorded. The screen now says it: `לא הוגדר`. Words carry meaning that a glyph only gestures at.
  */
+import type { TKey } from './i18n/t';
 import { fmtDate, fmtMoneyExact } from './format';
 
 /** What a value looks like when there is nothing there. Scoped to this screen — see the note above. */
-const NOT_SET = 'לא הוגדר';
+const NOT_SET: TKey = 'supplierLog.valueNotSet';
 
 /**
  * The fields a person asks about, and how to say each one. Everything absent from this map is
@@ -25,43 +26,47 @@ const NOT_SET = 'לא הוגדר';
  * its books, not what changed about a supplier or a price. `money` and `date` also decide the
  * formatting, so a price never renders as `420` and a date never as an ISO string.
  */
-const FIELD_LABELS: Record<string, { label: string; kind?: 'money' | 'date' | 'bool' }> = {
+const FIELD_LABELS: Record<string, { labelKey: TKey; kind?: 'money' | 'date' | 'bool' }> = {
   // supplier_products
-  current_price: { label: 'מחיר נוכחי', kind: 'money' },
-  previous_price: { label: 'מחיר קודם', kind: 'money' },
-  price_effective_date: { label: 'בתוקף מ־', kind: 'date' },
-  available: { label: 'זמינות', kind: 'bool' },
-  min_qty: { label: 'כמות מינימום' },
-  package_size: { label: 'גודל אריזה' },
-  supplier_sku: { label: 'מק״ט ספק' },
+  current_price: { labelKey: 'supplierLog.fieldCurrentPrice', kind: 'money' },
+  previous_price: { labelKey: 'supplierLog.fieldPreviousPrice', kind: 'money' },
+  price_effective_date: { labelKey: 'supplierLog.fieldPriceEffectiveDate', kind: 'date' },
+  available: { labelKey: 'supplierLog.fieldAvailable', kind: 'bool' },
+  min_qty: { labelKey: 'supplierLog.fieldMinQty' },
+  package_size: { labelKey: 'supplierLog.fieldPackageSize' },
+  supplier_sku: { labelKey: 'supplierLog.fieldSupplierSku' },
   // suppliers
-  name: { label: 'שם' },
-  status: { label: 'סטטוס' },
-  tax_id: { label: 'ח.פ / עוסק' },
-  contact_name: { label: 'איש קשר' },
-  phone: { label: 'טלפון' },
-  whatsapp: { label: 'וואטסאפ' },
-  email: { label: 'אימייל' },
-  address: { label: 'כתובת' },
-  payment_terms: { label: 'תנאי תשלום' },
-  delivery_days: { label: 'ימי אספקה' },
-  cutoff_time: { label: 'שעת סגירה' },
-  min_order_amount: { label: 'מינימום להזמנה', kind: 'money' },
-  rating: { label: 'דירוג' },
-  rating_note: { label: 'הערת דירוג' },
-  notes: { label: 'הערות' },
-  deleted_at: { label: 'נמחק', kind: 'date' },
+  name: { labelKey: 'supplierLog.fieldName' },
+  status: { labelKey: 'supplierLog.fieldStatus' },
+  tax_id: { labelKey: 'supplierLog.fieldTaxId' },
+  contact_name: { labelKey: 'supplierLog.fieldContactName' },
+  phone: { labelKey: 'supplierLog.fieldPhone' },
+  whatsapp: { labelKey: 'supplierLog.fieldWhatsApp' },
+  email: { labelKey: 'supplierLog.fieldEmail' },
+  address: { labelKey: 'supplierLog.fieldAddress' },
+  payment_terms: { labelKey: 'supplierLog.fieldPaymentTerms' },
+  delivery_days: { labelKey: 'supplierLog.fieldDeliveryDays' },
+  cutoff_time: { labelKey: 'supplierLog.fieldCutoffTime' },
+  min_order_amount: { labelKey: 'supplierLog.fieldMinOrderAmount', kind: 'money' },
+  rating: { labelKey: 'supplierLog.fieldRating' },
+  rating_note: { labelKey: 'supplierLog.fieldRatingNote' },
+  notes: { labelKey: 'supplierLog.fieldNotes' },
+  deleted_at: { labelKey: 'supplierLog.fieldDeletedAt', kind: 'date' },
 };
 
-export function renderValue(raw: unknown, kind?: 'money' | 'date' | 'bool'): string {
-  if (raw === null || raw === undefined || raw === '') return NOT_SET;
-  if (kind === 'bool') return raw ? 'זמין' : 'לא זמין';
+export function renderValue(
+  raw: unknown,
+  t: (key: TKey) => string,
+  kind?: 'money' | 'date' | 'bool',
+): string {
+  if (raw === null || raw === undefined || raw === '') return t(NOT_SET);
+  if (kind === 'bool') return t(raw ? 'supplierLog.valueAvailable' : 'supplierLog.valueUnavailable');
   if (kind === 'money') {
     const amount = typeof raw === 'number' ? raw : Number(raw);
     return Number.isFinite(amount) ? fmtMoneyExact(amount) : String(raw);
   }
   if (kind === 'date') return fmtDate(String(raw));
-  if (Array.isArray(raw)) return raw.length ? raw.join(', ') : NOT_SET;
+  if (Array.isArray(raw)) return raw.length ? raw.join(', ') : t(NOT_SET);
   return String(raw);
 }
 
@@ -69,6 +74,7 @@ export function renderValue(raw: unknown, kind?: 'money' | 'date' | 'bool'): str
 export function fieldChanges(
   before: Record<string, unknown> | null,
   after: Record<string, unknown> | null,
+  t: (key: TKey) => string,
 ) {
   return Object.entries(FIELD_LABELS).flatMap(([field, meta]) => {
     const oldRaw = before?.[field] ?? null;
@@ -76,9 +82,9 @@ export function fieldChanges(
     if (JSON.stringify(oldRaw) === JSON.stringify(newRaw)) return [];
     return [{
       field,
-      label: meta.label,
-      before: renderValue(oldRaw, meta.kind),
-      after: renderValue(newRaw, meta.kind),
+      label: t(meta.labelKey),
+      before: renderValue(oldRaw, t, meta.kind),
+      after: renderValue(newRaw, t, meta.kind),
     }];
   });
 }
