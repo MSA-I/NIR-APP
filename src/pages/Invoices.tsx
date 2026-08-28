@@ -1,4 +1,5 @@
 import { useT } from '../lib/i18n/LocaleProvider';
+import { pluralCategory, type TKey } from '../lib/i18n/t';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
@@ -54,8 +55,9 @@ export type InvoiceRow = Omit<Invoice, 'supplier'> & {
 
 /** Shared renderer for automatic-check results. */
 export function CheckList({ checks }: { checks: CheckResult[] }) {
+  const { t } = useT();
   if (!checks.length) {
-    return <Note tone="done">כל הבדיקות האוטומטיות עברו ללא ממצאים.</Note>;
+    return <Note tone="done">{t('invoiceList.text')}</Note>;
   }
   const icon = { critical: AlertOctagon, warning: AlertTriangle, info: Info };
   // Severity → semantic tone: critical is a loss-risk (alert), warning needs our action (await),
@@ -93,9 +95,10 @@ const DEFAULT_SORT: readonly ServerSort[] = [{ column: 'invoice_date', ascending
  */
 function reviewFilterOptions(
   statusLabel: (meta: { key: string } | null | undefined) => string,
+  allLabel: string,
 ): ReadonlyArray<readonly [string, string]> {
   return [
-    ['', 'הכל'],
+    ['', allLabel],
     ...Object.entries(INVOICE_REVIEW_STATUS).map(([key, value]) => [key, statusLabel(value)] as const),
   ];
 }
@@ -106,7 +109,11 @@ const MOBILE_PRIMARY_REVIEW_FILTERS = new Set(['', 'received', 'pending_approval
 export function InvoicesList() {
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
-  const { statusLabel , errorText } = useT();
+  const { t, locale, statusLabel, errorText } = useT();
+  // The only place on this screen where a number changes the sentence around it. Hebrew has
+  // one/two/many/other and English has one/other, so the choice is Intl's rather than n === 1.
+  const countKey = (count: number, one: TKey, other: TKey) =>
+    (pluralCategory(locale, count) === 'one' ? one : other);
   const toast = useToast();
   const [, setParams] = useSearchParams();
   const [reviewFilter] = useParamState('review');
@@ -245,23 +252,23 @@ export function InvoicesList() {
     setBusyDelete(false);
     if (res.error) { setDeleteTarget(null); toast(errorText(res.error.message), 'error'); return; }
     setDeleteTarget(null);
-    toast('החשבונית נמחקה');
+    toast(t('invoiceList.toast'));
     void refetch();
   }
 
   const columns: ServerColumn<InvoiceRow>[] = [
-    { key: 'number', header: 'מס׳ חשבונית', priority: 3, className: 'num', render: (r) => <span className="font-medium text-ink" dir="ltr">{r.invoice_number}</span> },
-    { key: 'supplier', header: 'ספק', priority: 3, render: (r) => r.supplier.name },
-    { key: 'date', header: 'תאריך', render: (r) => fmtDate(r.invoice_date) },
-    { key: 'total', header: 'סה״כ', className: 'num', render: (r) => fmtMoneyExact(r.total_amount) },
-    { key: 'review', header: 'בדיקה', mobileLabel: null, render: (r) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
-    { key: 'payment', header: 'תשלום', priority: 3, render: (r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
+    { key: 'number', header: t('invoiceList.text_2'), priority: 3, className: 'num', render: (r) => <span className="font-medium text-ink" dir="ltr">{r.invoice_number}</span> },
+    { key: 'supplier', header: t('invoiceList.text_3'), priority: 3, render: (r) => r.supplier.name },
+    { key: 'date', header: t('invoiceList.fmtDate'), render: (r) => fmtDate(r.invoice_date) },
+    { key: 'total', header: t('invoiceList.fmtMoneyExact'), className: 'num', render: (r) => fmtMoneyExact(r.total_amount) },
+    { key: 'review', header: t('invoiceList.text_4'), mobileLabel: null, render: (r) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
+    { key: 'payment', header: t('invoiceList.text_5'), priority: 3, render: (r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
   ];
   if (!isProcurementManager) {
-    columns.splice(4, 0, { key: 'balance', header: 'יתרה', className: 'num', render: (r) => (r.balance != null && r.balance > 0 ? <span className="text-await-fg">{fmtMoneyExact(r.balance)}</span> : <span className="text-done-fg">—</span>) });
+    columns.splice(4, 0, { key: 'balance', header: t('invoiceList.splice'), className: 'num', render: (r) => (r.balance != null && r.balance > 0 ? <span className="text-await-fg">{fmtMoneyExact(r.balance)}</span> : <span className="text-done-fg">—</span>) });
   }
   if (canViewExport) {
-    columns.push({ key: 'export', header: 'רו״ח', priority: 3, render: (r) => <StatusBadge meta={INVOICE_EXPORT_STATUS[r.export_status]} /> });
+    columns.push({ key: 'export', header: t('invoiceList.push'), priority: 3, render: (r) => <StatusBadge meta={INVOICE_EXPORT_STATUS[r.export_status]} /> });
   }
 
   const activeFilters = [reviewFilter, payFilter, canViewExport ? exportFilter : '', monthFilter, attentionFilter]
@@ -279,35 +286,37 @@ export function InvoicesList() {
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
-      {fetching && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
+      {fetching && <div className="text-xs text-ink-muted" role="status">{t('invoiceList.text_6')}</div>}
       {/* No "new invoice" action (G1, 10.08.2026). An invoice arrives from a supplier; it is not
           something this business creates. The way one comes into existence is: photograph the
           document, let it be read, approve it. The gallery is where that starts. */}
-      <PageHeader title="חשבוניות"
-        meta={`${data.total} חשבוניות${activeFilters ? ` · ${activeFilters} מסננים פעילים` : ''}`}
+      <PageHeader title={t('invoiceList.title')}
+        meta={activeFilters
+          ? t(countKey(data.total, 'invoiceList.metaFilteredOne', 'invoiceList.metaFiltered'), { total: data.total, filters: activeFilters })
+          : t(countKey(data.total, 'invoiceList.metaOne', 'invoiceList.meta'), { total: data.total })}
         actions={canCreate && (
           <button className="btn-primary" onClick={() => navigate('/documents')}>
-            <Plus size={ICON.sm} aria-hidden="true" /> העלאת מסמך שהתקבל
+            <Plus size={ICON.sm} aria-hidden="true" /> {t('invoiceList.uploadReceived')}
           </button>
         )} />
       {/* ToggleGroup owns the chip geometry; the per-item className is what keeps the phone
           strip to the stages that start or unblock work — a secondary stage stays hidden below
           `sm` unless it is the active one, and every stage remains in the filter sheet. */}
       <ToggleGroup<string>
-        label="סינון חשבוניות לפי שלב הבדיקה"
+        label={t('invoiceList.label')}
         className="gap-1.5"
         value={reviewFilter}
         onChange={(value) => patchParams({ review: value, page: '' })}
-        items={reviewFilterOptions(statusLabel).map(([value, label]) => ({
+        items={reviewFilterOptions(statusLabel, t('invoiceList.reviewFilterAll')).map(([value, label]) => ({
           key: value,
           label,
           className: MOBILE_PRIMARY_REVIEW_FILTERS.has(value) || reviewFilter === value ? '' : 'max-sm:hidden',
         }))} />
       <DataTable rows={data.rows} columns={columns}
-        emptyTitle="אין חשבוניות עדיין"
+        emptyTitle={t('invoiceList.emptyTitle')}
         emptySubtitle={canCreate
-          ? 'חשבונית נקלטת מצילום או מהעלאת המסמך שהתקבל מהספק, בתיקיית המסמכים.'
-          : 'קליטת חשבוניות זמינה למנהל ולמנהל הרכש.'}
+          ? t('invoiceList.text_7')
+          : t('invoiceList.text_8')}
         error={error}
         server={{
           total: data.total,
@@ -323,8 +332,8 @@ export function InvoicesList() {
         activeFilters={activeFilters}
         onClearFilters={clearFilters}
         columnPicker="invoices"
-        searchLabel="חיפוש בחשבוניות"
-        rowLabel={(r) => `חשבונית ${r.invoice_number} של ${r.supplier.name}`}
+        searchLabel={t('invoiceList.searchLabel')}
+        rowLabel={(r) => t('invoiceList.rowLabel', { number: r.invoice_number, supplier: r.supplier.name })}
         onRowClick={(r) => navigate(`/invoices/${r.id}`)}
         mobile="cards"
         mobileTitle={(r) => <><span dir="ltr" className="num">{r.invoice_number}</span> · {r.supplier.name}</>}
@@ -333,33 +342,33 @@ export function InvoicesList() {
           // "עריכה" was a false affordance: there is no invoice-edit command anywhere in the
           // system, and the row action navigated to a detail screen whose amount is plain text
           // (InvoiceDetail.tsx:248-249). "פתיחה" is the same navigation under its real name.
-          { key: 'edit', label: 'פתיחה', icon: Eye, hidden: !canCreate, onSelect: () => navigate(`/invoices/${r.id}`) },
-          { key: 'share', label: 'שליחה', icon: Share2, hidden: !canShare(), onSelect: () => void shareInvoice(r, r.supplier.name) },
-          { key: 'print', label: 'הדפסה', icon: Printer, onSelect: () => navigate(`/invoices/${r.id}?print=1`) },
-          { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', hidden: !isOffice, onSelect: () => setDeleteTarget(r) },
+          { key: 'edit', label: t('invoiceList.actionOpen'), icon: Eye, hidden: !canCreate, onSelect: () => navigate(`/invoices/${r.id}`) },
+          { key: 'share', label: t('invoiceList.canShare'), icon: Share2, hidden: !canShare(), onSelect: () => void shareInvoice(r, r.supplier.name) },
+          { key: 'print', label: t('invoiceList.actionPrint'), icon: Printer, onSelect: () => navigate(`/invoices/${r.id}?print=1`) },
+          { key: 'delete', label: t('invoiceList.setDeleteTarget'), icon: Trash2, tone: 'danger', hidden: !isOffice, onSelect: () => setDeleteTarget(r) },
         ]}
         toolbar={
           <>
             {data.narrowed && <span className="text-xs text-await-fg" role="status">{SUPPLIER_SEARCH_NARROWED}</span>}
-            <select className="input w-auto! md:hidden" aria-label="סינון חשבוניות לפי שלב הבדיקה"
+            <select className="input w-auto! md:hidden" aria-label={t('invoiceList.aria_label')}
               value={reviewFilter} onChange={(e) => patchParams({ review: e.target.value, page: '' })}>
-              {reviewFilterOptions(statusLabel).map(([value, label]) => <option key={value || 'all'} value={value}>{label}</option>)}
+              {reviewFilterOptions(statusLabel, t('invoiceList.reviewFilterAll')).map(([value, label]) => <option key={value || 'all'} value={value}>{label}</option>)}
             </select>
             {/* `without-order` is available only on the active invoice-reading surface. */}
-            <select className="input w-auto!" aria-label="סינון חשבוניות לפי צורך בטיפול" value={attentionFilter} onChange={(e) => patchParams({ attention: e.target.value, page: '' })}>
-              <option value="">כל החשבוניות</option>
-              <option value="duplicates">חשד לכפילות</option>
-              <option value="without-order">ללא הזמנת רכש</option>
+            <select className="input w-auto!" aria-label={t('invoiceList.aria_label_2')} value={attentionFilter} onChange={(e) => patchParams({ attention: e.target.value, page: '' })}>
+              <option value="">{t('invoiceList.text_9')}</option>
+              <option value="duplicates">{t('invoiceList.text_10')}</option>
+              <option value="without-order">{t('invoiceList.text_11')}</option>
             </select>
-            <select className="input w-auto!" aria-label="סינון חשבוניות לפי סטטוס תשלום" value={payFilter} onChange={(e) => patchParams({ pay: e.target.value, page: '' })}>
-              <option value="">כל סטטוסי התשלום</option>
-              <option value="open">פתוחות לתשלום</option>
+            <select className="input w-auto!" aria-label={t('invoiceList.aria_label_3')} value={payFilter} onChange={(e) => patchParams({ pay: e.target.value, page: '' })}>
+              <option value="">{t('invoiceList.text_12')}</option>
+              <option value="open">{t('invoiceList.text_13')}</option>
               {Object.entries(INVOICE_PAYMENT_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
             </select>
-            <input type="month" className="input w-auto!" aria-label="סינון חשבוניות לפי חודש" value={monthFilter} onChange={(e) => patchParams({ month: e.target.value, page: '' })} />
+            <input type="month" className="input w-auto!" aria-label={t('invoiceList.aria_label_4')} value={monthFilter} onChange={(e) => patchParams({ month: e.target.value, page: '' })} />
             {canViewExport && (
-              <select className="input w-auto!" aria-label="סינון חשבוניות לפי סטטוס העברה לרואה חשבון" value={exportFilter} onChange={(e) => patchParams({ export: e.target.value, page: '' })}>
-                <option value="">כל סטטוסי הרו״ח</option>
+              <select className="input w-auto!" aria-label={t('invoiceList.aria_label_5')} value={exportFilter} onChange={(e) => patchParams({ export: e.target.value, page: '' })}>
+                <option value="">{t('invoiceList.text_14')}</option>
                 {Object.entries(INVOICE_EXPORT_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
               </select>
             )}
@@ -368,9 +377,9 @@ export function InvoicesList() {
 
       <ConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}
         onConfirm={(reason) => void deleteInvoice(reason)}
-        title="מחיקת חשבונית"
-        message={`חשבונית ${deleteTarget?.invoice_number ?? ''} תימחק (מחיקה רכה — הרשומה נשמרת ביומן). הפעולה תתועד ביומן הביקורת.`}
-        confirmLabel="מחיקה" danger requireReason busy={busyDelete} />
+        title={t('invoiceList.title_2')}
+        message={t('invoiceList.deleteMessage', { number: deleteTarget?.invoice_number ?? '' })}
+        confirmLabel={t('invoiceList.confirmLabel')} danger requireReason busy={busyDelete} />
     </div>
   );
 }

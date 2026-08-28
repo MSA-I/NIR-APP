@@ -131,7 +131,6 @@
     "src/pages/Inventory.tsx": 6,
     "src/pages/InvoiceDetail.tsx": 5,
     "src/pages/InvoiceNew.tsx": 1,
-    "src/pages/Invoices.tsx": 39,
     "src/pages/Login.tsx": 27,
     "src/pages/neworder/MinimumFixPanel.tsx": 23,
     "src/pages/neworder/ProductStep.tsx": 20,
