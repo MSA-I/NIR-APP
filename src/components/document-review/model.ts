@@ -352,6 +352,7 @@ export interface InvoiceDraft {
   before_vat: string;
   vat: string;
   total: string;
+  currency: string;
 }
 
 /**
@@ -373,12 +374,17 @@ export function invoiceDraftFromInterpretation(payload: InterpretationContract):
     return parsed === null ? '' : String(parsed);
   };
   const number = pick(INVOICE_NUMBER_KEYS);
+  const rawCurrency = pick(['currency', 'מטבע']);
+  const currencyText = typeof rawCurrency === 'string' ? rawCurrency.trim().toUpperCase() : '';
+  const currency = ({ '₪': 'ILS', NIS: 'ILS', '$': 'USD', '€': 'EUR', '£': 'GBP' } as Record<string, string>)[currencyText]
+    ?? (/^[A-Z]{3}$/.test(currencyText) ? currencyText : '');
   return {
     invoice_number: typeof number === 'string' || typeof number === 'number' ? String(number).trim() : '',
     invoice_date: normalizeInvoiceDate(pick(INVOICE_DATE_KEYS)),
     before_vat: money(BEFORE_VAT_KEYS),
     vat: money(VAT_KEYS),
     total: money(TOTAL_KEYS),
+    currency,
   };
 }
 

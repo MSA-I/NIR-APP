@@ -22,7 +22,6 @@ import {
   type FindingGroup,
   type FindingSeverity,
   type ReviewedLineEdit,
-  INTAKE_CURRENCY,
 } from './assessment';
 
 interface DocumentAssessmentPanelProps {
@@ -152,6 +151,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
 
   const [storedSentence, approvedSentence] = storageAndApprovalSentences(read);
   const assessment = read.assessment;
+  const intakeCurrency = assessment?.currency ?? null;
   const editable = !read.data_approved && read.state !== 'awaiting_interpretation';
 
   return (
@@ -265,7 +265,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-ink-muted">סכום הזיכוי במסמך</dt>
-                <dd className="num font-medium">{fmtMoneyExact(read.credit_resolution.amount, INTAKE_CURRENCY)}</dd>
+                <dd className="num font-medium">{fmtMoneyExact(read.credit_resolution.amount, intakeCurrency)}</dd>
               </div>
             </dl>
           ) : (
@@ -399,9 +399,9 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
                             <Cell>{fmtNum(line.quantity)}</Cell>
                             <Cell>{orderItem ? fmtNum(orderItem.ordered_quantity) : '—'}</Cell>
                             <Cell>{orderItem ? fmtNum(orderItem.received_quantity) : '—'}</Cell>
-                            <Cell>{fmtMoneyExact(line.unit_price, INTAKE_CURRENCY)}</Cell>
-                            <Cell>{fmtMoneyExact(line.baseline_price, INTAKE_CURRENCY)}</Cell>
-                            <Cell>{difference === null ? '—' : fmtMoneyExact(difference, INTAKE_CURRENCY)}</Cell>
+                            <Cell>{fmtMoneyExact(line.unit_price, intakeCurrency)}</Cell>
+                            <Cell>{fmtMoneyExact(line.baseline_price, intakeCurrency)}</Cell>
+                            <Cell>{difference === null ? '—' : fmtMoneyExact(difference, intakeCurrency)}</Cell>
                           </tr>
                         );
                       })}

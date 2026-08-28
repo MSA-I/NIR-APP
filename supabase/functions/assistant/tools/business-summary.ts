@@ -28,19 +28,21 @@ interface SummaryMetricRow {
   metric_key: string;
   value: number | string | null;
   measured: boolean;
+  currency: string | null;
 }
 
-function metricRows(data: unknown): Map<string, SummaryMetricRow> {
-  const rows = new Map<string, SummaryMetricRow>();
+function metricRows(data: unknown): SummaryMetricRow[] {
+  const rows: SummaryMetricRow[] = [];
   if (!Array.isArray(data)) return rows;
   for (const raw of data) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const row = raw as Record<string, unknown>;
     if (typeof row.metric_key !== "string") continue;
-    rows.set(row.metric_key, {
+    rows.push({
       metric_key: row.metric_key,
       value: row.value as number | string | null,
       measured: row.measured === true,
+      currency: typeof row.currency === "string" ? row.currency : null,
     });
   }
   return rows;
@@ -71,43 +73,52 @@ export const getBusinessSummaryTool: AssistantTool = {
   classification: "financial_sensitive",
   async run(ctx: ToolContext): Promise<ToolEnvelope> {
     const asOf = ctx.now().toISOString();
-    const result = await ctx.db.rpc("p2_business_summary_rows");
+    const result = await ctx.db.rpc("p2_business_summary_rows_by_currency");
     // An RPC failure means every metric is unknown -- five named failures, never a blank sheet
     // and never a fabricated one.
     const rows = result.error
-      ? new Map<string, SummaryMetricRow>()
+      ? []
       : metricRows(result.data);
 
     const facts: Fact[] = [];
     const sources: SourceReference[] = [];
     const failures: { code: string; label: string }[] = [];
     for (const line of SUMMARY_METRIC_LINES) {
-      const value = metricValue(rows.get(line.key));
-      if (value === null) {
-        // measured:false, a missing row and a non-finite value are all the same honest answer:
-        // unmeasured. The fact still exists with value null so the model can SAY the line is
-        // unmeasured -- it can never turn it into a number (validate.ts).
+      const matching = rows.filter((row) => row.metric_key === line.key);
+      const selected = line.unit === "currency"
+        ? matching.filter((row): row is SummaryMetricRow & { currency: string } =>
+          typeof row.currency === "string" && /^[A-Z]{3}$/.test(row.currency))
+          .sort((a, b) => a.currency.localeCompare(b.currency))
+        : [matching.find((row) => row.currency == null) ?? matching[0]].filter(Boolean) as SummaryMetricRow[];
+      if (selected.length === 0) {
         failures.push({ code: line.key, label: line.label });
+        continue;
       }
-      facts.push(ctx.evidence.fact({
-        kind: line.unit === "currency" ? "metric.money" : "metric.count",
-        subject: null,
-        label: line.label,
-        value,
-        unit: line.unit === "currency" ? "ils" : "count",
-        tool: "get_business_summary",
-        as_of: asOf,
-        classification: line.unit === "currency"
-          ? "financial_sensitive"
-          : "tenant_standard",
-      }));
-      sources.push(ctx.evidence.source({
-        entity: "organization",
-        entity_id: ctx.actor.orgId,
-        label: line.label,
-        route: line.to,
-        classification: "tenant_standard",
-      }));
+      for (const row of selected) {
+        const value = metricValue(row);
+        const currency = line.unit === "currency" ? row.currency : null;
+        const label = currency ? `${line.label} (${currency})` : line.label;
+        if (value === null) failures.push({ code: currency ? `${line.key}:${currency}` : line.key, label });
+        facts.push(ctx.evidence.fact({
+          kind: line.unit === "currency" ? "metric.money" : "metric.count",
+          subject: null,
+          label,
+          value,
+          unit: currency ? currency.toLowerCase() : "count",
+          tool: "get_business_summary",
+          as_of: asOf,
+          classification: line.unit === "currency"
+            ? "financial_sensitive"
+            : "tenant_standard",
+        }));
+        sources.push(ctx.evidence.source({
+          entity: "organization",
+          entity_id: ctx.actor.orgId,
+          label,
+          route: line.to,
+          classification: "tenant_standard",
+        }));
+      }
     }
 
     return {

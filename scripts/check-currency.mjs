@@ -256,17 +256,30 @@ function assertAggregates() {
 
 function assertIntakeGuard() {
   const ASSESSMENT = 'document_reconciliation_assessment';
-  const defining = files.filter((f) => new RegExp(`create\\s+(?:or\\s+replace\\s+)?function\\s+private\\.${ASSESSMENT}`, 'i').test(read(f)));
-  if (defining.length === 0) {
+  const definitionPattern = new RegExp(`create\\s+(?:or\\s+replace\\s+)?function\\s+private\\.${ASSESSMENT}`, 'i');
+  const signature = `private.${ASSESSMENT}(uuid,text,uuid,uuid,jsonb,date)`;
+  const touching = files.filter((file) => {
+    const text = read(file);
+    return definitionPattern.test(text)
+      || (text.includes(signature) && text.includes('pg_get_functiondef')
+        && text.includes('execute replace') && text.includes('currency_unrecognised'));
+  });
+  if (touching.length === 0) {
     console.error(`check:currency intake-guard FAILED — no migration defines private.${ASSESSMENT}().`);
     return EXIT['intake-guard'];
   }
 
-  const latest = defining[defining.length - 1];
-  const body = functionBodies(read(latest)).find((f) => f.name.endsWith(ASSESSMENT))?.body ?? '';
+  const latest = touching[touching.length - 1];
+  const latestText = read(latest);
+  const fullDefinition = definitionPattern.test(latestText);
+  const body = fullDefinition
+    ? functionBodies(latestText).find((f) => f.name.endsWith(ASSESSMENT))?.body ?? ''
+    : latestText;
   // `currency_not_ils` is today's code; phase 4 narrows the rejection to `currency_unrecognised`.
   // Either spelling satisfies this gate. Deleting the rejection does not.
-  const code = /'(currency_not_ils|currency_unrecognised|currency_unsupported)'/.exec(body);
+  const code = fullDefinition
+    ? /'(currency_not_ils|currency_unrecognised|currency_unsupported)'/.exec(body)
+    : /'code',\s*'(currency_unrecognised|currency_unsupported)'/.exec(body);
   if (!code) {
     console.error(
       `check:currency intake-guard FAILED — ${latest} defines private.${ASSESSMENT}() with no\n`

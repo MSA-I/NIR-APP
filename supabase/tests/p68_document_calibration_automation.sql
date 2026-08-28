@@ -34,7 +34,11 @@ select pg_temp.p68_assert(
   and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
     like '%preparation.id%'
   and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
-    !~* '(provider|model|prompt_version|schema_version|payload|decision_confidence|evidence_block_ids)',
+    !~* '(provider|model|prompt_version|schema_version|decision_confidence|evidence_block_ids)'
+  and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
+    !~* 'returns table\([^)]*payload'
+  and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
+    !~* 'pending[.]payload',
   'office queue grant/scope or safe projection contract is wrong');
 -- What the rewrite ADDED, asserted here and not only in 0181's apply-time do-block: that block runs
 -- once, against the schema the migration itself just built. This suite runs against the schema as
@@ -55,6 +59,12 @@ select pg_temp.p68_assert(
   and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
     like '%cardinality(prepared.line_ids)%',
   'the calibration queue is not document-scoped, paged with a pre-page total, or counted per preparation');
+select pg_temp.p68_assert(
+  pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
+    like '%pending_currency%'
+  and pg_get_functiondef('public.get_price_list_calibration_preparation_queue(uuid,integer,integer)'::regprocedure)
+    like '%resolve_document_currency%',
+  'the calibration queue returned prices without the document evidence currency');
 -- And the batch itself is all-or-nothing over what is still outstanding. Without this refusal an
 -- owner could approve a window while the same run keeps unreviewed lines nobody ever looked at,
 -- and the preparation's line_count would be a statement about a subset instead of about the run --
@@ -97,6 +107,12 @@ select pg_temp.p68_assert(
   and pg_get_functiondef('public.get_qualified_product_creation_dry_run(uuid)'::regprocedure)
     not like '%insert into public.products%',
   'qualified creation dry-run writes or hides unsafe outcome counts');
+select pg_temp.p68_assert(
+  pg_get_functiondef('public.get_qualified_product_creation_dry_run(uuid)'::regprocedure)
+    like '%''currency'',v_currency%'
+  and pg_get_functiondef('public.get_qualified_product_creation_dry_run(uuid)'::regprocedure)
+    like '%v_minor_units%',
+  'qualified creation dry-run returned or rounded a price without its currency');
 select pg_temp.p68_assert(
   pg_get_functiondef('public.apply_price_list_interpretation(uuid,uuid,uuid)'::regprocedure)
     like '%v_ambiguous%'

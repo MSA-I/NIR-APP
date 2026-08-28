@@ -10,23 +10,23 @@ vi.mock('./supabase', () => ({ supabase: { rpc: (...args: unknown[]) => rpc(...a
 const scanAlerts = vi.fn();
 vi.mock('./alerts', () => ({ scanAlerts: (...args: unknown[]) => scanAlerts(...args) }));
 
-const row = (metric_key: string, value: number | string | null, measured = true) =>
-  ({ metric_key, value, measured });
+const row = (metric_key: string, value: number | string | null, measured = true, currency: string | null = null) =>
+  ({ metric_key, value, measured, currency });
 
 const allFive = () => [
   row('received_week', 4),
   row('awaiting_approval', 2),
-  row('expected_payments', '1234.56'),
+  row('expected_payments', '1234.56', true, 'ILS'),
   row('suppliers_raised', 1),
   row('open_exceptions', 0),
 ];
 
 const EXPECTED_LINES = [
-  { key: 'received_week', label: 'חשבוניות שנקלטו ב-7 הימים האחרונים', unit: 'count', to: '/invoices' },
-  { key: 'awaiting_approval', label: 'חשבוניות הממתינות לאישור', unit: 'count', to: '/invoices' },
-  { key: 'expected_payments', label: 'סכום פתוח בדרישות תשלום', unit: 'currency', to: '/payment-requests' },
-  { key: 'suppliers_raised', label: 'ספקים שהעלו מחיר ב-30 הימים האחרונים', unit: 'count', to: '/prices' },
-  { key: 'open_exceptions', label: 'חריגים פתוחים', unit: 'count', to: '/exceptions' },
+  { key: 'received_week', label: 'חשבוניות שנקלטו ב-7 הימים האחרונים', unit: 'count', to: '/invoices', currency: null },
+  { key: 'awaiting_approval', label: 'חשבוניות הממתינות לאישור', unit: 'count', to: '/invoices', currency: null },
+  { key: 'expected_payments', label: 'סכום פתוח בדרישות תשלום', unit: 'currency', to: '/payment-requests', currency: 'ILS' },
+  { key: 'suppliers_raised', label: 'ספקים שהעלו מחיר ב-30 הימים האחרונים', unit: 'count', to: '/prices', currency: null },
+  { key: 'open_exceptions', label: 'חריגים פתוחים', unit: 'count', to: '/exceptions', currency: null },
 ] as const;
 
 beforeEach(() => {
@@ -38,10 +38,22 @@ describe('הסיכום העסקי מול המודל השרתי (0165)', () => {
   it('חמשת המדדים שומרים מפתח, תווית עברית, יחידה ויעד ניווט — החוזה של /alerts לא זז', async () => {
     const summary = await buildSummary();
     expect(rpc).toHaveBeenCalledTimes(1);
-    expect(rpc).toHaveBeenCalledWith('p2_business_summary_rows');
+    expect(rpc).toHaveBeenCalledWith('p2_business_summary_rows_by_currency');
     expect(summary.lines.map(({ value: _value, ...line }) => line)).toEqual(EXPECTED_LINES);
     expect(summary.complete).toBe(true);
     expect(summary.failures).toEqual([]);
+  });
+
+  it('returns one expected-payments line per currency and never their sum', async () => {
+    rpc.mockResolvedValue({
+      data: [...allFive(), row('expected_payments', 3100, true, 'USD')], error: null,
+    });
+    const summary = await buildSummary();
+    const payments = summary.lines.filter((line) => line.key === 'expected_payments');
+    expect(payments.map((line) => ({ value: line.value, currency: line.currency }))).toEqual([
+      { value: 1234.56, currency: 'ILS' }, { value: 3100, currency: 'USD' },
+    ]);
+    expect(payments.some((line) => line.value === 4334.56)).toBe(false);
   });
 
   it('אפס נשאר אפס — מדד שנמדד ומצא כלום אינו הופך ל"אין נתונים"', async () => {
@@ -123,6 +135,6 @@ describe('הסיכום העסקי מול המודל השרתי (0165)', () => {
     expect(source).not.toContain(".from('exceptions')");
     expect(source).not.toContain('.from(');
     // and the single server definition is the one being called
-    expect(source).toContain("supabase.rpc('p2_business_summary_rows')");
+    expect(source).toContain("supabase.rpc('p2_business_summary_rows_by_currency')");
   });
 });

@@ -211,9 +211,12 @@ export const FACT_KINDS = [
 export type FactKind = (typeof FACT_KINDS)[number];
 export const FactKindSchema = z.enum(FACT_KINDS);
 
-export const FACT_UNITS = ['ils', 'count', 'percent', 'date', 'text'] as const;
-export type FactUnit = (typeof FACT_UNITS)[number];
-export const FactUnitSchema = z.enum(FACT_UNITS);
+/** Named non-money units. Money facts use a lower-case ISO-4217 code (`usd`, `jpy`, ...). */
+export const FACT_UNITS = ['count', 'percent', 'date', 'text'] as const;
+const IsoCurrencyFactUnitSchema = z.string().regex(/^[a-z]{3}$/);
+export const FactUnitSchema = z.union([z.enum(FACT_UNITS), IsoCurrencyFactUnitSchema]);
+export type FactUnit = z.infer<typeof FactUnitSchema>;
+export const isFactUnit = (value: unknown): value is FactUnit => FactUnitSchema.safeParse(value).success;
 export const FactValueSchema = z.union([
   z.number().finite(),
   z.string().min(1).max(600),

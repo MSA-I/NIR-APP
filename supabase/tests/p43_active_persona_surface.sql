@@ -219,6 +219,7 @@ $$;
 select public.create_invoice(
   '60430000-0000-4000-8000-000000000001',
   '30430000-0000-4000-8000-000000000001',
+  'ILS',
   'P43-INV-1', current_date, 100, 18, 118, null, null, null, null,
   'P43 creates the payable invoice'
 );

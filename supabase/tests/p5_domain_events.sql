@@ -29,6 +29,9 @@
 
 begin;
 
+-- Legacy invoice fixtures in this transaction predate multi-currency and are explicitly ILS.
+alter table public.invoices alter column currency set default 'ILS';
+
 create function pg_temp.p5_assert(p_condition boolean, p_message text)
 returns void
 language plpgsql

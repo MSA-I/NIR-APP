@@ -55,14 +55,14 @@ insert into suppliers (id, org_id, name) values
 
 insert into invoices (
   id, org_id, unit_id, supplier_id, invoice_number, invoice_date,
-  amount_before_vat, vat_amount, total_amount, review_status, payment_status
+  amount_before_vat, vat_amount, total_amount, review_status, payment_status, currency
 ) values
   ('a5730000-0000-4000-8000-000000000021', 'a5730000-0000-4000-8000-000000000001',
    :'pc_legal_entity', 'a5730000-0000-4000-8000-000000000011',
-   '0073-CONCURRENCY-REPLAY', current_date, 100, 0, 100, 'received', 'unpaid'),
+   '0073-CONCURRENCY-REPLAY', current_date, 100, 0, 100, 'received', 'unpaid', 'ILS'),
   ('a5730000-0000-4000-8000-000000000022', 'a5730000-0000-4000-8000-000000000001',
    :'pc_legal_entity', 'a5730000-0000-4000-8000-000000000012',
-   '0073-CONCURRENCY-CREDIT', current_date, 80, 0, 80, 'received', 'unpaid');
+   '0073-CONCURRENCY-CREDIT', current_date, 80, 0, 80, 'received', 'unpaid', 'ILS');
 
 -- Create both requests through the real command so the replay payload and baseline audit facts
 -- are production-shaped before independent sessions begin.

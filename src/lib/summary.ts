@@ -34,6 +34,8 @@ export interface SummaryLine {
   /** null means "no data behind this figure" and must render as `—`. Zero is a real zero. */
   value: number | null;
   unit: SummaryUnit;
+  /** Money lines carry their ISO code; counts carry null. */
+  currency: string | null;
   to: string;
 }
 
@@ -45,13 +47,14 @@ interface SummaryMetricRow {
   metric_key: string;
   value: number | string | null;
   measured: boolean;
+  currency: string | null;
 }
 
 /** One round-trip for all five metrics. null means the call itself failed — every metric is unknown. */
-async function fetchMetricRows(): Promise<Map<string, SummaryMetricRow> | null> {
-  const { data, error } = await supabase.rpc('p2_business_summary_rows');
+async function fetchMetricRows(): Promise<SummaryMetricRow[] | null> {
+  const { data, error } = await supabase.rpc('p2_business_summary_rows_by_currency');
   if (error || !Array.isArray(data)) return null;
-  return new Map((data as SummaryMetricRow[]).map((row) => [row.metric_key, row]));
+  return data as SummaryMetricRow[];
 }
 
 /** Same guard the per-metric rpcNumber applied: a non-finite or negative figure is no figure. */
@@ -72,10 +75,29 @@ export interface Summary {
 export async function buildSummary(): Promise<Summary> {
   const [rows, alertScan] = await Promise.all([fetchMetricRows(), scanAlerts()]);
   const failures: { code: string; label: string }[] = [...alertScan.failures];
-  const lines = SUMMARY_METRIC_LINES.map((definition): SummaryLine => {
-    const value = metricValue(rows?.get(definition.key));
+  const lines = SUMMARY_METRIC_LINES.flatMap((definition): SummaryLine[] => {
+    const matching = rows?.filter((row) => row.metric_key === definition.key) ?? [];
+    if (definition.unit === 'currency') {
+      const currencyRows = matching
+        .filter((row): row is SummaryMetricRow & { currency: string } =>
+          typeof row.currency === 'string' && /^[A-Z]{3}$/.test(row.currency))
+        .sort((a, b) => a.currency.localeCompare(b.currency));
+      if (currencyRows.length === 0) {
+        failures.push({ code: definition.key, label: definition.label });
+        return [{ ...definition, value: null, currency: null }];
+      }
+      return currencyRows.map((row) => {
+        const value = metricValue(row);
+        if (value == null) failures.push({
+          code: `${definition.key}:${row.currency}`,
+          label: `${definition.label} (${row.currency})`,
+        });
+        return { ...definition, value, currency: row.currency };
+      });
+    }
+    const value = metricValue(matching.find((row) => row.currency == null) ?? matching[0]);
     if (value == null) failures.push({ code: definition.key, label: definition.label });
-    return { ...definition, value };
+    return [{ ...definition, value, currency: null }];
   });
 
   return { lines, alerts: alertScan.alerts, complete: failures.length === 0, failures, generatedAt: new Date() };

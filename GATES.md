@@ -603,39 +603,52 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
 
 ## Phase 4 — intake
 
-- [ ] P4-G1: a dollar document becomes a dollar invoice
+- [x] P4-G1: a dollar document becomes a dollar invoice
   CHECK: apply a reviewed document printing USD; select currency from invoices where id = :new;
   EXPECT: USD
+  EVIDENCE: `p31_apply_reviewed_document.sql` writes immutable USD interpretation evidence,
+  applies it through the real command and reads `invoices.currency = 'USD'`; exit 0 against 0227.
 
-- [ ] P4-G2: something that is not a currency is still blocked
+- [x] P4-G2: something that is not a currency is still blocked
   CHECK: a document whose printed currency reads `US0` through `private.document_reconciliation_assessment`
   EXPECT: finding `currency_unrecognised`, severity `error`, `approval_blocked` true. EUR now
   passes (`#284`); "I could not read it" must never resolve to shekels.
+  EVIDENCE: P29 proves EUR resolves and `US0` returns `currency_unrecognised/error` with
+  `approval_blocked=true`. `check:currency` now follows the 0227 anchored patch and reports the
+  same live spelling instead of measuring 0108's old body.
 
-- [ ] P4-G5: a foreign supplier's invoice is not flagged for the local VAT rate (`#285`)
+- [x] P4-G5: a foreign supplier's invoice is not flagged for the local VAT rate (`#285`)
   CHECK: an invoice from a supplier whose `country_code` differs from the organisation's, printing zero VAT
   EXPECT: no VAT-rate finding. The same document from a domestic supplier still produces one —
   the discriminator is the country, not the currency.
+  EVIDENCE: P29 runs the same zero-VAT line first with IL/IL and then IL/US. The domestic case
+  returns `vat_rate_mismatch`; the foreign case returns none; exit 0.
 
-- [ ] P4-G3: the shekel-only business feels nothing (regression)
+- [x] P4-G3: the shekel-only business feels nothing (regression)
   CHECK: a shekel document with no printed currency from a shekel supplier
   EXPECT: zero new findings — identical to today's behaviour
+  EVIDENCE: P29 omits printed currency for an ILS-default supplier and proves resolved currency
+  ILS with no `currency_assumed_from_supplier` finding.
 
-- [ ] P4-G6: (was P1-G5) an amount cannot be stored with more decimals than its currency has (`#284`)
+- [x] P4-G6: (was P1-G5) an amount cannot be stored with more decimals than its currency has (`#284`)
   CHECK: write a JPY amount of 1000.50 through the owning RPC
   EXPECT: refused. Rounding reads `currencies.minor_units` instead of the hard-coded 2
   (`0023:1712-1725` is the site), and the write commands are already the only write path.
   Moved here from phase 1 because no writer could produce a non-ILS row until this phase — see the
   ABANDON note under phase 1.
+  EVIDENCE: P80 calls the new `create_invoice` with JPY 1000.50 and receives exactly
+  `invoice_currency_precision_invalid`; no invoice row is written.
 
-- [ ] P4-G7: the temporary `default 'ILS'` comes off the intake path
+- [x] P4-G7: the temporary `default 'ILS'` comes off the intake path
   CHECK: `alter table invoices alter column currency drop default;` lands in this phase's migration,
   and an insert that names no currency then fails
   EXPECT: `null value in column "currency"`. `0217` carried the default so that phases 1–3 kept
   running against writers that do not name a currency; the moment `apply_reviewed_document`
   supplies one, a currency nobody stated must be a failure rather than a shekel.
+  EVIDENCE: 0228 drops the default only after the manual command exists. P80 proves
+  `column_default is null` and a direct insert omitting currency fails `23502` on `currency`.
 
-- [ ] P4-G8: the manual invoice form can state a currency, and `create_invoice` records it
+- [x] P4-G8: the manual invoice form can state a currency, and `create_invoice` records it
   ADDED 28.08.2026, during phase 3. `create_invoice` (`0023`) takes no currency parameter, so an
   invoice typed by hand is stored `ILS` by the temporary default — which means the form is
   telling the truth today and stops doing so the moment P4-G7 removes that default. Phase 3 made
@@ -646,11 +659,21 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   what was chosen, and the duplicate/order/credit checks compare against invoices in the SAME
   currency — a shekel invoice with the same number is not this invoice's duplicate in any figure
   it reports
+  EVIDENCE: `quickCreateSupplierWiring.spec.tsx` selects a USD-default supplier and observes the
+  form currency `USD`. P80 creates USD and ILS invoices with the same supplier/number; both remain
+  `received`, the USD row records USD, and a USD invoice linked to an ILS order is refused by name.
 
-- [ ] P4-G4: the client cannot dictate the currency
+- [x] P4-G4: the client cannot dictate the currency
   CHECK: a review payload asserting a currency the recomputed assessment did not derive
   EXPECT: `document_review_currency_mismatch`. `0110:358-378` already ignores client findings; this
   extends the same rule to the currency it writes.
+  EVIDENCE: P31 gives immutable interpretation evidence `USD` and a reviewed payload claiming
+  `ILS`; `apply_reviewed_document` returns exactly `document_review_currency_mismatch`.
+
+  PHASE 4 VERIFICATION 28.08.2026: P29, P30, P31, P68, P80, P1 financial commands and P43 all
+  exit 0 on local migrations through 0230. Vitest: 158/158 files, 1669/1669 tests. TypeScript,
+  money, currency, exemptions, anchored replacements, supplier-column and Assistant schema/send
+  guards all exit 0. This is local evidence only; CI and Production remain Phase 6.
 
 ---
 

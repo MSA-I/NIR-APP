@@ -250,11 +250,11 @@ reset role;
 select pg_temp.p46_actor(null);
 
 insert into public.invoices(
-  id,org_id,unit_id,supplier_id,invoice_number,invoice_date,amount_before_vat,vat_amount,total_amount
+  id,org_id,unit_id,supplier_id,invoice_number,invoice_date,amount_before_vat,vat_amount,total_amount,currency
 ) values(
   '13570000-0000-4000-8000-000000000001','13500000-0000-4000-8000-000000000001',
   :'a_legal_entity','13540000-0000-4000-8000-000000000001','P46-INTERIM',
-  :'p46_invoice_date',100,18,118);
+  :'p46_invoice_date',100,18,118,'ILS');
 
 select pg_temp.p46_actor('13510000-0000-4000-8000-000000000001');
 set role authenticated;
@@ -592,11 +592,11 @@ select pg_temp.p46_actor(null);
 
 -- A late invoice is born as evidence, appends a new snapshot, and is never a payment target.
 insert into public.invoices(
-  id,org_id,unit_id,supplier_id,invoice_number,invoice_date,amount_before_vat,vat_amount,total_amount
+  id,org_id,unit_id,supplier_id,invoice_number,invoice_date,amount_before_vat,vat_amount,total_amount,currency
 ) values(
   '13570000-0000-4000-8000-000000000002','13500000-0000-4000-8000-000000000001',
   :'a_legal_entity','13540000-0000-4000-8000-000000000001','P46-LATE',
-  :'p46_invoice_date',50,9,59);
+  :'p46_invoice_date',50,9,59,'ILS');
 
 select pg_temp.p46_assert(
   (select financial_role='supporting_evidence' from public.invoices

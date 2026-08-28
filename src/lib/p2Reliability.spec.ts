@@ -110,14 +110,17 @@ assert.deepEqual(reportMeta.find((row) => row[0] === 'שם ארגון'), ['שם 
 
 const invoiceFingerprint = invoiceCheckFingerprint({
   supplierId: 'supplier-a', invoiceNumber: ' 42 ', invoiceDate: '2026-07-22', totalAmount: 100,
+  currency: 'ILS',
   linkedOrderIds: ['order-b', 'order-a'],
 });
 assert.equal(invoiceFingerprint, invoiceCheckFingerprint({
   supplierId: 'supplier-a', invoiceNumber: '42', invoiceDate: '2026-07-22', totalAmount: 100,
+  currency: 'ILS',
   linkedOrderIds: ['order-a', 'order-b'],
 }));
 assert.notEqual(invoiceFingerprint, invoiceCheckFingerprint({
   supplierId: 'supplier-a', invoiceNumber: '43', invoiceDate: '2026-07-22', totalAmount: 100,
+  currency: 'ILS',
   linkedOrderIds: ['order-a', 'order-b'],
 }));
 assert.equal(

@@ -64,11 +64,11 @@ insert into public.suppliers (id, org_id, name, status) values
 -- credit, and the race under test would never be reached.
 insert into public.invoices (
   id, org_id, unit_id, supplier_id, invoice_number, invoice_date,
-  amount_before_vat, vat_amount, total_amount, review_status, payment_status
+  amount_before_vat, vat_amount, total_amount, review_status, payment_status, currency
 ) values
   ('f6390000-0000-4000-8000-000000000021', 'f6390000-0000-4000-8000-000000000001',
    :'p63c_legal_entity', 'f6390000-0000-4000-8000-000000000011',
-   'P63-CONCURRENCY-CREDIT', current_date, 200, 0, 200, 'received', 'unpaid');
+   'P63-CONCURRENCY-CREDIT', current_date, 200, 0, 200, 'received', 'unpaid', 'ILS');
 
 -- Approved through the real command so the executor meets a production-shaped approval.
 select set_config('request.jwt.claim.sub', 'f6390000-0000-4000-8000-000000000002', false);

@@ -4,6 +4,9 @@
 
 begin;
 
+-- Legacy invoice fixtures in this transaction predate multi-currency and are explicitly ILS.
+alter table public.invoices alter column currency set default 'ILS';
+
 create function pg_temp.p1_assert(p_condition boolean, p_message text)
 returns void
 language plpgsql
@@ -205,6 +208,7 @@ select pg_temp.p1_assert(
   (create_invoice(
     '60000000-0000-0000-0000-000000000001',
     '30000000-0000-0000-0000-000000000001',
+    'ILS',
     'INV-001', '2026-07-10', 100, 18, 118, null, null, null, null,
     'קליטת חשבונית לבדיקה'
   )->>'idempotent')::boolean = false,
@@ -218,6 +222,7 @@ select pg_temp.p1_assert(
   (create_invoice(
     '60000000-0000-0000-0000-000000000001',
     '30000000-0000-0000-0000-000000000001',
+    'ILS',
     'INV-001', '2026-07-10', 100, 18, 118, null, null, null, null,
     'ניסיון חוזר'
   )->>'idempotent')::boolean,
@@ -229,6 +234,7 @@ begin
   perform create_invoice(
     '60000000-0000-0000-0000-000000000099',
     '30000000-0000-0000-0000-000000000001',
+    'ILS',
     'INV-BAD', '2026-07-10', 100, 18, 117, null, null, null, null, 'בדיקת rollback'
   );
   raise exception 'expected invoice_amounts_invalid';
@@ -246,6 +252,7 @@ begin
   perform create_invoice(
     '60000000-0000-0000-0000-000000000098',
     '30000000-0000-0000-0000-000000000003',
+    'ILS',
     'CROSS-TENANT', '2026-07-10', 10, 1.8, 11.8, null, null, null, null, 'בדיקת דייר'
   );
   raise exception 'expected cross-tenant rejection';
@@ -275,6 +282,7 @@ select set_invoice_review_status(
 select create_invoice(
   '60000000-0000-0000-0000-000000000002',
   '30000000-0000-0000-0000-000000000001',
+  'ILS',
   'INV-002', '2026-07-11', 42.37, 7.63, 50, null, null, null, null,
   'קליטת חשבונית נוספת'
 );
@@ -290,12 +298,14 @@ select set_invoice_review_status(
 select create_invoice(
   '60000000-0000-0000-0000-000000000009',
   '30000000-0000-0000-0000-000000000001',
+  'ILS',
   'INV-SOFT-DELETE', '2026-07-12', 10, 1.8, 11.8, null, null, null, null,
   'חשבונית לבדיקת מחיקה רכה'
 );
 select create_invoice(
   '60000000-0000-0000-0000-000000000012',
   '30000000-0000-0000-0000-000000000001',
+  'ILS',
   'INV-OFFICE-DELETE', '2026-07-12', 20, 3.6, 23.6, null, null, null, null,
   'חשבונית לבדיקת הרשאת מנהל רכש'
 );
@@ -341,6 +351,7 @@ select pg_temp.p1_assert(
 select create_invoice(
   '60000000-0000-0000-0000-000000000003',
   '30000000-0000-0000-0000-000000000001',
+  'ILS',
   'INV-CREDIT', '2026-07-12', 100, 18, 118, null, null, null, null,
   'credit command fixture'
 );

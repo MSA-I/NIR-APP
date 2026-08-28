@@ -16,6 +16,9 @@
 
 begin;
 
+-- Legacy invoice fixtures in this transaction predate multi-currency and are explicitly ILS.
+alter table public.invoices alter column currency set default 'ILS';
+
 create function pg_temp.p29_assert(p_condition boolean, p_message text)
 returns void language plpgsql as $$
 begin
@@ -43,11 +46,12 @@ create function pg_temp.p29_line(
   p_unit text default null,
   p_unit_price text default null,
   p_line_total text default null,
-  p_barcode text default null
+  p_barcode text default null,
+  p_vat_rate text default null
 ) returns jsonb language sql immutable as $$
   select jsonb_build_array(jsonb_build_object('values', jsonb_strip_nulls(jsonb_build_object(
     'sku', p_sku, 'barcode', p_barcode, 'quantity', p_quantity, 'unit', p_unit,
-    'unit_price', p_unit_price, 'line_total', p_line_total))));
+    'unit_price', p_unit_price, 'line_total', p_line_total, 'vat_rate', p_vat_rate))));
 $$;
 
 create function pg_temp.p29_assess(
@@ -361,13 +365,50 @@ select pg_temp.p29_assert(
   'after a supplier mismatch the assessment still claimed the order as a source');
 
 select pg_temp.p29_assert(
-  (select f ->> 'severity' = 'error'
-   from pg_temp.p29_finding(
-     pg_temp.p29_assess(pg_temp.p29_line('SKU-MEAT', '2', 'kg', '20', '40'),
-                        jsonb_build_object('currency', 'EUR')),
-     'currency_not_ils') f),
-  'a document printed in euros was assessed as shekels. There is no currency column anywhere; '
-  '0001 fixes this product to ILS, so recording the numbers as shekels is silent and expensive');
+  (select r ->> 'currency' = 'EUR'
+          and (r ->> 'approval_blocked')::boolean = false
+          and pg_temp.p29_finding(r, 'currency_unrecognised') is null
+   from pg_temp.p29_assess('[]'::jsonb, jsonb_build_object('currency', 'EUR')) r),
+  'a valid active ISO currency was still refused instead of being carried by the assessment');
+
+select pg_temp.p29_assert(
+  (select (r ->> 'approval_blocked')::boolean = true
+          and pg_temp.p29_finding(r, 'currency_unrecognised') ->> 'severity' = 'error'
+   from pg_temp.p29_assess('[]'::jsonb, jsonb_build_object('currency', 'US0')) r),
+  'an unreadable printed currency was accepted or silently treated as shekels');
+
+select pg_temp.p29_assert(
+  (select r ->> 'currency' = 'ILS'
+          and pg_temp.p29_finding(r, 'currency_assumed_from_supplier') is null
+   from pg_temp.p29_assess('[]'::jsonb, '{}'::jsonb) r),
+  'a shekel supplier with no printed currency no longer follows the unchanged quiet ILS path');
+
+-- VAT belongs to the business country, not the printed currency. A foreign supplier's document
+-- is recorded as printed; the same zero-rate line from a domestic supplier is still a mismatch.
+update public.organizations set country_code = 'IL'
+where id = '1a290000-0000-4000-8000-000000000001';
+update public.suppliers set country_code = 'IL'
+where id = '4a290000-0000-4000-8000-000000000001';
+
+select pg_temp.p29_assert(
+  (select pg_temp.p29_finding(r, 'vat_rate_mismatch') is not null
+   from pg_temp.p29_assess(
+     pg_temp.p29_line('SKU-MEAT', '2', 'kg', '20', '40', null, '0'),
+     jsonb_build_object('currency', 'ILS'), null, date '2026-06-15') r),
+  'a domestic supplier stopped being checked against the organisation VAT rate');
+
+update public.suppliers set country_code = 'US', default_currency = 'USD'
+where id = '4a290000-0000-4000-8000-000000000001';
+
+select pg_temp.p29_assert(
+  (select pg_temp.p29_finding(r, 'vat_rate_mismatch') is null
+   from pg_temp.p29_assess(
+     pg_temp.p29_line('SKU-MEAT', '2', 'kg', '20', '40', null, '0'),
+     jsonb_build_object('currency', 'USD'), null, date '2026-06-15') r),
+  'a foreign supplier was falsely accused of using the wrong local VAT rate');
+
+update public.suppliers set country_code = 'IL', default_currency = 'ILS'
+where id = '4a290000-0000-4000-8000-000000000001';
 
 -- ===== 7. A document with no order is still assessable, and says what it lacks =====
 

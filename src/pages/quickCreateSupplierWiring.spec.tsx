@@ -69,7 +69,11 @@ import PaymentRequests from './PaymentRequests';
 
 const SUPPLIERS_ENDPOINT = `${SUPABASE_URL}/rest/v1/suppliers`;
 const FINANCIAL_SUPPLIERS_ENDPOINT = `${SUPABASE_URL}/rest/v1/financial_supplier_directory`;
-const EXISTING = { id: 'sup-1', name: 'ספק קיים בע״מ', tax_id: '514000000', status: 'active' };
+const CURRENCIES_ENDPOINT = `${SUPABASE_URL}/rest/v1/currencies`;
+const EXISTING = {
+  id: 'sup-1', name: 'ספק קיים בע״מ', tax_id: '514000000', status: 'active',
+  default_currency: 'USD', country_code: 'US',
+};
 const NEW_ROW = { id: 'sup-new', name: 'ירקות השדה בע״מ' };
 
 beforeAll(() => {
@@ -89,6 +93,9 @@ beforeEach(() => {
 function useSupplierTable(rows: Array<Record<string, unknown>> = [EXISTING]) {
   server.use(
     http.get(SUPPLIERS_ENDPOINT, () => HttpResponse.json(rows)),
+    http.get(CURRENCIES_ENDPOINT, () => HttpResponse.json([
+      { code: 'ILS', minor_units: 2 }, { code: 'USD', minor_units: 2 },
+    ])),
     http.get(FINANCIAL_SUPPLIERS_ENDPOINT, () => HttpResponse.json(rows.map((row) => ({
       id: row.id,
       name: row.name,
@@ -413,6 +420,19 @@ describe('InvoiceNew — the same door', () => {
 
     await waitFor(() => expect(screen.getByLabelText('ספק *')).toHaveValue('sup-new'));
     expect(screen.getByRole('option', { name: NEW_ROW.name })).toBeInTheDocument();
+  });
+
+  it('defaults the manual invoice currency from the selected supplier', async () => {
+    const user = userEvent.setup();
+    useSupplierTable();
+    server.use(http.get(CURRENCIES_ENDPOINT, () => HttpResponse.json([
+      { code: 'ILS', minor_units: 2 }, { code: 'USD', minor_units: 2 },
+    ])));
+    render(wrap(<InvoiceNew />, '/invoices/new'));
+
+    await screen.findByRole('option', { name: EXISTING.name });
+    await user.selectOptions(screen.getByLabelText('ספק *'), EXISTING.id);
+    expect(screen.getByLabelText('מטבע *')).toHaveValue('USD');
   });
 
 });
