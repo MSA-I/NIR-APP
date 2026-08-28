@@ -20,6 +20,7 @@ import { neutralizeSpreadsheetRow } from '../lib/documentExport';
 import {
   downloadRenderedWorkbook,
   expenseSummaryTemplateValues,
+  reportTemplateErrorText,
   renderConfiguredReportTemplate,
   type PurchaseMetrics,
 } from '../lib/reportTemplateExport';
@@ -254,7 +255,7 @@ export default function Expenses() {
       XLSX.writeFile(wb, fileName);
       toast(t('expenses.toast_2'));
     } catch (e) {
-      toast(errorText(e), 'error');
+      toast(reportTemplateErrorText(e, t, errorText), 'error');
     } finally {
       setExporting(false);
     }

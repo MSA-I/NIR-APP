@@ -3,7 +3,35 @@ import {
   expenseSummaryTemplateValues,
   monthlyReportTemplateValues,
   productPurchaseTemplateValues,
+  REPORT_TEMPLATE_ERROR_KEY,
+  ReportTemplateError,
+  reportTemplateErrorText,
+  type ReportTemplateErrorCode,
 } from './reportTemplateExport';
+import { en } from './i18n/dictionaries/en';
+import { he } from './i18n/dictionaries/he';
+import type { Dictionary } from './i18n/dictionaries/he';
+import { translate, type TKey } from './i18n/t';
+
+const say = (dictionary: Dictionary) => (key: TKey) => translate(dictionary, key);
+const sayHe = say(he as unknown as Dictionary);
+const sayEn = say(en);
+
+const ERROR_CODES: ReportTemplateErrorCode[] = [
+  'mapping_invalid',
+  'unknown_report_type',
+  'cell_invalid',
+  'duplicate_cell',
+  'field_invalid',
+  'wrong_export_key',
+  'path_invalid',
+  'bytes_invalid',
+  'checksum_invalid',
+  'download_failed',
+  'downloaded_size_mismatch',
+  'downloaded_checksum_mismatch',
+  'workbook_invalid',
+];
 
 const period = {
   orgName: 'מסעדת בדיקה',
@@ -14,6 +42,20 @@ const period = {
 };
 
 describe('ערכי תבניות הדוחות', () => {
+  it('ממפה כל קוד כשל תבנית לשתי השפות', () => {
+    expect(Object.keys(REPORT_TEMPLATE_ERROR_KEY).sort()).toEqual([...ERROR_CODES].sort());
+    for (const code of ERROR_CODES) {
+      expect(sayHe(REPORT_TEMPLATE_ERROR_KEY[code])).not.toBe(REPORT_TEMPLATE_ERROR_KEY[code]);
+      expect(sayEn(REPORT_TEMPLATE_ERROR_KEY[code])).not.toBe(REPORT_TEMPLATE_ERROR_KEY[code]);
+    }
+    const failure = new ReportTemplateError('download_failed');
+    expect(reportTemplateErrorText(failure, sayHe, () => 'fallback'))
+      .toBe('לא ניתן להוריד את תבנית הייצוא הפרטית. נסו שוב או העלו תבנית חדשה.');
+    expect(reportTemplateErrorText(failure, sayEn, () => 'fallback'))
+      .toBe('The private export template could not be downloaded. Try again or upload a new template.');
+    expect(reportTemplateErrorText(new Error('network'), sayEn, () => 'fallback')).toBe('fallback');
+  });
+
   it('מפיק את דוח רואה החשבון מהחשבוניות ומהזיכוי שהשרת כבר קיזז מהן', () => {
     const values = monthlyReportTemplateValues({
       ...period,

@@ -9,6 +9,7 @@ import { useAuth } from '../auth/AuthContext';
 import {
   downloadRenderedWorkbook,
   productPurchaseTemplateValues,
+  reportTemplateErrorText,
   renderConfiguredReportTemplate,
 } from '../lib/reportTemplateExport';
 import { neutralizeSpreadsheetRow } from '../lib/documentExport';
@@ -157,7 +158,7 @@ export default function ProductPurchaseSummary() {
       }
       toast(t('productPurchase.toast'));
     } catch (exportError) {
-      toast(errorText(exportError), 'error');
+      toast(reportTemplateErrorText(exportError, t, errorText), 'error');
     } finally {
       setExporting(false);
     }

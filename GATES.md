@@ -245,6 +245,16 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   1,737/1,737; `npx tsc --noEmit` and `check:jsx-space` passed. `zero` still exits 1 on 355/54,
   so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `reportTemplateExport.ts` batch in this commit.** The pinned count is
+  now 880 Hebrew line(s) across 85 files; the protected set remains 539 lines in 32 files, so the
+  real remainder is **341 lines in 53 files**. This is the 72nd surface locked at zero. Fourteen
+  reader-facing throws became thirteen exhaustive `ReportTemplateErrorCode` values mapped to
+  paired `TKey`s; Expenses, Reports and ProductPurchaseSummary resolve them at their reader-facing
+  catch boundary. Organization, supplier and template names plus report values remain unmodified
+  export data. Evidence: the stale-baseline negative control failed on this file alone; the focused
+  value/error-mapping suite passed 6/6; the full suite passed 1,738/1,738; `npx tsc --noEmit` and
+  `check:jsx-space` passed. `zero` still exits 1 on 341/53, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

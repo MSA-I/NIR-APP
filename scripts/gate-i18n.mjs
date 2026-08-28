@@ -94,6 +94,7 @@ const EXTRACTED = [
   'src/lib/feedback.ts',
   'src/pages/DocumentsInbox.tsx',
   'src/pages/neworder/SummaryStep.tsx',
+  'src/lib/reportTemplateExport.ts',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */

@@ -5309,4 +5309,20 @@ export const en: Dictionary = {
     confirmOrders: 'Confirm and send orders',
   },
 
+  reportTemplateExport: {
+    mappingInvalid: 'The export-template mapping is invalid. Upload and approve the template again.',
+    unknownReportType: 'The template report type is unknown.',
+    cellInvalid: 'A template cell location is invalid. Upload and approve the template again.',
+    duplicateCell: 'The same cell appears twice in the template mapping. Approve only one mapping.',
+    fieldInvalid: 'The template refers to a field that does not belong to this report. Approve the mapping again.',
+    wrongExportKey: 'The server returned a template for a different report type. Export stopped.',
+    pathInvalid: 'The template path does not belong to the organization or approved version. Export stopped.',
+    bytesInvalid: 'The approved template size is missing or invalid.',
+    checksumInvalid: 'The approved template checksum is missing or invalid.',
+    downloadFailed: 'The private export template could not be downloaded. Try again or upload a new template.',
+    downloadedSizeMismatch: 'The template file size differs from the approved version. Export stopped.',
+    downloadedChecksumMismatch: 'The template file checksum does not match the approved version. Export stopped.',
+    workbookInvalid: 'The template file or cell mapping is invalid. Upload and approve the template again.',
+  },
+
 };

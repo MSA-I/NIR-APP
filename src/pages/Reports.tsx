@@ -17,6 +17,7 @@ import { financialSupplierMap } from '../lib/financialSuppliers';
 import {
   downloadRenderedWorkbook,
   monthlyReportTemplateValues,
+  reportTemplateErrorText,
   renderConfiguredReportTemplate,
 } from '../lib/reportTemplateExport';
 
@@ -244,7 +245,7 @@ export default function Reports() {
       }
       toast(t('reports.toast'));
     } catch (e) {
-      toast(errorText(e), 'error');
+      toast(reportTemplateErrorText(e, t, errorText), 'error');
     } finally {
       setBusy(false);
     }
