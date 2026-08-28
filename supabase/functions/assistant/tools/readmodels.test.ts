@@ -63,6 +63,7 @@ function ctxWith(db: ToolReads, role: ActorContext["role"] = "owner"): ToolConte
     actor: actor(role),
     evidence: new RunEvidence(),
     now: () => new Date("2026-08-20T08:00:00.000Z"),
+    locale: "he",
   };
 }
 

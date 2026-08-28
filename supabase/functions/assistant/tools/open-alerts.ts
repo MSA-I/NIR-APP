@@ -13,9 +13,8 @@ import type {
   ToolEnvelope,
 } from "../../../../src/lib/assistant/contracts.ts";
 import { PRICE_INCREASE_SCOPE_DETAIL_KEY } from "../../../../src/lib/alertRules.ts";
-import { he } from "../../../../src/lib/i18n/dictionaries/he.ts";
-import type { Dictionary } from "../../../../src/lib/i18n/dictionaries/he.ts";
-import { translate, type TKey } from "../../../../src/lib/i18n/t.ts";
+import type { TKey } from "../../../../src/lib/i18n/t.ts";
+import { readerText } from "../reader-locale.ts";
 import { addCalendarDays, toZoneISO } from "../time.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
 
@@ -149,7 +148,7 @@ export const getOpenAlertsTool: AssistantTool = {
               // The scope-limit sentence is still `alerts.ts`’s own, resolved rather than
               // retyped: extraction moved it into the dictionaries under this key, and a
               // paraphrase of a scope limit is a widening of it.
-              translate(he as unknown as Dictionary, PRICE_INCREASE_SCOPE_DETAIL_KEY as TKey),
+              readerText(ctx.locale, PRICE_INCREASE_SCOPE_DETAIL_KEY as TKey),
             ],
           };
         },

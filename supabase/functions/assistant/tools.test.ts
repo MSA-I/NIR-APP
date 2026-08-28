@@ -39,6 +39,7 @@ function context(db: ToolDataPort, role: ActorContext["role"] = "owner"): ToolCo
     actor: actorWithRole(role),
     evidence: new RunEvidence(),
     now: () => new Date("2026-08-20T10:00:00Z"),
+    locale: "he",
   };
 }
 

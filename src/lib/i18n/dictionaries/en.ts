@@ -7,7 +7,7 @@
  *   - The language names stay in their own language: a person looking for Hebrew is looking for
  *     `עברית`, and `Hebrew` written in English is no help to someone who cannot read the screen.
  */
-import type { Dictionary } from './he';
+import type { Dictionary } from './he.ts';
 
 export const en: Dictionary = {
   common: {

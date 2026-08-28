@@ -734,6 +734,17 @@ export const AssistantAskRequestSchema = z.object({
   conversation_id: z.string().uuid().nullable().default(null),
   /** The route the user is on. Context only — never authorization, never a data filter. */
   route: z.string().max(200).nullable().default(null),
+  /**
+   * The language the person is reading the product in, so the answer, the help steps and the
+   * warnings underneath them arrive in it (`OPEN-DECISIONS #283`).
+   *
+   * A PREFERENCE, not an identity claim, and that is why it may ride the request body next to
+   * `route`: both locales of the help registry are `public_product_metadata` open to the same
+   * roles, so a caller who sent the other one would receive a screen they were already entitled
+   * to, in a language they chose. `null` means the caller did not say, and the server falls back
+   * to the product's base language rather than guessing.
+   */
+  locale: z.enum(PRODUCT_HELP_LOCALES).nullable().default(null),
 });
 export type AssistantAskRequest = z.infer<typeof AssistantAskRequestSchema>;
 

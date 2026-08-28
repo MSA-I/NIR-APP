@@ -77,7 +77,7 @@ export function assistantAuthorizationFingerprint(
 export function useAssistantRunSession(
   authorizationFingerprint = 'assistant-authorization-unscoped',
 ): AssistantRunSession {
-  const { errorText: resolveError } = useT();
+  const { errorText: resolveError, locale } = useT();
   const [question, setQuestion] = useState('');
   const [submittedQuestion, setSubmittedQuestion] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -128,6 +128,10 @@ export function useAssistantRunSession(
           conversation_id: conversationId,
           // Context only — the server treats it as neither authorization nor a data filter.
           route: route?.slice(0, 200) ?? null,
+          // The language this person is reading the product in, so the answer, the help steps
+          // and the warnings under them arrive in it (`OPEN-DECISIONS #283`). A preference, not
+          // an identity claim — see the field’s docblock in `contracts.ts`.
+          locale,
         });
         if (
           authorizationEpochRef.current !== authorizationEpoch ||

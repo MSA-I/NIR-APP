@@ -66,7 +66,13 @@ function summaryDb(): ToolDataPort {
 }
 
 function toolContext(db: ToolDataPort) {
-  return { db, actor, evidence: new RunEvidence(), now: () => new Date("2026-08-20T10:00:00Z") };
+  return {
+    db,
+    actor,
+    evidence: new RunEvidence(),
+    now: () => new Date("2026-08-20T10:00:00Z"),
+    locale: "he" as const,
+  };
 }
 
 function toolContextAs(db: ToolDataPort, role: ActorContext["role"]) {
@@ -75,6 +81,7 @@ function toolContextAs(db: ToolDataPort, role: ActorContext["role"]) {
     actor: { ...actor, role },
     evidence: new RunEvidence(),
     now: () => new Date("2026-08-20T10:00:00Z"),
+    locale: "he" as const,
   };
 }
 
@@ -174,7 +181,7 @@ Deno.test("the adapter clamps retries to the remaining budget", async () => {
     model: "test-model",
     maxOutputTokens: 1024,
     timeoutMs: 30_000,
-    instructions: buildInstructions(),
+    instructions: buildInstructions("he"),
     tools: [],
     fetchImpl: () => {
       fetchCalls += 1;
@@ -475,7 +482,7 @@ Deno.test("an instruction inside tool data stays data and cannot buy an unsuppor
 
   // The injected text appears ONLY inside fenced function_call_output items -- never as an
   // instruction-bearing message and never in the system prompt.
-  assert.ok(!buildInstructions().includes(injection));
+  assert.ok(!buildInstructions("he").includes(injection));
   for (const input of observed) {
     for (const item of input) {
       if (!item || typeof item !== "object") continue;
@@ -573,8 +580,25 @@ Deno.test("the answer schema declares a draft arm that carries no label, recipie
   }
 });
 
+Deno.test("the answer language follows the reader, and nothing else in the prompt moves", () => {
+  const hebrew = buildInstructions("he");
+  const english = buildInstructions("en");
+  assert.ok(hebrew.includes("Answer in Hebrew"));
+  assert.ok(english.includes("Answer in English"));
+  assert.ok(!english.includes("Answer in Hebrew"));
+  // Exactly ONE line differs. Every rule below it — the injection stance, the claim rules, the
+  // no-send rule — is the same instruction in both languages, so a reader cannot be handed a
+  // weaker assistant by choosing English.
+  const hebrewLines = hebrew.split("\n");
+  const englishLines = english.split("\n");
+  assert.equal(hebrewLines.length, englishLines.length);
+  const differing = hebrewLines.filter((line, index) => line !== englishLines[index]);
+  assert.equal(differing.length, 1);
+  assert.ok(differing[0].includes("Answer in Hebrew"));
+});
+
 Deno.test("the system prompt teaches the draft rules and never offers to send", () => {
-  const instructions = buildInstructions();
+  const instructions = buildInstructions("he");
   assert.ok(instructions.includes(ASSISTANT_DRAFT_LABEL));
   assert.ok(instructions.includes("copies and sends himself"));
   assert.ok(instructions.includes("never write a label"));

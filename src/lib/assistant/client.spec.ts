@@ -90,7 +90,7 @@ beforeEach(() => {
 describe('askAssistant', () => {
   it('שולח את הבקשה לפונקציית assistant ומחזיר את המעטפה כפי שהשרת הנפיק אותה — הלקוח לא מחשב דבר', async () => {
     invoke.mockResolvedValue({ data: emptyRun, error: null });
-    const request = { question: 'מה מצב החשבוניות?', conversation_id: null, route: '/dashboard' };
+    const request = { question: 'מה מצב החשבוניות?', conversation_id: null, route: '/dashboard', locale: 'en' as const };
     const result = await askAssistant(request);
     expect(invoke).toHaveBeenCalledWith('assistant', { body: request });
     expect(result).toEqual(emptyRun);
@@ -179,7 +179,7 @@ describe('askAssistant', () => {
   ])('נכשל סגור על 2xx פגום: %s', async (_case, malformed) => {
     invoke.mockResolvedValue({ data: malformed, error: null });
 
-    await expect(askAssistant({ question: 'שאלה', conversation_id: null, route: null }))
+    await expect(askAssistant({ question: 'שאלה', conversation_id: null, route: null, locale: null }))
       .rejects.toThrow('assistant_unsupported_answer');
   });
 
@@ -190,13 +190,13 @@ describe('askAssistant', () => {
         context: { json: async () => ({ error: { code: 'assistant_limit_reached' } }) },
       }),
     });
-    await expect(askAssistant({ question: 'שאלה', conversation_id: null, route: null }))
+    await expect(askAssistant({ question: 'שאלה', conversation_id: null, route: null, locale: null }))
       .rejects.toThrow('assistant_limit_reached');
   });
 
   it('סירוב שמגיע בגוף 2xx (מוסכמת send-feedback) נזרק גם הוא כקוד, לא מדווח כהצלחה', async () => {
     invoke.mockResolvedValue({ data: { error: { code: 'assistant_disabled' } }, error: null });
-    await expect(askAssistant({ question: 'שאלה', conversation_id: null, route: null }))
+    await expect(askAssistant({ question: 'שאלה', conversation_id: null, route: null, locale: null }))
       .rejects.toThrow('assistant_disabled');
   });
 
@@ -207,7 +207,7 @@ describe('askAssistant', () => {
         context: { status: 401, json: async () => { throw new Error('empty body'); } },
       }),
     });
-    await expect(askAssistant({ question: 'שאלה', conversation_id: null, route: null }))
+    await expect(askAssistant({ question: 'שאלה', conversation_id: null, route: null, locale: null }))
       .rejects.toThrow('assistant_unauthenticated');
     expect(toHebrewError(new Error('assistant_unauthenticated')))
       .toBe(he.errors.assistant_unauthenticated);
