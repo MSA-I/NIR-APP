@@ -1,4 +1,4 @@
-import type { TKey } from './i18n/t';
+import type { TKey } from './i18n/t.ts';
 import * as XLSX from 'xlsx';
 import { neutralizeSpreadsheetRow, neutralizeSpreadsheetString } from './documentExport';
 import { exportDefinition } from './exportTemplates';

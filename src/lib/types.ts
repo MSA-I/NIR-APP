@@ -1,5 +1,5 @@
 // Row types matching supabase/migrations/0001_init.sql (hand-maintained, pragmatic subset)
-import type { Locale } from './i18n/locale';
+import type { Locale } from './i18n/locale.ts';
 
 export type Role = 'owner' | 'kitchen' | 'office' | 'payer' | 'accountant' | 'supplier';
 

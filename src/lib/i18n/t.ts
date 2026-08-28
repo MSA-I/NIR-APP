@@ -1,5 +1,5 @@
-import { INTL_LOCALE, type Locale } from './locale';
-import type { Dictionary } from './dictionaries/he';
+import { INTL_LOCALE, type Locale } from './locale.ts';
+import type { Dictionary } from './dictionaries/he.ts';
 
 /**
  * Every legal key, as a union: `'common.save' | 'settings.languageTitle' | ...`.
@@ -8,9 +8,13 @@ import type { Dictionary } from './dictionaries/he';
  * a key surfaces every call site, and an autocomplete list of the real keys removes the main
  * reason people give up on extraction halfway and go back to hardcoding.
  */
+// `& string` on both halves rather than only inside the template: Deno's stricter default lib
+// admits a symbol key here, and `[keyof Dictionary]` then indexes by one. The narrowing is a
+// no-op for Vite and the difference between compiling and not for the Edge function, which
+// reads this file through the same shared-contract door `contracts.ts` already uses.
 export type TKey = {
-  [N in keyof Dictionary]: `${N & string}.${keyof Dictionary[N] & string}`;
-}[keyof Dictionary];
+  [N in keyof Dictionary & string]: `${N}.${keyof Dictionary[N] & string}`;
+}[keyof Dictionary & string];
 
 const PLACEHOLDER = /\{(\w+)\}/g;
 

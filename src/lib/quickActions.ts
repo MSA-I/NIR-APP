@@ -1,4 +1,4 @@
-import type { TKey } from '../lib/i18n/t';
+import type { TKey } from '../lib/i18n/t.ts';
 import { Activity, Camera, CreditCard, FileText, FolderOpen, LayoutDashboard, PackageCheck, ShoppingCart, type LucideIcon } from 'lucide-react';
 import { isActiveRole, type ActiveRole, type Role } from './types';
 import { staticRouteTitle } from './routePresentation';

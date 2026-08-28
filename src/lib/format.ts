@@ -1,4 +1,4 @@
-import type { Locale } from './i18n/locale';
+import type { Locale } from './i18n/locale.ts';
 
 export const BUSINESS_TIME_ZONE = 'Asia/Jerusalem';
 

@@ -1,4 +1,4 @@
-import type { TKey } from './i18n/t';
+import type { TKey } from './i18n/t.ts';
 
 /**
  * Canonical user-facing names for authenticated routes.
