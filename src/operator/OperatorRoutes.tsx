@@ -4,6 +4,10 @@ import { useAuth } from '../auth/AuthContext';
 import { RecordSkeleton } from '../components/ui';
 import Admin from '../pages/Admin';
 import OperatorShell from './OperatorShell';
+import Overview from './Overview';
+import Users from './Users';
+import UserDetail from './UserDetail';
+import Team from './Team';
 import AutonomyPolicies from './AutonomyPolicies';
 import Customers from './Customers';
 import CustomerDetail from './CustomerDetail';
@@ -53,7 +57,14 @@ export default function OperatorRoutes() {
     <PlatformGuard>
       <Routes>
         <Route element={<OperatorShell />}>
-          <Route path="/admin" element={<Admin />} />
+          {/* The console opens on a decision screen, not on a queue. `Admin` keeps every
+              platform-operations table it always had; it simply is no longer the first thing an
+              operator sees on arrival. */}
+          <Route path="/admin" element={<Overview />} />
+          <Route path="/admin/platform" element={<Admin />} />
+          <Route path="/admin/users" element={<Users />} />
+          <Route path="/admin/users/:userId" element={<UserDetail />} />
+          <Route path="/admin/team" element={<Team />} />
           <Route path="/admin/customers" element={<Customers />} />
           <Route path="/admin/customers/:orgId" element={<CustomerDetail />} />
           <Route path="/admin/funnel" element={<Funnel />} />

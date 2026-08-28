@@ -13,9 +13,12 @@ import { toHebrewError } from '../lib/errors';
  * of this application today.
  */
 const NAV = [
+  { to: '/admin', label: 'מרכז בקרה', end: true },
   { to: '/admin/customers', label: 'לקוחות', end: false },
+  { to: '/admin/users', label: 'משתמשים', end: false },
+  { to: '/admin/team', label: 'צוות הפלטפורמה', end: false },
   { to: '/admin/funnel', label: 'משפך', end: false },
-  { to: '/admin', label: 'ניהול פלטפורמה', end: true },
+  { to: '/admin/platform', label: 'ניהול פלטפורמה', end: false },
   { to: '/admin/autonomy', label: 'אוטונומיית מסמכים', end: false },
   { to: '/admin/signups', label: 'הרשמות שלא אושרו', end: false },
   { to: '/admin/purge', label: 'מחיקה סופית', end: false },
