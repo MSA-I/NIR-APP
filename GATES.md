@@ -141,7 +141,23 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   ledger where a green test run is not the question. There are now TWO legal documents, neither
   read by a lawyer, and the file's own header has recorded from the start that the drafting is not
   legal advice and that the review is the owner's decision. It closes when the owner says the
-  translation was reviewed — not before.
+  translation was reviewed — not before. Recorded as a standing debt in `DEBT §70` on the owner's
+  instruction of 28.08.2026, so it does not live only in this ledger.
+
+  **A SECOND REPOSITORY IS INVOLVED, and it currently disagrees with the decision.** The marketing
+  site (`LANDING-PAGE-NIR`, `src/content/pages.ts`) publishes both documents verbatim, cites
+  `TERMS_VERSION 2026-08-24`, and its lede says the Hebrew version governs — the sentence `#280`
+  retired. Somebody reading the terms there before signing up is reading a different document from
+  the one they will consent to. Both repositories have to move together; `DEBT §70` carries it.
+
+  **The look changed on 28.08.2026 on a separate owner instruction** — the two pages now read like
+  the marketing site's. Only the shell was ported, never the lede: copying the copy with the look
+  would have reinstated the "Hebrew governs" reading in the app itself. `DESIGN.md` §5 carries the
+  decision table, and the evidence screenshots were re-taken after it.
+
+  **THIS BRANCH DEPLOYS NOTHING.** Owner instruction, 28.08.2026: the rollout is the merge agent's
+  step, and the PR must say so explicitly — the Frontend row of the `CLAUDE.md` matrix for these
+  pages, plus the Edge Function row for `assistant` (P2-G8).
 
   DECISION: **the owner chose TWO BINDING VERSIONS, one per language** (`OPEN-DECISIONS #280`) — picked over both cheaper readings after all three were spelled out. So: translate `Legal.tsx` in full, BUMP `TERMS_VERSION`, and write NO sentence claiming the Hebrew governs — such a sentence contradicts the decision. Someone who signed in English agreed to the English text.
 
