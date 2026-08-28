@@ -1239,6 +1239,18 @@ html { transition: --glow-x 0.12s ease-out, --glow-y 0.12s ease-out; }
   .btn-rainbow, .btn-rainbow::before { animation: none; }
 }
 
+/* Paper-only content, and the one class that also survives a PDF capture.
+
+   `src/lib/pdf.ts` rasterises the same `.print-area` subtree the print stylesheet targets, and
+   html2canvas renders the LIVE DOM: a heading hidden behind `display: none` is simply absent from
+   the generated file, logo and all. Tailwind's `print:block` cannot help — it is defined inside
+   the print media query and nothing else can turn it on. So the rule that says "this belongs on
+   paper" is written once, here, and answers to both consumers. */
+.print-only { display: none; }
+@media print { .print-only { display: block; } }
+.pdf-capture .print-only { display: block; }
+.pdf-capture .no-print { display: none !important; }
+
 @media print {
   /* `.table-scroll` carries `contain: inline-size paint`, and paint containment clips the box and
      makes it monolithic — which is exactly what breaks `.monthly-report .report-table-wrap`'s
@@ -1287,6 +1299,21 @@ html { transition: --glow-x 0.12s ease-out, --glow-y 0.12s ease-out; }
     color: inherit !important;
   }
   .monthly-report .card, .monthly-report table, .monthly-report tr { break-inside: avoid; }
+
+  /* Every printable area, not just the report: a table that runs past the page break loses its
+     column headings on page two unless the browser is told to repeat them, and a row split down
+     the middle is unreadable in a document somebody files. */
+  .print-area thead { display: table-header-group; }
+  .print-area tr, .print-area .card { break-inside: avoid; }
+}
+
+/* The page every OTHER printable screen lands on. Until 28.08.2026 only the monthly report named
+   a page, so the order sheet, the invoice and the expense summary printed on whatever the browser
+   defaulted to — which is why a printed order arrived with a different margin on every machine.
+   `.monthly-report` still overrides this with its own landscape page. */
+@page {
+  size: A4;
+  margin: 12mm;
 }
 
 @page monthly-report {

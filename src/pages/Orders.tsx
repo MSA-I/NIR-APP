@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toHebrewError } from "../lib/errors";
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
-import { Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle, Pencil, Copy, Plus, FileText } from 'lucide-react';
+import { FileDown, Loader2, Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle, Pencil, Copy, Plus, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -10,6 +10,8 @@ import { Breadcrumbs, DataTable, StatusBadge, useToast, ConfirmDialog, Lifecycle
 import { PO_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, formatQuantity, formatUnit, productLabel, todayISO } from '../lib/format';
 import { orderWhatsAppLink, markOrderSentToSupplier, needsSentConfirmation } from '../lib/share';
+import { downloadElementPdf } from '../lib/pdf';
+import { useExportWatermark } from '../lib/exportBranding';
 import { WhatsAppSendDialog } from '../components/WhatsAppSendDialog';
 import { SupplierPortalCard } from '../components/SupplierPortalCard';
 import { EmailOrderCard } from '../components/EmailOrderCard';
@@ -277,6 +279,12 @@ export function OrderDetail() {
   const [busy, setBusy] = useState(false);
   const [params, setParams] = useSearchParams();
   const printedRef = useRef<string | null>(null);
+  const printAreaRef = useRef<HTMLDivElement>(null);
+  const watermark = useExportWatermark();
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const orgLogoUrl = org?.logo_path
+    ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
+    : null;
 
   const { data: order, loading, error, refetch } = useQuery(async () =>
     unwrap(await supabase.from('purchase_orders')
@@ -352,6 +360,31 @@ export function OrderDetail() {
     void refetch();
   }
 
+  /**
+   * The order sheet as a branded PDF — the artefact that goes to the supplier by mail.
+   *
+   * Portrait A4: this is a heading and one item table. Prices ARE included here, unlike the
+   * WhatsApp image (owner decision 18.08.2026), because this file is the order document rather
+   * than a picking list forwarded around a supplier's shop floor.
+   */
+  async function exportPdf() {
+    const element = printAreaRef.current;
+    if (!element || !order) return;
+    setExportingPdf(true);
+    try {
+      await downloadElementPdf({
+        element,
+        fileName: `purchase-order-${order.number}.pdf`,
+        watermark,
+      });
+      toast('קובץ ה-PDF הורד');
+    } catch (e) {
+      toast(toHebrewError(e), 'error');
+    } finally {
+      setExportingPdf(false);
+    }
+  }
+
   if (loading) return <RecordSkeleton />;
   if (error || !order) return <ErrorNote message={error ?? 'הזמנה לא נמצאה'} />;
 
@@ -419,6 +452,9 @@ export function OrderDetail() {
               <FileText size={ICON.sm} aria-hidden="true" /> העלאת החשבונית שהתקבלה
             </button>
           )}
+          <button className="btn-secondary" disabled={exportingPdf} onClick={() => void exportPdf()} title="הורדת ההזמנה כקובץ PDF מעוצב עם הלוגו של הארגון">{exportingPdf ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileDown size={ICON.sm} aria-hidden="true" />} הורדת PDF</button>
+          {/* Print stays beside the generated file: the browser's own print produces SELECTABLE
+              text, which the rasterised PDF cannot (src/lib/pdf.ts explains why). */}
           <button className="btn-secondary" onClick={() => window.print()}><Printer size={ICON.sm} aria-hidden="true" /> הדפסה</button>
           {canWrite && !['received', 'cancelled'].includes(order.status) && (
             <button type="button" className="btn-danger" onClick={() => setConfirm({ status: 'cancelled', label: 'ביטול הזמנה' })}><XCircle size={ICON.sm} aria-hidden="true" /> ביטול</button>
@@ -453,8 +489,11 @@ export function OrderDetail() {
       )}
 
       {/* Printable order sheet */}
-      <Card className="print-area">
-        <div className="hidden print:block mb-4">
+      <Card ref={printAreaRef} className="print-area">
+        {/* `print-only`, not `hidden print:block`: html2canvas renders the live DOM, so a
+            display:none heading is simply absent from the generated PDF (src/index.css). */}
+        <div className="print-only mb-4">
+          {orgLogoUrl && <img src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
           <h2 className="text-xl font-semibold">{`הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`}</h2>
           <div className="text-sm mt-1">ספק: {order.supplier.name} · תאריך: {fmtDate(order.created_at)} {order.expected_date && `· אספקה מבוקשת: ${fmtDate(order.expected_date)}`}</div>
         </div>

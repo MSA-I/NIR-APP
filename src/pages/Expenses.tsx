@@ -1,7 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Banknote, Calculator, ChevronLeft, FileSpreadsheet, Loader2, Printer, ReceiptText, type LucideIcon } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { Banknote, Calculator, ChevronLeft, FileDown, FileSpreadsheet, Loader2, Printer, ReceiptText, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useParamState } from '../lib/useParamState';
@@ -15,7 +14,9 @@ import {
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { useAuth } from '../auth/AuthContext';
 import { financialSupplierMap } from '../lib/financialSuppliers';
-import { neutralizeSpreadsheetRow } from '../lib/documentExport';
+import { downloadWorkbook } from '../lib/workbook';
+import { downloadElementPdf } from '../lib/pdf';
+import { useExportWatermark } from '../lib/exportBranding';
 import {
   downloadRenderedWorkbook,
   expenseSummaryTemplateValues,
@@ -97,6 +98,11 @@ export default function Expenses() {
   const [params, setParams] = useSearchParams();
   const [drill, setDrill] = useState<SupplierRow | null>(null);
   const [exporting, setExporting] = useState(false);
+  const printAreaRef = useRef<HTMLDivElement>(null);
+  const watermark = useExportWatermark();
+  const orgLogoUrl = org?.logo_path
+    ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
+    : null;
   const invalidRange = !!from && !!to && from > to;
   const categoryBreakdownAvailable = profile?.role === 'owner';
 
@@ -208,26 +214,83 @@ export default function Expenses() {
         toast('קובץ ה-Excel הורד');
         return;
       }
-      // Supplier, product-category and invoice-number text is tenant data on its way into a file
-      // somebody opens in Excel. `=`/`@` at the start of a cell is a formula there, whatever we
-      // meant by it — same neutralizer as documentExport.ts, which is now the one place it lives.
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.bySupplier.map((r) => neutralizeSpreadsheetRow({
-        'ספק': r.name, 'חשבוניות': r.count, 'סה"כ': r.total,
-        '% מהסך': data.totalAll > 0 ? Number(((r.total / data.totalAll) * 100).toFixed(1)) : null,
-      }))), 'לפי ספק');
-      if (data.categoryBreakdownAvailable) {
-        const catRows: { 'קטגוריה': string; 'ערך בהזמנות מקושרות': number }[] = [...data.catTotals]
-          .sort((a, b) => b.total - a.total)
-          .map((c) => neutralizeSpreadsheetRow({ 'קטגוריה': c.name, 'ערך בהזמנות מקושרות': c.total }));
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'קטגוריות בהזמנות');
-      }
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.invoices.map((i) => neutralizeSpreadsheetRow({
-        'ספק': i.supplier?.name ?? '', 'מספר חשבונית': i.invoice_number, 'תאריך': i.invoice_date,
-        'סה"כ': i.total_amount, 'סטטוס תשלום': INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
-      }))), 'חשבוניות');
-      XLSX.writeFile(wb, fileName);
+      // No custom template configured → the styled built-in. Until 28.08.2026 this branch wrote a
+      // bare SheetJS workbook with no RTL view, so the summary a Hebrew reader opened ran
+      // left-to-right, with unsized columns and money as raw numbers. `buildWorkbook` owns all
+      // three, and cell text is neutralized there — `=`/`@` at the start of a cell is a formula
+      // to Excel whatever we meant by it.
+      await downloadWorkbook({
+        title: `ריכוז הוצאות — ${org.name}`,
+        subtitle: `${fmtDate(from)} – ${fmtDate(to)} · הופק ${fmtDate(todayISO())}`,
+        sheets: [
+          {
+            name: 'לפי ספק',
+            columns: [
+              { header: 'ספק', key: 'supplier', width: 30 },
+              { header: 'חשבוניות', key: 'count', width: 12, type: 'number' },
+              { header: 'סה״כ', key: 'total', width: 16, type: 'money' },
+              { header: '% מהסך', key: 'share', width: 12, type: 'percent' },
+            ],
+            rows: data.bySupplier.map((r) => ({
+              supplier: r.name,
+              count: r.count,
+              total: r.total,
+              // A share of an empty total is not 0% — it is unmeasured, so the cell stays empty.
+              share: data.totalAll > 0 ? r.total / data.totalAll : null,
+            })),
+          },
+          ...(data.categoryBreakdownAvailable ? [{
+            name: 'קטגוריות בהזמנות',
+            columns: [
+              { header: 'קטגוריה', key: 'category', width: 28 },
+              { header: 'ערך בהזמנות מקושרות', key: 'total', width: 22, type: 'money' as const },
+            ],
+            rows: [...data.catTotals]
+              .sort((a, b) => b.total - a.total)
+              .map((c) => ({ category: c.name, total: c.total })),
+          }] : []),
+          {
+            name: 'חשבוניות',
+            columns: [
+              { header: 'ספק', key: 'supplier', width: 30 },
+              { header: 'מספר חשבונית', key: 'number', width: 18 },
+              { header: 'תאריך', key: 'date', width: 14, type: 'date' },
+              { header: 'סה״כ', key: 'total', width: 16, type: 'money' },
+              { header: 'סטטוס תשלום', key: 'status', width: 16 },
+            ],
+            rows: data.invoices.map((i) => ({
+              supplier: i.supplier?.name ?? '',
+              number: i.invoice_number,
+              date: i.invoice_date,
+              total: i.total_amount,
+              status: INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
+            })),
+          },
+        ],
+      }, fileName);
       toast('קובץ ה-Excel הורד');
+    } catch (e) {
+      toast(toHebrewError(e), 'error');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  /**
+   * The same printable area the print stylesheet targets, as a branded PDF. Portrait: this summary
+   * is three narrow blocks and a supplier table, not the eleven-column accountant grid.
+   */
+  async function exportPdf() {
+    const element = printAreaRef.current;
+    if (!element || fetching || error || !data || data.invalidRange) return;
+    setExporting(true);
+    try {
+      await downloadElementPdf({
+        element,
+        fileName: `expenses-${from}-${to}.pdf`,
+        watermark,
+      });
+      toast('קובץ ה-PDF הורד');
     } catch (e) {
       toast(toHebrewError(e), 'error');
     } finally {
@@ -279,7 +342,10 @@ export default function Expenses() {
       <PageHeader className="no-print" title="ריכוז הוצאות" actions={
         <div className="flex flex-wrap items-center gap-2">
           <button className="btn-secondary" onClick={() => void exportExcel()} disabled={exporting || !hasInvoices || fetching || !!error || data.invalidRange} title={excelBlockedReason ?? 'הורדת הריכוז כקובץ Excel'}>{exporting ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={ICON.sm} aria-hidden="true" />} ייצוא Excel</button>
-          <button className="btn-secondary" disabled={fetching || !!error || data.invalidRange} onClick={() => window.print()} title={rangeBlockedReason ?? 'הדפסת הריכוז או שמירה כ-PDF'}><Printer size={ICON.sm} aria-hidden="true" /> הדפסה / PDF</button>
+          <button className="btn-secondary" disabled={exporting || fetching || !!error || data.invalidRange} onClick={() => void exportPdf()} title={rangeBlockedReason ?? 'הורדת הריכוז כקובץ PDF מעוצב עם הלוגו של הארגון'}>{exporting ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileDown size={ICON.sm} aria-hidden="true" />} הורדת PDF</button>
+          {/* Print stays beside the generated file: the browser's own print produces SELECTABLE
+              text, which the rasterised PDF cannot (src/lib/pdf.ts explains why). */}
+          <button className="btn-secondary" disabled={fetching || !!error || data.invalidRange} onClick={() => window.print()} title={rangeBlockedReason ?? 'הדפסת הריכוז'}><Printer size={ICON.sm} aria-hidden="true" /> הדפסה</button>
         </div>
       } />
 
@@ -310,9 +376,12 @@ export default function Expenses() {
 
       {data.invalidRange && <div id={RANGE_ERROR_ID}><Note tone="alert" role="alert">תאריך ההתחלה חייב להיות מוקדם מתאריך הסיום או זהה לו.</Note></div>}
 
-      {!data.invalidRange && <div className="print-area space-y-4">
-        <div className="hidden print:block">
-          <h2 className="text-xl font-semibold">ריכוז הוצאות {fmtDate(from)} – {fmtDate(to)}</h2>
+      {!data.invalidRange && <div ref={printAreaRef} className="print-area space-y-4">
+        {/* `print-only`, not `hidden print:block`: html2canvas renders the live DOM, so a
+            display:none heading is simply absent from the generated PDF (src/index.css). */}
+        <div className="print-only">
+          {orgLogoUrl && <img src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
+          <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}ריכוז הוצאות`} {fmtDate(from)} – {fmtDate(to)}</h2>
         </div>
 
         <div className="grid grid-cols-1 border-y border-line-strong bg-surface sm:grid-cols-3">

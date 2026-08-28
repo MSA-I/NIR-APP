@@ -11,8 +11,7 @@ import {
   productPurchaseTemplateValues,
   renderConfiguredReportTemplate,
 } from '../lib/reportTemplateExport';
-import { neutralizeSpreadsheetRow } from '../lib/documentExport';
-import * as XLSX from 'xlsx';
+import { downloadWorkbook } from '../lib/workbook';
 
 /**
  * Per-product purchase rollup — the screen for `get_product_purchase_summary` (0114).
@@ -137,22 +136,42 @@ export default function ProductPurchaseSummary() {
       if (templated) {
         downloadRenderedWorkbook(templated, fileName);
       } else {
-        const book = XLSX.utils.book_new();
-        const exportRows = data.products.map((row) => neutralizeSpreadsheetRow({
-          'מוצר': row.product_name,
-          'יחידה': formatUnit(row.unit),
-          'הוזמן': row.ordered_qty,
-          'התקבל': row.received_qty,
-          'חויב': row.invoiced_qty,
-          'נרכש בפועל': row.canonical_qty,
-          'מספר ספקים': row.supplier_count,
-          'מספר הזמנות': row.order_count,
-          'מספר חשבוניות': row.invoice_count,
-          'הוצאה ברוטו': row.gross_amount,
-          'מחיר יחידה ממוצע': row.average_unit_price,
-        }));
-        XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(exportRows), 'רכישות מוצרים');
-        XLSX.writeFile(book, fileName);
+        // No custom template configured → the styled built-in. Until 28.08.2026 this branch wrote
+        // a bare SheetJS workbook: no RTL view, so an eleven-column Hebrew grid opened
+        // left-to-right, with every column at default width and money as raw numbers.
+        await downloadWorkbook({
+          title: `ריכוז רכישות מוצרים — ${org.name}`,
+          subtitle: `${fmtDate(from)} – ${fmtDate(to)} · הופק ${fmtDate(todayISO())}`,
+          sheets: [{
+            name: 'רכישות מוצרים',
+            columns: [
+              { header: 'מוצר', key: 'product', width: 32 },
+              { header: 'יחידה', key: 'unit', width: 10 },
+              { header: 'הוזמן', key: 'ordered', width: 10, type: 'number' },
+              { header: 'התקבל', key: 'received', width: 10, type: 'number' },
+              { header: 'חויב', key: 'invoiced', width: 10, type: 'number' },
+              { header: 'נרכש בפועל', key: 'canonical', width: 13, type: 'number' },
+              { header: 'מספר ספקים', key: 'suppliers', width: 12, type: 'number' },
+              { header: 'מספר הזמנות', key: 'orders', width: 12, type: 'number' },
+              { header: 'מספר חשבוניות', key: 'invoices', width: 13, type: 'number' },
+              { header: 'הוצאה ברוטו', key: 'gross', width: 16, type: 'money' },
+              { header: 'מחיר יחידה ממוצע', key: 'average', width: 18, type: 'money' },
+            ],
+            rows: data.products.map((row) => ({
+              product: row.product_name,
+              unit: formatUnit(row.unit),
+              ordered: row.ordered_qty,
+              received: row.received_qty,
+              invoiced: row.invoiced_qty,
+              canonical: row.canonical_qty,
+              suppliers: row.supplier_count,
+              orders: row.order_count,
+              invoices: row.invoice_count,
+              gross: row.gross_amount,
+              average: row.average_unit_price,
+            })),
+          }],
+        }, fileName);
       }
       toast('קובץ ה-Excel הורד');
     } catch (exportError) {

@@ -1,6 +1,6 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { FileSpreadsheet, Printer, Send, CheckCircle2, LockKeyhole, Download, Loader2 } from 'lucide-react';
+import { FileDown, FileSpreadsheet, Printer, Send, CheckCircle2, LockKeyhole, Download, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -12,8 +12,11 @@ import { useParamState } from '../lib/useParamState';
 import { toHebrewError } from '../lib/errors';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { buildLockedMonthlyWorkbook, buildStyledMonthlyWorkbook, monthlyReportScreenTotals, type MonthlyReportLabels, type MonthlyReportSnapshot } from '../lib/monthlyReport';
-import * as XLSX from 'xlsx';
+
 import { financialSupplierMap } from '../lib/financialSuppliers';
+import { downloadElementPdf } from '../lib/pdf';
+import { useExportWatermark } from '../lib/exportBranding';
+import { downloadWorkbook, safeFileName } from '../lib/workbook';
 import {
   downloadRenderedWorkbook,
   monthlyReportTemplateValues,
@@ -63,6 +66,8 @@ export default function Reports() {
   const [monthParam, setMonth] = useParamState('month');
   const month = safeMonthISO(monthParam);
   const [busy, setBusy] = useState(false);
+  const printAreaRef = useRef<HTMLDivElement>(null);
+  const watermark = useExportWatermark();
   const [sendSnapshot, setSendSnapshot] = useState<MonthlyReportSnapshot | null>(null);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [snapshotReauthOpen, setSnapshotReauthOpen] = useState(false);
@@ -224,11 +229,10 @@ export default function Reports() {
         // No custom template configured → the styled built-in default (18.08.2026). A BROKEN
         // custom template still throws above rather than landing here — that contract is
         // renderConfiguredReportTemplate's, untouched.
-        const wb = buildStyledMonthlyWorkbook({
+        await downloadWorkbook(buildStyledMonthlyWorkbook({
           orgName: org.name, month, generatedAt: data.generatedAt, data,
           labels: reportLabels, summary: values,
-        });
-        XLSX.writeFile(wb, fileName);
+        }), fileName);
       }
       toast('קובץ ה-Excel הורד');
     } catch (e) {
@@ -238,13 +242,39 @@ export default function Reports() {
     }
   }
 
-  function downloadSnapshot(snapshot: MonthlyReportSnapshot) {
+  /**
+   * The report as a generated PDF: the tenant's logo, the accountant's own grids, and — on a plan
+   * that does not grant `exports.unbranded_pdf` — the InPlace mark across every page.
+   *
+   * A4 LANDSCAPE, matching `@page monthly-report` in src/index.css. The invoice grid carries
+   * eleven columns; portrait would either crush the supplier name or spill the page.
+   */
+  async function exportPdf() {
+    const element = printAreaRef.current;
+    if (!element || fetching || error) return;
+    setBusy(true);
     try {
-      const workbook = buildLockedMonthlyWorkbook({ snapshot });
-      const orgSlug = snapshot.organization_name.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
-      const unitSlug = snapshot.legal_entity_name.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
-      XLSX.writeFile(
-        workbook,
+      const slug = safeFileName(org?.name?.replace(/\s+/g, '-') ?? '', 'inplace');
+      await downloadElementPdf({
+        element,
+        fileName: `${slug}-report-${month}.pdf`,
+        watermark,
+        orientation: 'landscape',
+      });
+      toast('קובץ ה-PDF הורד');
+    } catch (e) {
+      toast(toHebrewError(e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function downloadSnapshot(snapshot: MonthlyReportSnapshot) {
+    try {
+      const orgSlug = safeFileName(snapshot.organization_name.replace(/\s+/g, '-'), '');
+      const unitSlug = safeFileName(snapshot.legal_entity_name.replace(/\s+/g, '-'), '');
+      await downloadWorkbook(
+        buildLockedMonthlyWorkbook({ snapshot }),
         `${orgSlug || 'inplace'}-${unitSlug || 'legal-entity'}-final-report-${snapshot.report_month.slice(0, 7)}-v${snapshot.version}.xlsx`,
       );
       toast(`גרסה ${snapshot.version} הורדה מה-snapshot הנעול`);
@@ -344,7 +374,12 @@ export default function Reports() {
           {/* The native clear affordance emits '' — keep the previous month instead of a broken query. */}
           <input id="monthly-report-month" type="month" className="input w-auto!" value={month} onChange={(e) => { if (e.target.value) setMonth(e.target.value); }} />
           <button className="btn-secondary" disabled={busy || fetching || !!error} title={exportBlockedReason ?? 'הורדת הדוח כקובץ Excel'} onClick={() => void exportExcel()}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={ICON.sm} aria-hidden="true" />} ייצוא Excel</button>
-          <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הדפסת הדוח או שמירה כ-PDF'} onClick={() => window.print()}><Printer size={ICON.sm} aria-hidden="true" /> הדפסה / PDF</button>
+          <button className="btn-secondary" disabled={busy || fetching || !!error} title={exportBlockedReason ?? 'הורדת הדוח כקובץ PDF מעוצב עם הלוגו של הארגון'} onClick={() => void exportPdf()}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileDown size={ICON.sm} aria-hidden="true" />} הורדת PDF</button>
+          {/* Print stays beside the generated file rather than being replaced by it, and the two
+              are not the same artefact: the browser's own print produces SELECTABLE text, which
+              the generated PDF cannot (src/lib/pdf.ts explains why). One is for reading and
+              filing, the other for copying a figure out of. */}
+          <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הדפסת הדוח'} onClick={() => window.print()}><Printer size={ICON.sm} aria-hidden="true" /> הדפסה</button>
         </div>} />
 
       {/* The product summary is a sibling report, reached from here rather than from the main
@@ -495,7 +530,7 @@ export default function Reports() {
                             {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />} סימון כהועבר לרו״ח
                           </button>
                         )}
-                        <button type="button" className="btn-secondary" onClick={() => downloadSnapshot(snapshot)}>
+                        <button type="button" className="btn-secondary" onClick={() => void downloadSnapshot(snapshot)}>
                           <Download size={ICON.sm} aria-hidden="true" /> הורדת גרסה {snapshot.version}
                         </button>
                       </div>
@@ -508,9 +543,12 @@ export default function Reports() {
         </>
       )}
 
-      <div className="print-area monthly-report space-y-4">
-        <div className="hidden print:block">
-          {/* Printed header handed to the accountant — carries the tenant's own name. */}
+      <div ref={printAreaRef} className="print-area monthly-report space-y-4">
+        <div className="print-only">
+          {/* The header handed to the accountant, on paper AND in the generated PDF — carries the
+              tenant's own logo and name. `print-only` rather than `hidden print:block` because
+              html2canvas renders the live DOM: a display:none header is simply absent from the
+              generated file (src/index.css states the rule). */}
           {orgLogoUrl && <img data-testid="monthly-report-logo" src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
           <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}דוח חודשי ${fmtMonth(`${month}-01`)}`}</h2>
           <p className="text-xs">נוצר {fmtDateTime(data.generatedAt)}</p>

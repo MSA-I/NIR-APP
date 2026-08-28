@@ -14,6 +14,7 @@ import { invoiceCheckFingerprint, paymentRequestCheckFingerprint } from './check
 import { openExternalPopup, openReservedPopup } from './popup';
 import { mergeUploadBatchSummary, runUploadBatch } from './uploadBatch';
 import { buildMonthlyWorkbook } from './monthlyReport';
+import { buildWorkbook } from './workbook';
 import * as XLSX from 'xlsx';
 import { readExactCount } from './queryResult';
 
@@ -98,9 +99,10 @@ const reportWorkbook = buildMonthlyWorkbook({
     creditReason: {}, creditStatus: {}, exceptionType: {},
   },
 });
-const reportBytes = XLSX.write(reportWorkbook, { type: 'buffer', bookType: 'xlsx' });
-const reopenedReport = XLSX.read(reportBytes, { type: 'buffer' });
-const invoiceRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(reopenedReport.Sheets['חשבוניות']);
+const reopenedReport = XLSX.read(await buildWorkbook(reportWorkbook), { type: 'array' });
+// `range: 3`: workbook.ts puts the title on row 1, the subtitle on row 2, a blank on row 3, and
+// the column headers on row 4.
+const invoiceRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(reopenedReport.Sheets['חשבוניות'], { range: 3 });
 assert.equal(invoiceRows.length, 1501, 'XLSX must retain every row above the PostgREST cap');
 assert.equal(invoiceRows.reduce((sum, row) => sum + Number(row['סה"כ']), 0), 1501 * 118);
 const reportMeta = XLSX.utils.sheet_to_json<unknown[]>(reopenedReport.Sheets['פרטי הדוח'], { header: 1 });
