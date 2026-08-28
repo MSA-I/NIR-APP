@@ -24,8 +24,14 @@
 
 **מודל נתונים** (`ARCHITECTURE.md:71-77`) — אלה לא המלצות:
 - **אין `payment_id` על חשבונית.** טבלאות הקצאה N:M בלבד (`payment_allocations`, `bank_allocations`). חשבונית משולמת בכמה תשלומים, תשלום מכסה כמה חשבוניות, תשלומים חלקיים, קיזוזי זיכוי.
-- **יתרות מחושבות, לא מאוחסנות** — העיקרון לא השתנה, המנגנון כן: מ-`0022` ‏`invoice_balances`/`supplier_balances` **אינם views** אלא פונקציות `SECURITY DEFINER` מחזירות־קבוצה — `p0_invoice_balance_rows()` ו-`p0_supplier_balance_rows()` (`ARCHITECTURE.md:116-120`).
+- **יתרות מחושבות, לא מאוחסנות, ותמיד בתוך מטבע אחד.** מ־`0218` המשטח הוא
+  `p0_invoice_balance_rows_by_currency()`/`p0_supplier_balance_rows_by_currency()` וה־views
+  `invoice_balances_by_currency`/`supplier_balances_by_currency`. השמות הישנים נמחקו בכוונה;
+  ספק עם ILS ו־USD מחזיר שתי שורות ולעולם לא סכום מאוחד.
 - **snapshot מחירים** ב-`purchase_order_items.unit_price` ברגע ההזמנה; `price_history` שומר כל שינוי.
+- **כל סכום נושא מטבע.** אין המרה ואין מקור שערים חיצוני. תשלום במטבע חוב אחד מחשבון במטבע
+  אחר שומר `amount/currency` לחוב ו־`settlement_amount/settlement_currency` לחשבון; יחס ביניהם
+  נגזר בקריאה ואינו נשמר. דיווח וסיכום נעשים שורה למטבע.
 - **מחיקה רכה בלבד** לרשומות כספיות.
 - כל פעולה רגישה נרשמת ב-`audit_logs` **עם סיבה**.
 

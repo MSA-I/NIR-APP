@@ -1,6 +1,6 @@
 # PLAN — מערכת רב-מטבעית ל-InPlace
 
-עודכן: 28.08.2026 · מצב: `PLAN_ONLY / NOT_STARTED / BLOCKED_ON_ENGLISH (#281)`
+עודכן: 28.08.2026 · מצב: `IMPLEMENTED_LOCAL / P3-P5_VERIFIED / P6_PENDING`
 ענף התכנון: `plan/multi-currency-20260828`, מבוסס על `main` (`c04d37a`). **אין בו קוד מוצר ואין בו מיגרציה.**
 ענף הביצוע: ייפתח כשהאנגלית תגיע לאפס. ראה §9.
 
