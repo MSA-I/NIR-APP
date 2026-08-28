@@ -58,7 +58,7 @@ function monthStart(): string {
 }
 
 export default function ProductPurchaseSummary() {
-  const { errorText, locale } = useT();
+  const { t, errorText, locale } = useT();
   const { org } = useAuth();
   const toast = useToast();
   const [from, setFrom] = useState(monthStart);
@@ -76,7 +76,7 @@ export default function ProductPurchaseSummary() {
 
   const columns: Column<SummaryRow & { id: string }>[] = [
     {
-      key: 'product', header: 'מוצר', sortValue: (r) => r.product_name,
+      key: 'product', header: t('productPurchase.text'), sortValue: (r) => r.product_name,
       render: (r) => (
         <div>
           <div className="font-medium text-ink"><bdi>{r.product_name}</bdi></div>
@@ -84,31 +84,31 @@ export default function ProductPurchaseSummary() {
             {r.unit && <span>{formatUnit(r.unit, locale)}</span>}
             {/* Provenance, not decoration. "Some of this rests on the supplier's word" is the
                 difference between a number you can quote back to them and one you cannot. */}
-            {r.includes_invoice_only_quantity && <span>· חלק מהכמות לפי החשבונית בלבד</span>}
-            {r.includes_unevidenced_quantity && <span>· חלק מהשורות טרם אושרו בראיה</span>}
+            {r.includes_invoice_only_quantity && <span>{t('productPurchase.text_2')}</span>}
+            {r.includes_unevidenced_quantity && <span>{t('productPurchase.text_3')}</span>}
           </div>
         </div>
       ),
     },
     {
-      key: 'canonical', header: 'נרכש בפועל', priority: 1,
+      key: 'canonical', header: t('productPurchase.text_4'), priority: 1,
       sortValue: (r) => r.canonical_qty ?? -1,
       render: (r) => <span className="num font-semibold">{fmtNum(r.canonical_qty)}</span>,
     },
     // Ordered, received and invoiced stay side by side. The rows worth opening are the ones where
     // they disagree, and one merged figure hides exactly that.
-    { key: 'ordered', header: 'הוזמן', sortValue: (r) => r.ordered_qty ?? -1,
+    { key: 'ordered', header: t('productPurchase.text_5'), sortValue: (r) => r.ordered_qty ?? -1,
       render: (r) => <span className="num">{fmtNum(r.ordered_qty)}</span> },
-    { key: 'received', header: 'התקבל', sortValue: (r) => r.received_qty ?? -1,
+    { key: 'received', header: t('productPurchase.text_6'), sortValue: (r) => r.received_qty ?? -1,
       render: (r) => <span className="num">{fmtNum(r.received_qty)}</span> },
-    { key: 'invoiced', header: 'חויב', sortValue: (r) => r.invoiced_qty ?? -1,
+    { key: 'invoiced', header: t('productPurchase.text_7'), sortValue: (r) => r.invoiced_qty ?? -1,
       render: (r) => <span className="num">{fmtNum(r.invoiced_qty)}</span> },
-    { key: 'gross', header: 'הוצאה', sortValue: (r) => r.gross_amount ?? -1,
+    { key: 'gross', header: t('productPurchase.text_8'), sortValue: (r) => r.gross_amount ?? -1,
       render: (r) => <span className="num">{fmtMoneyExact(r.gross_amount)}</span> },
-    { key: 'avg', header: 'מחיר יחידה ממוצע',
+    { key: 'avg', header: t('productPurchase.text_9'),
       sortValue: (r) => r.average_unit_price ?? -1,
       render: (r) => <span className="num">{fmtMoneyExact(r.average_unit_price)}</span> },
-    { key: 'sources', header: 'ספקים · הזמנות · חשבוניות', priority: 3,
+    { key: 'sources', header: t('productPurchase.text_10'), priority: 3,
       sortValue: (r) => r.supplier_count,
       render: (r) => (
         <span className="num text-ink-muted">
@@ -140,22 +140,22 @@ export default function ProductPurchaseSummary() {
       } else {
         const book = XLSX.utils.book_new();
         const exportRows = data.products.map((row) => neutralizeSpreadsheetRow({
-          'מוצר': row.product_name,
-          'יחידה': formatUnit(row.unit, locale),
-          'הוזמן': row.ordered_qty,
-          'התקבל': row.received_qty,
-          'חויב': row.invoiced_qty,
-          'נרכש בפועל': row.canonical_qty,
-          'מספר ספקים': row.supplier_count,
-          'מספר הזמנות': row.order_count,
-          'מספר חשבוניות': row.invoice_count,
-          'הוצאה ברוטו': row.gross_amount,
-          'מחיר יחידה ממוצע': row.average_unit_price,
+          [t('productPurchase.text_11')]: row.product_name,
+          [t('productPurchase.formatUnit')]: formatUnit(row.unit, locale),
+          [t('productPurchase.text_12')]: row.ordered_qty,
+          [t('productPurchase.text_13')]: row.received_qty,
+          [t('productPurchase.text_14')]: row.invoiced_qty,
+          [t('productPurchase.text_15')]: row.canonical_qty,
+          [t('productPurchase.text_16')]: row.supplier_count,
+          [t('productPurchase.text_17')]: row.order_count,
+          [t('productPurchase.text_18')]: row.invoice_count,
+          [t('productPurchase.text_19')]: row.gross_amount,
+          [t('productPurchase.text_20')]: row.average_unit_price,
         }));
-        XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(exportRows), 'רכישות מוצרים');
+        XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(exportRows), t('productPurchase.book_append_sheet'));
         XLSX.writeFile(book, fileName);
       }
-      toast('קובץ ה-Excel הורד');
+      toast(t('productPurchase.toast'));
     } catch (exportError) {
       toast(errorText(exportError), 'error');
     } finally {
@@ -166,22 +166,22 @@ export default function ProductPurchaseSummary() {
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
-      <PageHeader title="סיכום רכישות מוצרים"
-        meta={data ? `${rows.length} מוצרים · ${data.from} עד ${data.to}` : undefined}
+      <PageHeader title={t('productPurchase.title')}
+        meta={data ? t('productPurchase.meta', { count: rows.length, from: data.from, to: data.to }) : undefined}
         actions={<button className="btn-secondary" type="button" onClick={() => void exportExcel()}
           disabled={exporting || loading || !!error || !data || rows.length === 0 || from > to}>
             {exporting ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={ICON.sm} aria-hidden="true" />}
-          {exporting ? 'מכין קובץ…' : 'ייצוא Excel'}
+          {exporting ? t('productPurchase.text_21') : t('productPurchase.text_22')}
         </button>} />
 
       <Card pad={false} className="flex flex-wrap items-end gap-3 p-3">
         <div>
-          <label className="label" htmlFor="summary-from">מתאריך</label>
+          <label className="label" htmlFor="summary-from">{t('productPurchase.text_23')}</label>
           <input id="summary-from" type="date" className="input num" value={from}
             onChange={(event) => setFrom(event.target.value)} />
         </div>
         <div>
-          <label className="label" htmlFor="summary-to">עד תאריך</label>
+          <label className="label" htmlFor="summary-to">{t('productPurchase.text_24')}</label>
           <input id="summary-to" type="date" className="input num" value={to}
             onChange={(event) => setTo(event.target.value)} />
         </div>
@@ -193,8 +193,8 @@ export default function ProductPurchaseSummary() {
         <p className="flex items-start gap-2 text-sm">
           <Info size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
           <span>
-            „נרכש בפועל” נספר <strong>פעם אחת</strong> לכל משלוח: קבלה שהושלמה גוברת על החשבונית,
-            והחשבונית משמשת רק כשאין ראיית קבלה. „הוזמן” אינו נספר כרכישה.
+            <strong>{t('productPurchase.countedOnceRule')}</strong>{' '}
+            {t('productPurchase.countedOnceDetail')}
           </span>
         </p>
       </Note>
@@ -206,9 +206,10 @@ export default function ProductPurchaseSummary() {
           <p className="flex items-start gap-2 text-sm">
             <AlertTriangle size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
             <span>
-              <span className="num">{data.unmapped_invoice_lines}</span> שורות חשבונית בסך
-              <span className="num"> {fmtMoneyExact(data.unmapped_invoice_amount)}</span> לא שויכו
-              לשורת הזמנה, ולכן אינן נספרות באף מוצר. הן ממתינות למיפוי ידני.
+              {t('productPurchase.unmappedLines', {
+                lines: data.unmapped_invoice_lines,
+                amount: fmtMoneyExact(data.unmapped_invoice_amount),
+              })}
             </span>
           </p>
         </Note>
@@ -217,8 +218,8 @@ export default function ProductPurchaseSummary() {
       {loading && !data ? <SkeletonTable cols={8} /> : (
         <DataTable rows={rows} columns={columns} searchable mobile="cards"
           searchFn={(r, q) => r.product_name.toLowerCase().includes(q)}
-          emptyTitle="אין רכישות בטווח שנבחר"
-          emptySubtitle="הזמנות שאינן טיוטה בטווח התאריכים יופיעו כאן, עם מה שהתקבל וחויב מולן." />
+          emptyTitle={t('productPurchase.emptyTitle')}
+          emptySubtitle={t('productPurchase.emptySubtitle')} />
       )}
     </div>
   );
