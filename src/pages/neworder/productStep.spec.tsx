@@ -9,6 +9,7 @@ import userEvent from '@testing-library/user-event';
 
 import ProductStep from './ProductStep';
 import type { Product, SupplierProduct } from '../../lib/types';
+import { LocaleProvider } from '../../lib/i18n/LocaleProvider';
 
 const product = (id: string, name: string): Product => ({
   id, org_id: 'org', name, display_name: null, category_id: null, unit: 'יח׳',
@@ -25,30 +26,43 @@ const offer: SupplierProduct = {
   updated_at: '2026-08-01T00:00:00Z',
 };
 
-function renderStep(cartProductIds: readonly string[], qty = 2) {
+function renderStep(cartProductIds: readonly string[], qty = 2, locale: 'he' | 'en' = 'he') {
   const onAdd = vi.fn();
   const onRemove = vi.fn();
   const onQty = vi.fn();
   render(
-    <ProductStep
-      products={[tomato, cucumber]}
-      categories={[]}
-      offersByProduct={new Map([['p1', [offer]]])}
-      cart={cartProductIds.map((id) => ({ product: id === 'p1' ? tomato : cucumber, qty }))}
-      q="" setQ={() => {}} cat="" setCat={() => {}}
-      onAdd={onAdd}
-      onRemove={onRemove}
-      onQty={onQty}
-      onContinue={() => {}}
-      nextOrderItems={[]}
-      nextOrderBusyId={null}
-      onAddNextOrderItem={() => {}}
-      onDismissNextOrderItem={() => {}}
-      onCreateProduct={null}
-    />,
+    <LocaleProvider initialLocale={locale}>
+      <ProductStep
+        products={[tomato, cucumber]}
+        categories={[]}
+        offersByProduct={new Map([['p1', [offer]]])}
+        cart={cartProductIds.map((id) => ({ product: id === 'p1' ? tomato : cucumber, qty }))}
+        q="" setQ={() => {}} cat="" setCat={() => {}}
+        onAdd={onAdd}
+        onRemove={onRemove}
+        onQty={onQty}
+        onContinue={() => {}}
+        nextOrderItems={[]}
+        nextOrderBusyId={null}
+        onAddNextOrderItem={() => {}}
+        onDismissNextOrderItem={() => {}}
+        onCreateProduct={null}
+      />
+    </LocaleProvider>,
   );
   return { onAdd, onRemove, onQty };
 }
+
+describe('ProductStep — reader language and source product names', () => {
+  it('renders interface copy in English while preserving the catalogue product name', () => {
+    renderStep([], 2, 'en');
+
+    expect(screen.getByRole('heading', { name: 'Select products' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Search for a product' })).toHaveAttribute('placeholder', 'Search products...');
+    expect(screen.getByRole('button', { name: 'Select עגבניות' })).toBeInTheDocument();
+    expect(screen.queryByText('בחירת מוצרים')).toBeNull();
+  });
+});
 
 describe('ProductStep — the row is a real toggle', () => {
   it('a product that is not in the cart is added', async () => {

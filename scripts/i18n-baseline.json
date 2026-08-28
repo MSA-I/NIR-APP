@@ -118,7 +118,6 @@
     "src/pages/Inventory.tsx": 6,
     "src/pages/InvoiceDetail.tsx": 5,
     "src/pages/InvoiceNew.tsx": 1,
-    "src/pages/neworder/ProductStep.tsx": 20,
     "src/pages/neworder/SummaryStep.tsx": 15,
     "src/pages/neworder/SupplierGroupCard.tsx": 13,
     "src/pages/Onboarding.tsx": 14,

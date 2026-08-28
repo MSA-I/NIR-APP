@@ -135,6 +135,14 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   alone; the new boundary spec passed 3/3; the full suite passed 1,718/1,718; `npx tsc --noEmit`
   and `check:jsx-space` passed. `zero` still exits 1 on 543/67, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `ProductStep` batch in this commit.** The pinned count is now 1,061
+  Hebrew line(s) across 97 files; the protected set remains 538 lines in 31 files, so the real
+  remainder is **523 lines in 66 files**. `ProductStep.tsx` is the 60th surface locked at zero.
+  The English component test keeps the product name as catalogue data while translating the
+  action around it. Evidence: the stale-baseline negative control failed on that file alone;
+  the focused suite passed 8/8; the full suite passed 1,719/1,719; `npx tsc --noEmit` and
+  `check:jsx-space` passed. `zero` still exits 1 on 523/66, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

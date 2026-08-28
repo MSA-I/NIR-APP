@@ -5044,6 +5044,35 @@ export const he = {
     uploadProgress: 'התקדמות העלאה — {fileName}',
   },
 
+  productStep: {
+    text: 'נשמרו להזמנה הבאה',
+    text_2: 'אפשר להחזיר את הפריטים לסל בכמות שנשמרה או להתעלם מהם.',
+    productLabel: 'כמות',
+    onAddNextOrderItem: 'הוסף להזמנה',
+    onDismissNextOrderItem: 'התעלם',
+    text_3: 'בחירת מוצרים',
+    selectedProductsOne: 'מוצר נבחר',
+    selectedProductsMany: 'מוצרים נבחרו',
+    aria_label: 'חיפוש מוצר',
+    placeholder: 'חיפוש מוצר...',
+    label: 'סינון לפי קטגוריה',
+    map: 'הכול',
+    text_5: 'לא נמצאו מוצרים',
+    text_6: 'אפשר להוסיף את המוצר עכשיו, לבחור לו ספק ומחיר, ולהמשיך בהזמנה.',
+    text_7: 'בחר לפחות מוצר אחד',
+    readyProductsOne: 'מוצר מוכן · המערכת תפצל את ההזמנה לפי הספק הזול ביותר',
+    readyProductsMany: 'מוצרים מוכנים · המערכת תפצל את ההזמנה לפי הספק הזול לכל מוצר',
+    text_9: 'המשך לספקים',
+    newProduct: 'מוצר חדש',
+    selectProduct: 'בחירת {product}',
+    deselectProduct: 'ביטול בחירת {product}',
+    noSupplier: 'אין ספק',
+    quantityLabel: 'כמות {product}',
+    decrementQuantity: 'הפחתת כמות {product}',
+    incrementQuantity: 'הוספת כמות {product}',
+    newProductForQuery: 'מוצר חדש — {query}',
+  },
+
 } as const;
 
 /**

@@ -82,6 +82,7 @@ const EXTRACTED = [
   'src/components/assistant/AssistantDialog.tsx',
   'src/lib/documentStatus.ts',
   'src/components/UploadCenter.tsx',
+  'src/pages/neworder/ProductStep.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */
