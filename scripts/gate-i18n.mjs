@@ -69,6 +69,8 @@ const EXTRACTED = [
   'src/components/PushSettings.tsx',
   'src/components/SupplierCommunicationCard.tsx',
   'src/lib/supplierLogChanges.ts',
+  'src/components/AttachmentsPanel.tsx',
+  'src/pages/Alerts.tsx',
   'src/components/ReceiptConflictDialog.tsx',
   'src/pages/SupplierProposalReview.tsx',
   'src/pages/neworder/SupplierSplitStep.tsx',
