@@ -46,6 +46,7 @@ const EXTRACTED = [
   'src/components/FileUpload.tsx',
   'src/components/document-review/assessment.ts',
   'src/components/document-review/DocumentAssessmentPanel.tsx',
+  'src/components/ReceiptConflictDialog.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */

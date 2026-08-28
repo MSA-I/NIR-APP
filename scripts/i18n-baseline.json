@@ -65,7 +65,6 @@
     "src/components/QuickCreateSupplier.tsx": 11,
     "src/components/QuickSupplierPicker.tsx": 5,
     "src/components/ReauthModal.tsx": 10,
-    "src/components/ReceiptConflictDialog.tsx": 46,
     "src/components/supplier-metrics.tsx": 9,
     "src/components/SupplierCommunicationCard.tsx": 25,
     "src/components/SupplierPortalCard.tsx": 28,

@@ -630,7 +630,7 @@ export function ReceiveOrder() {
           serverReceiptAt: null,
           serverActorName: '—',
           serverOrderStatus: null,
-          rereadError: t('receiving.text_18'),
+          rereadErrorKey: 'receiving.text_18',
         }));
         if (!cancelled) setConflict(hydratedConflict);
       }

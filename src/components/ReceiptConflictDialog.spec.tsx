@@ -1,3 +1,6 @@
+import { he } from '../lib/i18n/dictionaries/he';
+import type { Dictionary } from '../lib/i18n/dictionaries/he';
+import { translate, type TKey } from '../lib/i18n/t';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
@@ -43,10 +46,17 @@ const state = (over: Partial<ReceiptConflictState> = {}): ReceiptConflictState =
   serverReceiptAt: '2026-08-05T11:02:00Z',
   serverActorName: 'דנה כהן',
   serverOrderStatus: 'partial',
-  rereadError: null,
+  rereadErrorKey: null,
   ...over,
 });
 
+/**
+ * The presentation carries KEYS now. Each assertion resolves one through the HEBREW dictionary
+ * and keeps the claim it always made — that every one of the five rejections answers in words,
+ * and that a local-only resolution says so rather than implying an audit entry that will never
+ * exist. A key-to-key comparison would have passed against an empty dictionary.
+ */
+const say = (key: TKey | null): string => (key ? translate(he as unknown as Dictionary, key) : '');
 describe('conflictPresentation — one decision per rejection code', () => {
   it('offers a per-line human decision only where quantities actually disagree', () => {
     const qty = conflictPresentation('receipt_qty_exceeds_order');
@@ -54,7 +64,7 @@ describe('conflictPresentation — one decision per rejection code', () => {
     expect(qty.resendable).toBe(true);
     expect(qty.requiresExplanation).toBe(true);
     expect(qty.options.map((option) => option.kind)).toEqual(['resend-decided', 'keep-local']);
-    expect(qty.localOnlyNote).toBeNull();
+    expect(qty.localOnlyNoteKey).toBeNull();
   });
 
   it('never offers to overwrite a receipt the server has already closed', () => {
@@ -65,7 +75,7 @@ describe('conflictPresentation — one decision per rejection code', () => {
       expect(presentation.options.map((option) => option.kind)).toEqual(['keep-local', 'discard-local']);
       // A local-only resolution writes nothing to the server, so it says so instead of implying
       // an audit entry that will never exist.
-      expect(presentation.localOnlyNote).toMatch(/[֐-׿]/);
+      expect(say(presentation.localOnlyNoteKey)).toMatch(/[֐-׿]/);
     }
   });
 
@@ -81,8 +91,8 @@ describe('conflictPresentation — one decision per rejection code', () => {
     expect(RECEIPT_CONFLICT_CODES).toHaveLength(5);
     for (const code of RECEIPT_CONFLICT_CODES) {
       const presentation = conflictPresentation(code);
-      expect(presentation.title).toMatch(/[֐-׿]/);
-      expect(presentation.summary).toMatch(/[֐-׿]/);
+      expect(say(presentation.titleKey)).toMatch(/[֐-׿]/);
+      expect(say(presentation.summaryKey)).toMatch(/[֐-׿]/);
       // Losing what the device saw must never be the only way forward.
       expect(presentation.options.some((option) => option.kind === 'keep-local')).toBe(true);
     }
@@ -153,7 +163,7 @@ describe('the dialog', () => {
   it('shows unknown server quantities as — and blocks re-send after a failed re-read', () => {
     render(<ReceiptConflictDialog
       conflict={state({
-        rereadError: 'לא ניתן לקרוא מחדש את נתוני ההזמנה. שליחה מחדש חסומה.',
+        rereadErrorKey: 'receiptConflict.rereadFailed',
         lines: [line({ orderedQty: null, serverReceivedQty: null, serverRemaining: null })],
       })}
       onClose={() => {}}
