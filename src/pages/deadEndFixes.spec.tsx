@@ -111,7 +111,10 @@ describe('focused-form navigation safety', () => {
 
   it('warns before abandoning a dirty new invoice', () => {
     const text = source('InvoiceNew.tsx');
-    expect(text).toContain('יציאה מחשבונית חדשה');
+    // The title moved into the dictionary, so the claim splits: the screen renders that key, and
+    // the key still names the thing a person is about to walk away from.
+    expect(text).toContain("t('invoiceNew.title_3')");
+    expect(he.invoiceNew.title_3).toBe('יציאה מחשבונית חדשה');
     expect(text).toContain("document.addEventListener('click', protectLink, true)");
     expect(text).toContain("window.addEventListener('beforeunload', beforeUnload)");
   });

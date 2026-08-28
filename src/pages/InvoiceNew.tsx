@@ -27,7 +27,7 @@ import {
 } from '../lib/invoiceLinkedContext';
 
 export default function InvoiceNew() {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { org, profile } = useAuth();
@@ -68,7 +68,7 @@ export default function InvoiceNew() {
         supabase.from('documents').select('file_name').eq('id', presetDocument).maybeSingle(),
       ]);
       if (interpretation.error || !interpretation.data) {
-        toast('לא נמצא פירוש למסמך המבוקש. אפשר למלא את החשבונית ידנית.', 'error');
+        toast(t('invoiceNew.toast'), 'error');
         return;
       }
       const src = interpretation.data as { payload: InterpretationContract; suggested_supplier_id: string | null };
@@ -83,6 +83,9 @@ export default function InvoiceNew() {
         vat: draft.vat || s.vat,
         total: draft.total || s.total,
         // A file name is something a bookkeeper can recognise later; the document uuid is not.
+        // The audit reason, and it stays Hebrew on purpose: it is written to `p_reason` in
+        // `audit_logs`, which is a protected class. A log whose wording follows whoever happened
+        // to be reading the screen is a log nobody can search.
         reason: s.reason || (fileName ? `נקלטה מהמסמך הסרוק ${fileName}` : 'נקלטה ממסמך סרוק'),
       }));
       setDirty(true);
@@ -197,7 +200,10 @@ export default function InvoiceNew() {
     setCheckError(null);
     if (!checkFingerprint) { setChecking(false); return; }
     setChecking(true);
-    const t = setTimeout(() => {
+    // `debounce`, not `t`: this file is about to hold the translation function under that name,
+    // and a shadowed `t` inside one effect is the kind of thing that compiles and then renders
+    // a timer handle. `PriceLists.tsx` hit exactly this.
+    const debounce = setTimeout(() => {
       void runInvoiceChecks({
         supplier_id: effectiveSupplierId, invoice_number: f.invoice_number.trim(), invoice_date: f.invoice_date,
         total_amount: Number(f.total), linkedOrderIds,
@@ -206,13 +212,13 @@ export default function InvoiceNew() {
           setChecked({ fingerprint: checkFingerprint, results });
         }
       }).catch(() => {
-        if (checkSequence.current === sequence) setCheckError('בדיקות הכפילות נכשלו. לא ניתן לשמור עד לניסיון חוזר מוצלח.');
+        if (checkSequence.current === sequence) setCheckError(t('invoiceNew.setCheckError'));
       }).finally(() => {
         if (checkSequence.current === sequence) setChecking(false);
       });
     }, 500);
     return () => {
-      clearTimeout(t);
+      clearTimeout(debounce);
       if (checkSequence.current === sequence) checkSequence.current += 1;
     };
   }, [checkFingerprint]);
@@ -223,11 +229,11 @@ export default function InvoiceNew() {
 
   async function save(overrideReason?: string) {
     if (!effectiveSupplierId || !f.invoice_number.trim() || !Number(f.total)) {
-      toast('ספק, מספר חשבונית וסכום הם שדות חובה', 'error');
+      toast(t('invoiceNew.toast_2'), 'error');
       return;
     }
     if (!checkFingerprint || !checksReady) {
-      toast(checkError ?? 'יש להמתין לסיום בדיקות הכפילות', 'error');
+      toast(checkError ?? t('invoiceNew.toast_3'), 'error');
       return;
     }
     setBusy(true);
@@ -240,10 +246,10 @@ export default function InvoiceNew() {
         });
       } catch (checkFailure) {
         setChecked(null);
-        setCheckError('בדיקות הכפילות נכשלו. החשבונית לא נשמרה.');
+        setCheckError(t('invoiceNew.setCheckError_2'));
         throw checkFailure;
       }
-      if (latestFingerprint.current !== checkFingerprint) throw new Error('פרטי החשבונית השתנו במהלך הבדיקה. יש להמתין לבדיקה העדכנית.');
+      if (latestFingerprint.current !== checkFingerprint) throw new Error(t('invoiceNew.Error'));
       setChecked({ fingerprint: checkFingerprint, results: freshChecks });
       setCheckError(null);
       const inv = unwrap(await supabase.rpc('create_invoice', {
@@ -258,12 +264,12 @@ export default function InvoiceNew() {
         p_order_id: linkedOrderId,
         p_receipt_id: linkedReceiptId,
         p_override_reason: overrideReason?.trim() || null,
-        p_reason: reasonOr(f.reason, 'קליטת חשבונית שהתקבלה'),
+        p_reason: reasonOr(f.reason, t('invoiceNew.reasonOr')),
       })) as { invoice_id: string; review_status: string; duplicate_detected: boolean };
 
       toast(inv.review_status === 'investigation'
-        ? 'החשבונית נשמרה כדורשת בירור ונפתח חריג לבדיקה'
-        : 'החשבונית נשמרה');
+        ? t('invoiceNew.text')
+        : t('invoiceNew.text_2'));
       setDirty(false);
       navigate(`/invoices/${inv.invoice_id}`);
     } catch (e) {
@@ -278,49 +284,49 @@ export default function InvoiceNew() {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <PageHeader title="חשבונית חדשה" breadcrumbs={<Breadcrumbs items={[{ label: 'חשבוניות', to: '/invoices' }, { label: 'חשבונית חדשה' }]} />} />
+      <PageHeader title={t('invoiceNew.title')} breadcrumbs={<Breadcrumbs items={[{ label: t('invoiceNew.text_3'), to: '/invoices' }, { label: t('invoiceNew.text_4') }]} />} />
       {linkedContext && (
         <section className="note-info space-y-3" aria-labelledby="invoice-linked-context-title" data-testid="invoice-linked-context">
           <div>
-            <h2 id="invoice-linked-context-title" className="font-semibold text-ink">רשומות שיקושרו לחשבונית</h2>
+            <h2 id="invoice-linked-context-title" className="font-semibold text-ink">{t('invoiceNew.text_5')}</h2>
             <p className="mt-1 text-sm">
-              החשבונית החדשה תקושר {linkedContext.orderId && linkedContext.receiptId
-                ? 'להזמנת הרכש ולקבלת הסחורה הבאות'
-                : linkedContext.orderId ? 'להזמנת הרכש הבאה' : 'לקבלת הסחורה הבאה'} לאחר השמירה.
+              {t('invoiceNew.willBeLinkedLead')}{' '}{linkedContext.orderId && linkedContext.receiptId
+                ? t('invoiceNew.text_6')
+                : linkedContext.orderId ? t('invoiceNew.text_7') : t('invoiceNew.text_8')}{' '}{t('invoiceNew.willBeLinkedTail')}
             </p>
           </div>
           <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-ink-muted">ספק</dt>
+              <dt className="text-ink-muted">{t('invoiceNew.text_9')}</dt>
               <dd className="mt-0.5 font-medium" data-testid="invoice-linked-supplier">{linkedContext.supplier.name}</dd>
             </div>
             <div>
-              <dt className="text-ink-muted">{linkedContext.orderId ? 'הזמנת רכש' : 'הזמנת המקור של הקבלה'}</dt>
+              <dt className="text-ink-muted">{linkedContext.orderId ? t('invoiceNew.text_10') : t('invoiceNew.text_11')}</dt>
               <dd className="mt-0.5 flex flex-wrap items-center gap-2">
                 {canOpenProcurement
-                  ? <Link className="link" to={`/orders/${linkedContext.order.id}`} data-testid="invoice-linked-order">הזמנה <span className="num">#{linkedContext.order.number}</span></Link>
-                  : <span data-testid="invoice-linked-order">הזמנה <span className="num">#{linkedContext.order.number}</span></span>}
+                  ? <Link className="link" to={`/orders/${linkedContext.order.id}`} data-testid="invoice-linked-order">{t('invoiceNew.orderWord')} <span className="num">#{linkedContext.order.number}</span></Link>
+                  : <span data-testid="invoice-linked-order">{t('invoiceNew.text_12')} <span className="num">#{linkedContext.order.number}</span></span>}
                 <StatusBadge meta={PO_STATUS[linkedContext.order.status]} />
               </dd>
             </div>
             {linkedContext.receipt && (
               <div>
-                <dt className="text-ink-muted">קבלת סחורה</dt>
+                <dt className="text-ink-muted">{t('invoiceNew.text_13')}</dt>
                 <dd className="mt-0.5 flex flex-wrap items-center gap-2 font-medium">
                   {canOpenProcurement
                     ? <Link
                         className="link num"
                         to={`/receipts/${linkedContext.receipt.id}`}
                         data-testid="invoice-linked-receipt"
-                        aria-label={`צפייה בקבלה #${linkedContext.receipt.number}`}
-                      >קבלה #{linkedContext.receipt.number}</Link>
-                    : <span data-testid="invoice-linked-receipt">קבלה <span className="num">#{linkedContext.receipt.number}</span></span>}
+                        aria-label={t('invoiceNew.viewReceiptLabel', { number: linkedContext.receipt.number })}
+                      >{t('invoiceNew.receiptWord')} #{linkedContext.receipt.number}</Link>
+                    : <span data-testid="invoice-linked-receipt">{t('invoiceNew.text_14')} <span className="num">#{linkedContext.receipt.number}</span></span>}
                 </dd>
               </div>
             )}
             {linkedContext.receipt && (
               <div>
-                <dt className="text-ink-muted">תאריך קבלה</dt>
+                <dt className="text-ink-muted">{t('invoiceNew.text_15')}</dt>
                 <dd className="mt-0.5 num">{fmtDate(linkedContext.receipt.received_at)}</dd>
               </div>
             )}
@@ -330,7 +336,7 @@ export default function InvoiceNew() {
       {linksRequested && linkResolution?.status === 'invalid' && (
         <div data-testid="invoice-linked-context-unavailable">
           <Note tone="await" role="status">
-            לא ניתן לטעון את רשומות המקור. אפשר להמשיך ולשמור את החשבונית ללא קישור.
+            {t('invoiceNew.text_16')}
           </Note>
         </div>
       )}
@@ -339,25 +345,25 @@ export default function InvoiceNew() {
         <div className="sm:col-span-2">
           {/* `disabled` when the invoice is linked covers the create button too: a supplier the
               linked order already decided is not one the user may add to here. */}
-          <SupplierSelectField picker={supplierPicker} id="invoice-new-supplier" label="ספק *"
-            placeholder="בחר ספק..." value={effectiveSupplierId} disabled={!!linkedContext}
+          <SupplierSelectField picker={supplierPicker} id="invoice-new-supplier" label={t('invoiceNew.label')}
+            placeholder={t('invoiceNew.placeholder')} value={effectiveSupplierId} disabled={!!linkedContext}
             describedBy={linkedContext ? 'invoice-linked-supplier-help' : undefined} />
-          {linkedContext && <div id="invoice-linked-supplier-help" className="mt-1 text-xs text-ink-muted">הספק נקבע לפי הרשומות המקושרות ואינו ניתן לשינוי כאן.</div>}
+          {linkedContext && <div id="invoice-linked-supplier-help" className="mt-1 text-xs text-ink-muted">{t('invoiceNew.text_17')}</div>}
         </div>
-        <div><label className="label" htmlFor="invoice-new-number">מספר חשבונית *</label><input id="invoice-new-number" className="input num" dir="ltr" value={f.invoice_number} onChange={(e) => set('invoice_number', e.target.value)} /></div>
-        <div><label className="label" htmlFor="invoice-new-date">תאריך חשבונית *</label><input id="invoice-new-date" type="date" className="input" value={f.invoice_date} onChange={(e) => set('invoice_date', e.target.value)} /></div>
-        <div><label className="label" htmlFor="invoice-new-before-vat">סכום לפני מע״מ</label><input id="invoice-new-before-vat" type="number" step="0.01" className="input num" value={f.before_vat} onChange={(e) => onBeforeVat(e.target.value)} /></div>
-        <div><label className="label" htmlFor="invoice-new-vat">מע״מ ({org?.vat_rate ?? 18}%)</label><input id="invoice-new-vat" type="number" step="0.01" className="input num" value={f.vat} onChange={(e) => set('vat', e.target.value)} /></div>
-        <div><label className="label" htmlFor="invoice-new-total">סה״כ לתשלום *</label><input id="invoice-new-total" type="number" step="0.01" className="input num font-semibold" value={f.total} onChange={(e) => onTotal(e.target.value)} /></div>
-        <div className="sm:col-span-2"><label className="label" htmlFor="invoice-new-notes">הערות</label><textarea id="invoice-new-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
-        <div className="sm:col-span-2"><label className="label" htmlFor="invoice-new-reason">סיבת קליטת החשבונית *</label><input id="invoice-new-reason" className="input" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-new-number">{t('invoiceNew.set')}</label><input id="invoice-new-number" className="input num" dir="ltr" value={f.invoice_number} onChange={(e) => set('invoice_number', e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-new-date">{t('invoiceNew.set_2')}</label><input id="invoice-new-date" type="date" className="input" value={f.invoice_date} onChange={(e) => set('invoice_date', e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-new-before-vat">{t('invoiceNew.onBeforeVat')}</label><input id="invoice-new-before-vat" type="number" step="0.01" className="input num" value={f.before_vat} onChange={(e) => onBeforeVat(e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-new-vat">{t('invoiceNew.vatLabel', { rate: org?.vat_rate ?? 18 })}</label><input id="invoice-new-vat" type="number" step="0.01" className="input num" value={f.vat} onChange={(e) => set('vat', e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-new-total">{t('invoiceNew.onTotal')}</label><input id="invoice-new-total" type="number" step="0.01" className="input num font-semibold" value={f.total} onChange={(e) => onTotal(e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="invoice-new-notes">{t('invoiceNew.set_3')}</label><textarea id="invoice-new-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="invoice-new-reason">{t('invoiceNew.set_4')}</label><input id="invoice-new-reason" className="input" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>
       </Card>
 
       {(checks || checking || checkError) && (
         <Card>
           <div className="section-title mb-3 flex items-center gap-2">
-            בדיקות אוטומטיות
-            {checking && <span role="status" className="flex items-center gap-1 text-sm text-ink-muted"><Loader2 size={ICON.sm} className="animate-spin text-ink-faint" aria-hidden="true" /> בודק…</span>}
+            {t('invoiceNew.text_18')}
+            {checking && <span role="status" className="flex items-center gap-1 text-sm text-ink-muted"><Loader2 size={ICON.sm} className="animate-spin text-ink-faint" aria-hidden="true" /> {t('invoiceNew.text_19')}</span>}
           </div>
           {checkError && <Note tone="alert">{checkError}</Note>}
           {checks && <CheckList checks={checks} />}
@@ -365,28 +371,28 @@ export default function InvoiceNew() {
       )}
 
       <div className="flex justify-end gap-2">
-        <button className="btn-secondary" onClick={() => dirty ? setLeaveTarget('/invoices') : navigate('/invoices')}>ביטול</button>
+        <button className="btn-secondary" onClick={() => dirty ? setLeaveTarget('/invoices') : navigate('/invoices')}>{t('invoiceNew.setLeaveTarget')}</button>
         {hasCritical ? (
           <>
             <button className="btn-secondary" disabled={busy || !checksReady} onClick={() => void save()}>
-              {busy && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />} שמירה כ״דורשת בירור״
+              {busy && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />} {t('invoiceNew.saveAsNeedsReview')}
             </button>
             <button className="btn-danger" disabled={busy || !checksReady} onClick={() => setOverrideOpen(true)}>
-              <ShieldAlert size={ICON.sm} aria-hidden="true" /> אישור למרות האזהרה
+              <ShieldAlert size={ICON.sm} aria-hidden="true" /> {t('invoiceNew.approveDespiteWarning')}
             </button>
           </>
         ) : (
           <button className="btn-primary" disabled={busy || !checksReady} onClick={() => void save()}>
-            {busy && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />} שמירת חשבונית
+            {busy && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />} {t('invoiceNew.saveInvoice')}
           </button>
         )}
       </div>
 
       <ConfirmDialog open={overrideOpen} onClose={() => setOverrideOpen(false)}
         onConfirm={(reason) => { setOverrideOpen(false); void save(reason); }}
-        title="אישור חריגה — חשד לכפילות"
-        message="נמצאו ממצאים קריטיים. אישור ישמור את החשבונית כרגילה למרות האזהרות. הפעולה והסיבה יתועדו ביומן הביקורת."
-        confirmLabel="אישור ושמירה" danger requireReason busy={busy} />
+        title={t('invoiceNew.title_2')}
+        message={t('invoiceNew.message')}
+        confirmLabel={t('invoiceNew.confirmLabel')} danger requireReason busy={busy} />
       <ConfirmDialog open={leaveTarget !== null} onClose={() => setLeaveTarget(null)}
         onConfirm={() => {
           const target = leaveTarget;
@@ -394,9 +400,9 @@ export default function InvoiceNew() {
           setDirty(false);
           if (target) navigate(target);
         }}
-        title="יציאה מחשבונית חדשה"
-        message="הנתונים שהוזנו בחשבונית עדיין לא נשמרו. יציאה מהמסך תמחק אותם."
-        confirmLabel="יציאה ללא שמירה" danger busy={busy} />
+        title={t('invoiceNew.title_3')}
+        message={t('invoiceNew.message_2')}
+        confirmLabel={t('invoiceNew.confirmLabel_2')} danger busy={busy} />
     </div>
   );
 }
