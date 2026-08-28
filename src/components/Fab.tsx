@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { Link, useLocation } from 'react-router';
 import type { CSSProperties } from 'react';
 import { Loader2 } from 'lucide-react';
@@ -34,6 +35,7 @@ export default function Fab({ inboxCount = null }: {
    */
   inboxCount?: number | null;
 } = {}) {
+  const { t } = useT();
   const { profile, organizationAccess = ACTIVE_ORGANIZATION_ACCESS } = useAuth();
   const { pathname } = useLocation();
   const { openCapture, element, busy, retryCount } = useQuickCapture();
@@ -72,7 +74,8 @@ export default function Fab({ inboxCount = null }: {
       <div role="group" aria-label="קיצורי דרך ופעולות"
         style={{ '--mobile-action-count': mobileActions.length } as CSSProperties}
         className="mobile-action-bar fixed z-40 border-t border-line-soft bg-topbar/75 backdrop-blur-sm shadow-menu no-print lg:hidden">
-        {mobileActions.map(({ key, label, icon: Icon, kind, to }) => {
+        {mobileActions.map(({ key, labelKey, icon: Icon, kind, to }) => {
+          const label = t(labelKey);
           if (kind === 'capture') {
             return (
               <button key={key} type="button" className={`${restClass} mobile-action-raised`} data-quick-action-key={key}

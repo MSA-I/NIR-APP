@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_SECTIONS, drawerSectionsForRole, footerItemsForRole, pageTitleFor, sectionsForRole } from './Layout';
+import { NAV_SECTIONS, drawerSectionsForRole, footerItemsForRole, pageTitleKeyFor, sectionsForRole } from './Layout';
+import { he } from '../lib/i18n/dictionaries/he';
+
+/** The words a key stands for, so a claim about COLLIDING LABELS stays a claim about words. */
+const say = (key: string) => (he.nav as Record<string, string>)[key.replace(/^nav\./, '')];
 import { isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
 import type { ActiveRole } from '../lib/types';
 import { routePresentationTitle, STATIC_ROUTE_TITLES } from '../lib/routePresentation';
@@ -86,8 +90,8 @@ describe('מעטפת הניווט', () => {
 
   it('כל תווית ניווט נגזרת משם המסך הקנוני', () => {
     for (const item of NAV_SECTIONS.flatMap((section) => section.items)) {
-      expect(item.label).toBe(routePresentationTitle(item.to));
-      expect(pageTitleFor(item.to)).toBe(item.label);
+      expect(item.labelKey).toBe(routePresentationTitle(item.to));
+      expect(pageTitleKeyFor(item.to)).toBe(item.labelKey);
     }
   });
 
@@ -124,18 +128,21 @@ describe('סרגל הפעולות המהירות במובייל', () => {
    * named them apart; only this bar was writing its own labels.
    */
   it('תווית בסרגל היא שם המסך הקנוני, ואין שתי מילים זהות לשני מסכים', () => {
-    const SHORT_FORMS: Record<string, string> = { '/documents': 'מסמכים' };
+    const SHORT_FORMS: Record<string, string> = { '/documents': 'nav.barDocuments' };
     for (const action of QUICK_ACTION_LINKS) {
       const path = action.to!.split('?')[0];
-      expect(action.label).toBe(SHORT_FORMS[path] ?? routePresentationTitle(path));
+      expect(action.labelKey).toBe(SHORT_FORMS[path] ?? routePresentationTitle(path));
     }
+    // The short form is a DIFFERENT word from the catalogue's, not the same one under another key.
+    expect(say('nav.barDocuments')).toBe('מסמכים');
+    expect(say(routePresentationTitle('/documents')!)).not.toBe(say('nav.barDocuments'));
     // The two payment screens must not collide anywhere a single role can see both. One label may
     // repeat across surfaces — that is the same screen named twice — but never over two routes.
     expect(routePresentationTitle('/pay')).not.toBe(routePresentationTitle('/payments'));
     const byLabel = new Map<string, Set<string>>();
     for (const { label, to } of [
-      ...quickActionsFor('accountant').filter((a) => a.kind === 'link').map((a) => ({ label: a.label, to: a.to!.split('?')[0] })),
-      ...sectionsForRole('accountant').flatMap((s) => s.items).map((i) => ({ label: i.label, to: i.to })),
+      ...quickActionsFor('accountant').filter((a) => a.kind === 'link').map((a) => ({ label: say(a.labelKey), to: a.to!.split('?')[0] })),
+      ...sectionsForRole('accountant').flatMap((s) => s.items).map((i) => ({ label: say(i.labelKey), to: i.to })),
     ]) {
       byLabel.set(label, (byLabel.get(label) ?? new Set()).add(to));
     }

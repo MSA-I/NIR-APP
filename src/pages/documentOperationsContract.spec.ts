@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../components/ui';
 import { NAV_SECTIONS } from '../components/Layout';
+import { he } from '../lib/i18n/dictionaries/he';
 import {
   attemptStatusMeta,
   recoveryInvokeErrorMessage,
@@ -99,7 +100,10 @@ describe('document control capability and UX contract', () => {
     expect(app).toContain('path="/documents/operations" element={<Guard roles={[\'owner\']}><DocumentOperations /></Guard>}');
     const navigation = NAV_SECTIONS.flatMap((section) => section.items)
       .find((item) => item.to === '/documents/operations');
-    expect(navigation).toMatchObject({ label: 'בקרת מסמכים', roles: ['owner'] });
+    // The item carries a key; the claim is still about the words, so it resolves through the
+    // dictionary rather than comparing key to key — which would pass whatever the words were.
+    expect(navigation).toMatchObject({ roles: ['owner'] });
+    expect(he.nav[navigation!.labelKey.replace(/^nav./, '') as keyof typeof he.nav]).toBe('בקרת מסמכים');
     expect(app).not.toContain('roles={[\'office\']}><DocumentOperations');
     expect(app).not.toContain('roles={[\'accountant\']}><DocumentOperations');
   });

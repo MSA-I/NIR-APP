@@ -7,6 +7,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {} }));
 import { financialBankStatusCounts, financialDueExposure } from './FinancialSupplier';
 import { NAV_SECTIONS } from '../components/Layout';
 import { APP_ROUTE_POLICY } from '../lib/routePolicy';
+import { he } from '../lib/i18n/dictionaries/he';
 
 const source = readFileSync(join(process.cwd(), 'src', 'pages', 'FinancialSupplier.tsx'), 'utf8');
 const app = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
@@ -61,7 +62,8 @@ describe('financial supplier capability boundary', () => {
     expect(app).toContain('roles={APP_ROUTE_POLICY.analytics.roles}');
     const navigation = NAV_SECTIONS.flatMap((section) => section.items)
       .find((item) => item.to === '/analytics');
-    expect(navigation).toMatchObject({ label: 'ביצועי ספקים', roles: ['owner', 'office'] });
+    expect(navigation).toMatchObject({ roles: ['owner', 'office'] });
+    expect(he.nav[navigation!.labelKey.replace(/^nav./, '') as keyof typeof he.nav]).toBe('ביצועי ספקים');
     expect(navigation?.roles).not.toContain('accountant');
   });
 

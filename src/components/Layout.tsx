@@ -22,7 +22,7 @@ import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/organizationAccess';
 import { isRouteFamilyActive, sectionOf } from '../lib/quickActions';
 import { routeBackPresentation, routePresentationTitle, staticRouteTitle, type StaticRoutePath } from '../lib/routePresentation';
 
-export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: ActiveRole[] }
+export interface NavItem { to: string; labelKey: TKey; icon: typeof LayoutDashboard; roles: ActiveRole[] }
 export interface NavSection { section: string; items: NavItem[]; collapsible?: boolean }
 
 /* "The menu is open" is a place, not a component state (owner, 19.08.2026: the iPhone back gesture
@@ -72,7 +72,7 @@ function useGlowPointer() {
 }
 
 function navItem(to: StaticRoutePath, icon: typeof LayoutDashboard, roles: ActiveRole[]): NavItem {
-  return { to, label: staticRouteTitle(to), icon, roles };
+  return { to, labelKey: staticRouteTitle(to), icon, roles };
 }
 
 /* T7.2 pill navigation: the floating pill is one slim row of TEXT items (the reference's), and
@@ -246,8 +246,15 @@ export function drawerSectionsForRole(role: ActiveRole | undefined): NavSection[
    destination renders as a plain link rather than a disclosure (DESIGN.md:507, "דיסקלוזר מעל פריט
    אחד הוא דלת עם מכסה"), which `topNavGroup`'s caller below decides and the drawer inherits. */
 
-export function pageTitleFor(pathname: string): string {
-  return routePresentationTitle(pathname) ?? APP_NAME;
+/**
+ * The browser title, as a KEY or the product name.
+ *
+ * Returns `null` for a route the catalogue does not name, so the caller decides — `APP_NAME` is
+ * the product's own name and is not translated, which makes it the one value here that must not
+ * go through `t`.
+ */
+export function pageTitleKeyFor(pathname: string): TKey | null {
+  return routePresentationTitle(pathname);
 }
 
 export default function Layout() {
@@ -300,7 +307,8 @@ export default function Layout() {
   const orgLogoUrl = org?.logo_path
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
     : null;
-  const currentTitle = pageTitleFor(location.pathname);
+  const currentTitleKey = pageTitleKeyFor(location.pathname);
+  const currentTitle = currentTitleKey ? t(currentTitleKey) : APP_NAME;
   const routeBack = routeBackPresentation(location.pathname);
 
   /**
@@ -550,13 +558,14 @@ export default function Layout() {
     const section = active ? sectionOf(item.to) : null;
     // The table holds a KEY (module scope cannot call a hook); it is resolved here, where one has.
     const shortKey = NAV_SHORT_LABELS[item.to];
-    const pillLabel = shortKey ? t(shortKey as TKey) : item.label;
+    const itemLabel = t(item.labelKey);
+    const pillLabel = shortKey ? t(shortKey as TKey) : itemLabel;
     return (
       <Link key={item.to} to={item.to} className={linkCls(active, surface)} aria-current={active ? 'page' : undefined}
-        data-section={section ?? undefined} title={surface === 'pill' && pillLabel !== item.label ? item.label : undefined}
+        data-section={section ?? undefined} title={surface === 'pill' && pillLabel !== itemLabel ? itemLabel : undefined}
         onClick={() => setOpenGroup(null)}>
         {surface !== 'pill' && <item.icon size={ICON.md} aria-hidden="true" />}
-        <span className="min-w-0 flex-1 truncate">{surface === 'pill' ? pillLabel : item.label}</span>
+        <span className="min-w-0 flex-1 truncate">{surface === 'pill' ? pillLabel : itemLabel}</span>
         {item.to === '/documents' && inboxCount != null && inboxCount > 0 && (
           <span className="badge num bg-action-soft text-action-on-soft ms-auto">{inboxCount}</span>
         )}
@@ -945,7 +954,7 @@ export default function Layout() {
                 measures zero, so the name starts flush against the menu button. */}
             <div data-shell-lead>
               {routeBack && (
-                <Link to={routeBack.to} aria-label={routeBack.label} title={routeBack.label}
+                <Link to={routeBack.to} aria-label={t(routeBack.label)} title={t(routeBack.label)}
                   className="btn-ghost btn-icon rounded-full">
                   <ArrowRight size={ICON.xl} aria-hidden="true" />
                 </Link>

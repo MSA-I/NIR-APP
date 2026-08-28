@@ -31,6 +31,7 @@ const EXTRACTED = [
   'src/pages/Settings.tsx',
   'src/pages/Reports.tsx',
   'src/pages/ConsolidatedInvoices.tsx',
+  'src/lib/routePresentation.ts',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */

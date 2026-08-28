@@ -8,6 +8,17 @@ import {
   STATIC_ROUTE_DESCRIPTIONS,
   STATIC_ROUTE_TITLES,
 } from './routePresentation';
+import { he } from './i18n/dictionaries/he';
+
+/**
+ * The words a key stands for.
+ *
+ * The catalogue holds keys now, so every expectation below could have been rewritten to compare
+ * key against key — and would then pass whatever the dictionary said. Resolving through `he`
+ * keeps each one naming the exact sentence a Hebrew reader sees, which is what these tests were
+ * written to pin.
+ */
+const say = (key: string | null) => (key === null ? null : (he.nav as Record<string, string>)[key.replace(/^nav./, '')]);
 
 const DYNAMIC_ROUTES = [
   ['/finance/suppliers/supplier-1', 'כרטיס ספק פיננסי'],
@@ -22,15 +33,16 @@ const DYNAMIC_ROUTES = [
 describe('קטלוג שמות מסכים', () => {
   it.each(Object.entries(STATIC_ROUTE_TITLES))('%s מקבל שם קנוני', (path, title) => {
     expect(routePresentationTitle(path)).toBe(title);
+    expect(say(title)).toBeTruthy();
   });
 
   it.each(DYNAMIC_ROUTES)('%s מקבל שם קנוני', (path, title) => {
-    expect(routePresentationTitle(path)).toBe(title);
+    expect(say(routePresentationTitle(path))).toBe(title);
   });
 
   it('מכסה את שני מסלולי ההקשר שלא הופיעו בניווט', () => {
-    expect(routePresentationTitle('/reports/products')).toBe('סיכום רכישות מוצרים');
-    expect(routePresentationTitle('/finance/suppliers/supplier-1')).toBe('כרטיס ספק פיננסי');
+    expect(say(routePresentationTitle('/reports/products'))).toBe('סיכום רכישות מוצרים');
+    expect(say(routePresentationTitle('/finance/suppliers/supplier-1'))).toBe('כרטיס ספק פיננסי');
   });
 
   it('אינו ממציא שם למסלול לא מוכר', () => {
@@ -46,7 +58,9 @@ describe('קטלוג שמות מסכים', () => {
     ['/receipts/receipt-1', '/receiving', 'חזרה לקבלת סחורה'],
     ['/documents/document-1/review', '/documents', 'חזרה למסמכים'],
   ])('%s מקבל יעד אב קבוע', (path, to, label) => {
-    expect(routeBackPresentation(path)).toEqual({ to, label });
+    const back = routeBackPresentation(path);
+    expect(back?.to).toBe(to);
+    expect(say(back?.label ?? null)).toBe(label);
   });
 
   it('אינו מציג חזרה במסך רשימה ראשי', () => {
