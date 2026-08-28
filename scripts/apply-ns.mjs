@@ -31,7 +31,33 @@ for (const [path, table] of [['src/lib/i18n/dictionaries/he.ts', he], ['src/lib/
   const block = Object.entries(table).map(([k, v]) => `    ${k}: ${lit(v)},`);
   if (at >= 0) {
     const close = lines.indexOf('  },', at);
-    const existing = new Set(lines.slice(at + 1, close).map((l) => l.trim().split(':')[0]));
+    // A key already in the namespace is a COLLISION, not a duplicate to skip past.
+    //
+    // `extract.mjs` numbers its keys `text_1, text_2, …` from one on every run, so a second
+    // extraction into a namespace that already has `text_30` produces a different `text_30`.
+    // Skipping it silently — what this did — left the screen rendering the OLD sentence: the
+    // proposals table asked for "שורות מוצעות" and got "ספק", a word from an unrelated panel.
+    // Nothing failed. tsc was clean, because both are strings. Only a test that named the literal
+    // caught it, and only on the surfaces that happen to have one.
+    //
+    // An identical value is not a collision; re-running the same extraction is allowed to be a
+    // no-op. A different value under a taken name stops the run.
+    const existing = new Map(lines.slice(at + 1, close)
+      .map((l) => l.trim())
+      .filter((l) => /^\w+:/.test(l))
+      .map((l) => [l.split(':')[0], l.slice(l.indexOf(':') + 1).trim().replace(/,$/, '')]));
+    const clashes = Object.entries(table)
+      .filter(([k, v]) => existing.has(k) && existing.get(k) !== lit(v))
+      .map(([k, v]) => `  ${k}\n    is:   ${existing.get(k)}\n    want: ${lit(v)}`);
+    if (clashes.length) {
+      console.error(
+        `${clashes.length} key(s) already mean something else under \`${ns}\` in ${path}:\n`
+        + `${clashes.join('\n')}\n\n`
+        + 'Rename them, or extract into a namespace of this surface\'s own. Merging them would '
+        + 'silently repoint live screens at the older sentence.',
+      );
+      process.exit(1);
+    }
     lines.splice(close, 0, ...block.filter((l) => !existing.has(l.trim().split(':')[0])));
   } else {
     // Insert before the closing brace of the object literal, keeping namespaces in one block.

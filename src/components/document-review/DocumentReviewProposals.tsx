@@ -39,9 +39,9 @@ interface DocumentReviewProposalsProps {
   onRefetch: () => Promise<boolean>;
 }
 
-function valueText(value: string | number | boolean | null): string {
-  if (value === null) return 'לא זוהה';
-  if (typeof value === 'boolean') return value ? 'כן' : 'לא';
+function valueText(value: string | number | boolean | null, t: TFn): string {
+  if (value === null) return t('docReview.valueNotRecognised');
+  if (typeof value === 'boolean') return value ? t('docReview.valueYes') : t('docReview.valueNo');
   return String(value);
 }
 
@@ -51,10 +51,14 @@ function annotationTarget(snapshot: ReviewSnapshot, annotation: DocumentAnnotati
     const text = block
       ? resolvedText(block.text, latestCorrections(snapshot.reviewCorrections), 'block', block.id).text
       : null;
-    return block ? `קטע בעמוד ${block.page}: ${text || 'ללא טקסט'}` : `קטע ${annotation.target_id}`;
+    return block
+      ? t('docReview.blockOnPage', { page: block.page, text: text || t('docReview.blockNoText') })
+      : t('docReview.blockRef', { id: annotation.target_id });
   }
   const mark = snapshot.extraction?.payload.marks.find(({ id }) => id === annotation.target_id);
-  return mark ? `${t(MARK_KIND_KEYS[mark.kind])} בעמוד ${mark.page}` : `סימון ${annotation.target_id}`;
+  return mark
+    ? t('docReview.markOnPage', { mark: t(MARK_KIND_KEYS[mark.kind]), page: mark.page })
+    : t('docReview.markRef', { id: annotation.target_id });
 }
 
 /**
@@ -68,7 +72,9 @@ function annotationTarget(snapshot: ReviewSnapshot, annotation: DocumentAnnotati
  */
 function ruleApplicationTarget(snapshot: ReviewSnapshot, targetId: string, t: TFn): string {
   const mark = snapshot.extraction?.payload.marks.find(({ id }) => id === targetId);
-  return mark ? `${t(MARK_KIND_KEYS[mark.kind])} בעמוד ${mark.page}` : 'סימון שאינו מופיע בחילוץ הנוכחי';
+  return mark
+    ? t('docReview.markOnPage', { mark: t(MARK_KIND_KEYS[mark.kind]), page: mark.page })
+    : t('docReview.markNotInExtraction');
 }
 
 function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
@@ -103,7 +109,7 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
 
   async function saveCorrection() {
     if (selectedType === effectiveType) {
-      toast('יש לבחור סוג מסמך שונה.', 'error');
+      toast(t('docReview.toast'), 'error');
       return;
     }
     setBusy(true);
@@ -120,16 +126,16 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
       });
       if (result.error) throw new Error(result.error.message);
       const refreshed = await onRefetch();
-      const success = `סוג המסמך תוקן ל${t(DOCUMENT_TYPE_KEYS[selectedType])}`;
+      const success = t('docReview.typeCorrectedTo', { type: t(DOCUMENT_TYPE_KEYS[selectedType]) });
       if (refreshed) toast(success);
-      else toast(`${success}, אך רענון המסך נכשל. יש לרענן ידנית לפני פעולה נוספת.`, 'error');
+      else toast(t('docReview.refreshFailedBeforeMore', { message: success }), 'error');
       setReason('');
       setChosenType(null);
       setCorrecting(false);
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error);
       if (/document_type_review_(revision_conflict|context_changed)|document_review_status_invalid/i.test(raw)) {
-        toast('הקשר הבדיקה השתנה מאז פתיחת הטופס. הנתונים ירועננו; יש לבדוק ולנסות שוב.', 'error');
+        toast(t('docReview.toast_2'), 'error');
         await onRefetch();
       } else {
         toast(errorText(error), 'error');
@@ -143,28 +149,28 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
     <div className="card card-pad" aria-labelledby="document-type-review-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 id="document-type-review-title" className="section-title">סוג המסמך</h3>
-          <p className="mt-1 text-sm text-ink-muted">המערכת מסווגת את המסמך אוטומטית. אין צורך באישור ידני.</p>
+          <h3 id="document-type-review-title" className="section-title">{t('docReview.text')}</h3>
+          <p className="mt-1 text-sm text-ink-muted">{t('docReview.text_2')}</p>
         </div>
-        <span className={manuallyCorrected ? 'badge-info' : 'badge-done'}>{manuallyCorrected ? 'תוקן ידנית' : 'סווג אוטומטית'}</span>
+        <span className={manuallyCorrected ? 'badge-info' : 'badge-done'}>{manuallyCorrected ? t('docReview.text_3') : t('docReview.text_4')}</span>
       </div>
 
       <dl className="mt-4 rounded-lg bg-surface-sunken p-3" aria-live="polite">
-        <dt className="text-sm font-medium text-ink-soft">הסיווג הפעיל</dt>
+        <dt className="text-sm font-medium text-ink-soft">{t('docReview.text_5')}</dt>
         <dd className="mt-1 text-ink-body">{t(DOCUMENT_TYPE_KEYS[effectiveType])}</dd>
-        <dd className="mt-1 text-xs text-ink-muted">זיהוי אוטומטי: {confidenceLabel(currentInterpretation.payload.document_type_confidence, t)}</dd>
+        <dd className="mt-1 text-xs text-ink-muted">{t('docReview.autoDetection')} {confidenceLabel(currentInterpretation.payload.document_type_confidence, t)}</dd>
       </dl>
 
       {latest && (
         <p className="mt-3 break-words text-xs text-ink-muted">
-          {latest.reason} · {fmtDateTime(latest.created_at)} · מבצע {actorName(snapshot, latest.actor_id)}
+          {latest.reason} · {fmtDateTime(latest.created_at)} · {t('docReview.actorBy', { name: actorName(snapshot, latest.actor_id) })}
         </p>
       )}
 
       {canMutate && correcting ? (
         <form className="mt-4 border-t border-line pt-4" onSubmit={(event) => event.preventDefault()}>
           <label className="block">
-            <span className="label">סוג המסמך הנכון</span>
+            <span className="label">{t('docReview.text_6')}</span>
             <select
               className="input"
               value={selectedType}
@@ -173,27 +179,27 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
             >
               {(Object.keys(DOCUMENT_TYPE_KEYS) as InterpretationContract['document_type'][]).map((type) => (
                 <option key={type} value={type}>
-                  {t(DOCUMENT_TYPE_KEYS[type])}{type === effectiveType ? ' — הסיווג הנוכחי' : ''}
+                  {t(DOCUMENT_TYPE_KEYS[type])}{type === effectiveType ? t('docReview.text_7') : ''}
                 </option>
               ))}
             </select>
           </label>
           <label className="mt-3 block">
-            <span className="label">סיבת התיקון</span>
+            <span className="label">{t('docReview.text_8')}</span>
             <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} />
           </label>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" className="btn-primary" disabled={busy || selectedType === effectiveType} onClick={() => void saveCorrection()}>
-              {busy && <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />} שמירת התיקון
+              {busy && <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />} {t('docReview.saveCorrection')}
             </button>
             <button type="button" className="btn-secondary" disabled={busy} onClick={() => { setCorrecting(false); setChosenType(null); setReason(''); }}>
-              ביטול
+              {t('docReview.text_9')}
             </button>
           </div>
         </form>
       ) : canMutate ? (
         <div className="mt-3 flex justify-end">
-          <button type="button" className="btn-secondary" onClick={() => setCorrecting(true)}>הסיווג שגוי? תיקון סוג</button>
+          <button type="button" className="btn-secondary" onClick={() => setCorrecting(true)}>{t('docReview.setCorrecting')}</button>
         </div>
       ) : null}
 
@@ -210,22 +216,22 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
 
 const DRAFT_ACTIONS: Partial<Record<
   InterpretationContract['document_type'],
-  { blurb: string; label: string }
+  { blurbKey: TKey; labelKey: TKey }
 >> = {
   invoice: {
-    blurb: 'המסמך מסווג כחשבונית. אפשר לפתוח ממנו טיוטת חשבונית עם הערכים שזוהו, לבדוק ולאשר.',
-    label: 'יצירת טיוטת חשבונית מהמסמך',
+    blurbKey: 'docReview.draftInvoiceBlurb',
+    labelKey: 'docReview.draftInvoiceLabel',
   },
   delivery_note: {
     // Deliberately does not promise the order is chosen for you. When the automatic path resolved
     // it, the document is already filed to its draft receipt and this panel is not what the
     // reviewer sees; when it did not, the honest sentence is the manual one.
-    blurb: 'המסמך מסווג כתעודת משלוח. אפשר לקלוט ממנו סחורה — הכמויות ימולאו מהתעודה, ואת ההזמנה בוחרים ידנית.',
-    label: 'קליטת סחורה מתעודת המשלוח',
+    blurbKey: 'docReview.draftReceiptBlurb',
+    labelKey: 'docReview.draftReceiptLabel',
   },
   credit_note: {
-    blurb: 'המסמך מסווג כחשבונית זיכוי. אפשר לפתוח ממנו דרישת זיכוי על החשבונית המקורית, עם הסכום שזוהה.',
-    label: 'פתיחת דרישת זיכוי מהמסמך',
+    blurbKey: 'docReview.draftCreditBlurb',
+    labelKey: 'docReview.draftCreditLabel',
   },
 };
 
@@ -240,6 +246,7 @@ const DRAFT_ACTIONS: Partial<Record<
 function PaymentConfirmationMatch({ interpretation }: {
   interpretation: NonNullable<ReviewSnapshot['interpretation']>;
 }) {
+  const { t } = useT();
   const facts = useMemo(
     () => paymentConfirmationFacts(interpretation.payload),
     [interpretation.payload],
@@ -284,17 +291,17 @@ function PaymentConfirmationMatch({ interpretation }: {
 
   return (
     <div className="mt-4 border-t border-line pt-4" data-testid="payment-confirmation-match">
-      <h4 className="text-sm font-medium text-ink-soft">התאמה לתשלומים במערכת</h4>
+      <h4 className="text-sm font-medium text-ink-soft">{t('docReview.text_10')}</h4>
       <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
-        <div><dt className="text-xs text-ink-muted">סכום במסמך</dt><dd className="num">{facts.amount === null ? '—' : facts.amount}</dd></div>
-        <div><dt className="text-xs text-ink-muted">תאריך</dt><dd className="num">{facts.paidDate || '—'}</dd></div>
-        <div><dt className="text-xs text-ink-muted">אסמכתא</dt><dd className="break-all num" dir="ltr">{facts.reference || '—'}</dd></div>
+        <div><dt className="text-xs text-ink-muted">{t('docReview.text_11')}</dt><dd className="num">{facts.amount === null ? '—' : facts.amount}</dd></div>
+        <div><dt className="text-xs text-ink-muted">{t('docReview.text_12')}</dt><dd className="num">{facts.paidDate || '—'}</dd></div>
+        <div><dt className="text-xs text-ink-muted">{t('docReview.text_13')}</dt><dd className="break-all num" dir="ltr">{facts.reference || '—'}</dd></div>
       </dl>
 
-      {state.status === 'loading' && <p className="mt-3 text-sm text-ink-muted">בודק מול התשלומים והדרישות של הספק…</p>}
+      {state.status === 'loading' && <p className="mt-3 text-sm text-ink-muted">{t('docReview.text_14')}</p>}
       {state.status === 'error' && (
         <Note tone="alert" className="mt-3" role="alert">
-          בדיקת ההתאמה נכשלה. אין להסיק מכך שהתשלום קיים או שאינו קיים.
+          {t('docReview.text_15')}
         </Note>
       )}
       {state.status === 'ready' && (
@@ -302,30 +309,30 @@ function PaymentConfirmationMatch({ interpretation }: {
           {matchedPayments.length > 0 && (
             <Note tone="done">
               <span className="min-w-0 flex-1">
-                נמצא תשלום רשום תואם: {matchedPayments.map((payment) => `#${payment.number} מ־${payment.paid_date}`).join(', ')}.
-                המסמך הוא אסמכתא לתשלום שכבר קיים במערכת.
+                {t('docReview.matchedPaymentFound', { payments: matchedPayments.map((payment) => t('docReview.paymentRef', { number: payment.number, date: payment.paid_date })).join(', ') })}
+                {t('docReview.text_16')}
               </span>
             </Note>
           )}
           {matchedPayments.length === 0 && matchedRequests.length > 0 && (
             <Note tone="await">
               <span className="min-w-0 flex-1">
-                אין תשלום רשום בסכום הזה, אך יש דרישת תשלום מאושרת תואמת: {matchedRequests.map((request) => `#${request.number}`).join(', ')}.
-                ייתכן שההעברה בוצעה ועדיין לא נרשמה.
+                {t('docReview.matchedRequestFound', { requests: matchedRequests.map((request) => `#${request.number}`).join(', ') })}
+                {t('docReview.text_17')}
               </span>
             </Note>
           )}
           {matchedPayments.length === 0 && matchedRequests.length === 0 && (
             <Note tone="alert" role="alert">
               {facts.amount === null
-                ? 'לא זוהה סכום במסמך, ולכן לא ניתן להשוות אותו לתשלומים במערכת.'
-                : 'לא נמצא תשלום או דרישת תשלום בסכום הזה לספק. כדאי לברר לפני שמסתמכים על המסמך.'}
+                ? t('docReview.text_18')
+                : t('docReview.text_19')}
             </Note>
           )}
           {/* Said explicitly rather than left to be discovered: the reviewer is not being denied a
               button by oversight, and hunting for one they will never have is wasted time. */}
           <p className="text-xs text-ink-muted">
-            רישום ההעברה עצמה נעשה במסך התשלומים בידי בעל תפקיד תשלומים, ולא מכאן.
+            {t('docReview.text_20')}
           </p>
         </div>
       )}
@@ -353,7 +360,7 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
     const draft = creditDraftFromInterpretation(interpretation.payload, t);
     const supplierId = interpretation.suggested_supplier_id;
     if (!draft.creditedInvoiceNumber || !supplierId) {
-      toast('לא זוהתה במסמך החשבונית שאותה מזכים. בחר אותה מהרשימה ופתח ממנה דרישת זיכוי.', 'error');
+      toast(t('docReview.toast_3'), 'error');
       navigate('/invoices');
       return;
     }
@@ -366,8 +373,8 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
     const rows = (found.data ?? []) as { id: string }[];
     if (rows.length !== 1) {
       toast(rows.length === 0
-        ? `לא נמצאה חשבונית ${draft.creditedInvoiceNumber} לספק הזה. בחר אותה מהרשימה.`
-        : `נמצאה יותר מחשבונית אחת במספר ${draft.creditedInvoiceNumber}. בחר את הנכונה מהרשימה.`, 'error');
+        ? t('docReview.creditInvoiceNotFound', { number: draft.creditedInvoiceNumber })
+        : t('docReview.creditInvoiceAmbiguous', { number: draft.creditedInvoiceNumber }), 'error');
       navigate('/invoices');
       return;
     }
@@ -376,7 +383,7 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
 
   return (
     <div className="mt-4 border-t border-line pt-4">
-      <p className="text-sm text-ink-soft">{action.blurb}</p>
+      <p className="text-sm text-ink-soft">{t(action.blurbKey)}</p>
       {/* Secondary, not primary. This card renders on the same screen as `DocumentAssessmentPanel`,
           whose "אישור המסמך" already creates the supplier invoice or the draft receipt — with the
           reason, the ledger row and the audit entry. Two petrol buttons offering two routes to the
@@ -392,23 +399,23 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
           else void openCreditDraft();
         }}
       >
-        {busy ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <FilePlus2 size={ICON.md} aria-hidden="true" />} {action.label}
+        {busy ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <FilePlus2 size={ICON.md} aria-hidden="true" />} {t(action.labelKey)}
       </button>
     </div>
   );
 }
 
-const FEEDBACK_LABELS: Record<DocumentFeedback['feedback_type'], string> = {
-  accepted: 'ההצעה אושרה',
-  rejected: 'ההצעה נדחתה',
-  corrected: 'ההצעה תוקנה',
+const FEEDBACK_KEYS: Record<DocumentFeedback['feedback_type'], TKey> = {
+  accepted: 'docReview.text_21',
+  rejected: 'docReview.text_22',
+  corrected: 'docReview.feedbackCorrected',
 };
 
 function FeedbackControls({ annotation, onRefetch }: {
   annotation: DocumentAnnotation;
   onRefetch: () => Promise<boolean>;
 }) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const toast = useToast();
   const [reason, setReason] = useState('');
   const [tagKey, setTagKey] = useState(annotation.tag_key);
@@ -417,7 +424,7 @@ function FeedbackControls({ annotation, onRefetch }: {
 
   async function submit(feedbackType: 'accepted' | 'rejected' | 'corrected') {
     if (feedbackType === 'corrected' && (!tagKey.trim() || !label.trim())) {
-      toast('לתיקון הצעה נדרשים מפתח ותווית.', 'error');
+      toast(t('docReview.toast_4'), 'error');
       return;
     }
     setBusy(feedbackType);
@@ -430,9 +437,9 @@ function FeedbackControls({ annotation, onRefetch }: {
       });
       if (result.error) throw new Error(result.error.message);
       const refreshed = await onRefetch();
-      const success = feedbackType === 'accepted' ? 'ההצעה אושרה' : feedbackType === 'rejected' ? 'ההצעה נדחתה' : 'ההצעה תוקנה כשכבת annotation חדשה';
+      const success = feedbackType === 'accepted' ? t('docReview.text_21') : feedbackType === 'rejected' ? t('docReview.text_22') : t('docReview.text_23');
       if (refreshed) toast(success);
-      else toast(`${success}, אך רענון המסך נכשל. יש לרענן ידנית.`, 'error');
+      else toast(t('docReview.refreshFailed', { message: success }), 'error');
       setReason('');
     } catch (error) {
       toast(errorText(error), 'error');
@@ -445,27 +452,27 @@ function FeedbackControls({ annotation, onRefetch }: {
     <div className="mt-3 border-t border-line pt-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="label">מפתח משמעות</span>
+          <span className="label">{t('docReview.text_24')}</span>
           <input className="input" value={tagKey} maxLength={100} onChange={(event) => setTagKey(event.target.value)} disabled={!!busy} />
         </label>
         <label className="block">
-          <span className="label">תווית</span>
+          <span className="label">{t('docReview.text_25')}</span>
           <input className="input" value={label} maxLength={200} onChange={(event) => setLabel(event.target.value)} disabled={!!busy} />
         </label>
       </div>
       <label className="mt-3 block">
-        <span className="label">סיבת המשוב</span>
+        <span className="label">{t('docReview.text_26')}</span>
         <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={!!busy} />
       </label>
       <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" className="btn-primary" disabled={!!busy} onClick={() => void submit('accepted')}>
-          {busy === 'accepted' ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <Check size={ICON.md} aria-hidden="true" />} אישור הצעה
+          {busy === 'accepted' ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <Check size={ICON.md} aria-hidden="true" />} {t('docReview.acceptProposal')}
         </button>
         <button type="button" className="btn-secondary" disabled={!!busy} onClick={() => void submit('corrected')}>
-          {busy === 'corrected' ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <RotateCcw size={ICON.md} aria-hidden="true" />} תיקון הצעה
+          {busy === 'corrected' ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <RotateCcw size={ICON.md} aria-hidden="true" />} {t('docReview.correctProposal')}
         </button>
         <button type="button" className="btn-danger" disabled={!!busy} onClick={() => void submit('rejected')}>
-          {busy === 'rejected' ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <X size={ICON.md} aria-hidden="true" />} דחייה
+          {busy === 'rejected' ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <X size={ICON.md} aria-hidden="true" />} {t('docReview.rejectProposal')}
         </button>
       </div>
     </div>
@@ -476,7 +483,7 @@ function RuleControls({ rule, onRefetch }: {
   rule: DocumentLearningRule;
   onRefetch: () => Promise<boolean>;
 }) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const toast = useToast();
   const [tagKey, setTagKey] = useState(rule.tag_key);
   const [label, setLabel] = useState(rule.label);
@@ -486,7 +493,7 @@ function RuleControls({ rule, onRefetch }: {
   async function finish(message: string) {
     const refreshed = await onRefetch();
     if (refreshed) toast(message);
-    else toast(`${message}, אך רענון המסך נכשל. יש לרענן ידנית.`, 'error');
+    else toast(t('docReview.refreshFailed', { message }), 'error');
   }
 
   async function disableRule() {
@@ -497,7 +504,7 @@ function RuleControls({ rule, onRefetch }: {
         p_reason: reasonOr(reason, 'השבתת כלל למידה'),
       });
       if (result.error) throw new Error(result.error.message);
-      await finish('הכלל הושבת');
+      await finish(t('docReview.finish'));
       setReason('');
     } catch (error) {
       toast(errorText(error), 'error');
@@ -509,7 +516,7 @@ function RuleControls({ rule, onRefetch }: {
   async function correctRule(event: FormEvent) {
     event.preventDefault();
     if (!tagKey.trim() || !label.trim()) {
-      toast('יש למלא מפתח ותווית לעדכון הכלל.', 'error');
+      toast(t('docReview.toast_5'), 'error');
       return;
     }
     setBusy('correct');
@@ -525,7 +532,7 @@ function RuleControls({ rule, onRefetch }: {
         p_reason: reasonOr(reason, 'עדכון כלל למידה'),
       });
       if (result.error) throw new Error(result.error.message);
-      await finish('נוצרה גרסה מתוקנת של הכלל');
+      await finish(t('docReview.finish_2'));
       setReason('');
     } catch (error) {
       toast(errorText(error), 'error');
@@ -539,24 +546,24 @@ function RuleControls({ rule, onRefetch }: {
     <form className="mt-3 border-t border-line pt-3" onSubmit={correctRule}>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="label">מפתח מתוקן</span>
+          <span className="label">{t('docReview.text_27')}</span>
           <input className="input" maxLength={100} value={tagKey} onChange={(event) => setTagKey(event.target.value)} disabled={!!busy} />
         </label>
         <label className="block">
-          <span className="label">תווית מתוקנת</span>
+          <span className="label">{t('docReview.text_28')}</span>
           <input className="input" maxLength={200} value={label} onChange={(event) => setLabel(event.target.value)} disabled={!!busy} />
         </label>
       </div>
       <label className="mt-3 block">
-        <span className="label">סיבה</span>
+        <span className="label">{t('docReview.text_29')}</span>
         <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={!!busy} />
       </label>
       <div className="mt-3 flex flex-wrap gap-2">
         <button className="btn-secondary" disabled={!!busy}>
-          {busy === 'correct' && <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />} יצירת גרסה מתוקנת
+          {busy === 'correct' && <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />} {t('docReview.createCorrectedVersion')}
         </button>
         <button type="button" className="btn-danger" disabled={!!busy} onClick={() => void disableRule()}>
-          {busy === 'disable' && <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />} השבתת כלל
+          {busy === 'disable' && <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />} {t('docReview.disableRule')}
         </button>
       </div>
     </form>
@@ -600,20 +607,20 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
       <div className="card card-pad" data-testid="document-routing-result">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="section-title">מה עודכן ולאן</h2>
+            <h2 className="section-title">{t('docReview.text_30')}</h2>
             <p className="mt-1 text-sm font-medium text-ink-body">{routing.headline}</p>
           </div>
-          <span className={routing.completed ? 'badge-done' : 'badge-await'}>{routing.completed ? 'שויך' : 'דורש השלמה'}</span>
+          <span className={routing.completed ? 'badge-done' : 'badge-await'}>{routing.completed ? t('docReview.text_31') : t('docReview.text_32')}</span>
         </div>
         <dl className="mt-3 grid gap-2 rounded-lg bg-surface-sunken p-3 text-sm sm:grid-cols-2">
-          <div><dt className="text-xs text-ink-muted">סוג שזוהה</dt><dd className="mt-1 font-medium text-ink-body">{t(DOCUMENT_TYPE_KEYS[interpretation.payload.document_type])}</dd></div>
-          <div><dt className="text-xs text-ink-muted">יעד במערכת</dt><dd className="mt-1 font-medium text-ink-body">{routing.destination}</dd></div>
+          <div><dt className="text-xs text-ink-muted">{t('docReview.text_33')}</dt><dd className="mt-1 font-medium text-ink-body">{t(DOCUMENT_TYPE_KEYS[interpretation.payload.document_type])}</dd></div>
+          <div><dt className="text-xs text-ink-muted">{t('docReview.text_34')}</dt><dd className="mt-1 font-medium text-ink-body">{routing.destination}</dd></div>
         </dl>
         <p className="mt-3 text-sm text-ink-soft">{routing.lineSummary}</p>
         {machineReason && (
           <Note tone="info" className="mt-3" role="status" data-testid="filing-reason">
             <Info className="mt-0.5 shrink-0" size={ICON.md} aria-hidden="true" />
-            <span><strong>למה לא נכתב ליעד:</strong> {machineReason}</span>
+            <span><strong>{t('docReview.text_35')}</strong> {machineReason}</span>
           </Note>
         )}
         {routing.path && routing.actionLabel && (
@@ -624,17 +631,17 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
       <div className="card card-pad">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 id="document-proposals-title" className="section-title">פירוש המסמך</h2>
-            <p className="mt-1 text-sm text-ink-muted">השדות הופקו אוטומטית ומוצגים להשוואה מול המקור.</p>
+            <h2 id="document-proposals-title" className="section-title">{t('docReview.text_36')}</h2>
+            <p className="mt-1 text-sm text-ink-muted">{t('docReview.text_37')}</p>
           </div>
-          <span className="badge-info">פירוש אוטומטי</span>
+          <span className="badge-info">{t('docReview.text_38')}</span>
         </div>
         {/* Provider, model, prompt and schema versions used to sit here as a second card of equal
             weight. They are provenance, not a decision the reviewer makes; they now live in the
             "פרטים טכניים" disclosure at the top of the workspace. */}
         <dl className="mt-4 rounded-lg bg-surface-sunken p-3">
-          <dt className="text-sm font-medium text-ink-soft">ספק מוצע</dt>
-          <dd className="mt-1 break-words text-ink-body">{interpretation.payload.supplier.suggested_name || 'לא זוהה'}</dd>
+          <dt className="text-sm font-medium text-ink-soft">{t('docReview.text_39')}</dt>
+          <dd className="mt-1 break-words text-ink-body">{interpretation.payload.supplier.suggested_name || t('docReview.text_40')}</dd>
           <dd className="mt-1 text-xs text-ink-muted">{confidenceLabel(interpretation.payload.supplier.confidence, t)}</dd>
         </dl>
         {/* The supplier is the one value on this card whose grade is not the whole message: it is
@@ -657,8 +664,8 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
         <Note tone="alert" role="alert">
           <ShieldAlert className="mt-0.5 shrink-0" size={ICON.md} aria-hidden="true" />
           <span>
-            ב־<span className="num">{inconsistentRows}</span> שורות הכפל אינו מסתדר: כמות × מחיר ליחידה
-            אינו שווה לסכום השורה. בדוק אותן מול המסמך לפני אישור.
+            {t('docReview.inconsistentBefore')}<span className="num">{inconsistentRows}</span>{t('docReview.inconsistentAfter')}
+            {t('docReview.text_41')}
           </span>
         </Note>
       )}
@@ -666,16 +673,16 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
       {/* Everything the machine produced and is sure about, folded into one card of counted rows.
           It is evidence to check a decision against, not the decision — so it opens on demand. */}
       <div className="card min-w-0 overflow-hidden" data-testid="document-evidence">
-        <h3 className="section-title px-4 pt-4 sm:px-5">פירוט מהמסמך</h3>
+        <h3 className="section-title px-4 pt-4 sm:px-5">{t('docReview.text_42')}</h3>
 
         {interpretation.payload.fields.length > 0 ? (
-          <Disclosure className="mt-2 border-t border-line-soft" title="שדות מוצעים" count={interpretation.payload.fields.length}>
+          <Disclosure className="mt-2 border-t border-line-soft" title={t('docReview.title')} count={interpretation.payload.fields.length}>
             <div className="divide-y divide-line">
               {interpretation.payload.fields.map((field) => (
                 <div key={field.key} className="grid gap-1 py-3 first:pt-0 sm:grid-cols-[minmax(8rem,0.4fr)_minmax(0,1fr)] sm:gap-4">
                   <div className="font-medium text-ink-soft">{fieldKeyLabel(field.key, t)}</div>
                   <div className="min-w-0">
-                    <div className="break-words text-ink-body">{valueText(field.value)}</div>
+                    <div className="break-words text-ink-body">{valueText(field.value, t)}</div>
                     {/* Evidence block ids ("block-heading") named nothing a reviewer could act on.
                         The evidence itself is not lost: the source viewer beside this list is where
                         a value is checked against the document. */}
@@ -686,19 +693,19 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
             </div>
           </Disclosure>
         ) : (
-          <p className="mt-2 border-t border-line-soft px-3 py-3 text-sm text-ink-muted sm:px-4">לא הוצעו שדות.</p>
+          <p className="mt-2 border-t border-line-soft px-3 py-3 text-sm text-ink-muted sm:px-4">{t('docReview.text_43')}</p>
         )}
 
         {interpretation.payload.line_items.length > 0 ? (
-          <Disclosure className="border-t border-line-soft" title="שורות מוצעות"
+          <Disclosure className="border-t border-line-soft" title={t('docReview.title_2')}
             count={interpretation.payload.line_items.length} onToggle={setLinesOpen}>
             {linesOpen && (
-              <div className="table-scroll overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label="טבלת שורות מוצעות; ניתן לגלול בתוך הטבלה">
+              <div className="table-scroll overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label={t('docReview.aria_label')}>
                 <table className="min-w-full bg-surface">
                   <thead className="table-head">
                     <tr className="border-b border-line">
-                      <th scope="col" className="th">שורת מקור</th>
-                      <th scope="col" className="th">ערכים מוצעים</th>
+                      <th scope="col" className="th">{t('docReview.text_44')}</th>
+                      <th scope="col" className="th">{t('docReview.text_45')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -708,12 +715,12 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
                         <tr key={`${item.source_row ?? 'none'}-${index}`} className="border-b border-line last:border-b-0">
                           <td className="td num">{item.source_row ?? '—'}</td>
                           <td className="td">
-                            <dl className="space-y-1">{Object.entries(item.values).map(([key, value]) => <div key={key}><dt className="inline font-medium">{lineItemKeyLabel(key, t)}: </dt><dd className="inline">{valueText(value)}</dd></div>)}</dl>
+                            <dl className="space-y-1">{Object.entries(item.values).map(([key, value]) => <div key={key}><dt className="inline font-medium">{lineItemKeyLabel(key, t)}: </dt><dd className="inline">{valueText(value, t)}</dd></div>)}</dl>
                             {arithmetic && !arithmetic.consistent && (
                               <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <span className="badge-alert">הכפל אינו מסתדר</span>
+                                <span className="badge-alert">{t('docReview.text_46')}</span>
                                 <span className="text-xs text-ink-muted">
-                                  <span className="num">{arithmetic.quantity}</span> × <span className="num">{arithmetic.unitPrice}</span> = <span className="num">{arithmetic.expected}</span>, ובשורה <span className="num">{arithmetic.lineTotal}</span>
+                                  <span className="num">{arithmetic.quantity}</span> × <span className="num">{arithmetic.unitPrice}</span> = <span className="num">{arithmetic.expected}</span>{t('docReview.text_47')} <span className="num">{arithmetic.lineTotal}</span>
                                 </span>
                               </div>
                             )}
@@ -727,12 +734,12 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
             )}
           </Disclosure>
         ) : (
-          <p className="border-t border-line-soft px-3 py-3 text-sm text-ink-muted sm:px-4">לא זוהו שורות פריט.</p>
+          <p className="border-t border-line-soft px-3 py-3 text-sm text-ink-muted sm:px-4">{t('docReview.text_48')}</p>
         )}
 
         {snapshot.annotations.length > 0 && (
-          <Disclosure className="border-t border-line-soft" title="הערות והחלטות" count={snapshot.annotations.length}>
-            <p className="text-sm text-ink-muted">המקור מצוין בכל רשומה; רק משוב מפורש משנה את מצב ההצעה.</p>
+          <Disclosure className="border-t border-line-soft" title={t('docReview.title_3')} count={snapshot.annotations.length}>
+            <p className="text-sm text-ink-muted">{t('docReview.text_49')}</p>
             <div className="mt-3 space-y-3">
               {snapshot.annotations.map((annotation) => {
                 const feedback = feedbackByAnnotation.get(annotation.id);
@@ -744,16 +751,16 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
                         <p className="mt-1 break-words text-sm text-ink-soft">{annotation.tag_key} · {annotationTarget(snapshot, annotation, t)}</p>
                         <p className="mt-1 text-xs text-ink-muted">
                           {confidenceLabel(annotation.confidence, t)} · {t(ANNOTATION_SOURCE_KEYS[annotation.source])} · {fmtDateTime(annotation.created_at)}
-                          {annotation.rule_version ? ` · כלל v${annotation.rule_version}` : ''}
+                          {annotation.rule_version ? t('docReview.ruleVersionSuffix', { version: annotation.rule_version }) : ''}
                         </p>
                       </div>
-                      <span className={annotation.active ? 'badge-info' : 'badge-idle'}>{annotation.active ? 'פעיל' : 'לא פעיל'}</span>
+                      <span className={annotation.active ? 'badge-info' : 'badge-idle'}>{annotation.active ? t('docReview.text_50') : t('docReview.text_51')}</span>
                     </div>
                     {feedback && (
                       <div className="mt-3 rounded-lg bg-surface-sunken p-3 text-sm text-ink-soft">
-                        <p><strong>{FEEDBACK_LABELS[feedback.feedback_type]}</strong> · {fmtDateTime(feedback.created_at)}</p>
+                        <p><strong>{t(FEEDBACK_KEYS[feedback.feedback_type])}</strong> · {fmtDateTime(feedback.created_at)}</p>
                         <p className="mt-1 break-words">{feedback.reason}</p>
-                        <p className="mt-1 break-words text-xs text-ink-muted">מבצע {actorName(snapshot, feedback.actor_id)}</p>
+                        <p className="mt-1 break-words text-xs text-ink-muted">{t('docReview.actorBy', { name: actorName(snapshot, feedback.actor_id) })}</p>
                       </div>
                     )}
                     {!feedback && annotation.active && annotation.source !== 'user' && snapshot.job?.status === 'review' && (
@@ -767,8 +774,8 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
         )}
 
         {snapshot.ruleApplications.length > 0 && (
-          <Disclosure className="border-t border-line-soft" title="כללים שהופעלו" count={snapshot.ruleApplications.length}>
-            <p className="text-sm text-ink-muted">כל יישום מקושר לגרסה המדויקת של הכלל ולסימון שעליו פעל.</p>
+          <Disclosure className="border-t border-line-soft" title={t('docReview.title_4')} count={snapshot.ruleApplications.length}>
+            <p className="text-sm text-ink-muted">{t('docReview.text_52')}</p>
             <div className="mt-3 space-y-3">
               {snapshot.ruleApplications.map((application) => {
                 const rule = ruleById.get(application.rule_id);
@@ -776,11 +783,11 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
                   <SubPanel as="article" key={application.id}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <h4 className="break-words font-semibold text-ink-body">{rule ? `${rule.label} (${rule.tag_key})` : `כלל ${application.rule_id}`}</h4>
-                        <p className="mt-1 text-sm text-ink-soft">הופעל על {ruleApplicationTarget(snapshot, application.target_id, t)}; {confidenceLabel(application.confidence, t)}</p>
-                        <p className="mt-1 text-sm text-ink-muted"><strong>למה הופעל:</strong> {ruleWhy(rule, t)}</p>
+                        <h4 className="break-words font-semibold text-ink-body">{rule ? `${rule.label} (${rule.tag_key})` : t('docReview.ruleFallbackName', { id: application.rule_id })}</h4>
+                        <p className="mt-1 text-sm text-ink-soft">{t('docReview.firedOn')} {ruleApplicationTarget(snapshot, application.target_id, t)}; {confidenceLabel(application.confidence, t)}</p>
+                        <p className="mt-1 text-sm text-ink-muted"><strong>{t('docReview.ruleWhy')}</strong> {ruleWhy(rule, t)}</p>
                       </div>
-                      <span className="badge-done">כלל v{application.rule_version}</span>
+                      <span className="badge-done">{t('docReview.ruleBadge', { version: application.rule_version })}</span>
                     </div>
                     {rule && snapshot.job?.status === 'review' && <RuleControls rule={rule} onRefetch={onRefetch} />}
                   </SubPanel>

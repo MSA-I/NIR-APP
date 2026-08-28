@@ -13,9 +13,17 @@ const reprocessMigration = readFileSync(join(process.cwd(), 'supabase', 'migrati
 
 describe('automatic document review UX', () => {
   it('does not ask for type approval and puts price-list results before generic review panels', () => {
-    expect(proposals).toContain('אין צורך באישור ידני');
+    // The sentence moved to the dictionary, so the claim splits: the screen renders that key, and
+    // the key carries that wording. Either half alone would pass while the other was broken.
+    expect(proposals).toContain("t('docReview.text_2')");
+    expect(he.docReview.text_2).toContain('אין צורך באישור ידני');
+    // These two stay whole-repo absence checks. They are about copy that must not EXIST anywhere,
+    // so extraction does not weaken them — it only moves where the string could hide, and the
+    // dictionary is now one of those places.
     expect(proposals).not.toContain('אישור הסוג המוצע');
     expect(proposals).not.toContain('דחיית ההצעה');
+    expect(JSON.stringify(he.docReview)).not.toContain('אישור הסוג המוצע');
+    expect(JSON.stringify(he.docReview)).not.toContain('דחיית ההצעה');
     expect(workspace).toContain("const isPriceList = snapshot.interpretation?.payload.document_type === 'price_list'");
     expect(workspace).toMatch(/isPriceList\r?\n\s+\? <PriceListReviewConfirmation/);
   });
