@@ -899,7 +899,7 @@ interface CatalogIndex {
 }
 
 function ProductsStep({ onDone }: { onDone: () => void }) {
-  const { errorText, t } = useT();
+  const { errorText, locale, t } = useT();
   const { profile } = useAuth();
   const index = useRef<CatalogIndex>({ products: new Map(), suppliers: new Map(), categories: new Map() });
 
@@ -1045,7 +1045,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
   const columns: Column<ProductDraft>[] = [
     { key: 'name', header: t('onboarding.text_25'), render: (r) => <span className="font-medium text-ink">{r.name}</span> },
     { key: 'cat', header: t('onboarding.text_26'), render: (r) => r.category || '—' },
-    { key: 'unit', header: t('onboarding.formatUnit'), render: (r) => formatUnit(r.unit) },
+    { key: 'unit', header: t('onboarding.formatUnit'), render: (r) => formatUnit(r.unit, locale) },
     { key: 'sku', header: t('onboarding.text_27'), render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
     { key: 'supplier', header: t('onboarding.text_28'), render: (r) => r.supplier || '—' },
     { key: 'price', header: t('onboarding.fmtMoneyExact'), className: 'num', render: (r) => fmtMoneyExact(r.price) },

@@ -232,7 +232,7 @@ export function PriceListReviewConfirmation({
   actorId,
   onRefetch,
 }: PriceListReviewConfirmationProps) {
-  const { errorText, t } = useT();
+  const { errorText, locale, t } = useT();
   const interpretation = snapshot.interpretation;
   const lineItems = interpretation?.payload.line_items ?? [];
   const autoDecision = snapshot.priceListDecision;
@@ -964,7 +964,7 @@ export function PriceListReviewConfirmation({
                         }}>
                         <option value="">{t('priceListReview.text_55')}</option>
                         {products.map((product) => (
-                          <option key={product.id} value={product.id}>{bidiIsolate(product.name)} · {formatUnit(product.unit)}{product.sku ? ` · ${product.sku}` : ''}</option>
+                          <option key={product.id} value={product.id}>{bidiIsolate(product.name)} · {formatUnit(product.unit, locale)}{product.sku ? ` · ${product.sku}` : ''}</option>
                         ))}
                       </select>
                     </label>

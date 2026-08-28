@@ -141,7 +141,7 @@ function movementBadge(type: InventoryMovement['movement_type'], t: (key: TKey) 
 }
 
 export default function Inventory() {
-  const { t } = useT();
+  const { locale, t } = useT();
   const { profile, organizationAccess } = useAuth();
   // In the URL, not in component state: a filtered מלאי view is a thing an owner sends to the
   // office ("these are the ones under minimum"), and it has to survive Back after opening a
@@ -174,24 +174,24 @@ export default function Inventory() {
     {
       key: 'quantity', header: t('inventory.text_16'), className: 'num', priority: 1,
       sortValue: (row) => row.quantity_on_hand ?? Number.NEGATIVE_INFINITY,
-      render: (row) => <span className="num">{formatQuantity(row.quantity_on_hand, row.unit)}</span>,
+      render: (row) => <span className="num">{formatQuantity(row.quantity_on_hand, row.unit, locale)}</span>,
     },
     {
       key: 'minimum', header: t('inventory.text_17'), className: 'num',
       sortValue: (row) => row.min_stock ?? Number.NEGATIVE_INFINITY,
-      render: (row) => <span className="num">{formatQuantity(row.min_stock, row.unit)}</span>,
+      render: (row) => <span className="num">{formatQuantity(row.min_stock, row.unit, locale)}</span>,
     },
     {
       key: 'consumption', header: t('inventory.text_18'), className: 'num', priority: 2,
       sortValue: (row) => row.average_daily_consumption ?? Number.NEGATIVE_INFINITY,
-      render: (row) => <span className="num">{formatQuantity(row.average_daily_consumption, row.unit)}</span>,
+      render: (row) => <span className="num">{formatQuantity(row.average_daily_consumption, row.unit, locale)}</span>,
     },
     {
       key: 'incoming', header: t('inventory.text_19'), className: 'num', priority: 2,
       sortValue: (row) => row.expected_incoming_quantity ?? Number.NEGATIVE_INFINITY,
       render: (row) => (
         <span>
-          <span className="block num">{formatQuantity(row.expected_incoming_quantity, row.unit)}</span>
+          <span className="block num">{formatQuantity(row.expected_incoming_quantity, row.unit, locale)}</span>
           {row.next_expected_incoming_date && <span className="block text-xs text-ink-muted">המועד הקרוב: {fmtDate(row.next_expected_incoming_date)}</span>}
           {!!row.incoming_without_date_quantity && row.incoming_without_date_quantity > 0 && (
             <span className="block text-xs text-ink-muted">{t('inventory.fmtNum')} <span className="num">{fmtNum(row.incoming_without_date_quantity)}</span> {t('inventory.fmtNum_2')}</span>
@@ -209,7 +209,7 @@ export default function Inventory() {
     {
       key: 'reorder', header: t('inventory.text_21'), className: 'num', priority: 2,
       sortValue: (row) => row.suggested_reorder_quantity ?? Number.NEGATIVE_INFINITY,
-      render: (row) => <span className="num">{formatQuantity(row.suggested_reorder_quantity, row.unit)}</span>,
+      render: (row) => <span className="num">{formatQuantity(row.suggested_reorder_quantity, row.unit, locale)}</span>,
     },
     {
       key: 'supplierPrice', header: t('inventory.text_22'), priority: 2,
@@ -254,7 +254,7 @@ export default function Inventory() {
       sortValue: (row) => row.quantity_delta,
       render: (row) => (
         <span className={`num font-medium ${row.quantity_delta < 0 ? 'text-alert-fg' : 'text-done-fg'}`} dir="ltr">
-          {row.quantity_delta > 0 ? '+' : ''}{formatQuantity(row.quantity_delta, row.unit)}
+          {row.quantity_delta > 0 ? '+' : ''}{formatQuantity(row.quantity_delta, row.unit, locale)}
         </span>
       ),
     },
@@ -442,7 +442,7 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { errorText, t } = useT();
+  const { errorText, locale, t } = useT();
   const toast = useToast();
   const copy = COMMAND_COPY[command];
   const [commandId] = useState(() => crypto.randomUUID());
@@ -499,7 +499,7 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
 
   return (
     <Modal open onClose={onClose} busy={busy} title={`${copy.title} — ${product.product_name}`}
-      description={`יתרה נוכחית: ${formatQuantity(product.quantity_on_hand, product.unit)}. הפעולה תירשם ביומן הביקורת.`}
+      description={`יתרה נוכחית: ${formatQuantity(product.quantity_on_hand, product.unit, locale)}. הפעולה תירשם ביומן הביקורת.`}
       statusMessage={busy ? t('inventory.text_51') : undefined}>
       <div className="space-y-4">
         <div>
@@ -507,7 +507,7 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
           <div className="flex items-center gap-2">
             <input id="inventory-command-quantity" className="input num" dir="ltr" type="number" step="0.01"
               min={command === 'adjustment' ? undefined : 0} value={quantity} onChange={(event) => setQuantity(event.target.value)} />
-            <span className="shrink-0 text-sm text-ink-soft">{formatUnit(product.unit)}</span>
+            <span className="shrink-0 text-sm text-ink-soft">{formatUnit(product.unit, locale)}</span>
           </div>
         </div>
         <div>

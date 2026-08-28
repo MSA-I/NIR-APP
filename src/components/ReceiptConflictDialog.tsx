@@ -319,7 +319,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
   onClose: () => void;
   onResolve: (resolution: ReceiptConflictResolution) => void;
 }) {
-  const { statusLabel } = useT();
+  const { locale, statusLabel } = useT();
   const explanationId = useId();
   const [explanation, setExplanation] = useState('');
   const [choice, setChoice] = useState<Record<string, 'local' | 'server'>>({});
@@ -430,7 +430,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
                   <td className="td whitespace-normal">
                     <div className="text-ink"><bdi>{line.productName}</bdi></div>
                     <div className="text-xs text-ink-muted">
-                      הוזמן <span className="num">{formatQuantity(line.orderedQty, line.unit)}</span>
+                      הוזמן <span className="num">{formatQuantity(line.orderedQty, line.unit, locale)}</span>
                     </div>
                   </td>
                   <td className="td">

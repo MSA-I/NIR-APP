@@ -21,4 +21,14 @@ describe('supplier portal locale', () => {
     expect(formatPortalQuantity('en', 1.5, 'kg')).toBe('1.5 kg');
     expect(formatPortalQuantity('he', 5, 'kg')).toContain('5');
   });
+
+  // The unit a supplier's portal actually receives is the one stored on the product, and that
+  // is Hebrew (`products.unit`, `0001:92`). Until decision #282 this line read the raw stored
+  // value straight out to an English reader, so the English portal showed `ק״ג`.
+  it('reads a stored Hebrew unit in the reader’s language, without changing what is stored', () => {
+    expect(formatPortalQuantity('en', 3, 'ק״ג')).toBe('3 kg');
+    expect(formatPortalQuantity('en', 2, 'ארגז')).toBe('2 crates');
+    expect(formatPortalQuantity('en', 1, 'יחידות')).toBe('1 unit');
+    expect(formatPortalQuantity('he', 3, 'ק״ג')).toBe('3 ק״ג');
+  });
 });

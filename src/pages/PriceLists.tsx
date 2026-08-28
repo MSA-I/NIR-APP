@@ -33,7 +33,7 @@ const monthLabel = (value: string) => new Intl.DateTimeFormat('he-IL', {
 }).format(new Date(`${value.slice(0, 7)}-01T00:00:00Z`));
 
 export default function PriceLists() {
-  const { t } = useT();
+  const { locale, t } = useT();
   const { profile, organizationAccess } = useAuth();
   const canWrite = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
   /**
@@ -119,7 +119,7 @@ export default function PriceLists() {
   const columns: Column<Row>[] = [
     { key: 'product', header: t('priceLists.productLabel'), priority: 3, sortValue: (r) => productLabel(r.product), render: (r) => <bdi className="font-medium text-ink">{productLabel(r.product)}</bdi> },
     { key: 'supplier', header: t('priceLists.text'), priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
-    { key: 'unit', header: t('priceLists.formatUnit'), priority: 3, render: (r) => formatUnit(r.product.unit) },
+    { key: 'unit', header: t('priceLists.formatUnit'), priority: 3, render: (r) => formatUnit(r.product.unit, locale) },
     { key: 'price', header: t('priceLists.fmtMoneyExact'), className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
     // Comparison-only column: how far each offer stands from the cheapest eligible one.
     ...(productFilter ? [{
@@ -173,7 +173,7 @@ export default function PriceLists() {
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div className="text-sm text-ink-muted">
               <bdi className="text-base font-semibold text-ink">{productLabel(comparison.product)}</bdi>
-              {' '}· {formatUnit(comparison.product.unit)} · <span className="num">{comparison.supplierCount}</span> ספקים
+              {' '}· {formatUnit(comparison.product.unit, locale)} · <span className="num">{comparison.supplierCount}</span> ספקים
             </div>
             {canWrite && <Link className="text-sm text-action underline" to={`/products?id=${comparison.product.id}`}>עריכת מוצר</Link>}
           </div>

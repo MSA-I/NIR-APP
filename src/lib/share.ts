@@ -39,7 +39,10 @@ export function orderWhatsAppText(order: WhatsAppOrder, orgName: string, portalU
     ...(order.notes ? [`הערות: ${order.notes}`] : []),
     '',
     `פריטים (${order.items.length}):`,
-    ...order.items.map((i) => `• ${bidiIsolate(i.product.name)} — ${formatQuantity(i.qty, i.product.unit)}`),
+    // The unit is pinned to Hebrew for the same reason the product name is raw: this message is
+    // read by the supplier, not by the person who sent it. An English `2 crates` would arrive at
+    // a picker who counts ארגזים, and the whole message around it is Hebrew anyway.
+    ...order.items.map((i) => `• ${bidiIsolate(i.product.name)} — ${formatQuantity(i.qty, i.product.unit, 'he')}`),
     '',
     // The portal link (0167) rides the message when the operator issued one: the supplier can
     // approve or propose changes there instead of answering in free text. The closing lines

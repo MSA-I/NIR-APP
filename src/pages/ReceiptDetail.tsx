@@ -5,6 +5,7 @@ import { Breadcrumbs, Card, EmptyState, ErrorNote, Note, RecordHeader, RecordSke
 import { DocumentList } from '../components/FileUpload';
 import OfflineQueueStatus from '../components/OfflineQueueStatus';
 import { fmtDate, formatQuantity, productLabel } from '../lib/format';
+import { useT } from '../lib/i18n/LocaleProvider';
 import { isUuid } from '../lib/invoiceLinkedContext';
 import { PO_STATUS, RECEIPT_LINE_STATUS, RECEIPT_STATUS } from '../lib/status';
 import { supabase } from '../lib/supabase';
@@ -27,6 +28,7 @@ interface ReceiptDetailData {
 const UNAVAILABLE_MESSAGE = 'לא ניתן לטעון את הקבלה. ייתכן שהרשומה אינה קיימת או שאין לך הרשאה לצפות בה.';
 
 export default function ReceiptDetail() {
+  const { locale } = useT();
   const { receiptId } = useParams<{ receiptId: string }>();
   const { profile } = useAuth();
   const orgId = profile?.org_id ?? null;
@@ -169,7 +171,7 @@ export default function ReceiptDetail() {
                   <div className="min-w-0">
                     <h3 className="break-words font-medium text-ink-body"><bdi>{line.product ? productLabel(line.product) : 'מוצר לא זמין'}</bdi></h3>
                     <p className="mt-1 text-sm text-ink-muted">
-                      כמות שהתקבלה: <span className="num font-medium text-ink-mid">{formatQuantity(line.qty_received, line.product?.unit)}</span>
+                      כמות שהתקבלה: <span className="num font-medium text-ink-mid">{formatQuantity(line.qty_received, line.product?.unit, locale)}</span>
                     </p>
                   </div>
                   <StatusBadge meta={RECEIPT_LINE_STATUS[line.status]} />

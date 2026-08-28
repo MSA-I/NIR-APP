@@ -1,4 +1,5 @@
 import type { TKey } from '../lib/i18n/t';
+import type { Locale } from '../lib/i18n/locale';
 import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -93,7 +94,7 @@ const THREE_WAY_REASON_KEYS: Record<string, TKey> = {
   expected_vat_rate_missing: 'invoices.reason_expected_vat_rate_missing',
 };
 
-function threeWayReasonDetails(reason: ThreeWayReason, t: (key: TKey, vars?: Record<string, string | number>) => string) {
+function threeWayReasonDetails(reason: ThreeWayReason, t: (key: TKey, vars?: Record<string, string | number>) => string, locale: Locale) {
   if (reason.ordered_unit_price != null && reason.invoice_unit_price_normalized != null) {
     const difference = reason.difference_amount
       ?? reason.invoice_unit_price_normalized - reason.ordered_unit_price;
@@ -128,7 +129,7 @@ function threeWayReasonDetails(reason: ThreeWayReason, t: (key: TKey, vars?: Rec
     return t('invoices.detailExpectedActual', { expected: fmtMoneyExact(reason.expected), actual: fmtMoneyExact(reason.actual) });
   }
   if (reason.invoice_unit && reason.order_unit) {
-    return t('invoices.detailUnits', { invoiceUnit: formatUnit(reason.invoice_unit), orderUnit: formatUnit(reason.order_unit) });
+    return t('invoices.detailUnits', { invoiceUnit: formatUnit(reason.invoice_unit, locale), orderUnit: formatUnit(reason.order_unit, locale) });
   }
   return null;
 }
@@ -218,7 +219,7 @@ export async function readAllowedInvoiceTransitions(
 }
 
 export default function InvoiceDetail() {
-  const { errorText, t } = useT();
+  const { errorText, locale, t } = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
@@ -561,7 +562,7 @@ export default function InvoiceDetail() {
             {data.threeWay.reasons.length > 0 ? (
               <ul className="divide-y divide-line-soft border border-line-soft rounded-lg">
                 {data.threeWay.reasons.map((reason, index) => {
-                  const details = threeWayReasonDetails(reason, t);
+                  const details = threeWayReasonDetails(reason, t, locale);
                   return (
                     <li key={`${reason.code}-${reason.line_number ?? 'invoice'}-${index}`} className="px-3 py-2.5 text-sm">
                       <div className="flex items-start gap-2">
@@ -589,7 +590,7 @@ export default function InvoiceDetail() {
                   {data.threeWay.lines.map((line) => (
                     <li key={line.id} className="px-3 py-2 text-sm flex flex-wrap justify-between gap-2">
                       <span><span className="num text-ink-muted">{line.line_number}.</span> <bdi>{line.description}</bdi></span>
-                      <span className="num text-ink-muted">{formatQuantity(line.quantity, line.unit)} × {fmtMoneyExact(line.unit_price)} = {fmtMoneyExact(line.line_total)}</span>
+                      <span className="num text-ink-muted">{formatQuantity(line.quantity, line.unit, locale)} × {fmtMoneyExact(line.unit_price)} = {fmtMoneyExact(line.line_total)}</span>
                     </li>
                   ))}
                 </ul>

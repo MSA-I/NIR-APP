@@ -20,7 +20,7 @@ interface ProductRow extends Product {
 }
 
 export default function Products() {
-  const { errorText } = useT();
+  const { errorText, locale } = useT();
   const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -135,7 +135,7 @@ export default function Products() {
     // one, because that is the field it edits and the one matching and the supplier read.
     { key: 'name', header: 'מוצר', sortValue: (r) => productLabel(r), render: (r) => <bdi className={`font-medium ${r.active ? 'text-ink' : 'text-ink-muted line-through'}`}>{productLabel(r)}</bdi> },
     { key: 'cat', header: 'קטגוריה', sortValue: (r) => r.category?.name ?? '', render: (r) => r.category?.name ?? '—' },
-    { key: 'unit', header: 'יחידת מידה', render: (r) => formatUnit(r.unit) },
+    { key: 'unit', header: 'יחידת מידה', render: (r) => formatUnit(r.unit, locale) },
     { key: 'sku', header: 'מק״ט', render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
     // Shows 0, not `—`. The dash means "no data"; a product with no supplier is a measured
     // fact and an actionable one — it cannot be ordered. Hiding it behind the same glyph as

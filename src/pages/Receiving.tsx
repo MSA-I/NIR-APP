@@ -410,7 +410,7 @@ const REASON_COMPLETE_KEY = 'receiving.text_16';
 const REASON_DRAFT_KEY = 'receiving.text_17';
 
 export function ReceiveOrder() {
-  const { errorText, t } = useT();
+  const { errorText, locale, t } = useT();
   const { orderId } = useParams<{ orderId: string }>();
   const [params] = useSearchParams();
   const documentId = params.get('document');
@@ -1072,8 +1072,8 @@ export function ReceiveOrder() {
               <div>
                 <div className="font-semibold text-ink"><bdi>{productLabel(item.product)}</bdi></div>
                 <div className="text-xs text-ink-muted mt-0.5">
-                  הוזמן: <span className="num">{formatQuantity(item.qty, item.product.unit)}</span>
-                  {item.received_qty > 0 && <> {t('receiving.formatQuantity')} <span className="num">{formatQuantity(item.received_qty, item.product.unit)}</span></>}
+                  הוזמן: <span className="num">{formatQuantity(item.qty, item.product.unit, locale)}</span>
+                  {item.received_qty > 0 && <> {t('receiving.formatQuantity')} <span className="num">{formatQuantity(item.received_qty, item.product.unit, locale)}</span></>}
                 </div>
               </div>
               <StatusBadge meta={RECEIPT_LINE_STATUS[line.status]} />
@@ -1097,7 +1097,7 @@ export function ReceiveOrder() {
                 inputRef={(element) => { qtyInputs.current[item.id] = element; }}
                 onChange={(next) => setLine(item.id, { qty: next }, item)} />
               {line.qty !== remaining && (
-                <button type="button" className="btn-ghost btn-sm" aria-label={`סימון מלוא הכמות שנותרה עבור ${productLabel(item.product)}: ${formatQuantity(remaining, item.product.unit)}`} onClick={() => setLine(item.id, { qty: remaining }, item)}>מלא ({formatQuantity(remaining, item.product.unit)})</button>
+                <button type="button" className="btn-ghost btn-sm" aria-label={`סימון מלוא הכמות שנותרה עבור ${productLabel(item.product)}: ${formatQuantity(remaining, item.product.unit, locale)}`} onClick={() => setLine(item.id, { qty: remaining }, item)}>מלא ({formatQuantity(remaining, item.product.unit, locale)})</button>
               )}
             </div>
 

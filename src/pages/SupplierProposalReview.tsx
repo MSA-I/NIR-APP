@@ -32,7 +32,7 @@ function lineChanged(line: SupplierOrderProposalLine): boolean {
 }
 
 export default function SupplierProposalReview() {
-  const { errorText } = useT();
+  const { errorText, locale } = useT();
   const { proposalId } = useParams<{ proposalId: string }>();
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
@@ -237,7 +237,7 @@ export default function SupplierProposalReview() {
                 <li key={line.id} className="flex items-center justify-between gap-3 text-sm">
                   <span className="text-ink-body"><bdi>{line.product_name}</bdi></span>
                   <span className="num text-ink-muted">
-                    {formatQuantity(line.original_qty, line.unit)} × {fmtMoneyExact(line.original_unit_price)}
+                    {formatQuantity(line.original_qty, line.unit, locale)} × {fmtMoneyExact(line.original_unit_price)}
                   </span>
                   {pending && canWrite && (
                     <VerdictPicker
@@ -330,6 +330,7 @@ function ProposalLineCard({
   verdict: Verdict | undefined;
   onVerdict: (v: Verdict) => void;
 }) {
+  const { locale } = useT();
   const qtyChanged = line.proposed_qty !== null && line.proposed_qty !== line.original_qty;
   const priceChanged = line.proposed_unit_price !== null && line.proposed_unit_price !== line.original_unit_price;
   return (
@@ -354,8 +355,8 @@ function ProposalLineCard({
         <div>
           <dt className="text-xs text-ink-faint">כמות</dt>
           <dd className="num text-ink-body">
-            {formatQuantity(line.original_qty, line.unit)}
-            {qtyChanged && <> ← <span className="font-medium">{formatQuantity(line.proposed_qty, line.unit)}</span></>}
+            {formatQuantity(line.original_qty, line.unit, locale)}
+            {qtyChanged && <> ← <span className="font-medium">{formatQuantity(line.proposed_qty, line.unit, locale)}</span></>}
           </dd>
         </div>
         <div>

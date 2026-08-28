@@ -93,7 +93,7 @@ export function InvoiceLineReviewModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { errorText } = useT();
+  const { errorText, locale } = useT();
   const toast = useToast();
   const [lines, setLines] = useState<DraftLine[]>(
     assessment.lines.length ? assessment.lines.map(toDraft) : [toDraft()],
@@ -316,7 +316,7 @@ export function InvoiceLineReviewModal({
               {ambiguousLines.map((line) => (
                 <fieldset key={line.id} className="rounded-lg border border-line-soft p-3">
                   <legend className="px-1 text-sm font-medium">שורה <span className="num">{line.line_number}</span> · {line.description}</legend>
-                  <p className="mb-2 text-xs text-ink-muted">יש להקצות יחד את מלוא הכמות: <span className="num">{formatQuantity(line.quantity, line.unit)}</span></p>
+                  <p className="mb-2 text-xs text-ink-muted">יש להקצות יחד את מלוא הכמות: <span className="num">{formatQuantity(line.quantity, line.unit, locale)}</span></p>
                   <div className="space-y-2">
                     {(candidatesByLine.get(line.id) ?? []).map((candidate) => {
                       const key = `${line.id}:${candidate.purchase_order_item_id}`;
@@ -324,7 +324,7 @@ export function InvoiceLineReviewModal({
                         <label key={candidate.purchase_order_item_id} className="grid min-h-11 items-center gap-2 rounded-lg bg-surface-sunken px-3 py-2 sm:grid-cols-[1fr_8rem]">
                           <span className="text-sm">
                             הזמנה <span className="num">#{orderNumbers[candidate.purchase_order_id] ?? '—'}</span>
-                            <span className="block text-xs text-ink-muted">הוזמן <span className="num">{formatQuantity(candidate.ordered_quantity, candidate.unit)}</span> · התקבל <span className="num">{formatQuantity(candidate.received_quantity, candidate.unit)}</span> · <span className="num">{fmtMoneyExact(candidate.unit_price)}</span> ל־{formatUnit(candidate.unit)}</span>
+                            <span className="block text-xs text-ink-muted">הוזמן <span className="num">{formatQuantity(candidate.ordered_quantity, candidate.unit, locale)}</span> · התקבל <span className="num">{formatQuantity(candidate.received_quantity, candidate.unit, locale)}</span> · <span className="num">{fmtMoneyExact(candidate.unit_price)}</span> ל־{formatUnit(candidate.unit, locale)}</span>
                           </span>
                           <span><input aria-label={`כמות להקצאה להזמנה ${orderNumbers[candidate.purchase_order_id] ?? ''}`} className="input num" type="number" min="0" step="any" value={allocations[key] ?? ''} onChange={(event) => { setAllocations((current) => ({ ...current, [key]: event.target.value })); setMatchKey(crypto.randomUUID()); }} /></span>
                         </label>

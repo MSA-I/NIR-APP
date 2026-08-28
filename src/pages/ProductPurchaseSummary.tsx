@@ -58,7 +58,7 @@ function monthStart(): string {
 }
 
 export default function ProductPurchaseSummary() {
-  const { errorText } = useT();
+  const { errorText, locale } = useT();
   const { org } = useAuth();
   const toast = useToast();
   const [from, setFrom] = useState(monthStart);
@@ -81,7 +81,7 @@ export default function ProductPurchaseSummary() {
         <div>
           <div className="font-medium text-ink"><bdi>{r.product_name}</bdi></div>
           <div className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-ink-muted">
-            {r.unit && <span>{formatUnit(r.unit)}</span>}
+            {r.unit && <span>{formatUnit(r.unit, locale)}</span>}
             {/* Provenance, not decoration. "Some of this rests on the supplier's word" is the
                 difference between a number you can quote back to them and one you cannot. */}
             {r.includes_invoice_only_quantity && <span>· חלק מהכמות לפי החשבונית בלבד</span>}
@@ -141,7 +141,7 @@ export default function ProductPurchaseSummary() {
         const book = XLSX.utils.book_new();
         const exportRows = data.products.map((row) => neutralizeSpreadsheetRow({
           'מוצר': row.product_name,
-          'יחידה': formatUnit(row.unit),
+          'יחידה': formatUnit(row.unit, locale),
           'הוזמן': row.ordered_qty,
           'התקבל': row.received_qty,
           'חויב': row.invoiced_qty,

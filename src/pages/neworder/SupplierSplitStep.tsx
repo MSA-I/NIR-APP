@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Split, Trash2 } from 'lucide-react';
 import { fmtMoneyExact, formatQuantity, formatUnit, productLabel, todayISO } from '../../lib/format';
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { compareLine, summarizeComparison, type LineComparison } from '../../lib/orderComparison';
 import { centsFromUnits, lineUnits, moneyFromCents } from '../../lib/orderSavings';
 import {
@@ -58,6 +59,7 @@ export default function SupplierSplitStep({
   onBack,
   onContinue,
 }: SupplierSplitStepProps) {
+  const { locale } = useT();
   const [focusedSupplierId, setFocusedSupplierId] = useState<string | null>(null);
   const [panelMode, setPanelMode] = useState<'all' | 'move_group'>('all');
   const options = useMemo(
@@ -129,8 +131,8 @@ export default function SupplierSplitStep({
             const resolved = resolvedByProduct.get(item.productId);
             return (
               <div key={item.productId} className="grid items-center gap-2 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(9rem,auto)_auto_2.75rem] sm:gap-4 sm:px-4">
-                <div className="min-w-0"><div className="break-words text-sm font-medium text-ink-body"><bdi>{productLabel(item.product)}</bdi></div><div className="text-xs text-ink-muted">{formatUnit(item.product.unit)}</div></div>
-                <div className="text-sm"><span className="text-ink-muted">כמות </span><b className="num">{formatQuantity(item.qty, item.product.unit)}</b></div>
+                <div className="min-w-0"><div className="break-words text-sm font-medium text-ink-body"><bdi>{productLabel(item.product)}</bdi></div><div className="text-xs text-ink-muted">{formatUnit(item.product.unit, locale)}</div></div>
+                <div className="text-sm"><span className="text-ink-muted">כמות </span><b className="num">{formatQuantity(item.qty, item.product.unit, locale)}</b></div>
                 <div className="text-xs text-ink-muted">{resolved?.supplierId ? supplierById.get(resolved.supplierId)?.name ?? 'ספק לא זמין' : 'טרם הוקצה ספק'}</div>
                 <div className="num text-sm font-semibold">{fmtMoneyExact(resolved?.lineTotal)}</div>
                 <button type="button" className="btn-ghost btn-icon text-alert-fg" onClick={() => onRemove(item.productId)} aria-label={`הסרת ${productLabel(item.product)}`}><Trash2 size={ICON.sm} aria-hidden="true" /></button>
