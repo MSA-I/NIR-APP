@@ -301,6 +301,19 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   `check:jsx-space` passed. Dictionary parity passed at 5,087 keys per locale; `zero` still exits
   1 on 287/49, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `Analytics.tsx` + shared `ui.tsx` tail in this commit.** The pinned
+  count is now 817 Hebrew line(s) across 81 files; the protected set remains 552 lines in 34 files,
+  so the real remainder is **265 lines in 47 files**. These are the 75th and 76th surfaces locked
+  at zero. Analytics renders its full leaderboard contract in English while preserving supplier
+  names, and the owner-approved 90-day claim is pinned as a source key plus exact dictionary value.
+  The rendered English test found two shared leaks outside Analytics: DataTable's scroll-region
+  label and record count. Closing all nine remaining `ui.tsx` sites also translated row actions,
+  open-row labels, column/filter triggers and quantity-stepper fallbacks; record singular/plural now
+  comes from `Intl.PluralRules`. The stale-baseline negative control named only Analytics 13→0 and
+  ui 9→0. Focused analytics/DataTable/control suites passed 53/53; the full suite passed
+  1,748/1,748; `npx tsc --noEmit` and `check:jsx-space` passed. Dictionary parity passed at 5,108
+  keys per locale; `zero` still exits 1 on 265/47, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

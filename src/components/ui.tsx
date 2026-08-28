@@ -12,6 +12,7 @@ import type { ServerSort } from '../lib/serverList';
 import { fmtMoneyRounded } from '../lib/format';
 import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
 import { routePresentationDescription } from '../lib/routePresentation';
+import { pluralCategory } from '../lib/i18n/t';
 import { ActionMenu, type ActionMenuItem } from './ActionMenu';
 
 /* ---------- StatusBadge ---------- */
@@ -733,6 +734,7 @@ export function Stepper({ value, onChange, min = 0, max, step = 1, inputStep, la
   inputClassName?: string;
   className?: string;
 }) {
+  const { t } = useT();
   const clamp = (n: number) => Math.min(max ?? Infinity, Math.max(min, n));
   const atMin = value <= min;
   const atMax = max != null && value >= max;
@@ -801,7 +803,7 @@ export function Stepper({ value, onChange, min = 0, max, step = 1, inputStep, la
       {/* `select-none touch-manipulation`: a press-and-hold on a phone is also the gesture for
           select-text and the callout menu, and neither belongs on a quantity button. */}
       <button type="button" className="btn-secondary btn-icon select-none touch-manipulation" disabled={disabled || atMin}
-        aria-label={decrementLabel ?? `הפחתה — ${label}`} onPointerDown={() => startHold(-step)} onClick={() => stepTo(clamp(value - step))}>
+        aria-label={decrementLabel ?? t('uiTail.decrement', { label })} onPointerDown={() => startHold(-step)} onClick={() => stepTo(clamp(value - step))}>
         <Minus size={ICON.sm} aria-hidden="true" />
       </button>
       <input ref={inputRef} type="number" className={`input num w-20! text-center ${inputClassName}`} value={emptied ? '' : value} min={min} max={max} step={inputStep ?? step}
@@ -834,7 +836,7 @@ export function Stepper({ value, onChange, min = 0, max, step = 1, inputStep, la
         }}
         onBlur={() => setEmptied(false)} />
       <button type="button" className="btn-secondary btn-icon select-none touch-manipulation" disabled={disabled || atMax}
-        aria-label={incrementLabel ?? `הוספה — ${label}`} onPointerDown={() => startHold(step)} onClick={() => stepTo(clamp(value + step))}>
+        aria-label={incrementLabel ?? t('uiTail.increment', { label })} onPointerDown={() => startHold(step)} onClick={() => stepTo(clamp(value + step))}>
         <Plus size={ICON.sm} aria-hidden="true" />
       </button>
     </div>
@@ -1596,7 +1598,7 @@ function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
     <>
       <button ref={triggerRef} type="button" className="btn-secondary" aria-haspopup="dialog" aria-expanded={open}
         onClick={() => (open ? close() : setOpen(true))}>
-        <Columns3 size={ICON.sm} aria-hidden="true" /> עמודות
+        <Columns3 size={ICON.sm} aria-hidden="true" /> {t('ui.text_19')}
       </button>
       {open && createPortal(
         <div ref={panelRef} role="dialog" aria-label={t('ui.aria_label_5')} tabIndex={-1}
@@ -1621,7 +1623,7 @@ function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
  * `tsc` over the unchanged pages is the compatibility proof.
  */
 export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
-  const { t } = useT();
+  const { locale, t } = useT();
   const {
     rows, columns, onRowClick, searchLabel = t('ui.text_14'), tableLabel,
     emptyTitle = t('ui.text_15'), emptySubtitle, emptyAction, emptyIcon, toolbar, mobile = 'cards',
@@ -1877,7 +1879,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
                     <div className="min-w-0 flex-1">{body}</div>
                     {rowActions && (
                       <div className="shrink-0" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-                        <ActionMenu items={rowActions(row)} label={`פעולות עבור ${rowLabel?.(row) ?? row.id}`} />
+                        <ActionMenu items={rowActions(row)} label={t('uiTail.actionsFor', { row: rowLabel?.(row) ?? row.id })} />
                       </div>
                     )}
                   </li>
@@ -1890,7 +1892,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
           {/* The cards-to-table switch stays at `lg`, matching the shell (readiness package 5):
               at `md` the desktop table rendered inside the phone frame. */}
           <div className={mobile === 'cards' ? 'table-scroll overflow-x-auto hidden lg:block' : 'table-scroll overflow-x-auto'}
-            role="region" aria-label={`${tableLabel ?? 'טבלת נתונים'} — ניתן לגלול אופקית`} tabIndex={0}>
+            role="region" aria-label={t('uiTail.scrollableTable', { label: tableLabel ?? t('uiTail.dataTable') })} tabIndex={0}>
             <table className="w-full">
               <thead className="table-head border-b border-line-soft">
                 <tr>
@@ -1951,7 +1953,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
                         <td key={c.key} className={`td ${c.className ?? ''}`}>
                           {index === 0 && onRowClick ? (
                             <button type="button" className="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
-                              aria-label={rowLabel ? `פתיחת ${rowLabel(row)}` : undefined}
+                              aria-label={rowLabel ? t('uiTail.openRow', { row: rowLabel(row) }) : undefined}
                               onClick={(event) => { event.stopPropagation(); onRowClick(row); }}>
                               {c.render(row)}
                             </button>
@@ -1964,7 +1966,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
                               opening the menu must not also navigate. keydown is stopped too so
                               menu keys stay self-contained even if a row handler returns later. */}
                           <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-                            <ActionMenu items={rowActions(row)} label={`פעולות עבור ${rowLabel?.(row) ?? row.id}`} />
+                            <ActionMenu items={rowActions(row)} label={t('uiTail.actionsFor', { row: rowLabel?.(row) ?? row.id })} />
                           </div>
                         </td>
                       )}
@@ -1998,7 +2000,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
                 // places at a time, so no id inside it can duplicate (gate B6).
                 <button type="button" className="btn-secondary" aria-haspopup="dialog" aria-expanded={sheetOpen}
                   onClick={() => setSheetOpen(true)}>
-                  <SlidersHorizontal size={ICON.sm} aria-hidden="true" /> סינון ותצוגה
+                  <SlidersHorizontal size={ICON.sm} aria-hidden="true" /> {t('ui.title_2')}
                   {activeFilters > 0 && <span className="badge num bg-action-soft text-action-on-soft">{activeFilters}</span>}
                 </button>
               ) : null}
@@ -2018,7 +2020,10 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
                 across states so a screen reader hears it change, including down to a true 0.
                 An unavailable count never reaches here: it throws upstream (queryResult.ts). */}
             <span className="flex items-center gap-2">
-              <span aria-live="polite">{filteredCount} רשומות</span>
+              <span aria-live="polite">{t(
+                pluralCategory(locale, filteredCount) === 'one' ? 'uiTail.recordOne' : 'uiTail.recordsOther',
+                { count: filteredCount },
+              )}</span>
                 {server?.fetching && <Loader2 size={ICON.sm} className="animate-spin text-ink-faint" aria-hidden="true" />}
             </span>
             {pages > 1 && (

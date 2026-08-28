@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { Star } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -29,6 +30,7 @@ const toneClass: Record<ScoreTone, string> = {
 };
 
 export default function Analytics() {
+  const { t } = useT();
   const { data, loading, error } = useQuery<Row[]>(async () => {
     const [suppliers, metrics] = await Promise.all([
       supabase.from('suppliers').select('id, name, rating, status').is('deleted_at', null).order('name'),
@@ -44,37 +46,37 @@ export default function Analytics() {
   const rows = data ?? [];
 
   const columns: Column<Row>[] = [
-    { key: 'name', header: 'ספק', render: (r) => <span className="font-medium">{r.name}</span>, sortValue: (r) => r.name },
-    { key: 'rating', header: 'דירוג', className: 'num', sortValue: (r) => r.rating ?? 0,
+    { key: 'name', header: t('analytics.supplier'), render: (r) => <span className="font-medium">{r.name}</span>, sortValue: (r) => r.name },
+    { key: 'rating', header: t('analytics.rating'), className: 'num', sortValue: (r) => r.rating ?? 0,
       render: (r) => r.rating != null ? <span className="inline-flex items-center gap-1"><Star size={ICON.xs} className="fill-star text-star" aria-hidden="true" />{r.rating}</span> : '—' },
-    { key: 'lead', header: 'זמן אספקה', className: 'num', sortValue: (r) => r.m?.avg_lead_days ?? Number.MAX_SAFE_INTEGER,
+    { key: 'lead', header: t('analytics.leadTime'), className: 'num', sortValue: (r) => r.m?.avg_lead_days ?? Number.MAX_SAFE_INTEGER,
       render: (r) => fmtLeadDays(r.m?.avg_lead_days) },
-    { key: 'otd', header: 'עמידה בזמנים', className: 'num', sortValue: (r) => r.m?.on_time_pct ?? -1,
+    { key: 'otd', header: t('analytics.onTime'), className: 'num', sortValue: (r) => r.m?.on_time_pct ?? -1,
       render: (r) => <span className={toneClass[otdTone(r.m)]}>{fmtPct(r.m?.on_time_pct)}</span> },
     // A supplier with no supplier_metrics row has no measured counts; rendering 0 would assert
     // "nothing happened" instead of "not measured". Sorting still treats absence as 0 so the
     // unmeasured suppliers group at the bottom rather than scattering.
-    { key: 'price', header: 'שינויי מחיר (90 הימים האחרונים)', className: 'num', sortValue: (r) => r.m?.price_changes_window ?? 0,
+    { key: 'price', header: t('analytics.priceChanges90'), className: 'num', sortValue: (r) => r.m?.price_changes_window ?? 0,
       render: (r) => fmtNum(r.m?.price_changes_window ?? null) },
-    { key: 'exceptions', header: 'חריגים פתוחים', className: 'num', sortValue: (r) => r.m?.open_exceptions ?? 0,
+    { key: 'exceptions', header: t('analytics.openExceptions'), className: 'num', sortValue: (r) => r.m?.open_exceptions ?? 0,
       render: (r) => fmtNum(r.m?.open_exceptions ?? null) },
-    { key: 'credits', header: 'זיכויים פתוחים', className: 'num', sortValue: (r) => r.m?.open_credits_amount ?? 0,
+    { key: 'credits', header: t('analytics.openCredits'), className: 'num', sortValue: (r) => r.m?.open_credits_amount ?? 0,
       render: (r) => r.m?.open_credits_amount ? fmtMoneyExact(r.m.open_credits_amount) : '—' },
   ];
 
   return (
     <div className="space-y-5">
-      <PageHeader title="ביצועי ספקים"
-        meta={`${rows.length} ספקים · עמידה בזמנים מוצגת לאחר 5 קבלות לפחות לספק`} />
+      <PageHeader title={t('analytics.title')}
+        meta={t('analytics.meta', { count: rows.length })} />
       <DataTable
         rows={rows}
         columns={columns}
         searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q)}
-        searchLabel="חיפוש ספק"
-        rowLabel={(r) => `ביצועי ${r.name}`}
-        emptyTitle="אין ספקים"
-        emptySubtitle="ספקים פעילים יופיעו כאן עם מדדי הביצועים שלהם"
+        searchLabel={t('analytics.searchLabel')}
+        rowLabel={(r) => t('analytics.rowLabel', { name: r.name })}
+        emptyTitle={t('analytics.emptyTitle')}
+        emptySubtitle={t('analytics.emptySubtitle')}
       />
     </div>
   );

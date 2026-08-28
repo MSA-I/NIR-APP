@@ -5387,6 +5387,33 @@ export const he = {
     uploadAnyway: 'העלאה בכל זאת',
   },
 
+  analytics: {
+    supplier: 'ספק',
+    rating: 'דירוג',
+    leadTime: 'זמן אספקה',
+    onTime: 'עמידה בזמנים',
+    priceChanges90: 'שינויי מחיר (90 הימים האחרונים)',
+    openExceptions: 'חריגים פתוחים',
+    openCredits: 'זיכויים פתוחים',
+    title: 'ביצועי ספקים',
+    meta: '{count} ספקים · עמידה בזמנים מוצגת לאחר 5 קבלות לפחות לספק',
+    searchLabel: 'חיפוש ספק',
+    rowLabel: 'ביצועי {name}',
+    emptyTitle: 'אין ספקים',
+    emptySubtitle: 'ספקים פעילים יופיעו כאן עם מדדי הביצועים שלהם',
+  },
+
+  uiTail: {
+    decrement: 'הפחתה — {label}',
+    increment: 'הוספה — {label}',
+    actionsFor: 'פעולות עבור {row}',
+    dataTable: 'טבלת נתונים',
+    scrollableTable: '{label} — ניתן לגלול אופקית',
+    openRow: 'פתיחת {row}',
+    recordOne: '{count} רשומה',
+    recordsOther: '{count} רשומות',
+  },
+
 } as const;
 
 /**

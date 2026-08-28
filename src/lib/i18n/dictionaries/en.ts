@@ -5383,4 +5383,31 @@ export const en: Dictionary = {
     uploadAnyway: 'Upload anyway',
   },
 
+  analytics: {
+    supplier: 'Supplier',
+    rating: 'Rating',
+    leadTime: 'Delivery time',
+    onTime: 'On-time performance',
+    priceChanges90: 'Price changes (last 90 days)',
+    openExceptions: 'Open exceptions',
+    openCredits: 'Open credits',
+    title: 'Supplier performance',
+    meta: '{count} suppliers · On-time performance is shown after at least 5 receipts per supplier',
+    searchLabel: 'Search suppliers',
+    rowLabel: 'Performance for {name}',
+    emptyTitle: 'No suppliers',
+    emptySubtitle: 'Active suppliers will appear here with their performance metrics',
+  },
+
+  uiTail: {
+    decrement: 'Decrease — {label}',
+    increment: 'Increase — {label}',
+    actionsFor: 'Actions for {row}',
+    dataTable: 'Data table',
+    scrollableTable: '{label} — horizontally scrollable',
+    openRow: 'Open {row}',
+    recordOne: '{count} record',
+    recordsOther: '{count} records',
+  },
+
 };
