@@ -110,6 +110,13 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   EXPECT: GATE_I18N_ZERO_OK
   EVIDENCE: pending — `exit=1`, `gate-i18n: extraction is not finished — 3634 Hebrew line(s) across 138 file(s)` (measured 28.08.2026 after PaymentRequests, Settings, Onboarding and InvoiceDetail; 4,982 at the start of the phase). **This oracle was replaced after the ledger's first run, and the ledger is what caught it.** It originally ran `ratchet`, which passes while thousands of lines remain, so the gate reported MET on its first day with 5,311 lines still hardcoded — the gate's English title and its command were measuring different things. `zero` fails until the count is actually zero.
 
+  **PROGRESS, measured 28.08.2026 at `bd594c7` (100 commits above `main`).** The count is
+  1,113 Hebrew line(s) across 99 file(s), of which 530 in 30 files are documented exceptions —
+  so what is actually left to extract is **583 lines in 69 files**. 58 surfaces are locked at
+  zero. The phase began this branch at 3,131 and round 3 alone took 2,135 to 1,113. The file
+  list, in descending order and with what the extractor can and cannot take from each, is in
+  `docs/HANDOFF-english-language-20260828-session3.md`. Nothing here is blocked; it is work.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER
