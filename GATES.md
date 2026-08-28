@@ -506,6 +506,34 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   EVIDENCE REQUIRED: the error list produced by deleting the one-argument signature is pasted here
   **before** the work — 267 sites in 46 files is the measurement, and `tsc` returning 0 afterwards
   is the only proof each one was answered.
+  MEASURED BEFORE THE WORK, on this branch: **265 errors in 50 files** (the plan measured 267 in 46
+  on `main`; the difference is the branch, not the method). Call sites counted directly:
+  **233 occurrences on 214 lines in 41 non-spec files** — `fmtMoneyExact` 202, `fmtMoneyRounded` 30,
+  `fmtMoneyCompact` 1. Every error is `TS2554: Expected 2 arguments, but got 1`, which is one place
+  where a person has to answer "which currency is this figure in".
+
+  | file | errors | | file | errors |
+  |---|---|---|---|---|
+  | `pages/Reports.tsx` | 24 | | `pages/dashboards/AccountantDashboard.tsx` | 5 |
+  | `pages/Dashboard.tsx` | 18 | | `pages/SupplierProposalReview.tsx` | 5 |
+  | `pages/InvoiceDetail.tsx` | 15 | | `pages/Payments.tsx` | 4 |
+  | `pages/neworder/SupplierSplitStep.tsx` | 13 | | `components/document-review/DocumentAssessmentPanel.tsx` | 4 |
+  | `pages/AccountantPaymentQueue.tsx` | 12 | | `pages/quickCreateSupplierWiring.spec.tsx` | 3 |
+  | `pages/Orders.tsx` | 11 | | `pages/ProductPurchaseSummary.tsx` | 3 |
+  | `pages/Suppliers.tsx` | 10 | | `pages/Inventory.tsx` | 3 |
+  | `pages/neworder/SupplierGroupCard.tsx` | 9 | | `pages/Credits.tsx` | 3 |
+  | `pages/PriceLists.tsx` | 9 | | `lib/monthlyReport.spec.ts` | 3 |
+  | `pages/PaymentRequests.tsx` | 9 | | `pages/Products.tsx` | 2 |
+  | `pages/FinancialSupplier.tsx` | 9 | | `pages/Invoices.tsx` | 2 |
+  | `pages/Bank.tsx` | 9 | | `pages/DocumentOperations.tsx` | 2 |
+  | `components/charts.tsx` | 9 | | `components/ui.tsx` | 2 |
+  | `pages/neworder/NewOrder.tsx` | 8 | | `components/document-review/PriceListAutomationReadiness.tsx` | 2 |
+  | `pages/neworder/MinimumFixPanel.tsx` | 8 | | `portal/i18n.ts` | 1 |
+  | `pages/Expenses.tsx` | 8 | | `pages/supplierCardHonesty.spec.tsx` | 1 |
+  | `lib/checks.ts` | 7 | | `pages/serverListScreens.spec.tsx` | 1 |
+  | `pages/neworder/SummaryStep.tsx` | 6 | | `pages/neworder/ProductStep.tsx` | 1 |
+  | `pages/dashboardDueWindow.spec.tsx` | 6 | | `pages/Onboarding.tsx` | 1 |
+  | `lib/supplierLogChanges.spec.ts` | 6 | | `pages/Exceptions.tsx` · `pages/ConsolidatedInvoices.tsx` · `pages/Analytics.tsx` · `lib/supplierLogChanges.ts` · `lib/share.ts` · `components/assistant/assistantPanel.spec.tsx` · `components/assistant/AnswerView.tsx` · `components/PriceListUpload.tsx` · `components/OrgSubscriptionPanel.tsx` · `components/InvoiceLineReviewModal.tsx` · `components/GlobalSearch.tsx` | 1 each |
 
 - [ ] P3-G2: the tests and the money guard survive it
   CHECK: npm run -s test && npm run -s check:money
