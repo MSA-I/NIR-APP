@@ -590,21 +590,34 @@ do $assert_0227$
 declare
   v_result jsonb;
   v_violations text;
+  v_probe_org uuid := gen_random_uuid();
 begin
-  v_result := private.resolve_document_currency(
-    (select id from public.organizations order by created_at, id limit 1), null,
-    jsonb_build_object('fields', jsonb_build_array(
-      jsonb_build_object('key', 'currency', 'value', 'USD'))));
-  if v_result ->> 'currency' <> 'USD' then
-    raise exception '0227: USD did not resolve';
-  end if;
-  v_result := private.resolve_document_currency(
-    (select id from public.organizations order by created_at, id limit 1), null,
-    jsonb_build_object('fields', jsonb_build_array(
-      jsonb_build_object('key', 'currency', 'value', 'US0'))));
-  if v_result ->> 'status' <> 'unrecognised' then
-    raise exception '0227: US0 was not refused';
-  end if;
+  -- Migrations run before seed on a clean `supabase start`, so there may be no organisation to
+  -- resolve against. Prove the live function on a real FK-valid row inside a subtransaction, then
+  -- deliberately roll the entire fixture back. Any other error is re-raised and fails migration.
+  begin
+    insert into public.organizations (id, name)
+    values (v_probe_org, '__0227_currency_probe__');
+
+    v_result := private.resolve_document_currency(
+      v_probe_org, null,
+      jsonb_build_object('fields', jsonb_build_array(
+        jsonb_build_object('key', 'currency', 'value', 'USD'))));
+    if v_result ->> 'currency' <> 'USD' then
+      raise exception '0227: USD did not resolve';
+    end if;
+    v_result := private.resolve_document_currency(
+      v_probe_org, null,
+      jsonb_build_object('fields', jsonb_build_array(
+        jsonb_build_object('key', 'currency', 'value', 'US0'))));
+    if v_result ->> 'status' <> 'unrecognised' then
+      raise exception '0227: US0 was not refused';
+    end if;
+
+    raise exception '0227_probe_rollback';
+  exception when others then
+    if sqlerrm <> '0227_probe_rollback' then raise; end if;
+  end;
 
   if position('currency_unrecognised' in (select prosrc from pg_proc where oid =
        'private.document_reconciliation_assessment(uuid,text,uuid,uuid,jsonb,date)'::regprocedure)) = 0

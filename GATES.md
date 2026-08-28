@@ -776,6 +776,14 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   then exposed seven stale `business-summary` fixtures and one lost null-fact contract; after the
   narrow repair, all 228 Deno tests and frozen `deno check` pass. Gate remains open until a fresh
   workflow run succeeds on the new SHA.
+  SECOND ATTEMPT 28.08.2026: workflow-dispatch run `33197194457` on `f362077` passed Assistant,
+  dependency and OCR contracts, then failed during clean `supabase start` before SQL suites:
+  `0227` selected the first organisation for its currency-resolver self-check, but migrations run
+  before seed and the table was empty (`document_currency_requires_org`). The self-check now creates
+  a real FK-valid organisation inside a PL/pgSQL subtransaction, proves USD and malformed `US0`,
+  then deliberately raises `0227_probe_rollback`; any other error is re-raised. Running that exact
+  block against the migrated local DB returned `BEGIN / DO / ROLLBACK`, with no row left behind.
+  Gate remains open until the clean-reset CI succeeds on the next SHA.
 
 - [ ] P6-G2: the rollout matrix rows that were touched were actually executed
   EVIDENCE: pending — the union of `Migration / חוזה DB` and `Frontend` rows requires backup, dry-run + ledger,
