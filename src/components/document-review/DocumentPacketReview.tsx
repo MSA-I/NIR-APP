@@ -1,4 +1,5 @@
 import { useT } from '../../lib/i18n/LocaleProvider';
+import type { TKey } from '../../lib/i18n/t';
 import {
   CheckCircle2, ChevronDown, ChevronsDownUp, ChevronsUpDown, FileStack, Loader2,
 } from 'lucide-react';
@@ -62,14 +63,14 @@ function manifestValid(segments: SegmentDraft[], pageCount: number): boolean {
  * Graded against the STORED segment, never the live draft. A reviewer who corrects a type must not
  * have the row he is editing vanish into the folded group under his cursor.
  */
-function segmentAttentionReason(
+function segmentAttentionKey(
   segment: DocumentPacketSegment | undefined,
   packet: DocumentPacket,
-): string | null {
-  if (!segment) return 'החלק לא נקרא';
-  if (!segment.document_type || segment.document_type === 'other') return 'הסוג לא זוהה';
-  if (segment.confidence == null || !Number.isFinite(segment.confidence)) return 'הזיהוי לא נמדד';
-  if (segment.confidence < packet.confidence_threshold) return 'זיהוי נמוך';
+): TKey | null {
+  if (!segment) return 'packetReview.attentionUnread';
+  if (!segment.document_type || segment.document_type === 'other') return 'packetReview.attentionTypeUnknown';
+  if (segment.confidence == null || !Number.isFinite(segment.confidence)) return 'packetReview.attentionUnmeasured';
+  if (segment.confidence < packet.confidence_threshold) return 'packetReview.attentionLowConfidence';
   return null;
 }
 
@@ -125,13 +126,13 @@ function SegmentGroup({ id, testId, title, count, tone, summary, open, onOpenCha
 
 /** One editable part. Identical anatomy whether it is open on top or folded below — the only
     difference is the attention badge, so a folded part is never a different kind of thing. */
-function SegmentEditor({ draft, stored, pageCount, editable, busy, attention, onChange }: {
+function SegmentEditor({ draft, stored, pageCount, editable, busy, attentionKey, onChange }: {
   draft: SegmentDraft;
   stored: DocumentPacketSegment | undefined;
   pageCount: number;
   editable: boolean;
   busy: boolean;
-  attention: string | null;
+  attentionKey: TKey | null;
   onChange: (patch: Partial<SegmentDraft>) => void;
 }) {
   const { t } = useT();
@@ -139,17 +140,17 @@ function SegmentEditor({ draft, stored, pageCount, editable, busy, attention, on
     <SubPanel as="article">
       <div className="grid gap-3 sm:grid-cols-[6rem_6rem_minmax(0,1fr)]">
         <label>
-          <span className="label">עמוד ראשון</span>
+          <span className="label">{t('packetReview.text')}</span>
           <input className="input num" type="number" min={1} max={pageCount} value={draft.start_page}
             disabled={!editable || busy} onChange={(event) => onChange({ start_page: Number(event.target.value) })} />
         </label>
         <label>
-          <span className="label">עמוד אחרון</span>
+          <span className="label">{t('packetReview.text_2')}</span>
           <input className="input num" type="number" min={1} max={pageCount} value={draft.end_page}
             disabled={!editable || busy} onChange={(event) => onChange({ end_page: Number(event.target.value) })} />
         </label>
         <label>
-          <span className="label">סוג מסמך</span>
+          <span className="label">{t('packetReview.text_3')}</span>
           <select className="input" value={draft.document_type} disabled={!editable || busy}
             onChange={(event) => onChange({ document_type: event.target.value as DocumentInterpretationType })}>
             {DOCUMENT_TYPES.map((type) => <option key={type} value={type}>{t(DOCUMENT_TYPE_KEYS[type])}</option>)}
@@ -158,12 +159,12 @@ function SegmentEditor({ draft, stored, pageCount, editable, busy, attention, on
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-ink-muted">
         <span className="flex flex-wrap items-center gap-2">
-          <span>חלק <span className="num">{draft.ordinal}</span> · {confidenceLabel(draft.confidence, t)}</span>
-          {attention && <span className="badge-await">{attention}</span>}
+          <span>{t('packetReview.confidenceLabel')} <span className="num">{draft.ordinal}</span> · {confidenceLabel(draft.confidence, t)}</span>
+          {attentionKey && <span className="badge-await">{t(attentionKey)}</span>}
         </span>
         {stored?.child_document_id && (
           <Link className="btn-secondary" to={`/documents/${stored.child_document_id}/review`}>
-            פתיחת המסמך שנוצר
+            {t('packetReview.text_4')}
           </Link>
         )}
       </div>
@@ -172,7 +173,7 @@ function SegmentEditor({ draft, stored, pageCount, editable, busy, attention, on
 }
 
 export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const packet = snapshot.packet;
   const [drafts, setDrafts] = useState(() => draftsFromSnapshot(snapshot));
   const [reason, setReason] = useState('');
@@ -208,18 +209,18 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
 
   // One attention verdict per part, index-aligned with `drafts`. Derived from the stored segments,
   // so the split describes what the machine produced and does not move while someone edits.
-  const attentionReasons = useMemo(
-    () => (packet ? snapshot.packetSegments.map((segment) => segmentAttentionReason(segment, packet)) : []),
+  const attentionKeys = useMemo(
+    () => (packet ? snapshot.packetSegments.map((segment) => segmentAttentionKey(segment, packet)) : []),
     [snapshot.packetSegments, packet],
   );
 
   const needsAttention = useMemo(
-    () => snapshot.packetSegments.flatMap((_, index) => attentionReasons[index] ? [index] : []),
-    [snapshot.packetSegments, attentionReasons],
+    () => snapshot.packetSegments.flatMap((_, index) => attentionKeys[index] ? [index] : []),
+    [snapshot.packetSegments, attentionKeys],
   );
   const classified = useMemo(
-    () => snapshot.packetSegments.flatMap((_, index) => attentionReasons[index] ? [] : [index]),
-    [snapshot.packetSegments, attentionReasons],
+    () => snapshot.packetSegments.flatMap((_, index) => attentionKeys[index] ? [] : [index]),
+    [snapshot.packetSegments, attentionKeys],
   );
 
   if (!packet) return null;
@@ -260,7 +261,7 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
         pageCount={currentPacket.page_count}
         editable={editable}
         busy={busy}
-        attention={attentionReasons[index]}
+        attentionKey={attentionKeys[index]}
         onChange={(patch) => update(index, patch)}
       />
     );
@@ -273,7 +274,7 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
 
   async function approve() {
     if (!manifestValid(drafts, currentPacket.page_count)) {
-      setError('טווחי העמודים חייבים לכסות את כל הקובץ ברצף, ללא חפיפה או דילוג.');
+      setError(t('packetReview.setError'));
       return;
     }
     setBusy(true);
@@ -312,20 +313,20 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
     <section className="card card-pad" aria-labelledby="document-packet-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id="document-packet-title" className="section-title">חבילת מסמכים בקובץ אחד</h2>
-          <p className="mt-1 text-sm text-ink-muted">הקובץ המקורי נשמר כמקור בלבד. כל חלק יעבור עיבוד ואישור בנפרד.</p>
+          <h2 id="document-packet-title" className="section-title">{t('packetReview.text_5')}</h2>
+          <p className="mt-1 text-sm text-ink-muted">{t('packetReview.text_6')}</p>
         </div>
         <span className={packet.status === 'materialized' ? 'badge-done' : packet.status === 'failed' ? 'badge-alert' : 'badge-await'}>
-          {packet.status === 'materialized' ? 'הפיצול הושלם' : packet.status === 'approved' ? 'הפיצול אושר' : packet.status === 'failed' ? 'הפיצול נכשל' : 'נדרשת בדיקה'}
+          {packet.status === 'materialized' ? t('packetReview.text_7') : packet.status === 'approved' ? t('packetReview.text_8') : packet.status === 'failed' ? t('packetReview.text_9') : t('packetReview.text_10')}
         </span>
       </div>
 
       {/* The count line, before anything to scroll: how big the file is, how much of it the machine
           settled, and how much is left for a person. Every figure is measured — none is a label. */}
       <p className="mt-3 text-sm text-ink-body" data-testid="packet-counts">
-        <span className="num">{currentPacket.page_count}</span> עמודים
-        {' · '}<span className="num">{classifiedPages}</span> מסווגים
-        {attentionPages > 0 && <>{' · '}<span className="num">{attentionPages}</span> דורשים בדיקה</>}
+        <span className="num">{currentPacket.page_count}</span> {t('packetReview.pagesWord')}
+        {' · '}<span className="num">{classifiedPages}</span> {t('packetReview.classifiedWord')}
+        {attentionPages > 0 && <>{' · '}<span className="num">{attentionPages}</span> {t('packetReview.text_11')}</>}
       </p>
 
       {/* Two facts about the FILE, said once each, at the top — and deliberately NOT in one
@@ -337,10 +338,7 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
       {currentPacket.source_partial && (
         <Note tone="await" className="mt-4">
           <span className="min-w-0 flex-1">
-            לא כל הקובץ נקרא: לפחות עמוד אחד לא הניב טקסט. קריאת OCR בתשלום מוגבלת
-            ל־<span className="num">{PAID_OCR_PAGE_CAP}</span> עמודים למסמך, ולכן בסריקה ארוכה יותר
-            העמודים שמעבר לכך אינם נקראים כלל. טווחי העמודים למטה נגזרו ממה שכן נקרא, ולכן החבילה
-            כולה דורשת אישור אדם — לא חלק מסוים בה.
+            {t('packetReview.sourcePartialNote', { cap: PAID_OCR_PAGE_CAP })}
           </span>
         </Note>
       )}
@@ -348,9 +346,7 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
       {currentPacket.page_count > AUTOMATIC_SPLIT_PAGE_CEILING && (
         <Note tone="idle" className="mt-4">
           <span className="min-w-0 flex-1">
-            הקובץ ארוך מ־<span className="num">{AUTOMATIC_SPLIT_PAGE_CEILING}</span> עמודים — מעל
-            תקרת הפיצול האוטומטי, ולכן הפיצול נשאר לאישור אדם גם כשהמדיניות מופעלת וגם כשכל החלקים
-            זוהו בביטחון. זו אמירה על אורך הקובץ, לא על איכות הקריאה.
+            {t('packetReview.aboveSplitCeilingNote', { ceiling: AUTOMATIC_SPLIT_PAGE_CEILING })}
           </span>
         </Note>
       )}
@@ -361,14 +357,14 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
       {editable && (
         <div className="mt-4 border-t border-line pt-4" data-testid="packet-decision">
           <label>
-            <span className="label">הערה ליומן הביקורת — רשות</span>
+            <span className="label">{t('packetReview.text_17')}</span>
             <textarea className="input" rows={2} maxLength={1000} value={reason} disabled={busy}
               onChange={(event) => setReason(event.target.value)} />
           </label>
-          <PrimaryDecision className="mt-3" label="אישור פיצול החבילה">
+          <PrimaryDecision className="mt-3" label={t('packetReview.label')}>
             <button type="button" className="btn-primary" disabled={busy} onClick={() => void approve()}>
               {busy ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <CheckCircle2 size={ICON.md} aria-hidden="true" />}
-              {busy ? 'יוצר מסמכים נפרדים…' : 'אישור הפיצול ויצירת המסמכים'}
+              {busy ? t('packetReview.text_18') : t('packetReview.text_19')}
             </button>
           </PrimaryDecision>
         </div>
@@ -376,10 +372,10 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
 
       {canMaterialize && (
         <div className="mt-4 border-t border-line pt-4" data-testid="packet-decision">
-          <PrimaryDecision label="יצירת המסמכים הנפרדים">
+          <PrimaryDecision label={t('packetReview.label_2')}>
             <button type="button" className="btn-primary" disabled={busy} onClick={() => void retryMaterialization()}>
               {busy ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <FileStack size={ICON.md} aria-hidden="true" />}
-              {busy ? 'יוצר מסמכים נפרדים…' : 'יצירת המסמכים הנפרדים'}
+              {busy ? t('packetReview.text_20') : t('packetReview.text_21')}
             </button>
           </PrimaryDecision>
         </div>
@@ -390,7 +386,7 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
       {snapshot.packetSegments.length > 0 && (
         <div className="mt-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="section-title">חלקי הקובץ</h3>
+            <h3 className="section-title">{t('packetReview.text_22')}</h3>
             {/* The reviewer's own control over the whole list, next to its heading rather than on
                 any row. It changes what is on screen and nothing about what is submitted. */}
             <button type="button" className="btn-ghost" onClick={toggleAllGroups}
@@ -398,7 +394,7 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
               {anyGroupOpen
                 ? <ChevronsDownUp size={ICON.md} aria-hidden="true" />
                 : <ChevronsUpDown size={ICON.md} aria-hidden="true" />}
-              {anyGroupOpen ? 'קיפול כל החלקים' : 'פתיחת כל החלקים'}
+              {anyGroupOpen ? t('packetReview.text_23') : t('packetReview.text_24')}
             </button>
           </div>
 
@@ -408,10 +404,10 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
               testId="packet-attention"
               // Both groups count PAGES on the badge and PARTS on the summary, in that order — the
               // same two units, in the same places, as the count line at the top of the panel.
-              title="עמודים דורשים בדיקה"
+              title={t('packetReview.title')}
               count={attentionPages}
               tone="await"
-              summary={<><span className="num">{needsAttention.length}</span> חלקים</>}
+              summary={<><span className="num">{needsAttention.length}</span> {t('packetReview.partsWord')}</>}
               open={attentionOpen}
               onOpenChange={setAttentionOpen}
             >
@@ -423,12 +419,12 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
             <SegmentGroup
               id={classifiedGroupId}
               testId="packet-classified"
-              title="עמודים מסווגים"
+              title={t('packetReview.title_2')}
               count={classifiedPages}
               tone="idle"
               summary={<>
-                <span className="num">{classified.length}</span> חלקים
-                {classifiedCreated > 0 && <>{' · '}<span className="num">{classifiedCreated}</span> נוצרו</>}
+                <span className="num">{classified.length}</span> {t('packetReview.partsWord')}
+                {classifiedCreated > 0 && <>{' · '}<span className="num">{classifiedCreated}</span> {t('packetReview.text_26')}</>}
               </>}
               open={classifiedOpen}
               onOpenChange={setClassifiedOpen}
