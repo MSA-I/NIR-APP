@@ -52,26 +52,73 @@ function createTableBlocks(text) {
       i++;
     }
     blocks.push({ table: match[1].replace(/"/g, '').replace(/^public\./, ''), body: text.slice(re.lastIndex, i - 1) });
+    re.lastIndex = i;
   }
   return blocks;
 }
 
-/** Every numeric column the migrations declare, whether in a create table or a later add column. */
+/**
+ * Statements, split on the `;` that actually ends one.
+ *
+ * A naive split loses more than half the schema: `;` appears inside every `$$ … $$` function body,
+ * inside string literals and inside `--` comments. This walker skips all three, which is what makes
+ * a multi-column `alter table … add column a …, add column b …` readable as one statement.
+ */
+function statements(text) {
+  const out = [];
+  let i = 0;
+  let start = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === '$') {
+      const tag = /^\$[a-z_]*\$/i.exec(text.slice(i));
+      if (tag) {
+        const end = text.indexOf(tag[0], i + tag[0].length);
+        i = end === -1 ? text.length : end + tag[0].length;
+        continue;
+      }
+    }
+    if (c === "'") { const end = text.indexOf("'", i + 1); i = end === -1 ? text.length : end + 1; continue; }
+    if (c === '-' && text[i + 1] === '-') { const nl = text.indexOf('\n', i); i = nl === -1 ? text.length : nl + 1; continue; }
+    if (c === ';') { out.push(text.slice(start, i)); start = i + 1; }
+    i++;
+  }
+  out.push(text.slice(start));
+  return out;
+}
+
+const alterTarget = (stmt) => {
+  const m = /alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?([a-z_."]+)/i.exec(stmt);
+  return m ? m[1].replace(/"/g, '').replace(/^public\./, '') : null;
+};
+
+/**
+ * Every numeric column the migrations declare, in a create table or in any later add column.
+ *
+ * `numeric\b` and not `numeric\(\d+,\d+\)`: a bare `numeric` is still money or still a quantity,
+ * and the first draft of this function missed 28 of the 79 columns in the tree by insisting on a
+ * precision and by reading only the FIRST `add column` of a multi-column `alter table`. The
+ * inventory it returns was checked column-for-column against `pg_attribute` on a database that had
+ * replayed every migration — 79 parsed, 79 live, no difference in either direction.
+ */
 function declaredNumericColumns() {
   const found = new Map();
   for (const file of files) {
     const text = read(file);
     for (const { table, body } of createTableBlocks(text)) {
       for (const line of body.split('\n')) {
-        const m = /^\s*([a-z_]+)\s+numeric\(\d+,\s*\d+\)/i.exec(line);
+        const m = /^\s*([a-z_]+)\s+numeric\b/i.exec(line);
         if (m && !found.has(`${table}.${m[1]}`)) found.set(`${table}.${m[1]}`, file);
       }
     }
-    const add = /alter\s+table\s+(?:if\s+exists\s+)?([a-z_."]+)[\s\S]{0,200}?add\s+column\s+(?:if\s+not\s+exists\s+)?([a-z_]+)\s+numeric\(\d+,\s*\d+\)/gi;
-    let m;
-    while ((m = add.exec(text)) !== null) {
-      const key = `${m[1].replace(/"/g, '').replace(/^public\./, '')}.${m[2]}`;
-      if (!found.has(key)) found.set(key, file);
+    for (const stmt of statements(text)) {
+      const table = alterTarget(stmt);
+      if (!table) continue;
+      const add = /add\s+column\s+(?:if\s+not\s+exists\s+)?([a-z_]+)\s+numeric\b/gi;
+      let m;
+      while ((m = add.exec(stmt)) !== null) {
+        if (!found.has(`${table}.${m[1]}`)) found.set(`${table}.${m[1]}`, file);
+      }
     }
   }
   return found;
@@ -85,9 +132,10 @@ function tablesCarryingCurrency() {
     for (const { table, body } of createTableBlocks(text)) {
       if (/^\s*currency\s+/im.test(body)) carriers.add(table);
     }
-    const add = /alter\s+table\s+(?:if\s+exists\s+)?([a-z_."]+)[\s\S]{0,200}?add\s+column\s+(?:if\s+not\s+exists\s+)?currency\s/gi;
-    let m;
-    while ((m = add.exec(text)) !== null) carriers.add(m[1].replace(/"/g, '').replace(/^public\./, ''));
+    for (const stmt of statements(text)) {
+      const table = alterTarget(stmt);
+      if (table && /add\s+column\s+(?:if\s+not\s+exists\s+)?currency\s/i.test(stmt)) carriers.add(table);
+    }
   }
   return carriers;
 }
@@ -112,7 +160,11 @@ function assertColumns() {
     const carriers = tablesCarryingCurrency();
     for (const [column, carrier] of Object.entries(baseline.money)) {
       const table = column.slice(0, column.lastIndexOf('.'));
-      if (carrier === 'own' || carrier === 'allocation') {
+      if (carrier === 'evidence') {
+        // Evidence is read, never rewritten (plan §3.3). Its currency is decided by the reader of
+        // the interpretation that produced it, so there is no column here to check.
+        continue;
+      } else if (carrier === 'own' || carrier === 'allocation') {
         if (!carriers.has(table)) {
           problems.push(`  ${column} is marked "${carrier}" but ${table} has no currency column.`);
         }

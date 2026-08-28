@@ -1,10 +1,11 @@
 {
-  "__reason": "Every numeric column the migrations declare, classified once, by hand. `numeric(12,2)` is NOT a synonym for money: 23 of the columns below are quantities, rates and confidences, and giving any of them a currency is the first failure mode of a search-and-replace through this schema (PLAN-multi-currency-20260828 §1.1). The list is pinned the way scripts/i18n-baseline.json is pinned — a numeric column that appears in a migration and in neither list fails check:currency, so the next money column cannot be added quietly.",
+  "__reason": "Every numeric column the migrations declare, classified once, by hand. `numeric(12,2)` is NOT a synonym for money: most of the columns below are quantities, rates, quota limits and confidences, and giving any of them a currency is the first failure mode of a search-and-replace through this schema (PLAN-multi-currency-20260828 §1.1). The list is pinned the way scripts/i18n-baseline.json is pinned — a numeric column that appears in a migration and in neither list fails check:currency, so the next money column cannot be added quietly. The inventory was verified against pg_attribute on a database that had replayed every migration: 79 parsed, 79 live.",
 
   "__carriers": {
     "own": "the table carries its own `currency` column — a document or transaction head, a price list row, or a threshold (plan §2)",
     "inherits:<table>": "no column of its own; the currency is the parent row's. A document is never printed in two currencies (plan §2)",
-    "allocation": "no currency of its own by design; the composite foreign keys make a cross-currency link unrepresentable rather than merely rejected (plan §4.1)"
+    "allocation": "no currency of its own by design; the composite foreign keys make a cross-currency link unrepresentable rather than merely rejected (plan §4.1)",
+    "evidence": "money, but a record of what a document or a model said — plan §3.3's protected class. It is read, never rewritten, so it gets no currency column and its currency is decided by whoever reads the interpretation that produced it"
   },
 
   "money": {
@@ -13,6 +14,8 @@
     "supplier_products.previous_price": "own",
     "price_history.price": "own",
     "purchase_requests.split_total": "own",
+    "purchase_requests.single_supplier_total": "own",
+    "purchase_requests.savings_amount": "own",
     "purchase_request_items.unit_price": "inherits:purchase_requests",
     "purchase_order_items.unit_price": "inherits:purchase_orders",
     "invoices.amount_before_vat": "own",
@@ -31,12 +34,20 @@
     "bank_allocations.amount": "allocation",
     "approval_policy_configurations.threshold_amount": "own",
     "supplier_order_proposals.total_delta": "inherits:purchase_orders",
-    "supplier_order_proposal_lines.original_unit_price": "inherits:supplier_order_proposals",
-    "supplier_order_proposal_lines.proposed_unit_price": "inherits:supplier_order_proposals",
-    "supplier_order_proposal_lines.line_delta": "inherits:supplier_order_proposals",
+    "supplier_order_proposal_lines.original_unit_price": "inherits:purchase_orders",
+    "supplier_order_proposal_lines.proposed_unit_price": "inherits:purchase_orders",
+    "supplier_order_proposal_lines.line_delta": "inherits:purchase_orders",
     "plan_prices.amount": "inherits:plan_price_catalogues",
-    "organization_billing_periods.amount": "own"
+    "organization_billing_periods.amount": "own",
+
+    "price_list_interpretation_lines.unit_price": "evidence",
+    "price_list_shadow_lines.current_unit_price": "evidence",
+    "price_list_shadow_lines.proposed_unit_price": "evidence",
+    "price_list_calibration_reviews.expected_unit_price": "evidence",
+    "assistant_facts.value_numeric": "evidence"
   },
+
+  "__assistantFactsNote": "assistant_facts.value_numeric is money whenever its sibling `unit` column reads 'ils', and that check constraint (0164) accepts no other currency. The row is evidence of what the assistant cited in one run, so it is not rewritten — but the readers that PRODUCE it become currency-aware in phase 2, and the `unit` check must widen with them or a dollar figure will be stamped as shekels at the moment it is quoted. Recorded here because the plan never scoped the assistant, and a gap nobody wrote down is a gap nobody closes.",
 
   "notMoney": {
     "organizations.vat_rate": "a tax rate, not an amount",
@@ -56,16 +67,39 @@
     "next_order_items.qty": "quantity",
     "supplier_order_proposal_lines.original_qty": "quantity",
     "supplier_order_proposal_lines.proposed_qty": "quantity",
+    "purchase_requests.savings_percent": "a percentage",
+    "price_list_shadow_lines.price_change_percent": "a percentage",
+    "price_list_automation_scope_decisions.evidence_accuracy": "a ratio",
+
     "bank_allocations.confidence": "model confidence",
     "org_autonomy_policies.min_confidence": "model confidence",
     "private.autonomy_policy_definitions.baseline_min_confidence": "model confidence",
     "document_packets.confidence_threshold": "model confidence",
     "document_packet_segments.confidence": "model confidence",
-    "document_scan_outputs.rotation_degrees": "an angle"
+    "document_annotations.confidence": "model confidence",
+    "document_filings.confidence": "model confidence",
+    "document_rule_applications.confidence": "model confidence",
+    "delivery_note_interpretation_decisions.decision_confidence": "model confidence",
+    "price_list_interpretation_decisions.decision_confidence": "model confidence",
+    "price_list_shadow_runs.decision_confidence": "model confidence",
+    "price_list_shadow_runs.evaluated_min_confidence": "model confidence",
+    "document_scan_outputs.rotation_degrees": "an angle",
+
+    "plan_entitlements.numeric_limit": "a quota limit, counted in records or seats",
+    "organization_entitlement_overrides.numeric_limit": "a quota limit",
+    "private.plan_quota_decisions.decided_limit": "a quota limit",
+    "private.plan_quota_decisions.previous_limit": "a quota limit",
+    "private.usage_counters.quantity": "usage counted in records",
+    "private.usage_events.quantity": "usage counted in records",
+    "private.usage_period_rebase_ledger.quantity": "usage counted in records",
+    "private.referral_grants.quantity": "granted months, counted",
+    "private.referral_grants.revoked_quantity": "granted months, counted",
+    "private.referral_program_settings.grant_quantity": "granted months, counted",
+    "private.referral_program_settings.period_ceiling": "granted months, counted"
   },
 
   "extraMoneyNames": ["balance", "open_balance", "balance_in_currency", "open_balance_in_currency"],
 
-  "aggregatesEnforcedFrom": "0214",
-  "__aggregatesReason": "The 111 money aggregation sites that predate this work are rewritten in phase 2, not by this guard. From 0214 onward a new function that sums money and never says the word `currency` is the exact way the false total comes back, so it fails here."
+  "aggregatesEnforcedFrom": "0217",
+  "__aggregatesReason": "The 111 money aggregation sites that predate this work are rewritten in phase 2, not by this guard. From 0217 onward a new function that sums money and never says the word `currency` is the exact way the false total comes back, so it fails here."
 }
