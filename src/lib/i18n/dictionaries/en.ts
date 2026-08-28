@@ -5069,4 +5069,28 @@ export const en: Dictionary = {
     newProductForQuery: 'New product — {query}',
   },
 
+  productNameRepair: {
+    text: 'The number of pending source corrections is unknown — the dry-run report was not loaded.',
+    text_2: 'No source-name repair dry-run report has been produced. Until it is produced, the number of names requiring correction is unknown; this screen makes no claim that it is zero.',
+    text_3: 'No source corrections are pending.',
+    text_4: 'Source-name repair',
+    text_5: 'Every change is read again from the original price list. Compare the old and new names with the source-row evidence and approve each product separately.',
+    toast: 'Enter a reason before approving the correction',
+    toast_2: 'The product name was corrected and recorded in the audit log',
+    text_6: 'Stored name',
+    text_7: 'Awaiting approval',
+    text_8: 'No change',
+    text_9: 'Blocked',
+    text_10: 'Name read from source',
+    text_11: 'Source:',
+    text_12: '· row',
+    text_13: 'There is not enough evidence to approve a change.',
+    text_14: 'Reason for approving the correction',
+    reasonMissingSource: 'The product was not found in this source by an unambiguous SKU or barcode. The name remains blocked.',
+    reasonAmbiguousSource: 'The source contains several possible names for the same product. None may be selected automatically.',
+    reasonSourceNameMissing: 'The source row does not contain a product name that can be approved.',
+    reasonSourceSameAsCurrent: 'The source name matches the stored name; there is no change to approve.',
+    approveRepair: 'Approve correction',
+  },
+
 };
