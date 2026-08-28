@@ -11,7 +11,7 @@
  * successful delivery and the pending/failed counts, and never a secret and never a raw error.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { ToastProvider } from '../components/ui';
@@ -238,9 +238,9 @@ describe('WebhookSettings — registration', () => {
     renderScreen();
     await user.click(await screen.findByRole('button', { name: /חיבור חדש/ }));
 
-    await user.type(screen.getByLabelText(/כתובת נקודת הקצה/), 'https://169.254.169.254/hook');
-    await user.type(screen.getByLabelText(/סוד חתימה/), 'a'.repeat(40));
-    await user.type(screen.getByLabelText(/סיבת הפעולה/), 'ניסיון');
+    fireEvent.change(screen.getByLabelText(/כתובת נקודת הקצה/), { target: { value: 'https://169.254.169.254/hook' } });
+    fireEvent.change(screen.getByLabelText(/סוד חתימה/), { target: { value: 'a'.repeat(40) } });
+    fireEvent.change(screen.getByLabelText(/סיבת הפעולה/), { target: { value: 'ניסיון' } });
     await user.click(screen.getByRole('button', { name: /שמירת החיבור/ }));
 
     expect(await screen.findByText(/יש להזין שם מארח, לא כתובת IP/)).toBeInTheDocument();
@@ -252,9 +252,9 @@ describe('WebhookSettings — registration', () => {
     renderScreen();
     await user.click(await screen.findByRole('button', { name: /חיבור חדש/ }));
 
-    await user.type(screen.getByLabelText(/כתובת נקודת הקצה/), 'https://hooks.example.com/inplace');
-    await user.type(screen.getByLabelText(/סוד חתימה/), 'short');
-    await user.type(screen.getByLabelText(/סיבת הפעולה/), 'ניסיון');
+    fireEvent.change(screen.getByLabelText(/כתובת נקודת הקצה/), { target: { value: 'https://hooks.example.com/inplace' } });
+    fireEvent.change(screen.getByLabelText(/סוד חתימה/), { target: { value: 'short' } });
+    fireEvent.change(screen.getByLabelText(/סיבת הפעולה/), { target: { value: 'ניסיון' } });
     await user.click(screen.getByRole('button', { name: /שמירת החיבור/ }));
 
     expect(await screen.findByText(/סוד החתימה חייב להיות באורך/)).toBeInTheDocument();
@@ -266,9 +266,9 @@ describe('WebhookSettings — registration', () => {
     const { container } = renderScreen();
     await user.click(await screen.findByRole('button', { name: /חיבור חדש/ }));
 
-    await user.type(screen.getByLabelText(/כתובת נקודת הקצה/), 'https://hooks.example.com/inplace');
-    await user.type(screen.getByLabelText(/סוד חתימה/), 'super-secret-signing-value-0123456789');
-    await user.type(screen.getByLabelText(/סיבת הפעולה/), 'חיבור ERP');
+    fireEvent.change(screen.getByLabelText(/כתובת נקודת הקצה/), { target: { value: 'https://hooks.example.com/inplace' } });
+    fireEvent.change(screen.getByLabelText(/סוד חתימה/), { target: { value: 'super-secret-signing-value-0123456789' } });
+    fireEvent.change(screen.getByLabelText(/סיבת הפעולה/), { target: { value: 'חיבור ERP' } });
     await user.click(screen.getByRole('button', { name: /שמירת החיבור/ }));
 
     await vi.waitFor(() => expect(registerWebhookSubscription).toHaveBeenCalled());

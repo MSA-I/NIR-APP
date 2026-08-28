@@ -374,7 +374,7 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   `credit_request_balance_rows()`, `payment_request_financial_check_signals()`
   EXPECT: money per currency, an invoice set spanning two currencies refused, and no invented
   tolerance for a currency nobody configured
-  EVIDENCE, on a fixture of one supplier with a ₪12,400 and a $3,100 invoice and a payment request
+  EVIDENCE: on a fixture of one supplier with a ₪12,400 and a $3,100 invoice and a payment request
   on each:
   ```
   p2_active_payment_request_total_by_currency: ILS 19676.000 · USD 3100.000   (never 22,776)
@@ -444,7 +444,7 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   CHECK: `private.canonical_purchase_metrics`, `private.product_purchase_summary`,
   `public.purchase_comparison`, `private.consolidated_case_lines`/`consolidated_comparison`
   EXPECT: money per currency; no comparison across currencies
-  EVIDENCE:
+  EVIDENCE: the migrated local schema and the named SQL suites produced the measurements below.
   * `canonical_purchase_metrics` — all five money figures are arrays now, proven on the demo
     organisation: `committed_by_currency [{ILS, 26314.860}]`, `gross_expense_by_currency
     [{ILS, 13163.000}]`, `credits_recognised/pending`, `net_expense_by_currency [{ILS, 12928.000}]`,
@@ -500,9 +500,11 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
 
 ## Phase 3 — the client
 
-- [ ] P3-G1: an amount cannot be rendered without saying which currency it is
+- [x] P3-G1: an amount cannot be rendered without saying which currency it is
   CHECK: npx tsc --noEmit
   EXPECT: exit 0
+  EVIDENCE: `0ec1e32` records the achieved gate; `ecd5d41` is the final implementation commit and
+  `npx tsc --noEmit` exited 0 after the fixture typing correction recorded under P3-G2.
   EVIDENCE REQUIRED: the error list produced by deleting the one-argument signature is pasted here
   **before** the work — 267 sites in 46 files is the measurement, and `tsc` returning 0 afterwards
   is the only proof each one was answered.
@@ -556,9 +558,11 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   currencies of the orders its lines came from. Fixed in `0226`; the client could not have
   rendered those figures honestly without it.
 
-- [ ] P3-G2: the tests and the money guard survive it
+- [x] P3-G2: the tests and the money guard survive it
   CHECK: npm run -s test && npm run -s check:money
   EXPECT: suite green; /check:money passed/
+  EVIDENCE: resumed 28.08.2026 — `npm run -s typecheck` exited 0; Vitest completed with
+  158/158 files and 1666/1666 tests passing; `check:money passed: 3 rules`, exit 0.
   STATUS 28.08.2026: **not claimed.** Every suite touched by this phase was run individually and
   passes — `accountantPaymentCredits`, `orderSavings`, `orderSplit`, `orderComparison`,
   `monthlyReport`, `financialSupplierContract`, `reportTemplateExport`, `dashboardDueWindow`,
@@ -581,6 +585,10 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
 
   STOP 28.08.2026: this is the second consecutive failure of the full-test gate. Per `CLAUDE.md`,
   no third attempt was made. P3-G2 remains open, and `check:money` was not run.
+
+  RESUMED 28.08.2026 by owner instruction: the second timeout received the same measured,
+  contract-preserving fixture correction; its entire 11-test file passed before the full gate.
+  The completed full run and money guard above close this gate.
 
 - [ ] P3-G3: a supplier card shows two balances and never their sum
   EVIDENCE: screenshot of one supplier with ₪12,400 and $3,100 on two lines. An empty list renders
@@ -608,7 +616,7 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   CHECK: a shekel document with no printed currency from a shekel supplier
   EXPECT: zero new findings — identical to today's behaviour
 
-- [ ] P4-G6 (was P1-G5): an amount cannot be stored with more decimals than its currency has (`#284`)
+- [ ] P4-G6: (was P1-G5) an amount cannot be stored with more decimals than its currency has (`#284`)
   CHECK: write a JPY amount of 1000.50 through the owning RPC
   EXPECT: refused. Rounding reads `currencies.minor_units` instead of the hard-coded 2
   (`0023:1712-1725` is the site), and the write commands are already the only write path.
@@ -705,12 +713,12 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   EXPECT: success
 
 - [ ] P6-G2: the rollout matrix rows that were touched were actually executed
-  EXPECT: the union of `Migration / חוזה DB` and `Frontend` rows — backup, dry-run + ledger,
+  EVIDENCE: pending — the union of `Migration / חוזה DB` and `Frontend` rows requires backup, dry-run + ledger,
   forward-only apply, postflight; build with production env, Pages, hash parity, canonical smoke.
   The manual `schema_migrations` ledger row after `db-query.ps1` is part of it, not optional.
   `worker/ocr` is out of scope and is **not** redeployed unless a gateway contract version moves.
 
 ---
 
-ABANDON: none yet. A gate dropped later is recorded here with `ABANDON:` and its reason — never
+No gate is abandoned. A gate dropped later is recorded with `ABANDON:` and its reason — never
 deleted quietly.
