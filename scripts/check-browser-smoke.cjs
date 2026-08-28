@@ -1587,6 +1587,7 @@ async function orderSupplierComparison(browser) {
 async function paymentRequestNamesAndModalStack(browser) {
   const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1024, height: 768 } });
   const supplierId = '94000000-0000-4000-8000-000000000001';
+  const invoiceId = '94000000-0000-4000-8000-000000000011';
   const request = {
     id: 'p4-request', org_id: 'p4-org', supplier_id: supplierId, number: 7001, amount: 850,
     due_date: '2026-07-30', status: 'draft', notes: 'בדיקת שכבות', created_at: '2026-07-22T08:00:00Z',
@@ -1599,8 +1600,8 @@ async function paymentRequestNamesAndModalStack(browser) {
     headers: jsonHeaders,
     json: [{ id: supplierId, name: 'ספק בדיקת שכבות', tax_id: null, payment_terms: null, status: 'active', bank_details: null }],
   }));
-  await context.route('**/rest/v1/invoices?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ id: 'p4-invoice', supplier_id: supplierId, invoice_number: 'INV-P4-01', invoice_date: '2026-07-01', total_amount: 850, review_status: 'approved' }] }));
-  await context.route('**/rest/v1/invoice_balances?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ invoice_id: 'p4-invoice', balance: 850 }] }));
+  await context.route('**/rest/v1/invoices?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ id: invoiceId, supplier_id: supplierId, invoice_number: 'INV-P4-01', invoice_date: '2026-07-01', total_amount: 850, currency: 'ILS', review_status: 'approved' }] }));
+  await context.route('**/rest/v1/invoice_balances_by_currency?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ invoice_id: invoiceId, currency: 'ILS', balance_in_currency: 850 }] }));
   await context.route('**/rest/v1/bank_transactions?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/credit_requests?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/rpc/payment_request_financial_check_signals', (route) => route.fulfill({
@@ -1659,6 +1660,7 @@ async function paymentRequestNamesAndModalStack(browser) {
 async function bankContextualNames(browser) {
   const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1024, height: 768 } });
   const supplierId = '94000000-0000-4000-8000-000000000002';
+  const invoiceId = '94000000-0000-4000-8000-000000000012';
   const transaction = {
     id: 'p4-bank-row', org_id: 'p4-bank-org', import_id: 'p4-bank-import', tx_date: '2026-07-20',
     amount: 850, description: 'העברה לספק בדיקת נגישות', reference: 'P4-REF',
@@ -1675,10 +1677,10 @@ async function bankContextualNames(browser) {
   await context.route('**/rest/v1/payments?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/bank_allocations?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/invoices?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{
-    id: 'p4-bank-invoice', supplier_id: supplierId, invoice_number: 'BANK-P4-01',
-    invoice_date: '2026-07-18', total_amount: 850,
+    id: invoiceId, supplier_id: supplierId, invoice_number: 'BANK-P4-01',
+    invoice_date: '2026-07-18', total_amount: 850, currency: 'ILS',
   }] }));
-  await context.route('**/rest/v1/invoice_balances?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ invoice_id: 'p4-bank-invoice', balance: 850 }] }));
+  await context.route('**/rest/v1/invoice_balances_by_currency?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ invoice_id: invoiceId, currency: 'ILS', balance_in_currency: 850 }] }));
   const page = await context.newPage();
   captureConsole(page, 'bank-accessibility');
   try {

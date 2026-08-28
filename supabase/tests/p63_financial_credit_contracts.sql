@@ -16,6 +16,9 @@
 
 begin;
 
+-- Legacy invoice fixtures in this transaction predate multi-currency and are explicitly ILS.
+alter table public.invoices alter column currency set default 'ILS';
+
 create function pg_temp.p63_assert(p_condition boolean, p_message text)
 returns void language plpgsql as $$
 begin
@@ -219,8 +222,8 @@ select pg_temp.p63_assert(
    where source_document_id = 'f6300000-0000-4000-8000-000000000031'),
   'credit-note provenance, amount, invoice or received status was not preserved');
 select pg_temp.p63_assert(
-  (select credited_amount = 0 and balance = 200
-   from public.p0_invoice_balance_rows()
+  (select credited_amount = 0 and balance_in_currency = 200
+   from public.p0_invoice_balance_rows_by_currency()
    where invoice_id = 'f6300000-0000-4000-8000-000000000021'),
   'credit-note intake changed the invoice balance before any allocation');
 
@@ -384,8 +387,8 @@ select pg_temp.p63_assert(
                           where source_document_id = 'f6300000-0000-4000-8000-000000000031')),
   'partial use did not stay received with a computed remaining balance');
 select pg_temp.p63_assert(
-  (select paid_amount = 70 and credited_amount = 30 and balance = 100
-   from public.p0_invoice_balance_rows()
+  (select paid_amount = 70 and credited_amount = 30 and balance_in_currency = 100
+   from public.p0_invoice_balance_rows_by_currency()
    where invoice_id = 'f6300000-0000-4000-8000-000000000021'),
   'the partial allocation, rather than intake, did not become the credited amount');
 
@@ -442,7 +445,7 @@ select pg_temp.p63_assert(
                           where source_document_id = 'f6300000-0000-4000-8000-000000000031')),
   'full consumption did not move the credit to offset exactly at zero remaining');
 select pg_temp.p63_assert(
-  (select balance = 0 from public.p0_invoice_balance_rows()
+  (select balance_in_currency = 0 from public.p0_invoice_balance_rows_by_currency()
    where invoice_id = 'f6300000-0000-4000-8000-000000000021'),
   'two cash-plus-credit payments did not settle the invoice they named');
 
@@ -485,7 +488,7 @@ select public.execute_payment_request(
       'credit_id', 'f6300000-0000-4000-8000-000000000092', 'amount', 40)),
   'P63 overpay baseline');
 select pg_temp.p63_assert(
-  (select balance = 100 from public.p0_invoice_balance_rows()
+  (select balance_in_currency = 100 from public.p0_invoice_balance_rows_by_currency()
    where invoice_id = 'f6300000-0000-4000-8000-000000000025'),
   'the baseline payment did not leave exactly 100 outstanding');
 select pg_temp.p63_expect_error(
@@ -638,8 +641,8 @@ select pg_temp.p63_assert(
    where credit_id = 'f6300000-0000-4000-8000-000000000095'),
   'the newly linked credit did not report half of itself consumed');
 select pg_temp.p63_assert(
-  (select paid_amount = 70 and credited_amount = 30 and balance = 100
-   from public.p0_invoice_balance_rows()
+  (select paid_amount = 70 and credited_amount = 30 and balance_in_currency = 100
+   from public.p0_invoice_balance_rows_by_currency()
    where invoice_id = 'f6300000-0000-4000-8000-000000000028'),
   'the credit an unlinked allocation applied did not reach the invoice it named');
 
@@ -703,7 +706,7 @@ select pg_temp.p63_assert(
   (select remaining_amount = 0 and allocated_amount = 60
    from public.credit_request_balance_rows('f6300000-0000-4000-8000-000000000011')
    where credit_id = 'f6300000-0000-4000-8000-000000000095')
-  and (select balance = 0 from public.p0_invoice_balance_rows()
+  and (select balance_in_currency = 0 from public.p0_invoice_balance_rows_by_currency()
        where invoice_id = 'f6300000-0000-4000-8000-000000000028'),
   'the second half of the once-unlinked credit did not close its invoice');
 reset role;
@@ -734,8 +737,8 @@ begin
     into v_stale
   from pg_catalog.pg_proc proc
   where proc.oid in (
-    'public.execute_payment_request(uuid,date,text,text,text,jsonb,text)'::regprocedure,
-    'public.p0_invoice_balance_rows()'::regprocedure,
+    'public.execute_payment_request(uuid,date,text,text,text,jsonb,numeric,text,text)'::regprocedure,
+    'public.p0_invoice_balance_rows_by_currency()'::regprocedure,
     'public.p1_refresh_invoice_payment_statuses(uuid,uuid[])'::regprocedure,
     'public.soft_delete_supplier(uuid,text)'::regprocedure,
     'public.payment_request_financial_check_signals(uuid,numeric,uuid[],uuid)'::regprocedure,
@@ -762,7 +765,7 @@ begin
   -- The fail-closed placeholder is not merely unreachable, it is gone. An executor that can still
   -- raise it is one that never learned the 2026-08-23 ruling.
   if position('credit_request_not_linked_to_invoice' in replace(pg_get_functiondef(
-       'public.execute_payment_request(uuid,date,text,text,text,jsonb,text)'::regprocedure
+       'public.execute_payment_request(uuid,date,text,text,text,jsonb,numeric,text,text)'::regprocedure
      ), e'\r', '')) > 0 then
     raise exception
       'P63 financial credit assertion failed: the unlinked-credit placeholder refusal survives';

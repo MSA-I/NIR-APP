@@ -44,7 +44,8 @@ $$;
 create function pg_temp.p31_reviewed(
   p_type text, p_lines jsonb, p_order uuid default null,
   p_number text default 'INV-31', p_date text default '2026-06-15',
-  p_net text default null, p_vat text default null, p_total text default null
+  p_net text default null, p_vat text default null, p_total text default null,
+  p_currency text default null
 ) returns jsonb language sql immutable as $$
   select jsonb_strip_nulls(jsonb_build_object(
     'document_type', p_type,
@@ -52,6 +53,7 @@ create function pg_temp.p31_reviewed(
     'order_id', p_order,
     'document_number', p_number,
     'document_date', p_date,
+    'currency', p_currency,
     'totals', jsonb_strip_nulls(jsonb_build_object(
       'net', p_net, 'vat', p_vat, 'total', p_total)),
     'lines', p_lines));
@@ -104,7 +106,7 @@ select ('60310000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
        '10310000-0000-4000-8000-000000000001', 'inbox',
        '10310000-0000-4000-8000-000000000001/p31-' || n || '.pdf',
        'p31-' || n || '.pdf', 'application/pdf', 'invoice'
-from generate_series(1, 8) as n;
+from generate_series(1, 10) as n;
 
 insert into public.document_processing_jobs (
   id, org_id, document_id, requested_by, status, input_checksum,
@@ -115,7 +117,7 @@ select ('90310000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
        ('60310000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
        '20310000-0000-4000-8000-000000000001', 'review',
        'etag:' || lpad(n::text, 16, '0'), '20310000-0000-4000-8000-000000000001', now()
-from generate_series(1, 8) as n;
+from generate_series(1, 10) as n;
 
 insert into public.document_extractions (
   id, org_id, job_id, document_id, engine, model, model_version,
@@ -134,7 +136,7 @@ select ('a0310000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
            'id', 'block-1', 'page', 1, 'type', 'text',
            'bbox', jsonb_build_array(0, 0, 1, 1), 'text', 'P31', 'confidence', 0.95)),
          'tables', '[]'::jsonb, 'marks', '[]'::jsonb)
-from generate_series(1, 8) as n;
+from generate_series(1, 10) as n;
 
 insert into public.document_interpretations (
   id, org_id, job_id, extraction_id, document_id, interpreted_for_user_id,
@@ -151,9 +153,14 @@ select ('b0310000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
          'schema_version', '1', 'document_type', 'invoice', 'document_type_confidence', 0.97,
          'supplier', jsonb_build_object('suggested_id', null, 'suggested_name', 'P31 ספק',
            'confidence', 0.9, 'evidence_block_ids', jsonb_build_array('block-1')),
-         'fields', '[]'::jsonb, 'line_items', '[]'::jsonb,
+         'fields', case when n in (9, 10)
+           then jsonb_build_array(jsonb_build_object(
+             'key', 'currency', 'value', 'USD', 'confidence', 0.99,
+             'evidence_block_ids', jsonb_build_array('block-1')))
+           else '[]'::jsonb end,
+         'line_items', '[]'::jsonb,
          'suggested_annotations', '[]'::jsonb)
-from generate_series(1, 8) as n;
+from generate_series(1, 10) as n;
 
 set local role authenticated;
 select pg_temp.p31_act('20310000-0000-4000-8000-000000000001');
@@ -437,7 +444,48 @@ exception when sqlstate '40001' then
 end
 $$;
 
--- ===== 9. The ledger is evidence, and evidence does not change =====
+-- ===== 9. The evidence decides currency; the client cannot dictate it =====
+
+reset role;
+set local role authenticated;
+select pg_temp.p31_act('20310000-0000-4000-8000-000000000001');
+
+create temp table p31_currency_result as
+select public.apply_reviewed_document(
+     '60310000-0000-4000-8000-000000000009',
+     'b0310000-0000-4000-8000-000000000009',
+     pg_temp.p31_reviewed('invoice',
+       jsonb_build_array(pg_temp.p31_line(
+         '30310000-0000-4000-8000-000000000001', '1', 'unit', '10', '10', 'SKU-31')),
+       null, 'INV-USD', '2026-06-15', '10', '1.8', '11.8', 'USD'),
+     '00000000-0000-4000-8000-000000000009', 'P31 דולר נכתב כדולר') result
+;
+reset role;
+select pg_temp.p31_assert(
+  (select invoice.currency = 'USD'
+   from p31_currency_result applied
+   join public.invoices invoice on invoice.id = (applied.result ->> 'invoice_id')::uuid),
+  'a reviewed document printing USD created an invoice in another currency');
+set local role authenticated;
+select pg_temp.p31_act('20310000-0000-4000-8000-000000000001');
+
+do $$
+begin
+  perform public.apply_reviewed_document(
+    '60310000-0000-4000-8000-000000000010',
+    'b0310000-0000-4000-8000-000000000010',
+    pg_temp.p31_reviewed('invoice',
+      jsonb_build_array(pg_temp.p31_line(
+        '30310000-0000-4000-8000-000000000001', '1', 'unit', '10', '10', 'SKU-31')),
+      null, 'INV-MISMATCH', '2026-06-15', '10', '1.8', '11.8', 'ILS'),
+    '00000000-0000-4000-8000-000000000010', 'P31 לקוח מנסה לכפות שקל');
+  raise exception 'P31 apply assertion failed: a client replaced the USD evidence with ILS';
+exception when sqlstate '22023' then
+  if sqlerrm <> 'document_review_currency_mismatch' then raise; end if;
+end
+$$;
+
+-- ===== 10. The ledger is evidence, and evidence does not change =====
 
 select pg_temp.p31_assert(
   (select count(*) >= 4 from public.document_review_applications

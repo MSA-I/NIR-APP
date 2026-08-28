@@ -17,11 +17,19 @@ import type { DashboardWeeklyPoint } from '../lib/dashboardSeries';
  * Colors always come from chartTheme() (resolved CSS-var strings) — never hex/palette literals (DESIGN).
  */
 
-// Whole-shekel label for bars; compact for dense axes and donut centres. Both go through
+// Whole-currency label for bars; compact for dense axes and donut centres. Both go through
 // src/lib/format.ts — they used to hand-build the symbol as a prefix with a bare toLocaleString,
 // which put the currency mark on the wrong side of the figure from every table in the app.
-export const money = (v: number) => fmtMoneyRounded(v);
-export const moneyShort = (v: number) => (Math.abs(v) >= 1000 ? fmtMoneyCompact(v) : fmtMoneyRounded(v));
+//
+// SINCE 0217 THEY ARE FACTORIES, and that is not ceremony. recharts hands a formatter a bare
+// number, so the only place a chart can learn which money it is drawing is the moment it is built.
+// A CHART IS ALWAYS ONE CURRENCY: a series mixing two would need two axes to be honest, and the
+// callers instead pick a currency and pass its own series (plan §3.1). The currency comes with the
+// data; it is never assumed and never converted.
+export const moneyFor = (currency: string | null | undefined) => (v: number) => fmtMoneyRounded(v, currency);
+export const moneyShortFor = (currency: string | null | undefined) => (v: number) => (
+  Math.abs(v) >= 1000 ? fmtMoneyCompact(v, currency) : fmtMoneyRounded(v, currency)
+);
 
 /**
  * DarkTooltip (T7.2; oceanic since T7.3 — the brand blue leads, black stays rare) — the one
@@ -125,13 +133,15 @@ export function ChartViewport({ className, label, style, children }: {
   );
 }
 
-export function TrendSparkline({ points, label }: { points: DashboardWeeklyPoint[]; label: string }) {
+export function TrendSparkline({ points, label, currency }: {
+  points: DashboardWeeklyPoint[]; label: string; currency: string | null | undefined;
+}) {
   const gradientId = `dashboardSpark${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const t = chartTheme();
   // T7.2 zero policy: the window is fetched in full, so a rowless week is a measured ₪0 — the
   // sparkline stays continuous. Callers already gate rendering on ≥2 active weeks (hasSpark).
   const plotted = points.map((point) => ({ ...point, total: point.count > 0 ? point.total : 0 }));
-  const ariaLabel = `${label}: ${points.map((point) => `${point.week} ${point.count ? fmtMoneyExact(point.total) : 'אין רשומות'}`).join(', ')}`;
+  const ariaLabel = `${label}: ${points.map((point) => `${point.week} ${point.count ? fmtMoneyExact(point.total, currency) : 'אין רשומות'}`).join(', ')}`;
 
   return (
     <ChartViewport className="h-7 min-w-16 flex-1" label={ariaLabel}>
@@ -163,15 +173,20 @@ export type BarPoint = { key: string; label: string; total: number };
  *  height does, and the tooltip and ARIA sentence carry the figures. See `bucketFill` for the
  *  trade written out. Thin, rounded marks; empty → emptyMessage, not empty axes. */
 export function SpendBarChart({
-  points, ariaLabel, emptyMessage, className = 'mt-2 h-32 sm:h-48', maxBarSize = 32, valueFormatter = fmtMoneyExact,
+  points, ariaLabel, emptyMessage, currency, className = 'mt-2 h-32 sm:h-48', maxBarSize = 32,
+  valueFormatter,
 }: {
   points: BarPoint[];
   ariaLabel: string;
   emptyMessage: string;
+  /** The one currency this chart is drawn in. Two would need two axes to be honest. */
+  currency: string | null | undefined;
   className?: string;
   maxBarSize?: number;
+  /** Defaults to this chart's own currency; pass one only to draw something that is not money. */
   valueFormatter?: (v: number) => string;
 }) {
+  const format = valueFormatter ?? ((v: number) => fmtMoneyExact(v, currency));
   const t = chartTheme();
   /* One bucket, one colour, taken from the SAME categorical palette the donut beside it uses
      (owner report 26.08.2026: "שהצבע בדאשבורד באזור של המגמות בהוצאות רכש שיהיה כמו הצבעים של
@@ -203,7 +218,7 @@ export function SpendBarChart({
                 can hold the same amount, and matching on the number would have painted the swatch
                 of whichever one recharts happened to find first. */}
             <Tooltip cursor={false} isAnimationActive={animation.active}
-              content={<DarkTooltip formatter={valueFormatter} colorFor={(entry) => {
+              content={<DarkTooltip formatter={format} colorFor={(entry) => {
                 const index = points.findIndex((p) => p.key === entry.payload?.key);
                 return bucketFill(Number(entry.value ?? 0), index < 0 ? 0 : index);
               }} />} />
@@ -254,9 +269,11 @@ function sliceColor(categorical: string[], name: string, allNames: readonly stri
  * row plain — the aggregated "אחר" slice is not a destination, because there is no one thing to
  * open. Callers that pass nothing keep exactly the markup they had.
  */
-export function CategoryDonut({ slices, total, ariaLabel, emptyMessage, hrefFor, hrefLabel }: {
+export function CategoryDonut({ slices, total, currency, ariaLabel, emptyMessage, hrefFor, hrefLabel }: {
   slices: CategorySlice[];
   total: number;
+  /** The one currency this chart is drawn in. Two would need two axes to be honest. */
+  currency: string | null | undefined;
   ariaLabel: string;
   emptyMessage: string;
   hrefFor?: (slice: CategorySlice) => string | null;
@@ -287,7 +304,7 @@ export function CategoryDonut({ slices, total, ariaLabel, emptyMessage, hrefFor,
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 grid place-content-center text-center" aria-hidden="true">
-              <span className="num text-xl font-semibold text-ink sm:text-2xl">{moneyShort(total)}</span>
+              <span className="num text-xl font-semibold text-ink sm:text-2xl">{moneyShortFor(currency)(total)}</span>
               <span className="text-xs text-ink-muted">סה״כ</span>
             </div>
           </>
@@ -304,14 +321,14 @@ export function CategoryDonut({ slices, total, ariaLabel, emptyMessage, hrefFor,
           return (
             <li key={slice.name}>
               {href ? (
-                <Link to={href} aria-label={hrefLabel?.(slice) ?? slice.name} title={fmtMoneyExact(slice.total)}
+                <Link to={href} aria-label={hrefLabel?.(slice) ?? slice.name} title={fmtMoneyExact(slice.total, currency)}
                   className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-1.5 text-action hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
                   {swatch}
                   <span className="max-w-32 truncate">{slice.name}</span>
                   <span className="num text-ink-muted">{pct}%</span>
                 </Link>
               ) : (
-                <div className="inline-flex min-h-11 items-center gap-1.5 px-1.5 text-ink-mid" title={fmtMoneyExact(slice.total)}>
+                <div className="inline-flex min-h-11 items-center gap-1.5 px-1.5 text-ink-mid" title={fmtMoneyExact(slice.total, currency)}>
                   {swatch}
                   <span className="max-w-32 truncate">{slice.name}</span>
                   <span className="num text-ink-muted">{pct}%</span>
@@ -390,17 +407,21 @@ export function endLabels(points: readonly EndPoint[]) {
  *  still want the swatch row (default off — end labels replace it). */
 export function ComparisonLineChart({
   points, xKey = 'x', series, ariaLabel, emptyMessage,
-  className = 'mt-2 h-32 sm:h-48', valueFormatter = fmtMoneyExact, legend = false,
+  className = 'mt-2 h-32 sm:h-48', currency, valueFormatter, legend = false,
 }: {
   points: LinePoint[];
   xKey?: string;
   series: LineSeries[];
+  /** The one currency this chart is drawn in. Two would need two axes to be honest. */
+  currency: string | null | undefined;
   ariaLabel: string;
   emptyMessage: string;
   className?: string;
+  /** Defaults to this chart's own currency; pass one only to draw something that is not money. */
   valueFormatter?: (v: number) => string;
   legend?: boolean;
 }) {
+  const format = valueFormatter ?? ((v: number) => fmtMoneyExact(v, currency));
   const t = chartTheme();
   const gradientBase = `cmpArea${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const hasData = points.length > 0 && points.some((point) => series.some((s) => point[s.key] != null));
@@ -435,7 +456,7 @@ export function ComparisonLineChart({
               <YAxis hide />
               {/* T7.3g: dashed hover cursor — the owner drew exactly this on image #16. */}
               <Tooltip cursor={{ stroke: t.tick, strokeWidth: 1, strokeDasharray: '4 4' }}
-                content={<DarkTooltip formatter={valueFormatter} />} isAnimationActive={animation.active} />
+                content={<DarkTooltip formatter={format} />} isAnimationActive={animation.active} />
               {series.map((s, index) => (
                 <Area key={s.key} type="monotone" dataKey={s.key} name={s.name} stroke={s.color} strokeWidth={2.5}
                   strokeDasharray={s.dash ? '7 5' : undefined}
@@ -496,16 +517,20 @@ export function ComparisonLineChart({
  */
 export function GroupedBarChart({
   points, xKey = 'x', series, ariaLabel, emptyMessage,
-  className = 'mt-2 h-32 sm:h-48', valueFormatter = fmtMoneyExact,
+  className = 'mt-2 h-32 sm:h-48', currency, valueFormatter,
 }: {
   points: LinePoint[];
   xKey?: string;
   series: LineSeries[];
+  /** The one currency this chart is drawn in. Two would need two axes to be honest. */
+  currency: string | null | undefined;
   ariaLabel: string;
   emptyMessage: string;
   className?: string;
+  /** Defaults to this chart's own currency; pass one only to draw something that is not money. */
   valueFormatter?: (v: number) => string;
 }) {
+  const format = valueFormatter ?? ((v: number) => fmtMoneyExact(v, currency));
   const t = chartTheme();
   const hasData = points.length > 0 && points.some((point) => series.some((s) => point[s.key] != null));
   return (
@@ -517,7 +542,7 @@ export function GroupedBarChart({
               <CartesianGrid vertical={false} stroke={t.grid} />
               <XAxis dataKey={xKey} tick={{ fontSize: 12, fill: t.tick }} axisLine={false} tickLine={false} />
               <YAxis hide />
-              <Tooltip cursor={false} content={<DarkTooltip formatter={valueFormatter} />} isAnimationActive={animation.active} />
+              <Tooltip cursor={false} content={<DarkTooltip formatter={format} />} isAnimationActive={animation.active} />
               {series.map((s) => (
                 <Bar key={s.key} dataKey={s.key} name={s.name} fill={s.color} radius={[999, 999, 0, 0]} maxBarSize={14}
                   isAnimationActive={animation.active} animationDuration={550} animationEasing="ease-out" onAnimationEnd={animation.finish} />

@@ -43,7 +43,7 @@ function reviewRead(over: Partial<DocumentReviewRead> = {}): DocumentReviewRead 
     order_resolution: null,
     state: 'ready_for_approval',
     assessment: {
-      document_type: 'invoice', document_number: 'INV-9', document_date: '2026-08-01',
+      document_type: 'invoice', currency: 'ILS', document_number: 'INV-9', document_date: '2026-08-01',
       supplier_id: 'supplier-1', order_id: 'order-1',
       sources: { document: true, ordered: true, received: true, baseline: true },
       totals: { lines_net: 108, header_net: 108, header_vat: 18.36, header_total: 126.36, overcharge_total: 9 },

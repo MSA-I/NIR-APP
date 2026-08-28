@@ -103,7 +103,7 @@ select pg_temp.p46_assert(
 
 select pg_temp.p46_assert(
   position('financial_role = ''payable''' in (
-    select prosrc from pg_proc where oid='public.p0_invoice_balance_rows()'::regprocedure))>0
+    select prosrc from pg_proc where oid='public.p0_invoice_balance_rows_by_currency()'::regprocedure))>0
   and position('financial_role = ''payable''' in (
     select prosrc from pg_proc where oid='private.canonical_purchase_metrics(uuid,date,date)'::regprocedure))>0
   and position('financial_role = ''payable''' in (
@@ -250,11 +250,11 @@ reset role;
 select pg_temp.p46_actor(null);
 
 insert into public.invoices(
-  id,org_id,unit_id,supplier_id,invoice_number,invoice_date,amount_before_vat,vat_amount,total_amount
+  id,org_id,unit_id,supplier_id,invoice_number,invoice_date,amount_before_vat,vat_amount,total_amount,currency
 ) values(
   '13570000-0000-4000-8000-000000000001','13500000-0000-4000-8000-000000000001',
   :'a_legal_entity','13540000-0000-4000-8000-000000000001','P46-INTERIM',
-  :'p46_invoice_date',100,18,118);
+  :'p46_invoice_date',100,18,118,'ILS');
 
 select pg_temp.p46_actor('13510000-0000-4000-8000-000000000001');
 set role authenticated;
@@ -491,11 +491,12 @@ select pg_temp.p46_assert(
 
 select pg_temp.p46_assert(
   (select invoice_number='P46-ANCHOR' and invoice_date=:'p46_invoice_date'::date
-        and amount_before_vat=100 and vat_amount=18 and total_amount=118
+        and amount_before_vat=100 and vat_amount=18 and total_amount=118 and currency='ILS'
    from public.invoices
    where id=(select anchor_invoice_id from public.consolidated_invoice_cases
-             where org_id='13500000-0000-4000-8000-000000000001')),
-  'page 2 overrode authoritative header fields from primary page 1');
+             where org_id='13500000-0000-4000-8000-000000000001'))
+  and :'p46_applied'::jsonb->>'currency'='ILS',
+  'page 2 overrode authoritative header fields or the anchor lost its evidence currency');
 
 select pg_temp.p46_assert(
   (select count(*)=1 and array_agg(line.line_number order by line.line_number)=array[1]
@@ -592,11 +593,11 @@ select pg_temp.p46_actor(null);
 
 -- A late invoice is born as evidence, appends a new snapshot, and is never a payment target.
 insert into public.invoices(
-  id,org_id,unit_id,supplier_id,invoice_number,invoice_date,amount_before_vat,vat_amount,total_amount
+  id,org_id,unit_id,supplier_id,invoice_number,invoice_date,amount_before_vat,vat_amount,total_amount,currency
 ) values(
   '13570000-0000-4000-8000-000000000002','13500000-0000-4000-8000-000000000001',
   :'a_legal_entity','13540000-0000-4000-8000-000000000001','P46-LATE',
-  :'p46_invoice_date',50,9,59);
+  :'p46_invoice_date',50,9,59,'ILS');
 
 select pg_temp.p46_assert(
   (select financial_role='supporting_evidence' from public.invoices

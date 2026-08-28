@@ -1,0 +1,19 @@
+{
+  "gate": "P3-G3",
+  "supplierName": "ספק ראיית שתי יתרות",
+  "balanceLines": [
+    "‏12,400.00 ‏₪",
+    "‏3,100.00 ‏$"
+  ],
+  "separateLineY": [
+    337.203125,
+    357.5
+  ],
+  "combined15500Present": false,
+  "layout": {
+    "dir": "rtl",
+    "overflow": 0
+  },
+  "fullScreenshot": "artifacts/multi-currency/p3-g3-supplier-balances-full.png",
+  "rowScreenshot": "artifacts/multi-currency/p3-g3-supplier-balances-row.png"
+}

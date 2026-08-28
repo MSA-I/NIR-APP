@@ -8,6 +8,8 @@ import { StatusBadge, useToast, ConfirmDialog, ErrorNote, PageHeader, SkeletonCa
 import { ReauthModal } from '../components/ReauthModal';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
 import { addCalendarDays, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange, safeMonthISO } from '../lib/format';
+import { MoneyByCurrency, sortByBaseCurrency } from '../components/Money';
+import type { MoneyAmount } from '../lib/types';
 import { useParamState } from '../lib/useParamState';
 import { toHebrewError } from '../lib/errors';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
@@ -21,15 +23,19 @@ import {
 } from '../lib/reportTemplateExport';
 
 /**
- * What `invoice_balances` returns per invoice. Every one of these is COMPUTED at read time from
- * the allocation tables — the constitution's rule that a balance is never stored. The row is read
- * and displayed; it is never re-derived in the browser from payments or credits.
+ * What `invoice_balances_by_currency` returns per invoice. Every one of these is COMPUTED at read
+ * time from the allocation tables — the constitution's rule that a balance is never stored. The
+ * row is read and displayed; it is never re-derived in the browser from payments or credits.
+ *
+ * One row per invoice still, because an invoice is issued in one currency; the reader is named
+ * per-currency (0218) so that a SUPPLIER's two debts stay two.
  */
 interface InvoiceBalanceRow {
   invoice_id: string;
+  currency: string;
   paid_amount: number;
   credited_amount: number;
-  balance: number;
+  balance_in_currency: number;
 }
 
 function toSnapshotHebrewError(error: unknown): string {
@@ -51,6 +57,7 @@ function toSnapshotHebrewError(error: unknown): string {
 
 export default function Reports() {
   const { profile, org, organizationAccess } = useAuth();
+  const baseCurrency = org?.base_currency ?? null;
   const orgLogoUrl = org?.logo_path
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
     : null;
@@ -125,8 +132,8 @@ export default function Reports() {
     const [suppliers, balanceRows] = await Promise.all([
       financialSupplierMap(linkedRows.flatMap((row) => row.supplier_id ? [row.supplier_id] : [])),
       invoiceIds.length
-        ? fetchInChunks(invoiceIds, (chunk) => fetchAll<InvoiceBalanceRow>((from, to) => supabase.from('invoice_balances')
-          .select('invoice_id, paid_amount, credited_amount, balance')
+        ? fetchInChunks(invoiceIds, (chunk) => fetchAll<InvoiceBalanceRow>((from, to) => supabase.from('invoice_balances_by_currency')
+          .select('invoice_id, currency, paid_amount, credited_amount, balance_in_currency')
           .in('invoice_id', chunk).order('invoice_id').range(from, to)))
         : Promise.resolve<InvoiceBalanceRow[]>([]),
     ]);
@@ -135,11 +142,11 @@ export default function Reports() {
       name: supplierId ? suppliers.get(supplierId)?.name ?? '—' : '—',
     });
     return {
-      invoices: (rawInvoices as unknown as (SupplierLinked & { id: string; invoice_number: string; invoice_date: string; received_date: string | null; total_amount: number; amount_before_vat: number; vat_amount: number; review_status: string; payment_status: string; export_status: string; notes: string | null })[])
+      invoices: (rawInvoices as unknown as (SupplierLinked & { id: string; invoice_number: string; invoice_date: string; received_date: string | null; total_amount: number; amount_before_vat: number; vat_amount: number; currency: string; review_status: string; payment_status: string; export_status: string; notes: string | null })[])
         .map((row) => ({ ...row, supplier: supplier(row.supplier_id), balance: balances.get(row.id) ?? null })),
-      payments: (rawPayments as unknown as (SupplierLinked & { id: string; number: number; paid_date: string; amount: number; method: string | null; reference: string | null })[])
+      payments: (rawPayments as unknown as (SupplierLinked & { id: string; number: number; paid_date: string; amount: number; currency: string; method: string | null; reference: string | null })[])
         .map((row) => ({ ...row, supplier: supplier(row.supplier_id) })),
-      credits: (rawCredits as unknown as (SupplierLinked & { id: string; number: number; reason: string; amount: number; status: string })[])
+      credits: (rawCredits as unknown as (SupplierLinked & { id: string; number: number; reason: string; amount: number; currency: string; status: string })[])
         .map((row) => ({ ...row, supplier: supplier(row.supplier_id) })),
       exceptions: (rawExceptions as unknown as (SupplierLinked & { id: string; type: string; title: string })[])
         .map((row) => ({ ...row, supplier: row.supplier_id ? supplier(row.supplier_id) : null })),
@@ -215,7 +222,14 @@ export default function Reports() {
       // Strip only what filesystems object to; Hebrew names are fine and are the whole point.
       const slug = org.name.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
       const fileName = `${slug || 'inplace'}-report-${month}.xlsx`;
-      const templated = await renderConfiguredReportTemplate({
+      const reportCurrencies = new Set([
+        ...data.invoices.map((row) => row.currency),
+        ...data.payments.map((row) => row.currency),
+        ...data.credits.map((row) => row.currency),
+      ]);
+      // A custom template exposes one scalar per money field. In a mixed month that shape cannot
+      // state two currencies without adding them, so the currency-aware built-in workbook wins.
+      const templated = reportCurrencies.size > 1 ? null : await renderConfiguredReportTemplate({
         exportKey: 'accountant_monthly_report', orgId: org.id, values,
       });
       if (templated) {
@@ -225,7 +239,7 @@ export default function Reports() {
         // custom template still throws above rather than landing here — that contract is
         // renderConfiguredReportTemplate's, untouched.
         const wb = buildStyledMonthlyWorkbook({
-          orgName: org.name, month, generatedAt: data.generatedAt, data,
+          orgName: org.name, baseCurrency: org.base_currency, month, generatedAt: data.generatedAt, data,
           labels: reportLabels, summary: values,
         });
         XLSX.writeFile(wb, fileName);
@@ -302,19 +316,33 @@ export default function Reports() {
   if (!data) return <ErrorNote message="שגיאה" />;
 
   const balancesComplete = data.invoices.every((i) => i.balance !== null);
+  /** Sum a month's rows WITHIN each currency. There is no other kind of total on this screen. */
+  const within = <T,>(rows: readonly T[], currency: (row: T) => string, amount: (row: T) => number): MoneyAmount[] => {
+    const sums = new Map<string, number>();
+    for (const row of rows) sums.set(currency(row), (sums.get(currency(row)) ?? 0) + amount(row));
+    return sortByBaseCurrency([...sums].map(([code, value]) => ({ currency: code, amount: value })), baseCurrency);
+  };
   const totals = {
     ...monthlyReportScreenTotals(data),
     // Distinct from `paid`: that is money that LEFT this month, this is what has been allocated
-    // against these invoices whenever it was paid.
-    allocated: balancesComplete ? data.invoices.reduce((s, i) => s + (i.balance?.paid_amount ?? 0), 0) : null,
-    openBalance: balancesComplete ? data.invoices.reduce((s, i) => s + (i.balance?.balance ?? 0), 0) : null,
+    // against these invoices whenever it was paid. Still per currency, and still withheld
+    // entirely when any invoice has no balance row — a partial sum is not a smaller total.
+    allocated: balancesComplete ? within(data.invoices, (i) => i.currency, (i) => i.balance?.paid_amount ?? 0) : null,
+    openBalance: balancesComplete ? within(data.invoices, (i) => i.currency, (i) => i.balance?.balance_in_currency ?? 0) : null,
   };
+  const orderedTotals = (rows: MoneyAmount[]) => sortByBaseCurrency(rows, baseCurrency);
 
-  // payments grouped by supplier
+  /* Payments grouped by supplier AND currency, and ordered inside each currency. A supplier paid
+     ₪4,000 and $900 this month appears twice, because those are two payments of two kinds of
+     money — one row holding their sum would be the false number this whole change is about. */
   const paymentsBySupplier = [...data.payments.reduce((m, p) => {
-    m.set(p.supplier.name, (m.get(p.supplier.name) ?? 0) + p.amount);
+    const key = `${p.supplier.name}|${p.currency}`;
+    m.set(key, { name: p.supplier.name, currency: p.currency, amount: (m.get(key)?.amount ?? 0) + p.amount });
     return m;
-  }, new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]);
+  }, new Map<string, { name: string; currency: string; amount: number }>()).values()]
+    .sort((a, b) => (a.currency === b.currency
+      ? b.amount - a.amount
+      : a.currency === baseCurrency ? -1 : b.currency === baseCurrency ? 1 : a.currency < b.currency ? -1 : 1));
   // A disabled button looks clickable but does nothing; the title says why it is blocked.
   const exportBlockedReason = fetching ? 'הנתונים נטענים…' : error ? 'שגיאה בטעינת הנתונים' : null;
   // Card now renders whatever element it is told to (`as`), so the tiles stop composing the
@@ -518,9 +546,9 @@ export default function Reports() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">חשבוניות</div><div className="kpi-value-compact num">{data.invoices.length}</div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(totals.invoices)}</div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(totals.vat)}</div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className={`kpi-value-compact num text-start ${totals.paid ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(totals.paid)}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="kpi-value-compact text-start"><MoneyByCurrency amounts={orderedTotals(totals.invoices)} baseCurrency={baseCurrency} /></div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="kpi-value-compact text-start"><MoneyByCurrency amounts={orderedTotals(totals.vat)} baseCurrency={baseCurrency} /></div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className={`kpi-value-compact text-start ${totals.paid.length ? 'text-done-fg' : 'text-idle-fg'}`}><MoneyByCurrency amounts={orderedTotals(totals.paid)} baseCurrency={baseCurrency} /></div></Card>
           <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`kpi-value-compact num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Card>
           <Card as={Link} className={metricLinkClass} to={`/bank?month=${month}&status=unmatched`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`kpi-value-compact num ${totals.unmatchedBank ? 'text-alert-fg' : ''}`}>{totals.unmatchedBank}</div></Card>
           <Card as={Link} className={metricLinkClass} to={`/bank?month=${month}&status=suggested`}><div className="text-xs text-ink-muted">התאמות שממתינות לאישור</div><div className={`kpi-value-compact num ${totals.suggestedBank ? 'text-await-fg' : ''}`}>{totals.suggestedBank}</div></Card>
@@ -549,15 +577,15 @@ export default function Reports() {
                     <div className="break-words font-medium text-ink-body">{i.supplier.name}</div>
                     <div className="mt-0.5 text-xs text-ink-muted"><span className="num" dir="ltr">{i.invoice_number}</span> · {fmtDate(i.invoice_date)}</div>
                   </div>
-                  <div className="num shrink-0 font-semibold text-ink-body">{fmtMoneyExact(i.total_amount)}</div>
+                  <div className="num shrink-0 font-semibold text-ink-body">{fmtMoneyExact(i.total_amount, i.currency)}</div>
                 </div>
                 {/* Four figures, not eleven. The wide grid below is where a month is reconciled;
                     a phone card that grew to match it would be a table with extra steps. */}
                 <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <div><dt className="text-xs text-ink-muted">לפני מע״מ</dt><dd className="num mt-0.5">{fmtMoneyExact(i.amount_before_vat)}</dd></div>
-                  <div><dt className="text-xs text-ink-muted">מע״מ</dt><dd className="num mt-0.5">{fmtMoneyExact(i.vat_amount)}</dd></div>
-                  <div><dt className="text-xs text-ink-muted">שולם</dt><dd className="num mt-0.5">{fmtMoneyExact(i.balance?.paid_amount)}</dd></div>
-                  <div><dt className="text-xs text-ink-muted">יתרה לתשלום</dt><dd className="num mt-0.5">{fmtMoneyExact(i.balance?.balance)}</dd></div>
+                  <div><dt className="text-xs text-ink-muted">לפני מע״מ</dt><dd className="num mt-0.5">{fmtMoneyExact(i.amount_before_vat, i.currency)}</dd></div>
+                  <div><dt className="text-xs text-ink-muted">מע״מ</dt><dd className="num mt-0.5">{fmtMoneyExact(i.vat_amount, i.currency)}</dd></div>
+                  <div><dt className="text-xs text-ink-muted">שולם</dt><dd className="num mt-0.5">{fmtMoneyExact(i.balance?.paid_amount, i.currency)}</dd></div>
+                  <div><dt className="text-xs text-ink-muted">יתרה לתשלום</dt><dd className="num mt-0.5">{fmtMoneyExact(i.balance?.balance_in_currency, i.currency)}</dd></div>
                 </dl>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <StatusBadge meta={INVOICE_REVIEW_STATUS[i.review_status]} />
@@ -571,7 +599,7 @@ export default function Reports() {
                 already said everything there is to say about this month. */}
             {totals.hasInvoices && (
               <li className="flex min-h-11 flex-wrap items-center justify-between gap-2 bg-surface-sunken px-4 py-3 font-semibold">
-                <span>סה״כ</span><span className="num">{fmtMoneyExact(totals.invoices)}</span>
+                <span>סה״כ</span><MoneyByCurrency amounts={orderedTotals(totals.invoices)} baseCurrency={baseCurrency} />
               </li>
             )}
           </ul>
@@ -613,11 +641,11 @@ export default function Reports() {
                         </td>
                         <td className="td">{fmtDate(i.invoice_date)}</td>
                         <td className="td">{fmtDate(i.received_date)}</td>
-                        <td className="td num">{fmtMoneyExact(i.amount_before_vat)}</td>
-                        <td className="td num">{fmtMoneyExact(i.vat_amount)}</td>
-                        <td className="td num font-medium">{fmtMoneyExact(i.total_amount)}</td>
-                        <td className="td num">{fmtMoneyExact(i.balance?.paid_amount)}</td>
-                        <td className="td num">{fmtMoneyExact(i.balance?.balance)}</td>
+                        <td className="td num">{fmtMoneyExact(i.amount_before_vat, i.currency)}</td>
+                        <td className="td num">{fmtMoneyExact(i.vat_amount, i.currency)}</td>
+                        <td className="td num font-medium">{fmtMoneyExact(i.total_amount, i.currency)}</td>
+                        <td className="td num">{fmtMoneyExact(i.balance?.paid_amount, i.currency)}</td>
+                        <td className="td num">{fmtMoneyExact(i.balance?.balance_in_currency, i.currency)}</td>
                         <td className="td"><StatusBadge meta={INVOICE_REVIEW_STATUS[i.review_status]} /></td>
                         <td className="td"><StatusBadge meta={INVOICE_PAYMENT_STATUS[i.payment_status]} /></td>
                       </tr>
@@ -628,7 +656,7 @@ export default function Reports() {
                       {(i.notes || credited > 0) && (
                         <tr className="hidden print:table-row">
                           <td className="td text-ink-muted" colSpan={11}>
-                            {credited > 0 && <span className="me-4">זוכה <span className="num">{fmtMoneyExact(credited)}</span></span>}
+                            {credited > 0 && <span className="me-4">זוכה <span className="num">{fmtMoneyExact(credited, i.currency)}</span></span>}
                             {i.notes && <span className="break-words">הערות: {i.notes}</span>}
                           </td>
                         </tr>
@@ -645,11 +673,14 @@ export default function Reports() {
               {totals.hasInvoices && (
               <tfoot><tr className="border-t-2 border-line font-semibold">
                 <th scope="row" className="td text-start font-semibold" colSpan={4}>סה״כ</th>
-                <td className="td num">{fmtMoneyExact(totals.beforeVat)}</td>
-                <td className="td num">{fmtMoneyExact(totals.vat)}</td>
-                <td className="td num">{fmtMoneyExact(totals.invoices)}</td>
-                <td className="td num">{fmtMoneyExact(totals.allocated)}</td>
-                <td className="td num">{fmtMoneyExact(totals.openBalance)}</td>
+                {/* A footer line per currency, never one line covering two. In a shekel-only
+                    month — every month this product has recorded — this renders exactly the
+                    single figure it always did. */}
+                <td className="td"><MoneyByCurrency amounts={orderedTotals(totals.beforeVat)} baseCurrency={baseCurrency} /></td>
+                <td className="td"><MoneyByCurrency amounts={orderedTotals(totals.vat)} baseCurrency={baseCurrency} /></td>
+                <td className="td"><MoneyByCurrency amounts={orderedTotals(totals.invoices)} baseCurrency={baseCurrency} /></td>
+                <td className="td"><MoneyByCurrency amounts={totals.allocated} baseCurrency={baseCurrency} /></td>
+                <td className="td"><MoneyByCurrency amounts={totals.openBalance} baseCurrency={baseCurrency} /></td>
                 <td colSpan={2} />
               </tr></tfoot>
               )}
@@ -661,10 +692,10 @@ export default function Reports() {
           <Card pad={false} clip>
             <div className="px-4 py-3 border-b border-line-soft section-title">תשלומים לפי ספק</div>
             <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="תשלומים לפי ספק">
-              {paymentsBySupplier.map(([name, sum]) => (
-                <li key={name} className="flex min-h-11 min-w-0 items-center justify-between gap-3 px-4 py-3">
-                  <span className="min-w-0 break-words text-sm">{name}</span>
-                  <span className="num shrink-0 font-medium">{fmtMoneyExact(sum)}</span>
+              {paymentsBySupplier.map((row) => (
+                <li key={`${row.name}|${row.currency}`} className="flex min-h-11 min-w-0 items-center justify-between gap-3 px-4 py-3">
+                  <span className="min-w-0 break-words text-sm">{row.name}</span>
+                  <span className="num shrink-0 font-medium">{fmtMoneyExact(row.amount, row.currency)}</span>
                 </li>
               ))}
               {!paymentsBySupplier.length && <li><EmptyState title="אין תשלומים בחודש זה" /></li>}
@@ -673,8 +704,8 @@ export default function Reports() {
             <table className="w-full">
               <thead className="table-head"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סכום ששולם</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
-                {paymentsBySupplier.map(([name, sum]) => (
-                  <tr key={name}><td className="td">{name}</td><td className="td num font-medium">{fmtMoneyExact(sum)}</td></tr>
+                {paymentsBySupplier.map((row) => (
+                  <tr key={`${row.name}|${row.currency}`}><td className="td">{row.name}</td><td className="td num font-medium">{fmtMoneyExact(row.amount, row.currency)}</td></tr>
                 ))}
                 {!paymentsBySupplier.length && <tr><td className="td" colSpan={2}><EmptyState className="print:hidden" title="אין תשלומים בחודש זה" /><span className="hidden text-ink-muted print:inline">אין תשלומים בחודש זה</span></td></tr>}
               </tbody>
@@ -692,7 +723,7 @@ export default function Reports() {
                       <div className="break-words font-medium text-ink-body">{c.supplier.name}</div>
                       <div className="mt-0.5 break-words text-xs text-ink-muted">{CREDIT_REASON[c.reason]}</div>
                     </div>
-                    <span className="num shrink-0 font-medium">{fmtMoneyExact(c.amount)}</span>
+                    <span className="num shrink-0 font-medium">{fmtMoneyExact(c.amount, c.currency)}</span>
                   </div>
                   <div className="mt-3"><StatusBadge meta={CREDIT_STATUS[c.status]} /></div>
                 </li>
@@ -707,7 +738,7 @@ export default function Reports() {
                   <tr key={c.number}>
                     <td className="td">{c.supplier.name}</td>
                     <td className="td text-ink-muted">{CREDIT_REASON[c.reason]}</td>
-                    <td className="td num">{fmtMoneyExact(c.amount)}</td>
+                    <td className="td num">{fmtMoneyExact(c.amount, c.currency)}</td>
                     <td className="td"><StatusBadge meta={CREDIT_STATUS[c.status]} /></td>
                   </tr>
                 ))}

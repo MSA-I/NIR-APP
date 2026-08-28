@@ -12,7 +12,8 @@ import { PriceListUploadModal, SUBMISSION_STATUS, submissionMonthLabel } from '.
 import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
 import { canStartSupplierCommerce, SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
 import { fmtMoneyExact, fmtNum, fmtDate, fmtDays, productLabel } from '../lib/format';
-import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission, SupplierBankDetails, SupplierBankMigrationItem } from '../lib/types';
+import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission, SupplierBankDetails, SupplierBankMigrationItem, MoneyAmount } from '../lib/types';
+import { MoneyByCurrency } from '../components/Money';
 import { SUPPLIER_COLUMNS } from '../lib/supplierColumns';
 import { SupplierCommunicationCard } from '../components/SupplierCommunicationCard';
 import { readFinancialSupplierBankAccount, readSupplierBankMigrationItem } from '../lib/financialSuppliers';
@@ -30,7 +31,14 @@ type PricedProduct = SupplierProduct & {
 };
 
 interface SupplierWithBalance extends SupplierRow {
-  open_balance?: number | null; // null = the balance reader is owner-gated for this caller
+  /**
+   * ONE ENTRY PER CURRENCY (0218, #277) — the row this whole campaign is about. A supplier owed
+   * ₪12,400 and $3,100 has two balances managed separately, and `Map` keyed by supplier alone was
+   * exactly the place the second one used to be overwritten by the first.
+   * `null` = the balance reader is owner-gated for this caller, which is not the same claim as
+   * "nothing is owed".
+   */
+  open_balances?: MoneyAmount[] | null;
   categories?: string[];
   metrics?: SupplierMetrics;
 }
@@ -61,7 +69,7 @@ function RiskCell({ m }: { m?: SupplierMetrics }) {
 
 export function SuppliersList() {
   const navigate = useNavigate();
-  const { profile, organizationAccess } = useAuth();
+  const { profile, org, organizationAccess } = useAuth();
   const toast = useToast();
   const [editing, setEditing] = useState<SupplierRow | null | 'new'>(null);
   const [priceUploadFor, setPriceUploadFor] = useState<SupplierWithBalance | null>(null);
@@ -85,18 +93,24 @@ export function SuppliersList() {
         .select('id, org_id, name, tax_id, contact_name, phone, whatsapp, email, address, delivery_days, cutoff_time, min_order_amount, payment_terms, notes, status, deleted_at, created_at, updated_at, rating, rating_updated_at, rating_note, supplier_categories(category_id, categories(name))')
         .is('deleted_at', null).order('name'),
       financial
-        ? supabase.from('supplier_balances').select('*')
+        ? supabase.from('supplier_balances_by_currency').select('*')
         : Promise.resolve({ data: [], error: null }),
       supabase.from('supplier_metrics').select('*'),
     ]);
     const suppliers = unwrap(supRes) as (SupplierRow & { supplier_categories: { categories: { name: string } }[] })[];
-    const balances = unwrap(balRes) as { supplier_id: string; open_balance: number }[];
+    const balances = unwrap(balRes) as { supplier_id: string; currency: string; open_balance_in_currency: number }[];
     const metrics = unwrap(metRes) as SupplierMetrics[];
-    const balMap = new Map(balances.map((b) => [b.supplier_id, b.open_balance]));
+    // A LIST per supplier, not a number. Keying by supplier alone is what dropped a currency.
+    const balMap = new Map<string, MoneyAmount[]>();
+    for (const balance of balances) {
+      const rows = balMap.get(balance.supplier_id) ?? [];
+      rows.push({ currency: balance.currency, amount: balance.open_balance_in_currency });
+      balMap.set(balance.supplier_id, rows);
+    }
     const metMap = new Map(metrics.map((m) => [m.supplier_id, m]));
     return suppliers.map((s) => ({
       ...s,
-      open_balance: financial ? (balMap.get(s.id) ?? 0) : null,
+      open_balances: financial ? (balMap.get(s.id) ?? []) : null,
       categories: s.supplier_categories?.map((c) => c.categories?.name).filter(Boolean),
       metrics: metMap.get(s.id),
     }));
@@ -108,7 +122,7 @@ export function SuppliersList() {
   const [balanceFilter, setBalanceFilter] = useParamState('balance');
   const [statusFilter, setStatusFilter] = useParamState('status');
   const rows = useMemo(() => (data ?? []).filter((r) =>
-    (balanceFilter !== 'open' || (r.open_balance ?? 0) > 0)
+    (balanceFilter !== 'open' || (r.open_balances ?? []).some((entry) => entry.amount > 0))
     && (!statusFilter || r.status === statusFilter)
   ), [data, balanceFilter, statusFilter]);
 
@@ -131,14 +145,18 @@ export function SuppliersList() {
       return;
     }
     const [balRes, poRes] = await Promise.all([
-      supabase.from('supplier_balances').select('open_balance').eq('supplier_id', s.id).maybeSingle(),
+      supabase.from('supplier_balances_by_currency').select('open_balance_in_currency').eq('supplier_id', s.id),
       supabase.from('purchase_orders').select('id', { count: 'exact', head: true })
         .eq('supplier_id', s.id).not('status', 'in', '(draft,received,cancelled)'),
     ]);
     const err = balRes.error ?? poRes.error;
     // If the check itself failed we cannot prove the supplier is safe to delete — refuse.
     if (err) { toast(toHebrewError(err.message), 'error'); return; }
-    const openBalance = (balRes.data as { open_balance: number } | null)?.open_balance ?? 0;
+    // ANY currency in which this supplier is still owed money blocks the deletion. A netting
+    // across currencies is exactly how a supplier with a dollar debt and a shekel credit could
+    // have been deleted with money outstanding — the server's own guard was fixed the same way.
+    const openBalance = ((balRes.data ?? []) as { open_balance_in_currency: number }[])
+      .reduce((worst, row) => Math.max(worst, row.open_balance_in_currency), 0);
     if (openBalance > 0) {
       toast('לא ניתן למחוק ספק שיש לו יתרה פתוחה. יש לסגור את היתרה לפני המחיקה.', 'error');
       return;
@@ -174,9 +192,19 @@ export function SuppliersList() {
     { key: 'cats', header: 'קטגוריות', priority: 3, render: (r) => <span className="text-ink-muted">{r.categories?.join(', ') || '—'}</span> },
     { key: 'contact', header: 'איש קשר', priority: 3, render: (r) => r.contact_name || '—' },
     { key: 'phone', header: 'טלפון', render: (r) => <span dir="ltr">{r.phone || '—'}</span> },
-    { key: 'min', header: 'מינ׳ הזמנה', priority: 3, className: 'num', sortValue: (r) => r.min_order_amount ?? 0, render: (r) => fmtMoneyExact(r.min_order_amount) },
+    { key: 'min', header: 'מינ׳ הזמנה', priority: 3, className: 'num', sortValue: (r) => r.min_order_amount ?? 0, render: (r) => fmtMoneyExact(r.min_order_amount, r.default_currency) },
     { key: 'risk', header: 'התראות', mobileLabel: null, render: (r) => <RiskCell m={r.metrics} /> },
-    { key: 'balance', header: 'יתרה פתוחה', sortValue: (r) => r.open_balance ?? 0, render: (r) => <span className={`num ${r.open_balance ? 'text-await-fg font-medium' : ''}`}>{fmtMoneyExact(r.open_balance)}</span>, className: 'num' },
+    {
+      key: 'balance', header: 'יתרה פתוחה', className: 'num',
+      /* Sorted on the organisation's own currency: a column holding two currencies has no single
+         ordering, and ranking by "the first entry" would order the table by whichever currency
+         came back first. */
+      sortValue: (r) => r.open_balances?.find((entry) => entry.currency === org?.base_currency)?.amount ?? 0,
+      render: (r) => (r.open_balances == null
+        ? <span className="num">—</span>
+        : <MoneyByCurrency amounts={r.open_balances} baseCurrency={org?.base_currency}
+            className={r.open_balances.some((entry) => entry.amount > 0) ? 'text-await-fg font-medium' : ''} />),
+    },
     { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} /> },
   ];
 
@@ -187,7 +215,7 @@ export function SuppliersList() {
     <div className="space-y-4">
       <PageHeader title="ספקים"
         meta={financial
-          ? `${data?.length ?? 0} ספקים · ${(data ?? []).filter((supplier) => (supplier.open_balance ?? 0) > 0).length} עם יתרה פתוחה`
+          ? `${data?.length ?? 0} ספקים · ${(data ?? []).filter((supplier) => (supplier.open_balances ?? []).some((entry) => entry.amount > 0)).length} עם יתרה פתוחה`
           : `${data?.length ?? 0} ספקים`}
         actions={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> ספק חדש</button>} />
       <DataTable rows={rows} columns={columns} searchable
@@ -611,7 +639,7 @@ export function SupplierCard() {
         : Promise.resolve({ data: null as Payment[] | null, error: null }),
       supabase.from('credit_requests').select('*').eq('supplier_id', id!).order('created_at', { ascending: false }).limit(50),
       financial
-        ? supabase.from('supplier_balances').select('*').eq('supplier_id', id!).maybeSingle()
+        ? supabase.from('supplier_balances_by_currency').select('*').eq('supplier_id', id!)
         : Promise.resolve({ data: null, error: null }),
       supabase.from('supplier_metrics').select('*').eq('supplier_id', id!).maybeSingle(), // maybeSingle: a role-guarded view may return no row
       supabase.from('supplier_products').select('*, product:products(id,name,display_name,unit)').eq('supplier_id', id!).order('updated_at', { ascending: false }),
@@ -634,7 +662,10 @@ export function SupplierCard() {
       // and the render below keeps the two apart (constitution: אפס הוא גם טענה על המציאות).
       payments: financial ? (unwrap(payments) as Payment[]) : null,
       credits: unwrap(credits) as CreditRequest[],
-      balance: financial ? ((balance.data as { open_balance: number } | null)?.open_balance ?? 0) : null,
+      balances: financial
+        ? ((balance.data ?? []) as { currency: string; open_balance_in_currency: number }[])
+          .map((row) => ({ currency: row.currency, amount: row.open_balance_in_currency }))
+        : null,
       metrics: (metrics.data as SupplierMetrics | null) ?? null,
       prices,
       history,
@@ -672,9 +703,17 @@ export function SupplierCard() {
   const scoreItems: ScoreItem[] = [
     // balance === null means the balance reader is owner-gated for this caller, and a green
     // ₪0.00 there would be a fabricated measurement, not a permission message.
-    data.balance === null
+    data.balances === null
       ? { label: 'יתרה פתוחה', value: '—', sub: 'זמין לבעלים בלבד', tone: 'idle' }
-      : { label: 'יתרה פתוחה', value: fmtMoneyExact(data.balance), tone: data.balance > 0 ? 'await' : 'done' },
+      /* THE ROW #277 IS ABOUT. Two currencies are two balances, listed one under the other, and
+         never a sum: ₪12,400 plus $3,100 is not 15,500, it is not a number at all. */
+      : {
+        label: 'יתרה פתוחה',
+        value: data.balances.length
+          ? data.balances.map((entry) => fmtMoneyExact(entry.amount, entry.currency)).join(' · ')
+          : '—',
+        tone: data.balances.some((entry) => entry.amount > 0) ? 'await' : 'done',
+      },
     {
       label: 'עמידה בזמנים',
       value: m && m.otd_samples > 0 ? fmtPct(m.on_time_pct) : '—',
@@ -686,9 +725,11 @@ export function SupplierCard() {
     // "zero open exceptions". fmtNum(null) renders — so the tile stays honest (constitution §"אין ערכים
     // סטטיים מזויפים"), matching how OTD and lead time above already behave.
     { label: 'חריגים פתוחים', value: fmtNum(m?.open_exceptions ?? null), sub: m ? `${fmtNum(m.exceptions_lifetime)} בסה״כ` : 'טרם חושבו מדדים', tone: (m?.open_exceptions ?? 0) > 0 ? 'alert' : 'idle' },
-    { label: 'זיכויים פתוחים', value: fmtNum(m?.open_credits ?? null), sub: fmtMoneyExact(m?.open_credits_amount ?? null), tone: (m?.open_credits ?? 0) > 0 ? 'await' : 'idle' },
+    /* 0223: the amount is null when this supplier holds open credits in more than one currency,
+       because the view refuses to add them — the count is still true, and the sub-line says so. */
+    { label: 'זיכויים פתוחים', value: fmtNum(m?.open_credits ?? null), sub: fmtMoneyExact(m?.open_credits_amount ?? null, m?.open_credits_currency), tone: (m?.open_credits ?? 0) > 0 ? 'await' : 'idle' },
     { label: 'שינויי מחיר (90 הימים האחרונים)', value: fmtNum(m?.price_changes_window ?? null), sub: m ? `${fmtNum(m.priced_items)} פריטים` : 'טרם חושבו מדדים', tone: 'idle' },
-    { label: 'מינימום הזמנה', value: fmtMoneyExact(s.min_order_amount), tone: 'idle' },
+    { label: 'מינימום הזמנה', value: fmtMoneyExact(s.min_order_amount, s.default_currency), tone: 'idle' },
     { label: 'תנאי תשלום', value: s.payment_terms ?? '—', tone: 'idle', numeric: false },
   ];
 
@@ -763,7 +804,7 @@ export function SupplierCard() {
         <DataTable rows={data.invoices} columns={[
           { key: 'num', header: 'מס׳ חשבונית', className: 'num', render: (r: Invoice) => r.invoice_number },
           { key: 'date', header: 'תאריך', sortValue: (r: Invoice) => r.invoice_date, render: (r: Invoice) => fmtDate(r.invoice_date) },
-          { key: 'total', header: 'סה״כ', className: 'num', sortValue: (r: Invoice) => r.total_amount, render: (r: Invoice) => fmtMoneyExact(r.total_amount) },
+          { key: 'total', header: 'סה״כ', className: 'num', sortValue: (r: Invoice) => r.total_amount, render: (r: Invoice) => fmtMoneyExact(r.total_amount, r.currency) },
           { key: 'review', header: 'בדיקה', render: (r: Invoice) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
           { key: 'payment', header: 'תשלום', render: (r: Invoice) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
         ]} rowLabel={(r) => `חשבונית ${r.invoice_number} של ${s.name}`} onRowClick={(r) => navigate(`/invoices/${r.id}`)} emptyTitle="אין חשבוניות לספק זה" />
@@ -774,7 +815,7 @@ export function SupplierCard() {
         {data.payments ? (
           <DataTable rows={data.payments} columns={[
             { key: 'date', header: 'תאריך', sortValue: (r: Payment) => r.paid_date, render: (r: Payment) => fmtDate(r.paid_date) },
-            { key: 'amount', header: 'סכום', className: 'num', sortValue: (r: Payment) => r.amount, render: (r: Payment) => fmtMoneyExact(r.amount) },
+            { key: 'amount', header: 'סכום', className: 'num', sortValue: (r: Payment) => r.amount, render: (r: Payment) => fmtMoneyExact(r.amount, r.currency) },
             { key: 'method', header: 'אמצעי', render: (r: Payment) => r.method ?? '—' },
             { key: 'ref', header: 'אסמכתא', className: 'num', render: (r: Payment) => <span dir="ltr">{r.reference ?? '—'}</span> },
           ]} emptyTitle="אין תשלומים לספק זה" />
@@ -788,7 +829,7 @@ export function SupplierCard() {
         <DataTable rows={data.credits} columns={[
           { key: 'num', header: 'מס׳', className: 'num', render: (r: CreditRequest) => `#${r.number}` },
           { key: 'reason', header: 'סיבה', render: (r: CreditRequest) => CREDIT_REASON[r.reason] },
-          { key: 'amount', header: 'סכום', className: 'num', sortValue: (r: CreditRequest) => r.amount, render: (r: CreditRequest) => fmtMoneyExact(r.amount) },
+          { key: 'amount', header: 'סכום', className: 'num', sortValue: (r: CreditRequest) => r.amount, render: (r: CreditRequest) => fmtMoneyExact(r.amount, r.currency) },
           { key: 'status', header: 'סטטוס', render: (r: CreditRequest) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
           { key: 'date', header: 'נפתח', sortValue: (r: CreditRequest) => r.created_at, render: (r: CreditRequest) => fmtDate(r.created_at) },
         ]} rowLabel={(r) => `דרישת זיכוי מספר ${r.number} עבור ${s.name}`} onRowClick={() => navigate('/credits')} emptyTitle="אין זיכויים לספק זה" />
@@ -853,8 +894,8 @@ function SupplierPricesTab({ rows, history, submissions }: {
 
   const columns: Column<PricedProduct>[] = [
     { key: 'product', header: 'מוצר', sortValue: (r) => productLabel(r.product), render: (r) => <bdi className="font-medium text-ink">{productLabel(r.product)}</bdi> },
-    { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
-    { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => fmtMoneyExact(r.previous_price) },
+    { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price, r.currency)}</span> },
+    { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => fmtMoneyExact(r.previous_price, r.currency) },
     {
       key: 'change', header: 'שינוי', sortValue: changePct,
       render: (r) => {

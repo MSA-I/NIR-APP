@@ -47,7 +47,7 @@ vi.mock('../lib/supabase', async () => {
 const auth = vi.hoisted(() => ({
   current: {
     profile: { id: 'user-1', org_id: 'org-test', role: 'office' } as { id: string; org_id: string; role: string },
-    org: { vat_rate: 18 },
+    org: { vat_rate: 18, base_currency: 'ILS' },
     session: {},
     organizationAccess: { mode: 'active', canWrite: true },
   },
@@ -69,7 +69,11 @@ import PaymentRequests from './PaymentRequests';
 
 const SUPPLIERS_ENDPOINT = `${SUPABASE_URL}/rest/v1/suppliers`;
 const FINANCIAL_SUPPLIERS_ENDPOINT = `${SUPABASE_URL}/rest/v1/financial_supplier_directory`;
-const EXISTING = { id: 'sup-1', name: 'ספק קיים בע״מ', tax_id: '514000000', status: 'active' };
+const CURRENCIES_ENDPOINT = `${SUPABASE_URL}/rest/v1/currencies`;
+const EXISTING = {
+  id: 'sup-1', name: 'ספק קיים בע״מ', tax_id: '514000000', status: 'active',
+  default_currency: 'USD', country_code: 'US',
+};
 const NEW_ROW = { id: 'sup-new', name: 'ירקות השדה בע״מ' };
 
 beforeAll(() => {
@@ -79,7 +83,7 @@ beforeAll(() => {
 beforeEach(() => {
   auth.current = {
     profile: { id: 'user-1', org_id: 'org-test', role: 'office' },
-    org: { vat_rate: 18 },
+    org: { vat_rate: 18, base_currency: 'ILS' },
     session: {},
     organizationAccess: { mode: 'active', canWrite: true },
   };
@@ -89,6 +93,9 @@ beforeEach(() => {
 function useSupplierTable(rows: Array<Record<string, unknown>> = [EXISTING]) {
   server.use(
     http.get(SUPPLIERS_ENDPOINT, () => HttpResponse.json(rows)),
+    http.get(CURRENCIES_ENDPOINT, () => HttpResponse.json([
+      { code: 'ILS', minor_units: 2 }, { code: 'USD', minor_units: 2 },
+    ])),
     http.get(FINANCIAL_SUPPLIERS_ENDPOINT, () => HttpResponse.json(rows.map((row) => ({
       id: row.id,
       name: row.name,
@@ -415,13 +422,26 @@ describe('InvoiceNew — the same door', () => {
     expect(screen.getByRole('option', { name: NEW_ROW.name })).toBeInTheDocument();
   });
 
+  it('defaults the manual invoice currency from the selected supplier', async () => {
+    const user = userEvent.setup();
+    useSupplierTable();
+    server.use(http.get(CURRENCIES_ENDPOINT, () => HttpResponse.json([
+      { code: 'ILS', minor_units: 2 }, { code: 'USD', minor_units: 2 },
+    ])));
+    render(wrap(<InvoiceNew />, '/invoices/new'));
+
+    await screen.findByRole('option', { name: EXISTING.name });
+    await user.selectOptions(screen.getByLabelText('ספק *'), EXISTING.id);
+    expect(screen.getByLabelText('מטבע *')).toHaveValue('USD');
+  });
+
 });
 
 describe('PaymentRequests — the same door', () => {
   /** One open invoice for `sup-1`, and nothing for anybody else. */
   const OPEN_INVOICE = {
     id: 'inv-1', invoice_number: '1001', invoice_date: '2026-07-01',
-    total_amount: 1234, review_status: 'approved', payment_status: 'unpaid',
+    total_amount: 1234, currency: 'ILS', review_status: 'approved', payment_status: 'unpaid',
   };
 
   const useScreenTables = () => {
@@ -435,7 +455,8 @@ describe('PaymentRequests — the same door', () => {
         HttpResponse.json({
           requested_invoice_count: 1, visible_invoice_count: 1, paid_invoice_count: 0,
           unapproved_invoice_count: 0, amount_matches_open_balance: true,
-          similar_bank_transfer_check: 'unavailable', open_credit_total: 0,
+          similar_bank_transfer_check: 'unavailable',
+          currency: 'ILS', open_credit_total_by_currency: [],
           over_allocated_invoice_count: 0,
         })),
     );
@@ -487,14 +508,14 @@ describe('PaymentRequests — the same door', () => {
     await user.selectOptions(screen.getByLabelText('ספק *'), 'sup-1');
 
     await user.click(await screen.findByRole('checkbox', { name: /בחירת חשבונית 1001/ }));
-    expect(amountText()).toContain(flat(fmtMoneyExact(1234)));
+    expect(amountText()).toContain(flat(fmtMoneyExact(1234, 'ILS')));
 
     await createSupplier(user);
 
     await waitFor(() => expect(screen.getByLabelText('ספק *')).toHaveValue('sup-new'));
     // The new supplier has no invoices, and the request no longer carries the old one's money.
-    expect(amountText()).toContain(flat(fmtMoneyExact(0)));
-    expect(amountText()).not.toContain(flat(fmtMoneyExact(1234)));
+    expect(amountText()).toContain(flat(fmtMoneyExact(0, 'ILS')));
+    expect(amountText()).not.toContain(flat(fmtMoneyExact(1234, 'ILS')));
     expect(screen.queryByRole('checkbox', { name: /בחירת חשבונית 1001/ })).toBeNull();
   });
 });

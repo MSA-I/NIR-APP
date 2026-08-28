@@ -15,26 +15,29 @@ const supplierReader = readFileSync(join(process.cwd(), 'src', 'lib', 'financial
 describe('financial supplier capability boundary', () => {
   it('ignores historical matched requests when deciding whether current due exposure is known', () => {
     expect(financialDueExposure([
-      { id: 'matched', number: 1, amount: 500, due_date: null, status: 'matched' },
-      { id: 'open', number: 2, amount: 75, due_date: '2026-08-01', status: 'approved' },
-    ], '2026-08-08')).toBe(75);
+      { id: 'matched', number: 1, amount: 500, currency: 'ILS', due_date: null, status: 'matched' },
+      { id: 'open', number: 2, amount: 75, currency: 'ILS', due_date: '2026-08-01', status: 'approved' },
+    ], '2026-08-08')).toEqual([{ currency: 'ILS', amount: 75 }]);
   });
 
   it('keeps unknown due dates distinct from a real zero', () => {
     expect(financialDueExposure([], '2026-08-08')).toBeNull();
     expect(financialDueExposure([
-      { id: 'undated', number: 1, amount: 500, due_date: null, status: 'approved' },
+      { id: 'undated', number: 1, amount: 500, currency: 'ILS', due_date: null, status: 'approved' },
     ], '2026-08-08')).toBeNull();
     expect(financialDueExposure([
-      { id: 'future', number: 2, amount: 75, due_date: '2026-08-09', status: 'approved' },
-    ], '2026-08-08')).toBe(0);
+      { id: 'future', number: 2, amount: 75, currency: 'ILS', due_date: '2026-08-09', status: 'approved' },
+    /* An empty LIST, not a zero and not a null: the exposure was measured — there is a dated
+       request — and nothing has come due yet. Which is a different claim from "the due dates are
+       unknown" above, and that distinction is what this test has always been about. */
+    ], '2026-08-08')).toEqual([]);
   });
 
   it('counts suggested bank matches separately from unmatched transactions', () => {
     expect(financialBankStatusCounts([
-      { id: 'u1', tx_date: '2026-08-01', amount: 10, status: 'unmatched' },
-      { id: 's1', tx_date: '2026-08-02', amount: 20, status: 'suggested' },
-      { id: 'm1', tx_date: '2026-08-03', amount: 30, status: 'matched' },
+      { id: 'u1', tx_date: '2026-08-01', amount: 10, currency: 'ILS', status: 'unmatched' },
+      { id: 's1', tx_date: '2026-08-02', amount: 20, currency: 'ILS', status: 'suggested' },
+      { id: 'm1', tx_date: '2026-08-03', amount: 30, currency: 'ILS', status: 'matched' },
     ])).toEqual({ unmatched: 1, suggested: 1 });
     expect(source).toContain('תנועות בנק לא מותאמות');
     expect(source).toContain('התאמות שממתינות לאישור');

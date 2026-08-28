@@ -175,7 +175,12 @@ export const ANSWER_JSON_SCHEMA: Record<string, unknown> = {
                   { type: "null" },
                 ],
               },
-              claim_unit: { type: "string", enum: [...FACT_UNITS] },
+              claim_unit: {
+                anyOf: [
+                  { type: "string", enum: [...FACT_UNITS] },
+                  { type: "string", pattern: "^[a-z]{3}$" },
+                ],
+              },
               claim_value: {
                 anyOf: [
                   { type: "number" },

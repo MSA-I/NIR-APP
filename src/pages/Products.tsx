@@ -16,7 +16,17 @@ import { ProductNameRepairReview, type ProductNameRepairQueue } from './ProductN
 
 interface ProductRow extends Product {
   supplierCount?: number;
+  /**
+   * The lowest price among this product's available suppliers — and null when they do not all
+   * quote in the SAME currency (0217, #277). `Math.min` over 12 and 40 answers 12 whether those
+   * are dollars and shekels or the other way round, and a "best price" column that returns the
+   * dollar figure because the number is smaller is a recommendation nobody could defend. It is the
+   * same rule `purchase_comparison` and `inventory_intelligence` now follow on the server.
+   */
   bestPrice?: number | null;
+  bestPriceCurrency?: string | null;
+  /** True when the offers span currencies, so the column can say why it has no answer. */
+  pricesSpanCurrencies?: boolean;
 }
 
 export default function Products() {
@@ -44,20 +54,27 @@ export default function Products() {
   const { data, loading, fetching, error, refetch } = useQuery(async () => {
     const products = await fetchAll<ProductRow>((from, to) => supabase.from('products')
       .select('*, category:categories(id, name)').order('name').order('id').range(from, to));
-    const sps = await fetchAll<{ id: string; product_id: string; current_price: number; available: boolean }>((from, to) => supabase.from('supplier_products')
-      .select('id, product_id, current_price, available').order('product_id').order('id').range(from, to));
-    const byProduct = new Map<string, number[]>();
+    const sps = await fetchAll<{ id: string; product_id: string; current_price: number; currency: string; available: boolean }>((from, to) => supabase.from('supplier_products')
+      .select('id, product_id, current_price, currency, available').order('product_id').order('id').range(from, to));
+    const byProduct = new Map<string, { price: number; currency: string }[]>();
     for (const sp of sps) {
       if (!sp.available) continue;
       const arr = byProduct.get(sp.product_id) ?? [];
-      arr.push(sp.current_price);
+      arr.push({ price: sp.current_price, currency: sp.currency });
       byProduct.set(sp.product_id, arr);
     }
-    return products.map((p) => ({
-      ...p,
-      supplierCount: byProduct.get(p.id)?.length ?? 0,
-      bestPrice: byProduct.get(p.id)?.length ? Math.min(...byProduct.get(p.id)!) : null,
-    }));
+    return products.map((p) => {
+      const offers = byProduct.get(p.id) ?? [];
+      const currencies = new Set(offers.map((offer) => offer.currency));
+      const comparable = currencies.size === 1;
+      return {
+        ...p,
+        supplierCount: offers.length,
+        bestPrice: offers.length && comparable ? Math.min(...offers.map((offer) => offer.price)) : null,
+        bestPriceCurrency: comparable ? offers[0]?.currency ?? null : null,
+        pricesSpanCurrencies: currencies.size > 1,
+      };
+    });
   });
 
   const canWrite = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
@@ -144,13 +161,21 @@ export default function Products() {
       key: 'best', header: 'מחיר מיטבי', className: 'num', sortValue: (r) => r.bestPrice ?? 0,
       // The price is exactly the value that invites comparison — it links straight to the
       // cross-supplier view. stopPropagation: the row click underneath opens the edit modal.
-      render: (r) => r.bestPrice != null ? (
+      render: (r) => (r.bestPrice != null ? (
         <button type="button" className="text-action underline underline-offset-2"
           title={`השוואת מחירי ${productLabel(r)}`}
           onClick={(event) => { event.stopPropagation(); navigate(`/prices?product=${r.id}`); }}>
-          {fmtMoneyExact(r.bestPrice)}
+          {fmtMoneyExact(r.bestPrice, r.bestPriceCurrency)}
         </button>
-      ) : fmtMoneyExact(r.bestPrice),
+      ) : r.pricesSpanCurrencies ? (
+        /* Not "no price" — "no comparable price". The link still opens the comparison, where every
+           offer is listed with its own currency and a person can decide. */
+        <button type="button" className="text-action underline underline-offset-2"
+          title={`השוואת מחירי ${productLabel(r)}`}
+          onClick={(event) => { event.stopPropagation(); navigate(`/prices?product=${r.id}`); }}>
+          מחירים בכמה מטבעות
+        </button>
+      ) : '—'),
     },
   ];
 

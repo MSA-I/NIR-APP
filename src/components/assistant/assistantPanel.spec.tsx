@@ -356,7 +356,7 @@ describe('העוזר של InPlace — הפאנל', () => {
     // textContent גולמי ולא getByText(string): הפלט של Intl מכיל NBSP שהנרמול של testing-library
     // מקפל לרווח, וההשוואה חייבת להיות מול אותו פורמטר בדיוק — לא מול העתק מוקלד שלו.
     const value = screen.getByText((_, element) =>
-      element?.tagName === 'DD' && element.textContent === fmtMoneyExact(1650.6));
+      element?.tagName === 'DD' && element.textContent === fmtMoneyExact(1650.6, 'ILS'));
     expect(value).toBeInTheDocument();
     const source = screen.getByRole('link', { name: /ירקות השדה/ });
     expect(source).toHaveAttribute('href', '/suppliers/sup-1');

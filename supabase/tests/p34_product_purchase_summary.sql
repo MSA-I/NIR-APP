@@ -8,6 +8,9 @@
 
 begin;
 
+-- Legacy invoice fixtures in this transaction predate multi-currency and are explicitly ILS.
+alter table public.invoices alter column currency set default 'ILS';
+
 create function pg_temp.p34_assert(p_condition boolean, p_message text)
 returns void language plpgsql as $$
 begin
@@ -26,6 +29,16 @@ returns jsonb language sql stable as $$
   where p ->> 'product_id' = p_product::text
 $$;
 
+
+-- 0221: spend is an array of {currency, amount}. The assertion names the currency it means,
+-- because reading "the first element" would pass on this shekel-only fixture and quietly assert
+-- about the wrong currency the moment a product is billed in a second one.
+create function pg_temp.p34_money(p_row jsonb, p_key text, p_currency text)
+returns numeric language sql immutable as $$
+  select (entry ->> 'amount')::numeric
+  from jsonb_array_elements(p_row -> p_key) entry
+  where entry ->> 'currency' = p_currency
+$$;
 insert into public.organizations (id, name, status, vat_rate) values
   ('10340000-0000-4000-8000-000000000001', 'P34 tenant', 'active', 18);
 insert into auth.users (id, email) values
@@ -167,7 +180,7 @@ select pg_temp.p34_assert(
 -- ===== 3. Products are never merged by name =====
 
 select pg_temp.p34_assert(
-  (select (p ->> 'canonical_qty')::numeric = 6 and p ->> 'gross_amount' is null
+  (select (p ->> 'canonical_qty')::numeric = 6 and p ->> 'gross_amount_by_currency' is null
    from pg_temp.p34_product('30340000-0000-4000-8000-000000000002') p),
   '"עגבניות שרי 500 גרם" was merged into "עגבניות שרי", or its receipted quantity was lost. They '
   'are one product to a person and two rows to Postgres; merging them on a screen that drives '
@@ -183,7 +196,7 @@ select pg_temp.p34_assert(
 -- 88 products rendering ₪0.00 against quantities somebody had physically received, which reads as
 -- "this was free" rather than "nobody has billed us for it yet".
 select pg_temp.p34_assert(
-  (select p ->> 'gross_amount' is null and p ->> 'invoiced_qty' is null
+  (select p ->> 'gross_amount_by_currency' is null and p ->> 'invoiced_qty' is null
           and (p ->> 'received_qty')::numeric = 6
    from pg_temp.p34_product('30340000-0000-4000-8000-000000000002') p),
   'a product that was received but never billed reports a spend of zero instead of nothing. Zero '
@@ -202,14 +215,14 @@ select pg_temp.p34_assert(
 
 select pg_temp.p34_assert(
   (select (r ->> 'unmapped_invoice_lines')::bigint = 1
-          and (r ->> 'unmapped_invoice_amount')::numeric = 29
+          and pg_temp.p34_money(r, 'unmapped_invoice_amount_by_currency', 'ILS') = 29
    from private.product_purchase_summary(
      '10340000-0000-4000-8000-000000000001', '2026-08-01', '2026-08-31', null) r),
   'an approved invoice line that no order item claims was silently folded into a product total, '
   'or silently dropped. It is real money whose product placement is not established');
 
 select pg_temp.p34_assert(
-  (select (p ->> 'gross_amount')::numeric = 160
+  (select pg_temp.p34_money(p, 'gross_amount_by_currency', 'ILS') = 160
    from pg_temp.p34_product('30340000-0000-4000-8000-000000000001') p),
   'the unmapped ₪29 line leaked into a product''s spend');
 

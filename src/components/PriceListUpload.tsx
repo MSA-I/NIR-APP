@@ -194,15 +194,15 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
 
   const { data: suppliers, loading: suppliersLoading, error: suppliersError } = useQuery(async () => {
     if (supplier) {
-      const row = unwrap(await supabase.from('suppliers').select('id, name, status')
-        .eq('id', supplier.id).is('deleted_at', null).single()) as Pick<Supplier, 'id' | 'name' | 'status'>;
+      const row = unwrap(await supabase.from('suppliers').select('id, name, status, default_currency')
+        .eq('id', supplier.id).is('deleted_at', null).single()) as Pick<Supplier, 'id' | 'name' | 'status' | 'default_currency'>;
       if (!canStartSupplierCommerce(row.status)) {
         throw new PriceDocumentError('הספק לא פעיל לפעילות מסחרית חדשה. מחירון חדש לא ייקלט.');
       }
       return [row];
     }
-    return unwrap(await supabase.from('suppliers').select('id, name').is('deleted_at', null)
-      .in('status', NEW_COMMERCE_SUPPLIER_STATUSES).order('name')) as Pick<Supplier, 'id' | 'name'>[];
+    return unwrap(await supabase.from('suppliers').select('id, name, default_currency').is('deleted_at', null)
+      .in('status', NEW_COMMERCE_SUPPLIER_STATUSES).order('name')) as Pick<Supplier, 'id' | 'name' | 'default_currency'>[];
   });
 
   // The dialog that already creates new *products* on the fly stopped dead at a supplier it did
@@ -369,7 +369,12 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
     }
   }
 
-  const supplierName = picker.suppliers.find((s) => s.id === supplierId)?.name ?? supplier?.name;
+  const selectedSupplier = picker.suppliers.find((s) => s.id === supplierId);
+  const supplierName = selectedSupplier?.name ?? supplier?.name;
+  /* A price list is the SUPPLIER's own quote, so the preview is in the currency that supplier
+     trades in (0217) — not the organisation's. A supplier who quotes dollars would otherwise
+     preview as shekels, which is the silent unit swap this campaign exists to end. */
+  const supplierCurrency = selectedSupplier?.default_currency;
 
   return (
     <Modal open onClose={onClose} title={supplier ? `העלאת מחירון — ${supplier.name}` : 'העלאת מחירון'}
@@ -419,7 +424,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
                 {preview.rows.slice(0, 100).map((r, i) => (
                   <tr key={i}>
                     <td className="td">{r.name}</td>
-                    <td className="td num">{fmtMoneyExact(r.price)}</td>
+                    <td className="td num">{fmtMoneyExact(r.price, supplierCurrency)}</td>
                     <td className="td">{r.productId ? <span className="badge-done">מוצר קיים</span>
                       : r.ambiguous ? <span className="badge-alert">שם כפול בקטלוג</span>
                         : <span className="badge-await">מוצר חדש</span>}</td>

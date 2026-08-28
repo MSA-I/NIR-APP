@@ -40,6 +40,7 @@ const read = (over: Partial<DocumentReviewRead> = {}): DocumentReviewRead => ({
 
 const assessment = (over: Record<string, unknown> = {}) => ({
   document_type: 'invoice',
+  currency: 'USD',
   document_number: 'INV-1',
   document_date: '2026-06-15',
   supplier_id: 's1',
@@ -161,6 +162,7 @@ describe('reviewedProposal', () => {
     expect(proposal.lines[0].quantity).toBe('2');
     expect(proposal.lines[0].unit_price).toBe('20');
     expect(proposal.totals.total).toBe('23.6');
+    expect(proposal.currency).toBe('USD');
     expect(typeof proposal.lines[0].line_total).toBe('string');
   });
 

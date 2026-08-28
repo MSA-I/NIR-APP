@@ -8,7 +8,7 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, Note, ICON, type Column } from '../components/ui';
 import { EXCEPTION_TYPE, EXCEPTION_STATUS, SEVERITY } from '../lib/status';
-import { fmtDate, fmtMoneyExact } from '../lib/format';
+import { fmtDate, fmtMoneyExact, fmtNum } from '../lib/format';
 import { logAction } from '../lib/audit';
 import { financialSupplierMap } from '../lib/financialSuppliers';
 import type { ExceptionRow, ExceptionStatus } from '../lib/types';
@@ -41,8 +41,15 @@ function businessDetailLines(details: Record<string, unknown> | null): string[] 
     const label = DETAIL_LABELS[key] ?? 'פרט נוסף';
     return values.flatMap((value) => {
       if (!['string', 'number', 'boolean'].includes(typeof value)) return [];
+      /* An exception's `details` is server-written jsonb, and it does not carry a currency yet:
+         the writers are spread across the intake, bank and payment paths and are touched in later
+         phases. When one IS present the figure is drawn in it; when it is not, the figure is drawn
+         as a plain number rather than under an invented symbol. The label beside it already says
+         "סכום"; asserting a currency nobody stated would be the exact lie this campaign removes. */
+      const detailCurrency = typeof details.currency === 'string' && /^[A-Z]{3}$/.test(details.currency)
+        ? details.currency : null;
       const text = key === 'amount' && typeof value === 'number'
-        ? fmtMoneyExact(value)
+        ? (detailCurrency ? fmtMoneyExact(value, detailCurrency) : fmtNum(value))
         : key === 'date' && typeof value === 'string'
           ? fmtDate(value)
           : typeof value === 'boolean'

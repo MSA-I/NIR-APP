@@ -56,6 +56,8 @@ export interface AssessmentOrderItem {
 
 export interface DocumentAssessment {
   document_type: string | null;
+  /** ISO-4217 code resolved by the server from the interpretation evidence. */
+  currency: string | null;
   document_number: string | null;
   document_date: string | null;
   supplier_id: string | null;
@@ -130,7 +132,10 @@ export interface DocumentReviewRead {
 export const FINDING_LABELS: Record<string, string> = {
   duplicate_document: 'מסמך כפול',
   supplier_mismatch: 'ההזמנה שייכת לספק אחר',
-  currency_not_ils: 'מטבע שאינו שקל',
+  currency_unrecognised: 'לא ניתן לזהות את המטבע',
+  currency_assumed_from_supplier: 'המטבע נלקח מברירת המחדל של הספק',
+  document_order_currency_mismatch: 'מטבע המסמך שונה ממטבע ההזמנה',
+  price_baseline_currency_mismatch: 'המחיר המוסכם שמור במטבע אחר',
   product_unidentified: 'מוצר לא מזוהה',
   product_repeated_on_document: 'מוצר חוזר ביותר משורה אחת',
   product_charged_not_ordered: 'מוצר שחויב ולא הוזמן',
@@ -343,6 +348,7 @@ export interface ReviewedLineEdit {
 
 export interface ReviewedProposal {
   document_type: string;
+  currency: string | null;
   supplier_id: string;
   order_id: string | null;
   document_number: string | null;
@@ -371,6 +377,7 @@ export function reviewedProposal(
   const assessment = read.assessment;
   return {
     document_type: read.document_type || '',
+    currency: assessment?.currency ?? null,
     supplier_id: supplierId,
     order_id: orderId,
     document_number: assessment?.document_number ?? null,

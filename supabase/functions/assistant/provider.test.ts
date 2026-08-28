@@ -48,12 +48,12 @@ function summaryDb(): ToolDataPort {
   return {
     rpc: (name) =>
       Promise.resolve(
-        name === "p2_business_summary_rows"
+        name === "p2_business_summary_rows_by_currency"
           ? {
             data: [
               { metric_key: "received_week", value: 12, measured: true },
               { metric_key: "awaiting_approval", value: 3, measured: true },
-              { metric_key: "expected_payments", value: "1234.5", measured: true },
+              { metric_key: "expected_payments", value: "1234.5", measured: true, currency: "ILS" },
               { metric_key: "suppliers_raised", value: 0, measured: true },
               { metric_key: "open_exceptions", value: 2, measured: true },
             ],

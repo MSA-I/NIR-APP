@@ -84,21 +84,27 @@ const THREE_WAY_REASON_LABELS: Record<string, string> = {
   invoiced_quantity_above_ordered: 'הכמות שחויבה גבוהה מהכמות שהוזמנה.',
   invoiced_quantity_above_received: 'הכמות שחויבה גבוהה מהכמות שהתקבלה.',
   received_but_not_invoiced: 'התקבלה כמות שטרם חויבה בחשבונית.',
-  line_arithmetic_discrepancy: 'חישוב השורה אינו מסתכם נכון מעבר ל־₪0.05.',
+  line_arithmetic_discrepancy: 'חישוב השורה אינו מסתכם נכון מעבר לסטייה המותרת במטבע החשבונית.',
   invoice_net_total_discrepancy: 'סכום שורות החשבונית לפני מע״מ אינו תואם לסכום החשבונית.',
-  invoice_vat_total_discrepancy: 'סכום המע״מ בשורות אינו תואם לסכום המע״מ בחשבונית מעבר ל־₪1.',
-  invoice_grand_total_discrepancy: 'סך השורות אינו תואם לסך החשבונית מעבר ל־₪1.',
+  invoice_vat_total_discrepancy: 'סכום המע״מ בשורות אינו תואם לסכום המע״מ בחשבונית מעבר לסטייה המותרת במטבע החשבונית.',
+  invoice_grand_total_discrepancy: 'סך השורות אינו תואם לסך החשבונית מעבר לסטייה המותרת במטבע החשבונית.',
   vat_rate_mismatch: 'שיעור המע״מ בשורה שונה משיעור המע״מ המצופה.',
   expected_vat_rate_missing: 'אין שיעור מע״מ ארגוני מאושר להשוואה, ולכן לא ניתן לאשר את השורה.',
 };
 
-function threeWayReasonDetails(reason: ThreeWayReason) {
+/**
+ * `currency` is the invoice's own (0217). Every figure in a reason — the ordered price, the
+ * invoiced price, the difference between them — is money in that one currency, because a
+ * three-way match compares an invoice line against the order line it was matched to and a
+ * matched pair the server would not have produced across two currencies.
+ */
+function threeWayReasonDetails(reason: ThreeWayReason, currency: string) {
   if (reason.ordered_unit_price != null && reason.invoice_unit_price_normalized != null) {
     const difference = reason.difference_amount
       ?? reason.invoice_unit_price_normalized - reason.ordered_unit_price;
     const percent = reason.difference_percent
       ?? (reason.ordered_unit_price === 0 ? null : difference / reason.ordered_unit_price * 100);
-    return `מחיר בהזמנה ${fmtMoneyExact(reason.ordered_unit_price)}, בחשבונית ${fmtMoneyExact(reason.invoice_unit_price_normalized)}, הפרש ${fmtMoneyExact(difference)}${percent == null ? '' : ` (${percent.toFixed(2)}%)`}`;
+    return `מחיר בהזמנה ${fmtMoneyExact(reason.ordered_unit_price, currency)}, בחשבונית ${fmtMoneyExact(reason.invoice_unit_price_normalized, currency)}, הפרש ${fmtMoneyExact(difference, currency)}${percent == null ? '' : ` (${percent.toFixed(2)}%)`}`;
   }
   if (reason.invoiced_quantity != null) {
     const values = [
@@ -120,7 +126,7 @@ function threeWayReasonDetails(reason: ThreeWayReason) {
   }
   if (reason.actual_vat_rate != null) return `שיעור בפועל ${reason.actual_vat_rate}%`;
   if (reason.expected != null && reason.actual != null) {
-    return `מצופה ${fmtMoneyExact(reason.expected)} · בפועל ${fmtMoneyExact(reason.actual)}`;
+    return `מצופה ${fmtMoneyExact(reason.expected, currency)} · בפועל ${fmtMoneyExact(reason.actual, currency)}`;
   }
   if (reason.invoice_unit && reason.order_unit) {
     return `יחידה בחשבונית: ${formatUnit(reason.invoice_unit)} · יחידה בהזמנה: ${formatUnit(reason.order_unit)}`;
@@ -243,8 +249,11 @@ export default function InvoiceDetail() {
     };
     const balance = isProcurementManager
       ? null
-      : unwrap(await supabase.from('invoice_balances').select('*').eq('invoice_id', id!).maybeSingle()) as
-        { paid_amount: number; credited_amount: number; balance: number } | null;
+      /* One row per invoice still, because an invoice is issued in ONE currency — the reader is
+         per-currency (0218) so that a supplier's two debts stay two, and the row it returns for
+         this invoice is in the invoice's own currency. */
+      : unwrap(await supabase.from('invoice_balances_by_currency').select('*').eq('invoice_id', id!).maybeSingle()) as
+        { currency: string; paid_amount: number; credited_amount: number; balance_in_currency: number } | null;
     const allocations = isProcurementManager
       ? []
       : unwrap(await supabase.from('payment_allocations')
@@ -323,7 +332,7 @@ export default function InvoiceDetail() {
     try {
       const res = await runInvoiceChecks({
         id: inv.id, supplier_id: inv.supplier.id, invoice_number: inv.invoice_number,
-        invoice_date: inv.invoice_date, total_amount: inv.total_amount,
+        invoice_date: inv.invoice_date, total_amount: inv.total_amount, currency: inv.currency,
         linkedOrderIds: inv.orders.map((o) => o.order_id),
       });
       if (checkSequence.current === sequence && id === inv.id) setChecks(res);
@@ -415,7 +424,7 @@ export default function InvoiceDetail() {
         breadcrumbs={<Breadcrumbs items={[{ label: 'חשבוניות', to: '/invoices' }, { label: inv.invoice_number }]} />}
         title={<>חשבונית <span dir="ltr" className="num">{inv.invoice_number}</span> — {inv.supplier.name}</>}
         status={<StatusBadge meta={INVOICE_REVIEW_STATUS[inv.review_status]} />}
-        meta={<><span className="num font-semibold text-ink-body">{fmtMoneyExact(inv.total_amount)}</span><StatusBadge meta={INVOICE_PAYMENT_STATUS[inv.payment_status]} />{!isProcurementManager && <StatusBadge meta={INVOICE_EXPORT_STATUS[inv.export_status]} />}</>}
+        meta={<><span className="num font-semibold text-ink-body">{fmtMoneyExact(inv.total_amount, inv.currency)}</span><StatusBadge meta={INVOICE_PAYMENT_STATUS[inv.payment_status]} />{!isProcurementManager && <StatusBadge meta={INVOICE_EXPORT_STATUS[inv.export_status]} />}</>}
         primaryAction={primaryAction}
         secondaryActions={<>
           {isOffice && transitions.filter((transition) => transition.to !== primaryKey).map((transition) => (
@@ -460,8 +469,8 @@ export default function InvoiceDetail() {
       {/* print-area on the money + details cards: shadows/borders drop in print so the sheet
           stays a clean invoice document (same convention as the Orders print sheet). */}
       <Card pad={false} clip className={`grid ${isProcurementManager ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-4'}`}>
-        <div className="p-4 print-area"><div className="text-xs text-ink-muted">סה״כ חשבונית</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(inv.total_amount)}</div>
-          <div className="text-xs text-ink-muted mt-0.5">לפני מע״מ {fmtMoneyExact(inv.amount_before_vat)} + מע״מ {fmtMoneyExact(inv.vat_amount)}</div></div>
+        <div className="p-4 print-area"><div className="text-xs text-ink-muted">סה״כ חשבונית</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(inv.total_amount, inv.currency)}</div>
+          <div className="text-xs text-ink-muted mt-0.5">לפני מע״מ {fmtMoneyExact(inv.amount_before_vat, inv.currency)} + מע״מ {fmtMoneyExact(inv.vat_amount, inv.currency)}</div></div>
         {!isProcurementManager && (
           <>
             {/* No invoice_balances row = the ledger has not been computed for this invoice, which is a
@@ -471,11 +480,11 @@ export default function InvoiceDetail() {
             {/* Tone follows the VALUE, like the balance tile below and like Suppliers.tsx:496-497.
                 done-green on a 0.00 read as "paid ✓" to anyone scanning the row — and nothing had
                 been paid. Zero is the absence of a claim, which is what `idle` means (DESIGN.md). */}
-            <div className="border-s border-line-soft p-4 print-area"><div className="text-xs text-ink-muted">שולם</div><div className={`kpi-value-compact num text-start ${data.balance?.paid_amount ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(data.balance?.paid_amount ?? null)}</div></div>
+            <div className="border-s border-line-soft p-4 print-area"><div className="text-xs text-ink-muted">שולם</div><div className={`kpi-value-compact num text-start ${data.balance?.paid_amount ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(data.balance?.paid_amount ?? null, inv.currency)}</div></div>
             {/* credited = already offset, a settled claim like "paid" — done, not the retired violet
                 (audit 2026-07-21) — but only once something actually was credited. */}
-            <div className="border-t border-line-soft p-4 print-area sm:border-s sm:border-t-0"><div className="text-xs text-ink-muted">זוכה</div><div className={`kpi-value-compact num text-start ${data.balance?.credited_amount ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(data.balance?.credited_amount ?? null)}</div></div>
-            <div className="border-s border-t border-line-soft p-4 print-area sm:border-t-0"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`kpi-value-compact num text-start ${data.balance && data.balance.balance > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance ?? inv.total_amount)}</div></div>
+            <div className="border-t border-line-soft p-4 print-area sm:border-s sm:border-t-0"><div className="text-xs text-ink-muted">זוכה</div><div className={`kpi-value-compact num text-start ${data.balance?.credited_amount ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(data.balance?.credited_amount ?? null, inv.currency)}</div></div>
+            <div className="border-s border-t border-line-soft p-4 print-area sm:border-t-0"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`kpi-value-compact num text-start ${data.balance && data.balance.balance_in_currency > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance_in_currency ?? inv.total_amount, inv.currency)}</div></div>
           </>
         )}
       </Card>
@@ -509,7 +518,10 @@ export default function InvoiceDetail() {
                 {data.allocations.map((a, i) => (
                   <li key={i} className="flex justify-between px-3 py-2">
                     <span>תשלום #{a.payment.number} · {fmtDate(a.payment.paid_date)} {a.payment.reference && <span className="text-ink-muted" dir="ltr">({a.payment.reference})</span>}</span>
-                    <span className="num font-medium">{fmtMoneyExact(a.amount)}</span>
+                    {/* An allocation is recorded in the DEBT's currency (#286), which is this
+                        invoice's — a payment made from an account in another currency records
+                        its settlement separately and never changes what the invoice owes. */}
+                    <span className="num font-medium">{fmtMoneyExact(a.amount, inv.currency)}</span>
                   </li>
                 ))}
               </ul>
@@ -555,7 +567,7 @@ export default function InvoiceDetail() {
             {data.threeWay.reasons.length > 0 ? (
               <ul className="divide-y divide-line-soft border border-line-soft rounded-lg">
                 {data.threeWay.reasons.map((reason, index) => {
-                  const details = threeWayReasonDetails(reason);
+                  const details = threeWayReasonDetails(reason, inv.currency);
                   return (
                     <li key={`${reason.code}-${reason.line_number ?? 'invoice'}-${index}`} className="px-3 py-2.5 text-sm">
                       <div className="flex items-start gap-2">
@@ -583,7 +595,7 @@ export default function InvoiceDetail() {
                   {data.threeWay.lines.map((line) => (
                     <li key={line.id} className="px-3 py-2 text-sm flex flex-wrap justify-between gap-2">
                       <span><span className="num text-ink-muted">{line.line_number}.</span> <bdi>{line.description}</bdi></span>
-                      <span className="num text-ink-muted">{formatQuantity(line.quantity, line.unit)} × {fmtMoneyExact(line.unit_price)} = {fmtMoneyExact(line.line_total)}</span>
+                      <span className="num text-ink-muted">{formatQuantity(line.quantity, line.unit)} × {fmtMoneyExact(line.unit_price, inv.currency)} = {fmtMoneyExact(line.line_total, inv.currency)}</span>
                     </li>
                   ))}
                 </ul>

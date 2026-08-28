@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createAppQueryClient } from '../lib/query/client';
@@ -163,13 +163,13 @@ describe('WhatsAppConnectionCard', () => {
     const user = userEvent.setup();
     renderCard('owner');
     await user.click(await screen.findByRole('button', { name: /חיבור מספר הארגון/ }));
-    await user.type(screen.getByLabelText('מזהה החשבון אצל הספק'), 'ACtest');
-    await user.type(screen.getByLabelText('כתובת השולח בערוץ'), 'whatsapp:+972500000001');
-    await user.type(screen.getByLabelText('מספר לתצוגה'), '+972500000001');
-    await user.type(screen.getByLabelText('סוד הגישה של הארגון'), 'a-tenant-credential');
-    await user.type(screen.getByLabelText('מזהה תבנית הזמנה'), 'HXorder');
-    await user.type(screen.getByLabelText('מזהה תבנית תזכורת'), 'HXreminder');
-    await user.type(screen.getByLabelText(/סיבת החיבור/), 'חיבור ראשוני');
+    fireEvent.change(screen.getByLabelText('מזהה החשבון אצל הספק'), { target: { value: 'ACtest' } });
+    fireEvent.change(screen.getByLabelText('כתובת השולח בערוץ'), { target: { value: 'whatsapp:+972500000001' } });
+    fireEvent.change(screen.getByLabelText('מספר לתצוגה'), { target: { value: '+972500000001' } });
+    fireEvent.change(screen.getByLabelText('סוד הגישה של הארגון'), { target: { value: 'a-tenant-credential' } });
+    fireEvent.change(screen.getByLabelText('מזהה תבנית הזמנה'), { target: { value: 'HXorder' } });
+    fireEvent.change(screen.getByLabelText('מזהה תבנית תזכורת'), { target: { value: 'HXreminder' } });
+    fireEvent.change(screen.getByLabelText(/סיבת החיבור/), { target: { value: 'חיבור ראשוני' } });
     await user.click(screen.getByRole('button', { name: 'שמירת החיבור' }));
     expect(calls.configure).toEqual([]);
     expect(stepUp.shown).toBe(1);

@@ -9,9 +9,21 @@ export interface CheckResult {
   severity: CheckSeverity;
   message: string;
   amount?: number;
+  /**
+   * The currency `amount` is in (0217). Present whenever `amount` is, because a caller that reads
+   * the figure back — the payment-request screen subtracts the open-credit total from the request
+   * — has to know it is looking at the same kind of money before it does the arithmetic.
+   */
+  currency?: string;
 }
 
-const AMOUNT_TOLERANCE = 1; // ₪ — treat sub-shekel gaps as rounding
+/**
+ * ONE UNIT of the invoice's own currency, and advisory only: this is the gap below which the
+ * browser stops raising a warning to a person, not a threshold anything is approved by. The
+ * binding tolerance is the server's, per organisation and per currency (`private.money_tolerance`,
+ * 0219, decision #288) — every check that actually blocks reads that one.
+ */
+const AMOUNT_TOLERANCE = 1;
 
 /** Automatic invoice checks required by the spec (duplicates, order/receipt gaps, existing payment paths). */
 export async function runInvoiceChecks(inv: {
@@ -20,6 +32,14 @@ export async function runInvoiceChecks(inv: {
   invoice_number: string;
   invoice_date: string;
   total_amount: number;
+  /**
+   * The currency of THIS invoice (0217). Every figure below — the duplicate's total, the order
+   * total, the value received, the supplier's open credits — is compared against it and rendered
+   * in it. A comparison across two currencies is not a discrepancy, it is a category error, and
+   * the server refuses to create one: an order's items are in the order's currency and a credit
+   * is tied to its invoice's currency by foreign key.
+   */
+  currency: string;
   linkedOrderIds?: string[];
 }): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
@@ -37,7 +57,7 @@ export async function runInvoiceChecks(inv: {
     results.push({
       code: 'duplicate_number',
       severity: 'critical',
-      message: `קיימת חשבונית עם אותו מספר לאותו ספק (מ־${fmtDate(d.invoice_date)}, ${fmtMoneyExact(d.total_amount)}${d.payment_status === 'paid' ? ', שולמה' : ''})`,
+      message: `קיימת חשבונית עם אותו מספר לאותו ספק (מ־${fmtDate(d.invoice_date)}, ${fmtMoneyExact(d.total_amount, inv.currency)}${d.payment_status === 'paid' ? ', שולמה' : ''})`,
     });
   }
 
@@ -76,14 +96,14 @@ export async function runInvoiceChecks(inv: {
       results.push({
         code: 'order_mismatch',
         severity: 'warning',
-        message: `סכום החשבונית (${fmtMoneyExact(inv.total_amount)}) שונה מסכום ההזמנה (${fmtMoneyExact(orderTotal)}) — פער של ${fmtMoneyExact(Math.abs(inv.total_amount - orderTotal))}`,
+        message: `סכום החשבונית (${fmtMoneyExact(inv.total_amount, inv.currency)}) שונה מסכום ההזמנה (${fmtMoneyExact(orderTotal, inv.currency)}) — פער של ${fmtMoneyExact(Math.abs(inv.total_amount - orderTotal), inv.currency)}`,
       });
     }
     if (Math.abs(receivedTotal - inv.total_amount) > AMOUNT_TOLERANCE && Math.abs(receivedTotal - orderTotal) > AMOUNT_TOLERANCE) {
       results.push({
         code: 'receipt_mismatch',
         severity: 'warning',
-        message: `שווי הסחורה שהתקבלה בפועל (${fmtMoneyExact(receivedTotal)}) שונה מסכום החשבונית — ייתכן שנדרש זיכוי`,
+        message: `שווי הסחורה שהתקבלה בפועל (${fmtMoneyExact(receivedTotal, inv.currency)}) שונה מסכום החשבונית — ייתכן שנדרש זיכוי`,
       });
     }
   }
@@ -125,7 +145,7 @@ export async function runInvoiceChecks(inv: {
       code: 'open_credit',
       severity: 'info',
       message: `לספק זה ${credits.length} ${credits.length === 1 ? 'זיכוי פתוח' : 'זיכויים פתוחים'} `
-        + `בסך ${fmtMoneyExact(sum)} — כדאי לקזז לפני תשלום`,
+        + `בסך ${fmtMoneyExact(sum, inv.currency)} — כדאי לקזז לפני תשלום`,
     });
   }
 
@@ -152,9 +172,13 @@ export async function runPaymentRequestChecks(pr: {
     visible_invoice_count: number;
     paid_invoice_count: number;
     unapproved_invoice_count: number;
-    amount_matches_open_balance: boolean;
+    /** 0219: null — not false — when this organisation has stated no tolerance for this currency. */
+    amount_matches_open_balance: boolean | null;
     similar_bank_transfer_check: 'unavailable';
-    open_credit_total: number;
+    /** The currency the whole answer is in. The server refuses an invoice set spanning two (0219). */
+    currency: string;
+    /** 0219: one entry per currency the supplier has an open credit in. Never one sum. */
+    open_credit_total_by_currency: { currency: string; amount: number }[];
     over_allocated_invoice_count: number;
   };
   if (financial.visible_invoice_count !== financial.requested_invoice_count) {
@@ -214,12 +238,16 @@ export async function runPaymentRequestChecks(pr: {
 
   // 4. Scoped open-credit total from the trusted server check. The browser does not read
   // raw credit rows or aggregate credits from another legal entity.
-  if (financial.open_credit_total > 0) {
+  // One finding per currency, because a dollar credit does not offset a shekel request and a
+  // single line reading their sum would say that it does.
+  for (const credit of financial.open_credit_total_by_currency) {
+    if (credit.amount <= 0) continue;
     results.push({
       code: 'open_credit',
       severity: 'warning',
-      amount: financial.open_credit_total,
-      message: `זיכויים פתוחים בסך ${fmtMoneyExact(financial.open_credit_total)} טרם קוזזו מהדרישה`,
+      amount: credit.amount,
+      currency: credit.currency,
+      message: `זיכויים פתוחים בסך ${fmtMoneyExact(credit.amount, credit.currency)} טרם קוזזו מהדרישה`,
     });
   }
 

@@ -87,6 +87,7 @@ assert.deepEqual(chunked, source.slice(0, 351).map(String));
 const scaleInvoices = Array.from({ length: 1501 }, (_, index) => ({
   supplier: { name: `ספק ${index}` }, invoice_number: String(index + 1), invoice_date: '2026-07-22',
   amount_before_vat: 100, vat_amount: 18, total_amount: 118,
+  currency: 'ILS',
   review_status: 'received', payment_status: 'unpaid',
 }));
 const reportWorkbook = buildMonthlyWorkbook({
@@ -110,14 +111,17 @@ assert.deepEqual(reportMeta.find((row) => row[0] === 'שם ארגון'), ['שם 
 
 const invoiceFingerprint = invoiceCheckFingerprint({
   supplierId: 'supplier-a', invoiceNumber: ' 42 ', invoiceDate: '2026-07-22', totalAmount: 100,
+  currency: 'ILS',
   linkedOrderIds: ['order-b', 'order-a'],
 });
 assert.equal(invoiceFingerprint, invoiceCheckFingerprint({
   supplierId: 'supplier-a', invoiceNumber: '42', invoiceDate: '2026-07-22', totalAmount: 100,
+  currency: 'ILS',
   linkedOrderIds: ['order-a', 'order-b'],
 }));
 assert.notEqual(invoiceFingerprint, invoiceCheckFingerprint({
   supplierId: 'supplier-a', invoiceNumber: '43', invoiceDate: '2026-07-22', totalAmount: 100,
+  currency: 'ILS',
   linkedOrderIds: ['order-a', 'order-b'],
 }));
 assert.equal(

@@ -4,6 +4,9 @@
 
 begin;
 
+-- Legacy invoice fixtures in this transaction predate multi-currency and are explicitly ILS.
+alter table public.invoices alter column currency set default 'ILS';
+
 create function pg_temp.snapshot_assert(p_condition boolean, p_message text)
 returns void
 language plpgsql
@@ -387,14 +390,23 @@ begin
   perform pg_temp.snapshot_assert(v_snapshot.organization_name = 'Snapshot tenant A', 'organization metadata mismatch');
   perform pg_temp.snapshot_assert(v_snapshot.legal_entity_name = 'ישות משפטית ראשית', 'legal-entity name was not captured');
   perform pg_temp.snapshot_assert((v_snapshot.totals ->> 'invoice_count')::integer = 1, 'LE1 invoice count mismatch');
-  perform pg_temp.snapshot_assert((v_snapshot.totals ->> 'invoice_total')::numeric = 118, 'LE1 invoice total mismatch');
-  perform pg_temp.snapshot_assert((v_snapshot.totals ->> 'payment_total')::numeric = 40, 'LE1 payment total mismatch');
-  perform pg_temp.snapshot_assert((v_snapshot.totals ->> 'credit_total')::numeric = 15, 'derived credit total mismatch');
+  perform pg_temp.snapshot_assert((select (row ->> 'invoice_total')::numeric = 118
+    from jsonb_array_elements(v_snapshot.totals -> 'by_currency') row where row ->> 'currency' = 'ILS'), 'LE1 invoice total mismatch');
+  perform pg_temp.snapshot_assert((select (row ->> 'payment_total')::numeric = 40
+    from jsonb_array_elements(v_snapshot.totals -> 'by_currency') row where row ->> 'currency' = 'ILS'), 'LE1 payment total mismatch');
+  perform pg_temp.snapshot_assert((select (row ->> 'credit_total')::numeric = 15
+    from jsonb_array_elements(v_snapshot.totals -> 'by_currency') row where row ->> 'currency' = 'ILS'), 'derived credit total mismatch');
   perform pg_temp.snapshot_assert((v_snapshot.totals ->> 'exception_count')::integer = 1, 'attributed exception mismatch');
   perform pg_temp.snapshot_assert((v_snapshot.totals ->> 'bank_transaction_count')::integer = 1, 'bank row count mismatch');
   perform pg_temp.snapshot_assert(jsonb_array_length(v_snapshot.bank_rows) = 1, 'structured bank detail is missing');
   perform pg_temp.snapshot_assert(
     v_snapshot.invoice_rows -> 0 ->> 'review_status_label' = 'מאושרת'
+      and v_snapshot.report_version = 'monthly-accountant-legal-entity-v3'
+      and v_snapshot.base_currency = 'ILS'
+      and v_snapshot.invoice_rows -> 0 ->> 'currency' = 'ILS'
+      and v_snapshot.payment_rows -> 0 ->> 'currency' = 'ILS'
+      and v_snapshot.credit_rows -> 0 ->> 'currency' = 'ILS'
+      and v_snapshot.bank_rows -> 0 ->> 'currency' = 'ILS'
       and v_snapshot.credit_rows -> 0 ? 'reason_label'
       and v_snapshot.exception_rows -> 0 ? 'type_label'
       and v_snapshot.bank_rows -> 0 ? 'status_label',
@@ -407,7 +419,8 @@ begin
   );
   perform set_config('monthly_snapshot_test.snapshot2', v_snapshot.id::text, true);
   perform pg_temp.snapshot_assert(v_snapshot.version = 1, 'LE2 must have an independent version sequence');
-  perform pg_temp.snapshot_assert((v_snapshot.totals ->> 'invoice_total')::numeric = 236, 'LE2 leaked or lost invoice data');
+  perform pg_temp.snapshot_assert((select (row ->> 'invoice_total')::numeric = 236
+    from jsonb_array_elements(v_snapshot.totals -> 'by_currency') row where row ->> 'currency' = 'ILS'), 'LE2 leaked or lost invoice data');
   perform pg_temp.snapshot_assert(
     v_snapshot.invoice_rows -> 0 ->> 'review_status' = 'in_review',
     'non-approved invoice from the live report boundary was omitted'
@@ -487,6 +500,7 @@ select pg_temp.snapshot_assert(
 select pg_temp.snapshot_assert(
   (select content_hash = encode(sha256(convert_to(jsonb_build_object(
     'report_version', report_version,
+    'base_currency', base_currency,
     'organization_id', org_id,
     'organization_name', organization_name,
     'legal_entity_id', unit_id,
@@ -540,7 +554,8 @@ update public.suppliers set name = 'Snapshot supplier changed'
 where id = 'd5740000-0000-0000-0000-000000000001';
 
 select pg_temp.snapshot_assert(
-  (select (totals ->> 'invoice_total')::numeric = 118
+  (select (select (row ->> 'invoice_total')::numeric = 118
+              from jsonb_array_elements(totals -> 'by_currency') row where row ->> 'currency' = 'ILS')
       and invoice_rows -> 0 -> 'supplier' ->> 'name' = 'Snapshot supplier A'
    from public.monthly_report_snapshots
    where org_id = 'a5740000-0000-0000-0000-000000000001'
@@ -557,7 +572,8 @@ begin
     '2026-08-01', current_setting('monthly_snapshot_test.le1')::uuid
   );
   perform pg_temp.snapshot_assert(v_snapshot.version = 2, 'explicit later creation did not allocate version 2');
-  perform pg_temp.snapshot_assert((v_snapshot.totals ->> 'invoice_total')::numeric = 236, 'version 2 did not capture new live total');
+  perform pg_temp.snapshot_assert((select (row ->> 'invoice_total')::numeric = 236
+    from jsonb_array_elements(v_snapshot.totals -> 'by_currency') row where row ->> 'currency' = 'ILS'), 'version 2 did not capture new live total');
 end
 $$;
 reset role;

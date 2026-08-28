@@ -3,6 +3,7 @@ export function invoiceCheckFingerprint(input: {
   invoiceNumber: string;
   invoiceDate: string;
   totalAmount: number;
+  currency: string;
   linkedOrderIds?: string[];
 }) {
   return JSON.stringify([
@@ -10,6 +11,7 @@ export function invoiceCheckFingerprint(input: {
     input.invoiceNumber.trim(),
     input.invoiceDate,
     input.totalAmount,
+    input.currency,
     [...(input.linkedOrderIds ?? [])].sort(),
   ]);
 }

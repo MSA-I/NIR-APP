@@ -24,6 +24,9 @@
 
 begin;
 
+-- Legacy invoice fixtures in this transaction predate multi-currency and are explicitly ILS.
+alter table public.invoices alter column currency set default 'ILS';
+
 create function pg_temp.p4_assert(p_condition boolean, p_message text)
 returns void
 language plpgsql
@@ -380,7 +383,7 @@ language sql stable
 as $$
   select wired.signature
   from (values
-    ('public.execute_payment_request(uuid,date,text,text,text,jsonb,text)'),
+    ('public.execute_payment_request(uuid,date,text,text,text,jsonb,numeric,text,text)'),
     ('public.execute_emergency_payment_request(uuid,date,text,text,text,jsonb,text)'),
     ('public.manage_profile_access(uuid,user_role,boolean,uuid,text)'),
     ('public.mark_month_export_sent(date,uuid[],text)'),
@@ -513,8 +516,9 @@ select pg_temp.p4_assert(
 -- still carries the step-up 0061 injects into its LIVE body.
 select pg_temp.p4_assert(
   (select position('assert_recent_password_authentication' in p.prosrc) > 0
-   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-   where n.nspname = 'public' and p.proname = 'execute_payment_request'),
+   from pg_proc p
+   where p.oid = to_regprocedure(
+     'public.execute_payment_request(uuid,date,text,text,text,jsonb,numeric,text,text)')),
   'execute_payment_request lost its password step-up when the emergency route was retired');
 
 -- --- manage_profile_access (owner -> office) ---

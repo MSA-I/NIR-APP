@@ -274,7 +274,7 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
                       apart as the row widens: they end together, against the row's END edge. */}
                   <span className="flex shrink-0 items-center justify-end gap-2">
                     <StatusBadge meta={metaFor(hit)} />
-                    {hit.amount != null && <span className="num text-sm text-ink-mid">{fmtMoneyExact(hit.amount)}</span>}
+                    {hit.amount != null && <span className="num text-sm text-ink-mid">{fmtMoneyExact(hit.amount, hit.currency)}</span>}
                   </span>
                 </li>
               ))}

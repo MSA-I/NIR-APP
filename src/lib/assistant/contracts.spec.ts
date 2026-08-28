@@ -17,6 +17,7 @@ import {
   CALENDAR_PERIODS,
   DraftBlockSchema,
   FACT_KINDS,
+  FactUnitSchema,
   ProductHelpEntrySchema,
   TIME_WINDOW_LABELS,
 } from './contracts';
@@ -79,6 +80,15 @@ describe('fact kinds for the new read models (#189, #190, #192)', () => {
     ]) {
       expect(FACT_KINDS).toContain(kind);
     }
+  });
+});
+
+describe('currency fact units (multi-currency phase 4)', () => {
+  it('accepts any lower-case ISO-shaped currency unit without weakening the named units', () => {
+    expect(FactUnitSchema.safeParse('usd').success).toBe(true);
+    expect(FactUnitSchema.safeParse('jpy').success).toBe(true);
+    expect(FactUnitSchema.safeParse('USD').success).toBe(false);
+    expect(FactUnitSchema.safeParse('money').success).toBe(false);
   });
 });
 

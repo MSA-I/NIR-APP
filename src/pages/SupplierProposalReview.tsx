@@ -48,9 +48,9 @@ export default function SupplierProposalReview() {
     const proposal = await fetchProposal(proposalId!);
     if (!proposal) return null;
     const order = unwrap(await supabase.from('purchase_orders')
-      .select('id, number, status, expected_date, supplier:suppliers(name)')
+      .select('id, number, status, currency, expected_date, supplier:suppliers(name)')
       .eq('id', proposal.purchase_order_id).single()) as {
-        id: string; number: number; status: string; expected_date: string | null;
+        id: string; number: number; status: string; currency: string; expected_date: string | null;
         supplier: { name: string } | null;
       };
     return { proposal, order };
@@ -135,7 +135,7 @@ export default function SupplierProposalReview() {
           {order.supplier && <span>{order.supplier.name}</span>}
           <span>התקבלה דרך פורטל הספק {fmtDateTime(proposal.submitted_at)}</span>
           <span className="num font-semibold text-ink-body">
-            הפרש מוצע: {fmtMoneyExact(proposal.total_delta)}
+            הפרש מוצע: {fmtMoneyExact(proposal.total_delta, order.currency)}
           </span>
         </>}
         primaryAction={pending && canWrite ? (
@@ -219,6 +219,7 @@ export default function SupplierProposalReview() {
       <section aria-label="שורות ההצעה" className="space-y-3">
         {changedLines.map((line) => (
           <ProposalLineCard
+            currency={order.currency}
             key={line.id}
             line={line}
             pending={pending && canWrite}
@@ -236,7 +237,7 @@ export default function SupplierProposalReview() {
                 <li key={line.id} className="flex items-center justify-between gap-3 text-sm">
                   <span className="text-ink-body"><bdi>{line.product_name}</bdi></span>
                   <span className="num text-ink-muted">
-                    {formatQuantity(line.original_qty, line.unit)} × {fmtMoneyExact(line.original_unit_price)}
+                    {formatQuantity(line.original_qty, line.unit)} × {fmtMoneyExact(line.original_unit_price, order.currency)}
                   </span>
                   {pending && canWrite && (
                     <VerdictPicker
@@ -322,9 +323,15 @@ function DecisionBadge({ decision }: { decision: SupplierOrderProposalLine['deci
 }
 
 function ProposalLineCard({
-  line, pending, verdict, onVerdict,
+  line, currency, pending, verdict, onVerdict,
 }: {
   line: SupplierOrderProposalLine;
+  /**
+   * The ORDER's currency (0217). A proposal is the supplier's answer to one order, so its prices
+   * and every delta derived from them are money of that one kind — the supplier is not quoting in
+   * a second currency, they are answering the one they were asked in.
+   */
+  currency: string;
   pending: boolean;
   verdict: Verdict | undefined;
   onVerdict: (v: Verdict) => void;
@@ -360,13 +367,13 @@ function ProposalLineCard({
         <div>
           <dt className="text-xs text-ink-faint">מחיר יחידה</dt>
           <dd className="num text-ink-body">
-            {fmtMoneyExact(line.original_unit_price)}
-            {priceChanged && <> ← <span className="font-medium">{fmtMoneyExact(line.proposed_unit_price)}</span></>}
+            {fmtMoneyExact(line.original_unit_price, currency)}
+            {priceChanged && <> ← <span className="font-medium">{fmtMoneyExact(line.proposed_unit_price, currency)}</span></>}
           </dd>
         </div>
         <div>
           <dt className="text-xs text-ink-faint">הפרש לשורה</dt>
-          <dd className="num text-ink-body">{fmtMoneyExact(line.line_delta)}</dd>
+          <dd className="num text-ink-body">{fmtMoneyExact(line.line_delta, currency)}</dd>
         </div>
       </dl>
     </div>

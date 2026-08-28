@@ -3,6 +3,7 @@ export interface InvoiceContextOrder {
   number: number;
   supplier_id: string;
   status: string;
+  currency: string;
 }
 
 export interface InvoiceContextReceipt {
@@ -15,6 +16,8 @@ export interface InvoiceContextReceipt {
 export interface InvoiceContextSupplier {
   id: string;
   name: string;
+  default_currency: string;
+  country_code: string | null;
 }
 
 export type InvoiceLinkedContext = {

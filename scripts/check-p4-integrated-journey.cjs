@@ -270,7 +270,7 @@ async function captureAfter(evidence, financialActor, ids) {
   ];
   const [rows, balanceRows] = await Promise.all([
     Promise.all(queries.map((query, index) => dataOf(query, labels[index]))),
-    rpc(financialActor, 'p0_invoice_balance_rows', {}, 'after computed invoice balances'),
+    rpc(financialActor, 'p0_invoice_balance_rows_by_currency', {}, 'after computed invoice balances'),
   ]);
   const invoiceBalance = balanceRows.find((row) => row.invoice_id === ids.invoice);
   assert(invoiceBalance, 'after computed invoice balance row missing');
@@ -300,7 +300,7 @@ async function readFinancialState(actor, invoiceId, paymentRequestId, label) {
   const [invoice, balances, paymentRequest] = await Promise.all([
     dataOf(actor.from('invoices').select('id,review_status,payment_status')
       .eq('id', invoiceId).single(), `${label} invoice`),
-    rpc(actor, 'p0_invoice_balance_rows', {}, `${label} computed balances`),
+    rpc(actor, 'p0_invoice_balance_rows_by_currency', {}, `${label} computed balances`),
     dataOf(actor.from('payment_requests').select('id,status').eq('id', paymentRequestId).single(),
       `${label} payment request`),
   ]);
@@ -317,7 +317,7 @@ function assertFinancialState(state, expected, label) {
   assertMoney(state.balance.total_amount, AMOUNTS.invoice, `${label}: invoice total`);
   assertMoney(state.balance.paid_amount, AMOUNTS.payment, `${label}: paid amount`);
   assertMoney(state.balance.credited_amount, expected.credited, `${label}: credited amount`);
-  assertMoney(state.balance.balance, expected.balance, `${label}: balance`);
+  assertMoney(state.balance.balance_in_currency, expected.balance, `${label}: balance`);
 }
 
 function auditTransitionSet(rows, oldKey, newKey) {
@@ -699,7 +699,7 @@ async function main() {
   assertMoney(after.invoice.total_amount, AMOUNTS.invoice, 'Final invoice total');
   assertMoney(after.invoice_balance.paid_amount, AMOUNTS.payment, 'Computed invoice paid amount');
   assertMoney(after.invoice_balance.credited_amount, AMOUNTS.credit, 'Computed invoice credited amount');
-  assertMoney(after.invoice_balance.balance, 0, 'Computed invoice balance');
+  assertMoney(after.invoice_balance.balance_in_currency, 0, 'Computed invoice balance');
   assert.equal(after.payment_request.status, 'matched');
   assertMoney(after.payment_request.amount, AMOUNTS.payment, 'Final payment request amount');
   assertMoney(after.payment.amount, AMOUNTS.payment, 'Final payment amount');

@@ -6,6 +6,9 @@
 
 begin;
 
+-- Legacy invoice fixtures in this transaction predate multi-currency and are explicitly ILS.
+alter table public.invoices alter column currency set default 'ILS';
+
 create function pg_temp.p57_assert(p_condition boolean, p_message text)
 returns void language plpgsql as $$
 begin
@@ -37,22 +40,22 @@ $$;
 select pg_temp.p57_assert(
   not (select procedure.prosecdef from pg_proc procedure
        join pg_namespace space on space.oid = procedure.pronamespace
-       where space.nspname = 'public' and procedure.proname = 'p2_business_summary_rows'),
-  'p2_business_summary_rows is SECURITY DEFINER');
+       where space.nspname = 'public' and procedure.proname = 'p2_business_summary_rows_by_currency'),
+  'p2_business_summary_rows_by_currency is SECURITY DEFINER');
 
 -- Same rule as my_entitlements(): a tenant summary must not accept an organization argument,
 -- because a parameter is a thing an attacker can change.
 select pg_temp.p57_assert(
   (select procedure.pronargs from pg_proc procedure
     join pg_namespace space on space.oid = procedure.pronamespace
-   where space.nspname = 'public' and procedure.proname = 'p2_business_summary_rows') = 0,
-  'p2_business_summary_rows grew a parameter');
+   where space.nspname = 'public' and procedure.proname = 'p2_business_summary_rows_by_currency') = 0,
+  'p2_business_summary_rows_by_currency grew a parameter');
 
 select pg_temp.p57_assert(
-  has_function_privilege('authenticated', 'public.p2_business_summary_rows()', 'execute'),
+  has_function_privilege('authenticated', 'public.p2_business_summary_rows_by_currency()', 'execute'),
   'the browser role cannot call the summary at all');
 select pg_temp.p57_assert(
-  not has_function_privilege('anon', 'public.p2_business_summary_rows()', 'execute'),
+  not has_function_privilege('anon', 'public.p2_business_summary_rows_by_currency()', 'execute'),
   'anon can read a business summary');
 
 -- ===== Fixture =====
@@ -172,46 +175,46 @@ select pg_temp.p57_as('57000000-0000-4000-8000-000000000101');
 set local role authenticated;
 
 select pg_temp.p57_assert(
-  (select count(*) from public.p2_business_summary_rows()) = 5
-  and (select bool_and(measured) from public.p2_business_summary_rows()),
+  (select count(*) from public.p2_business_summary_rows_by_currency()) = 5
+  and (select bool_and(measured) from public.p2_business_summary_rows_by_currency()),
   'a healthy schema did not return five measured metrics');
 
 select pg_temp.p57_assert(
-  (select value from public.p2_business_summary_rows() where metric_key = 'received_week')
+  (select value from public.p2_business_summary_rows_by_currency() where metric_key = 'received_week')
     = (select count(*) from public.invoices
         where financial_role = 'payable' and deleted_at is null
           and received_date >= pg_temp.p57_today() - 7)
-  and (select value from public.p2_business_summary_rows() where metric_key = 'received_week') = 2,
+  and (select value from public.p2_business_summary_rows_by_currency() where metric_key = 'received_week') = 2,
   'received_week disagrees with the re-derived literal (payable, not deleted, trailing 7 days)');
 
 select pg_temp.p57_assert(
-  (select value from public.p2_business_summary_rows() where metric_key = 'awaiting_approval')
+  (select value from public.p2_business_summary_rows_by_currency() where metric_key = 'awaiting_approval')
     = (select count(*) from public.invoices
         where financial_role = 'payable' and deleted_at is null
           and review_status = 'pending_approval')
-  and (select value from public.p2_business_summary_rows() where metric_key = 'awaiting_approval') = 3,
+  and (select value from public.p2_business_summary_rows_by_currency() where metric_key = 'awaiting_approval') = 3,
   'awaiting_approval disagrees with the re-derived literal (payable, not deleted, pending_approval)');
 
 select pg_temp.p57_assert(
-  (select value from public.p2_business_summary_rows() where metric_key = 'expected_payments')
+  (select value from public.p2_business_summary_rows_by_currency() where metric_key = 'expected_payments')
     = (select coalesce(sum(amount), 0) from public.payment_requests
         where status in ('draft', 'pending_approval', 'approved', 'sent_for_execution'))
-  and (select value from public.p2_business_summary_rows() where metric_key = 'expected_payments')
+  and (select value from public.p2_business_summary_rows_by_currency() where metric_key = 'expected_payments')
     = 375.25,
   'expected_payments disagrees with the re-derived literal (sum over the four active statuses)');
 
 select pg_temp.p57_assert(
-  (select value from public.p2_business_summary_rows() where metric_key = 'suppliers_raised')
+  (select value from public.p2_business_summary_rows_by_currency() where metric_key = 'suppliers_raised')
     = (select count(distinct supplier_id) from public.supplier_products
         where previous_price is not null and current_price > previous_price
           and price_effective_date >= pg_temp.p57_today() - 30)
-  and (select value from public.p2_business_summary_rows() where metric_key = 'suppliers_raised') = 1,
+  and (select value from public.p2_business_summary_rows_by_currency() where metric_key = 'suppliers_raised') = 1,
   'suppliers_raised disagrees with the re-derived literal (distinct raisers, trailing 30 days)');
 
 select pg_temp.p57_assert(
-  (select value from public.p2_business_summary_rows() where metric_key = 'open_exceptions')
+  (select value from public.p2_business_summary_rows_by_currency() where metric_key = 'open_exceptions')
     = (select count(*) from public.exceptions where status in ('open', 'in_progress'))
-  and (select value from public.p2_business_summary_rows() where metric_key = 'open_exceptions') = 4,
+  and (select value from public.p2_business_summary_rows_by_currency() where metric_key = 'open_exceptions') = 4,
   'open_exceptions disagrees with the re-derived literal (open or in_progress)');
 
 reset role;
@@ -220,7 +223,7 @@ reset role;
 select pg_temp.p57_as('57000000-0000-4000-8000-000000000102');
 set local role authenticated;
 select pg_temp.p57_assert(
-  (select jsonb_object_agg(metric_key, value) from public.p2_business_summary_rows())
+  (select jsonb_object_agg(metric_key, value) from public.p2_business_summary_rows_by_currency())
     = jsonb_build_object(
         'received_week', 1, 'awaiting_approval', 1, 'expected_payments', 77,
         'suppliers_raised', 1, 'open_exceptions', 1),
@@ -237,15 +240,66 @@ select pg_temp.p57_as('57000000-0000-4000-8000-000000000101');
 set local role authenticated;
 select pg_temp.p57_assert(
   (select not measured and value is null
-     from public.p2_business_summary_rows() where metric_key = 'suppliers_raised'),
+     from public.p2_business_summary_rows_by_currency() where metric_key = 'suppliers_raised'),
   'a broken metric did not report measured=false / value=null');
 select pg_temp.p57_assert(
-  (select count(*) from public.p2_business_summary_rows()
+  (select count(*) from public.p2_business_summary_rows_by_currency()
     where measured and metric_key in
       ('received_week', 'awaiting_approval', 'expected_payments', 'open_exceptions')) = 4
-  and (select value from public.p2_business_summary_rows() where metric_key = 'expected_payments')
+  and (select value from public.p2_business_summary_rows_by_currency() where metric_key = 'expected_payments')
     = 375.25,
   'one broken metric blanked its neighbours');
+reset role;
+
+-- ===== 0219: the money metric splits per currency, and the counts do not =====
+--
+-- Everything above runs on a shekel-only fixture, which is what every organisation looks like
+-- today; the assertions there prove the shape did not change for them. This block adds one dollar
+-- payment request to tenant A and proves the only thing the rename exists for: `expected_payments`
+-- becomes TWO rows, neither of which is their sum, while the four counts stay single rows with no
+-- currency on them at all.
+--
+-- The four broken-metric assertions above have already run, and `p2_suppliers_with_price_increase_since`
+-- is dropped by then, so this block asserts only what survives that: the money metric and the counts.
+-- No JWT subject for the write: p1_financial_command_guard lets a migration or a trusted job write
+-- directly and stops an end user, which is the boundary it is for, and this fixture row is neither
+-- a user action nor something an RPC can express (no RPC accepts a currency yet -- that is phase 4).
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
+
+insert into public.payment_requests (id, org_id, supplier_id, amount, status, currency, unit_id)
+select '57000000-0000-4000-8000-0000000009f1', '57000000-0000-4000-8000-000000000001',
+       request.supplier_id, 120, 'draft', 'USD', request.unit_id
+from public.payment_requests request
+where request.org_id = '57000000-0000-4000-8000-000000000001'
+limit 1;
+
+select pg_temp.p57_as('57000000-0000-4000-8000-000000000101');
+set local role authenticated;
+
+select pg_temp.p57_assert(
+  (select count(*) from public.p2_business_summary_rows_by_currency()
+    where metric_key = 'expected_payments') = 2,
+  'a two-currency organisation did not get two expected_payments rows');
+
+select pg_temp.p57_assert(
+  (select value from public.p2_business_summary_rows_by_currency()
+    where metric_key = 'expected_payments' and currency = 'ILS') = 375.25
+  and (select value from public.p2_business_summary_rows_by_currency()
+    where metric_key = 'expected_payments' and currency = 'USD') = 120,
+  'the two currencies did not keep their own totals');
+
+select pg_temp.p57_assert(
+  not exists (
+    select 1 from public.p2_business_summary_rows_by_currency()
+    where metric_key = 'expected_payments' and value = 495.25),
+  'the summary produced the sum of two currencies, which is a false number');
+
+select pg_temp.p57_assert(
+  (select bool_and(currency is null) from public.p2_business_summary_rows_by_currency()
+    where metric_key in ('received_week', 'awaiting_approval', 'open_exceptions')),
+  'a count was given a currency, which it does not have');
+
 reset role;
 
 rollback;

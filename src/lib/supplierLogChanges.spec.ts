@@ -23,12 +23,16 @@ describe('renderValue', () => {
   });
 
   it('formats money through fmtMoneyExact, never on its own', () => {
-    expect(renderValue(14, 'money')).toBe(fmtMoneyExact(14));
-    expect(renderValue(14, 'money')).toContain('14.00');
+    expect(renderValue(14, 'money', 'ILS')).toBe(fmtMoneyExact(14, 'ILS'));
+    expect(renderValue(14, 'money', 'ILS')).toContain('14.00');
     // A numeric string out of jsonb is still money, not text.
-    expect(renderValue('12.5', 'money')).toBe(fmtMoneyExact(12.5));
+    expect(renderValue('12.5', 'money', 'ILS')).toBe(fmtMoneyExact(12.5, 'ILS'));
     // Zero is a price, not a missing value.
-    expect(renderValue(0, 'money')).toBe(fmtMoneyExact(0));
+    expect(renderValue(0, 'money', 'ILS')).toBe(fmtMoneyExact(0, 'ILS'));
+    // The supplier's own currency, not the reader's: the same 14 on a dollar supplier's row is
+    // fourteen dollars, and the log is the record of what that supplier's price became.
+    expect(renderValue(14, 'money', 'USD')).toBe(fmtMoneyExact(14, 'USD'));
+    expect(renderValue(14, 'money', 'USD')).not.toBe(renderValue(14, 'money', 'ILS'));
   });
 
   it('keeps a value that cannot be a number as itself', () => {
@@ -56,16 +60,16 @@ describe('fieldChanges', () => {
   });
 
   it('pairs a price change as before and after, both formatted', () => {
-    const changes = fieldChanges({ current_price: 12.5 }, { current_price: 14 });
+    const changes = fieldChanges({ current_price: 12.5 }, { current_price: 14 }, 'ILS');
     expect(changes).toHaveLength(1);
-    expect(changes[0].before).toBe(fmtMoneyExact(12.5));
-    expect(changes[0].after).toBe(fmtMoneyExact(14));
+    expect(changes[0].before).toBe(fmtMoneyExact(12.5, 'ILS'));
+    expect(changes[0].after).toBe(fmtMoneyExact(14, 'ILS'));
   });
 
   it('calls a first-time value "not set" rather than leaving the side blank', () => {
-    const changes = fieldChanges(null, { current_price: 14 });
+    const changes = fieldChanges(null, { current_price: 14 }, 'ILS');
     expect(changes[0].before).toBe('לא הוגדר');
-    expect(changes[0].after).toBe(fmtMoneyExact(14));
+    expect(changes[0].after).toBe(fmtMoneyExact(14, 'ILS'));
   });
 
   it('returns nothing when only untracked columns differ', () => {

@@ -72,6 +72,9 @@
 
 begin;
 
+-- Legacy invoice fixtures in this transaction predate multi-currency and are explicitly ILS.
+alter table public.invoices alter column currency set default 'ILS';
+
 create function pg_temp.p14_assert(p_condition boolean, p_message text)
 returns void
 language plpgsql
@@ -665,6 +668,30 @@ select pg_temp.p14_assert(
   'an unidentified supplier must queue BY NAME even at 0.99 -- there is nothing to attach the '
   || 'money to, and picking the likeliest supplier is exactly the guess this forbids');
 
+-- A currency token that is not an active ISO code is a refusal, never a silent ILS default.
+select pg_temp.p14_seed(
+  76, '14000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001',
+  pg_temp.p14_payload('invoice', 0.99, '34000000-0000-4000-8000-000000000001', 0.99,
+    jsonb_build_array(
+      jsonb_build_object('key','invoice_number','value','P14-BAD-CURRENCY','confidence',0.97,
+        'evidence_block_ids',jsonb_build_array('block-1')),
+      jsonb_build_object('key','invoice_date','value','03/04/2026','confidence',0.95,
+        'evidence_block_ids',jsonb_build_array('block-1')),
+      jsonb_build_object('key','currency','value','US0','confidence',0.99,
+        'evidence_block_ids',jsonb_build_array('block-1')),
+      jsonb_build_object('key','subtotal','value',1000,'confidence',0.96,
+        'evidence_block_ids',jsonb_build_array('block-2')),
+      jsonb_build_object('key','vat_amount','value',180,'confidence',0.96,
+        'evidence_block_ids',jsonb_build_array('block-2')),
+      jsonb_build_object('key','total','value',1180,'confidence',0.96,
+        'evidence_block_ids',jsonb_build_array('block-2')))));
+
+select pg_temp.p14_assert(
+  pg_temp.p14_apply('74000000-0000-4000-8000-000000000076')->>'reason_code'
+    = 'currency_unrecognised'
+  and not exists(select 1 from public.invoices where invoice_number='P14-BAD-CURRENCY'),
+  'an unrecognised printed currency must queue by name and write no invoice');
+
 -- ===== (i) document_type = other: archived, with ZERO financial writes =====
 select pg_temp.p14_seed(
   5, '14000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001',
@@ -726,6 +753,7 @@ select pg_temp.p14_assert(
       and invoice_number = 'P14-1001'
       and invoice_date = date '2026-04-03'
       and amount_before_vat = 1000 and vat_amount = 180 and total_amount = 1180
+      and currency = 'ILS'
     from public.invoices where org_id = '14000000-0000-4000-8000-000000000001'),
   'the invoice must carry the supplier, number, day-first date and the RECONCILING breakdown '
   || 'the model transcribed -- 03/04/2026 is 3 April, the Israeli day-first convention');
@@ -1612,7 +1640,7 @@ select pg_temp.p14_assert(
        'organization_inactive', 'autonomy_disabled', 'document_type_other',
        'confidence_unknown', 'below_confidence_threshold', 'not_an_invoice',
        'supplier_unidentified', 'invoice_identity_missing', 'invoice_number_unrepresentable',
-       'invoice_number_unreasonable', 'total_missing', 'amounts_unreconciled',
+       'invoice_number_unreasonable', 'currency_unrecognised', 'total_missing', 'amounts_unreconciled',
        'payment_allocation_conflict', 'duplicate_invoice_number']) as code
    ) expected
    where not exists (
@@ -1622,7 +1650,7 @@ select pg_temp.p14_assert(
   'every reason code this suite claims to cover must still exist in the function');
 
 select pg_temp.p14_assert(
-  (select count(*) = 14 from (
+  (select count(*) = 15 from (
      select distinct (regexp_matches(
        regexp_replace(prosrc, '--[^\n]*', '', 'g'),
        'v_reason_code := ''([a-z_]+)''', 'g'))[1] as code

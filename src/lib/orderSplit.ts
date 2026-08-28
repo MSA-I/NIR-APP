@@ -11,8 +11,9 @@ export type Assignment = { mode: 'auto' } | { mode: 'pinned'; supplierId: string
 
 export interface SplitLine { productId: string; qty: number; assignment: Assignment }
 
-export interface SplitOffer { supplierId: string; unitPrice: number; minQty: number | null }
-export interface SplitSupplier { id: string; name: string; minOrderAmount: number | null }
+export interface SplitOffer { supplierId: string; unitPrice: number; currency: string; minQty: number | null }
+/** `currency` is the supplier's own (0217) — the unit `minOrderAmount` is stated in. */
+export interface SplitSupplier { id: string; name: string; minOrderAmount: number | null; currency: string }
 
 export interface SplitInput {
   lines: readonly SplitLine[];
@@ -25,7 +26,14 @@ export type LineStatus =
   | 'pin_below_min_qty'
   | 'pin_supplier_gone'
   | 'no_usable_offer'
-  | 'no_offers';
+  | 'no_offers'
+  /**
+   * The product is offered in more than one currency, so it has no cheapest offer (#277). Sorting
+   * a $12 offer below a ₪40 one is not a comparison, and picking the smaller number would hand a
+   * supplier the order because of the unit its price happens to be quoted in. The line waits for a
+   * person, with every offer visible in its own currency.
+   */
+  | 'offers_span_currencies';
 
 export interface ResolvedLine {
   productId: string;
@@ -33,6 +41,8 @@ export interface ResolvedLine {
   assignment: Assignment;
   supplierId: string | null;
   unitPrice: number | null;
+  /** The chosen supplier's currency; null when nothing was chosen. */
+  currency: string | null;
   lineTotal: number | null;
   status: LineStatus;
 }
@@ -40,6 +50,12 @@ export interface ResolvedLine {
 export interface SupplierGroup {
   supplier: SplitSupplier;
   lines: ResolvedLine[];
+  /**
+   * The group's one currency, which is the supplier's own. It cannot hold two: an offer priced in
+   * anything other than its supplier's currency is not usable (see `usableOffers`), so every line
+   * under a supplier is in that supplier's money and the minimum below is comparable to it.
+   */
+  currency: string;
   subtotal: number;
   shortfall: number | null;
   belowMinimum: boolean;
@@ -49,7 +65,14 @@ export interface SupplierGroup {
 export interface OrderSplit {
   groups: SupplierGroup[];
   blocked: ResolvedLine[];
-  total: number;
+  /**
+   * One entry per currency. RENAMED from `total`, and deliberately: a basket split across a
+   * shekel supplier and a dollar supplier has two totals and no third, and a reader still asking
+   * for `total` should fail to compile rather than receive the first of them (plan §3.2).
+   */
+  totalsByCurrency: { currency: string; amount: number }[];
+  /** The single currency the whole basket resolved in, or null when it holds more than one. */
+  basketCurrency: string | null;
   savings: OrderSavings;
   breachCount: number;
 }
@@ -98,6 +121,7 @@ const blockedLine = (line: SplitLine, status: Exclude<LineStatus, 'ok'>): Resolv
   ...line,
   supplierId: null,
   unitPrice: null,
+  currency: null,
   lineTotal: null,
   status,
 });
@@ -106,9 +130,21 @@ const resolvedLine = (line: SplitLine, offer: SplitOffer): ResolvedLine => ({
   ...line,
   supplierId: offer.supplierId,
   unitPrice: offer.unitPrice,
+  currency: offer.currency,
   lineTotal: moneyFromCents(centsFromUnits(lineUnits(line.qty, offer.unitPrice))),
   status: 'ok',
 });
+
+/**
+ * An offer counts only when it is priced in ITS OWN SUPPLIER's currency.
+ *
+ * A supplier quoting one product in a currency other than the one they trade in is a data
+ * anomaly, and admitting it would break the one property everything downstream leans on: that a
+ * supplier's group is in a single currency, so its subtotal is a real number and its minimum order
+ * — stated in that same currency — is comparable to it.
+ */
+const usableOffers = (offers: readonly SplitOffer[], suppliers: SplitInput['suppliers']) =>
+  offers.filter((offer) => offer.currency === suppliers.get(offer.supplierId)?.currency);
 
 interface GroupAccumulator {
   supplier: SplitSupplier;
@@ -129,10 +165,15 @@ export function resolveSplit(input: SplitInput): OrderSplit {
   let totalUnits = 0n;
 
   for (const line of input.lines) {
-    const offers = [...(input.offersByProduct.get(line.productId) ?? [])]
-      .filter((candidate) => input.suppliers.has(candidate.supplierId))
-      .sort(compareOffers);
+    const offers = usableOffers(
+      [...(input.offersByProduct.get(line.productId) ?? [])]
+        .filter((candidate) => input.suppliers.has(candidate.supplierId)),
+      input.suppliers,
+    ).sort(compareOffers);
     knownOffersByProduct.set(line.productId, offers);
+    // Whether this product can be compared at all. Two currencies among its offers means the
+    // cheapest is undefined, not merely unknown.
+    const lineCurrencies = new Set(offers.map((offer) => offer.currency));
 
     let resolved: ResolvedLine;
     if (line.assignment.mode === 'pinned') {
@@ -149,6 +190,8 @@ export function resolveSplit(input: SplitInput): OrderSplit {
       }
     } else if (offers.length === 0) {
       resolved = blockedLine(line, 'no_offers');
+    } else if (lineCurrencies.size > 1) {
+      resolved = blockedLine(line, 'offers_span_currencies');
     } else {
       const cheapest = offers.find((candidate) => meetsMin(candidate, line.qty));
       resolved = cheapest ? resolvedLine(line, cheapest) : blockedLine(line, 'no_usable_offer');
@@ -178,7 +221,14 @@ export function resolveSplit(input: SplitInput): OrderSplit {
     }
   }
 
-  const savings = calculateOrderSavings(savingsLines);
+  // The basket's own currency: the one every resolved line landed in, or null when they did not
+  // agree. A saving is "split across suppliers costs less than one supplier for everything", and
+  // that sentence is only true inside one kind of money.
+  const resolvedCurrencies = new Set(
+    [...groupBySupplier.values()].map((group) => group.supplier.currency),
+  );
+  const basketCurrency = resolvedCurrencies.size === 1 ? [...resolvedCurrencies][0] : null;
+  const savings = calculateOrderSavings(savingsLines, basketCurrency);
   const accumulators = [...groupBySupplier.values()].sort((a, b) =>
     a.supplier.id < b.supplier.id ? -1 : a.supplier.id > b.supplier.id ? 1 : 0);
   const groups = accumulators.map(({ supplier, lines, units }): SupplierGroup => {
@@ -189,6 +239,7 @@ export function resolveSplit(input: SplitInput): OrderSplit {
     return {
       supplier,
       lines,
+      currency: supplier.currency,
       subtotal: moneyFromCents(subtotalCents),
       shortfall: shortfallCents === null ? null : moneyFromCents(shortfallCents),
       belowMinimum: shortfallCents !== null && shortfallCents > 0n,
@@ -218,10 +269,17 @@ export function resolveSplit(input: SplitInput): OrderSplit {
     }
   }
 
+  const totalsByCurrency = [...groups.reduce((totals, group) => {
+    totals.set(group.currency, (totals.get(group.currency) ?? 0n) + hundredths(group.subtotal));
+    return totals;
+  }, new Map<string, bigint>())].map(([currency, cents]) => ({ currency, amount: moneyFromCents(cents) }))
+    .sort((a, b) => (a.currency < b.currency ? -1 : a.currency > b.currency ? 1 : 0));
+
   return {
     groups,
     blocked,
-    total: moneyFromCents(centsFromUnits(totalUnits)),
+    totalsByCurrency,
+    basketCurrency,
     savings,
     breachCount: groups.filter((group) => group.belowMinimum).length,
   };
@@ -242,10 +300,29 @@ const clearsMinimum = (supplier: SplitSupplier, units: bigint) => supplier.minOr
   || centsFromUnits(units) >= hundredths(supplier.minOrderAmount);
 
 function supplierOffer(input: SplitInput, productId: string, supplierId: string): SplitOffer | null {
-  return [...(input.offersByProduct.get(productId) ?? [])]
-    .filter((candidate) => candidate.supplierId === supplierId)
-    .sort(compareOffers)[0] ?? null;
+  return usableOffers(
+    [...(input.offersByProduct.get(productId) ?? [])]
+      .filter((candidate) => candidate.supplierId === supplierId),
+    input.suppliers,
+  ).sort(compareOffers)[0] ?? null;
 }
+
+/**
+ * Moving a line from a shekel supplier to a dollar one is not a fix for a minimum-order shortfall,
+ * and `costDelta` for such a move would be the subtraction of unlike things. The panel offers a
+ * move only between suppliers who price in the same money; the alternative offer stays visible on
+ * the line itself, where the person can see its currency and decide.
+ *
+ * A source supplier that is no longer in `input.suppliers` — the `pin_supplier_gone` case — has no
+ * currency to conflict with, and moving off it is the whole repair for that state. There is
+ * nothing to compare, so the move stays on offer: this guard exists to stop a MEANINGLESS
+ * subtraction, not to strand a line whose supplier disappeared.
+ */
+const sameCurrency = (input: SplitInput, a: string, b: string) => {
+  const from = input.suppliers.get(a);
+  if (!from) return true;
+  return from.currency === input.suppliers.get(b)?.currency;
+};
 
 const optionBucket = (option: ResolutionOption) => {
   if (option.kind === 'increase_qty') return option.clearsMinimum ? 0 : 1;
@@ -355,8 +432,12 @@ export function resolutionOptions(
       ? sourceGroup.belowMinimum
       : sourceGroup.lines.length > 1 && !clearsMinimum(sourceGroup.supplier, sourceSubtotalAfterUnits));
     const targetOffers = new Map<string, SplitOffer>();
-    for (const candidate of input.offersByProduct.get(line.productId) ?? []) {
+    for (const candidate of usableOffers(input.offersByProduct.get(line.productId) ?? [], input.suppliers)) {
       if (candidate.supplierId === supplierId || !input.suppliers.has(candidate.supplierId)) continue;
+      // `costDelta` below is the subtraction of the two line totals. Across two currencies that is
+      // not a cost difference, so the move is not offered at all rather than offered with a
+      // meaningless number attached to it.
+      if (!sameCurrency(input, supplierId, candidate.supplierId)) continue;
       const current = targetOffers.get(candidate.supplierId);
       if (!current || compareOffers(candidate, current) < 0) targetOffers.set(candidate.supplierId, candidate);
     }
@@ -385,6 +466,7 @@ export function resolutionOptions(
   if (sourceGroup?.lines.length) {
     for (const targetSupplier of [...input.suppliers.values()].sort((a, b) => compareText(a.id, b.id))) {
       if (targetSupplier.id === supplierId) continue;
+      if (!sameCurrency(input, supplierId, targetSupplier.id)) continue;
       const targetLines: { line: ResolvedLine; offer: SplitOffer; qtyAfter: number }[] = [];
       for (const line of sourceGroup.lines) {
         const target = supplierOffer(input, line.productId, targetSupplier.id);

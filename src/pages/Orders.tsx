@@ -29,6 +29,8 @@ type OrderRow = PurchaseOrder & {
 type DraftListRow = {
   id: string;
   number: number;
+  /** The draft's currency (0217) — the unit its line prices are quoted in. */
+  currency: string;
   updated_at: string;
   notes: string | null;
   editor_step: number;
@@ -75,7 +77,7 @@ export function OrdersList() {
         .order('created_at', { ascending: false }),
       canWrite
         ? supabase.from('purchase_requests')
-          .select('id, number, updated_at, notes, editor_step, items:purchase_request_items(qty, unit_price, product:products(name))')
+          .select('id, number, currency, updated_at, notes, editor_step, items:purchase_request_items(qty, unit_price, product:products(name))')
           .eq('status', 'draft').eq('created_by', profile!.id).order('updated_at', { ascending: false })
         : Promise.resolve({ data: [], error: null }),
     ]);
@@ -146,7 +148,7 @@ export function OrdersList() {
     { key: 'created', header: 'נוצרה', sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
     { key: 'expected', header: 'אספקה', sortValue: (r) => r.expected_date ?? '', render: (r) => fmtDate(r.expected_date) },
     { key: 'items', header: 'פריטים', priority: 3, className: 'num', render: (r) => r.items.length },
-    { key: 'total', header: 'סה״כ', className: 'num', mobileLabel: null, sortValue: orderTotal, render: (r) => fmtMoneyExact(orderTotal(r)) },
+    { key: 'total', header: 'סה״כ', className: 'num', mobileLabel: null, sortValue: orderTotal, render: (r) => fmtMoneyExact(orderTotal(r), r.currency) },
     { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={PO_STATUS[r.status]} /> },
   ];
 
@@ -171,7 +173,7 @@ export function OrdersList() {
                 <div key={draft.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-3 sm:px-4">
                   <div className="min-w-0">
                     <div className="font-medium text-ink-body">טיוטה <span className="num">#{draft.number}</span></div>
-                    <div className="text-xs text-ink-muted">עודכנה {fmtDateTime(draft.updated_at)} · <span className="num">{draft.items.length}</span> מוצרים · {fmtMoneyExact(draftTotal(draft))}</div>
+                    <div className="text-xs text-ink-muted">עודכנה {fmtDateTime(draft.updated_at)} · <span className="num">{draft.items.length}</span> מוצרים · {fmtMoneyExact(draftTotal(draft), draft.currency)}</div>
                   </div>
                   <div className="ms-auto flex gap-2">
                     <button type="button" className="btn-secondary" onClick={() => navigate(`/orders/new?draft=${draft.id}`)}>המשך עריכה</button>
@@ -254,7 +256,16 @@ export function OrdersList() {
 }
 
 type FullOrder = PurchaseOrder & {
-  supplier: { id: string; name: string; phone: string | null; whatsapp: string | null; email: string | null; min_order_amount: number | null };
+  supplier: {
+    id: string; name: string; phone: string | null; whatsapp: string | null; email: string | null;
+    min_order_amount: number | null;
+    /**
+     * The currency the supplier's own figures are in — `min_order_amount` among them. It is read
+     * here to decide whether that minimum is even comparable to this order's total, never to
+     * convert either one.
+     */
+    default_currency: string;
+  };
   items: (PurchaseOrderItem & {
     product: { name: string; display_name: string | null; unit: string; sku: string | null };
   })[];
@@ -280,7 +291,7 @@ export function OrderDetail() {
 
   const { data: order, loading, error, refetch } = useQuery(async () =>
     unwrap(await supabase.from('purchase_orders')
-      .select('*, supplier:suppliers(id, name, phone, whatsapp, email, min_order_amount), items:purchase_order_items(*, product:products(name, display_name, unit, sku))')
+      .select('*, supplier:suppliers(id, name, phone, whatsapp, email, min_order_amount, default_currency), items:purchase_order_items(*, product:products(name, display_name, unit, sku))')
       .eq('id', id!).single()) as Promise<FullOrder>, [id]);
 
   // ?print=1 (Orders list "הדפסה" action): print once when the data is on screen, then strip
@@ -355,8 +366,16 @@ export function OrderDetail() {
   if (loading) return <RecordSkeleton />;
   if (error || !order) return <ErrorNote message={error ?? 'הזמנה לא נמצאה'} />;
 
+  // Every price on this sheet is a snapshot taken in the ORDER's currency, so the total is that
+  // currency and nothing here needs a second one.
   const total = order.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
-  const underMin = order.supplier.min_order_amount != null && total < order.supplier.min_order_amount;
+  /* The supplier's minimum is a figure in the SUPPLIER's currency (#289). An order placed in a
+     different currency cannot be under it or over it — "3,100 is less than 5,000" is not a fact
+     when the two are different money — so the warning is withheld and the mismatch is named
+     instead. Same rule the server applies in `purchase_comparison.below_minimum`. */
+  const minimumComparable = order.currency === order.supplier.default_currency;
+  const underMin = minimumComparable && order.supplier.min_order_amount != null && total < order.supplier.min_order_amount;
+  const minimumInOtherCurrency = !minimumComparable && order.supplier.min_order_amount != null;
 
   const waLink = orderWhatsAppLink(order, orgName);
   const primaryKey = canWrite ? orderPrimaryAction(order.status, !!waLink) : null;
@@ -388,7 +407,7 @@ export function OrderDetail() {
         breadcrumbs={<Breadcrumbs items={[{ label: 'הזמנות', to: '/orders' }, { label: `#${order.number}` }]} />}
         title={<span>הזמנה <span className="num">#{order.number}</span></span>}
         status={<StatusBadge meta={PO_STATUS[order.status]} />}
-        meta={<><span>{order.supplier.name}</span><span className="num font-semibold text-ink-body">{fmtMoneyExact(total)}</span><span>נוצרה {fmtDateTime(order.created_at)}</span>{order.sent_at && <span>נשלחה {fmtDateTime(order.sent_at)}</span>}{order.revision_number > 1 && order.revised_from_order_id && (
+        meta={<><span>{order.supplier.name}</span><span className="num font-semibold text-ink-body">{fmtMoneyExact(total, order.currency)}</span><span>נוצרה {fmtDateTime(order.created_at)}</span>{order.sent_at && <span>נשלחה {fmtDateTime(order.sent_at)}</span>}{order.revision_number > 1 && order.revised_from_order_id && (
           <button type="button" className="underline" onClick={() => navigate(`/orders/${order.revised_from_order_id}`)}>
             רוויזיה <span className="num">{order.revision_number}</span> — להזמנה המקורית
           </button>
@@ -439,7 +458,16 @@ export function OrderDetail() {
       {underMin && (
         <Note tone="await" className="no-print">
           <span className="min-w-0 flex-1">
-            שים לב: סכום ההזמנה ({fmtMoneyExact(total)}) נמוך ממינימום ההזמנה של הספק ({fmtMoneyExact(order.supplier.min_order_amount!)}).
+            שים לב: סכום ההזמנה ({fmtMoneyExact(total, order.currency)}) נמוך ממינימום ההזמנה של הספק ({fmtMoneyExact(order.supplier.min_order_amount!, order.supplier.default_currency)}).
+          </span>
+        </Note>
+      )}
+
+      {minimumInOtherCurrency && (
+        <Note tone="idle" className="no-print">
+          <span className="min-w-0 flex-1">
+            ההזמנה במטבע {order.currency} ומינימום ההזמנה של הספק נקוב ב-{order.supplier.default_currency}
+            ({fmtMoneyExact(order.supplier.min_order_amount!, order.supplier.default_currency)}), ולכן אין כאן בדיקת מינימום.
           </span>
         </Note>
       )}
@@ -462,13 +490,13 @@ export function OrderDetail() {
           {order.items.map((item) => (
             <li key={item.id} className="py-3 first:pt-0 last:pb-0">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0"><div className="font-medium text-ink-body"><bdi>{productLabel(item.product)}</bdi></div><div className="mt-1 text-xs text-ink-muted"><span className="num">{formatQuantity(item.qty, item.product.unit)}</span> × <span className="num">{fmtMoneyExact(item.unit_price)}</span></div></div>
-                <span className="num shrink-0 font-semibold">{fmtMoneyExact(item.qty * item.unit_price)}</span>
+                <div className="min-w-0"><div className="font-medium text-ink-body"><bdi>{productLabel(item.product)}</bdi></div><div className="mt-1 text-xs text-ink-muted"><span className="num">{formatQuantity(item.qty, item.product.unit)}</span> × <span className="num">{fmtMoneyExact(item.unit_price, order.currency)}</span></div></div>
+                <span className="num shrink-0 font-semibold">{fmtMoneyExact(item.qty * item.unit_price, order.currency)}</span>
               </div>
               {order.status !== 'draft' && <div className="mt-2 text-xs text-ink-muted">התקבל: <span className={`num ${item.received_qty >= item.qty ? 'text-done-fg' : item.received_qty > 0 ? 'text-await-fg' : ''}`}>{item.received_qty}</span> מתוך <span className="num">{item.qty}</span></div>}
             </li>
           ))}
-          <li className="flex items-center justify-between pt-3 font-semibold"><span>סה״כ להזמנה</span><span className="num">{fmtMoneyExact(total)}</span></li>
+          <li className="flex items-center justify-between pt-3 font-semibold"><span>סה״כ להזמנה</span><span className="num">{fmtMoneyExact(total, order.currency)}</span></li>
         </ul>
         <div className="table-scroll hidden overflow-x-auto lg:block print:block print:overflow-visible" tabIndex={0} role="region" aria-label="שורות ההזמנה">
         <table className="w-full">
@@ -485,8 +513,8 @@ export function OrderDetail() {
                 <td className="td font-medium text-ink-body"><bdi>{productLabel(i.product)}</bdi></td>
                 <td className="td">{formatUnit(i.product.unit)}</td>
                 <td className="td num">{i.qty}</td>
-                <td className="td num">{fmtMoneyExact(i.unit_price)}</td>
-                <td className="td num">{fmtMoneyExact(i.qty * i.unit_price)}</td>
+                <td className="td num">{fmtMoneyExact(i.unit_price, order.currency)}</td>
+                <td className="td num">{fmtMoneyExact(i.qty * i.unit_price, order.currency)}</td>
                 {order.status !== 'draft' && (
                   <td className="td no-print num">
                     {i.received_qty > 0 ? <span className={i.received_qty >= i.qty ? 'text-done-fg' : 'text-await-fg'}>{i.received_qty}</span> : '—'}
@@ -498,7 +526,7 @@ export function OrderDetail() {
           <tfoot>
             <tr className="border-t-2 border-line">
               <th scope="row" className="td text-start font-semibold" colSpan={4}>סה״כ להזמנה</th>
-              <td className="td num font-semibold">{fmtMoneyExact(total)}</td>
+              <td className="td num font-semibold">{fmtMoneyExact(total, order.currency)}</td>
               {order.status !== 'draft' && <td className="no-print" />}
             </tr>
           </tfoot>

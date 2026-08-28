@@ -40,7 +40,9 @@ export default function InvoiceNew() {
   const [f, setF] = useState({
     supplier_id: presetSupplier, invoice_number: '', invoice_date: todayISO(),
     before_vat: '', vat: '', total: '', notes: '', reason: '',
+    currency: org?.base_currency ?? 'ILS',
   });
+  const currencySupplierRef = useRef('');
   const [invoiceId] = useState(() => crypto.randomUUID());
   const [dirty, setDirty] = useState(false);
   const [leaveTarget, setLeaveTarget] = useState<string | null>(null);
@@ -73,6 +75,7 @@ export default function InvoiceNew() {
       const src = interpretation.data as { payload: InterpretationContract; suggested_supplier_id: string | null };
       const draft = invoiceDraftFromInterpretation(src.payload);
       const fileName = (document.data as { file_name: string } | null)?.file_name;
+      if (src.suggested_supplier_id) currencySupplierRef.current = src.suggested_supplier_id;
       setF((s) => ({
         ...s,
         supplier_id: src.suggested_supplier_id ?? s.supplier_id,
@@ -81,6 +84,7 @@ export default function InvoiceNew() {
         before_vat: draft.before_vat || s.before_vat,
         vat: draft.vat || s.vat,
         total: draft.total || s.total,
+        currency: draft.currency || s.currency,
         // A file name is something a bookkeeper can recognise later; the document uuid is not.
         reason: s.reason || (fileName ? `נקלטה מהמסמך הסרוק ${fileName}` : 'נקלטה ממסמך סרוק'),
       }));
@@ -100,6 +104,10 @@ export default function InvoiceNew() {
       .is('deleted_at', null).order('name').order('id')
       .range(from, to) as unknown as PromiseLike<PageResponse<Supplier>>));
 
+  const { data: currencies, loading: currenciesLoading, error: currenciesError } = useQuery(async () =>
+    unwrap(await supabase.from('currencies').select('code, minor_units')
+      .eq('active', true).order('code')) as { code: string; minor_units: number }[], []);
+
   const linksRequested = !!presetOrder || !!presetReceipt;
   const { data: linkResolution, loading: linksLoading } = useQuery(async () => {
     if (!linksRequested) return resolveInvoiceLinkedContext(null, null, null, null, null);
@@ -113,11 +121,11 @@ export default function InvoiceNew() {
         : null;
       const orderId = presetOrder ?? receipt?.order_id ?? null;
       const order = orderId
-        ? unwrap(await supabase.from('purchase_orders').select('id, number, supplier_id, status')
+        ? unwrap(await supabase.from('purchase_orders').select('id, number, supplier_id, status, currency')
           .eq('id', orderId).maybeSingle()) as InvoiceContextOrder | null
         : null;
       const supplier = order
-        ? unwrap(await supabase.from('suppliers').select('id, name').eq('id', order.supplier_id)
+        ? unwrap(await supabase.from('suppliers').select('id, name, default_currency, country_code').eq('id', order.supplier_id)
           .is('deleted_at', null).maybeSingle()) as InvoiceContextSupplier | null
         : null;
       return resolveInvoiceLinkedContext(presetOrder, presetReceipt, order, receipt, supplier);
@@ -134,7 +142,25 @@ export default function InvoiceNew() {
   const linkedReceiptId = linkedContext?.receiptId ?? null;
   const canOpenProcurement = profile?.role === 'owner' || profile?.role === 'office';
 
-  const vatRate = (org?.vat_rate ?? 18) / 100;
+  const effectiveSupplier = linkedContext?.supplier
+    ?? suppliers?.find((supplier) => supplier.id === effectiveSupplierId)
+    ?? null;
+  useEffect(() => {
+    if (!effectiveSupplierId || currencySupplierRef.current === effectiveSupplierId) return;
+    currencySupplierRef.current = effectiveSupplierId;
+    const nextCurrency = linkedContext?.order.currency
+      ?? effectiveSupplier?.default_currency
+      ?? org?.base_currency
+      ?? 'ILS';
+    setF((current) => ({ ...current, currency: nextCurrency }));
+  }, [effectiveSupplierId, effectiveSupplier?.default_currency, linkedContext?.order.currency, org?.base_currency]);
+
+  const domesticSupplier = effectiveSupplier?.country_code != null && org?.country_code != null
+    ? effectiveSupplier.country_code === org.country_code
+    : true;
+  const vatRate = domesticSupplier ? (org?.vat_rate ?? 18) / 100 : null;
+  const minorUnits = currencies?.find((currency) => currency.code === f.currency)?.minor_units ?? 2;
+  const amountStep = minorUnits === 0 ? '1' : `0.${'0'.repeat(minorUnits - 1)}1`;
   const set = (k: string, v: string) => {
     setDirty(true);
     setF((s) => ({ ...s, [k]: v }));
@@ -147,12 +173,20 @@ export default function InvoiceNew() {
   function onBeforeVat(v: string) {
     const n = Number(v);
     setDirty(true);
-    setF((s) => ({ ...s, before_vat: v, vat: n ? (n * vatRate).toFixed(2) : s.vat, total: n ? (n * (1 + vatRate)).toFixed(2) : s.total }));
+    setF((s) => vatRate == null ? { ...s, before_vat: v } : ({
+      ...s, before_vat: v,
+      vat: n ? (n * vatRate).toFixed(minorUnits) : s.vat,
+      total: n ? (n * (1 + vatRate)).toFixed(minorUnits) : s.total,
+    }));
   }
   function onTotal(v: string) {
     const n = Number(v);
     setDirty(true);
-    setF((s) => ({ ...s, total: v, before_vat: n ? (n / (1 + vatRate)).toFixed(2) : s.before_vat, vat: n ? (n - n / (1 + vatRate)).toFixed(2) : s.vat }));
+    setF((s) => vatRate == null ? { ...s, total: v } : ({
+      ...s, total: v,
+      before_vat: n ? (n / (1 + vatRate)).toFixed(minorUnits) : s.before_vat,
+      vat: n ? (n - n / (1 + vatRate)).toFixed(minorUnits) : s.vat,
+    }));
   }
 
   useEffect(() => {
@@ -183,7 +217,7 @@ export default function InvoiceNew() {
   const checkFingerprint = effectiveSupplierId && f.invoice_number.trim() && Number(f.total) > 0
     ? invoiceCheckFingerprint({
       supplierId: effectiveSupplierId, invoiceNumber: f.invoice_number, invoiceDate: f.invoice_date,
-      totalAmount: Number(f.total), linkedOrderIds,
+      totalAmount: Number(f.total), currency: f.currency, linkedOrderIds,
     })
     : null;
   const latestFingerprint = useRef(checkFingerprint);
@@ -199,7 +233,7 @@ export default function InvoiceNew() {
     const t = setTimeout(() => {
       void runInvoiceChecks({
         supplier_id: effectiveSupplierId, invoice_number: f.invoice_number.trim(), invoice_date: f.invoice_date,
-        total_amount: Number(f.total), linkedOrderIds,
+        total_amount: Number(f.total), currency: f.currency, linkedOrderIds,
       }).then((results) => {
         if (checkSequence.current === sequence && latestFingerprint.current === checkFingerprint) {
           setChecked({ fingerprint: checkFingerprint, results });
@@ -235,7 +269,7 @@ export default function InvoiceNew() {
       try {
         freshChecks = await runInvoiceChecks({
           supplier_id: effectiveSupplierId, invoice_number: f.invoice_number.trim(), invoice_date: f.invoice_date,
-          total_amount: Number(f.total), linkedOrderIds,
+          total_amount: Number(f.total), currency: f.currency, linkedOrderIds,
         });
       } catch (checkFailure) {
         setChecked(null);
@@ -248,6 +282,7 @@ export default function InvoiceNew() {
       const inv = unwrap(await supabase.rpc('create_invoice', {
         p_invoice_id: invoiceId,
         p_supplier_id: effectiveSupplierId,
+        p_currency: f.currency,
         p_invoice_number: f.invoice_number.trim(),
         p_invoice_date: f.invoice_date,
         p_amount_before_vat: Number(f.before_vat) || 0,
@@ -272,8 +307,8 @@ export default function InvoiceNew() {
     }
   }
 
-  if (loading || linksLoading) return <RecordSkeleton />;
-  if (error) return <ErrorNote message={error} />;
+  if (loading || linksLoading || currenciesLoading) return <RecordSkeleton />;
+  if (error || currenciesError) return <ErrorNote message={error ?? currenciesError ?? 'טעינת המטבעות נכשלה'} />;
 
   return (
     <div className="max-w-2xl space-y-4">
@@ -343,11 +378,20 @@ export default function InvoiceNew() {
             describedBy={linkedContext ? 'invoice-linked-supplier-help' : undefined} />
           {linkedContext && <div id="invoice-linked-supplier-help" className="mt-1 text-xs text-ink-muted">הספק נקבע לפי הרשומות המקושרות ואינו ניתן לשינוי כאן.</div>}
         </div>
+        <div>
+          <label className="label" htmlFor="invoice-new-currency">מטבע *</label>
+          <select id="invoice-new-currency" className="input num" dir="ltr" value={f.currency}
+            onChange={(event) => set('currency', event.target.value)}>
+            {(currencies ?? []).map((currency) => (
+              <option key={currency.code} value={currency.code}>{currency.code}</option>
+            ))}
+          </select>
+        </div>
         <div><label className="label" htmlFor="invoice-new-number">מספר חשבונית *</label><input id="invoice-new-number" className="input num" dir="ltr" value={f.invoice_number} onChange={(e) => set('invoice_number', e.target.value)} /></div>
         <div><label className="label" htmlFor="invoice-new-date">תאריך חשבונית *</label><input id="invoice-new-date" type="date" className="input" value={f.invoice_date} onChange={(e) => set('invoice_date', e.target.value)} /></div>
-        <div><label className="label" htmlFor="invoice-new-before-vat">סכום לפני מע״מ</label><input id="invoice-new-before-vat" type="number" step="0.01" className="input num" value={f.before_vat} onChange={(e) => onBeforeVat(e.target.value)} /></div>
-        <div><label className="label" htmlFor="invoice-new-vat">מע״מ ({org?.vat_rate ?? 18}%)</label><input id="invoice-new-vat" type="number" step="0.01" className="input num" value={f.vat} onChange={(e) => set('vat', e.target.value)} /></div>
-        <div><label className="label" htmlFor="invoice-new-total">סה״כ לתשלום *</label><input id="invoice-new-total" type="number" step="0.01" className="input num font-semibold" value={f.total} onChange={(e) => onTotal(e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-new-before-vat">סכום לפני מע״מ</label><input id="invoice-new-before-vat" type="number" step={amountStep} className="input num" value={f.before_vat} onChange={(e) => onBeforeVat(e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-new-vat">{domesticSupplier ? `מע״מ (${org?.vat_rate ?? 18}%)` : 'מע״מ לפי המסמך'}</label><input id="invoice-new-vat" type="number" step={amountStep} className="input num" value={f.vat} onChange={(e) => set('vat', e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-new-total">סה״כ לתשלום *</label><input id="invoice-new-total" type="number" step={amountStep} className="input num font-semibold" value={f.total} onChange={(e) => onTotal(e.target.value)} /></div>
         <div className="sm:col-span-2"><label className="label" htmlFor="invoice-new-notes">הערות</label><textarea id="invoice-new-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
         <div className="sm:col-span-2"><label className="label" htmlFor="invoice-new-reason">סיבת קליטת החשבונית *</label><input id="invoice-new-reason" className="input" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>
       </Card>

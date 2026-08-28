@@ -13,7 +13,9 @@ import {
 } from '../lib/format';
 import { comparisonSeries } from '../lib/theme';
 import { mergeWeeklyComparison, topCategoriesWithOther } from '../lib/dashboardSeries';
-import { CategoryDonut, ComparisonLineChart, money, moneyShort, SpendBarChart, TrendSparkline } from '../components/charts';
+import { CategoryDonut, ComparisonLineChart, moneyFor, moneyShortFor, SpendBarChart, TrendSparkline } from '../components/charts';
+import { MoneyByCurrency } from '../components/Money';
+import type { MoneyAmount } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
 import { useAuth } from '../auth/AuthContext';
 import { PlanBadge } from '../components/PlanBadge';
@@ -23,13 +25,31 @@ import { PlanBadge } from '../components/PlanBadge';
 // amounts; format.ts is untouched. null stays null → "—", never a fake rounded 0 (CLAUDE.md:37).
 // The rounding moved into the formatter (format.ts): a glance surface is a shape decision, not
 // something each call site re-derives. The alias stays because it names the surface.
+/**
+ * Every glance figure on this screen is drawn in the currency the row it came from is in — never
+ * in a currency the screen picked. `glanceMoney(value, currency)` keeps the shape rule (whole
+ * units on a glance surface) and leaves the unit to the data.
+ */
 const glanceMoney = fmtMoneyRounded;
 // "עודכן ב-HH:MM" freshness stamp — the screen promises real-time, so it says when it last read.
 const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TIME_ZONE });
 
 type WeeklyPoint = { week: string; total: number; count: number; label: string };
+/**
+ * 0218 split every money figure on this snapshot into one entry per currency, and renamed each key
+ * with it. The dashboard is one screen for a whole business, so it does two different things with
+ * them, and the difference is deliberate (plan §3.1):
+ *
+ *   A FIGURE THE READER GLANCES AT   — the KPI strip, the attention rows — renders every currency,
+ *     one line each, ordered with the organisation's own first. Two lines are the honest shape;
+ *     one line is what every business sees today.
+ *   A FIGURE THE SCREEN COMPUTES WITH — the due-window split bar, the month-over-month delta, the
+ *     charts — works inside the ORGANISATION'S OWN CURRENCY only, and the screen says so when
+ *     there is money outside it. A ratio, a percentage change or a bar width across two currencies
+ *     is not a smaller version of the truth, it is a different number entirely.
+ */
 type ManagementDashboardSnapshot = {
-  money: { openBalance: number | null; openInvoiceCount: number };
+  money: { openBalanceByCurrency: MoneyAmount[] | null; openInvoiceCount: number };
   paymentRequests: {
     pendingApproval: number;
     drafts: number;
@@ -40,17 +60,30 @@ type ManagementDashboardSnapshot = {
     // 0148 — the due-window money. All four figures below ride the same evidence guard as
     // `overdue`/`dueToday`: null means "no active request carries a due date at all", while 0
     // means "dated requests exist and none of them fall here". Never conflate the two.
-    overdueAmount: number | null;
-    dueWithin7Amount: number | null;
+    overdueAmountByCurrency: MoneyAmount[] | null;
+    dueWithin7AmountByCurrency: MoneyAmount[] | null;
     dueWithin7Count: number | null;
   };
-  credits: { count: number; sum: number | null };
+  credits: { count: number; sumByCurrency: MoneyAmount[] | null };
   bank: { unmatched: number; suggested: number };
   invoices: { pendingApproval: number; toReview: number; notSent: number };
-  openOrders: { count: number; committed: number | null; remaining: number; noDate: number; late: number; awaitingConfirmation: number };
+  openOrders: {
+    count: number;
+    committedByCurrency: MoneyAmount[] | null;
+    remainingByCurrency: MoneyAmount[];
+    noDate: number; late: number; awaitingConfirmation: number;
+  };
   openSupplierCount: number;
-  topBalances: { id: string; name: string; balance: number }[];
+  topBalancesByCurrency: { currency: string; rows: { id: string; name: string; balance: number }[] }[];
 };
+
+/** The base-currency entry of a per-currency list, or null when that currency is not in it. */
+const inBaseCurrency = (entries: MoneyAmount[] | null | undefined, base: string | null | undefined) =>
+  entries?.find((entry) => entry.currency === base)?.amount ?? null;
+
+/** Every currency in a list that is not the organisation's own — what the note has to mention. */
+const currenciesBeside = (entries: MoneyAmount[] | null | undefined, base: string | null | undefined) =>
+  [...new Set((entries ?? []).filter((entry) => entry.currency !== base).map((entry) => entry.currency))].sort();
 
 // T7.3 — the reference's delta idiom: bare arrow + figure in ink, no gray pill box. The color
 // stays neutral on purpose: more purchasing is not "good" or "bad", so the trend hues (which are
@@ -77,7 +110,7 @@ function DeltaChip({ value }: { value: number }) {
 // borders — the three figures sit straight on the wheat canvas, Crextio-style, and separate by
 // spacing alone. Each stat keeps its full anatomy: icon chip · label · hero figure · delta ·
 // sparkline · context line.
-function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, delta, spark, sparkLabel }: {
+function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, delta, spark, sparkLabel, currency }: {
   title: string;
   value: number | null;
   tone?: 'done' | 'await' | 'idle';
@@ -88,13 +121,15 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
   delta?: number | null;
   spark?: WeeklyPoint[];
   sparkLabel?: string;
+  /** The one currency this tile's figure is in. A tile shows one number, so it shows one unit. */
+  currency: string | null | undefined;
 }) {
   // T7.2 (Crextio strip): the icon sits flat beside the label — no chip box; the tone lives on
   // the figure alone.
   const toneCls = { done: 'text-done-fg', await: 'text-await-fg', idle: 'text-ink' }[tone];
   const hasSpark = value != null && spark != null && spark.filter((point) => point.count > 0).length >= 2;
   const linkLabel = [
-    `${title}: ${glanceMoney(value)}`,
+    `${title}: ${glanceMoney(value, currency)}`,
     delta != null ? `${Math.round(delta) > 0 ? '+' : ''}${Math.round(delta)}% מול אותם ימים בחודש הקודם` : null,
     context,
     aux,
@@ -113,8 +148,8 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
         {delta != null && <DeltaChip value={delta} />}
       </div>
       <div className="mt-2 flex items-center gap-3">
-        <div className={`shrink-0 kpi-hero num ${toneCls}`} dir="ltr">{glanceMoney(value)}</div>
-        {hasSpark && spark && sparkLabel && <TrendSparkline points={spark} label={sparkLabel} />}
+        <div className={`shrink-0 kpi-hero num ${toneCls}`} dir="ltr">{glanceMoney(value, currency)}</div>
+        {hasSpark && spark && sparkLabel && <TrendSparkline points={spark} label={sparkLabel} currency={currency} />}
       </div>
       {/* One context line, never the same sentence twice: the start slot names the period (or the
           delta's baseline), the end slot exists only when it adds a DIFFERENT fact. */}
@@ -465,7 +500,8 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
-  const { profile } = useAuth();
+  const { profile, org } = useAuth();
+  const baseCurrency = org?.base_currency ?? null;
   /* The tier mark on the greeting line is owner-only, and the gate is repeated HERE rather than
      left to `PlanBadge`'s own: the component renders null for everyone else, but the line that
      holds it must not exist at all for them — a truthy `meta` node that renders nothing still
@@ -493,18 +529,18 @@ export default function Dashboard() {
     ] = await Promise.all([
       // recent orders (8 weeks) — purchased today/week/month + the weekly series. created_at is the
       // time axis, non-draft/cancelled the filter, at snapshot prices (OPEN-DECISIONS #4, locked).
-      fetchAll((from, to) => supabase.from('purchase_orders').select('id, created_at, status, items:purchase_order_items(qty, unit_price)').gte('created_at', trendFromTimestamp).lte('created_at', now.toISOString()).not('status', 'in', '(draft,cancelled)').order('created_at').order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('invoices').select('id, supplier_id, invoice_date, received_date, total_amount, review_status, payment_status, export_status').eq('financial_role', 'payable').is('deleted_at', null).gte('invoice_date', chartsFrom).order('invoice_date').order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('payments').select('id, amount, paid_date').gte('paid_date', trendFromISO).lte('paid_date', todayISO).order('paid_date').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('purchase_orders').select('id, created_at, status, currency, items:purchase_order_items(qty, unit_price)').gte('created_at', trendFromTimestamp).lte('created_at', now.toISOString()).not('status', 'in', '(draft,cancelled)').order('created_at').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('invoices').select('id, supplier_id, invoice_date, received_date, total_amount, currency, review_status, payment_status, export_status').eq('financial_role', 'payable').is('deleted_at', null).gte('invoice_date', chartsFrom).order('invoice_date').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('payments').select('id, amount, currency, paid_date').gte('paid_date', trendFromISO).lte('paid_date', todayISO).order('paid_date').order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('exceptions').select('*, supplier:suppliers(name)').in('status', ['open', 'in_progress']).order('created_at', { ascending: false }).order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('purchase_order_items').select('id, qty, unit_price, product:products(category:categories(name)), order:purchase_orders!inner(created_at, status)').gte('order.created_at', chartsFromTimestamp).lte('order.created_at', now.toISOString()).not('order.status', 'in', '(draft,cancelled)').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('purchase_order_items').select('id, qty, unit_price, product:products(category:categories(name)), order:purchase_orders!inner(created_at, status, currency)').gte('order.created_at', chartsFromTimestamp).lte('order.created_at', now.toISOString()).not('order.status', 'in', '(draft,cancelled)').order('id').range(from, to)),
       // price increases — now bounded to the last 30 days (was a full unbounded scan): matches the
       // "מוצרים שהתייקרו לאחרונה" label and the alerts window (OPEN-DECISIONS #26).
-      fetchAll((from, to) => supabase.from('supplier_products').select('id, current_price, previous_price, price_effective_date, product:products(id, name, display_name), supplier:suppliers(name)').gte('price_effective_date', last30dISO).not('previous_price', 'is', null).order('price_effective_date', { ascending: false }).order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('purchase_request_items').select('id, qty, unit_price, product_id, request:purchase_requests!inner(created_at, status)').gte('request.created_at', monthStartTimestamp).lte('request.created_at', now.toISOString()).eq('request.status', 'split').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('supplier_products').select('id, current_price, previous_price, currency, price_effective_date, product:products(id, name, display_name), supplier:suppliers(name)').gte('price_effective_date', last30dISO).not('previous_price', 'is', null).order('price_effective_date', { ascending: false }).order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('purchase_request_items').select('id, qty, unit_price, product_id, request:purchase_requests!inner(created_at, status, currency)').gte('request.created_at', monthStartTimestamp).lte('request.created_at', now.toISOString()).eq('request.status', 'split').order('id').range(from, to)),
       // available offers for the savings estimate — kept minimal (2 cols) but cannot be date-bounded:
       // savings needs the max CURRENT available offer per product regardless of when it was set.
-      fetchAll((from, to) => supabase.from('supplier_products').select('id, product_id, current_price').eq('available', true).order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('supplier_products').select('id, product_id, current_price, currency').eq('available', true).order('id').range(from, to)),
       // deliveries due today/tomorrow — open POs (sent/confirmed/partial) whose expected_date is
       // today or tomorrow (OPEN-DECISIONS: a delivery = open order + expected_date). NULL
       // expected_date rows are excluded by the gte and surfaced as a count from openPos instead.
@@ -518,14 +554,14 @@ export default function Dashboard() {
       supabase.from('suppliers').select('id', { count: 'exact', head: true }).is('deleted_at', null),
     ]);
 
-    const orders = ordersRes as unknown as { created_at: string; items: { qty: number; unit_price: number }[] }[];
-    const invoices = invoicesRes as unknown as { supplier_id: string; invoice_date: string; received_date: string; total_amount: number; review_status: string; payment_status: string; export_status: string }[];
-    const payments = paymentsRes as unknown as { amount: number; paid_date: string }[];
+    const orders = ordersRes as unknown as { created_at: string; currency: string; items: { qty: number; unit_price: number }[] }[];
+    const invoices = invoicesRes as unknown as { supplier_id: string; invoice_date: string; received_date: string; total_amount: number; currency: string; review_status: string; payment_status: string; export_status: string }[];
+    const payments = paymentsRes as unknown as { amount: number; currency: string; paid_date: string }[];
     const exceptions = exceptionsRes as unknown as ({ id: string; type: string; severity: 'low' | 'medium' | 'high'; title: string; created_at: string; supplier: { name: string } | null })[];
-    const poItems = poItemsRes as unknown as { qty: number; unit_price: number; product: { category: { name: string } | null } | null; order: { created_at: string } }[];
-    const priceRows = priceUpRes as unknown as { current_price: number; previous_price: number | null; price_effective_date: string; product: { id: string; name: string; display_name: string | null }; supplier: { name: string } }[];
-    const reqItems = reqItemsRes as unknown as { qty: number; unit_price: number | null; product_id: string }[];
-    const offers = offersRes as unknown as { product_id: string; current_price: number }[];
+    const poItems = poItemsRes as unknown as { qty: number; unit_price: number; product: { category: { name: string } | null } | null; order: { created_at: string; currency: string } }[];
+    const priceRows = priceUpRes as unknown as { current_price: number; previous_price: number | null; currency: string; price_effective_date: string; product: { id: string; name: string; display_name: string | null }; supplier: { name: string } }[];
+    const reqItems = reqItemsRes as unknown as { qty: number; unit_price: number | null; product_id: string; request: { currency: string } }[];
+    const offers = offersRes as unknown as { product_id: string; current_price: number; currency: string }[];
     const deliveries = deliveriesRes as unknown as DeliveryOrder[];
     const snapshot = unwrap(snapshotRes) as ManagementDashboardSnapshot | null;
     if (!snapshot) throw new Error('dashboard_snapshot_unavailable');
@@ -535,17 +571,30 @@ export default function Dashboard() {
     // ── money strip (context). Every value is `number | null`: null when its source set is
     // empty, so an empty org shows "—", never a fake "0" (CLAUDE.md:31,37). A measured 0 (there
     // ARE rows this period, they just sum to 0) is legitimate and kept as a number.
-    const ordersThisMonth = orders.filter((o) => {
+    /* THE ONE RULE FOR EVERY FIGURE THIS SCREEN COMPUTES ITSELF (0217, #277).
+       A month-over-month delta, a category mix, a savings percentage and a bar width are all
+       ratios, and a ratio across two currencies is not an approximation of anything. So each
+       aggregate below is taken inside the organisation's own currency, and `otherCurrencies`
+       collects what was left outside so the screen can say so rather than quietly under-report. */
+    const inBase = <T extends { currency: string }>(rows: readonly T[]) =>
+      rows.filter((row) => row.currency === baseCurrency);
+    const otherCurrencies = [...new Set([
+      ...orders.filter((o) => o.currency !== baseCurrency).map((o) => o.currency),
+      ...invoices.filter((i) => i.currency !== baseCurrency).map((i) => i.currency),
+      ...payments.filter((p) => p.currency !== baseCurrency).map((p) => p.currency),
+    ])].sort();
+
+    const ordersThisMonth = inBase(orders).filter((o) => {
       const date = localDateKey(o.created_at);
       return date >= monthStart && date <= todayISO;
     });
-    const paymentsThisMonth = payments.filter((p) => {
+    const paymentsThisMonth = inBase(payments).filter((p) => {
       const date = localDateKey(p.paid_date);
       return date >= monthStart && date <= todayISO;
     });
     const purchasedMonth = ordersThisMonth.length ? ordersThisMonth.reduce((s, o) => s + orderValue(o), 0) : null;
     const paidMonth = paymentsThisMonth.length ? paymentsThisMonth.reduce((s, p) => s + p.amount, 0) : null;
-    const { openBalance, openInvoiceCount } = snapshot.money;
+    const { openBalanceByCurrency, openInvoiceCount } = snapshot.money;
 
     // ── attention counts. A count of 0 is a real "all clear" (rendered in tier B as "✓ אין…").
     // `null` is reserved for what genuinely cannot be measured.
@@ -564,30 +613,33 @@ export default function Dashboard() {
     const unmatchedBank = snapshot.bank.unmatched;
     const suggestedBank = snapshot.bank.suggested;
 
-    const openCreditsSum = snapshot.credits.sum;
+    const openCreditsByCurrency = snapshot.credits.sumByCurrency;
 
-    const committedSum = snapshot.openOrders.committed;
-    const remainingSum = snapshot.openOrders.remaining;
+    const committedByCurrency = snapshot.openOrders.committedByCurrency;
+    const remainingByCurrency = snapshot.openOrders.remainingByCurrency;
     const lateDeliveries = snapshot.openOrders.late;
     const awaitingConfirmation = snapshot.openOrders.awaitingConfirmation;
 
     // ── estimated savings this month: chosen price vs the most expensive available offer.
+    // The dearest AVAILABLE offer, inside the base currency: "we could have paid X and paid Y"
+    // is a comparison, and a comparison needs one unit.
     const maxOffer = new Map<string, number>();
-    for (const o of offers) maxOffer.set(o.product_id, Math.max(maxOffer.get(o.product_id) ?? 0, o.current_price));
-    const savings = reqItems.length ? reqItems.reduce((s, it) => {
+    for (const o of inBase(offers)) maxOffer.set(o.product_id, Math.max(maxOffer.get(o.product_id) ?? 0, o.current_price));
+    const baseReqItems = reqItems.filter((it) => it.request.currency === baseCurrency);
+    const savings = baseReqItems.length ? baseReqItems.reduce((s, it) => {
       if (it.unit_price == null) return s;
       const max = maxOffer.get(it.product_id) ?? it.unit_price;
       return s + Math.max(0, (max - it.unit_price) * it.qty);
     }, 0) : null;
     // savings as a % of the worst-case (most-expensive-offer) basket, so the ₪ figure has a scale.
-    const savingsBaseline = reqItems.reduce((s, it) => {
+    const savingsBaseline = baseReqItems.reduce((s, it) => {
       if (it.unit_price == null) return s;
       return s + (maxOffer.get(it.product_id) ?? it.unit_price) * it.qty;
     }, 0);
     const savingsPct = savings != null && savingsBaseline > 0 ? (savings / savingsBaseline) * 100 : null;
 
     // ── price increases (from the 30-day set). The attention metric is SUPPLIERS, not products.
-    const priceIncreases = priceRows
+    const priceIncreases = inBase(priceRows)
       .filter((r) => r.previous_price != null && r.current_price > r.previous_price)
       .map((r) => ({ ...r, pct: ((r.current_price - r.previous_price!) / r.previous_price!) * 100 }))
       .sort((a, b) => b.pct - a.pct);
@@ -596,7 +648,7 @@ export default function Dashboard() {
     // ── monthly expense chart (invoices by calendar month) + MoM change. Calendar buckets stay
     // consecutive even when a month has no invoices; an entirely empty source stays empty.
     const byMonth = new Map<string, { total: number; count: number }>();
-    for (const inv of invoices) {
+    for (const inv of inBase(invoices)) {
       const m = inv.invoice_date.slice(0, 7);
       const bucket = byMonth.get(m) ?? { total: 0, count: 0 };
       bucket.total += inv.total_amount;
@@ -607,7 +659,7 @@ export default function Dashboard() {
       const key = shiftCalendarMonth(monthKey, -(3 - idx));
       const bucket = byMonth.get(key) ?? { total: 0, count: 0 };
       const total = bucket.total;
-      return { key, month: fmtMonth(`${key}-01`), total, count: bucket.count, label: bucket.count ? money(total) : '' };
+      return { key, month: fmtMonth(`${key}-01`), total, count: bucket.count, label: bucket.count ? moneyFor(baseCurrency)(total) : '' };
     });
     const monthly = invoices.length ? monthBuckets.map(({ month, total, count, label }) => ({ month, total, count, label })) : [];
     const curMonthBucket = byMonth.get(monthKey);
@@ -637,7 +689,7 @@ export default function Dashboard() {
         bucket.total += row.value;
         bucket.count += 1;
       }
-      return buckets.map(({ week, total, count }) => ({ week, total, count, label: count ? moneyShort(total) : '' }));
+      return buckets.map(({ week, total, count }) => ({ week, total, count, label: count ? moneyShortFor(baseCurrency)(total) : '' }));
     };
     const weekly = weeklySeries(orders.map((order) => ({ date: order.created_at, value: orderValue(order) })));
     const paidWeekly = weeklySeries(payments.map((payment) => ({ date: payment.paid_date, value: payment.amount })));
@@ -663,16 +715,20 @@ export default function Dashboard() {
     // ── by category (PO items, current month) — kept but demoted.
     const byCat = new Map<string, number>();
     for (const it of poItems) {
+      if (it.order.currency !== baseCurrency) continue;
       const orderDate = localDateKey(it.order.created_at);
       if (orderDate < monthStart || orderDate > todayISO) continue;
       const cat = it.product?.category?.name ?? 'ללא קטגוריה';
       byCat.set(cat, (byCat.get(cat) ?? 0) + it.qty * it.unit_price);
     }
     const categories = topCategoriesWithOther([...byCat.entries()].map(([name, total]) => ({ name, total })))
-      .map((category) => ({ ...category, label: moneyShort(category.total) }));
+      .map((category) => ({ ...category, label: moneyShortFor(baseCurrency)(category.total) }));
 
     // supplier open balances — id is KEPT so each row can link to /suppliers/:id (was dropped).
-    const topBalances = snapshot.topBalances;
+    // The organisation's own currency leads; a supplier owed in another appears in its own group.
+    const topBalancesByCurrency = snapshot.topBalancesByCurrency;
+    const topBalances = topBalancesByCurrency.find((group) => group.currency === baseCurrency)?.rows
+      ?? topBalancesByCurrency[0]?.rows ?? [];
 
     // ── "דורש טיפול היום", ordered by business importance.
     // Tones use section 6's semantic vocabulary: await=ממתין · alert=דחוף · info=מידע · idle=ניטרלי.
@@ -682,8 +738,8 @@ export default function Dashboard() {
       { key: 'pay-overdue', label: 'דרישות תשלום באיחור', count: paymentsOverdue, tone: 'alert', to: '/payment-requests?due=overdue', hint: paymentsOverdue == null ? 'אין מספיק תאריכי פירעון כדי למדוד איחורים' : undefined, clearLabel: 'אין תשלומים באיחור' },
       { key: 'pay-today', label: 'תשלומים לביצוע היום', count: paymentsDueToday, tone: 'await', to: '/payment-requests?due=today', hint: paymentsDueToday == null ? 'לא הוגדרו תאריכי יעד' : undefined, clearLabel: 'אין תשלומים להיום' },
       { key: 'exceptions', label: 'חריגים פתוחים', count: exceptions.length, tone: 'alert', to: '/exceptions?status=open', hint: highExceptions ? `${highExceptions} בחומרה גבוהה` : undefined, clearLabel: 'אין חריגים פתוחים' },
-      { key: 'credits', label: 'זיכויים פתוחים', count: snapshot.credits.count, amount: openCreditsSum, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
-      { key: 'commitments', label: 'התחייבויות רכש פתוחות', count: snapshot.openOrders.count, amount: committedSum, tone: 'idle', to: '/orders?status=open', hint: remainingSum > 0 ? `נותר לקבלה ${fmtMoneyRounded(remainingSum)}` : undefined, clearLabel: 'אין התחייבויות פתוחות' },
+      { key: 'credits', label: 'זיכויים פתוחים', count: snapshot.credits.count, amounts: openCreditsByCurrency, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
+      { key: 'commitments', label: 'התחייבויות רכש פתוחות', count: snapshot.openOrders.count, amounts: committedByCurrency, tone: 'idle', to: '/orders?status=open', hint: remainingByCurrency.some((entry) => entry.amount > 0) ? `נותר לקבלה ${remainingByCurrency.filter((entry) => entry.amount > 0).map((entry) => fmtMoneyRounded(entry.amount, entry.currency)).join(' · ')}` : undefined, clearLabel: 'אין התחייבויות פתוחות' },
       { key: 'late-delivery', label: 'הזמנות באיחור באספקה', count: lateDeliveries, tone: 'alert', to: '/receiving', clearLabel: 'אין הזמנות באיחור' },
       { key: 'awaiting-confirmation', label: 'הזמנות ממתינות לאישור ספק', count: awaitingConfirmation, tone: 'await', to: '/orders?status=sent', clearLabel: 'כל ההזמנות אושרו' },
       { key: 'price-increases', label: 'ספקים שהעלו מחירים (30 יום)', count: priceIncreaseSuppliers, tone: 'await', to: '/prices?increases=1', clearLabel: 'אין שינויי מחירים' },
@@ -700,11 +756,16 @@ export default function Dashboard() {
         noDateCount: snapshot.openOrders.noDate,
       },
       attention,
-      money: { openBalance, openInvoiceCount, paidMonth, paidDelta, purchasedMonth, purchasedDelta, monthKey },
+      money: { openBalanceByCurrency, openInvoiceCount, paidMonth, paidDelta, purchasedMonth, purchasedDelta, monthKey },
+      /* Named for what it is: money this screen's own arithmetic left out because it is in another
+         currency. Empty for every business today, and the moment it is not, the screen says which
+         currencies rather than quietly reporting a smaller number. */
+      otherCurrencies,
       monthly, weekly, paidWeekly, momChange, headline, categories, savings, savingsPct,
       priceIncreases: priceIncreases.slice(0, 6),
       priceIncreaseCount: priceIncreases.length,
       topBalances,
+      topBalancesByCurrency,
       openSupplierCount: snapshot.openSupplierCount,
       exceptions: exceptions.slice(0, 6),
       exceptionCount: exceptions.length,
@@ -723,13 +784,22 @@ export default function Dashboard() {
       // the tile to re-derive the same guard four times and risk printing ₪0 next to a "—".
       dueWindow: (() => {
         const pr = snapshot.paymentRequests;
-        if (pr.overdueAmount == null || pr.dueWithin7Amount == null
+        if (pr.overdueAmountByCurrency == null || pr.dueWithin7AmountByCurrency == null
           || pr.overdue == null || pr.dueWithin7Count == null) return null;
+        // The tile draws a SPLIT BAR from these two, so they have to be in one currency for the
+        // ratio to mean anything. It is the organisation's own; the lists ride along so the tile
+        // can name what it did not include.
         return {
-          overdueAmount: pr.overdueAmount,
+          overdueAmount: inBaseCurrency(pr.overdueAmountByCurrency, baseCurrency),
+          overdueAmountByCurrency: pr.overdueAmountByCurrency,
           overdueCount: pr.overdue,
-          dueWithin7Amount: pr.dueWithin7Amount,
+          dueWithin7Amount: inBaseCurrency(pr.dueWithin7AmountByCurrency, baseCurrency),
+          dueWithin7AmountByCurrency: pr.dueWithin7AmountByCurrency,
           dueWithin7Count: pr.dueWithin7Count,
+          otherCurrencies: [...new Set([
+            ...currenciesBeside(pr.overdueAmountByCurrency, baseCurrency),
+            ...currenciesBeside(pr.dueWithin7AmountByCurrency, baseCurrency),
+          ])].sort(),
         };
       })(),
     };
@@ -765,20 +835,25 @@ export default function Dashboard() {
   // The due-window tile's split bar divides by this, so it is computed once here and guarded
   // once at the call site: a window that holds requests but no money is a real state (all-zero
   // amounts), and dividing by it would paint NaN% into two inline widths.
-  const dueSplitTotal = data?.dueWindow
+  // Both halves are the organisation's own currency, or the bar is not drawn at all: a width
+  // computed from a shekel numerator over a shekel-plus-dollar denominator is a picture of nothing.
+  const dueSplitTotal = data?.dueWindow && data.dueWindow.overdueAmount != null && data.dueWindow.dueWithin7Amount != null
     ? data.dueWindow.overdueAmount + data.dueWindow.dueWithin7Amount
     : 0;
+  /* The open-balance list is ONE currency group (the organisation own first). A supplier owed
+     in another currency appears in that currency group, never converted into this one. */
+  const topBalancesCurrency = data?.topBalancesByCurrency.find((group) => group.rows === data.topBalances)?.currency ?? baseCurrency;
   const monthlyAria = data ? `הוצאות רכש לפי חודש: ${data.monthly.length
-    ? data.monthly.map((point) => `${point.month} ${point.count ? fmtMoneyExact(point.total) : 'אין חשבוניות'}`).join(', ')
+    ? data.monthly.map((point) => `${point.month} ${point.count ? fmtMoneyExact(point.total, baseCurrency) : 'אין חשבוניות'}`).join(', ')
     : 'אין נתוני חשבוניות לתקופה'}` : '';
   const weeklyAria = `השוואת רכש ותשלומים לפי שבוע: ${weeklyComparison.map((point) => (
-    `${point.week}, רכש ${point.purchases == null ? 'אין רשומות' : fmtMoneyExact(point.purchases)}, תשלומים ${point.payments == null ? 'אין רשומות' : fmtMoneyExact(point.payments)}`
+    `${point.week}, רכש ${point.purchases == null ? 'אין רשומות' : fmtMoneyExact(point.purchases, baseCurrency)}, תשלומים ${point.payments == null ? 'אין רשומות' : fmtMoneyExact(point.payments, baseCurrency)}`
   )).join('; ')}`;
   const categoryEmptyMessage = data?.categories.length
-    ? `נמדד רכש בסכום ${fmtMoneyExact(categoryTotal)}; אין תמהיל חיובי להצגה`
+    ? `נמדד רכש בסכום ${fmtMoneyExact(categoryTotal, baseCurrency)}; אין תמהיל חיובי להצגה`
     : 'אין רכש החודש';
   const categoriesAria = data ? `הוצאות לפי קטגוריה: ${categoryTotal > 0
-    ? data.categories.map((category) => `${category.name} ${fmtMoneyExact(category.total)}, ${Math.round((category.total / categoryTotal) * 100)} אחוז`).join(', ')
+    ? data.categories.map((category) => `${category.name} ${fmtMoneyExact(category.total, baseCurrency)}, ${Math.round((category.total / categoryTotal) * 100)} אחוז`).join(', ')
     : categoryEmptyMessage}` : '';
 
   return (
@@ -874,7 +949,7 @@ export default function Dashboard() {
           order (attention h2 first, deliveries h2 second), so placement is CSS `order` only. */}
       {data && (
         <div className="dash-enter flex flex-col gap-5 lg:grid lg:grid-cols-12 lg:gap-6">
-          <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול"
+          <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול" baseCurrency={baseCurrency}
             className="lg:order-2 lg:col-span-6 [--dash-step-mobile:1] [--dash-step:1]" />
 
           <DeliveriesZone today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount}
@@ -886,17 +961,41 @@ export default function Dashboard() {
               tiles, on desktop they sit as the reference's stat-card row. Each BandStat is its
               own card now. */}
           <div className="order-first grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 lg:order-1 lg:col-span-12 [--dash-step-mobile:0] [--dash-step:0]">
-            <BandStat title="יתרת חשבוניות פתוחות" value={data.money.openBalance} tone="await" to="/invoices?pay=unpaid"
-              icon={ReceiptText} context="נכון לעכשיו"
-              aux={data.money.openBalance == null ? 'אין נתונים זמינים' : `${data.money.openInvoiceCount} חשבוניות פתוחות`} />
+            {/* The open balance is the one strip figure that can genuinely be two numbers: a
+                supplier owed in shekels and another owed in dollars are two debts, not one
+                (#277). It renders as lines rather than as a tile with a single hero figure,
+                which is what `MoneyByCurrency` is for. */}
+            <Card as={Link} pad={false} to="/invoices?pay=unpaid" aria-label={`יתרת חשבוניות פתוחות: ${data.money.openInvoiceCount} חשבוניות`}
+              className="card-link-hover block min-h-24 px-4 py-3.5 sm:px-5">
+              <div className="flex items-center gap-2">
+                <ReceiptText size={ICON.md} className="shrink-0 text-ink-muted" aria-hidden="true" />
+                <span className="text-xs font-medium text-ink-muted">יתרת חשבוניות פתוחות</span>
+              </div>
+              <div className="mt-2 kpi-hero text-await-fg" dir="ltr">
+                <MoneyByCurrency amounts={data.money.openBalanceByCurrency} baseCurrency={baseCurrency} shape="rounded" />
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3 text-xs text-ink-muted">
+                <span>נכון לעכשיו</span>
+                <span>{data.money.openBalanceByCurrency == null ? 'אין נתונים זמינים' : `${data.money.openInvoiceCount} חשבוניות פתוחות`}</span>
+              </div>
+            </Card>
             <BandStat title="שולם לספקים החודש" value={data.money.paidMonth} tone="done" to={`/payments?month=${data.money.monthKey}`}
-              icon={Banknote} context="מתחילת החודש" delta={data.money.paidDelta}
+              icon={Banknote} context="מתחילת החודש" delta={data.money.paidDelta} currency={baseCurrency}
               spark={data.paidWeekly} sparkLabel="מגמת תשלומים לספקים בשמונה השבועות האחרונים" />
             <BandStat title="נרכש החודש" value={data.money.purchasedMonth} to="/orders?status=all"
-              icon={ShoppingCart} context="מתחילת החודש" delta={data.money.purchasedDelta}
-              aux={data.savings != null ? `חיסכון משוער ${fmtMoneyRounded(data.savings)}${data.savingsPct != null ? ` · ${data.savingsPct.toFixed(0)}%` : ''}` : undefined}
+              icon={ShoppingCart} context="מתחילת החודש" delta={data.money.purchasedDelta} currency={baseCurrency}
+              aux={data.savings != null ? `חיסכון משוער ${fmtMoneyRounded(data.savings, baseCurrency)}${data.savingsPct != null ? ` · ${data.savingsPct.toFixed(0)}%` : ''}` : undefined}
               spark={data.weekly} sparkLabel="מגמת רכש בשמונה השבועות האחרונים" />
           </div>
+          {data.otherCurrencies.length > 0 && (
+            /* Said once, where the figures are, rather than repeated on every tile: the trend and
+               mix figures above are the organisation's own currency, and this business also holds
+               money in another. Nothing here is converted and nothing is hidden — the balances,
+               the credits and the commitments above list every currency they are in. */
+            <p className="text-xs text-ink-muted lg:order-2 lg:col-span-12">
+              המגמות והתמהיל מוצגים ב־{baseCurrency}. קיימת פעילות גם ב־{data.otherCurrencies.join(', ')}, והיא אינה מחוברת אליהם.
+            </p>
+          )}
 
           <RoleQueueCard queue={data.queue} total={taskTotal}
             className="lg:order-4 lg:col-span-3 [--dash-step-mobile:3] [--dash-step:3]" />
@@ -924,7 +1023,7 @@ export default function Dashboard() {
                       <div className="pe-3 text-end">
                         <div className="text-ink-muted">החודש</div>
                         <div className="flex items-baseline gap-1.5">
-                          <span className="num text-sm font-semibold text-ink">{glanceMoney(data.headline.current)}</span>
+                          <span className="num text-sm font-semibold text-ink">{glanceMoney(data.headline.current, baseCurrency)}</span>
                           {/* Neutral ink, same reasoning as DeltaChip above: this is the month's
                               purchasing against last month's, and buying more is neither good nor
                               bad. It used to wear alert/done — a business verdict on a figure the
@@ -939,7 +1038,7 @@ export default function Dashboard() {
                       {data.headline.previous != null && (
                         <div className="border-s border-line-soft ps-3 text-end">
                           <div className="text-ink-muted">חודש קודם</div>
-                          <div className="num text-sm font-semibold text-ink-mid">{glanceMoney(data.headline.previous)}</div>
+                          <div className="num text-sm font-semibold text-ink-mid">{glanceMoney(data.headline.previous, baseCurrency)}</div>
                         </div>
                       )}
                     </div>
@@ -949,13 +1048,13 @@ export default function Dashboard() {
                     neighboring charts in one color read as one chart (owner, T7.3c). */}
                 <SpendBarChart
                   points={data.monthly.map((point) => ({ key: point.month, label: point.label, total: point.total }))}
-                  ariaLabel={monthlyAria} emptyMessage="אין נתוני חשבוניות לתקופה" />
+                  ariaLabel={monthlyAria} emptyMessage="אין נתוני חשבוניות לתקופה" currency={baseCurrency} />
               </Card>
 
               <Card as="section" className="lg:col-span-4" aria-labelledby="category-trend-title">
                 <h3 id="category-trend-title" className="text-sm font-semibold text-ink-body">תמהיל הרכש החודש</h3>
                 <p className="text-xs text-ink-muted">ארבע הקטגוריות הגדולות וכל היתר</p>
-                <CategoryDonut slices={data.categories} total={categoryTotal} ariaLabel={categoriesAria} emptyMessage={categoryEmptyMessage} />
+                <CategoryDonut slices={data.categories} total={categoryTotal} currency={baseCurrency} ariaLabel={categoriesAria} emptyMessage={categoryEmptyMessage} />
               </Card>
 
               {/* Owner review, defect 11: this slot used to hold a radial ring over "כיסוי תאריכי
@@ -977,11 +1076,23 @@ export default function Dashboard() {
                   <p className="mt-4 flex min-h-24 items-center text-sm text-ink-muted sm:min-h-40">
                     אין דרישות תשלום פעילות עם תאריך פירעון
                   </p>
+                ) : data.dueWindow.overdueAmount == null || data.dueWindow.dueWithin7Amount == null ? (
+                  /* Active dated requests exist, but none of them is in the organisation's own
+                     currency — so this tile has no figure it may add, and says which currencies
+                     the money IS in rather than showing one of them as though it were the total. */
+                  <p className="mt-4 flex min-h-24 items-center text-sm text-ink-muted sm:min-h-40">
+                    דרישות התשלום הפעילות הן ב־{data.dueWindow.otherCurrencies.join(', ')} בלבד. ראו את מסך דרישות התשלום.
+                  </p>
                 ) : (
                   <div className="mt-2 flex min-h-32 flex-col justify-center gap-4 sm:min-h-40">
                     <div className="kpi-hero num text-ink" dir="ltr">
-                      {glanceMoney(data.dueWindow.overdueAmount + data.dueWindow.dueWithin7Amount)}
+                      {glanceMoney(data.dueWindow.overdueAmount + (data.dueWindow.dueWithin7Amount ?? 0), baseCurrency)}
                     </div>
+                    {data.dueWindow.otherCurrencies.length > 0 && (
+                      <p className="text-xs text-ink-muted">
+                        בנוסף קיימות דרישות ב־{data.dueWindow.otherCurrencies.join(', ')}, שאינן מחוברות לסכום הזה.
+                      </p>
+                    )}
                     {/* The one graphic this tile gets, and the reason it is allowed where the ring
                         was not: THIS part-of-whole has a real whole. The ring divided by a window
                         we chose; this divides the money that has to move into the half that is
@@ -992,17 +1103,17 @@ export default function Dashboard() {
                         screen reader gains nothing from hearing the split a third time. */}
                     {dueSplitTotal > 0 && (
                       <div className="split-bar flex h-2 overflow-hidden rounded-full bg-line-soft" aria-hidden="true">
-                        <span className="bg-alert-solid" style={{ width: `${(data.dueWindow.overdueAmount / dueSplitTotal) * 100}%` }} />
-                        <span className="bg-bar-mid" style={{ width: `${(data.dueWindow.dueWithin7Amount / dueSplitTotal) * 100}%` }} />
+                        <span className="bg-alert-solid" style={{ width: `${((data.dueWindow.overdueAmount ?? 0) / dueSplitTotal) * 100}%` }} />
+                        <span className="bg-bar-mid" style={{ width: `${((data.dueWindow.dueWithin7Amount ?? 0) / dueSplitTotal) * 100}%` }} />
                       </div>
                     )}
                     <div className="flex flex-col gap-1.5 text-sm">
                       <p className="text-alert-fg">
-                        מתוכם באיחור <span className="num" dir="ltr">{glanceMoney(data.dueWindow.overdueAmount)}</span>
+                        מתוכם באיחור <span className="num" dir="ltr">{glanceMoney(data.dueWindow.overdueAmount, baseCurrency)}</span>
                         {' · '}<span className="num">{data.dueWindow.overdueCount}</span> דרישות
                       </p>
                       <p className="text-ink-mid">
-                        לפירעון בשבעת הימים הקרובים <span className="num" dir="ltr">{glanceMoney(data.dueWindow.dueWithin7Amount)}</span>
+                        לפירעון בשבעת הימים הקרובים <span className="num" dir="ltr">{glanceMoney(data.dueWindow.dueWithin7Amount, baseCurrency)}</span>
                         {' · '}<span className="num">{data.dueWindow.dueWithin7Count}</span> דרישות
                       </p>
                     </div>
@@ -1025,7 +1136,7 @@ export default function Dashboard() {
                     whole distinction. Owner decision 19.08.2026: spend both carriers. */}
                 <ComparisonLineChart points={weeklyHasActivity ? weeklyComparison : []} xKey="week"
                   series={comparisonSeries({ key: 'purchases', name: 'רכש' }, { key: 'payments', name: 'תשלומים' })}
-                  ariaLabel={weeklyAria} emptyMessage="אין רכש או תשלומים בשמונת השבועות האחרונים" />
+                  ariaLabel={weeklyAria} emptyMessage="אין רכש או תשלומים בשמונת השבועות האחרונים" currency={baseCurrency} />
               </Card>
             </div>
           </section>
@@ -1092,7 +1203,7 @@ export default function Dashboard() {
                           <span className="ms-2 text-xs text-ink-muted">{price.supplier.name}</span>
                         </span>
                         <span className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 sm:justify-start">
-                          <span className="text-xs text-ink-muted">מ־<span className="num">{fmtMoneyExact(price.previous_price)}</span> ל־<span className="num">{fmtMoneyExact(price.current_price)}</span></span>
+                          <span className="text-xs text-ink-muted">מ־<span className="num">{fmtMoneyExact(price.previous_price, price.currency)}</span> ל־<span className="num">{fmtMoneyExact(price.current_price, price.currency)}</span></span>
                           {/* One vocabulary per element: a price that rose is a DIRECTION, so the
                               figure and its arrow both speak trend-*. The span used to be alert-fg
                               with a trend-up arrow inside it — two languages in one number. */}
@@ -1107,7 +1218,7 @@ export default function Dashboard() {
               </OperationsDisclosure>
 
               <OperationsDisclosure title="ספקים עם יתרה פתוחה" count={data.openSupplierCount}
-                summary={data.topBalances[0] ? `${data.topBalances[0].name} · ${fmtMoneyExact(data.topBalances[0].balance)}` : undefined}
+                summary={data.topBalances[0] ? `${data.topBalances[0].name} · ${fmtMoneyExact(data.topBalances[0].balance, topBalancesCurrency)}` : undefined}
                 empty="אין יתרות פתוחות">
                 <div className="flex justify-end">
                   <Link to="/suppliers?balance=open" className="btn-ghost min-h-11 text-xs">לכל הספקים <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
@@ -1117,7 +1228,7 @@ export default function Dashboard() {
                     <li key={balance.id}>
                       <Link to={`/suppliers/${balance.id}`} className="flex min-h-11 items-center justify-between rounded-lg px-2 py-2 text-sm hover:bg-surface-hover active:bg-surface-selected">
                         <span className="text-ink-mid">{balance.name}</span>
-                        <span className="font-semibold text-await-fg num">{fmtMoneyExact(balance.balance)}</span>
+                        <span className="font-semibold text-await-fg num">{fmtMoneyExact(balance.balance, topBalancesCurrency)}</span>
                       </Link>
                     </li>
                   ))}

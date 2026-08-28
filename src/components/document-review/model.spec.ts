@@ -162,6 +162,7 @@ test('invoice draft reads what the model offered and guesses nothing else', () =
       { key: 'invoice_date', value: '03/04/2026', confidence: 0.9, evidence_block_ids: [] },
       { key: 'subtotal', value: '₪ 1,392.00', confidence: 0.9, evidence_block_ids: [] },
       { key: 'total', value: 745.6, confidence: 0.93, evidence_block_ids: [] },
+      { key: 'currency', value: 'USD', confidence: 0.99, evidence_block_ids: [] },
     ],
     line_items: [], suggested_annotations: [],
   } as unknown as Parameters<typeof invoiceDraftFromInterpretation>[0];
@@ -171,6 +172,7 @@ test('invoice draft reads what the model offered and guesses nothing else', () =
     before_vat: '1392',
     vat: '',                      // not offered -> left for the person, never inferred from the others
     total: '745.6',
+    currency: 'USD',
   });
 });
 

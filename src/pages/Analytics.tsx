@@ -59,7 +59,10 @@ export default function Analytics() {
     { key: 'exceptions', header: 'חריגים פתוחים', className: 'num', sortValue: (r) => r.m?.open_exceptions ?? 0,
       render: (r) => fmtNum(r.m?.open_exceptions ?? null) },
     { key: 'credits', header: 'זיכויים פתוחים', className: 'num', sortValue: (r) => r.m?.open_credits_amount ?? 0,
-      render: (r) => r.m?.open_credits_amount ? fmtMoneyExact(r.m.open_credits_amount) : '—' },
+      /* 0223: null when the supplier holds open credits in more than one currency — the view
+         refuses to add them, and this column has always drawn a dash for a figure it cannot read. */
+      render: (r) => (r.m?.open_credits_amount
+        ? fmtMoneyExact(r.m.open_credits_amount, r.m.open_credits_currency) : '—') },
   ];
 
   return (

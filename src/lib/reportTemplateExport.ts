@@ -23,11 +23,56 @@ function commonValues(input: ReportPeriodInput): ReportTemplateValues {
   };
 }
 
+
+/**
+ * A workbook template substitutes named placeholders into CELLS, so its money values are numbers
+ * an accountant sorts and adds in Excel. That is exactly why a period covering two currencies
+ * cannot fill them (OPEN-DECISIONS #277): the only honest single number for "gross total" across
+ * ₪12,400 and $3,100 does not exist, and a cell holding 15,500 would be worse than an empty one
+ * because it looks computed.
+ *
+ * So the rule these builders follow is the rule the whole product follows:
+ *
+ *   ONE CURRENCY  every numeric placeholder is filled exactly as it always was, and `currency`
+ *                 names it. This is every period any organisation has today.
+ *   TWO OR MORE   the numeric placeholders are null — which every template already renders as an
+ *                 em dash, because a figure the reader may not have permission to see has always
+ *                 been able to arrive null — and `currency_note` says in words which currencies
+ *                 the period held, so the file states the reason rather than looking incomplete.
+ *
+ * The per-currency workbook itself — a currency column on every money sheet and a sheet per
+ * currency in a mixed month — is #287 and belongs to the monthly report, not to this template.
+ */
+export interface MoneyEntry { currency: string; amount: number }
+
+export function singleCurrencyTotal(entries: readonly MoneyEntry[] | null | undefined) {
+  if (!entries || entries.length === 0) return { amount: null as number | null, currency: null as string | null, mixed: false };
+  const currencies = [...new Set(entries.map((entry) => entry.currency))].sort();
+  if (currencies.length > 1) return { amount: null as number | null, currency: null as string | null, mixed: true };
+  return {
+    amount: entries.reduce((sum, entry) => sum + entry.amount, 0),
+    currency: currencies[0],
+    mixed: false,
+  };
+}
+
+function currencyValues(entries: readonly MoneyEntry[] | null | undefined): ReportTemplateValues {
+  const currencies = [...new Set((entries ?? []).map((entry) => entry.currency))].sort();
+  return {
+    currency: currencies.length === 1 ? currencies[0] : null,
+    currency_note: currencies.length > 1
+      ? `התקופה כוללת יותר ממטבע אחד (${currencies.join(', ')}), ולכן אין סכום כולל יחיד`
+      : null,
+  };
+}
+
 export function monthlyReportTemplateValues(input: ReportPeriodInput & {
   invoices: {
     amount_before_vat: number;
     vat_amount: number;
     total_amount: number;
+    /** The invoice's own currency (0217). Every total below is filled only when they all agree. */
+    currency: string;
     supplier: { name: string };
     /**
      * `invoice_balances.credited_amount` for this invoice — the credit the server has already
@@ -36,9 +81,9 @@ export function monthlyReportTemplateValues(input: ReportPeriodInput & {
     balance?: { credited_amount: number } | null;
   }[];
 }): ReportTemplateValues {
-  const netTotal = input.invoices.reduce((sum, row) => sum + row.amount_before_vat, 0);
-  const vatTotal = input.invoices.reduce((sum, row) => sum + row.vat_amount, 0);
-  const grossTotal = input.invoices.reduce((sum, row) => sum + row.total_amount, 0);
+  const net = singleCurrencyTotal(input.invoices.map((row) => ({ currency: row.currency, amount: row.amount_before_vat })));
+  const vat = singleCurrencyTotal(input.invoices.map((row) => ({ currency: row.currency, amount: row.vat_amount })));
+  const gross = singleCurrencyTotal(input.invoices.map((row) => ({ currency: row.currency, amount: row.total_amount })));
   // Recognised credit is read from the same computed balance the screen shows, never re-derived
   // here from credit lifecycle labels. Since 0173 the canonical credited amount is the sum of the
   // `payment_allocations` that name the credit, and a credit consumed in part stays `received` —
@@ -48,60 +93,70 @@ export function monthlyReportTemplateValues(input: ReportPeriodInput & {
   // Both sides of the subtraction must range over the same invoices. If any invoice in the total
   // has no balance row, the credited figure is unanswerable and stays `—` rather than 0.
   const creditedRows = input.invoices.map((row) => row.balance ?? null);
-  const creditsRecognized = creditedRows.includes(null)
+  const creditsRecognized = creditedRows.includes(null) || gross.mixed
     ? null
-    : creditedRows.reduce((sum, row) => sum + (row?.credited_amount ?? 0), 0);
+    : input.invoices.reduce((sum, row) => sum + (row.balance?.credited_amount ?? 0), 0);
 
   return {
     ...commonValues(input),
+    ...currencyValues(input.invoices.map((row) => ({ currency: row.currency, amount: row.total_amount }))),
     invoice_count: input.invoices.length,
-    net_total: netTotal,
-    vat_total: vatTotal,
-    gross_total: grossTotal,
+    net_total: net.amount,
+    vat_total: vat.amount,
+    gross_total: gross.amount,
     credits_recognized: creditsRecognized,
-    net_expense: creditsRecognized === null ? null : grossTotal - creditsRecognized,
+    net_expense: creditsRecognized === null || gross.amount === null ? null : gross.amount - creditsRecognized,
     supplier_count: new Set(input.invoices.map((row) => row.supplier.name).filter(Boolean)).size,
   };
 }
 
 export interface PurchaseMetrics {
-  committed: number | null;
-  gross_expense: number | null;
-  credits_recognised: number | null;
-  net_expense: number | null;
+  committed_by_currency: MoneyEntry[] | null;
+  gross_expense_by_currency: MoneyEntry[] | null;
+  credits_recognised_by_currency: MoneyEntry[] | null;
+  net_expense_by_currency: MoneyEntry[] | null;
 }
 
 export function expenseSummaryTemplateValues(input: ReportPeriodInput & {
   metrics: PurchaseMetrics;
-  bySupplier: { name: string; total: number }[];
+  /** Per supplier, in ONE currency — the caller picks which and passes only that slice. */
+  bySupplier: { name: string; total: number; currency: string }[];
 }): ReportTemplateValues {
   const topSupplier = [...input.bySupplier].sort((a, b) => b.total - a.total)[0] ?? null;
+  const gross = singleCurrencyTotal(input.metrics.gross_expense_by_currency);
   return {
     ...commonValues(input),
-    committed_total: input.metrics.committed,
-    gross_total: input.metrics.gross_expense,
-    credits_recognized: input.metrics.credits_recognised,
-    net_expense: input.metrics.net_expense,
+    ...currencyValues(input.metrics.gross_expense_by_currency),
+    committed_total: singleCurrencyTotal(input.metrics.committed_by_currency).amount,
+    gross_total: gross.amount,
+    credits_recognized: singleCurrencyTotal(input.metrics.credits_recognised_by_currency).amount,
+    net_expense: singleCurrencyTotal(input.metrics.net_expense_by_currency).amount,
     top_supplier_name: topSupplier?.name ?? null,
     top_supplier_total: topSupplier?.total ?? null,
   };
 }
 
 export function productPurchaseTemplateValues(input: ReportPeriodInput & {
-  products: { gross_amount: number | null }[];
+  products: { gross_amount_by_currency: MoneyEntry[] | null }[];
   unmappedInvoiceLines: number;
-  unmappedInvoiceAmount: number | null;
+  unmappedInvoiceAmount: MoneyEntry[];
 }): ReportTemplateValues {
-  const mappedGross = input.products.reduce((sum, row) => sum + (row.gross_amount ?? 0), 0);
+  // Unmapped invoice money remains visible as unmapped, but it is still part of the period's
+  // gross expense. Omitting it from the total would make the template look reconciled when it is
+  // exactly the work item the report calls out. Both halves go into ONE list, so a period whose
+  // products and unmapped lines are in different currencies is mixed and fills nothing.
+  const everyEntry = [
+    ...input.products.flatMap((row) => row.gross_amount_by_currency ?? []),
+    ...input.unmappedInvoiceAmount,
+  ];
+  const unmapped = singleCurrencyTotal(input.unmappedInvoiceAmount);
   return {
     ...commonValues(input),
+    ...currencyValues(everyEntry),
     product_count: input.products.length,
-    // Unmapped invoice money remains visible as unmapped, but it is still part of the period's
-    // gross expense. Omitting it from the total would make the template look reconciled when it is
-    // exactly the work item the report calls out.
-    gross_total: mappedGross + (input.unmappedInvoiceAmount ?? 0),
+    gross_total: singleCurrencyTotal(everyEntry).amount,
     unmapped_invoice_lines: input.unmappedInvoiceLines,
-    unmapped_invoice_amount: input.unmappedInvoiceAmount,
+    unmapped_invoice_amount: unmapped.amount,
   };
 }
 

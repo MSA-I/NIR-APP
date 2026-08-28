@@ -25,6 +25,7 @@ interface CalibrationPreparationRow {
   unit: string | null;
   proposed_unit_price: number | null;
   current_unit_price: number | null;
+  currency: string;
   preparation_id: string | null;
   prepared_by: string | null;
   prepared_role: 'owner' | 'office' | null;
@@ -48,6 +49,7 @@ interface QualifiedProductRow {
 interface QualifiedProductDryRun {
   interpretation_id: string;
   supplier_id: string;
+  currency: string;
   qualified_create_count: number;
   existing_product_count: number;
   ambiguous_count: number;
@@ -289,7 +291,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
                       <span className="min-w-0 break-words"><bdi>{sampleLabel(row)}</bdi></span>
                       <span className="text-ink-muted">
                         {row.source_row != null && <>שורה <span className="num">{row.source_row}</span> · </>}
-                        <span dir="ltr">{row.sku ?? row.barcode ?? '—'}</span> · {fmtMoneyExact(row.unit_price)}
+                        <span dir="ltr">{row.sku ?? row.barcode ?? '—'}</span> · {fmtMoneyExact(row.unit_price, dryRun.currency)}
                       </span>
                     </li>
                   ))}
@@ -346,7 +348,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
                     <li key={row.shadow_line_id} data-testid="calibration-preparation-row"
                       className="flex flex-wrap justify-between gap-2">
                       <span><bdi>{row.product_name ?? row.matched_product_name ?? 'שורה ללא שם'}</bdi></span>
-                      <span className="text-ink-muted">שורה <span className="num">{row.source_row ?? row.line_index + 1}</span> · {fmtMoneyExact(row.proposed_unit_price)}</span>
+                      <span className="text-ink-muted">שורה <span className="num">{row.source_row ?? row.line_index + 1}</span> · {fmtMoneyExact(row.proposed_unit_price, row.currency)}</span>
                     </li>
                   ))}
                 </ul>

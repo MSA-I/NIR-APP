@@ -51,16 +51,16 @@ insert into public.purchase_order_items (
 );
 insert into public.invoices (
   id, org_id, supplier_id, invoice_number, invoice_date,
-  amount_before_vat, vat_amount, total_amount, review_status
+  amount_before_vat, vat_amount, total_amount, review_status, currency
 ) values
   ('7c200000-0000-4000-8000-000000000001',
    '1c200000-0000-4000-8000-000000000001',
    '3c200000-0000-4000-8000-000000000001', 'P20B-A', current_date,
-   30, 5.10, 35.10, 'in_review'),
+   30, 5.10, 35.10, 'in_review', 'ILS'),
   ('7c200000-0000-4000-8000-000000000002',
    '1c200000-0000-4000-8000-000000000001',
    '3c200000-0000-4000-8000-000000000001', 'P20B-B', current_date,
-   30, 5.10, 35.10, 'in_review');
+   30, 5.10, 35.10, 'in_review', 'ILS');
 insert into public.invoice_order_links (org_id, invoice_id, order_id) values
   ('1c200000-0000-4000-8000-000000000001',
    '7c200000-0000-4000-8000-000000000001',

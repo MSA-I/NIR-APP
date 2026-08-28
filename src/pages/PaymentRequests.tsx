@@ -27,6 +27,8 @@ type PaymentInvoiceCandidate = {
   invoice_number: string;
   invoice_date: string;
   total_amount: number;
+  /** The invoice's own currency (0217) — and, once picked, the whole request's. */
+  currency: string;
   review_status: string;
   payment_status: string;
   balance: number | null;
@@ -116,7 +118,7 @@ export default function PaymentRequests() {
   const columns: Column<Row>[] = [
     { key: 'num', header: 'מס׳', priority: 3, className: 'num', sortValue: (r) => r.number, render: (r) => `#${r.number}` },
     { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
-    { key: 'amount', header: 'סכום', mobileLabel: null, className: 'num', sortValue: (r) => r.amount, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
+    { key: 'amount', header: 'סכום', mobileLabel: null, className: 'num', sortValue: (r) => r.amount, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount, r.currency)}</span> },
     { key: 'due', header: 'יעד', sortValue: (r) => r.due_date ?? '', render: (r) => fmtDate(r.due_date) },
     { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} /> },
     { key: 'created', header: 'נוצרה', priority: 3, sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
@@ -200,7 +202,7 @@ export default function PaymentRequests() {
 function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
   presetInvoiceId: string | null; onClose: () => void; onSaved: () => void;
 }) {
-  const { profile } = useAuth();
+  const { profile, org } = useAuth();
   const toast = useToast();
   const [supplierId, setSupplierId] = useState('');
   const [chosen, setChosen] = useState<Record<string, number>>({}); // invoice_id -> allocation
@@ -229,7 +231,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
     if (!supplierId) return [];
     const inv = await fetchAll<Omit<PaymentInvoiceCandidate, 'balance' | 'allocationAmount'>>((from, to) => {
       let query = supabase.from('invoices')
-        .select('id, invoice_number, invoice_date, total_amount, review_status, payment_status')
+        .select('id, invoice_number, invoice_date, total_amount, currency, review_status, payment_status')
         .eq('supplier_id', supplierId).eq('financial_role', 'payable').is('deleted_at', null);
       // Procurement may use the invoice total only while the invoice is wholly unpaid. Once
       // partial, its exact balance belongs to the owner/accounting boundary.
@@ -237,9 +239,9 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
       return query.order('invoice_date').order('id').range(from, to);
     });
     const ids = inv.map((i) => i.id);
-    const bals = isOwner && ids.length ? await fetchInChunks(ids, (chunk) => fetchAll<{ invoice_id: string; balance: number }>((from, to) => supabase.from('invoice_balances')
-      .select('invoice_id, balance').in('invoice_id', chunk).order('invoice_id').range(from, to))) : [];
-    const balMap = new Map(bals.map((b) => [b.invoice_id, b.balance]));
+    const bals = isOwner && ids.length ? await fetchInChunks(ids, (chunk) => fetchAll<{ invoice_id: string; balance_in_currency: number }>((from, to) => supabase.from('invoice_balances_by_currency')
+      .select('invoice_id, balance_in_currency').in('invoice_id', chunk).order('invoice_id').range(from, to))) : [];
+    const balMap = new Map(bals.map((b) => [b.invoice_id, b.balance_in_currency]));
     return inv.flatMap<PaymentInvoiceCandidate>((i) => {
       const balance = isOwner ? balMap.get(i.id) ?? null : null;
       const allocationAmount = isOwner ? balance : i.total_amount;
@@ -254,7 +256,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
     if (!presetInvoiceId) return;
     let cancelled = false;
     void (async () => {
-      const invoiceResult = await supabase.from('invoices').select('id, supplier_id, total_amount, payment_status')
+      const invoiceResult = await supabase.from('invoices').select('id, supplier_id, total_amount, currency, payment_status')
         .eq('id', presetInvoiceId).eq('financial_role', 'payable').is('deleted_at', null).neq('payment_status', 'paid').maybeSingle();
       if (cancelled) return;
       if (invoiceResult.error || !invoiceResult.data) {
@@ -262,7 +264,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
         onClose();
         return;
       }
-      const inv = invoiceResult.data as { id: string; supplier_id: string; total_amount: number; payment_status: string };
+      const inv = invoiceResult.data as { id: string; supplier_id: string; total_amount: number; currency: string; payment_status: string };
       if (!isOwner && inv.payment_status !== 'unpaid') {
         toast('חשבונית ששולמה חלקית אינה זמינה לדרישת תשלום של מנהל הרכש.', 'error');
         onClose();
@@ -270,14 +272,14 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
       }
       let allocationAmount = inv.total_amount;
       if (isOwner) {
-        const balanceResult = await supabase.from('invoice_balances').select('balance').eq('invoice_id', inv.id).maybeSingle();
+        const balanceResult = await supabase.from('invoice_balances_by_currency').select('balance_in_currency').eq('invoice_id', inv.id).maybeSingle();
         if (cancelled) return;
         if (balanceResult.error || !balanceResult.data) {
           toast('טעינת יתרת החשבונית שבקישור נכשלה.', 'error');
           onClose();
           return;
         }
-        allocationAmount = (balanceResult.data as { balance: number }).balance;
+        allocationAmount = (balanceResult.data as { balance_in_currency: number }).balance_in_currency;
       }
       if (allocationAmount <= 0) {
         toast('לחשבונית שבקישור אין יתרה פתוחה.', 'error');
@@ -297,6 +299,15 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presetInvoiceId, isOwner]);
 
+  /* A PAYMENT REQUEST IS ONE TRANSFER, SO IT IS ONE CURRENCY (0217, #277). `amount` is the sum
+     of the ticked allocations, and a sum only exists inside one currency — so the first ticked
+     invoice fixes the request's currency and the rest of the list is refused by name rather than
+     silently added on top. Nothing here converts: a supplier billing in two currencies is paid by
+     two transfers, which is the same thing the supplier's balance already says. */
+  const requestCurrency = useMemo(() => {
+    const first = Object.keys(chosen).find((id) => (chosen[id] ?? 0) >= 0);
+    return (invoices ?? []).find((invoice) => invoice.id === first)?.currency ?? null;
+  }, [chosen, invoices]);
   const amount = useMemo(() => Object.values(chosen).reduce((s, v) => s + v, 0), [chosen]);
   const invoiceIds = Object.entries(chosen).filter(([, value]) => value > 0).map(([id]) => id);
   const checkFingerprint = supplierId && amount > 0
@@ -396,11 +407,17 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
               <div className="max-h-56 divide-y divide-line-soft overflow-y-auto rounded-lg border border-line" tabIndex={0} role="region" aria-label="חשבוניות פתוחות לבחירה — רשימה נגללת">
                 {invoices.map((inv) => {
                   const checked = inv.id in chosen;
+                  // Blocked, not hidden: the accountant can see this invoice is open, and a list
+                  // that quietly dropped it would read as missing data rather than as a rule.
+                  const otherCurrency = requestCurrency != null && inv.currency !== requestCurrency;
                   return (
-                    <div key={inv.id} className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 text-sm">
+                    <div key={inv.id} className={`flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 text-sm ${otherCurrency ? 'opacity-60' : ''}`}>
                       <label className="flex min-h-11 min-w-0 flex-1 basis-full cursor-pointer items-center gap-3 sm:basis-auto">
                         <input type="checkbox" className="size-5 shrink-0 accent-action" checked={checked}
-                          aria-label={`בחירת חשבונית ${inv.invoice_number} של ${supplierName} להקצאה בדרישת התשלום`}
+                          disabled={otherCurrency}
+                          aria-label={otherCurrency
+                            ? `חשבונית ${inv.invoice_number} של ${supplierName} נקובה ב-${inv.currency} ואינה ניתנת לצירוף לדרישה ב-${requestCurrency}`
+                            : `בחירת חשבונית ${inv.invoice_number} של ${supplierName} להקצאה בדרישת התשלום`}
                           onChange={(e) => setChosen((c) => {
                             const next = { ...c };
                             if (e.target.checked) next[inv.id] = inv.allocationAmount; else delete next[inv.id];
@@ -412,8 +429,14 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
                         </span>
                       </label>
                       <span className="text-ink-muted text-xs num">
-                        {isOwner ? 'יתרה' : 'סכום חשבונית'} {fmtMoneyExact(inv.allocationAmount)}
+                        {isOwner ? 'יתרה' : 'סכום חשבונית'} {fmtMoneyExact(inv.allocationAmount, inv.currency)}
                       </span>
+                      {otherCurrency && (
+                        <span className="basis-full text-xs text-ink-muted">
+                          החשבונית נקובה ב-{inv.currency} והדרישה נבנית ב-{requestCurrency}. דרישת תשלום אחת היא העברה אחת,
+                          ולכן היא כולה במטבע אחד — לחשבונית הזו נפתחת דרישה נפרדת.
+                        </span>
+                      )}
                       {checked && (
                         <input type="number" step="0.01" className="input w-28! num" value={chosen[inv.id]}
                           aria-label={`סכום ההקצאה לחשבונית ${inv.invoice_number} של ${supplierName}`}
@@ -440,7 +463,11 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
 
         <SubPanel className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <span className="text-sm text-ink-soft">סכום הדרישה</span>
-          <span className="kpi-value-compact num">{fmtMoneyExact(amount)}</span>
+          {/* Before anything is ticked there is no invoice to take a currency from, and the
+              request would be built in the organisation's own — so that is what the zero is in.
+              The CHECKBOX guard above still keys off `requestCurrency`, which stays null until a
+              real selection fixes it; nothing is refused on the strength of a default. */}
+          <span className="kpi-value-compact num">{fmtMoneyExact(amount, requestCurrency ?? org?.base_currency)}</span>
         </SubPanel>
 
         <div><label className="label" htmlFor="payment-request-notes">הערות</label><input id="payment-request-notes" className="input" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
@@ -611,7 +638,17 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
     };
   }, [checkFingerprint]);
 
-  const openCreditTotal = checks?.find((check) => check.code === 'open_credit')?.amount ?? 0;
+  /* One finding per currency since 0219 — a dollar credit does not offset a shekel request, so
+     they are never one figure on screen. */
+  const openCreditFindings = (checks ?? []).filter((check) => check.code === 'open_credit');
+  /* The number the SERVER computes and this screen echoes back to it, never renders.
+     `approve_payment_request` (0073) still sums the supplier's open credits across currencies, so
+     for a supplier holding two this token is a figure with no unit — it is compared, not read.
+     Making the server's own check per-currency is P5-G6; until then the gate stays "any open
+     credit blocks a plain approval", which is a COUNT and true in every currency. */
+  const openCreditTotal = openCreditFindings.reduce((sum, check) => sum + (check.amount ?? 0), 0);
+  /** The open credit that CAN reduce this request: the one in its own currency, if there is one. */
+  const sameCurrencyCredit = openCreditFindings.find((check) => check.currency === pr.currency)?.amount ?? null;
 
   useEffect(() => {
     setCreditOverrideAcknowledged(false);
@@ -727,7 +764,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge meta={PAYMENT_REQUEST_STATUS[pr.status]} />
-          <span className="kpi-value-compact num">{fmtMoneyExact(pr.amount)}</span>
+          <span className="kpi-value-compact num">{fmtMoneyExact(pr.amount, pr.currency)}</span>
           {pr.due_date && <span className="text-sm text-ink-muted">יעד: {fmtDate(pr.due_date)}</span>}
           {pr.approved_at && <span className="text-sm text-ink-muted">אושר על ידי {pr.approver?.full_name ?? 'משתמש לא זמין'} · {fmtDate(pr.approved_at)}</span>}
         </div>
@@ -736,7 +773,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
           <Note tone="alert">
             <span className="min-w-0 flex-1">
               <strong>הדרישה אושרה באישור חריג ללא קיזוז הזיכוי.</strong>{' '}
-              בעת האישור היו זיכויים פתוחים בסך <span className="num">{fmtMoneyExact(pr.open_credit_override_total)}</span>, והם לא קוזזו אוטומטית.
+              בעת האישור היו זיכויים פתוחים בסך <span className="num">{fmtMoneyExact(pr.open_credit_override_total, pr.currency)}</span>, והם לא קוזזו אוטומטית.
               <span className="block mt-1">סיבת אישור החריגה: {pr.open_credit_override_reason}</span>
             </span>
           </Note>
@@ -751,7 +788,8 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
               {links.map((l) => (
                 <li key={l.invoice_id} className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2">
                   <span>חשבונית <b dir="ltr" className="num">{l.invoice.invoice_number}</b> · {fmtDate(l.invoice.invoice_date)}</span>
-                  <span className="num font-medium">{fmtMoneyExact(l.amount_allocated)}</span>
+                  {/* An allocation is money in the debt's currency, which is the request's. */}
+                  <span className="num font-medium">{fmtMoneyExact(l.amount_allocated, pr.currency)}</span>
                 </li>
               ))}
             </ul>
@@ -774,9 +812,21 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
               <p className="font-semibold">לספק קיימים זיכויים פתוחים שטרם קוזזו. אישור זה אינו מקזז את הזיכויים ואינו משנה את סכום הדרישה.</p>
               <dl className="grid gap-2 text-sm sm:grid-cols-2">
                 <div><dt className="text-ink-muted">ספק</dt><dd className="font-medium">{pr.supplier.name}</dd></div>
-                <div><dt className="text-ink-muted">סך זיכויים פתוחים</dt><dd className="font-semibold num">{fmtMoneyExact(openCreditTotal)}</dd></div>
-                <div><dt className="text-ink-muted">סכום דרישת התשלום</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount)}</dd></div>
-                <div><dt className="text-ink-muted">נטו אינפורמטיבי לאחר זיכויים</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount - openCreditTotal)}</dd></div>
+                <div><dt className="text-ink-muted">סך זיכויים פתוחים</dt>
+                  <dd className="font-semibold">
+                    {openCreditFindings.map((credit) => (
+                      <span key={credit.currency} className="num block">{fmtMoneyExact(credit.amount ?? null, credit.currency)}</span>
+                    ))}
+                  </dd></div>
+                <div><dt className="text-ink-muted">סכום דרישת התשלום</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount, pr.currency)}</dd></div>
+                {/* The net line exists only when the credits and the request are the same money.
+                    Subtracting a dollar credit from a shekel request produces a number that is
+                    not the net of anything — so the sentence takes its place. */}
+                {sameCurrencyCredit != null ? (
+                  <div><dt className="text-ink-muted">נטו אינפורמטיבי לאחר זיכויים</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount - sameCurrencyCredit, pr.currency)}</dd></div>
+                ) : (
+                  <div><dt className="text-ink-muted">נטו אינפורמטיבי לאחר זיכויים</dt><dd className="text-sm">אין — הזיכויים הפתוחים נקובים במטבע אחר מהדרישה, ואינם מקטינים אותה</dd></div>
+                )}
               </dl>
               <label className="flex min-h-11 items-start gap-2 text-sm font-medium">
                 <input type="checkbox" className="mt-1 size-5 shrink-0 accent-action" checked={creditOverrideAcknowledged}

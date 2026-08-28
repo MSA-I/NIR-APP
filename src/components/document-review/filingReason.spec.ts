@@ -72,6 +72,12 @@ describe('what the reviewer is told', () => {
     expect(text).toContain('אין עדיין פקודת כתיבה אוטומטית בטוחה');
   });
 
+  it('explains an unreadable currency without silently calling it shekels', () => {
+    const text = filingReason(snapshotWith([filing({ reason_code: 'currency_unrecognised' })]));
+    expect(text).toContain('המטבע שהודפס');
+    expect(text).not.toContain('שקל');
+  });
+
   it('says nothing when the machine wrote the record — a null code is not a stop', () => {
     expect(filingReason(snapshotWith([filing({ reason_code: null })]))).toBeNull();
   });

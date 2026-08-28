@@ -1,4 +1,4 @@
-import { BUSINESS_TIME_ZONE, formatUnit } from '../lib/format';
+import { BUSINESS_TIME_ZONE, fmtMoneyExactInLocale, formatUnit } from '../lib/format';
 
 export type PortalLocale = 'he' | 'en';
 
@@ -108,11 +108,23 @@ export function formatPortalDate(locale: PortalLocale, value: string | Date | nu
   }).format(new Date(value));
 }
 
-export function formatPortalMoney(locale: PortalLocale, value: number | null | undefined): string {
-  if (value == null) return '—';
-  return new Intl.NumberFormat(INTL_LOCALE[locale], {
-    style: 'currency', currency: 'ILS', minimumFractionDigits: 2,
-  }).format(value);
+/**
+ * What currency a portal snapshot is in.
+ *
+ * A snapshot written before `0217` has no `currency` field, and rewriting one to add it would be
+ * editing evidence. So it is INTERPRETED here instead, and the interpretation is not a guess:
+ * `0001` declared the product's money to be shekels and `0108` refused any other currency at
+ * intake, so every order issued before this field existed was a shekel order. The same reasoning
+ * justifies the `not null` backfill in `0217` — it is one rule, applied in two places.
+ */
+export function portalCurrency(snapshot: { currency?: string }): string {
+  return snapshot.currency ?? 'ILS';
+}
+
+export function formatPortalMoney(
+  locale: PortalLocale, value: number | null | undefined, currency: string,
+): string {
+  return fmtMoneyExactInLocale(INTL_LOCALE[locale], value, currency);
 }
 
 export function formatPortalQuantity(

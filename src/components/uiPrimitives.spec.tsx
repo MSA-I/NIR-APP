@@ -140,14 +140,14 @@ describe('כותרת "דורש טיפול היום"', () => {
   it('סופר סוגי טיפול פעם אחת בלבד, ושומר את היחידה לקורא המסך', () => {
     // Two action rows carrying 5 and 7, so the header's own "2" cannot be confused with a row
     // count. Before this round the same 2 was rendered twice here and a third time by Dashboard.
-    render(inRouter(<AttentionZone items={[row('a', 'await', 5), row('b', 'alert', 7)]} />));
+    render(inRouter(<AttentionZone items={[row('a', 'await', 5), row('b', 'alert', 7)]} baseCurrency="ILS" />));
     expect(screen.getAllByText((_, node) => node?.textContent === '2 סוגי טיפול')
       .filter((node) => node.className.includes('badge'))).toHaveLength(1);
     expect(screen.queryByText(/^\s*2 סוגי טיפול\s*$/)).not.toBeInTheDocument();
   });
 
   it('לוקח את הטון מהשורות שהוא סופר — alert גובר על await', () => {
-    render(inRouter(<AttentionZone items={[row('a', 'await', 5), row('b', 'alert', 7)]} />));
+    render(inRouter(<AttentionZone items={[row('a', 'await', 5), row('b', 'alert', 7)]} baseCurrency="ILS" />));
     expect(bell()).toHaveClass('text-alert-fg');
     expect(screen.getByRole('heading', { level: 2 }).querySelector('.badge-alert')).not.toBeNull();
   });
@@ -155,21 +155,21 @@ describe('כותרת "דורש טיפול היום"', () => {
   it('כשאין מה לטפל בו הפעמון כבה ואין תג', () => {
     // A permanently amber bell above "אין משימות דחופות כרגע" is colour asserting the opposite of
     // the sentence beside it — the exact failure mode this campaign is about.
-    render(inRouter(<AttentionZone items={[row('a', 'info', 0)]} />));
+    render(inRouter(<AttentionZone items={[row('a', 'info', 0)]} baseCurrency="ILS" />));
     expect(bell()).toHaveClass('text-ink-ghost');
     expect(bell()).not.toHaveClass('text-await-fg');
     expect(screen.getByRole('heading', { level: 2 }).querySelector('[class*="badge"]')).toBeNull();
   });
 
   it('כשהכל נמדד ואין דחוף — המשפט הירוק', () => {
-    render(inRouter(<AttentionZone items={[row('a', 'info', 0), row('b', 'idle', 3)]} />));
+    render(inRouter(<AttentionZone items={[row('a', 'info', 0), row('b', 'idle', 3)]} baseCurrency="ILS" />));
     expect(screen.getByText('אין משימות דחופות כרגע')).toBeInTheDocument();
   });
 
   it('כשמדד אחד אינו ניתן למדידה — משפט ניטרלי, ולא all-clear כוזב', () => {
     // A brand-new organization is exactly this shape: measured zeros plus the two payment rows
     // the snapshot returns as null. Before this fix the card body rendered nothing at all.
-    render(inRouter(<AttentionZone items={[row('a', 'info', 0), row('b', 'alert', null)]} />));
+    render(inRouter(<AttentionZone items={[row('a', 'info', 0), row('b', 'alert', null)]} baseCurrency="ILS" />));
     expect(screen.getByText(/אין משימות דחופות מבין המדדים שנמדדו/)).toBeInTheDocument();
     expect(screen.queryByText('אין משימות דחופות כרגע')).not.toBeInTheDocument();
   });

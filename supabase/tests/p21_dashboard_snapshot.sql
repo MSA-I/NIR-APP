@@ -3,6 +3,9 @@
 
 begin;
 
+-- Legacy invoice fixtures in this transaction predate multi-currency and are explicitly ILS.
+alter table public.invoices alter column currency set default 'ILS';
+
 create function pg_temp.p21_assert(p_condition boolean, p_message text)
 returns void language plpgsql as $$
 begin
@@ -10,6 +13,17 @@ begin
     raise exception 'P21 dashboard assertion failed: %', p_message;
   end if;
 end
+$$;
+
+-- 0219/0218: every money figure on this snapshot is now an array of {currency, amount}, so an
+-- assertion has to say WHICH currency it is asserting about. Reading "the first element" would
+-- pass today and quietly assert about the wrong currency the moment a second one appears, which is
+-- the whole failure this campaign exists to prevent — so the currency is named.
+create function pg_temp.p21_money(p_snapshot jsonb, p_path text[], p_currency text)
+returns numeric language sql immutable as $$
+  select (entry ->> 'amount')::numeric
+  from jsonb_array_elements(p_snapshot #> p_path) entry
+  where entry ->> 'currency' = p_currency
 $$;
 
 select pg_temp.p21_assert(
@@ -107,8 +121,8 @@ select pg_temp.p21_assert(
 --                           already-overdue 2026-08-01, so the two figures never double-count.
 --   dueWithin7Count = 1   -- the count agrees with the sum it accompanies.
 select pg_temp.p21_assert(
-  (public.management_dashboard_snapshot('2026-08-09') #>> '{paymentRequests,overdueAmount}')::numeric = 10
-  and (public.management_dashboard_snapshot('2026-08-09') #>> '{paymentRequests,dueWithin7Amount}')::numeric = 35
+  pg_temp.p21_money(public.management_dashboard_snapshot('2026-08-09'), '{paymentRequests,overdueAmountByCurrency}', 'ILS') = 10
+  and pg_temp.p21_money(public.management_dashboard_snapshot('2026-08-09'), '{paymentRequests,dueWithin7AmountByCurrency}', 'ILS') = 35
   and public.management_dashboard_snapshot('2026-08-09') #>> '{paymentRequests,dueWithin7Count}' = '1',
   'the due-window money leaked another tenant, counted an undated request, or double-counted the overdue slice');
 
@@ -133,7 +147,7 @@ select set_config('request.jwt.claim.sub', '31000000-0000-4000-8000-000000000001
 set local role authenticated;
 
 select pg_temp.p21_assert(
-  (public.management_dashboard_snapshot('2026-08-09') #>> '{paymentRequests,dueWithin7Amount}')::numeric = 35
+  pg_temp.p21_money(public.management_dashboard_snapshot('2026-08-09'), '{paymentRequests,dueWithin7AmountByCurrency}', 'ILS') = 35
   and public.management_dashboard_snapshot('2026-08-09') #>> '{paymentRequests,dueWithin7Count}' = '1',
   'the due window admitted a draft or an eighth day -- 535, 735 or 1235 where 35 was owed');
 
@@ -154,8 +168,8 @@ select pg_temp.p21_assert(
 -- existing dated requests is a measured ₪0, not "unknown" -- this is what the `coalesce` inside
 -- the guard buys, and it is the assertion that fails the moment someone removes it.
 select pg_temp.p21_assert(
-  (public.management_dashboard_snapshot('2026-08-25') #>> '{paymentRequests,overdueAmount}')::numeric = 745
-  and (public.management_dashboard_snapshot('2026-08-25') #>> '{paymentRequests,dueWithin7Amount}')::numeric = 0
+  pg_temp.p21_money(public.management_dashboard_snapshot('2026-08-25'), '{paymentRequests,overdueAmountByCurrency}', 'ILS') = 745
+  and pg_temp.p21_money(public.management_dashboard_snapshot('2026-08-25'), '{paymentRequests,dueWithin7AmountByCurrency}', 'ILS') = 0
   and public.management_dashboard_snapshot('2026-08-25') #>> '{paymentRequests,dueWithin7Count}' = '0',
   -- 745 and not 1245: by this date the 10, the 35 and the 700 added above are all overdue,
   -- and the 500 draft that shares 2026-08-12 with the 35 is still excluded. The same
@@ -163,10 +177,10 @@ select pg_temp.p21_assert(
   'an empty due window under existing dated requests must read as a measured zero, not as unknown');
 select pg_temp.p21_assert(
   public.management_dashboard_snapshot('2026-08-09') #>> '{credits,count}' = '1'
-  and (public.management_dashboard_snapshot('2026-08-09') #>> '{credits,sum}')::numeric = 7,
+  and pg_temp.p21_money(public.management_dashboard_snapshot('2026-08-09'), '{credits,sumByCurrency}', 'ILS') = 7,
   'credit aggregation leaked another tenant');
 select pg_temp.p21_assert(
-  public.management_dashboard_snapshot('2026-08-09') #> '{money,openBalance}' = 'null'::jsonb,
+  public.management_dashboard_snapshot('2026-08-09') #> '{money,openBalanceByCurrency}' = 'null'::jsonb,
   'missing invoice evidence must remain null, not zero');
 select pg_temp.p21_assert(
   public.management_dashboard_snapshot(null) is null,
@@ -183,8 +197,8 @@ select pg_temp.p21_assert(
   and public.management_dashboard_snapshot('2026-08-09') #> '{paymentRequests,dueToday}' = 'null'::jsonb
   -- The money follows the counts: no dated request at all is not ₪0 owed, it is no measurement,
   -- and the dashboard tile prints a sentence rather than a figure when it reads these nulls.
-  and public.management_dashboard_snapshot('2026-08-09') #> '{paymentRequests,overdueAmount}' = 'null'::jsonb
-  and public.management_dashboard_snapshot('2026-08-09') #> '{paymentRequests,dueWithin7Amount}' = 'null'::jsonb
+  and public.management_dashboard_snapshot('2026-08-09') #> '{paymentRequests,overdueAmountByCurrency}' = 'null'::jsonb
+  and public.management_dashboard_snapshot('2026-08-09') #> '{paymentRequests,dueWithin7AmountByCurrency}' = 'null'::jsonb
   and public.management_dashboard_snapshot('2026-08-09') #> '{paymentRequests,dueWithin7Count}' = 'null'::jsonb,
   'absence of any active request with an explicit due date must remain unknown, not zero');
 
@@ -235,7 +249,7 @@ insert into public.payment_requests (org_id, supplier_id, amount, due_date, stat
 select set_config('request.jwt.claim.sub', '31000000-0000-4000-8000-000000000001', true);
 set local role authenticated;
 select pg_temp.p21_assert(
-  (public.management_dashboard_snapshot('2026-11-28') #>> '{paymentRequests,dueWithin7Amount}')::numeric = 2200,
+  pg_temp.p21_money(public.management_dashboard_snapshot('2026-11-28'), '{paymentRequests,dueWithin7AmountByCurrency}', 'ILS') = 2200,
   'a root-granted actor lost money that its scope closure covers');
 
 -- The LE1-granted office user sees its own legal entity and the unit-less rows, and nothing of
@@ -246,8 +260,8 @@ reset role;
 select set_config('request.jwt.claim.sub', '31000000-0000-4000-8000-000000000004', true);
 set local role authenticated;
 select pg_temp.p21_assert(
-  (public.management_dashboard_snapshot('2026-11-28') #>> '{paymentRequests,dueWithin7Amount}')::numeric = 900
-  and (public.management_dashboard_snapshot('2026-11-28') #>> '{paymentRequests,overdueAmount}')::numeric = 745,
+  pg_temp.p21_money(public.management_dashboard_snapshot('2026-11-28'), '{paymentRequests,dueWithin7AmountByCurrency}', 'ILS') = 900
+  and pg_temp.p21_money(public.management_dashboard_snapshot('2026-11-28'), '{paymentRequests,overdueAmountByCurrency}', 'ILS') = 745,
   'the due window ignored unit scope -- 2200 instead of 900, or dropped the org-visible rows');
 reset role;
 select set_config('request.jwt.claim.sub', '31000000-0000-4000-8000-000000000002', true);

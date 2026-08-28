@@ -32,9 +32,11 @@ import { Disclosure, ICON, Note } from '../ui';
 function factValueText(fact: Fact): string {
   if (fact.value === null) return '—';
   if (typeof fact.value === 'string') return fact.unit === 'date' ? fmtDate(fact.value) : fact.value;
+  // A three-letter unit IS the ISO currency the fact was measured in (0217). The assistant
+  // never converts and never assumes: a money fact says which money it is in, or it is not a
+  // money fact. Until phase 4 the only such unit a tool can emit is 'ils'.
+  if (/^[a-z]{3}$/.test(fact.unit)) return fmtMoneyExact(fact.value, fact.unit.toUpperCase());
   switch (fact.unit) {
-    case 'ils':
-      return fmtMoneyExact(fact.value);
     case 'percent':
       return `${fmtNum(fact.value)}%`;
     case 'date':

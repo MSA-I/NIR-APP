@@ -40,7 +40,10 @@ vi.mock('../lib/supabase', async () => {
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
     profile: { id: 'u-1', role: 'owner', full_name: 'בודק', org_id: 'org-1' },
-    org: { settings: {} },
+    // The organisation states the currency it keeps its own books in (0217). Every screen
+    // reads it for DISPLAY ORDER and for which currency a single-figure tile is about; it is
+    // never a conversion target.
+    org: { settings: {}, base_currency: 'ILS' },
     session: {},
     organizationAccess: { mode: 'active', canWrite: true },
   }),
@@ -82,19 +85,22 @@ beforeAll(() => {
  *  the attention tier has real action rows — the header duplication under test only appeared when
  *  the count was greater than zero. */
 const SNAPSHOT = {
-  money: { openBalance: 1200, openInvoiceCount: 3 },
+  money: { openBalanceByCurrency: [{ currency: 'ILS', amount: 1200 }], openInvoiceCount: 3 },
   // No active request carries a due date here, so every due-date figure — counts and money
   // alike — is unknown rather than zero, and the due-window tile renders its sentence.
   paymentRequests: {
     pendingApproval: 2, drafts: 0, dueDateCoverage: 0, activeCount: 2, overdue: null, dueToday: null,
-    overdueAmount: null, dueWithin7Amount: null, dueWithin7Count: null,
+    overdueAmountByCurrency: null, dueWithin7AmountByCurrency: null, dueWithin7Count: null,
   },
-  credits: { count: 0, sum: null },
+  credits: { count: 0, sumByCurrency: null },
   bank: { unmatched: 0, suggested: 0 },
   invoices: { pendingApproval: 1, toReview: 0, notSent: 0 },
-  openOrders: { count: 0, committed: null, remaining: 0, noDate: 0, late: 0, awaitingConfirmation: 0 },
+  openOrders: {
+    count: 0, committedByCurrency: null, remainingByCurrency: [],
+    noDate: 0, late: 0, awaitingConfirmation: 0,
+  },
   openSupplierCount: 0,
-  topBalances: [],
+  topBalancesByCurrency: [],
 };
 
 // Every table read answers empty: none of them is under test, and the zones must render their
@@ -211,7 +217,7 @@ describe('מרכז הבקרה — מה עדיין כרטיס ומה כבר לא'
 describe('ארגון ריק — הריצה הראשונה', () => {
   const EMPTY_SNAPSHOT = {
     ...SNAPSHOT,
-    money: { openBalance: null, openInvoiceCount: 0 },
+    money: { openBalanceByCurrency: null, openInvoiceCount: 0 },
     // The two rows the RPC cannot measure with no due-dated request in the org (0100:126-134).
     // They are what used to make the attention card render an empty body.
     paymentRequests: { pendingApproval: 0, drafts: 0, dueDateCoverage: 0, activeCount: 0, overdue: null, dueToday: null },

@@ -24,17 +24,17 @@ const assessment: InvoiceLineReviewAssessment = {
     {
       invoice_line_id: 'line-1', purchase_order_item_id: 'item-1',
       purchase_order_id: 'order-1', product_id: 'product-1',
-      ordered_quantity: 6, received_quantity: 6, unit: 'kg', unit_price: 42,
+      ordered_quantity: 6, received_quantity: 6, unit: 'kg', unit_price: 42, currency: 'ILS',
     },
     {
       invoice_line_id: 'line-1', purchase_order_item_id: 'item-2',
       purchase_order_id: 'order-2', product_id: 'product-1',
-      ordered_quantity: 4, received_quantity: 4, unit: 'kg', unit_price: 42,
+      ordered_quantity: 4, received_quantity: 4, unit: 'kg', unit_price: 42, currency: 'ILS',
     },
     {
       invoice_line_id: 'line-2', purchase_order_item_id: 'item-3',
       purchase_order_id: 'order-3', product_id: 'product-2',
-      ordered_quantity: 3, received_quantity: 3, unit: 'unit', unit_price: 5,
+      ordered_quantity: 3, received_quantity: 3, unit: 'unit', unit_price: 5, currency: 'ILS',
     },
   ],
 };

@@ -1,7 +1,7 @@
 export const BUSINESS_TIME_ZONE = 'Asia/Jerusalem';
 
 /**
- * Two money shapes, and deliberately no third.
+ * Two money shapes, and deliberately no third — and since 0217, no money without its currency.
  *
  * There used to be a `fmtMoney` with `minimumFractionDigits: 0, maximumFractionDigits: 2` — a
  * formatter whose OUTPUT SHAPE depended on the value. Inside one column it produced `0 ₪`,
@@ -10,19 +10,78 @@ export const BUSINESS_TIME_ZONE = 'Asia/Jerusalem';
  * is the shape of a formatter nobody trusted. It is gone, and every one of its call sites now
  * chooses in the open.
  *
- * `fmtMoneyExact` — ledgers, tables, record detail and anything about money being moved. Always
- *   two decimals, so a column of figures aligns and agorot are never silently dropped.
+ * `fmtMoneyExact` — ledgers, tables, record detail and anything about money being moved. The
+ *   currency's own number of decimals, so a column of figures aligns and agorot are never silently
+ *   dropped. That is two for the shekel, three for the dinar and none at all for the yen.
  * `fmtMoneyRounded` — glance surfaces only: KPI tiles, chart axes, the dashboard money band.
  *   Always zero decimals. A headline that reads `18,420 ₪` is honest about being a headline.
  *
  * Both are stable: the shape follows the SURFACE, never the value.
+ *
+ * THE SECOND ARGUMENT IS NOT OPTIONAL, AND THAT IS THE POINT (OPEN-DECISIONS #277, plan §3.2).
+ * These functions used to take an amount alone and print a shekel sign, because the product had
+ * one currency and `0108` refused every document that said otherwise. The moment an invoice can
+ * arrive in dollars, an amount with no currency beside it is a number with no unit, and a screen
+ * that prints one is guessing on the reader's behalf. Deleting the one-argument signature is what
+ * turned that from a thing to remember into 233 compile errors — one at every place where a person
+ * had to answer "which currency is this figure in", and none of which could be skipped.
+ *
+ * A currency this function cannot render returns an em dash rather than a figure in the wrong
+ * unit. `null` is the honest answer to "how much", not zero and not a number with a wrong sign.
  */
-const ilsRounded = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 });
-const ilsExact = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', minimumFractionDigits: 2 });
+type MoneyShape = 'exact' | 'rounded' | 'compact';
+
+const moneyFormatters = new Map<string, Intl.NumberFormat>();
+
+function moneyFormatter(currency: string, shape: MoneyShape): Intl.NumberFormat | null {
+  // ISO-4217 shape first: `Intl` throws on anything else, and a throw inside a render is a blank
+  // screen where a dash belongs.
+  if (!/^[A-Z]{3}$/.test(currency)) return null;
+  const key = `${shape}:${currency}`;
+  const cached = moneyFormatters.get(key);
+  if (cached) return cached;
+  let formatter: Intl.NumberFormat;
+  try {
+    formatter = new Intl.NumberFormat('he-IL', {
+      style: 'currency',
+      currency,
+      // `exact` names no fraction digits on purpose: with `style: 'currency'` the platform uses
+      // the currency's own minor units, which is exactly the rule `currencies.minor_units` states
+      // on the server. For the shekel that is the two decimals this file has always printed.
+      ...(shape === 'rounded' ? { maximumFractionDigits: 0 } : {}),
+      ...(shape === 'compact' ? { notation: 'compact' as const, maximumFractionDigits: 1 } : {}),
+    });
+  } catch {
+    return null;
+  }
+  moneyFormatters.set(key, formatter);
+  return formatter;
+}
+
+function fmtMoney(v: number | null | undefined, currency: string | null | undefined, shape: MoneyShape) {
+  if (v == null || currency == null) return '—';
+  return moneyFormatter(currency, shape)?.format(v) ?? '—';
+}
+
+export const fmtMoneyExact = (v: number | null | undefined, currency: string | null | undefined) =>
+  fmtMoney(v, currency, 'exact');
+export const fmtMoneyRounded = (v: number | null | undefined, currency: string | null | undefined) =>
+  fmtMoney(v, currency, 'rounded');
 /** Compact currency for chart axes, where a full figure per tick would not fit. */
-const ilsCompact = new Intl.NumberFormat('he-IL', {
-  style: 'currency', currency: 'ILS', notation: 'compact', maximumFractionDigits: 1,
-});
+export const fmtMoneyCompact = (v: number | null | undefined, currency: string | null | undefined) =>
+  fmtMoney(v, currency, 'compact');
+
+/** ISO currency scale from the same platform formatter that renders it. Null means unsupported. */
+export function currencyMinorUnits(currency: string): number | null {
+  if (!/^[A-Z]{3}$/.test(currency)) return null;
+  try {
+    return new Intl.NumberFormat('en', { style: 'currency', currency })
+      .resolvedOptions().maximumFractionDigits ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Quantities and counts, NOT money — and it keeps variable decimals on purpose. `3` invoices must
  * not render as `3.00`, and `2.5` kg must not render as `3`. The money rule above does not
@@ -34,28 +93,32 @@ const dateTimeFmt = new Intl.DateTimeFormat('he-IL', { day: '2-digit', month: '2
 const monthFmt = new Intl.DateTimeFormat('he-IL', { month: 'long', year: 'numeric', timeZone: BUSINESS_TIME_ZONE });
 
 /**
- * Subscription catalogue prices, and the ONE reason a second currency exists in this file.
+ * The one money formatter that does NOT pin `he-IL`, and the only reason it exists.
  *
- * The product's own money is shekels and stays that way (#14). A plan price is different:
- * OPEN-DECISIONS #208 keeps two versioned catalogues — ILS for a verified Israeli billing address,
- * USD for every other country — and the catalogue is chosen by the merchant of record, never by
- * this code. So the CURRENCY IS AN ARGUMENT, supplied by the row being rendered, and a currency
- * this function does not recognise returns an em dash rather than a figure in the wrong unit.
- *
- * Zero decimals, because every figure #195 decided is whole and a pricing surface is a glance
- * surface. As with the shekel formatters, the shape follows the surface and never the value.
+ * The supplier portal renders in the supplier's language (`PortalLocale`), so its figures must
+ * carry that locale's grouping and digit shapes. It used to build its own `Intl.NumberFormat`
+ * inside `src/portal/i18n.ts`, which `check:money` could not see: the call was split across lines
+ * and the guard read one line at a time. Fixing that blindness surfaced this site, and the answer
+ * is the same one the rest of the file gives — the shape of money is decided here, once.
  */
-const usdRounded = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-export const fmtPlanPrice = (v: number | null | undefined, currency: string | null | undefined) => {
-  if (v == null) return '—';
-  if (currency === 'ILS') return ilsRounded.format(v);
-  if (currency === 'USD') return usdRounded.format(v);
-  return '—';
+const localeExact = new Map<string, Intl.NumberFormat>();
+export const fmtMoneyExactInLocale = (
+  locale: string, v: number | null | undefined, currency: string | null | undefined,
+) => {
+  if (v == null || currency == null || !/^[A-Z]{3}$/.test(currency)) return '—';
+  const key = `${locale}:${currency}`;
+  let formatter = localeExact.get(key);
+  if (!formatter) {
+    try {
+      formatter = new Intl.NumberFormat(locale, { style: 'currency', currency });
+    } catch {
+      return '—';
+    }
+    localeExact.set(key, formatter);
+  }
+  return formatter.format(v);
 };
 
-export const fmtMoneyExact = (v: number | null | undefined) => (v == null ? '—' : ilsExact.format(v));
-export const fmtMoneyRounded = (v: number | null | undefined) => (v == null ? '—' : ilsRounded.format(v));
-export const fmtMoneyCompact = (v: number | null | undefined) => (v == null ? '—' : ilsCompact.format(v));
 export const fmtNum = (v: number | null | undefined) => (v == null ? '—' : num.format(v));
 
 /**

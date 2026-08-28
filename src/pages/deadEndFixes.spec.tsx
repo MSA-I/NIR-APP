@@ -180,7 +180,7 @@ describe('finding 13 — the accountant can open a supplier balance', () => {
 
   const renderDonut = (hrefFor?: (slice: { name: string; total: number }) => string | null) => render(
     <MemoryRouter>
-      <CategoryDonut slices={slices} total={5000} ariaLabel="יתרות" emptyMessage="אין" hrefFor={hrefFor} />
+      <CategoryDonut slices={slices} total={5000} currency="ILS" ariaLabel="יתרות" emptyMessage="אין" hrefFor={hrefFor} />
     </MemoryRouter>,
   );
 

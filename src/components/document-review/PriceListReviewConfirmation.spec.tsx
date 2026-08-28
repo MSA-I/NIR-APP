@@ -44,6 +44,7 @@ const LINE_COUNT = 22;
 const UNMATCHED_LINES = 2;
 const QUALIFIED_DRY_RUN = {
   interpretation_id: 'interpretation-1', supplier_id: 'supplier-1',
+  currency: 'USD',
   qualified_create_count: 2, existing_product_count: 1, ambiguous_count: 0,
   missing_qualification_count: 0, invalid_price_count: 0, mutated: false,
   rows: [
@@ -96,6 +97,7 @@ function predictions(count = LINE_COUNT): PriceListPredictedLine[] {
       unit: 'unit',
       proposed_unit_price: unmatched ? null : index + 10,
       current_unit_price: null,
+      currency: 'USD',
       price_change_percent: null,
       product_would_be_created: false,
       created_at: '2026-08-17T00:00:00Z',

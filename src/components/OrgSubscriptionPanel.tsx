@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CreditCard, Undo2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { fmtDate, fmtNum, fmtPlanPrice } from '../lib/format';
+import { fmtDate, fmtNum, fmtMoneyRounded } from '../lib/format';
 import { SUBSCRIPTION_STATUS } from '../lib/status';
 import { DOMAIN, key } from '../lib/query/keys';
 import { useOrgScope } from '../lib/query/orgScope';
@@ -606,7 +606,8 @@ export function OrgSubscriptionPanel() {
                      ladder already carries it in full and saying it five more times is the
                      cramped duplicated prose the owner asked to remove in the first place.
 
-                     THE MONEY LAYER IS UNTOUCHED. `fmtPlanPrice` still answers «—» for a null
+                     THE MONEY LAYER IS UNTOUCHED. `fmtMoneyRounded` (0217: fmtPlanPrice was this
+                     function with two branches hard-coded) still answers «—» for a null
                      amount; what changed is that this call site no longer ASKS it that question.
                      It is called only when there is both a verified currency (#208) and an
                      amount, so a missing price is still missing — it is only said differently. */
@@ -621,7 +622,7 @@ export function OrgSubscriptionPanel() {
                   // #194 and #201: a conversation, never a figure — and never at price size.
                   figure={option.contact_sales ? 'דברו איתנו'
                     : !option.paid ? 'ללא עלות'
-                      : hasAmount ? fmtPlanPrice(amount, currency) : PRICE_AT_UPGRADE}
+                      : hasAmount ? fmtMoneyRounded(amount, currency) : PRICE_AT_UPGRADE}
                   figureTone={option.contact_sales || !option.paid ? 'compact'
                     : hasAmount ? 'anchor' : 'quiet'}
                   /* The period rides the price's own baseline, and only when there IS a price to

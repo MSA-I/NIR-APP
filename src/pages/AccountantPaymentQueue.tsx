@@ -59,11 +59,13 @@ interface PaymentAllocationPayload {
   credit_invoice_id?: string;
 }
 
-/** One row of `credit_request_balance_rows` (0173). */
+/** One row of `credit_request_balance_rows` (0173, currency added in 0219). */
 export interface SupplierCreditBalance {
   credit_id: string;
   invoice_id: string | null;
   credit_number: number;
+  /** The credit's own currency — it can only ever be offset against a debt in the same one. */
+  currency: string;
   amount: number;
   allocated_amount: number;
   remaining_amount: number;
@@ -87,26 +89,37 @@ export interface SupplierCreditBalance {
  *   it here would shrink the transfer while the request's own invoices stay open, and the invoice
  *   ledger and the payment ledger would drift apart. Returned rather than dropped, so the screen
  *   can say why a credit it clearly holds is not on offer.
+ * - `otherCurrency` — the credit is money of a different kind from the debt this request pays
+ *   (0217, OPEN-DECISIONS #277). A ₪500 credit does not reduce a $3,100 invoice by 500 of
+ *   anything, and there is no rate here to make it reduce it by some other number either. Refused
+ *   for the same reason as `otherRequests` and returned for the same reason: the accountant can
+ *   see the supplier holds it, and read why it is not on offer against THIS transfer.
  */
 export function partitionSupplierCredits(
   balances: SupplierCreditBalance[],
   requestInvoiceIds: ReadonlySet<string>,
+  requestCurrency: string,
 ): { open: SupplierCreditBalance[]; available: SupplierCreditBalance[];
-     unlinked: SupplierCreditBalance[]; otherRequests: SupplierCreditBalance[] } {
+     unlinked: SupplierCreditBalance[]; otherRequests: SupplierCreditBalance[];
+     otherCurrency: SupplierCreditBalance[] } {
   const open = balances.filter(
     (credit) => credit.status === 'received' && credit.remaining_amount > 0);
+  // The currency test comes FIRST, so a credit in another currency never reaches the two buckets
+  // the screen offers — whether or not it names an invoice of this request.
+  const sameCurrency = open.filter((credit) => credit.currency === requestCurrency);
   return {
     open,
-    available: open.filter(
+    available: sameCurrency.filter(
       (credit) => credit.invoice_id != null && requestInvoiceIds.has(credit.invoice_id)),
-    unlinked: open.filter((credit) => credit.invoice_id == null),
-    otherRequests: open.filter(
+    unlinked: sameCurrency.filter((credit) => credit.invoice_id == null),
+    otherRequests: sameCurrency.filter(
       (credit) => credit.invoice_id != null && !requestInvoiceIds.has(credit.invoice_id)),
+    otherCurrency: open.filter((credit) => credit.currency !== requestCurrency),
   };
 }
 
-const agora = (value: number) => Math.round(value * 100);
-const money = (value: number) => value / 100;
+const minorAmount = (value: number, minorUnits: number) => Math.round(value * (10 ** minorUnits));
+const majorAmount = (value: number, minorUnits: number) => value / (10 ** minorUnits);
 
 /** Ties the visible refusal to the control it disables. */
 const ALLOCATION_ERROR_ID = 'payment-execution-allocation-error';
@@ -149,13 +162,14 @@ const allocationRefusal = (error: unknown) =>
 export function buildPaymentAllocations(
   invoices: InvoiceAllocationInput[],
   credits: SelectedCreditAllocation[],
+  minorUnits = 2,
 ): { allocations: PaymentAllocationPayload[]; cashAmount: number; creditAmount: number } {
   // One entry per invoice: the executor rejects two allocations naming the same invoice.
   const cashByInvoice = new Map<string, number>();
   for (const invoice of invoices) {
     cashByInvoice.set(
       invoice.invoice_id,
-      (cashByInvoice.get(invoice.invoice_id) ?? 0) + agora(invoice.amount_allocated),
+      (cashByInvoice.get(invoice.invoice_id) ?? 0) + minorAmount(invoice.amount_allocated, minorUnits),
     );
   }
 
@@ -165,9 +179,9 @@ export function buildPaymentAllocations(
   // already knows its invoice, and sending it again would be a second place to get it wrong.
   const chosenTargetByCredit = new Map<string, string>();
   for (const credit of credits) {
-    const amount = agora(credit.amount);
+    const amount = minorAmount(credit.amount, minorUnits);
     if (amount <= 0) continue;
-    if (amount > agora(credit.remaining)) throw new Error('credit_allocation_exceeds_remaining');
+    if (amount > minorAmount(credit.remaining, minorUnits)) throw new Error('credit_allocation_exceeds_remaining');
     // A credit that already names an invoice is not portable. Moving it would close an invoice
     // the credit note never referred to while the one it did refer to stays open.
     if (credit.invoice_id && credit.target_invoice_id
@@ -197,18 +211,18 @@ export function buildPaymentAllocations(
   for (const [invoiceId, cash] of cashByInvoice) {
     if (cash <= 0) continue; // fully offset by credit — the executor rejects a zero allocation
     cashTotal += cash;
-    allocations.push({ invoice_id: invoiceId, credit_id: null, amount: money(cash) });
+    allocations.push({ invoice_id: invoiceId, credit_id: null, amount: majorAmount(cash, minorUnits) });
   }
   if (cashTotal < 1) throw new Error('payment_cash_amount_required');
 
   for (const credit of credits) {
-    const amount = agora(credit.amount);
+    const amount = minorAmount(credit.amount, minorUnits);
     if (amount > 0) {
       const chosenTarget = chosenTargetByCredit.get(credit.credit_id);
       allocations.push({
         invoice_id: null,
         credit_id: credit.credit_id,
-        amount: money(amount),
+        amount: majorAmount(amount, minorUnits),
         // Present only for a credit that had no invoice: the executor writes the link from it,
         // once, in the same transaction. Spread so the key is absent — not `undefined` — on the
         // linked path, which keeps that payload byte-identical to what it has always sent.
@@ -216,7 +230,11 @@ export function buildPaymentAllocations(
       });
     }
   }
-  return { allocations, cashAmount: money(cashTotal), creditAmount: money(creditTotal) };
+  return {
+    allocations,
+    cashAmount: majorAmount(cashTotal, minorUnits),
+    creditAmount: majorAmount(creditTotal, minorUnits),
+  };
 }
 
 /**
@@ -227,6 +245,7 @@ type Row = Omit<PaymentRequest, 'supplier'> & {
   supplier: { id: string; name: string; bank_details: string | null };
   invoices: { invoice_id: string; amount_allocated: number; invoice: { invoice_number: string } | null }[];
   approver: { full_name: string } | null;
+  minor_units: number;
 };
 type RawRow = Omit<Row, 'supplier'>;
 
@@ -252,19 +271,31 @@ export default function AccountantPaymentQueue() {
       .in('status', ['approved', 'sent_for_execution', 'executed', 'matched'])
       .order('due_date', { ascending: true, nullsFirst: false })) as RawRow[];
     const supplierIds = rows.map((row) => row.supplier_id);
-    const [suppliers, bankAccounts] = await Promise.all([
+    const [suppliers, bankAccounts, currencyRows] = await Promise.all([
       financialSupplierMap(supplierIds),
       financialSupplierBankAccountMap(supplierIds),
+      rows.length
+        ? supabase.from('currencies').select('code, minor_units')
+          .in('code', [...new Set(rows.map((row) => row.currency))])
+        : Promise.resolve({ data: [], error: null }),
     ]);
-    return rows.map<Row>((row) => ({
-      ...row,
-      supplier: {
-        ...(suppliers.get(row.supplier_id) ?? {
-          id: row.supplier_id, name: '—', tax_id: null, payment_terms: null, status: 'active', bank_details: null,
-        }),
-        bank_details: formatSupplierBankAccount(bankAccounts.get(row.supplier_id)),
-      },
-    }));
+    if (currencyRows.error) throw new Error(currencyRows.error.message);
+    const minorUnits = new Map(((currencyRows.data ?? []) as { code: string; minor_units: number }[])
+      .map((currency) => [currency.code, currency.minor_units]));
+    return rows.map<Row>((row) => {
+      const units = minorUnits.get(row.currency);
+      if (units == null) throw new Error(`currency_minor_units_unavailable:${row.currency}`);
+      return {
+        ...row,
+        supplier: {
+          ...(suppliers.get(row.supplier_id) ?? {
+            id: row.supplier_id, name: '—', tax_id: null, payment_terms: null, status: 'active', bank_details: null,
+          }),
+          bank_details: formatSupplierBankAccount(bankAccounts.get(row.supplier_id)),
+        },
+        minor_units: units,
+      };
+    });
   });
 
   if (loading) return <SkeletonList />;
@@ -286,7 +317,7 @@ export default function AccountantPaymentQueue() {
             <Card as="button" key={r.id} pad={false} className="card-link-hover w-full text-start p-4 sm:p-5" onClick={() => setSelected(r)}>
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <span className="min-w-0 break-words font-semibold text-ink">{r.supplier.name}</span>
-                <span className="kpi-value-compact num shrink-0">{fmtMoneyExact(r.amount)}</span>
+                <span className="kpi-value-compact num shrink-0">{fmtMoneyExact(r.amount, r.currency)}</span>
               </div>
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-ink-muted">
                 <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} />
@@ -295,7 +326,7 @@ export default function AccountantPaymentQueue() {
               </div>
               {r.open_credit_override_total != null && (
                 <div className="mt-3 text-sm text-await-fg">
-                  אושר בחריגה ללא קיזוז זיכויים בסך <span className="num font-semibold">{fmtMoneyExact(r.open_credit_override_total)}</span>
+                  אושר בחריגה ללא קיזוז זיכויים בסך <span className="num font-semibold">{fmtMoneyExact(r.open_credit_override_total, r.currency)}</span>
                 </div>
               )}
             </Card>
@@ -312,7 +343,7 @@ export default function AccountantPaymentQueue() {
                 <span className="min-w-0 break-words">{r.supplier.name}</span>
                 <span className="flex shrink-0 items-center gap-3">
                   <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} />
-                  <span className="num font-medium">{fmtMoneyExact(r.amount)}</span>
+                  <span className="num font-medium">{fmtMoneyExact(r.amount, r.currency)}</span>
                 </span>
               </div>
             ))}
@@ -328,7 +359,10 @@ export default function AccountantPaymentQueue() {
 function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; onDone: () => void }) {
   const { profile } = useAuth();
   const toast = useToast();
-  const [f, setF] = useState({ paid_date: todayISO(), reference: '', notes: '', reason: '' });
+  const [f, setF] = useState({
+    paid_date: todayISO(), reference: '', notes: '', reason: '',
+    settlement_currency: pr.currency, settlement_amount: '',
+  });
   const [reauthOpen, setReauthOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [paymentId, setPaymentId] = useState<string | null>(null);
@@ -340,6 +374,14 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
     unwrap(await supabase.rpc('credit_request_balance_rows', {
       p_supplier_id: pr.supplier.id,
     })) as SupplierCreditBalance[]);
+  const { data: currencyOptions, loading: currenciesLoading, error: currenciesError } = useQuery(async () =>
+    unwrap(await supabase.from('currencies').select('code, minor_units')
+      .eq('active', true).order('code')) as { code: string; minor_units: number }[], []);
+  const crossCurrencySettlement = f.settlement_currency !== pr.currency;
+  const settlementMinorUnits = currencyOptions
+    ?.find((currency) => currency.code === f.settlement_currency)?.minor_units;
+  const settlementStep = settlementMinorUnits === 0 ? '1'
+    : `0.${'0'.repeat(Math.max((settlementMinorUnits ?? 2) - 1, 0))}1`;
 
   const requestInvoiceIds = new Set(pr.invoices.map((invoice) => invoice.invoice_id));
   const invoiceNumberById = new Map(
@@ -352,7 +394,8 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
     available: availableCredits,
     unlinked: unlinkedCredits,
     otherRequests: otherRequestCredits,
-  } = partitionSupplierCredits(creditBalances ?? [], requestInvoiceIds);
+    otherCurrency: otherCurrencyCredits,
+  } = partitionSupplierCredits(creditBalances ?? [], requestInvoiceIds, pr.currency);
 
   // Both buckets are on offer. `target_invoice_id` is read from the picker for every credit, not
   // only for the unlinked ones: that way a linked credit that somehow carries a foreign target is
@@ -368,7 +411,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
   let allocationPreview: ReturnType<typeof buildPaymentAllocations> | null = null;
   let allocationError: string | null = null;
   try {
-    allocationPreview = buildPaymentAllocations(pr.invoices, selectedCredits);
+    allocationPreview = buildPaymentAllocations(pr.invoices, selectedCredits, pr.minor_units);
   } catch (error) {
     allocationPreview = null;
     allocationError = allocationRefusal(error);
@@ -381,6 +424,15 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
     if (!f.reference.trim()) { toast('נדרשת אסמכתת העברה', 'error'); return; }
     if (!allocationPreview) {
       toast(allocationError ?? 'לא ניתן לחשב את פיצול התשלום מהזיכויים שנבחרו', 'error');
+      return;
+    }
+    if (currenciesLoading || currenciesError || settlementMinorUnits == null) {
+      toast(currenciesError ?? 'רשימת המטבעות עדיין אינה זמינה', 'error');
+      return;
+    }
+    if (crossCurrencySettlement
+        && (!Number.isFinite(Number(f.settlement_amount)) || Number(f.settlement_amount) <= 0)) {
+      toast('יש להזין את הסכום שיצא מחשבון הבנק', 'error');
       return;
     }
     setReauthOpen(true);
@@ -396,6 +448,8 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
         p_reference: f.reference.trim(),
         p_notes: f.notes.trim() || null,
         p_allocations: allocationPreview?.allocations ?? [],
+        p_settlement_amount: crossCurrencySettlement ? Number(f.settlement_amount) : null,
+        p_settlement_currency: crossCurrencySettlement ? f.settlement_currency : null,
         p_reason: reasonOr(f.reason, 'ביצוע העברת תשלום'),
       })) as { payment_id: string };
 
@@ -443,11 +497,15 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
         </p>
 
         <dl className="text-sm space-y-1.5 [&>div]:flex-wrap [&>div]:gap-x-4 [&>div]:gap-y-0.5">
-          <div className="flex justify-between"><dt className="text-ink-muted">סכום מאושר</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount)}</dd></div>
+          {/* One transfer, one currency. The request, its invoices, the credits offset against
+              them and the payment that results are all money of the same kind — settlement from
+              an account in another currency is recorded on the payment (#286) and does not change
+              any figure here. */}
+          <div className="flex justify-between"><dt className="text-ink-muted">סכום מאושר</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount, pr.currency)}</dd></div>
           {/* `—`, never `0`: while the credits load, or while the selection is invalid, the offset
               is unknown — and an unknown offset printed as ₪0.00 is a claim that none was taken. */}
-          <div className="flex justify-between"><dt className="text-ink-muted">קיזוז זיכויים</dt><dd className="num">{fmtMoneyExact(allocationPreview?.creditAmount ?? null)}</dd></div>
-          <div className="flex justify-between"><dt className="text-ink-muted">סכום להעברה בפועל</dt><dd className="font-semibold num">{fmtMoneyExact(allocationPreview?.cashAmount ?? null)}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">קיזוז זיכויים</dt><dd className="num">{fmtMoneyExact(allocationPreview?.creditAmount ?? null, pr.currency)}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">סכום להעברה בפועל</dt><dd className="font-semibold num">{fmtMoneyExact(allocationPreview?.cashAmount ?? null, pr.currency)}</dd></div>
           {pr.due_date && <div className="flex justify-between"><dt className="text-ink-muted">תאריך יעד</dt><dd>{fmtDate(pr.due_date)}</dd></div>}
           <div className="flex justify-between"><dt className="text-ink-muted">חשבוניות</dt>
             <dd dir="ltr">{pr.invoices.map((i) => i.invoice?.invoice_number).filter(Boolean).join(', ') || 'לא זמינות'}</dd></div>
@@ -459,7 +517,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
             <Note tone="alert">
               <span className="min-w-0 flex-1">
                 <strong>אושר באישור חריג ללא קיזוז הזיכוי.</strong>{' '}
-                הזיכויים הפתוחים בסך <span className="num">{fmtMoneyExact(pr.open_credit_override_total)}</span> לא קוזזו אוטומטית.
+                הזיכויים הפתוחים בסך <span className="num">{fmtMoneyExact(pr.open_credit_override_total, pr.currency)}</span> לא קוזזו אוטומטית.
                 <span className="block mt-1">סיבת אישור החריגה: {pr.open_credit_override_reason}</span>
               </span>
             </Note>
@@ -477,6 +535,18 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
             <p className="mt-2 text-sm text-ink-muted">
               אין זיכויים פתוחים שניתן לקזז מול חשבוניות דרישת התשלום הזו
             </p>
+          )}
+
+          {/* Said out loud rather than left as a shorter list: the accountant can see in the
+              supplier card that this credit exists, so silence here would read as a bug. */}
+          {otherCurrencyCredits.length > 0 && (
+            <Note tone="info" className="mt-3">
+              <span>
+                <span className="num">{otherCurrencyCredits.length}</span> מהזיכויים הפתוחים של הספק נקובים
+                במטבע אחר מההעברה הזו ({pr.currency}), ולכן אינם ניתנים לקיזוז מולה. זיכוי מקזז חוב
+                באותו מטבע בלבד — אין כאן המרה.
+              </span>
+            </Note>
           )}
 
           {/* Owner ruling, 23.08.2026: an unlinked credit may be offset against any invoice of the
@@ -545,7 +615,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
                           {[...invoiceAmountById].map(([invoiceId, amount]) => (
                             <option key={invoiceId} value={invoiceId}>
                               {bidiIsolate(invoiceNumberById.get(invoiceId) ?? 'מספר לא זמין')}
-                              {' · '}{fmtMoneyExact(amount)}
+                              {' · '}{fmtMoneyExact(amount, pr.currency)}
                             </option>
                           ))}
                         </select>
@@ -559,9 +629,9 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
                     )}
 
                     <p className="mt-1 text-sm text-ink-muted">
-                      יתרה זמינה <span className="num font-medium text-ink-body">{fmtMoneyExact(credit.remaining_amount)}</span>
+                      יתרה זמינה <span className="num font-medium text-ink-body">{fmtMoneyExact(credit.remaining_amount, credit.currency)}</span>
                       {targetAmount != null && (
-                        <>{' · '}סכום החשבונית בדרישה <span className="num">{fmtMoneyExact(targetAmount)}</span></>
+                        <>{' · '}סכום החשבונית בדרישה <span className="num">{fmtMoneyExact(targetAmount, pr.currency)}</span></>
                       )}
                     </p>
 
@@ -592,8 +662,8 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
                       </p>
                     )}
                     <p className="mt-1 text-xs text-ink-muted">
-                      הוקצו בעבר <span className="num">{fmtMoneyExact(credit.allocated_amount)}</span>
-                      {' · '}סכום מקורי <span className="num">{fmtMoneyExact(credit.amount)}</span>
+                      הוקצו בעבר <span className="num">{fmtMoneyExact(credit.allocated_amount, credit.currency)}</span>
+                      {' · '}סכום מקורי <span className="num">{fmtMoneyExact(credit.amount, credit.currency)}</span>
                     </p>
                   </li>
                 );
@@ -618,7 +688,32 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div><label className="label" htmlFor="payment-execution-date">תאריך ביצוע</label><input id="payment-execution-date" type="date" className="input" value={f.paid_date} onChange={(e) => setF((s) => ({ ...s, paid_date: e.target.value }))} /></div>
-          <div><label className="label" htmlFor="payment-execution-amount">סכום להעברה בפועל</label><input id="payment-execution-amount" type="number" className="input num" value={allocationPreview?.cashAmount ?? ''} readOnly /></div>
+          <div><label className="label" htmlFor="payment-execution-amount">סכום החוב שנפרע ({pr.currency})</label><input id="payment-execution-amount" type="number" className="input num" value={allocationPreview?.cashAmount ?? ''} readOnly /></div>
+          <div>
+            <label className="label" htmlFor="payment-settlement-currency">מטבע חשבון הבנק</label>
+            <select id="payment-settlement-currency" className="input num" dir="ltr"
+              value={f.settlement_currency}
+              onChange={(event) => setF((current) => ({
+                ...current, settlement_currency: event.target.value, settlement_amount: '',
+              }))}>
+              {(currencyOptions ?? []).map((currency) => (
+                <option key={currency.code} value={currency.code}>{currency.code}</option>
+              ))}
+            </select>
+          </div>
+          {crossCurrencySettlement && (
+            <div>
+              <label className="label" htmlFor="payment-settlement-amount">
+                סכום שיצא מהחשבון ({f.settlement_currency}) *
+              </label>
+              <input id="payment-settlement-amount" type="number" min="0" step={settlementStep}
+                className="input num" value={f.settlement_amount}
+                onChange={(event) => setF((current) => ({ ...current, settlement_amount: event.target.value }))} />
+              <p className="mt-1 text-xs text-ink-muted">
+                שער ההמרה נגזר משני הסכומים לצפייה בלבד ואינו נשמר.
+              </p>
+            </div>
+          )}
         </div>
         <div><label className="label" htmlFor="payment-execution-reference">אסמכתת העברה *</label><input id="payment-execution-reference" className="input num" dir="ltr" value={f.reference} onChange={(e) => setF((s) => ({ ...s, reference: e.target.value }))} /></div>
         <div><label className="label" htmlFor="payment-execution-notes">הערות</label><input id="payment-execution-notes" className="input" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></div>

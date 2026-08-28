@@ -139,7 +139,7 @@ export default function Payments() {
     { key: 'num', header: 'מס׳', render: (r) => `#${r.number}` },
     { key: 'supplier', header: 'ספק', render: (r) => <span className="font-medium">{r.supplier.name}</span> },
     { key: 'date', header: 'תאריך', render: (r) => fmtDate(r.paid_date) },
-    { key: 'amount', header: 'סכום', className: 'num', render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount)}</span> },
+    { key: 'amount', header: 'סכום', className: 'num', render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount, r.currency)}</span> },
     { key: 'method', header: 'אמצעי', render: (r) => r.method ?? '—' },
     { key: 'ref', header: 'אסמכתא', render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
     { key: 'executor', header: 'בוצע על ידי', priority: 3, render: (r) => r.executor?.full_name ?? '—' },
@@ -218,12 +218,30 @@ function PaymentDetail({ payment, onClose }: { payment: Row; onClose: () => void
       <div className="space-y-4">
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
           <div><dt className="text-ink-muted">ספק</dt><dd className="font-medium">{payment.supplier.name}</dd></div>
-          <div><dt className="text-ink-muted">סכום</dt><dd className="font-semibold num">{fmtMoneyExact(payment.amount)}</dd></div>
+          <div><dt className="text-ink-muted">סכום</dt><dd className="font-semibold num">{fmtMoneyExact(payment.amount, payment.currency)}</dd></div>
           <div><dt className="text-ink-muted">תאריך תשלום</dt><dd className="num">{fmtDate(payment.paid_date)}</dd></div>
           <div><dt className="text-ink-muted">אמצעי תשלום</dt><dd>{payment.method ?? '—'}</dd></div>
           <div><dt className="text-ink-muted">אסמכתא</dt><dd dir="ltr">{payment.reference ?? '—'}</dd></div>
           <div><dt className="text-ink-muted">בוצע על ידי</dt><dd>{payment.executor?.full_name ?? '—'}</dd></div>
         </dl>
+
+        {/* OPEN-DECISIONS #286. A dollar debt may be settled from a shekel account, and when it
+            was, BOTH figures are recorded: the debt closed in dollars, and this is what actually
+            left the bank. The rate between them is derived here for reading and is stored nowhere
+            — there is no rate source in this product, and the two amounts are the whole record. */}
+        {payment.settlement_currency && payment.settlement_amount != null && (
+          <dl className="grid gap-3 rounded-lg bg-surface-sunken px-3 py-2 text-sm sm:grid-cols-2">
+            <div><dt className="text-ink-muted">ירד מהחשבון בפועל</dt>
+              <dd className="font-semibold num">{fmtMoneyExact(payment.settlement_amount, payment.settlement_currency)}</dd></div>
+            <div><dt className="text-ink-muted">שער שנגזר מהתשלום</dt>
+              <dd className="num" dir="ltr">
+                {payment.amount === 0 ? '—' : `1 ${payment.currency} = ${(payment.settlement_amount / payment.amount).toFixed(4)} ${payment.settlement_currency}`}
+              </dd></div>
+            <div className="sm:col-span-2 text-xs text-ink-muted">
+              החוב נסגר ב-{payment.currency}. השער מחושב מתוך שני הסכומים שנרשמו בתשלום הזה ואינו נשמר במערכת.
+            </div>
+          </dl>
+        )}
 
         {payment.notes && <div className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-3 py-2">{payment.notes}</div>}
 
@@ -237,14 +255,16 @@ function PaymentDetail({ payment, onClose }: { payment: Row; onClose: () => void
                     <Link to={`/invoices/${allocation.invoice.id}`} onClick={onClose}
                       className="row-hover flex min-h-11 items-center justify-between gap-3 px-3 py-2">
                       <span>חשבונית <b dir="ltr" className="num">{allocation.invoice.invoice_number}</b></span>
-                      <span className="num font-medium">{fmtMoneyExact(allocation.amount)}</span>
+                      {/* The allocation stays in the DEBT's currency, which is the payment's —
+                          settlement in another currency does not change what was closed. */}
+                      <span className="num font-medium">{fmtMoneyExact(allocation.amount, payment.currency)}</span>
                     </Link>
                   ) : (
                     // Kept, never filtered: this row carries money, and a detail card that hides
                     // part of the sum tells the reader the payment is smaller than it is.
                     <div className="flex min-h-11 items-center justify-between gap-3 px-3 py-2">
                       <span className="text-await-fg">חשבונית שאינה זמינה לצפייה</span>
-                      <span className="num font-medium">{fmtMoneyExact(allocation.amount)}</span>
+                      <span className="num font-medium">{fmtMoneyExact(allocation.amount, payment.currency)}</span>
                     </div>
                   )}
                 </li>

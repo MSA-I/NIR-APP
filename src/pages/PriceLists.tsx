@@ -10,7 +10,7 @@ import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, PageHeader, StatusBadge, Note, SkeletonTable, EmptyState, Card, ICON, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
-import { fmtDate, fmtMoneyExact, fmtMoneyRounded, formatUnit, productLabel, todayISO } from '../lib/format';
+import { fmtDate, fmtMoneyExact, fmtMoneyRounded, formatUnit, productLabel, todayISO, fmtNum } from '../lib/format';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { chartTheme } from '../lib/theme';
 import { PRODUCT_AVAILABILITY } from '../lib/status';
@@ -87,11 +87,19 @@ export default function PriceLists() {
     const offers = productRows
       .filter((r) => r.available && ['active', 'problematic'].includes(r.supplier.status))
       .sort((a, b) => a.current_price - b.current_price);
-    const cheapest = offers[0] ?? null;
-    const next = offers[1] ?? null;
+    /* A CHEAPEST OFFER EXISTS ONLY INSIDE ONE CURRENCY (0217, #277). Sorting a $12 quote below a
+       ₪40 one returns the dollar supplier as cheaper, which is not a smaller price — it is a
+       smaller number in a different unit, presented on the screen a person picks a supplier from.
+       The same rule the server now applies in `purchase_comparison` and `inventory_intelligence`.
+       Every offer stays listed, each with its own currency; only the RANKING is withheld. */
+    const offerCurrencies = new Set(offers.map((offer) => offer.currency));
+    const comparable = offerCurrencies.size === 1;
+    const cheapest = comparable ? offers[0] ?? null : null;
+    const next = comparable ? offers[1] ?? null : null;
     return {
       product: productRows[0].product,
       supplierCount: productRows.length,
+      spansCurrencies: offerCurrencies.size > 1,
       cheapest,
       delta: cheapest && next ? next.current_price - cheapest.current_price : null,
       deltaPct: cheapest && next && cheapest.current_price > 0
@@ -119,7 +127,7 @@ export default function PriceLists() {
     { key: 'product', header: 'מוצר', priority: 3, sortValue: (r) => productLabel(r.product), render: (r) => <bdi className="font-medium text-ink">{productLabel(r.product)}</bdi> },
     { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
     { key: 'unit', header: 'יחידה', priority: 3, render: (r) => formatUnit(r.product.unit) },
-    { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price)}</span> },
+    { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price, r.currency)}</span> },
     // Comparison-only column: how far each offer stands from the cheapest eligible one.
     ...(productFilter ? [{
       key: 'delta', header: 'הפרש מהזול', className: 'num',
@@ -130,10 +138,10 @@ export default function PriceLists() {
         const diff = r.current_price - cheapest.current_price;
         if (diff <= 0) return <span className="text-ink-faint">—</span>;
         const pct = cheapest.current_price > 0 ? (diff / cheapest.current_price) * 100 : null;
-        return <span className="text-trend-up-fg">‎+{fmtMoneyExact(diff)}{pct != null ? ` (+${pct.toFixed(1)}%)` : ''}</span>;
+        return <span className="text-trend-up-fg">‎+{fmtMoneyExact(diff, r.currency)}{pct != null ? ` (+${pct.toFixed(1)}%)` : ''}</span>;
       },
     } satisfies Column<Row>] : []),
-    { key: 'prev', header: 'מחיר קודם', priority: 3, className: 'num', render: (r) => fmtMoneyExact(r.previous_price) },
+    { key: 'prev', header: 'מחיר קודם', priority: 3, className: 'num', render: (r) => fmtMoneyExact(r.previous_price, r.currency) },
     {
       key: 'change', header: 'שינוי', sortValue: changePct,
       render: (r) => {
@@ -177,12 +185,14 @@ export default function PriceLists() {
             {canWrite && <Link className="text-sm text-action underline" to={`/products?id=${comparison.product.id}`}>עריכת מוצר</Link>}
           </div>
           <div className="mt-2 text-sm text-ink-body">
-            {comparison.cheapest ? (
+            {comparison.spansCurrencies ? (
+              <>המוצר מצוטט ביותר ממטבע אחד, ולכן אין הצעה &quot;זולה ביותר&quot;. ההצעות מוצגות למטה, כל אחת במטבע שלה.</>
+            ) : comparison.cheapest ? (
               <>
                 הזול ביותר: <bdi className="font-medium">{comparison.cheapest.supplier.name}</bdi>
-                {' — '}<span className="num font-semibold">{fmtMoneyExact(comparison.cheapest.current_price)}</span>
+                {' — '}<span className="num font-semibold">{fmtMoneyExact(comparison.cheapest.current_price, comparison.cheapest.currency)}</span>
                 {comparison.delta != null && comparison.delta > 0 && (
-                  <> · זול ב-<span className="num">{fmtMoneyExact(comparison.delta)}</span>
+                  <> · זול ב-<span className="num">{fmtMoneyExact(comparison.delta, comparison.cheapest.currency)}</span>
                     {comparison.deltaPct != null ? ` (${comparison.deltaPct.toFixed(1)}%)` : ''} מהמחיר הבא</>
                 )}
                 {comparison.delta === 0 && <> · המחיר הבא זהה</>}
@@ -277,6 +287,9 @@ export default function PriceLists() {
 }
 
 function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) {
+  /* One supplier_product, so one currency throughout the chart and the table. A price history row
+     carries its own (0217); the row this modal opened on names the one the axis is drawn in. */
+  const currency = row.currency;
   const { data } = useQuery<PriceHistory[]>(async () =>
     unwrap(await supabase.from('price_history').select('*').eq('supplier_product_id', row.id).order('effective_date', { ascending: false })), [row.id]);
   return (
@@ -294,8 +307,8 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
               <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
                 <CartesianGrid stroke={t.grid} strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="date" tick={{ fill: t.tick, fontSize: 11 }} tickLine={false} axisLine={{ stroke: t.grid }} minTickGap={24} />
-                <YAxis tick={{ fill: t.tick, fontSize: 11 }} tickLine={false} axisLine={false} width={52} tickFormatter={(v: number) => fmtMoneyRounded(v)} />
-                <Tooltip formatter={(v: number) => [fmtMoneyExact(v), 'מחיר']} />
+                <YAxis tick={{ fill: t.tick, fontSize: 11 }} tickLine={false} axisLine={false} width={52} tickFormatter={(v: number) => fmtMoneyRounded(v, currency)} />
+                <Tooltip formatter={(v: number) => [fmtMoneyExact(v, currency), 'מחיר']} />
                 <Line type="stepAfter" dataKey="price" stroke={stroke} strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -313,7 +326,7 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
           <thead className="table-head"><tr><th scope="col" className="th">תאריך</th><th scope="col" className="th">מחיר</th></tr></thead>
           <tbody className="divide-y divide-line-soft">
             {data.map((h) => (
-              <tr key={h.id}><td className="td">{fmtDate(h.effective_date)}</td><td className="td num">{fmtMoneyExact(h.price)}</td></tr>
+              <tr key={h.id}><td className="td">{fmtDate(h.effective_date)}</td><td className="td num">{fmtMoneyExact(h.price, h.currency)}</td></tr>
             ))}
           </tbody>
         </table>
@@ -435,13 +448,18 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         </div>
       ) : preview.length ? (
         <div className="space-y-4">
-          <div className="text-sm text-ink-soft">{preview.length} שורות זוהו. ההתאמה מתבצעת לפי שם ספק ושם מוצר מדויקים.</div>
+          <div className="text-sm text-ink-soft">{preview.length} שורות זוהו. ההתאמה מתבצעת לפי שם ספק ושם מוצר מדויקים. המחיר ייקלט במטבע של הספק.</div>
           <div className="table-scroll max-h-64 overflow-auto rounded-lg border border-line-soft" tabIndex={0} role="region" aria-label="תצוגה מקדימה של שורות המחירון">
             <table className="w-full">
               <thead className="table-head sticky top-0"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">מוצר</th><th scope="col" className="th">מחיר</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {preview.slice(0, 100).map((r, i) => (
-                  <tr key={i}><td className="td">{r.supplier}</td><td className="td">{r.product}</td><td className="td num">{fmtMoneyExact(r.price)}</td></tr>
+                  <tr key={i}><td className="td">{r.supplier}</td><td className="td">{r.product}</td>{/* No currency symbol here on purpose: the sheet has no currency column, the supplier is
+                        matched by NAME at import time, and the price is stored in THAT supplier own
+                        currency by the server. Printing a symbol this screen guessed would be the
+                        silent unit swap the whole campaign removes; the note below says where the
+                        currency comes from. */}
+                    <td className="td num">{fmtNum(r.price)}</td></tr>
                 ))}
               </tbody>
             </table>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Banknote, Calculator, ChevronLeft, FileSpreadsheet, Loader2, Printer, ReceiptText, type LucideIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -9,10 +9,12 @@ import { DataTable, EmptyState, ErrorNote, ICON, Modal, Note, PageHeader, Skelet
 import { INVOICE_PAYMENT_STATUS } from '../lib/status';
 import { toHebrewError } from '../lib/errors';
 import {
-  addCalendarDays, daysInCalendarMonth, fmtDate, fmtMoneyRounded, fmtMoneyExact, fmtNum,
+  addCalendarDays, daysInCalendarMonth, fmtDate, fmtMoneyExact, fmtNum,
   shiftCalendarMonth, todayISO,
 } from '../lib/format';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
+import { MoneyByCurrency, sortByBaseCurrency, totalsByCurrency } from '../components/Money';
+import type { MoneyAmount } from '../lib/types';
 import { useAuth } from '../auth/AuthContext';
 import { financialSupplierMap } from '../lib/financialSuppliers';
 import { neutralizeSpreadsheetRow } from '../lib/documentExport';
@@ -20,11 +22,14 @@ import {
   downloadRenderedWorkbook,
   expenseSummaryTemplateValues,
   renderConfiguredReportTemplate,
+  singleCurrencyTotal,
   type PurchaseMetrics,
 } from '../lib/reportTemplateExport';
 
 type InvoiceRow = {
   id: string; invoice_number: string; invoice_date: string; total_amount: number;
+  /** The currency the invoice was issued in (0217). Never converted, on this screen or any other. */
+  currency: string;
   payment_status: string; supplier_id: string; supplier: { name: string } | null;
 };
 type RawInvoiceRow = Omit<InvoiceRow, 'supplier'>;
@@ -32,8 +37,17 @@ type RawOrderItem = {
   qty: number;
   unit_price: number;
   product: { category_id: string | null } | { category_id: string | null }[] | null;
+  // The line's money is the ORDER's money: `unit_price` is the snapshot taken in the order's
+  // currency, so a category value can only be added up inside that currency.
+  order: { currency: string } | { currency: string }[] | null;
 };
-type SupplierRow = { id: string; name: string; count: number; total: number };
+/**
+ * One row per supplier AND currency — a supplier billing in two currencies has two rows (#277).
+ * `id` is the row's identity, not the supplier's, because `DataTable` keys on it and one key per
+ * supplier is exactly where the second currency would collide with the first.
+ */
+type SupplierRow = { id: string; supplierId: string; name: string; currency: string; count: number; total: number };
+type CategoryRow = { name: string; currency: string; total: number };
 
 /** The one id the two date inputs point at when the range is refused. */
 const RANGE_ERROR_ID = 'expenses-range-error';
@@ -70,7 +84,9 @@ function presetRange(key: PresetKey): { from: string; to: string } {
 // One segment in a compact control-room strip. The square marker and shared ruled surface keep
 // the summary dense and operational instead of turning each number into a floating card.
 function StripStat({ title, value, context, icon: Icon }: {
-  title: string; value: string; context?: string; icon: LucideIcon;
+  // `ReactNode`, because a money figure on this strip may be two lines — one per currency — and
+  // a string could only have joined them into something that reads like one number.
+  title: string; value: ReactNode; context?: string; icon: LucideIcon;
 }) {
   return (
     <div className="min-h-20 border-t border-line-soft px-4 py-3 first:border-t-0 sm:border-s sm:border-t-0 sm:px-5 sm:first:border-s-0">
@@ -88,6 +104,7 @@ function StripStat({ title, value, context, icon: Icon }: {
 
 export default function Expenses() {
   const { profile, org } = useAuth();
+  const baseCurrency = org?.base_currency ?? null;
   const toast = useToast();
   const defaults = presetRange('month');
   // useParamState seeds from the URL and re-syncs when it changes; the URL is also WRITTEN
@@ -110,14 +127,18 @@ export default function Expenses() {
 
   const { data, loading, fetching, error } = useQuery(async () => {
     if (invalidRange) return {
-      invoices: [], bySupplier: [], catTotals: [], totalAll: 0, coveredTotal: 0,
+      invoices: [], bySupplier: [], catTotals: [] as CategoryRow[],
+      totals: [] as MoneyAmount[], coveredTotals: [] as MoneyAmount[], averages: [] as MoneyAmount[],
       invalidRange: true, categoryBreakdownAvailable,
-      metrics: { committed: null, gross_expense: null, credits_recognised: null, net_expense: null } as PurchaseMetrics,
+      metrics: {
+        committed_by_currency: null, gross_expense_by_currency: null,
+        credits_recognised_by_currency: null, net_expense_by_currency: null,
+      } as PurchaseMetrics,
     };
     const end = addCalendarDays(to, 1);
     const [rawInvoices, categories, metrics] = await Promise.all([
       fetchAll<RawInvoiceRow>((fromRow, toRow) => supabase.from('invoices')
-        .select('id, invoice_number, invoice_date, total_amount, payment_status, supplier_id')
+        .select('id, invoice_number, invoice_date, total_amount, currency, payment_status, supplier_id')
         .eq('financial_role', 'payable')
         .gte('invoice_date', from).lt('invoice_date', end)
         .is('deleted_at', null)
@@ -139,7 +160,7 @@ export default function Expenses() {
     // Category split can only be derived from purchase orders (invoices carry no line items):
     // in-range invoices → invoice_order_links → purchase_order_items at snapshot prices.
     let links: { invoice_id: string; order_id: string }[] = [];
-    let items: { qty: number; unit_price: number; product: { category_id: string | null } | null }[] = [];
+    let items: { qty: number; unit_price: number; product: { category_id: string | null } | null; currency: string }[] = [];
     if (categoryBreakdownAvailable && invoices.length) {
       links = await fetchInChunks(invoices.map((i) => i.id), (chunk) =>
         fetchAll<{ invoice_id: string; order_id: string }>((fromRow, toRow) => supabase.from('invoice_order_links')
@@ -149,47 +170,76 @@ export default function Expenses() {
       if (orderIds.length) {
         const rawItems = await fetchInChunks(orderIds, (chunk) =>
           fetchAll<RawOrderItem>((fromRow, toRow) => supabase.from('purchase_order_items')
-            .select('qty, unit_price, product:products(category_id)')
+            .select('qty, unit_price, product:products(category_id), order:purchase_orders!inner(currency)')
             .in('order_id', chunk).order('order_id').order('id').range(fromRow, toRow)));
         items = rawItems.map((item) => ({
           ...item,
           product: Array.isArray(item.product) ? item.product[0] ?? null : item.product,
+          currency: (Array.isArray(item.order) ? item.order[0] : item.order)?.currency ?? '',
         }));
       }
     }
 
     // Coverage is expressed separately from the category rows. Category values come from order
     // snapshots, not invoice lines, so the UI never presents them as an exact invoice breakdown.
-    const linkedIds = new Set(links.map((l) => l.invoice_id));
-    const totalAll = invoices.reduce((s, i) => s + i.total_amount, 0);
-    const coveredTotal = invoices.filter((i) => linkedIds.has(i.id)).reduce((s, i) => s + i.total_amount, 0);
+    /* EVERY TOTAL ON THIS SCREEN IS A TOTAL WITHIN ONE CURRENCY (0217, #277). A period holding
+       ₪12,400 of shekel invoices and $3,100 of dollar ones has two totals, not one — and the
+       average, the coverage figure and each supplier's share are all derived from a total, so
+       every one of them is computed inside its own currency and labelled with it. Nothing here
+       is converted, and nothing spanning two currencies is added.
 
-    const byCat = new Map<string, number>();
+       Coverage is still expressed separately from the category rows: category values come from
+       order snapshots, not invoice lines, so the screen never presents them as an exact invoice
+       breakdown. */
+    const linkedIds = new Set(links.map((l) => l.invoice_id));
+    const totals = totalsByCurrency(invoices.map((i) => ({ currency: i.currency, amount: i.total_amount })));
+    const coveredTotals = totalsByCurrency(invoices
+      .filter((i) => linkedIds.has(i.id))
+      .map((i) => ({ currency: i.currency, amount: i.total_amount })));
+    const countByCurrency = new Map<string, number>();
+    for (const invoice of invoices) countByCurrency.set(invoice.currency, (countByCurrency.get(invoice.currency) ?? 0) + 1);
+    const averages = totals.map((total) => ({
+      currency: total.currency,
+      amount: total.amount / (countByCurrency.get(total.currency) ?? 1),
+    }));
+
+    // Keyed by category AND currency: one key per name is where a dollar order's value used to be
+    // added onto a shekel one and shown as a single figure under the category's name.
+    const byCat = new Map<string, CategoryRow>();
     for (const it of items) {
       const name = (it.product?.category_id && categoryNames.get(it.product.category_id)) || 'ללא קטגוריה';
-      byCat.set(name, (byCat.get(name) ?? 0) + it.qty * it.unit_price);
+      const row = byCat.get(`${name}|${it.currency}`) ?? { name, currency: it.currency, total: 0 };
+      row.total += it.qty * it.unit_price;
+      byCat.set(`${name}|${it.currency}`, row);
     }
-    const catTotals = [...byCat.entries()].map(([name, total]) => ({ name, total })).filter((c) => c.total > 0);
+    const catTotals = [...byCat.values()].filter((c) => c.total > 0);
 
     const bySupMap = new Map<string, SupplierRow>();
     for (const inv of invoices) {
-      const row = bySupMap.get(inv.supplier_id) ?? { id: inv.supplier_id, name: inv.supplier?.name ?? '—', count: 0, total: 0 };
+      const key = `${inv.supplier_id}|${inv.currency}`;
+      const row = bySupMap.get(key)
+        ?? { id: key, supplierId: inv.supplier_id, name: inv.supplier?.name ?? '—', currency: inv.currency, count: 0, total: 0 };
       row.count += 1;
       row.total += inv.total_amount;
-      bySupMap.set(inv.supplier_id, row);
+      bySupMap.set(key, row);
     }
-    const bySupplier = [...bySupMap.values()].sort((a, b) => b.total - a.total);
+    // Ordered by amount INSIDE each currency, the organisation's own currency first: 3,100 of one
+    // currency is not "less than" 12,400 of another, so a single descending sort over the column
+    // would be ranking numbers that have no order between them.
+    const bySupplier = sortByBaseCurrency([...bySupMap.values()], baseCurrency)
+      .sort((a, b) => (a.currency === b.currency ? b.total - a.total : 0));
 
     return {
-      invoices, bySupplier, catTotals, totalAll, coveredTotal,
+      invoices, bySupplier, catTotals, totals, coveredTotals, averages,
       invalidRange: false, categoryBreakdownAvailable, metrics,
     };
-  }, [from, to, invalidRange, categoryBreakdownAvailable]);
+  }, [from, to, invalidRange, categoryBreakdownAvailable, baseCurrency]);
 
   async function exportExcel() {
     if (!data || data.invalidRange || fetching || error || !org) return;
     setExporting(true);
     try {
+      const exportCurrency = singleCurrencyTotal(data.metrics.gross_expense_by_currency).currency;
       const values = expenseSummaryTemplateValues({
         orgName: org.name,
         periodLabel: `${fmtDate(from)} – ${fmtDate(to)}`,
@@ -197,7 +247,10 @@ export default function Expenses() {
         periodTo: fmtDate(to),
         generatedAt: fmtDate(todayISO()),
         metrics: data.metrics,
-        bySupplier: data.bySupplier,
+        // The template fills its numeric cells only in a single-currency period, and this list has
+        // to be the same currency those cells are in — otherwise "top supplier" would name a
+        // supplier whose figure is in a different unit from the total above it.
+        bySupplier: exportCurrency ? data.bySupplier.filter((row) => row.currency === exportCurrency) : [],
       });
       const templated = await renderConfiguredReportTemplate({
         exportKey: 'owner_expense_summary', orgId: org.id, values,
@@ -212,19 +265,22 @@ export default function Expenses() {
       // somebody opens in Excel. `=`/`@` at the start of a cell is a formula there, whatever we
       // meant by it — same neutralizer as documentExport.ts, which is now the one place it lives.
       const wb = XLSX.utils.book_new();
+      // A currency column on every money sheet, so a row is never read in the wrong unit — the
+      // same rule the accountant's workbook follows (#287).
+      const sheetTotalFor = (currency: string) => data.totals.find((t) => t.currency === currency)?.amount ?? 0;
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.bySupplier.map((r) => neutralizeSpreadsheetRow({
-        'ספק': r.name, 'חשבוניות': r.count, 'סה"כ': r.total,
-        '% מהסך': data.totalAll > 0 ? Number(((r.total / data.totalAll) * 100).toFixed(1)) : null,
+        'ספק': r.name, 'מטבע': r.currency, 'חשבוניות': r.count, 'סה"כ': r.total,
+        '% מהסך': sheetTotalFor(r.currency) > 0 ? Number(((r.total / sheetTotalFor(r.currency)) * 100).toFixed(1)) : null,
       }))), 'לפי ספק');
       if (data.categoryBreakdownAvailable) {
-        const catRows: { 'קטגוריה': string; 'ערך בהזמנות מקושרות': number }[] = [...data.catTotals]
-          .sort((a, b) => b.total - a.total)
-          .map((c) => neutralizeSpreadsheetRow({ 'קטגוריה': c.name, 'ערך בהזמנות מקושרות': c.total }));
+        const catRows: { 'קטגוריה': string; 'מטבע': string; 'ערך בהזמנות מקושרות': number }[] = sortByBaseCurrency(data.catTotals, baseCurrency)
+          .sort((a, b) => (a.currency === b.currency ? b.total - a.total : 0))
+          .map((c) => neutralizeSpreadsheetRow({ 'קטגוריה': c.name, 'מטבע': c.currency, 'ערך בהזמנות מקושרות': c.total }));
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'קטגוריות בהזמנות');
       }
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.invoices.map((i) => neutralizeSpreadsheetRow({
         'ספק': i.supplier?.name ?? '', 'מספר חשבונית': i.invoice_number, 'תאריך': i.invoice_date,
-        'סה"כ': i.total_amount, 'סטטוס תשלום': INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
+        'מטבע': i.currency, 'סה"כ': i.total_amount, 'סטטוס תשלום': INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
       }))), 'חשבוניות');
       XLSX.writeFile(wb, fileName);
       toast('קובץ ה-Excel הורד');
@@ -240,9 +296,8 @@ export default function Expenses() {
   if (!data) return <ErrorNote message="שגיאה" />;
 
   const hasInvoices = data.invoices.length > 0;
-  // A computed sum over a selected range IS data — ₪0 total with 0 invoices is an honest
-  // statement. Only the average is genuinely unmeasurable at 0/0 → "—" (CLAUDE.md).
-  const avg = hasInvoices ? data.totalAll / data.invoices.length : null;
+  /** The period's total in one named currency — the denominator of every share on this screen. */
+  const totalFor = (currency: string) => data.totals.find((total) => total.currency === currency)?.amount ?? 0;
 
   // A disabled button looks clickable but does nothing; the title says why it is blocked.
   const rangeBlockedReason = fetching ? 'הנתונים נטענים…'
@@ -251,20 +306,28 @@ export default function Expenses() {
     : null;
   const excelBlockedReason = rangeBlockedReason ?? (!hasInvoices ? 'אין חשבוניות בטווח שנבחר' : null);
 
-  const categoryRows = [...data.catTotals].sort((a, b) => b.total - a.total);
-  const categoryTotal = categoryRows.reduce((sum, row) => sum + row.total, 0);
+  const categoryRows = sortByBaseCurrency(data.catTotals, baseCurrency)
+    .sort((a, b) => (a.currency === b.currency ? b.total - a.total : 0));
+  const categoryTotalFor = (currency: string) => categoryRows
+    .filter((row) => row.currency === currency)
+    .reduce((sum, row) => sum + row.total, 0);
 
   const columns: Column<SupplierRow>[] = [
     { key: 'name', header: 'ספק', sortValue: (r) => r.name, render: (r) => <span className="font-medium">{r.name}</span> },
     { key: 'count', header: 'חשבוניות', className: 'num', sortValue: (r) => r.count, render: (r) => fmtNum(r.count) },
-    { key: 'total', header: 'סה״כ', className: 'num', mobileLabel: null, sortValue: (r) => r.total, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.total)}</span> },
+    { key: 'total', header: 'סה״כ', className: 'num', mobileLabel: null, sortValue: (r) => r.total, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.total, r.currency)}</span> },
     {
       key: 'pct', header: '% מהסך', className: 'num', mobileLabel: '% מהסך', sortValue: (r) => r.total,
-      render: (r) => (data.totalAll > 0 ? `${((r.total / data.totalAll) * 100).toFixed(1)}%` : '—'),
+      // A share of the total IN THIS ROW'S CURRENCY. Dividing a dollar figure by a shekel total
+      // returns a percentage of nothing.
+      render: (r) => (totalFor(r.currency) > 0 ? `${((r.total / totalFor(r.currency)) * 100).toFixed(1)}%` : '—'),
     },
   ];
 
-  const drillInvoices = drill ? data.invoices.filter((i) => i.supplier_id === drill.id) : [];
+  // The drill-down belongs to ONE of the supplier's currencies — the row that was clicked.
+  const drillInvoices = drill
+    ? data.invoices.filter((i) => i.supplier_id === drill.supplierId && i.currency === drill.currency)
+    : [];
   // Which quick range the current from/to happens to equal — '' once the dates were typed by hand,
   // which is how ToggleGroup renders "no chip pressed" without inventing a sixth option.
   const activePreset: PresetKey | '' = PRESETS.find((preset) => {
@@ -317,12 +380,15 @@ export default function Expenses() {
 
         <div className="grid grid-cols-1 border-y border-line-strong bg-surface sm:grid-cols-3">
           <StripStat title="סה״כ הוצאות בטווח" icon={Banknote}
-            value={fmtMoneyRounded(data.totalAll)} context={`${fmtDate(from)} – ${fmtDate(to)}`} />
+            value={<MoneyByCurrency amounts={data.totals} baseCurrency={baseCurrency} shape="rounded" />}
+            context={`${fmtDate(from)} – ${fmtDate(to)}`} />
           <StripStat title="מספר חשבוניות" icon={ReceiptText}
             value={fmtNum(data.invoices.length)} context="חשבוניות שאינן מחוקות בטווח" />
+          {/* An average per currency: the sum of that currency's invoices over the number of
+              them. 0/0 stays "—" — an average of nothing is unmeasurable, not zero (CLAUDE.md). */}
           <StripStat title="ממוצע לחשבונית" icon={Calculator}
-            value={avg == null ? '—' : fmtMoneyRounded(avg)}
-            context={avg == null ? 'אין חשבוניות בטווח' : 'סה״כ חלקי מספר החשבוניות'} />
+            value={<MoneyByCurrency amounts={data.averages} baseCurrency={baseCurrency} shape="rounded" />}
+            context={hasInvoices ? 'סה״כ חלקי מספר החשבוניות, בכל מטבע בנפרד' : 'אין חשבוניות בטווח'} />
         </div>
 
         {!hasInvoices ? (
@@ -342,17 +408,17 @@ export default function Expenses() {
                       <span className="block font-medium text-ink-body">{supplier.name}</span>
                       <span className="mt-0.5 block text-xs text-ink-muted">
                         <span className="num">{fmtNum(supplier.count)}</span> חשבוניות
-                        {data.totalAll > 0 && <> · <span className="num">{((supplier.total / data.totalAll) * 100).toFixed(1)}%</span> מהסך</>}
+                        {totalFor(supplier.currency) > 0 && <> · <span className="num">{((supplier.total / totalFor(supplier.currency)) * 100).toFixed(1)}%</span> מהסך ב-{supplier.currency}</>}
                       </span>
                     </span>
-                    <strong className="num shrink-0 text-sm text-ink-body">{fmtMoneyExact(supplier.total)}</strong>
+                    <strong className="num shrink-0 text-sm text-ink-body">{fmtMoneyExact(supplier.total, supplier.currency)}</strong>
                     <ChevronLeft size={ICON.sm} className="shrink-0 text-ink-ghost" aria-hidden="true" />
                   </button>
                 ))}
               </div>
               <div className="hidden lg:block">
                 <DataTable rows={data.bySupplier} columns={columns} mobile="scroll"
-                  rowLabel={(r) => `הוצאות עבור ${r.name}`}
+                  rowLabel={(r) => `הוצאות עבור ${r.name} ב-${r.currency}`}
                   onRowClick={(r) => setDrill(r)} emptyTitle="אין חשבוניות בטווח" />
               </div>
             </section>
@@ -368,16 +434,17 @@ export default function Expenses() {
                 </summary>
                 <div className="border-t border-line-soft">
                   <div className="px-3 py-2 text-xs text-ink-muted sm:px-4">
-                    חשבוניות מקושרות בסך <span className="num">{fmtMoneyRounded(data.coveredTotal)}</span> מתוך{' '}
-                    <span className="num">{fmtMoneyRounded(data.totalAll)}</span>. הסכומים למטה הם ערכי פריטי ההזמנה במחירי snapshot.
+                    חשבוניות מקושרות בסך{' '}
+                    <MoneyByCurrency amounts={data.coveredTotals} baseCurrency={baseCurrency} shape="rounded" /> מתוך{' '}
+                    <MoneyByCurrency amounts={data.totals} baseCurrency={baseCurrency} shape="rounded" />. הסכומים למטה הם ערכי פריטי ההזמנה במחירי snapshot.
                   </div>
                   {categoryRows.length > 0 ? (
                     <ul className="divide-y divide-line-soft border-t border-line-soft text-sm">
                       {categoryRows.map((row) => (
-                        <li key={row.name} className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-2 sm:px-4">
+                        <li key={`${row.name}|${row.currency}`} className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-2 sm:px-4">
                           <span className="min-w-0 break-words text-ink-body">{row.name}</span>
-                          <span className="num text-ink-muted">{categoryTotal > 0 ? `${((row.total / categoryTotal) * 100).toFixed(1)}%` : '—'}</span>
-                          <span className="num min-w-24 font-medium text-ink-body">{fmtMoneyExact(row.total)}</span>
+                          <span className="num text-ink-muted">{categoryTotalFor(row.currency) > 0 ? `${((row.total / categoryTotalFor(row.currency)) * 100).toFixed(1)}%` : '—'}</span>
+                          <span className="num min-w-24 font-medium text-ink-body">{fmtMoneyExact(row.total, row.currency)}</span>
                         </li>
                       ))}
                     </ul>
@@ -397,7 +464,7 @@ export default function Expenses() {
         )}
       </div>}
 
-      <Modal open={!!drill} onClose={() => setDrill(null)} title={drill ? `חשבוניות בטווח — ${drill.name}` : ''}>
+      <Modal open={!!drill} onClose={() => setDrill(null)} title={drill ? `חשבוניות בטווח — ${drill.name} (${drill.currency})` : ''}>
         {drill && (
           <ul className="divide-y divide-line-soft">
             {drillInvoices.map((inv) => (
@@ -408,7 +475,7 @@ export default function Expenses() {
                   <span className="text-xs text-ink-muted">{fmtDate(inv.invoice_date)}</span>
                   <span className="ms-auto flex shrink-0 items-center gap-3">
                     <StatusBadge meta={INVOICE_PAYMENT_STATUS[inv.payment_status]} />
-                    <span className="num text-sm font-semibold">{fmtMoneyExact(inv.total_amount)}</span>
+                    <span className="num text-sm font-semibold">{fmtMoneyExact(inv.total_amount, inv.currency)}</span>
                   </span>
                 </Link>
               </li>

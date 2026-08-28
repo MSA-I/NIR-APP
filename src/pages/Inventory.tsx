@@ -41,9 +41,15 @@ interface InventoryBalance {
   suggested_reorder_quantity: number | null;
   cheapest_supplier_name: string | null;
   cheapest_unit_price: number | null;
+  /** 0223: the currency of the cheapest offer, and null when the offers span more than one. */
+  cheapest_currency: string | null;
+  /** 0223: true when the product is quoted in two currencies, so there IS no cheapest offer. */
+  prices_span_currencies: boolean;
   price_advantage: number | null;
   supplier_price_count: number | null;
   latest_purchase_unit_price: number | null;
+  /** 0225: the ORDER's currency, which is what the last purchase was priced in. */
+  latest_purchase_currency: string | null;
 }
 
 interface InventoryMovement {
@@ -211,15 +217,20 @@ export default function Inventory() {
     {
       key: 'supplierPrice', header: 'מחיר ספק', priority: 2,
       sortValue: (row) => row.cheapest_unit_price ?? Number.POSITIVE_INFINITY,
-      render: (row) => row.cheapest_unit_price == null ? <span className="num">—</span> : (
+      render: (row) => (row.prices_span_currencies ? (
+        /* 0223: quoted in two currencies, so there is no cheapest offer — sorting 12 below 40
+           when one is dollars and the other shekels would recommend a supplier on the strength of
+           a smaller number rather than a lower price. */
+        <span className="text-xs text-ink-muted">מחירים בכמה מטבעות</span>
+      ) : row.cheapest_unit_price == null ? <span className="num">—</span> : (
         <span>
-          <span className="block font-medium">{row.cheapest_supplier_name} · <span className="num">{fmtMoneyRounded(row.cheapest_unit_price)}</span></span>
+          <span className="block font-medium">{row.cheapest_supplier_name} · <span className="num">{fmtMoneyRounded(row.cheapest_unit_price, row.cheapest_currency)}</span></span>
           <span className="block text-xs text-ink-muted">
-            {row.price_advantage == null ? 'מחיר פעיל יחיד' : `זול ב-${fmtMoneyRounded(row.price_advantage)} מהמחיר הבא`}
-            {row.latest_purchase_unit_price == null ? '' : ` · רכישה אחרונה ${fmtMoneyRounded(row.latest_purchase_unit_price)}`}
+            {row.price_advantage == null ? 'מחיר פעיל יחיד' : `זול ב-${fmtMoneyRounded(row.price_advantage, row.cheapest_currency)} מהמחיר הבא`}
+            {row.latest_purchase_unit_price == null ? '' : ` · רכישה אחרונה ${fmtMoneyRounded(row.latest_purchase_unit_price, row.latest_purchase_currency)}`}
           </span>
         </span>
-      ),
+      )),
     },
     {
       key: 'status', header: 'מצב', priority: 1,

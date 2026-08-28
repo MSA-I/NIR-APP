@@ -19,6 +19,15 @@ export interface PortalSnapshot {
   notes: string | null;
   supplier_name: string | null;
   org_name: string;
+  /**
+   * The order's currency, as the snapshot recorded it.
+   *
+   * OPTIONAL, and deliberately so: a snapshot is EVIDENCE — the exact sheet a supplier was sent —
+   * and evidence is never rewritten. Snapshots issued before the currency existed carry no such
+   * field, and their currency is decided by INTERPRETATION at read time (see `portalCurrency`),
+   * not by editing what was signed.
+   */
+  currency?: string;
   issued_at: string;
   items: PortalSnapshotItem[];
 }

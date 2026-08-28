@@ -32,6 +32,7 @@ import { financialSupplierMap } from '../lib/financialSuppliers';
 export type InvoiceRow = Omit<Invoice, 'supplier'> & {
   supplier: { name: string };
   order_links: { order_id: string }[];
+  /** From invoice_balances_by_currency (0218). The invoice's own currency governs both figures. */
   balance?: number;
 };
 
@@ -188,12 +189,12 @@ export function InvoicesList() {
         supplier: { name: suppliers.get(row.supplier_id)?.name ?? '—' },
       }));
       if (!isProcurementManager && rows.length > 0) {
-        const balances = await supabase.from('invoice_balances')
-          .select('invoice_id, balance')
+        const balances = await supabase.from('invoice_balances_by_currency')
+          .select('invoice_id, balance_in_currency')
           .in('invoice_id', rows.map((row) => row.id));
         if (balances.error) throw new Error(balances.error.message);
-        const byId = new Map((balances.data as { invoice_id: string; balance: number }[])
-          .map((balance) => [balance.invoice_id, balance.balance]));
+        const byId = new Map((balances.data as { invoice_id: string; balance_in_currency: number }[])
+          .map((balance) => [balance.invoice_id, balance.balance_in_currency]));
         rows = rows.map((row) => ({ ...row, balance: byId.get(row.id) }));
       }
       return { ...result, rows, narrowed };
@@ -244,12 +245,12 @@ export function InvoicesList() {
     { key: 'number', header: 'מס׳ חשבונית', priority: 3, className: 'num', render: (r) => <span className="font-medium text-ink" dir="ltr">{r.invoice_number}</span> },
     { key: 'supplier', header: 'ספק', priority: 3, render: (r) => r.supplier.name },
     { key: 'date', header: 'תאריך', render: (r) => fmtDate(r.invoice_date) },
-    { key: 'total', header: 'סה״כ', className: 'num', render: (r) => fmtMoneyExact(r.total_amount) },
+    { key: 'total', header: 'סה״כ', className: 'num', render: (r) => fmtMoneyExact(r.total_amount, r.currency) },
     { key: 'review', header: 'בדיקה', mobileLabel: null, render: (r) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
     { key: 'payment', header: 'תשלום', priority: 3, render: (r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
   ];
   if (!isProcurementManager) {
-    columns.splice(4, 0, { key: 'balance', header: 'יתרה', className: 'num', render: (r) => (r.balance != null && r.balance > 0 ? <span className="text-await-fg">{fmtMoneyExact(r.balance)}</span> : <span className="text-done-fg">—</span>) });
+    columns.splice(4, 0, { key: 'balance', header: 'יתרה', className: 'num', render: (r) => (r.balance != null && r.balance > 0 ? <span className="text-await-fg">{fmtMoneyExact(r.balance, r.currency)}</span> : <span className="text-done-fg">—</span>) });
   }
   if (canViewExport) {
     columns.push({ key: 'export', header: 'רו״ח', priority: 3, render: (r) => <StatusBadge meta={INVOICE_EXPORT_STATUS[r.export_status]} /> });

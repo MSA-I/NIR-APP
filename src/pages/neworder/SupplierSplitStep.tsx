@@ -11,6 +11,7 @@ import {
   type SplitLine,
 } from '../../lib/orderSplit';
 import { ICON } from '../../components/ui';
+import { MoneyByCurrency } from '../../components/Money';
 import type { Product, Supplier, SupplierProduct } from '../../lib/types';
 import MinimumFixPanel from './MinimumFixPanel';
 import SupplierGroupCard from './SupplierGroupCard';
@@ -20,6 +21,8 @@ interface SupplierCartItem extends SplitLine {
 }
 
 interface SupplierSplitStepProps {
+  /** The organisation own currency: display ORDER for a multi-currency basket, never a rate. */
+  baseCurrency: string | null | undefined;
   cart: readonly SupplierCartItem[];
   offersByProduct: ReadonlyMap<string, readonly SupplierProduct[]>;
   supplierById: ReadonlyMap<string, Supplier>;
@@ -57,6 +60,7 @@ export default function SupplierSplitStep({
   onConsolidate,
   onBack,
   onContinue,
+  baseCurrency,
 }: SupplierSplitStepProps) {
   const [focusedSupplierId, setFocusedSupplierId] = useState<string | null>(null);
   const [panelMode, setPanelMode] = useState<'all' | 'move_group'>('all');
@@ -110,7 +114,7 @@ export default function SupplierSplitStep({
           <div className="min-w-0 flex-1">
             <strong className="block text-ink">אפשר לאחד את כל הסל אצל {singleSupplier.name}</strong>
             <span className="mt-0.5 block text-xs">
-              <ConsolidationCost savings={split.savings.savings} /> · סה״כ <span className="num font-semibold">{fmtMoneyExact(split.savings.singleSupplierTotal)}</span>
+              <ConsolidationCost savings={split.savings.savings} currency={split.savings.currency} /> · סה״כ <span className="num font-semibold">{fmtMoneyExact(split.savings.singleSupplierTotal, split.savings.currency)}</span>
             </span>
           </div>
           <button type="button" className="btn-secondary shrink-0" disabled={busy} onClick={() => onConsolidate(singleSupplierId)}>
@@ -122,7 +126,9 @@ export default function SupplierSplitStep({
       <section aria-labelledby="selected-products-title" className="border-y border-line-strong bg-surface">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft px-3 py-3 sm:px-4">
           <h2 id="selected-products-title" className="section-title">פריטים שנבחרו</h2>
-          <span className="text-sm text-ink-muted">סה״כ משוער <b className="num text-ink">{fmtMoneyExact(split.total)}</b></span>
+          {/* One line per currency (0217): a basket split between a shekel supplier and a dollar one has
+              two totals and no third. `totalsByCurrency` is why `split.total` no longer exists. */}
+          <span className="text-sm text-ink-muted">סה״כ משוער <b className="text-ink"><MoneyByCurrency amounts={split.totalsByCurrency} baseCurrency={baseCurrency} /></b></span>
         </div>
         <div className="divide-y divide-line-soft">
           {cart.map((item) => {
@@ -132,7 +138,7 @@ export default function SupplierSplitStep({
                 <div className="min-w-0"><div className="break-words text-sm font-medium text-ink-body"><bdi>{productLabel(item.product)}</bdi></div><div className="text-xs text-ink-muted">{formatUnit(item.product.unit)}</div></div>
                 <div className="text-sm"><span className="text-ink-muted">כמות </span><b className="num">{formatQuantity(item.qty, item.product.unit)}</b></div>
                 <div className="text-xs text-ink-muted">{resolved?.supplierId ? supplierById.get(resolved.supplierId)?.name ?? 'ספק לא זמין' : 'טרם הוקצה ספק'}</div>
-                <div className="num text-sm font-semibold">{fmtMoneyExact(resolved?.lineTotal)}</div>
+                <div className="num text-sm font-semibold">{fmtMoneyExact(resolved?.lineTotal, resolved?.currency)}</div>
                 <button type="button" className="btn-ghost btn-icon text-alert-fg" onClick={() => onRemove(item.productId)} aria-label={`הסרת ${productLabel(item.product)}`}><Trash2 size={ICON.sm} aria-hidden="true" /></button>
               </div>
             );
@@ -140,7 +146,7 @@ export default function SupplierSplitStep({
         </div>
       </section>
 
-      <SupplierComparison
+      <SupplierComparison baseCurrency={baseCurrency}
         cart={cart}
         offersByProduct={offersByProduct}
         supplierById={supplierById}
@@ -231,7 +237,7 @@ function BlockedSurface({ blocked, cartByProduct, offersByProduct, supplierById,
               </div>
               {line.status === 'pin_below_min_qty' && requiredQty != null && (
                 <button type="button" className="btn-secondary btn-sm" onClick={() => onQty(line.productId, requiredQty)}>
-                  הגדל ל-<span className="num">{requiredQty}</span>{addedCost != null ? <> · <span className="num">+{fmtMoneyExact(addedCost)}</span></> : null}
+                  הגדל ל-<span className="num">{requiredQty}</span>{addedCost != null ? <> · <span className="num">+{fmtMoneyExact(addedCost, line.currency ?? supplierById.get(line.assignment.mode === 'pinned' ? line.assignment.supplierId : '')?.default_currency)}</span></> : null}
                 </button>
               )}
               {line.status === 'no_usable_offer' && requiredQty != null && <button type="button" className="btn-secondary btn-sm" onClick={() => onQty(line.productId, requiredQty)}>הגדל ל-<span className="num">{requiredQty}</span></button>}
@@ -246,11 +252,13 @@ function BlockedSurface({ blocked, cartByProduct, offersByProduct, supplierById,
   );
 }
 
-function SupplierComparison({ cart, offersByProduct, supplierById, split, onChoose, onUnpin }: {
+function SupplierComparison({ cart, offersByProduct, supplierById, split, baseCurrency, onChoose, onUnpin }: {
   cart: readonly SupplierCartItem[];
   offersByProduct: ReadonlyMap<string, readonly SupplierProduct[]>;
   supplierById: ReadonlyMap<string, Supplier>;
   split: OrderSplit;
+  /** The organisation's own currency — the ORDER the figures are listed in, never a conversion. */
+  baseCurrency: string | null | undefined;
   onChoose: (item: SupplierCartItem, offer: SupplierProduct) => void;
   onUnpin: (productId: string) => void;
 }) {
@@ -264,13 +272,16 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, onChoo
     const selected = selectedSupplierId ? offers.find((offer) => offer.supplier_id === selectedSupplierId) ?? null : null;
     const comparison = compareLine(
       item.qty,
-      offers.map((offer) => ({ supplierId: offer.supplier_id, unitPrice: offer.current_price, minQty: offer.min_qty })),
+      offers.map((offer) => ({
+        supplierId: offer.supplier_id, unitPrice: offer.current_price,
+        currency: offer.currency, minQty: offer.min_qty,
+      })),
       selectedSupplierId ?? null,
     );
     return { item, selected, cheapest, comparison };
   });
   // What the choices already bought, and — kept apart from it — what a choice still costs.
-  const { saved, extra } = summarizeComparison(rows.map((row) => row.comparison));
+  const { savedByCurrency, extraByCurrency } = summarizeComparison(rows.map((row) => row.comparison));
   return (
     <section aria-labelledby="supplier-comparison-title" className="border-y border-line-strong bg-surface">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line-soft px-3 py-3 sm:px-4">
@@ -280,9 +291,11 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, onChoo
           {/* `—` and never ₪0.00: with nothing in the basket holding a runner-up there is no
               comparison to report, and a zero would be a claim about the money rather than the
               absence of one. */}
-          <strong className={`num text-base ${saved != null && saved > 0 ? 'text-done-fg' : 'text-ink'}`}>{saved == null ? '—' : fmtMoneyExact(saved)}</strong>
-          {extra != null && (
-            <span className="mt-0.5 block text-xs text-await-fg">תוספת של <span className="num">{fmtMoneyExact(extra)}</span> מול הזול ביותר</span>
+          <strong className={`text-base ${(savedByCurrency?.some((entry) => entry.amount > 0)) ? 'text-done-fg' : 'text-ink'}`}>
+            <MoneyByCurrency amounts={savedByCurrency} baseCurrency={baseCurrency} />
+          </strong>
+          {extraByCurrency != null && (
+            <span className="mt-0.5 block text-xs text-await-fg">תוספת של <MoneyByCurrency amounts={extraByCurrency} baseCurrency={baseCurrency} /> מול הזול ביותר</span>
           )}
         </div>
       </div>
@@ -311,7 +324,7 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, onChoo
                         aria-label={`בחירת ${supplierById.get(offer.supplier_id)?.name ?? 'ספק'} עבור ${productLabel(item.product)}`}
                         className="grid min-h-11 min-w-0 flex-1 gap-1 px-2 py-2 text-start row-hover cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-4">
                         <div className="font-medium text-ink-body">{supplierById.get(offer.supplier_id)?.name ?? 'ספק לא זמין'}{isSelected && <span className="ms-2 text-xs text-action">{isPinned ? 'מוצמד' : 'בחירה אוטומטית'}</span>}{offer.min_qty != null && <span className="badge-await ms-2">מינ׳ <span className="num ms-1">{offer.min_qty}</span></span>}</div>
-                        <div className="text-xs text-ink-muted"><span className="num">{fmtMoneyExact(offer.current_price)}</span> × <span className="num">{adjustedQty}</span> = <strong className="num text-ink">{fmtMoneyExact(lineTotal)}</strong></div>
+                        <div className="text-xs text-ink-muted"><span className="num">{fmtMoneyExact(offer.current_price, offer.currency)}</span> × <span className="num">{adjustedQty}</span> = <strong className="num text-ink">{fmtMoneyExact(lineTotal, offer.currency)}</strong></div>
                         <div className={`text-xs font-medium sm:min-w-36 sm:text-end ${difference == null ? 'text-ink-muted' : difference <= 0 ? 'text-done-fg' : 'text-await-fg'}`}>
                           {offer.min_qty != null && adjustedQty !== item.qty
                             ? <>הכמות תגדל ל-<span className="num">{adjustedQty}</span></>
@@ -319,7 +332,7 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, onChoo
                               ? 'המחיר הנמוך ביותר'
                               : difference == null
                                 ? 'אין בסיס השוואה'
-                                : <SignedAmount value={difference} />}
+                                : <SignedAmount value={difference} currency={offer.currency} />}
                         </div>
                       </button>
                       {/* Named for where it lands, not for what it cancels: unpinning re-runs the
@@ -346,11 +359,11 @@ function blockedReason(status: OrderSplit['blocked'][number]['status'], supplier
   return 'הכמות נמוכה ממינימום הכמות של הספק המוצמד.';
 }
 
-function ConsolidationCost({ savings }: { savings: number | null }) {
+function ConsolidationCost({ savings, currency }: { savings: number | null; currency: string | null }) {
   if (savings == null || savings === 0) return <>ללא שינוי בעלות</>;
   return savings > 0
-    ? <>האיחוד מוסיף <span className="num font-semibold">{fmtMoneyExact(savings)}</span></>
-    : <>האיחוד חוסך <span className="num font-semibold">{fmtMoneyExact(Math.abs(savings))}</span></>;
+    ? <>האיחוד מוסיף <span className="num font-semibold">{fmtMoneyExact(savings, currency)}</span></>
+    : <>האיחוד חוסך <span className="num font-semibold">{fmtMoneyExact(Math.abs(savings), currency)}</span></>;
 }
 
 function hasGroupMoveTarget(group: OrderSplit['groups'][number], input: SplitInput): boolean {
@@ -370,16 +383,16 @@ function exactLineTotal(qty: number, unitPrice: number): number {
  */
 function LineComparisonNote({ comparison }: { comparison: LineComparison }) {
   if (comparison.status === 'saved') {
-    return <p className="mt-0.5 text-xs text-done-fg">נחסכו <span className="num">{fmtMoneyExact(comparison.savedVsNext)}</span> מול האפשרות הזולה הבאה</p>;
+    return <p className="mt-0.5 text-xs text-done-fg">נחסכו <span className="num">{fmtMoneyExact(comparison.savedVsNext, comparison.currency)}</span> מול האפשרות הזולה הבאה</p>;
   }
   if (comparison.status === 'overpaying') {
-    return <p className="mt-0.5 text-xs text-await-fg">תוספת של <span className="num">{fmtMoneyExact(comparison.extraVsCheapest)}</span> מול הזול ביותר</p>;
+    return <p className="mt-0.5 text-xs text-await-fg">תוספת של <span className="num">{fmtMoneyExact(comparison.extraVsCheapest, comparison.currency)}</span> מול הזול ביותר</p>;
   }
   if (comparison.status === 'same_price') return <p className="mt-0.5 text-xs text-ink-muted">אותו מחיר גם באפשרות הבאה</p>;
   if (comparison.status === 'single_offer') return <p className="mt-0.5 text-xs text-ink-muted">הצעה יחידה — אין בסיס להשוואה</p>;
   return <p className="mt-0.5 text-xs text-ink-muted num">—</p>;
 }
 
-function SignedAmount({ value }: { value: number }) {
-  return <span className="num">{value > 0 ? '+' : '−'}{fmtMoneyExact(Math.abs(value))}</span>;
+function SignedAmount({ value, currency }: { value: number; currency: string | null | undefined }) {
+  return <span className="num">{value > 0 ? '+' : '−'}{fmtMoneyExact(Math.abs(value), currency)}</span>;
 }

@@ -5,7 +5,7 @@ import {
   DATA_CLASSES,
   EVIDENCE_ENTITIES,
   FACT_KINDS,
-  FACT_UNITS,
+  isFactUnit,
   type ActorContext,
   type AssistantRunResult,
   type DataClass,
@@ -122,7 +122,7 @@ function parseFacts(value: unknown): Fact[] | null {
     if (
       subject === undefined || typeof item.id !== "string" ||
       !oneOf(item.kind, FACT_KINDS) || typeof item.label !== "string" ||
-      !oneOf(item.unit, FACT_UNITS) || typeof item.tool !== "string" ||
+      !isFactUnit(item.unit) || typeof item.tool !== "string" ||
       typeof item.as_of !== "string" ||
       !oneOf(item.classification, DATA_CLASSES) ||
       !(

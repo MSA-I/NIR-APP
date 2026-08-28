@@ -278,6 +278,7 @@ function comparisonPayload(overrides: Record<string, unknown> = {}) {
         status: "ok",
         chosen_supplier_id: SUPPLIER_A,
         chosen_unit_price: 12,
+        chosen_currency: "ILS",
         line_total: 120,
         offers: [
           {
@@ -285,6 +286,7 @@ function comparisonPayload(overrides: Record<string, unknown> = {}) {
             supplier_name: "ספק א",
             preferred: false,
             unit_price: 12,
+            currency: "ILS",
             min_qty: null,
             meets_min_qty: true,
           },
@@ -293,6 +295,7 @@ function comparisonPayload(overrides: Record<string, unknown> = {}) {
             supplier_name: "ספק ב",
             preferred: true,
             unit_price: 14,
+            currency: "ILS",
             min_qty: null,
             meets_min_qty: true,
           },
@@ -306,6 +309,7 @@ function comparisonPayload(overrides: Record<string, unknown> = {}) {
         status: "ok",
         chosen_supplier_id: SUPPLIER_B,
         chosen_unit_price: 7,
+        chosen_currency: "ILS",
         line_total: 28,
         offers: [
           {
@@ -313,6 +317,7 @@ function comparisonPayload(overrides: Record<string, unknown> = {}) {
             supplier_name: "ספק ב",
             preferred: true,
             unit_price: 7,
+            currency: "ILS",
             min_qty: null,
             meets_min_qty: true,
           },
@@ -324,7 +329,9 @@ function comparisonPayload(overrides: Record<string, unknown> = {}) {
         supplier_id: SUPPLIER_A,
         supplier_name: "ספק א",
         subtotal: 120,
+        currency: "ILS",
         min_order_amount: 400,
+        min_order_currency: "ILS",
         below_minimum: true,
         shortfall: 280,
       },
@@ -332,7 +339,9 @@ function comparisonPayload(overrides: Record<string, unknown> = {}) {
         supplier_id: SUPPLIER_B,
         supplier_name: "ספק ב",
         subtotal: 28,
+        currency: "ILS",
         min_order_amount: null,
+        min_order_currency: "ILS",
         below_minimum: false,
         shortfall: null,
       },
@@ -371,16 +380,71 @@ Deno.test("the saving is the shared formula's answer, not a second implementatio
   // arithmetic of its own, these two numbers would part company.
   const expected = summarizeComparison([
     compareLine(10, [
-      { supplierId: SUPPLIER_A, unitPrice: 12, minQty: null },
-      { supplierId: SUPPLIER_B, unitPrice: 14, minQty: null },
+      { supplierId: SUPPLIER_A, unitPrice: 12, currency: "ILS", minQty: null },
+      { supplierId: SUPPLIER_B, unitPrice: 14, currency: "ILS", minQty: null },
     ], SUPPLIER_A),
-    compareLine(4, [{ supplierId: SUPPLIER_B, unitPrice: 7, minQty: null }], SUPPLIER_B),
+    compareLine(4, [
+      { supplierId: SUPPLIER_B, unitPrice: 7, currency: "ILS", minQty: null },
+    ], SUPPLIER_B),
   ]);
   const row = envelope.data[0] as Record<string, unknown>;
-  assert.equal(row.saved_total, expected.saved);
-  assert.equal(row.extra_total, expected.extra);
+  assert.deepEqual(row.saved_by_currency, expected.savedByCurrency);
+  assert.deepEqual(row.extra_by_currency, expected.extraByCurrency);
   assert.equal(row.overpaying_line_count, expected.overpayingCount);
-  assert.equal(expected.saved, 20);
+  assert.deepEqual(expected.savedByCurrency, [{ currency: "ILS", amount: 20 }]);
+  assert.equal("saved_total" in row, false);
+  assert.equal("extra_total" in row, false);
+});
+
+Deno.test("a mixed basket returns one assistant fact per currency and never a combined saving", async () => {
+  const payload = comparisonPayload();
+  payload.lines[1] = {
+    ...payload.lines[1],
+    chosen_currency: "USD",
+    offers: [
+      {
+        supplier_id: SUPPLIER_B,
+        supplier_name: "ספק ב",
+        preferred: true,
+        unit_price: 7,
+        currency: "USD",
+        min_qty: null,
+        meets_min_qty: true,
+      },
+      {
+        supplier_id: SUPPLIER_A,
+        supplier_name: "ספק א",
+        preferred: false,
+        unit_price: 9,
+        currency: "USD",
+        min_qty: null,
+        meets_min_qty: true,
+      },
+    ],
+  };
+  payload.suppliers[1] = {
+    ...payload.suppliers[1],
+    currency: "USD",
+    min_order_currency: "USD",
+  };
+
+  const envelope = await getPurchaseComparison.run(
+    ctxWith(fakeDb({ purchase_comparison: { data: payload, error: null } })),
+    { lines: [{ product_id: PRODUCT_A, qty: 10 }, { product_id: PRODUCT_B, qty: 4 }] },
+  );
+  const row = envelope.data[0] as Record<string, unknown>;
+  assert.deepEqual(row.saved_by_currency, [
+    { currency: "ILS", amount: 20 },
+    { currency: "USD", amount: 8 },
+  ]);
+  const basketSavings = envelope.facts
+    .filter((fact) => fact.subject === null && fact.kind === "comparison.saved_vs_next")
+    .map((fact) => ({ unit: fact.unit, value: fact.value }));
+  assert.deepEqual(basketSavings, [
+    { unit: "ils", value: 20 },
+    { unit: "usd", value: 8 },
+  ]);
+  assert.equal(basketSavings.some((fact) => fact.value === 28), false);
 });
 
 Deno.test("a product with no alternative is null, never zero", async () => {

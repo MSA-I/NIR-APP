@@ -12,6 +12,7 @@ import {
   formatPortalDate,
   formatPortalMoney,
   formatPortalQuantity,
+  portalCurrency,
   portalLocaleFromLocation,
   PORTAL_COPY,
   type PortalLocale,
@@ -147,11 +148,11 @@ export default function PortalApp() {
           </p>
           {proposal && proposal.total_delta !== 0 && (
             <p className="mt-1 text-sm text-ink-muted">
-              {copy.proposedMoneyDelta} <span className="num">{formatPortalMoney(locale, proposal.total_delta)}</span>
+              {copy.proposedMoneyDelta} <span className="num">{formatPortalMoney(locale, proposal.total_delta, portalCurrency(snapshot))}</span>
             </p>
           )}
         </div>
-        <ItemsView items={snapshot.items} readOnly edits={edits} onEdit={() => {}} locale={locale} />
+        <ItemsView items={snapshot.items} currency={portalCurrency(snapshot)} readOnly edits={edits} onEdit={() => {}} locale={locale} />
       </Shell>
     );
   }
@@ -216,6 +217,7 @@ export default function PortalApp() {
 
       <ItemsView
         items={snapshot.items}
+        currency={portalCurrency(snapshot)}
         readOnly={false}
         edits={edits}
         onEdit={(id, edit) => setEdits((prev) => ({ ...prev, [id]: edit }))}
@@ -245,7 +247,7 @@ export default function PortalApp() {
         </div>
         {totalDelta !== 0 && (
           <p className="text-sm text-ink-muted">
-            {copy.totalDelta} <span className="num font-medium">{formatPortalMoney(locale, totalDelta)}</span>
+            {copy.totalDelta} <span className="num font-medium">{formatPortalMoney(locale, totalDelta, portalCurrency(snapshot))}</span>
           </p>
         )}
         {submitError && (
@@ -336,9 +338,15 @@ function OrderHeader({ view, locale }: { view: PortalView; locale: PortalLocale 
 }
 
 function ItemsView({
-  items, readOnly, edits, onEdit, locale,
+  items, currency, readOnly, edits, onEdit, locale,
 }: {
   items: PortalSnapshotItem[];
+  /**
+   * The order's currency, read from the snapshot the supplier was sent (`portalCurrency`). The
+   * supplier is quoting against ONE order in ONE currency — this screen never converts, and the
+   * business never sees a figure here in a unit it did not ask for.
+   */
+  currency: string;
   readOnly: boolean;
   edits: Record<string, LineEdit>;
   onEdit: (id: string, edit: LineEdit) => void;
@@ -356,7 +364,7 @@ function ItemsView({
               <div className="flex items-start justify-between gap-3">
                 <p className="font-medium text-ink"><bdi>{item.product_name}</bdi></p>
                 <p className="text-sm text-ink-muted num whitespace-nowrap">
-                  {formatPortalQuantity(locale, item.qty, item.unit)} × {formatPortalMoney(locale, item.unit_price)}
+                  {formatPortalQuantity(locale, item.qty, item.unit)} × {formatPortalMoney(locale, item.unit_price, currency)}
                 </p>
               </div>
               {!readOnly && (
@@ -412,7 +420,7 @@ function ItemsView({
                   )}
                   {delta !== 0 && (
                     <p className="text-xs text-ink-muted">
-                      {copy.lineDelta} <span className="num">{formatPortalMoney(locale, delta)}</span>
+                      {copy.lineDelta} <span className="num">{formatPortalMoney(locale, delta, currency)}</span>
                     </p>
                   )}
                 </div>

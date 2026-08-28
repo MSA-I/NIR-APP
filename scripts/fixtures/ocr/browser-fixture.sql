@@ -540,11 +540,11 @@ where i.id = '97300000-0000-4000-8000-000000000003';
 -- two invoices sharing a number, and that refusal is asserted in the browser check.
 insert into public.invoices (
   org_id, supplier_id, invoice_number, invoice_date, received_by,
-  amount_before_vat, vat_amount, total_amount, notes
+  amount_before_vat, vat_amount, total_amount, notes, currency
 ) values (
   '11111111-1111-4111-8111-111111111111', 'aa000000-0000-4000-8000-000000000008',
   'INV-2026-1042', current_date - 7, :'ocr_owner_id',
-  632.71, 112.89, 745.60, 'חשבונית פיקסטורה לבדיקת דרישת זיכוי מסריקה'
+  632.71, 112.89, 745.60, 'חשבונית פיקסטורה לבדיקת דרישת זיכוי מסריקה', 'ILS'
 );
 
 -- A fourth document for the payment-confirmation panel, plus the payment it confirms. The panel

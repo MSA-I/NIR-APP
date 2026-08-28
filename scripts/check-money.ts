@@ -62,7 +62,13 @@ const RULES: readonly Rule[] = [
   },
   {
     id: 'second-currency-formatter',
-    re: /new Intl\.NumberFormat\([^)]*currency/g,
+    // `[\s\S]` and not `[^)]`: the argument list may span lines, and its FIRST argument may itself
+    // be a call — `new Intl.NumberFormat(localeOf(row), { … currency … })`. `[^)]*` stopped at the
+    // `)` of `localeOf(row)` and at the end of the first line, so both shapes walked past the
+    // guard. The bound is a window, not a balance check: 240 characters is longer than every
+    // options object in this repository and short enough that an unrelated `currency` further down
+    // the file cannot be dragged in.
+    re: /new Intl\.NumberFormat\([\s\S]{0,240}?currency/g,
     why: 'a second currency formatter is exactly how the first drift started',
     fix: 'add the variant to src/lib/format.ts and export it, so there is one place to read',
   },
@@ -79,21 +85,30 @@ function walk(dir: string, out: string[] = []): string[] {
 
 const findings: string[] = [];
 
+/** 1-based line holding `offset`, counted on the same text the rule matched. */
+function lineOf(text: string, offset: number): number {
+  let line = 1;
+  for (let i = 0; i < offset; i++) if (text.charCodeAt(i) === 10) line++;
+  return line;
+}
+
 for (const file of walk(srcDir)) {
   if (file === FORMAT_MODULE) continue;
   const text = readFileSync(file, 'utf8');
   const lines = text.split(/\r?\n/);
 
+  // Matched against the WHOLE FILE, never line by line. A formatter written across two lines is
+  // still one formatter, and the per-line loop this replaces could not see one.
   for (const rule of RULES) {
-    lines.forEach((line, index) => {
-      rule.re.lastIndex = 0;
-      if (!rule.re.test(line)) return;
+    rule.re.lastIndex = 0;
+    for (const match of text.matchAll(rule.re)) {
+      const line = lineOf(text, match.index ?? 0);
       findings.push(
-        `  ${relative(root, file)}:${index + 1} — ${rule.why}\n`
-        + `    ${line.trim().slice(0, 160)}\n`
+        `  ${relative(root, file)}:${line} — ${rule.why}\n`
+        + `    ${(lines[line - 1] ?? '').trim().slice(0, 160)}\n`
         + `    Fix: ${rule.fix}`,
       );
-    });
+    }
   }
 }
 
