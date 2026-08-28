@@ -100,8 +100,14 @@ Plan: `docs/PLAN-english-language-20260827.md`.
 
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
-- [ ] P2-G9: the consent documents read in the reader's language — OWNER DECISION REQUIRED
-  EVIDENCE: not started, and deliberately not started by an agent. `src/pages/Legal.tsx` (79 Hebrew lines) is the terms of service and the privacy policy. It is not screen copy: **it is a document people agree to.** `AcceptInvite.tsx` sends `TERMS_VERSION` into `acceptInvitation`, `0089` refuses to create a profile without it and stamps it into `audit_logs`, and the file's own header states the rule — changing the text in a way that matters legally must bump the version, because "an unchanged version over changed terms would make every stored consent a lie".
+- [ ] P2-G9: the consent documents read in the reader's language — DECIDED 28.08.2026, NOT BUILT
+  EVIDENCE: **the owner chose TWO BINDING VERSIONS, one per language** (`OPEN-DECISIONS #280`) — picked over both cheaper readings after all three were spelled out. So: translate `Legal.tsx` in full, BUMP `TERMS_VERSION`, and write NO sentence claiming the Hebrew governs — such a sentence contradicts the decision. Someone who signed in English agreed to the English text.
+
+  **The price the owner accepted explicitly:** every future amendment is TWO legal amendments, each needing review. A gap between the versions is not a wording slip — it is two different undertakings.
+
+  **This gate must not be marked met on a green test run.** The file's own header records that its drafting is not legal advice and that a lawyer's review is the owner's call; two binding versions raise the stakes of that review rather than removing it. Passing technically is not the same as being right here, and this is the one gate in this ledger where that distinction decides.
+
+  Not started, and deliberately not started by an agent before the decision existed. `src/pages/Legal.tsx` (79 Hebrew lines) is the terms of service and the privacy policy. It is not screen copy: **it is a document people agree to.** `AcceptInvite.tsx` sends `TERMS_VERSION` into `acceptInvitation`, `0089` refuses to create a profile without it and stamps it into `audit_logs`, and the file's own header states the rule — changing the text in a way that matters legally must bump the version, because "an unchanged version over changed terms would make every stored consent a lie".
 
   **The question extraction cannot answer:** an English reader consents to the English text. When the two texts differ — and a translated legal clause differs from its original more often than a button label does — which one did that person agree to? That is a legal decision about a document drafted against תיקון 13 לחוק הגנת הפרטיות, whose own header already records that it is not legal advice and that a lawyer's review is the owner's call.
 
@@ -109,7 +115,7 @@ Plan: `docs/PLAN-english-language-20260827.md`.
 
   Until it is decided, the file stays Hebrew and pinned, with the reason on its baseline row. **Nothing about this blocks the rest of the extraction**; it is the one surface where being fast is the wrong instinct.
 
-- [ ] P2-G8: the assistant answers a product question in the language it was asked in
+- [ ] P2-G8: the assistant answers a product question in the language it was asked in — **owner decision 28.08.2026 (`OPEN-DECISIONS #283`): wire the real locale through to the server.** The half below that is not met is now a decided task, not an open question.
   CHECK: node scripts/gate-i18n.mjs help-registry-paired
   EXPECT: GATE_I18N_HELP_PAIRED_OK
   EVIDENCE: half met, and the half that is met is the runnable one. exit=0; output=gate-i18n: 15 product-help topic(s), each in both locales | GATE_I18N_HELP_PAIRED_OK. Positive control: deleting the English row for `check_product_purchases` ⇒ `gate-i18n: the product-help registry is not paired. no English row: check_product_purchases`, exit 1; restored ⇒ pass. It fails in the other direction too, on an English row with no Hebrew original — that is #192's missing-locale rule read backwards, a translation of nothing. Every one of the 15 product-help topics now has both an `he` and an `en` row, built from the Hebrew row's own `route`, `roles`, `version` and `source` rather than retyped — those are contract fields the registry guard checks, and a retyped `roles` could hand somebody a screen the Guard withholds.
@@ -137,7 +143,7 @@ ABANDON: P2-G4 Owner decision, 27.08.2026 — `src/operator/**` is internal, use
   EVIDENCE: pending
 
 - [ ] P3-G2: units read `kg` in English instead of `ק״ג`
-  EVIDENCE: pending
+  EVIDENCE: pending — **owner decision 28.08.2026 (`OPEN-DECISIONS #282`): a display translation table only. The database does not change.** `products.unit` stays Hebrew (`0001:92`, default `יח׳`), the Hebrew value remains the key, and there is NO data migration — changing it would move `name_match_key` and the three-way match with it, which the plan forbids outright. What gets added is a second map from the canonical Hebrew form to English, ABOVE the existing 45-entry `UNIT_FORMS` in `src/lib/format.ts:104`, plus `Intl.PluralRules` for the English plural. `formatUnit(unit, quantity)` is the entry point. Required result: an English reader sees `3 kg`, `12 units`, `2 crates`; what is stored is `ק״ג`. **This failure exists today** — `portal/i18n.ts:125` already falls through to the raw `unit?.trim()`. Trap: `check:money` evaluates PER LINE (`scripts/check-money.ts:88-90`), so a formatter broken across two lines is invisible to it.
 
 - [ ] P3-G3: the safe-area and drawer mappings flip with `dir`
   EVIDENCE: pending
