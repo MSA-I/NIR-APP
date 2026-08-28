@@ -20,16 +20,16 @@ import {
 } from '../components/ui';
 import {
   completeConsolidatedInvoiceIntake,
-  consolidatedPageStatusLabel,
-  consolidatedPageTypeLabel,
-  consolidatedStatusLabel,
+  consolidatedPageStatusKey,
+  consolidatedPageTypeKey,
+  consolidatedStatusKey,
   consolidatedStatusTone,
-  consolidatedWarningLabel,
+  consolidatedWarningKey,
   getConsolidatedInvoiceWorkspace,
   listConsolidatedInvoiceCases,
   listConsolidatedInvoiceLegalEntities,
-  matchChannelLabel,
-  matchGroupLabel,
+  matchChannelKey,
+  matchGroupKey,
   openConsolidatedInvoiceIntake,
   previousJerusalemMonth,
   refreshConsolidatedInvoiceReconciliation,
@@ -57,8 +57,11 @@ interface ActiveIntake {
   completeKey: string;
 }
 
-function statusBadge(status: ConsolidatedInvoiceCaseSummary['status']) {
-  return <span className={`badge-${consolidatedStatusTone(status)}`}>{consolidatedStatusLabel(status)}</span>;
+function statusBadge(
+  status: ConsolidatedInvoiceCaseSummary['status'],
+  t: (key: TKey) => string,
+) {
+  return <span className={`badge-${consolidatedStatusTone(status)}`}>{t(consolidatedStatusKey(status))}</span>;
 }
 
 function sourceTypeLabel(source: ConsolidatedInvoiceSource, t: (key: TKey, vars?: Record<string, string | number>) => string) {
@@ -252,7 +255,7 @@ export default function ConsolidatedInvoices() {
   const caseColumns: Column<CaseRow>[] = [
     { key: 'supplier', header: t('consolidated.text_4'), priority: 1, render: (row) => <span className="font-medium">{row.supplier_name}</span> },
     { key: 'month', header: t('consolidated.text_5'), priority: 1, render: () => month.label },
-    { key: 'status', header: t('consolidated.statusBadge'), priority: 1, render: (row) => statusBadge(row.status) },
+    { key: 'status', header: t('consolidated.statusBadge'), priority: 1, render: (row) => statusBadge(row.status, t) },
     { key: 'warnings', header: t('consolidated.fmtNum'), priority: 2, render: (row) => <span className="num">{fmtNum(row.warning_count)}</span> },
     { key: 'updated', header: t('consolidated.fmtDateTime'), priority: 2, render: (row) => <span className="num">{fmtDateTime(row.updated_at)}</span> },
   ];
@@ -387,7 +390,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
   const sourceRows: SourceRow[] = workspace.sources.map((source) => ({ ...source, id: `${source.source_type}:${source.source_id}` }));
   const primaryPage = workspace.pages.find((page) => page.is_primary) ?? workspace.pages[0] ?? null;
   const reviewReason = workspace.intake?.reason_code
-    ? consolidatedWarningLabel(workspace.intake.reason_code)
+    ? t(consolidatedWarningKey(workspace.intake.reason_code))
     : t('consolidated.text_18');
   const retryReview = async () => {
     if (!primaryPage?.job_id || retryingReview) return;
@@ -428,7 +431,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h2 id="consolidated-workspace-title" className="section-title">{workspace.case.supplier_name} · {workspace.case.legal_entity_name}</h2>
-            {statusBadge(workspace.case.status)}
+            {statusBadge(workspace.case.status, t)}
           </div>
           <p className="mt-1 text-sm text-ink-soft">{fmtDate(workspace.case.target_month)} · {t('consolidated.matchVersion')} <span className="num">{fmtNum(workspace.case.current_revision)}</span></p>
         </div>
@@ -478,7 +481,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
                   <p className="font-medium">{t('consolidated.pageWord')} {fmtNum(page.page_number)} · {page.file_name}</p>
                   <p className="mt-1 text-sm text-ink-soft">
                     {page.is_primary ? t('consolidated.text_27') : t('consolidated.text_28')} ·
-                    {' '}{consolidatedPageTypeLabel(page.document_type)} · {consolidatedPageStatusLabel(page.job_status)}
+                    {' '}{t(consolidatedPageTypeKey(page.document_type))} · {t(consolidatedPageStatusKey(page.job_status))}
                   </p>
                 </div>
                 <button type="button" className="btn-secondary min-h-11"
@@ -495,7 +498,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
           <div className="min-w-0 flex-1">
             <p className="font-medium">{t('consolidated.warningsFound', { count: fmtNum(workspace.warnings.length) })}</p>
             <ul className="mt-2 list-disc space-y-1 ps-5">
-              {workspace.warnings.map((warning, index) => <li key={`${warning.code}:${warning.source_id ?? index}`}>{consolidatedWarningLabel(warning.code)}</li>)}
+              {workspace.warnings.map((warning, index) => <li key={`${warning.code}:${warning.source_id ?? index}`}>{t(consolidatedWarningKey(warning.code))}</li>)}
             </ul>
           </div>
         </Note>
@@ -552,7 +555,7 @@ function ReconciliationTable({ channel, lines }: { channel: ConsolidatedMatchCha
   const { t } = useT();
   const rows: MatchRow[] = lines.map((line, index) => ({ ...line, id: `${channel}:${index}:${line.product_id ?? 'unknown'}` }));
   const columns: Column<MatchRow>[] = [
-    { key: 'result', header: t('consolidated.matchGroupLabel'), priority: 1, render: (row) => <span className={row.result === 'matched' ? 'badge-done' : 'badge-await'}>{matchGroupLabel(row.result)}</span> },
+    { key: 'result', header: t('consolidated.matchGroupLabel'), priority: 1, render: (row) => <span className={row.result === 'matched' ? 'badge-done' : 'badge-await'}>{t(matchGroupKey(row.result))}</span> },
     {
       key: 'product', header: t('consolidated.text_35'), priority: 1,
       render: (row) => (
@@ -585,7 +588,7 @@ function ReconciliationTable({ channel, lines }: { channel: ConsolidatedMatchCha
   return (
     <section aria-labelledby={`match-${channel}`} className="space-y-3">
       <div>
-        <h3 id={`match-${channel}`} className="section-title">{matchChannelLabel(channel)}</h3>
+        <h3 id={`match-${channel}`} className="section-title">{t(matchChannelKey(channel))}</h3>
         <p className="mt-1 text-sm text-ink-soft">{t('consolidated.text_41')}</p>
       </div>
       <DataTable rows={rows} columns={columns} mobile="cards" pageSize={15}

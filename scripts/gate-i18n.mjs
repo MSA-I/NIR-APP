@@ -42,6 +42,7 @@ const EXTRACTED = [
   'src/pages/neworder/NewOrder.tsx',
   'src/pages/Expenses.tsx',
   'src/pages/Exceptions.tsx',
+  'src/lib/consolidatedInvoices.ts',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */

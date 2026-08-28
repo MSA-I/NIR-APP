@@ -81,7 +81,6 @@
     "src/lib/assistant/summaryLines.ts": 5,
     "src/lib/checks.ts": 17,
     "src/lib/checkSummary.ts": 1,
-    "src/lib/consolidatedInvoices.ts": 49,
     "src/lib/dashboardSeries.ts": 3,
     "src/lib/documentStatus.ts": 38,
     "src/lib/exportTemplates.ts": 28,

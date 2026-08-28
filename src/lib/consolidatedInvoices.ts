@@ -1,3 +1,4 @@
+import type { TKey } from './i18n/t.ts';
 import { supabase } from './supabase';
 import { tusUploadToDocuments } from './tusUpload';
 import { unwrap } from './useQuery';
@@ -220,46 +221,46 @@ export function previousJerusalemMonth(now: Date = new Date()): PreviousMonth {
 
 // One state, one string. `נדרשת בדיקה` is the canonical wording in documentStatus.ts, and a page
 // that says `דורשת בדיקה` sends the reader looking for a label the product never shows.
-export function consolidatedStatusLabel(status: ConsolidatedInvoiceStatus): string {
+export function consolidatedStatusKey(status: ConsolidatedInvoiceStatus): TKey {
   return ({
-    awaiting_anchor: 'ממתינה לחשבונית מרכזת',
-    needs_review: 'נדרשת בדיקה',
-    reconciling: 'מבצעת התאמה',
-    matched: 'מותאם',
-    warnings: 'נרשמה עם אזהרות',
-    blocked: 'חסומה לרישום',
+    awaiting_anchor: 'consolidated.statusAwaitingAnchor',
+    needs_review: 'consolidated.statusNeedsReview',
+    reconciling: 'consolidated.statusReconciling',
+    matched: 'consolidated.statusMatched',
+    warnings: 'consolidated.statusWarnings',
+    blocked: 'consolidated.statusBlocked',
   } as const)[status];
 }
 
 // The packet page list used to print `page.document_type` and `page.job_status` straight into the
 // sentence, so a Hebrew screen showed raw pipeline tokens (`queued`, `leased`, `delivery_note`).
 // Unknown values are named as unknown rather than echoed.
-export function consolidatedPageTypeLabel(documentType: string | null): string {
-  if (!documentType) return 'ממתין לזיהוי';
+export function consolidatedPageTypeKey(documentType: string | null): TKey {
+  if (!documentType) return 'consolidated.pageTypeUnidentified';
   return ({
-    invoice: 'חשבונית',
-    delivery_note: 'תעודת משלוח',
-    credit_note: 'חשבונית זיכוי',
-    price_list: 'מחירון',
-    quote: 'הצעת מחיר',
-    payment_confirmation: 'אישור תשלום',
-    tax_receipt: 'קבלה',
-    other: 'מסמך אחר',
-  } as Record<string, string>)[documentType] ?? 'ממתין לזיהוי';
+    invoice: 'consolidated.pageTypeInvoice',
+    delivery_note: 'consolidated.pageTypeDeliveryNote',
+    credit_note: 'consolidated.pageTypeCreditNote',
+    price_list: 'consolidated.pageTypePriceList',
+    quote: 'consolidated.pageTypeQuote',
+    payment_confirmation: 'consolidated.pageTypePaymentConfirmation',
+    tax_receipt: 'consolidated.pageTypeTaxReceipt',
+    other: 'consolidated.pageTypeOther',
+  } as Record<string, TKey>)[documentType] ?? 'consolidated.pageTypeUnidentified';
 }
 
-export function consolidatedPageStatusLabel(jobStatus: string | null): string {
-  if (!jobStatus) return 'ממתין לעיבוד';
+export function consolidatedPageStatusKey(jobStatus: string | null): TKey {
+  if (!jobStatus) return 'consolidated.pageStatusQueued';
   return ({
-    awaiting_scan: 'ממתין לסריקה',
-    queued: 'ממתין לעיבוד',
-    leased: 'בעיבוד',
-    extracted: 'בעיבוד',
-    interpreting: 'בעיבוד',
-    review: 'נדרשת בדיקה',
-    completed: 'הושלם',
-    failed: 'העיבוד נכשל',
-  } as Record<string, string>)[jobStatus] ?? 'ממתין לעיבוד';
+    awaiting_scan: 'consolidated.pageStatusAwaitingScan',
+    queued: 'consolidated.pageStatusQueued',
+    leased: 'consolidated.pageStatusProcessing',
+    extracted: 'consolidated.pageStatusProcessing',
+    interpreting: 'consolidated.pageStatusProcessing',
+    review: 'consolidated.pageStatusReview',
+    completed: 'consolidated.pageStatusCompleted',
+    failed: 'consolidated.pageStatusFailed',
+  } as Record<string, TKey>)[jobStatus] ?? 'consolidated.pageStatusQueued';
 }
 
 export function consolidatedStatusTone(status: ConsolidatedInvoiceStatus): 'idle' | 'info' | 'alert' | 'await' | 'done' {
@@ -270,41 +271,41 @@ export function consolidatedStatusTone(status: ConsolidatedInvoiceStatus): 'idle
   return 'idle';
 }
 
-export function matchGroupLabel(result: ConsolidatedMatchResult): string {
+export function matchGroupKey(result: ConsolidatedMatchResult): TKey {
   return ({
-    matched: 'מותאם',
-    missing_source: 'חסר מקור',
-    source_not_on_anchor: 'מקור שלא הופיע במרכזת',
-    ambiguous: 'עמום',
-    quantity_mismatch: 'פער כמות',
-    price_mismatch: 'פער מחיר',
+    matched: 'consolidated.matchGroupMatched',
+    missing_source: 'consolidated.matchGroupMissingSource',
+    source_not_on_anchor: 'consolidated.matchGroupSourceNotOnAnchor',
+    ambiguous: 'consolidated.matchGroupAmbiguous',
+    quantity_mismatch: 'consolidated.matchGroupQuantityMismatch',
+    price_mismatch: 'consolidated.matchGroupPriceMismatch',
   } as const)[result];
 }
 
-export function matchChannelLabel(channel: ConsolidatedMatchChannel): string {
+export function matchChannelKey(channel: ConsolidatedMatchChannel): TKey {
   return ({
-    anchor_vs_interim: 'מרכזת מול חשבוניות ביניים',
-    anchor_vs_receipts: 'מרכזת מול קבלות שהושלמו',
-    interim_vs_receipts: 'חשבוניות ביניים מול קבלות',
+    anchor_vs_interim: 'consolidated.matchChannelAnchorVsInterim',
+    anchor_vs_receipts: 'consolidated.matchChannelAnchorVsReceipts',
+    interim_vs_receipts: 'consolidated.matchChannelInterimVsReceipts',
   } as const)[channel];
 }
 
-export function consolidatedWarningLabel(code: string): string {
+export function consolidatedWarningKey(code: string): TKey {
   return ({
-    consolidated_supplier_unresolved: 'לא ניתן לזהות ספק קנוני באופן חד־משמעי.',
-    consolidated_supplier_mismatch: 'הספק שנמצא במסמך שונה מהספק שנבחר לתיק.',
-    consolidated_target_month_invalid: 'תאריך החשבונית אינו שייך לחודש הקליטה הנעול.',
-    consolidated_duplicate_anchor: 'כבר קיימת חשבונית מרכזת פעילה לספק, לישות ולחודש.',
-    consolidated_core_fields_missing: 'חסרים מספר חשבונית, תאריך או סכומי ליבה.',
-    consolidated_payable_conflict: 'נמצא חוב נוסף שעלול ליצור ספירה כפולה.',
-    consolidated_late_revision_created: 'מסמך מאוחר יצר גרסת התאמה חדשה; החוב לא שונה.',
-    supporting_document_pending: 'מסמך תומך עדיין ממתין לתיוק כחשבונית ביניים או כקבלת סחורה.',
-    receipt_not_completed: 'קבלת הסחורה עדיין לא הושלמה ולכן אינה מוכיחה כמות שנכנסה.',
-    receipt_sources_missing: 'לא נמצאו קבלות סחורה לאותו ספק ולחודש.',
-    interim_sources_missing: 'לא נמצאו חשבוניות ביניים לאותו ספק ולחודש.',
-    anchor_line_evidence_missing: 'לא נמצאו שורות מוצר תקינות בחשבונית המרכזת.',
-    interim_source_line_evidence_missing: 'בחשבונית ביניים חסרות שורות מוצר תקינות להשוואה.',
-  } as Record<string, string>)[code] ?? 'נמצא פער שדורש בדיקה בתיק ההתאמה.';
+    consolidated_supplier_unresolved: 'consolidated.warningConsolidatedSupplierUnresolved',
+    consolidated_supplier_mismatch: 'consolidated.warningConsolidatedSupplierMismatch',
+    consolidated_target_month_invalid: 'consolidated.warningConsolidatedTargetMonthInvalid',
+    consolidated_duplicate_anchor: 'consolidated.warningConsolidatedDuplicateAnchor',
+    consolidated_core_fields_missing: 'consolidated.warningConsolidatedCoreFieldsMissing',
+    consolidated_payable_conflict: 'consolidated.warningConsolidatedPayableConflict',
+    consolidated_late_revision_created: 'consolidated.warningConsolidatedLateRevisionCreated',
+    supporting_document_pending: 'consolidated.warningSupportingDocumentPending',
+    receipt_not_completed: 'consolidated.warningReceiptNotCompleted',
+    receipt_sources_missing: 'consolidated.warningReceiptSourcesMissing',
+    interim_sources_missing: 'consolidated.warningInterimSourcesMissing',
+    anchor_line_evidence_missing: 'consolidated.warningAnchorLineEvidenceMissing',
+    interim_source_line_evidence_missing: 'consolidated.warningInterimSourceLineEvidenceMissing',
+  } as Record<string, TKey>)[code] ?? 'consolidated.warningFallback';
 }
 
 export async function listConsolidatedInvoiceLegalEntities(): Promise<ConsolidatedLegalEntity[]> {
