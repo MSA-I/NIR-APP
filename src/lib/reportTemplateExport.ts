@@ -212,7 +212,7 @@ export async function renderConfiguredReportTemplate(input: {
   }
 
   try {
-    return fillTemplateWorkbook(bytes, input.values, mapping);
+    return await fillTemplateWorkbook(bytes, input.values, mapping);
   } catch {
     throw new ReportTemplateError('קובץ התבנית או מיפוי התאים פגומים. יש להעלות ולאשר את התבנית מחדש.');
   }

@@ -122,6 +122,10 @@ describe('styled workbook writer', () => {
  * So the rule is enforced over the SOURCE instead: a file that creates a workbook must be a file
  * that turns RTL on. `src/lib/workbook.ts` does it unconditionally for every sheet it makes;
  * anything else that reaches for a writer has to say so in its own body.
+ *
+ * A file that LOADS somebody else's workbook is a different thing and may opt out — by writing
+ * `workbook-rtl-exempt:` and its reason in its own source. The marker is the point: an exemption
+ * has to be argued in the file, not collected in a list here that nobody reads.
  */
 describe('no workbook is built without a right-to-left view', () => {
   // `process.cwd()`, the idiom productDisplayName.spec.ts and noteProse.spec.ts already use for
@@ -141,7 +145,7 @@ describe('no workbook is built without a right-to-left view', () => {
     const offenders = sourceFiles(SRC)
       .map((path) => ({ path, text: readFileSync(path, 'utf8') }))
       .filter(({ text }) => /XLSX\.utils\.book_new\(\)|new Workbook\(\)|addWorksheet\(/.test(text))
-      .filter(({ text }) => !/RTL:\s*true|rightToLeft:\s*true/.test(text))
+      .filter(({ text }) => !/RTL:\s*true|rightToLeft:\s*true|workbook-rtl-exempt:/.test(text))
       .map(({ path }) => path.slice(SRC.length));
     expect(offenders).toEqual([]);
   });

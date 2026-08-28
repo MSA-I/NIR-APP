@@ -11,7 +11,7 @@ import { PO_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, formatQuantity, formatUnit, productLabel, todayISO } from '../lib/format';
 import { orderWhatsAppLink, markOrderSentToSupplier, needsSentConfirmation } from '../lib/share';
 import { downloadElementPdf } from '../lib/pdf';
-import { useExportWatermark } from '../lib/exportBranding';
+import { exportWatermark } from '../lib/exportBranding';
 import { WhatsAppSendDialog } from '../components/WhatsAppSendDialog';
 import { SupplierPortalCard } from '../components/SupplierPortalCard';
 import { EmailOrderCard } from '../components/EmailOrderCard';
@@ -280,7 +280,6 @@ export function OrderDetail() {
   const [params, setParams] = useSearchParams();
   const printedRef = useRef<string | null>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
-  const watermark = useExportWatermark();
   const [exportingPdf, setExportingPdf] = useState(false);
   const orgLogoUrl = org?.logo_path
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
@@ -375,7 +374,7 @@ export function OrderDetail() {
       await downloadElementPdf({
         element,
         fileName: `purchase-order-${order.number}.pdf`,
-        watermark,
+        watermark: await exportWatermark(),
       });
       toast('קובץ ה-PDF הורד');
     } catch (e) {
@@ -492,7 +491,7 @@ export function OrderDetail() {
       <Card ref={printAreaRef} className="print-area">
         {/* `print-only`, not `hidden print:block`: html2canvas renders the live DOM, so a
             display:none heading is simply absent from the generated PDF (src/index.css). */}
-        <div className="print-only mb-4">
+        <div aria-hidden="true" className="print-only mb-4">
           {orgLogoUrl && <img src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
           <h2 className="text-xl font-semibold">{`הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`}</h2>
           <div className="text-sm mt-1">ספק: {order.supplier.name} · תאריך: {fmtDate(order.created_at)} {order.expected_date && `· אספקה מבוקשת: ${fmtDate(order.expected_date)}`}</div>

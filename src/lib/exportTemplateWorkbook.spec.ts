@@ -108,49 +108,49 @@ describe('filling it in', () => {
     return book.Sheets[book.SheetNames[0]][address] as XLSX.CellObject | undefined;
   };
 
-  it('puts a number in as a number, so the accountant’s own SUM keeps working', () => {
-    const filled = fillTemplateWorkbook(
+  it('puts a number in as a number, so the accountant’s own SUM keeps working', async () => {
+    const filled = await fillTemplateWorkbook(
       workbook({ A1: text('{{net_total}}') }), { net_total: 1234.5 });
     const cell = read(filled, 'A1');
     expect(cell?.t).toBe('n');
     expect(cell?.v).toBe(1234.5);
   });
 
-  it('leaves an unmapped placeholder visible rather than blanking it', () => {
+  it('leaves an unmapped placeholder visible rather than blanking it', async () => {
     // A blank cell reads as zero to whoever opens the file. A visible {{key}} reads as "nobody
     // filled this in", which is the truth.
-    const filled = fillTemplateWorkbook(workbook({ A1: text('{{never_mapped}}') }), {});
+    const filled = await fillTemplateWorkbook(workbook({ A1: text('{{never_mapped}}') }), {});
     expect(read(filled, 'A1')?.v).toBe('{{never_mapped}}');
   });
 
-  it('neutralises a value that Excel would treat as a formula', () => {
+  it('neutralises a value that Excel would treat as a formula', async () => {
     // A supplier name is not our text. `=HYPERLINK(...)` in a supplier field executes on open, in
     // an accountant's Excel, on a file we sent them.
-    const filled = fillTemplateWorkbook(
+    const filled = await fillTemplateWorkbook(
       workbook({ A1: text('{{supplier_name}}') }), { supplier_name: '=HYPERLINK("http://x")' });
     expect(String(read(filled, 'A1')?.v)).toBe("'=HYPERLINK(\"http://x\")");
   });
 
-  it('leaves everything it was not asked to change', () => {
-    const filled = fillTemplateWorkbook(
+  it('leaves everything it was not asked to change', async () => {
+    const filled = await fillTemplateWorkbook(
       workbook({ A1: text('כותרת קבועה'), A2: text('{{net_total}}') }), { net_total: 10 });
     expect(read(filled, 'A1')?.v).toBe('כותרת קבועה');
   });
 
-  it('keeps a value with a leading zero as text, so an account number survives', () => {
-    const filled = fillTemplateWorkbook(
+  it('keeps a value with a leading zero as text, so an account number survives', async () => {
+    const filled = await fillTemplateWorkbook(
       workbook({ A1: text('{{account}}') }), { account: '0123456' });
     const cell = read(filled, 'A1');
     expect(cell?.t).toBe('s');
     expect(cell?.v).toBe('0123456');
   });
 
-  it('uses the approved sheet, cell and source instead of filling by placeholder name alone', () => {
+  it('uses the approved sheet, cell and source instead of filling by placeholder name alone', async () => {
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, { A1: text('{{total}}'), '!ref': 'A1' }, 'ראשי');
     XLSX.utils.book_append_sheet(book, { A1: text('{{total}}'), '!ref': 'A1' }, 'משני');
     const bytes = XLSX.write(book, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
-    const filled = fillTemplateWorkbook(bytes, { gross_total: 120, net_expense: 95 }, [
+    const filled = await fillTemplateWorkbook(bytes, { gross_total: 120, net_expense: 95 }, [
       { key: 'total', sheet: 'ראשי', cell: 'A1', source: 'gross_total' },
       { key: 'total', sheet: 'משני', cell: 'A1', source: 'net_expense' },
     ]);
@@ -159,11 +159,40 @@ describe('filling it in', () => {
     expect(result.Sheets['משני'].A1.v).toBe(95);
   });
 
-  it('refuses an approved mapping when its exact cell no longer carries the placeholder', () => {
-    expect(() => fillTemplateWorkbook(
+  it('refuses an approved mapping when its exact cell no longer carries the placeholder', async () => {
+    await expect(fillTemplateWorkbook(
       workbook({ A1: text('{{gross_total}}') }),
       { gross_total: 120 },
       [{ key: 'gross_total', sheet: 'דוח', cell: 'B2', source: 'gross_total' }],
-    )).toThrow('export_template_cell_missing');
+    )).rejects.toThrow('export_template_cell_missing');
+  });
+
+  /**
+   * The reason this half moved to ExcelJS: the accountant's own formatting IS the deliverable, and
+   * SheetJS CE drops a cell fill on write (DEBT §37). Written with ExcelJS so the fixture carries a
+   * real style, then read back after the round trip.
+   */
+  it('keeps the template’s own cell styling through the round trip', async () => {
+    const { Workbook } = await import('exceljs');
+    const source = new Workbook();
+    const sheet = source.addWorksheet('דוח');
+    sheet.getColumn(1).width = 34;
+    const styled = sheet.getCell('A1');
+    styled.value = '{{net_total}}';
+    styled.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    styled.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E5F' } };
+    styled.numFmt = '#,##0.00';
+    const bytes = await source.xlsx.writeBuffer();
+
+    const filled = await fillTemplateWorkbook(bytes as ArrayBuffer, { net_total: 1234.5 });
+
+    const reopened = new Workbook();
+    await reopened.xlsx.load(filled);
+    const cell = reopened.getWorksheet('דוח')!.getCell('A1');
+    expect(cell.value).toBe(1234.5);
+    expect(cell.numFmt).toBe('#,##0.00');
+    expect(cell.font?.bold).toBe(true);
+    expect((cell.fill as { fgColor?: { argb?: string } }).fgColor?.argb).toBe('FF1F4E5F');
+    expect(reopened.getWorksheet('דוח')!.getColumn(1).width).toBe(34);
   });
 });

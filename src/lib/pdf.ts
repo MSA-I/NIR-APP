@@ -15,10 +15,10 @@ import { safeFileName } from './workbook';
  *
  * A browser, meanwhile, implements bidi correctly and is already sitting here rendering the same
  * table on screen. So the layout engine is the one we already trust: `html2canvas-pro` rasterises
- * the print area the screen has already laid out — the identical reasoning `src/lib/orderImage.ts`
+ * the print areas the screen has already laid out — the identical reasoning `src/lib/orderImage.ts`
  * used to build the WhatsApp order image, and `-pro` for the identical reason (the original throws
- * on the oklch colours Tailwind v4 emits). jsPDF is then only a container: pages, an image per
- * page, and the watermark.
+ * on the oklch colours Tailwind v4 emits). jsPDF is then only a container: pages, the blocks that
+ * land on them, and the stamp.
  *
  * THE COST IS STATED PLAINLY: text in these PDFs is not selectable or searchable. It is a picture
  * of a correctly typeset page. The accountant's machine-readable artefact is the .xlsx, which is
@@ -29,6 +29,8 @@ import { safeFileName } from './workbook';
 
 const A4 = { width: 210, height: 297 } as const;
 const MARGIN = 10;
+/** Breathing room between two blocks that share a page. */
+const BLOCK_GAP = 4;
 
 /**
  * Print-only blocks are `display: none` on screen, so html2canvas would capture a page missing its
@@ -39,13 +41,20 @@ const MARGIN = 10;
 const CAPTURE_CLASS = 'pdf-capture';
 
 export interface PdfOptions {
-  /** The subtree to render — the same `.print-area` the print stylesheet targets. */
-  element: HTMLElement;
+  /**
+   * The subtree(s) to render — the same `.print-area` elements the print stylesheet targets.
+   *
+   * An ARRAY because a screen is not always one box: the invoice detail carries six separate
+   * print areas (the money tiles, the details card, the lines) and no single wrapper around them.
+   * Each element is captured on its own and the blocks are then flowed across pages, so a screen
+   * built from several cards prints like a document instead of not printing at all.
+   */
+  element: HTMLElement | readonly HTMLElement[];
   fileName: string;
   /**
    * Stamp the InPlace mark across every page. Driven by the `exports.unbranded_pdf` entitlement:
    * a plan that does not grant it exports branded. Enforced in the browser, which is the honest
-   * limit — see `usePdfWatermark`.
+   * limit — see `useExportWatermark` and DEBT §69.
    */
   watermark: boolean;
   /** Landscape for the wide accountant grids; portrait for order sheets and invoices. */
@@ -58,10 +67,16 @@ function tokenColor(token: string): string | undefined {
   return value === '' ? undefined : value;
 }
 
-/** Rasterise the shipped SVG mark once per export so jsPDF has bitmap bytes to place. */
+/**
+ * Rasterise the shipped SVG mark once per export so jsPDF has bitmap bytes to place.
+ *
+ * The LOCKUP, not the bare symbol (owner ruling 28.08.2026): a watermark exists to say whose
+ * product produced the document, and the symbol alone says that only to someone who already knows
+ * it. The lockup carries the name.
+ */
 async function watermarkImage(height: number): Promise<HTMLCanvasElement | null> {
   const image = new Image();
-  image.src = '/brand/inplace-symbol.svg';
+  image.src = '/brand/inplace-lockup.svg';
   try {
     await image.decode();
   } catch {
@@ -80,13 +95,6 @@ async function watermarkImage(height: number): Promise<HTMLCanvasElement | null>
   return canvas;
 }
 
-/**
- * Cut the tall page canvas into one canvas per printed page.
- *
- * The alternative — placing the whole image once per page at a negative offset — relies on the
- * page boundary clipping it, which jsPDF does not do: every page ends up carrying the entire
- * document and the file grows with the square of its length.
- */
 /**
  * Move a page break UP to the nearest blank scanline, so a table row is not cut in half.
  *
@@ -111,6 +119,23 @@ function isBlankRow(pixels: Uint8ClampedArray, width: number, row: number): bool
   return true;
 }
 
+function crop(source: HTMLCanvasElement, top: number, height: number): HTMLCanvasElement | null {
+  const slice = document.createElement('canvas');
+  slice.width = source.width;
+  slice.height = height;
+  const context = slice.getContext('2d');
+  if (context === null) return null;
+  context.drawImage(source, 0, top, source.width, height, 0, 0, source.width, height);
+  return slice;
+}
+
+/**
+ * Cut a canvas that is taller than one page into one canvas per printed page.
+ *
+ * The alternative — placing the whole image once per page at a negative offset — relies on the
+ * page boundary clipping it, which jsPDF does not do: every page ends up carrying the entire
+ * document and the file grows with the square of its length.
+ */
 function pageSlices(source: HTMLCanvasElement, sliceHeight: number): HTMLCanvasElement[] {
   const reader = source.getContext('2d', { willReadFrequently: true });
   const pixels = reader?.getImageData(0, 0, source.width, source.height).data ?? null;
@@ -125,12 +150,8 @@ function pageSlices(source: HTMLCanvasElement, sliceHeight: number): HTMLCanvasE
         if (isBlankRow(pixels, source.width, top + candidate)) { height = candidate; break; }
       }
     }
-    const slice = document.createElement('canvas');
-    slice.width = source.width;
-    slice.height = height;
-    const context = slice.getContext('2d');
-    if (context === null) return slices;
-    context.drawImage(source, 0, top, source.width, height, 0, 0, source.width, height);
+    const slice = crop(source, top, height);
+    if (slice === null) return slices;
     slices.push(slice);
     top += height;
   }
@@ -138,7 +159,11 @@ function pageSlices(source: HTMLCanvasElement, sliceHeight: number): HTMLCanvasE
 }
 
 export async function downloadElementPdf(options: PdfOptions): Promise<void> {
-  const { element, watermark, orientation = 'portrait' } = options;
+  const { watermark, orientation = 'portrait' } = options;
+  const elements = (Array.isArray(options.element) ? options.element : [options.element])
+    .filter((element): element is HTMLElement => element instanceof HTMLElement);
+  if (elements.length === 0) return;
+
   const [{ default: html2canvas }, { jsPDF, GState }] = await Promise.all([
     import('html2canvas-pro'),
     import('jspdf'),
@@ -146,23 +171,27 @@ export async function downloadElementPdf(options: PdfOptions): Promise<void> {
 
   const root = document.documentElement;
   root.classList.add(CAPTURE_CLASS);
-  let source: HTMLCanvasElement;
+  let blocks: HTMLCanvasElement[];
   try {
     // The organisation's logo lives in Supabase Storage, a DIFFERENT ORIGIN from the app, and it
     // sits in a block that is `display: none` until the line above. Both facts have to be handled
     // or the logo is quietly missing from the file: `useCORS` lets the canvas read the image at
     // all, and waiting for every image to decode stops the capture racing a fetch that only
     // started when the block became visible. Measured — the first generated report had no logo.
-    await Promise.all([...element.querySelectorAll('img')].map((image) => image.decode().catch(() => {})));
-    source = await html2canvas(element, {
-      // 2× so a 9pt table stays legible when the page is zoomed; beyond that the file grows
-      // faster than the reading improves.
-      scale: 2,
-      backgroundColor: tokenColor('--color-surface') ?? null,
-      useCORS: true,
-      imageTimeout: 15_000,
-      logging: false,
-    });
+    await Promise.all(elements.flatMap((element) =>
+      [...element.querySelectorAll('img')].map((image) => image.decode().catch(() => {}))));
+    blocks = [];
+    for (const element of elements) {
+      blocks.push(await html2canvas(element, {
+        // 2× so a 9pt table stays legible when the page is zoomed; beyond that the file grows
+        // faster than the reading improves.
+        scale: 2,
+        backgroundColor: tokenColor('--color-surface') ?? null,
+        useCORS: true,
+        imageTimeout: 15_000,
+        logging: false,
+      }));
+    }
   } finally {
     root.classList.remove(CAPTURE_CLASS);
   }
@@ -172,49 +201,70 @@ export async function downloadElementPdf(options: PdfOptions): Promise<void> {
     : { width: A4.width, height: A4.height };
   const contentWidth = page.width - MARGIN * 2;
   const contentHeight = page.height - MARGIN * 2;
-  // How many source pixels fit in one printed page, at the scale the width imposes.
-  const sliceHeight = Math.max(1, Math.floor((contentHeight / contentWidth) * source.width));
 
   const pdf = new jsPDF({ orientation, unit: 'mm', format: 'a4', compress: true });
-  const mark = watermark ? await watermarkImage(512) : null;
+  let cursor = MARGIN;
+  let started = false;
 
-  const slices = pageSlices(source, sliceHeight);
-  slices.forEach((slice, index) => {
-    if (index > 0) pdf.addPage();
+  const draw = (canvas: HTMLCanvasElement) => {
+    const height = (canvas.height / canvas.width) * contentWidth;
     pdf.addImage(
-      slice.toDataURL('image/png'),
-      'PNG',
-      MARGIN,
-      MARGIN,
-      contentWidth,
-      (slice.height / slice.width) * contentWidth,
-      undefined,
-      'FAST',
+      canvas.toDataURL('image/png'), 'PNG',
+      MARGIN, cursor, contentWidth, height, undefined, 'FAST',
     );
-    // Page numbers, when there is more than one page. Digits and a slash only: jsPDF's built-in
-    // fonts carry no Hebrew glyphs, and a page number does not need words.
-    if (slices.length > 1) {
+    cursor += height + BLOCK_GAP;
+    started = true;
+  };
+  const newPage = () => { pdf.addPage(); cursor = MARGIN; started = false; };
+
+  for (const block of blocks) {
+    const height = (block.height / block.width) * contentWidth;
+    if (height <= contentHeight) {
+      // A hair of tolerance: `contentHeight` and the summed block heights are floating point, and
+      // a block that fits exactly must not be pushed onto a page of its own by a rounding crumb.
+      if (started && cursor + height > page.height - MARGIN + 0.01) newPage();
+      draw(block);
+      continue;
+    }
+    // Taller than a page on its own: it starts on a fresh page and is sliced across as many as it
+    // needs. `sliceHeight` is how many source pixels fit one page at the scale the width imposes.
+    if (started) newPage();
+    const sliceHeight = Math.max(1, Math.floor((contentHeight / contentWidth) * block.width));
+    for (const slice of pageSlices(block, sliceHeight)) {
+      if (started) newPage();
+      draw(slice);
+    }
+  }
+
+  /**
+   * The stamp and the page numbers go on AFTER the content, in one pass over the finished pages.
+   * Drawing them while placing blocks would mean guessing the page count before it exists, and a
+   * document that says "1 / 1" on its first of three pages is worse than no numbering at all.
+   */
+  const total = pdf.getNumberOfPages();
+  const mark = watermark ? await watermarkImage(256) : null;
+  for (let index = 1; index <= total; index += 1) {
+    pdf.setPage(index);
+    if (total > 1) {
+      // Digits and a slash only: jsPDF's built-in fonts carry no Hebrew glyphs, and a page number
+      // does not need words.
       pdf.setFontSize(8);
       pdf.setTextColor(120);
-      pdf.text(`${index + 1} / ${slices.length}`, page.width / 2, page.height - 4, { align: 'center' });
+      pdf.text(`${index} / ${total}`, page.width / 2, page.height - 4, { align: 'center' });
     }
-    if (mark === null) return;
-    // Behind nothing and in front of everything: the stamp goes on last so it is not hidden by a
-    // filled table cell, and at 8% so it never competes with a figure the reader has to trust.
-    const markWidth = contentWidth * 0.45;
+    if (mark === null) continue;
+    // In front of everything, so a filled table cell cannot hide it, and at 8% so it never
+    // competes with a figure the reader has to trust.
+    const markWidth = contentWidth * 0.55;
     const markHeight = (mark.height / mark.width) * markWidth;
     pdf.saveGraphicsState();
     pdf.setGState(new GState({ opacity: 0.08 }));
     pdf.addImage(
-      mark.toDataURL('image/png'),
-      'PNG',
-      (page.width - markWidth) / 2,
-      (page.height - markHeight) / 2,
-      markWidth,
-      markHeight,
+      mark.toDataURL('image/png'), 'PNG',
+      (page.width - markWidth) / 2, (page.height - markHeight) / 2, markWidth, markHeight,
     );
     pdf.restoreGraphicsState();
-  });
+  }
 
   const name = safeFileName(options.fileName, 'inplace-document.pdf');
   pdf.save(name.toLowerCase().endsWith('.pdf') ? name : `${name}.pdf`);

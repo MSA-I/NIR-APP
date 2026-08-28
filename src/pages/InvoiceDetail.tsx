@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { toHebrewError } from '../lib/errors';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { Loader2, Send, CheckCircle2, RotateCcw, SearchCheck, FilePenLine } from 'lucide-react';
+import { FileDown, Loader2, Send, CheckCircle2, RotateCcw, SearchCheck, FilePenLine } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -10,6 +10,8 @@ import { InvoiceAttachments } from '../components/AttachmentsPanel';
 import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
 import { reasonOr } from '../lib/reason';
+import { downloadElementPdf } from '../lib/pdf';
+import { exportWatermark } from '../lib/exportBranding';
 import { reasonDemandFor } from '../lib/transitionIntent';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS, CREDIT_REASON } from '../lib/status';
 import { fmtMoneyExact, fmtDate, formatQuantity, formatUnit, todayISO } from '../lib/format';
@@ -215,7 +217,10 @@ export async function readAllowedInvoiceTransitions(
 export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { profile, organizationAccess } = useAuth();
+  const { profile, org, organizationAccess } = useAuth();
+  const orgLogoUrl = org?.logo_path
+    ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
+    : null;
   const toast = useToast();
   const [checks, setChecks] = useState<CheckResult[] | null>(null);
   const [checkError, setCheckError] = useState<string | null>(null);
@@ -274,6 +279,13 @@ export default function InvoiceDetail() {
   // the param so refresh/back does not re-open the dialog. Same one-shot pattern as OrderDetail.
   const [params, setParams] = useSearchParams();
   const printedRef = useRef<string | null>(null);
+  // The invoice sheet is TWO cards, not one container: the money tiles and the details block, with
+  // working-screen material between them. `downloadElementPdf` takes both and flows them onto
+  // pages, which is why this screen can export at all.
+  const headerRef = useRef<HTMLDivElement>(null);
+  const moneyCardRef = useRef<HTMLDivElement>(null);
+  const detailsCardRef = useRef<HTMLDivElement>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
   useEffect(() => {
     if (printedRef.current === inv?.id || params.get('print') !== '1' || !inv) return;
     printedRef.current = inv.id;
@@ -282,6 +294,30 @@ export default function InvoiceDetail() {
     next.delete('print');
     setParams(next, { replace: true });
   }, [params, inv, setParams]);
+
+  /**
+   * The invoice as a branded PDF. Portrait, and THREE blocks rather than one subtree: the heading,
+   * the money tiles and the details card, with working-screen material (attachments, allocations,
+   * the three-way match panel) sitting between them that must not reach the file.
+   */
+  async function exportPdf() {
+    const blocks = [headerRef.current, moneyCardRef.current, detailsCardRef.current]
+      .filter((element): element is HTMLDivElement => element !== null);
+    if (blocks.length === 0 || !inv) return;
+    setExportingPdf(true);
+    try {
+      await downloadElementPdf({
+        element: blocks,
+        fileName: `invoice-${inv.invoice_number}.pdf`,
+        watermark: await exportWatermark(),
+      });
+      toast('קובץ ה-PDF הורד');
+    } catch (e) {
+      toast(toHebrewError(e), 'error');
+    } finally {
+      setExportingPdf(false);
+    }
+  }
 
   // ?credit=<documentId> (review screen, "פתיחת דרישת זיכוי מהמסמך"): open the ordinary credit
   // modal prefilled from the scanned credit note. Same one-shot pattern as ?print above -- the
@@ -426,6 +462,7 @@ export default function InvoiceDetail() {
             </button>
           ))}
           {canEdit && <button className="btn-secondary" onClick={() => setCreditOpen(true)}><RotateCcw size={ICON.sm} aria-hidden="true" /> דרישת זיכוי</button>}
+          <button className="btn-secondary" disabled={exportingPdf} onClick={() => void exportPdf()} title="הורדת החשבונית כקובץ PDF מעוצב עם הלוגו של הארגון">{exportingPdf ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileDown size={ICON.sm} aria-hidden="true" />} הורדת PDF</button>
         </>}
         lifecycle={lifecycleSteps.length ? <LifecycleStrip steps={lifecycleSteps} current={inv.review_status} nextAction={nextAction} /> : undefined} />
 
@@ -457,9 +494,17 @@ export default function InvoiceDetail() {
         onConfirm={() => void overrideThreeWayMatch()}
         onCancel={() => { setOverrideReauthOpen(false); setOverrideReason(''); }} />
 
+      {/* The document heading, on paper AND in the generated PDF. `print-only` rather than
+          `hidden print:block` because html2canvas renders the live DOM. */}
+      <div ref={headerRef} aria-hidden="true" className="print-only">
+        {orgLogoUrl && <img src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
+        <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}חשבונית ${inv.invoice_number} — ${inv.supplier.name}`}</h2>
+        <p className="text-xs">תאריך חשבונית: {fmtDate(inv.invoice_date)}</p>
+      </div>
+
       {/* print-area on the money + details cards: shadows/borders drop in print so the sheet
           stays a clean invoice document (same convention as the Orders print sheet). */}
-      <Card pad={false} clip className={`grid ${isProcurementManager ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-4'}`}>
+      <Card ref={moneyCardRef} pad={false} clip className={`grid ${isProcurementManager ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-4'}`}>
         <div className="p-4 print-area"><div className="text-xs text-ink-muted">סה״כ חשבונית</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(inv.total_amount)}</div>
           <div className="text-xs text-ink-muted mt-0.5">לפני מע״מ {fmtMoneyExact(inv.amount_before_vat)} + מע״מ {fmtMoneyExact(inv.vat_amount)}</div></div>
         {!isProcurementManager && (
@@ -481,7 +526,7 @@ export default function InvoiceDetail() {
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="space-y-3 print-area">
+        <Card ref={detailsCardRef} className="space-y-3 print-area">
           <div className="section-title">פרטים</div>
           <dl className="text-sm space-y-2">
             <div className="flex justify-between"><dt className="text-ink-muted">תאריך חשבונית</dt><dd>{fmtDate(inv.invoice_date)}</dd></div>

@@ -15,7 +15,7 @@ import { buildLockedMonthlyWorkbook, buildStyledMonthlyWorkbook, monthlyReportSc
 
 import { financialSupplierMap } from '../lib/financialSuppliers';
 import { downloadElementPdf } from '../lib/pdf';
-import { useExportWatermark } from '../lib/exportBranding';
+import { exportWatermark } from '../lib/exportBranding';
 import { downloadWorkbook, safeFileName } from '../lib/workbook';
 import {
   downloadRenderedWorkbook,
@@ -67,7 +67,6 @@ export default function Reports() {
   const month = safeMonthISO(monthParam);
   const [busy, setBusy] = useState(false);
   const printAreaRef = useRef<HTMLDivElement>(null);
-  const watermark = useExportWatermark();
   const [sendSnapshot, setSendSnapshot] = useState<MonthlyReportSnapshot | null>(null);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [snapshotReauthOpen, setSnapshotReauthOpen] = useState(false);
@@ -258,7 +257,7 @@ export default function Reports() {
       await downloadElementPdf({
         element,
         fileName: `${slug}-report-${month}.pdf`,
-        watermark,
+        watermark: await exportWatermark(),
         orientation: 'landscape',
       });
       toast('קובץ ה-PDF הורד');
@@ -544,7 +543,7 @@ export default function Reports() {
       )}
 
       <div ref={printAreaRef} className="print-area monthly-report space-y-4">
-        <div className="print-only">
+        <div aria-hidden="true" className="print-only">
           {/* The header handed to the accountant, on paper AND in the generated PDF — carries the
               tenant's own logo and name. `print-only` rather than `hidden print:block` because
               html2canvas renders the live DOM: a display:none header is simply absent from the

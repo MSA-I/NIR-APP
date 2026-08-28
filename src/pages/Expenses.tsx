@@ -16,7 +16,7 @@ import { useAuth } from '../auth/AuthContext';
 import { financialSupplierMap } from '../lib/financialSuppliers';
 import { downloadWorkbook } from '../lib/workbook';
 import { downloadElementPdf } from '../lib/pdf';
-import { useExportWatermark } from '../lib/exportBranding';
+import { exportWatermark } from '../lib/exportBranding';
 import {
   downloadRenderedWorkbook,
   expenseSummaryTemplateValues,
@@ -99,7 +99,6 @@ export default function Expenses() {
   const [drill, setDrill] = useState<SupplierRow | null>(null);
   const [exporting, setExporting] = useState(false);
   const printAreaRef = useRef<HTMLDivElement>(null);
-  const watermark = useExportWatermark();
   const orgLogoUrl = org?.logo_path
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
     : null;
@@ -288,7 +287,7 @@ export default function Expenses() {
       await downloadElementPdf({
         element,
         fileName: `expenses-${from}-${to}.pdf`,
-        watermark,
+        watermark: await exportWatermark(),
       });
       toast('קובץ ה-PDF הורד');
     } catch (e) {
@@ -379,7 +378,7 @@ export default function Expenses() {
       {!data.invalidRange && <div ref={printAreaRef} className="print-area space-y-4">
         {/* `print-only`, not `hidden print:block`: html2canvas renders the live DOM, so a
             display:none heading is simply absent from the generated PDF (src/index.css). */}
-        <div className="print-only">
+        <div aria-hidden="true" className="print-only">
           {orgLogoUrl && <img src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
           <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}ריכוז הוצאות`} {fmtDate(from)} – {fmtDate(to)}</h2>
         </div>
