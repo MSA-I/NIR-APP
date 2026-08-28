@@ -112,7 +112,10 @@ describe('focused-form navigation safety', () => {
   it('flushes the local receiving draft before following a link', () => {
     const text = source('Receiving.tsx');
     expect(text).toContain('draftAutosaver.current.flush()');
-    expect(text).toContain('לא ניתן לעבור מסך לפני שמירת טיוטת הקבלה');
+    // Same split as the invoice claim below: the screen renders the key, and the key still names
+    // what the person is being stopped from doing.
+    expect(text).toContain("t('receiving.leaveBlockedBySave'");
+    expect(he.receiving.leaveBlockedBySave).toContain('לא ניתן לעבור מסך לפני שמירת טיוטת הקבלה');
   });
 
   it('warns before abandoning a dirty new invoice', () => {

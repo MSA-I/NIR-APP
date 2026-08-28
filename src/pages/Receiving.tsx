@@ -175,8 +175,8 @@ function ReceivingOrderCard({ order, today, localDraft, machineDraft, onOpen }: 
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-ink-muted">
         <span>{t('receiving.text_4')} <span className="num">#{order.number}</span></span>
-        <span className="num">{order.items.length} פריטים</span>
-        {order.expected_date && <span>אספקה: {fmtDate(order.expected_date)}</span>}
+        <span><span className="num">{order.items.length}</span> {t('receiving.itemsWord')}</span>
+        {order.expected_date && <span>{t('receiving.expectedDate', { date: fmtDate(order.expected_date) })}</span>}
       </div>
       {attentionReason && <div className="mt-2 text-xs font-medium text-await-fg">{attentionReason}</div>}
       {/* A receipt recorded on this device that the server has not accepted yet. Shown on the card
@@ -184,8 +184,9 @@ function ReceivingOrderCard({ order, today, localDraft, machineDraft, onOpen }: 
       {localDraft && <div className="mt-1 text-xs font-medium text-alert-fg">{t('receiving.text_5')}</div>}
       {machineDraft && (
         <div className="mt-1 text-xs font-medium text-await-fg">
-          טיוטה אוטומטית מתעודת משלוח — {machineDraft.matchedCount} שורות מוכנות לאישור
-          {machineDraft.waitingCount > 0 && `, ${machineDraft.waitingCount} ממתינות`}
+          {machineDraft.waitingCount > 0
+            ? t('receiving.machineDraftWithWaiting', { matched: machineDraft.matchedCount, waiting: machineDraft.waitingCount })
+            : t('receiving.machineDraft', { matched: machineDraft.matchedCount })}
           {/* Named, not hidden. This is the tier that picked the order because it was the only one
               open — a real link, on the weakest evidence of the three, and the person standing at
               the delivery is the only one who can see whether it is the right order. */}
@@ -321,21 +322,27 @@ export function ReceivingList() {
 
   return (
     <div className="space-y-4 max-w-2xl">
-      <PageHeader title="קבלת סחורה" meta={`${orders.length} הזמנות ממתינות · ${attention.length} דורשות פעולה`} />
+      <PageHeader title={t('receiving.pageTitle')}
+        meta={t('receiving.listMeta', { orders: orders.length, attention: attention.length })} />
       <OfflineQueueStatus />
       {data?.fromDevice && (
         <Note tone={data.stale ? 'alert' : 'await'}>
           <span className="min-w-0 flex-1">
-            הרשימה מוצגת מהמכשיר, לא מהשרת. נקראה לאחרונה ב<span className="num">{fmtDateTime(data.readAt ? new Date(data.readAt) : null)}</span>
-            {data.stale && t('receiving.text_7')}. מופיעות כאן רק הזמנות שנפתחו במכשיר הזה בעבר.
+            {t(data.stale ? 'receiving.listFromDeviceStale' : 'receiving.listFromDevice', {
+              readAt: fmtDateTime(data.readAt ? new Date(data.readAt) : null),
+            })}
           </span>
         </Note>
       )}
       {documentId && (
         <Note tone={source ? 'await' : 'alert'}>
           {source
-            ? <>קליטה מתעודת המשלוח {source.fileName ? <strong>{source.fileName}</strong> : t('receiving.text_8')}
-                {supplierName ? <> {t('receiving.text_9')} <strong>{supplierName}</strong></> : null}. בחר את ההזמנה שאליה הסחורה הגיעה — הכמויות ימולאו מהתעודה.</>
+            ? <>
+                {t('receiving.fromDeliveryNoteLead')}{' '}
+                {source.fileName ? <strong>{source.fileName}</strong> : t('receiving.text_8')}
+                {supplierName ? <> {t('receiving.text_9')} <strong>{supplierName}</strong></> : null}
+                {'. '}{t('receiving.fromDeliveryNoteChoose')}
+              </>
             : t('receiving.text_10')}
         </Note>
       )}
@@ -359,7 +366,8 @@ export function ReceivingList() {
       </div>
 
       {!orders.length ? (
-        <div className="card"><EmptyState title="אין הזמנות שממתינות לקבלה" subtitle={`הזמנות בסטטוס ${statusLabel(PO_STATUS.sent)} / ${statusLabel(PO_STATUS.confirmed)} יופיעו כאן`} /></div>
+        <div className="card"><EmptyState title={t('receiving.emptyTitle')}
+          subtitle={t('receiving.emptySubtitle', { sent: statusLabel(PO_STATUS.sent), confirmed: statusLabel(PO_STATUS.confirmed) })} /></div>
       ) : !filtered.length ? (
         <div className="card"><EmptyState title={t('receiving.title')} subtitle={t('receiving.subtitle')} /></div>
       ) : !focusedQueue ? (
@@ -384,7 +392,7 @@ export function ReceivingList() {
             <>
               <details className="group sm:hidden">
                 <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-2 text-sm font-medium text-action hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
-                  הצג הכל ({filtered.length})
+                  {t('receiving.showAll', { count: filtered.length })}
                   <ChevronDown size={ICON.sm} className="transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
                 </summary>
                 <div className="space-y-3 pt-2">
@@ -501,7 +509,7 @@ export function ReceiveOrder() {
             if (productId && line.quantity !== null) {
               matchedQty.set(productId, (matchedQty.get(productId) ?? 0) + line.quantity);
             } else {
-              unmatched.push(line.description || line.sku || `שורה ${line.sourceRow ?? '—'}`);
+              unmatched.push(line.description || line.sku || t('receiving.sourceRowLabel', { row: line.sourceRow ?? '—' }));
             }
           }
           delivered = {
@@ -684,7 +692,7 @@ export function ReceiveOrder() {
       void draftAutosaver.current.flush().then(() => {
         navigate(`${url.pathname}${url.search}${url.hash}`);
       }).catch((saveError) => {
-        toast(`${errorText(saveError)} לא ניתן לעבור מסך לפני שמירת טיוטת הקבלה.`, 'error');
+        toast(t('receiving.leaveBlockedBySave', { error: errorText(saveError) }), 'error');
       });
     };
     window.addEventListener('beforeunload', beforeUnload);
@@ -788,7 +796,7 @@ export function ReceiveOrder() {
 
     const outcome = await offlineQueue.submitReceipt({
       orderId: order.id,
-      orderLabel: `${order.supplier.name} · הזמנה #${order.number ?? '—'}`,
+      orderLabel: t('receiving.queuedOrderLabel', { supplier: order.supplier.name, number: order.number ?? '—' }),
       payload,
       observedAt,
     });
@@ -923,7 +931,7 @@ export function ReceiveOrder() {
               where it is read and approved. */}
           <button className="btn-primary" disabled={donePendingSync}
             onClick={() => navigate('/documents')}>
-            <FileText size={ICON.sm} aria-hidden="true" /> לצילום החשבונית שהתקבלה
+            <FileText size={ICON.sm} aria-hidden="true" /> {t('receiving.photographInvoice')}
           </button>
           <button className="btn-secondary" onClick={() => navigate('/receiving')}>{t('receiving.navigate')}</button>
         </div>
@@ -956,7 +964,7 @@ export function ReceiveOrder() {
     <div className="max-w-xl mx-auto space-y-3 pb-52 lg:pb-28">
       <div>
         <RecordHeader
-          breadcrumbs={<Breadcrumbs items={[{ label: 'קבלת סחורה', to: '/receiving' }, { label: `הזמנה #${order.number}` }]} />}
+          breadcrumbs={<Breadcrumbs items={[{ label: t('receiving.pageTitle'), to: '/receiving' }, { label: t('receiving.orderNumberCrumb', { number: order.number ?? '—' }) }]} />}
           title={<span className="flex items-center gap-2"><PackageCheck size={ICON.xl} aria-hidden="true" /> {t('receiving.text_29')}</span>}
           status={<StatusBadge meta={PO_STATUS[order.status]} />}
           meta={<><span>{order.supplier.name}</span><span>{t('receiving.text_30')} <span className="num">#{order.number}</span></span><span><span className="num">{progress.done}</span> {t('receiving.text_31')} <span className="num">{progress.total}</span> {t('receiving.text_32')}</span></>} />
@@ -991,8 +999,9 @@ export function ReceiveOrder() {
       {data?.fromDevice && (
         <Note tone={data.stale ? 'alert' : 'await'}>
           <span className="min-w-0 flex-1">
-            ההזמנה מוצגת מהמכשיר. נקראה ב<span className="num">{fmtDateTime(data.readAt ? new Date(data.readAt) : null)}</span>
-            {data.stale && t('receiving.text_42')}. הקבלה תישלח כשיהיה חיבור.
+            {t(data.stale ? 'receiving.orderFromDeviceStale' : 'receiving.orderFromDevice', {
+              readAt: fmtDateTime(data.readAt ? new Date(data.readAt) : null),
+            })}
           </span>
         </Note>
       )}
@@ -1004,7 +1013,7 @@ export function ReceiveOrder() {
           <BarcodeScanControl entries={scanEntries} onPick={onScan} />
           {scan && scan.kind !== 'match' && (
             <span className="text-xs text-ink-muted">
-              קוד אחרון שנסרק: <span className="num">{scan.code}</span> — לא נבחרה שורה.
+              {t('receiving.lastScannedCode', { code: scan.code })}
               {/* G1, finding 6. An unrecognised code ended here, with no suggestion — while the
                   price-list review screen offers "יצירת מוצר חדש מהשורה" on every unmatched row
                   (PriceListReviewConfirmation.tsx). The link is the step;
@@ -1013,9 +1022,8 @@ export function ReceiveOrder() {
                   the receipt cannot take it either. */}
               {scan.kind === 'none' && (
                 <>
-                  {' '}הקוד אינו מוכר בשורות ההזמנה. אם המוצר חסר בקטלוג אפשר להוסיף אותו במסך{' '}
-                  <Link className="link" to="/products">{t('receiving.text_43')}</Link>{' '}— אך מוצר שנוסף עכשיו עדיין אינו חלק מההזמנה הזו,
-                  {t('receiving.text_44')}
+                  {' '}{t('receiving.unknownCodeLead')}{' '}
+                  <Link className="link" to="/products">{t('receiving.text_43')}</Link>{' '}{t('receiving.unknownCodeLimit')}
                 </>
               )}
             </span>
@@ -1035,7 +1043,7 @@ export function ReceiveOrder() {
             {data?.draft
               ? <div>{t('receiving.text_46')}</div>
               : <div>
-                  הכמויות מולאו מתעודת המשלוח עבור <span className="num">{data.delivered.matchedQty.size}</span> פריטים.
+                  {t('receiving.quantitiesFilled', { items: data.delivered.matchedQty.size })}{' '}
                   {t('receiving.text_47')}
                 </div>}
             {/* #116, decided 09.08.2026 — G1 left this paragraph action-less because no manual
@@ -1043,7 +1051,7 @@ export function ReceiveOrder() {
                 now (open_manual_exception, 0087), owner/office only. */}
             {data.delivered.unmatched.length > 0 && (
               <div>
-                שורות בתעודה שלא זוהו במחירון הספק ולכן לא מולאו: {data.delivered.unmatched.join(', ')}.
+                {t('receiving.unmatchedNoteLines', { lines: data.delivered.unmatched.join(', ') })}
                 <span className="block mt-1">
                   {t('receiving.text_48')}
                   {canOpenException
@@ -1072,7 +1080,7 @@ export function ReceiveOrder() {
               <div>
                 <div className="font-semibold text-ink"><bdi>{productLabel(item.product)}</bdi></div>
                 <div className="text-xs text-ink-muted mt-0.5">
-                  הוזמן: <span className="num">{formatQuantity(item.qty, item.product.unit, locale)}</span>
+                  {t('receiving.orderedLabel')} <span className="num">{formatQuantity(item.qty, item.product.unit, locale)}</span>
                   {item.received_qty > 0 && <> {t('receiving.formatQuantity')} <span className="num">{formatQuantity(item.received_qty, item.product.unit, locale)}</span></>}
                 </div>
               </div>
@@ -1091,13 +1099,20 @@ export function ReceiveOrder() {
                   was hand-rolled here, and convergence had no mandate to change that. */}
               <Stepper value={line.qty} min={0} inputStep="any"
                 inputClassName="w-24! text-lg! py-2.5! font-semibold"
-                label={`כמות שהתקבלה עבור ${productLabel(item.product)}`}
-                decrementLabel={`הפחתת הכמות שהתקבלה עבור ${productLabel(item.product)}`}
-                incrementLabel={`הגדלת הכמות שהתקבלה עבור ${productLabel(item.product)}`}
+                label={t('receiving.qtyLabel', { product: productLabel(item.product) })}
+                decrementLabel={t('receiving.qtyDecrement', { product: productLabel(item.product) })}
+                incrementLabel={t('receiving.qtyIncrement', { product: productLabel(item.product) })}
                 inputRef={(element) => { qtyInputs.current[item.id] = element; }}
                 onChange={(next) => setLine(item.id, { qty: next }, item)} />
               {line.qty !== remaining && (
-                <button type="button" className="btn-ghost btn-sm" aria-label={`סימון מלוא הכמות שנותרה עבור ${productLabel(item.product)}: ${formatQuantity(remaining, item.product.unit, locale)}`} onClick={() => setLine(item.id, { qty: remaining }, item)}>מלא ({formatQuantity(remaining, item.product.unit, locale)})</button>
+                <button type="button" className="btn-ghost btn-sm"
+                  aria-label={t('receiving.fillRemainingAria', {
+                    product: productLabel(item.product),
+                    quantity: formatQuantity(remaining, item.product.unit, locale),
+                  })}
+                  onClick={() => setLine(item.id, { qty: remaining }, item)}>
+                  {t('receiving.fillRemaining', { quantity: formatQuantity(remaining, item.product.unit, locale) })}
+                </button>
               )}
             </div>
 
@@ -1105,7 +1120,7 @@ export function ReceiveOrder() {
               {statusButtons.map((b) => (
                 <button key={b.key}
                   className={`rounded-lg border min-h-11 flex items-center justify-center text-xs font-medium transition-colors ${line.status === b.key ? SOLID[RECEIPT_LINE_STATUS[b.key].tone] : 'border-line text-ink-soft hover:bg-surface-hover'}`}
-                  aria-label={`${b.label} עבור ${productLabel(item.product)}`}
+                  aria-label={t('receiving.statusButtonAria', { status: b.label, product: productLabel(item.product) })}
                   aria-pressed={line.status === b.key}
                   onClick={() => setLine(item.id, { status: b.key, ...(b.key === 'missing' ? { qty: 0 } : {}) })}>
                   {b.label}
@@ -1115,7 +1130,7 @@ export function ReceiveOrder() {
 
             {line.status !== 'full' && (
               <input className="input mt-2.5" placeholder={t('receiving.placeholder_2')}
-                aria-label={`הערה לקבלת ${productLabel(item.product)}`}
+                aria-label={t('receiving.lineNoteAria', { product: productLabel(item.product) })}
                 value={line.notes} onChange={(e) => setLine(item.id, { notes: e.target.value })} />
             )}
           </div>
@@ -1139,13 +1154,13 @@ export function ReceiveOrder() {
             documents folder unattached, and it is the completion screen that ties it to THIS
             receipt. Saying only that keeps the sentence honest in both directions. */}
         <div className="hidden sm:flex items-center text-xs text-ink-muted me-auto ps-2">
-          <Camera size={ICON.xs} className="me-1" aria-hidden="true" /> אפשר לצלם עכשיו — הצילום נשמר בתיקיית המסמכים; צירופו לקבלה זו מיד לאחר סיומה
+          <Camera size={ICON.xs} className="me-1" aria-hidden="true" /> {t('receiving.photographNow')}
         </div>
         <button className="btn-secondary flex-1 sm:flex-none" disabled={busy || !receiptKey} onClick={() => void save(false)}>
-          <Save size={ICON.sm} aria-hidden="true" /> שמירת ביניים
+          <Save size={ICON.sm} aria-hidden="true" /> {t('receiving.saveDraft')}
         </button>
         <button type="button" className="btn-primary flex-1 sm:flex-none" disabled={busy || !receiptKey} onClick={() => void save(true)}>
-          <CheckCircle2 size={ICON.sm} aria-hidden="true" /> סיום קבלה ({progress.total} פריטים)
+          <CheckCircle2 size={ICON.sm} aria-hidden="true" /> {t('receiving.finishReceipt', { items: progress.total })}
         </button>
       </div>
 
@@ -1156,7 +1171,7 @@ export function ReceiveOrder() {
       <ConfirmDialog open={exceptionOpen} onClose={() => setExceptionOpen(false)}
         onConfirm={(reason) => void openManualException(reason ?? '')}
         title={t('receiving.title_3')}
-        message={`ייפתח חריג "פריט שלא הוזמן" על הזמנה #${order?.number ?? ''}. הוא יופיע במסך החריגים בשיוך למנהל הרכש.`}
+        message={t('receiving.exceptionMessage', { number: order?.number ?? '' })}
         confirmLabel={t('receiving.confirmLabel')} requireReason busy={exceptionBusy} />
     </div>
   );
