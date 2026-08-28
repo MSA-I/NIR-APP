@@ -59,9 +59,11 @@ describe('automatic document review UX', () => {
 
   it('keeps an unprocessed document in review with a clear enqueue action', () => {
     expect(documentReview).toContain("snapshot.stage === 'unprocessed'");
-    expect(documentReview).toContain('הקובץ נשמר, אך טרם נשלח לעיבוד');
+    expect(documentReview).toContain("t('documentReviewPage.text_5')");
+    expect(he.documentReviewPage.text_5).toContain('הקובץ נשמר, אך טרם נשלח לעיבוד');
     expect(documentReview).toContain("supabase.rpc('enqueue_document_processing'");
-    expect(documentReview).toContain('שליחה לעיבוד');
+    expect(documentReview).toContain("t('documentReviewPage.text_8')");
+    expect(he.documentReviewPage.text_8).toBe('שליחה לעיבוד');
     expect(documentReview).toContain('new Event(DOCUMENT_PROCESSING_CHANGED_EVENT)');
   });
 });

@@ -183,6 +183,18 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   suite passed 1,729/1,729; `npx tsc --noEmit` and `check:jsx-space` passed. `zero` still exits 1
   on 451/61, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `DocumentReview.tsx` batch in this commit.** The pinned count is now
+  974 Hebrew line(s) across 92 files. The protected set is now 539 lines in 32 files: this screen
+  keeps one fixed `p_reason` for `reprocess_document`, restored by its write site because it lands
+  in `audit_logs`. The real remainder is **435 lines in 60 files**. All interface copy moved to
+  paired keys. Nineteen known `interpret-document` Edge codes resolve in the reader language;
+  unknown server text stays raw. Enqueue/reprocess failures are stored as raw failures and resolved
+  only while rendering. Evidence: the stale-baseline negative control measured 16→1 on this file;
+  focused screen/source-contract suites passed 10/10, including parity against all 19 canonical
+  Edge error codes; the full suite passed 1,731/1,731;
+  `npx tsc --noEmit` and `check:jsx-space` passed. This file is protected by `__reason`+ratchet,
+  not listed as zero in `EXTRACTED`; `zero` still exits 1 on 435/60, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

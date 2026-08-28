@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import { LocaleProvider } from '../lib/i18n/LocaleProvider';
 
 const rpc = vi.hoisted(() => vi.fn());
 const invoke = vi.hoisted(() => vi.fn());
@@ -46,10 +49,15 @@ vi.mock('../components/document-review/DocumentReviewWorkspace', () => ({
 
 import DocumentReview from './DocumentReview';
 
-const renderReview = () => render(
-  <MemoryRouter initialEntries={['/documents/document-1/review']}>
-    <Routes><Route path="/documents/:documentId/review" element={<DocumentReview />} /></Routes>
-  </MemoryRouter>,
+const reviewSource = readFileSync(join(process.cwd(), 'src', 'pages', 'DocumentReview.tsx'), 'utf8');
+const edgeSource = readFileSync(join(process.cwd(), 'supabase', 'functions', 'interpret-document', 'index.ts'), 'utf8');
+
+const renderReview = (locale: 'he' | 'en' = 'he') => render(
+  <LocaleProvider initialLocale={locale}>
+    <MemoryRouter initialEntries={['/documents/document-1/review']}>
+      <Routes><Route path="/documents/:documentId/review" element={<DocumentReview />} /></Routes>
+    </MemoryRouter>
+  </LocaleProvider>,
 );
 
 describe('מסך בדיקת מסמך שנכשל', () => {
@@ -96,7 +104,7 @@ describe('התראת פענוח שנכשל', () => {
     invoke.mockReset();
     refetch.mockClear();
     processing.snapshots = waitingSnapshots('extracted');
-    // interpret-document maps its own failures to Hebrew, so the body IS the message.
+    // Legacy/unknown responses without a code remain raw instead of being guessed into our vocabulary.
     invoke.mockResolvedValue({
       error: { context: { json: async () => ({ error: { message: 'שירות הפענוח לא זמין כרגע.' } }) } },
     });
@@ -126,5 +134,33 @@ describe('התראת פענוח שנכשל', () => {
     expect(await screen.findByText('שירות הפענוח לא זמין כרגע.')).toBeInTheDocument();
     // Nothing changed on the server, so nothing is withdrawn: the alert and its retry stay.
     expect(screen.getByRole('button', { name: 'ניסיון נוסף' })).toBeInTheDocument();
+  });
+
+  it('מעדיפה קוד Edge מוכר ומפענחת אותו בשפת הקורא', async () => {
+    invoke.mockResolvedValue({
+      error: {
+        context: {
+          json: async () => ({
+            error: { code: 'provider_unavailable', message: 'שירות הפירוש אינו זמין כרגע.' },
+          }),
+        },
+      },
+    });
+
+    renderReview('en');
+    expect(await screen.findByText('The interpretation service is currently unavailable. Try again later.'))
+      .toBeInTheDocument();
+    expect(screen.queryByText('שירות הפירוש אינו זמין כרגע.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('ממפה כל קוד שגיאה קנוני של interpret-document', () => {
+    const edgeBlock = edgeSource.match(/type EdgeErrorCode =([\s\S]*?);/)?.[1] ?? '';
+    const edgeCodes = [...edgeBlock.matchAll(/"([a-z_]+)"/g)].map((match) => match[1]).sort();
+    const clientBlock = reviewSource.match(/const INTERPRET_ERROR_KEY = \{([\s\S]*?)\} as const/)?.[1] ?? '';
+    const clientCodes = [...clientBlock.matchAll(/^\s*([a-z_]+):/gm)].map((match) => match[1]).sort();
+
+    expect(edgeCodes).not.toHaveLength(0);
+    expect(clientCodes).toEqual(edgeCodes);
   });
 });
