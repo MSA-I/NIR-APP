@@ -89,6 +89,7 @@ const EXTRACTED = [
   'src/components/GlobalSearch.tsx',
   'src/lib/checks.ts',
   'src/lib/checkSummary.ts',
+  'src/lib/imageQuality.ts',
   'src/components/BarcodeScanner.tsx',
   'src/components/document-review/DocumentExportPreview.tsx',
   'src/components/FeedbackButton.tsx',

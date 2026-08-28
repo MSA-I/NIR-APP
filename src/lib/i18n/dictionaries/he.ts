@@ -5367,6 +5367,26 @@ export const he = {
     done: 'סיום',
   },
 
+  imageQuality: {
+    blurryLabel: 'מטושטשת',
+    darkLabel: 'חשוכה',
+    multipleTitle: 'חלק מהתמונות לא יצאו טוב',
+    blurryTitle: 'התמונה יצאה מטושטשת',
+    darkTitle: 'התמונה חשוכה מדי',
+    pickerBlurryHint: 'כדאי לבחור קובץ ברור יותר.',
+    pickerDarkHint: 'כדאי לבחור קובץ בהיר יותר.',
+    pickerMixedHint: 'כדאי לבחור קבצים אחרים.',
+    cameraBlurryOneHint: 'כדאי לייצב את הטלפון ולצלם שוב.',
+    cameraDarkOneHint: 'כדאי להוסיף אור ולצלם שוב.',
+    cameraMixedOneHint: 'כדאי לצלם שוב.',
+    cameraBlurryManyHint: 'כדאי לייצב את הטלפון ולצלם אותן שוב.',
+    cameraDarkManyHint: 'כדאי להוסיף אור ולצלם אותן שוב.',
+    cameraMixedManyHint: 'כדאי לצלם אותן שוב.',
+    retake: 'צילום מחדש',
+    chooseAnother: 'בחירת קובץ אחר',
+    uploadAnyway: 'העלאה בכל זאת',
+  },
+
 } as const;
 
 /**

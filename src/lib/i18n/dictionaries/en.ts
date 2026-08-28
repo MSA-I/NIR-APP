@@ -5363,4 +5363,24 @@ export const en: Dictionary = {
     done: 'Done',
   },
 
+  imageQuality: {
+    blurryLabel: 'Blurry',
+    darkLabel: 'Dark',
+    multipleTitle: 'Some photos did not turn out well',
+    blurryTitle: 'The photo came out blurry',
+    darkTitle: 'The photo is too dark',
+    pickerBlurryHint: 'Choose a clearer file.',
+    pickerDarkHint: 'Choose a brighter file.',
+    pickerMixedHint: 'Choose different files.',
+    cameraBlurryOneHint: 'Hold the phone steady and take it again.',
+    cameraDarkOneHint: 'Add more light and take it again.',
+    cameraMixedOneHint: 'Take it again.',
+    cameraBlurryManyHint: 'Hold the phone steady and take them again.',
+    cameraDarkManyHint: 'Add more light and take them again.',
+    cameraMixedManyHint: 'Take them again.',
+    retake: 'Retake',
+    chooseAnother: 'Choose another file',
+    uploadAnyway: 'Upload anyway',
+  },
+
 };

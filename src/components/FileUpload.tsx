@@ -7,12 +7,12 @@ import { useAuth } from '../auth/AuthContext';
 import { useToast, Skeleton, ConfirmDialog, ErrorNote, ICON, Modal, Note } from './ui';
 import { ActionMenu } from './ActionMenu';
 import {
-  WEAK_CAPTURE_LABEL,
-  WEAK_CAPTURE_PROCEED_LABEL,
+  WEAK_CAPTURE_LABEL_KEY,
+  WEAK_CAPTURE_PROCEED_LABEL_KEY,
   screenImageQuality,
-  weakCaptureHint,
-  weakCaptureRetryLabel,
-  weakCaptureTitle,
+  weakCaptureHintKey,
+  weakCaptureRetryLabelKey,
+  weakCaptureTitleKey,
   type CaptureSource,
   type WeakCapture,
 } from '../lib/imageQuality';
@@ -674,17 +674,17 @@ export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDi
     <Modal
       open={pick.weak.length > 0 || pick.serverRequired.length > 0}
       onClose={onDismiss}
-      title={serverOnly ? t('fileUpload.weakCaptureTitle') : weakCaptureTitle(pick.weak)}
+      title={serverOnly ? t('fileUpload.weakCaptureTitle') : t(weakCaptureTitleKey(pick.weak))}
       description={serverOnly
         ? t('fileUpload.text')
-        : weakCaptureHint(pick.weak, source)}
+        : t(weakCaptureHintKey(pick.weak, source))}
     >
       {pick.files.length > 1 && (
         <ul className="mb-3 divide-y divide-line-soft rounded-lg border border-line-soft text-sm">
           {pick.weak.map((item, index) => (
             <li key={`${item.file.name}-${index}`} className="flex items-center gap-2 px-3 py-2">
               <span className="min-w-0 flex-1 truncate text-ink-body"><bdi>{item.file.name}</bdi></span>
-              <span className="badge-await shrink-0">{WEAK_CAPTURE_LABEL[item.verdict]}</span>
+              <span className="badge-await shrink-0">{t(WEAK_CAPTURE_LABEL_KEY[item.verdict])}</span>
             </li>
           ))}
         </ul>
@@ -707,11 +707,11 @@ export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDi
       )}
       <div className="flex flex-wrap justify-end gap-2">
         <button type="button" className={serverOnly ? 'btn-primary' : 'btn-secondary'} onClick={onUploadAnyway}>
-          {serverOnly ? t('fileUpload.text_6') : WEAK_CAPTURE_PROCEED_LABEL}
+          {serverOnly ? t('fileUpload.text_6') : t(WEAK_CAPTURE_PROCEED_LABEL_KEY)}
         </button>
         {!serverOnly && (
           <button type="button" className="btn-primary" onClick={onRetake}>
-            {weakCaptureRetryLabel(source)}
+            {t(weakCaptureRetryLabelKey(source))}
           </button>
         )}
       </div>

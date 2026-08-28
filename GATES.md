@@ -290,6 +290,17 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   `check:jsx-space` passed. Dictionary parity passed at 5,070 keys per locale; `zero` still exits
   1 on 300/50, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `imageQuality.ts` batch in this commit.** The pinned count is now 839
+  Hebrew line(s) across 83 files; the protected set remains 552 lines in 34 files, so the real
+  remainder is **287 lines in 49 files**. This is the 74th surface locked at zero. The pure image
+  measurement module now returns typed copy keys for verdicts, titles, source-aware hints and
+  actions; `FileUpload` resolves those keys in the reader locale. Capture thresholds, source bytes,
+  HEIC routing and the warn-never-block decision are unchanged. The stale-baseline negative control
+  measured 13→0 on this file alone. Focused metric and quick-capture suites passed 60/60, including
+  the rendered English decision; the full suite passed 1,747/1,747; `npx tsc --noEmit` and
+  `check:jsx-space` passed. Dictionary parity passed at 5,087 keys per locale; `zero` still exits
+  1 on 287/49, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER
