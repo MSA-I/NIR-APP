@@ -103,7 +103,7 @@ select pg_temp.p46_assert(
 
 select pg_temp.p46_assert(
   position('financial_role = ''payable''' in (
-    select prosrc from pg_proc where oid='public.p0_invoice_balance_rows()'::regprocedure))>0
+    select prosrc from pg_proc where oid='public.p0_invoice_balance_rows_by_currency()'::regprocedure))>0
   and position('financial_role = ''payable''' in (
     select prosrc from pg_proc where oid='private.canonical_purchase_metrics(uuid,date,date)'::regprocedure))>0
   and position('financial_role = ''payable''' in (

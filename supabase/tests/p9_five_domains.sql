@@ -162,10 +162,26 @@ select pg_temp.p9_assert(
 
 -- approval_policy_configurations must NOT be FK-bound to the private definitions (0059:66-68):
 -- an orphan is a preflight anomaly, not a broken cascade.
+--
+-- 0217 states the rule the comment above always meant, instead of the proxy it used to count.
+-- "Exactly one foreign key" was true when the tenant was the only one, and `threshold_amount`
+-- then acquired a second: a currency, because a threshold an amount is compared against is
+-- meaningless without one. Counting ALL keys would now fail on a key that has nothing to do with
+-- the definitions table this assertion exists to keep out, so each relationship is named.
 select pg_temp.p9_assert(
   (select count(*) from pg_constraint
-   where conrelid = 'public.approval_policy_configurations'::regclass and contype = 'f') = 1,
-  'the policy configuration must carry exactly one FK -- the tenant, never the definition');
+   where conrelid = 'public.approval_policy_configurations'::regclass and contype = 'f'
+     and confrelid = 'public.organizations'::regclass) = 1
+  and (select count(*) from pg_constraint
+       where conrelid = 'public.approval_policy_configurations'::regclass and contype = 'f'
+         and confrelid = 'private.approval_policy_definitions'::regclass) = 0,
+  'the policy configuration must reach the tenant through exactly one FK and the definition through none');
+
+select pg_temp.p9_assert(
+  (select count(*) from pg_constraint
+   where conrelid = 'public.approval_policy_configurations'::regclass and contype = 'f'
+     and confrelid = 'public.currencies'::regclass) = 1,
+  'the approval threshold lost the currency it is compared in');
 
 -- Grant matrix.
 select pg_temp.p9_assert(

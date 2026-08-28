@@ -136,9 +136,16 @@ insert into payment_allocations (org_id, payment_id, credit_id, amount) values (
 select set_config('request.jwt.claim.sub', '22000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
 
+-- 0219: one row per currency. This fixture is shekels only, so the shekel row is the whole total;
+-- the assertion is written against the currency by name rather than against "the first row",
+-- because "the first row" is what a second currency would silently change.
 select pg_temp.p2_assert(
-  p2_active_payment_request_total() = 1501,
+  (select total from p2_active_payment_request_total_by_currency() where currency = 'ILS') = 1501,
   'active payment total lost rows above 1,000'
+);
+select pg_temp.p2_assert(
+  (select count(*) from p2_active_payment_request_total_by_currency()) = 1,
+  'a shekel-only fixture must report exactly one currency'
 );
 select pg_temp.p2_assert(
   p2_suppliers_with_price_increase_since('2026-06-22') = 1501,

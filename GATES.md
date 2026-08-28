@@ -398,6 +398,46 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   invoice is now single-currency by construction. Probe: flipping a credit's currency ⇒
   foreign-key violation.
 
+- [x] P2-G8: the SQL suites were run against the migrated schema, and the two things that broke
+  were found here rather than in CI
+  CHECK: every file in `supabase/tests/` replayed against `0217`+`0218`+`0219`+`0220` inside one
+  rolled-back transaction (the local stack is on somebody else's `0214`, so nothing may be left
+  behind)
+  EXPECT: no suite fails for a reason this campaign caused
+  EVIDENCE: **80 suites run. Two failed because of this work, and both are fixed:**
+  1. `monthly_report_snapshots` — `ERROR: column "b.currency" must appear in the GROUP BY clause`.
+     `create_monthly_report_snapshot` aggregates a CTE of bank transactions with a GROUP BY that
+     ENUMERATES every column by name. Postgres infers the rest of a row from a grouped primary key
+     only for a real table; a CTE has none, so the enumeration is load-bearing and `0217`'s new
+     column broke the plan. Fixed by `0220` — an **anchored replacement** of one GROUP BY list
+     against the live body with `\r` stripped, not a restatement of 21,000 characters, and the
+     migration fails if the anchor is absent or appears twice. A search of every function body
+     carrying both `group by` and a column of an altered table returns five; the other four group
+     by columns of REAL tables that gained nothing, so the key dependency covers them.
+  2. `p9_five_domains` — "the policy configuration must carry exactly one FK". The rule that
+     assertion states in its own comment is that `approval_policy_configurations` must not be
+     FK-bound to the private definitions; "exactly one" was a proxy that held while the tenant was
+     the only key. `threshold_amount` now has a currency beside it, so the assertion names each
+     relationship instead of counting them, and gains a third: the threshold must keep the currency
+     it is compared in. It passes with the migrations and **fails without them**, which is the
+     coupling worth having.
+  Seven suites also updated for the renames, each verified passing against the migrated schema:
+  `p2_data_reliability`, `p3_org_scope`, `p21_dashboard_snapshot`, `p46_consolidated_supplier_invoice`,
+  `p57_business_summary_parity`, `p63_financial_credit_contracts`, `payment_credit_override`.
+  `p57` gains a two-currency block proving `expected_payments` returns two rows, that neither is
+  495.25, and that the three counts carry no currency at all. `p21` gains a helper that names the
+  currency it asserts about, because reading "the first element" would pass today and assert about
+  the wrong currency the moment a second appears.
+  **NOT claimed to pass, and honestly:** eleven suites cannot run in this harness at all — they
+  open second connections through `dblink` or own a schema, and an outer transaction that also
+  strips their own transaction control breaks that. `p46` fails identically **at baseline** on the
+  unmodified file, which is how that was established. Seven more fail identically at baseline for
+  reasons this work did not cause (`p22_trial_read_only`, `p49_platform_capabilities`,
+  `p51_plan_entitlements`, `p5_domain_events`, `p70_launch_plans_and_usage_anchor`,
+  `p18_document_automation_calibration`, `smart_document_processing`) — the shared local database
+  is carrying another branch's `0213`/`0214`. CI runs all of these on a clean reset; this gate is
+  the fast local sweep, not a substitute for P6-G1.
+
 - **Phase 3's scope is wider than "the client", and this is where that was decided.** Two
   server-side consumers still call names this phase deleted: `src/lib/summary.ts:52` and the Edge
   tool `supabase/functions/assistant/tools/business-summary.ts:74` both call

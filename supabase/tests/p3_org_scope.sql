@@ -196,10 +196,10 @@ select pg_temp.p3_assert(
 
 -- ===== (b) Balance functions respect scope, and the 0031 role gates survived =====
 select set_config('request.jwt.claim.sub', '25000000-0000-0000-0000-000000000001', true);
-select count(*)::text as rows, coalesce(sum(balance), -1)::text as total
-from p0_invoice_balance_rows() \gset owner_bal_
-select coalesce(open_balance, -1)::text as balance, coalesce(open_invoices, -1)::text as count
-from p0_supplier_balance_rows()
+select count(*)::text as rows, coalesce(sum(balance_in_currency), -1)::text as total
+from p0_invoice_balance_rows_by_currency() \gset owner_bal_
+select coalesce(open_balance_in_currency, -1)::text as balance, coalesce(open_invoices, -1)::text as count
+from p0_supplier_balance_rows_by_currency()
 where supplier_id = '35000000-0000-0000-0000-000000000001' \gset owner_sup_
 select pg_temp.p3_assert(
   :'owner_bal_rows'::int = 3 and :'owner_bal_total'::numeric = 1400.00
@@ -207,11 +207,11 @@ select pg_temp.p3_assert(
   'root owner balances must aggregate all three invoices (700 + 500 + 200)');
 
 select set_config('request.jwt.claim.sub', '25000000-0000-0000-0000-000000000003', true);
-select count(*)::text as rows, coalesce(sum(balance), -1)::text as total,
+select count(*)::text as rows, coalesce(sum(balance_in_currency), -1)::text as total,
        coalesce(sum(paid_amount), -1)::text as paid
-from p0_invoice_balance_rows() \gset entity_bal_
-select coalesce(open_balance, -1)::text as balance, coalesce(open_invoices, -1)::text as count
-from p0_supplier_balance_rows()
+from p0_invoice_balance_rows_by_currency() \gset entity_bal_
+select coalesce(open_balance_in_currency, -1)::text as balance, coalesce(open_invoices, -1)::text as count
+from p0_supplier_balance_rows_by_currency()
 where supplier_id = '35000000-0000-0000-0000-000000000001' \gset entity_sup_
 select pg_temp.p3_assert(
   :'entity_bal_rows'::int = 2 and :'entity_bal_total'::numeric = 900.00
@@ -221,8 +221,8 @@ select pg_temp.p3_assert(
   || '-- never the other entity''s 500');
 
 select set_config('request.jwt.claim.sub', '25000000-0000-0000-0000-000000000002', true);
-select count(*)::text as rows, coalesce(sum(balance), -1)::text as total
-from p0_invoice_balance_rows() \gset branch_bal_
+select count(*)::text as rows, coalesce(sum(balance_in_currency), -1)::text as total
+from p0_invoice_balance_rows_by_currency() \gset branch_bal_
 select pg_temp.p3_assert(
   :'branch_bal_rows'::int = 1 and :'branch_bal_total'::numeric = 200.00,
   'branch-scoped balances must hold only the org-visible NULL invoice');
@@ -230,15 +230,15 @@ select pg_temp.p3_assert(
 -- The 0031 gates, pinned against a 0022 silent revert: office gets NOTHING from either
 -- function; accountant gets approved invoices only.
 select set_config('request.jwt.claim.sub', '25000000-0000-0000-0000-000000000004', true);
-select count(*)::text as inv_rows from p0_invoice_balance_rows() \gset office_
-select count(*)::text as sup_rows from p0_supplier_balance_rows() \gset office_
+select count(*)::text as inv_rows from p0_invoice_balance_rows_by_currency() \gset office_
+select count(*)::text as sup_rows from p0_supplier_balance_rows_by_currency() \gset office_
 select pg_temp.p3_assert(
   :'office_inv_rows'::int = 0 and :'office_sup_rows'::int = 0,
   'office must stay outside both balance functions (the 0031 narrowing, not the 0022 gate)');
 
 select set_config('request.jwt.claim.sub', '25000000-0000-0000-0000-000000000005', true);
-select count(*)::text as rows, coalesce(sum(balance), -1)::text as total
-from p0_invoice_balance_rows() \gset acct_
+select count(*)::text as rows, coalesce(sum(balance_in_currency), -1)::text as total
+from p0_invoice_balance_rows_by_currency() \gset acct_
 select pg_temp.p3_assert(
   :'acct_rows'::int = 1 and :'acct_total'::numeric = 700.00,
   'accountant must see approved invoices only (inv1, balance 700)');

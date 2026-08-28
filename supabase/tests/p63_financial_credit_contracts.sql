@@ -219,8 +219,8 @@ select pg_temp.p63_assert(
    where source_document_id = 'f6300000-0000-4000-8000-000000000031'),
   'credit-note provenance, amount, invoice or received status was not preserved');
 select pg_temp.p63_assert(
-  (select credited_amount = 0 and balance = 200
-   from public.p0_invoice_balance_rows()
+  (select credited_amount = 0 and balance_in_currency = 200
+   from public.p0_invoice_balance_rows_by_currency()
    where invoice_id = 'f6300000-0000-4000-8000-000000000021'),
   'credit-note intake changed the invoice balance before any allocation');
 
@@ -384,8 +384,8 @@ select pg_temp.p63_assert(
                           where source_document_id = 'f6300000-0000-4000-8000-000000000031')),
   'partial use did not stay received with a computed remaining balance');
 select pg_temp.p63_assert(
-  (select paid_amount = 70 and credited_amount = 30 and balance = 100
-   from public.p0_invoice_balance_rows()
+  (select paid_amount = 70 and credited_amount = 30 and balance_in_currency = 100
+   from public.p0_invoice_balance_rows_by_currency()
    where invoice_id = 'f6300000-0000-4000-8000-000000000021'),
   'the partial allocation, rather than intake, did not become the credited amount');
 
@@ -442,7 +442,7 @@ select pg_temp.p63_assert(
                           where source_document_id = 'f6300000-0000-4000-8000-000000000031')),
   'full consumption did not move the credit to offset exactly at zero remaining');
 select pg_temp.p63_assert(
-  (select balance = 0 from public.p0_invoice_balance_rows()
+  (select balance_in_currency = 0 from public.p0_invoice_balance_rows_by_currency()
    where invoice_id = 'f6300000-0000-4000-8000-000000000021'),
   'two cash-plus-credit payments did not settle the invoice they named');
 
@@ -485,7 +485,7 @@ select public.execute_payment_request(
       'credit_id', 'f6300000-0000-4000-8000-000000000092', 'amount', 40)),
   'P63 overpay baseline');
 select pg_temp.p63_assert(
-  (select balance = 100 from public.p0_invoice_balance_rows()
+  (select balance_in_currency = 100 from public.p0_invoice_balance_rows_by_currency()
    where invoice_id = 'f6300000-0000-4000-8000-000000000025'),
   'the baseline payment did not leave exactly 100 outstanding');
 select pg_temp.p63_expect_error(
@@ -638,8 +638,8 @@ select pg_temp.p63_assert(
    where credit_id = 'f6300000-0000-4000-8000-000000000095'),
   'the newly linked credit did not report half of itself consumed');
 select pg_temp.p63_assert(
-  (select paid_amount = 70 and credited_amount = 30 and balance = 100
-   from public.p0_invoice_balance_rows()
+  (select paid_amount = 70 and credited_amount = 30 and balance_in_currency = 100
+   from public.p0_invoice_balance_rows_by_currency()
    where invoice_id = 'f6300000-0000-4000-8000-000000000028'),
   'the credit an unlinked allocation applied did not reach the invoice it named');
 
@@ -703,7 +703,7 @@ select pg_temp.p63_assert(
   (select remaining_amount = 0 and allocated_amount = 60
    from public.credit_request_balance_rows('f6300000-0000-4000-8000-000000000011')
    where credit_id = 'f6300000-0000-4000-8000-000000000095')
-  and (select balance = 0 from public.p0_invoice_balance_rows()
+  and (select balance_in_currency = 0 from public.p0_invoice_balance_rows_by_currency()
        where invoice_id = 'f6300000-0000-4000-8000-000000000028'),
   'the second half of the once-unlinked credit did not close its invoice');
 reset role;
@@ -735,7 +735,7 @@ begin
   from pg_catalog.pg_proc proc
   where proc.oid in (
     'public.execute_payment_request(uuid,date,text,text,text,jsonb,text)'::regprocedure,
-    'public.p0_invoice_balance_rows()'::regprocedure,
+    'public.p0_invoice_balance_rows_by_currency()'::regprocedure,
     'public.p1_refresh_invoice_payment_statuses(uuid,uuid[])'::regprocedure,
     'public.soft_delete_supplier(uuid,text)'::regprocedure,
     'public.payment_request_financial_check_signals(uuid,numeric,uuid[],uuid)'::regprocedure,

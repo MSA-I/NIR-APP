@@ -219,8 +219,25 @@ select pg_temp.credit_assert(
     '17330000-0000-0000-0000-000000000001', 100,
     array['17340000-0000-0000-0000-000000000001'::uuid],
     '17370000-0000-0000-0000-000000000002'
-  ) ->> 'open_credit_total')::numeric = 20,
+  ) -> 'open_credit_total_by_currency' -> 0 ->> 'amount')::numeric = 20,
   'entity A1 total must exclude invoice and receipt credits in entity A2'
+);
+
+-- 0219: the open credit is reported per currency, and this fixture has exactly one. A second entry
+-- here would mean a credit in another currency reached the same legal entity, which the screen has
+-- to show as a separate line rather than fold into this one.
+select pg_temp.credit_assert(
+  jsonb_array_length(public.payment_request_financial_check_signals(
+    '17330000-0000-0000-0000-000000000001', 100,
+    array['17340000-0000-0000-0000-000000000001'::uuid],
+    '17370000-0000-0000-0000-000000000002'
+  ) -> 'open_credit_total_by_currency') = 1
+  and public.payment_request_financial_check_signals(
+    '17330000-0000-0000-0000-000000000001', 100,
+    array['17340000-0000-0000-0000-000000000001'::uuid],
+    '17370000-0000-0000-0000-000000000002'
+  ) ->> 'currency' = 'ILS',
+  'the signal must name the currency it answered in, and report one entry per currency'
 );
 
 select pg_temp.credit_assert(
