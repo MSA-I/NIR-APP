@@ -124,17 +124,24 @@ function declaredNumericColumns() {
   return found;
 }
 
-/** Tables that carry a `currency` column, from a create table or a later add column. */
-function tablesCarryingCurrency() {
+/** `table.column` for every currency-bearing column, from a create table or a later add column. */
+function currencyColumns() {
   const carriers = new Set();
+  const named = /^\s*([a-z_]*currency)\s+text\b/i;
   for (const file of files) {
     const text = read(file);
     for (const { table, body } of createTableBlocks(text)) {
-      if (/^\s*currency\s+/im.test(body)) carriers.add(table);
+      for (const line of body.split('\n')) {
+        const m = named.exec(line);
+        if (m) carriers.add(`${table}.${m[1]}`);
+      }
     }
     for (const stmt of statements(text)) {
       const table = alterTarget(stmt);
-      if (table && /add\s+column\s+(?:if\s+not\s+exists\s+)?currency\s/i.test(stmt)) carriers.add(table);
+      if (!table) continue;
+      const add = /add\s+column\s+(?:if\s+not\s+exists\s+)?([a-z_]*currency)\s/gi;
+      let m;
+      while ((m = add.exec(stmt)) !== null) carriers.add(`${table}.${m[1]}`);
     }
   }
   return carriers;
@@ -157,20 +164,24 @@ function assertColumns() {
   // The carrier half only becomes checkable once the reference table exists. Before the phase-1
   // migration it would fail on every row by construction, and a guard that cannot pass is noise.
   if (schemaHasCurrencies) {
-    const carriers = tablesCarryingCurrency();
+    const carriers = currencyColumns();
     for (const [column, carrier] of Object.entries(baseline.money)) {
       const table = column.slice(0, column.lastIndexOf('.'));
       if (carrier === 'evidence') {
         // Evidence is read, never rewritten (plan §3.3). Its currency is decided by the reader of
         // the interpretation that produced it, so there is no column here to check.
         continue;
-      } else if (carrier === 'own' || carrier === 'allocation') {
-        if (!carriers.has(table)) {
-          problems.push(`  ${column} is marked "${carrier}" but ${table} has no currency column.`);
+      } else if (carrier === 'own' || carrier === 'allocation' || carrier.startsWith('own:')) {
+        // `own:<column>` names the bearer, because a table may carry more than one currency and
+        // "the currency column" is then ambiguous — suppliers.min_order_amount is stated in
+        // suppliers.default_currency, and a second column holding the same fact could disagree.
+        const bearer = carrier.startsWith('own:') ? carrier.slice('own:'.length) : 'currency';
+        if (!carriers.has(`${table}.${bearer}`)) {
+          problems.push(`  ${column} is marked "${carrier}" but ${table}.${bearer} does not exist.`);
         }
       } else if (carrier.startsWith('inherits:')) {
         const parent = carrier.slice('inherits:'.length);
-        if (!carriers.has(parent)) {
+        if (!carriers.has(`${parent}.currency`)) {
           problems.push(`  ${column} inherits from ${parent}, which has no currency column.`);
         }
       } else {

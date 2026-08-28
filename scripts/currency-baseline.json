@@ -3,13 +3,14 @@
 
   "__carriers": {
     "own": "the table carries its own `currency` column — a document or transaction head, a price list row, or a threshold (plan §2)",
+    "own:<column>": "the table carries the currency in a column of that name. Used where a table carries more than one currency column and naming the bearer is the only unambiguous answer — suppliers.min_order_amount is stated in suppliers.default_currency",
     "inherits:<table>": "no column of its own; the currency is the parent row's. A document is never printed in two currencies (plan §2)",
     "allocation": "no currency of its own by design; the composite foreign keys make a cross-currency link unrepresentable rather than merely rejected (plan §4.1)",
     "evidence": "money, but a record of what a document or a model said — plan §3.3's protected class. It is read, never rewritten, so it gets no currency column and its currency is decided by whoever reads the interpretation that produced it"
   },
 
   "money": {
-    "suppliers.min_order_amount": "own",
+    "suppliers.min_order_amount": "own:default_currency",
     "supplier_products.current_price": "own",
     "supplier_products.previous_price": "own",
     "price_history.price": "own",
@@ -29,6 +30,7 @@
     "payment_requests.open_credit_override_total": "inherits:payment_requests",
     "payment_request_invoices.amount_allocated": "allocation",
     "payments.amount": "own",
+    "payments.settlement_amount": "own:settlement_currency",
     "payment_allocations.amount": "allocation",
     "bank_transactions.amount": "inherits:bank_imports",
     "bank_allocations.amount": "allocation",

@@ -9,9 +9,22 @@ still `c04d37a`, the exact commit the planning branch was cut from, and
 `claude/add-english-language-system-f43d1e` is **not** in `git branch --merged main`. There is
 nothing to merge. The English branch is still read read-only through `git show`.
 
-Migration number: the English branch adds `0213_profile_locale.sql` and `#281` puts it first, so
-this work takes **`0214`** — verified by `git ls-tree` on both branches, not assumed. Taking `0214`
-is right whichever order the merges land in; taking `0213` would collide.
+Migration number: **`0217`, not the `0214` the plan expected**, and the plan was right to say
+"verify before you decide". `git ls-tree` over every local branch returns **seven** migration files
+claiming `0213`–`0216`, and they already collide with each other:
+
+| number | files claiming it | branch |
+|---|---|---|
+| 0213 | `profile_locale` · `plan_capability_ladder` · `export_branding_entitlement` | English · codex/subscription-plans · another |
+| 0214 | `platform_user_administration` · `plan_capability_decisions` | feat/app-admin-console · fix/exports-rtl-and-design |
+| 0215 | `scan_pages_label` | |
+| 0216 | `plan_capability_enforcement` | `fixes` |
+
+The shared local database confirms it independently: `select max(version) from
+supabase_migrations.schema_migrations` returns `0214`, applied as `platform_user_administration` —
+somebody else's. `0217` is the first number above every claim, and it is correct under any merge
+order. This is a repository-wide hazard, not a currency one: two pairs of unmerged migrations will
+collide on merge whatever this branch does.
 
 OWNS: docs/PLAN-multi-currency-20260828.md, docs/OPEN-DECISIONS.md (rows #284–#289), GATES.md,
 scripts/check-currency.mjs, scripts/currency-baseline.json
@@ -173,30 +186,98 @@ constitution's clause 12.
 
 ## Phase 1 — the schema
 
-- [ ] P1-G1: every money row carries a currency and no legacy row was guessed
+The migration is `supabase/migrations/0217_money_carries_its_currency.sql`. Every gate below was
+measured by applying that file to the local stack inside `begin; … rollback;`, so the shared
+database was never left changed — see the migration-number note above for why the local stack is
+not on this branch's schema in the first place.
+
+- [x] P1-G1: every money row carries a currency and no legacy row was guessed
   CHECK: select count(*) from invoices where currency is null; select count(*) from invoices where currency <> 'ILS';
   EXPECT: 0 and 0 immediately after the backfill
+  EVIDENCE: `null_currency 0 | non_ils 0 | total 14` on the local stack's demo data. No statement
+  in the migration updates a row: every new column is `not null default 'ILS'`, which Postgres 11+
+  stores as metadata, so nothing was rewritten and none of `p1_financial_command_guard`,
+  `zz_organization_write_guard` or the tenant-identity guards had to be argued past.
 
-- [ ] P1-G4: a currency the reference table does not hold cannot be written (`#284`)
+- [x] P1-G4: a currency the reference table does not hold cannot be written (`#284`)
   CHECK: update invoices set currency = 'XQZ' where id = :any;
   EXPECT: a foreign-key violation against `currencies`. The table carries `minor_units`, and every
   money column is `numeric(14,3)` so a 0-decimal (JPY) and a 3-decimal (KWD) currency both fit.
+  EVIDENCE: the invoice probe in the CHECK line is the WRONG probe and the run proved it —
+  `update invoices set currency = 'XQZ'` is refused by
+  `payment_request_invoices_invoice_currency_fk`, a *referencing* key, so it would have passed even
+  if the `currencies` key were missing. The migration's own assertion therefore probes
+  `organizations.base_currency`, which nothing references: `ERROR: insert or update on table
+  "organizations" violates foreign key constraint` is the only constraint that can refuse it.
+  `currencies` holds **157** ISO-4217 codes, asserted with `minor_units` of 2 for ILS, 0 for JPY
+  and 3 for KWD — the three shapes the rounding rule turns on.
 
-- [ ] P1-G5: an amount cannot be stored with more decimals than its currency has (`#284`)
-  CHECK: write a JPY amount of 1000.50 through the owning RPC
-  EXPECT: refused. Rounding reads `currencies.minor_units` instead of the hard-coded 2
-  (`0023:1712-1725` is the site), and the write commands are already the only write path.
-
-- [ ] P1-G2: a cross-currency allocation is not rejected — it is unrepresentable
+- [x] P1-G2: a cross-currency allocation is not rejected — it is unrepresentable
   CHECK: insert a `payment_allocations` row linking a USD payment to an ILS invoice
   EXPECT: a foreign-key violation, not a trigger warning. The composite FKs onto
   `(org_id, payment_id, currency)` and `(org_id, invoice_id, currency)` are the mechanism.
+  EVIDENCE: `ERROR: insert or update on table "payment_allocations" violates foreign key
+  constraint "payment_allocations_payment_currency_fk" — DETAIL: Key (org_id, payment_id,
+  currency)=(…, USD) is not present in table "payments".` The same insert with `'ILS'` is
+  **accepted**, so the key discriminates rather than blocking everything. Flipping the payment
+  instead of the allocation is refused from the other side. Nine composite keys were built and the
+  assertion counts all nine; a negative control that renamed one produced
+  `ERROR: 0217: 8 of the 9 currency-identity foreign keys exist`.
+  Two more identity keys beyond the plan's three allocation tables: `bank_transactions.currency` is
+  locked to `bank_imports.currency` (`ERROR: … violates foreign key constraint
+  "bank_allocations_transaction_currency_fk"` when a line is flipped), and `payments` carries
+  `payments_settlement_pair` / `payments_settlement_differs`, both of which fired on probe.
 
-- [ ] P1-G3: the migration meets the standing obligations
+- [x] P1-G3: the migration meets the standing obligations
   CHECK: node scripts/check-anchored-replacements.mjs && npm run -s check:exemptions
   EXPECT: both exit 0; plus A5 (scope-enforced table name read from the settings table, never a
   literal or a comment), A6 (`tenant_export_registry` rehashed), explicit column grants — the step
   `0213` skipped — and forward-only.
+  EVIDENCE: `check:anchored-replacements passed: 208 migration(s) scanned … 0 new unnormalised
+  reader(s)`; `check:exemptions passed: 144 post-0057 migration(s) re-assert A1/A3/A5`. The
+  migration adds **no** `SECURITY DEFINER` function, so A5's definer and trigger arms have nothing
+  new to cover; it re-runs `private.scope_enforcement_violations()` and
+  `private.tenant_export_registry_violations()` in its own assertion block and both return empty.
+  A1 is met by the one new base table: `currencies` is registered `('currencies','system',false)`,
+  the same classification `0184` gave the plan catalogue, and it deliberately gets NO
+  `tenant_export_registry` row because it has no `org_id` and the registry's staleness arm treats
+  such a row as a violation. A6 rehashes **every** registry row rather than naming the twenty that
+  changed — one statement, nothing to keep in sync (`UPDATE 131`).
+  Column grants: only `suppliers` needed them. Every other table carries a TABLE-level `SELECT`
+  for `authenticated`, so its new columns are readable as soon as they exist; `suppliers` has been
+  column-by-column since `0112` moved `bank_details` out of reach, so `default_currency` and
+  `country_code` are granted by name (SELECT, and INSERT/UPDATE because the supplier form is an
+  allow-listed direct write). Deliberately NOT granted: UPDATE on `invoices.currency` (evidence of
+  what was printed, written only by the server command that recomputes the assessment), UPDATE on
+  `organizations.country_code`/`base_currency` (`#285` routes both through an owner action with a
+  reason and an audit row), and anything at all for `anon`.
+
+- [x] P1-G6: widening the columns did not quietly drop a read model
+  CHECK: two views read the widened columns and `alter column … type` refuses while they do
+  EXPECT: both back, byte-identical in behaviour, with their storage options, grants and comment
+  EVIDENCE: `inventory_intelligence` (0102) reads `supplier_products.current_price` and
+  `purchase_order_items.unit_price`; `supplier_metrics` (0204) reads `credit_requests.amount`,
+  `payment_allocations.amount` and `price_history.price`. The first run of the migration failed
+  with `ERROR: cannot alter type of a column used by a view or rule — DETAIL: rule _RETURN on view
+  inventory_intelligence depends on column "current_price"`, which is how they were found. They are
+  captured from `pg_get_viewdef` into a temp table, dropped, and rebuilt from what the database
+  holds — **not** from a definition restated in this migration, which is how a clause goes missing
+  in silence. After the run both report `security_invoker=on, security_barrier=on`,
+  `has_table_privilege('authenticated', …, 'select') = t`, and `inventory_intelligence` still
+  carries its comment. Both return 0 rows to `postgres`, which is correct and not a defect: they
+  are `security_invoker` and filter on `auth_org()`, which is null outside a session.
+  Nothing else in the schema depends on either view.
+
+- ABANDON — moved, not dropped: **P1-G5** ("an amount cannot be stored with more decimals than its
+  currency has") **moves to phase 4 as P4-G6.** It cannot be measured in phase 1, and that is a
+  measurement rather than a preference: the gate asks for "a JPY amount of 1000.50 through the
+  owning RPC", and until phase 4 opens `0108` **no writer in this system can produce a row in any
+  currency but ILS** — `create_invoice` takes no currency argument and the intake guard refuses
+  every non-shekel document. A gate whose precondition cannot exist is not a gate. The schema half
+  it depends on is delivered here: `currencies.minor_units` is seeded and asserted for the 0-, 2-
+  and 3-decimal cases, and every money column is `numeric(14,3)` so all three fit. The rounding
+  itself belongs in the write commands (`0023:1712-1725` hard-codes `round(…, 2)`), which phase 4
+  edits anyway to accept a currency — doing it now would mean rewriting the same function twice.
 
 ---
 
@@ -260,6 +341,20 @@ constitution's clause 12.
 - [ ] P4-G3: the shekel-only business feels nothing (regression)
   CHECK: a shekel document with no printed currency from a shekel supplier
   EXPECT: zero new findings — identical to today's behaviour
+
+- [ ] P4-G6 (was P1-G5): an amount cannot be stored with more decimals than its currency has (`#284`)
+  CHECK: write a JPY amount of 1000.50 through the owning RPC
+  EXPECT: refused. Rounding reads `currencies.minor_units` instead of the hard-coded 2
+  (`0023:1712-1725` is the site), and the write commands are already the only write path.
+  Moved here from phase 1 because no writer could produce a non-ILS row until this phase — see the
+  ABANDON note under phase 1.
+
+- [ ] P4-G7: the temporary `default 'ILS'` comes off the intake path
+  CHECK: `alter table invoices alter column currency drop default;` lands in this phase's migration,
+  and an insert that names no currency then fails
+  EXPECT: `null value in column "currency"`. `0217` carried the default so that phases 1–3 kept
+  running against writers that do not name a currency; the moment `apply_reviewed_document`
+  supplies one, a currency nobody stated must be a failure rather than a shekel.
 
 - [ ] P4-G4: the client cannot dictate the currency
   CHECK: a review payload asserting a currency the recomputed assessment did not derive
