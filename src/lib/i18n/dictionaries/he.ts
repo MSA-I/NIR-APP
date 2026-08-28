@@ -5329,6 +5329,15 @@ export const he = {
     workbookInvalid: 'קובץ התבנית או מיפוי התאים פגומים. יש להעלות ולאשר את התבנית מחדש.',
   },
 
+  share: {
+    whatsappMissingNumber: 'לספק אין מספר WhatsApp זמין',
+    whatsappPopupBlocked: 'הדפדפן חסם את חלון WhatsApp. יש לאפשר חלונות קופצים ולנסות שוב.',
+    invoiceLine: 'חשבונית {number} — {supplier}',
+    invoiceDateLine: 'תאריך: {date}',
+    invoiceTotalLine: 'סה״כ: {total}',
+    invoiceTitle: 'חשבונית {number}',
+  },
+
 } as const;
 
 /**

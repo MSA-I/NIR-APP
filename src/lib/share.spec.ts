@@ -1,4 +1,6 @@
 import { toHebrewError } from './errors';
+import { en } from './i18n/dictionaries/en';
+import { translate, type TKey } from './i18n/t';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
@@ -23,7 +25,10 @@ vi.mock('./popup', () => ({
   },
 }));
 
-import { openOrderWhatsApp, orderWhatsAppText, markOrderSentToSupplier, needsSentConfirmation, type WhatsAppOrder } from './share';
+import { openOrderWhatsApp, orderWhatsAppText, markOrderSentToSupplier, needsSentConfirmation, shareInvoice, type WhatsAppOrder } from './share';
+
+const shareFn = vi.fn();
+const sayEn = (key: TKey, vars?: Record<string, string | number>) => translate(en, key, vars);
 
 const order: WhatsAppOrder = {
   id: 'order-1',
@@ -41,6 +46,8 @@ beforeEach(() => {
   openedUrls.length = 0;
   rpcError = null;
   popupResult = 'opened';
+  shareFn.mockReset();
+  Object.defineProperty(navigator, 'share', { configurable: true, value: shareFn });
 });
 
 /**
@@ -63,14 +70,14 @@ describe('WhatsApp order send', () => {
     const result = openOrderWhatsApp(order, 'המסעדה');
 
     expect(result.opened).toBe(false);
-    expect(result.error).toMatch(/חלונות קופצים/);
+    expect(result.errorCode).toBe('popup_blocked');
     expect(rpcCalls).toEqual([]);
   });
 
   it('refuses a supplier with no reachable number', () => {
     const result = openOrderWhatsApp({ ...order, supplier: { name: 'ירקות השדה', phone: null, whatsapp: null } }, 'המסעדה');
 
-    expect(result).toEqual({ opened: false, error: 'לספק אין מספר WhatsApp זמין' });
+    expect(result).toEqual({ opened: false, errorCode: 'missing_number' });
     expect(openedUrls).toEqual([]);
   });
 
@@ -121,5 +128,22 @@ describe('WhatsApp order send', () => {
     expect(needsSentConfirmation('confirmed')).toBe(false);
     expect(needsSentConfirmation('received')).toBe(false);
     expect(needsSentConfirmation('cancelled')).toBe(false);
+  });
+
+  it('builds invoice share copy in the reader language and preserves supplier data', async () => {
+    shareFn.mockResolvedValue(undefined);
+    await shareInvoice({
+      invoice_number: '1001',
+      invoice_date: '2026-08-12',
+      total_amount: 118,
+    }, 'ספק מקור', sayEn);
+
+    expect(shareFn).toHaveBeenCalledOnce();
+    const payload = shareFn.mock.calls[0][0] as { title: string; text: string };
+    expect(payload.title).toContain('Invoice');
+    expect(payload.text).toContain('Invoice');
+    expect(payload.text).toContain('ספק מקור');
+    expect(payload.text).toContain('Date:');
+    expect(payload.text).toContain('Total:');
   });
 });

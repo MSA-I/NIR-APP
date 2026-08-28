@@ -5325,4 +5325,13 @@ export const en: Dictionary = {
     workbookInvalid: 'The template file or cell mapping is invalid. Upload and approve the template again.',
   },
 
+  share: {
+    whatsappMissingNumber: 'The supplier has no available WhatsApp number',
+    whatsappPopupBlocked: 'The browser blocked the WhatsApp window. Allow pop-ups and try again.',
+    invoiceLine: 'Invoice {number} — {supplier}',
+    invoiceDateLine: 'Date: {date}',
+    invoiceTotalLine: 'Total: {total}',
+    invoiceTitle: 'Invoice {number}',
+  },
+
 };

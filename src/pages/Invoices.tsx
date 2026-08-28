@@ -343,7 +343,7 @@ export function InvoicesList() {
           // system, and the row action navigated to a detail screen whose amount is plain text
           // (InvoiceDetail.tsx:248-249). "פתיחה" is the same navigation under its real name.
           { key: 'edit', label: t('invoiceList.actionOpen'), icon: Eye, hidden: !canCreate, onSelect: () => navigate(`/invoices/${r.id}`) },
-          { key: 'share', label: t('invoiceList.canShare'), icon: Share2, hidden: !canShare(), onSelect: () => void shareInvoice(r, r.supplier.name) },
+          { key: 'share', label: t('invoiceList.canShare'), icon: Share2, hidden: !canShare(), onSelect: () => void shareInvoice(r, r.supplier.name, t) },
           { key: 'print', label: t('invoiceList.actionPrint'), icon: Printer, onSelect: () => navigate(`/invoices/${r.id}?print=1`) },
           { key: 'delete', label: t('invoiceList.setDeleteTarget'), icon: Trash2, tone: 'danger', hidden: !isOffice, onSelect: () => setDeleteTarget(r) },
         ]}

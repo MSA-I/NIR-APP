@@ -9,7 +9,7 @@ import { SUPPLIER_LINK_STATE, SUPPLIER_PROPOSAL_STATUS } from '../lib/status';
 import {
   buildPortalUrl, fetchOrderLink, fetchOrderProposal, issueOrderLink, linkState, revokeOrderLink,
 } from '../lib/supplierPortal';
-import { openOrderWhatsApp, type WhatsAppOrder } from '../lib/share';
+import { OPEN_ORDER_WHATSAPP_ERROR_KEY, openOrderWhatsApp, type WhatsAppOrder } from '../lib/share';
 
 /**
  * The supplier-portal panel on an order (0167): issue / regenerate / revoke the one live link,
@@ -89,7 +89,9 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
   function openWhatsAppWithLink() {
     if (!freshUrl) return;
     const res = openOrderWhatsApp(order, orgName, freshUrl);
-    if (res.error) toast(res.error, 'error');
+    if (res.errorCode) {
+      toast(t(OPEN_ORDER_WHATSAPP_ERROR_KEY[res.errorCode]), 'error');
+    }
   }
 
   if (loading) return null;

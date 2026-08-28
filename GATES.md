@@ -255,6 +255,17 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   value/error-mapping suite passed 6/6; the full suite passed 1,738/1,738; `npx tsc --noEmit` and
   `check:jsx-space` passed. `zero` still exits 1 on 341/53, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `share.ts` batch in this commit.** The pinned count is now 874 Hebrew
+  line(s) across 85 files. The protected set is now 547 lines in 33 files: seven lines build the
+  deliberately Hebrew supplier-facing WhatsApp order and one fixed `p_reason` lands in
+  `audit_logs`. The real remainder is **327 lines in 52 files**. Reader-facing WhatsApp-open
+  failures now carry `OpenOrderWhatsAppErrorCode`; invoice share copy receives the reader
+  translator while preserving supplier/invoice data and bidi isolation. Evidence: the stale-
+  baseline negative control measured 14→8 on this file; focused share/dialog suites passed 13/13;
+  the full suite passed 1,739/1,739; `npx tsc --noEmit` and `check:jsx-space` passed. This file is
+  protected by `__reason`+ratchet, not listed as zero in `EXTRACTED`; `zero` still exits 1 on
+  327/52, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

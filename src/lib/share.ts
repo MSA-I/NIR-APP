@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { bidiIsolate, fmtDate, fmtMoneyExact, formatQuantity } from './format';
 import { openExternalPopup } from './popup';
+import type { TKey } from './i18n/t';
 
 /**
  * The slice of a purchase order the WhatsApp share needs. Both the Orders list rows and the
@@ -77,11 +78,19 @@ export function orderWhatsAppLink(order: WhatsAppOrder, orgName: string, portalU
  * `needsSentConfirmation` below decides whether to ASK afterwards; `markOrderSentToSupplier` is
  * the answer. Automatic confirmation waits for a verified WhatsApp Business delivery webhook.
  */
-export function openOrderWhatsApp(order: WhatsAppOrder, orgName: string, portalUrl?: string | null): { opened: boolean; error?: string } {
+export type OpenOrderWhatsAppErrorCode = 'missing_number' | 'popup_blocked';
+export const OPEN_ORDER_WHATSAPP_ERROR_KEY: Readonly<Record<OpenOrderWhatsAppErrorCode, TKey>> = {
+  missing_number: 'share.whatsappMissingNumber',
+  popup_blocked: 'share.whatsappPopupBlocked',
+};
+export function openOrderWhatsApp(order: WhatsAppOrder, orgName: string, portalUrl?: string | null): {
+  opened: boolean;
+  errorCode?: OpenOrderWhatsAppErrorCode;
+} {
   const link = orderWhatsAppLink(order, orgName, portalUrl);
-  if (!link) return { opened: false, error: 'לספק אין מספר WhatsApp זמין' };
+  if (!link) return { opened: false, errorCode: 'missing_number' };
   if (openExternalPopup(link) !== 'opened') {
-    return { opened: false, error: 'הדפדפן חסם את חלון WhatsApp. יש לאפשר חלונות קופצים ולנסות שוב.' };
+    return { opened: false, errorCode: 'popup_blocked' };
   }
   return { opened: true };
 }
@@ -149,15 +158,22 @@ export async function shareOrderImage(blob: Blob, fileName: string): Promise<'sh
 export async function shareInvoice(
   inv: { invoice_number: string; invoice_date: string; total_amount: number },
   supplierName: string,
+  t: (key: TKey, vars?: Record<string, string | number>) => string,
 ): Promise<void> {
   if (!canShare()) return;
   const text = [
-    `חשבונית ${inv.invoice_number} — ${supplierName}`,
-    `תאריך: ${fmtDate(inv.invoice_date)}`,
-    `סה"כ: ${fmtMoneyExact(inv.total_amount)}`,
+    t('share.invoiceLine', {
+      number: bidiIsolate(inv.invoice_number),
+      supplier: bidiIsolate(supplierName),
+    }),
+    t('share.invoiceDateLine', { date: fmtDate(inv.invoice_date) }),
+    t('share.invoiceTotalLine', { total: fmtMoneyExact(inv.total_amount) }),
   ].join('\n');
   try {
-    await navigator.share({ title: `חשבונית ${inv.invoice_number}`, text });
+    await navigator.share({
+      title: t('share.invoiceTitle', { number: bidiIsolate(inv.invoice_number) }),
+      text,
+    });
   } catch {
     // AbortError when the user dismisses the share sheet — nothing to surface.
   }
