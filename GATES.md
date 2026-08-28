@@ -132,7 +132,39 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   EXPECT: GATE_I18N_HELP_PAIRED_OK
   EVIDENCE: half met, and the half that is met is the runnable one. exit=0; output=gate-i18n: 15 product-help topic(s), each in both locales | GATE_I18N_HELP_PAIRED_OK. Positive control: deleting the English row for `check_product_purchases` ⇒ `gate-i18n: the product-help registry is not paired. no English row: check_product_purchases`, exit 1; restored ⇒ pass. It fails in the other direction too, on an English row with no Hebrew original — that is #192's missing-locale rule read backwards, a translation of nothing. Every one of the 15 product-help topics now has both an `he` and an `en` row, built from the Hebrew row's own `route`, `roles`, `version` and `source` rather than retyped — those are contract fields the registry guard checks, and a retyped `roles` could hand somebody a screen the Guard withholds.
 
-  **What is NOT met, and cannot be from this branch:** `get_product_help` takes `locale` as a TOOL ARGUMENT the model chooses, defaulting to `he` — it is never told the reader's actual locale, and `profiles.locale` does not reach the Edge Function at all. So an English speaker gets an English answer only when the model happens to pass `en`. The parameter's description now says to follow the language of the question, which raises the odds and is not a guarantee; wiring the caller's real locale through is an Edge change with its own deploy, outside this branch's surface.
+  **BUILT 28.08.2026, NOT YET DEPLOYED.** The half that was a guess is now wiring. The reader's
+  language rides the ask request beside `route`, is read once per run, and is handed to BOTH
+  halves of it: `buildInstructions(locale)` says "Answer in English" instead of "Answer in
+  Hebrew", and `ToolContext.locale` resolves every sentence a person reads. Splitting those two
+  would let an English answer arrive over Hebrew help steps. `get_product_help` keeps `locale` as
+  a tool argument — a Hebrew reader asking in English should get the English steps — but SILENCE
+  now means the reader's own language instead of Hebrew. `ASSISTANT_PROMPT_VERSION` is
+  `assistant-v3`, stamped on every recorded run.
+
+  Evidence so far, all of it offline: `deno test` 230 passed | 0 failed, up from 227. Three of
+  those are new — an English reader gets the English entry with NO `locale` in the tool
+  arguments; an explicit `locale` from the model still beats it; and exactly ONE line of the
+  system prompt differs between the two languages, so nobody is handed a weaker assistant by
+  choosing English. `parseAssistantRequest` refuses `fr` rather than falling back silently, and
+  a caller that never heard of the field still parses to `null`.
+
+  Two things a PERSON reads were Hebrew regardless of any of this, and are now resolved per
+  reader: the price-rise scope-limit warning, and a source's screen label. The label came from
+  `routePresentationTitle`, which returns a dictionary KEY since the interface was extracted,
+  into a `SourceReference.label` typed `string` — so `nav.routeTitle_prices` was reaching people
+  with `tsc` perfectly happy. That is iron rule 7 a third time, and the test now asserts no
+  source label may start with `nav.`.
+
+  **WHAT KEEPS THIS GATE OPEN:** nothing above is deployed, and the gate asks for a live English
+  answer. The Edge rollout is its own step under the `CLAUDE.md` matrix — deploy only the
+  function that changed, verify secrets/JWT, then one targeted live call. It is an owner
+  decision to make, not an agent's, and until it is made this stays unmet.
+
+  One thing found on the way, recorded because it explains why none of this was caught earlier:
+  **the assistant function did not type-check on this branch at all.** Four errors, 227 contract
+  tests not running, and a deploy that would have failed. Repaired in `4d02c0a`. The CI job that
+  runs them is `pull_request: branches: [main]`, and this branch has no such PR — `DEBT §65`, in
+  the flesh.
 
   The English steps deliberately name NO on-screen control by its words. The three that already existed quoted Hebrew button labels, on a premise the file stated outright — "the UI itself is Hebrew" — which this very feature retires. Naming the action and the place survives both languages, and survives every screen still mid-extraction.
 
