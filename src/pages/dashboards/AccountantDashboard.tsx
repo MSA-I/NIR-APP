@@ -5,18 +5,20 @@ import { useQuery } from '../../lib/useQuery';
 import { fetchAll } from '../../lib/supabasePaging';
 import { AttentionZone, SkeletonCards, ErrorNote, ICON, type AttentionItem } from '../../components/ui';
 import { Scorecard, type ScoreItem } from '../../components/supplier-metrics';
-import { CategoryDonut, GroupedBarChart, SpendBarChart, money, type LinePoint } from '../../components/charts';
+import { CategoryDonut, GroupedBarChart, SpendBarChart, moneyFor, type LinePoint } from '../../components/charts';
+import { totalsByCurrency } from '../../components/Money';
+import { useAuth } from '../../auth/AuthContext';
 import { comparisonSeries } from '../../lib/theme';
 import { topCategoriesWithOther } from '../../lib/dashboardSeries';
 import { fmtMonth, fmtMoneyRounded, fmtNum, monthlyBuckets, shiftCalendarMonth, todayISO, weeklyBuckets } from '../../lib/format';
 import { DashboardFrame, ChartCard } from './parts';
 import { readFinancialSuppliers } from '../../lib/financialSuppliers';
 
-type Payment = { amount: number; paid_date: string };
-type Bank = { status: string; tx_date: string; amount: number; is_debit: boolean };
-type Credit = { amount: number; status: string };
+type Payment = { amount: number; currency: string; paid_date: string };
+type Bank = { status: string; tx_date: string; amount: number; currency: string; is_debit: boolean };
+type Credit = { amount: number; currency: string; status: string };
 type Invoice = { review_status: string; export_status: string };
-type SupBal = { supplier_id: string; open_balance: number };
+type SupBal = { supplier_id: string; currency: string; open_balance_in_currency: number };
 
 /**
  * Accountant control room (finance execution). RLS-scoped to finance the accountant may read:
@@ -24,18 +26,20 @@ type SupBal = { supplier_id: string; open_balance: number };
  * prices, purchase orders or supplier_metrics (RLS returns nothing there). Empty → "—"/empty-state.
  */
 export default function AccountantDashboard() {
+  const { org } = useAuth();
+  const baseCurrency = org?.base_currency ?? null;
   const { data, loading, error } = useQuery(async () => {
     const today = todayISO();
     const monthKey = today.slice(0, 7);
     const chartsFrom = `${shiftCalendarMonth(monthKey, -3)}-01`;
 
     const [paymentsRes, bankRes, creditsRes, invoicesRes, invBalRes, supBalRes, suppliersRes] = await Promise.all([
-      fetchAll((from, to) => supabase.from('payments').select('amount, paid_date').gte('paid_date', chartsFrom).lte('paid_date', today).order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('bank_transactions').select('status, tx_date, amount, is_debit').order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('credit_requests').select('amount, status').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('payments').select('amount, currency, paid_date').gte('paid_date', chartsFrom).lte('paid_date', today).order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('bank_transactions').select('status, tx_date, amount, currency, is_debit').order('id').range(from, to)),
+      fetchAll((from, to) => supabase.from('credit_requests').select('amount, currency, status').order('id').range(from, to)),
       fetchAll((from, to) => supabase.from('invoices').select('review_status, export_status').eq('financial_role', 'payable').is('deleted_at', null).order('id').range(from, to)),
-      fetchAll((from, to) => supabase.from('invoice_balances').select('balance').order('invoice_id').range(from, to)),
-      fetchAll((from, to) => supabase.from('supplier_balances').select('supplier_id, open_balance').gt('open_balance', 0).order('supplier_id').range(from, to)),
+      fetchAll((from, to) => supabase.from('invoice_balances_by_currency').select('currency, balance_in_currency').order('invoice_id').range(from, to)),
+      fetchAll((from, to) => supabase.from('supplier_balances_by_currency').select('supplier_id, currency, open_balance_in_currency').gt('open_balance_in_currency', 0).order('supplier_id').range(from, to)),
       readFinancialSuppliers(),
     ]);
 
@@ -43,27 +47,35 @@ export default function AccountantDashboard() {
     const bank = bankRes as unknown as Bank[];
     const credits = creditsRes as unknown as Credit[];
     const invoices = invoicesRes as unknown as Invoice[];
-    const invBal = invBalRes as unknown as { balance: number }[];
+    const invBal = invBalRes as unknown as { currency: string; balance_in_currency: number }[];
     const supBal = supBalRes as unknown as SupBal[];
     const suppliers = new Map((suppliersRes as unknown as { id: string; name: string }[]).map((s) => [s.id, s.name]));
 
     // ── KPIs
+    /* Every figure below is summed WITHIN a currency (0217, #277). The accountant's screen is
+       the last place a total may quietly cover two kinds of money: this is the person who
+       reconciles it against a bank statement. */
     const paymentsThisMonth = payments.filter((p) => p.paid_date.slice(0, 7) === monthKey);
-    const paidMonth = paymentsThisMonth.length ? paymentsThisMonth.reduce((s, p) => s + p.amount, 0) : null;
-    const openInvoiceBalance = invBal.length ? invBal.reduce((s, b) => s + Math.max(0, b.balance), 0) : null;
+    const paidMonth = totalsByCurrency(paymentsThisMonth.map((p) => ({ currency: p.currency, amount: p.amount })));
+    const openInvoiceBalance = totalsByCurrency(
+      invBal.map((b) => ({ currency: b.currency, amount: Math.max(0, b.balance_in_currency) })),
+    );
     const unmatchedBank = bank.filter((b) => b.status === 'unmatched').length;
     const suggestedBank = bank.filter((b) => b.status === 'suggested').length;
     // Fix (was `status === 'active'`, never true): open credits are open/requested/received (enum values).
     const openCreditRows = credits.filter((c) => ['open', 'requested', 'received'].includes(c.status));
-    const openCreditsSum = openCreditRows.length ? openCreditRows.reduce((s, c) => s + c.amount, 0) : null;
+    const openCreditsByCurrency = totalsByCurrency(openCreditRows.map((c) => ({ currency: c.currency, amount: c.amount })));
     const notSent = invoices.filter((i) => i.export_status === 'not_sent' && i.review_status === 'approved').length;
 
+    const asLines = (entries: { currency: string; amount: number }[]) => (entries.length
+      ? entries.map((entry) => fmtMoneyRounded(entry.amount, entry.currency)).join(' · ')
+      : '—');
     const kpis: ScoreItem[] = [
-      { label: 'שולם החודש', value: fmtMoneyRounded(paidMonth) },
-      { label: 'יתרת חשבוניות פתוחות', value: fmtMoneyRounded(openInvoiceBalance), tone: openInvoiceBalance ? 'await' : 'idle' },
+      { label: 'שולם החודש', value: asLines(paidMonth) },
+      { label: 'יתרת חשבוניות פתוחות', value: asLines(openInvoiceBalance), tone: openInvoiceBalance.length ? 'await' : 'idle' },
       { label: 'תנועות בנק לא מותאמות', value: fmtNum(unmatchedBank), tone: unmatchedBank ? 'await' : 'idle' },
       { label: 'התאמות שממתינות לאישור', value: fmtNum(suggestedBank), tone: suggestedBank ? 'await' : 'idle' },
-      { label: 'זיכויים פתוחים', value: fmtNum(openCreditRows.length), sub: openCreditsSum != null ? fmtMoneyRounded(openCreditsSum) : undefined },
+      { label: 'זיכויים פתוחים', value: fmtNum(openCreditRows.length), sub: openCreditsByCurrency.length ? asLines(openCreditsByCurrency) : undefined },
       { label: 'ממתין להעברה לרו״ח', value: fmtNum(notSent), tone: notSent ? 'await' : 'idle' },
     ];
 
@@ -76,15 +88,19 @@ export default function AccountantDashboard() {
       { key: 'not-sent', label: 'חשבוניות מאושרות שלא נשלחו לרו״ח', count: notSent, tone: 'await', to: '/invoices', clearLabel: 'הכול נשלח לרו״ח' },
       { key: 'bank', label: 'תנועות בנק לא מותאמות', count: unmatchedBank, tone: 'await', to: '/bank', clearLabel: 'אין תנועות פתוחות' },
       { key: 'bank-suggested', label: 'התאמות שממתינות לאישור', count: suggestedBank, tone: 'await', to: '/bank?status=suggested', clearLabel: 'אין הצעות שממתינות לאישור' },
-      { key: 'credits', label: 'זיכויים פתוחים', count: openCreditRows.length, amount: openCreditsSum, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
+      { key: 'credits', label: 'זיכויים פתוחים', count: openCreditRows.length, amounts: openCreditsByCurrency, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
     ];
 
     // ── charts
-    const monthly = monthlyBuckets(payments.map((p) => ({ date: p.paid_date, value: p.amount })), { monthKey, months: 4 })
-      .map((b) => ({ key: fmtMonth(`${b.key}-01`), label: b.count ? money(b.total) : '', total: b.total }));
+    // A chart is one currency (charts.tsx). The organisation's own is the one it draws; money in
+    // any other currency is reported by the KPI lines above, which list every currency they hold.
+    const basePayments = payments.filter((p) => p.currency === baseCurrency);
+    const baseBank = bank.filter((b) => b.currency === baseCurrency);
+    const monthly = monthlyBuckets(basePayments.map((p) => ({ date: p.paid_date, value: p.amount })), { monthKey, months: 4 })
+      .map((b) => ({ key: fmtMonth(`${b.key}-01`), label: b.count ? moneyFor(baseCurrency)(b.total) : '', total: b.total }));
 
-    const paidW = weeklyBuckets(payments.map((p) => ({ date: p.paid_date, value: p.amount })), { todayISO: today });
-    const debitW = weeklyBuckets(bank.filter((b) => b.is_debit).map((b) => ({ date: b.tx_date, value: Math.abs(b.amount) })), { todayISO: today });
+    const paidW = weeklyBuckets(basePayments.map((p) => ({ date: p.paid_date, value: p.amount })), { todayISO: today });
+    const debitW = weeklyBuckets(baseBank.filter((b) => b.is_debit).map((b) => ({ date: b.tx_date, value: Math.abs(b.amount) })), { todayISO: today });
     // T7.2 zero policy: both series bucket the same fully-fetched window, so a rowless week is a
     // measured ₪0 — bars simply have zero height. A truly all-quiet window renders the empty
     // state instead (weeklyActive guard below), never a fabricated chart.
@@ -95,14 +111,21 @@ export default function AccountantDashboard() {
     }));
     const weeklyActive = paidW.some((p) => p.count > 0) || debitW.some((b) => b.count > 0);
 
+    // The donut is one currency too: a slice is a share of a whole, and two currencies have no
+    // shared whole to take a share of.
+    const baseSupBal = supBal.filter((b) => b.currency === baseCurrency);
     const supplierSlices = topCategoriesWithOther(
-      supBal.map((b) => ({ name: suppliers.get(b.supplier_id) ?? '—', total: b.open_balance })),
+      baseSupBal.map((b) => ({ name: suppliers.get(b.supplier_id) ?? '—', total: b.open_balance_in_currency })),
     );
     const supplierTotal = supplierSlices.reduce((s, c) => s + c.total, 0);
 
+    // The list, unlike the donut, may show every currency: it is a list of debts, not a share of
+    // one whole, and it is ordered inside each currency rather than across them.
     const supplierBalances = supBal
       .map((row) => ({ ...row, name: suppliers.get(row.supplier_id) ?? '—' }))
-      .sort((a, b) => b.open_balance - a.open_balance)
+      .sort((a, b) => (a.currency === b.currency
+        ? b.open_balance_in_currency - a.open_balance_in_currency
+        : a.currency === baseCurrency ? -1 : b.currency === baseCurrency ? 1 : a.currency < b.currency ? -1 : 1))
       .slice(0, 5);
     return { kpis, attention, monthly, weekly, weeklyActive, supplierSlices, supplierTotal, supplierBalances };
   });
@@ -116,13 +139,13 @@ export default function AccountantDashboard() {
       <Link to="/pay" className="btn-primary"><Banknote size={ICON.sm} aria-hidden="true" /> תשלומים</Link>
       <Link to="/invoices" className="btn-secondary"><ReceiptText size={ICON.sm} aria-hidden="true" /> חשבוניות</Link>
     </>}>
-      <AttentionZone items={data.attention} />
+      <AttentionZone items={data.attention} baseCurrency={baseCurrency} />
       <Scorecard items={data.kpis} />
       <div className="grid gap-5 lg:grid-cols-2">
         <ChartCard title="תשלומים לפי חודש" subtitle="סך התשלומים לספקים בארבעת החודשים האחרונים">
           <SpendBarChart points={data.monthly}
             ariaLabel={`תשלומים לפי חודש: ${data.monthly.map((p) => `${p.key} ${p.label || 'אין תשלומים'}`).join(', ')}`}
-            emptyMessage="אין תשלומים לתקופה" />
+            emptyMessage="אין תשלומים לתקופה" currency={baseCurrency} />
         </ChartCard>
         {/* G1, finding 13. "כמה אני חייב לספק הזה?" ended here for an accountant: four labels in a
             pie and nothing to click. The permission was never the problem — `p0_supplier_balance_rows()`
@@ -134,8 +157,8 @@ export default function AccountantDashboard() {
             OPEN-DECISIONS #117. "אחר" gets no link: it is several suppliers summed, so there is no
             single thing to open, and a link that lands on a wrong filter is worse than none. */}
         <ChartCard title="יתרות פתוחות לפי ספק" subtitle="ארבעת הספקים עם היתרה הגבוהה וכל היתר">
-          <CategoryDonut slices={data.supplierSlices} total={data.supplierTotal}
-            ariaLabel={`יתרות פתוחות לפי ספק, סה״כ ${fmtMoneyRounded(data.supplierTotal)}`}
+          <CategoryDonut slices={data.supplierSlices} total={data.supplierTotal} currency={baseCurrency}
+            ariaLabel={`יתרות פתוחות לפי ספק, סה״כ ${fmtMoneyRounded(data.supplierTotal, baseCurrency)}`}
             hrefFor={(slice) => (slice.name === 'אחר' || slice.name === '—'
               ? null
               : `/invoices?q=${encodeURIComponent(slice.name)}&pay=open`)}
@@ -145,7 +168,7 @@ export default function AccountantDashboard() {
             {data.supplierBalances.map((supplier) => <Link key={supplier.supplier_id}
               to={`/finance/suppliers/${supplier.supplier_id}`}
               className="flex min-h-11 items-center justify-between gap-3 py-2 text-sm">
-              <span>{supplier.name}</span><span className="num font-medium">{fmtMoneyRounded(supplier.open_balance)}</span>
+              <span>{supplier.name}</span><span className="num font-medium">{fmtMoneyRounded(supplier.open_balance_in_currency, supplier.currency)}</span>
             </Link>)}
           </div>}
         </ChartCard>
@@ -155,7 +178,7 @@ export default function AccountantDashboard() {
           <GroupedBarChart points={data.weeklyActive ? data.weekly : []} xKey="week"
             series={comparisonSeries({ key: 'payments', name: 'תשלומים' }, { key: 'bank', name: 'חיובי בנק' })}
             ariaLabel="השוואת תשלומים שבוצעו מול חיובי בנק, שמונה שבועות"
-            emptyMessage="אין תשלומים או תנועות בנק בשמונת השבועות האחרונים" />
+            emptyMessage="אין תשלומים או תנועות בנק בשמונת השבועות האחרונים" currency={baseCurrency} />
         </ChartCard>
       </div>
     </DashboardFrame>
