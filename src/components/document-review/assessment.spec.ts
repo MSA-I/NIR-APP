@@ -1,14 +1,17 @@
+import { he } from '../../lib/i18n/dictionaries/he';
+import type { Dictionary } from '../../lib/i18n/dictionaries/he';
+import { translate, type TKey } from '../../lib/i18n/t';
 import { describe, expect, it } from 'vitest';
 import {
   approvalEffects,
   blockingFindings,
   canSubmit,
-  findingLabel,
+  findingText,
   formatLineRanges,
   groupFindings,
-  resolutionLabel,
+  resolutionText,
   reviewedProposal,
-  storageAndApprovalSentences,
+  storageAndApprovalKeys,
   type DocumentReviewRead,
 } from './assessment';
 
@@ -54,9 +57,17 @@ const assessment = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+/**
+ * The labels are keys now. Each assertion resolves one through the HEBREW dictionary and keeps
+ * the exact phrase it always asserted — these are promises about what `apply_reviewed_document`
+ * will and will not do, and a dictionary that lost one would still pass a key-to-key comparison.
+ */
+const say = (key: TKey): string => translate(he as unknown as Dictionary, key);
 describe('storage and approval are two sentences', () => {
   it('never says the data is approved because the file is stored', () => {
-    const [stored, approved] = storageAndApprovalSentences(read());
+    const [storedKey, approvedKey] = storageAndApprovalKeys(read());
+    const stored = say(storedKey);
+    const approved = say(approvedKey);
     expect(stored).toContain('הקובץ נשמר');
     expect(approved).toContain('לא אושרו');
     // The failure this guards against is one word covering both. If they ever became the same
@@ -65,7 +76,7 @@ describe('storage and approval are two sentences', () => {
   });
 
   it('says so plainly once the data really was approved', () => {
-    const [, approved] = storageAndApprovalSentences(read({ data_approved: true }));
+    const approved = say(storageAndApprovalKeys(read({ data_approved: true }))[1]);
     expect(approved).toContain('אושרו');
   });
 });
@@ -73,30 +84,30 @@ describe('storage and approval are two sentences', () => {
 describe('approvalEffects mirrors what apply_reviewed_document actually does', () => {
   it('promises an invoice will not receive goods', () => {
     const effects = approvalEffects('invoice', true);
-    const negative = effects.filter((effect) => !effect.happens).map((effect) => effect.text);
+    const negative = effects.filter((effect) => !effect.happens).map((effect) => say(effect.textKey));
     expect(negative.join(' ')).toContain('לא ישתנו כמויות שהתקבלו');
     expect(negative.join(' ')).toContain('לא יבוצע תשלום');
-    expect(effects.some((effect) => effect.happens && effect.text.includes('התקבלה'))).toBe(true);
+    expect(effects.some((effect) => effect.happens && say(effect.textKey).includes('התקבלה'))).toBe(true);
   });
 
   it('says an unlinked invoice is legitimate rather than an error', () => {
     const effects = approvalEffects('invoice', false);
-    expect(effects.some((effect) => effect.text.includes('לגיטימי'))).toBe(true);
+    expect(effects.some((effect) => say(effect.textKey).includes('לגיטימי'))).toBe(true);
   });
 
   it('promises a delivery note only drafts, and names what completes it', () => {
     const effects = approvalEffects('delivery_note', true);
-    expect(effects.some((effect) => effect.happens && effect.text.includes('טיוטת'))).toBe(true);
-    const negative = effects.filter((effect) => !effect.happens).map((effect) => effect.text).join(' ');
+    expect(effects.some((effect) => effect.happens && say(effect.textKey).includes('טיוטת'))).toBe(true);
+    const negative = effects.filter((effect) => !effect.happens).map((effect) => say(effect.textKey)).join(' ');
     expect(negative).toContain('מלאי');
     expect(negative).toContain('אישור נפרד');
     // 0110's anchor (c) forbids this command writing a completed receipt at all.
-    expect(effects.some((effect) => effect.happens && effect.text.includes('מלאי'))).toBe(false);
+    expect(effects.some((effect) => effect.happens && say(effect.textKey).includes('מלאי'))).toBe(false);
   });
 
   it('promises a receipt creates nothing', () => {
     const effects = approvalEffects('tax_receipt', false);
-    const negative = effects.filter((effect) => !effect.happens).map((effect) => effect.text).join(' ');
+    const negative = effects.filter((effect) => !effect.happens).map((effect) => say(effect.textKey)).join(' ');
     expect(negative).toContain('לא תיווצר חשבונית');
     expect(negative).toContain('לא תשלום');
     expect(effects.filter((effect) => effect.happens)).toHaveLength(1);
@@ -105,8 +116,8 @@ describe('approvalEffects mirrors what apply_reviewed_document actually does', (
   it('says an approved credit note records a received credit without offsetting a balance', () => {
     const effects = approvalEffects('credit_note', false);
     expect(effects.some((effect) => effect.happens
-      && effect.text.includes('זיכוי') && effect.text.includes('התקבל'))).toBe(true);
-    const negative = effects.filter((effect) => !effect.happens).map((effect) => effect.text).join(' ');
+      && say(effect.textKey).includes('זיכוי') && say(effect.textKey).includes('התקבל'))).toBe(true);
+    const negative = effects.filter((effect) => !effect.happens).map((effect) => say(effect.textKey)).join(' ');
     expect(negative).toContain('לא יקוזז');
     expect(negative).toContain('לא יבוצע תשלום');
   });
@@ -119,16 +130,16 @@ describe('approvalEffects mirrors what apply_reviewed_document actually does', (
 
 describe('findings', () => {
   it('prefers the server sentence, which carries the numbers', () => {
-    expect(findingLabel({ code: 'price_above_baseline', severity: 'error', message: 'המחיר גבוה ב-₪4' }))
+    expect(findingText({ code: 'price_above_baseline', severity: 'error', message: 'המחיר גבוה ב-₪4' }, say))
       .toBe('המחיר גבוה ב-₪4');
   });
 
   it('falls back to a label, then to the code itself', () => {
-    expect(findingLabel({ code: 'duplicate_document', severity: 'critical' }))
+    expect(findingText({ code: 'duplicate_document', severity: 'critical' }, say))
       .toBe('מסמך כפול');
     // Not "unknown error": a code a bookkeeper can read aloud to support is worth more than a
     // sentence that says nothing.
-    expect(findingLabel({ code: 'some_future_code', severity: 'error' })).toBe('some_future_code');
+    expect(findingText({ code: 'some_future_code', severity: 'error' }, say)).toBe('some_future_code');
   });
 
   it('puts the hardest blocker first and leaves advisories out of the work list', () => {
@@ -232,26 +243,26 @@ describe('canSubmit errs toward letting the server decide', () => {
 describe('resolutionLabel', () => {
   it('says what the evidence was, not what the tier is called', () => {
     // The screen used to render the raw token, producing "זוהתה · by_number" on a Hebrew page.
-    expect(resolutionLabel('by_number')).toBe('מספר ההזמנה מודפס על המסמך');
-    expect(resolutionLabel('tax_id')).toBe('ח.פ / עוסק מורשה תואם');
+    expect(resolutionText('by_number', say)).toBe('מספר ההזמנה מודפס על המסמך');
+    expect(resolutionText('tax_id', say)).toBe('ח.פ / עוסק מורשה תואם');
   });
 
   it('marks the two inferred tiers as worth verifying', () => {
     // 0120 and 0090 both record that these are safe only because a person confirms them, so the
     // label has to carry that rather than presenting them as settled facts.
-    expect(resolutionLabel('by_date_proximity')).toContain('כדאי לוודא');
-    expect(resolutionLabel('single_open_order')).toContain('כדאי לוודא');
+    expect(resolutionText('by_date_proximity', say)).toContain('כדאי לוודא');
+    expect(resolutionText('single_open_order', say)).toContain('כדאי לוודא');
   });
 
   it('reads the comma-joined form 0106 produces when two identifiers agree', () => {
-    expect(resolutionLabel('barcode,supplier_sku'))
+    expect(resolutionText('barcode,supplier_sku', say))
       .toBe('ברקוד מודפס · מק"ט ספק מודפס');
   });
 
   it('falls back to the token, which support can read aloud, and to null for nothing', () => {
-    expect(resolutionLabel('a_tier_this_build_has_not_met')).toBe('a_tier_this_build_has_not_met');
-    expect(resolutionLabel(null)).toBeNull();
-    expect(resolutionLabel('')).toBeNull();
+    expect(resolutionText('a_tier_this_build_has_not_met', say)).toBe('a_tier_this_build_has_not_met');
+    expect(resolutionText(null, say)).toBeNull();
+    expect(resolutionText('', say)).toBeNull();
   });
 });
 

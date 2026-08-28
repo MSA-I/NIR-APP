@@ -44,6 +44,8 @@ const EXTRACTED = [
   'src/pages/Exceptions.tsx',
   'src/lib/consolidatedInvoices.ts',
   'src/components/FileUpload.tsx',
+  'src/components/document-review/assessment.ts',
+  'src/components/document-review/DocumentAssessmentPanel.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */

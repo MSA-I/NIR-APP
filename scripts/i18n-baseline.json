@@ -33,8 +33,6 @@
     "src/components/AttachmentsPanel.tsx": 24,
     "src/components/BarcodeScanner.tsx": 15,
     "src/components/charts.tsx": 4,
-    "src/components/document-review/assessment.ts": 56,
-    "src/components/document-review/DocumentAssessmentPanel.tsx": 46,
     "src/components/document-review/DocumentExportPreview.tsx": 15,
     "src/components/document-review/DocumentPacketReview.tsx": 36,
     "src/components/document-review/DocumentProcessingProgress.tsx": 12,
