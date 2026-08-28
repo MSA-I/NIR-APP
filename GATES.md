@@ -112,8 +112,38 @@ Plan: `docs/PLAN-english-language-20260827.md`.
 
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
-- [ ] P2-G9: the consent documents read in the reader's language — DECIDED 28.08.2026, NOT BUILT
-  EVIDENCE: **the owner chose TWO BINDING VERSIONS, one per language** (`OPEN-DECISIONS #280`) — picked over both cheaper readings after all three were spelled out. So: translate `Legal.tsx` in full, BUMP `TERMS_VERSION`, and write NO sentence claiming the Hebrew governs — such a sentence contradicts the decision. Someone who signed in English agreed to the English text.
+- [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER
+  CHECK: npx vitest run src/pages/legal.spec.tsx
+  EXPECT: /Tests\s+9 passed/
+  EVIDENCE, and it is deliberately not enough to close this gate. Both documents exist in both
+  languages, `TERMS_VERSION` is `2026-08-28`, and no sentence in either claims the other governs.
+  Live pages: `.tmp/shots/p2-legal/{terms,privacy}-{he,en}.png`, `<html>` flipping `he/rtl` ↔
+  `en/ltr`, zero console errors, no `legal.*` key in the rendered body. `check:i18n` 3,131 → 3,052,
+  the file's whole pinned count, its `__reason` exemption dropped and the file added to the
+  surfaces `extracted` locks at zero — 12 now.
+
+  **The Hebrew document did not move, and that is measured rather than asserted.** The rendered
+  text of both pages was captured before the change and compared after: 4,469 characters,
+  identical except for the version string. The wording was lifted out of the JSX BY SCRIPT rather
+  than retyped — including the invisible RLM marks in the sub-processor list, which a hand
+  transcription loses without anyone seeing it. On a consent document that is the difference
+  between a translation and an amendment.
+
+  Four pins keep the two versions the same document: `apply-ns.mjs` refuses a namespace with a key
+  on one side only, `en.ts` is type-checked against `he.ts`, a test counts the keys, and a test
+  asserts every English disclosure the Hebrew makes — the 30-day window, the third-party
+  contractors, the unsupported region, `store: false`, and the promise deliberately not made. A
+  fifth asserts neither version claims the other governs, with narrow patterns rather than the bare
+  words: clause 7 legitimately says "governing law", and a test that forbade the word would be
+  deleted by the next person rather than obeyed.
+
+  **WHY IT STAYS OPEN.** Everything above is a green test run, and this is the one gate in this
+  ledger where a green test run is not the question. There are now TWO legal documents, neither
+  read by a lawyer, and the file's own header has recorded from the start that the drafting is not
+  legal advice and that the review is the owner's decision. It closes when the owner says the
+  translation was reviewed — not before.
+
+  DECISION: **the owner chose TWO BINDING VERSIONS, one per language** (`OPEN-DECISIONS #280`) — picked over both cheaper readings after all three were spelled out. So: translate `Legal.tsx` in full, BUMP `TERMS_VERSION`, and write NO sentence claiming the Hebrew governs — such a sentence contradicts the decision. Someone who signed in English agreed to the English text.
 
   **The price the owner accepted explicitly:** every future amendment is TWO legal amendments, each needing review. A gap between the versions is not a wording slip — it is two different undertakings.
 
