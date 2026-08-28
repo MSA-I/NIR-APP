@@ -354,6 +354,20 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   `npx tsc --noEmit` and `check:jsx-space` passed; dictionary parity passed at 5,212 keys per
   locale. `zero` still exits 1 on 150/37, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `Layout` + supplier metrics + supplier order-image boundary in this
+  commit.** The pinned count is now 697 Hebrew line(s) across 71 files. The protected set is now
+  575 lines in 37 files: `orderImage.ts` is the deliberately Hebrew supplier-facing PNG, paired
+  with raw catalogue names/units and the protected WhatsApp order text. The real remainder is
+  **122 lines in 34 files**. Layout navigation sections now carry typed keys and resolve in both
+  drawer and desktop disclosure; sign-out, home/account aria labels and pending-offline counts also
+  follow the reader locale. Supplier rating, lead days and price-trend accessibility copy moved to
+  paired keys; raw supplier metrics remain facts. Layout and supplier metrics are surfaces 85–86
+  locked at zero. The stale-baseline negative controls measured Layout 9→0 and supplier metrics
+  9→0. Focused suites passed 47/47; the full suite passed 1,760/1,760; `npx tsc --noEmit` and
+  `check:jsx-space` passed. Dictionary parity passed at 5,231 keys per locale; `zero` still exits
+  1 on 122/34, so this gate remains open. The design hook's pre-existing bounce easing in Layout
+  stayed outside the translation diff and was neither changed nor suppressed.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

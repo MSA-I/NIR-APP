@@ -46,6 +46,8 @@ const EXTRACTED = [
   'src/lib/consolidatedInvoices.ts',
   'src/components/FileUpload.tsx',
   'src/components/ui.tsx',
+  'src/components/Layout.tsx',
+  'src/components/supplier-metrics.tsx',
   'src/components/document-review/assessment.ts',
   'src/components/document-review/DocumentAssessmentPanel.tsx',
   'src/components/document-review/DocumentReviewWorkspace.tsx',

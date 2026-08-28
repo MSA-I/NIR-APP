@@ -5545,6 +5545,31 @@ export const he = {
     confirm: 'אישור זהות',
   },
 
+  layoutTail: {
+    management: 'ניהול',
+    currentWork: 'עבודה שוטפת',
+    signOut: 'התנתקות',
+    homeAria: '{app} — מעבר למרכז הבקרה',
+    accountMenu: 'תפריט החשבון של {name}',
+    user: 'המשתמש',
+    pendingOffline: 'במכשיר הזה ממתינות {actions} פעולות קבלה ו-{uploads} העלאות שלא נשלחו לשרת.',
+  },
+
+  supplierMetrics: {
+    days: '{value} ימים',
+    ratingLabel: 'דירוג ספק',
+    ratingValue: 'דירוג {value} מתוך 5',
+    supplierUnrated: 'ספק לא דורג',
+    unrated: 'לא דורג',
+    stars: '{count} כוכבים',
+    clear: 'נקה',
+    up: 'עלה',
+    down: 'ירד',
+    flat: 'ללא שינוי',
+    magnitude: ' ב-{pct}%',
+    trend: 'מגמת מחיר: {direction}{magnitude} לאורך {count} שינויי מחיר',
+  },
+
 } as const;
 
 /**

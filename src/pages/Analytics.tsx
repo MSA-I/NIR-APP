@@ -30,7 +30,7 @@ const toneClass: Record<ScoreTone, string> = {
 };
 
 export default function Analytics() {
-  const { t } = useT();
+  const { locale, t } = useT();
   const { data, loading, error } = useQuery<Row[]>(async () => {
     const [suppliers, metrics] = await Promise.all([
       supabase.from('suppliers').select('id, name, rating, status').is('deleted_at', null).order('name'),
@@ -50,7 +50,7 @@ export default function Analytics() {
     { key: 'rating', header: t('analytics.rating'), className: 'num', sortValue: (r) => r.rating ?? 0,
       render: (r) => r.rating != null ? <span className="inline-flex items-center gap-1"><Star size={ICON.xs} className="fill-star text-star" aria-hidden="true" />{r.rating}</span> : '—' },
     { key: 'lead', header: t('analytics.leadTime'), className: 'num', sortValue: (r) => r.m?.avg_lead_days ?? Number.MAX_SAFE_INTEGER,
-      render: (r) => fmtLeadDays(r.m?.avg_lead_days) },
+      render: (r) => fmtLeadDays(r.m?.avg_lead_days, locale) },
     { key: 'otd', header: t('analytics.onTime'), className: 'num', sortValue: (r) => r.m?.on_time_pct ?? -1,
       render: (r) => <span className={toneClass[otdTone(r.m)]}>{fmtPct(r.m?.on_time_pct)}</span> },
     // A supplier with no supplier_metrics row has no measured counts; rendering 0 would assert

@@ -28,7 +28,7 @@ describe('מעטפת הניווט', () => {
     // and the point of the group (owner report 25.08.2026) was to stop the subscription being
     // something you find by scrolling a settings screen.
     expect(owner.slice(1).map((section) => [section.section, section.collapsible])).toEqual([
-      ['ניהול', true], ['בקרה', true], ['המנוי', undefined],
+      ['layoutTail.management', true], ['nav.text_8', true], ['nav.text_4', undefined],
     ]);
   });
 
@@ -59,8 +59,8 @@ describe('מעטפת הניווט', () => {
     const singles = (role: ActiveRole) => sectionsForRole(role)
       .filter((section) => section.section && section.items.length === 1)
       .map((section) => section.section);
-    expect(singles('owner')).toEqual(['המנוי']);
-    expect(singles('accountant')).toEqual(['ניהול']);
+    expect(singles('owner')).toEqual(['nav.text_4']);
+    expect(singles('accountant')).toEqual(['layoutTail.management']);
     expect(singles('office')).toEqual([]);
   });
 
@@ -158,7 +158,7 @@ describe('סרגל הפעולות המהירות במובייל', () => {
   it('מחזיר את כל יעדי הניווט למגירה תחת שכבת עבודה שוטפת', () => {
     for (const role of ACTIVE_ROLES) {
       const drawer = drawerSectionsForRole(role);
-      expect(drawer[0].section).toBe('עבודה שוטפת');
+      expect(drawer[0].section).toBe('layoutTail.currentWork');
       expect(drawer.flatMap((section) => section.items)).toEqual(
         sectionsForRole(role).flatMap((section) => section.items),
       );

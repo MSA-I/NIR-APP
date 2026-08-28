@@ -583,7 +583,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
 
 /* ================= Supplier card ================= */
 export function SupplierCard() {
-  const { statusLabel, t } = useT();
+  const { locale, statusLabel, t } = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
@@ -694,7 +694,7 @@ export function SupplierCard() {
       sub: m && m.otd_samples > 0 ? t('suppliers.otdSamples', { count: m.otd_samples }) : t('suppliers.noDeliveryDate'),
       tone: otdTone(m),
     },
-    { label: t('suppliers.fmtLeadDays'), value: fmtLeadDays(m?.avg_lead_days ?? null), sub: t('suppliers.fmtLeadDays_2'), tone: 'idle' },
+    { label: t('suppliers.fmtLeadDays'), value: fmtLeadDays(m?.avg_lead_days ?? null, locale), sub: t('suppliers.fmtLeadDays_2'), tone: 'idle' },
     // No supplier_metrics row = the counts were never computed, which is not the same claim as
     // "zero open exceptions". fmtNum(null) renders — so the tile stays honest (constitution §"אין ערכים
     // סטטיים מזויפים"), matching how OTD and lead time above already behave.

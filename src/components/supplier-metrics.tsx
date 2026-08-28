@@ -23,6 +23,8 @@ import type { Tone } from '../lib/status';
 import { chartTheme } from '../lib/theme';
 import { ICON } from './ui';
 import { useId } from 'react';
+import { translateIn, useT } from '../lib/i18n/LocaleProvider';
+import type { Locale } from '../lib/i18n/locale';
 
 export type { SupplierMetrics };  // re-exported so Suppliers.tsx's existing import keeps resolving
 
@@ -38,7 +40,9 @@ export type ScoreTone = Tone;
 // Metric formatters — kept local rather than added to format.ts, which is not owned this wave.
 // Both return an em dash for null, matching fmtMoney's convention (format.ts:8).
 export const fmtPct = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v)}%`);
-export const fmtLeadDays = (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(1)} ימים`);
+export const fmtLeadDays = (v: number | null | undefined, locale: Locale) => (
+  v == null ? '—' : translateIn(locale, 'supplierMetrics.days', { value: v.toFixed(1) })
+);
 
 // Value text colour per tone → the semantic token utilities. Mirrors KpiCard's mapping (ui.tsx).
 // await-fg lifts the 16px tile value off the failing 3.19:1 contrast that amber-600 gave.
@@ -96,15 +100,17 @@ const EMPTY_STAR = 'text-line-strong';
  * star). Interactive variant is a keyboard-accessible radiogroup; the "נקה" button and star 0
  * both mean "clear" — the caller maps 0 to null.
  */
-export function RatingStars({ value, onChange, label = 'דירוג ספק' }: { value: number | null; onChange?: (n: number) => void; label?: string }) {
+export function RatingStars({ value, onChange, label }: { value: number | null; onChange?: (n: number) => void; label?: string }) {
+  const { t } = useT();
   const stars = [1, 2, 3, 4, 5];
   const groupName = useId();
+  const resolvedLabel = label ?? t('supplierMetrics.ratingLabel');
 
   if (!onChange) {
     return (
       <span className="inline-flex items-center gap-0.5"
-        aria-label={value != null ? `דירוג ${value} מתוך 5` : 'ספק לא דורג'}
-        title={value != null ? `דירוג ${value} מתוך 5` : 'לא דורג'}>
+        aria-label={value != null ? t('supplierMetrics.ratingValue', { value }) : t('supplierMetrics.supplierUnrated')}
+        title={value != null ? t('supplierMetrics.ratingValue', { value }) : t('supplierMetrics.unrated')}>
         {stars.map((n) => (
           <Star key={n} size={ICON.sm} aria-hidden="true"
             className={value != null && n <= value ? 'fill-star text-star' : EMPTY_STAR} />
@@ -117,7 +123,7 @@ export function RatingStars({ value, onChange, label = 'דירוג ספק' }: { 
   }
 
   return (
-    <span role="radiogroup" aria-label={label} className="inline-flex items-center gap-0.5">
+    <span role="radiogroup" aria-label={resolvedLabel} className="inline-flex items-center gap-0.5">
       {/* Each star is a radio, and a radio is a control: 44×44 like every other one (DESIGN.md).
           The glyph stays 20px — the target grew, the picture did not. The previous 24px label was
           the smallest hit area left in the interface once the "נקה" button below was fixed, and
@@ -125,7 +131,7 @@ export function RatingStars({ value, onChange, label = 'דירוג ספק' }: { 
       {stars.map((n) => (
         <label key={n} className="inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-lg leading-none focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus">
           <input className="sr-only" type="radio" name={groupName} value={n} checked={value === n}
-            aria-label={`${n} כוכבים`} onChange={() => onChange(n)} />
+            aria-label={t('supplierMetrics.stars', { count: n })} onChange={() => onChange(n)} />
           <Star size={ICON.lg} aria-hidden="true"
             className={value != null && n <= value ? 'fill-star text-star' : `${EMPTY_STAR} hover:text-star-hover`} />
         </label>
@@ -136,7 +142,7 @@ export function RatingStars({ value, onChange, label = 'דירוג ספק' }: { 
         <button type="button"
           className="ms-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-xs text-ink-faint hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           onClick={() => onChange(0)}>
-          נקה
+          {t('supplierMetrics.clear')}
         </button>
       )}
     </span>
@@ -150,22 +156,25 @@ export function RatingStars({ value, onChange, label = 'דירוג ספק' }: { 
  * null under two points — a single dot is noise, not a trend.
  */
 export function PriceSparkline({ points }: { points: number[] }) {
+  const { t } = useT();
   if (!points || points.length < 2) return null;
   const first = points[0];
   const last = points[points.length - 1];
-  const t = chartTheme();
-  const stroke = last > first ? t.trendUp : last < first ? t.trendDown : t.flat;
+  const theme = chartTheme();
+  const stroke = last > first ? theme.trendUp : last < first ? theme.trendDown : theme.flat;
   const data = points.map((price, i) => ({ i, price }));
   // The stroke hue was the ONLY carrier of "this went up": 96×28 with no axes, no dots, no
   // tooltip and no label. Rose against emerald is the classic red-green pair, and this one had
   // no fallback at all — so the direction is now stated in words, like every other chart's
   // aria-label. Percent, not currency: the component receives bare numbers by design.
   const pct = first > 0 ? ((last - first) / first) * 100 : null;
-  const direction = last > first ? 'עלה' : last < first ? 'ירד' : 'ללא שינוי';
-  const magnitude = pct != null && Math.abs(pct) >= 0.05 ? ` ב-${Math.abs(pct).toFixed(1)}%` : '';
+  const direction = last > first ? t('supplierMetrics.up') : last < first ? t('supplierMetrics.down') : t('supplierMetrics.flat');
+  const magnitude = pct != null && Math.abs(pct) >= 0.05
+    ? t('supplierMetrics.magnitude', { pct: Math.abs(pct).toFixed(1) })
+    : '';
   return (
     <span dir="ltr" className="inline-block align-middle" role="img"
-      aria-label={`מגמת מחיר: ${direction}${magnitude} לאורך ${points.length} שינויי מחיר`}>
+      aria-label={t('supplierMetrics.trend', { direction, magnitude, count: points.length })}>
       <LineChart width={96} height={28} data={data} margin={{ top: 4, right: 2, bottom: 4, left: 2 }}>
         <Line type="stepAfter" dataKey="price" stroke={stroke} strokeWidth={1.5} dot={false} isAnimationActive={false} />
       </LineChart>

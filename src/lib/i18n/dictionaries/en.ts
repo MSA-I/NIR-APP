@@ -5541,4 +5541,29 @@ export const en: Dictionary = {
     confirm: 'Verify identity',
   },
 
+  layoutTail: {
+    management: 'Management',
+    currentWork: 'Current work',
+    signOut: 'Sign out',
+    homeAria: '{app} — go to the control centre',
+    accountMenu: 'Account menu for {name}',
+    user: 'the user',
+    pendingOffline: 'This device has {actions} receiving actions and {uploads} uploads waiting that were not sent to the server.',
+  },
+
+  supplierMetrics: {
+    days: '{value} days',
+    ratingLabel: 'Supplier rating',
+    ratingValue: 'Rating {value} out of 5',
+    supplierUnrated: 'Supplier not rated',
+    unrated: 'Not rated',
+    stars: '{count} stars',
+    clear: 'Clear',
+    up: 'increased',
+    down: 'decreased',
+    flat: 'unchanged',
+    magnitude: ' by {pct}%',
+    trend: 'Price trend: {direction}{magnitude} across {count} price changes',
+  },
+
 };

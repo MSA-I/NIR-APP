@@ -23,7 +23,7 @@ import { isRouteFamilyActive, sectionOf } from '../lib/quickActions';
 import { routeBackPresentation, routePresentationTitle, staticRouteTitle, type StaticRoutePath } from '../lib/routePresentation';
 
 export interface NavItem { to: string; labelKey: TKey; icon: typeof LayoutDashboard; roles: ActiveRole[] }
-export interface NavSection { section: string; items: NavItem[]; collapsible?: boolean }
+export interface NavSection { section: TKey | ''; items: NavItem[]; collapsible?: boolean }
 
 /* "The menu is open" is a place, not a component state (owner, 19.08.2026: the iPhone back gesture
    left the application instead of returning to the menu the screen was chosen from). Opening the
@@ -221,13 +221,15 @@ export function sectionsForRole(role: ActiveRole | undefined): NavSection[] {
   // operator console itself (19.08.2026): /admin now lives in the separate operator application
   // (operator.html, src/operator/), and the tenant shell offers no door to it. This catalogue is
   // tenant navigation only.
-  return role ? [
+  if (!role) return [];
+  const sections: NavSection[] = [
     { section: '', items: itemsFor(role, DAILY_PATHS[role]) },
-    { section: 'ניהול', items: itemsFor(role, MANAGEMENT_PATHS[role] ?? []), collapsible: true },
-    { section: 'בקרה', items: itemsFor(role, CONTROL_PATHS[role] ?? []), collapsible: true },
+    { section: 'layoutTail.management', items: itemsFor(role, MANAGEMENT_PATHS[role] ?? []), collapsible: true },
+    { section: 'nav.text_8', items: itemsFor(role, CONTROL_PATHS[role] ?? []), collapsible: true },
     // Last, and deliberately not collapsible: one item behind a disclosure is a door with a lid.
-    { section: 'המנוי', items: itemsFor(role, SUBSCRIPTION_PATHS[role] ?? []) },
-  ].filter((section) => section.items.length > 0) : [];
+    { section: 'nav.text_4', items: itemsFor(role, SUBSCRIPTION_PATHS[role] ?? []) },
+  ];
+  return sections.filter((section) => section.items.length > 0);
 }
 
 export function footerItemsForRole(role: ActiveRole | undefined): NavItem[] {
@@ -236,7 +238,7 @@ export function footerItemsForRole(role: ActiveRole | undefined): NavItem[] {
 
 export function drawerSectionsForRole(role: ActiveRole | undefined): NavSection[] {
   return sectionsForRole(role).map((section, index) => (
-    role && index === 0 ? { ...section, section: 'עבודה שוטפת' } : section
+    role && index === 0 ? { ...section, section: 'layoutTail.currentWork' } : section
   ));
 }
 
@@ -587,7 +589,7 @@ export default function Layout() {
   const signOutRow = (
     <button type="button" onClick={() => void handleSignOut()}
       className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-sm text-ink-soft transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset">
-      <LogOut size={ICON.md} aria-hidden="true" /> התנתקות
+      <LogOut size={ICON.md} aria-hidden="true" /> {t('layoutTail.signOut')}
     </button>
   );
 
@@ -637,7 +639,7 @@ export default function Layout() {
             Link rather than a decorated div so it lands in the tab order, announces itself and
             honours a middle click; the image stays alt="" because the accessible name belongs to
             the link, and repeating it would make a screen reader say the brand twice. */}
-        <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
+        <Link to="/dashboard" aria-label={t('layoutTail.homeAria', { app: APP_NAME })}
           className="-m-2 flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset">
           {brandMark('drawer')}
           <div className="min-w-0">
@@ -663,7 +665,7 @@ export default function Layout() {
             navigation surface changes under people without a decision behind it. */}
         {displaySections.map((s, i) => (
           <div key={s.section || i}>
-            {s.section && <div className="px-3 pb-1 text-xs font-semibold text-ink-muted">{s.section}</div>}
+            {s.section && <div className="px-3 pb-1 text-xs font-semibold text-ink-muted">{t(s.section)}</div>}
             <div className="space-y-0.5">{navLinks(s.items, { surface: 'panel' })}</div>
           </div>
         ))}
@@ -717,7 +719,7 @@ export default function Layout() {
         <button type="button" id={`top-nav-group-${s.section}`} aria-expanded={open}
           className={groupTriggerCls(active, open)}
           onClick={() => setOpenGroup(open ? null : s.section)}>
-          <span className="whitespace-nowrap">{s.section}</span>
+          <span className="whitespace-nowrap">{s.section ? t(s.section) : ''}</span>
           <ChevronDown size={ICON.xs} aria-hidden="true" className={`transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
         {/* Mounted always, hidden when closed: the active link keeps existing in the DOM (the
@@ -738,7 +740,7 @@ export default function Layout() {
   const topAccountMenu = (
     <div className="relative">
       <button type="button" id="top-nav-group-account" aria-expanded={accountOpen}
-        aria-label={`תפריט החשבון של ${profile?.full_name || 'המשתמש'}`}
+        aria-label={t('layoutTail.accountMenu', { name: profile?.full_name || t('layoutTail.user') })}
         className={`grid size-10 place-items-center rounded-full bg-action text-sm font-medium text-on-solid shadow-card transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${accountOpen ? 'scale-95' : 'hover:scale-105'}`}
         onClick={() => setOpenGroup(accountOpen ? null : 'account')}>
         <span aria-hidden="true">{initials}</span>
@@ -796,7 +798,7 @@ export default function Layout() {
               it described the person instead of the tenant.
               It also cost the navigation 19px of the row while it was here, which is 19px the
               1100px band did not have. */}
-          <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
+          <Link to="/dashboard" aria-label={t('layoutTail.homeAria', { app: APP_NAME })}
             /* HEIGHT PINNED TO THE SEARCH FIELD, not left to the padding (owner: "הבועה צריכה
                להתאים בגודלה לאותו גודל של התיבת חיפוש"). `.input` is `min-h-11`; `h-11` here is
                the same 44px from the same token, so the two ends of the row cannot drift apart
@@ -1076,8 +1078,10 @@ export default function Layout() {
       <ConfirmDialog open={pendingOffline !== null} danger
         title={t('nav.title')}
         message={pendingOffline
-          ? `במכשיר הזה ממתינות ${pendingOffline.actions} פעולות קבלה ו-${pendingOffline.uploads} העלאות שלא נשלחו לשרת. `
+          ? t('layoutTail.pendingOffline', { actions: pendingOffline.actions, uploads: pendingOffline.uploads })
+            + ' '
             + t('nav.text_14')
+            + ' '
             + t('nav.text_15')
           : ''}
         confirmLabel={t('nav.confirmLabel')}
