@@ -1,3 +1,4 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { Link } from 'react-router';
 import { Banknote, ReceiptText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -24,6 +25,7 @@ type SupBal = { supplier_id: string; open_balance: number };
  * prices, purchase orders or supplier_metrics (RLS returns nothing there). Empty → "—"/empty-state.
  */
 export default function AccountantDashboard() {
+  const { t } = useT();
   const { data, loading, error } = useQuery(async () => {
     const today = todayISO();
     const monthKey = today.slice(0, 7);
@@ -59,12 +61,12 @@ export default function AccountantDashboard() {
     const notSent = invoices.filter((i) => i.export_status === 'not_sent' && i.review_status === 'approved').length;
 
     const kpis: ScoreItem[] = [
-      { label: 'שולם החודש', value: fmtMoneyRounded(paidMonth) },
-      { label: 'יתרת חשבוניות פתוחות', value: fmtMoneyRounded(openInvoiceBalance), tone: openInvoiceBalance ? 'await' : 'idle' },
-      { label: 'תנועות בנק לא מותאמות', value: fmtNum(unmatchedBank), tone: unmatchedBank ? 'await' : 'idle' },
-      { label: 'התאמות שממתינות לאישור', value: fmtNum(suggestedBank), tone: suggestedBank ? 'await' : 'idle' },
-      { label: 'זיכויים פתוחים', value: fmtNum(openCreditRows.length), sub: openCreditsSum != null ? fmtMoneyRounded(openCreditsSum) : undefined },
-      { label: 'ממתין להעברה לרו״ח', value: fmtNum(notSent), tone: notSent ? 'await' : 'idle' },
+      { label: t('accountantDashboard.fmtMoneyRounded'), value: fmtMoneyRounded(paidMonth) },
+      { label: t('accountantDashboard.fmtMoneyRounded_2'), value: fmtMoneyRounded(openInvoiceBalance), tone: openInvoiceBalance ? 'await' : 'idle' },
+      { label: t('accountantDashboard.fmtNum'), value: fmtNum(unmatchedBank), tone: unmatchedBank ? 'await' : 'idle' },
+      { label: t('accountantDashboard.fmtNum_2'), value: fmtNum(suggestedBank), tone: suggestedBank ? 'await' : 'idle' },
+      { label: t('accountantDashboard.fmtNum_3'), value: fmtNum(openCreditRows.length), sub: openCreditsSum != null ? fmtMoneyRounded(openCreditsSum) : undefined },
+      { label: t('accountantDashboard.fmtNum_4'), value: fmtNum(notSent), tone: notSent ? 'await' : 'idle' },
     ];
 
     // ── attention. NOTE: "חשבוניות לבדיקה" (received/in_review) is structurally ~0 for the accountant —
@@ -72,11 +74,11 @@ export default function AccountantDashboard() {
     // prior dashboard; flagged for a follow-up (a review queue belongs on the office dashboard).
     const toReview = invoices.filter((i) => ['received', 'in_review'].includes(i.review_status)).length;
     const attention: AttentionItem[] = [
-      { key: 'review', label: 'חשבוניות לבדיקה', count: toReview, tone: 'await', to: '/invoices', clearLabel: 'אין חשבוניות לבדיקה' },
-      { key: 'not-sent', label: 'חשבוניות מאושרות שלא נשלחו לרו״ח', count: notSent, tone: 'await', to: '/invoices', clearLabel: 'הכול נשלח לרו״ח' },
-      { key: 'bank', label: 'תנועות בנק לא מותאמות', count: unmatchedBank, tone: 'await', to: '/bank', clearLabel: 'אין תנועות פתוחות' },
-      { key: 'bank-suggested', label: 'התאמות שממתינות לאישור', count: suggestedBank, tone: 'await', to: '/bank?status=suggested', clearLabel: 'אין הצעות שממתינות לאישור' },
-      { key: 'credits', label: 'זיכויים פתוחים', count: openCreditRows.length, amount: openCreditsSum, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
+      { key: 'review', label: t('accountantDashboard.text'), count: toReview, tone: 'await', to: '/invoices', clearLabel: t('accountantDashboard.text_2') },
+      { key: 'not-sent', label: t('accountantDashboard.text_3'), count: notSent, tone: 'await', to: '/invoices', clearLabel: t('accountantDashboard.text_4') },
+      { key: 'bank', label: t('accountantDashboard.text_5'), count: unmatchedBank, tone: 'await', to: '/bank', clearLabel: t('accountantDashboard.text_6') },
+      { key: 'bank-suggested', label: t('accountantDashboard.text_7'), count: suggestedBank, tone: 'await', to: '/bank?status=suggested', clearLabel: t('accountantDashboard.text_8') },
+      { key: 'credits', label: t('accountantDashboard.text_9'), count: openCreditRows.length, amount: openCreditsSum, tone: 'info', to: '/credits?status=active', clearLabel: t('accountantDashboard.text_10') },
     ];
 
     // ── charts
@@ -112,17 +114,19 @@ export default function AccountantDashboard() {
   if (!data) return null;
 
   return (
-    <DashboardFrame title="מרכז הבקרה — הנהלת חשבונות" actions={<>
-      <Link to="/pay" className="btn-primary"><Banknote size={ICON.sm} aria-hidden="true" /> תשלומים</Link>
-      <Link to="/invoices" className="btn-secondary"><ReceiptText size={ICON.sm} aria-hidden="true" /> חשבוניות</Link>
+    <DashboardFrame title={t('accountantDashboard.title')} actions={<>
+      <Link to="/pay" className="btn-primary"><Banknote size={ICON.sm} aria-hidden="true" /> {t('accountantDashboard.text_11')}</Link>
+      <Link to="/invoices" className="btn-secondary"><ReceiptText size={ICON.sm} aria-hidden="true" /> {t('accountantDashboard.text_12')}</Link>
     </>}>
       <AttentionZone items={data.attention} />
       <Scorecard items={data.kpis} />
       <div className="grid gap-5 lg:grid-cols-2">
-        <ChartCard title="תשלומים לפי חודש" subtitle="סך התשלומים לספקים בארבעת החודשים האחרונים">
+        <ChartCard title={t('accountantDashboard.title_2')} subtitle={t('accountantDashboard.subtitle')}>
           <SpendBarChart points={data.monthly}
-            ariaLabel={`תשלומים לפי חודש: ${data.monthly.map((p) => `${p.key} ${p.label || 'אין תשלומים'}`).join(', ')}`}
-            emptyMessage="אין תשלומים לתקופה" />
+            ariaLabel={t('accountantDashboard.monthlyAria', {
+              points: data.monthly.map((p) => `${p.key} ${p.label || t('accountantDashboard.noPayments')}`).join(', '),
+            })}
+            emptyMessage={t('accountantDashboard.emptyMessage')} />
         </ChartCard>
         {/* G1, finding 13. "כמה אני חייב לספק הזה?" ended here for an accountant: four labels in a
             pie and nothing to click. The permission was never the problem — `p0_supplier_balance_rows()`
@@ -133,14 +137,14 @@ export default function AccountantDashboard() {
             role would be a role-contract change (PRODUCT.md:23-30) and is left as
             OPEN-DECISIONS #117. "אחר" gets no link: it is several suppliers summed, so there is no
             single thing to open, and a link that lands on a wrong filter is worse than none. */}
-        <ChartCard title="יתרות פתוחות לפי ספק" subtitle="ארבעת הספקים עם היתרה הגבוהה וכל היתר">
+        <ChartCard title={t('accountantDashboard.title_3')} subtitle={t('accountantDashboard.subtitle_2')}>
           <CategoryDonut slices={data.supplierSlices} total={data.supplierTotal}
-            ariaLabel={`יתרות פתוחות לפי ספק, סה״כ ${fmtMoneyRounded(data.supplierTotal)}`}
-            hrefFor={(slice) => (slice.name === 'אחר' || slice.name === '—'
+            ariaLabel={t('accountantDashboard.supplierBalancesAria', { total: fmtMoneyRounded(data.supplierTotal) })}
+            hrefFor={(slice) => (slice.name === t('accountantDashboard.text_13') || slice.name === '—'
               ? null
               : `/invoices?q=${encodeURIComponent(slice.name)}&pay=open`)}
-            hrefLabel={(slice) => `חשבוניות פתוחות של ${slice.name}`}
-            emptyMessage="אין יתרות פתוחות" />
+            hrefLabel={(slice) => t('accountantDashboard.openInvoicesOf', { supplier: slice.name })}
+            emptyMessage={t('accountantDashboard.emptyMessage_2')} />
           {data.supplierBalances.length > 0 && <div className="mt-4 divide-y divide-line border-t border-line">
             {data.supplierBalances.map((supplier) => <Link key={supplier.supplier_id}
               to={`/finance/suppliers/${supplier.supplier_id}`}
@@ -151,11 +155,11 @@ export default function AccountantDashboard() {
         </ChartCard>
         {/* T7.2: the reference's paired-bars rendering — each week gets a payments bar beside a
             bank-debits bar, round caps, dot legend below. */}
-        <ChartCard title="תשלומים מול חיובי בנק" subtitle="שמונה השבועות האחרונים" className="lg:col-span-2">
+        <ChartCard title={t('accountantDashboard.title_4')} subtitle={t('accountantDashboard.subtitle_3')} className="lg:col-span-2">
           <GroupedBarChart points={data.weeklyActive ? data.weekly : []} xKey="week"
-            series={comparisonSeries({ key: 'payments', name: 'תשלומים' }, { key: 'bank', name: 'חיובי בנק' })}
-            ariaLabel="השוואת תשלומים שבוצעו מול חיובי בנק, שמונה שבועות"
-            emptyMessage="אין תשלומים או תנועות בנק בשמונת השבועות האחרונים" />
+            series={comparisonSeries({ key: 'payments', name: t('accountantDashboard.comparisonSeries') }, { key: 'bank', name: t('accountantDashboard.comparisonSeries_2') })}
+            ariaLabel={t('accountantDashboard.ariaLabel')}
+            emptyMessage={t('accountantDashboard.emptyMessage_3')} />
         </ChartCard>
       </div>
     </DashboardFrame>

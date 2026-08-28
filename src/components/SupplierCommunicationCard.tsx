@@ -23,7 +23,7 @@ export function SupplierCommunicationCard({ supplierId, supplierEmail, supplierP
   supplierPhone: string | null;
   canWrite: boolean;
 }) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -59,7 +59,7 @@ export function SupplierCommunicationCard({ supplierId, supplierEmail, supplierP
         remindersAllowed,
         reason: reason.trim(),
       });
-      toast('העדפות התקשורת נשמרו ותועדו ביומן הביקורת');
+      toast(t('supplierComms.toast'));
       setEditing(false);
       void refetch();
     } catch (failure) {
@@ -78,67 +78,66 @@ export function SupplierCommunicationCard({ supplierId, supplierEmail, supplierP
     <div className="card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink">
-          <MessageSquareText size={ICON.sm} aria-hidden="true" /> תקשורת עם הספק
+          <MessageSquareText size={ICON.sm} aria-hidden="true" /> {t('supplierComms.heading')}
         </h2>
         <div className="flex items-center gap-2">
           <StatusBadge meta={COMMUNICATION_CHANNEL[effectiveChannel]} />
           {canWrite && (
             <button type="button" className="btn-ghost" onClick={openEditor}>
-              <Pencil size={ICON.sm} /> עריכה
+              <Pencil size={ICON.sm} /> {t('supplierComms.edit')}
             </button>
           )}
         </div>
       </div>
       <dl className="mt-2 grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
         <div className="flex gap-1">
-          <dt className="text-ink-faint">שפת הודעות:</dt>
-          <dd className="text-ink-body">{(prefs?.locale ?? 'he') === 'he' ? 'עברית' : 'אנגלית'}</dd>
+          <dt className="text-ink-faint">{t('supplierComms.text')}</dt>
+          <dd className="text-ink-body">{(prefs?.locale ?? 'he') === 'he' ? t('supplierComms.text_2') : t('supplierComms.text_3')}</dd>
         </div>
         {['email', 'both'].includes(effectiveChannel) && (
           <div className="flex gap-1">
-            <dt className="text-ink-faint">יעד מייל:</dt>
+            <dt className="text-ink-faint">{t('supplierComms.text_4')}</dt>
             <dd className="text-ink-body" dir="ltr">{effectiveEmail ?? '—'}</dd>
           </div>
         )}
         <div className="flex gap-1">
-          <dt className="text-ink-faint">תזכורות אוטומטיות:</dt>
-          <dd className="text-ink-body">{prefs?.reminders_allowed ? 'מאושרות' : 'כבויות'}</dd>
+          <dt className="text-ink-faint">{t('supplierComms.text_5')}</dt>
+          <dd className="text-ink-body">{prefs?.reminders_allowed ? t('supplierComms.text_6') : t('supplierComms.text_7')}</dd>
         </div>
       </dl>
       {effectiveChannel === 'manual' && (
         <p className="mt-2 text-xs text-ink-muted">
-          במצב ידני הזמנות נמסרות בשיתוף WhatsApp ידני או בהדפסה בלבד. כדי לאפשר שליחת מייל
-          אוטומטית יש לבחור ערוץ מייל.
+          {t('supplierComms.manualChannelNote')}
         </p>
       )}
 
-      <Modal open={editing} onClose={() => setEditing(false)} title="העדפות תקשורת עם הספק" busy={busy}>
+      <Modal open={editing} onClose={() => setEditing(false)} title={t('supplierComms.title')} busy={busy}>
         <div className="space-y-3">
           <div>
-            <label className="label" htmlFor="comm-channel">ערוץ מסירת הזמנות</label>
+            <label className="label" htmlFor="comm-channel">{t('supplierComms.text_10')}</label>
             <select id="comm-channel" className="input" value={channel}
               onChange={(e) => setChannel(e.target.value as CommunicationChannel)}>
-              <option value="manual">ידני בלבד (ברירת המחדל)</option>
-              <option value="email">מייל</option>
-              <option value="whatsapp">WhatsApp (יופעל כשהחיבור יוגדר)</option>
-              <option value="both">מייל ו-WhatsApp</option>
+              <option value="manual">{t('supplierComms.text_11')}</option>
+              <option value="email">{t('supplierComms.text_12')}</option>
+              <option value="whatsapp">{t('supplierComms.text_13')}</option>
+              <option value="both">{t('supplierComms.text_14')}</option>
             </select>
           </div>
           <div>
-            <label className="label" htmlFor="comm-locale">שפת ההודעות לספק</label>
+            <label className="label" htmlFor="comm-locale">{t('supplierComms.text_15')}</label>
             <select id="comm-locale" className="input" value={locale}
               onChange={(e) => setLocale(e.target.value as CommunicationLocale)}>
-              <option value="he">עברית</option>
-              <option value="en">אנגלית</option>
+              <option value="he">{t('supplierComms.text_16')}</option>
+              <option value="en">{t('supplierComms.text_17')}</option>
             </select>
           </div>
           <div>
-            <label className="label" htmlFor="comm-email">כתובת מייל ייעודית (ברירת מחדל: {supplierEmail ?? 'אין בכרטיס'})</label>
+            <label className="label" htmlFor="comm-email">{t('supplierComms.dedicatedEmailLabel', { fallback: supplierEmail ?? t('supplierComms.text_18') })}</label>
             <input id="comm-email" className="input" dir="ltr" type="email"
               value={emailOverride} onChange={(e) => setEmailOverride(e.target.value)} />
           </div>
           <div>
-            <label className="label" htmlFor="comm-whatsapp">מספר WhatsApp ייעודי (ברירת מחדל: {supplierPhone ?? 'אין בכרטיס'})</label>
+            <label className="label" htmlFor="comm-whatsapp">{t('supplierComms.dedicatedWhatsAppLabel', { fallback: supplierPhone ?? t('supplierComms.text_19') })}</label>
             <input id="comm-whatsapp" className="input num" dir="ltr" inputMode="tel"
               placeholder="9725XXXXXXXX"
               value={whatsappOverride} onChange={(e) => setWhatsappOverride(e.target.value)} />
@@ -146,16 +145,16 @@ export function SupplierCommunicationCard({ supplierId, supplierEmail, supplierP
           <label className="flex min-h-11 items-center gap-2 text-sm text-ink-body">
             <input type="checkbox" className="size-5 shrink-0" checked={remindersAllowed}
               onChange={(e) => setRemindersAllowed(e.target.checked)} />
-            הספק מאשר קבלת תזכורות אוטומטיות
+            {t('supplierComms.text_20')}
           </label>
           <div>
-            <label className="label" htmlFor="comm-reason">סיבת השינוי (חובה — תתועד ביומן הביקורת)</label>
+            <label className="label" htmlFor="comm-reason">{t('supplierComms.text_21')}</label>
             <input id="comm-reason" className="input" value={reason}
               onChange={(e) => setReason(e.target.value)} />
           </div>
           <div className="flex justify-end gap-2">
-            <button type="button" className="btn-secondary" disabled={busy} onClick={() => setEditing(false)}>ביטול</button>
-            <button type="button" className="btn-primary" disabled={busy || !reason.trim()} onClick={() => void save()}>שמירה</button>
+            <button type="button" className="btn-secondary" disabled={busy} onClick={() => setEditing(false)}>{t('supplierComms.setEditing')}</button>
+            <button type="button" className="btn-primary" disabled={busy || !reason.trim()} onClick={() => void save()}>{t('supplierComms.trim')}</button>
           </div>
         </div>
       </Modal>
