@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { ShieldCheck, UserMinus, UserPlus } from 'lucide-react';
+import { Copy, MailPlus, ShieldCheck, UserMinus, UserPlus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery } from '../lib/useQuery';
 import {
@@ -10,21 +10,35 @@ import { ReauthModal } from '../components/ReauthModal';
 import { fmtDateTime } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
 import {
-  addOperator, fetchMyCapabilities, fetchOperatorEvents, fetchPlatformOperators,
-  fetchPlatformRoles, removeOperator, setOperatorRoles,
-  type PlatformCapability, type PlatformOperator, type PlatformOperatorEvent, type PlatformRole,
+  addOperator, fetchMyCapabilities, fetchOperatorEvents, fetchOperatorInvitations,
+  fetchPlatformOperators, fetchPlatformRoles, inviteOperator, removeOperator,
+  revokeOperatorInvitation, setOperatorRoles,
+  type IssuedInvitation, type OperatorInvitation, type PlatformCapability, type PlatformOperator,
+  type PlatformOperatorEvent, type PlatformRole,
 } from '../lib/platform';
 
 const EVENT_LABEL: Record<string, string> = {
   operator_added: 'מפעיל נוסף',
   operator_removed: 'מפעיל הוסר',
   operator_roles_set: 'תפקידים עודכנו',
+  operator_invited: 'הזמנה נשלחה',
+  operator_invitation_revoked: 'הזמנה בוטלה',
+  operator_invitation_accepted: 'הזמנה נוצלה',
+};
+
+const INVITATION_STATUS: Record<OperatorInvitation['status'], { label: string; cls: string }> = {
+  pending: { label: 'ממתינה', cls: 'badge-await' },
+  accepted: { label: 'נוצלה', cls: 'badge-done' },
+  revoked: { label: 'בוטלה', cls: 'badge-idle' },
+  expired: { label: 'פג תוקף', cls: 'badge-idle' },
 };
 
 type Command =
   | { kind: 'add'; email: string; note: string; roleKey: string; reason: string }
   | { kind: 'roles'; userId: string; roleKeys: string[]; reason: string }
-  | { kind: 'remove'; userId: string; reason: string };
+  | { kind: 'remove'; userId: string; reason: string }
+  | { kind: 'invite'; email: string; roleKey: string; reason: string }
+  | { kind: 'revoke-invite'; id: string; email: string; reason: string };
 
 function AddOperatorDialog({ open, roles, busy, onClose, onSubmit }: {
   open: boolean;
@@ -207,6 +221,160 @@ function RemoveDialog({ operator, busy, onClose, onSubmit }: {
   );
 }
 
+function InviteDialog({ open, roles, busy, onClose, onSubmit }: {
+  open: boolean;
+  roles: PlatformRole[];
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (input: { email: string; roleKey: string; reason: string }) => void;
+}) {
+  const emailId = useId();
+  const roleId = useId();
+  const reasonId = useId();
+  const [email, setEmail] = useState('');
+  const [roleKey, setRoleKey] = useState('');
+  const [reason, setReason] = useState('');
+
+  if (!open) return null;
+  const chosen = roleKey || roles[0]?.role_key || '';
+
+  return (
+    <Modal open onClose={onClose} title="הזמנת מפעיל" busy={busy}>
+      <div className="space-y-3">
+        <Note tone="info">
+          <span className="min-w-0 flex-1">
+            ההזמנה פותחת חשבון לניהול הפלטפורמה בלבד — היא אינה פותחת עסק ואינה מצרפת לאף ארגון.
+            זה ההבדל מהרשמה רגילה, ולכן היא קיימת.
+          </span>
+        </Note>
+        <div>
+          <label htmlFor={emailId} className="block text-sm font-medium text-ink">כתובת דוא״ל</label>
+          <input
+            id={emailId} dir="ltr" type="email" className="input mt-1 w-full"
+            value={email} onChange={(event) => setEmail(event.target.value)}
+          />
+        </div>
+        <div>
+          <label htmlFor={roleId} className="block text-sm font-medium text-ink">תפקיד</label>
+          <select
+            id={roleId} className="input mt-1 w-full"
+            value={chosen} onChange={(event) => setRoleKey(event.target.value)}
+          >
+            {roles.map((role) => (
+              <option key={role.role_key} value={role.role_key}>{role.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor={reasonId} className="block text-sm font-medium text-ink">סיבה</label>
+          <textarea
+            id={reasonId} className="input mt-1 min-h-20 w-full"
+            value={reason} onChange={(event) => setReason(event.target.value)}
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
+          <button
+            type="button" className="btn-primary"
+            disabled={busy || !email.trim() || !reason.trim() || !chosen}
+            onClick={() => onSubmit({ email, roleKey: chosen, reason })}
+          >
+            יצירת הזמנה
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * The handover. The link is shown ONCE and nowhere else: the row keeps only the token's digest,
+ * so there is no screen that could show it again — reissuing is a new invitation with a new
+ * token. Fifteen minutes (owner, 28.08.2026) is also why this is a handover and not an email:
+ * a window that short is shorter than mail delivery is reliable.
+ */
+function HandoverDialog({ issued, onClose, onCopyError }: {
+  issued: IssuedInvitation | null;
+  onClose: () => void;
+  onCopyError: () => void;
+}) {
+  if (!issued) return null;
+  const link = `${window.location.origin}/operator-invite?token=${issued.token}`;
+  return (
+    <Modal open onClose={onClose} title="ההזמנה נוצרה — קישור למסירה" wide>
+      <div className="space-y-3">
+        <Note tone="alert">
+          <span className="min-w-0 flex-1">
+            הקישור מוצג פעם אחת בלבד ותקף עד {fmtDateTime(issued.expires_at)}. אחרי זה צריך ליצור
+            הזמנה חדשה.
+          </span>
+        </Note>
+        <div>
+          <div className="text-xs text-ink-muted">נמען</div>
+          <div dir="ltr" className="text-sm text-ink">{issued.email}</div>
+        </div>
+        <div>
+          <div className="text-xs text-ink-muted">קישור ההצטרפות</div>
+          <div dir="ltr" className="mt-1 break-all rounded-2xl bg-surface-sunken p-3 text-xs text-ink">
+            {link}
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button" className="btn-secondary"
+            onClick={() => { void navigator.clipboard.writeText(link).catch(onCopyError); }}
+          >
+            <Copy size={ICON.sm} aria-hidden="true" /> העתקת הקישור
+          </button>
+          <button type="button" className="btn-primary" onClick={onClose}>סגירה</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function RevokeInviteDialog({ invitation, busy, onClose, onSubmit }: {
+  invitation: OperatorInvitation | null;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (reason: string) => void;
+}) {
+  const reasonId = useId();
+  const [reason, setReason] = useState('');
+  const [lastKey, setLastKey] = useState('');
+  if (invitation && invitation.id !== lastKey) {
+    setLastKey(invitation.id);
+    setReason('');
+  }
+  if (!invitation) return null;
+
+  return (
+    <Modal open onClose={onClose} title={`ביטול הזמנה — ${invitation.email}`} busy={busy}>
+      <div className="space-y-3">
+        <Note tone="idle">
+          <span className="min-w-0 flex-1">
+            הקישור מפסיק לעבוד מיד. אפשר ליצור הזמנה חדשה לאותה כתובת בכל רגע.
+          </span>
+        </Note>
+        <div>
+          <label htmlFor={reasonId} className="block text-sm font-medium text-ink">סיבה</label>
+          <textarea
+            id={reasonId} className="input mt-1 min-h-20 w-full"
+            value={reason} onChange={(event) => setReason(event.target.value)}
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>סגירה</button>
+          <button type="button" className="btn-danger" disabled={busy || !reason.trim()}
+            onClick={() => onSubmit(reason)}>
+            ביטול ההזמנה
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 /**
  * Our own side of the roster.
  *
@@ -222,17 +390,21 @@ export default function Team() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<PlatformOperator | null>(null);
   const [removing, setRemoving] = useState<PlatformOperator | null>(null);
+  const [inviting, setInviting] = useState(false);
+  const [revokingInvite, setRevokingInvite] = useState<OperatorInvitation | null>(null);
+  const [issued, setIssued] = useState<IssuedInvitation | null>(null);
   const [pending, setPending] = useState<Command | null>(null);
   const [busy, setBusy] = useState(false);
 
   const { data, loading, error, refetch } = useQuery(async () => {
-    const [capabilities, operators, roles, events] = await Promise.all([
+    const [capabilities, operators, roles, events, invitations] = await Promise.all([
       fetchMyCapabilities(),
       fetchPlatformOperators(),
       fetchPlatformRoles(),
       fetchOperatorEvents(),
+      fetchOperatorInvitations(),
     ]);
-    return { capabilities, operators, roles, events };
+    return { capabilities, operators, roles, events, invitations };
   }, []);
 
   if (loading) return <SkeletonTable cols={4} />;
@@ -242,6 +414,7 @@ export default function Team() {
   const operators: PlatformOperator[] = data?.operators ?? [];
   const roles: PlatformRole[] = data?.roles ?? [];
   const events: PlatformOperatorEvent[] = data?.events ?? [];
+  const invitations: OperatorInvitation[] = data?.invitations ?? [];
   const mayManage = capabilities.includes('operator.manage');
   const me = session?.user.id ?? null;
 
@@ -259,8 +432,15 @@ export default function Team() {
         await setOperatorRoles({
           userId: command.userId, roleKeys: command.roleKeys, reason: command.reason,
         });
-      } else {
+      } else if (command.kind === 'remove') {
         await removeOperator(command.userId, command.reason);
+      } else if (command.kind === 'invite') {
+        // The only command whose RESULT matters to the screen: the raw token exists in this one
+        // response and nowhere else, ever again.
+        const result = await inviteOperator(command);
+        setIssued(result);
+      } else {
+        await revokeOperatorInvitation(command.id, command.reason);
       }
     } catch (rpcError) {
       setBusy(false);
@@ -273,6 +453,8 @@ export default function Team() {
     setAdding(false);
     setEditing(null);
     setRemoving(null);
+    setInviting(false);
+    setRevokingInvite(null);
     toast('רשימת המפעילים עודכנה');
     void refetch();
   }
@@ -325,6 +507,33 @@ export default function Team() {
     },
   ];
 
+  const invitationColumns: Column<OperatorInvitation>[] = [
+    {
+      key: 'email', header: 'נמען', priority: 3,
+      render: (row) => <span dir="ltr" className="font-medium text-ink">{row.email}</span>,
+    },
+    { key: 'role', header: 'תפקיד', render: (row) => row.role_label },
+    {
+      key: 'status', header: 'מצב', mobileLabel: null,
+      render: (row) => (
+        <span className={INVITATION_STATUS[row.status].cls}>{INVITATION_STATUS[row.status].label}</span>
+      ),
+    },
+    {
+      key: 'expires', header: 'תקף עד',
+      render: (row) => (row.status === 'pending'
+        ? fmtDateTime(row.expires_at)
+        : <span className="text-ink-muted">—</span>),
+    },
+    { key: 'invited_by', header: 'הוזמן בידי', render: (row) => <span dir="ltr">{row.invited_by ?? '—'}</span> },
+    {
+      key: 'actions', header: '', mobileLabel: null,
+      render: (row) => (mayManage && row.status === 'pending' ? (
+        <button type="button" className="btn-ghost" onClick={() => setRevokingInvite(row)}>ביטול</button>
+      ) : null),
+    },
+  ];
+
   const eventColumns: Column<PlatformOperatorEvent>[] = [
     { key: 'when', header: 'מתי', render: (row) => fmtDateTime(row.occurred_at) },
     { key: 'what', header: 'פעולה', render: (row) => EVENT_LABEL[row.action] ?? row.action },
@@ -339,9 +548,16 @@ export default function Team() {
         title={<span className="flex items-center gap-2"><ShieldCheck size={ICON.xl} aria-hidden="true" /> צוות הפלטפורמה</span>}
         description="מי מאיתנו מחזיק בגישה לקונסולה, ובאיזו רמה."
         actions={mayManage ? (
-          <button type="button" className="btn-primary" onClick={() => setAdding(true)}>
-            <UserPlus size={ICON.sm} aria-hidden="true" /> הוספת מפעיל
-          </button>
+          <span className="flex flex-wrap gap-2">
+            <button type="button" className="btn-primary" onClick={() => setInviting(true)}>
+              <MailPlus size={ICON.sm} aria-hidden="true" /> הזמנת מפעיל
+            </button>
+            {/* Two doors, and the difference is which problem you have: invite when the person has
+                no account yet, add when they already sign in to something here. */}
+            <button type="button" className="btn-secondary" onClick={() => setAdding(true)}>
+              <UserPlus size={ICON.sm} aria-hidden="true" /> חשבון קיים
+            </button>
+          </span>
         ) : null}
       />
 
@@ -368,6 +584,16 @@ export default function Team() {
         </span>
       </Note>
 
+      <section className="space-y-2" aria-labelledby="invitations-heading">
+        <h2 id="invitations-heading" className="section-title">הזמנות</h2>
+        <DataTable
+          rows={invitations}
+          columns={invitationColumns}
+          emptyTitle="לא נשלחה אף הזמנה"
+          emptySubtitle="הזמנה פותחת חשבון ניהול פלטפורמה בלי לפתוח עסק"
+        />
+      </section>
+
       <section className="space-y-2" aria-labelledby="team-history-heading">
         <h2 id="team-history-heading" className="section-title">יומן שינויים</h2>
         <DataTable
@@ -392,6 +618,31 @@ export default function Team() {
         onClose={() => setEditing(null)}
         onSubmit={({ roleKeys, reason }) => {
           if (editing) setPending({ kind: 'roles', userId: editing.user_id, roleKeys, reason });
+        }}
+      />
+
+      <InviteDialog
+        open={inviting}
+        roles={roles}
+        busy={busy}
+        onClose={() => setInviting(false)}
+        onSubmit={(input) => setPending({ kind: 'invite', ...input })}
+      />
+
+      <HandoverDialog
+        issued={issued}
+        onClose={() => setIssued(null)}
+        onCopyError={() => toast('ההעתקה נכשלה — יש להעתיק ידנית', 'error')}
+      />
+
+      <RevokeInviteDialog
+        invitation={revokingInvite}
+        busy={busy}
+        onClose={() => setRevokingInvite(null)}
+        onSubmit={(reason) => {
+          if (revokingInvite) {
+            setPending({ kind: 'revoke-invite', id: revokingInvite.id, email: revokingInvite.email, reason });
+          }
         }}
       />
 

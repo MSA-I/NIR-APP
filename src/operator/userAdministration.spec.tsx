@@ -18,6 +18,7 @@ const fetchPlatformUserEvents = vi.fn();
 const fetchPlatformOperators = vi.fn<() => Promise<PlatformOperator[]>>();
 const fetchPlatformRoles = vi.fn<() => Promise<PlatformRole[]>>();
 const fetchOperatorEvents = vi.fn();
+const fetchOperatorInvitations = vi.fn();
 
 const ME = '79100000-0000-4000-8000-000000000004';
 
@@ -32,6 +33,7 @@ vi.mock('../lib/platform', async (importOriginal) => ({
   fetchPlatformOperators: () => fetchPlatformOperators(),
   fetchPlatformRoles: () => fetchPlatformRoles(),
   fetchOperatorEvents: () => fetchOperatorEvents(),
+  fetchOperatorInvitations: () => fetchOperatorInvitations(),
 }));
 
 vi.mock('../components/ReauthModal', () => ({
@@ -101,6 +103,13 @@ beforeEach(() => {
   fetchPlatformUserDetail.mockResolvedValue(detail());
   fetchPlatformUserEvents.mockResolvedValue([]);
   fetchOperatorEvents.mockResolvedValue([]);
+  fetchOperatorInvitations.mockResolvedValue([
+    {
+      id: 'inv-1', email: 'newcomer@inplace.test', role_key: 'support', role_label: 'תמיכה',
+      status: 'pending', expires_at: '2026-08-28T10:15:00.000Z',
+      created_at: '2026-08-28T10:00:00.000Z', invited_by: 'me@inplace.test',
+    },
+  ]);
   fetchPlatformRoles.mockResolvedValue([
     { role_key: 'support', label: 'תמיכה', description: 'קריאה ורישום פניות' },
     { role_key: 'super_admin', label: 'מנהל פלטפורמה ראשי', description: 'כל היכולות' },
@@ -172,17 +181,54 @@ describe('the operator roster', () => {
     fetchMyCapabilities.mockResolvedValue(['user.view']);
     shell(<Team />);
     expect(await screen.findAllByText('colleague@inplace.test')).not.toHaveLength(0);
-    expect(screen.queryByRole('button', { name: /הוספת מפעיל/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /הזמנת מפעיל/ })).not.toBeInTheDocument();
     expect(screen.getByText(/שינוי הרכב הצוות שמור למנהל פלטפורמה ראשי/)).toBeInTheDocument();
   });
 
   it('states the self rule on your own row instead of offering buttons that would be refused', async () => {
     fetchMyCapabilities.mockResolvedValue(['user.view', 'operator.manage']);
     shell(<Team />);
-    expect(await screen.findByRole('button', { name: /הוספת מפעיל/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /הזמנת מפעיל/ })).toBeInTheDocument();
     expect(screen.getAllByText('אי אפשר לשנות את ההרשאות של עצמך')).not.toHaveLength(0);
     // The colleague's row keeps its actions, so the absence above is about identity and not
     // about the capability.
     expect(screen.getAllByRole('button', { name: 'תפקידים' })).not.toHaveLength(0);
+  });
+});
+
+describe('operator invitations', () => {
+  it('offers no invitation door to an operator without operator.manage, and still shows the queue', async () => {
+    fetchMyCapabilities.mockResolvedValue(['user.view']);
+    shell(<Team />);
+    expect(await screen.findAllByText('newcomer@inplace.test')).not.toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /הזמנת מפעיל/ })).not.toBeInTheDocument();
+    // A pending invitation is roster information; cancelling one is authority.
+    expect(screen.queryByRole('button', { name: 'ביטול' })).not.toBeInTheDocument();
+  });
+
+  it('separates the two doors: invite a person with no account, add one who already has one', async () => {
+    fetchMyCapabilities.mockResolvedValue(['user.view', 'operator.manage']);
+    shell(<Team />);
+    expect(await screen.findByRole('button', { name: /הזמנת מפעיל/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /חשבון קיים/ })).toBeInTheDocument();
+  });
+
+  it('says an invitation is pending and offers to cancel it', async () => {
+    fetchMyCapabilities.mockResolvedValue(['user.view', 'operator.manage']);
+    shell(<Team />);
+    expect(await screen.findAllByText('ממתינה')).not.toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: 'ביטול' })).not.toHaveLength(0);
+  });
+
+  it('reports an expired or spent invitation without an expiry date to read', async () => {
+    fetchMyCapabilities.mockResolvedValue(['user.view', 'operator.manage']);
+    fetchOperatorInvitations.mockResolvedValue([{
+      id: 'inv-2', email: 'late@inplace.test', role_key: 'support', role_label: 'תמיכה',
+      status: 'expired', expires_at: '2026-08-28T10:15:00.000Z',
+      created_at: '2026-08-28T10:00:00.000Z', invited_by: 'me@inplace.test',
+    }]);
+    shell(<Team />);
+    expect(await screen.findAllByText('פג תוקף')).not.toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'ביטול' })).not.toBeInTheDocument();
   });
 });

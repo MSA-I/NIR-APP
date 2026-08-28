@@ -14,6 +14,7 @@ import { APP_ROUTE_POLICY } from './lib/routePolicy';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import AcceptInvite from './pages/AcceptInvite';
+import AcceptOperatorInvite from './pages/AcceptOperatorInvite';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import { TermsOfService, PrivacyPolicy } from './pages/Legal';
@@ -238,7 +239,10 @@ export default function App() {
   // AccountUnavailable would trap an invitee on a screen that has nothing to do with them.
   // Recovery links arrive with an Auth session before the tenant profile resolves. Legal pages
   // must remain public as well.
-  const isPublic = ['/accept-invite', '/login', '/forgot-password', '/reset-password', '/terms', '/privacy',
+  // `/operator-invite` lives HERE and not in the operator console on purpose: the person
+  // holding the link has no account and no authority yet, so the console's guard would
+  // bounce them before the screen rendered.
+  const isPublic = ['/accept-invite', '/operator-invite', '/login', '/forgot-password', '/reset-password', '/terms', '/privacy',
     '/signup', '/pricing']
     .includes(pathname);
   const isOfflineReceivingRoute = pathname === '/receiving' || pathname.startsWith('/receiving/');
@@ -260,6 +264,7 @@ export default function App() {
       <Route path="/signup" element={<Signup />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/accept-invite" element={<AcceptInvite />} />
+      <Route path="/operator-invite" element={<AcceptOperatorInvite />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/terms" element={<TermsOfService />} />

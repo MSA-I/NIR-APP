@@ -375,4 +375,159 @@ select pg_temp.p79_assert(
   (select operators_without_role from public.platform_user_overview()) = 0,
   'an operator was left holding membership without any role');
 
+
+-- ===== 8. Inviting an operator (0215) =====
+-- The hole 0214 left: `platform_add_operator` grants authority to an identity that already
+-- exists, and the product's only self-service signup creates an organization. A colleague
+-- joining OUR team had no door. These arms are about that door staying narrow.
+
+select pg_temp.p79_assert(
+  private.platform_invitation_window() = interval '15 minutes',
+  'the invitation window is not the fifteen minutes the owner decided');
+
+select pg_temp.p79_assert(
+  not exists (
+    select 1 from information_schema.role_table_grants
+    where table_schema = 'public' and table_name = 'platform_operator_invitations'
+      and grantee in ('anon', 'authenticated')),
+  'a browser role holds a grant on the invitation table');
+
+-- Support may read the roster and may not add to it, invitation or otherwise.
+select pg_temp.p79_as('79100000-0000-4000-8000-000000000005', true);
+select pg_temp.p79_refused(
+  $$select public.platform_invite_operator('newcomer-p79@example.test', 'support', 'P79 support attempt')$$,
+  'not_platform_capability');
+
+select pg_temp.p79_as('79100000-0000-4000-8000-000000000006', true);
+select pg_temp.p79_refused(
+  $$select public.platform_invite_operator('not-an-email', 'support', 'P79 bad address')$$,
+  'invalid_email');
+select pg_temp.p79_refused(
+  $$select public.platform_invite_operator('newcomer-p79@example.test', 'no_such_role', 'P79 bad role')$$,
+  'platform_role_unknown');
+-- Someone already on the roster is changed, not invited — and the product says which command.
+select pg_temp.p79_refused(
+  $$select public.platform_invite_operator('support-p79@example.test', 'support', 'P79 already ours')$$,
+  'operator_already_exists');
+
+-- The happy path. The raw token leaves the database exactly here.
+create temporary table p79_invite as
+select public.platform_invite_operator(
+  'newcomer-p79@example.test', 'support', 'P79 onboarding a colleague') as payload;
+
+select pg_temp.p79_assert(
+  (select payload ->> 'email' from p79_invite) = 'newcomer-p79@example.test',
+  'the invitation did not come back for the address it was issued to');
+select pg_temp.p79_assert(
+  (select length(payload ->> 'token') from p79_invite) = 64,
+  'the invitation token is not a 64-character value');
+
+-- Stored as a hash and nothing else: no read path can reproduce the token.
+select pg_temp.p79_assert(
+  not exists (
+    select 1 from platform_operator_invitations
+    where token_hash = (select payload ->> 'token' from p79_invite)),
+  'the raw token was stored instead of its digest');
+select pg_temp.p79_assert(
+  (select count(*) from public.platform_operator_invitations() where status = 'pending') = 1,
+  'the queue does not show the pending invitation');
+
+-- The anonymous lookup: enough to render the screen, and no oracle for who was invited.
+select pg_temp.p79_as(null);
+select pg_temp.p79_assert(
+  (public.lookup_platform_operator_invitation(repeat('b', 64)) ->> 'status') = 'unknown',
+  'an unmatched token was distinguishable from a malformed one');
+select pg_temp.p79_assert(
+  (public.lookup_platform_operator_invitation((select payload ->> 'token' from p79_invite)) ->> 'status') = 'valid',
+  'a live invitation did not read as valid to the person holding the link');
+select pg_temp.p79_assert(
+  (public.lookup_platform_operator_invitation((select payload ->> 'token' from p79_invite)) ->> 'email')
+    = 'newcomer-p79@example.test',
+  'the lookup did not name the address the invitation is for');
+
+-- Acceptance. The invitee signs up first — the screen does that — so here they simply have a
+-- session. The address is what redeems the link, not merely holding it.
+insert into auth.users (id, email) values
+  ('79100000-0000-4000-8000-000000000008', 'newcomer-p79@example.test'),
+  ('79100000-0000-4000-8000-000000000009', 'stranger-p79@example.test');
+
+select pg_temp.p79_as('79100000-0000-4000-8000-000000000009', true);
+select pg_temp.p79_refused(
+  format($$select public.accept_platform_operator_invitation(%L)$$,
+         (select payload ->> 'token' from p79_invite)),
+  'invitation_email_mismatch');
+
+select pg_temp.p79_as('79100000-0000-4000-8000-000000000008', true);
+select public.accept_platform_operator_invitation((select payload ->> 'token' from p79_invite));
+
+select pg_temp.p79_assert(
+  exists (select 1 from platform_admins where user_id = '79100000-0000-4000-8000-000000000008'),
+  'accepting an invitation did not put the invitee on the roster');
+select pg_temp.p79_assert(
+  (select array_agg(role_key) from platform_admin_roles
+    where user_id = '79100000-0000-4000-8000-000000000008') = array['support'],
+  'the invitee did not receive the role they were invited to');
+-- The door that must not quietly make an operator a tenant member.
+select pg_temp.p79_assert(
+  not exists (select 1 from profiles where id = '79100000-0000-4000-8000-000000000008'),
+  'accepting a platform invitation created a tenant profile');
+select pg_temp.p79_assert(
+  exists (select 1 from platform_admin_events
+           where subject = '79100000-0000-4000-8000-000000000008'
+             and action = 'operator_invitation_accepted'),
+  'the acceptance was not recorded');
+
+-- A link is redeemed once.
+select pg_temp.p79_refused(
+  format($$select public.accept_platform_operator_invitation(%L)$$,
+         (select payload ->> 'token' from p79_invite)),
+  'invitation_already_accepted');
+
+-- Expiry and revocation are refusals, not silent failures — and re-inviting mints a NEW token,
+-- which is what makes the fifteen-minute window mean anything.
+select pg_temp.p79_as('79100000-0000-4000-8000-000000000006', true);
+create temporary table p79_invite_two as
+select public.platform_invite_operator(
+  'second-newcomer-p79@example.test', 'analyst', 'P79 second colleague') as payload;
+update platform_operator_invitations set expires_at = now() - interval '1 minute'
+ where email = 'second-newcomer-p79@example.test';
+select pg_temp.p79_assert(
+  (public.lookup_platform_operator_invitation((select payload ->> 'token' from p79_invite_two)) ->> 'status')
+    = 'expired',
+  'a window that has passed did not read as expired');
+
+insert into auth.users (id, email)
+values ('79100000-0000-4000-8000-000000000010', 'second-newcomer-p79@example.test');
+select pg_temp.p79_as('79100000-0000-4000-8000-000000000010', true);
+select pg_temp.p79_refused(
+  format($$select public.accept_platform_operator_invitation(%L)$$,
+         (select payload ->> 'token' from p79_invite_two)),
+  'invitation_expired');
+
+select pg_temp.p79_as('79100000-0000-4000-8000-000000000006', true);
+create temporary table p79_invite_three as
+select public.platform_invite_operator(
+  'second-newcomer-p79@example.test', 'analyst', 'P79 reissue') as payload;
+select pg_temp.p79_assert(
+  (select payload ->> 'token' from p79_invite_three)
+    is distinct from (select payload ->> 'token' from p79_invite_two),
+  're-inviting reused the old token, so the expired link would still open the door');
+select pg_temp.p79_assert(
+  (public.lookup_platform_operator_invitation((select payload ->> 'token' from p79_invite_two)) ->> 'status')
+    = 'unknown',
+  'the superseded token still resolves to an invitation');
+
+select public.platform_revoke_operator_invitation(
+  (select id from platform_operator_invitations
+    where email = 'second-newcomer-p79@example.test' and accepted_at is null and revoked_at is null),
+  'P79 the colleague declined');
+select pg_temp.p79_assert(
+  (public.lookup_platform_operator_invitation((select payload ->> 'token' from p79_invite_three)) ->> 'status')
+    = 'revoked',
+  'a revoked invitation did not say so');
+select pg_temp.p79_refused(
+  format($$select public.platform_revoke_operator_invitation(%L, 'P79 twice')$$,
+         (select id from platform_operator_invitations where email = 'second-newcomer-p79@example.test')),
+  'invitation_not_pending');
+
 rollback;

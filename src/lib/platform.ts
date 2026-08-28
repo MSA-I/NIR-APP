@@ -862,3 +862,61 @@ export function setOperatorRoles(input: {
     p_reason: input.reason,
   });
 }
+
+// ===== Operator invitations (0215) =====
+
+export interface OperatorInvitation {
+  id: string;
+  email: string;
+  role_key: string;
+  role_label: string;
+  status: 'pending' | 'accepted' | 'revoked' | 'expired';
+  expires_at: string;
+  created_at: string;
+  invited_by: string | null;
+}
+
+/** What the command returns to the inviter, once. `token` is never readable again — the row
+    stores only its digest — so the console has exactly one chance to hand it over. */
+export interface IssuedInvitation {
+  id: string;
+  email: string;
+  token: string;
+  expires_at: string;
+}
+
+export async function fetchOperatorInvitations(): Promise<OperatorInvitation[]> {
+  return (await rpc<OperatorInvitation[]>('platform_operator_invitations', {})) ?? [];
+}
+
+export function inviteOperator(input: {
+  email: string; roleKey: string; reason: string;
+}): Promise<IssuedInvitation> {
+  return rpc<IssuedInvitation>('platform_invite_operator', {
+    p_email: input.email,
+    p_role_key: input.roleKey,
+    p_reason: input.reason,
+  });
+}
+
+export function revokeOperatorInvitation(id: string, reason: string): Promise<unknown> {
+  return rpc('platform_revoke_operator_invitation', { p_id: id, p_reason: reason });
+}
+
+export interface InvitationLookup {
+  status: 'valid' | 'expired' | 'revoked' | 'accepted' | 'unknown';
+  email?: string;
+  role_key?: string;
+  role_label?: string;
+  expires_at?: string;
+}
+
+/** Callable without a session: the person holding the link has no account yet, and a blank form
+    is a worse answer than "this invitation expired". */
+export function lookupOperatorInvitation(token: string): Promise<InvitationLookup> {
+  return rpc<InvitationLookup>('lookup_platform_operator_invitation', { p_token: token });
+}
+
+export function acceptOperatorInvitation(token: string): Promise<{ role_key: string }> {
+  return rpc<{ role_key: string }>('accept_platform_operator_invitation', { p_token: token });
+}
