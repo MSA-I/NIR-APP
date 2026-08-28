@@ -143,7 +143,6 @@
     "src/pages/Receiving.tsx": 1,
     "src/pages/ResetPassword.tsx": 11,
     "src/pages/Signup.tsx": 22,
-    "src/pages/Subscription.tsx": 1,
-    "src/pages/Suppliers.tsx": 29
+    "src/pages/Subscription.tsx": 1
   }
 }

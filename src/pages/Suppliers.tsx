@@ -178,7 +178,7 @@ export function SuppliersList() {
     { key: 'phone', header: t('suppliers.text_9'), render: (r) => <span dir="ltr">{r.phone || '—'}</span> },
     { key: 'min', header: t('suppliers.fmtMoneyExact'), priority: 3, className: 'num', sortValue: (r) => r.min_order_amount ?? 0, render: (r) => fmtMoneyExact(r.min_order_amount) },
     { key: 'risk', header: t('suppliers.text_10'), mobileLabel: null, render: (r) => <RiskCell m={r.metrics} /> },
-    { key: 'balance', header: 'יתרה פתוחה', sortValue: (r) => r.open_balance ?? 0, render: (r) => <span className={`num ${r.open_balance ? 'text-await-fg font-medium' : ''}`}>{fmtMoneyExact(r.open_balance)}</span>, className: 'num' },
+    { key: 'balance', header: t('suppliers.balanceHeader'), sortValue: (r) => r.open_balance ?? 0, render: (r) => <span className={`num ${r.open_balance ? 'text-await-fg font-medium' : ''}`}>{fmtMoneyExact(r.open_balance)}</span>, className: 'num' },
     { key: 'status', header: t('suppliers.text_11'), priority: 3, render: (r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} /> },
   ];
 
@@ -189,13 +189,16 @@ export function SuppliersList() {
     <div className="space-y-4">
       <PageHeader title={t('suppliers.title')}
         meta={financial
-          ? `${data?.length ?? 0} ספקים · ${(data ?? []).filter((supplier) => (supplier.open_balance ?? 0) > 0).length} עם יתרה פתוחה`
-          : `${data?.length ?? 0} ספקים`}
+          ? t('suppliers.listMetaFinancial', {
+            count: data?.length ?? 0,
+            withBalance: (data ?? []).filter((supplier) => (supplier.open_balance ?? 0) > 0).length,
+          })
+          : t('suppliers.listMeta', { count: data?.length ?? 0 })}
         actions={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> {t('suppliers.setEditing')}</button>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.contact_name ?? '').toLowerCase().includes(q) || (r.tax_id ?? '').toLowerCase().includes(q)}
         searchLabel={t('suppliers.searchLabel')}
-        rowLabel={(r) => `ספק ${r.name}`}
+        rowLabel={(r) => t('suppliers.rowLabel', { name: r.name })}
         onRowClick={(r) => navigate(`/suppliers/${r.id}`)}
         mobile="cards"
         mobileTitle={(r) => r.name}
@@ -233,7 +236,7 @@ export function SuppliersList() {
       <ConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}
         onConfirm={(reason) => void deleteSupplier(reason)}
         title={t('suppliers.title_2')}
-        message={`הספק ״${deleteTarget?.name ?? ''}״ יוסר מהרשימות (מחיקה רכה — ההיסטוריה הכספית נשמרת). הפעולה תתועד ביומן הביקורת.`}
+        message={t('suppliers.deleteMessage', { name: deleteTarget?.name ?? '' })}
         confirmLabel={t('suppliers.confirmLabel')} danger requireReason busy={busyDelete} />
     </div>
   );
@@ -461,7 +464,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   const days = [t('suppliers.text_15'), t('suppliers.text_16'), t('suppliers.text_17'), t('suppliers.text_18'), t('suppliers.text_19'), t('suppliers.text_20'), t('suppliers.text_21')];
 
   return (
-    <Modal open onClose={onClose} title={supplier ? `עריכת ספק — ${supplier.name}` : 'ספק חדש'} wide busy={busy} statusMessage={busy ? 'שומר את פרטי הספק' : undefined}>
+    <Modal open onClose={onClose} title={supplier ? t('suppliers.editTitle', { name: supplier.name }) : t('suppliers.newTitle')} wide busy={busy} statusMessage={busy ? t('suppliers.savingStatus') : undefined}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><label className="label" htmlFor="supplier-name">{t('suppliers.set')}</label><input id="supplier-name" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-tax-id">{t('suppliers.set_2')}</label><input id="supplier-tax-id" className="input" dir="ltr" value={f.tax_id} onChange={(e) => set('tax_id', e.target.value)} /></div>
@@ -556,7 +559,13 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         onClose={cancelBankStep}
         onConfirm={(reason) => setBankReauth(reason ?? '')}
         title={t('suppliers.title_3')}
-        message={`פרטי הבנק של ״${supplier?.name ?? f.name}״ ${bankStep?.nextBank ? `יעודכנו לחשבון ${bankStep.nextBank.country_code} שמסתיים ב־${(bankStep.nextBank.account_number ?? bankStep.nextBank.iban ?? '').slice(-4)}` : 'יוסרו'}. השינוי דורש אימות סיסמה טרי ונרשם ביומן הביקורת.`}
+        message={bankStep?.nextBank
+          ? t('suppliers.bankChangeMessage', {
+            name: supplier?.name ?? f.name,
+            country: bankStep.nextBank.country_code,
+            last4: (bankStep.nextBank.account_number ?? bankStep.nextBank.iban ?? '').slice(-4),
+          })
+          : t('suppliers.bankRemoveMessage', { name: supplier?.name ?? f.name })}
         confirmLabel={t('suppliers.confirmLabel_2')}
         requireReason
         busy={bankBusy}
@@ -658,12 +667,12 @@ export function SupplierCard() {
   }, [editParam, canWrite, setEditParam]);
 
   const tabs = useMemo(() => ([
-    { key: 'orders' as const, label: `הזמנות (${data?.orders.length ?? 0})` },
-    { key: 'invoices' as const, label: `חשבוניות (${data?.invoices.length ?? 0})` },
+    { key: 'orders' as const, label: t('suppliers.tabOrders', { count: data?.orders.length ?? 0 }) },
+    { key: 'invoices' as const, label: t('suppliers.tabInvoices', { count: data?.invoices.length ?? 0 }) },
     // — and not 0: a role that may not read payments has no count to claim.
-    { key: 'payments' as const, label: `תשלומים (${data?.payments ? data.payments.length : '—'})` },
-    { key: 'credits' as const, label: `זיכויים (${data?.credits.length ?? 0})` },
-    { key: 'prices' as const, label: `מחירים (${data?.prices.length ?? 0})` },
+    { key: 'payments' as const, label: t('suppliers.tabPayments', { count: data?.payments ? data.payments.length : '—' }) },
+    { key: 'credits' as const, label: t('suppliers.tabCredits', { count: data?.credits.length ?? 0 }) },
+    { key: 'prices' as const, label: t('suppliers.tabPrices', { count: data?.prices.length ?? 0 }) },
   ]), [data]);
 
   if (loading) return <RecordSkeleton />;
@@ -682,16 +691,16 @@ export function SupplierCard() {
     {
       label: t('suppliers.text_39'),
       value: m && m.otd_samples > 0 ? fmtPct(m.on_time_pct) : '—',
-      sub: m && m.otd_samples > 0 ? `${m.otd_samples} אספקות` : 'אין תאריך אספקה מוזן',
+      sub: m && m.otd_samples > 0 ? t('suppliers.otdSamples', { count: m.otd_samples }) : t('suppliers.noDeliveryDate'),
       tone: otdTone(m),
     },
     { label: t('suppliers.fmtLeadDays'), value: fmtLeadDays(m?.avg_lead_days ?? null), sub: t('suppliers.fmtLeadDays_2'), tone: 'idle' },
     // No supplier_metrics row = the counts were never computed, which is not the same claim as
     // "zero open exceptions". fmtNum(null) renders — so the tile stays honest (constitution §"אין ערכים
     // סטטיים מזויפים"), matching how OTD and lead time above already behave.
-    { label: 'חריגים פתוחים', value: fmtNum(m?.open_exceptions ?? null), sub: m ? `${fmtNum(m.exceptions_lifetime)} בסה״כ` : 'טרם חושבו מדדים', tone: (m?.open_exceptions ?? 0) > 0 ? 'alert' : 'idle' },
+    { label: t('suppliers.openExceptions'), value: fmtNum(m?.open_exceptions ?? null), sub: m ? t('suppliers.exceptionsLifetime', { count: fmtNum(m.exceptions_lifetime) }) : t('suppliers.metricsNotComputed'), tone: (m?.open_exceptions ?? 0) > 0 ? 'alert' : 'idle' },
     { label: t('suppliers.fmtNum'), value: fmtNum(m?.open_credits ?? null), sub: fmtMoneyExact(m?.open_credits_amount ?? null), tone: (m?.open_credits ?? 0) > 0 ? 'await' : 'idle' },
-    { label: 'שינויי מחיר (90 הימים האחרונים)', value: fmtNum(m?.price_changes_window ?? null), sub: m ? `${fmtNum(m.priced_items)} פריטים` : 'טרם חושבו מדדים', tone: 'idle' },
+    { label: t('suppliers.priceChanges90'), value: fmtNum(m?.price_changes_window ?? null), sub: m ? t('suppliers.pricedItems', { count: fmtNum(m.priced_items) }) : t('suppliers.metricsNotComputed'), tone: 'idle' },
     { label: t('suppliers.fmtMoneyExact_3'), value: fmtMoneyExact(s.min_order_amount), tone: 'idle' },
     { label: t('suppliers.text_40'), value: s.payment_terms ?? '—', tone: 'idle', numeric: false },
   ];
@@ -704,7 +713,7 @@ export function SupplierCard() {
         status={<><StatusBadge meta={SUPPLIER_STATUS[s.status]} /><span className="inline-flex items-center gap-2">
               <RatingStars value={s.rating} />
               {s.rating != null && s.rating_updated_at && (
-                <span className="text-xs font-normal text-ink-muted" title={s.rating_note ?? undefined}>עודכן {fmtDate(s.rating_updated_at)}</span>
+                <span className="text-xs font-normal text-ink-muted" title={s.rating_note ?? undefined}>{t('suppliers.ratingUpdated', { date: fmtDate(s.rating_updated_at) })}</span>
               )}
             </span></>}
         meta={<>
@@ -712,8 +721,8 @@ export function SupplierCard() {
             {s.phone && <span className="flex items-center gap-1"><Phone size={ICON.xs} aria-hidden="true" /><span dir="ltr">{s.phone}</span></span>}
             {s.email && <span className="flex items-center gap-1"><Mail size={ICON.xs} aria-hidden="true" /><span dir="ltr">{s.email}</span></span>}
             {s.address && <span className="flex items-center gap-1"><MapPin size={ICON.xs} aria-hidden="true" />{s.address}</span>}
-            {s.delivery_days.length > 0 && <span className="flex items-center gap-1"><Truck size={ICON.xs} aria-hidden="true" />ימי אספקה {fmtDays(s.delivery_days)}</span>}
-            {s.cutoff_time && <span className="flex items-center gap-1"><Clock size={ICON.xs} aria-hidden="true" />סגירת הזמנות {s.cutoff_time.slice(0, 5)}</span>}
+            {s.delivery_days.length > 0 && <span className="flex items-center gap-1"><Truck size={ICON.xs} aria-hidden="true" />{t('suppliers.deliveryDays', { days: fmtDays(s.delivery_days) })}</span>}
+            {s.cutoff_time && <span className="flex items-center gap-1"><Clock size={ICON.xs} aria-hidden="true" />{t('suppliers.orderCutoff', { time: s.cutoff_time.slice(0, 5) })}</span>}
           </>}
         primaryAction={canWrite && canStartSupplierCommerce(s.status)
           ? <button className="btn-primary" onClick={() => setUploadOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> {t('suppliers.setUploadOpen')}</button>
@@ -723,7 +732,7 @@ export function SupplierCard() {
                 inside a form of twenty fields. Navigates rather than calling setEditing directly,
                 so the address is the one another screen can link to. */}
             <button className="btn-secondary" onClick={() => navigate(`/suppliers/${s.id}?edit=bank`)}>
-              <Landmark size={ICON.sm} aria-hidden="true" /> עדכון פרטי בנק
+              <Landmark size={ICON.sm} aria-hidden="true" /> {t('suppliers.updateBankDetails')}
             </button>
             <button className="btn-secondary" onClick={() => setEditing(true)}>{t('suppliers.setEditing_4')}</button>
           </>} />
@@ -739,16 +748,16 @@ export function SupplierCard() {
       {/* Tabs generates exactly these ids (tabId/panelId with idPrefix "supplier"), so the
           panels below keep the wiring they already had. */}
       <Tabs items={tabs} value={tab} onChange={(key) => setTab(key as typeof tab)}
-        label={`מידע עבור ${s.name}`} idPrefix="supplier" />
+        label={t('suppliers.tabsLabel', { name: s.name })} idPrefix="supplier" />
 
       {tab === 'orders' && (
         <TabPanel idPrefix="supplier" tabKey="orders">
         <DataTable rows={data.orders} columns={[
-          { key: 'num', header: 'מס׳', className: 'num', render: (r: PurchaseOrder) => `#${r.number}` },
+          { key: 'num', header: t('suppliers.numberHeader'), className: 'num', render: (r: PurchaseOrder) => `#${r.number}` },
           { key: 'date', header: t('suppliers.fmtDate'), sortValue: (r: PurchaseOrder) => r.created_at, render: (r: PurchaseOrder) => fmtDate(r.created_at) },
           { key: 'expected', header: t('suppliers.fmtDate_2'), render: (r: PurchaseOrder) => fmtDate(r.expected_date) },
           { key: 'status', header: t('suppliers.text_43'), render: (r: PurchaseOrder) => <StatusBadge meta={PO_STATUS[r.status]} /> },
-        ]} rowLabel={(r) => `הזמנת רכש מספר ${r.number} עבור ${s.name}`} onRowClick={(r) => navigate(`/orders/${r.id}`)} emptyTitle="אין הזמנות לספק זה" />
+        ]} rowLabel={(r) => t('suppliers.orderRowLabel', { number: r.number, supplier: s.name })} onRowClick={(r) => navigate(`/orders/${r.id}`)} emptyTitle={t('suppliers.noOrders')} />
         </TabPanel>
       )}
       {tab === 'invoices' && (
@@ -758,7 +767,7 @@ export function SupplierCard() {
              prose (noteProse.spec — .note is a flex row and shreds raw text into columns). */
           <Note tone="info">
             <span>
-              <span className="num">{data.consolidatedCount}</span> מסמכי חשבונית של ספק זה אוחדו לחשבונית
+              <span className="num">{data.consolidatedCount}</span> {t('suppliers.consolidatedLead')}
               {t('suppliers.text_44')}{' '}
               <button className="underline" onClick={() => navigate('/documents/consolidated-invoices')}>{t('suppliers.navigate')}</button>
             </span>
@@ -770,7 +779,7 @@ export function SupplierCard() {
           { key: 'total', header: t('suppliers.fmtMoneyExact_4'), className: 'num', sortValue: (r: Invoice) => r.total_amount, render: (r: Invoice) => fmtMoneyExact(r.total_amount) },
           { key: 'review', header: t('suppliers.text_46'), render: (r: Invoice) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
           { key: 'payment', header: t('suppliers.text_47'), render: (r: Invoice) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
-        ]} rowLabel={(r) => `חשבונית ${r.invoice_number} של ${s.name}`} onRowClick={(r) => navigate(`/invoices/${r.id}`)} emptyTitle="אין חשבוניות לספק זה" />
+        ]} rowLabel={(r) => t('suppliers.invoiceRowLabel', { number: r.invoice_number, supplier: s.name })} onRowClick={(r) => navigate(`/invoices/${r.id}`)} emptyTitle={t('suppliers.noInvoices')} />
         </TabPanel>
       )}
       {tab === 'payments' && (
@@ -790,12 +799,12 @@ export function SupplierCard() {
       {tab === 'credits' && (
         <TabPanel idPrefix="supplier" tabKey="credits">
         <DataTable rows={data.credits} columns={[
-          { key: 'num', header: 'מס׳', className: 'num', render: (r: CreditRequest) => `#${r.number}` },
+          { key: 'num', header: t('suppliers.numberHeader'), className: 'num', render: (r: CreditRequest) => `#${r.number}` },
           { key: 'reason', header: t('suppliers.statusLabel'), render: (r: CreditRequest) => statusLabel(CREDIT_REASON[r.reason]) },
           { key: 'amount', header: t('suppliers.fmtMoneyExact_6'), className: 'num', sortValue: (r: CreditRequest) => r.amount, render: (r: CreditRequest) => fmtMoneyExact(r.amount) },
           { key: 'status', header: t('suppliers.text_51'), render: (r: CreditRequest) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
           { key: 'date', header: t('suppliers.fmtDate_5'), sortValue: (r: CreditRequest) => r.created_at, render: (r: CreditRequest) => fmtDate(r.created_at) },
-        ]} rowLabel={(r) => `דרישת זיכוי מספר ${r.number} עבור ${s.name}`} onRowClick={() => navigate('/credits')} emptyTitle="אין זיכויים לספק זה" />
+        ]} rowLabel={(r) => t('suppliers.creditRowLabel', { number: r.number, supplier: s.name })} onRowClick={() => navigate('/credits')} emptyTitle={t('suppliers.noCredits')} />
         </TabPanel>
       )}
       {tab === 'prices' && (
@@ -889,7 +898,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
       <div className="flex flex-wrap gap-4 text-sm">
         <span className="text-ink-soft">{t('suppliers.text_54')} <b className="text-trend-up-fg">{summary.up}</b></span>
         <span className="text-ink-soft">{t('suppliers.text_55')} <b className="text-trend-down-fg">{summary.down}</b></span>
-        <span className="text-ink-soft">שינוי חציוני: <b className="num">{summary.median == null ? '—' : `${summary.median > 0 ? '+' : ''}${summary.median.toFixed(1)}%`}</b></span>
+        <span className="text-ink-soft">{t('suppliers.medianChange')} <b className="num">{summary.median == null ? '—' : `${summary.median > 0 ? '+' : ''}${summary.median.toFixed(1)}%`}</b></span>
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => productLabel(r.product).toLowerCase().includes(q) || r.product.name.toLowerCase().includes(q)}
@@ -904,11 +913,11 @@ function SupplierPricesTab({ rows, history, submissions }: {
               {submissions.map((submission) => (
                 <div key={submission.id} className="py-2.5 first:pt-0 last:pb-0">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-medium text-ink">{submissionMonthLabel(submission.target_month)} · גרסה <span className="num">{submission.revision}</span></div>
+                    <div className="font-medium text-ink">{submissionMonthLabel(submission.target_month)} · {t('suppliers.revisionWord')} <span className="num">{submission.revision}</span></div>
                     <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
                   </div>
                   <div className="mt-1 text-sm text-ink-muted break-words">
-                    {submission.file_name ?? t('suppliers.text_57')} · נקלטו <span className="num">{submission.accepted_count}</span> {t('suppliers.text_58')} <span className="num">{submission.unchanged_count}</span> {t('suppliers.text_59')} <span className="num">{submission.rejected_count}</span>
+                    {submission.file_name ?? t('suppliers.text_57')} · {t('suppliers.acceptedWord')} <span className="num">{submission.accepted_count}</span> {t('suppliers.text_58')} <span className="num">{submission.unchanged_count}</span> {t('suppliers.text_59')} <span className="num">{submission.rejected_count}</span>
                   </div>
                 </div>
               ))}
