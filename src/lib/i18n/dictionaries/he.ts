@@ -5570,6 +5570,48 @@ export const he = {
     trend: 'מגמת מחיר: {direction}{magnitude} לאורך {count} שינויי מחיר',
   },
 
+  documentSourceViewer: {
+    title: 'המסמך המקורי',
+    page: 'עמוד',
+    pageOf: '{page} מתוך {count}',
+    opening: 'פותח…',
+    openSource: 'פתיחת המקור',
+    imageAlt: 'המסמך המקורי {fileName}',
+    loadingPdf: 'טוען את קובץ ה־PDF…',
+    noPreview: 'לקובץ זה אין תצוגה מקדימה בדפדפן. אפשר לפתוח את המקור בקישור שמעל.',
+    loadingSource: 'טוען קישור מאובטח למקור…',
+  },
+
+  notificationEvents: {
+    duplicateInvoice: 'חשד לחשבונית כפולה',
+    duplicateInvoiceDetail: 'אותו ספק ואותו מספר חשבונית נקלטו יותר מפעם אחת',
+    paymentDue: 'תשלום שמועד הפירעון שלו מתקרב או עבר',
+    paymentDueDetail: 'נבדק פעם ביום, רק על דרישות תשלום שהוזן להן תאריך',
+    priceIncrease: 'עליית מחיר במחירון של ספק',
+    priceIncreaseDetail: 'לפי המחירון — לא לפי מה שנגבה בחשבונית',
+    documentStalled: 'עיבוד המסמכים נעצר',
+    documentStalledDetail: 'מסמכים ממתינים בתור ואיש אינו קורא אותם — נבדק כל חמש דקות',
+  },
+
+  whatsappConnection: {
+    pending: 'הוגדר, טרם הופעל',
+    active: 'פעיל',
+    disabled: 'מושבת',
+    error: 'תקלה בחיבור',
+    notConnected: 'לא מחובר',
+    credentialStored: 'שמור בכספת, אינו ניתן לצפייה',
+    hebrew: 'עברית',
+    english: 'אנגלית',
+  },
+
+  exportTemplateWorkbook: {
+    macroEnabled: 'הקובץ מכיל מאקרו (‎.xlsm או ‎.xlsb). שמרו אותו מחדש כ-‎.xlsx רגיל והעלו שוב — התבנית נשלחת לרואה החשבון בשם המערכת, ולכן אינה יכולה לשאת קוד.',
+    externalLinks: 'הקובץ מפנה לחוברות חיצוניות. הפניה כזו עובדת רק במחשב שבו נוצרה, ובכל מקום אחר תיתן מספר ישן בלי להתריע. החליפו את ההפניות בערכים או ב-‎{{שדה}} והעלו שוב.',
+    unreadable: 'לא ניתן לקרוא את הקובץ. ודאו שזו חוברת Excel תקינה ולא קובץ מוגן בסיסמה.',
+    noSheets: 'אין בחוברת אף גיליון קריא, ולכן אין מה למפות.',
+    tooLarge: 'הקובץ גדול מ-20MB. תבנית היא שלד מעוצב, לא הדוח עצמו.',
+  },
+
 } as const;
 
 /**

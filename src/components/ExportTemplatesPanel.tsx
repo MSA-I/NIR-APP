@@ -12,6 +12,7 @@ import {
 } from '../lib/exportTemplates';
 import {
   WORKBOOK_MIME_TYPES,
+  WORKBOOK_REJECTION_KEY,
   WorkbookRejected,
   parseTemplateWorkbook,
   type ParsedWorkbook,
@@ -92,10 +93,10 @@ export function ExportTemplatesPanel({ orgId }: { orgId: string }) {
       });
     } catch (caught) {
       // A rejected workbook is not an error state of the panel — it is an answer, and it names what
-      // to do next. See WORKBOOK_REJECTION_MESSAGE.
-      setRejection(caught instanceof WorkbookRejected ? caught.message : errorText(caught));
+      // to do next. See WORKBOOK_REJECTION_KEY.
+      setRejection(caught instanceof WorkbookRejected ? t(WORKBOOK_REJECTION_KEY[caught.reason]) : errorText(caught));
     }
-  }, []);
+  }, [errorText, t]);
 
   const submit = useCallback(async () => {
     if (!draft) return;

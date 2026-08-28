@@ -368,6 +368,18 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   1 on 122/34, so this gate remains open. The design hook's pre-existing bounce easing in Layout
   stayed outside the translation diff and was neither changed nor suppressed.
 
+  **PROGRESS, 29.08.2026 — notifications + WhatsApp connection + source viewer + workbook
+  refusals in this commit.** The pinned count is now 667 Hebrew line(s) across 68 files. The
+  protected set is now 576 lines in 38 files: one workbook-placeholder regex stays as Hebrew input
+  recognition. The real remainder is **91 lines in 30 files**. Notification event rows carry paired
+  label/detail keys; WhatsApp connection summaries receive the reader translator while provider,
+  masked sender and language-code facts stay raw; DocumentSourceViewer moved every control/status/
+  aria sentence; workbook refusals carry typed rejection reasons and resolve in the panel. These
+  are surfaces 87–89 locked at zero; exportTemplateWorkbook stays protected at one line. The stale-
+  baseline negative control measured 8→1, 8→0, 8→0 and 7→0. Focused suites passed 33/33; the full
+  suite passed 1,760/1,760; `npx tsc --noEmit` and `check:jsx-space` passed. Dictionary parity
+  passed at 5,261 keys per locale; `zero` still exits 1 on 91/30, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

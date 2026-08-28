@@ -12,7 +12,7 @@ import {
   revokeWhatsAppConnection,
   setWhatsAppConnectionEnabled,
   summarizeConnection,
-  WHATSAPP_CONNECTION_STATUS_LABEL,
+  WHATSAPP_CONNECTION_STATUS_KEY,
   type WhatsAppConnectionStatus,
   type WhatsAppProvider,
 } from '../lib/whatsappConnection';
@@ -60,7 +60,7 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
   const toast = useToast();
   const isOwner = role === 'owner';
   const { data: connection, loading, refetch } = useQuery(() => fetchWhatsAppConnection(), []);
-  const summary = summarizeConnection(connection ?? null);
+  const summary = summarizeConnection(connection ?? null, t);
 
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -150,10 +150,9 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
 
   if (loading) return null;
 
-  // Not a StatusMeta: WHATSAPP_CONNECTION_STATUS_LABEL is this card's own vocabulary and has not
-  // been extracted yet, so it is still literal text. StatusBadge takes both shapes on purpose.
+  // Not a StatusMeta: this card owns the provider vocabulary and resolves its typed key here.
   const statusMeta: { label: string; tone: StatusMeta['tone'] } | undefined = connection?.status
-    ? { label: WHATSAPP_CONNECTION_STATUS_LABEL[connection.status], tone: STATUS_TONE[connection.status] }
+    ? { label: t(WHATSAPP_CONNECTION_STATUS_KEY[connection.status]), tone: STATUS_TONE[connection.status] }
     : undefined;
 
   return (

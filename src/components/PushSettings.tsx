@@ -203,9 +203,9 @@ export function NotificationMatrix() {
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-x-4 sm:gap-y-2">
                   <div className="min-w-0 sm:flex-1">
                     <div className="text-sm font-medium text-ink-body">
-                      {copy?.label ?? preference.event_code}
+                      {copy ? t(copy.labelKey) : preference.event_code}
                     </div>
-                    {copy && <div className="text-xs text-ink-muted mt-0.5">{copy.detail}</div>}
+                    {copy && <div className="text-xs text-ink-muted mt-0.5">{t(copy.detailKey)}</div>}
                     <div className="text-xs text-ink-soft mt-1">{t(deliveryKey(preference))}</div>
                     {!preference.configured && (
                       <div className="text-xs text-ink-faint mt-0.5">{t('pushSettings.text_13')}</div>
@@ -227,7 +227,7 @@ export function NotificationMatrix() {
                           type="button"
                           role="switch"
                           aria-checked={on}
-                          aria-label={t('pushSettings.channelAria', { channel: t(CHANNEL_KEY[channel]), event: copy?.label ?? preference.event_code })}
+                          aria-label={t('pushSettings.channelAria', { channel: t(CHANNEL_KEY[channel]), event: copy ? t(copy.labelKey) : preference.event_code })}
                           disabled={busy}
                           className={on ? 'btn-secondary' : 'btn-ghost'}
                           onClick={() => void change(preference, channel, !on)}

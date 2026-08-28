@@ -5566,4 +5566,46 @@ export const en: Dictionary = {
     trend: 'Price trend: {direction}{magnitude} across {count} price changes',
   },
 
+  documentSourceViewer: {
+    title: 'Original document',
+    page: 'Page',
+    pageOf: '{page} of {count}',
+    opening: 'Opening…',
+    openSource: 'Open source',
+    imageAlt: 'Original document {fileName}',
+    loadingPdf: 'Loading the PDF…',
+    noPreview: 'This file cannot be previewed in the browser. Open the source using the link above.',
+    loadingSource: 'Loading a secure source link…',
+  },
+
+  notificationEvents: {
+    duplicateInvoice: 'Possible duplicate invoice',
+    duplicateInvoiceDetail: 'The same supplier and invoice number were received more than once',
+    paymentDue: 'A payment is approaching or past its due date',
+    paymentDueDetail: 'Checked once a day, only for payment requests that have a date',
+    priceIncrease: 'A price increased in a supplier price list',
+    priceIncreaseDetail: 'Based on the price list — not on what was charged on an invoice',
+    documentStalled: 'Document processing stopped',
+    documentStalledDetail: 'Documents are waiting in queue and no one is reading them — checked every five minutes',
+  },
+
+  whatsappConnection: {
+    pending: 'Configured, not yet active',
+    active: 'Active',
+    disabled: 'Disabled',
+    error: 'Connection error',
+    notConnected: 'Not connected',
+    credentialStored: 'Stored in the vault and cannot be viewed',
+    hebrew: 'Hebrew',
+    english: 'English',
+  },
+
+  exportTemplateWorkbook: {
+    macroEnabled: 'The file contains a macro (.xlsm or .xlsb). Save it again as a regular .xlsx file and upload it again — the template is sent to the accountant in the system\'s name, so it cannot carry code.',
+    externalLinks: 'The file refers to external workbooks. Such a reference works only on the computer where it was created and can show an old number elsewhere without warning. Replace the references with values or a {{field}} placeholder and upload it again.',
+    unreadable: 'The file could not be read. Make sure it is a valid Excel workbook and not password protected.',
+    noSheets: 'The workbook has no readable worksheet, so there is nothing to map.',
+    tooLarge: 'The file is larger than 20MB. A template is a designed framework, not the report itself.',
+  },
+
 };

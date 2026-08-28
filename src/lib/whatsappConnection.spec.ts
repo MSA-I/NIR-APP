@@ -2,14 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
   summarizeConnection,
   toConnectionView,
-  WHATSAPP_CONNECTION_STATUS_LABEL,
+  WHATSAPP_CONNECTION_STATUS_KEY,
   WHATSAPP_PROVIDER_LABEL,
 } from './whatsappConnection';
 import libSource from './whatsappConnection.ts?raw';
+import { translateIn } from './i18n/LocaleProvider';
+
+const tHe = (key: Parameters<typeof translateIn>[1], vars?: Record<string, string | number>) =>
+  translateIn('he', key, vars);
 
 describe('summarizeConnection', () => {
   it('says nothing it does not know: an unconfigured tenant shows — and never 0', () => {
-    const summary = summarizeConnection(null);
+    const summary = summarizeConnection(null, tHe);
     expect(summary.configured).toBe(false);
     expect(summary.providerLabel).toBe('—');
     expect(summary.maskedSender).toBe('—');
@@ -22,9 +26,9 @@ describe('summarizeConnection', () => {
     const summary = summarizeConnection(toConnectionView({
       configured: true, provider: 'twilio', status: 'pending',
       masked_sender: '••••0001', credential_configured: true, language_code: 'he',
-    }));
+    }), tHe);
     expect(summary.providerDeliveryAvailable).toBe(false);
-    expect(summary.statusLabel).toBe(WHATSAPP_CONNECTION_STATUS_LABEL.pending);
+    expect(summary.statusLabel).toBe(tHe(WHATSAPP_CONNECTION_STATUS_KEY.pending));
     expect(summary.providerLabel).toBe(WHATSAPP_PROVIDER_LABEL.twilio);
   });
 
@@ -32,7 +36,7 @@ describe('summarizeConnection', () => {
     const summary = summarizeConnection(toConnectionView({
       configured: true, provider: 'twilio', status: 'active',
       masked_sender: '••••0001', credential_configured: true, language_code: 'he',
-    }));
+    }), tHe);
     expect(summary.providerDeliveryAvailable).toBe(true);
     expect(summary.credentialLabel).toBe('שמור בכספת, אינו ניתן לצפייה');
     expect(summary.languageLabel).toBe('עברית');
@@ -42,7 +46,7 @@ describe('summarizeConnection', () => {
     const summary = summarizeConnection(toConnectionView({
       configured: true, provider: 'twilio', status: 'active',
       masked_sender: '••••0001', credential_configured: false, language_code: 'he',
-    }));
+    }), tHe);
     expect(summary.providerDeliveryAvailable).toBe(false);
     expect(summary.credentialLabel).toBe('—');
   });
@@ -52,18 +56,18 @@ describe('summarizeConnection', () => {
       const summary = summarizeConnection(toConnectionView({
         configured: true, provider: 'twilio', status,
         masked_sender: '••••0001', credential_configured: true, language_code: 'he',
-      }));
+      }), tHe);
       expect(summary.providerDeliveryAvailable).toBe(false);
-      expect(summary.statusLabel).toBe(WHATSAPP_CONNECTION_STATUS_LABEL[status]);
+      expect(summary.statusLabel).toBe(tHe(WHATSAPP_CONNECTION_STATUS_KEY[status]));
     }
   });
 
   it('the manual share stays available in every state -- it is a separate channel', () => {
-    expect(summarizeConnection(null).manualShareAvailable).toBe(true);
+    expect(summarizeConnection(null, tHe).manualShareAvailable).toBe(true);
     expect(summarizeConnection(toConnectionView({
       configured: true, provider: 'twilio', status: 'active',
       masked_sender: '••••0001', credential_configured: true, language_code: 'he',
-    })).manualShareAvailable).toBe(true);
+    }), tHe).manualShareAvailable).toBe(true);
   });
 });
 

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { ExternalLink, FileText, Loader2 } from 'lucide-react';
 import { ICON, Note } from '../ui';
+import { useT } from '../../lib/i18n/LocaleProvider';
 
 // Lazy on purpose: pdf.js is ~1MB of rendering engine that image documents never need. The
 // import happens only when a PDF actually reaches the viewer, and lands in its own chunk.
@@ -51,6 +52,7 @@ export function DocumentSourceViewer({
   onPageChange,
   onOpenSource,
 }: DocumentSourceViewerProps) {
+  const { t } = useT();
   const isImage = mimeType?.startsWith('image/') ?? false;
   const isPdf = mimeType === 'application/pdf';
   const hasPages = pageCount > 1;
@@ -59,21 +61,21 @@ export function DocumentSourceViewer({
     <section className="min-w-0 space-y-4" data-testid="document-source-viewer" aria-labelledby="document-source-title">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 id="document-source-title" className="section-title">המסמך המקורי</h2>
+          <h2 id="document-source-title" className="section-title">{t('documentSourceViewer.title')}</h2>
           <p className="mt-1 break-words text-sm text-ink-muted">{fileName}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {/* Only when there is somewhere to go. A lone "עמוד 1" is a control that does nothing. */}
           {hasPages && (
             <label className="flex min-h-11 items-center gap-2 text-sm font-medium text-ink-soft">
-              <span>עמוד</span>
+              <span>{t('documentSourceViewer.page')}</span>
               <select
                 className="input min-w-0 sm:min-w-24"
                 value={page}
                 onChange={(event) => onPageChange(Number(event.target.value))}
               >
                 {Array.from({ length: pageCount }, (_, index) => index + 1).map((number) => (
-                  <option key={number} value={number}>{number} מתוך {pageCount}</option>
+                  <option key={number} value={number}>{t('documentSourceViewer.pageOf', { page: number, count: pageCount })}</option>
                 ))}
               </select>
             </label>
@@ -82,7 +84,7 @@ export function DocumentSourceViewer({
             {openingSource
             ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />
               : <ExternalLink size={ICON.md} aria-hidden="true" />}
-            {openingSource ? 'פותח…' : 'פתיחת המקור'}
+            {openingSource ? t('documentSourceViewer.opening') : t('documentSourceViewer.openSource')}
           </button>
         </div>
       </div>
@@ -92,13 +94,13 @@ export function DocumentSourceViewer({
       <div className="card overflow-hidden">
         {sourceUrl && isImage ? (
           <div className="mx-auto w-full max-w-4xl bg-surface-sunken">
-            <img className="block h-auto w-full" src={sourceUrl} alt={`המסמך המקורי ${fileName}`} />
+            <img className="block h-auto w-full" src={sourceUrl} alt={t('documentSourceViewer.imageAlt', { fileName })} />
           </div>
         ) : sourceUrl && isPdf ? (
           <Suspense
             fallback={
               <div className="flex min-h-64 items-center justify-center p-6 text-sm text-ink-muted" role="status">
-                טוען את קובץ ה־PDF…
+                {t('documentSourceViewer.loadingPdf')}
               </div>
             }
           >
@@ -107,7 +109,7 @@ export function DocumentSourceViewer({
         ) : (
           <div className="flex min-h-64 flex-col items-center justify-center gap-3 p-6 text-center text-ink-muted">
             <FileText size={ICON.hero} aria-hidden="true" />
-            <p>{sourceUrl ? 'לקובץ זה אין תצוגה מקדימה בדפדפן. אפשר לפתוח את המקור בקישור שמעל.' : 'טוען קישור מאובטח למקור…'}</p>
+            <p>{sourceUrl ? t('documentSourceViewer.noPreview') : t('documentSourceViewer.loadingSource')}</p>
           </div>
         )}
       </div>
