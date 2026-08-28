@@ -60,6 +60,7 @@ const EXTRACTED = [
   'src/components/EmailOrderCard.tsx',
   'src/lib/orderEmail.ts',
   'src/pages/Suppliers.tsx',
+  'src/components/SupplierPortalCard.tsx',
   'src/components/ReceiptConflictDialog.tsx',
   'src/pages/SupplierProposalReview.tsx',
   'src/pages/neworder/SupplierSplitStep.tsx',

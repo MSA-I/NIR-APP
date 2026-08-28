@@ -64,7 +64,6 @@
     "src/components/ReauthModal.tsx": 10,
     "src/components/supplier-metrics.tsx": 9,
     "src/components/SupplierCommunicationCard.tsx": 25,
-    "src/components/SupplierPortalCard.tsx": 28,
     "src/components/ui.tsx": 9,
     "src/components/UploadCenter.tsx": 20,
     "src/components/WhatsAppSendDialog.tsx": 13,
