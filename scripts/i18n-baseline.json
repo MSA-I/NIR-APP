@@ -133,7 +133,6 @@
     "src/pages/documentOperationsModel.ts": 5,
     "src/pages/DocumentReview.tsx": 16,
     "src/pages/DocumentsInbox.tsx": 16,
-    "src/pages/Exceptions.tsx": 48,
     "src/pages/FinancialSupplier.tsx": 31,
     "src/pages/ForgotPassword.tsx": 9,
     "src/pages/Inventory.tsx": 6,

@@ -41,6 +41,7 @@ const EXTRACTED = [
   'src/pages/WebhookSettings.tsx',
   'src/pages/neworder/NewOrder.tsx',
   'src/pages/Expenses.tsx',
+  'src/pages/Exceptions.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */
