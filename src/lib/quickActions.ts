@@ -117,7 +117,20 @@ export function isRouteFamilyActive(pathname: string, to: string): boolean {
     return pathname === targetPath || /^\/documents\/[^/]+\/review$/.test(pathname);
   }
   if (targetPath === '/documents/archive') return pathname === targetPath;
-  if (['/orders', '/receiving', '/invoices', '/suppliers'].includes(targetPath)) {
+  /**
+   * '/orders' owns its record pages and NOT '/orders/new' — the same carve-out '/documents'
+   * already makes for its archive, and for the same reason.
+   *
+   * It became load-bearing on 28.08.2026, when the reordered menu put "הזמנה חדשה" on the bar
+   * beside "הזמנות" (owner approval). Without this line, standing on /orders/new marked both,
+   * and two current-page markers is a contradiction: announced twice by a screen reader, and the
+   * first match wins the drawer's initial focus. A new order is not a record inside the order
+   * list; it is the screen that has not produced one yet.
+   */
+  if (targetPath === '/orders') {
+    return pathname === targetPath || (pathname.startsWith('/orders/') && pathname !== '/orders/new');
+  }
+  if (['/receiving', '/invoices', '/suppliers'].includes(targetPath)) {
     return pathname === targetPath || pathname.startsWith(`${targetPath}/`);
   }
   return pathname === targetPath;

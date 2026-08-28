@@ -99,15 +99,19 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
   });
 
   it('הארכיון אינו מדליק בטעות את תיקיית המסמכים', () => {
+    // The archive joined the menu in the 28.08.2026 reorganisation, so it now marks ITSELF. The
+    // defect this test was written for is unchanged and still guarded: the two are separate rows
+    // and standing on one must never light the other.
     renderAt('/documents/archive');
-    expect(currentLabels()).toEqual([]);
+    expect(currentLabels()).toEqual(['ארכיון מסמכים']);
   });
 
   it('בתיקיית המסמכים מסומנת תיקיית המסמכים', () => {
+    // The full name, on every surface. NAV_SHORT_LABELS existed while /documents was a plain link
+    // on a slim pill; it now lives inside the 'מסמכים' group panel, which always rendered the
+    // catalogue's own name — so there is no second set of labels left to drift.
     renderAt('/documents');
-    // T7.2: the floating pill shows the SHORT navigation label ("מסמכים"); the full name stays in
-    // the drawer, the page title and the routePresentation catalogue.
-    expect(currentLabels()).toEqual(['מסמכים']);
+    expect(currentLabels()).toEqual(['תיקיית המסמכים']);
   });
 
   it('יעד בקרה נדיר גלוי בסרגל הדסקטופ בלי disclosure כלל', () => {
@@ -122,20 +126,24 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
   });
 
   /**
-   * DESIGN.md:507 — "דיסקלוזר מעל פריט אחד הוא דלת עם מכסה". 'המנוי' held exactly one route
-   * (`/settings/subscription`) and still shipped as a button with a chevron and a panel, so the
-   * owner's subscription screen cost two clicks and a disclosure to reach. The rendered half of
-   * the rule: no `aria-expanded` trigger for a one-item group, and the destination is a link in
-   * the bar itself. `layout.spec.ts` asserts which groups those are.
+   * The rendered half of the 28.08.2026 grouping: four subject groups on the bar, the control room
+   * and the new-order action as plain links beside them, and the account group NOT on the bar at
+   * all — it is reached through the avatar disc, and printing it in both places on one screen is
+   * the duplication this reorganisation exists to remove.
+   *
+   * DESIGN.md:507 still holds ("דיסקלוזר מעל פריט אחד הוא דלת עם מכסה") and `layout.spec.ts`
+   * asserts the data half: under the subject grouping no owner group is down to one row.
    */
-  it('קבוצה בת פריט אחד היא קישור בגלולה, לא כפתור עם מכסה', () => {
+  it('ארבע קבוצות נושא בסרגל, והחשבון אינו אחת מהן', () => {
     renderAt('/dashboard');
     const bar = document.querySelector('nav[aria-label="ניווט ראשי"]')!;
-    expect(bar.querySelector('#top-nav-group-המנוי')).toBeNull();
     expect([...bar.querySelectorAll('button[aria-expanded]')].map((b) => b.textContent?.trim()))
-      .toEqual(['ניהול', 'בקרה']);
-    const subscription = within(bar as HTMLElement).getByRole('link', { name: 'המנוי' });
-    expect(subscription).toHaveAttribute('href', '/settings/subscription');
+      .toEqual(['רכש', 'מסמכים', 'כספים', 'בקרה ודוחות']);
+    expect(bar.querySelector('#top-nav-group-החשבון')).toBeNull();
+    expect(within(bar as HTMLElement).queryByRole('link', { name: 'הגדרות מערכת' })).toBeNull();
+    // The two that stand alone above the groups.
+    expect(within(bar as HTMLElement).getByRole('link', { name: 'מרכז הבקרה' })).toBeInTheDocument();
+    expect(within(bar as HTMLElement).getByRole('link', { name: 'הזמנה חדשה' })).toBeInTheDocument();
   });
 
   it('כותרת הדפדפן מפרידה מסך, דייר ומוצר', async () => {
@@ -154,8 +162,11 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
     expect(within(drawer).getByRole('link', { name: 'קבלת סחורה' })).toBeInTheDocument();
     expect(within(drawer).getByRole('link', { name: 'הגדרות מערכת' })).toBeInTheDocument();
     expect(within(drawer).getByText('עבודה שוטפת')).toBeInTheDocument();
-    expect(within(drawer).getByText('ניהול').closest('details')).toBeNull();
-    expect(within(drawer).getByText('בקרה').closest('details')).toBeNull();
+    // Every group open on both surfaces (DESIGN.md): a destination behind a lid is a destination
+    // people stop finding. The headings are the separation, not a control.
+    for (const group of ['רכש', 'מסמכים', 'כספים', 'בקרה ודוחות', 'החשבון']) {
+      expect(within(drawer).getByText(group).closest('details')).toBeNull();
+    }
   });
 
   it('משאיר במגירה את קבוצת המסך הפעיל פתוחה ללא disclosure', () => {
@@ -220,12 +231,13 @@ describe('מבטא האזור בסמן הניווט הפעיל', () => {
     expect(mainRegion()).not.toHaveAttribute('data-section');
   });
 
-  it('אזור העבודה יודע את התחום גם כשאין פריט תפריט פעיל', () => {
-    // /documents/archive is a contextual destination: it is deliberately absent from the sidebar,
-    // so no item is current. The domain still comes from the URL — which is the point of deriving
-    // the accent from the route rather than from whichever link happens to be highlighted.
-    renderAt('/documents/archive');
-    expect(activeLink()).toBeNull();
+  it('אזור העבודה יודע את התחום מהכתובת, לא מהקישור המודגש', () => {
+    // The archive was a contextual destination with no menu row until 28.08.2026, and this test
+    // used its absence to prove the domain comes from the URL. It has a row now, so the same
+    // property is asserted where it still has teeth: a document being reviewed lights the FOLDER,
+    // and <main> still takes its domain from the address rather than from that link.
+    renderAt('/documents/abc/review');
+    expect(activeLink()?.textContent?.trim()).toBe('תיקיית המסמכים');
     expect(mainRegion()).toHaveAttribute('data-section', 'documents');
   });
 

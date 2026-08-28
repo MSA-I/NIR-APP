@@ -53,7 +53,7 @@ function tree() {
         <Routes>
           <Route element={<Layout />}>
             <Route path="/dashboard" element={null} />
-            <Route path="/suppliers" element={null} />
+            <Route path="/orders/new" element={null} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -80,8 +80,11 @@ describe('Layout — focus moves to #main only on an actual navigation', () => {
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     expect(document.activeElement).toBe(search);
 
-    // A real route change still announces itself by moving focus past the shell.
-    fireEvent.click(screen.getAllByRole('link', { name: /ספקים/ })[0]);
+    // A real route change still announces itself by moving focus past the shell. The
+    // destination is one of the bar's two plain links: after the 28.08.2026 grouping every other
+    // desktop destination sits inside a group panel that is `hidden` until its trigger is
+    // pressed, and a hidden link is not in the accessibility tree to be clicked.
+    fireEvent.click(screen.getAllByRole('link', { name: /הזמנה חדשה/ })[0]);
     await waitFor(() => expect(document.activeElement?.id).toBe('main'));
   });
 });

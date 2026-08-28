@@ -74,20 +74,12 @@ function navItem(to: StaticRoutePath, icon: typeof LayoutDashboard, roles: Activ
   return { to, label: staticRouteTitle(to), icon, roles };
 }
 
-/* T7.2 pill navigation: the floating pill is one slim row of TEXT items (the reference's), and
-   the full Hebrew titles do not fit it. These shorter forms exist for the PILL ONLY — the drawer,
-   the dropdown panels, the page titles and the routePresentation catalogue keep the full names,
-   so nothing desyncs. A path with no entry here simply shows its full label. */
-const NAV_SHORT_LABELS: Partial<Record<string, string>> = {
-  '/orders': 'הזמנות',
-  '/receiving': 'קבלה',
-  '/documents': 'מסמכים',
-  // 'המנוי' used to be the GROUP's name, printed on a disclosure trigger over a single route
-  // (DESIGN.md:507 forbids exactly that shape). The group is now a plain link on this surface, and
-  // this entry is what keeps the word on the bar identical to the one the owner approved — the
-  // drawer, the panel and the page title all still say 'המנוי שלי'.
-  '/settings/subscription': 'המנוי',
-};
+/* NAV_SHORT_LABELS stood here until 28.08.2026. It existed because the desktop pill was one slim
+   row of TEXT items and the full Hebrew titles did not fit it — /orders showed "הזמנות",
+   /documents showed "מסמכים". After the reorganisation the pill's only plain links are
+   /dashboard and /orders/new; every other destination lives in a group panel, which always
+   rendered the full name. A map of short forms for links that no longer exist is a second set of
+   labels waiting to drift from the catalogue, so it went with them. */
 
 // Four work groups — מסמכים / רכש / כספים / בקרה — under two ungrouped links that need no
 // header to explain them. The less self-evident items (מחירונים, דרישות תשלום, התאמות בנק,
@@ -174,33 +166,41 @@ export const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-const DAILY_PATHS: Record<ActiveRole, readonly string[]> = {
-  owner: ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
-  office: ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
-  accountant: ['/dashboard', '/invoices', '/pay', '/payments', '/bank'],
-};
-
-const MANAGEMENT_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
-  owner: ['/inventory', '/products', '/prices', '/credits', '/payment-requests', '/payments', '/bank'],
-  office: ['/inventory', '/products', '/prices', '/credits', '/payment-requests'],
-  accountant: ['/credits'],
-};
-
-const CONTROL_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
-  owner: ['/documents/operations', '/documents/consolidated-invoices', '/exceptions', '/expenses', '/reports', '/analytics', '/supplier-log'],
-  office: ['/documents/consolidated-invoices', '/exceptions', '/analytics'],
-  accountant: ['/documents/consolidated-invoices', '/exceptions', '/expenses', '/reports'],
-};
-
 /**
- * Its own group, not a row inside 'בקרה' (owner report 25.08.2026). Everything in the three
- * groups above is the business the tenant runs; this is the contract they run it under, and a
- * single-item group is the honest shape for a subject with exactly one screen. Owner only, the
- * same boundary the panel and the route guard already draw (owner decision 23.08.2026).
+ * ONE grouping, by subject, for every role and both surfaces (owner approval 28.08.2026).
+ *
+ * What it replaces, and why the replacement is the fix rather than a rearrangement: this file
+ * carried TWO groupings of the same screens. `NAV_SECTIONS` grouped them by subject —
+ * מסמכים / רכש / כספים / בקרה — and four per-role path maps regrouped them by FREQUENCY —
+ * daily / ניהול / בקרה — and the second is what the drawer actually rendered. So "ניהול" held the
+ * product catalogue and the bank together, "בקרה" held document operations next to the reports,
+ * and a person looking for מחירונים had to know which of the two mental models the menu was
+ * using. The owner's words: "יש בלאגן, לא מבינים את הניווט כמו שצריך".
+ *
+ * There is now one list. `NAV_SECTIONS` below stays what it always was — the permission-aware
+ * catalogue, the record of which role may reach which destination — and this decides the ORDER and
+ * the grouping a person sees. A role simply never sees the paths its catalogue entry withholds, so
+ * one list serves owner, office and accountant without three copies to drift apart: an accountant's
+ * 'רכש' group resolves to nothing and is dropped.
  */
-const SUBSCRIPTION_PATHS: Partial<Record<ActiveRole, readonly string[]>> = {
-  owner: ['/settings/subscription'],
-};
+const NAV_GROUPS: readonly { section: string; paths: readonly string[] }[] = [
+  // The control room first — it is the answer to §12, "what needs attention now" — and the single
+  // most frequent action after it. Nothing else earns a place above a group heading.
+  { section: '', paths: ['/dashboard', '/orders/new'] },
+  { section: 'רכש', paths: ['/orders', '/receiving', '/suppliers', '/products', '/prices', '/inventory'] },
+  // Documents stand apart from כספים because a scanned page is not yet a financial fact: it is
+  // read and filed first, and only then becomes an invoice or a credit.
+  { section: 'מסמכים', paths: ['/documents', '/documents/consolidated-invoices', '/documents/archive', '/documents/operations'] },
+  { section: 'כספים', paths: ['/invoices', '/credits', '/payment-requests', '/payments', '/pay', '/bank'] },
+  { section: 'בקרה ודוחות', paths: ['/alerts', '/exceptions', '/expenses', '/reports', '/analytics', '/supplier-log'] },
+  // Last, and the separation DESIGN.md:509 asks for: the contract the business runs under, and the
+  // screens that configure it, are not one more work destination. It is owner-only by catalogue,
+  // so the group simply does not resolve for anybody else.
+  { section: 'החשבון', paths: ['/settings/subscription', '/onboarding', '/settings'] },
+];
+
+/** The account group lives in the avatar menu on desktop; showing it twice on one screen is noise. */
+const DESKTOP_HIDDEN_SECTION = 'החשבון';
 
 function catalogItem(path: string, role: ActiveRole): NavItem | null {
   const item = NAV_SECTIONS.flatMap((section) => section.items).find((candidate) => candidate.to === path);
@@ -220,17 +220,21 @@ export function sectionsForRole(role: ActiveRole | undefined): NavSection[] {
   // operator console itself (19.08.2026): /admin now lives in the separate operator application
   // (operator.html, src/operator/), and the tenant shell offers no door to it. This catalogue is
   // tenant navigation only.
-  return role ? [
-    { section: '', items: itemsFor(role, DAILY_PATHS[role]) },
-    { section: 'ניהול', items: itemsFor(role, MANAGEMENT_PATHS[role] ?? []), collapsible: true },
-    { section: 'בקרה', items: itemsFor(role, CONTROL_PATHS[role] ?? []), collapsible: true },
-    // Last, and deliberately not collapsible: one item behind a disclosure is a door with a lid.
-    { section: 'המנוי', items: itemsFor(role, SUBSCRIPTION_PATHS[role] ?? []) },
-  ].filter((section) => section.items.length > 0) : [];
+  return role
+    ? NAV_GROUPS
+      .map((group) => ({ section: group.section, items: itemsFor(role, group.paths) }))
+      .filter((section) => section.items.length > 0)
+    : [];
 }
 
+/** The desktop pill's groups. The account group is reached through the avatar disc instead. */
+export function barSectionsForRole(role: ActiveRole | undefined): NavSection[] {
+  return sectionsForRole(role).filter((section) => section.section !== DESKTOP_HIDDEN_SECTION);
+}
+
+/** What the desktop avatar menu holds — the same account group, in the surface that owns it. */
 export function footerItemsForRole(role: ActiveRole | undefined): NavItem[] {
-  return role === 'owner' ? itemsFor(role, ['/onboarding', '/settings']) : [];
+  return role === 'owner' ? itemsFor(role, ['/settings/subscription', '/onboarding', '/settings']) : [];
 }
 
 export function drawerSectionsForRole(role: ActiveRole | undefined): NavSection[] {
@@ -338,7 +342,7 @@ export default function Layout() {
         className={`${box} shrink-0 object-contain`} />;
   };
 
-  const sections = sectionsForRole(role);
+  const sections = barSectionsForRole(role);
   const drawerSections = drawerSectionsForRole(role);
   const footerItems = footerItemsForRole(role);
 
@@ -546,13 +550,12 @@ export default function Layout() {
     const surface = opts?.surface ?? 'panel';
     const active = isRouteFamilyActive(location.pathname, item.to);
     const section = active ? sectionOf(item.to) : null;
-    const pillLabel = NAV_SHORT_LABELS[item.to] ?? item.label;
     return (
       <Link key={item.to} to={item.to} className={linkCls(active, surface)} aria-current={active ? 'page' : undefined}
-        data-section={section ?? undefined} title={surface === 'pill' && pillLabel !== item.label ? item.label : undefined}
+        data-section={section ?? undefined}
         onClick={() => setOpenGroup(null)}>
         {surface !== 'pill' && <item.icon size={ICON.md} aria-hidden="true" />}
-        <span className="min-w-0 flex-1 truncate">{surface === 'pill' ? pillLabel : item.label}</span>
+        <span className="min-w-0 flex-1 truncate">{item.label}</span>
         {item.to === '/documents' && inboxCount != null && inboxCount > 0 && (
           <span className="badge num bg-action-soft text-action-on-soft ms-auto">{inboxCount}</span>
         )}
@@ -649,8 +652,20 @@ export default function Layout() {
             owner question, and answering it silently in a shell refactor is exactly how a
             navigation surface changes under people without a decision behind it. */}
         {displaySections.map((s, i) => (
-          <div key={s.section || i}>
-            {s.section && <div className="px-3 pb-1 text-xs font-semibold text-ink-muted">{s.section}</div>}
+          /* The separation the owner asked for, drawn rather than implied (28.08.2026: "יש לחשוב
+             על דרך וויזואלית ליצור הפרדה בין הקטגוריות השונות"). Until now every group was a 12px
+             gap and a small grey word, so five subjects read as one long list. Each group now
+             opens with a rule that runs to the edge and a heading that sits ON that rule — the
+             cheapest device that says "a new subject starts here" without adding a box, a shade
+             or a control. Every group stays OPEN on both surfaces (DESIGN.md): a destination
+             behind a lid is a destination people stop finding. */
+          <div key={s.section || i} className={i > 0 ? 'pt-1' : ''}>
+            {s.section && (
+              <div className="flex items-center gap-2 px-3 pb-1.5 pt-2">
+                <span className="text-xs font-semibold text-ink-soft">{s.section}</span>
+                <span aria-hidden="true" className="h-px flex-1 bg-line-soft" />
+              </div>
+            )}
             <div className="space-y-0.5">{navLinks(s.items, { surface: 'panel' })}</div>
           </div>
         ))}
@@ -662,12 +677,6 @@ export default function Layout() {
             The note trigger sits with the account because the phone top bar gave its slot to the
             tier mark (owner report 25.08.2026): it goes nowhere, it opens a dialog. */}
         <div className="border-t border-line-soft pt-3">
-          {footerItems.length > 0 && (
-            <>
-              <div className="px-3 pb-1 text-xs font-semibold text-ink-muted">החשבון והמערכת</div>
-              <div className="space-y-0.5">{navLinks(footerItems, { surface: 'panel' })}</div>
-            </>
-          )}
           <FeedbackButton variant="menu" />
           {accountBlock}
         </div>
