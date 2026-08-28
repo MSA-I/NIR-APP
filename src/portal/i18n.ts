@@ -1,4 +1,4 @@
-import { BUSINESS_TIME_ZONE, formatUnit } from '../lib/format';
+import { BUSINESS_TIME_ZONE, fmtMoneyExactInLocale, formatUnit } from '../lib/format';
 
 export type PortalLocale = 'he' | 'en';
 
@@ -109,10 +109,7 @@ export function formatPortalDate(locale: PortalLocale, value: string | Date | nu
 }
 
 export function formatPortalMoney(locale: PortalLocale, value: number | null | undefined): string {
-  if (value == null) return '—';
-  return new Intl.NumberFormat(INTL_LOCALE[locale], {
-    style: 'currency', currency: 'ILS', minimumFractionDigits: 2,
-  }).format(value);
+  return fmtMoneyExactInLocale(INTL_LOCALE[locale], value);
 }
 
 export function formatPortalQuantity(

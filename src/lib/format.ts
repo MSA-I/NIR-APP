@@ -53,6 +53,28 @@ export const fmtPlanPrice = (v: number | null | undefined, currency: string | nu
   return '—';
 };
 
+/**
+ * The one money formatter that does NOT pin `he-IL`, and the only reason it exists.
+ *
+ * The supplier portal renders in the supplier's language (`PortalLocale`), so its figures must
+ * carry that locale's grouping and digit shapes. It used to build its own `Intl.NumberFormat`
+ * inside `src/portal/i18n.ts`, which `check:money` could not see: the call was split across lines
+ * and the guard read one line at a time. Fixing that blindness surfaced this site, and the answer
+ * is the same one the rest of the file gives — the shape of money is decided here, once.
+ *
+ * The currency is still ILS, exactly as the portal rendered it before this move.
+ */
+const localeExact = new Map<string, Intl.NumberFormat>();
+export const fmtMoneyExactInLocale = (locale: string, v: number | null | undefined) => {
+  if (v == null) return '—';
+  let formatter = localeExact.get(locale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, { style: 'currency', currency: 'ILS', minimumFractionDigits: 2 });
+    localeExact.set(locale, formatter);
+  }
+  return formatter.format(v);
+};
+
 export const fmtMoneyExact = (v: number | null | undefined) => (v == null ? '—' : ilsExact.format(v));
 export const fmtMoneyRounded = (v: number | null | undefined) => (v == null ? '—' : ilsRounded.format(v));
 export const fmtMoneyCompact = (v: number | null | undefined) => (v == null ? '—' : ilsCompact.format(v));

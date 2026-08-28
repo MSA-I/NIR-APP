@@ -1,10 +1,20 @@
 # Gates: money carries its currency — a plan, measured before it is written
 
-Branch: `plan/multi-currency-20260828`, based on `main` (`c04d37a`). **Planning branch. No product
-code, no migration.** The English work on `claude/add-english-language-system-f43d1e` is untouched
-and unmerged; this branch reads it read-only through `git show`.
+Planning branch: `plan/multi-currency-20260828`, based on `main` (`c04d37a`). Phase P below was
+achieved there and is history.
 
-OWNS: docs/PLAN-multi-currency-20260828.md, docs/OPEN-DECISIONS.md (rows #284–#289), GATES.md
+Execution branch: `ביצוע-תוכנית-מערכת-הדולרים`, branched from `plan/multi-currency-20260828`
+(`770617c`). **`main` was not merged in, and that is a measurement, not an omission:** `main` is
+still `c04d37a`, the exact commit the planning branch was cut from, and
+`claude/add-english-language-system-f43d1e` is **not** in `git branch --merged main`. There is
+nothing to merge. The English branch is still read read-only through `git show`.
+
+Migration number: the English branch adds `0213_profile_locale.sql` and `#281` puts it first, so
+this work takes **`0214`** — verified by `git ls-tree` on both branches, not assumed. Taking `0214`
+is right whichever order the merges land in; taking `0213` would collide.
+
+OWNS: docs/PLAN-multi-currency-20260828.md, docs/OPEN-DECISIONS.md (rows #284–#289), GATES.md,
+scripts/check-currency.mjs, scripts/currency-baseline.json
 
 Plan: `docs/PLAN-multi-currency-20260828.md`.
 Decision this starts from: `OPEN-DECISIONS #277` (28.08.2026, supersedes `#14`), timing by `#281`.
@@ -80,7 +90,7 @@ constitution's clause 12.
 
 ## Phase 0 — the guard before the schema
 
-- [ ] P0-G1: `check:money` stops being blind to a multi-line and a computed-argument formatter
+- [x] P0-G1: `check:money` stops being blind to a multi-line and a computed-argument formatter
   CHECK: npm run -s check:money
   EXPECT: /check:money passed/
   NEGATIVE CONTROL (must FAIL before the fix and after planting, pass after removal):
@@ -88,24 +98,76 @@ constitution's clause 12.
   and a second formatter split across two lines. Both escape the current
   `/new Intl\.NumberFormat\([^)]*currency/` evaluated per line (`scripts/check-money.ts:88-90`) —
   `DEBT §69` and `RESEARCH §1` document the two halves of the same hole.
+  EVIDENCE: both controls planted under `src/__negctl__/` **before** the fix ⇒
+  `check:money passed: 3 rules …`, exit 0 — the hole reproduced. After the fix (rule 3 becomes
+  `/new Intl\.NumberFormat\([\s\S]{0,240}?currency/`, and every rule is matched against the whole
+  file with the line derived from the match offset) ⇒ `check:money FAILED — 3 hand-rolled money
+  format(s)`, exit 1, naming both controls **and a third site the guard had never seen**:
+  `src/portal/i18n.ts:113`, a real `Intl.NumberFormat` split across three lines with
+  `currency: 'ILS'`. That site is not exempted — it moved into `src/lib/format.ts` as
+  `fmtMoneyExactInLocale(locale, v)`, the one money formatter that does not pin `he-IL`, because
+  the supplier portal renders in the supplier's language. Behaviour is unchanged: still ILS, still
+  two decimals; `src/portal/i18n.spec.ts` 2/2 green. Controls removed ⇒ exit 0, and
+  `npx tsc --noEmit` exit 0.
 
-- [ ] P0-G2: a money column without a currency companion cannot be added quietly
+- [x] P0-G2: a money column without a currency companion cannot be added quietly
   CHECK: node scripts/check-currency.mjs columns
   EXPECT: GATE_CURRENCY_COLUMNS_OK
   NEGATIVE CONTROL: plant a money column in a scratch create-table block with no currency companion
   ⇒ non-zero exit naming the column. The 22 measured non-money `numeric(12,2)` columns (quantities,
   rates, confidences) sit in an explicit exemption list, pinned like `scripts/i18n-baseline.json`;
   they keep their scale of 2 while the 24 money columns widen to `numeric(14,3)` for `#284`.
+  EVIDENCE: `GATE_CURRENCY_COLUMNS_OK — 51 numeric columns declared, all classified (28 money,
+  23 not money); carrier check pending the currencies table`, exit 0. Control
+  `9990_negctl_columns.sql` declaring `scratch_negctl_fees.service_fee_amount numeric(12,2)` ⇒
+  exit **2**, naming the column and the file. Removed; exit 0 again.
+  **Two measured corrections to plan §1.1, and neither is a scope decision — both follow §2's own
+  rules applied to rows the plan's measurement could not see.** The plan counted `numeric(12,2)`
+  columns inside `create table` blocks only, so it missed columns added by `alter table … add
+  column`: **`purchase_requests.split_total`** (`0027`) and
+  **`payment_requests.open_credit_override_total`** (`0073`) are money. The second inherits its own
+  row's `payment_requests.currency`; the first is a draft head and takes `own`. The guard also
+  classifies every numeric scale rather than `(12,2)` alone, which is why 51 and not 48: the money
+  set includes `invoice_lines.unit_price numeric(18,6)`, `line_total`/`discount_amount
+  numeric(14,2)` and the two `supplier_order_proposal*` deltas, and the not-money set includes
+  `organizations.vat_rate numeric(5,2)` and five confidences. **26 of the money columns lack a
+  currency today and 2 already carry one** (`plan_prices` through its catalogue,
+  `organization_billing_periods` on the row) — the plan's "26 money, 24 without" holds for the set
+  it measured; the phase-1 migration answers 26.
+  The carrier half of the assertion is derived, not pinned: it switches itself on when a migration
+  declares `create table currencies`, so nothing has to be remembered in phase 1.
 
-- [ ] P0-G3: an aggregate over money without `currency` in its `group by` fails the guard
+- [x] P0-G3: an aggregate over money without `currency` in its `group by` fails the guard
   CHECK: node scripts/check-currency.mjs aggregates
   EXPECT: GATE_CURRENCY_AGGREGATES_OK
+  EVIDENCE: `GATE_CURRENCY_AGGREGATES_OK — money aggregates enforced from 0214 onward`, exit 0.
+  Control `9991_negctl_aggregate.sql` — a function doing `sum(i.total_amount)` with no mention of
+  currency ⇒ exit **3**, naming the file and the function. Removed; exit 0. The 111 pre-existing
+  aggregation sites are out of the window by the pin `aggregatesEnforcedFrom: "0214"`; phase 2
+  rewrites them, this guard stops new ones.
 
-- [ ] P0-G4: `0108` still refuses a currency that is not on the list
+- [x] P0-G4: `0108` still refuses a currency that is not on the list
   CHECK: node scripts/check-currency.mjs intake-guard
   EXPECT: GATE_CURRENCY_INTAKE_GUARD_OK
   This assertion must keep passing **after** phase 4, when the rejection narrows rather than
   disappears. A guard that only passes today is worthless.
+  EVIDENCE: `GATE_CURRENCY_INTAKE_GUARD_OK — 0108_document_reconciliation_assessment.sql still
+  rejects an unrecognised currency as currency_not_ils/error`, exit 0. The assertion reads the
+  **latest** migration that defines `private.document_reconciliation_assessment`, not `0108` by
+  name, and accepts `currency_not_ils` (today) or `currency_unrecognised` / `currency_unsupported`
+  (phase 4) — what it will not accept is the rejection being gone, or its severity dropping below
+  `error`. Control `9992_negctl_intake.sql`, a later redefinition with the rejection deleted ⇒
+  exit **4**. Removed; exit 0.
+
+- [x] P0-G5: the guard runs where the other guards run, and the phase changed no behaviour
+  CHECK: npm run -s test; npx tsc --noEmit; npm run -s check:dead-code
+  EXPECT: suite green; exit 0; no new knip findings
+  EVIDENCE: `Test Files 158 passed (158) · Tests 1658 passed (1658)`; `TypeScript: No errors
+  found`; knip unchanged (5 pre-existing configuration hints, no unused-export findings).
+  `check:currency` is wired into `npm run verify` between `check:money` and `check:exemptions`,
+  so CI runs it on every `src`/`scripts`/`migrations` change rather than only when somebody
+  remembers. No product behaviour changed: the only runtime edit is the portal's money formatter
+  moving into `format.ts` with identical output.
 
 ---
 

@@ -1,0 +1,71 @@
+{
+  "__reason": "Every numeric column the migrations declare, classified once, by hand. `numeric(12,2)` is NOT a synonym for money: 23 of the columns below are quantities, rates and confidences, and giving any of them a currency is the first failure mode of a search-and-replace through this schema (PLAN-multi-currency-20260828 §1.1). The list is pinned the way scripts/i18n-baseline.json is pinned — a numeric column that appears in a migration and in neither list fails check:currency, so the next money column cannot be added quietly.",
+
+  "__carriers": {
+    "own": "the table carries its own `currency` column — a document or transaction head, a price list row, or a threshold (plan §2)",
+    "inherits:<table>": "no column of its own; the currency is the parent row's. A document is never printed in two currencies (plan §2)",
+    "allocation": "no currency of its own by design; the composite foreign keys make a cross-currency link unrepresentable rather than merely rejected (plan §4.1)"
+  },
+
+  "money": {
+    "suppliers.min_order_amount": "own",
+    "supplier_products.current_price": "own",
+    "supplier_products.previous_price": "own",
+    "price_history.price": "own",
+    "purchase_requests.split_total": "own",
+    "purchase_request_items.unit_price": "inherits:purchase_requests",
+    "purchase_order_items.unit_price": "inherits:purchase_orders",
+    "invoices.amount_before_vat": "own",
+    "invoices.vat_amount": "own",
+    "invoices.total_amount": "own",
+    "invoice_lines.unit_price": "inherits:invoices",
+    "invoice_lines.discount_amount": "inherits:invoices",
+    "invoice_lines.line_total": "inherits:invoices",
+    "credit_requests.amount": "own",
+    "payment_requests.amount": "own",
+    "payment_requests.open_credit_override_total": "inherits:payment_requests",
+    "payment_request_invoices.amount_allocated": "allocation",
+    "payments.amount": "own",
+    "payment_allocations.amount": "allocation",
+    "bank_transactions.amount": "inherits:bank_imports",
+    "bank_allocations.amount": "allocation",
+    "approval_policy_configurations.threshold_amount": "own",
+    "supplier_order_proposals.total_delta": "inherits:purchase_orders",
+    "supplier_order_proposal_lines.original_unit_price": "inherits:supplier_order_proposals",
+    "supplier_order_proposal_lines.proposed_unit_price": "inherits:supplier_order_proposals",
+    "supplier_order_proposal_lines.line_delta": "inherits:supplier_order_proposals",
+    "plan_prices.amount": "inherits:plan_price_catalogues",
+    "organization_billing_periods.amount": "own"
+  },
+
+  "notMoney": {
+    "organizations.vat_rate": "a tax rate, not an amount",
+    "products.min_stock": "quantity",
+    "supplier_products.min_qty": "quantity",
+    "supplier_products.package_size": "quantity",
+    "purchase_request_items.qty": "quantity",
+    "purchase_order_items.qty": "quantity",
+    "purchase_order_items.received_qty": "quantity",
+    "goods_receipt_items.qty_received": "quantity",
+    "delivery_note_interpretation_lines.qty_received": "quantity",
+    "invoice_lines.quantity": "quantity",
+    "invoice_lines.vat_rate": "a tax rate, not an amount",
+    "invoice_line_matches.allocated_quantity": "quantity",
+    "inventory_movements.quantity_delta": "quantity",
+    "inventory_movements.counted_quantity": "quantity",
+    "next_order_items.qty": "quantity",
+    "supplier_order_proposal_lines.original_qty": "quantity",
+    "supplier_order_proposal_lines.proposed_qty": "quantity",
+    "bank_allocations.confidence": "model confidence",
+    "org_autonomy_policies.min_confidence": "model confidence",
+    "private.autonomy_policy_definitions.baseline_min_confidence": "model confidence",
+    "document_packets.confidence_threshold": "model confidence",
+    "document_packet_segments.confidence": "model confidence",
+    "document_scan_outputs.rotation_degrees": "an angle"
+  },
+
+  "extraMoneyNames": ["balance", "open_balance", "balance_in_currency", "open_balance_in_currency"],
+
+  "aggregatesEnforcedFrom": "0214",
+  "__aggregatesReason": "The 111 money aggregation sites that predate this work are rewritten in phase 2, not by this guard. From 0214 onward a new function that sums money and never says the word `currency` is the exact way the false total comes back, so it fails here."
+}
