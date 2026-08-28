@@ -28,6 +28,16 @@ const from = vi.hoisted(() => vi.fn(() => {
 }));
 vi.mock('../../lib/supabase', () => ({ supabase: { rpc, from } }));
 
+/** The mapping card creates products, so it reads the tenant off the profile. */
+vi.mock('../../auth/AuthContext', () => ({
+  useAuth: () => ({
+    profile: { id: 'user-1', org_id: 'org-test', role: 'owner' },
+    org: { vat_rate: 18 },
+    session: {},
+    organizationAccess: { mode: 'active', canWrite: true },
+  }),
+}));
+
 import { DocumentAssessmentPanel } from './DocumentAssessmentPanel';
 
 function line(index: number, over: Partial<AssessmentLine> = {}): AssessmentLine {
@@ -160,8 +170,10 @@ describe('הבדיקה מקפלת את העבודה של המכונה ולא א�
     }));
 
     const card = await screen.findByTestId('document-line-mapping');
-    // One control per UNMATCHED line, not per line: the matched one needs no decision.
-    expect(card.querySelectorAll('select')).toHaveLength(1);
+    // One row per UNMATCHED line, not per line: the matched one needs no decision. Rows are shut,
+    // so there is no picker on screen until someone opens one — the owner's "מאות מוצרים" rule.
+    expect(within(card).getAllByRole('button', { expanded: false })).toHaveLength(1);
+    expect(card.querySelectorAll('select')).toHaveLength(0);
 
     const blocking = screen.getByRole('alert');
     const cta = screen.getByRole('button', { name: 'אישור המסמך' });
