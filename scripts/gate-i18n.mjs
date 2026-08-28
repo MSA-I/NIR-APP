@@ -46,6 +46,7 @@ const EXTRACTED = [
   'src/components/FileUpload.tsx',
   'src/components/document-review/assessment.ts',
   'src/components/document-review/DocumentAssessmentPanel.tsx',
+  'src/components/document-review/DocumentReviewWorkspace.tsx',
   'src/components/ReceiptConflictDialog.tsx',
   'src/pages/SupplierProposalReview.tsx',
   'src/pages/neworder/SupplierSplitStep.tsx',

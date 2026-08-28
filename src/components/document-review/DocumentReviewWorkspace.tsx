@@ -70,19 +70,19 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
     if (payload) {
       rows.push({
         key: 'document-type',
-        label: `סוג המסמך · ${t(DOCUMENT_TYPE_KEYS[payload.document_type])}`,
+        label: t('docWorkspace.evidenceDocumentType', { value: t(DOCUMENT_TYPE_KEYS[payload.document_type]) }),
         confidence: payload.document_type_confidence,
         evidence: [],
       });
       rows.push({
         key: 'supplier',
-        label: `ספק מוצע · ${payload.supplier.suggested_name || 'לא זוהה'}`,
+        label: t('docWorkspace.evidenceSupplier', { value: payload.supplier.suggested_name || t('docWorkspace.notIdentified') }),
         confidence: payload.supplier.confidence,
         evidence: payload.supplier.evidence_block_ids,
       });
       payload.fields.forEach((field, index) => rows.push({
         key: `field-${index}`,
-        label: `שדה · ${fieldKeyLabel(field.key, t)}`,
+        label: t('docWorkspace.evidenceField', { value: fieldKeyLabel(field.key, t) }),
         confidence: field.confidence,
         evidence: field.evidence_block_ids,
       }));
@@ -90,20 +90,22 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
       // borrowed from somewhere else. They are here for their evidence ids.
       payload.line_items.forEach((item, index) => rows.push({
         key: `line-${index}`,
-        label: `שורה מוצעת ${index + 1}${item.source_row === null ? '' : ` · שורת מקור ${item.source_row}`}`,
+        label: item.source_row === null
+          ? t('docWorkspace.evidenceProposedLine', { index: index + 1 })
+          : t('docWorkspace.evidenceProposedLineWithSource', { index: index + 1, source: item.source_row }),
         confidence: null,
         evidence: item.evidence_block_ids,
       }));
     }
     snapshot.annotations.forEach((annotation) => rows.push({
       key: `annotation-${annotation.id}`,
-      label: `הערה · ${annotation.label}`,
+      label: t('docWorkspace.evidenceAnnotation', { value: annotation.label }),
       confidence: annotation.confidence,
       evidence: annotation.evidence_mark_ids,
     }));
     snapshot.ruleApplications.forEach((application) => rows.push({
       key: `rule-application-${application.id}`,
-      label: `כלל שהופעל · גרסה ${application.rule_version}`,
+      label: t('docWorkspace.evidenceRuleApplied', { version: application.rule_version }),
       confidence: application.confidence,
       evidence: [application.target_id],
     }));
@@ -116,7 +118,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
     return [
       ...payload.blocks.map((block) => ({
         key: `block-${block.id}`,
-        kind: 'קטע טקסט',
+        kind: t('docWorkspace.text'),
         page: block.page,
         confidence: block.confidence,
         bbox: block.bbox,
@@ -142,7 +144,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
       if (cancelled) return;
       if (error || !data?.signedUrl) {
         console.error('[document-review-source]', error?.message ?? 'signed URL missing');
-        setSourceError('לא ניתן לטעון תצוגה מאובטחת של המקור. אפשר לנסות לרענן את המסך.');
+        setSourceError(t('docWorkspace.setSourceError'));
         return;
       }
       setSourceUrl(data.signedUrl);
@@ -162,8 +164,8 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
       return data.signedUrl;
     });
     setOpeningSource(false);
-    if (result === 'blocked') toast('הדפדפן חסם את פתיחת המסמך. יש לאפשר חלונות קופצים ולנסות שוב.', 'error');
-    if (result === 'error') toast('לא ניתן ליצור קישור מאובטח חדש למסמך. יש לנסות שוב.', 'error');
+    if (result === 'blocked') toast(t('docWorkspace.toast'), 'error');
+    if (result === 'error') toast(t('docWorkspace.toast_2'), 'error');
   }
 
   useEffect(() => {
@@ -172,7 +174,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
   }, [extraction]);
 
   if (!snapshot.document) {
-    return <Note tone="alert" role="alert">המסמך אינו זמין או שאין לך הרשאה לצפות בו.</Note>;
+    return <Note tone="alert" role="alert">{t('docWorkspace.text_2')}</Note>;
   }
 
   return (
@@ -183,7 +185,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
             this workspace does not mount at all — so the copy here was the second h1 and the
             second file name on the same screen. This card owns one thing: where the document is. */}
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="section-title">מצב המסמך</h2>
+          <h2 className="section-title">{t('docWorkspace.text_3')}</h2>
           {/* The strip below is the single place this screen says how far the document got. While
               a job is in flight the badge said it again, and `DocumentStatusBadge` carries the page
               counter for the surfaces that have no strip (the folder, the upload centre) — so
@@ -204,8 +206,8 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
             to report; its absence carries the same information without spending the space. */}
         {(snapshot.reviewCorrections.length > 0 || snapshot.annotations.length > 0) && (
           <div className="mt-4 rounded-lg bg-surface-sunken p-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-ink-soft"><FileCheck2 size={ICON.md} aria-hidden="true" /> שכבות בדיקה</div>
-            <p className="mt-1 text-sm text-ink-body"><span className="num">{snapshot.reviewCorrections.length}</span> תיקונים · <span className="num">{snapshot.annotations.length}</span> הערות</p>
+            <div className="flex items-center gap-2 text-sm font-medium text-ink-soft"><FileCheck2 size={ICON.md} aria-hidden="true" /> {t('docWorkspace.text_4')}</div>
+            <p className="mt-1 text-sm text-ink-body"><span className="num">{snapshot.reviewCorrections.length}</span> {t('docWorkspace.text_5')} <span className="num">{snapshot.annotations.length}</span> {t('docWorkspace.text_6')}</p>
           </div>
         )}
 
@@ -221,7 +223,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
             className="mt-4 border-t border-line pt-3"
             onToggle={(event) => setTechnicalOpen(event.currentTarget.open)}
           >
-            <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-ink-soft">פרטים טכניים</summary>
+            <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-ink-soft">{t('docWorkspace.text_7')}</summary>
             <dl className="mt-2 grid gap-2 text-xs text-ink-muted">
               {/* THE VENDOR AND THE MODEL ARE GONE (owner report 25.08.2026: "כשכתוב לי פרטים
                   טכניים אני לא אמור לראות שם מודל ו-ai ודברים כאלה"). DESIGN.md already banned a
@@ -240,30 +242,30 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
                   from the database — `engine`, `model` and `provider` are still written and still
                   queryable by an operator; they simply stop being printed at a tenant. */}
               <div>
-                <dt className="flex items-center gap-1.5 font-medium text-ink-soft"><ScanText size={ICON.xs} aria-hidden="true" /> גרסת עיבוד</dt>
+                <dt className="flex items-center gap-1.5 font-medium text-ink-soft"><ScanText size={ICON.xs} aria-hidden="true" /> {t('docWorkspace.text_8')}</dt>
                 <dd className="mt-0.5 break-words">
                   {snapshot.extraction
-                    ? <>קריאה <span dir="ltr" className="num">{snapshot.extraction.model_version}</span></>
-                    : 'קריאה — טרם זמין'}
+                    ? <>{t('docWorkspace.text_9')} <span dir="ltr" className="num">{snapshot.extraction.model_version}</span></>
+                    : t('docWorkspace.text_10')}
                   {snapshot.interpretation
-                    ? <> · פירוש <span dir="ltr" className="num">{snapshot.interpretation.prompt_version}</span> / <span dir="ltr" className="num">{snapshot.interpretation.schema_version}</span></>
-                    : ' · פירוש — טרם זמין'}
+                    ? <> {t('docWorkspace.text_11')} <span dir="ltr" className="num">{snapshot.interpretation.prompt_version}</span> / <span dir="ltr" className="num">{snapshot.interpretation.schema_version}</span></>
+                    : t('docWorkspace.text_12')}
                 </dd>
               </div>
               {snapshot.job && (
                 <div>
-                  <dt className="font-medium text-ink-soft">מזהה משימה</dt>
+                  <dt className="font-medium text-ink-soft">{t('docWorkspace.text_13')}</dt>
                   <dd className="mt-0.5 break-all"><span dir="ltr" className="tech-id">{snapshot.job.id}</span></dd>
                 </div>
               )}
               {snapshot.extraction && (
                 <>
                   <div>
-                    <dt className="font-medium text-ink-soft">טביעת מקור</dt>
+                    <dt className="font-medium text-ink-soft">{t('docWorkspace.text_14')}</dt>
                     <dd className="mt-0.5 break-all"><span dir="ltr" className="tech-id">{snapshot.extraction.input_checksum}</span></dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-ink-soft">גרסת חוזה</dt>
+                    <dt className="font-medium text-ink-soft">{t('docWorkspace.text_15')}</dt>
                     <dd className="mt-0.5 break-all"><span dir="ltr" className="num">{snapshot.extraction.contract_version}</span></dd>
                   </div>
                 </>
@@ -276,9 +278,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
                 does not appear when there is nothing under it to describe. */}
             {technicalOpen && (interpretationEvidence.length > 0 || extractionEvidence.length > 0) && (
               <p className="mt-3 text-xs text-ink-muted">
-                האחוזים הם דיווח עצמי של המנוע על איכות הקריאה, ואינם הסתברות שהערך נכון. המסכים
-                עצמם מציגים דרגה מילולית; כאן מוצג המספר עצמו, מעוגל לשתי ספרות אחרי הנקודה, לצד
-                מזהי הראיה.
+                {t('docWorkspace.confidenceIsSelfReported')}
               </p>
             )}
 
@@ -287,15 +287,15 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
                 className="mt-2 table-scroll overflow-x-auto rounded-lg border border-line"
                 role="region"
                 tabIndex={0}
-                aria-label="רמות זיהוי גולמיות של הפירוש; ניתן לגלול בתוך הטבלה"
+                aria-label={t('docWorkspace.aria_label')}
               >
                 <table className="min-w-full bg-surface">
-                  <caption className="px-3 pt-2 text-start text-xs font-medium text-ink-soft">פירוש, הערות וכללים</caption>
+                  <caption className="px-3 pt-2 text-start text-xs font-medium text-ink-soft">{t('docWorkspace.text_19')}</caption>
                   <thead className="table-head">
                     <tr className="border-b border-line">
-                      <th className="th" scope="col">פריט</th>
-                      <th className="th" scope="col">רמת זיהוי</th>
-                      <th className="th" scope="col">מזהי ראיה</th>
+                      <th className="th" scope="col">{t('docWorkspace.text_20')}</th>
+                      <th className="th" scope="col">{t('docWorkspace.text_21')}</th>
+                      <th className="th" scope="col">{t('docWorkspace.text_22')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -316,17 +316,17 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
                 className="mt-2 table-scroll overflow-x-auto rounded-lg border border-line"
                 role="region"
                 tabIndex={0}
-                aria-label="רמות זיהוי גולמיות של החילוץ; ניתן לגלול בתוך הטבלה"
+                aria-label={t('docWorkspace.aria_label_2')}
               >
                 <table className="min-w-full bg-surface">
-                  <caption className="px-3 pt-2 text-start text-xs font-medium text-ink-soft">קטעים וסימונים בחילוץ</caption>
+                  <caption className="px-3 pt-2 text-start text-xs font-medium text-ink-soft">{t('docWorkspace.text_23')}</caption>
                   <thead className="table-head">
                     <tr className="border-b border-line">
-                      <th className="th" scope="col">פריט</th>
-                      <th className="th" scope="col">עמוד</th>
-                      <th className="th" scope="col">רמת זיהוי</th>
-                      <th className="th" scope="col">מיקום</th>
-                      <th className="th" scope="col">מזהה</th>
+                      <th className="th" scope="col">{t('docWorkspace.text_24')}</th>
+                      <th className="th" scope="col">{t('docWorkspace.text_25')}</th>
+                      <th className="th" scope="col">{t('docWorkspace.text_26')}</th>
+                      <th className="th" scope="col">{t('docWorkspace.text_27')}</th>
+                      <th className="th" scope="col">{t('docWorkspace.text_28')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -350,13 +350,13 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
       {snapshot.stage === 'failed' && (
         <Note tone="alert" role="alert" className="flex-wrap">
           <span className="min-w-0 flex-1">
-            <strong>העיבוד נכשל.</strong>{' '}
+            <strong>{t('docWorkspace.text_29')}</strong>{' '}
             {t(documentProcessingFailureKey(snapshot.job?.last_error_code, snapshot.job?.last_error_message))}
           </span>
           {!readOnly && onReprocess && (
             <button type="button" className="btn-secondary" disabled={reprocessing} onClick={onReprocess}>
               <RefreshCw className={reprocessing ? 'animate-spin ' : ''} size={ICON.md} aria-hidden="true" />
-              {reprocessing ? 'שולח מחדש…' : 'עיבוד מחדש'}
+              {reprocessing ? t('docWorkspace.text_30') : t('docWorkspace.text_31')}
             </button>
           )}
         </Note>
@@ -364,10 +364,10 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
       {/* The old wording narrated the heuristic ("לפי הגיל ומספר הניסיונות שנשמרו בשרת").
           documentUiStatus already carries the reason; the alert only has to name the next move. */}
       {uiStatus.state === 'stuck' && (
-        <Note tone="alert" role="alert">העיבוד נעצר. אפשר לטפל בו במרכז תפעול המסמכים.</Note>
+        <Note tone="alert" role="alert">{t('docWorkspace.text_32')}</Note>
       )}
       {snapshot.extraction?.payload.document.partial && (
-        <Note tone="await" role="status">החילוץ חלקי. יש להשוות כל ערך למקור לפני מתן משוב.</Note>
+        <Note tone="await" role="status">{t('docWorkspace.text_33')}</Note>
       )}
 
       {/* Four notes stood here and none of them survived, because each one was the strip's sentence
@@ -412,7 +412,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
             {snapshot.packet ? (
               <DocumentPacketReview snapshot={snapshot} readOnly={readOnly} onRefetch={onRefetch} />
             ) : readOnly ? (
-              <Note tone="idle">המסמך ותוצאות העיבוד זמינים לצפייה. פעולות בדיקה ועדכון אינן זמינות במצב קריאה בלבד.</Note>
+              <Note tone="idle">{t('docWorkspace.text_34')}</Note>
             ) : isPriceList
               ? <PriceListReviewConfirmation snapshot={snapshot} actorId={actorId} onRefetch={onRefetch} />
               : snapshot.interpretation && (
