@@ -295,7 +295,12 @@ export function PageHeader({ title, description, meta, breadcrumbs, actions, cla
   // cannot tell an absent prop from `description={undefined}`, so the opt-out has to be a value
   // that is not `undefined` — hence the identity check rather than a falsy one.
   const { pathname } = useLocation();
-  const resolvedDescription = description === undefined ? routePresentationDescription(pathname) : description;
+  const { t } = useT();
+  // The catalogue hands back a KEY, and this line used to render it. `TKey` is a string and
+  // `description` is a `ReactNode`, so `tsc` was clean while every catalogued screen printed
+  // `nav.routeDesc_inventory` under its title, in both languages. A screenshot found it.
+  const catalogued = routePresentationDescription(pathname);
+  const resolvedDescription = description === undefined ? (catalogued && t(catalogued)) : description;
   return (
     <header className={`flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between ${className}`}>
       <div className="min-w-0 space-y-1">
