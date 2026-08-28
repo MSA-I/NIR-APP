@@ -86,7 +86,7 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
        * routes remain in place so navigation cannot discard work or hide partial failures.
        */
       if (summary.failed.length) {
-        const detail = failures[0] ? ` ${failures[0].message}` : '';
+        const detail = failures[0] ? ` ${errorText(new Error(failures[0].code))}` : '';
         const retryHint = failed.length ? ' לחיצה נוספת תנסה רק את הכשלים הזמניים.' : '';
         toast(`${summary.succeeded.length} הועלו וממתינים לבדיקה בתיקיית המסמכים, ${summary.failed.length} לא הושלמו.${detail}${retryHint}`, 'error');
       } else {

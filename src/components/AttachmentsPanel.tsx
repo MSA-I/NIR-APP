@@ -106,7 +106,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
       setUploadSummary(summary);
       if (result.succeeded.length || registered) await refetch();
       if (summary.failed.length) {
-        const detail = failures[0] ? ` ${failures[0].message}` : '';
+        const detail = failures[0] ? ` ${errorText(new Error(failures[0].code))}` : '';
         toast(`${summary.succeeded.length} הועלו וממתינים לעיבוד, ${summary.failed.length} לא הושלמו.${detail}`, 'error');
       } else {
         toast(result.succeeded.length === 1 ? 'הועלה וממתין לעיבוד' : `${result.succeeded.length} קבצים הועלו וממתינים לעיבוד`);

@@ -45,7 +45,11 @@ describe('offline receipt photo wiring', () => {
     expect(upload).toContain('await updatePendingPhoto(photo.id, {');
     expect(upload).toContain("state: failure.retryable ? 'failed' : 'needs_attention'");
     expect(upload).toContain("state: failure ? (failure.retryable ? 'failed' : 'needs_attention') : 'pending'");
-    expect(upload).toContain('lastError: failure.message');
+    // The queue stores the CODE, not a sentence, and the claim splits with it: the source
+    // writes the code, and `OfflineQueueStatus` reads that column back through `errorText()`,
+    // which maps codes. A stored sentence always fell through to the generic message — which
+    // is why this assertion had to move rather than be deleted.
+    expect(upload).toContain('lastError: failure.code');
     expect(offlineDb).toContain("db.transaction(OFFLINE_STORES.pendingPhotos, 'readwrite')");
     expect(offlineDb).toContain('await tx.store.put({ ...row, ...patch })');
     expect(offlineDb).toContain('await tx.done');

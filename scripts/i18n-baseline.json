@@ -51,7 +51,6 @@
     "src/components/ExportTemplatesPanel.tsx": 27,
     "src/components/Fab.tsx": 4,
     "src/components/FeedbackButton.tsx": 15,
-    "src/components/FileUpload.tsx": 59,
     "src/components/GlobalSearch.tsx": 17,
     "src/components/InvoiceLineReviewModal.tsx": 34,
     "src/components/Layout.tsx": 9,

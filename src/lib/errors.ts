@@ -395,6 +395,22 @@ const PATTERNS: [RegExp, string][] = [
   [/document_upload_reservation_registered/i, 'document_upload_reservation_registered'],
   [/document_upload_reservation_lifetime_exceeded/i, 'document_upload_reservation_lifetime_exceeded'],
   [/document_upload_reservation_unknown/i, 'document_upload_reservation_unknown'],
+  // The registration half of the same surface. `uploadDocument` stores the file first and
+  // registers it second, so every one of these means THE FILE IS SAFE and only the row is
+  // missing — which is why each sentence says so, and why none of them says "upload it again".
+  [/document_registration_malformed_response/i, 'document_registration_malformed_response'],
+  [/document_registration_unavailable/i, 'document_registration_unavailable'],
+  [/document_registration_misconfigured/i, 'document_registration_misconfigured'],
+  [/document_registration_not_authorized/i, 'document_registration_not_authorized'],
+  [/document_registration_key_taken/i, 'document_registration_key_taken'],
+  [/document_registration_invalid/i, 'document_registration_invalid'],
+  [/document_registration_transient/i, 'document_registration_transient'],
+  [/document_registration_failed/i, 'document_registration_failed'],
+  [/document_enqueue_transient/i, 'document_enqueue_transient'],
+  [/document_enqueue_failed/i, 'document_enqueue_failed'],
+  [/document_upload_cancelled/i, 'document_upload_cancelled'],
+  [/document_upload_too_large/i, 'document_upload_too_large'],
+  [/document_upload_type_unsupported/i, 'document_upload_type_unsupported'],
   // Two screens used to keep their own status-to-sentence tables. The conditions live here now,
   // where a reader can see the whole vocabulary at once instead of hunting it per page.
   [/price_list_confirm_session_expired/i, 'price_list_confirm_session_expired'],

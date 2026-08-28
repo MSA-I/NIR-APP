@@ -263,11 +263,18 @@ function defaultClassify(error: unknown): UploadFailureShape {
   };
   const resume = duck.resume && typeof duck.resume === 'object' ? duck.resume : null;
   const shaped: UploadFailureShape = {
-    // Errors that carry their own retry verdict (DocumentUploadError, TusUploadError)
-    // author Hebrew messages; anything else goes through the translation table.
-    message: error instanceof Error && typeof duck.retryable === 'boolean'
-      ? error.message
-      : toHebrewError(error),
+    // ONE branch, and the one it replaced is why. It used to read the message straight off any
+    // error that carried its own retry verdict, on the premise that `DocumentUploadError` and
+    // `TusUploadError` "author Hebrew messages". They do not: both carry a registered CODE, so
+    // that branch was rendering `tus_upload_forbidden` at a person. `toHebrewError` resolves a
+    // code and a raw failure alike, which is what made the special case unnecessary in the first
+    // place.
+    //
+    // It answers in Hebrew only, and that is a real gap rather than a decision: this runner is
+    // module scope and cannot hold a hook. Every screen that needs the reader's own language
+    // passes its own `classifyFailure` — `FileUpload` does — and the ones that do not are still
+    // mid-extraction. Recorded in the handoff rather than papered over here.
+    message: toHebrewError(error),
     retryable: duck.retryable === true,
     registered: duck.registered === true,
     storedSafely: resume !== null || duck.registered === true,

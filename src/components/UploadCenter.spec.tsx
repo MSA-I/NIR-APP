@@ -4,6 +4,7 @@
 // spaced aria-live announcements, and `runUploadBatch` signature compatibility.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { he } from '../lib/i18n/dictionaries/he';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
@@ -249,7 +250,10 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
     renderCenter();
     await act(async () => {
       await enqueueUploadCenterBatch([file('terminal.pdf')], async () => {
-        throw Object.assign(new Error('הקובץ נשמר, אך נדרשת בדיקה.'), {
+        // A registered CODE, which is what the upload surface actually throws now. The fixture
+        // used to carry a finished Hebrew sentence and the Center echoed it, so this case
+        // passed while `tus_upload_forbidden` would have reached a reader unchanged.
+        throw Object.assign(new Error('document_registration_failed'), {
           retryable: false,
           resume: {
             storagePath: 'org-1/inbox/terminal-key_terminal.pdf',
@@ -264,7 +268,7 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
     expect(entry).toMatchObject({ status: 'stored', storedSafely: true, canRetry: false });
     const section = screen.getByRole('region', { name: 'מרכז ההעלאות' });
     expect(within(section).getByText('הועלה אך לא נרשם')).toBeInTheDocument();
-    expect(within(section).getByText('הקובץ נשמר, אך נדרשת בדיקה.')).toBeInTheDocument();
+    expect(within(section).getByText(he.errors.document_registration_failed)).toBeInTheDocument();
     expect(within(section).queryByRole('button', { name: /ניסיון חוזר|השלמת רישום|שליחה מחדש לעיבוד/ })).toBeNull();
   });
 

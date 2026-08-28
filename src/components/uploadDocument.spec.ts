@@ -38,7 +38,18 @@ vi.mock('./UploadCenter', () => ({
   subscribeUploadCenter: () => () => {},
 }));
 
+import { he } from '../lib/i18n/dictionaries/he';
+import type { Dictionary } from '../lib/i18n/dictionaries/he';
+import { translate, type TKey } from '../lib/i18n/t';
 import { documentUploadFailure, uploadDocument } from './FileUpload';
+
+/**
+ * The failure carries a CODE now, so each expectation below resolves it through the HEBREW
+ * `errors` namespace and keeps the exact phrase it always asserted. That is deliberately not
+ * `t(key)` against `t(key)`: these sentences are the difference between "the file is safe, only
+ * the row is missing" and "upload it again", and a dictionary that lost one would still pass.
+ */
+const say = (code: string): string => translate(he as unknown as Dictionary, `errors.${code}` as TKey);
 
 const file = (name: string) => new File(['document'], name, { type: 'application/pdf' });
 
@@ -148,7 +159,7 @@ describe('uploadDocument registration recovery', () => {
       clientUploadKey: 'transient-key-0003',
       documentId: null,
     });
-    expect(failure.message).toContain('תקלה זמנית');
+    expect(say(failure.code)).toContain('תקלה זמנית');
     expect(mocks.tusUpload).toHaveBeenCalledTimes(1);
     expect(mocks.remove).not.toHaveBeenCalled();
   });
@@ -179,7 +190,7 @@ describe('uploadDocument registration recovery', () => {
       clientUploadKey: 'terminal-key-0004',
       documentId: null,
     });
-    expect(failure.message).toContain(message);
+    expect(say(failure.code)).toContain(message);
     expect(mocks.tusUpload).toHaveBeenCalledTimes(1);
     expect(mocks.remove).not.toHaveBeenCalled();
   });
@@ -203,7 +214,7 @@ describe('uploadDocument registration recovery', () => {
       documentId: null,
       clientUploadKey: 'unknown-key-0008',
     });
-    expect(failure.message).toContain('נדרשת בדיקה');
+    expect(say(failure.code)).toContain('נדרשת בדיקה');
     expect(mocks.tusUpload).toHaveBeenCalledTimes(1);
     expect(mocks.remove).not.toHaveBeenCalled();
   });
@@ -218,10 +229,29 @@ describe('uploadDocument registration recovery', () => {
 
     expect(failure.retryable).toBe(false);
     expect(failure.resume?.clientUploadKey).toBe('malformed-key-0005');
-    expect(failure.message).toContain('תשובת שרת לא תקינה');
+    expect(say(failure.code)).toContain('תשובת שרת לא תקינה');
     expect(mocks.remove).not.toHaveBeenCalled();
   });
 
+  it('answers with a registered code, never with words the server chose', async () => {
+    // The refusal used to be a finished sentence, which meant a `TusUploadError` put a synthetic
+    // token in front of a person and a stored `lastError` never matched `errorText`. What crosses
+    // the boundary now is a name this product owns, and it has to resolve to a real sentence.
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: '42501', message: 'ERROR: permission denied for relation private.x at 10.0.3.7' },
+      status: 403,
+    });
+
+    const error = await uploadDocument(
+      'org-1', 'inbox', null, file('leak.pdf'), {}, { objectKey: 'leak-key-0009' },
+    ).catch((reason) => reason);
+    const failure = documentUploadFailure(error);
+
+    expect(failure.code).toBe('document_registration_not_authorized');
+    expect(failure.code).not.toContain('10.0.3.7');
+    expect(say(failure.code)).toMatch(/[֐-׿]/);
+  });
   it('keeps a resume point when the registration promise rejects after TUS', async () => {
     mocks.rpc.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 

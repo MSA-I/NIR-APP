@@ -16,7 +16,7 @@ import {
   DOCUMENT_KIND_OPTIONS,
   DOCUMENT_UPLOAD_ACCEPT,
   beginDocumentIntake,
-  documentKindLabel,
+  documentKindKey,
   documentUploadFailure,
   mergeDocumentUploadSummary,
   uploadDocument,
@@ -287,7 +287,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
         await onDone();
       }
       if (summary.failed.length) {
-        const currentFailure = failures[0]?.message;
+        const currentFailure = failures[0] ? errorText(new Error(failures[0].code)) : null;
         toast(`${summary.succeeded.length} הועלו וממתינים לעיבוד, ${summary.failed.length} לא הושלמו.${currentFailure ? ` ${currentFailure}` : ''}`, 'error');
       } else {
         toast(summary.succeeded.length === 1 ? 'הועלה וממתין לעיבוד' : `${summary.succeeded.length} מסמכים הועלו וממתינים לעיבוד`);
@@ -756,7 +756,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           && ['unprocessed', 'queued', 'processing', 'extracted'].includes(stage);
         return unread
           ? <span className="text-ink-muted" title={t('documents.title_2')}>—</span>
-          : documentKindLabel(doc.document_kind);
+          : t(documentKindKey(doc.document_kind));
       },
     },
     { key: 'supplier', header: t('documents.text_34'), sortValue: (doc) => doc.supplier?.name ?? '', render: (doc) => doc.supplier?.name ?? '—' },
@@ -870,7 +870,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
               <span className="label">{t('documents.text_51')}</span>
               <select className="input" value={kind} onChange={(event) => setKind(event.target.value)}>
                 <option value="">{t('documents.text_52')}</option>
-                {DOCUMENT_KIND_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                {DOCUMENT_KIND_OPTIONS.map((option) => <option key={option.value} value={option.value}>{t(option.labelKey)}</option>)}
               </select>
             </label>
             {!archive && (
