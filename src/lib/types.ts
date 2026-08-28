@@ -237,6 +237,11 @@ export type PoStatus = 'draft' | 'ready' | 'sent' | 'confirmed' | 'partial' | 'r
 export interface PurchaseOrder {
   id: string; org_id: string; number: number; supplier_id: string; request_id: string | null;
   status: PoStatus; expected_date: string | null; notes: string | null;
+  /**
+   * The currency every price on the order is quoted in (0217). The line snapshots in
+   * `purchase_order_items.unit_price` are taken in it, so the order total is in it too.
+   */
+  currency: string;
   created_by: string | null; sent_at: string | null; created_at: string;
   confirmed_at: string | null; confirmation_note: string | null;
   /** 1 for an order created directly; n+1 for a revision created from a supplier proposal (0167). */
