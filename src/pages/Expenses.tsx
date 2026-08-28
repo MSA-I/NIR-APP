@@ -1,4 +1,5 @@
 import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t.ts';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Banknote, Calculator, ChevronLeft, FileSpreadsheet, Loader2, Printer, ReceiptText, type LucideIcon } from 'lucide-react';
@@ -39,11 +40,11 @@ type SupplierRow = { id: string; name: string; count: number; total: number };
 const RANGE_ERROR_ID = 'expenses-range-error';
 
 type PresetKey = 'month' | 'prevMonth' | 'quarter' | 'year';
-const PRESETS: { key: PresetKey; label: string }[] = [
-  { key: 'month', label: 'החודש' },
-  { key: 'prevMonth', label: 'חודש קודם' },
-  { key: 'quarter', label: '3 חודשים' },
-  { key: 'year', label: 'שנה' },
+const PRESETS: { key: PresetKey; labelKey: TKey }[] = [
+  { key: 'month', labelKey: 'expenses.presetMonth' },
+  { key: 'prevMonth', labelKey: 'expenses.presetPrevMonth' },
+  { key: 'quarter', labelKey: 'expenses.presetQuarter' },
+  { key: 'year', labelKey: 'expenses.presetYear' },
 ];
 
 // Israel business-calendar ranges. "3 חודשים" starts two calendar months back; "שנה" is
@@ -88,7 +89,7 @@ function StripStat({ title, value, context, icon: Icon }: {
 
 export default function Expenses() {
   const { profile, org } = useAuth();
-  const { statusLabel , errorText } = useT();
+  const { errorText, statusLabel, t } = useT();
   const toast = useToast();
   const defaults = presetRange('month');
   // useParamState seeds from the URL and re-syncs when it changes; the URL is also WRITTEN
@@ -167,7 +168,7 @@ export default function Expenses() {
 
     const byCat = new Map<string, number>();
     for (const it of items) {
-      const name = (it.product?.category_id && categoryNames.get(it.product.category_id)) || 'ללא קטגוריה';
+      const name = (it.product?.category_id && categoryNames.get(it.product.category_id)) || t('expenses.get');
       byCat.set(name, (byCat.get(name) ?? 0) + it.qty * it.unit_price);
     }
     const catTotals = [...byCat.entries()].map(([name, total]) => ({ name, total })).filter((c) => c.total > 0);
@@ -206,29 +207,52 @@ export default function Expenses() {
       const fileName = `expenses-${todayISO()}.xlsx`;
       if (templated) {
         downloadRenderedWorkbook(templated, fileName);
-        toast('קובץ ה-Excel הורד');
+        toast(t('expenses.toast'));
         return;
       }
       // Supplier, product-category and invoice-number text is tenant data on its way into a file
       // somebody opens in Excel. `=`/`@` at the start of a cell is a formula there, whatever we
       // meant by it — same neutralizer as documentExport.ts, which is now the one place it lives.
       const wb = XLSX.utils.book_new();
+      // The column headers are the workbook's own words, so they are resolved once, here, and
+      // used as COMPUTED KEYS. `t('x'): v` is a syntax error rather than a property, and a typed
+      // literal cannot carry one at all — the row shape is therefore a plain record, which is
+      // also what `json_to_sheet` reads.
+      const column = {
+        supplier: t('expenses.text'),
+        invoiceCount: t('expenses.text_2'),
+        total: t('expenses.totalColumn'),
+        shareOfTotal: t('expenses.Number'),
+        category: t('expenses.text_4'),
+        linkedOrderValue: t('expenses.text_5'),
+        invoiceNumber: t('expenses.text_7'),
+        invoiceDate: t('expenses.text_8'),
+        paymentStatus: t('expenses.statusLabel'),
+      };
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.bySupplier.map((r) => neutralizeSpreadsheetRow({
-        'ספק': r.name, 'חשבוניות': r.count, 'סה"כ': r.total,
-        '% מהסך': data.totalAll > 0 ? Number(((r.total / data.totalAll) * 100).toFixed(1)) : null,
-      }))), 'לפי ספק');
+        [column.supplier]: r.name,
+        [column.invoiceCount]: r.count,
+        [column.total]: r.total,
+        [column.shareOfTotal]: data.totalAll > 0 ? Number(((r.total / data.totalAll) * 100).toFixed(1)) : null,
+      }))), t('expenses.text_3'));
       if (data.categoryBreakdownAvailable) {
-        const catRows: { 'קטגוריה': string; 'ערך בהזמנות מקושרות': number }[] = [...data.catTotals]
+        const catRows: Record<string, string | number>[] = [...data.catTotals]
           .sort((a, b) => b.total - a.total)
-          .map((c) => neutralizeSpreadsheetRow({ 'קטגוריה': c.name, 'ערך בהזמנות מקושרות': c.total }));
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'קטגוריות בהזמנות');
+          .map((c) => neutralizeSpreadsheetRow({
+            [column.category]: c.name,
+            [column.linkedOrderValue]: c.total,
+          }));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), t('expenses.book_append_sheet'));
       }
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.invoices.map((i) => neutralizeSpreadsheetRow({
-        'ספק': i.supplier?.name ?? '', 'מספר חשבונית': i.invoice_number, 'תאריך': i.invoice_date,
-        'סה"כ': i.total_amount, 'סטטוס תשלום': statusLabel(INVOICE_PAYMENT_STATUS[i.payment_status]),
-      }))), 'חשבוניות');
+        [column.supplier]: i.supplier?.name ?? '',
+        [column.invoiceNumber]: i.invoice_number,
+        [column.invoiceDate]: i.invoice_date,
+        [column.total]: i.total_amount,
+        [column.paymentStatus]: statusLabel(INVOICE_PAYMENT_STATUS[i.payment_status]),
+      }))), t('expenses.text_9'));
       XLSX.writeFile(wb, fileName);
-      toast('קובץ ה-Excel הורד');
+      toast(t('expenses.toast_2'));
     } catch (e) {
       toast(errorText(e), 'error');
     } finally {
@@ -238,7 +262,7 @@ export default function Expenses() {
 
   if (loading) return <SkeletonCards count={3} cols={3} title />;
   if (error && !data) return <ErrorNote message={error} />;
-  if (!data) return <ErrorNote message="שגיאה" />;
+  if (!data) return <ErrorNote message={t('expenses.message')} />;
 
   const hasInvoices = data.invoices.length > 0;
   // A computed sum over a selected range IS data — ₪0 total with 0 invoices is an honest
@@ -246,21 +270,21 @@ export default function Expenses() {
   const avg = hasInvoices ? data.totalAll / data.invoices.length : null;
 
   // A disabled button looks clickable but does nothing; the title says why it is blocked.
-  const rangeBlockedReason = fetching ? 'הנתונים נטענים…'
-    : error ? 'שגיאה בטעינת הנתונים'
-    : data.invalidRange ? 'טווח התאריכים שגוי — מ־ אחרי עד'
+  const rangeBlockedReason = fetching ? t('expenses.text_10')
+    : error ? t('expenses.text_11')
+    : data.invalidRange ? t('expenses.text_12')
     : null;
-  const excelBlockedReason = rangeBlockedReason ?? (!hasInvoices ? 'אין חשבוניות בטווח שנבחר' : null);
+  const excelBlockedReason = rangeBlockedReason ?? (!hasInvoices ? t('expenses.text_13') : null);
 
   const categoryRows = [...data.catTotals].sort((a, b) => b.total - a.total);
   const categoryTotal = categoryRows.reduce((sum, row) => sum + row.total, 0);
 
   const columns: Column<SupplierRow>[] = [
-    { key: 'name', header: 'ספק', sortValue: (r) => r.name, render: (r) => <span className="font-medium">{r.name}</span> },
-    { key: 'count', header: 'חשבוניות', className: 'num', sortValue: (r) => r.count, render: (r) => fmtNum(r.count) },
-    { key: 'total', header: 'סה״כ', className: 'num', mobileLabel: null, sortValue: (r) => r.total, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.total)}</span> },
+    { key: 'name', header: t('expenses.text_14'), sortValue: (r) => r.name, render: (r) => <span className="font-medium">{r.name}</span> },
+    { key: 'count', header: t('expenses.fmtNum'), className: 'num', sortValue: (r) => r.count, render: (r) => fmtNum(r.count) },
+    { key: 'total', header: t('expenses.fmtMoneyExact'), className: 'num', mobileLabel: null, sortValue: (r) => r.total, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.total)}</span> },
     {
-      key: 'pct', header: '% מהסך', className: 'num', mobileLabel: '% מהסך', sortValue: (r) => r.total,
+      key: 'pct', header: t('expenses.text_15'), className: 'num', mobileLabel: t('expenses.text_16'), sortValue: (r) => r.total,
       render: (r) => (data.totalAll > 0 ? `${((r.total / data.totalAll) * 100).toFixed(1)}%` : '—'),
     },
   ];
@@ -276,11 +300,11 @@ export default function Expenses() {
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
-      {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
-      <PageHeader className="no-print" title="ריכוז הוצאות" actions={
+      {fetching && data && <div className="text-xs text-ink-muted" role="status">{t('expenses.text_17')}</div>}
+      <PageHeader className="no-print" title={t('expenses.title')} actions={
         <div className="flex flex-wrap items-center gap-2">
-          <button className="btn-secondary" onClick={() => void exportExcel()} disabled={exporting || !hasInvoices || fetching || !!error || data.invalidRange} title={excelBlockedReason ?? 'הורדת הריכוז כקובץ Excel'}>{exporting ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={ICON.sm} aria-hidden="true" />} ייצוא Excel</button>
-          <button className="btn-secondary" disabled={fetching || !!error || data.invalidRange} onClick={() => window.print()} title={rangeBlockedReason ?? 'הדפסת הריכוז או שמירה כ-PDF'}><Printer size={ICON.sm} aria-hidden="true" /> הדפסה / PDF</button>
+          <button className="btn-secondary" onClick={() => void exportExcel()} disabled={exporting || !hasInvoices || fetching || !!error || data.invalidRange} title={excelBlockedReason ?? t('expenses.exportExcel')}>{exporting ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={ICON.sm} aria-hidden="true" />} {t('expenses.exportExcelLabel')}</button>
+          <button className="btn-secondary" disabled={fetching || !!error || data.invalidRange} onClick={() => window.print()} title={rangeBlockedReason ?? t('expenses.print')}><Printer size={ICON.sm} aria-hidden="true" /> {t('expenses.print_2')}</button>
         </div>
       } />
 
@@ -288,53 +312,53 @@ export default function Expenses() {
         {/* Was `chip-filter sm:min-h-9` — a deliberate drop to 36px above the sm breakpoint, which
             contradicts "44px on every viewport". ToggleGroup owns the geometry now. */}
         <ToggleGroup<PresetKey | ''>
-          label="טווחי תאריכים מהירים"
+          label={t('expenses.label')}
           className="gap-1"
           value={activePreset}
           onChange={(key) => { if (!key) return; const range = presetRange(key); setRange(range.from, range.to); }}
-          items={PRESETS.map((preset) => ({ key: preset.key, label: preset.label }))} />
+          items={PRESETS.map((preset) => ({ key: preset.key, label: t(preset.labelKey) }))} />
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-1.5 text-xs text-ink-soft">
-            מ־
+            {t('expenses.text_18')}
             {/* The range error is a claim about THESE two fields, so it is bound to them rather
                 than left to a note floating below the toolbar. */}
             <input type="date" className="input w-auto!" value={from} onChange={(e) => setRange(e.target.value, to)}
               aria-invalid={invalidRange || undefined} aria-describedby={invalidRange ? RANGE_ERROR_ID : undefined} />
           </label>
           <label className="flex items-center gap-1.5 text-xs text-ink-soft">
-            עד
+            {t('expenses.text_19')}
             <input type="date" className="input w-auto!" value={to} onChange={(e) => setRange(from, e.target.value)}
               aria-invalid={invalidRange || undefined} aria-describedby={invalidRange ? RANGE_ERROR_ID : undefined} />
           </label>
         </div>
       </div>
 
-      {data.invalidRange && <div id={RANGE_ERROR_ID}><Note tone="alert" role="alert">תאריך ההתחלה חייב להיות מוקדם מתאריך הסיום או זהה לו.</Note></div>}
+      {data.invalidRange && <div id={RANGE_ERROR_ID}><Note tone="alert" role="alert">{t('expenses.text_20')}</Note></div>}
 
       {!data.invalidRange && <div className="print-area space-y-4">
         <div className="hidden print:block">
-          <h2 className="text-xl font-semibold">ריכוז הוצאות {fmtDate(from)} – {fmtDate(to)}</h2>
+          <h2 className="text-xl font-semibold">{t('expenses.heading', { from: fmtDate(from), to: fmtDate(to) })}</h2>
         </div>
 
         <div className="grid grid-cols-1 border-y border-line-strong bg-surface sm:grid-cols-3">
-          <StripStat title="סה״כ הוצאות בטווח" icon={Banknote}
+          <StripStat title={t('expenses.title_2')} icon={Banknote}
             value={fmtMoneyRounded(data.totalAll)} context={`${fmtDate(from)} – ${fmtDate(to)}`} />
-          <StripStat title="מספר חשבוניות" icon={ReceiptText}
-            value={fmtNum(data.invoices.length)} context="חשבוניות שאינן מחוקות בטווח" />
-          <StripStat title="ממוצע לחשבונית" icon={Calculator}
+          <StripStat title={t('expenses.title_3')} icon={ReceiptText}
+            value={fmtNum(data.invoices.length)} context={t('expenses.context')} />
+          <StripStat title={t('expenses.title_4')} icon={Calculator}
             value={avg == null ? '—' : fmtMoneyRounded(avg)}
-            context={avg == null ? 'אין חשבוניות בטווח' : 'סה״כ חלקי מספר החשבוניות'} />
+            context={avg == null ? t('expenses.text_21') : t('expenses.text_22')} />
         </div>
 
         {!hasInvoices ? (
           <div className="border-y border-line-soft bg-surface">
-            <EmptyState title="אין חשבוניות בטווח שנבחר"
-              subtitle="שנו את טווח התאריכים או בחרו אחד מהטווחים המהירים" />
+            <EmptyState title={t('expenses.title_5')}
+              subtitle={t('expenses.subtitle')} />
           </div>
         ) : (
           <>
             <section className="space-y-2">
-              <h2 className="section-title">הוצאות לפי ספק</h2>
+              <h2 className="section-title">{t('expenses.text_23')}</h2>
               <div className="divide-y divide-line-soft border-y border-line-strong bg-surface lg:hidden">
                 {data.bySupplier.map((supplier) => (
                   <button key={supplier.id} type="button" onClick={() => setDrill(supplier)}
@@ -342,8 +366,8 @@ export default function Expenses() {
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium text-ink-body">{supplier.name}</span>
                       <span className="mt-0.5 block text-xs text-ink-muted">
-                        <span className="num">{fmtNum(supplier.count)}</span> חשבוניות
-                        {data.totalAll > 0 && <> · <span className="num">{((supplier.total / data.totalAll) * 100).toFixed(1)}%</span> מהסך</>}
+                        <span className="num">{fmtNum(supplier.count)}</span> {t('expenses.invoicesWord')}
+                        {data.totalAll > 0 && <> · <span className="num">{((supplier.total / data.totalAll) * 100).toFixed(1)}%</span> {t('expenses.toFixed')}</>}
                       </span>
                     </span>
                     <strong className="num shrink-0 text-sm text-ink-body">{fmtMoneyExact(supplier.total)}</strong>
@@ -353,8 +377,8 @@ export default function Expenses() {
               </div>
               <div className="hidden lg:block">
                 <DataTable rows={data.bySupplier} columns={columns} mobile="scroll"
-                  rowLabel={(r) => `הוצאות עבור ${r.name}`}
-                  onRowClick={(r) => setDrill(r)} emptyTitle="אין חשבוניות בטווח" />
+                  rowLabel={(r) => t('expenses.rowLabel', { supplier: r.name })}
+                  onRowClick={(r) => setDrill(r)} emptyTitle={t('expenses.emptyTitle')} />
               </div>
             </section>
 
@@ -362,15 +386,18 @@ export default function Expenses() {
               <details className="border-y border-line-strong bg-surface">
                 <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 sm:px-4">
                   <span>
-                    <span className="block font-semibold text-ink-body">פירוט מוצרים לפי קטגוריה</span>
-                    <span className="mt-0.5 block text-xs text-ink-muted">מידע משלים מהזמנות מקושרות; אינו מחליף את סכומי החשבוניות בטבלת הספקים.</span>
+                    <span className="block font-semibold text-ink-body">{t('expenses.text_24')}</span>
+                    <span className="mt-0.5 block text-xs text-ink-muted">{t('expenses.text_25')}</span>
                   </span>
-                  <span className="shrink-0 text-xs text-ink-muted">הצג פירוט</span>
+                  <span className="shrink-0 text-xs text-ink-muted">{t('expenses.text_26')}</span>
                 </summary>
                 <div className="border-t border-line-soft">
                   <div className="px-3 py-2 text-xs text-ink-muted sm:px-4">
-                    חשבוניות מקושרות בסך <span className="num">{fmtMoneyRounded(data.coveredTotal)}</span> מתוך{' '}
-                    <span className="num">{fmtMoneyRounded(data.totalAll)}</span>. הסכומים למטה הם ערכי פריטי ההזמנה במחירי snapshot.
+                    {t('expenses.linkedInvoicesLead')}{' '}
+                    <span className="num">{fmtMoneyRounded(data.coveredTotal)}</span>{' '}
+                    {t('expenses.linkedInvoicesOf')}{' '}
+                    <span className="num">{fmtMoneyRounded(data.totalAll)}</span>
+                    {t('expenses.linkedInvoicesTail')}
                   </div>
                   {categoryRows.length > 0 ? (
                     <ul className="divide-y divide-line-soft border-t border-line-soft text-sm">
@@ -384,21 +411,21 @@ export default function Expenses() {
                     </ul>
                   ) : (
                     <div className="border-t border-line-soft px-3 py-6 text-center text-sm text-ink-muted sm:px-4">
-                      אין בטווח חשבוניות עם הזמנה מקושרת ופריטי קטגוריה.
+                      {t('expenses.text_27')}
                     </div>
                   )}
                 </div>
               </details>
             ) : (
               <Note tone="idle">
-                פילוח מוצרים וקטגוריות אינו חלק מההקשר החשבונאי המצומצם. סכומי הספקים והחשבוניות למעלה נשארים המקור המדויק, והייצוא אינו מוסיף פילוח שאינו זמין.
+                {t('expenses.text_28')}
               </Note>
             )}
           </>
         )}
       </div>}
 
-      <Modal open={!!drill} onClose={() => setDrill(null)} title={drill ? `חשבוניות בטווח — ${drill.name}` : ''}>
+      <Modal open={!!drill} onClose={() => setDrill(null)} title={drill ? t('expenses.drillTitle', { supplier: drill.name }) : ''}>
         {drill && (
           <ul className="divide-y divide-line-soft">
             {drillInvoices.map((inv) => (
