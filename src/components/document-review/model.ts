@@ -620,6 +620,8 @@ export const FILING_REASON_LABELS: Record<string, string> = {
     'אותו פריט מופיע ביותר משורה אחת בתעודה. המערכת לא חיברה את הכמויות והשורות ממתינות.',
   supplier_unidentified:
     'הספק לא הותאם לספק קיים במערכת, ואין למה לשייך את הסכום. אפשר לבחור ספק או ליצור אחד חדש.',
+  currency_unrecognised:
+    'לא ניתן לזהות את המטבע שהודפס במסמך, ולכן לא נוצרה רשומה כספית. יש לבחור קוד מטבע תקף מול המסמך.',
   invoice_identity_missing:
     'חסרים מספר חשבונית או תאריך, ולכן לא ניתן ליצור רשומה כספית.',
   invoice_number_unrepresentable:
