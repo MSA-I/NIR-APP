@@ -13,7 +13,7 @@ import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS } 
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import { canShare, shareInvoice } from '../lib/share';
 import type { Invoice } from '../lib/types';
-import type { CheckResult } from '../lib/checks';
+import { checkText, type CheckResult } from '../lib/checks';
 import {
   SUPPLIER_SEARCH_NARROWED,
   fetchServerList,
@@ -70,7 +70,7 @@ export function CheckList({ checks }: { checks: CheckResult[] }) {
         return (
           <Note key={i} tone={tone[c.severity]}>
             <Icon size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
-            <span>{c.message}</span>
+            <span>{checkText(c, t)}</span>
           </Note>
         );
       })}

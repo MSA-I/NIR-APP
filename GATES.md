@@ -172,6 +172,17 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   suite passed 7/7; the full suite passed 1,725/1,725; `npx tsc --noEmit` and `check:jsx-space`
   passed. `zero` still exits 1 on 469/63, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `checks.ts` + `checkSummary.ts` batch in this commit.** The pinned
+  count is now 989 Hebrew line(s) across 92 files; the protected set remains 538 lines in 31
+  files, so the real remainder is **451 lines in 61 files**. These are the 64th and 65th surfaces
+  locked at zero. `CheckResult.message` was removed: checks now carry an exhaustive `CheckCode`
+  plus raw variables, `CHECK_MESSAGE_KEY: Record<CheckCode, TKey>` resolves at render time, and
+  payment-request decisions compare codes rather than searching a translated sentence. Singular
+  and plural financial findings use distinct codes. Evidence: the stale-baseline negative control
+  named these two files alone; focused mapping/summary/allocation suites passed 12/12; the full
+  suite passed 1,729/1,729; `npx tsc --noEmit` and `check:jsx-space` passed. `zero` still exits 1
+  on 451/61, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

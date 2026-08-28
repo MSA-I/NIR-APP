@@ -5135,4 +5135,28 @@ export const en: Dictionary = {
     noResultsFor: 'No results found for “{query}”',
   },
 
+  checks: {
+    duplicateNumber: 'An invoice with the same number exists for this supplier (dated {date}, {amount})',
+    duplicateNumberPaid: 'An invoice with the same number exists for this supplier (dated {date}, {amount}, paid)',
+    similarInvoice: 'A similar invoice was found (same supplier, same amount, nearby date): no. {numbers}',
+    orderMismatch: 'The invoice amount ({invoiceAmount}) differs from the order amount ({orderAmount}) — a difference of {difference}',
+    receiptMismatch: 'The value of goods actually received ({receivedAmount}) differs from the invoice amount — a credit may be required',
+    existingPaymentRequest: 'A payment request is linked to this invoice (#{numbers})',
+    bankMatched: 'A bank transaction is matched to this invoice',
+    alreadyPaid: 'The invoice is already marked as fully paid — another payment would be a duplicate',
+    invoiceOpenCreditOne: 'This supplier has one open credit totaling {total} — offset it before payment',
+    invoiceOpenCreditMany: 'This supplier has {count} open credits totaling {total} — offset them before payment',
+    invoiceVisibility: 'Not all invoices linked to the request could be verified',
+    invoicePaidOne: 'One linked invoice has already been paid in full',
+    invoicePaidMany: '{count} linked invoices have already been paid in full',
+    invoiceUnapproved: 'The request includes an invoice that has not yet been approved for payment',
+    allocationVsBalanceOne: 'One linked invoice is allocated above its remaining balance — probably because a credit was offset after the request was created. Cancel the request and open a new request for the updated amount',
+    allocationVsBalanceMany: '{count} linked invoices are allocated above their remaining balances — probably because credits were offset after the request was created. Cancel the request and open a new request for the updated amount',
+    amountVsBalance: 'The requested amount differs from the open balance of the linked invoices',
+    similarPaymentRequest: 'An active payment request exists for the same supplier and exact amount (#{numbers}) — possible duplicate',
+    similarBankUnavailable: 'The similar-transfer check is unavailable until the bank account is assigned to a legal entity',
+    paymentRequestOpenCredit: 'Open credits totaling {total} have not yet been offset against the request',
+    actionAllocationVsBalance: 'Cancel the request and open a new request for the updated amount',
+  },
+
 };

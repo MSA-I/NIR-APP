@@ -1,4 +1,5 @@
-import type { CheckResult } from './checks';
+import type { CheckCode, CheckResult } from './checks';
+import type { TKey } from './i18n/t';
 
 /**
  * One reading of an automatic-check run: what blocks, what is only a warning, what is context,
@@ -21,7 +22,7 @@ export interface ChecksSummary {
    *
    * `null` is the honest answer far more often than it looks. Inventing a next step on a screen
    * that moves money is worse than saying nothing: the user follows it, it does not work, and the
-   * screen has now lied about what the system can do. A code earns a line in `REQUIRED_ACTION`
+   * screen has now lied about what the system can do. A code earns a line in `REQUIRED_ACTION_KEY`
    * only when the remedy is already established somewhere in the product, not when it is merely
    * plausible.
    *
@@ -29,25 +30,26 @@ export interface ChecksSummary {
    * Two simultaneous remedies have never occurred, and guessing their order of operations would be
    * exactly the invention this field refuses to make.
    */
-  action: string | null;
+  actionKey: TKey | null;
 }
 
 /**
  * Check code → the step that clears it.
  *
- * Only `allocation_vs_balance` qualifies today, and it qualifies because the product already
+ * Only the two `allocation_vs_balance_*` codes qualify today, because the product already
  * settled it: `amount_allocated` is frozen at creation, no screen can edit an allocation, and the
  * server refuses the request at approval AND at execution — so cancelling and re-opening is not
  * advice, it is the only route the state machine leaves open (checks.ts:169-180).
  *
  * The other `critical` codes (`duplicate_number`, `already_paid`, `invoice_visibility`,
- * `invoice_paid`, `invoice_unapproved`, `similar_pr`) are deliberately absent. Each of them has a
+ * `invoice_paid_*`, `invoice_unapproved`, `similar_pr`) are deliberately absent. Each has a
  * plausible-sounding remedy and not one of them has a decided one — approving past a duplicate
  * suspicion is a judgement call, and "ask someone who can see the invoice" is a sentence nobody
  * signed off on. They block, they say why, and they leave the next move to a person.
  */
-const REQUIRED_ACTION: Readonly<Record<string, string | undefined>> = {
-  allocation_vs_balance: 'יש לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן',
+const REQUIRED_ACTION_KEY: Readonly<Partial<Record<CheckCode, TKey>>> = {
+  allocation_vs_balance_one: 'checks.actionAllocationVsBalance',
+  allocation_vs_balance_many: 'checks.actionAllocationVsBalance',
 };
 
 /** Partition a check run by severity and resolve the one action, if any, that clears the block. */
@@ -57,6 +59,6 @@ export function summarizeChecks(checks: readonly CheckResult[]): ChecksSummary {
     blocking,
     warnings: checks.filter((check) => check.severity === 'warning'),
     info: checks.filter((check) => check.severity === 'info'),
-    action: blocking.map((check) => REQUIRED_ACTION[check.code]).find((step) => step != null) ?? null,
+    actionKey: blocking.map((check) => REQUIRED_ACTION_KEY[check.code]).find((key) => key != null) ?? null,
   };
 }

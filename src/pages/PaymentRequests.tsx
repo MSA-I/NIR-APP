@@ -10,7 +10,7 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, useToast, Modal, ConfirmDialog, Disclosure, ErrorNote, Note, PageHeader, SkeletonTable, SubPanel, ICON, type Column } from '../components/ui';
 import { CheckList } from './Invoices';
-import { runPaymentRequestChecks, type CheckResult } from '../lib/checks';
+import { checkText, runPaymentRequestChecks, type CheckResult } from '../lib/checks';
 import { summarizeChecks, type ChecksSummary } from '../lib/checkSummary';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
 import { addCalendarDays, fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
@@ -502,6 +502,9 @@ const paymentRequestActionLabel = (status: PaymentRequestStatus) =>
  * Local to this screen on purpose. `CheckList` has four consumers and only this one repeated
  * itself; reshaping the shared component would push a fix onto three screens nobody complained about.
  */
+const isAllocationVsBalanceCheck = (check: CheckResult) =>
+  check.code === 'allocation_vs_balance_one' || check.code === 'allocation_vs_balance_many';
+
 function CheckSummary({ summary, checks }: { summary: ChecksSummary; checks: CheckResult[] }) {
   const { t } = useT();
   const [detailOpen, setDetailOpen] = useState(false);
@@ -530,11 +533,11 @@ function CheckSummary({ summary, checks }: { summary: ChecksSummary; checks: Che
         : t('paymentRequests.text_26');
 
   // The action gets its own line only when no blocking sentence already ends with it.
-  // `allocation_vs_balance` carries its remedy inside its own message (checks.ts:174-180), and
+  // The allocation-vs-balance codes carry their remedy inside their own message, and
   // printing it again under "פעולה נדרשת" would rebuild — inside one box this time — the exact
   // repetition this summary exists to remove.
-  const action = summary.action;
-  const unsaidAction = action != null && !summary.blocking.some((check) => check.message.includes(action))
+  const action = summary.actionKey ? t(summary.actionKey) : null;
+  const unsaidAction = action != null && !summary.blocking.some(isAllocationVsBalanceCheck)
     ? action
     : null;
 
@@ -545,7 +548,7 @@ function CheckSummary({ summary, checks }: { summary: ChecksSummary; checks: Che
         {counts.length > 0 && <p className="text-xs">{counts.join(' · ')}</p>}
         {blocked && (
           <ul className="space-y-1">
-            {summary.blocking.map((check, index) => <li key={index}>{check.message}</li>)}
+            {summary.blocking.map((check, index) => <li key={index}>{checkText(check, t)}</li>)}
           </ul>
         )}
         {unsaidAction && <p><span className="font-medium">{t('paymentRequests.text_27')}</span> {unsaidAction}</p>}
@@ -615,7 +618,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
     };
   }, [checkFingerprint]);
 
-  const openCreditTotal = checks?.find((check) => check.code === 'open_credit')?.amount ?? 0;
+  const openCreditTotal = checks?.find((check) => check.code === 'payment_request_open_credit')?.amount ?? 0;
 
   useEffect(() => {
     setCreditOverrideAcknowledged(false);
@@ -639,7 +642,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         if (latestFingerprint.current !== checkFingerprint) throw new Error(t('paymentRequests.Error_2'));
         setChecks(freshChecks);
         setCheckError(null);
-        freshOpenCreditTotal = freshChecks.find((check) => check.code === 'open_credit')?.amount ?? 0;
+        freshOpenCreditTotal = freshChecks.find((check) => check.code === 'payment_request_open_credit')?.amount ?? 0;
         // 0146: re-read on the fresh signals, not the rendered ones. A credit offset between
         // opening the modal and pressing approve lands here, and the server would answer with a
         // bare payment_request_checks_failed.
@@ -648,7 +651,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
         // and stops there. `setChecks(freshChecks)` above has already re-rendered the summary,
         // which states the rule and the required action; reciting them here too was the third
         // copy of one sentence the owner asked us to stop printing (19.08.2026).
-        if (freshChecks.some((check) => check.code === 'allocation_vs_balance')) {
+        if (freshChecks.some(isAllocationVsBalanceCheck)) {
           setBusy(false);
           toast(t('paymentRequests.toast_13'), 'error');
           return;
@@ -724,7 +727,7 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
   // (payment_request_checks_failed) and again at execution (allocation_exceeds_balance), and no
   // screen can repair an allocation. Both approval routes are closed here so the refusal arrives
   // with its reason attached instead of as a server error the user cannot act on.
-  const overAllocated = summary?.blocking.some((c) => c.code === 'allocation_vs_balance') ?? false;
+  const overAllocated = summary?.blocking.some(isAllocationVsBalanceCheck) ?? false;
 
   return (
     <Modal open onClose={onClose} title={t('paymentRequests.detailTitle', { number: pr.number, supplier: pr.supplier.name })} wide busy={busy} statusMessage={busy ? t('paymentRequests.detailBusy') : undefined}>

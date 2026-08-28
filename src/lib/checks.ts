@@ -2,13 +2,65 @@ import { supabase } from './supabase';
 import { unwrap } from './useQuery';
 import { addCalendarDays, fmtDate, fmtMoneyExact } from './format';
 import { fetchAll, fetchInChunks } from './supabasePaging';
+import type { TKey } from './i18n/t';
 
 export type CheckSeverity = 'info' | 'warning' | 'critical';
+export type CheckCode =
+  | 'duplicate_number'
+  | 'duplicate_number_paid'
+  | 'similar_invoice'
+  | 'order_mismatch'
+  | 'receipt_mismatch'
+  | 'existing_pr'
+  | 'bank_matched'
+  | 'already_paid'
+  | 'invoice_open_credit_one'
+  | 'invoice_open_credit_many'
+  | 'invoice_visibility'
+  | 'invoice_paid_one'
+  | 'invoice_paid_many'
+  | 'invoice_unapproved'
+  | 'allocation_vs_balance_one'
+  | 'allocation_vs_balance_many'
+  | 'amount_vs_balance'
+  | 'similar_pr'
+  | 'similar_bank_unavailable'
+  | 'payment_request_open_credit';
 export interface CheckResult {
-  code: string;
+  code: CheckCode;
   severity: CheckSeverity;
-  message: string;
+  vars?: Record<string, string | number>;
   amount?: number;
+}
+
+export const CHECK_MESSAGE_KEY: Readonly<Record<CheckCode, TKey>> = {
+  duplicate_number: 'checks.duplicateNumber',
+  duplicate_number_paid: 'checks.duplicateNumberPaid',
+  similar_invoice: 'checks.similarInvoice',
+  order_mismatch: 'checks.orderMismatch',
+  receipt_mismatch: 'checks.receiptMismatch',
+  existing_pr: 'checks.existingPaymentRequest',
+  bank_matched: 'checks.bankMatched',
+  already_paid: 'checks.alreadyPaid',
+  invoice_open_credit_one: 'checks.invoiceOpenCreditOne',
+  invoice_open_credit_many: 'checks.invoiceOpenCreditMany',
+  invoice_visibility: 'checks.invoiceVisibility',
+  invoice_paid_one: 'checks.invoicePaidOne',
+  invoice_paid_many: 'checks.invoicePaidMany',
+  invoice_unapproved: 'checks.invoiceUnapproved',
+  allocation_vs_balance_one: 'checks.allocationVsBalanceOne',
+  allocation_vs_balance_many: 'checks.allocationVsBalanceMany',
+  amount_vs_balance: 'checks.amountVsBalance',
+  similar_pr: 'checks.similarPaymentRequest',
+  similar_bank_unavailable: 'checks.similarBankUnavailable',
+  payment_request_open_credit: 'checks.paymentRequestOpenCredit',
+};
+
+export function checkText(
+  check: CheckResult,
+  t: (key: TKey, vars?: Record<string, string | number>) => string,
+): string {
+  return t(CHECK_MESSAGE_KEY[check.code], check.vars);
 }
 
 const AMOUNT_TOLERANCE = 1; // ₪ — treat sub-shekel gaps as rounding
@@ -35,9 +87,9 @@ export async function runInvoiceChecks(inv: {
   });
   for (const d of dups) {
     results.push({
-      code: 'duplicate_number',
+      code: d.payment_status === 'paid' ? 'duplicate_number_paid' : 'duplicate_number',
       severity: 'critical',
-      message: `קיימת חשבונית עם אותו מספר לאותו ספק (מ־${fmtDate(d.invoice_date)}, ${fmtMoneyExact(d.total_amount)}${d.payment_status === 'paid' ? ', שולמה' : ''})`,
+      vars: { date: fmtDate(d.invoice_date), amount: fmtMoneyExact(d.total_amount) },
     });
   }
 
@@ -59,7 +111,7 @@ export async function runInvoiceChecks(inv: {
       results.push({
         code: 'similar_invoice',
         severity: 'warning',
-        message: `נמצאה חשבונית דומה (אותו ספק, אותו סכום, טווח תאריכים קרוב): מס׳ ${sims.map((s) => s.invoice_number).join(', ')}`,
+        vars: { numbers: sims.map((s) => s.invoice_number).join(', ') },
       });
     }
   }
@@ -76,14 +128,18 @@ export async function runInvoiceChecks(inv: {
       results.push({
         code: 'order_mismatch',
         severity: 'warning',
-        message: `סכום החשבונית (${fmtMoneyExact(inv.total_amount)}) שונה מסכום ההזמנה (${fmtMoneyExact(orderTotal)}) — פער של ${fmtMoneyExact(Math.abs(inv.total_amount - orderTotal))}`,
+        vars: {
+          invoiceAmount: fmtMoneyExact(inv.total_amount),
+          orderAmount: fmtMoneyExact(orderTotal),
+          difference: fmtMoneyExact(Math.abs(inv.total_amount - orderTotal)),
+        },
       });
     }
     if (Math.abs(receivedTotal - inv.total_amount) > AMOUNT_TOLERANCE && Math.abs(receivedTotal - orderTotal) > AMOUNT_TOLERANCE) {
       results.push({
         code: 'receipt_mismatch',
         severity: 'warning',
-        message: `שווי הסחורה שהתקבלה בפועל (${fmtMoneyExact(receivedTotal)}) שונה מסכום החשבונית — ייתכן שנדרש זיכוי`,
+        vars: { receivedAmount: fmtMoneyExact(receivedTotal) },
       });
     }
   }
@@ -99,7 +155,7 @@ export async function runInvoiceChecks(inv: {
       results.push({
         code: 'existing_pr',
         severity: 'info',
-        message: `קיימת דרישת תשלום מקושרת לחשבונית זו (#${active.map((p) => p.payment_requests.number).join(', ')})`,
+        vars: { numbers: active.map((p) => p.payment_requests.number).join(', ') },
       });
     }
 
@@ -108,10 +164,10 @@ export async function runInvoiceChecks(inv: {
       p_invoice_id: inv.id,
     })) as { bank_match_exists: boolean; already_paid: boolean };
     if (financial.bank_match_exists) {
-      results.push({ code: 'bank_matched', severity: 'info', message: 'קיימת תנועת בנק מותאמת לחשבונית זו' });
+      results.push({ code: 'bank_matched', severity: 'info' });
     }
     if (financial.already_paid) {
-      results.push({ code: 'already_paid', severity: 'critical', message: 'החשבונית כבר מסומנת כמשולמת במלואה — תשלום נוסף יהיה כפול' });
+      results.push({ code: 'already_paid', severity: 'critical' });
     }
   }
 
@@ -122,10 +178,9 @@ export async function runInvoiceChecks(inv: {
   if (credits.length) {
     const sum = credits.reduce((s, c) => s + c.amount, 0);
     results.push({
-      code: 'open_credit',
+      code: credits.length === 1 ? 'invoice_open_credit_one' : 'invoice_open_credit_many',
       severity: 'info',
-      message: `לספק זה ${credits.length} ${credits.length === 1 ? 'זיכוי פתוח' : 'זיכויים פתוחים'} `
-        + `בסך ${fmtMoneyExact(sum)} — כדאי לקזז לפני תשלום`,
+      vars: { count: credits.length, total: fmtMoneyExact(sum) },
     });
   }
 
@@ -158,13 +213,17 @@ export async function runPaymentRequestChecks(pr: {
     over_allocated_invoice_count: number;
   };
   if (financial.visible_invoice_count !== financial.requested_invoice_count) {
-    results.push({ code: 'invoice_visibility', severity: 'critical', message: 'לא ניתן לאמת את כל החשבוניות המקושרות לדרישה' });
+    results.push({ code: 'invoice_visibility', severity: 'critical' });
   }
   if (financial.paid_invoice_count > 0) {
-    results.push({ code: 'invoice_paid', severity: 'critical', message: `${financial.paid_invoice_count} מהחשבוניות המקושרות כבר שולמו במלואן` });
+    results.push({
+      code: financial.paid_invoice_count === 1 ? 'invoice_paid_one' : 'invoice_paid_many',
+      severity: 'critical',
+      vars: { count: financial.paid_invoice_count },
+    });
   }
   if (financial.unapproved_invoice_count > 0) {
-    results.push({ code: 'invoice_unapproved', severity: 'critical', message: 'הדרישה כוללת חשבונית שטרם אושרה לתשלום' });
+    results.push({ code: 'invoice_unapproved', severity: 'critical' });
   }
   // 0146. amount_allocated is fixed when the request is created and never recomputed, so a credit
   // that was offset afterwards leaves the request allocating more than the invoice still owes.
@@ -173,16 +232,17 @@ export async function runPaymentRequestChecks(pr: {
   // button, instead of as a refusal the user cannot act on.
   if (financial.over_allocated_invoice_count > 0) {
     results.push({
-      code: 'allocation_vs_balance',
+      code: financial.over_allocated_invoice_count === 1
+        ? 'allocation_vs_balance_one'
+        : 'allocation_vs_balance_many',
       severity: 'critical',
-      message: `${financial.over_allocated_invoice_count === 1 ? 'חשבונית מקושרת אחת מוקצית' : `${financial.over_allocated_invoice_count} מהחשבוניות המקושרות מוקצות`} מעל היתרה שנותרה — ככל הנראה בעקבות זיכוי שקוזז אחרי יצירת הדרישה. יש לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן`,
+      vars: { count: financial.over_allocated_invoice_count },
     });
   }
   if (!financial.amount_matches_open_balance) {
     results.push({
       code: 'amount_vs_balance',
       severity: 'warning',
-      message: 'סכום הדרישה שונה מהיתרה הפתוחה של החשבוניות המקושרות',
     });
   }
 
@@ -198,7 +258,7 @@ export async function runPaymentRequestChecks(pr: {
     results.push({
       code: 'similar_pr',
       severity: 'critical',
-      message: `קיימת דרישת תשלום פעילה לאותו ספק באותו סכום בדיוק (#${sims.map((s) => s.number).join(', ')}) — חשד לכפילות`,
+      vars: { numbers: sims.map((s) => s.number).join(', ') },
     });
   }
 
@@ -208,7 +268,6 @@ export async function runPaymentRequestChecks(pr: {
     results.push({
       code: 'similar_bank_unavailable',
       severity: 'warning',
-      message: 'בדיקת העברה דומה אינה זמינה עד שיוך בנק לישות',
     });
   }
 
@@ -216,10 +275,10 @@ export async function runPaymentRequestChecks(pr: {
   // raw credit rows or aggregate credits from another legal entity.
   if (financial.open_credit_total > 0) {
     results.push({
-      code: 'open_credit',
+      code: 'payment_request_open_credit',
       severity: 'warning',
       amount: financial.open_credit_total,
-      message: `זיכויים פתוחים בסך ${fmtMoneyExact(financial.open_credit_total)} טרם קוזזו מהדרישה`,
+      vars: { total: fmtMoneyExact(financial.open_credit_total) },
     });
   }
 

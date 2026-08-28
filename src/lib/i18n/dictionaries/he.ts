@@ -5139,6 +5139,30 @@ export const he = {
     noResultsFor: 'לא נמצאו תוצאות עבור «{query}»',
   },
 
+  checks: {
+    duplicateNumber: 'קיימת חשבונית עם אותו מספר לאותו ספק (מ־{date}, {amount})',
+    duplicateNumberPaid: 'קיימת חשבונית עם אותו מספר לאותו ספק (מ־{date}, {amount}, שולמה)',
+    similarInvoice: 'נמצאה חשבונית דומה (אותו ספק, אותו סכום, טווח תאריכים קרוב): מס׳ {numbers}',
+    orderMismatch: 'סכום החשבונית ({invoiceAmount}) שונה מסכום ההזמנה ({orderAmount}) — פער של {difference}',
+    receiptMismatch: 'שווי הסחורה שהתקבלה בפועל ({receivedAmount}) שונה מסכום החשבונית — ייתכן שנדרש זיכוי',
+    existingPaymentRequest: 'קיימת דרישת תשלום מקושרת לחשבונית זו (#{numbers})',
+    bankMatched: 'קיימת תנועת בנק מותאמת לחשבונית זו',
+    alreadyPaid: 'החשבונית כבר מסומנת כמשולמת במלואה — תשלום נוסף יהיה כפול',
+    invoiceOpenCreditOne: 'לספק זה זיכוי פתוח אחד בסך {total} — כדאי לקזז לפני תשלום',
+    invoiceOpenCreditMany: 'לספק זה {count} זיכויים פתוחים בסך {total} — כדאי לקזז לפני תשלום',
+    invoiceVisibility: 'לא ניתן לאמת את כל החשבוניות המקושרות לדרישה',
+    invoicePaidOne: 'חשבונית מקושרת אחת כבר שולמה במלואה',
+    invoicePaidMany: '{count} מהחשבוניות המקושרות כבר שולמו במלואן',
+    invoiceUnapproved: 'הדרישה כוללת חשבונית שטרם אושרה לתשלום',
+    allocationVsBalanceOne: 'חשבונית מקושרת אחת מוקצית מעל היתרה שנותרה — ככל הנראה בעקבות זיכוי שקוזז אחרי יצירת הדרישה. יש לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן',
+    allocationVsBalanceMany: '{count} מהחשבוניות המקושרות מוקצות מעל היתרה שנותרה — ככל הנראה בעקבות זיכוי שקוזז אחרי יצירת הדרישה. יש לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן',
+    amountVsBalance: 'סכום הדרישה שונה מהיתרה הפתוחה של החשבוניות המקושרות',
+    similarPaymentRequest: 'קיימת דרישת תשלום פעילה לאותו ספק באותו סכום בדיוק (#{numbers}) — חשד לכפילות',
+    similarBankUnavailable: 'בדיקת העברה דומה אינה זמינה עד שיוך בנק לישות',
+    paymentRequestOpenCredit: 'זיכויים פתוחים בסך {total} טרם קוזזו מהדרישה',
+    actionAllocationVsBalance: 'יש לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן',
+  },
+
 } as const;
 
 /**
