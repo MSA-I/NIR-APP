@@ -8,7 +8,8 @@ import {
 } from '@tanstack/react-table';
 import type { StatusMeta, Tone } from '../lib/status';
 import type { ServerSort } from '../lib/serverList';
-import { fmtMoneyRounded } from '../lib/format';
+import { MoneyByCurrency, totalsByCurrency } from './Money';
+import type { MoneyAmount } from '../lib/types';
 import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
 import { routePresentationDescription } from '../lib/routePresentation';
 import { ActionMenu, type ActionMenuItem } from './ActionMenu';
@@ -876,7 +877,13 @@ export interface AttentionItem {
   key: string;
   label: string;
   count: number | null;      // null = cannot be measured → never rendered, never shown as 0
-  amount?: number | null;    // optional ₪ figure shown at the row end
+  /**
+   * Optional money figure at the row end, and it is a LIST because a row can be about two
+   * currencies at once (0217, #277): "4 invoices awaiting approval" can be ₪12,400 and $3,100,
+   * and adding them would be the false total this product exists not to print. One entry renders
+   * exactly as the single figure always did.
+   */
+  amounts?: readonly MoneyAmount[] | null;
   tone: Tone;                // shared tone vocabulary (badge-* in index.css)
   to: string;                // full path incl. query string — a real <Link>, not onClick
   hint?: string;             // e.g. "3 בחומרה גבוהה"
@@ -894,7 +901,9 @@ const ATTENTION_TONE_ORDER: Record<Tone, number> = { alert: 0, await: 1, info: 2
 // T7.3: the row CLUSTERS at the logical start instead of stretching content to both edges — a
 // wide card no longer leaves a chevron orphaned across an empty gulf (owner report). The hover
 // wash still spans the full row, so the tap surface did not shrink.
-function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean }) {
+function AttentionRow({ item, muted, baseCurrency }: {
+  item: AttentionItem; muted?: boolean; baseCurrency: string | null | undefined;
+}) {
   const measured = item.count != null;
   return (
     <li>
@@ -904,8 +913,14 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
           <span className={muted ? 'text-ink-soft' : 'text-ink-body font-medium'}>{item.label}</span>
           {item.hint && <span className="ms-2 text-xs text-ink-muted max-sm:block max-sm:ms-0 max-sm:mt-0.5">{item.hint}</span>}
         </span>
-        {item.amount != null && item.amount > 0 && (
-          <span className={`num text-sm ${muted ? 'font-medium text-ink-soft' : 'font-semibold text-ink-mid'}`}>{fmtMoneyRounded(item.amount)}</span>
+        {(item.amounts?.length ?? 0) > 0 && (
+          <MoneyByCurrency
+            amounts={item.amounts}
+            baseCurrency={baseCurrency}
+            shape="rounded"
+            empty=""
+            className={`text-sm ${muted ? 'font-medium text-ink-soft' : 'font-semibold text-ink-mid'}`}
+          />
         )}
         <ChevronLeft size={ICON.sm} className="text-ink-ghost shrink-0" aria-hidden="true" />
       </Link>
@@ -935,9 +950,11 @@ function AttentionRow({ item, muted }: { item: AttentionItem; muted?: boolean })
  * obligations (money we owe), so a bare figure is apples+oranges. The caller — which knows what
  * the mix means — may pass a short qualifier (e.g. "חשיפה"); we render it, we never invent it.
  */
-export function AttentionZone({ items, totalLabel, className = '' }: {
+export function AttentionZone({ items, totalLabel, baseCurrency, className = '' }: {
   items: AttentionItem[];
   totalLabel?: string;
+  /** The organisation's own currency — the ORDER money is listed in, never a conversion target. */
+  baseCurrency: string | null | undefined;
   /** Caller-supplied classes on the card root. The owner dashboard uses it to declare this zone's
    *  entrance step, which differs between phone and desktop since the money band moves. */
   className?: string;
@@ -954,7 +971,10 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
   const isAction = (i: AttentionItem) => i.tone === 'alert' || i.tone === 'await';
   const actionRows = active.filter(isAction);
   const noticeRows = active.filter((i) => !isAction(i));
-  const actionTotal = actionRows.reduce((s, i) => s + (i.amount ?? 0), 0);
+  // Summed WITHIN each currency and never across them. Two currencies produce two lines in the
+  // header, which is the only honest shape for "what needs action today" when the answer is in
+  // two kinds of money.
+  const actionTotals = totalsByCurrency(actionRows.flatMap((i) => i.amounts ?? []));
   // The header's own tone, from the rows it is counting rather than from a constant. The bell used
   // to be `text-await-fg` unconditionally, so it went on claiming "something is waiting" while the
   // card underneath said "אין משימות דחופות כרגע" — colour asserting the opposite of the sentence
@@ -979,9 +999,10 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
             </span>
           )}
         </h2>
-        {actionTotal > 0 && (
+        {actionTotals.length > 0 && (
           <span className="text-xs text-ink-muted">
-            {totalLabel ? <>{totalLabel} </> : null}<span className="num">{fmtMoneyRounded(actionTotal)}</span>
+            {totalLabel ? <>{totalLabel} </> : null}
+            <MoneyByCurrency amounts={actionTotals} baseCurrency={baseCurrency} shape="rounded" empty="" />
           </span>
         )}
       </div>
@@ -990,7 +1011,7 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
         /* T7: one column. The zone now lives in a half-width tile of the dashboard grid (the
            reference's side list), where two columns of long Hebrew labels wrapped every row. */
         <ul className="grid grid-cols-1">
-          {actionRows.map((i) => <AttentionRow key={i.key} item={i} />)}
+          {actionRows.map((i) => <AttentionRow key={i.key} item={i} baseCurrency={baseCurrency} />)}
         </ul>
       ) : unknownRows.length > 0 ? (
         /* Not everything could be measured, so the green all-clear is a claim we are not entitled
@@ -1016,7 +1037,7 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
             <div className="pt-2">
               <div className="text-xs font-medium text-ink-muted mb-1">לידיעה</div>
               <ul className="divide-y divide-line-soft">
-                {noticeRows.map((i) => <AttentionRow key={i.key} item={i} muted />)}
+                {noticeRows.map((i) => <AttentionRow key={i.key} item={i} muted baseCurrency={baseCurrency} />)}
               </ul>
             </div>
           )}
@@ -1025,7 +1046,7 @@ export function AttentionZone({ items, totalLabel, className = '' }: {
             <div className="mt-2 pt-2 border-t border-line-soft">
               <div className="text-xs font-medium text-ink-muted mb-1">לא ניתן למדידה</div>
               <ul className="divide-y divide-line-soft">
-                {unknownRows.map((i) => <AttentionRow key={i.key} item={i} muted />)}
+                {unknownRows.map((i) => <AttentionRow key={i.key} item={i} muted baseCurrency={baseCurrency} />)}
               </ul>
             </div>
           )}

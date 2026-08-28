@@ -144,14 +144,14 @@ export async function shareOrderImage(blob: Blob, fileName: string): Promise<'sh
 
 /** Shares a Hebrew invoice summary (number, supplier, date, amount) via the Web Share API. */
 export async function shareInvoice(
-  inv: { invoice_number: string; invoice_date: string; total_amount: number },
+  inv: { invoice_number: string; invoice_date: string; total_amount: number; currency: string },
   supplierName: string,
 ): Promise<void> {
   if (!canShare()) return;
   const text = [
     `חשבונית ${inv.invoice_number} — ${supplierName}`,
     `תאריך: ${fmtDate(inv.invoice_date)}`,
-    `סה"כ: ${fmtMoneyExact(inv.total_amount)}`,
+    `סה"כ: ${fmtMoneyExact(inv.total_amount, inv.currency)}`,
   ].join('\n');
   try {
     await navigator.share({ title: `חשבונית ${inv.invoice_number}`, text });
