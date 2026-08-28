@@ -11,6 +11,7 @@
  *   node scripts/gate-i18n.mjs abandon      -- the operator-console skip is recorded, not forgotten
  *   node scripts/gate-i18n.mjs zero         -- extraction is FINISHED: nothing left but the exceptions
  *   node scripts/gate-i18n.mjs currency-untouched -- translating the UI changed nothing about money
+ *   node scripts/gate-i18n.mjs help-registry-paired -- every product-help topic exists in both locales
  *   node scripts/gate-i18n.mjs legacy-errors -- how many PRODUCT sites still show failures in Hebrew only
  */
 import { execFileSync } from 'node:child_process';
@@ -216,10 +217,46 @@ function currencyUntouched() {
   console.log('GATE_I18N_CURRENCY_UNTOUCHED_OK');
 }
 
+
+/**
+ * P2-G8. Every product-help topic exists in both locales.
+ *
+ * The assistant answers product questions ONLY from this registry — there is no fallback and no
+ * model knowledge (OPEN-DECISIONS #192). A topic with a Hebrew row and no English one is therefore
+ * not a cosmetic gap: an English speaker asking that question gets Hebrew back, or nothing.
+ *
+ * Checked structurally rather than by counting, so it fails for the right reason: it names the
+ * topics that lost a twin, in whichever direction. An English row with no Hebrew original is also
+ * a failure — that is #192's "locale חסר" read the other way, a translation of nothing.
+ */
+function helpRegistryPaired() {
+  const registry = read('src/lib/assistant/productHelpRegistry.ts').replace(/\r\n/g, '\n');
+  const ids = [...registry.matchAll(/^ {4}id: '(\w+)',$/gm)].map((m) => m[1]);
+  const locales = [...registry.matchAll(/^ {4}locale: '(\w+)',$/gm)].map((m) => m[1]);
+  if (ids.length === 0 || ids.length !== locales.length) {
+    fail(`gate-i18n: parsed ${ids.length} id(s) against ${locales.length} locale(s) — the registry's shape changed and this check can no longer read it`);
+  }
+  const byLocale = { he: [], en: [] };
+  ids.forEach((id, index) => { (byLocale[locales[index]] ??= []).push(id); });
+  const he = byLocale.he ?? [];
+  const en = byLocale.en ?? [];
+  const missingEnglish = he.filter((id) => !en.includes(id));
+  const orphanEnglish = en.filter((id) => !he.includes(id));
+  if (missingEnglish.length || orphanEnglish.length) {
+    const lines = ['gate-i18n: the product-help registry is not paired.'];
+    if (missingEnglish.length) lines.push(`  no English row: ${missingEnglish.join(', ')}`);
+    if (orphanEnglish.length) lines.push(`  English with no Hebrew original: ${orphanEnglish.join(', ')}`);
+    fail(lines.join('\n'));
+  }
+  console.log(`gate-i18n: ${he.length} product-help topic(s), each in both locales`);
+  console.log('GATE_I18N_HELP_PAIRED_OK');
+}
+
 const COMMANDS = {
   ratchet, extracted, dictionaries, abandon, zero, legacyErrors,
   'legacy-errors': legacyErrors,
   currencyUntouched, 'currency-untouched': currencyUntouched,
+  helpRegistryPaired, 'help-registry-paired': helpRegistryPaired,
 };
 const command = COMMANDS[process.argv[2]];
 if (!command) fail(`gate-i18n: unknown subcommand ${process.argv[2] ?? '(none)'}; expected one of ${Object.keys(COMMANDS).join(', ')}`);

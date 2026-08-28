@@ -100,6 +100,15 @@ Plan: `docs/PLAN-english-language-20260827.md`.
 
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
+- [ ] P2-G8: the assistant answers a product question in the language it was asked in
+  CHECK: node scripts/gate-i18n.mjs help-registry-paired
+  EXPECT: GATE_I18N_HELP_PAIRED_OK
+  EVIDENCE: half met, and the half that is met is the runnable one. exit=0; output=gate-i18n: 15 product-help topic(s), each in both locales | GATE_I18N_HELP_PAIRED_OK. Positive control: deleting the English row for `check_product_purchases` ⇒ `gate-i18n: the product-help registry is not paired. no English row: check_product_purchases`, exit 1; restored ⇒ pass. It fails in the other direction too, on an English row with no Hebrew original — that is #192's missing-locale rule read backwards, a translation of nothing. Every one of the 15 product-help topics now has both an `he` and an `en` row, built from the Hebrew row's own `route`, `roles`, `version` and `source` rather than retyped — those are contract fields the registry guard checks, and a retyped `roles` could hand somebody a screen the Guard withholds.
+
+  **What is NOT met, and cannot be from this branch:** `get_product_help` takes `locale` as a TOOL ARGUMENT the model chooses, defaulting to `he` — it is never told the reader's actual locale, and `profiles.locale` does not reach the Edge Function at all. So an English speaker gets an English answer only when the model happens to pass `en`. The parameter's description now says to follow the language of the question, which raises the odds and is not a guarantee; wiring the caller's real locale through is an Edge change with its own deploy, outside this branch's surface.
+
+  The English steps deliberately name NO on-screen control by its words. The three that already existed quoted Hebrew button labels, on a premise the file stated outright — "the UI itself is Hebrew" — which this very feature retires. Naming the action and the place survives both languages, and survives every screen still mid-extraction.
+
 - [ ] P2-G7: an English session shows no Hebrew word anywhere on screen, except what a document put there
   CHECK: node scripts/check-english-screens.mjs
   EXPECT: ENGLISH_SCREENS_OK

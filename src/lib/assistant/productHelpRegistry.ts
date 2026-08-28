@@ -304,14 +304,38 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     updated_at: '2026-08-24',
   },
 
-  /* --------------------------------------------------------------------------
+/* --------------------------------------------------------------------------
    * English translations.
    *
-   * The UI itself is Hebrew, so a translated step still quotes the Hebrew control it tells you to
-   * press — an English sentence naming an English button that does not exist would be exactly the
-   * kind of unfollowable instruction #192 exists to prevent. Route and roles are pinned to the
-   * Hebrew original by the guard.
+   * These steps name NO on-screen control by its words. The registry used to require the opposite
+   * — an English step that quoted the Hebrew button, on the reasoning that "the UI itself is
+   * Hebrew, so an English sentence naming an English button that does not exist would be exactly
+   * the kind of unfollowable instruction #192 exists to prevent". That reasoning was correct and
+   * its premise has since stopped being true: the interface now reads in the reader's language,
+   * so a quoted Hebrew label is the sentence that names a button which does not exist.
+   *
+   * Naming the ACTION and the PLACE rather than the label is what survives both states, and it
+   * survives the rest of the extraction too — every screen still being translated would otherwise
+   * invalidate these entries the day its labels move into the dictionary.
+   *
+   * Route and roles are pinned to the Hebrew original by the guard, and are copied from it here
+   * rather than retyped: a retyped `roles` could hand somebody a screen the Guard withholds.
    * ------------------------------------------------------------------------*/
+  {
+    id: 'see_business_state_now',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office'],
+    route: 'dashboard',
+    label: 'The control room — the state of the business right now',
+    steps: [
+      'Open the dashboard: what needs handling now, what could cost money, and how the business stands at this moment.',
+      'For the full queue of everything that needs handling, continue to the alerts screen — the dashboard summarises it and points there.',
+    ],
+    source: 'src/lib/routePresentation.ts · src/pages/Alerts.tsx · docs/ASSISTANT.md §7',
+    updated_at: '2026-08-28',
+  },
   {
     id: 'see_what_needs_attention',
     version: 1,
@@ -322,13 +346,13 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     label: 'The queue of what needs attention',
     steps: [
       'Open the alerts screen — the full queue of everything that needs handling, urgent first.',
-      'When several severities are present, filter with the chips: דחוף, לטיפול or מידע.',
-      'Click a row to go straight to the screen where that item is handled.',
+      'When several severities are present, narrow the list with the severity filter above it: urgent, needs handling, or information.',
+      'Select a row to go straight to the screen where that item is handled.',
       'A partial scan is announced at the top: what was found is shown, and nothing can be declared clear.',
       'The foot of the screen names what is NOT checked — low stock and budget overrun — and that due dates are checked only on payment requests that were given a date.',
     ],
     source: 'src/pages/Alerts.tsx',
-    updated_at: '2026-08-24',
+    updated_at: '2026-08-28',
   },
   {
     id: 'compare_supplier_prices',
@@ -339,13 +363,62 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     route: 'prices',
     label: 'Comparing supplier prices',
     steps: [
-      'Open the price-lists screen and search for a product, or pick a supplier in the supplier filter.',
-      'Tick "רק התייקרויות" to leave only prices that rose against their previous price.',
-      'The product comparison card names the cheapest supplier and the gap to the next price; a product with no available offer from an active supplier says so explicitly.',
-      'The row menu opens price history and "מי עדכן", and — for owner and procurement manager — a price update.',
+      'Open the price lists screen and search for a product, or pick a supplier in the supplier filter.',
+      'Tick the price-rise filter to leave only prices that went up against their previous price.',
+      'The product comparison card names the cheapest supplier and the gap to the next price; a product with no available offer from an active supplier is shown as such explicitly.',
+      'The row menu opens the price history and who last updated it, and — for an owner and a procurement manager — a price update.',
     ],
     source: 'src/pages/PriceLists.tsx',
-    updated_at: '2026-08-24',
+    updated_at: '2026-08-28',
+  },
+  {
+    id: 'upload_price_list',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office'],
+    route: 'prices',
+    label: 'Uploading a supplier\'s price list',
+    steps: [
+      'On the price lists screen, use the upload action to take in one supplier\'s price list.',
+      'For an Excel file holding several suppliers together, use the multi-supplier import, read the preview, and then confirm the import.',
+      'Uploading price lists is available to an owner and a procurement manager only.',
+    ],
+    source: 'src/pages/PriceLists.tsx',
+    updated_at: '2026-08-28',
+  },
+  {
+    id: 'manage_product_catalogue',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office'],
+    route: 'products',
+    label: 'Managing the product catalogue',
+    steps: [
+      'The products screen holds the catalogue that orders are built from; filter by category and search by name.',
+      'Add a product by hand, or upload a supplier price list — a price list creates the products and their prices together.',
+      'The name-approval and correct-from-source views approve or correct a product display name, one at a time.',
+    ],
+    source: 'src/pages/Products.tsx',
+    updated_at: '2026-08-28',
+  },
+  {
+    id: 'find_products_below_minimum',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office'],
+    route: 'inventory',
+    label: 'Products below their minimum',
+    steps: [
+      'On the inventory screen, select the below-minimum tile to filter the table to those products.',
+      'A product that was never counted shows a dash — an unknown balance, not zero.',
+      'The explanation of how the numbers are calculated states that daily consumption is measured from the last count and over at most 30 days, and that the run-out forecast rests on the counted balance alone.',
+      'The purchase suggestion shown in the table does NOT create an order.',
+    ],
+    source: 'src/pages/Inventory.tsx',
+    updated_at: '2026-08-28',
   },
   {
     id: 'check_invoice_status',
@@ -357,12 +430,145 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     label: 'The state of a supplier invoice',
     steps: [
       'On the invoices screen, filter by review stage using the chips above the table.',
-      'The attention filter shows suspected duplicates or invoices with no purchase order.',
+      'The attention filter shows suspected duplicates and invoices with no purchase order.',
       'The payment-status filter shows invoices still open for payment, and the month filter narrows to one month.',
-      'Click a row to open the invoice itself and check it against its order and its receipt.',
+      'Select a row to open the invoice itself and check it against its order and its receipt.',
     ],
     source: 'src/pages/Invoices.tsx · src/lib/routePresentation.ts',
-    updated_at: '2026-08-24',
+    updated_at: '2026-08-28',
+  },
+  {
+    id: 'resolve_an_exception',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office'],
+    route: 'exceptions',
+    label: 'Closing an exception',
+    steps: [
+      'Open the exceptions screen and filter by status, type and severity; the default shows open and in-progress ones.',
+      'Select a row to open the exception detail and its links to the invoice, the payment request, the bank transaction or the supplier.',
+      'Write a handling note — it is required before closing — and then mark it in progress, reject it as not relevant, or mark it handled.',
+      'Exceptions are opened automatically by invoice checks, payments and bank matching; there is no manual creation from the screen.',
+    ],
+    source: 'src/pages/Exceptions.tsx',
+    updated_at: '2026-08-28',
+  },
+  {
+    id: 'track_a_credit',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office'],
+    route: 'credits',
+    label: 'Following a credit request',
+    steps: [
+      'Open the credits screen; the default shows active credits, and it can be switched to all of them or narrowed to one month.',
+      'Select a row to see the reason, the amount, the status and the invoice the credit belongs to.',
+      'Move the credit through its stages: requested from the supplier, credit received, offset against a payment, then closed.',
+      'A credit for a short quantity, a damaged item or a return is opened automatically at goods receipt; a wrong price or a double charge is opened from the supplier invoice.',
+    ],
+    source: 'src/pages/Credits.tsx',
+    updated_at: '2026-08-28',
+  },
+  {
+    id: 'open_a_payment_request',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office'],
+    route: 'paymentRequests',
+    label: 'Opening a payment request',
+    steps: [
+      'On the payment requests screen, start a new request.',
+      'A payment request is opened against a supplier who has open invoices, and is linked to them.',
+      'From there send it for approval, and once approved hand it to whoever executes the payment.',
+      'To follow it, filter by active requests and by due date: due today, overdue, or within 7 days including overdue.',
+    ],
+    source: 'src/pages/PaymentRequests.tsx',
+    updated_at: '2026-08-28',
+  },
+  {
+    id: 'see_recorded_payments',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'accountant'],
+    route: 'payments',
+    label: 'Payments that were already recorded',
+    steps: [
+      'The payments screen is the log of payments that were made.',
+      'Each payment shows its reference and the invoices it covered.',
+    ],
+    source: 'src/lib/routePresentation.ts · src/pages/Payments.tsx',
+    updated_at: '2026-08-28',
+  },
+  {
+    id: 'reconcile_bank_statement',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'accountant'],
+    route: 'bank',
+    label: 'Reconciling a bank statement',
+    steps: [
+      'On the bank matching screen, import a bank statement as an XLSX file in the canonical layout — there is no column mapping and no guessing at the structure.',
+      'Filter to the transactions that still need matching.',
+      'Open a transaction and approve one of the suggested matches, or match it by hand, splitting it across open invoices.',
+      'Removing a match requires a reason, returns the transaction to the queue, and does NOT undo the payment or its allocations.',
+    ],
+    source: 'src/pages/Bank.tsx',
+    updated_at: '2026-08-28',
+  },
+  {
+    id: 'export_expense_summary',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'accountant'],
+    route: 'expenses',
+    label: 'An expense summary to export and print',
+    steps: [
+      'On the expense summary screen, choose a range: a quick-range chip, or a from and to date by hand.',
+      'Expenses are grouped by supplier and by category over the chosen range.',
+      'Export the summary to Excel, or print it and save it as a PDF.',
+      'A reversed date range, or a range with no invoices in it, blocks the export — and the reason is shown on the button itself.',
+    ],
+    source: 'src/pages/Expenses.tsx',
+    updated_at: '2026-08-28',
+  },
+  {
+    id: 'compare_supplier_performance',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office'],
+    route: 'analytics',
+    label: 'Comparing supplier performance',
+    steps: [
+      'The supplier performance screen shows every active supplier in one table: delivery time, on-time record, price changes, open exceptions and open credits.',
+      'Sort by the column that matters, and search for a supplier by name.',
+      'An on-time percentage is shown only for a supplier with at least 5 receipts; below that there is no sample, so there is no percentage.',
+      'A measure that was not measured shows a dash, not a zero.',
+    ],
+    source: 'src/pages/Analytics.tsx',
+    updated_at: '2026-08-28',
+  },
+  {
+    id: 'check_product_purchases',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office', 'accountant'],
+    route: 'productReport',
+    label: 'How much was bought of each product',
+    steps: [
+      'The product purchase summary shows the quantity and the cost bought of each product over the chosen range.',
+      'Beside every number, the three data sources behind it are named.',
+      'The summary covers orders that are not drafts within the date range, together with what was received and what was billed against them.',
+    ],
+    source: 'src/lib/routePresentation.ts · src/pages/ProductPurchaseSummary.tsx',
+    updated_at: '2026-08-28',
   },
 ];
 

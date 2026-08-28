@@ -69,7 +69,9 @@ export const getProductHelp: AssistantTool = {
           { type: "string", enum: [...PRODUCT_HELP_LOCALES] },
           { type: "null" },
         ],
-        description: "שפת הרשומה המבוקשת, או null לברירת המחדל (עברית)",
+        description:
+          "שפת הרשומה המבוקשת. יש לבחור את השפה שבה המשתמש כתב את השאלה: " +
+          "\"en\" לשאלה באנגלית, \"he\" לשאלה בעברית. null נופל לעברית.",
       },
     },
     required: ["question", "entry_id", "locale"],
