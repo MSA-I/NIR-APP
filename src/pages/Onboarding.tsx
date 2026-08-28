@@ -558,7 +558,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
   async function onFile(file: File) {
     setFailure(null);
     try {
-      const data = await readSheet(file);
+      const data = await readSheet(file, t);
       setSheet(data);
       setCols(autoMapColumns(data.headers, fields));
       setParsed(null);
@@ -807,7 +807,7 @@ function SuppliersStep({ onDone }: { onDone: () => void }) {
         payment_terms: cellText(r, cols.payment_terms, 80) || null,
         min_order_amount: min,
       };
-    });
+    }, t('importSheet.invalidRow'));
   };
 
   async function commit(rows: SupplierDraft[]): Promise<string[]> {
@@ -963,7 +963,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
         existingProductId,
         priceNote,
       };
-    });
+    }, t('importSheet.invalidRow'));
   };
 
   async function commit(rows: ProductDraft[], reason?: string): Promise<string[]> {

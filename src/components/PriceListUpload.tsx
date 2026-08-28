@@ -219,7 +219,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
   const ambiguousRows = useMemo(() => (preview?.rows ?? []).filter((r) => r.ambiguous), [preview]);
 
   async function parseSheet(sheetFile: File) {
-    const sheet = await readSheet(sheetFile);
+    const sheet = await readSheet(sheetFile, t);
     const cols = {
       product: matchColumn(sheet.headers, ['מוצר', 'שם מוצר', 'product', 'product_name'], false),
       price: matchColumn(sheet.headers, ['מחיר', 'price'], false),
@@ -256,7 +256,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
         productId: match?.id ?? null,
         ambiguous: match === null,
       } satisfies SheetPreviewRow;
-    });
+    }, t('importSheet.invalidRow'));
     if (!valid.length) throw new PriceDocumentError(t('priceUpload.PriceDocumentError_5'));
     setPreview({ rows: valid, skipped });
   }

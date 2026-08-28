@@ -68,7 +68,7 @@ function PushDeviceCard() {
     setBusy(true);
     const err = status === 'subscribed' ? await unsubscribePush() : await subscribePush();
     setBusy(false);
-    if (err) toast(err, 'error');
+    if (err) toast(t(err), 'error');
     else toast(status === 'subscribed' ? t('pushSettings.toast') : t('pushSettings.toast_2'));
     setStatus(await getPushStatus());
   }

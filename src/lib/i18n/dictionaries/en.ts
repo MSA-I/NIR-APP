@@ -5457,4 +5457,34 @@ export const en: Dictionary = {
     chunkCountUnknown: 'The number of segments is not known yet.',
   },
 
+  importSheet: {
+    emptyFile: 'The file is empty',
+    tooLarge: 'The file is larger than {max}MB and cannot be imported',
+    unsupportedType: 'This file type is not supported. Upload an Excel file (xlsx/xls) or a UTF-8 encoded CSV.',
+    csvEncoding: 'The CSV is not UTF-8 encoded. Save it as CSV UTF-8 and try again.',
+    csvMalformed: 'The CSV structure is invalid. Check the column count, separators and quotation marks.',
+    csvMalformedAtRow: 'The CSV structure is invalid near row {row}. Check the column count, separators and quotation marks.',
+    noSheet: 'No worksheet was found in the file',
+    unreadable: 'The file could not be read. Excel files (xlsx/xls) and UTF-8 encoded CSV files are supported.',
+    noDataRows: 'No data rows were found. Make sure this is a valid Excel or CSV file with a header row and at least one data row.',
+    tooManyRows: 'The file contains {count} rows. One import is limited to {max} rows — split the file.',
+    noHeaders: 'No column headers were found in the file',
+    invalidRow: 'Invalid row',
+  },
+
+  push: {
+    unsupported: 'This browser does not support push notifications',
+    noKey: 'Push notifications are not configured in this environment',
+    permissionDenied: 'Notification permission was not granted in the browser',
+    registrationFailed: 'The notification service could not be registered — refresh the page and try again',
+    subscriptionMissing: 'The subscription returned by the browser is incomplete — try again',
+    saveFailed: 'The subscription could not be saved — try again',
+    enableFailed: 'Notifications could not be enabled — try again',
+    disableFailed: 'Notifications could not be turned off — try again',
+    cleanupInspectFailed: 'The notification subscription on this device could not be checked. Sign-out completed, but turn off notifications in the browser\'s site settings before using a shared device.',
+    cleanupServerUnknown: 'The device notification subscription was cancelled, but removal of the server record could not be verified. To try again, sign in, enable notifications and then turn them off in Settings.',
+    cleanupBrowserUnknown: 'The server notification record was removed, but cancellation of the browser subscription could not be verified. Turn off notifications in the browser\'s site settings before using a shared device.',
+    cleanupFailed: 'The notification subscription could not be cleaned up in either the server or browser. Sign-out completed, but turn off notifications in the browser\'s site settings; you can also sign in again and retry.',
+  },
+
 };

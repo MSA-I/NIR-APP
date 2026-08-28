@@ -391,7 +391,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
 
   async function onFile(file: File) {
     try {
-      const sheet = await readSheet(file);
+      const sheet = await readSheet(file, t);
       // exact header names only, as before — this screen has no column-mapping step to correct a wrong guess
       const cols = {
         supplier: matchColumn(sheet.headers, ['ספק', 'supplier'], false),
@@ -404,7 +404,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         const price = cellNumber(r, cols.price) ?? 0;
         if (!supplier || !product || price <= 0) return skipRow(t('priceLists.skipRow'));
         return { supplier, product, price };
-      });
+      }, t('importSheet.invalidRow'));
       if (!valid.length) { toast(t('priceLists.toast_2'), 'error'); return; }
       setPreview(valid);
     } catch (e) {

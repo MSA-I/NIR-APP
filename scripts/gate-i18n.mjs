@@ -93,6 +93,7 @@ const EXTRACTED = [
   'src/lib/checks.ts',
   'src/lib/checkSummary.ts',
   'src/lib/imageQuality.ts',
+  'src/lib/push.ts',
   'src/components/BarcodeScanner.tsx',
   'src/components/document-review/DocumentExportPreview.tsx',
   'src/components/document-review/DocumentProcessingProgress.tsx',

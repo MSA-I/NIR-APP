@@ -4,6 +4,9 @@
 
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import type { TKey } from './i18n/t';
+
+type Translator = (key: TKey, vars?: Record<string, string | number>) => string;
 
 export type SheetRow = Record<string, unknown>;
 
@@ -17,19 +20,19 @@ export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const MAX_ROWS = 5000;
 const MAX_TEXT = 200;
 
-/** Thrown for problems the user can act on; the message is Hebrew and displayable as-is. */
+/** Thrown for problems the reader can act on; the caller supplies its current translator. */
 export class SheetError extends Error {}
 
 const isBlank = (row: SheetRow) => !row || Object.values(row).every((v) => String(v ?? '').trim() === '');
 
 /** Reads the first sheet of an .xlsx/.xls file, or a UTF-8 CSV, into plain rows keyed by header. */
-export async function readSheet(file: File): Promise<SheetData> {
-  if (file.size === 0) throw new SheetError('הקובץ ריק');
+export async function readSheet(file: File, t: Translator): Promise<SheetData> {
+  if (file.size === 0) throw new SheetError(t('importSheet.emptyFile'));
   if (file.size > MAX_FILE_BYTES) {
-    throw new SheetError(`הקובץ גדול מ־${Math.round(MAX_FILE_BYTES / 1024 / 1024)}MB ולא ניתן לייבוא`);
+    throw new SheetError(t('importSheet.tooLarge', { max: Math.round(MAX_FILE_BYTES / 1024 / 1024) }));
   }
   if (!/\.(csv|xlsx|xls)$/i.test(file.name)) {
-    throw new SheetError('סוג הקובץ אינו נתמך. ניתן להעלות Excel (xlsx/xls) או CSV בקידוד UTF-8.');
+    throw new SheetError(t('importSheet.unsupportedType'));
   }
   const buf = await file.arrayBuffer();
 
@@ -42,7 +45,7 @@ export async function readSheet(file: File): Promise<SheetData> {
       try {
         text = new TextDecoder('utf-8', { fatal: true }).decode(buf).replace(/^\uFEFF/, '');
       } catch {
-        throw new SheetError('קידוד ה־CSV אינו UTF-8. שמור את הקובץ כ־CSV UTF-8 ונסה שוב.');
+        throw new SheetError(t('importSheet.csvEncoding'));
       }
       const parsed = Papa.parse<SheetRow>(text, { header: true, skipEmptyLines: true });
       // Papa keeps rows with missing/extra fields in `data`. Accepting them would silently shift
@@ -50,33 +53,35 @@ export async function readSheet(file: File): Promise<SheetData> {
       const parseError = parsed.errors[0];
       if (parseError) {
         const firstRow = parseError.row;
-        throw new SheetError(`מבנה ה־CSV אינו תקין${firstRow == null ? '' : ` ליד שורה ${firstRow + 2}`}. בדוק את מספר העמודות, המפרידים והמרכאות.`);
+        throw new SheetError(firstRow == null
+          ? t('importSheet.csvMalformed')
+          : t('importSheet.csvMalformedAtRow', { row: firstRow + 2 }));
       }
       rows = parsed.data;
     } else {
       const wb = XLSX.read(buf);
       const first = wb.SheetNames[0];
-      if (!first) throw new SheetError('לא נמצא גיליון בקובץ');
+      if (!first) throw new SheetError(t('importSheet.noSheet'));
       rows = XLSX.utils.sheet_to_json<SheetRow>(wb.Sheets[first]);
     }
   } catch (e) {
     if (e instanceof SheetError) throw e;
-    throw new SheetError('לא ניתן לקרוא את הקובץ. נתמכים קבצי Excel (xlsx/xls) ו־CSV בקידוד UTF-8.');
+    throw new SheetError(t('importSheet.unreadable'));
   }
 
   rows = rows.filter((r) => !isBlank(r));
   // also the landing spot for a corrupt file: xlsx parses arbitrary bytes into an empty sheet
   if (!rows.length) {
-    throw new SheetError('לא נמצאו שורות נתונים בקובץ. ודא שזהו קובץ Excel או CSV תקין, עם שורת כותרות ולפחות שורת נתונים אחת.');
+    throw new SheetError(t('importSheet.noDataRows'));
   }
   if (rows.length > MAX_ROWS) {
-    throw new SheetError(`הקובץ מכיל ${rows.length} שורות. המגבלה היא ${MAX_ROWS} שורות בייבוא אחד — יש לפצל אותו.`);
+    throw new SheetError(t('importSheet.tooManyRows', { count: rows.length, max: MAX_ROWS }));
   }
 
   // a cell that is empty in the first row is omitted by sheet_to_json, so union across rows
   const headers: string[] = [];
   for (const row of rows) for (const key of Object.keys(row)) if (!headers.includes(key)) headers.push(key);
-  if (!headers.length) throw new SheetError('לא נמצאו כותרות עמודות בקובץ');
+  if (!headers.length) throw new SheetError(t('importSheet.noHeaders'));
 
   return { fileName: file.name, headers, rows };
 }
@@ -148,7 +153,11 @@ const isSkip = (v: unknown): v is SkipSignal =>
  * Runs `map` over every row. The mapper returns the parsed value, or `skipRow(reason)`
  * to reject it; a thrown error rejects the row too rather than failing the whole file.
  */
-export function mapRows<T>(rows: SheetRow[], map: (row: SheetRow, rowNumber: number) => T | SkipSignal): MapResult<T> {
+export function mapRows<T>(
+  rows: SheetRow[],
+  map: (row: SheetRow, rowNumber: number) => T | SkipSignal,
+  invalidRowReason: string,
+): MapResult<T> {
   const valid: T[] = [];
   const skipped: SkippedRow[] = [];
   rows.forEach((row, i) => {
@@ -157,7 +166,7 @@ export function mapRows<T>(rows: SheetRow[], map: (row: SheetRow, rowNumber: num
     try {
       out = map(row, rowNumber);
     } catch (e) {
-      skipped.push({ row: rowNumber, reason: e instanceof Error ? e.message : 'שורה לא תקינה' });
+      skipped.push({ row: rowNumber, reason: e instanceof Error ? e.message : invalidRowReason });
       return;
     }
     if (isSkip(out)) skipped.push({ row: rowNumber, reason: out.__skip });

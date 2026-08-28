@@ -67,7 +67,7 @@ const AuthContext = createContext<AuthState>(null as unknown as AuthState);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   // AuthProvider sits INSIDE LocaleProvider (src/main.tsx), so a language already exists here.
-  const { statusLabel , errorText } = useT();
+  const { errorText, statusLabel, t } = useT();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
@@ -296,7 +296,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signOut() {
     const push = await cleanupPushBeforeSignOut();
     const { error } = await supabase.auth.signOut();
-    return { error: error?.message ?? null, pushWarning: push.warning };
+    return { error: error?.message ?? null, pushWarning: push.warning ? t(push.warning) : null };
   }
 
   function retryBootstrap() {

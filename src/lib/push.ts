@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { TKey } from './i18n/t';
 
 /**
  * Web Push client — subscription lifecycle for the current device.
@@ -26,7 +27,7 @@ export interface PushCleanupResult {
   localRemoved: boolean | null;
   /** null means there was no endpoint whose authenticated server row could be targeted. */
   serverRemoved: boolean | null;
-  warning: string | null;
+  warning: TKey | null;
 }
 
 export function isPushSupported(): boolean {
@@ -86,18 +87,18 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
  * The DB row's org/user come from auth_org()/auth.uid() inside claim_push_subscription,
  * never from the caller — so there is no profile argument to lie with.
  */
-export async function subscribePush(): Promise<string | null> {
-  if (!isPushSupported()) return 'הדפדפן הזה אינו תומך בהתראות דחיפה';
-  if (!VAPID_PUBLIC_KEY) return 'התראות דחיפה אינן מוגדרות בסביבה זו';
+export async function subscribePush(): Promise<TKey | null> {
+  if (!isPushSupported()) return 'push.unsupported';
+  if (!VAPID_PUBLIC_KEY) return 'push.noKey';
 
   const permission = await Notification.requestPermission();
-  if (permission !== 'granted') return 'לא ניתן אישור להתראות בדפדפן';
+  if (permission !== 'granted') return 'push.permissionDenied';
 
   try {
     // Fail fast when main.tsx's registration never succeeded — `serviceWorker.ready`
     // would otherwise wait forever and leave the Settings toggle stuck on busy.
     if (!(await navigator.serviceWorker.getRegistration())) {
-      return 'רישום שירות ההתראות נכשל — רענן את הדף ונסה שוב';
+      return 'push.registrationFailed';
     }
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.subscribe({
@@ -108,7 +109,7 @@ export async function subscribePush(): Promise<string | null> {
     const json = sub.toJSON();
     if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
       await sub.unsubscribe();
-      return 'המנוי שהתקבל מהדפדפן חסר — נסה שוב';
+      return 'push.subscriptionMissing';
     }
 
     // claim_push_subscription (SECURITY DEFINER, 0015) deletes any existing row for this
@@ -126,16 +127,16 @@ export async function subscribePush(): Promise<string | null> {
     if (res.error) {
       // Do not keep a browser subscription the server never heard about.
       await sub.unsubscribe();
-      return 'שמירת המנוי נכשלה — נסה שוב';
+      return 'push.saveFailed';
     }
     return null;
   } catch {
-    return 'הפעלת ההתראות נכשלה — נסה שוב';
+    return 'push.enableFailed';
   }
 }
 
 /** Unsubscribes this device and removes its row. Returns null on success. */
-export async function unsubscribePush(): Promise<string | null> {
+export async function unsubscribePush(): Promise<TKey | null> {
   try {
     const reg = await navigator.serviceWorker.getRegistration();
     const sub = await reg?.pushManager.getSubscription();
@@ -149,7 +150,7 @@ export async function unsubscribePush(): Promise<string | null> {
     await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
     return null;
   } catch {
-    return 'כיבוי ההתראות נכשל — נסה שוב';
+    return 'push.disableFailed';
   }
 }
 
@@ -172,7 +173,7 @@ export async function cleanupPushBeforeSignOut(): Promise<PushCleanupResult> {
     return {
       localRemoved: false,
       serverRemoved: null,
-      warning: 'לא ניתן היה לבדוק את מנוי ההתראות במכשיר. ההתנתקות הושלמה, אך יש לבטל את ההתראות בהגדרות האתר בדפדפן לפני שימוש במכשיר משותף.',
+      warning: 'push.cleanupInspectFailed',
     };
   }
 
@@ -203,7 +204,7 @@ export async function cleanupPushBeforeSignOut(): Promise<PushCleanupResult> {
     return {
       serverRemoved,
       localRemoved,
-      warning: 'מנוי ההתראות במכשיר בוטל, אך ניקוי הרשומה בשרת לא אומת. כדי לנסות שוב, יש להתחבר מחדש ולהפעיל ואז לכבות את ההתראות בהגדרות.',
+      warning: 'push.cleanupServerUnknown',
     };
   }
 
@@ -211,13 +212,13 @@ export async function cleanupPushBeforeSignOut(): Promise<PushCleanupResult> {
     return {
       serverRemoved,
       localRemoved,
-      warning: 'רשומת ההתראות בשרת הוסרה, אך ביטול המנוי בדפדפן לא אומת. יש לבטל את ההתראות בהגדרות האתר בדפדפן לפני שימוש במכשיר משותף.',
+      warning: 'push.cleanupBrowserUnknown',
     };
   }
 
   return {
     serverRemoved,
     localRemoved,
-    warning: 'ניקוי מנוי ההתראות נכשל בשרת ובדפדפן. ההתנתקות הושלמה, אך יש לבטל את ההתראות בהגדרות האתר בדפדפן; אפשר גם להתחבר מחדש ולנסות שוב.',
+    warning: 'push.cleanupFailed',
   };
 }

@@ -327,6 +327,20 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   `check:jsx-space` passed. Dictionary parity passed at 5,146 keys per locale; `zero` still exits
   1 on 227/44, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `importSheet`, `productDisplayName` and `push` boundary batch in this
+  commit.** The pinned count is now 756 Hebrew line(s) across 77 files. The protected set is now
+  565 lines in 36 files: one spreadsheet-header normalisation regex plus twelve Hebrew catalogue
+  recognition rows are parser input, not copy. The real remainder is **191 lines in 41 files**.
+  `push.ts` is the 80th surface locked at zero: subscription and sign-out cleanup return typed keys,
+  resolved only by PushSettings/AuthContext in the reader locale. `readSheet` takes the caller
+  translator and every actionable refusal moves with it; `mapRows` receives the caller's unknown-row
+  fallback. `productDisplayName` deliberately stays pinned because its Hebrew units/company marker
+  parse stored catalogue names before a human approves a proposal. The stale-baseline negative
+  control named only push 12→0 and importSheet 12→1. Focused importer/push/catalogue suites passed
+  39/39; the full suite passed 1,754/1,754; `npx tsc --noEmit` and `check:jsx-space` passed.
+  Dictionary parity passed at 5,170 keys per locale; `zero` still exits 1 on 191/41, so this gate
+  remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER
