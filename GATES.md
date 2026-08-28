@@ -535,9 +535,39 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   | `pages/dashboardDueWindow.spec.tsx` | 6 | | `pages/Onboarding.tsx` | 1 |
   | `lib/supplierLogChanges.spec.ts` | 6 | | `pages/Exceptions.tsx` · `pages/ConsolidatedInvoices.tsx` · `pages/Analytics.tsx` · `lib/supplierLogChanges.ts` · `lib/share.ts` · `components/assistant/assistantPanel.spec.tsx` · `components/assistant/AnswerView.tsx` · `components/PriceListUpload.tsx` · `components/OrgSubscriptionPanel.tsx` · `components/InvoiceLineReviewModal.tsx` · `components/GlobalSearch.tsx` | 1 each |
 
+  **ACHIEVED 28.08.2026, commit `ecd5d41`.** `npx tsc --noEmit` → `TypeScript: No errors found`,
+  exit 0. All 265 errors answered, one file at a time, across ten commits (`84bf316` … `ecd5d41`).
+  Nothing was silenced: no `as any`, no `@ts-expect-error`, no widened signature. The one-argument
+  form of the three formatters no longer exists.
+
+  Two rules were applied at every site, and they are the whole content of this gate:
+  **one currency → exactly the behaviour of the day before, plus the unit stated**;
+  **two or more → no ranked, summed or netted answer — every currency listed, and the reason said
+  in words.** Where a figure is a share of a total, the share is taken against the total in the
+  row's own currency; where a screen ranks (cheapest offer, top supplier, a donut slice), the
+  ranking is withheld across currencies and the rows stay visible, each in its own money.
+
+  **Two defects were found by doing this work, both fixed in the commits above:**
+  (a) `orderSplit.resolutionOptions` compared the source supplier's currency to the target's, and
+  a pinned supplier that no longer exists has no currency — so the repair for `pin_supplier_gone`,
+  which IS the move off that supplier, was silently withheld. Caught by `orderSplit.spec.ts`.
+  (b) `get_consolidated_invoice_workspace` handed the browser an anchor total and per-source
+  totals with no currency at all, and computed a goods receipt's value as a sum across the
+  currencies of the orders its lines came from. Fixed in `0226`; the client could not have
+  rendered those figures honestly without it.
+
 - [ ] P3-G2: the tests and the money guard survive it
   CHECK: npm run -s test && npm run -s check:money
   EXPECT: suite green; /check:money passed/
+  STATUS 28.08.2026: **not claimed.** Every suite touched by this phase was run individually and
+  passes — `accountantPaymentCredits`, `orderSavings`, `orderSplit`, `orderComparison`,
+  `monthlyReport`, `financialSupplierContract`, `reportTemplateExport`, `dashboardDueWindow`,
+  `dashboardDensity`, `serverListScreens`, `supplierCardHonesty`,
+  `paymentRequestAllocationBlock`, `quickCreateSupplierWiring`. The full `npm run -s test` run was
+  interrupted before it finished, so the suite is NOT reported green, and `check:money` has not
+  been run since the client work began. Both must run to completion before this gate is closed.
+  Four suites edited late were not re-run individually and are the likeliest place for a
+  survivor: `InvoiceLineReviewModal`, `uiPrimitives`, `supplierLogChanges`, `assistantPanel`.
 
 - [ ] P3-G3: a supplier card shows two balances and never their sum
   EVIDENCE: screenshot of one supplier with ₪12,400 and $3,100 on two lines. An empty list renders
