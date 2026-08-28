@@ -1,3 +1,4 @@
+import type { TKey } from '../lib/i18n/t';
 import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { reasonOr } from '../lib/reason';
@@ -120,9 +121,9 @@ const ALLOCATION_ERROR_ID = 'payment-execution-allocation-error';
  * Only the fallback differs, and deliberately: here we know the operation, so "the split could
  * not be computed" beats the generic "the action failed".
  */
-const allocationRefusal = (error: unknown) =>
+const allocationRefusal = (error: unknown, t: (key: TKey) => string) =>
   ALLOCATION_REFUSAL_MESSAGES[(error as Error | undefined)?.message ?? '']
-  ?? 'לא ניתן לחשב את פיצול התשלום מהזיכויים שנבחרו';
+  ?? t('payQueue.toast');
 
 /**
  * Replaces part of the approved liability with supplier credit while preserving the approved
@@ -245,6 +246,7 @@ type RawRow = Omit<Row, 'supplier'>;
  * Only the ability to start a NEW one is gone.
  */
 export default function AccountantPaymentQueue() {
+  const { t } = useT();
   const [selected, setSelected] = useState<Row | null>(null);
 
   const { data, loading, error, refetch } = useQuery(async () => {
@@ -276,11 +278,11 @@ export default function AccountantPaymentQueue() {
 
   return (
     <div className="space-y-5 max-w-2xl">
-      <PageHeader title="תשלומים לביצוע"
-        meta={`${pending.length} העברות ממתינות לביצוע`} />
+      <PageHeader title={t('payQueue.title')}
+        meta={t('payQueue.pendingMeta', { count: pending.length })} />
 
       {!pending.length ? (
-        <Card pad={false}><EmptyState title="אין העברות שממתינות לביצוע" subtitle="דרישות תשלום מאושרות יופיעו כאן" /></Card>
+        <Card pad={false}><EmptyState title={t('payQueue.title_2')} subtitle={t('payQueue.subtitle')} /></Card>
       ) : (
         <div className="space-y-3">
           {pending.map((r) => (
@@ -291,12 +293,12 @@ export default function AccountantPaymentQueue() {
               </div>
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-ink-muted">
                 <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} />
-                {r.due_date && <span>לתשלום עד {fmtDate(r.due_date)}</span>}
-                <span>{r.invoices.length} חשבוניות</span>
+                {r.due_date && <span>{t('payQueue.payBy')} {fmtDate(r.due_date)}</span>}
+                <span>{t('payQueue.invoiceCount', { count: r.invoices.length })}</span>
               </div>
               {r.open_credit_override_total != null && (
                 <div className="mt-3 text-sm text-await-fg">
-                  אושר בחריגה ללא קיזוז זיכויים בסך <span className="num font-semibold">{fmtMoneyExact(r.open_credit_override_total)}</span>
+                  {t('payQueue.approvedWithoutOffsetBefore')}<span className="num font-semibold">{fmtMoneyExact(r.open_credit_override_total)}</span>
                 </div>
               )}
             </Card>
@@ -306,7 +308,7 @@ export default function AccountantPaymentQueue() {
 
       {done.length > 0 && (
         <div>
-          <h2 className="section-title mb-2 text-ink-muted">בוצעו לאחרונה</h2>
+          <h2 className="section-title mb-2 text-ink-muted">{t('payQueue.text')}</h2>
           <Card pad={false} className="divide-y divide-line-soft">
             {done.slice(0, 8).map((r) => (
               <div key={r.id} className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
@@ -327,7 +329,7 @@ export default function AccountantPaymentQueue() {
 }
 
 function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; onDone: () => void }) {
-  const { errorText } = useT();
+  const { errorText, t } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [f, setF] = useState({ paid_date: todayISO(), reference: '', notes: '', reason: '' });
@@ -373,16 +375,16 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
     allocationPreview = buildPaymentAllocations(pr.invoices, selectedCredits);
   } catch (error) {
     allocationPreview = null;
-    allocationError = allocationRefusal(error);
+    allocationError = allocationRefusal(error, t);
   }
 
   // Field validation first, then the step-up gate. Re-authentication happens only when the JWT's
   // password AMR entry is stale — the server (0061) asserts freshness itself, so a fresh session
   // sees no new modal and a stale one is prompted instead of rejected.
   function requestExecute() {
-    if (!f.reference.trim()) { toast('נדרשת אסמכתת העברה', 'error'); return; }
+    if (!f.reference.trim()) { toast(t('payQueue.trim'), 'error'); return; }
     if (!allocationPreview) {
-      toast(allocationError ?? 'לא ניתן לחשב את פיצול התשלום מהזיכויים שנבחרו', 'error');
+      toast(allocationError ?? t('payQueue.toast'), 'error');
       return;
     }
     setReauthOpen(true);
@@ -394,7 +396,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
       const payment = unwrap(await supabase.rpc('execute_payment_request', {
         p_payment_request_id: pr.id,
         p_paid_date: f.paid_date,
-        p_method: 'העברה בנקאית',
+        p_method: t('payQueue.text_2'),
         p_reference: f.reference.trim(),
         p_notes: f.notes.trim() || null,
         p_allocations: allocationPreview?.allocations ?? [],
@@ -402,7 +404,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
       })) as { payment_id: string };
 
       setPaymentId(payment.payment_id);
-      toast('ההעברה נרשמה בהצלחה');
+      toast(t('payQueue.toast_2'));
     } catch (e) {
       toast(errorText(e), 'error');
     } finally {
@@ -412,72 +414,72 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
 
   if (paymentId) {
     return (
-      <Modal open onClose={onDone} title="ההעברה נרשמה">
+      <Modal open onClose={onDone} title={t('payQueue.title_3')}>
         <div className="text-center mb-4">
           <CheckCircle2 size={ICON.hero} className="text-done-fg mx-auto mb-2" aria-hidden="true" />
-          <p className="text-sm text-ink-soft">אפשר לצרף עכשיו אישור העברה (צילום מסך / PDF).</p>
+          <p className="text-sm text-ink-soft">{t('payQueue.text_3')}</p>
         </div>
         <DocumentList entityType="payment" entityId={paymentId} capture />
-        <div className="flex justify-end mt-4"><button className="btn-primary" onClick={onDone}>סיום</button></div>
+        <div className="flex justify-end mt-4"><button className="btn-primary" onClick={onDone}>{t('payQueue.text_4')}</button></div>
       </Modal>
     );
   }
 
   return (
-    <Modal open onClose={onClose} title={`ביצוע העברה — ${pr.supplier.name}`} busy={busy} statusMessage={busy ? 'רושם את ההעברה' : undefined}>
+    <Modal open onClose={onClose} title={t('payQueue.executeTitle', { supplier: pr.supplier.name })} busy={busy} statusMessage={busy ? t('payQueue.recordingTransfer') : undefined}>
       <div className="space-y-4">
         <SubPanel className="border border-line">
-          <div className="flex items-center gap-2 text-sm font-medium text-ink-mid mb-1"><Landmark size={ICON.sm} aria-hidden="true" /> פרטי חשבון להעברה</div>
-          <div className="text-sm text-ink-body text-start" dir="ltr">{pr.supplier.bank_details ?? 'לא הוזנו פרטי בנק'}</div>
+          <div className="flex items-center gap-2 text-sm font-medium text-ink-mid mb-1"><Landmark size={ICON.sm} aria-hidden="true" /> {t('payQueue.text_5')}</div>
+          <div className="text-sm text-ink-body text-start" dir="ltr">{pr.supplier.bank_details ?? t('payQueue.text_6')}</div>
         </SubPanel>
 
         {/* The queue records a completed transfer; it never claims to perform the bank action. */}
         {!pr.supplier.bank_details && (
           <Note tone="alert">
             <span>
-              לא הוזנו פרטי בנק לספק זה, ולכן לא ניתן לבצע את ההעברה. יש לפנות לבעלים או למנהל הרכש כדי שיזינו את הפרטים
-              בכרטיס הספק. אין במסך זה דרך לדווח על כך.
+              {t('payQueue.text_7')}
+              {t('payQueue.text_8')}
             </span>
           </Note>
         )}
         <p className="text-xs text-ink-muted">
-          הכפתור בתחתית המסך <b>מתעד</b> העברה שכבר בוצעה בבנק — הוא אינו מבצע אותה. אין ללחוץ עליו לפני שההעברה נעשתה בפועל.
+          {t('payQueue.recordsOnlyBefore')}<b>{t('payQueue.text_9')}</b>{t('payQueue.recordsOnlyAfter')}
         </p>
 
         <dl className="text-sm space-y-1.5 [&>div]:flex-wrap [&>div]:gap-x-4 [&>div]:gap-y-0.5">
-          <div className="flex justify-between"><dt className="text-ink-muted">סכום מאושר</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount)}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.fmtMoneyExact')}</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount)}</dd></div>
           {/* `—`, never `0`: while the credits load, or while the selection is invalid, the offset
               is unknown — and an unknown offset printed as ₪0.00 is a claim that none was taken. */}
-          <div className="flex justify-between"><dt className="text-ink-muted">קיזוז זיכויים</dt><dd className="num">{fmtMoneyExact(allocationPreview?.creditAmount ?? null)}</dd></div>
-          <div className="flex justify-between"><dt className="text-ink-muted">סכום להעברה בפועל</dt><dd className="font-semibold num">{fmtMoneyExact(allocationPreview?.cashAmount ?? null)}</dd></div>
-          {pr.due_date && <div className="flex justify-between"><dt className="text-ink-muted">תאריך יעד</dt><dd>{fmtDate(pr.due_date)}</dd></div>}
-          <div className="flex justify-between"><dt className="text-ink-muted">חשבוניות</dt>
-            <dd dir="ltr">{pr.invoices.map((i) => i.invoice?.invoice_number).filter(Boolean).join(', ') || 'לא זמינות'}</dd></div>
-          <div className="flex justify-between"><dt className="text-ink-muted">אושר על ידי</dt><dd>{pr.approver?.full_name ?? 'לא זמין'}</dd></div>
-          <div className="flex justify-between"><dt className="text-ink-muted">מבוצע על ידי</dt><dd>{profile?.full_name ?? 'המשתמש המחובר'}</dd></div>
-          <div className="flex justify-between gap-4"><dt className="text-ink-muted">רישום ביומן</dt><dd className="text-start">{'ביצוע תשלום והסיבה'}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.fmtMoneyExact_2')}</dt><dd className="num">{fmtMoneyExact(allocationPreview?.creditAmount ?? null)}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.fmtMoneyExact_3')}</dt><dd className="font-semibold num">{fmtMoneyExact(allocationPreview?.cashAmount ?? null)}</dd></div>
+          {pr.due_date && <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.fmtDate')}</dt><dd>{fmtDate(pr.due_date)}</dd></div>}
+          <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.text_10')}</dt>
+            <dd dir="ltr">{pr.invoices.map((i) => i.invoice?.invoice_number).filter(Boolean).join(', ') || t('payQueue.map')}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.text_12')}</dt><dd>{pr.approver?.full_name ?? t('payQueue.text_11')}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.text_14')}</dt><dd>{profile?.full_name ?? t('payQueue.text_13')}</dd></div>
+          <div className="flex justify-between gap-4"><dt className="text-ink-muted">{t('payQueue.text_16')}</dt><dd className="text-start">{t('payQueue.text_15')}</dd></div>
           {pr.notes && <Note tone="await">{pr.notes}</Note>}
           {pr.open_credit_override_total != null && (
             <Note tone="alert">
               <span className="min-w-0 flex-1">
-                <strong>אושר באישור חריג ללא קיזוז הזיכוי.</strong>{' '}
-                הזיכויים הפתוחים בסך <span className="num">{fmtMoneyExact(pr.open_credit_override_total)}</span> לא קוזזו אוטומטית.
-                <span className="block mt-1">סיבת אישור החריגה: {pr.open_credit_override_reason}</span>
+                <strong>{t('payQueue.text_17')}</strong>{' '}
+                {t('payQueue.openCreditsBefore')}<span className="num">{fmtMoneyExact(pr.open_credit_override_total)}</span>{t('payQueue.openCreditsAfter')}
+                <span className="block mt-1">{t('payQueue.overrideReasonLabel')} {pr.open_credit_override_reason}</span>
               </span>
             </Note>
           )}
         </dl>
 
         <SubPanel>
-          <h3 className="text-sm font-medium text-ink-soft">זיכויים זמינים לקיזוז</h3>
-          {creditsLoading && <p className="mt-2 text-sm text-ink-muted" role="status">טוען יתרות זיכוי…</p>}
+          <h3 className="text-sm font-medium text-ink-soft">{t('payQueue.text_18')}</h3>
+          {creditsLoading && <p className="mt-2 text-sm text-ink-muted" role="status">{t('payQueue.text_19')}</p>}
           {creditsError && <p className="mt-2 text-sm text-alert-fg" role="alert">{creditsError}</p>}
           {!creditsLoading && !creditsError && openCredits.length === 0 && (
-            <p className="mt-2 text-sm text-ink-muted">אין זיכויים פתוחים לספק זה</p>
+            <p className="mt-2 text-sm text-ink-muted">{t('payQueue.text_20')}</p>
           )}
           {!creditsLoading && !creditsError && openCredits.length > 0 && selectableCredits.length === 0 && (
             <p className="mt-2 text-sm text-ink-muted">
-              אין זיכויים פתוחים שניתן לקזז מול חשבוניות דרישת התשלום הזו
+              {t('payQueue.text_21')}
             </p>
           )}
 
@@ -487,9 +489,9 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           {unlinkedCredits.length > 0 && (
             <Note tone="info" className="mt-3">
               <span>
-                <span className="num">{unlinkedCredits.length}</span> מהזיכויים הפתוחים אינם משויכים
-                לחשבונית. ניתן לקזז אותם מול כל אחת מחשבוניות הספק שבדרישה הזו, והשיוך נרשם ברגע
-                הקיזוז. יש לבחור את החשבונית במפורש — היא זו שתקוזז, והמערכת לא תבחר עבורך.
+                <span className="num">{unlinkedCredits.length}</span>{t('payQueue.unlinkedCreditsAre')}
+                {t('payQueue.text_22')}
+                {t('payQueue.text_23')}
               </span>
             </Note>
           )}
@@ -508,25 +510,25 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
                 return (
                   <li key={credit.credit_id} className="rounded-lg bg-surface-sunken p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                      <span>זיכוי <span className="num">#{credit.credit_number}</span></span>
+                      <span>{t('payQueue.text_24')} <span className="num">#{credit.credit_number}</span></span>
                       {chosenTarget == null
-                        ? <span className="badge-await">דורש בחירת חשבונית</span>
-                        : <span className="badge-done">זמין לקיזוז</span>}
+                        ? <span className="badge-await">{t('payQueue.text_25')}</span>
+                        : <span className="badge-done">{t('payQueue.text_26')}</span>}
                     </div>
 
                     {/* The linkage is the whole point of the selection — the accountant must see
                         WHICH invoice of this request the offset is taken off. */}
                     {credit.invoice_id != null ? (
                       <p className="mt-1 text-sm text-ink-muted">
-                        משויך לחשבונית{' '}
+                        {t('payQueue.text_27')}{' '}
                         <span className="font-medium text-ink-body" dir="ltr">
-                          {invoiceNumberById.get(credit.invoice_id) ?? 'מספר לא זמין'}
+                          {invoiceNumberById.get(credit.invoice_id) ?? t('payQueue.get')}
                         </span>
                       </p>
                     ) : (
                       <>
                         <label className="label mt-2 block" htmlFor={`credit-target-${credit.credit_id}`}>
-                          חשבונית שממנה יקוזז הזיכוי
+                          {t('payQueue.text_28')}
                         </label>
                         <select
                           id={`credit-target-${credit.credit_id}`}
@@ -540,13 +542,13 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
                         >
                           {/* No preselected invoice. The empty option is not a choice, and the
                               allocation refuses by name while it is the one showing. */}
-                          <option value="">בחר חשבונית…</option>
+                          <option value="">{t('payQueue.text_29')}</option>
                           {/* Built from the deduplicated map, not from the raw rows: two options
                               carrying the same value is a picker whose selection cannot be read
                               back, and `buildPaymentAllocations` already sums repeated rows. */}
                           {[...invoiceAmountById].map(([invoiceId, amount]) => (
                             <option key={invoiceId} value={invoiceId}>
-                              {bidiIsolate(invoiceNumberById.get(invoiceId) ?? 'מספר לא זמין')}
+                              {bidiIsolate(invoiceNumberById.get(invoiceId) ?? t('payQueue.bidiIsolate'))}
                               {' · '}{fmtMoneyExact(amount)}
                             </option>
                           ))}
@@ -554,21 +556,21 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
                         {/* Stated before the choice, not after it: the executor writes the link
                             once, so a partial offset today decides where the remainder may go. */}
                         <p id={targetHintId} className="mt-1 text-xs text-ink-muted">
-                          הזיכוי אינו משויך לחשבונית. השיוך שייבחר כאן נרשם עם ביצוע ההעברה ואינו ניתן לשינוי לאחר מכן —
-                          גם יתרת הזיכוי שתישאר תוכל להתקזז רק מול אותה חשבונית.
+                          {t('payQueue.text_30')}
+                          {t('payQueue.text_31')}
                         </p>
                       </>
                     )}
 
                     <p className="mt-1 text-sm text-ink-muted">
-                      יתרה זמינה <span className="num font-medium text-ink-body">{fmtMoneyExact(credit.remaining_amount)}</span>
+                      {t('payQueue.availableBalance')} <span className="num font-medium text-ink-body">{fmtMoneyExact(credit.remaining_amount)}</span>
                       {targetAmount != null && (
-                        <>{' · '}סכום החשבונית בדרישה <span className="num">{fmtMoneyExact(targetAmount)}</span></>
+                        <>{' · '}{t('payQueue.requestInvoiceAmount')} <span className="num">{fmtMoneyExact(targetAmount)}</span></>
                       )}
                     </p>
 
                     <label className="label mt-2 block" htmlFor={`credit-allocation-${credit.credit_id}`}>
-                      סכום לקיזוז בהעברה זו
+                      {t('payQueue.text_32')}
                     </label>
                     <input
                       id={`credit-allocation-${credit.credit_id}`}
@@ -590,12 +592,12 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
                     />
                     {chosenTarget == null && (
                       <p id={amountHintId} className="mt-1 text-xs text-await-fg">
-                        בחר חשבונית תחילה — בלעדיה אין לדעת מאיזו חשבונית ירד הסכום.
+                        {t('payQueue.text_33')}
                       </p>
                     )}
                     <p className="mt-1 text-xs text-ink-muted">
-                      הוקצו בעבר <span className="num">{fmtMoneyExact(credit.allocated_amount)}</span>
-                      {' · '}סכום מקורי <span className="num">{fmtMoneyExact(credit.amount)}</span>
+                      {t('payQueue.previouslyAllocated')} <span className="num">{fmtMoneyExact(credit.allocated_amount)}</span>
+                      {' · '}{t('payQueue.originalAmount')} <span className="num">{fmtMoneyExact(credit.amount)}</span>
                     </p>
                   </li>
                 );
@@ -607,9 +609,9 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
             <div className="mt-3">
               <Note tone="await">
                 <span>
-                  <span className="num">{otherRequestCredits.length}</span> זיכויים פתוחים משויכים
-                  לחשבוניות שאינן בדרישת תשלום זו. קיזוזם כאן היה מקטין את ההעברה מבלי לסגור את
-                  החשבוניות שבדרישה.
+                  <span className="num">{otherRequestCredits.length}</span>{t('payQueue.otherRequestCreditsAre')}
+                  {t('payQueue.text_34')}
+                  {t('payQueue.text_35')}
                 </span>
               </Note>
             </div>
@@ -619,12 +621,12 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
         <hr className="border-line-soft" />
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div><label className="label" htmlFor="payment-execution-date">תאריך ביצוע</label><input id="payment-execution-date" type="date" className="input" value={f.paid_date} onChange={(e) => setF((s) => ({ ...s, paid_date: e.target.value }))} /></div>
-          <div><label className="label" htmlFor="payment-execution-amount">סכום להעברה בפועל</label><input id="payment-execution-amount" type="number" className="input num" value={allocationPreview?.cashAmount ?? ''} readOnly /></div>
+          <div><label className="label" htmlFor="payment-execution-date">{t('payQueue.setF')}</label><input id="payment-execution-date" type="date" className="input" value={f.paid_date} onChange={(e) => setF((s) => ({ ...s, paid_date: e.target.value }))} /></div>
+          <div><label className="label" htmlFor="payment-execution-amount">{t('payQueue.text_36')}</label><input id="payment-execution-amount" type="number" className="input num" value={allocationPreview?.cashAmount ?? ''} readOnly /></div>
         </div>
-        <div><label className="label" htmlFor="payment-execution-reference">אסמכתת העברה *</label><input id="payment-execution-reference" className="input num" dir="ltr" value={f.reference} onChange={(e) => setF((s) => ({ ...s, reference: e.target.value }))} /></div>
-        <div><label className="label" htmlFor="payment-execution-notes">הערות</label><input id="payment-execution-notes" className="input" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></div>
-        <div><label className="label" htmlFor="payment-execution-reason">סיבת ביצוע / אישור הפעולה *</label><input id="payment-execution-reason" className="input" value={f.reason} onChange={(e) => setF((s) => ({ ...s, reason: e.target.value }))} /></div>
+        <div><label className="label" htmlFor="payment-execution-reference">{t('payQueue.setF_2')}</label><input id="payment-execution-reference" className="input num" dir="ltr" value={f.reference} onChange={(e) => setF((s) => ({ ...s, reference: e.target.value }))} /></div>
+        <div><label className="label" htmlFor="payment-execution-notes">{t('payQueue.setF_3')}</label><input id="payment-execution-notes" className="input" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></div>
+        <div><label className="label" htmlFor="payment-execution-reason">{t('payQueue.setF_4')}</label><input id="payment-execution-reason" className="input" value={f.reason} onChange={(e) => setF((s) => ({ ...s, reason: e.target.value }))} /></div>
 
         {/* The button below is disabled while the split cannot be computed; the reason is stated
             here instead of leaving the accountant to guess which figure is wrong, and the button
@@ -635,7 +637,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
         )}
 
         <div className="flex flex-wrap justify-end gap-2">
-          <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
+          <button className="btn-secondary" disabled={busy} onClick={onClose}>{t('payQueue.text_37')}</button>
           <button
             className="btn-primary"
             disabled={busy || !allocationPreview}
@@ -643,14 +645,14 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
             aria-describedby={allocationError ? ALLOCATION_ERROR_ID : undefined}
             onClick={requestExecute}
           >
-            {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={ICON.sm} aria-hidden="true" />} ההעברה בוצעה
+            {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={ICON.sm} aria-hidden="true" />} {t('payQueue.transferMade')}
           </button>
         </div>
       </div>
 
       <ReauthModal
         open={reauthOpen}
-        title="אימות זהות לביצוע ההעברה"
+        title={t('payQueue.title_4')}
         onConfirm={() => { setReauthOpen(false); void execute(); }}
         onCancel={() => setReauthOpen(false)}
       />
