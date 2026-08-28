@@ -119,7 +119,6 @@
     "src/pages/Alerts.tsx": 23,
     "src/pages/Analytics.tsx": 13,
     "src/pages/Bank.tsx": 20,
-    "src/pages/Credits.tsx": 30,
     "src/pages/Dashboard.tsx": 26,
     "src/pages/dashboards/AccountantDashboard.tsx": 26,
     "src/pages/DocumentReview.tsx": 16,
