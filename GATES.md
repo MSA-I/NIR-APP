@@ -195,6 +195,16 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   `npx tsc --noEmit` and `check:jsx-space` passed. This file is protected by `__reason`+ratchet,
   not listed as zero in `EXTRACTED`; `zero` still exits 1 on 435/60, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `BarcodeScanner.tsx` batch in this commit.** The pinned count is now
+  959 Hebrew line(s) across 91 files; the protected set remains 539 lines in 32 files, so the real
+  remainder is **420 lines in 59 files**. This is the 66th surface locked at zero. Camera failures
+  now store a `CameraFailureCode`, result descriptions store `TKey`+variables, and both resolve at
+  render time. Scanned codes and catalogue product names remain untouched input data. Evidence:
+  the stale-baseline negative control failed on this file alone; the focused scanner suite passed
+  9/9, including an English camera/manual-code flow with a Hebrew catalogue name; the full suite
+  passed 1,732/1,732; `npx tsc --noEmit` and `check:jsx-space` passed. `zero` still exits 1 on
+  420/59, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

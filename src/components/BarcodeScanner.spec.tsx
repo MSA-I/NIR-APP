@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import type { ReactNode } from 'react';
@@ -7,6 +8,7 @@ import { server } from '../test/msw/server';
 import { SUPABASE_URL } from '../test/msw/handlers';
 import { createAppQueryClient } from '../lib/query/client';
 import { OrgScopeProvider } from '../lib/query/orgScope';
+import { LocaleProvider } from '../lib/i18n/LocaleProvider';
 
 /** Real supabase-js against the MSW base URL, the `flags.spec.tsx` precedent. */
 vi.mock('../lib/supabase', async () => {
@@ -30,10 +32,12 @@ const entry = (over: Partial<BarcodeCatalogueEntry> & { productId: string }): Ba
   ...over,
 });
 
-const wrap = (children: ReactNode) => (
-  <QueryClientProvider client={createAppQueryClient()}>
-    <OrgScopeProvider org="org-1">{children}</OrgScopeProvider>
-  </QueryClientProvider>
+const wrap = (children: ReactNode, locale: 'he' | 'en' = 'he') => (
+  <LocaleProvider initialLocale={locale}>
+    <QueryClientProvider client={createAppQueryClient()}>
+      <OrgScopeProvider org="org-1">{children}</OrgScopeProvider>
+    </QueryClientProvider>
+  </LocaleProvider>
 );
 
 function resolveFlags(body: unknown, status = 200) {
@@ -102,5 +106,24 @@ describe('the flag boundary', () => {
     resolveFlags([{ flag_key: 'receiving.barcode', state: true }]);
     render(wrap(<BarcodeScanControl entries={[]} onPick={() => {}} />));
     await waitFor(() => expect(screen.getByRole('button', { name: 'סריקת ברקוד' })).toBeInTheDocument());
+  });
+
+  it('renders scanner state in English while preserving catalogue product data', async () => {
+    resolveFlags([{ flag_key: 'receiving.barcode', state: true }]);
+    const onPick = vi.fn();
+    const product = entry({ productId: 'p-tomato', barcode: '12345', name: 'עגבניות' });
+    render(wrap(<BarcodeScanControl entries={[product]} onPick={onPick} />, 'en'));
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Scan barcode' }));
+    expect(await screen.findByText(/No camera is available/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Enter code manually'), '12345');
+    await user.click(screen.getByRole('button', { name: 'Check code' }));
+
+    expect(screen.getByText('Code 12345 identified עגבניות. You still enter the quantity.'))
+      .toBeInTheDocument();
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'match', code: '12345', name: 'עגבניות',
+    }));
   });
 });

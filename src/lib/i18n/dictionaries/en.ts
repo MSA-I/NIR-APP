@@ -5197,4 +5197,23 @@ export const en: Dictionary = {
     interpretServiceUnavailable: 'The document interpretation service is currently unavailable.',
   },
 
+  barcodeScanner: {
+    title: 'Scan barcode',
+    description: 'Scanning identifies the order line. Quantity always remains a manual entry.',
+    aria_label: 'Camera preview for barcode scanning',
+    text: 'Starting the camera…',
+    text_2: 'Point the camera at the barcode on the package.',
+    text_3: 'Enter code manually',
+    trim: 'Check code',
+    text_4: 'Finish scanning',
+    openScanner: 'Scan barcode',
+    cameraDenied: 'The browser did not grant camera permission, so scanning is unavailable. Allow camera access in the site settings, or enter the code below.',
+    cameraMissing: 'No camera is available on this device. Enter the code below instead.',
+    cameraInsecure: 'The browser allows camera access only over a secure connection (HTTPS). Enter the code below instead.',
+    readerFailed: 'The scanning engine could not be loaded. Enter the code below instead.',
+    resultMatch: 'Code {code} identified {name}. You still enter the quantity.',
+    resultAmbiguous: 'Code {code} appears on more than one product in this order ({candidates}), so the received product cannot be determined. Select the line manually.',
+    resultNone: 'Code {code} does not appear in this order. Select the line manually — nothing was selected for you.',
+  },
+
 };
