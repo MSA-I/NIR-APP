@@ -6,6 +6,7 @@ import { DocumentList } from '../components/FileUpload';
 import OfflineQueueStatus from '../components/OfflineQueueStatus';
 import { fmtDate, formatQuantity, productLabel } from '../lib/format';
 import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 import { isUuid } from '../lib/invoiceLinkedContext';
 import { PO_STATUS, RECEIPT_LINE_STATUS, RECEIPT_STATUS } from '../lib/status';
 import { supabase } from '../lib/supabase';
@@ -25,10 +26,10 @@ interface ReceiptDetailData {
   lines: ReceiptLine[];
 }
 
-const UNAVAILABLE_MESSAGE = 'לא ניתן לטעון את הקבלה. ייתכן שהרשומה אינה קיימת או שאין לך הרשאה לצפות בה.';
+const UNAVAILABLE_KEY: TKey = 'receiptDetail.unavailable';
 
 export default function ReceiptDetail() {
-  const { locale } = useT();
+  const { locale, t } = useT();
   const { receiptId } = useParams<{ receiptId: string }>();
   const { profile } = useAuth();
   const orgId = profile?.org_id ?? null;
@@ -81,7 +82,7 @@ export default function ReceiptDetail() {
 
   if (loading) return <RecordSkeleton />;
   if (!data) {
-    return <div className="max-w-2xl" data-testid="receipt-detail-unavailable"><ErrorNote message={UNAVAILABLE_MESSAGE} /></div>;
+    return <div className="max-w-2xl" data-testid="receipt-detail-unavailable"><ErrorNote message={t(UNAVAILABLE_KEY)} /></div>;
   }
 
   const { receipt, order, supplier, lines } = data;
@@ -99,49 +100,49 @@ export default function ReceiptDetail() {
       {/* G1, finding 14. This is the durable second entrance to the linked invoice form; it keeps
           the order and receipt context that drives three-way matching. */}
       <RecordHeader
-        breadcrumbs={<Breadcrumbs items={[{ label: 'קבלת סחורה', to: '/receiving' }, { label: `קבלה #${receipt.number}` }]} />}
-        title={<span data-testid="receipt-detail-number">קבלה <span className="num">#{receipt.number}</span></span>}
+        breadcrumbs={<Breadcrumbs items={[{ label: t('receiptDetail.receivingCrumb'), to: '/receiving' }, { label: t('receiptDetail.receiptNumberCrumb', { number: receipt.number }) }]} />}
+        title={<span data-testid="receipt-detail-number">{t('receiptDetail.text')} <span className="num">#{receipt.number}</span></span>}
         status={<StatusBadge meta={RECEIPT_STATUS[receipt.status]} />}
-        meta={`${supplier.name} · התקבלה ב-${fmtDate(receipt.received_at)}`}
+        meta={t('receiptDetail.meta', { supplier: supplier.name, date: fmtDate(receipt.received_at) })}
         primaryAction={canOpenOrder && (
           /* Retargeted from /invoices/new (G1, 10.08.2026): an invoice is received, not entered. */
           <Link className="btn-primary inline-flex" to="/documents">
-            <FileText size={ICON.sm} aria-hidden="true" /> העלאת החשבונית שהתקבלה
+            <FileText size={ICON.sm} aria-hidden="true" /> {t('receiptDetail.uploadInvoiceReceived')}
           </Link>
         )} />
 
       <Card as="section" aria-labelledby="receipt-details-title">
-        <h2 id="receipt-details-title" className="section-title">פרטי הקבלה</h2>
+        <h2 id="receipt-details-title" className="section-title">{t('receiptDetail.text_2')}</h2>
         <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-ink-muted">תאריך קבלה</dt>
+            <dt className="text-ink-muted">{t('receiptDetail.text_3')}</dt>
             <dd className="mt-0.5 num" data-testid="receipt-detail-date">{fmtDate(receipt.received_at)}</dd>
           </div>
           <div>
-            <dt className="text-ink-muted">ספק</dt>
+            <dt className="text-ink-muted">{t('receiptDetail.text_4')}</dt>
             <dd className="mt-0.5 font-medium" data-testid="receipt-detail-supplier">{supplier.name}</dd>
           </div>
           <div>
-            <dt className="text-ink-muted">הזמנת רכש</dt>
+            <dt className="text-ink-muted">{t('receiptDetail.text_5')}</dt>
             <dd className="mt-0.5 flex flex-wrap items-center gap-2">
               {canOpenOrder
-                ? <Link className="link inline-flex min-h-11 items-center" to={`/orders/${order.id}`} data-testid="receipt-detail-order">הזמנה <span className="num">#{order.number}</span></Link>
-                : <span data-testid="receipt-detail-order">הזמנה <span className="num">#{order.number}</span></span>}
+                ? <Link className="link inline-flex min-h-11 items-center" to={`/orders/${order.id}`} data-testid="receipt-detail-order">{t('receiptDetail.orderWord')} <span className="num">#{order.number}</span></Link>
+                : <span data-testid="receipt-detail-order">{t('receiptDetail.text_6')} <span className="num">#{order.number}</span></span>}
               <StatusBadge meta={PO_STATUS[order.status]} />
             </dd>
           </div>
           <div>
-            <dt className="text-ink-muted">מצב הקבלה</dt>
+            <dt className="text-ink-muted">{t('receiptDetail.text_7')}</dt>
             <dd className="mt-0.5"><StatusBadge meta={RECEIPT_STATUS[receipt.status]} /></dd>
           </div>
         </dl>
-        {receipt.notes && <div className="mt-3 rounded-lg bg-surface-sunken px-3 py-2 text-sm text-ink-soft">הערות: {receipt.notes}</div>}
+        {receipt.notes && <div className="mt-3 rounded-lg bg-surface-sunken px-3 py-2 text-sm text-ink-soft">{t('receiptDetail.notesLabel')} {receipt.notes}</div>}
         {unsettledLines.length > 0 && (
           <div className="mt-3">
             <Note tone="await">
               <span>
-                <span className="num">{unsettledLines.length}</span> פריטים סומנו כפגומים או שהוחזרו. עבורם לא נפתחה דרישת זיכוי אוטומטית —
-                זיכוי אוטומטי נפתח לחוסר בכמות בלבד. דרישת זיכוי עליהם נפתחת מתוך החשבונית של הספק, לאחר שתיקלט למערכת.
+                <span className="num">{unsettledLines.length}</span> {t('receiptDetail.unsettledLead')}
+                {t('receiptDetail.text_8')}
               </span>
             </Note>
           </div>
@@ -150,8 +151,8 @@ export default function ReceiptDetail() {
 
       <Card as="section" className="space-y-3" aria-labelledby="receipt-documents-title">
         <div>
-          <h2 id="receipt-documents-title" className="section-title">מסמכי הקבלה</h2>
-          <p className="mt-1 text-sm text-ink-muted">אפשר לצלם גם ללא חיבור; הקובץ נשמר במכשיר ונשלח כשהרשת חוזרת.</p>
+          <h2 id="receipt-documents-title" className="section-title">{t('receiptDetail.text_9')}</h2>
+          <p className="mt-1 text-sm text-ink-muted">{t('receiptDetail.text_10')}</p>
         </div>
         <OfflineQueueStatus />
         <DocumentList entityType="goods_receipt" entityId={receipt.id} capture />
@@ -159,24 +160,24 @@ export default function ReceiptDetail() {
 
       <section className="card overflow-hidden" aria-labelledby="receipt-lines-title">
         <div className="border-b border-line-soft px-4 py-3">
-          <h2 id="receipt-lines-title" className="section-title">פריטי הקבלה</h2>
+          <h2 id="receipt-lines-title" className="section-title">{t('receiptDetail.text_11')}</h2>
         </div>
         {lines.length === 0 ? (
-          <EmptyState title="לא נמצאו פריטים בקבלה" />
+          <EmptyState title={t('receiptDetail.title')} />
         ) : (
           <ul className="divide-y divide-line-soft" data-testid="receipt-detail-lines">
             {lines.map((line) => (
               <li key={line.id} className="p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h3 className="break-words font-medium text-ink-body"><bdi>{line.product ? productLabel(line.product) : 'מוצר לא זמין'}</bdi></h3>
+                    <h3 className="break-words font-medium text-ink-body"><bdi>{line.product ? productLabel(line.product) : t('receiptDetail.productLabel')}</bdi></h3>
                     <p className="mt-1 text-sm text-ink-muted">
-                      כמות שהתקבלה: <span className="num font-medium text-ink-mid">{formatQuantity(line.qty_received, line.product?.unit, locale)}</span>
+                      {t('receiptDetail.quantityReceived')} <span className="num font-medium text-ink-mid">{formatQuantity(line.qty_received, line.product?.unit, locale)}</span>
                     </p>
                   </div>
                   <StatusBadge meta={RECEIPT_LINE_STATUS[line.status]} />
                 </div>
-                {line.notes && <p className="mt-2 text-sm text-ink-soft">הערה: {line.notes}</p>}
+                {line.notes && <p className="mt-2 text-sm text-ink-soft">{t('receiptDetail.lineNoteLabel')} {line.notes}</p>}
               </li>
             ))}
           </ul>

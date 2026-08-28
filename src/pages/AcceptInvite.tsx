@@ -1,4 +1,5 @@
 import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Loader2, UserPlus, AlertCircle, MailCheck } from 'lucide-react';
@@ -16,7 +17,7 @@ import { TERMS_VERSION } from './Legal';
 
 /** Public route — the invitee has no account and no session when they land here. */
 export default function AcceptInvite() {
-  const { statusLabel , errorText } = useT();
+  const { errorText, statusLabel, t } = useT();
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
 
@@ -73,7 +74,7 @@ export default function AcceptInvite() {
       if (error) {
         setFormError(
           /Invalid login credentials/i.test(error.message)
-            ? 'קיים כבר חשבון לכתובת הזו, והסיסמה שהוזנה אינה נכונה.'
+            ? t('acceptInvite.text')
             : errorText(error),
         );
         return;
@@ -106,7 +107,7 @@ export default function AcceptInvite() {
   }
 
   if (lookupError) {
-    return <Shell><Notice title="לא ניתן לבדוק את ההזמנה" message={lookupError} /></Shell>;
+    return <Shell><Notice title={t('acceptInvite.title')} message={lookupError} /></Shell>;
   }
 
   if (confirmEmailSent) {
@@ -114,15 +115,15 @@ export default function AcceptInvite() {
       <Shell>
         <Notice
           tone="info"
-          title="נשלח אליך מייל אימות"
-          message="יש לאשר את כתובת האימייל, ואז לפתוח שוב את קישור ההזמנה כדי להשלים את ההצטרפות. ההזמנה נשארת בתוקף."
+          title={t('acceptInvite.title_2')}
+          message={t('acceptInvite.message')}
         />
       </Shell>
     );
   }
 
   if (lookup?.status !== 'valid') {
-    return <Shell><Notice title="לא ניתן להשלים את ההצטרפות" message={INVALID_MESSAGE[lookup?.status ?? 'unknown']} /></Shell>;
+    return <Shell><Notice title={t('acceptInvite.title_3')} message={t(INVALID_KEY[lookup?.status ?? 'unknown'])} /></Shell>;
   }
 
   return (
@@ -130,9 +131,9 @@ export default function AcceptInvite() {
       <Card as="form" onSubmit={(e: FormEvent) => void onSubmit(e)} className="space-y-4">
         <div className="pb-1 border-b border-line-soft">
           {/* h2 under the shell's h1 — the shell names the task, this names the business. */}
-          <h2 className="section-title">הצטרפות ל{lookup.org_name}</h2>
+          <h2 className="section-title">{t('acceptInvite.joinHeading', { org: lookup.org_name ?? '' })}</h2>
           <p className="text-sm text-ink-muted mt-1">
-            התפקיד שהוגדר עבורך: <strong className="text-ink-mid">
+            {t('acceptInvite.yourRoleIs')} <strong className="text-ink-mid">
               {/* Never the bare enum: an unrecognised role used to print "office" to the invitee. */}
               {resolveRoleLabels({ role_labels: lookup.role_labels }, statusLabel)[lookup.role ?? ''] ?? '—'}
             </strong>
@@ -140,24 +141,24 @@ export default function AcceptInvite() {
         </div>
 
         <div>
-          <label className="label" htmlFor="invite-email">אימייל</label>
+          <label className="label" htmlFor="invite-email">{t('acceptInvite.text_2')}</label>
           <input id="invite-email" className="input" dir="ltr" value={lookup.email ?? ''} disabled readOnly />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="label" htmlFor="fullName">שם מלא</label>
+            <label className="label" htmlFor="fullName">{t('acceptInvite.text_3')}</label>
             <input id="fullName" className="input" autoComplete="name" required
               value={fullName} onChange={(e) => setFullName(e.target.value)} />
           </div>
           <div>
-            <label className="label" htmlFor="phone">טלפון (אופציונלי)</label>
+            <label className="label" htmlFor="phone">{t('acceptInvite.text_4')}</label>
             <input id="phone" className="input" dir="ltr" autoComplete="tel"
               value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="label" htmlFor="password">סיסמה ({MIN_PASSWORD_LENGTH} תווים לפחות)</label>
+            <label className="label" htmlFor="password">{t('acceptInvite.passwordLabel', { min: MIN_PASSWORD_LENGTH })}</label>
             {/* Both boxes carry the mark: `passwordProblem` judges the pair, so naming one of
                 them would be a claim the check does not make. */}
             <input id="password" type="password" className="input" dir="ltr" autoComplete="new-password" required
@@ -166,7 +167,7 @@ export default function AcceptInvite() {
               value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
           <div>
-            <label className="label" htmlFor="confirm">אימות סיסמה</label>
+            <label className="label" htmlFor="confirm">{t('acceptInvite.text_5')}</label>
             <input id="confirm" type="password" className="input" dir="ltr" autoComplete="new-password" required
               aria-invalid={formError ? true : undefined}
               aria-describedby={formError ? 'accept-invite-problem' : undefined}
@@ -181,8 +182,11 @@ export default function AcceptInvite() {
           <input type="checkbox" className="mt-1 size-4 shrink-0 rounded accent-action" checked={consent}
             onChange={(e) => setConsent(e.target.checked)} />
           <span>
-            קראתי ואני מסכים/ה ל<Link className="link" to="/terms" target="_blank">תנאי השימוש</Link>{' '}
-            ול<Link className="link" to="/privacy" target="_blank">מדיניות הפרטיות</Link> (גרסה {TERMS_VERSION}).
+            {t('acceptInvite.consentLead')}{' '}
+            <Link className="link" to="/terms" target="_blank">{t('acceptInvite.text_6')}</Link>{' '}
+            {t('acceptInvite.consentAnd')}{' '}
+            <Link className="link" to="/privacy" target="_blank">{t('acceptInvite.text_7')}</Link>{' '}
+            {t('acceptInvite.consentVersion', { version: TERMS_VERSION })}
           </span>
         </label>
 
@@ -190,21 +194,22 @@ export default function AcceptInvite() {
 
         <button type="submit" className="btn-primary w-full" disabled={busy || !consent}>
           {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <UserPlus size={ICON.sm} aria-hidden="true" />}
-          השלמת ההצטרפות
+          {t('acceptInvite.text_8')}
         </button>
       </Card>
     </Shell>
   );
 }
 
-const INVALID_MESSAGE: Record<string, string> = {
-  unknown: 'קישור ההזמנה אינו תקין. ייתכן שהועתק חלקית — בקש מהעסק לשלוח הזמנה חדשה.',
-  expired: 'תוקף ההזמנה פג. בקש מהעסק לשלוח הזמנה חדשה.',
-  accepted: 'ההזמנה כבר נוצלה. אפשר להתחבר עם הפרטים שהוגדרו.',
-  revoked: 'ההזמנה בוטלה על ידי העסק.',
+const INVALID_KEY: Record<string, TKey> = {
+  unknown: 'acceptInvite.invalidUnknown',
+  expired: 'acceptInvite.invalidExpired',
+  accepted: 'acceptInvite.invalidAccepted',
+  revoked: 'acceptInvite.invalidRevoked',
 };
 
 function Shell({ children }: { children: ReactNode }) {
+  const { t } = useT();
   return (
     <div className="min-h-dvh flex items-center justify-center bg-action px-4 py-6 sm:py-10">
       <div className="w-full max-w-sm sm:max-w-md">
@@ -213,8 +218,8 @@ function Shell({ children }: { children: ReactNode }) {
         <div className="text-center mb-8">
           <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="184" height="40"
             className="mx-auto h-auto w-44" />
-          <h1 className="page-title mt-2 text-shell-ink">הצטרפות לעסק</h1>
-          <p className="text-shell-ink-soft mt-1 text-sm">רכש, חשבוניות ותשלומים במקום אחד</p>
+          <h1 className="page-title mt-2 text-shell-ink">{t('acceptInvite.text_9')}</h1>
+          <p className="text-shell-ink-soft mt-1 text-sm">{t('acceptInvite.text_10')}</p>
         </div>
         {children}
       </div>
@@ -223,6 +228,7 @@ function Shell({ children }: { children: ReactNode }) {
 }
 
 function Notice({ title, message, tone = 'warn' }: { title: string; message: string; tone?: 'warn' | 'info' }) {
+  const { t } = useT();
   const Icon = tone === 'info' ? MailCheck : AlertCircle;
   return (
     <Card className="space-y-3">
@@ -233,7 +239,7 @@ function Notice({ title, message, tone = 'warn' }: { title: string; message: str
           <p className="text-sm text-ink-soft mt-1 leading-relaxed">{message}</p>
         </div>
       </div>
-      <Link to="/login" className="btn-secondary w-full">מעבר למסך ההתחברות</Link>
+      <Link to="/login" className="btn-secondary w-full">{t('acceptInvite.text_11')}</Link>
     </Card>
   );
 }

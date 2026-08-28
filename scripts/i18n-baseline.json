@@ -109,7 +109,6 @@
     "src/operator/OperatorShell.tsx": 9,
     "src/operator/PurgeCandidates.tsx": 27,
     "src/operator/SignupQuarantine.tsx": 26,
-    "src/pages/AcceptInvite.tsx": 22,
     "src/pages/AccountantPaymentQueue.tsx": 1,
     "src/pages/Analytics.tsx": 13,
     "src/pages/Bank.tsx": 20,
@@ -119,7 +118,6 @@
     "src/pages/Inventory.tsx": 6,
     "src/pages/InvoiceDetail.tsx": 5,
     "src/pages/InvoiceNew.tsx": 1,
-    "src/pages/neworder/MinimumFixPanel.tsx": 23,
     "src/pages/neworder/ProductStep.tsx": 20,
     "src/pages/neworder/SummaryStep.tsx": 15,
     "src/pages/neworder/SupplierGroupCard.tsx": 13,
@@ -130,10 +128,8 @@
     "src/pages/ProductNameRepairReview.tsx": 19,
     "src/pages/ProductNameReview.tsx": 2,
     "src/pages/Products.tsx": 2,
-    "src/pages/ReceiptDetail.tsx": 22,
     "src/pages/Receiving.tsx": 1,
     "src/pages/ResetPassword.tsx": 11,
-    "src/pages/Signup.tsx": 22,
     "src/pages/Subscription.tsx": 1
   }
 }
