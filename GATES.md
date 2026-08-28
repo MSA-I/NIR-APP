@@ -314,6 +314,19 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   1,748/1,748; `npx tsc --noEmit` and `check:jsx-space` passed. Dictionary parity passed at 5,108
   keys per locale; `zero` still exits 1 on 265/47, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `SupplierGroupCard`, `Pricing` and
+  `DocumentProcessingProgress` batch in this commit.** The pinned count is now 779 Hebrew line(s)
+  across 78 files; the protected set remains 552 lines in 34 files, so the real remainder is
+  **227 lines in 44 files**. These are surfaces 77–79 locked at zero. Supplier-group decisions and
+  minimum-order facts now follow the reader locale while supplier/product names remain raw;
+  item count uses `Intl.PluralRules`. Public-plan fixed promises moved as whole sentences rather
+  than glued fragments, while server catalogue labels and figures remain server facts. Processing
+  steps, measured page/segment progress and every unknown/waiting detail now resolve per reader.
+  The stale-baseline negative control named exactly the three files at 13→0, 13→0 and 12→0.
+  Focused suites passed 27/27; the full suite passed 1,751/1,751; `npx tsc --noEmit` and
+  `check:jsx-space` passed. Dictionary parity passed at 5,146 keys per locale; `zero` still exits
+  1 on 227/44, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

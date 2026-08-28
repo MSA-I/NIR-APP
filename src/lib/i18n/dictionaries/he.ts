@@ -5414,6 +5414,53 @@ export const he = {
     recordsOther: '{count} רשומות',
   },
 
+  supplierGroupCard: {
+    itemOne: 'פריט',
+    itemsOther: 'פריטים',
+    belowMinimum: 'מתחת למינימום',
+    orderTotal: 'סכום הזמנה',
+    moveGroup: 'העבר את כל הקבוצה ל…',
+    supplierMinimum: 'מינימום ספק',
+    minimumShortfall: 'חסר למינימום',
+    savingsContribution: 'תרומת חיסכון',
+    status: 'סטטוס',
+    needsTopUp: 'דורש השלמה',
+    ready: 'מוכן',
+    fallbackProduct: 'מוצר',
+    quantity: 'כמות',
+    perUnit: 'ליחידה',
+    shortfallPrefix: 'חסרים',
+    minimumSuffix: 'למינימום ההזמנה.',
+    showSolutions: 'הצג פתרונות',
+  },
+
+  pricingTail: {
+    loadFailed: 'לא ניתן לטעון את המסלולים כרגע.',
+    title: 'מסלולים',
+    subtitle: 'אותה שליטה. קצב שמתאים לעסק שלך.',
+    notice: 'כל היכולות פתוחות בכל המסלולים; ההבדל הוא נפח בלבד. המחיר אינו מפורסם בדף הזה — הוא נמסר בתוך החשבון, בשלב המעבר למסלול בתשלום, במטבע שנקבע לפי כתובת החיוב המאומתת מול ספק הסליקה ולא לפי מיקום משוער. פתיחת חשבון והמסלול החינמי אינם דורשים אמצעי תשלום.',
+    unlimitedFeature: '{label} ללא הגבלה',
+    unlimited: 'ללא הגבלה',
+    quotaPeriod: 'המכסות נספרות בתקופת שימוש חודשית של הארגון. חריגה עוצרת עיבוד חדש בלבד — שום מסמך אינו נמחק ושום דבר שכבר נעשה אינו נחסם למפרע.',
+    unmeasuredNote: 'מכסה שהמערכת אינה מודדת היום מוצגת כ«—» ואינה מפורסמת כמספר, כדי שלא תיווצר הבטחה שאין מאחוריה מדידה.',
+    openFreeAccount: 'פתיחת חשבון חינם',
+  },
+
+  documentProcessingProgress: {
+    queued: 'ממתין בתור',
+    reading: 'קריאת המסמך',
+    interpreting: 'פירוש הנתונים',
+    review: 'מוכן לבדיקה',
+    pageProgress: 'עמוד {done} מתוך {total}',
+    chunkProgress: 'מקטע {done} מתוך {total}',
+    awaitingScanApproval: 'הסריקה ממתינה לאישור לפני שהקריאה מתחילה.',
+    queuedWaited: 'ממתין {waited}. העבודה תתחיל מעצמה.',
+    queuedAutomatic: 'העבודה תתחיל מעצמה.',
+    pageCountUnknown: 'מספר העמודים עדיין לא ידוע.',
+    interpretationNotStarted: 'הקריאה הסתיימה. הפירוש עוד לא התחיל.',
+    chunkCountUnknown: 'מספר המקטעים עדיין לא ידוע.',
+  },
+
 } as const;
 
 /**

@@ -57,6 +57,7 @@ const EXTRACTED = [
   'src/components/WhatsAppConnectionCard.tsx',
   'src/components/WhatsAppSendDialog.tsx',
   'src/pages/ProductPurchaseSummary.tsx',
+  'src/pages/Pricing.tsx',
   'src/components/InvoiceLineReviewModal.tsx',
   'src/pages/FinancialSupplier.tsx',
   'src/pages/Credits.tsx',
@@ -94,10 +95,12 @@ const EXTRACTED = [
   'src/lib/imageQuality.ts',
   'src/components/BarcodeScanner.tsx',
   'src/components/document-review/DocumentExportPreview.tsx',
+  'src/components/document-review/DocumentProcessingProgress.tsx',
   'src/components/FeedbackButton.tsx',
   'src/lib/feedback.ts',
   'src/pages/DocumentsInbox.tsx',
   'src/pages/neworder/SummaryStep.tsx',
+  'src/pages/neworder/SupplierGroupCard.tsx',
   'src/lib/reportTemplateExport.ts',
 ];
 
