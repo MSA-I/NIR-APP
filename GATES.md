@@ -766,6 +766,16 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
 - [ ] P6-G1: the heavy gate is green on the SHA
   CHECK: gh workflow run quality-gate.yml && gh run watch
   EXPECT: success
+  ATTEMPT 28.08.2026: workflow-dispatch run `33196329682` on `16ad30a` failed at the Assistant
+  contract job before SQL/browser finished. The full error was 11 TypeScript errors: the shared
+  purchase-comparison formula had gained currency and per-currency totals, while the Assistant
+  consumer still built currency-less offers and read the deleted scalar totals. A focused local
+  reproduction failed identically. The consumer now projects the RPC's `chosen_currency`, offer
+  and supplier currencies, emits `saved_by_currency` / `extra_by_currency`, and a new mixed-basket
+  test proves ILS 20 plus USD 8 never becomes 28. The previously unexecuted full Assistant suite
+  then exposed seven stale `business-summary` fixtures and one lost null-fact contract; after the
+  narrow repair, all 228 Deno tests and frozen `deno check` pass. Gate remains open until a fresh
+  workflow run succeeds on the new SHA.
 
 - [ ] P6-G2: the rollout matrix rows that were touched were actually executed
   EVIDENCE: pending — the union of `Migration / חוזה DB` and `Frontend` rows requires backup, dry-run + ledger,

@@ -146,10 +146,11 @@ Deno.test("get_business_summary: a failed RPC is five named failures, not a fabr
     envelope.failures.map((failure) => failure.code),
     ["received_week", "awaiting_approval", "expected_payments", "suppliers_raised", "open_exceptions"],
   );
-  // Every line still exists as a fact -- with value null, so the model can say "unmeasured"
-  // but can never turn it into a number.
-  assert.equal(envelope.facts.length, 5);
+  // The four counts still exist as null facts. The money line cannot: an unavailable RPC did not
+  // tell us which currency the missing amount belongs to, and inventing ILS would be a false fact.
+  assert.equal(envelope.facts.length, 4);
   assert.ok(envelope.facts.every((fact) => fact.value === null));
+  assert.ok(envelope.facts.every((fact) => fact.unit === "count"));
 });
 
 Deno.test("get_business_summary: an unmeasured line stays null and never blanks its neighbours", async () => {
@@ -160,7 +161,7 @@ Deno.test("get_business_summary: an unmeasured line stays null and never blanks 
           { metric_key: "received_week", value: 12, measured: true },
           { metric_key: "awaiting_approval", value: 3, measured: true },
           // The RPC's own exception block reported this one as unmeasurable.
-          { metric_key: "expected_payments", value: null, measured: false },
+          { metric_key: "expected_payments", value: null, measured: false, currency: "ILS" },
           { metric_key: "suppliers_raised", value: "0", measured: true },
           { metric_key: "open_exceptions", value: 2, measured: true },
         ],
@@ -176,8 +177,8 @@ Deno.test("get_business_summary: an unmeasured line stays null and never blanks 
   );
   assert.equal(envelope.complete, false);
   assert.deepEqual(envelope.failures, [{
-    code: "expected_payments",
-    label: "סכום פתוח בדרישות תשלום",
+    code: "expected_payments:ILS",
+    label: "סכום פתוח בדרישות תשלום (ILS)",
   }]);
   const money = envelope.facts.find((fact) => fact.unit === "ils");
   assert.ok(money);

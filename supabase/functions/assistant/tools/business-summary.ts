@@ -1,6 +1,7 @@
 // get_business_summary -- the section-10 business summary, server-side.
 //
-// Since 0165 the metric DEFINITIONS live in SQL -- public.p2_business_summary_rows(), SECURITY
+// Since 0165 the metric DEFINITIONS live in SQL. Since 0219 the public reader is
+// p2_business_summary_rows_by_currency(), SECURITY
 // INVOKER, STABLE, granted to authenticated -- because the summary has two consumers: the screen
 // (src/lib/summary.ts) and this tool. One server-side definition is the only arrangement under
 // which they cannot silently diverge. The RPC returns (metric_key, value, measured) and wraps
@@ -92,6 +93,29 @@ export const getBusinessSummaryTool: AssistantTool = {
         : [matching.find((row) => row.currency == null) ?? matching[0]].filter(Boolean) as SummaryMetricRow[];
       if (selected.length === 0) {
         failures.push({ code: line.key, label: line.label });
+        // Counts still have a truthful unit when the whole RPC failed, so retain their null facts:
+        // the model may say they were not measured but can never turn them into zero. A missing
+        // money row has no currency to attach to it, and inventing ILS would violate the contract
+        // this reader exists to enforce, so that one remains a named failure without a fact.
+        if (line.unit !== "currency") {
+          facts.push(ctx.evidence.fact({
+            kind: "metric.count",
+            subject: null,
+            label: line.label,
+            value: null,
+            unit: "count",
+            tool: "get_business_summary",
+            as_of: asOf,
+            classification: "tenant_standard",
+          }));
+          sources.push(ctx.evidence.source({
+            entity: "organization",
+            entity_id: ctx.actor.orgId,
+            label: line.label,
+            route: line.to,
+            classification: "tenant_standard",
+          }));
+        }
         continue;
       }
       for (const row of selected) {
