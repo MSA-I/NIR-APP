@@ -168,7 +168,7 @@ export default function UserDetail() {
         meta={<span dir="ltr" className="text-sm text-ink-muted">{user.email ?? '—'}</span>}
       />
 
-      <Card className="card-pad space-y-3">
+      <Card className="space-y-3">
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <dt className="text-xs text-ink-muted">ארגון</dt>
@@ -236,7 +236,7 @@ export default function UserDetail() {
         )}
 
         {mayChange && (
-          <Card className="card-pad space-y-3">
+          <Card className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-ink-soft">שינוי תפקיד:</span>
               {ACTIVE_ROLES.map((role) => (

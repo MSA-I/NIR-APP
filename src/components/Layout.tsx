@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useInboxCount } from '../lib/useInboxCount';
 import { APP_NAME } from '../lib/branding';
+import { useGlowPointer } from '../lib/glowPointer';
 import GlobalSearch, { canGlobalSearch } from './GlobalSearch';
 import Fab from './Fab';
 import AssistantPanel from './AssistantPanel';
@@ -36,39 +37,6 @@ export interface NavSection { section: string; items: NavItem[]; collapsible?: b
    its next value from `new URLSearchParams(current)`. A writer that passes a fresh object literal
    drops the marker and silently closes the drawer under the user. */
 const MENU_PARAM = 'menu';
-
-/* T7.3f pointer atmosphere: --glow-x/y drive the background's oceanic wash (.app-glow) and
-   the hero band's inner light (index.css). The canvas base itself is static pure wheat.
-   Mouse-only by design — attach nothing on touch devices or under reduced-motion, so those
-   users keep the static default position. rAF-throttled; the CSS `--glow-x/y` transition
-   supplies the easing, so React never re-renders on mouse move. */
-function useGlowPointer() {
-  useEffect(() => {
-    if (!window.matchMedia('(pointer: fine)').matches) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    let raf = 0;
-    let x = 0;
-    let y = 0;
-    const onMove = (event: PointerEvent) => {
-      x = event.clientX;
-      y = event.clientY;
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        const style = document.documentElement.style;
-        style.setProperty('--glow-x', `${((x / window.innerWidth) * 100).toFixed(1)}%`);
-        style.setProperty('--glow-y', `${((y / window.innerHeight) * 100).toFixed(1)}%`);
-      });
-    };
-    window.addEventListener('pointermove', onMove, { passive: true });
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      if (raf) cancelAnimationFrame(raf);
-      document.documentElement.style.removeProperty('--glow-x');
-      document.documentElement.style.removeProperty('--glow-y');
-    };
-  }, []);
-}
 
 function navItem(to: StaticRoutePath, icon: typeof LayoutDashboard, roles: ActiveRole[]): NavItem {
   return { to, label: staticRouteTitle(to), icon, roles };

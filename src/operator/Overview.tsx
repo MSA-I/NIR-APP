@@ -1,4 +1,5 @@
-import { Gauge } from 'lucide-react';
+import { Link } from 'react-router';
+import { ArrowUpLeft } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';
 import {
   AttentionZone, ErrorNote, ICON, KpiCard, Note, PageHeader, SkeletonCards,
@@ -6,21 +7,22 @@ import {
 } from '../components/ui';
 import { fmtNum } from '../lib/format';
 import {
-  fetchMyCapabilities, fetchPlatformOverview,
-  type PlatformCapability, type PlatformOverview,
+  fetchMyCapabilities, fetchPlatformOperators, fetchPlatformOverview, fetchPlatformRoles,
+  type PlatformCapability, type PlatformOperator, type PlatformOverview, type PlatformRole,
 } from '../lib/platform';
 
 /**
- * The console's opening screen, and the only one that is allowed to be a dashboard.
+ * The console's opening screen, and the only one allowed to be a dashboard.
  *
- * The constitution's §12 test applies to the operator exactly as it applies to a tenant owner:
- * a screen that merely displays numbers is an operational screen, not a decision screen. So the
- * attention strip comes first and the counts come second — "which customer has nobody who can
- * administer it" is a thing to go and fix; "we have 41 users" is context.
+ * The constitution's §12 test applies to an operator exactly as it applies to a tenant owner: a
+ * screen that merely displays numbers is an operational screen, not a decision screen. So it
+ * carries the tenant control centre's anatomy rather than a grid of tiles — the state band first
+ * at every width (DESIGN.md "Dashboard — פס הכסף": a manager who opens the product sees state,
+ * not only a task list), then the attention card beside the one Onyx surface of the screen.
  *
- * Every figure here is measured. platform_user_overview() returns no row at all to a caller
- * without user.view, which is why `null` and "a row of zeroes" are handled as different
- * situations: the first is a permission answer, the second is a fact about the platform.
+ * Every figure is measured. `platform_user_overview()` returns no row at all to a caller without
+ * `user.view`, which is why `null` and "a row of zeroes" are handled as different situations: the
+ * first is a permission answer, the second is a fact about the platform.
  */
 
 function attentionItems(overview: PlatformOverview): AttentionItem[] {
@@ -42,14 +44,6 @@ function attentionItems(overview: PlatformOverview): AttentionItem[] {
       to: '/admin/team',
       hint: 'חברות בצוות בלי אף הרשאה — הקונסולה תיראה להם ריקה',
       clearLabel: 'לכל מפעיל יש תפקיד',
-    },
-    {
-      key: 'orgs_suspended',
-      label: 'ארגונים מושהים',
-      count: overview.orgs_suspended,
-      tone: 'await',
-      to: '/admin/customers',
-      clearLabel: 'אין ארגון מושהה',
     },
     {
       key: 'users_suspended',
@@ -79,13 +73,71 @@ function attentionItems(overview: PlatformOverview): AttentionItem[] {
   ];
 }
 
+/**
+ * The screen's single Onyx surface, in the slot and the shape the tenant control centre gives
+ * "משימות לפי תפקיד": hero number, queue rows with count chips, and the reference's corner
+ * circle-chip to the full list. Here the queue is our own roster, by the authority each person
+ * holds — the one thing on this screen that is about us rather than about customers.
+ */
+function TeamCard({ operators, roles, className = '' }: {
+  operators: PlatformOperator[];
+  roles: PlatformRole[];
+  className?: string;
+}) {
+  const rows = roles
+    .map((role) => ({
+      key: role.role_key,
+      label: role.label,
+      count: operators.filter((operator) => operator.roles.includes(role.role_key)).length,
+    }))
+    .filter((row) => row.count > 0);
+  const unassigned = operators.filter((operator) => operator.roles.length === 0).length;
+
+  return (
+    <section aria-labelledby="operator-roster-title"
+      className={`relative rounded-3xl bg-shell p-4 text-shell-ink shadow-dashboard sm:p-5 ${className}`}>
+      <Link to="/admin/team" aria-label="לניהול צוות הפלטפורמה"
+        className="group absolute end-3 top-3 grid size-11 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+        <span className="grid size-9 place-items-center rounded-full bg-shell-ink/10 text-shell-ink transition-colors group-hover:bg-shell-ink/20">
+          <ArrowUpLeft size={ICON.sm} aria-hidden="true" />
+        </span>
+      </Link>
+      <h2 id="operator-roster-title" className="section-title pe-16 text-shell-ink">צוות הפלטפורמה</h2>
+      <div className="mt-1.5 flex items-baseline gap-2">
+        <span className="kpi-hero num text-shell-ink">{operators.length}</span>
+        <span className="text-xs text-shell-ink-dim">מפעילים בעלי גישה לקונסולה</span>
+      </div>
+      <ul className="mt-3 space-y-0.5 text-sm">
+        {rows.map((row) => (
+          <li key={row.key} className="flex min-h-11 items-center gap-3 px-0 py-1.5 text-shell-ink-soft">
+            <span className="min-w-0 flex-1 leading-snug">{row.label}</span>
+            <span className="badge num min-w-8 shrink-0 justify-center bg-action-soft text-action-on-soft">
+              {row.count}
+            </span>
+          </li>
+        ))}
+        {unassigned > 0 && (
+          <li className="flex min-h-11 items-center gap-3 py-1.5 text-shell-ink-soft">
+            <span className="min-w-0 flex-1 leading-snug">ללא תפקיד</span>
+            <span className="badge num min-w-8 shrink-0 justify-center bg-action-soft text-action-on-soft">
+              {unassigned}
+            </span>
+          </li>
+        )}
+      </ul>
+    </section>
+  );
+}
+
 export default function Overview() {
   const { data, loading, error } = useQuery(async () => {
-    const [capabilities, overview] = await Promise.all([
+    const [capabilities, overview, operators, roles] = await Promise.all([
       fetchMyCapabilities(),
       fetchPlatformOverview(),
+      fetchPlatformOperators(),
+      fetchPlatformRoles(),
     ]);
-    return { capabilities, overview };
+    return { capabilities, overview, operators, roles };
   }, []);
 
   if (loading) return <SkeletonCards count={4} />;
@@ -108,14 +160,16 @@ export default function Overview() {
   }
 
   return (
-    <div className="space-y-5">
+    // `dashboard-depth` is the one named elevation exception (DESIGN.md §4): inside the control
+    // centre a card carries `shadow-dashboard`, and the scope stays framed so operational cards
+    // elsewhere in the product are untouched.
+    <div className="dashboard-depth flex flex-col gap-5">
       <PageHeader
-        title={<span className="flex items-center gap-2"><Gauge size={ICON.xl} aria-hidden="true" /> מרכז בקרה</span>}
+        title="מרכז בקרה"
         description="מה דורש טיפול עכשיו, ומה מצב הפלטפורמה מאחוריו."
       />
 
-      <AttentionZone items={attentionItems(overview)} totalLabel="דורש טיפול" />
-
+      {/* The state band, first at every width. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           title="ארגונים פעילים"
@@ -131,12 +185,25 @@ export default function Overview() {
           title="משתמשים חדשים"
           value={fmtNum(overview.users_new_30d)}
           sub="נפתחו ב-30 הימים האחרונים"
-          tone={overview.users_new_30d > 0 ? 'info' : 'idle'}
         />
         <KpiCard
-          title="צוות הפלטפורמה"
-          value={fmtNum(overview.operators_total)}
-          sub="מפעילים בעלי גישה לקונסולה"
+          title="ארגונים מושהים"
+          value={fmtNum(overview.orgs_suspended)}
+          sub="הגישה שלהם חסומה"
+          tone={overview.orgs_suspended > 0 ? 'await' : 'idle'}
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-12">
+        <AttentionZone
+          className="lg:col-span-7"
+          items={attentionItems(overview)}
+          totalLabel="דורש טיפול"
+        />
+        <TeamCard
+          className="lg:col-span-5"
+          operators={data?.operators ?? []}
+          roles={data?.roles ?? []}
         />
       </div>
     </div>

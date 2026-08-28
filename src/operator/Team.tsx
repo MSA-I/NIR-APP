@@ -3,7 +3,7 @@ import { ShieldCheck, UserMinus, UserPlus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery } from '../lib/useQuery';
 import {
-  Card, DataTable, ErrorNote, ICON, Modal, Note, PageHeader, SkeletonTable, useToast,
+  DataTable, ErrorNote, ICON, Modal, Note, PageHeader, SkeletonTable, useToast,
   type Column,
 } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
@@ -298,7 +298,7 @@ export default function Team() {
       key: 'roles', header: 'תפקידים',
       render: (row) => (row.roles.length
         ? <span className="flex flex-wrap gap-1">
-            {row.roles.map((key) => <span key={key} className="badge-info">{roleLabel(key)}</span>)}
+            {row.roles.map((key) => <span key={key} className="badge-idle">{roleLabel(key)}</span>)}
           </span>
         : <span className="badge-alert">ללא תפקיד</span>),
     },
@@ -360,13 +360,13 @@ export default function Team() {
         emptySubtitle="רשימה ריקה כאן משמעה שאף אחד אינו יכול להיכנס לקונסולה"
       />
 
-      <Card className="card-pad">
-        <p className="text-sm text-ink-soft">
+      <Note tone="idle">
+        <span className="min-w-0 flex-1">
           שתי מגבלות שהמערכת אוכפת ואי אפשר לעקוף מהמסך הזה: אף אחד אינו יכול לשנות את ההרשאות
           של עצמו, ולא ניתן להסיר או להוריד בדרגה את מנהל הפלטפורמה הראשי האחרון. כל שינוי דורש
           אימות סיסמה מחדש ונרשם ביומן שלמטה.
-        </p>
-      </Card>
+        </span>
+      </Note>
 
       <section className="space-y-2" aria-labelledby="team-history-heading">
         <h2 id="team-history-heading" className="section-title">יומן שינויים</h2>
