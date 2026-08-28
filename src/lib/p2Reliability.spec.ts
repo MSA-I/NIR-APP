@@ -16,6 +16,20 @@ import { mergeUploadBatchSummary, runUploadBatch } from './uploadBatch';
 import { buildMonthlyWorkbook } from './monthlyReport';
 import * as XLSX from 'xlsx';
 import { readExactCount } from './queryResult';
+import { he } from '../lib/i18n/dictionaries/he';
+import type { Dictionary } from '../lib/i18n/dictionaries/he';
+import { translate } from '../lib/i18n/t';
+import type { TKey } from '../lib/i18n/t';
+
+/**
+ * The workbook builders take the translator now, and the tests inject the HEBREW one.
+ *
+ * Every expectation below still names a literal sheet name and column header, so a wrong
+ * dictionary entry fails here. Rewriting them to compare `t(key)` against `t(key)` would have
+ * passed whatever the words were — and the words ARE the file an accountant opens.
+ */
+const t = ((key, vars) => translate(he as unknown as Dictionary, key, vars)) as
+  (key: TKey, vars?: Record<string, string | number>) => string;
 
 test('calendar, paging, reports and retry reliability contracts', async () => {
 assert.deepEqual(monthRange('2026-07'), { start: '2026-07-01', end: '2026-08-01' });
@@ -90,6 +104,7 @@ const scaleInvoices = Array.from({ length: 1501 }, (_, index) => ({
   review_status: 'received', payment_status: 'unpaid',
 }));
 const reportWorkbook = buildMonthlyWorkbook({
+  t,
   orgName: 'ארגון בדיקה', month: '2026-07', generatedAt: new Date('2026-07-22T10:00:00.000Z'),
   data: { invoices: scaleInvoices, payments: [], credits: [], exceptions: [] },
   labels: {

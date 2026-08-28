@@ -1,3 +1,4 @@
+import type { TKey } from './i18n/t';
 import * as XLSX from 'xlsx';
 import { neutralizeSpreadsheetRow, neutralizeSpreadsheetString } from './documentExport';
 import { exportDefinition } from './exportTemplates';
@@ -136,13 +137,14 @@ function mergeTitleRows(sheet: XLSX.WorkSheet, lastCol: number) {
 }
 
 export function buildMonthlyWorkbook(input: {
+  t: (key: TKey, vars?: Record<string, string | number>) => string;
   orgName: string | null | undefined;
   month: string;
   generatedAt: Date;
   data: MonthlyReportData;
   labels: MonthlyReportLabels;
 }) {
-  const { data } = input;
+  const { data, t } = input;
   const invoiceTotal = data.invoices.reduce((sum, row) => sum + row.total_amount, 0);
   const beforeVatTotal = data.invoices.reduce((sum, row) => sum + row.amount_before_vat, 0);
   const vatTotal = data.invoices.reduce((sum, row) => sum + row.vat_amount, 0);
@@ -155,21 +157,21 @@ export function buildMonthlyWorkbook(input: {
   // read. The machine-readable rows below it are unchanged — the title is added above them, not
   // instead of them.
   const summarySheet = XLSX.utils.aoa_to_sheet([
-    [`דוח חודשי לרו״ח — ${neutralize(input.orgName ?? '—')}`],
-    [`${input.month} · הופק ${input.generatedAt.toISOString()}`],
+    [t('reports.xlTitleMonthly', { org: String(neutralize(input.orgName ?? '—') ?? '') })],
+    [t('reports.xlProducedAt', { month: input.month, at: input.generatedAt.toISOString() })],
     [],
-    ['שם ארגון', neutralize(input.orgName ?? '—')],
-    ['חודש', input.month],
-    ['נוצר בתאריך', input.generatedAt.toISOString()],
-    ['הערה', 'הקובץ משקף את הנתונים שהושלמו בזמן המצוין; הוא אינו snapshot טרנזקציוני.'],
+    [t('reports.xlOrgName'), neutralize(input.orgName ?? '—')],
+    [t('reports.xlMonth'), input.month],
+    [t('reports.xlCreatedOn'), input.generatedAt.toISOString()],
+    [t('reports.xlNote'), t('reports.xlNoteLive')],
     [],
-    ['מדד', 'מספר רשומות', 'סכום'],
-    ['חשבוניות', data.invoices.length, invoiceTotal],
-    ['לפני מע״מ', data.invoices.length, beforeVatTotal],
-    ['מע״מ', data.invoices.length, vatTotal],
-    ['תשלומים', data.payments.length, paymentTotal],
-    ['זיכויים', data.credits.length, creditTotal],
-    ['חריגים פתוחים כרגע', data.exceptions.length, null],
+    [t('reports.xlMeasure'), t('reports.xlRecordCount'), t('reports.xlAmount')],
+    [t('reports.xlInvoices'), data.invoices.length, invoiceTotal],
+    [t('reports.xlBeforeVat'), data.invoices.length, beforeVatTotal],
+    [t('reports.xlVat'), data.invoices.length, vatTotal],
+    [t('reports.xlPayments'), data.payments.length, paymentTotal],
+    [t('reports.xlCredits'), data.credits.length, creditTotal],
+    [t('reports.xlOpenExceptionsNow'), data.exceptions.length, null],
   ]);
 
   // Everything below that is not a number goes through neutralizeSpreadsheetRow. This workbook
@@ -177,22 +179,22 @@ export function buildMonthlyWorkbook(input: {
   // exception titles, payment references and payment methods straight from tenant data. A value
   // starting `=` or `@` is a formula to Excel regardless of what we meant by it, and until now
   // this file neutralized nothing while documentExport.ts, which never leaves the app, did.
-  XLSX.utils.book_append_sheet(workbook, summarySheet, 'פרטי הדוח');
+  XLSX.utils.book_append_sheet(workbook, summarySheet, t('reports.xlSheetReportDetails'));
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.invoices.map((row) => neutralizeSpreadsheetRow({
-    'ספק': row.supplier.name, 'מספר חשבונית': row.invoice_number, 'תאריך': row.invoice_date,
-    'לפני מע"מ': row.amount_before_vat, 'מע"מ': row.vat_amount, 'סה"כ': row.total_amount,
-    'סטטוס בדיקה': input.labels.invoiceReview[row.review_status],
-    'סטטוס תשלום': input.labels.invoicePayment[row.payment_status],
-  }))), 'חשבוניות');
+    [t('reports.xlSupplier')]: row.supplier.name, [t('reports.xlInvoiceNumber')]: row.invoice_number, [t('reports.xlDate')]: row.invoice_date,
+    [t('reports.xlBeforeVatQuoted')]: row.amount_before_vat, [t('reports.xlVatQuoted')]: row.vat_amount, [t('reports.xlTotalQuoted')]: row.total_amount,
+    [t('reports.xlReviewStatus')]: input.labels.invoiceReview[row.review_status],
+    [t('reports.xlPaymentStatus')]: input.labels.invoicePayment[row.payment_status],
+  }))), t('reports.xlInvoices'));
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.payments.map((row) => neutralizeSpreadsheetRow({
-    'ספק': row.supplier.name, 'תאריך': row.paid_date, 'סכום': row.amount, 'אמצעי': row.method, 'אסמכתא': row.reference,
-  }))), 'תשלומים');
+    [t('reports.xlSupplier')]: row.supplier.name, [t('reports.xlDate')]: row.paid_date, [t('reports.xlAmount')]: row.amount, [t('reports.xlMethod')]: row.method, [t('reports.xlReference')]: row.reference,
+  }))), t('reports.xlPayments'));
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.credits.map((row) => neutralizeSpreadsheetRow({
-    'ספק': row.supplier.name, 'סיבה': input.labels.creditReason[row.reason], 'סכום': row.amount, 'סטטוס': input.labels.creditStatus[row.status],
-  }))), 'זיכויים');
+    [t('reports.xlSupplier')]: row.supplier.name, [t('reports.xlReason')]: input.labels.creditReason[row.reason], [t('reports.xlAmount')]: row.amount, [t('reports.xlStatus')]: input.labels.creditStatus[row.status],
+  }))), t('reports.xlCredits'));
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.exceptions.map((row) => neutralizeSpreadsheetRow({
-    'סוג': input.labels.exceptionType[row.type], 'תיאור': row.title, 'ספק': row.supplier?.name ?? '',
-  }))), 'חריגים פתוחים כרגע');
+    [t('reports.xlType')]: input.labels.exceptionType[row.type], [t('reports.xlDescription')]: row.title, [t('reports.xlSupplier')]: row.supplier?.name ?? '',
+  }))), t('reports.xlOpenExceptionsNow'));
 
   /**
    * RTL is set HERE, in the one builder every path routes through, and not in each caller.
@@ -211,10 +213,10 @@ export function buildMonthlyWorkbook(input: {
 
   mergeTitleRows(summarySheet, 2);
   styleSheet(summarySheet, [30, 22, 16], [2]);
-  styleSheet(workbook.Sheets['חשבוניות'], [24, 16, 12, 14, 12, 14, 14, 14], [3, 4, 5]);
-  styleSheet(workbook.Sheets['תשלומים'], [24, 12, 14, 14, 18], [2]);
-  styleSheet(workbook.Sheets['זיכויים'], [24, 16, 14, 14], [2]);
-  styleSheet(workbook.Sheets['חריגים פתוחים כרגע'], [16, 40, 24], []);
+  styleSheet(workbook.Sheets[t('reports.xlInvoices')], [24, 16, 12, 14, 12, 14, 14, 14], [3, 4, 5]);
+  styleSheet(workbook.Sheets[t('reports.xlPayments')], [24, 12, 14, 14, 18], [2]);
+  styleSheet(workbook.Sheets[t('reports.xlCredits')], [24, 16, 14, 14], [2]);
+  styleSheet(workbook.Sheets[t('reports.xlOpenExceptionsNow')], [16, 40, 24], []);
   return workbook;
 }
 
@@ -238,6 +240,7 @@ export function buildMonthlyWorkbook(input: {
 export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthlyWorkbook>[0] & {
   summary: ReportTemplateValues;
 }): XLSX.WorkBook {
+  const { t } = input;
   const workbook = buildMonthlyWorkbook(input);
 
   const { data, summary } = input;
@@ -250,19 +253,24 @@ export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthly
     .map((field) => [field.label, summary[field.key] ?? null]);
 
   const sheet = XLSX.utils.aoa_to_sheet([
-    [`דוח חודשי לרו״ח — ${neutralize(input.orgName ?? '—')}`],
-    [`${summary.period_label ?? input.month} · ${summary.period_from ?? ''}–${summary.period_to ?? ''} · הופק ${summary.generated_at ?? input.generatedAt.toISOString()}`],
+    [t('reports.xlTitleMonthly', { org: String(neutralize(input.orgName ?? '—') ?? '') })],
+    [t('reports.xlStyledSubtitle', {
+      label: summary.period_label ?? input.month,
+      from: summary.period_from ?? '',
+      to: summary.period_to ?? '',
+      at: summary.generated_at ?? input.generatedAt.toISOString(),
+    })],
     [],
-    ['נתון', 'ערך'],
+    [t('reports.xlField'), t('reports.xlValue')],
     ...fieldRows,
     [],
-    ['מדד', 'מספר רשומות'],
-    ['חשבוניות', data.invoices.length],
-    ['תשלומים', data.payments.length],
-    ['זיכויים', data.credits.length],
-    ['חריגים פתוחים כרגע', data.exceptions.length],
+    [t('reports.xlMeasure'), t('reports.xlRecordCount')],
+    [t('reports.xlInvoices'), data.invoices.length],
+    [t('reports.xlPayments'), data.payments.length],
+    [t('reports.xlCredits'), data.credits.length],
+    [t('reports.xlOpenExceptionsNow'), data.exceptions.length],
     [],
-    ['הערה', 'הקובץ משקף את הנתונים שהושלמו בזמן המצוין; הוא אינו snapshot טרנזקציוני.'],
+    [t('reports.xlNote'), t('reports.xlNoteLive')],
   ]);
   mergeTitleRows(sheet, 2);
   sheet['!cols'] = [{ wch: 28 }, { wch: 20 }, { wch: 16 }];
@@ -273,7 +281,7 @@ export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthly
     if (cell && cell.t === 'n') cell.z = MONEY_FORMAT;
   });
   // The data sheets are already styled by the base builder; only the summary sheet is replaced.
-  workbook.Sheets['פרטי הדוח'] = sheet;
+  workbook.Sheets[t('reports.xlSheetReportDetails')] = sheet;
   return workbook;
 }
 
@@ -289,9 +297,10 @@ export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthly
  * is not better evidence for being plain.
  */
 export function buildLockedMonthlyWorkbook(input: {
+  t: (key: TKey, vars?: Record<string, string | number>) => string;
   snapshot: MonthlyReportSnapshot;
 }) {
-  const { snapshot } = input;
+  const { snapshot, t } = input;
   // v2 stores every row label beside the raw enum. Older local v1 artifacts remain readable
   // without consulting today's label maps: their frozen raw value is the conservative fallback.
   const frozenLabels: MonthlyReportLabels = {
@@ -312,6 +321,7 @@ export function buildLockedMonthlyWorkbook(input: {
     ])),
   };
   const workbook = buildMonthlyWorkbook({
+    t,
     orgName: snapshot.organization_name,
     month: snapshot.report_month.slice(0, 7),
     generatedAt: new Date(snapshot.created_at),
@@ -325,43 +335,43 @@ export function buildLockedMonthlyWorkbook(input: {
   });
 
   const summarySheet = XLSX.utils.aoa_to_sheet([
-    [`דוח סופי נעול — ${neutralize(snapshot.organization_name)} · ${neutralize(snapshot.legal_entity_name)}`],
-    [`${snapshot.report_month.slice(0, 7)} · גרסה ${snapshot.version} · נוצר ${snapshot.created_at}`],
+    [t('reports.xlTitleLocked', { org: String(neutralize(snapshot.organization_name) ?? ''), entity: String(neutralize(snapshot.legal_entity_name) ?? '') })],
+    [t('reports.xlLockedSubtitle', { month: snapshot.report_month.slice(0, 7), version: snapshot.version, at: snapshot.created_at })],
     [],
-    ['סוג הדוח', 'דוח סופי נעול'],
-    ['שם ארגון', neutralize(snapshot.organization_name)],
-    ['ישות משפטית', neutralize(snapshot.legal_entity_name)],
-    ['חודש', snapshot.report_month.slice(0, 7)],
-    ['גרסת snapshot', snapshot.version],
-    ['גרסת מבנה הדוח', snapshot.report_version],
-    ['נוצר בתאריך', snapshot.created_at],
-    ['נוצר על ידי', neutralize(snapshot.created_by_name)],
+    [t('reports.xlReportKind'), t('reports.xlLockedFinalReport')],
+    [t('reports.xlOrgName'), neutralize(snapshot.organization_name)],
+    [t('reports.xlLegalEntity'), neutralize(snapshot.legal_entity_name)],
+    [t('reports.xlMonth'), snapshot.report_month.slice(0, 7)],
+    [t('reports.xlSnapshotVersion'), snapshot.version],
+    [t('reports.xlReportLayoutVersion'), snapshot.report_version],
+    [t('reports.xlCreatedOn'), snapshot.created_at],
+    [t('reports.xlCreatedBy'), neutralize(snapshot.created_by_name)],
     ['Snapshot ID', snapshot.id],
     ['Checksum', snapshot.content_hash],
-    ['הערה', 'דוח סופי זה נוצר רק מנתוני snapshot נעולים במסד הנתונים ומשקף את גבול הדוח החי במועד היצירה.'],
+    [t('reports.xlNote'), t('reports.xlNoteLocked')],
     [],
-    ['מדד', 'מספר רשומות', 'סכום'],
-    ['חשבוניות', snapshot.totals.invoice_count, snapshot.totals.invoice_total],
-    ['לפני מע״מ', snapshot.totals.invoice_count, snapshot.totals.before_vat_total],
-    ['מע״מ', snapshot.totals.invoice_count, snapshot.totals.vat_total],
-    ['תשלומים', snapshot.totals.payment_count, snapshot.totals.payment_total],
-    ['זיכויים', snapshot.totals.credit_count, snapshot.totals.credit_total],
-    ['חריגים פתוחים בעת היצירה', snapshot.totals.exception_count, null],
-    ['תנועות בנק', snapshot.totals.bank_transaction_count, snapshot.totals.bank_total],
+    [t('reports.xlMeasure'), t('reports.xlRecordCount'), t('reports.xlAmount')],
+    [t('reports.xlInvoices'), snapshot.totals.invoice_count, snapshot.totals.invoice_total],
+    [t('reports.xlBeforeVat'), snapshot.totals.invoice_count, snapshot.totals.before_vat_total],
+    [t('reports.xlVat'), snapshot.totals.invoice_count, snapshot.totals.vat_total],
+    [t('reports.xlPayments'), snapshot.totals.payment_count, snapshot.totals.payment_total],
+    [t('reports.xlCredits'), snapshot.totals.credit_count, snapshot.totals.credit_total],
+    [t('reports.xlOpenExceptionsAtCreation'), snapshot.totals.exception_count, null],
+    [t('reports.xlBankTransactions'), snapshot.totals.bank_transaction_count, snapshot.totals.bank_total],
   ]);
   mergeTitleRows(summarySheet, 2);
   styleSheet(summarySheet, [30, 34, 16], [2]);
-  workbook.Sheets['פרטי הדוח'] = summarySheet;
+  workbook.Sheets[t('reports.xlSheetReportDetails')] = summarySheet;
 
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(snapshot.bank_rows.map((row) => neutralizeSpreadsheetRow({
-    'תאריך': row.tx_date,
-    'תיאור': row.description,
-    'סכום': row.amount,
-    'סוג': row.direction_label ?? (row.is_debit ? 'debit' : 'credit'),
-    'אסמכתא': row.reference,
-    'סטטוס': row.status_label ?? row.status,
-  }))), 'תנועות בנק');
-  styleSheet(workbook.Sheets['תנועות בנק'], [12, 40, 14, 10, 18, 14], [2]);
+    [t('reports.xlDate')]: row.tx_date,
+    [t('reports.xlDescription')]: row.description,
+    [t('reports.xlAmount')]: row.amount,
+    [t('reports.xlType')]: row.direction_label ?? (row.is_debit ? 'debit' : 'credit'),
+    [t('reports.xlReference')]: row.reference,
+    [t('reports.xlStatus')]: row.status_label ?? row.status,
+  }))), t('reports.xlBankTransactions'));
+  styleSheet(workbook.Sheets[t('reports.xlBankTransactions')], [12, 40, 14, 10, 18, 14], [2]);
 
   return workbook;
 }

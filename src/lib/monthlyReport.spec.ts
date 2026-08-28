@@ -10,6 +10,20 @@ import {
 } from './monthlyReport';
 import { currentMonthISO, fmtMoneyExact, monthRange, safeMonthISO } from './format';
 import { monthlyReportTemplateValues } from './reportTemplateExport';
+import { he } from '../lib/i18n/dictionaries/he';
+import type { Dictionary } from '../lib/i18n/dictionaries/he';
+import { translate } from '../lib/i18n/t';
+import type { TKey } from '../lib/i18n/t';
+
+/**
+ * The workbook builders take the translator now, and the tests inject the HEBREW one.
+ *
+ * Every expectation below still names a literal sheet name and column header, so a wrong
+ * dictionary entry fails here. Rewriting them to compare `t(key)` against `t(key)` would have
+ * passed whatever the words were — and the words ARE the file an accountant opens.
+ */
+const t = ((key, vars) => translate(he as unknown as Dictionary, key, vars)) as
+  (key: TKey, vars?: Record<string, string | number>) => string;
 
 const labels: MonthlyReportLabels = {
   invoiceReview: { approved: 'מאושרת' },
@@ -103,6 +117,7 @@ function worksheetXml(workbook: XLSX.WorkBook): string[] {
 describe('accountant workbook — formula injection', () => {
   const sheetOf = (name: string) => {
     const workbook = buildMonthlyWorkbook({
+      t,
       orgName: '=cmd|calc',
       month: '2026-08',
       generatedAt: new Date('2026-08-10T00:00:00.000Z'),
@@ -159,7 +174,7 @@ describe('accountant workbook — formula injection', () => {
  * workbook the accountant already archived.
  */
 describe('accountant workbook — styled built-in default', () => {
-  const workbook = buildStyledMonthlyWorkbook({ ...input, summary });
+  const workbook = buildStyledMonthlyWorkbook({ t, ...input, summary });
 
   it('opens right-to-left and carries the registry vocabulary on the summary sheet', () => {
     expect(workbook.Workbook?.Views?.[0]?.RTL).toBe(true);
@@ -192,7 +207,7 @@ describe('accountant workbook — styled built-in default', () => {
     const [invoiceRow] = XLSX.utils.sheet_to_json<Record<string, unknown>>(invoiceSheet);
     expect(invoiceRow['סה"כ']).toBe(118);
     // The neutralization path is shared with the plain builder — a hostile name stays escaped.
-    const hostile = buildStyledMonthlyWorkbook({
+    const hostile = buildStyledMonthlyWorkbook({ t,
       ...input,
       data: { ...input.data, invoices: [{ ...input.data.invoices[0], supplier: { name: '=HYPERLINK("http://evil","x")' } }] },
       summary,
@@ -212,8 +227,8 @@ describe('accountant workbook — styled built-in default', () => {
       XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 }).flat().map(String);
 
     for (const sheet of [
-      buildMonthlyWorkbook(input).Sheets['פרטי הדוח'],
-      buildLockedMonthlyWorkbook({ snapshot }).Sheets['פרטי הדוח'],
+      buildMonthlyWorkbook({ ...input, t }).Sheets['פרטי הדוח'],
+      buildLockedMonthlyWorkbook({ t, snapshot }).Sheets['פרטי הדוח'],
     ]) {
       const flat = flatten(sheet);
       for (const label of ['הוצאה נטו', 'זיכויים שקוזזו', 'מספר ספקים']) {
@@ -225,7 +240,7 @@ describe('accountant workbook — styled built-in default', () => {
   });
 
   it('builds the locked workbook only from snapshot values, styling included', () => {
-    const locked = buildLockedMonthlyWorkbook({ snapshot });
+    const locked = buildLockedMonthlyWorkbook({ t, snapshot });
     const rows = XLSX.utils.sheet_to_json<unknown[]>(locked.Sheets['פרטי הדוח'], { header: 1 });
     const rowOf = (label: string) => rows.find((row) => row[0] === label)!;
     expect(rowOf('Checksum')[1]).toBe(snapshot.content_hash);
@@ -245,9 +260,9 @@ describe('accountant workbook — styled built-in default', () => {
  */
 describe('accountant workbook — right-to-left in the produced file', () => {
   const builders: [string, () => XLSX.WorkBook][] = [
-    ['buildMonthlyWorkbook', () => buildMonthlyWorkbook(input)],
-    ['buildStyledMonthlyWorkbook', () => buildStyledMonthlyWorkbook({ ...input, summary })],
-    ['buildLockedMonthlyWorkbook', () => buildLockedMonthlyWorkbook({ snapshot })],
+    ['buildMonthlyWorkbook', () => buildMonthlyWorkbook({ ...input, t })],
+    ['buildStyledMonthlyWorkbook', () => buildStyledMonthlyWorkbook({ t, ...input, summary })],
+    ['buildLockedMonthlyWorkbook', () => buildLockedMonthlyWorkbook({ t, snapshot })],
   ];
 
   it.each(builders)('%s marks every worksheet right-to-left', (_name, build) => {

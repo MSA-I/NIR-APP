@@ -236,6 +236,7 @@ export default function Reports() {
         // custom template still throws above rather than landing here — that contract is
         // renderConfiguredReportTemplate's, untouched.
         const wb = buildStyledMonthlyWorkbook({
+          t,
           orgName: org.name, month, generatedAt: data.generatedAt, data,
           labels: reportLabels, summary: values,
         });
@@ -251,7 +252,7 @@ export default function Reports() {
 
   function downloadSnapshot(snapshot: MonthlyReportSnapshot) {
     try {
-      const workbook = buildLockedMonthlyWorkbook({ snapshot });
+      const workbook = buildLockedMonthlyWorkbook({ t, snapshot });
       const orgSlug = snapshot.organization_name.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
       const unitSlug = snapshot.legal_entity_name.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '-');
       XLSX.writeFile(
