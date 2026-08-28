@@ -77,6 +77,8 @@ interface PriceSnapshotLine {
   productName: string;
   supplierId: string;
   supplierName: string;
+  /** The supplier's own currency, which is the currency the line was priced in (0217). */
+  currency: string;
   qty: number;
   assignmentMode: 'auto' | 'pinned';
 }
@@ -104,6 +106,11 @@ interface PriceDiffLine extends PriceSnapshotLine {
 
 interface PriceDiffReport {
   lines: PriceDiffLine[];
+  /**
+   * The basket's one currency, or null when it holds more than one — in which case there is no
+   * order total to compare, and `fmtMoneyExact` draws an em dash rather than a figure.
+   */
+  currency: string | null;
   oldTotal: number | null;
   newTotal: number | null;
 }
@@ -357,12 +364,16 @@ export default function NewOrder() {
     offersByProduct: new Map([...offersByProduct].map(([productId, offers]) => [productId, offers.map((offer) => ({
       supplierId: offer.supplier_id,
       unitPrice: offer.current_price,
+      currency: offer.currency,
       minQty: offer.min_qty,
     }))])),
     suppliers: new Map([...supplierById].map(([supplierId, supplier]) => [supplierId, {
       id: supplier.id,
       name: supplier.name,
       minOrderAmount: supplier.min_order_amount,
+      // The supplier's own money: the unit their minimum order is stated in, and the only currency
+      // an offer of theirs may be priced in (orderSplit.usableOffers).
+      currency: supplier.default_currency,
     }])),
   }), [cart, offersByProduct, supplierById]);
   const split = useMemo(() => resolveSplit(splitInput), [splitInput]);
@@ -393,6 +404,7 @@ export default function NewOrder() {
           })(),
           supplierId: group.supplier.id,
           supplierName: group.supplier.name,
+          currency: group.currency,
           qty: line.qty,
           assignmentMode: line.assignment.mode,
         });
@@ -438,8 +450,13 @@ export default function NewOrder() {
     pendingPriceDiffRef.current = null;
     priceSnapshotRef.current = new Map(currentPriceSnapshot.prices);
     priceSnapshotLinesRef.current = currentPriceSnapshot.lines.map((line) => ({ ...line }));
-    setPriceDiff({ lines: changes, oldTotal: pending.oldTotal, newTotal: split.savings.splitTotal });
-  }, [currentPriceSnapshot, data?.sps, priceRefreshVersion, resolvedByProduct, split.savings.splitTotal]);
+    setPriceDiff({
+      lines: changes,
+      currency: split.basketCurrency,
+      oldTotal: pending.oldTotal,
+      newTotal: split.savings.splitTotal,
+    });
+  }, [currentPriceSnapshot, data?.sps, priceRefreshVersion, resolvedByProduct, split.basketCurrency, split.savings.splitTotal]);
 
   const runSaveQueue = useCallback((force = false): Promise<boolean> => {
     if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
@@ -811,7 +828,7 @@ export default function NewOrder() {
           onAddNextOrderItem={(item) => void addNextOrderItem(item)} onDismissNextOrderItem={(item) => void dismissNextItem(item)}
           onCreateProduct={canCreateProduct ? () => setCreateProductOpen(true) : null} />
       ) : step === 2 ? (
-        <SupplierSplitStep cart={cart} offersByProduct={offersByProduct} supplierById={supplierById} split={split} input={splitInput}
+        <SupplierSplitStep baseCurrency={org?.base_currency} cart={cart} offersByProduct={offersByProduct} supplierById={supplierById} split={split} input={splitInput}
           notes={notes} setNotes={setNotes} expectedDate={expectedDate} setExpectedDate={setExpectedDate} busy={busy}
           onSupplier={(productId, supplierId) => dispatch(supplierId
             ? { type: 'PIN_SUPPLIER', productId, supplierId }
@@ -910,17 +927,17 @@ function PriceDiffModal({ report, onClose }: { report: PriceDiffReport | null; o
     exact-text node and climbs two parents, so wrapping would break its locator depth. */}
 <strong className="text-ink-body" dir="auto">{line.productName}</strong><span className={line.assignmentMode === 'pinned' ? 'badge-info' : 'badge-idle'}>{line.assignmentMode === 'pinned' ? 'ספק מוצמד — ההצמדה נשמרה' : line.newSupplierId !== line.supplierId ? 'בחירה אוטומטית — הספק השתנה' : 'בחירה אוטומטית'}</span></div>
               <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-center">
-                <div><span className="block text-xs text-ink-muted">לפני · {line.supplierName}</span><span className="num font-semibold">{fmtMoneyExact(line.oldUnitPrice)}</span> ליחידה</div>
+                <div><span className="block text-xs text-ink-muted">לפני · {line.supplierName}</span><span className="num font-semibold">{fmtMoneyExact(line.oldUnitPrice, line.currency)}</span> ליחידה</div>
                 <span className="text-ink-faint" aria-hidden="true">←</span>
-                <div><span className="block text-xs text-ink-muted">עכשיו · {line.newSupplierName}</span><span className="num font-semibold">{fmtMoneyExact(line.newUnitPrice)}</span> ליחידה</div>
-                <div className={`font-semibold sm:text-end ${line.delta == null ? 'text-ink-muted' : `num ${line.delta > 0 ? 'text-await-fg' : 'text-done-fg'}`}`}>{line.delta == null ? 'לא זמין' : signedMoney(line.delta)}</div>
+                <div><span className="block text-xs text-ink-muted">עכשיו · {line.newSupplierName}</span><span className="num font-semibold">{fmtMoneyExact(line.newUnitPrice, line.currency)}</span> ליחידה</div>
+                <div className={`font-semibold sm:text-end ${line.delta == null ? 'text-ink-muted' : `num ${line.delta > 0 ? 'text-await-fg' : 'text-done-fg'}`}`}>{line.delta == null ? 'לא זמין' : signedMoney(line.delta, line.currency)}</div>
               </div>
-              <div className="mt-1 text-xs text-ink-muted">סכום שורה: <span className="num">{fmtMoneyExact(line.oldLineTotal)}</span> ← <span className="num font-semibold text-ink">{fmtMoneyExact(line.newLineTotal)}</span></div>
+              <div className="mt-1 text-xs text-ink-muted">סכום שורה: <span className="num">{fmtMoneyExact(line.oldLineTotal, line.currency)}</span> ← <span className="num font-semibold text-ink">{fmtMoneyExact(line.newLineTotal, line.currency)}</span></div>
             </div>
           ))}
         </div>
       ) : report ? <div className="note-info">המחירים נבדקו מחדש ולא נמצא שינוי נוסף בשורות ההזמנה.</div> : null}
-      {report && <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-y border-line-strong py-3 text-sm"><span>סכום ההזמנה</span><strong className="num">{fmtMoneyExact(report.oldTotal)} ← {fmtMoneyExact(report.newTotal)}{totalDelta != null ? ` · ${signedMoney(totalDelta)}` : ''}</strong></div>}
+      {report && <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-y border-line-strong py-3 text-sm"><span>סכום ההזמנה</span><strong className="num">{fmtMoneyExact(report.oldTotal, report.currency)} ← {fmtMoneyExact(report.newTotal, report.currency)}{totalDelta != null ? ` · ${signedMoney(totalDelta, report.currency)}` : ''}</strong></div>}
       <div className="mt-5 flex justify-end"><button type="button" className="btn-primary" onClick={onClose}>חזרה לסיכום ולאישור מחדש</button></div>
     </Modal>
   );
@@ -934,7 +951,7 @@ function exactLineTotal(qty: number, unitPrice: number): number {
   return moneyFromCents(centsFromUnits(lineUnits(qty, unitPrice)));
 }
 
-function signedMoney(value: number): string {
-  if (value === 0) return fmtMoneyExact(0);
-  return `${value > 0 ? '+' : '−'}${fmtMoneyExact(Math.abs(value))}`;
+function signedMoney(value: number, currency: string | null | undefined): string {
+  if (value === 0) return fmtMoneyExact(0, currency);
+  return `${value > 0 ? '+' : '−'}${fmtMoneyExact(Math.abs(value), currency)}`;
 }

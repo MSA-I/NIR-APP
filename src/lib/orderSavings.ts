@@ -2,10 +2,17 @@ export interface SavingsLine {
   productId: string;
   qty: number;
   chosenSupplierId: string | null;
-  offers: { supplierId: string; unitPrice: number; minQty: number | null }[];
+  offers: { supplierId: string; unitPrice: number; currency: string; minQty: number | null }[];
 }
 
 export interface OrderSavings {
+  /**
+   * The currency the whole comparison was made in, or null when the basket did not have one
+   * (OPEN-DECISIONS #277). Every figure below is in it, and when it is null they are all null:
+   * "split across three suppliers saves 240" is a sentence about one kind of money, and comparing
+   * a shekel basket against a dollar one produces a saving nobody banked.
+   */
+  currency: string | null;
   splitTotal: number | null;
   singleSupplierTotal: number | null;
   singleSupplierId: string | null;
@@ -24,8 +31,30 @@ export const lineUnits = (qty: number, unitPrice: number) => hundredths(qty) * h
 export const centsFromUnits = (value: bigint) => (value + 50n) / 100n;
 export const moneyFromCents = (value: bigint) => Number(value) / 100;
 
-export function calculateOrderSavings(lines: SavingsLine[]): OrderSavings {
-  const selected = lines.map((line) => {
+/**
+ * `basketCurrency` is supplied by the caller rather than inferred, because the caller is the one
+ * that already decided which currency this basket is being priced in — and an inference here would
+ * silently answer for a basket that has no single answer. An offer in any other currency is not
+ * considered at all: it is not cheaper and it is not dearer, it is a different question.
+ */
+export function calculateOrderSavings(lines: SavingsLine[], basketCurrency: string | null): OrderSavings {
+  if (basketCurrency == null) {
+    return {
+      currency: null,
+      splitTotal: null,
+      singleSupplierTotal: null,
+      singleSupplierId: null,
+      savings: null,
+      savingsPercent: null,
+      supplierCount: 0,
+      allCheapest: false,
+    };
+  }
+  const inCurrency = lines.map((line) => ({
+    ...line,
+    offers: line.offers.filter((offer) => offer.currency === basketCurrency),
+  }));
+  const selected = inCurrency.map((line) => {
     const sorted = [...line.offers].sort((a, b) =>
       a.unitPrice - b.unitPrice
       || (a.supplierId < b.supplierId ? -1 : a.supplierId > b.supplierId ? 1 : 0));
@@ -37,7 +66,7 @@ export function calculateOrderSavings(lines: SavingsLine[]): OrderSavings {
     return { line, offer, cheapest: usable[0] ?? null };
   });
 
-  const complete = lines.length > 0 && selected.every(({ offer }) => offer !== null);
+  const complete = inCurrency.length > 0 && selected.every(({ offer }) => offer !== null);
   const splitCents = complete
     ? centsFromUnits(selected.reduce((sum, { line, offer }) => sum + lineUnits(line.qty, offer!.unitPrice), 0n))
     : null;
@@ -47,11 +76,11 @@ export function calculateOrderSavings(lines: SavingsLine[]): OrderSavings {
 
   let singleSupplierId: string | null = null;
   let singleSupplierUnits: bigint | null = null;
-  const candidates = [...new Set(lines.flatMap((line) => line.offers.map((offer) => offer.supplierId)))].sort();
+  const candidates = [...new Set(inCurrency.flatMap((line) => line.offers.map((offer) => offer.supplierId)))].sort();
   for (const supplierId of candidates) {
     let total = 0n;
     let coversBasket = true;
-    for (const line of lines) {
+    for (const line of inCurrency) {
       const offers = line.offers.filter((offer) => offer.supplierId === supplierId
         && (offer.minQty == null || line.qty >= offer.minQty));
       if (!offers.length) { coversBasket = false; break; }
@@ -72,6 +101,7 @@ export function calculateOrderSavings(lines: SavingsLine[]): OrderSavings {
   const savingsCents = splitCents !== null && singleSupplierCents !== null ? singleSupplierCents - splitCents : null;
   const savings = savingsCents === null ? null : moneyFromCents(savingsCents);
   return {
+    currency: basketCurrency,
     splitTotal,
     singleSupplierTotal,
     singleSupplierId,
