@@ -35,6 +35,7 @@ const EXTRACTED = [
   'src/pages/DocumentOperations.tsx',
   'src/lib/monthlyReport.ts',
   'src/pages/Legal.tsx',
+  'src/pages/Admin.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */

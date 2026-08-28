@@ -40,7 +40,11 @@ describe('tenant offboarding UI contract', () => {
     expect(admin).toContain("supabase.rpc('reactivate_organization_from_offboarding'");
     expect(admin).toContain("body: { action: 'build', request_id: request.id }");
     expect(admin).toContain('open={offboardingPending !== null}');
-    expect(admin).toContain('הועברה לעיבוד');
+    // The sentence moved into the dictionary, so the claim moves with it in two halves: the
+    // screen renders that key, and the key still says the export build was QUEUED rather than
+    // finished. Either half alone would pass against a broken dictionary or a silent rewrite.
+    expect(admin).toContain("t('admin.text')");
+    expect(he.admin.text).toContain('הועברה לעיבוד');
   });
 
   it('revalidates a revocable bearer after Storage signed-URL minting', () => {
