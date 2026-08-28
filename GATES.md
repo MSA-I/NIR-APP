@@ -569,6 +569,19 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   Four suites edited late were not re-run individually and are the likeliest place for a
   survivor: `InvoiceLineReviewModal`, `uiPrimitives`, `supplierLogChanges`, `assistantPanel`.
 
+  ATTEMPT 28.08.2026: `npx tsc --noEmit` first failed with two `TS2322` errors in
+  `paymentRequestAllocationBlock.spec.tsx`: the empty `open_credit_total_by_currency` fixture had
+  inferred `never[]`. The fixture now names its `{ currency, amount }[]` shape; the same command
+  then exited 0. Full Vitest attempt 1 completed with 157/158 files and 1665/1666 tests passing;
+  the one failure was the unchanged WhatsApp connection wizard timing out at 5,068 ms. Its exact
+  test passed alone, and replacing seven character-by-character `user.type` calls that were not
+  part of its contract reduced its measured test body from 2.11 s to 472 ms. Full Vitest attempt 2
+  again completed with 157/158 files and 1665/1666 tests passing; the one failure moved to the
+  unchanged `webhookSettings` private-address test, which timed out at 5,284 ms.
+
+  STOP 28.08.2026: this is the second consecutive failure of the full-test gate. Per `CLAUDE.md`,
+  no third attempt was made. P3-G2 remains open, and `check:money` was not run.
+
 - [ ] P3-G3: a supplier card shows two balances and never their sum
   EVIDENCE: screenshot of one supplier with ₪12,400 and $3,100 on two lines. An empty list renders
   `—`, never `0` (constitution).

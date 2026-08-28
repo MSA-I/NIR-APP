@@ -69,7 +69,7 @@ const BASE_SIGNALS = {
   // entry per currency — a dollar credit does not offset a shekel request, so there is no one
   // figure to report.
   currency: 'ILS',
-  open_credit_total_by_currency: [],
+  open_credit_total_by_currency: [] as { currency: string; amount: number }[],
   over_allocated_invoice_count: 0,
 };
 
