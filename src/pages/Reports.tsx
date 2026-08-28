@@ -14,7 +14,7 @@ import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { buildLockedMonthlyWorkbook, buildStyledMonthlyWorkbook, monthlyReportScreenTotals, type MonthlyReportLabels, type MonthlyReportSnapshot } from '../lib/monthlyReport';
 
 import { financialSupplierMap } from '../lib/financialSuppliers';
-import { downloadElementPdf } from '../lib/pdf';
+import { downloadDocumentPdf } from '../lib/pdf';
 import { exportWatermark } from '../lib/exportBranding';
 import { downloadWorkbook, safeFileName } from '../lib/workbook';
 import {
@@ -254,8 +254,9 @@ export default function Reports() {
     setBusy(true);
     try {
       const slug = safeFileName(org?.name?.replace(/\s+/g, '-') ?? '', 'inplace');
-      await downloadElementPdf({
+      await downloadDocumentPdf({
         element,
+        path: `/reports?month=${month}`,
         fileName: `${slug}-report-${month}.pdf`,
         watermark: await exportWatermark(),
         orientation: 'landscape',

@@ -136,6 +136,14 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   | Auth / תפקידים / RLS | האיחוד של DB/Edge/browser הנוגעים לחוזה | smoke מחובר וקריאה בלבד לתפקידים שנפגעו, בדיקת חסימה לתפקידים שפרשו והוכחת אפס כתיבות עסקיות | אין מטריצת כל התפקידים לשינוי שאינו הרשאה |
   | Dependencies | `build` + ‏`verify` + ‏`audit`; browser כי קוד runtime שנפתר השתנה | deploy frontend רק אם החבילה נכנסת ל־bundle | אין SQL או OCR אלא אם קבצי המשטח שלהם השתנו |
   | ‏`worker/ocr/**` או גרסת חוזה gateway | build ו־self-check של OCR ב־`contracts` | **פריסה מחדש של ה־VPS באותו רולאאוט**, והוכחת `job_claimed`+`job_completed` ביומן | אין Pages, DB או Edge שאינם קשורים |
+  | ‏`worker/render/**` או גרסת חוזה render | self-check, ‏compose ו־image build ב־`contracts`, וחוזה `render-document` | **פריסה מחדש של ה־VPS באותו רולאאוט** עם הפונקציה, ‏`/health` שמחזיר את אותה גרסת חוזה, והוכחת ייצוא חי אחד | אין Pages, DB או OCR |
+
+  **שני שירותי ה־VPS אינם נפרסים עם כלום.** מ־28.08.2026 יש שם שניים — `worker/ocr` ו־
+  `worker/render`, האחרון מייצר את מסמכי ה־PDF ומטביע אותם בצד שרת — ולשניהם אותו כלל ואותה
+  מלכודת. ‏`RENDER_CONTRACT_VERSION` יושב ב־`worker/render/src/contract.mjs` מול
+  ‏`supabase/functions/render-document/contract.ts`; השער משווה את שני הליטרלים, השירות עונה
+  ‏`render_contract_mismatch` במקום להיכשל בשקט, ו־`/health` מחזיר את הגרסה שהוא באמת מריץ —
+  שלושתם קיימים בגלל מה שכתוב בפסקה הבאה.
 
   **ה־worker אינו נפרס עם כלום.** הוא רץ על VPS נפרד ואף שער ואף שלב רולאאוט אינו נוגע בו, ולכן
   merge ל־`main` לעולם אינו מגיע אליו. לשני חוזי ה־gateway יש מספר גרסה **בשני צדדים** —

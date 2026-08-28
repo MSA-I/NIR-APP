@@ -1,0 +1,40 @@
+name: inplace-render
+
+# The render service runs on the same VPS as the OCR worker and is deployed the same way: BY HAND.
+# Nothing in this repository can reach that machine — not a quality gate, not a merge to `main`,
+# not a Pages rollout. That is stated in CLAUDE.md for `worker/ocr` and it is equally true here.
+#
+# THE FAILURE MODE TO WATCH IS THE ONE THAT ALREADY HAPPENED ONCE. `RENDER_CONTRACT_VERSION` lives
+# in two files — `supabase/functions/render-document/contract.ts` and
+# `worker/render/src/contract.mjs` — and moving one without the other stops document rendering
+# while the container still reports healthy. The CI gate compares the two literals, and this
+# service answers `render_contract_mismatch` rather than failing quietly, but a deploy that
+# updates only one side is still a deploy that breaks exports.
+
+services:
+  render:
+    image: ${RENDER_IMAGE:-inplace-render:local}
+    build:
+      context: ./worker/render
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      # The shared secret the Edge function presents. Generate it once, set it in BOTH places:
+      # here and as the `RENDER_SERVICE_TOKEN` secret of the Supabase project.
+      RENDER_SERVICE_TOKEN: ${RENDER_SERVICE_TOKEN:?set RENDER_SERVICE_TOKEN}
+      # The public application origin the renderer opens. Production, not a preview: the document
+      # it produces carries the tenant's real data.
+      RENDER_APP_URL: ${RENDER_APP_URL:?set RENDER_APP_URL}
+      RENDER_SETTLE_MS: ${RENDER_SETTLE_MS:-2500}
+    ports:
+      # Bound to loopback: the only caller is the Edge function, and it must arrive through the
+      # reverse proxy that terminates TLS. A service holding a user session for the length of a
+      # render has no business listening on a public interface.
+      - "127.0.0.1:8091:8080"
+    # Chromium is memory-hungry and a runaway render must not take the OCR worker down with it.
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s

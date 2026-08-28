@@ -10,7 +10,7 @@ import { Breadcrumbs, DataTable, StatusBadge, useToast, ConfirmDialog, Lifecycle
 import { PO_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, formatQuantity, formatUnit, productLabel, todayISO } from '../lib/format';
 import { orderWhatsAppLink, markOrderSentToSupplier, needsSentConfirmation } from '../lib/share';
-import { downloadElementPdf } from '../lib/pdf';
+import { downloadDocumentPdf } from '../lib/pdf';
 import { exportWatermark } from '../lib/exportBranding';
 import { WhatsAppSendDialog } from '../components/WhatsAppSendDialog';
 import { SupplierPortalCard } from '../components/SupplierPortalCard';
@@ -371,8 +371,9 @@ export function OrderDetail() {
     if (!element || !order) return;
     setExportingPdf(true);
     try {
-      await downloadElementPdf({
+      await downloadDocumentPdf({
         element,
+        path: `/orders/${order.id}`,
         fileName: `purchase-order-${order.number}.pdf`,
         watermark: await exportWatermark(),
       });

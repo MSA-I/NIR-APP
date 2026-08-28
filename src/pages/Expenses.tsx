@@ -15,7 +15,7 @@ import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { useAuth } from '../auth/AuthContext';
 import { financialSupplierMap } from '../lib/financialSuppliers';
 import { downloadWorkbook } from '../lib/workbook';
-import { downloadElementPdf } from '../lib/pdf';
+import { downloadDocumentPdf } from '../lib/pdf';
 import { exportWatermark } from '../lib/exportBranding';
 import {
   downloadRenderedWorkbook,
@@ -284,8 +284,9 @@ export default function Expenses() {
     if (!element || fetching || error || !data || data.invalidRange) return;
     setExporting(true);
     try {
-      await downloadElementPdf({
+      await downloadDocumentPdf({
         element,
+        path: `/expenses?from=${from}&to=${to}`,
         fileName: `expenses-${from}-${to}.pdf`,
         watermark: await exportWatermark(),
       });

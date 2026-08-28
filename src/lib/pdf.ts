@@ -1,4 +1,5 @@
-import { safeFileName } from './workbook';
+import { downloadBytes, safeFileName } from './workbook';
+import { supabase } from './supabase';
 
 /**
  * The product's PDF generator.
@@ -20,11 +21,14 @@ import { safeFileName } from './workbook';
  * on the oklch colours Tailwind v4 emits). jsPDF is then only a container: pages, the blocks that
  * land on them, and the stamp.
  *
- * THE COST IS STATED PLAINLY: text in these PDFs is not selectable or searchable. It is a picture
- * of a correctly typeset page. The accountant's machine-readable artefact is the .xlsx, which is
- * where copying figures belongs; the PDF is the human-readable one. If selectable text is ever
- * required, the only honest route is rendering this same HTML in a headless browser server-side —
- * not a JS PDF engine, which would trade selectable text for wrong text.
+ * THE COST IS STATED PLAINLY: text in a PDF produced HERE is not selectable or searchable. It is a
+ * picture of a correctly typeset page.
+ *
+ * THAT COST IS WHY THIS IS NO LONGER THE ONLY PRODUCER. `downloadDocumentPdf` at the foot of this
+ * file asks the server first (`supabase/functions/render-document` → `worker/render`), where the
+ * same Chromium lays out the same print stylesheet and `page.pdf()` emits real text — and where
+ * the stamp goes on somewhere the reader cannot reach it. What remains here is the fallback for an
+ * environment with no render service deployed, which is a normal state rather than a failure.
  */
 
 const A4 = { width: 210, height: 297 } as const;
@@ -52,9 +56,10 @@ export interface PdfOptions {
   element: HTMLElement | readonly HTMLElement[];
   fileName: string;
   /**
-   * Stamp the InPlace mark across every page. Driven by the `exports.unbranded_pdf` entitlement:
-   * a plan that does not grant it exports branded. Enforced in the browser, which is the honest
-   * limit — see `useExportWatermark` and DEBT §69.
+   * Stamp the InPlace mark across every page. Driven by the `exports.unbranded_pdf` entitlement,
+   * resolved by `exportWatermark()` against the server. Applied in the BROWSER on this path, which
+   * makes it branding rather than enforcement — the enforced copy comes from `downloadDocumentPdf`
+   * below. DEBT §69.
    */
   watermark: boolean;
   /** Landscape for the wide accountant grids; portrait for order sheets and invoices. */
@@ -268,4 +273,67 @@ export async function downloadElementPdf(options: PdfOptions): Promise<void> {
 
   const name = safeFileName(options.fileName, 'inplace-document.pdf');
   pdf.save(name.toLowerCase().endsWith('.pdf') ? name : `${name}.pdf`);
+}
+
+export type PdfSource = 'server' | 'browser';
+
+export interface DocumentPdfOptions extends PdfOptions {
+  /**
+   * The application path the SERVER should render — the same screen the reader is looking at.
+   * There is no second template: `@media print` in `src/index.css` decides what belongs on paper,
+   * and Chromium applies it. The path must be one the render contract allows.
+   */
+  path: string;
+}
+
+/**
+ * Download a document, preferring the file the customer could not have made themselves.
+ *
+ * TWO PRODUCERS, ONE OF WHICH IS BETTER IN EVERY WAY THAT MATTERS. The server renderer
+ * (`supabase/functions/render-document` → `worker/render`) emits REAL TEXT rather than a picture,
+ * and stamps where a reader cannot reach — so it answers DEBT §68 and §69 at once. The browser
+ * generator below it produces a correct document too, but its text is an image and its watermark
+ * is branding.
+ *
+ * SO THE FALLBACK IS NARROW ON PURPOSE: only `renderer_not_configured` falls through. That state
+ * is normal — `worker/render` is deployed by hand onto the VPS, exactly like the OCR worker, and
+ * an environment without it must still be able to export. Any OTHER failure is reported: a
+ * configured renderer that breaks is a real fault, and quietly downgrading it would hide the one
+ * thing this package exists to guarantee.
+ */
+export async function downloadDocumentPdf(options: DocumentPdfOptions): Promise<PdfSource> {
+  const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+
+  if (url && anonKey && accessToken) {
+    const response = await fetch(`${url}/functions/v1/render-document`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'apikey': anonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        path: options.path,
+        orientation: options.orientation ?? 'portrait',
+        fileName: options.fileName,
+        // `watermark` is deliberately NOT sent. The server resolves the entitlement itself; a
+        // client that could ask for an unstamped document is the tampering this package prevents.
+      }),
+    });
+
+    if (response.ok) {
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      downloadBytes(bytes, safeFileName(options.fileName, 'inplace-document.pdf'), 'application/pdf');
+      return 'server';
+    }
+    if (response.status !== 503) {
+      throw new Error(`render_document_failed:${response.status}`);
+    }
+  }
+
+  await downloadElementPdf(options);
+  return 'browser';
 }

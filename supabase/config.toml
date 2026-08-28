@@ -132,6 +132,10 @@ verify_jwt = true
 [functions.upload-organization-logo]
 verify_jwt = true
 
+# The render service is handed the caller's own session, so the caller has to be one.
+[functions.render-document]
+verify_jwt = true
+
 [functions.tenant-export]
 # POST validates the caller JWT inside the handler; GET is a hashed, revocable seven-day
 # export token and therefore cannot require an Authorization header.

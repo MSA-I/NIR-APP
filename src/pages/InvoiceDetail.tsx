@@ -10,7 +10,7 @@ import { InvoiceAttachments } from '../components/AttachmentsPanel';
 import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
 import { reasonOr } from '../lib/reason';
-import { downloadElementPdf } from '../lib/pdf';
+import { downloadDocumentPdf } from '../lib/pdf';
 import { exportWatermark } from '../lib/exportBranding';
 import { reasonDemandFor } from '../lib/transitionIntent';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS, CREDIT_REASON } from '../lib/status';
@@ -306,8 +306,9 @@ export default function InvoiceDetail() {
     if (blocks.length === 0 || !inv) return;
     setExportingPdf(true);
     try {
-      await downloadElementPdf({
+      await downloadDocumentPdf({
         element: blocks,
+        path: `/invoices/${inv.id}`,
         fileName: `invoice-${inv.invoice_number}.pdf`,
         watermark: await exportWatermark(),
       });
