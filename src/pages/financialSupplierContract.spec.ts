@@ -37,8 +37,12 @@ describe('financial supplier capability boundary', () => {
       { id: 's1', tx_date: '2026-08-02', amount: 20, status: 'suggested' },
       { id: 'm1', tx_date: '2026-08-03', amount: 30, status: 'matched' },
     ])).toEqual({ unmatched: 1, suggested: 1 });
-    expect(source).toContain('תנועות בנק לא מותאמות');
-    expect(source).toContain('התאמות שממתינות לאישור');
+    // The two headings moved into the dictionary, so the claim splits rather than weakens: the
+    // screen renders both keys, and the keys still name the two counts as different things.
+    expect(source).toContain("t('financialSupplier.text_3')");
+    expect(source).toContain("t('financialSupplier.text_4')");
+    expect(he.financialSupplier.text_3).toBe('תנועות בנק לא מותאמות');
+    expect(he.financialSupplier.text_4).toBe('התאמות שממתינות לאישור');
   });
 
   it('does not request procurement-sensitive supplier data', () => {

@@ -124,7 +124,6 @@
     "src/pages/dashboards/AccountantDashboard.tsx": 26,
     "src/pages/DocumentReview.tsx": 16,
     "src/pages/DocumentsInbox.tsx": 15,
-    "src/pages/FinancialSupplier.tsx": 31,
     "src/pages/ForgotPassword.tsx": 9,
     "src/pages/Inventory.tsx": 6,
     "src/pages/InvoiceDetail.tsx": 5,

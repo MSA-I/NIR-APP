@@ -55,6 +55,7 @@ const EXTRACTED = [
   'src/components/WhatsAppConnectionCard.tsx',
   'src/pages/ProductPurchaseSummary.tsx',
   'src/components/InvoiceLineReviewModal.tsx',
+  'src/pages/FinancialSupplier.tsx',
   'src/components/ReceiptConflictDialog.tsx',
   'src/pages/SupplierProposalReview.tsx',
   'src/pages/neworder/SupplierSplitStep.tsx',
