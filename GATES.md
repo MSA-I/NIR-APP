@@ -283,23 +283,90 @@ not on this branch's schema in the first place.
 
 ## Phase 2 — the money readers
 
-- [ ] P2-G1: the old readers are gone by name, so an un-migrated caller fails loudly
+The migration is `supabase/migrations/0218_balances_are_read_per_currency.sql`, measured the same
+way as phase 1: `begin; 0217; 0218; fixture; rollback;` against the local stack.
+
+**The live surface was smaller than the plan estimated, and that is a measurement.** Plan §4.2
+counted 31 textual references across 10 migration FILES; migration files are immutable history, and
+what a new migration has to change is what is live. `pg_proc` says exactly three functions and two
+views name the balance readers: the two definitions themselves, `management_dashboard_snapshot`
+(which reads both views), and `soft_delete_supplier` — which turned out to name
+`p0_invoice_balance_rows` only in a comment while carrying its own copy of the sum. Nineteen live
+functions sum money in total, against the plan's estimate of ~23; the rest are phases 4 and 5.
+
+- [x] P2-G1: the old readers are gone by name, so an un-migrated caller fails loudly
   CHECK: select to_regprocedure('public.p0_supplier_balance_rows()') is null;
   EXPECT: t
+  EVIDENCE: `fn_gone t | view_gone t | inv_fn_gone t | inv_view_gone t` — both functions and both
+  views dropped, and the four `_by_currency` replacements created. The field names moved with them:
+  `balance` ⇒ `balance_in_currency`, `open_balance` ⇒ `open_balance_in_currency`, asserted by
+  column name in the migration itself. `drop`, not `create or replace`, is the whole mechanism:
+  `src/lib/supabase.ts:44` has no schema generic, so a reshaped return type produces zero compile
+  errors and `Suppliers.tsx:95` would keep one of a supplier's two balances with nothing to say so.
 
-- [ ] P2-G2: a supplier with two currencies returns two rows, and nothing merges them
+- [x] P2-G2: a supplier with two currencies returns two rows, and nothing merges them
   CHECK: fixture ₪12,400 open and $3,100 open for one supplier; select count(*) from supplier_balances_by_currency where supplier_id = :s;
   EXPECT: 2 — and no surface anywhere shows 15,500
+  EVIDENCE: exactly the fixture the plan names, on the demo organisation's supplier
+  `aa000000-…-0001`:
+  ```
+   supplier_id  | currency | open_balance_in_currency | open_invoices
+   aa000000-…01 | ILS      |                12400.000 |             1
+   aa000000-…01 | USD      |                 3100.000 |             1
+   rows_for_that_supplier = 2
+  ```
+  `15500` appears nowhere in the output of any reader. A supplier with **no** invoices now returns
+  no row at all rather than the old `(supplier, 0)`: grouping by currency has no honest currency to
+  put on that row, and the constitution already says the screen draws `—`, never `0`.
 
-- [ ] P2-G3: the dashboard refuses to combine instead of combining quietly
+- [x] P2-G3: the dashboard refuses to combine instead of combining quietly
   CHECK: management_dashboard_snapshot(current_date) on a mixed-currency org
   EXPECT: per-currency rows, or `null` for a metric that cannot be split — never a summed scalar.
   The `null` ⇒ `—` mechanism already exists (`0100`, partial coverage); the trigger is new.
+  EVIDENCE: on the same mixed fixture —
+  `money.openBalanceByCurrency = [{ILS, 30224.600, 10 invoices}, {USD, 3100.000, 1 invoice}]`,
+  and `topBalancesByCurrency` returns one group per currency, base currency first, six suppliers
+  ranked WITHIN each currency (ranking across currencies is the same false comparison as the sum,
+  wearing an ordering instead of a total). All six money figures split:
+  `openBalanceByCurrency`, `overdueAmountByCurrency`, `dueWithin7AmountByCurrency`,
+  `credits.sumByCurrency`, `openOrders.committedByCurrency`/`remainingByCurrency`,
+  `topBalancesByCurrency`. Every key was RENAMED, and the absence of the old ones is asserted both
+  in the migration and on the live result: `still_has_open_balance f | still_has_top_balances f |
+  still_has_credit_sum f`. Counts deliberately do not split — a count means the same thing in
+  every currency. The `null`-means-unknown branches are unchanged.
 
-- [ ] P2-G4: the P4 journey script was updated with the readers it calls
+- [x] P2-G5: deleting a supplier asks the question per currency
+  CHECK: `soft_delete_supplier` on the two-currency supplier
+  EXPECT: `supplier_has_open_balance`
+  EVIDENCE: `ERROR: supplier_has_open_balance`. The old predicate was `sum(total − paid − credited)
+  > 0` across ALL of a supplier's invoices — an addition of unlike things that could net a credit
+  balance in one currency against a real debt in another and let the supplier be deleted with money
+  still owed. It is now `exists (… group by currency having open_balance > 0)`, which is the
+  question the guard was always asking. The rest of the body is restated in full: it is
+  `SECURITY DEFINER` with a registered scope exemption keyed on a signature that does not move.
+
+- [x] P2-G6: A5's definer registry follows the rename
+  EVIDENCE: the first run failed with exactly the four lines it should have —
+  `A5 -- stale scope enforcement registration: p0_invoice_balance_rows()` (and the supplier twin),
+  `A5 -- uncovered security definer function: p0_invoice_balance_rows_by_currency()` (and its
+  twin). `private.scope_definer_enforcements` now deletes the two dead signatures and registers the
+  two new ones as `filtered_read`, with the body hash **computed from `pg_proc`** rather than typed
+  as a literal — a digest written into a migration is a value produced on a machine whose line
+  endings may not match CI's, which is how the `0171`–`0205` rollout aborted at `0181`.
+  `check:anchored-replacements` (209 migrations, 0 new unnormalised readers) and `check:exemptions`
+  (145 re-asserting migrations, pin 90 unchanged) both pass.
+
+- [x] P2-G4: the P4 journey script was updated with the readers it calls
   CHECK: node scripts/check-p4-integrated-journey.cjs
   EXPECT: PASS — its two `p0_invoice_balance_rows` calls (`:273`, `:303`) are the proof the rename
   actually propagated.
+  EVIDENCE: both RPC names updated to `p0_invoice_balance_rows_by_currency`, and the two reads of
+  the renamed field updated with them (`:320`, `:702` now read `balance_in_currency`).
+  `node --check` passes. The script itself runs only inside the manual Windows gate, which
+  `CLAUDE.md` records as outside CI; it is exercised in phase 6, not claimed here.
+  NOT touched, and deliberately: the two `invoice_balances` route mocks in
+  `scripts/check-browser-smoke.cjs` (`:1603`, `:1681`). They mock what the CLIENT asks for, and the
+  client still asks for the old name until phase 3. They move with it.
 
 ---
 
