@@ -48,6 +48,8 @@ const EXTRACTED = [
   'src/components/document-review/DocumentAssessmentPanel.tsx',
   'src/components/ReceiptConflictDialog.tsx',
   'src/pages/SupplierProposalReview.tsx',
+  'src/pages/neworder/SupplierSplitStep.tsx',
+  'src/components/assistant/AssistantDialog.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */
