@@ -401,6 +401,8 @@ const PATTERNS: [RegExp, string][] = [
   [/price_list_confirm_forbidden/i, 'price_list_confirm_forbidden'],
   [/price_list_confirm_conflict/i, 'price_list_confirm_conflict'],
   [/price_list_confirm_unavailable/i, 'price_list_confirm_unavailable'],
+  [/monthly_report_snapshot_unattributed_bank_transactions/i, 'monthly_report_snapshot_unattributed_bank'],
+  [/monthly_report_snapshot_unattributed_(invoices|payments|credits|exceptions)/i, 'monthly_report_snapshot_unattributed'],
   [/monthly_report_snapshot_legal_entity_invalid|unit_out_of_scope/i, 'monthly_report_snapshot_legal_entity_invalid'],
   [/monthly_report_snapshot_source_unavailable/i, 'monthly_report_snapshot_source_unavailable'],
   // The offline queue's own two outcomes. It persists what it stored to IndexedDB and shows it on
