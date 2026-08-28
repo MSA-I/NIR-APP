@@ -593,6 +593,15 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
 - [ ] P3-G3: a supplier card shows two balances and never their sum
   EVIDENCE: screenshot of one supplier with ₪12,400 and $3,100 on two lines. An empty list renders
   `—`, never `0` (constitution).
+  STATUS 28.08.2026: migrations 0217–0226 were applied to the shared local stack under the QA
+  mutex. A persisted owner-scoped fixture proves exactly two balance rows for
+  `ספק ראיית שתי יתרות`: ILS 12,400 and USD 3,100. Visual capture did not complete. Three
+  environmental attempts failed before an assertion could run: missing Playwright-managed
+  Chromium; Chrome reached a Vite process bound to a different host and received
+  `ERR_CONNECTION_REFUSED`; then explicit `127.0.0.1` loaded but `waitUntil: networkidle` timed
+  out because the application keeps network activity alive. Per `CLAUDE.md`, no fourth attempt
+  was made. Next hypothesis: wait for `domcontentloaded` and then the exact supplier-row selector,
+  which is the observable condition this gate needs.
 
 ---
 
