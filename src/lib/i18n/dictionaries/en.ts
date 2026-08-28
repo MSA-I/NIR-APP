@@ -5093,4 +5093,25 @@ export const en: Dictionary = {
     approveRepair: 'Approve correction',
   },
 
+  app: {
+    text: 'This screen could not be loaded',
+    text_2: 'The app may have been updated while this tab was open.',
+    reload: 'Refresh and reload',
+    text_3: 'The system is read-only',
+    text_4: 'The organization is ending its service, so the system is read-only. Existing information remains available for viewing and export until the process is complete.',
+    text_5: 'Write access is currently unavailable. Existing information remains available for viewing and export; contact the system administrator for details.',
+    text_6: 'Back to the control center',
+    text_7: 'The account is unavailable',
+    accountUnavailableBody: 'The account details could not be loaded. Access may have been suspended or the user may have been deactivated. Contact the system administrator for details.',
+    signingOut: 'Signing out…',
+    signOut: 'Sign out',
+    text_12: 'The account could not be loaded',
+    text_13: 'A temporary error occurred while loading the account details.',
+    text_14: 'Try again',
+    connectionRemainsActive: 'The connection remains active, and you can try again.',
+    text_17: 'Offline work is limited to receiving goods',
+    text_18: 'The user and organization identities were loaded from this device\'s latest verification. Until the network returns, you can open only receiving tasks already saved here; permissions and server changes will be verified again before synchronization.',
+    text_19: 'Go to receiving',
+  },
+
 };

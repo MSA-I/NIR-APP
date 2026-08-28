@@ -84,6 +84,7 @@ const EXTRACTED = [
   'src/components/UploadCenter.tsx',
   'src/pages/neworder/ProductStep.tsx',
   'src/pages/ProductNameRepairReview.tsx',
+  'src/App.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */

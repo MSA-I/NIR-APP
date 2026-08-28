@@ -33,7 +33,6 @@
     "src/pages/Receiving.tsx": "Iron rule, docs/HANDOFF-english-language-20260827.md section 9: audit_logs is evidence and is never translated. The one line that stays composes the reason a conflict resolution writes — the base reason plus the reviewer own explanation — and it reaches p_reason through send(). Same split as PaymentRequests.tsx, InvoiceDetail.tsx and the other five. Everything a person READS on this surface was extracted, including the two device-freshness notes, the delivery-note lead-in and every aria-label on the quantity stepper."
   },
   "counts": {
-    "src/App.tsx": 18,
     "src/auth/AuthContext.tsx": 1,
     "src/components/ActionMenu.tsx": 1,
     "src/components/AssistantPanel.tsx": 2,

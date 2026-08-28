@@ -152,6 +152,16 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   passed 5/5; the full suite passed 1,720/1,720; `npx tsc --noEmit` and `check:jsx-space` passed.
   `zero` still exits 1 on 504/65, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `App.tsx` batch in this commit.** The pinned count is now 1,024 Hebrew
+  line(s) across 95 files; the protected set remains 538 lines in 31 files, so the real remainder
+  is **486 lines in 64 files**. `App.tsx` is the 62nd surface locked at zero. The class-based lazy
+  error boundary delegates its translated fallback to a hook-safe function component; the two
+  account-unavailable sentences are one key rather than adjacent expressions, and bootstrap copy
+  uses an explicit JSX space after the raw error. Evidence: the stale-baseline negative control
+  failed on this file alone; focused root/access suites passed 8/8; the full suite passed
+  1,723/1,723; `npx tsc --noEmit` and `check:jsx-space` passed. `zero` still exits 1 on 486/64,
+  so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER
