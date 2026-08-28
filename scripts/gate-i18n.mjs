@@ -49,6 +49,7 @@ const EXTRACTED = [
   'src/components/document-review/DocumentReviewWorkspace.tsx',
   'src/pages/SupplierLog.tsx',
   'src/pages/Invoices.tsx',
+  'src/components/document-review/PriceListAutomationReadiness.tsx',
   'src/components/ReceiptConflictDialog.tsx',
   'src/pages/SupplierProposalReview.tsx',
   'src/pages/neworder/SupplierSplitStep.tsx',

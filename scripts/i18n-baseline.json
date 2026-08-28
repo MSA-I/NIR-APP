@@ -42,7 +42,6 @@
     "src/components/document-review/DocumentSourceViewer.tsx": 7,
     "src/components/document-review/model.ts": 16,
     "src/components/document-review/PdfSourceView.tsx": 3,
-    "src/components/document-review/PriceListAutomationReadiness.tsx": 38,
     "src/components/document-review/PriceListReviewConfirmation.tsx": 5,
     "src/components/DocumentRemovalDialog.tsx": 20,
     "src/components/EmailOrderCard.tsx": 29,

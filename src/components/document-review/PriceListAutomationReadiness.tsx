@@ -1,4 +1,5 @@
 import { useT } from '../../lib/i18n/LocaleProvider';
+import type { TKey } from '../../lib/i18n/t';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
@@ -107,10 +108,10 @@ async function loadCalibrationQueue(documentId: string): Promise<CalibrationQueu
   return { rows, total, truncated: rows.length !== total };
 }
 
-const sampleLabel = (row: QualifiedProductRow) => row.product_name?.trim()
+const sampleLabel = (row: QualifiedProductRow, t: (key: TKey) => string) => row.product_name?.trim()
   || row.sku?.trim()
   || row.barcode?.trim()
-  || 'שורה ללא שם';
+  || t('priceListReadiness.unnamedRow');
 
 function stableKey(keys: Map<string, string>, identity: string) {
   const existing = keys.get(identity);
@@ -126,7 +127,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
   /** The document's price list has already been taken in; preparation and qualification are closed. */
   ingested: boolean;
 }) {
-  const { errorText } = useT();
+  const { t, errorText } = useT();
   const { profile } = useAuth();
   const allowed = profile?.role === 'owner' || profile?.role === 'office';
   const [queue, setQueue] = useState<CalibrationQueue | null>(null);
@@ -157,16 +158,16 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
       if (queueResult.status === 'rejected') setQueueError(errorText(queueResult.reason));
       else setQueue(queueResult.value);
       if (dryRunResult.status === 'rejected') {
-        setDryRunError(`בדיקת הכשירות נכשלה: ${errorText(dryRunResult.reason)}`);
+        setDryRunError(t('priceListReadiness.dryRunFailed', { error: errorText(dryRunResult.reason) }));
         return;
       }
       if (dryRunResult.value.error) {
-        setDryRunError(`בדיקת הכשירות נכשלה: ${errorText(dryRunResult.value.error.message)}`);
+        setDryRunError(t('priceListReadiness.dryRunFailed', { error: errorText(dryRunResult.value.error.message) }));
         return;
       }
       const result = dryRunResult.value.data as QualifiedProductDryRun;
       if (!result || result.interpretation_id !== interpretationId || result.mutated !== false) {
-        setDryRunError('בדיקת הכשירות לא החזירה תוצאת dry-run תקינה.');
+        setDryRunError(t('priceListReadiness.setDryRunError'));
       } else setDryRun(result);
     });
     return () => { cancelled = true; };
@@ -198,7 +199,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
       <div className="mt-5 border-t border-line pt-5">
         <Note tone="idle">
           <span className="min-w-0 flex-1">
-            המחירון של המסמך הזה כבר נקלט. הכנת אצוות כיול ובדיקת הכשירות אינן פתוחות על מסמך שנקלט.
+            {t('priceListReadiness.text')}
           </span>
         </Note>
       </div>
@@ -208,7 +209,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
   async function prepareBatch(shadowRunId: string, rows: CalibrationPreparationRow[]) {
     const reason = (prepareReasons[shadowRunId] ?? '').trim();
     if (!reason) {
-      setActionError((current) => ({ ...current, [shadowRunId]: 'יש לציין סיבה להכנת האצווה.' }));
+      setActionError((current) => ({ ...current, [shadowRunId]: t('priceListReadiness.setActionError') }));
       return;
     }
     setBusyAction(`prepare:${shadowRunId}`);
@@ -230,7 +231,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
   async function reviewBatch(shadowRunId: string, receipt: PreparationReceipt) {
     const reason = (reviewReasons[shadowRunId] ?? '').trim();
     if (!reason) {
-      setActionError((current) => ({ ...current, [shadowRunId]: 'יש לציין סיבה לאישור האצווה.' }));
+      setActionError((current) => ({ ...current, [shadowRunId]: t('priceListReadiness.setActionError_2') }));
       return;
     }
     setBusyAction(`review:${shadowRunId}`);
@@ -256,23 +257,23 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
       <section className="space-y-3" aria-labelledby="qualified-product-dry-run-title">
         <div>
           <h3 id="qualified-product-dry-run-title" className="text-base font-semibold text-ink">
-            בדיקת כשירות לאוטומציית מוצרים
+            {t('priceListReadiness.text_2')}
           </h3>
           <p className="mt-1 text-sm text-ink-muted">
-            dry-run בלבד. הספירות והדוגמאות אינן יוצרות מוצר ואינן מפעילות אוטומציה.
+            {t('priceListReadiness.text_3')}
           </p>
         </div>
-        {!dryRun && !dryRunError && <p className="text-sm text-ink-muted" role="status">טוען בדיקת כשירות…</p>}
+        {!dryRun && !dryRunError && <p className="text-sm text-ink-muted" role="status">{t('priceListReadiness.text_4')}</p>}
         {dryRunError && <Note tone="alert" role="alert">{dryRunError}</Note>}
         {dryRun && (
           <>
             <dl className="grid grid-cols-2 gap-2 sm:grid-cols-5">
               {[
-                ['מוכנים ליצירה', dryRun.qualified_create_count],
-                ['מוצרים קיימים', dryRun.existing_product_count],
-                ['עמימות', dryRun.ambiguous_count],
-                ['חסרה כשירות', dryRun.missing_qualification_count],
-                ['מחיר לא תקין', dryRun.invalid_price_count],
+                [t('priceListReadiness.text_5'), dryRun.qualified_create_count],
+                [t('priceListReadiness.text_6'), dryRun.existing_product_count],
+                [t('priceListReadiness.text_7'), dryRun.ambiguous_count],
+                [t('priceListReadiness.text_8'), dryRun.missing_qualification_count],
+                [t('priceListReadiness.text_9'), dryRun.invalid_price_count],
               ].map(([label, value]) => (
                 <div key={String(label)} className="rounded-lg bg-surface-sunken p-3">
                   <dt className="text-xs text-ink-muted">{label}</dt>
@@ -282,14 +283,14 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
             </dl>
             {qualifiedSamples.length > 0 && (
               <div>
-                <p className="text-sm font-medium text-ink-soft">דוגמאות מתוך המועמדים</p>
+                <p className="text-sm font-medium text-ink-soft">{t('priceListReadiness.text_10')}</p>
                 <ul className="mt-2 space-y-2">
                   {qualifiedSamples.map((row, index) => (
                     <li key={`${row.source_row ?? index}-${row.sku ?? row.barcode ?? index}`}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-sunken p-3 text-sm">
-                      <span className="min-w-0 break-words"><bdi>{sampleLabel(row)}</bdi></span>
+                      <span className="min-w-0 break-words"><bdi>{sampleLabel(row, t)}</bdi></span>
                       <span className="text-ink-muted">
-                        {row.source_row != null && <>שורה <span className="num">{row.source_row}</span> · </>}
+                        {row.source_row != null && <>{t('priceListReadiness.text_11')} <span className="num">{row.source_row}</span> · </>}
                         <span dir="ltr">{row.sku ?? row.barcode ?? '—'}</span> · {fmtMoneyExact(row.unit_price)}
                       </span>
                     </li>
@@ -303,23 +304,23 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
 
       <section className="space-y-3" aria-labelledby="calibration-batch-title">
         <div>
-          <h3 id="calibration-batch-title" className="text-base font-semibold text-ink">כיול מחירון באצווה</h3>
+          <h3 id="calibration-batch-title" className="text-base font-semibold text-ink">{t('priceListReadiness.text_12')}</h3>
           <p className="mt-1 text-sm text-ink-muted">
-            מנהל המשרד מכין בלבד. בעלים בודק ומאשר שהשורות המוכנות נכונות. הפעלת Platform אינה זמינה כאן.
+            {t('priceListReadiness.text_13')}
           </p>
         </div>
-        {!queue && !queueError && <p className="text-sm text-ink-muted" role="status">טוען שורות כיול…</p>}
+        {!queue && !queueError && <p className="text-sm text-ink-muted" role="status">{t('priceListReadiness.text_14')}</p>}
         {queueError && <Note tone="alert" role="alert">{queueError}</Note>}
         {truncated && (
           <Note tone="alert" role="alert">
             <span className="min-w-0 flex-1">
-              לא ניתן להציג את כל שורות הכיול הממתינות במסמך הזה, ולכן אין מספר שאפשר להצהיר עליו.
-              הכנת אצווה ואישורה חסומים עד שכל השורות ייטענו.
+              {t('priceListReadiness.text_15')}{' '}
+              {t('priceListReadiness.text_16')}
             </span>
           </Note>
         )}
         {queue && !truncated && groups.length === 0 && (
-          <Note tone="idle">אין שורות כיול שממתינות להכנה במסמך הזה.</Note>
+          <Note tone="idle">{t('priceListReadiness.text_17')}</Note>
         )}
         {groups.map(({ shadowRunId, rows, serverPreparation, preparedRole }) => {
           const receipt = prepared[shadowRunId] ?? serverPreparation;
@@ -334,55 +335,56 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
             <div key={shadowRunId} className="card p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium text-ink" data-testid="calibration-row-count">
-                  <span className="num">{truncated ? '—' : rows.length}</span> שורות מוכנות לבדיקה
+                  <span className="num">{truncated ? '—' : rows.length}</span> {t('priceListReadiness.rowsReady')}
                 </p>
                 <span className={reviewReceipt ? 'badge-done' : receipt ? 'badge-info' : 'badge-await'}>
-                  {reviewReceipt ? 'האצווה אושרה' : receipt ? 'הוכנה לבעלים' : 'טרם הוכנה'}
+                  {reviewReceipt ? t('priceListReadiness.text_18') : receipt ? t('priceListReadiness.text_19') : t('priceListReadiness.text_20')}
                 </span>
               </div>
               <div className="max-h-96 overflow-y-auto rounded-lg bg-surface-sunken p-2"
-                tabIndex={0} role="region" aria-label="שורות האצווה המוכנות לבדיקה">
+                tabIndex={0} role="region" aria-label={t('priceListReadiness.aria_label')}>
                 <ul className="space-y-1 text-sm text-ink-soft">
                   {rows.map((row) => (
                     <li key={row.shadow_line_id} data-testid="calibration-preparation-row"
                       className="flex flex-wrap justify-between gap-2">
-                      <span><bdi>{row.product_name ?? row.matched_product_name ?? 'שורה ללא שם'}</bdi></span>
-                      <span className="text-ink-muted">שורה <span className="num">{row.source_row ?? row.line_index + 1}</span> · {fmtMoneyExact(row.proposed_unit_price)}</span>
+                      <span><bdi>{row.product_name ?? row.matched_product_name ?? t('priceListReadiness.unnamedRow')}</bdi></span>
+                      <span className="text-ink-muted">{t('priceListReadiness.fmtMoneyExact')} <span className="num">{row.source_row ?? row.line_index + 1}</span> · {fmtMoneyExact(row.proposed_unit_price)}</span>
                     </li>
                   ))}
                 </ul>
               </div>
               {!receipt && (
                 <div className="space-y-2">
-                  <label className="label" htmlFor={`calibration-prepare-reason-${shadowRunId}`}>סיבת הכנת האצווה</label>
+                  <label className="label" htmlFor={`calibration-prepare-reason-${shadowRunId}`}>{t('priceListReadiness.prepareReasonLabel')}</label>
                   <textarea id={`calibration-prepare-reason-${shadowRunId}`} className="input" rows={2} maxLength={1000}
                     value={prepareReasons[shadowRunId] ?? ''}
                     onChange={(event) => setPrepareReasons((current) => ({ ...current, [shadowRunId]: event.target.value }))} />
                   <button type="button" className="btn-secondary" disabled={preparing || truncated}
                     onClick={() => void prepareBatch(shadowRunId, rows)}>
                       {preparing && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />}
-                    הכנת האצווה לבדיקת בעלים
+                    {t('priceListReadiness.text_22')}
                   </button>
                 </div>
               )}
               {receipt && profile?.role === 'office' && !reviewReceipt && (
-                <Note tone="done" role="status">האצווה הוכנה לבדיקת בעלים.</Note>
+                <Note tone="done" role="status">{t('priceListReadiness.text_23')}</Note>
               )}
               {receipt && preparedRole === 'office' && profile?.role === 'owner' && !reviewReceipt && (
-                <Note tone="idle">האצווה הוכנה על ידי מנהל המשרד.</Note>
+                <Note tone="idle">{t('priceListReadiness.text_24')}</Note>
               )}
               {receipt && profile?.role === 'owner' && !reviewReceipt && !batchFullyShown && (
                 <Note tone="alert" role="alert">
                   <span className="min-w-0 flex-1">
-                    האצווה שהוכנה מכסה <span className="num">{receipt.line_count}</span> שורות, ובמסך מוצגות{' '}
-                    <span className="num">{truncated ? '—' : rows.length}</span>. אי אפשר לאשר שורות שלא נראו —
-                    יש לרענן את המסך ולהכין אצווה מחדש על השורות הממתינות.
+                    {t('priceListReadiness.batchCoverageMismatch', {
+                      prepared: receipt.line_count,
+                      shown: truncated ? '—' : rows.length,
+                    })}
                   </span>
                 </Note>
               )}
               {receipt && profile?.role === 'owner' && !reviewReceipt && batchFullyShown && (
                 <div className="space-y-2">
-                  <label className="label" htmlFor={`calibration-review-reason-${shadowRunId}`}>סיבת אישור האצווה</label>
+                  <label className="label" htmlFor={`calibration-review-reason-${shadowRunId}`}>{t('priceListReadiness.reviewReasonLabel')}</label>
                   <textarea id={`calibration-review-reason-${shadowRunId}`} className="input" rows={2} maxLength={1000}
                     value={reviewReasons[shadowRunId] ?? ''}
                     onChange={(event) => setReviewReasons((current) => ({ ...current, [shadowRunId]: event.target.value }))} />
@@ -391,11 +393,11 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
                     {reviewing
                     ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />
                       : <CheckCircle2 size={ICON.sm} aria-hidden="true" />}
-                    אישור האצווה כמסומנת נכונה
+                    {t('priceListReadiness.text_26')}
                   </button>
                 </div>
               )}
-              {reviewReceipt && <Note tone="done" role="status">כל שורות האצווה אושרו ונרשמו.</Note>}
+              {reviewReceipt && <Note tone="done" role="status">{t('priceListReadiness.text_27')}</Note>}
               {actionError[shadowRunId] && <Note tone="alert" role="alert">{actionError[shadowRunId]}</Note>}
             </div>
           );
