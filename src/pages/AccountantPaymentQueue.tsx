@@ -59,11 +59,13 @@ interface PaymentAllocationPayload {
   credit_invoice_id?: string;
 }
 
-/** One row of `credit_request_balance_rows` (0173). */
+/** One row of `credit_request_balance_rows` (0173, currency added in 0219). */
 export interface SupplierCreditBalance {
   credit_id: string;
   invoice_id: string | null;
   credit_number: number;
+  /** The credit's own currency — it can only ever be offset against a debt in the same one. */
+  currency: string;
   amount: number;
   allocated_amount: number;
   remaining_amount: number;
@@ -87,21 +89,32 @@ export interface SupplierCreditBalance {
  *   it here would shrink the transfer while the request's own invoices stay open, and the invoice
  *   ledger and the payment ledger would drift apart. Returned rather than dropped, so the screen
  *   can say why a credit it clearly holds is not on offer.
+ * - `otherCurrency` — the credit is money of a different kind from the debt this request pays
+ *   (0217, OPEN-DECISIONS #277). A ₪500 credit does not reduce a $3,100 invoice by 500 of
+ *   anything, and there is no rate here to make it reduce it by some other number either. Refused
+ *   for the same reason as `otherRequests` and returned for the same reason: the accountant can
+ *   see the supplier holds it, and read why it is not on offer against THIS transfer.
  */
 export function partitionSupplierCredits(
   balances: SupplierCreditBalance[],
   requestInvoiceIds: ReadonlySet<string>,
+  requestCurrency: string,
 ): { open: SupplierCreditBalance[]; available: SupplierCreditBalance[];
-     unlinked: SupplierCreditBalance[]; otherRequests: SupplierCreditBalance[] } {
+     unlinked: SupplierCreditBalance[]; otherRequests: SupplierCreditBalance[];
+     otherCurrency: SupplierCreditBalance[] } {
   const open = balances.filter(
     (credit) => credit.status === 'received' && credit.remaining_amount > 0);
+  // The currency test comes FIRST, so a credit in another currency never reaches the two buckets
+  // the screen offers — whether or not it names an invoice of this request.
+  const sameCurrency = open.filter((credit) => credit.currency === requestCurrency);
   return {
     open,
-    available: open.filter(
+    available: sameCurrency.filter(
       (credit) => credit.invoice_id != null && requestInvoiceIds.has(credit.invoice_id)),
-    unlinked: open.filter((credit) => credit.invoice_id == null),
-    otherRequests: open.filter(
+    unlinked: sameCurrency.filter((credit) => credit.invoice_id == null),
+    otherRequests: sameCurrency.filter(
       (credit) => credit.invoice_id != null && !requestInvoiceIds.has(credit.invoice_id)),
+    otherCurrency: open.filter((credit) => credit.currency !== requestCurrency),
   };
 }
 
@@ -286,7 +299,7 @@ export default function AccountantPaymentQueue() {
             <Card as="button" key={r.id} pad={false} className="card-link-hover w-full text-start p-4 sm:p-5" onClick={() => setSelected(r)}>
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <span className="min-w-0 break-words font-semibold text-ink">{r.supplier.name}</span>
-                <span className="kpi-value-compact num shrink-0">{fmtMoneyExact(r.amount)}</span>
+                <span className="kpi-value-compact num shrink-0">{fmtMoneyExact(r.amount, r.currency)}</span>
               </div>
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-ink-muted">
                 <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} />
@@ -295,7 +308,7 @@ export default function AccountantPaymentQueue() {
               </div>
               {r.open_credit_override_total != null && (
                 <div className="mt-3 text-sm text-await-fg">
-                  אושר בחריגה ללא קיזוז זיכויים בסך <span className="num font-semibold">{fmtMoneyExact(r.open_credit_override_total)}</span>
+                  אושר בחריגה ללא קיזוז זיכויים בסך <span className="num font-semibold">{fmtMoneyExact(r.open_credit_override_total, r.currency)}</span>
                 </div>
               )}
             </Card>
@@ -312,7 +325,7 @@ export default function AccountantPaymentQueue() {
                 <span className="min-w-0 break-words">{r.supplier.name}</span>
                 <span className="flex shrink-0 items-center gap-3">
                   <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} />
-                  <span className="num font-medium">{fmtMoneyExact(r.amount)}</span>
+                  <span className="num font-medium">{fmtMoneyExact(r.amount, r.currency)}</span>
                 </span>
               </div>
             ))}
@@ -352,7 +365,8 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
     available: availableCredits,
     unlinked: unlinkedCredits,
     otherRequests: otherRequestCredits,
-  } = partitionSupplierCredits(creditBalances ?? [], requestInvoiceIds);
+    otherCurrency: otherCurrencyCredits,
+  } = partitionSupplierCredits(creditBalances ?? [], requestInvoiceIds, pr.currency);
 
   // Both buckets are on offer. `target_invoice_id` is read from the picker for every credit, not
   // only for the unlinked ones: that way a linked credit that somehow carries a foreign target is
@@ -443,11 +457,15 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
         </p>
 
         <dl className="text-sm space-y-1.5 [&>div]:flex-wrap [&>div]:gap-x-4 [&>div]:gap-y-0.5">
-          <div className="flex justify-between"><dt className="text-ink-muted">סכום מאושר</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount)}</dd></div>
+          {/* One transfer, one currency. The request, its invoices, the credits offset against
+              them and the payment that results are all money of the same kind — settlement from
+              an account in another currency is recorded on the payment (#286) and does not change
+              any figure here. */}
+          <div className="flex justify-between"><dt className="text-ink-muted">סכום מאושר</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount, pr.currency)}</dd></div>
           {/* `—`, never `0`: while the credits load, or while the selection is invalid, the offset
               is unknown — and an unknown offset printed as ₪0.00 is a claim that none was taken. */}
-          <div className="flex justify-between"><dt className="text-ink-muted">קיזוז זיכויים</dt><dd className="num">{fmtMoneyExact(allocationPreview?.creditAmount ?? null)}</dd></div>
-          <div className="flex justify-between"><dt className="text-ink-muted">סכום להעברה בפועל</dt><dd className="font-semibold num">{fmtMoneyExact(allocationPreview?.cashAmount ?? null)}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">קיזוז זיכויים</dt><dd className="num">{fmtMoneyExact(allocationPreview?.creditAmount ?? null, pr.currency)}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">סכום להעברה בפועל</dt><dd className="font-semibold num">{fmtMoneyExact(allocationPreview?.cashAmount ?? null, pr.currency)}</dd></div>
           {pr.due_date && <div className="flex justify-between"><dt className="text-ink-muted">תאריך יעד</dt><dd>{fmtDate(pr.due_date)}</dd></div>}
           <div className="flex justify-between"><dt className="text-ink-muted">חשבוניות</dt>
             <dd dir="ltr">{pr.invoices.map((i) => i.invoice?.invoice_number).filter(Boolean).join(', ') || 'לא זמינות'}</dd></div>
@@ -459,7 +477,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
             <Note tone="alert">
               <span className="min-w-0 flex-1">
                 <strong>אושר באישור חריג ללא קיזוז הזיכוי.</strong>{' '}
-                הזיכויים הפתוחים בסך <span className="num">{fmtMoneyExact(pr.open_credit_override_total)}</span> לא קוזזו אוטומטית.
+                הזיכויים הפתוחים בסך <span className="num">{fmtMoneyExact(pr.open_credit_override_total, pr.currency)}</span> לא קוזזו אוטומטית.
                 <span className="block mt-1">סיבת אישור החריגה: {pr.open_credit_override_reason}</span>
               </span>
             </Note>
@@ -477,6 +495,18 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
             <p className="mt-2 text-sm text-ink-muted">
               אין זיכויים פתוחים שניתן לקזז מול חשבוניות דרישת התשלום הזו
             </p>
+          )}
+
+          {/* Said out loud rather than left as a shorter list: the accountant can see in the
+              supplier card that this credit exists, so silence here would read as a bug. */}
+          {otherCurrencyCredits.length > 0 && (
+            <Note tone="info" className="mt-3">
+              <span>
+                <span className="num">{otherCurrencyCredits.length}</span> מהזיכויים הפתוחים של הספק נקובים
+                במטבע אחר מההעברה הזו ({pr.currency}), ולכן אינם ניתנים לקיזוז מולה. זיכוי מקזז חוב
+                באותו מטבע בלבד — אין כאן המרה.
+              </span>
+            </Note>
           )}
 
           {/* Owner ruling, 23.08.2026: an unlinked credit may be offset against any invoice of the
@@ -545,7 +575,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
                           {[...invoiceAmountById].map(([invoiceId, amount]) => (
                             <option key={invoiceId} value={invoiceId}>
                               {bidiIsolate(invoiceNumberById.get(invoiceId) ?? 'מספר לא זמין')}
-                              {' · '}{fmtMoneyExact(amount)}
+                              {' · '}{fmtMoneyExact(amount, pr.currency)}
                             </option>
                           ))}
                         </select>
@@ -559,9 +589,9 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
                     )}
 
                     <p className="mt-1 text-sm text-ink-muted">
-                      יתרה זמינה <span className="num font-medium text-ink-body">{fmtMoneyExact(credit.remaining_amount)}</span>
+                      יתרה זמינה <span className="num font-medium text-ink-body">{fmtMoneyExact(credit.remaining_amount, credit.currency)}</span>
                       {targetAmount != null && (
-                        <>{' · '}סכום החשבונית בדרישה <span className="num">{fmtMoneyExact(targetAmount)}</span></>
+                        <>{' · '}סכום החשבונית בדרישה <span className="num">{fmtMoneyExact(targetAmount, pr.currency)}</span></>
                       )}
                     </p>
 
@@ -592,8 +622,8 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
                       </p>
                     )}
                     <p className="mt-1 text-xs text-ink-muted">
-                      הוקצו בעבר <span className="num">{fmtMoneyExact(credit.allocated_amount)}</span>
-                      {' · '}סכום מקורי <span className="num">{fmtMoneyExact(credit.amount)}</span>
+                      הוקצו בעבר <span className="num">{fmtMoneyExact(credit.allocated_amount, credit.currency)}</span>
+                      {' · '}סכום מקורי <span className="num">{fmtMoneyExact(credit.amount, credit.currency)}</span>
                     </p>
                   </li>
                 );

@@ -182,7 +182,7 @@ describe('credit allocations in the accountant payment queue', () => {
 
 describe('which supplier credits this request may offset', () => {
   const row = (over: Partial<SupplierCreditBalance>): SupplierCreditBalance => ({
-    credit_id: 'credit-1', invoice_id: 'invoice-a', credit_number: 1,
+    credit_id: 'credit-1', invoice_id: 'invoice-a', credit_number: 1, currency: 'ILS',
     amount: 50, allocated_amount: 0, remaining_amount: 50, status: 'received', ...over,
   });
   const requestInvoices = new Set(['invoice-a', 'invoice-b']);
@@ -192,7 +192,7 @@ describe('which supplier credits this request may offset', () => {
       row({ credit_id: 'mine', invoice_id: 'invoice-b' }),
       row({ credit_id: 'elsewhere', invoice_id: 'invoice-z' }),
       row({ credit_id: 'loose', invoice_id: null }),
-    ], requestInvoices);
+    ], requestInvoices, 'ILS');
 
     expect(partition.available.map((c) => c.credit_id)).toEqual(['mine']);
     // On offer since the owner ruled on 23.08.2026, in its own bucket because it is the one that
@@ -211,12 +211,42 @@ describe('which supplier credits this request may offset', () => {
       row({ credit_id: 'requested', status: 'requested' }),
       row({ credit_id: 'spent-loose', invoice_id: null, remaining_amount: 0 }),
       row({ credit_id: 'draft-loose', invoice_id: null, status: 'requested' }),
-    ], requestInvoices);
+    ], requestInvoices, 'ILS');
 
     expect(partition.open).toEqual([]);
     expect(partition.available).toEqual([]);
     expect(partition.unlinked).toEqual([]);
     expect(partition.otherRequests).toEqual([]);
+  });
+
+  /* OPEN-DECISIONS #277. A credit is money of one kind and the debt it would reduce is money of
+     one kind, and offsetting one against the other is only defined when they are the same kind.
+     There is no rate in this product to make it defined otherwise, so a dollar credit is refused
+     against a shekel transfer — refused BY NAME, not dropped, because the accountant can see the
+     credit in the supplier card and a silently shorter list would read as a bug. */
+  it('refuses a credit in another currency, and says it holds one', () => {
+    const partition = partitionSupplierCredits([
+      row({ credit_id: 'shekels', invoice_id: 'invoice-b', currency: 'ILS' }),
+      row({ credit_id: 'dollars-linked', invoice_id: 'invoice-a', currency: 'USD' }),
+      row({ credit_id: 'dollars-loose', invoice_id: null, currency: 'USD' }),
+    ], requestInvoices, 'ILS');
+
+    expect(partition.available.map((c) => c.credit_id)).toEqual(['shekels']);
+    expect(partition.unlinked).toEqual([]);
+    // Held by the supplier, visible to the screen, and on offer against nothing here.
+    expect(partition.otherCurrency.map((c) => c.credit_id))
+      .toEqual(['dollars-linked', 'dollars-loose']);
+    expect(partition.open).toHaveLength(3);
+  });
+
+  it('offers a dollar credit against a dollar transfer — the currency, not the symbol, is the test', () => {
+    const partition = partitionSupplierCredits([
+      row({ credit_id: 'dollars', invoice_id: 'invoice-b', currency: 'USD' }),
+      row({ credit_id: 'shekels', invoice_id: 'invoice-a', currency: 'ILS' }),
+    ], requestInvoices, 'USD');
+
+    expect(partition.available.map((c) => c.credit_id)).toEqual(['dollars']);
+    expect(partition.otherCurrency.map((c) => c.credit_id)).toEqual(['shekels']);
   });
 });
 
@@ -234,8 +264,8 @@ describe('what the payment-execution screen says about credits', () => {
 
   it('renders an unknown credit offset as — and never as a measured zero', () => {
     // A metric with no data renders `—`; `0` would be a claim that no credit was taken.
-    expect(source).toContain('fmtMoneyExact(allocationPreview?.creditAmount ?? null)');
-    expect(source).not.toContain('fmtMoneyExact(allocationPreview?.creditAmount ?? 0)');
+    expect(source).toContain('fmtMoneyExact(allocationPreview?.creditAmount ?? null, pr.currency)');
+    expect(source).not.toContain('fmtMoneyExact(allocationPreview?.creditAmount ?? 0');
   });
 
   it('asks the accountant which invoice an unlinked credit lands on, with nothing preselected', () => {
