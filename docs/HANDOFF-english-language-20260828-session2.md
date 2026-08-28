@@ -1,6 +1,6 @@
 # HANDOFF — הוספת אנגלית ל-InPlace (סבב שלישי)
 
-עודכן: 28.08.2026 · ענף: `claude/add-english-language-system-371a49` · 70 קומיטים מעל `main` (`c04d37a`)
+עודכן: 28.08.2026 · ענף: `claude/add-english-language-system-371a49` · 66 קומיטים מעל `main` (`c04d37a`)
 קודמיו: `docs/HANDOFF-english-language-20260828.md` ו-`docs/HANDOFF-english-language-20260827.md` —
 **שניהם עדיין תקפים.** כאן רק מה שהשתנה, ומה שנמצא.
 
