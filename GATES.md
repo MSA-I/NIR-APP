@@ -215,6 +215,16 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   passed 1,734/1,734; `npx tsc --noEmit` and `check:jsx-space` passed. `zero` still exits 1 on
   405/58, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `FeedbackButton.tsx` + `feedback.ts` batch in this commit.** The pinned
+  count is now 924 Hebrew line(s) across 88 files; the protected set remains 539 lines in 32 files,
+  so the real remainder is **385 lines in 56 files**. These are the 68th and 69th surfaces locked
+  at zero. `FeedbackOutcome.message` was replaced with `FeedbackOutcomeCode` plus a raw insert
+  error; the component resolves outcome and screenshot status in the reader language. Note text,
+  route/query/hash, page title and other submitted context remain unmodified input. Evidence: the
+  stale-baseline negative control named these two files alone; the focused Hebrew/English wire
+  suite passed 5/5; the full suite passed 1,735/1,735; `npx tsc --noEmit` and `check:jsx-space`
+  passed. `zero` still exits 1 on 385/56, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

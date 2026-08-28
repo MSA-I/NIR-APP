@@ -5238,4 +5238,27 @@ export const en: Dictionary = {
     displayedRows: 'Showing {shown} of {total} rows in the preview only.',
   },
 
+  feedbackButton: {
+    text: 'You can send another note shortly',
+    text_2: 'Send a note',
+    text_3: 'Send a note',
+    title: 'Send a note',
+    description: 'What did not work, what is missing, or what was confusing. The note comes directly to me.',
+    text_4: 'Your note',
+    text_5: 'Attach a screenshot',
+    alt: 'Preview of the screenshot that will be sent',
+    text_6: 'The screenshot includes everything currently visible on the screen — including supplier names, amounts, and document numbers.',
+    text_7: 'You can remove it, or close this dialog, arrange the screen, and capture it again.',
+    text_8: 'This browser could not capture the screen. The note will be sent without a screenshot.',
+    setOpen: 'Cancel',
+    text_10: 'Send',
+    retakeScreenshot: 'Retake screenshot',
+    contextPrefix: 'Also sent: the current screen',
+    contextSuffix: 'page title, selected filters, your role, screen width, and system version.',
+    outcomeEmpty: 'There is nothing to send — the note is empty',
+    outcomeSavedNotDelivered: 'The note was saved, but delivery failed',
+    outcomeDelivered: 'The note was sent. Thank you — it reaches me immediately.',
+    screenshotMissing: 'The screenshot was not attached',
+  },
+
 };

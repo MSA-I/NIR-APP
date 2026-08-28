@@ -1,4 +1,3 @@
-import { toHebrewError } from './errors';
 import { supabase } from './supabase';
 import type { ScreenshotCapture } from './screenshot';
 import type { Role } from './types';
@@ -40,7 +39,10 @@ export interface FeedbackContext {
   routeHash: string | null;
 }
 
+export type FeedbackOutcomeCode = 'empty' | 'save_failed' | 'saved_not_delivered' | 'delivered';
+
 export interface FeedbackOutcome {
+  code: FeedbackOutcomeCode;
   saved: boolean;
   delivered: boolean;
   /**
@@ -49,23 +51,11 @@ export interface FeedbackOutcome {
    * "the screenshot you were shown is the one they got".
    */
   screenshotAttached: boolean;
-  /** Hebrew, ready to show. Always says what actually happened. */
-  message: string;
+  /** Raw insert failure, resolved by the reader-facing component. */
+  error?: unknown;
 }
 
 interface EdgeError { code?: string; message?: string }
-
-/** supabase-js swallows the response body on non-2xx; dig out the Hebrew reason. */
-async function edgeMessage(error: unknown): Promise<string | null> {
-  const ctx = (error as { context?: Response } | null)?.context;
-  if (ctx && typeof ctx.json === 'function') {
-    try {
-      const parsed = await ctx.json() as { error?: EdgeError };
-      if (parsed?.error?.message) return parsed.error.message;
-    } catch { /* fall through */ }
-  }
-  return null;
-}
 
 export async function submitFeedbackNote(
   note: string,
@@ -76,8 +66,7 @@ export async function submitFeedbackNote(
 ): Promise<FeedbackOutcome> {
   const trimmed = note.trim();
   if (!trimmed) {
-    return { saved: false, delivered: false, screenshotAttached: false,
-             message: 'אין מה לשלוח — ההערה ריקה' };
+    return { code: 'empty', saved: false, delivered: false, screenshotAttached: false };
   }
 
   /*
@@ -115,30 +104,30 @@ export async function submitFeedbackNote(
     .single();
 
   if (inserted.error || !inserted.data) {
-    return { saved: false, delivered: false, screenshotAttached: false,
-             message: toHebrewError(inserted.error) };
+    return {
+      code: 'save_failed',
+      saved: false,
+      delivered: false,
+      screenshotAttached: false,
+      error: inserted.error,
+    };
   }
 
   const attached = Boolean(attachment);
-  const pictureNote = screenshot && !attached ? ' · הצילום לא צורף' : '';
 
   const { data, error } = await supabase.functions.invoke('send-feedback', {
     body: { noteId },
   });
 
   if (error) {
-    const message = await edgeMessage(error);
-    return { saved: true, delivered: false, screenshotAttached: attached,
-             message: (message ?? 'ההערה נשמרה, אך השליחה נכשלה') + pictureNote };
+    return { code: 'saved_not_delivered', saved: true, delivered: false, screenshotAttached: attached };
   }
   const failed = (data as { error?: EdgeError } | null)?.error;
   if (failed) {
-    return { saved: true, delivered: false, screenshotAttached: attached,
-             message: (failed.message ?? 'ההערה נשמרה, אך השליחה נכשלה') + pictureNote };
+    return { code: 'saved_not_delivered', saved: true, delivered: false, screenshotAttached: attached };
   }
 
-  return { saved: true, delivered: true, screenshotAttached: attached,
-           message: 'ההערה נשלחה. תודה — היא מגיעה אליי מיד.' + pictureNote };
+  return { code: 'delivered', saved: true, delivered: true, screenshotAttached: attached };
 }
 
 /**
