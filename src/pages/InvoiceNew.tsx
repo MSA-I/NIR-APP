@@ -18,6 +18,7 @@ import type { InterpretationContract } from '../lib/useDocumentProcessing';
 import { PO_STATUS } from '../lib/status';
 import { SupplierSelectField, useQuickSupplier } from '../components/QuickSupplierPicker';
 import { SUPPLIER_COLUMNS } from '../lib/supplierColumns';
+import { INTAKE_CURRENCY } from '../components/document-review/assessment';
 import {
   isUuid,
   resolveInvoiceLinkedContext,
@@ -199,7 +200,7 @@ export default function InvoiceNew() {
     const t = setTimeout(() => {
       void runInvoiceChecks({
         supplier_id: effectiveSupplierId, invoice_number: f.invoice_number.trim(), invoice_date: f.invoice_date,
-        total_amount: Number(f.total), linkedOrderIds,
+        total_amount: Number(f.total), currency: INTAKE_CURRENCY, linkedOrderIds,
       }).then((results) => {
         if (checkSequence.current === sequence && latestFingerprint.current === checkFingerprint) {
           setChecked({ fingerprint: checkFingerprint, results });
@@ -235,7 +236,7 @@ export default function InvoiceNew() {
       try {
         freshChecks = await runInvoiceChecks({
           supplier_id: effectiveSupplierId, invoice_number: f.invoice_number.trim(), invoice_date: f.invoice_date,
-          total_amount: Number(f.total), linkedOrderIds,
+          total_amount: Number(f.total), currency: INTAKE_CURRENCY, linkedOrderIds,
         });
       } catch (checkFailure) {
         setChecked(null);

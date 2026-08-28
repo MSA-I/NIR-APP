@@ -22,6 +22,7 @@ import {
   type FindingGroup,
   type FindingSeverity,
   type ReviewedLineEdit,
+  INTAKE_CURRENCY,
 } from './assessment';
 
 interface DocumentAssessmentPanelProps {
@@ -264,7 +265,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-ink-muted">סכום הזיכוי במסמך</dt>
-                <dd className="num font-medium">{fmtMoneyExact(read.credit_resolution.amount)}</dd>
+                <dd className="num font-medium">{fmtMoneyExact(read.credit_resolution.amount, INTAKE_CURRENCY)}</dd>
               </div>
             </dl>
           ) : (
@@ -398,9 +399,9 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
                             <Cell>{fmtNum(line.quantity)}</Cell>
                             <Cell>{orderItem ? fmtNum(orderItem.ordered_quantity) : '—'}</Cell>
                             <Cell>{orderItem ? fmtNum(orderItem.received_quantity) : '—'}</Cell>
-                            <Cell>{fmtMoneyExact(line.unit_price)}</Cell>
-                            <Cell>{fmtMoneyExact(line.baseline_price)}</Cell>
-                            <Cell>{difference === null ? '—' : fmtMoneyExact(difference)}</Cell>
+                            <Cell>{fmtMoneyExact(line.unit_price, INTAKE_CURRENCY)}</Cell>
+                            <Cell>{fmtMoneyExact(line.baseline_price, INTAKE_CURRENCY)}</Cell>
+                            <Cell>{difference === null ? '—' : fmtMoneyExact(difference, INTAKE_CURRENCY)}</Cell>
                           </tr>
                         );
                       })}

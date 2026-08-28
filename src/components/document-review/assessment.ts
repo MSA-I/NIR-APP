@@ -75,6 +75,21 @@ export interface DocumentAssessment {
   findings: AssessmentFinding[];
 }
 
+/**
+ * THE CURRENCY EVERY FIGURE ON THE INTAKE SCREENS IS IN.
+ *
+ * Not an assumption and not a display default: intake REFUSES a document in any other currency
+ * today — `0108` blocks it and `currency_not_ils` is a blocking finding — so a document that
+ * reached a review screen is a shekel document, and saying so is a statement about the data
+ * rather than a guess about it.
+ *
+ * Phase 4 of the multi-currency plan is where a document may arrive in another currency: `0108`
+ * narrows to `currency_unrecognised` and `apply_reviewed_document` writes what the interpretation
+ * derived. This constant is the single reference those screens read, so that phase replaces one
+ * definition instead of hunting call sites.
+ */
+export const INTAKE_CURRENCY = 'ILS';
+
 export interface ResolutionCandidate {
   matched_by: string;
   authoritative: boolean;

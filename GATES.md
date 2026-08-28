@@ -579,6 +579,18 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   running against writers that do not name a currency; the moment `apply_reviewed_document`
   supplies one, a currency nobody stated must be a failure rather than a shekel.
 
+- [ ] P4-G8: the manual invoice form can state a currency, and `create_invoice` records it
+  ADDED 28.08.2026, during phase 3. `create_invoice` (`0023`) takes no currency parameter, so an
+  invoice typed by hand is stored `ILS` by the temporary default — which means the form is
+  telling the truth today and stops doing so the moment P4-G7 removes that default. Phase 3 made
+  the form's duty checks read a named constant (`INTAKE_CURRENCY`) rather than an invented
+  supplier currency, precisely so that this gate replaces one reference.
+  CHECK: create an invoice by hand for a supplier whose `default_currency` is USD
+  EXPECT: the form offers the currency (defaulting to that supplier's), `create_invoice` records
+  what was chosen, and the duplicate/order/credit checks compare against invoices in the SAME
+  currency — a shekel invoice with the same number is not this invoice's duplicate in any figure
+  it reports
+
 - [ ] P4-G4: the client cannot dictate the currency
   CHECK: a review payload asserting a currency the recomputed assessment did not derive
   EXPECT: `document_review_currency_mismatch`. `0110:358-378` already ignores client findings; this

@@ -66,6 +66,8 @@ export interface ConsolidatedInvoiceAnchor {
   amount_before_vat: number;
   vat_amount: number;
   total_amount: number;
+  /** The anchor invoice's own currency (0226). Every figure above is money of this one kind. */
+  currency: string;
   financial_role: 'payable';
   review_status: string;
   payment_status: string;
@@ -78,6 +80,13 @@ export interface ConsolidatedInvoiceSource {
   document_number: string | null;
   document_date: string;
   total_amount: number | null;
+  /**
+   * The currency this source's value is in (0226). `null` together with a null `total_amount`
+   * when a goods receipt's lines came from orders in more than one currency — see
+   * `spans_currencies`. A receipt like that has no single value, and the screen says so.
+   */
+  currency: string | null;
+  spans_currencies: boolean;
   financial_role: 'supporting_evidence' | null;
   status: string;
   late_arrival: boolean;
@@ -90,6 +99,8 @@ export interface ConsolidatedInvoiceMatchLine {
   product_name: string | null;
   supplier_sku: string | null;
   barcode: string | null;
+  /** The currency this comparison row is grained by (0222) — both sides of it are in it. */
+  currency: string;
   anchor_quantity: number | null;
   interim_quantity: number | null;
   received_quantity: number | null;

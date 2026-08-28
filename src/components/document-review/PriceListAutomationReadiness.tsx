@@ -5,6 +5,7 @@ import { fmtMoneyExact } from '../../lib/format';
 import { toHebrewError } from '../../lib/errors';
 import { supabase } from '../../lib/supabase';
 import { ICON, Note } from '../ui';
+import { INTAKE_CURRENCY } from './assessment';
 
 interface CalibrationPreparationRow {
   shadow_run_id: string;
@@ -289,7 +290,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
                       <span className="min-w-0 break-words"><bdi>{sampleLabel(row)}</bdi></span>
                       <span className="text-ink-muted">
                         {row.source_row != null && <>שורה <span className="num">{row.source_row}</span> · </>}
-                        <span dir="ltr">{row.sku ?? row.barcode ?? '—'}</span> · {fmtMoneyExact(row.unit_price)}
+                        <span dir="ltr">{row.sku ?? row.barcode ?? '—'}</span> · {fmtMoneyExact(row.unit_price, INTAKE_CURRENCY)}
                       </span>
                     </li>
                   ))}
@@ -346,7 +347,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
                     <li key={row.shadow_line_id} data-testid="calibration-preparation-row"
                       className="flex flex-wrap justify-between gap-2">
                       <span><bdi>{row.product_name ?? row.matched_product_name ?? 'שורה ללא שם'}</bdi></span>
-                      <span className="text-ink-muted">שורה <span className="num">{row.source_row ?? row.line_index + 1}</span> · {fmtMoneyExact(row.proposed_unit_price)}</span>
+                      <span className="text-ink-muted">שורה <span className="num">{row.source_row ?? row.line_index + 1}</span> · {fmtMoneyExact(row.proposed_unit_price, INTAKE_CURRENCY)}</span>
                     </li>
                   ))}
                 </ul>

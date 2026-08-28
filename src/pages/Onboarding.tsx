@@ -875,6 +875,7 @@ interface CatalogIndex {
 }
 
 function ProductsStep({ onDone }: { onDone: () => void }) {
+  const { org } = useAuth();
   const { profile } = useAuth();
   const index = useRef<CatalogIndex>({ products: new Map(), suppliers: new Map(), categories: new Map() });
 
@@ -1020,7 +1021,10 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
     { key: 'unit', header: 'יחידה', render: (r) => formatUnit(r.unit) },
     { key: 'sku', header: 'מק״ט', render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
     { key: 'supplier', header: 'ספק', render: (r) => r.supplier || '—' },
-    { key: 'price', header: 'מחיר', className: 'num', render: (r) => fmtMoneyExact(r.price) },
+    // The imported sheet belongs to one supplier, and its prices are that supplier's own
+    // currency. During onboarding no supplier has been created with any other, so this is the
+    // organisation's — stated, not assumed away.
+    { key: 'price', header: 'מחיר', className: 'num', render: (r) => fmtMoneyExact(r.price, org?.base_currency) },
     {
       key: 'note', header: 'הערה',
       render: (r) => {

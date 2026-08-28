@@ -53,12 +53,19 @@ const FIELD_LABELS: Record<string, { label: string; kind?: 'money' | 'date' | 'b
   deleted_at: { label: 'נמחק', kind: 'date' },
 };
 
-export function renderValue(raw: unknown, kind?: 'money' | 'date' | 'bool'): string {
+export function renderValue(
+  raw: unknown,
+  kind?: 'money' | 'date' | 'bool',
+  currency?: string | null,
+): string {
   if (raw === null || raw === undefined || raw === '') return NOT_SET;
   if (kind === 'bool') return raw ? 'זמין' : 'לא זמין';
   if (kind === 'money') {
     const amount = typeof raw === 'number' ? raw : Number(raw);
-    return Number.isFinite(amount) ? fmtMoneyExact(amount) : String(raw);
+    /* A logged money value belongs to the supplier whose row changed, so it is rendered in
+       that supplier's own currency — passed in by the caller, because the log line itself only
+       remembers the number that was written. */
+    return Number.isFinite(amount) ? fmtMoneyExact(amount, currency) : String(raw);
   }
   if (kind === 'date') return fmtDate(String(raw));
   if (Array.isArray(raw)) return raw.length ? raw.join(', ') : NOT_SET;
@@ -69,6 +76,8 @@ export function renderValue(raw: unknown, kind?: 'money' | 'date' | 'bool'): str
 export function fieldChanges(
   before: Record<string, unknown> | null,
   after: Record<string, unknown> | null,
+  /** The supplier's own currency — every money field on their row is a figure in it (0217). */
+  currency?: string | null,
 ) {
   return Object.entries(FIELD_LABELS).flatMap(([field, meta]) => {
     const oldRaw = before?.[field] ?? null;
@@ -77,8 +86,8 @@ export function fieldChanges(
     return [{
       field,
       label: meta.label,
-      before: renderValue(oldRaw, meta.kind),
-      after: renderValue(newRaw, meta.kind),
+      before: renderValue(oldRaw, meta.kind, currency),
+      after: renderValue(newRaw, meta.kind, currency),
     }];
   });
 }

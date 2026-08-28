@@ -33,7 +33,12 @@ import { QuickCreateSupplier, type QuickCreatedSupplier } from './QuickCreateSup
 import { ICON } from './ui';
 
 /** All any supplier `<option>` needs. Every caller's row type is a superset of it. */
-export type SupplierOption = { id: string; name: string };
+/**
+ * `default_currency` is optional because most callers pick a supplier to NAME them and never
+ * show money; the ones that preview a supplier's own prices — the price-list upload — need to
+ * know which currency those prices are quoted in (0217), and read it from here.
+ */
+export type SupplierOption = { id: string; name: string; default_currency?: string };
 
 /**
  * The two sentences a screen-reader user hears, exported so the spec asserts what is said and not

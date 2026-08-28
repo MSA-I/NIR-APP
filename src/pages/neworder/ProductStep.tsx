@@ -109,7 +109,7 @@ export default function ProductStep({ products, categories, offersByProduct, car
                     names the action, and the quantity stepper exists only for a chosen product. */}
                 <span className={`grid size-6 shrink-0 place-items-center rounded-lg border ${carted ? 'border-action bg-action text-on-solid' : 'border-line text-transparent'}`} aria-hidden="true"><Check size={ICON.xs} /></span>
                 <span className="min-w-0 flex-1"><bdi className="block break-words text-sm font-medium text-ink-body sm:truncate">{productLabel(product)}</bdi><span className="text-xs text-ink-muted">{formatUnit(product.unit)}</span></span>
-                <span className={`shrink-0 text-xs text-ink-muted ${offers.length ? 'num' : ''}`}>{offers.length ? fmtMoneyExact(offers[0].current_price) : 'אין ספק'}</span>
+                <span className={`shrink-0 text-xs text-ink-muted ${offers.length ? 'num' : ''}`}>{offers.length ? fmtMoneyExact(offers[0].current_price, offers[0].currency) : 'אין ספק'}</span>
               </button>
               {/* The shared Stepper (components/ui). `min={1}` is the one deliberate behaviour
                   change in this convergence: the old raw control had no floor, so decrementing

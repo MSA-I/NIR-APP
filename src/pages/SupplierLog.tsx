@@ -69,13 +69,20 @@ type Row = AuditLog & {
   entity_type: EntityType;
   actor: string | null;
   supplierId: string | null;
+  /**
+   * The currency the supplier trades in (0217) — every money field on their row, and every price
+   * on their price list, is a figure in it. `null` when the supplier row is gone: the log
+   * outlives what it describes, and a deleted supplier's currency is genuinely unknown rather
+   * than shekels by default.
+   */
+  currency: string | null;
   subject: string;
 };
 
 /** A price row's own identity, resolved from `supplier_products` so the log is not a wall of UUIDs. */
 interface PriceRowIdentity {
   supplier_id: string;
-  supplier: { id: string; name: string } | null;
+  supplier: { id: string; name: string; default_currency: string } | null;
   product: { id: string; name: string } | null;
 }
 
@@ -113,11 +120,11 @@ export default function SupplierLog() {
     const [priceRows, suppliers, profiles] = await Promise.all([
       priceRowIds.length
         ? supabase.from('supplier_products')
-          .select('id, supplier_id, supplier:suppliers(id, name), product:products(id, name)')
+          .select('id, supplier_id, supplier:suppliers(id, name, default_currency), product:products(id, name)')
           .in('id', priceRowIds)
         : Promise.resolve({ data: [], error: null }),
       supplierIds.length
-        ? supabase.from('suppliers').select('id, name').in('id', supplierIds)
+        ? supabase.from('suppliers').select('id, name, default_currency').in('id', supplierIds)
         : Promise.resolve({ data: [], error: null }),
       actorIds.length
         ? supabase.from('profiles').select('id, full_name').in('id', actorIds)
@@ -126,8 +133,8 @@ export default function SupplierLog() {
 
     const priceById = new Map((unwrap(priceRows) as (PriceRowIdentity & { id: string })[])
       .map((row) => [row.id, row]));
-    const supplierById = new Map((unwrap(suppliers) as { id: string; name: string }[])
-      .map((row) => [row.id, row.name]));
+    const supplierById = new Map((unwrap(suppliers) as { id: string; name: string; default_currency: string }[])
+      .map((row) => [row.id, row]));
     const actorById = new Map((unwrap(profiles) as { id: string; full_name: string }[])
       .map((row) => [row.id, row.full_name]));
 
@@ -136,8 +143,11 @@ export default function SupplierLog() {
       const identity = entityType === 'supplier_products' && log.entity_id
         ? priceById.get(log.entity_id)
         : undefined;
-      const supplierName = entityType === 'suppliers'
+      const supplierRow = entityType === 'suppliers'
         ? (log.entity_id ? supplierById.get(log.entity_id) : undefined)
+        : undefined;
+      const supplierName = entityType === 'suppliers'
+        ? supplierRow?.name
         : identity?.supplier?.name;
       // The deleted-row case is not a gap to hide: old_values still holds what the row was, and a
       // name read from there is more honest than an em dash that implies nothing was recorded.
@@ -147,6 +157,7 @@ export default function SupplierLog() {
         entity_type: entityType,
         actor: log.user_id ? (actorById.get(log.user_id) ?? null) : null,
         supplierId: entityType === 'suppliers' ? log.entity_id : (identity?.supplier_id ?? null),
+        currency: (entityType === 'suppliers' ? supplierRow?.default_currency : identity?.supplier?.default_currency) ?? null,
         subject: entityType === 'supplier_products'
           ? [identity?.product?.name, supplierName].filter(Boolean).join(' · ') || 'שורת מחירון שנמחקה'
           : supplierName ?? fallbackName ?? 'ספק שנמחק',
@@ -202,12 +213,13 @@ export default function SupplierLog() {
       render: (r) => {
         const before = price(r.old_values);
         const after = price(r.new_values);
+        const supplierCurrency = r.currency;
         if (before == null && after == null) return <span className="text-ink-faint">אין נתוני מחיר</span>;
         if (after == null || before === after) {
           return (
             <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-ink-muted">
               <span className="text-xs">ללא שינוי</span>
-              <bdi>{renderValue(before, 'money')}</bdi>
+              <bdi>{renderValue(before, 'money', supplierCurrency)}</bdi>
             </span>
           );
         }
@@ -217,11 +229,11 @@ export default function SupplierLog() {
           <span className="inline-flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
             <span className="inline-flex items-baseline gap-1 text-ink-muted">
               <span className="text-xs">לפני</span>
-              <bdi className={before == null ? 'text-ink-faint' : undefined}>{renderValue(before, 'money')}</bdi>
+              <bdi className={before == null ? 'text-ink-faint' : undefined}>{renderValue(before, 'money', supplierCurrency)}</bdi>
             </span>
             <span className="inline-flex items-baseline gap-1 text-ink">
               <span className="text-xs">אחרי</span>
-              <bdi className="font-semibold">{renderValue(after, 'money')}</bdi>
+              <bdi className="font-semibold">{renderValue(after, 'money', supplierCurrency)}</bdi>
             </span>
           </span>
         );

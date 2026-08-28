@@ -80,8 +80,10 @@ function compactNumber(value: number | null) {
   return <span className="num" dir="ltr">{fmtNum(value)}</span>;
 }
 
-function money(value: number | null) {
-  return <span className="num" dir="ltr">{fmtMoneyExact(value)}</span>;
+/* A consolidated case is grained by (identity, currency) since 0222, so every figure a row
+   carries is money of that row's own currency and the caller passes it. */
+function money(value: number | null, currency: string | null | undefined) {
+  return <span className="num" dir="ltr">{fmtMoneyExact(value, currency)}</span>;
 }
 
 const matchChannels: readonly ConsolidatedMatchChannel[] = [
@@ -396,17 +398,30 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
       setRetryingReview(false);
     }
   };
+  /* A total of the interim invoices and a total of the completed receipts, each inside ONE
+     currency (0217, #277). The anchor fixes which one: a consolidated case reconciles sources
+     against an anchor invoice, and a source in another currency is not part of that arithmetic —
+     it is listed in the table above, in its own currency, and named here rather than added in. */
+  const caseCurrency = workspace.anchor?.currency ?? null;
+  const outOfCurrencySources = workspace.sources.filter(
+    (source) => source.total_amount != null && caseCurrency != null && source.currency !== caseCurrency,
+  );
   const interimTotal = workspace.sources
     .filter((source) => source.source_type === 'interim_invoice')
     .reduce((sum, source) => sum + (source.total_amount ?? 0), 0);
   const receiptTotal = workspace.sources
-    .filter((source) => source.source_type === 'goods_receipt')
+    .filter((source) => source.source_type === 'goods_receipt' && source.currency === caseCurrency)
     .reduce((sum, source) => sum + (source.total_amount ?? 0), 0);
   const sourceColumns: Column<SourceRow>[] = [
     { key: 'type', header: 'מקור', priority: 1, render: (row) => <span className="font-medium">{sourceTypeLabel(row)}</span> },
     { key: 'number', header: 'מספר', priority: 1, render: (row) => <span className="num" dir="ltr">{row.document_number ?? '—'}</span> },
     { key: 'date', header: 'תאריך', priority: 2, render: (row) => <span className="num">{fmtDate(row.document_date)}</span> },
-    { key: 'amount', header: 'סכום', priority: 1, render: (row) => money(row.total_amount) },
+    {
+      key: 'amount', header: 'סכום', priority: 1,
+      render: (row) => (row.spans_currencies
+        ? <span className="text-xs text-await-fg">שורות הקבלה נקובות ביותר ממטבע אחד</span>
+        : money(row.total_amount, row.currency)),
+    },
     { key: 'status', header: 'מצב', priority: 2, render: sourceStatusLabel },
     { key: 'source', header: 'מקור', priority: 1, render: (row) => row.document_id
       ? <button type="button" className="btn-secondary min-h-11" onClick={(event) => { event.stopPropagation(); void openDocument(row.document_id!); }}>צפייה במקור</button>
@@ -494,10 +509,17 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
 
       <Card pad={false} clip>
         <dl className="grid grid-cols-1 divide-y divide-line-soft sm:grid-cols-3 sm:divide-x sm:divide-y-0 sm:divide-x-reverse">
-          <div className="p-4"><dt className="text-xs text-ink-muted">סכום העוגן</dt><dd className="mt-1 text-lg font-semibold">{money(workspace.anchor?.total_amount ?? null)}</dd></div>
-          <div className="p-4"><dt className="text-xs text-ink-muted">חשבוניות ביניים</dt><dd className="mt-1 text-lg font-semibold">{money(interimTotal)}</dd></div>
-          <div className="p-4"><dt className="text-xs text-ink-muted">קבלות שהושלמו</dt><dd className="mt-1 text-lg font-semibold">{money(receiptTotal)}</dd></div>
+          <div className="p-4"><dt className="text-xs text-ink-muted">סכום העוגן</dt><dd className="mt-1 text-lg font-semibold">{money(workspace.anchor?.total_amount ?? null, caseCurrency)}</dd></div>
+          <div className="p-4"><dt className="text-xs text-ink-muted">חשבוניות ביניים</dt><dd className="mt-1 text-lg font-semibold">{money(interimTotal, caseCurrency)}</dd></div>
+          <div className="p-4"><dt className="text-xs text-ink-muted">קבלות שהושלמו</dt><dd className="mt-1 text-lg font-semibold">{money(receiptTotal, caseCurrency)}</dd></div>
         </dl>
+        {outOfCurrencySources.length > 0 && (
+          <p className="border-t border-line-soft px-4 py-3 text-xs text-await-fg">
+            <span className="num">{outOfCurrencySources.length}</span> מקורות נקובים במטבע אחר מהעוגן
+            ({[...new Set(outOfCurrencySources.map((source) => source.currency))].join(', ')}) ואינם נכללים
+            בסכומים שלמעלה. הם מופיעים בטבלת המקורות, כל אחד במטבע שלו.
+          </p>
+        )}
       </Card>
 
       <Card as="section" aria-labelledby="consolidated-anchor-title" className="space-y-3">
@@ -510,8 +532,8 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
           <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div><dt className="text-xs text-ink-muted">מספר חשבונית</dt><dd className="num mt-1 font-medium" dir="ltr">{workspace.anchor.invoice_number}</dd></div>
             <div><dt className="text-xs text-ink-muted">תאריך</dt><dd className="num mt-1 font-medium">{fmtDate(workspace.anchor.invoice_date)}</dd></div>
-            <div><dt className="text-xs text-ink-muted">לפני מע״מ</dt><dd className="mt-1 font-medium">{money(workspace.anchor.amount_before_vat)}</dd></div>
-            <div><dt className="text-xs text-ink-muted">סה״כ</dt><dd className="mt-1 font-medium">{money(workspace.anchor.total_amount)}</dd></div>
+            <div><dt className="text-xs text-ink-muted">לפני מע״מ</dt><dd className="mt-1 font-medium">{money(workspace.anchor.amount_before_vat, workspace.anchor.currency)}</dd></div>
+            <div><dt className="text-xs text-ink-muted">סה״כ</dt><dd className="mt-1 font-medium">{money(workspace.anchor.total_amount, workspace.anchor.currency)}</dd></div>
           </dl>
           <div className="flex flex-wrap gap-2">
             {workspace.anchor.document_ids.map((documentId, index) => (
@@ -561,15 +583,17 @@ function ReconciliationTable({ channel, lines }: { channel: ConsolidatedMatchCha
     },
     {
       key: 'prices', header: 'מחיר יחידה', priority: 2,
-      render: (row) => <span className="flex min-w-36 flex-col text-xs"><span>מרכזת {money(row.anchor_unit_price)}</span><span>ביניים {money(row.interim_unit_price)}</span></span>,
+      render: (row) => <span className="flex min-w-36 flex-col text-xs"><span>מרכזת {money(row.anchor_unit_price, row.currency)}</span><span>ביניים {money(row.interim_unit_price, row.currency)}</span></span>,
     },
     {
       key: 'amounts', header: 'סכומים', priority: 2,
-      render: (row) => <span className="flex min-w-36 flex-col text-xs"><span>מרכזת {money(row.anchor_amount)}</span><span>ביניים {money(row.interim_amount)}</span></span>,
+      render: (row) => <span className="flex min-w-36 flex-col text-xs"><span>מרכזת {money(row.anchor_amount, row.currency)}</span><span>ביניים {money(row.interim_amount, row.currency)}</span></span>,
     },
     {
       key: 'difference', header: 'פער', priority: 1,
-      render: (row) => <span className="flex min-w-28 flex-col text-xs"><span>כמות {compactNumber(row.difference_quantity)}</span><span>סכום {money(row.difference_amount)}</span></span>,
+      // Both sides of this subtraction are in `row.currency` by construction: 0222 joins the
+      // two sides of a comparison on the identity AND the currency.
+      render: (row) => <span className="flex min-w-28 flex-col text-xs"><span>כמות {compactNumber(row.difference_quantity)}</span><span>סכום {money(row.difference_amount, row.currency)}</span></span>,
     },
   ];
   return (
