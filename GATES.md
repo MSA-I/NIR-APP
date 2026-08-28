@@ -205,6 +205,16 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   passed 1,732/1,732; `npx tsc --noEmit` and `check:jsx-space` passed. `zero` still exits 1 on
   420/59, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `DocumentExportPreview.tsx` batch in this commit.** The pinned count
+  is now 944 Hebrew line(s) across 90 files; the protected set remains 539 lines in 32 files, so
+  the real remainder is **405 lines in 58 files**. This is the 67th surface locked at zero.
+  `formatLabel` became `formatLabelKey: Record<format, TKey>`, preview failure state stores a
+  boolean, and row-count copy distinguishes one from many. Stored template names, stored column
+  labels and interpreted row values remain raw data. Evidence: the stale-baseline negative control
+  failed on this file alone; the focused English preview/failure suite passed 2/2; the full suite
+  passed 1,734/1,734; `npx tsc --noEmit` and `check:jsx-space` passed. `zero` still exits 1 on
+  405/58, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

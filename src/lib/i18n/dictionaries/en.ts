@@ -5216,4 +5216,26 @@ export const en: Dictionary = {
     resultNone: 'Code {code} does not appear in this order. Select the line manually — nothing was selected for you.',
   },
 
+  documentExportPreview: {
+    setError: 'A preview could not be generated from the current template and interpretation. A required field may be missing, or a value type may not match the template.',
+    text: 'Export preview',
+    text_2: 'The preview is generated in real time by the approved export engine. It does not save a file or change data.',
+    text_3: 'Template selected by the approved priority',
+    text_4: 'Format:',
+    text_5: 'Template version:',
+    text_6: 'Columns:',
+    text_7: 'Preview result',
+    text_9: 'Source fingerprint:',
+    aria_label: 'Export table preview; scroll inside the table',
+    buildPreview: 'Generate preview',
+    formatXlsx: 'Excel (XLSX)',
+    formatCsv: 'CSV',
+    formatJson: 'JSON',
+    formatTable: 'Table',
+    formatText: 'Text',
+    rowOne: '1 row',
+    rowMany: '{count} rows',
+    displayedRows: 'Showing {shown} of {total} rows in the preview only.',
+  },
+
 };

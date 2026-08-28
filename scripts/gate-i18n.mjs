@@ -89,6 +89,7 @@ const EXTRACTED = [
   'src/lib/checks.ts',
   'src/lib/checkSummary.ts',
   'src/components/BarcodeScanner.tsx',
+  'src/components/document-review/DocumentExportPreview.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */
