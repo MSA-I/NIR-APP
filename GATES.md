@@ -438,6 +438,48 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   is carrying another branch's `0213`/`0214`. CI runs all of these on a clean reset; this gate is
   the fast local sweep, not a substitute for P6-G1.
 
+- [x] P2-G9: the purchase analytics stop adding — and one of them stops RANKING — unlike money
+  The migrations are `0221_purchase_analytics_per_currency.sql` and
+  `0222_consolidated_case_lines_carry_their_currency.sql`.
+  CHECK: `private.canonical_purchase_metrics`, `private.product_purchase_summary`,
+  `public.purchase_comparison`, `private.consolidated_case_lines`/`consolidated_comparison`
+  EXPECT: money per currency; no comparison across currencies
+  EVIDENCE:
+  * `canonical_purchase_metrics` — all five money figures are arrays now, proven on the demo
+    organisation: `committed_by_currency [{ILS, 26314.860}]`, `gross_expense_by_currency
+    [{ILS, 13163.000}]`, `credits_recognised/pending`, `net_expense_by_currency [{ILS, 12928.000}]`,
+    and `net_definition` renamed to `gross_minus_offset_and_closed_credits_within_one_currency`.
+    Net subtracts a credit only inside the currency it was issued in, through a full outer join,
+    so a currency with only credits reports no net at all rather than a negative expense nobody
+    was billed.
+  * `purchase_comparison` **was ranking across currencies**, and that is the worst defect this
+    phase found: `order by offers.current_price` sorted a $12 offer below a ₪40 offer and returned
+    the dollar supplier as cheaper — a false comparison presented as a recommendation, on the
+    screen a person uses to choose a supplier. Probed by giving one product a shekel offer of 8.50
+    and a dollar offer of 12:
+    ```
+    status                 | chosen | chosen_currency | offer_count | lines_spanning_currencies
+    offers_span_currencies |        |                 |           2 | 1
+    offers:  8.500 ILS · 12.000 USD          ← both listed, with their units, for a person to judge
+    ```
+    Putting both offers back in one currency restores exactly the old answer:
+    `ok | ILS | 8.500 | 850.000`. The supplier minimum follows the same rule —
+    `min_order_amount` is stated in the supplier's own currency, so against a subtotal in another
+    `below_minimum` is **null**, not false, because false claims the minimum was cleared.
+  * `product_purchase_summary` — spend splits per currency; the average unit price exists **only**
+    when a product was billed in one currency, because its divisor is the canonical QUANTITY, a
+    physical fact with no currency, and part of the money over all of the quantity is a unit price
+    nobody was charged. `spans_currencies` names the rows in that state. This is the same rule the
+    function already applied to unknown spend, which it renders as `—` rather than `0`.
+  * `consolidated_case_lines` — the reconciliation grain becomes `(identity_key, currency)`, taken
+    from the invoice a line was printed on or the order a receipt was priced against, and
+    `consolidated_comparison` joins on both. Every `difference_amount` is now a subtraction inside
+    one currency by construction.
+  `p33_canonical_purchase_metrics` and `p34_product_purchase_summary` are updated and pass; both
+  gained a helper that names the currency it asserts about rather than reading the first element.
+  A full sweep of all 94 suites after these two migrations returns **the same 19 failures as
+  before them** — eleven harness (dblink/superuser), eight identical at baseline — and no new one.
+
 - **Phase 3's scope is wider than "the client", and this is where that was decided.** Two
   server-side consumers still call names this phase deleted: `src/lib/summary.ts:52` and the Edge
   tool `supabase/functions/assistant/tools/business-summary.ts:74` both call

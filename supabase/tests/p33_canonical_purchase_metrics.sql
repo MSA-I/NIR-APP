@@ -29,6 +29,16 @@ returns jsonb language sql stable as $$
   select private.canonical_purchase_metrics(p_org, p_from, p_to);
 $$;
 
+
+-- 0221: every money figure is an array of {currency, amount}. An assertion has to name the
+-- currency it is asserting about: reading "the first element" would pass on this shekel-only
+-- fixture and quietly assert about the wrong currency the moment a second one appears.
+create function pg_temp.p33_money(p_metrics jsonb, p_key text, p_currency text)
+returns numeric language sql immutable as $$
+  select (entry ->> 'amount')::numeric
+  from jsonb_array_elements(p_metrics -> p_key) entry
+  where entry ->> 'currency' = p_currency
+$$;
 insert into public.organizations (id, name, status, vat_rate) values
   ('10330000-0000-4000-8000-000000000001', 'P33 tenant', 'active', 18),
   ('10330000-0000-4000-8000-000000000002', 'P33 other tenant', 'active', 18);
@@ -77,14 +87,14 @@ from (values ('50330000-0000-4000-8000-000000000001'::uuid),
              ('50330000-0000-4000-8000-000000000003'::uuid)) as o(id);
 
 select pg_temp.p33_assert(
-  (select (r ->> 'committed')::numeric = 50 and (r ->> 'committed_order_count')::bigint = 1
+  (select pg_temp.p33_money(r, 'committed_by_currency', 'ILS') = 50 and (r ->> 'committed_order_count')::bigint = 1
    from pg_temp.p33_metrics('2026-08-01', '2026-08-31') r),
   'an order placed at 00:30 on 1 August, which is 21:30Z on 31 July, was not counted in August. '
   'This is the exact row that had two dashboards reporting different totals for the same month '
   'under the same label');
 
 select pg_temp.p33_assert(
-  (select r ->> 'committed' is null
+  (select r ->> 'committed_by_currency' is null
    from pg_temp.p33_metrics('2026-07-01', '2026-07-31') r),
   'the same order was ALSO counted in July. A UTC slice puts it there; the business day does not');
 
@@ -101,7 +111,7 @@ select pg_temp.p33_assert(
 -- reported spend would be a number nobody could reconcile against anything.
 
 select pg_temp.p33_assert(
-  (select (r ->> 'committed')::numeric = 50
+  (select pg_temp.p33_money(r, 'committed_by_currency', 'ILS') = 50
    from pg_temp.p33_metrics('2026-08-01', '2026-08-31') r),
   'the committed figure moved with the price list. Order items carry the price agreed AT THE TIME '
   '(ARCHITECTURE.md); reading current_price here rewrites history every time a supplier raises a '
@@ -134,7 +144,7 @@ update public.invoices set deleted_at = now()
 where org_id = '10330000-0000-4000-8000-000000000001' and invoice_number = 'INV-D';
 
 select pg_temp.p33_assert(
-  (select (r ->> 'gross_expense')::numeric = 140
+  (select pg_temp.p33_money(r, 'gross_expense_by_currency', 'ILS') = 140
           and (r ->> 'gross_invoice_count')::bigint = 2
    from pg_temp.p33_metrics('2026-08-01', '2026-08-31') r),
   'gross expense counted an invoice still in review, or a deleted one. An unapproved invoice is a '
@@ -151,22 +161,22 @@ insert into public.credit_requests
    'wrong_price',25, 'requested', timestamptz '2026-08-15 10:00+03', null);
 
 select pg_temp.p33_assert(
-  (select (r ->> 'credits_recognised')::numeric = 30
-          and (r ->> 'credits_pending')::numeric = 25
+  (select pg_temp.p33_money(r, 'credits_recognised_by_currency', 'ILS') = 30
+          and pg_temp.p33_money(r, 'credits_pending_by_currency', 'ILS') = 25
    from pg_temp.p33_metrics('2026-08-01', '2026-08-31') r),
   'the two credit groups were merged. `open|requested|received` and `offset|closed` are DISJOINT '
   '(0022:411-417): only the second actually reduces a supplier balance, and Reports counts all '
   'five under one label today');
 
 select pg_temp.p33_assert(
-  (select (r ->> 'net_expense')::numeric = 110
+  (select pg_temp.p33_money(r, 'net_expense_by_currency', 'ILS') = 110
    from pg_temp.p33_metrics('2026-08-01', '2026-08-31') r),
   'net expense is not gross minus the RECOGNISED credits. A credit that has been agreed but not '
   'applied has not reduced anything yet, and letting it flatter the net number is the difference '
   'between a report and a hope (OPEN-DECISIONS #147)');
 
 select pg_temp.p33_assert(
-  (select r ->> 'net_definition' = 'gross_minus_offset_and_closed_credits'
+  (select r ->> 'net_definition' = 'gross_minus_offset_and_closed_credits_within_one_currency'
    from pg_temp.p33_metrics('2026-08-01', '2026-08-31') r),
   'the answer no longer states WHICH definition of net it used. #147 is a documented default '
   'awaiting the owner; a number that does not name its own definition cannot be re-read later');
@@ -174,8 +184,8 @@ select pg_temp.p33_assert(
 -- ===== 5. A dash is not a zero =====
 
 select pg_temp.p33_assert(
-  (select r ->> 'committed' is null and r ->> 'gross_expense' is null
-          and r ->> 'net_expense' is null and r ->> 'credits_recognised' is null
+  (select r ->> 'committed_by_currency' is null and r ->> 'gross_expense_by_currency' is null
+          and r ->> 'net_expense_by_currency' is null and r ->> 'credits_recognised_by_currency' is null
    from pg_temp.p33_metrics('2020-01-01', '2020-01-31') r),
   'an empty window reported zeros instead of nulls. CLAUDE.md: a metric with no data shows a '
   'dash, because zero is itself a claim about the business');
@@ -188,7 +198,7 @@ select pg_temp.p33_assert(
 -- ===== 6. Committed and gross are never netted against one another =====
 
 select pg_temp.p33_assert(
-  (select (r ->> 'committed')::numeric = 50 and (r ->> 'gross_expense')::numeric = 140
+  (select pg_temp.p33_money(r, 'committed_by_currency', 'ILS') = 50 and pg_temp.p33_money(r, 'gross_expense_by_currency', 'ILS') = 140
    from pg_temp.p33_metrics('2026-08-01', '2026-08-31') r),
   'committed and gross were combined. They are not two views of one number: an order placed in '
   'March and billed in April belongs to both months in different senses, and a screen that adds '
@@ -197,7 +207,7 @@ select pg_temp.p33_assert(
 -- ===== 7. Tenancy and the role boundary =====
 
 select pg_temp.p33_assert(
-  (select r ->> 'committed' is null and r ->> 'gross_expense' is null
+  (select r ->> 'committed_by_currency' is null and r ->> 'gross_expense_by_currency' is null
    from pg_temp.p33_metrics('2026-08-01', '2026-08-31',
                             '10330000-0000-4000-8000-000000000002') r),
   'another tenant''s window returned our figures');
@@ -206,13 +216,13 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '20330000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select pg_temp.p33_assert(
-  (select (r ->> 'gross_expense')::numeric = 140
+  (select pg_temp.p33_money(r, 'gross_expense_by_currency', 'ILS') = 140
    from public.get_purchase_metrics('2026-08-01', '2026-08-31') r),
   'the owner cannot read the canonical metrics through the public wrapper');
 
 select set_config('request.jwt.claim.sub', '20330000-0000-4000-8000-000000000002', true);
 select pg_temp.p33_assert(
-  (select (r ->> 'gross_expense')::numeric = 140
+  (select pg_temp.p33_money(r, 'gross_expense_by_currency', 'ILS') = 140
    from public.get_purchase_metrics('2026-08-01', '2026-08-31') r),
   'office lost the canonical purchase metrics used by the active management surface');
 
