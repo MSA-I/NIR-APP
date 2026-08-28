@@ -122,10 +122,15 @@ select pg_temp.p70_assert(
        or entitlement.numeric_limit is distinct from decision.decided_limit),
   'a decided quota did not reach the catalogue');
 
--- #196: tiers differ by volume only. A boolean that is false anywhere gates a capability by plan.
+-- #196 said tiers differ by volume only, and this asserted it literally: no boolean anywhere may
+-- be anything but true. **#274 cancelled #196 on 25.08.2026** and put two conditions in its place,
+-- so enforcing the withdrawn rule would have blocked the first capability the owner then chose to
+-- lock (`exports.unbranded_pdf`, #277). What replaces it is #274 itself, and it is deliberately
+-- the SAME function p51 calls: one definition, so the two suites cannot come to disagree about
+-- what the ladder is allowed to do.
 select pg_temp.p70_assert(
-  not exists (select 1 from plan_entitlements where kind = 'boolean' and boolean_value is not true),
-  'a capability was gated by plan -- #196 forbids it');
+  not exists (select 1 from private.plan_capability_violations()),
+  'a capability is closed without a recorded decision, or an upgrade would remove one -- #274');
 -- Every rung answers for every entitlement, or effective_entitlement() says `unavailable` and 0155
 -- reads that as a refusal on the customer's first document.
 select pg_temp.p70_assert(

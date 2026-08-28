@@ -154,22 +154,59 @@ select pg_temp.p51_assert(
   'the #266 record does not hold eight figures, every one of them a reduction');
 -- Two teeth, kept apart. The first: a plan may not restrict anything the owner has not decided.
 -- Naming the allowed metrics was how this read until 0202 added a third, and a list of names has to
--- be edited every time -- so the rule is now stated as what it always meant: every stated ceiling
--- must be backed by a row in the decision ledger for that exact plan and figure. A number typed
--- into plan_entitlements without a decision behind it still fails, whichever metric it belongs to,
--- and a boolean turned off still fails because no decision row can back it.
+-- be edited every time -- so the rule is stated as what it always meant: every stated ceiling must
+-- be backed by a row in the decision ledger for that exact plan and figure.
+--
+-- SPLIT IN TWO ON 28.08.2026, because it used to be one test that a capability could never pass.
+-- The subquery compares `decided_limit` to `numeric_limit`, and a boolean row has neither -- so a
+-- capability closed on a rung failed here NO MATTER WHAT was recorded about it, and the comment
+-- said so ("a boolean turned off still fails because no decision row can back it"). That was the
+-- honest description of a ledger with no shape for a yes/no decision, not a rule anybody chose:
+-- #274 cancelled #196 and asked for exactly that record. 0214 gives the ledger the shape and puts
+-- both of #274 conditions behind one function, so this file and p70 cannot drift apart.
 select pg_temp.p51_assert(
   not exists (
     select 1 from plan_entitlements entitlement
-    where ((entitlement.kind = 'numeric'
-             and not entitlement.unlimited and entitlement.numeric_limit is not null)
-        or (entitlement.kind = 'boolean' and entitlement.boolean_value is not true))
+    where entitlement.kind = 'numeric'
+      and not entitlement.unlimited and entitlement.numeric_limit is not null
       and not exists (
         select 1 from private.plan_quota_decisions decision
         where decision.plan_key = entitlement.plan_key
           and decision.entitlement_key = entitlement.entitlement_key
           and decision.decided_limit = entitlement.numeric_limit)),
   'a plan ceiling was stated without a recorded owner decision behind it');
+-- The same demand for a capability, plus the monotonicity #274 attached to it: a capability open
+-- on a cheaper active rung may not be closed on a dearer one, or an upgrade silently removes it.
+select pg_temp.p51_assert(
+  not exists (select 1 from private.plan_capability_violations()),
+  'a capability was closed without a recorded decision, or an upgrade would remove one');
+-- AND THE BOLT HAS TO BITE. The assertion above passes on a ladder where nothing is wrong, which
+-- is exactly what a broken guard also does -- so the state it is meant to refuse is built here and
+-- refused for the record, then rolled back. Both halves are probed separately: the first closes a
+-- capability with nothing recorded behind it, the second records the decision properly and is still
+-- refused because the rung above would lose what a cheaper one has.
+savepoint p51_capability_probe;
+update plan_entitlements set boolean_value = false
+ where plan_key = 'pro' and entitlement_key = 'reports.advanced';
+select pg_temp.p51_assert(
+  (select count(*) from private.plan_capability_violations()
+    where assertion = 'capability_closed_without_decision') = 1,
+  'closing a capability with nothing recorded behind it is not refused');
+rollback to savepoint p51_capability_probe;
+
+savepoint p51_monotonicity_probe;
+update plan_entitlements set boolean_value = false
+ where plan_key = 'premium' and entitlement_key = 'bank.reconciliation';
+insert into private.plan_quota_decisions
+  (plan_key, entitlement_key, decided_limit, decided_value, previous_value, decision_ref)
+values ('premium', 'bank.reconciliation', null, false, true, 'p51 probe');
+select pg_temp.p51_assert(
+  not exists (select 1 from private.plan_capability_violations()
+              where assertion = 'capability_closed_without_decision')
+  and (select count(*) from private.plan_capability_violations()
+        where assertion = 'capability_lost_on_upgrade') > 0,
+  'a recorded decision that would remove a capability on upgrade is not refused');
+rollback to savepoint p51_monotonicity_probe;
 -- The second: the unknown-that-refuses state is pinned to exactly the rows allowed to hold it.
 -- Since #198 that is the assistant quota on the contract-priced rung and on the retired one --
 -- `מותאם` is a per-contract override, not a number a migration may invent, and Legacy gets no new
