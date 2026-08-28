@@ -5118,6 +5118,27 @@ export const he = {
     text_19: 'מעבר לקבלת סחורה',
   },
 
+  globalSearch: {
+    setHits: 'החיפוש נכשל — נסה שוב',
+    placeholder: 'חיפוש ספקים, חשבוניות, הזמנות...',
+    aria_label: 'חיפוש כללי',
+    text: 'מחפש',
+    aria_label_2: 'תוצאות חיפוש',
+    aria_label_3: 'חיפוש כללי',
+    aria_label_4: 'סגירה',
+    groupSuppliers: 'ספקים',
+    groupProducts: 'מוצרים',
+    groupInvoices: 'חשבוניות',
+    groupOrders: 'הזמנות',
+    groupDrafts: 'טיוטות הזמנה',
+    groupPayments: 'תשלומים',
+    groupCredits: 'זיכויים',
+    resultsFoundOne: 'נמצאה תוצאה אחת',
+    resultsFoundMany: 'נמצאו {count} תוצאות',
+    searchHint: 'חיפוש {groups}',
+    noResultsFor: 'לא נמצאו תוצאות עבור «{query}»',
+  },
+
 } as const;
 
 /**

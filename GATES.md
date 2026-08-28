@@ -162,6 +162,16 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   1,723/1,723; `npx tsc --noEmit` and `check:jsx-space` passed. `zero` still exits 1 on 486/64,
   so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `GlobalSearch` batch in this commit.** The pinned count is now 1,007
+  Hebrew line(s) across 94 files; the protected set remains 538 lines in 31 files, so the real
+  remainder is **469 lines in 63 files**. This is the 63rd surface locked at zero. `GROUPS.label`
+  became `labelKey: TKey`, the local timeout variable was renamed from `t` to `timer` before
+  extraction, and search failure state now stores a boolean rather than a locale-resolved sentence.
+  English tests prove that group/status interface copy moves while raw server titles and subtitles
+  do not. Evidence: the stale-baseline negative control failed on this file alone; the focused
+  suite passed 7/7; the full suite passed 1,725/1,725; `npx tsc --noEmit` and `check:jsx-space`
+  passed. `zero` still exits 1 on 469/63, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

@@ -5114,4 +5114,25 @@ export const en: Dictionary = {
     text_19: 'Go to receiving',
   },
 
+  globalSearch: {
+    setHits: 'Search failed — try again',
+    placeholder: 'Search suppliers, invoices, orders...',
+    aria_label: 'Global search',
+    text: 'Searching',
+    aria_label_2: 'Search results',
+    aria_label_3: 'Global search',
+    aria_label_4: 'Close',
+    groupSuppliers: 'Suppliers',
+    groupProducts: 'Products',
+    groupInvoices: 'Invoices',
+    groupOrders: 'Orders',
+    groupDrafts: 'Order drafts',
+    groupPayments: 'Payments',
+    groupCredits: 'Credits',
+    resultsFoundOne: '1 result found',
+    resultsFoundMany: '{count} results found',
+    searchHint: 'Search {groups}',
+    noResultsFor: 'No results found for “{query}”',
+  },
+
 };
