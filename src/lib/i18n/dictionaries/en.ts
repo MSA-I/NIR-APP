@@ -5261,4 +5261,27 @@ export const en: Dictionary = {
     screenshotMissing: 'The screenshot was not attached',
   },
 
+  documentsInboxTail: {
+    unknownConfidence: 'unknown',
+    invoiceTitle: 'Invoice {number}',
+    invoiceTitleWithSupplier: 'Invoice {number} — {supplier}',
+    receiptTitle: 'Receipt #{number}',
+    receiptTitleWithSupplier: 'Receipt #{number} — {supplier}',
+    uploadPartial: '{succeeded} uploaded and awaiting processing; {failed} did not complete.',
+    uploadPartialWithError: '{succeeded} uploaded and awaiting processing; {failed} did not complete. {error}',
+    uploadOne: 'Uploaded and awaiting processing',
+    uploadMany: '{count} documents uploaded and awaiting processing',
+    failedSummary: 'Not completed: {files}. Retry will send only files that can be tried again.',
+    uploadedAt: 'Uploaded: {date}',
+    uploadDocument: 'Upload document',
+    showingPrefix: 'Showing',
+    documentsLabel: 'documents',
+    loadedDataRemain: 'The data already loaded remains displayed.',
+    retry: 'Try again',
+    documentRowLabel: 'Document {fileName}',
+    rescueMessage: 'Document "{fileName}" will return to the documents folder as unfiled and can then be linked to an invoice or goods receipt.',
+    revertMessage: 'Document "{fileName}" was automatically linked to an invoice created by the system, without human approval, at {confidence} confidence. Reverting will remove the invoice (the record remains for audit), return the document to the folder as unfiled, and close the exception opened by the link — not because the discrepancy was reviewed. Both creation and reversal records remain in the audit log.',
+    deleteMessage: 'Document "{fileName}" will be removed from the list. The file remains for audit.',
+  },
+
 };

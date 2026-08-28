@@ -5265,6 +5265,29 @@ export const he = {
     screenshotMissing: 'הצילום לא צורף',
   },
 
+  documentsInboxTail: {
+    unknownConfidence: 'לא ידועה',
+    invoiceTitle: 'חשבונית {number}',
+    invoiceTitleWithSupplier: 'חשבונית {number} — {supplier}',
+    receiptTitle: 'קבלה #{number}',
+    receiptTitleWithSupplier: 'קבלה #{number} — {supplier}',
+    uploadPartial: '{succeeded} הועלו וממתינים לעיבוד, {failed} לא הושלמו.',
+    uploadPartialWithError: '{succeeded} הועלו וממתינים לעיבוד, {failed} לא הושלמו. {error}',
+    uploadOne: 'הועלה וממתין לעיבוד',
+    uploadMany: '{count} מסמכים הועלו וממתינים לעיבוד',
+    failedSummary: 'לא הושלמו: {files}. ניסיון חוזר ישלח רק קבצים שניתן לנסות שוב.',
+    uploadedAt: 'תאריך העלאה: {date}',
+    uploadDocument: 'העלאת מסמך',
+    showingPrefix: 'מציג',
+    documentsLabel: 'מסמכים',
+    loadedDataRemain: 'הנתונים שכבר נטענו נשארו מוצגים.',
+    retry: 'ניסיון חוזר',
+    documentRowLabel: 'מסמך {fileName}',
+    rescueMessage: 'המסמך "{fileName}" יחזור לתיקיית המסמכים כלא משויך, ויהיה אפשר לשייך אותו לחשבונית או לקבלת סחורה.',
+    revertMessage: 'המסמך "{fileName}" שויך אוטומטית לחשבונית שהמערכת יצרה בעצמה, ללא אישור אדם, ברמת ביטחון {confidence}. הביטול יסיר את החשבונית (הרשומה נשמרת לביקורת), יחזיר את המסמך לתיקייה כלא משויך, ויסגור חריגה שנפתחה בעקבות השיוך — לא מפני שהפער נבדק. רישום היצירה ורישום הביטול נשמרים שניהם ביומן הביקורת.',
+    deleteMessage: 'המסמך "{fileName}" יוסר מהרשימה. הקובץ נשמר לביקורת.',
+  },
+
 } as const;
 
 /**

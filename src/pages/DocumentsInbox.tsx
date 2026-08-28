@@ -68,21 +68,27 @@ type AutoActionRow = {
  *  this invoice anyway" is a sentence about the software that would not be true. `decision` is
  *  jsonb, so the number can arrive as a JSON number or a numeric-as-string; both are accepted and
  *  anything else is unknown rather than NaN%. */
-function autoActionConfidence(action: AutoActionRow): string {
+function autoActionConfidence(action: AutoActionRow): string | null {
   const raw = action.decision?.decision_confidence;
   const value = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
-  if (!Number.isFinite(value)) return 'לא ידועה';
+  if (!Number.isFinite(value)) return null;
   return `${Math.round(value * 100)}%`;
 }
 
 /** The confidence VALUE. The sentence around it is `documentStatus.autoAssignedByMachine`. */
-function autoActionConfidenceVars(action: AutoActionRow): { confidence: string } {
-  return { confidence: autoActionConfidence(action) };
+function autoActionConfidenceVars(action: AutoActionRow, unknownLabel: string): { confidence: string } {
+  return { confidence: autoActionConfidence(action) ?? unknownLabel };
 }
 
 type InvoicePick = { id: string; invoice_number: string; invoice_date: string; supplier: { name: string } | null };
 type ReceiptPick = { id: string; number: number; received_at: string; order: { supplier: { name: string } | null } | null };
-type RefileOption = { id: string; title: string; sub: string };
+type RefileOption = {
+  id: string;
+  kind: 'invoice' | 'receipt';
+  number: string | number;
+  supplierName: string | null;
+  sub: string;
+};
 
 /** The badge a person reads, over the stage the machine records.
  *
@@ -178,7 +184,9 @@ function RefileModal({ doc, target, onClose, onDone }: {
       const rows = unwrap(await query) as InvoicePick[];
       result = rows.map((row) => ({
         id: row.id,
-        title: `חשבונית ${row.invoice_number}${row.supplier ? ` — ${row.supplier.name}` : ''}`,
+        kind: 'invoice',
+        number: row.invoice_number,
+        supplierName: row.supplier?.name ?? null,
         sub: fmtDate(row.invoice_date),
       }));
     } else {
@@ -191,12 +199,31 @@ function RefileModal({ doc, target, onClose, onDone }: {
       if (dq && !numeric) rows = rows.filter((row) => row.order?.supplier?.name.includes(dq));
       result = rows.map((row) => ({
         id: row.id,
-        title: `קבלה #${row.number}${row.order?.supplier ? ` — ${row.order.supplier.name}` : ''}`,
+        kind: 'receipt',
+        number: row.number,
+        supplierName: row.order?.supplier?.name ?? null,
         sub: fmtDate(row.received_at),
       }));
     }
     return result;
   }, [target, dq]);
+
+  const optionTitle = (option: RefileOption) => {
+    if (option.kind === 'invoice') {
+      return t(option.supplierName
+        ? 'documentsInboxTail.invoiceTitleWithSupplier'
+        : 'documentsInboxTail.invoiceTitle', {
+        number: option.number,
+        ...(option.supplierName ? { supplier: option.supplierName } : {}),
+      });
+    }
+    return t(option.supplierName
+      ? 'documentsInboxTail.receiptTitleWithSupplier'
+      : 'documentsInboxTail.receiptTitle', {
+      number: option.number,
+      ...(option.supplierName ? { supplier: option.supplierName } : {}),
+    });
+  };
 
   async function assign(option: RefileOption) {
     setBusy(true);
@@ -239,7 +266,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
             <li key={option.id}>
               <button type="button" disabled={busy} onClick={() => void assign(option)}
                 className="row-hover flex min-h-11 w-full items-center justify-between gap-3 px-3 py-2.5 text-start text-sm focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2 disabled:opacity-50">
-                <span className="min-w-0 truncate text-ink-body">{option.title}</span>
+                <span className="min-w-0 truncate text-ink-body">{optionTitle(option)}</span>
                 <span className="shrink-0 text-xs text-ink-muted">{option.sub}</span>
               </button>
             </li>
@@ -289,9 +316,17 @@ function UploadModal({ suppliers, onClose, onDone }: {
       }
       if (summary.failed.length) {
         const currentFailure = failures[0] ? errorText(new Error(failures[0].code)) : null;
-        toast(`${summary.succeeded.length} הועלו וממתינים לעיבוד, ${summary.failed.length} לא הושלמו.${currentFailure ? ` ${currentFailure}` : ''}`, 'error');
+        toast(t(currentFailure
+          ? 'documentsInboxTail.uploadPartialWithError'
+          : 'documentsInboxTail.uploadPartial', {
+          succeeded: summary.succeeded.length,
+          failed: summary.failed.length,
+          ...(currentFailure ? { error: currentFailure } : {}),
+        }), 'error');
       } else {
-        toast(summary.succeeded.length === 1 ? 'הועלה וממתין לעיבוד' : `${summary.succeeded.length} מסמכים הועלו וממתינים לעיבוד`);
+        toast(summary.succeeded.length === 1
+          ? t('documentsInboxTail.uploadOne')
+          : t('documentsInboxTail.uploadMany', { count: summary.succeeded.length }));
         onClose();
       }
     } catch (error) {
@@ -347,7 +382,10 @@ function UploadModal({ suppliers, onClose, onDone }: {
           <Note tone={uploadSummary.failed.length ? 'alert' : 'done'}>
             <div role="status">
               <div><span className="num">{uploadSummary.succeeded.length}</span> {t('documents.text_25')} <span className="num">{uploadSummary.failed.length}</span> {t('documents.text_26')}</div>
-              {uploadSummary.failed.length > 0 && <div className="mt-1 text-xs">לא הושלמו: {uploadSummary.failed.join(', ')}. ניסיון חוזר ישלח רק קבצים שניתן לנסות שוב.</div>}
+              {uploadSummary.failed.length > 0 && <div className="mt-1 text-xs">{t(
+                'documentsInboxTail.failedSummary',
+                { files: uploadSummary.failed.join(', ') },
+              )}</div>}
             </div>
           </Note>
         )}
@@ -476,7 +514,9 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       document: doc,
       autoAssigned: autoAction !== null,
       autoAssignmentDescriptionKey: autoAction ? 'documentStatus.autoAssignedByMachine' : null,
-      autoAssignmentDescriptionVars: autoAction ? autoActionConfidenceVars(autoAction) : undefined,
+      autoAssignmentDescriptionVars: autoAction
+        ? autoActionConfidenceVars(autoAction, t('documentsInboxTail.unknownConfidence'))
+        : undefined,
     });
   };
 
@@ -488,7 +528,10 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   const interpretAttempts = useRef(new Map<string, number>());
   const interpretMounted = useRef(false);
   const [interpretRetryTick, setInterpretRetryTick] = useState(0);
-  const [interpretFailure, setInterpretFailure] = useState<{ jobId: string; message: string } | null>(null);
+  const [interpretFailure, setInterpretFailure] = useState<{
+    jobId: string;
+    code: 'interpret_failed';
+  } | null>(null);
   const { snapshots: processingSnapshots, refetch: refetchProcessing } = processing;
   useEffect(() => {
     // React Strict Mode runs setup -> cleanup -> setup in development. Resetting the ref in every
@@ -529,7 +572,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           } else if (!cancelled) {
             setInterpretFailure({
               jobId: job.id,
-              message: t('documents.text_30'),
+              code: 'interpret_failed',
             });
           }
           continue;
@@ -765,7 +808,9 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     {
       key: 'date', header: t('documents.text_35'), className: 'num', sortValue: (doc) => doc.document_date ?? doc.created_at,
       render: (doc) => (
-        <span title={doc.document_date ? undefined : `תאריך העלאה: ${fmtDateTime(doc.created_at)}`}>
+        <span title={doc.document_date ? undefined : t('documentsInboxTail.uploadedAt', {
+          date: fmtDateTime(doc.created_at),
+        })}>
           {fmtDate(doc.document_date ?? doc.created_at)}{!doc.document_date && <span className="font-sans text-xs text-ink-muted"> {t('documents.fmtDate')}</span>}
         </span>
       ),
@@ -787,6 +832,9 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   const hasFilters = !!(q || supplierId || kind || from || to || filing !== 'all' || processingFilter !== 'all');
   const advancedFilterCount = [supplierId, kind, from, to, !archive && filing !== 'all' ? filing : ''].filter(Boolean).length;
   const revertAction = revertDoc ? autoActionFor(revertDoc) : null;
+  const revertConfidence = revertAction
+    ? autoActionConfidence(revertAction) ?? t('documentsInboxTail.unknownConfidence')
+    : t('documentsInboxTail.unknownConfidence');
 
   // Heading and icon track the nav label, because pageTitleFor derives the tab title from the
   // sidebar item and a different word would put two names on one screen. `ארכיון מסמכים` qualifies
@@ -816,7 +864,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         actions={<>
           {canUpload && !archive && (
             <button type="button" className="btn-primary" onClick={() => setUploadOpen(true)}>
-              <Upload size={ICON.sm} /> העלאת מסמך
+              <Upload size={ICON.sm} /> {t('documentsInboxTail.uploadDocument')}
             </button>
           )}
           <Link className="btn-secondary" to={archive ? '/documents' : '/documents/archive'}>
@@ -892,7 +940,9 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         </details>
         {!loading && data && (
           <div className="mt-2 text-xs text-ink-muted" aria-live="polite">
-            מציג <span className="num">{filtered.length}</span> {t('documents.text_58')} <span className="num">{data.docs.length}</span> מסמכים
+            {t('documentsInboxTail.showingPrefix')} <span className="num">{filtered.length}</span>{' '}
+            {t('documents.text_58')} <span className="num">{data.docs.length}</span>{' '}
+            {t('documentsInboxTail.documentsLabel')}
           </div>
         )}
       </section>
@@ -901,10 +951,10 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       {processing.error && (
         <Note tone="alert">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>{processing.error} הנתונים שכבר נטענו נשארו מוצגים.</span>
+            <span>{processing.error}{' '}{t('documentsInboxTail.loadedDataRemain')}</span>
             <button data-testid="documents-processing-retry" type="button" className="btn-secondary min-h-11"
               disabled={processing.fetching} onClick={() => void processing.refetch()}>
-              <RefreshCw size={ICON.sm} aria-hidden="true" /> ניסיון חוזר
+              <RefreshCw size={ICON.sm} aria-hidden="true" /> {t('documentsInboxTail.retry')}
             </button>
           </div>
         </Note>
@@ -912,7 +962,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       {interpretFailure && (
         <Note tone="alert">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>{interpretFailure.message}</span>
+            <span>{interpretFailure.code === 'interpret_failed' ? t('documents.text_30') : null}</span>
             <button type="button" className="btn-secondary min-h-11" onClick={() => {
               interpretAttempts.current.delete(interpretFailure.jobId);
               setInterpretFailure(null);
@@ -928,7 +978,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       {error && !data ? <ErrorNote message={error} /> : loading ? <SkeletonTable cols={6} /> : (
         <DataTable rows={filtered} columns={columns} pageSize={20}
           tableLabel={archive ? t('documents.text_62') : t('documents.text_63')}
-          rowLabel={(doc) => `מסמך ${doc.file_name}`}
+          rowLabel={(doc) => t('documentsInboxTail.documentRowLabel', { fileName: doc.file_name })}
           onRowClick={(doc) => review(doc)}
           mobileTitle={(doc) => <bdi>{doc.file_name}</bdi>}
           mobileTrailing={(doc) => (
@@ -1008,7 +1058,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           sends — this dialog is the courtesy, not the enforcement. */}
       <ConfirmDialog open={!!rescueDoc} onClose={() => setRescueDoc(null)} onConfirm={(reason) => void rescue(reason)}
         title={t('documents.title_3')}
-        message={`המסמך "${rescueDoc?.file_name ?? ''}" יחזור לתיקיית המסמכים כלא משויך, ויהיה אפשר לשייך אותו לחשבונית או לקבלת סחורה.`}
+        message={t('documentsInboxTail.rescueMessage', { fileName: rescueDoc?.file_name ?? '' })}
         confirmLabel={t('documents.confirmLabel')} requireReason busy={rescuing} />
 
       {/* The one dialog in this app that undoes a financial record nobody authorised by hand, so it
@@ -1019,7 +1069,10 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       <ConfirmDialog open={!!revertDoc} onClose={() => setRevertDoc(null)}
         onConfirm={(reason) => void revertAutoAction(reason)}
         title={t('documents.title_4')}
-        message={`המסמך "${revertDoc?.file_name ?? ''}" שויך אוטומטית לחשבונית שהמערכת יצרה בעצמה, ללא אישור אדם, ברמת ביטחון ${revertAction ? autoActionConfidence(revertAction) : 'לא ידועה'}. הביטול יסיר את החשבונית (הרשומה נשמרת לביקורת), יחזיר את המסמך לתיקייה כלא משויך, ויסגור חריגה שנפתחה בעקבות השיוך — לא מפני שהפער נבדק. רישום היצירה ורישום הביטול נשמרים שניהם ביומן הביקורת.`}
+        message={t('documentsInboxTail.revertMessage', {
+          fileName: revertDoc?.file_name ?? '',
+          confidence: revertConfidence,
+        })}
         confirmLabel={t('documents.confirmLabel_2')} danger requireReason busy={reverting} />
 
       {/* No requireReason, deliberately: #110 rules that removal from the archive needs none.
@@ -1027,7 +1080,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           as destruction and the file is kept. */}
       <ConfirmDialog open={!!deleteDoc} onClose={() => setDeleteDoc(null)} onConfirm={() => void removeDoc()}
         title={t('documents.title_5')}
-        message={`המסמך "${deleteDoc?.file_name ?? ''}" יוסר מהרשימה. הקובץ נשמר לביקורת.`}
+        message={t('documentsInboxTail.deleteMessage', { fileName: deleteDoc?.file_name ?? '' })}
         confirmLabel={t('documents.confirmLabel_3')} danger busy={deleting} />
 
       <DocumentRemovalDialog

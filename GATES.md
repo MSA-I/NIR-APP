@@ -225,6 +225,17 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   suite passed 5/5; the full suite passed 1,735/1,735; `npx tsc --noEmit` and `check:jsx-space`
   passed. `zero` still exits 1 on 385/56, so this gate remains open.
 
+  **PROGRESS, 28.08.2026 — `DocumentsInbox.tsx` batch in this commit.** The pinned count is now
+  909 Hebrew line(s) across 87 files; the protected set remains 539 lines in 32 files, so the real
+  remainder is **370 lines in 55 files**. This is the 70th surface locked at zero. Refile options
+  store raw kind/number/supplier facts instead of translated titles; interpretation failure state
+  stores a code instead of a message; unknown automation confidence resolves at render time.
+  Uploaded filenames, supplier names, source values and user-entered reasons remain untouched.
+  Evidence: the stale-baseline negative control failed on this file alone; focused automation,
+  archive and source-contract suites passed 32/32; the full suite passed 1,736/1,736;
+  `npx tsc --noEmit` and `check:jsx-space` passed. `zero` still exits 1 on 370/55, so this gate
+  remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER
