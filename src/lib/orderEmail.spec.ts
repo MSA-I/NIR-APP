@@ -58,6 +58,9 @@ describe('the bounded delivery reason', () => {
       .toBeNull();
   });
 
+  const sentenceOf = (reason: { key: string } | null | undefined) =>
+    (reason ? (he.emailOrderCard as Record<string, string>)[reason.key.split('.')[1]] : undefined);
+
   it('turns each bounded bounce code into one Hebrew sentence', () => {
     const codes = [
       'bounce_permanent', 'bounce_transient', 'bounce_undetermined', 'bounce_unclassified',
@@ -67,7 +70,7 @@ describe('the bounded delivery reason', () => {
         status: 'bounced', delivery_state: 'delivery_failed', error_code: code,
       }));
       expect(reason, code).not.toBeNull();
-      return reason!.sentence;
+      return sentenceOf(reason)!;
     });
     for (const sentence of sentences) expect(sentence.length).toBeGreaterThan(10);
     expect(new Set(sentences).size, 'each bounce classification reads differently')
@@ -78,8 +81,9 @@ describe('the bounded delivery reason', () => {
     const reason = emailDeliveryReason(message({
       status: 'bounced', delivery_state: 'delivery_failed', error_code: 'something_new',
     }));
-    expect(reason?.sentence).toBeTruthy();
-    expect(reason?.sentence).not.toContain('something_new');
+    expect(sentenceOf(reason)).toBeTruthy();
+    expect(sentenceOf(reason)).not.toContain('something_new');
+    expect(reason?.key).not.toContain('something_new');
   });
 
   it('passes the provider sentence through as bounded secondary detail only', () => {
@@ -101,9 +105,9 @@ describe('the bounded delivery reason', () => {
     const bounced = emailDeliveryReason(message({
       status: 'bounced', delivery_state: 'delivery_failed', error_code: 'bounce_permanent',
     }));
-    expect(failed?.sentence).toBeTruthy();
-    expect(bounced?.sentence).toBeTruthy();
-    expect(failed?.sentence).not.toBe(bounced?.sentence);
+    expect(sentenceOf(failed)).toBeTruthy();
+    expect(sentenceOf(bounced)).toBeTruthy();
+    expect(sentenceOf(failed)).not.toBe(sentenceOf(bounced));
   });
 });
 

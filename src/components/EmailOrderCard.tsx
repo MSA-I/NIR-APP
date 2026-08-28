@@ -35,7 +35,7 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
   canWrite: boolean;
 }) {
   const toast = useToast();
-  const { statusLabel , errorText } = useT();
+  const { errorText, statusLabel, t } = useT();
   const { profile } = useAuth();
   const [sendOpen, setSendOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -61,15 +61,15 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
   async function send(reason?: string) {
     setBusy(true);
     try {
-      const result = await sendOrderEmail(orderId, reason?.trim() || 'שליחת הזמנה לספק במייל');
+      const result = await sendOrderEmail(orderId, reason?.trim() || t('emailOrderCard.sendOrderEmail'));
       if (result.ok) {
         toast(result.deliveryLimited
-          ? 'המייל נמסר לספק המייל — אבל הדומיין טרם אומת, ולכן המסירה מוגבלת (DEBT §25)'
-          : 'המייל נמסר לספק המייל וההזמנה סומנה כנשלחה');
+          ? t('emailOrderCard.text')
+          : t('emailOrderCard.text_2'));
       } else if (result.state === 'already_sent' || result.state === 'in_flight') {
-        toast('שליחה כבר בתהליך או שהושלמה — המסך יתרענן');
+        toast(t('emailOrderCard.toast'));
       } else {
-        toast(result.error ? errorText(result.error) : 'השליחה נכשלה — הניסיון תועד וניתן לנסות שוב', 'error');
+        toast(result.error ? errorText(result.error) : t('emailOrderCard.toast_2'), 'error');
       }
       setSendOpen(false);
       void refetch();
@@ -84,8 +84,8 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
     if (!message) return;
     setBusy(true);
     try {
-      await resetOrderEmailMessage(message.id, reason?.trim() || 'איפוס שליחת מייל');
-      toast('ניסיונות השליחה אופסו');
+      await resetOrderEmailMessage(message.id, reason?.trim() || t('emailOrderCard.resetOrderEmailMessage'));
+      toast(t('emailOrderCard.toast_3'));
       setResetOpen(false);
       void refetch();
     } catch (failed) {
@@ -99,7 +99,7 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
     <div className="card p-4 no-print">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink">
-          <Mail size={ICON.sm} aria-hidden="true" /> מסירת ההזמנה במייל
+          <Mail size={ICON.sm} aria-hidden="true" /> {t('emailOrderCard.heading')}
         </h2>
         {message && <StatusBadge meta={EMAIL_CHANNEL_STATE[message.delivery_state]} />}
       </div>
@@ -107,32 +107,31 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
       {message ? (
         <div className="mt-2 space-y-1 text-sm text-ink-muted">
           <p>
-            נמענה: <span dir="ltr">{message.to_email}</span>
-            {' · '}ניסיון <span className="num">{message.attempt_count}</span> מתוך <span className="num">5</span>
+            {t('emailOrderCard.recipientLabel')} <span dir="ltr">{message.to_email}</span>
+            {' · '}{t('emailOrderCard.attemptWord')} <span className="num">{message.attempt_count}</span> {t('emailOrderCard.text_3')} <span className="num">5</span>
             {message.last_attempt_at && <> · {fmtDateTime(message.last_attempt_at)}</>}
           </p>
           {message.status === 'accepted' && message.accepted_at && (
             <p>
-              נמסרה לספק המייל ב-{fmtDateTime(message.accepted_at)}. אישור מסירה לנמען יתעדכן
-              כשיתקבל אירוע מאומת מהספק.
+              {t('emailOrderCard.acceptedByProvider', { at: fmtDateTime(message.accepted_at) })}{' '}
+              {t('emailOrderCard.text_4')}
             </p>
           )}
           {message.status === 'delivered' && message.delivered_at && (
-            <p>שרת הדואר של הנמען אישר את קבלת ההודעה ב-{fmtDateTime(message.delivered_at)}.</p>
+            <p>{t('emailOrderCard.deliveredAt', { at: fmtDateTime(message.delivered_at) })}</p>
           )}
           {/* #238: the channel failed, the order did not. Say both, and offer the resend. */}
           {message.delivery_state === 'delivery_failed' && failure && (
             <Note tone="alert">
               <span className="min-w-0 flex-1">
-                {failure.sentence}
+                {t(failure.key)}
                 {message.failed_at && <> ({fmtDateTime(message.failed_at)})</>}
-                {' '}ההזמנה עצמה נשארת במצב ״נשלחה״ — היא כבר נמסרה לספק המייל; מה שנכשל הוא
-                {' '}המסירה לנמען. שליחה חוזרת תנפיק קישור פורטל חדש ותבטל מיד את הקודם.
-                {failure.providerDetail && (
+                {' '}{t('emailOrderCard.orderStillSent')}
+                {failure.providerDetail && failure.providerDetail !== t(failure.key) && (
                   <>
                     {' '}
                     <span dir="auto" className="text-ink-faint">
-                      דיווח ספק המייל: {failure.providerDetail}
+                      {t('emailOrderCard.text_5')} {failure.providerDetail}
                     </span>
                   </>
                 )}
@@ -142,21 +141,19 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
           {message.status === 'unknown' && (
             <Note tone="alert">
               <span className="min-w-0 flex-1">
-                השליחה נקטעה במצב לא ידוע — ייתכן שהמייל יצא וייתכן שלא. כדי למנוע כפילות המערכת
-                קפאה את השרשור; בעל העסק יכול לאפס אותו לאחר בירור מול הספק.
+                {t('emailOrderCard.unknownState')}
               </span>
             </Note>
           )}
           {/* The provider's own word for the stored status, kept visible next to the channel
               claim so the two are never confused with each other. */}
           <p className="text-xs text-ink-faint">
-            מצב אצל ספק המייל: {statusLabel(EMAIL_MESSAGE_STATUS[message.status]) ?? '—'}
+            {t('emailOrderCard.providerStatusLabel')} {statusLabel(EMAIL_MESSAGE_STATUS[message.status]) ?? '—'}
           </p>
         </div>
       ) : (
         <p className="mt-2 text-sm text-ink-muted">
-          ההזמנה תישלח לכתובת המייל שהוגדרה בהעדפות התקשורת, עם קישור פורטל לאישור או להצעת
-          שינויים. ההזמנה תסומן ״נשלחה״ רק כשספק המייל יאשר את קבלת ההודעה.
+          {t('emailOrderCard.notSentYet')}
         </p>
       )}
 
@@ -165,13 +162,13 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
           {emailEnabled && sendable && (!message || retryable) && (
             <button type="button" className="btn-primary" disabled={busy} onClick={() => setSendOpen(true)}>
               {busy ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" /> : <Send size={ICON.sm} aria-hidden="true" />}
-              {message ? 'שליחה חוזרת במייל' : 'שליחת ההזמנה במייל'}
+              {message ? t('emailOrderCard.text_10') : t('emailOrderCard.text_11')}
             </button>
           )}
           {message && ['failed', 'unknown'].includes(message.status) && profile?.role === 'owner' && (
             <button type="button" className="btn-ghost" disabled={busy} onClick={() => setResetOpen(true)}>
               {busy ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" /> : <RotateCcw size={ICON.sm} aria-hidden="true" />}
-              איפוס ניסיונות (בעלים)
+              {t('emailOrderCard.text_12')}
             </button>
           )}
         </div>
@@ -179,14 +176,14 @@ export function EmailOrderCard({ orderId, supplierId, orderStatus, canWrite }: {
 
       <ConfirmDialog open={sendOpen} onClose={() => setSendOpen(false)}
         onConfirm={(reason) => void send(reason)}
-        title="שליחת ההזמנה לספק במייל"
-        message="המייל יכלול את פרטי ההזמנה וקישור פורטל מאובטח. קישור פורטל קודם, אם קיים, יבוטל מיד. ההזמנה תסומן כנשלחה רק לאחר שספק המייל יאשר את קבלת ההודעה. הפעולה תתועד ביומן הביקורת."
-        confirmLabel="שליחה" requireReason busy={busy} />
+        title={t('emailOrderCard.title')}
+        message={t('emailOrderCard.message')}
+        confirmLabel={t('emailOrderCard.confirmLabel')} requireReason busy={busy} />
       <ConfirmDialog open={resetOpen} onClose={() => setResetOpen(false)}
         onConfirm={(reason) => void reset(reason)}
-        title="איפוס ניסיונות השליחה"
-        message="האיפוס פותח מחדש את השרשור לאחר בירור. ודא מול הספק שהמייל לא התקבל — איפוס של שליחה שכן יצאה עלול להוביל לכפילות. הפעולה תתועד ביומן הביקורת."
-        confirmLabel="איפוס" danger requireReason busy={busy} />
+        title={t('emailOrderCard.title_2')}
+        message={t('emailOrderCard.message_2')}
+        confirmLabel={t('emailOrderCard.confirmLabel_2')} danger requireReason busy={busy} />
     </div>
   );
 }
