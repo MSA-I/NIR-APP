@@ -67,6 +67,8 @@ interface PriceReviewRow {
   sku: string | null;
   proposed_unit_price: number | null;
   current_unit_price: number | null;
+  /** 0225: both prices are the SUPPLIER's own money — a price list is that supplier's quote. */
+  currency: string | null;
   document_line_count: number;
   document_reviewed_count: number;
   is_empty_run: boolean;
@@ -264,7 +266,7 @@ export default function DocumentOperations() {
     },
     {
       key: 'price', header: 'מחיר נוכחי ← מוצע', priority: 2, className: 'num',
-      render: (row) => <span className="num">{fmtMoneyRounded(row.current_unit_price)} ← {fmtMoneyRounded(row.proposed_unit_price)}</span>,
+      render: (row) => <span className="num">{fmtMoneyRounded(row.current_unit_price, row.currency)} ← {fmtMoneyRounded(row.proposed_unit_price, row.currency)}</span>,
     },
   ];
 

@@ -5,6 +5,7 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { fmtDate, fmtMoneyExact, fmtNum, formatUnit, todayISO } from '../lib/format';
 import { Card, DataTable, ErrorNote, ICON, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
 import { useAuth } from '../auth/AuthContext';
+import { MoneyByCurrency } from '../components/Money';
 import { toHebrewError } from '../lib/errors';
 import {
   downloadRenderedWorkbook,
@@ -38,8 +39,16 @@ interface SummaryRow {
   supplier_count: number;
   order_count: number;
   invoice_count: number;
-  gross_amount: number | null;
+  /** 0221: spend per currency. A product bought from two suppliers in two currencies has two. */
+  gross_amount_by_currency: { currency: string; amount: number }[] | null;
+  /**
+   * 0221: null when the product was billed in more than one currency. The divisor is the canonical
+   * QUANTITY — a physical fact with no currency — so part of the money over all of the quantity is
+   * a unit price nobody was charged. `spans_currencies` says which rows are in that state.
+   */
   average_unit_price: number | null;
+  average_unit_price_currency: string | null;
+  spans_currencies: boolean;
   includes_invoice_only_quantity: boolean;
   includes_unevidenced_quantity: boolean;
 }
@@ -49,7 +58,7 @@ interface SummaryResponse {
   to: string;
   products: SummaryRow[];
   unmapped_invoice_lines: number;
-  unmapped_invoice_amount: number | null;
+  unmapped_invoice_amount_by_currency: { currency: string; amount: number }[];
   quantity_rule: string;
 }
 
@@ -102,11 +111,18 @@ export default function ProductPurchaseSummary() {
       render: (r) => <span className="num">{fmtNum(r.received_qty)}</span> },
     { key: 'invoiced', header: 'חויב', sortValue: (r) => r.invoiced_qty ?? -1,
       render: (r) => <span className="num">{fmtNum(r.invoiced_qty)}</span> },
-    { key: 'gross', header: 'הוצאה', sortValue: (r) => r.gross_amount ?? -1,
-      render: (r) => <span className="num">{fmtMoneyExact(r.gross_amount)}</span> },
+    { key: 'gross', header: 'הוצאה',
+      /* Sorted on the base-currency figure when there is one: a column of spend across two
+         currencies has no single ordering, and sorting on "the first entry" would silently rank
+         by whichever currency happened to come back first. */
+      sortValue: (r) => r.gross_amount_by_currency
+        ?.find((entry) => entry.currency === org?.base_currency)?.amount ?? -1,
+      render: (r) => <MoneyByCurrency amounts={r.gross_amount_by_currency} baseCurrency={org?.base_currency} /> },
     { key: 'avg', header: 'מחיר יחידה ממוצע',
       sortValue: (r) => r.average_unit_price ?? -1,
-      render: (r) => <span className="num">{fmtMoneyExact(r.average_unit_price)}</span> },
+      render: (r) => (r.spans_currencies
+        ? <span className="text-xs text-ink-muted">בכמה מטבעות</span>
+        : <span className="num">{fmtMoneyExact(r.average_unit_price, r.average_unit_price_currency)}</span>) },
     { key: 'sources', header: 'ספקים · הזמנות · חשבוניות', priority: 3,
       sortValue: (r) => r.supplier_count,
       render: (r) => (
@@ -128,7 +144,7 @@ export default function ProductPurchaseSummary() {
         generatedAt: fmtDate(todayISO()),
         products: data.products,
         unmappedInvoiceLines: data.unmapped_invoice_lines,
-        unmappedInvoiceAmount: data.unmapped_invoice_amount,
+        unmappedInvoiceAmount: data.unmapped_invoice_amount_by_currency,
       });
       const fileName = `product-purchases-${from}-${to}.xlsx`;
       const templated = await renderConfiguredReportTemplate({
@@ -148,8 +164,13 @@ export default function ProductPurchaseSummary() {
           'מספר ספקים': row.supplier_count,
           'מספר הזמנות': row.order_count,
           'מספר חשבוניות': row.invoice_count,
-          'הוצאה ברוטו': row.gross_amount,
-          'מחיר יחידה ממוצע': row.average_unit_price,
+          /* One column per currency would change shape with the data; one text column states
+             every figure with its own symbol and never adds two. */
+          'הוצאה ברוטו': (row.gross_amount_by_currency ?? [])
+            .map((entry) => fmtMoneyExact(entry.amount, entry.currency)).join(' · '),
+          'מחיר יחידה ממוצע': row.spans_currencies
+            ? 'בכמה מטבעות'
+            : fmtMoneyExact(row.average_unit_price, row.average_unit_price_currency),
         }));
         XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(exportRows), 'רכישות מוצרים');
         XLSX.writeFile(book, fileName);
@@ -206,7 +227,8 @@ export default function ProductPurchaseSummary() {
             <AlertTriangle size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
             <span>
               <span className="num">{data.unmapped_invoice_lines}</span> שורות חשבונית בסך
-              <span className="num"> {fmtMoneyExact(data.unmapped_invoice_amount)}</span> לא שויכו
+              <MoneyByCurrency amounts={data.unmapped_invoice_amount_by_currency}
+                baseCurrency={org?.base_currency} className="mx-1" /> לא שויכו
               לשורת הזמנה, ולכן אינן נספרות באף מוצר. הן ממתינות למיפוי ידני.
             </span>
           </p>

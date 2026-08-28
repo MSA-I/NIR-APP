@@ -9,6 +9,7 @@ import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, ICON, type Column } from '../components/ui';
 import { CREDIT_REASON, CREDIT_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
+import { MoneyByCurrency, totalsByCurrency } from '../components/Money';
 import type { CreditRequest, CreditStatus } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
 import { financialSupplierMap } from '../lib/financialSuppliers';
@@ -21,7 +22,7 @@ type Row = Omit<CreditRequest, 'supplier' | 'invoice'> & {
 export default function Credits() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const { profile, organizationAccess } = useAuth();
+  const { profile, org, organizationAccess } = useAuth();
   const [statusFilter, setStatusFilter] = useParamState('status', 'active');
   const [monthFilter, setMonthFilter] = useParamState('month');
   const [selected, setSelected] = useState<Row | null>(null);
@@ -52,15 +53,18 @@ export default function Credits() {
   const rows = (data ?? []).filter((r) =>
     (statusFilter === 'all' || ['open', 'requested', 'received'].includes(r.status)) &&
     (!monthFilter || r.created_at.startsWith(monthFilter)));
-  const openSum = (data ?? []).filter((r) =>
-    ['open', 'requested', 'received'].includes(r.status) && (!monthFilter || r.created_at.startsWith(monthFilter)))
-    .reduce((s, r) => s + r.amount, 0);
+  // Summed WITHIN each currency (0217, #277). A supplier can hold a shekel credit and a dollar
+  // credit at once, and one header figure covering both would be a number nobody is owed.
+  const openTotals = totalsByCurrency((data ?? [])
+    .filter((r) => ['open', 'requested', 'received'].includes(r.status)
+      && (!monthFilter || r.created_at.startsWith(monthFilter)))
+    .map((r) => ({ currency: r.currency, amount: r.amount })));
 
   const columns: Column<Row>[] = [
     { key: 'num', header: 'מס׳', sortValue: (r) => r.number, render: (r) => `#${r.number}` },
     { key: 'supplier', header: 'ספק', sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
     { key: 'reason', header: 'סיבה', render: (r) => CREDIT_REASON[r.reason] },
-    { key: 'amount', header: 'סכום', className: 'num', sortValue: (r) => r.amount, render: (r) => fmtMoneyExact(r.amount) },
+    { key: 'amount', header: 'סכום', className: 'num', sortValue: (r) => r.amount, render: (r) => fmtMoneyExact(r.amount, r.currency) },
     { key: 'invoice', header: 'חשבונית', render: (r) => r.invoice ? <span dir="ltr">{r.invoice.invoice_number}</span> : '—' },
     { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
     { key: 'created', header: 'נפתח', sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
@@ -74,7 +78,7 @@ export default function Credits() {
       {error && <ErrorNote message={error} />}
       {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
       <PageHeader title={<span className="flex items-center gap-2"><RotateCcw size={ICON.xl} aria-hidden="true" /> זיכויים</span>}
-        meta={<>סה״כ זיכויים פתוחים: <b className="num text-await-fg">{fmtMoneyExact(openSum)}</b></>} />
+        meta={<>סה״כ זיכויים פתוחים: <b className="text-await-fg"><MoneyByCurrency amounts={openTotals} baseCurrency={org?.base_currency} /></b></>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.notes ?? '').toLowerCase().includes(q)}
         searchLabel="חיפוש בדרישות זיכוי"
@@ -146,7 +150,7 @@ function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
     <Modal open onClose={onClose} title={`זיכוי #${credit.number} — ${credit.supplier.name}`} busy={busy} statusMessage={busy ? 'מעדכן את הזיכוי' : undefined}>
       <dl className="text-sm space-y-2 mb-4">
         <div className="flex justify-between"><dt className="text-ink-muted">סיבה</dt><dd>{CREDIT_REASON[credit.reason]}</dd></div>
-        <div className="flex justify-between"><dt className="text-ink-muted">סכום</dt><dd className="num font-semibold">{fmtMoneyExact(credit.amount)}</dd></div>
+        <div className="flex justify-between"><dt className="text-ink-muted">סכום</dt><dd className="num font-semibold">{fmtMoneyExact(credit.amount, credit.currency)}</dd></div>
         <div className="flex justify-between"><dt className="text-ink-muted">סטטוס</dt><dd><StatusBadge meta={CREDIT_STATUS[credit.status]} /></dd></div>
         {credit.invoice && (
           <div className="flex justify-between"><dt className="text-ink-muted">חשבונית</dt>

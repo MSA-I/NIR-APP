@@ -112,6 +112,11 @@ export interface SupplierMetrics {
   open_credits: number;
   /** `null` for a reader who may not read the allocation ledger the remainder is computed from. */
   open_credits_amount: number | null;
+  /**
+   * The currency `open_credits_amount` is in (0223), or null when the supplier holds open credits
+   * in more than one — in which case the amount is null too, because the view refuses to add them.
+   */
+  open_credits_currency: string | null;
   credits_window: number;
   credits_lifetime: number;
   priced_items: number;
