@@ -51,9 +51,15 @@ const COOLDOWN_MS = 30_000;
  * `onShell` was removed on 26.08.2026 for the same reason as the bell's: it switched this trigger
  * onto the dark Onyx ramp, and T7.3k made every cluster that renders it light. No caller passed it.
  */
-export default function FeedbackButton({ variant = 'icon' }: {
+export default function FeedbackButton({ variant = 'icon', tone = 'panel' }: {
   /** `menu` renders a full-width drawer row instead of a round icon target. */
   variant?: 'icon' | 'menu';
+  /**
+   * Which ground the menu row sits on. The same row appears in the desktop account panel (light
+   * paper) and in the phone drawer (onyx, owner 28.08.2026), and a hardcoded ink colour was
+   * invisible on one of them the moment the drawer went dark.
+   */
+  tone?: 'panel' | 'shell';
 } = {}) {
   const { profile } = useAuth();
   const location = useLocation();
@@ -157,7 +163,11 @@ export default function FeedbackButton({ variant = 'icon' }: {
       {variant === 'menu' ? (
         <button type="button" onClick={() => void openWithCapture()} disabled={cooling || capturing}
           title={label}
-          className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink-body transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset disabled:opacity-50">
+          className={`flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset disabled:opacity-50 ${
+            tone === 'shell'
+              ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
+              : 'text-ink-body hover:bg-surface-hover hover:text-ink'
+          }`}>
           <MessageSquarePlus size={ICON.md} aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate text-start">{cooling ? label : 'שליחת הערה'}</span>
         </button>

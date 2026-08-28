@@ -1,6 +1,12 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { RouterProvider, createMemoryRouter } from 'react-router';
+/* Layout reads the plan's entitlements through the shared cache, so the shell needs a client
+   even where the read never fires: TanStack throws when there is no provider above it, before it
+   considers `enabled`. The org scope is deliberately left null here — that is what keeps the
+   query disabled and these specs off the network. */
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createAppQueryClient } from '../lib/query/client';
 
 /**
  * "The menu is open" as a place in history (owner, 19.08.2026): open the drawer on a phone, pick a
@@ -74,7 +80,7 @@ function mountAt(entry: string) {
       ],
     },
   ], { initialEntries: [entry] });
-  render(<ToastProvider><RouterProvider router={router} /></ToastProvider>);
+  render(<QueryClientProvider client={createAppQueryClient()}><ToastProvider><RouterProvider router={router} /></ToastProvider></QueryClientProvider>);
   return router;
 }
 

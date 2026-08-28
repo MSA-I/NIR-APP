@@ -19,7 +19,11 @@ import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/organizationAccess';
 import { isRouteFamilyActive, sectionOf } from '../lib/quickActions';
+import { useWithheldNavPaths } from '../lib/entitlements';
 import { routeBackPresentation, routePresentationTitle, staticRouteTitle, type StaticRoutePath } from '../lib/routePresentation';
+
+/** Paper panel, floating pill, or the onyx drawer. See `linkCls`. */
+type NavSurface = 'pill' | 'panel' | 'shell';
 
 export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: ActiveRole[] }
 export interface NavSection { section: string; items: NavItem[]; collapsible?: boolean }
@@ -237,10 +241,20 @@ export function footerItemsForRole(role: ActiveRole | undefined): NavItem[] {
   return role === 'owner' ? itemsFor(role, ['/settings/subscription', '/onboarding', '/settings']) : [];
 }
 
+/**
+ * The drawer's own list.
+ *
+ * It used to rename the leading unnamed group to 'עבודה שוטפת', because the drawer printed a
+ * heading over every group and an unnamed one would have been a heading-shaped hole. The drawer
+ * prints no headings any more (owner, 28.08.2026: "אין צורך בפסי הפרדה לשים עוד טקסט - הפסי
+ * הפרדה מספיקים"), so the rename would put a word on a surface that renders none.
+ *
+ * The function stays rather than folding into `sectionsForRole` at the call site: it is the one
+ * place that says which list the drawer shows, and the two surfaces have already diverged once
+ * (the bar withholds the account group). A second divergence should have somewhere to land.
+ */
 export function drawerSectionsForRole(role: ActiveRole | undefined): NavSection[] {
-  return sectionsForRole(role).map((section, index) => (
-    role && index === 0 ? { ...section, section: 'עבודה שוטפת' } : section
-  ));
+  return sectionsForRole(role);
 }
 
 /* `showNavHeaders` lived here until 26.08.2026: an exported predicate about whether group headers
@@ -342,9 +356,22 @@ export default function Layout() {
         className={`${box} shrink-0 object-contain`} />;
   };
 
-  const sections = barSectionsForRole(role);
-  const drawerSections = drawerSectionsForRole(role);
-  const footerItems = footerItemsForRole(role);
+  /**
+   * What the PLAN withholds, applied on top of what the ROLE allows.
+   *
+   * Two different questions about the same list, kept as two steps: `sectionsForRole` is the role
+   * catalogue and `layout.spec.ts` asserts it as one, so folding the plan into it would make
+   * either question unreadable. Withholding only ever REMOVES rows, and a group emptied by it
+   * disappears rather than standing as a heading over nothing.
+   */
+  const withheld = useWithheldNavPaths();
+  const includedByPlan = (list: NavSection[]) => (withheld.size === 0 ? list : list
+    .map((section) => ({ ...section, items: section.items.filter((item) => !withheld.has(item.to)) }))
+    .filter((section) => section.items.length > 0));
+
+  const sections = includedByPlan(barSectionsForRole(role));
+  const drawerSections = includedByPlan(drawerSectionsForRole(role));
+  const footerItems = footerItemsForRole(role).filter((item) => !withheld.has(item.to));
 
   // The current screen with a rewritten query — the pathname and hash are carried through so the
   // marker never doubles as a navigation.
@@ -534,19 +561,38 @@ export default function Layout() {
      active pill's own colour, which is why the panel branch already had the icon inherit.
      What is left is what ships: the LIGHT dropdown/drawer row and the floating pill, both marking
      the active item with the small OCEANIC pill — the blue is the marker, the surface is bright. */
-  const linkCls = (isActive: boolean, surface: 'pill' | 'panel' = 'panel') => (surface === 'panel'
-    ? `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
-      isActive ? 'bg-action text-on-solid font-medium' : 'text-ink-body hover:bg-surface-hover hover:text-ink'
-    }`
-    : `relative flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
-      isActive ? 'bg-action text-on-solid font-medium' : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
-    }`);
+/**
+   * Three surfaces, because the shell has three grounds.
+   *
+   * The `'shell'` branch was deleted on 26.08.2026 as dead code — correctly, at the time: the phone
+   * drawer had been light paper since T7.3j and nothing passed it. The owner reversed that on
+   * 28.08.2026 ("לעשות שהתפריט יהיה בצבע השחור של האפליקציה והמילים בהירות"), so the branch is
+   * back and has a caller again. It is NOT the same thing as `'panel'`: the desktop dropdowns and
+   * the account menu are light paper by an owner ruling of their own (T7.3h, image #18), and one
+   * surface class serving both grounds is how one of them ends up unreadable.
+   *
+   * The active item wears the oceanic pill on every surface. That is the constant: the blue is
+   * what says "you are here", and it reads on paper and on onyx alike.
+   */
+  const linkCls = (isActive: boolean, surface: NavSurface = 'panel') => {
+    if (surface === 'pill') {
+      return `relative flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
+        isActive ? 'bg-action text-on-solid font-medium' : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
+      }`;
+    }
+    const rest = surface === 'shell'
+      ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
+      : 'text-ink-body hover:bg-surface-hover hover:text-ink';
+    return `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
+      isActive ? 'bg-action text-on-solid font-medium' : rest
+    }`;
+  };
 
   /* Section identity in navigation (T7.2) is DATA here, not decoration: `data-section` rides every
      nav link and `<main>`, and the one visible consumer is `.section-mark` under a page title. The
      pill is TEXT-only, and on the light panel the icon inherits — a `.section-glyph` accent would
      be the active oceanic pill's own colour. So no navigation surface paints the accent. */
-  const navLinks = (items: readonly NavItem[], opts?: { surface?: 'pill' | 'panel' }) => items.map((item) => {
+  const navLinks = (items: readonly NavItem[], opts?: { surface?: NavSurface }) => items.map((item) => {
     const surface = opts?.surface ?? 'panel';
     const active = isRouteFamilyActive(location.pathname, item.to);
     const section = active ? sectionOf(item.to) : null;
@@ -574,9 +620,13 @@ export default function Layout() {
    * every nav label above it (`px-3`), so the person's own name was the one row in the list that
    * did not line up with the list.
    */
-  const signOutRow = (
+  const signOutRow = (surface: NavSurface = 'panel') => (
     <button type="button" onClick={() => void handleSignOut()}
-      className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-sm text-ink-soft transition-colors hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset">
+      className={`flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
+        surface === 'shell'
+          ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
+          : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
+      }`}>
       <LogOut size={ICON.md} aria-hidden="true" /> התנתקות
     </button>
   );
@@ -588,9 +638,9 @@ export default function Layout() {
      column under the brand pill — both places where the ORGANISATION is what is being named. */
   const accountBlock = (
     <div className="pt-3">
-      <div className="px-3 text-sm font-medium text-ink">{profile?.full_name}</div>
-      <div className="mb-2 px-3 text-xs text-ink-muted">{role ? roleLabels[role] : ''}</div>
-      {signOutRow}
+      <div className="px-3 text-sm font-medium text-shell-ink">{profile?.full_name}</div>
+      <div className="mb-2 px-3 text-xs text-shell-ink-dim">{role ? roleLabels[role] : ''}</div>
+      {signOutRow('shell')}
     </div>
   );
 
@@ -621,52 +671,38 @@ export default function Layout() {
           own text. So the header is a flex row, the home link wraps only the mark and the names,
           and the chip is its sibling. `pe-12` still clears the absolutely-positioned close button,
           which is why the chip lands inside that reserve rather than under the X. */}
-      <div className="flex items-center gap-3 border-b border-line-soft px-4 py-4 pe-12 lg:pe-4">
+      <div className="flex items-center gap-3 border-b border-shell-ink/15 px-4 py-4 pe-12 lg:pe-4">
         {/* The mark is a door. Every product trains people that the logo goes home, and here it went
             nowhere — a 40px target in the corner of every screen that silently did nothing. It is a
             Link rather than a decorated div so it lands in the tab order, announces itself and
             honours a middle click; the image stays alt="" because the accessible name belongs to
             the link, and repeating it would make a screen reader say the brand twice. */}
         <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
-          className="-m-2 flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset">
+          className="-m-2 flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 hover:bg-shell-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset">
           {brandMark('drawer')}
           <div className="min-w-0">
-            <div className="text-base font-semibold text-ink">{APP_NAME}</div>
-            <div className="truncate text-xs text-ink-muted" title={orgName || undefined}>{orgName || 'ניהול רכש ותשלומים'}</div>
+            <div className="text-base font-semibold text-shell-ink">{APP_NAME}</div>
+            <div className="truncate text-xs text-shell-ink-dim" title={orgName || undefined}>{orgName || 'ניהול רכש ותשלומים'}</div>
           </div>
         </Link>
         <PlanBadge compact />
       </div>
-      <nav aria-label={navLabel} className="scrollbar-hidden flex-1 overflow-y-auto px-3 py-3 space-y-3">
-        {/* FLAT ON PURPOSE — and the product currently says so three different ways, which is the
-            finding, not the fix (26.08.2026).
-            · `DESIGN.md:483-484` describes staged disclosure here: 'ניהול' and 'בקרה' CLOSED on
-              arrival, the group holding the active screen opened automatically.
-            · `NavSection.collapsible` is set on exactly those two groups (Layout.tsx) and asserted
-              in `layout.spec.ts` — data with no renderer anywhere.
-            · `layoutActiveState.spec.tsx` asserts the opposite as a contract: `closest('details')`
-              must be null for the group headers AND for the active link.
-            A `<details open>` per collapsible group is one small block of markup and was written
-            and reverted here, because it fails that spec on the FIRST line — the assertion forbids
-            the element, not the closed state. Which of the three is the intended contract is an
-            owner question, and answering it silently in a shell refactor is exactly how a
-            navigation surface changes under people without a decision behind it. */}
+      <nav aria-label={navLabel} className="scrollbar-hidden flex-1 overflow-y-auto px-3 py-3">
+        {/* Every group open, always. DESIGN.md settles the three-way contradiction this file used
+            to carry: a destination behind a lid is a destination people stop finding. */}
         {displaySections.map((s, i) => (
-          /* The separation the owner asked for, drawn rather than implied (28.08.2026: "יש לחשוב
-             על דרך וויזואלית ליצור הפרדה בין הקטגוריות השונות"). Until now every group was a 12px
-             gap and a small grey word, so five subjects read as one long list. Each group now
-             opens with a rule that runs to the edge and a heading that sits ON that rule — the
-             cheapest device that says "a new subject starts here" without adding a box, a shade
-             or a control. Every group stays OPEN on both surfaces (DESIGN.md): a destination
-             behind a lid is a destination people stop finding. */
-          <div key={s.section || i} className={i > 0 ? 'pt-1' : ''}>
-            {s.section && (
-              <div className="flex items-center gap-2 px-3 pb-1.5 pt-2">
-                <span className="text-xs font-semibold text-ink-soft">{s.section}</span>
-                <span aria-hidden="true" className="h-px flex-1 bg-line-soft" />
-              </div>
-            )}
-            <div className="space-y-0.5">{navLinks(s.items, { surface: 'panel' })}</div>
+          /* THE RULE IS THE WHOLE DEVICE (owner, 28.08.2026: "אין צורך בפסי הפרדה לשים עוד טקסט -
+             הפסי הפרדה מספיקים"). The first version of this separation drew a rule AND printed the
+             group's name on it; he removed the word. He is right about what the word was doing:
+             the rows underneath already say רכש or כספים by being ספקים and חשבוניות, so the
+             heading repeated the list in a smaller, greyer font and cost a line per group on the
+             surface with the least room. The line alone answers the only question a heading was
+             answering here — where does one subject end and the next begin.
+             The group NAMES are not deleted; they still name the desktop dropdowns, where a
+             collapsed trigger genuinely has nothing else to say. */
+          <div key={s.section || i}
+            className={i > 0 ? 'mt-2 border-t border-shell-ink/15 pt-2' : ''}>
+            <div className="space-y-0.5">{navLinks(s.items, { surface: 'shell' })}</div>
           </div>
         ))}
         {/* On a phone the account block travels WITH the menu instead of pinning to the bottom.
@@ -676,8 +712,8 @@ export default function Layout() {
             is not one more work destination — and it is drawn here rather than by a pinned strip.
             The note trigger sits with the account because the phone top bar gave its slot to the
             tier mark (owner report 25.08.2026): it goes nowhere, it opens a dialog. */}
-        <div className="border-t border-line-soft pt-3">
-          <FeedbackButton variant="menu" />
+        <div className="mt-2 border-t border-shell-ink/15 pt-3">
+          <FeedbackButton variant="menu" tone="shell" />
           {accountBlock}
         </div>
       </nav>
@@ -759,7 +795,7 @@ export default function Layout() {
         {footerItems.length > 0 && <div className="mt-2 space-y-0.5">{navLinks(footerItems, { surface: 'panel' })}</div>}
         {/* The same row the drawer shows, in the surface that IS the drawer on this width. */}
         <div className="mt-2"><FeedbackButton variant="menu" /></div>
-        <div className="mt-2">{signOutRow}</div>
+        <div className="mt-2">{signOutRow()}</div>
       </div>
     </div>
   );
@@ -1016,17 +1052,18 @@ export default function Layout() {
           one is not worth a frame of drawer. */}
       {mobileOpen && (
         <div data-no-capture className="drawer-scrim lg:hidden fixed inset-0 z-50 bg-shell/50 no-print" onClick={() => closeMobileMenu()}>
-          {/* T7.3k fix (owner, image #29): OPAQUE light gray — translucency here sat over the
-              dark backdrop and the page behind it, and the blend read as a murky blue tint.
-              The top bar can stay translucent because only the light canvas scrolls under it. */}
+          {/* ONYX, with light words (owner, 28.08.2026: "לעשות שהתפריט יהיה בצבע השחור של
+              האפליקציה והמילים בהירות"). The drawer was light paper from T7.3j and is the app's
+              own dark again — opaque, never translucent: T7.3k already recorded that translucency
+              here blends with the scrim and the page behind it and reads as a murky blue tint. */}
           <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label="תפריט ראשי"
-            tabIndex={-1} className="drawer-enter phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-topbar border-e border-line-soft focus:outline-none" onClick={(e) => e.stopPropagation()}>
+            tabIndex={-1} className="drawer-enter phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-shell text-shell-ink focus:outline-none" onClick={(e) => e.stopPropagation()}>
             {/* Positioned INSIDE the safe-area padding, not on top of it. `absolute top-2 end-2`
                 measured from the panel's border box, so on a notched device the drawer's
                 `padding-block-start: env(safe-area-inset-top)` slid the list down and left the
                 close button sitting under the notch. The phone header solves the same problem with
                 `max(0.75rem, env(safe-area-inset-top))`; this does it with the same expression. */}
-            <button type="button" className="btn-ghost btn-icon absolute end-2 rounded-full" style={{ insetBlockStart: 'max(0.5rem, env(safe-area-inset-top))' }}
+            <button type="button" className="btn-ghost btn-icon absolute end-2 rounded-full text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink" style={{ insetBlockStart: 'max(0.5rem, env(safe-area-inset-top))' }}
               onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={ICON.lg} aria-hidden="true" /></button>
             {sidebar(drawerSections, 'יעדים נוספים')}
           </aside>

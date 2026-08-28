@@ -176,14 +176,19 @@ describe('סרגל הפעולות המהירות במובייל', () => {
     }
   });
 
-  it('מחזיר את כל יעדי הניווט למגירה תחת שכבת עבודה שוטפת', () => {
+  it('מחזיר את כל יעדי הניווט למגירה, כולל מה שהסרגל אינו מציג', () => {
+    // The drawer is the complete list; the desktop bar is the one that withholds — it drops the
+    // account group because the avatar disc already holds it. 'עבודה שוטפת' used to be pinned here
+    // as the drawer's name for the leading group; the drawer prints no headings now (owner,
+    // 28.08.2026), so a name that renders nowhere is not a contract worth keeping.
     for (const role of ACTIVE_ROLES) {
       const drawer = drawerSectionsForRole(role);
-      expect(drawer[0].section).toBe('עבודה שוטפת');
       expect(drawer.flatMap((section) => section.items)).toEqual(
         sectionsForRole(role).flatMap((section) => section.items),
       );
     }
+    expect(drawerSectionsForRole('owner').map((section) => section.section)).toContain('החשבון');
+    expect(barSectionsForRole('owner').map((section) => section.section)).not.toContain('החשבון');
   });
 
   // The desktop speed-dial test that used to sit here went with the speed-dial itself (owner

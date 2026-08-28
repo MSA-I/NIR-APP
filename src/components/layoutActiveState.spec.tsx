@@ -1,6 +1,12 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
+/* Layout reads the plan's entitlements through the shared cache, so the shell needs a client
+   even where the read never fires: TanStack throws when there is no provider above it, before it
+   considers `enabled`. The org scope is deliberately left null here — that is what keeps the
+   query disabled and these specs off the network. */
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createAppQueryClient } from '../lib/query/client';
 
 const authState = vi.hoisted(() => ({
   accessStatus: 'authoritative' as 'unknown' | 'authoritative' | 'offline',
@@ -53,7 +59,7 @@ beforeAll(() => {
 
 function renderAt(path: string) {
   render(
-    <ToastProvider>
+    <QueryClientProvider client={createAppQueryClient()}><ToastProvider>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route element={<Layout />}>
@@ -77,7 +83,7 @@ function renderAt(path: string) {
           </Route>
         </Routes>
       </MemoryRouter>
-    </ToastProvider>,
+    </ToastProvider></QueryClientProvider>,
   );
 }
 
@@ -161,12 +167,14 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
     expect(within(drawer).getByRole('link', { name: 'ספקים' })).toHaveAttribute('aria-current', 'page');
     expect(within(drawer).getByRole('link', { name: 'קבלת סחורה' })).toBeInTheDocument();
     expect(within(drawer).getByRole('link', { name: 'הגדרות מערכת' })).toBeInTheDocument();
-    expect(within(drawer).getByText('עבודה שוטפת')).toBeInTheDocument();
-    // Every group open on both surfaces (DESIGN.md): a destination behind a lid is a destination
-    // people stop finding. The headings are the separation, not a control.
-    for (const group of ['רכש', 'מסמכים', 'כספים', 'בקרה ודוחות', 'החשבון']) {
-      expect(within(drawer).getByText(group).closest('details')).toBeNull();
+    // The drawer separates its groups with a rule and NOTHING else (owner, 28.08.2026: "אין צורך
+    // בפסי הפרדה לשים עוד טקסט - הפסי הפרדה מספיקים"). The group names still exist as data and
+    // still label the desktop dropdowns; they are not printed here.
+    for (const group of ['עבודה שוטפת', 'רכש', 'מסמכים', 'כספים', 'בקרה ודוחות', 'החשבון']) {
+      expect(within(drawer).queryByText(group)).toBeNull();
     }
+    // Every group open, so every destination is one press away rather than behind a lid.
+    expect(within(drawer).getByRole('link', { name: 'תשלומים' }).closest('details')).toBeNull();
   });
 
   it('משאיר במגירה את קבוצת המסך הפעיל פתוחה ללא disclosure', () => {
