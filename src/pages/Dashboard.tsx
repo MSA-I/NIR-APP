@@ -98,7 +98,9 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
   const hasSpark = value != null && spark != null && spark.filter((point) => point.count > 0).length >= 2;
   const linkLabel = [
     `${title}: ${glanceMoney(value)}`,
-    delta != null ? `${Math.round(delta) > 0 ? '+' : ''}${Math.round(delta)}% מול אותם ימים בחודש הקודם` : null,
+    delta != null
+      ? t('dashboard.deltaVsPreviousMonth', { delta: `${Math.round(delta) > 0 ? '+' : ''}${Math.round(delta)}` })
+      : null,
     context,
     aux,
   ].filter(Boolean).join('. ');
@@ -270,7 +272,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
   // a quiet card could read "all clear" while five undated orders are still in flight.
   const noDateHint = noDateCount > 0 ? (
     <Link to="/orders" className="inline-flex min-h-11 items-center text-xs text-ink-muted hover:text-ink-mid active:text-ink">
-      <span className="num me-1">{noDateCount}</span> הזמנות פתוחות ללא תאריך אספקה
+      <span className="num me-1">{noDateCount}</span> {t('dashboard.openOrdersNoDate')}
     </Link>
   ) : null;
 
@@ -688,9 +690,9 @@ export default function Dashboard() {
       { key: 'pr-approval', label: t('dashboard.text_22'), count: prPendingApproval, tone: 'await', to: '/payment-requests?status=pending_approval', clearLabel: t('dashboard.text_23') },
       { key: 'pay-overdue', label: t('dashboard.text_24'), count: paymentsOverdue, tone: 'alert', to: '/payment-requests?due=overdue', hint: paymentsOverdue == null ? t('dashboard.text_25') : undefined, clearLabel: t('dashboard.text_26') },
       { key: 'pay-today', label: t('dashboard.text_27'), count: paymentsDueToday, tone: 'await', to: '/payment-requests?due=today', hint: paymentsDueToday == null ? t('dashboard.text_28') : undefined, clearLabel: t('dashboard.text_29') },
-      { key: 'exceptions', label: 'חריגים פתוחים', count: exceptions.length, tone: 'alert', to: '/exceptions?status=open', hint: highExceptions ? `${highExceptions} בחומרה גבוהה` : undefined, clearLabel: 'אין חריגים פתוחים' },
+      { key: 'exceptions', label: t('dashboard.openExceptions'), count: exceptions.length, tone: 'alert', to: '/exceptions?status=open', hint: highExceptions ? t('dashboard.highSeverity', { count: highExceptions }) : undefined, clearLabel: t('dashboard.noOpenExceptions') },
       { key: 'credits', label: t('dashboard.text_30'), count: snapshot.credits.count, amount: openCreditsSum, tone: 'info', to: '/credits?status=active', clearLabel: t('dashboard.text_31') },
-      { key: 'commitments', label: 'התחייבויות רכש פתוחות', count: snapshot.openOrders.count, amount: committedSum, tone: 'idle', to: '/orders?status=open', hint: remainingSum > 0 ? `נותר לקבלה ${fmtMoneyRounded(remainingSum)}` : undefined, clearLabel: 'אין התחייבויות פתוחות' },
+      { key: 'commitments', label: t('dashboard.openCommitments'), count: snapshot.openOrders.count, amount: committedSum, tone: 'idle', to: '/orders?status=open', hint: remainingSum > 0 ? t('dashboard.remainingToReceive', { amount: fmtMoneyRounded(remainingSum) }) : undefined, clearLabel: t('dashboard.noOpenCommitments') },
       { key: 'late-delivery', label: t('dashboard.text_32'), count: lateDeliveries, tone: 'alert', to: '/receiving', clearLabel: t('dashboard.text_33') },
       { key: 'awaiting-confirmation', label: t('dashboard.text_34'), count: awaitingConfirmation, tone: 'await', to: '/orders?status=sent', clearLabel: t('dashboard.text_35') },
       { key: 'price-increases', label: t('dashboard.text_36'), count: priceIncreaseSuppliers, tone: 'await', to: '/prices?increases=1', clearLabel: t('dashboard.text_37') },
@@ -751,7 +753,7 @@ export default function Dashboard() {
   const businessHour = Number(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: BUSINESS_TIME_ZONE }).format(new Date()));
   const dayGreeting = businessHour < 5 ? t('dashboard.text_38') : businessHour < 12 ? t('dashboard.text_39') : businessHour < 18 ? t('dashboard.text_40') : t('dashboard.text_41');
   const firstName = profile?.full_name?.trim().split(/\s+/)[0] ?? '';
-  const pageTitle = firstName ? `${dayGreeting}, ${firstName}` : 'מרכז הבקרה';
+  const pageTitle = firstName ? t('dashboard.greetingWithName', { greeting: dayGreeting, name: firstName }) : t('dashboard.controlCentre');
   const taskTotal = data ? Object.values(data.queue).reduce((sum, count) => sum + count, 0) : 0;
   const weeklyComparison = (() => {
     if (!data) return [];
@@ -775,18 +777,30 @@ export default function Dashboard() {
   const dueSplitTotal = data?.dueWindow
     ? data.dueWindow.overdueAmount + data.dueWindow.dueWithin7Amount
     : 0;
-  const monthlyAria = data ? `הוצאות רכש לפי חודש: ${data.monthly.length
-    ? data.monthly.map((point) => `${point.month} ${point.count ? fmtMoneyExact(point.total) : 'אין חשבוניות'}`).join(', ')
-    : 'אין נתוני חשבוניות לתקופה'}` : '';
-  const weeklyAria = `השוואת רכש ותשלומים לפי שבוע: ${weeklyComparison.map((point) => (
-    `${point.week}, רכש ${point.purchases == null ? 'אין רשומות' : fmtMoneyExact(point.purchases)}, תשלומים ${point.payments == null ? 'אין רשומות' : fmtMoneyExact(point.payments)}`
-  )).join('; ')}`;
+  const monthlyAria = data ? t('dashboard.monthlyAria', {
+    points: data.monthly.length
+      ? data.monthly.map((point) => `${point.month} ${point.count ? fmtMoneyExact(point.total) : t('dashboard.noInvoices')}`).join(', ')
+      : t('dashboard.noInvoiceDataForPeriod'),
+  }) : '';
+  const weeklyAria = t('dashboard.weeklyAria', {
+    points: weeklyComparison.map((point) => t('dashboard.weeklyAriaPoint', {
+      week: point.week,
+      purchases: point.purchases == null ? t('dashboard.noRecords') : fmtMoneyExact(point.purchases),
+      payments: point.payments == null ? t('dashboard.noRecords') : fmtMoneyExact(point.payments),
+    })).join('; '),
+  });
   const categoryEmptyMessage = data?.categories.length
-    ? `נמדד רכש בסכום ${fmtMoneyExact(categoryTotal)}; אין תמהיל חיובי להצגה`
+    ? t('dashboard.categoriesNoPositiveMix', { amount: fmtMoneyExact(categoryTotal) })
     : t('dashboard.text_42');
-  const categoriesAria = data ? `הוצאות לפי קטגוריה: ${categoryTotal > 0
-    ? data.categories.map((category) => `${category.name} ${fmtMoneyExact(category.total)}, ${Math.round((category.total / categoryTotal) * 100)} אחוז`).join(', ')
-    : categoryEmptyMessage}` : '';
+  const categoriesAria = data ? t('dashboard.categoriesAria', {
+    points: categoryTotal > 0
+      ? data.categories.map((category) => t('dashboard.categoriesAriaPoint', {
+        name: category.name,
+        amount: fmtMoneyExact(category.total),
+        percent: Math.round((category.total / categoryTotal) * 100),
+      })).join(', ')
+      : categoryEmptyMessage,
+  }) : '';
 
   return (
     <div className="dashboard-depth space-y-5">
@@ -832,7 +846,7 @@ export default function Dashboard() {
           <span aria-live="polite" aria-atomic="true">
             {data?.fetchedAt && (
               <span key={data.fetchedAt.getTime()} className="freshness-settle">
-                עודכן ב-<span className="num">{timeFmt.format(data.fetchedAt)}</span>
+                {t('dashboard.updatedAt')} <span className="num">{timeFmt.format(data.fetchedAt)}</span>
               </span>
             )}
           </span>
@@ -895,13 +909,15 @@ export default function Dashboard() {
           <div className="order-first grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 lg:order-1 lg:col-span-12 [--dash-step-mobile:0] [--dash-step:0]">
             <BandStat title={t('dashboard.title_3')} value={data.money.openBalance} tone="await" to="/invoices?pay=unpaid"
               icon={ReceiptText} context={t('dashboard.context')}
-              aux={data.money.openBalance == null ? 'אין נתונים זמינים' : `${data.money.openInvoiceCount} חשבוניות פתוחות`} />
-            <BandStat title="שולם לספקים החודש" value={data.money.paidMonth} tone="done" to={`/payments?month=${data.money.monthKey}`}
+              aux={data.money.openBalance == null ? t('dashboard.noDataAvailable') : t('dashboard.openInvoicesCount', { count: data.money.openInvoiceCount })} />
+            <BandStat title={t('dashboard.paidThisMonth')} value={data.money.paidMonth} tone="done" to={`/payments?month=${data.money.monthKey}`}
               icon={Banknote} context={t('dashboard.context_2')} delta={data.money.paidDelta}
               spark={data.paidWeekly} sparkLabel={t('dashboard.sparkLabel')} />
             <BandStat title={t('dashboard.title_4')} value={data.money.purchasedMonth} to="/orders?status=all"
               icon={ShoppingCart} context={t('dashboard.context_3')} delta={data.money.purchasedDelta}
-              aux={data.savings != null ? `חיסכון משוער ${fmtMoneyRounded(data.savings)}${data.savingsPct != null ? ` · ${data.savingsPct.toFixed(0)}%` : ''}` : undefined}
+              aux={data.savings == null ? undefined : data.savingsPct == null
+                ? t('dashboard.estimatedSaving', { amount: fmtMoneyRounded(data.savings) })
+                : t('dashboard.estimatedSavingWithPct', { amount: fmtMoneyRounded(data.savings), percent: data.savingsPct.toFixed(0) })}
               spark={data.weekly} sparkLabel={t('dashboard.sparkLabel_2')} />
           </div>
 
@@ -1005,12 +1021,12 @@ export default function Dashboard() {
                     )}
                     <div className="flex flex-col gap-1.5 text-sm">
                       <p className="text-alert-fg">
-                        מתוכם באיחור <span className="num" dir="ltr">{glanceMoney(data.dueWindow.overdueAmount)}</span>
-                        {' · '}<span className="num">{data.dueWindow.overdueCount}</span> דרישות
+                        {t('dashboard.ofWhichOverdue')} <span className="num" dir="ltr">{glanceMoney(data.dueWindow.overdueAmount)}</span>
+                        {' · '}<span className="num">{data.dueWindow.overdueCount}</span> {t('dashboard.requestsWord')}
                       </p>
                       <p className="text-ink-mid">
-                        לפירעון בשבעת הימים הקרובים <span className="num" dir="ltr">{glanceMoney(data.dueWindow.dueWithin7Amount)}</span>
-                        {' · '}<span className="num">{data.dueWindow.dueWithin7Count}</span> דרישות
+                        {t('dashboard.dueWithinSevenDays')} <span className="num" dir="ltr">{glanceMoney(data.dueWindow.dueWithin7Amount)}</span>
+                        {' · '}<span className="num">{data.dueWindow.dueWithin7Count}</span> {t('dashboard.requestsWord')}
                       </p>
                     </div>
                     <Link className="link self-start text-sm" to="/payment-requests?due=soon">
@@ -1045,7 +1061,7 @@ export default function Dashboard() {
             <h2 id="operations-title" className="section-title">{t('dashboard.text_60')}</h2>
             <Card className="mt-3">
               <OperationsDisclosure title={t('dashboard.title_5')} count={data.exceptionCount}
-                summary={data.queue.highExceptions ? `${data.queue.highExceptions} בחומרה גבוהה` : undefined}
+                summary={data.queue.highExceptions ? t('dashboard.highSeverity', { count: data.queue.highExceptions }) : undefined}
                 empty={t('dashboard.empty')}>
                 <div className="flex justify-end">
                   <Link to="/exceptions?status=open" className="btn-ghost min-h-11 text-xs">{t('dashboard.text_61')} <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
@@ -1067,17 +1083,17 @@ export default function Dashboard() {
                   <div className="mt-3 flex flex-wrap gap-x-4 border-t border-line-soft pt-2 text-xs">
                     {data.meta.suspectedDup > 0 && (
                       <Link to="/exceptions?type=duplicate_invoice,duplicate_payment" className="inline-flex min-h-11 items-center text-ink-muted hover:text-ink-mid active:text-ink">
-                        חשד לכפילות: <span className="num font-medium">{data.meta.suspectedDup}</span>
+                        {t('dashboard.suspectedDuplicates')} <span className="num font-medium">{data.meta.suspectedDup}</span>
                       </Link>
                     )}
                     {data.meta.unmatchedBank > 0 && (
                       <Link to="/bank?status=unmatched" className="inline-flex min-h-11 items-center text-ink-muted hover:text-ink-mid active:text-ink">
-                        תנועות בנק לא מותאמות: <span className="num font-medium">{data.meta.unmatchedBank}</span>
+                        {t('dashboard.unmatchedBank')} <span className="num font-medium">{data.meta.unmatchedBank}</span>
                       </Link>
                     )}
                     {data.meta.suggestedBank > 0 && (
                       <Link to="/bank?status=suggested" className="inline-flex min-h-11 items-center text-ink-muted hover:text-ink-mid active:text-ink">
-                        התאמות שממתינות לאישור: <span className="num font-medium">{data.meta.suggestedBank}</span>
+                        {t('dashboard.suggestedBank')} <span className="num font-medium">{data.meta.suggestedBank}</span>
                       </Link>
                     )}
                   </div>
@@ -1085,7 +1101,7 @@ export default function Dashboard() {
               </OperationsDisclosure>
 
               <OperationsDisclosure title={t('dashboard.title_6')} count={data.priceIncreaseCount}
-                summary={data.priceIncreases[0] ? `עלייה מרבית ${data.priceIncreases[0].pct.toFixed(1)}%` : undefined}
+                summary={data.priceIncreases[0] ? t('dashboard.largestIncrease', { percent: data.priceIncreases[0].pct.toFixed(1) }) : undefined}
                 empty={t('dashboard.empty_2')}>
                 <div className="flex justify-end">
                   <Link to="/prices?increases=1" className="btn-ghost min-h-11 text-xs">{t('dashboard.text_62')} <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
