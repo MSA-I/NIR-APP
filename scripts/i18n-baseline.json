@@ -49,7 +49,6 @@
     "src/components/Fab.tsx": 4,
     "src/components/FeedbackButton.tsx": 15,
     "src/components/GlobalSearch.tsx": 17,
-    "src/components/InvoiceLineReviewModal.tsx": 34,
     "src/components/Layout.tsx": 9,
     "src/components/NotificationBell.tsx": 3,
     "src/components/OfflineQueueStatus.tsx": 1,

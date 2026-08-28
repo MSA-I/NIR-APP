@@ -29,6 +29,9 @@ describe('invoice three-way match UI contract', () => {
     const modal = readFileSync(resolve(process.cwd(), 'src/components/InvoiceLineReviewModal.tsx'), 'utf8');
     expect(modal).toContain("supabase.rpc('record_invoice_line_evidence'");
     expect(modal).toContain("supabase.rpc('record_invoice_line_matches'");
-    expect(modal).toContain('שם אינו מזהה מוצר');
+    // Same split as the claim above: the modal renders the key, and the key still carries the
+    // sentence that tells a reviewer a name is not an identifier.
+    expect(modal).toContain("t('invoiceLineReview.text_4')");
+    expect(he.invoiceLineReview.text_4).toContain('שם אינו מזהה מוצר');
   });
 });

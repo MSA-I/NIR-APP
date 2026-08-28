@@ -93,7 +93,7 @@ export function InvoiceLineReviewModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { errorText, locale } = useT();
+  const { errorText, locale, t } = useT();
   const toast = useToast();
   const [lines, setLines] = useState<DraftLine[]>(
     assessment.lines.length ? assessment.lines.map(toDraft) : [toDraft()],
@@ -163,7 +163,7 @@ export function InvoiceLineReviewModal({
       || line.line_total == null || line.line_total < 0
     ));
     if (invalid || !evidenceReason.trim()) {
-      toast('יש להשלים את כל נתוני השורות ואת סיבת העדכון', 'error');
+      toast(t('invoiceLineReview.toast'), 'error');
       return;
     }
 
@@ -184,13 +184,13 @@ export function InvoiceLineReviewModal({
       toast(errorText(result.error.message), 'error');
       return;
     }
-    toast('שורות החשבונית נשמרו כגרסת ראיה חדשה');
+    toast(t('invoiceLineReview.toast_2'));
     onSaved();
   }
 
   async function saveMatches() {
     if (!assessment.evidence_batch_id || !matchReason.trim()) {
-      toast('יש להזין סיבה להקצאה הידנית', 'error');
+      toast(t('invoiceLineReview.toast_3'), 'error');
       return;
     }
     const matches: {
@@ -215,12 +215,12 @@ export function InvoiceLineReviewModal({
         }
       }
       if (Math.abs(allocated - line.quantity) > 0.000001) {
-        toast(`יש להקצות במלואה את הכמות בשורה ${line.line_number}`, 'error');
+        toast(t('invoiceLineReview.allocateWholeQuantity', { line: line.line_number }), 'error');
         return;
       }
     }
     if (!matches.length) {
-      toast('לא הוזנה הקצאה לשמירה', 'error');
+      toast(t('invoiceLineReview.toast_4'), 'error');
       return;
     }
 
@@ -238,7 +238,7 @@ export function InvoiceLineReviewModal({
       toast(errorText(result.error.message), 'error');
       return;
     }
-    toast('הקצאת השורות להזמנות נשמרה ונבדקה מחדש');
+    toast(t('invoiceLineReview.toast_5'));
     onSaved();
   }
 
@@ -246,16 +246,16 @@ export function InvoiceLineReviewModal({
     <Modal
       open
       onClose={onClose}
-      title="בדיקת שורות החשבונית"
+      title={t('invoiceLineReview.title')}
       busy={busy !== null}
-      statusMessage={busy === 'evidence' ? 'שומר גרסת ראיה חדשה' : busy === 'matches' ? 'שומר הקצאות להזמנות' : undefined}
+      statusMessage={busy === 'evidence' ? t('invoiceLineReview.text') : busy === 'matches' ? t('invoiceLineReview.text_2') : undefined}
     >
       <div className="space-y-6">
         <section aria-labelledby="invoice-line-evidence-title">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <h3 id="invoice-line-evidence-title" className="font-medium text-ink">שורות כפי שמופיעות בחשבונית</h3>
-              <p className="mt-0.5 text-xs text-ink-muted">שם אינו מזהה מוצר. יש להזין מק״ט ספק או ברקוד כאשר הם מופיעים במסמך.</p>
+              <h3 id="invoice-line-evidence-title" className="font-medium text-ink">{t('invoiceLineReview.text_3')}</h3>
+              <p className="mt-0.5 text-xs text-ink-muted">{t('invoiceLineReview.text_4')}</p>
             </div>
             <button
               type="button"
@@ -266,24 +266,24 @@ export function InvoiceLineReviewModal({
                 setEvidenceKey(crypto.randomUUID());
               }}
             >
-              <Plus size={ICON.sm} aria-hidden="true" /> הוספת שורה
+              <Plus size={ICON.sm} aria-hidden="true" /> {t('invoiceLineReview.addLine')}
             </button>
           </div>
 
           <div className="mt-3 space-y-3">
             {lines.map((line, index) => (
               <fieldset key={line.clientId} className="rounded-lg border border-line-soft p-3">
-                <legend className="px-1 text-xs font-medium text-ink-muted">שורה <span className="num">{index + 1}</span></legend>
+                <legend className="px-1 text-xs font-medium text-ink-muted">{t('invoiceLineReview.text_5')} <span className="num">{index + 1}</span></legend>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <label className="sm:col-span-2 lg:col-span-4"><span className="label">תיאור</span><input className="input" value={line.description} onChange={(event) => updateLine(index, 'description', event.target.value)} /></label>
-                  <label><span className="label">מק״ט ספק</span><input className="input num" dir="ltr" value={line.supplierSku} onChange={(event) => updateLine(index, 'supplierSku', event.target.value)} /></label>
-                  <label><span className="label">ברקוד</span><input className="input num" inputMode="numeric" dir="ltr" value={line.barcode} onChange={(event) => updateLine(index, 'barcode', event.target.value)} /></label>
-                  <label><span className="label">כמות</span><input className="input num" type="number" min="0" step="any" value={line.quantity} onChange={(event) => updateLine(index, 'quantity', event.target.value)} /></label>
-                  <label><span className="label">יחידה</span><input className="input" value={line.unit} onChange={(event) => updateLine(index, 'unit', event.target.value)} /></label>
-                  <label><span className="label">מחיר יחידה</span><input className="input num" type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(index, 'unitPrice', event.target.value)} /></label>
-                  <label><span className="label">הנחה</span><input className="input num" type="number" min="0" step="0.01" value={line.discountAmount} onChange={(event) => updateLine(index, 'discountAmount', event.target.value)} /></label>
-                  <label><span className="label">מע״מ (%)</span><input className="input num" type="number" min="0" max="100" step="0.01" value={line.vatRate} onChange={(event) => updateLine(index, 'vatRate', event.target.value)} /></label>
-                  <label><span className="label">סך שורה לפני מע״מ</span><input className="input num" type="number" min="0" step="0.01" value={line.lineTotal} onChange={(event) => updateLine(index, 'lineTotal', event.target.value)} /></label>
+                  <label className="sm:col-span-2 lg:col-span-4"><span className="label">{t('invoiceLineReview.updateLine')}</span><input className="input" value={line.description} onChange={(event) => updateLine(index, 'description', event.target.value)} /></label>
+                  <label><span className="label">{t('invoiceLineReview.updateLine_2')}</span><input className="input num" dir="ltr" value={line.supplierSku} onChange={(event) => updateLine(index, 'supplierSku', event.target.value)} /></label>
+                  <label><span className="label">{t('invoiceLineReview.updateLine_3')}</span><input className="input num" inputMode="numeric" dir="ltr" value={line.barcode} onChange={(event) => updateLine(index, 'barcode', event.target.value)} /></label>
+                  <label><span className="label">{t('invoiceLineReview.updateLine_4')}</span><input className="input num" type="number" min="0" step="any" value={line.quantity} onChange={(event) => updateLine(index, 'quantity', event.target.value)} /></label>
+                  <label><span className="label">{t('invoiceLineReview.updateLine_5')}</span><input className="input" value={line.unit} onChange={(event) => updateLine(index, 'unit', event.target.value)} /></label>
+                  <label><span className="label">{t('invoiceLineReview.updateLine_6')}</span><input className="input num" type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(index, 'unitPrice', event.target.value)} /></label>
+                  <label><span className="label">{t('invoiceLineReview.updateLine_7')}</span><input className="input num" type="number" min="0" step="0.01" value={line.discountAmount} onChange={(event) => updateLine(index, 'discountAmount', event.target.value)} /></label>
+                  <label><span className="label">{t('invoiceLineReview.updateLine_8')}</span><input className="input num" type="number" min="0" max="100" step="0.01" value={line.vatRate} onChange={(event) => updateLine(index, 'vatRate', event.target.value)} /></label>
+                  <label><span className="label">{t('invoiceLineReview.updateLine_9')}</span><input className="input num" type="number" min="0" step="0.01" value={line.lineTotal} onChange={(event) => updateLine(index, 'lineTotal', event.target.value)} /></label>
                 </div>
                 {lines.length > 1 && (
                   <button
@@ -295,54 +295,54 @@ export function InvoiceLineReviewModal({
                       setEvidenceKey(crypto.randomUUID());
                     }}
                   >
-                    <Trash2 size={ICON.sm} aria-hidden="true" /> הסרת השורה מהגרסה החדשה
+                    <Trash2 size={ICON.sm} aria-hidden="true" /> {t('invoiceLineReview.removeLine')}
                   </button>
                 )}
               </fieldset>
             ))}
           </div>
-          <label className="mt-3 block"><span className="label">סיבת תיקון השורות</span><textarea className="input" rows={2} value={evidenceReason} onChange={(event) => { setEvidenceReason(event.target.value); setEvidenceKey(crypto.randomUUID()); }} /></label>
+          <label className="mt-3 block"><span className="label">{t('invoiceLineReview.setEvidenceReason')}</span><textarea className="input" rows={2} value={evidenceReason} onChange={(event) => { setEvidenceReason(event.target.value); setEvidenceKey(crypto.randomUUID()); }} /></label>
           <div className="mt-3 flex justify-end">
-            <button type="button" className="btn-primary" disabled={busy !== null} onClick={() => void saveEvidence()}>שמירת שורות ובדיקה מחדש</button>
+            <button type="button" className="btn-primary" disabled={busy !== null} onClick={() => void saveEvidence()}>{t('invoiceLineReview.saveEvidence')}</button>
           </div>
         </section>
 
         <section className="border-t border-line-soft pt-5" aria-labelledby="invoice-line-match-title">
-          <h3 id="invoice-line-match-title" className="font-medium text-ink">הקצאה להזמנות כאשר קיימת עמימות</h3>
+          <h3 id="invoice-line-match-title" className="font-medium text-ink">{t('invoiceLineReview.text_6')}</h3>
           {ambiguousLines.length === 0 ? (
-            <Note tone="info">אין כרגע שורה עם יותר מהתאמת הזמנה אפשרית אחת. אם מוצר לא זוהה, יש לתקן תחילה את המק״ט או הברקוד בשורות.</Note>
+            <Note tone="info">{t('invoiceLineReview.text_7')}</Note>
           ) : (
             <div className="mt-3 space-y-4">
               {ambiguousLines.map((line) => (
                 <fieldset key={line.id} className="rounded-lg border border-line-soft p-3">
-                  <legend className="px-1 text-sm font-medium">שורה <span className="num">{line.line_number}</span> · {line.description}</legend>
-                  <p className="mb-2 text-xs text-ink-muted">יש להקצות יחד את מלוא הכמות: <span className="num">{formatQuantity(line.quantity, line.unit, locale)}</span></p>
+                  <legend className="px-1 text-sm font-medium">{t('invoiceLineReview.text_8')} <span className="num">{line.line_number}</span> · {line.description}</legend>
+                  <p className="mb-2 text-xs text-ink-muted">{t('invoiceLineReview.formatQuantity')} <span className="num">{formatQuantity(line.quantity, line.unit, locale)}</span></p>
                   <div className="space-y-2">
                     {(candidatesByLine.get(line.id) ?? []).map((candidate) => {
                       const key = `${line.id}:${candidate.purchase_order_item_id}`;
                       return (
                         <label key={candidate.purchase_order_item_id} className="grid min-h-11 items-center gap-2 rounded-lg bg-surface-sunken px-3 py-2 sm:grid-cols-[1fr_8rem]">
                           <span className="text-sm">
-                            הזמנה <span className="num">#{orderNumbers[candidate.purchase_order_id] ?? '—'}</span>
-                            <span className="block text-xs text-ink-muted">הוזמן <span className="num">{formatQuantity(candidate.ordered_quantity, candidate.unit, locale)}</span> · התקבל <span className="num">{formatQuantity(candidate.received_quantity, candidate.unit, locale)}</span> · <span className="num">{fmtMoneyExact(candidate.unit_price)}</span> ל־{formatUnit(candidate.unit, locale)}</span>
+                            {t('invoiceLineReview.orderWord')} <span className="num">#{orderNumbers[candidate.purchase_order_id] ?? '—'}</span>
+                            <span className="block text-xs text-ink-muted">{t('invoiceLineReview.formatQuantity_2')} <span className="num">{formatQuantity(candidate.ordered_quantity, candidate.unit, locale)}</span> {t('invoiceLineReview.formatQuantity_3')} <span className="num">{formatQuantity(candidate.received_quantity, candidate.unit, locale)}</span> · <span className="num">{fmtMoneyExact(candidate.unit_price)}</span> {t('invoiceLineReview.perUnit', { unit: formatUnit(candidate.unit, locale) })}</span>
                           </span>
-                          <span><input aria-label={`כמות להקצאה להזמנה ${orderNumbers[candidate.purchase_order_id] ?? ''}`} className="input num" type="number" min="0" step="any" value={allocations[key] ?? ''} onChange={(event) => { setAllocations((current) => ({ ...current, [key]: event.target.value })); setMatchKey(crypto.randomUUID()); }} /></span>
+                          <span><input aria-label={t('invoiceLineReview.allocationAria', { number: orderNumbers[candidate.purchase_order_id] ?? '' })} className="input num" type="number" min="0" step="any" value={allocations[key] ?? ''} onChange={(event) => { setAllocations((current) => ({ ...current, [key]: event.target.value })); setMatchKey(crypto.randomUUID()); }} /></span>
                         </label>
                       );
                     })}
                   </div>
                 </fieldset>
               ))}
-              <label className="block"><span className="label">סיבת ההקצאה הידנית</span><textarea className="input" rows={2} value={matchReason} onChange={(event) => { setMatchReason(event.target.value); setMatchKey(crypto.randomUUID()); }} /></label>
+              <label className="block"><span className="label">{t('invoiceLineReview.setMatchReason')}</span><textarea className="input" rows={2} value={matchReason} onChange={(event) => { setMatchReason(event.target.value); setMatchKey(crypto.randomUUID()); }} /></label>
               <div className="flex justify-end">
-                <button type="button" className="btn-primary" disabled={busy !== null} onClick={() => void saveMatches()}>שמירת הקצאות ובדיקה מחדש</button>
+                <button type="button" className="btn-primary" disabled={busy !== null} onClick={() => void saveMatches()}>{t('invoiceLineReview.saveMatches')}</button>
               </div>
             </div>
           )}
         </section>
 
         <div className="flex justify-end border-t border-line-soft pt-4">
-          <button type="button" className="btn-secondary" disabled={busy !== null} onClick={onClose}>סגירה</button>
+          <button type="button" className="btn-secondary" disabled={busy !== null} onClick={onClose}>{t('invoiceLineReview.text_9')}</button>
         </div>
       </div>
     </Modal>
