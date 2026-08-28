@@ -20,7 +20,7 @@ const cucumber = product('p2', 'מלפפונים');
 
 const offer: SupplierProduct = {
   id: 'sp1', org_id: 'org', supplier_id: 's1', product_id: 'p1',
-  current_price: 10, previous_price: null, price_effective_date: '2026-08-01',
+  current_price: 10, previous_price: null, currency: 'ILS', price_effective_date: '2026-08-01',
   available: true, supplier_sku: null, min_qty: null, package_size: null,
   updated_at: '2026-08-01T00:00:00Z',
 };

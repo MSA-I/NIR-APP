@@ -312,9 +312,17 @@ function supplierOffer(input: SplitInput, productId: string, supplierId: string)
  * and `costDelta` for such a move would be the subtraction of unlike things. The panel offers a
  * move only between suppliers who price in the same money; the alternative offer stays visible on
  * the line itself, where the person can see its currency and decide.
+ *
+ * A source supplier that is no longer in `input.suppliers` — the `pin_supplier_gone` case — has no
+ * currency to conflict with, and moving off it is the whole repair for that state. There is
+ * nothing to compare, so the move stays on offer: this guard exists to stop a MEANINGLESS
+ * subtraction, not to strand a line whose supplier disappeared.
  */
-const sameCurrency = (input: SplitInput, a: string, b: string) =>
-  input.suppliers.get(a)?.currency === input.suppliers.get(b)?.currency;
+const sameCurrency = (input: SplitInput, a: string, b: string) => {
+  const from = input.suppliers.get(a);
+  if (!from) return true;
+  return from.currency === input.suppliers.get(b)?.currency;
+};
 
 const optionBucket = (option: ResolutionOption) => {
   if (option.kind === 'increase_qty') return option.clearsMinimum ? 0 : 1;

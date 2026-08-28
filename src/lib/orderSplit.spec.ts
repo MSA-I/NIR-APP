@@ -17,9 +17,12 @@ const CHEAP = '00000000-0000-0000-0000-000000000001';
 const EXPENSIVE = '00000000-0000-0000-0000-000000000002';
 const THIRD = '00000000-0000-0000-0000-000000000003';
 
-const supplier = (id: string, minOrderAmount: number | null = null): SplitSupplier => ({
+const supplier = (
+  id: string, minOrderAmount: number | null = null, currency = 'ILS',
+): SplitSupplier => ({
   id,
   name: `Supplier ${id.at(-1)}`,
+  currency,
   minOrderAmount,
 });
 const product = (id: string): Product => ({
@@ -45,9 +48,12 @@ const pinned = (productId: string, supplierId: string, qty = 1): SplitLine => ({
   qty,
   assignment: { mode: 'pinned', supplierId },
 });
-const offer = (supplierId: string, unitPrice: number, minQty: number | null = null): SplitOffer => ({
+const offer = (
+  supplierId: string, unitPrice: number, minQty: number | null = null, currency = 'ILS',
+): SplitOffer => ({
   supplierId,
   unitPrice,
+  currency,
   minQty,
 });
 const splitInput = (
@@ -133,7 +139,9 @@ assert.equal(tie.groups[0].supplier.id, CHEAP);
 // 10. Line totals use the same half-cent path as orderSavings/Postgres.
 const rounded = resolve([auto('a', 2.5)], [['a', [offer(CHEAP, 4.03)]]]);
 assert.equal(rounded.groups[0].lines[0].lineTotal, 10.08);
-assert.equal(rounded.total, 10.08);
+// One currency in this basket, so exactly one total — and it says which currency it is in.
+assert.deepEqual(rounded.totalsByCurrency, [{ currency: 'ILS', amount: 10.08 }]);
+assert.equal(rounded.basketCurrency, 'ILS');
 
 // Savings contribution is measured against the one-supplier baseline and reconciles exactly.
 assert.equal(automatic.groups.reduce((sum, group) => sum + group.savingsContribution!, 0), automatic.savings.savings);

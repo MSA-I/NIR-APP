@@ -43,7 +43,10 @@ vi.mock('../lib/supabase', async () => {
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
     profile: { id: 'u-1', role: 'owner', full_name: 'בודק', org_id: 'org-1' },
-    org: { settings: {} },
+    // The organisation states the currency it keeps its own books in (0217). Every screen
+    // reads it for DISPLAY ORDER and for which currency a single-figure tile is about; it is
+    // never a conversion target.
+    org: { settings: {}, base_currency: 'ILS' },
     session: {},
     organizationAccess: { mode: 'active', canWrite: true },
   }),

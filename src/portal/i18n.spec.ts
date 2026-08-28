@@ -16,8 +16,12 @@ describe('supplier portal locale', () => {
 
   it('formats dates, ILS amounts, and quantities for the selected locale', () => {
     expect(formatPortalDate('en', '2026-08-25')).toBe('08/25/2026');
-    expect(formatPortalMoney('en', 10)).toContain('10.00');
-    expect(formatPortalMoney('en', 10)).toContain('₪');
+    expect(formatPortalMoney('en', 10, 'ILS')).toContain('10.00');
+    expect(formatPortalMoney('en', 10, 'ILS')).toContain('₪');
+    // The supplier sees the currency the ORDER was issued in, in their own locale's number
+    // shape (0217, #277). The locale decides how the figure reads; it never decides the money.
+    expect(formatPortalMoney('en', 10, 'USD')).toContain('$');
+    expect(formatPortalMoney('he', 10, 'USD')).toContain('$');
     expect(formatPortalQuantity('en', 1.5, 'kg')).toBe('1.5 kg');
     expect(formatPortalQuantity('he', 5, 'kg')).toContain('5');
   });

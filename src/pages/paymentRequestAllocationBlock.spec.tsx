@@ -39,7 +39,7 @@ vi.mock('../lib/supabase', async () => {
 const auth = vi.hoisted(() => ({
   current: {
     profile: { id: 'user-1', org_id: 'org-test', role: 'office' } as { id: string; org_id: string; role: string },
-    org: { vat_rate: 18 },
+    org: { vat_rate: 18, base_currency: 'ILS' },
     session: {},
     organizationAccess: { mode: 'active', canWrite: true },
   },
@@ -53,7 +53,7 @@ const SIGNALS_ENDPOINT = `${SUPABASE_URL}/rest/v1/rpc/payment_request_financial_
 const SIMILAR_ENDPOINT = `${SUPABASE_URL}/rest/v1/payment_requests`;
 
 const PR = {
-  id: 'pr-1', org_id: 'org-test', unit_id: 'unit-1', number: 41, supplier_id: 'sup-1', amount: 1000,
+  id: 'pr-1', org_id: 'org-test', unit_id: 'unit-1', number: 41, supplier_id: 'sup-1', amount: 1000, currency: 'ILS',
   due_date: null, status: 'pending_approval' as const, notes: null,
   created_by: 'user-1', approved_by: null, approved_at: null,
   open_credit_override_total: null, open_credit_override_reason: null, open_credit_override_at: null,
@@ -64,7 +64,12 @@ const PR = {
 const BASE_SIGNALS = {
   requested_invoice_count: 1, visible_invoice_count: 1, paid_invoice_count: 0,
   unapproved_invoice_count: 0, amount_matches_open_balance: true,
-  similar_bank_transfer_check: 'unavailable', open_credit_total: 0,
+  similar_bank_transfer_check: 'unavailable',
+  // 0219: the signals name the currency the whole answer is in, and report open credits one
+  // entry per currency — a dollar credit does not offset a shekel request, so there is no one
+  // figure to report.
+  currency: 'ILS',
+  open_credit_total_by_currency: [],
   over_allocated_invoice_count: 0,
 };
 
@@ -75,7 +80,7 @@ beforeAll(() => {
 beforeEach(() => {
   auth.current = {
     profile: { id: 'user-1', org_id: 'org-test', role: 'office' },
-    org: { vat_rate: 18 },
+    org: { vat_rate: 18, base_currency: 'ILS' },
     session: {},
     organizationAccess: { mode: 'active', canWrite: true },
   };
@@ -109,7 +114,7 @@ const renderDetail = () => render(wrap(
 
 describe('PaymentRequestDetail — an allocation that no longer fits', () => {
   it('closes both approval routes and names the credit as the cause', async () => {
-    useScreen({ over_allocated_invoice_count: 1, open_credit_total: 250 });
+    useScreen({ over_allocated_invoice_count: 1, open_credit_total_by_currency: [{ currency: 'ILS', amount: 250 }] });
     renderDetail();
 
     expect(await screen.findByText(/לא ניתן לאשר את הדרישה במצבה הנוכחי/)).toBeTruthy();
@@ -140,7 +145,7 @@ describe('PaymentRequestDetail — an allocation that no longer fits', () => {
   });
 
   it('leaves the exceptional route alone when the only finding is an open credit', async () => {
-    useScreen({ open_credit_total: 250 });
+    useScreen({ open_credit_total_by_currency: [{ currency: 'ILS', amount: 250 }] });
     renderDetail();
 
     expect(await screen.findByText(/לספק קיימים זיכויים פתוחים שטרם קוזזו/)).toBeTruthy();

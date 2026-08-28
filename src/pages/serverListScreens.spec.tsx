@@ -35,7 +35,10 @@ vi.mock('../lib/supabase', async () => {
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
     profile: { role: 'owner', full_name: 'בודק' },
-    org: { settings: {} },
+    // The organisation states the currency it keeps its own books in (0217). Every screen
+    // reads it for DISPLAY ORDER and for which currency a single-figure tile is about; it is
+    // never a conversion target.
+    org: { settings: {}, base_currency: 'ILS' },
     session: {},
     organizationAccess: { mode: 'active', canWrite: true },
   }),
@@ -135,10 +138,11 @@ function renderAt(path: string, route: string, element: ReactNode) {
  * he-IL currency joins the figure to ₪ with a NBSP; the queries collapse that to a plain space
  * on the element side only, so the expected string has to make the same trip to compare equal.
  */
-const money = (v: number) => fmtMoneyExact(v).replace(/\s+/g, ' ');
+const money = (v: number) => fmtMoneyExact(v, 'ILS').replace(/\s+/g, ' ');
 
 const payment = (i: number) => ({
-  id: `pay-${i}`, number: i + 1, amount: 100, paid_date: '2026-05-10', method: null,
+  id: `pay-${i}`, number: i + 1, amount: 100, currency: 'ILS',
+  settlement_amount: null, settlement_currency: null, paid_date: '2026-05-10', method: null,
   reference: `ref-${i}`, notes: null, supplier_id: `sup-${i}`,
   supplier: { name: `ספק ${i}` },
   // One readable allocation and one whose invoice RLS/soft-delete hid: both are money, so both
@@ -150,12 +154,12 @@ const payment = (i: number) => ({
   executor: { full_name: `מבצע ${i}` },
 });
 const invoiceRow = (i: number) => ({
-  id: `inv-${i}`, invoice_number: `N-${i}`, invoice_date: '2026-05-10', total_amount: 100,
+  id: `inv-${i}`, invoice_number: `N-${i}`, invoice_date: '2026-05-10', total_amount: 100, currency: 'ILS',
   review_status: 'approved', payment_status: 'unpaid', export_status: 'not_sent',
   supplier_id: `sup-${i}`, supplier: { name: `ספק ${i}` }, order_links: [], deleted_at: null,
 });
 const bankTx = (i: number) => ({
-  id: `tx-${i}`, tx_date: '2026-07-10', description: `העברה ${i}`, amount: 100,
+  id: `tx-${i}`, tx_date: '2026-07-10', description: `העברה ${i}`, amount: 100, currency: 'ILS',
   reference: null, status: 'unmatched', supplier_id: null, supplier: null,
 });
 
@@ -248,11 +252,11 @@ describe('/payments — server mode', () => {
 describe('/invoices — server mode', () => {
   const useBalances = () => {
     const seen: Seen[] = [];
-    server.use(http.get(`${SUPABASE_URL}/rest/v1/invoice_balances`, ({ request }) => {
+    server.use(http.get(`${SUPABASE_URL}/rest/v1/invoice_balances_by_currency`, ({ request }) => {
       const url = new URL(request.url);
       seen.push({ url, method: request.method });
       const list = url.searchParams.get('invoice_id')?.replace(/^in\.\(|\)$/g, '').split(',') ?? [];
-      return HttpResponse.json(list.map((id) => ({ invoice_id: id, balance: 0 })));
+      return HttpResponse.json(list.map((id) => ({ invoice_id: id, currency: 'ILS', balance_in_currency: 0 })));
     }));
     return seen;
   };

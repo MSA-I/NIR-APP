@@ -27,6 +27,7 @@ const input = {
     invoices: [{
       supplier: { name: 'ספק אחד' }, invoice_number: 'INV-1', invoice_date: '2026-08-01',
       amount_before_vat: 100, vat_amount: 18, total_amount: 118,
+      currency: 'ILS',
       review_status: 'approved', payment_status: 'unpaid',
       balance: { credited_amount: 0 },
     }],
@@ -288,36 +289,60 @@ describe('safeMonthISO', () => {
 });
 
 describe('monthlyReportScreenTotals — אפס שנמדד מול אפס שלא נמדד', () => {
-  const invoice = (total: number, paid = 'unpaid') =>
-    ({ total_amount: total, amount_before_vat: total / 1.18, vat_amount: total - total / 1.18, payment_status: paid });
+  const invoice = (total: number, paid = 'unpaid', currency = 'ILS') =>
+    ({ total_amount: total, amount_before_vat: total / 1.18, vat_amount: total - total / 1.18, currency, payment_status: paid });
 
-  it('חודש ריק — הסכומים הם null (המסך יציג —), הספירות הן 0', () => {
+  it('חודש ריק — אין סכומים כלל (המסך יציג —), הספירות הן 0', () => {
     const totals = monthlyReportScreenTotals({ invoices: [], payments: [], bank: [] });
-    expect(totals.invoices).toBeNull();
-    expect(totals.beforeVat).toBeNull();
-    expect(totals.vat).toBeNull();
-    expect(totals.paid).toBeNull();
+    // An EMPTY LIST, not a null and not a zero: there is no currency with a total in it, which is
+    // the same claim the old `null` made and the screen still renders as an em dash.
+    expect(totals.invoices).toEqual([]);
+    expect(totals.beforeVat).toEqual([]);
+    expect(totals.vat).toEqual([]);
+    expect(totals.paid).toEqual([]);
     expect(totals.hasInvoices).toBe(false);
     // A count over an empty universe was still taken. It stays a number.
     expect(totals.unpaidCount).toBe(0);
     expect(totals.unmatchedBank).toBe(0);
     expect(totals.suggestedBank).toBe(0);
-    expect(fmtMoneyExact(totals.vat)).toBe('—');
   });
 
-  it('חודש שיש בו חשבוניות שסכומן 0 — אפס אמיתי, לא null', () => {
+  it('חודש שיש בו חשבוניות שסכומן 0 — אפס אמיתי, לא היעדר', () => {
     // The half a blanket null-conversion would have destroyed: rows exist, they sum to zero.
     const totals = monthlyReportScreenTotals({ invoices: [invoice(0)], payments: [], bank: [] });
-    expect(totals.invoices).toBe(0);
+    expect(totals.invoices).toEqual([{ currency: 'ILS', amount: 0 }]);
     expect(totals.hasInvoices).toBe(true);
-    expect(fmtMoneyExact(totals.invoices)).not.toBe('—');
-    expect(fmtMoneyExact(totals.invoices)).toContain('0.00');
+    expect(fmtMoneyExact(totals.invoices[0].amount, 'ILS')).toContain('0.00');
   });
 
   it('תשלומים וחשבוניות נמדדים בנפרד — חודש עם חשבוניות ובלי תשלומים', () => {
     const totals = monthlyReportScreenTotals({ invoices: [invoice(118)], payments: [], bank: [] });
-    expect(totals.invoices).toBe(118);
-    expect(totals.paid).toBeNull();
+    expect(totals.invoices).toEqual([{ currency: 'ILS', amount: 118 }]);
+    expect(totals.paid).toEqual([]);
     expect(totals.unpaidCount).toBe(1);
+  });
+
+  /* OPEN-DECISIONS #277, and the sentence the whole campaign is measured against: a screen that
+     adds ₪12,400 and $3,100 into one number shows a false figure on a screen decisions are made
+     from. The accountant's month is where that number would have appeared. */
+  it('חודש עם חשבוניות בשני מטבעות — שני סכומים, לא סכום אחד', () => {
+    const totals = monthlyReportScreenTotals({
+      invoices: [invoice(12400), invoice(3100, 'unpaid', 'USD')],
+      payments: [{ amount: 500, currency: 'ILS' }, { amount: 80, currency: 'USD' }],
+      bank: [],
+    });
+
+    expect(totals.invoices).toEqual([
+      { currency: 'ILS', amount: 12400 },
+      { currency: 'USD', amount: 3100 },
+    ]);
+    expect(totals.paid).toEqual([
+      { currency: 'ILS', amount: 500 },
+      { currency: 'USD', amount: 80 },
+    ]);
+    // The counts are counts: an invoice is one invoice in any currency.
+    expect(totals.unpaidCount).toBe(2);
+    // And nothing anywhere in the answer equals 15,500.
+    expect(totals.invoices.some((entry) => entry.amount === 15500)).toBe(false);
   });
 });

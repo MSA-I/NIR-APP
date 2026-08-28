@@ -202,7 +202,7 @@ export default function PaymentRequests() {
 function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
   presetInvoiceId: string | null; onClose: () => void; onSaved: () => void;
 }) {
-  const { profile } = useAuth();
+  const { profile, org } = useAuth();
   const toast = useToast();
   const [supplierId, setSupplierId] = useState('');
   const [chosen, setChosen] = useState<Record<string, number>>({}); // invoice_id -> allocation
@@ -463,7 +463,11 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
 
         <SubPanel className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <span className="text-sm text-ink-soft">סכום הדרישה</span>
-          <span className="kpi-value-compact num">{fmtMoneyExact(amount, requestCurrency)}</span>
+          {/* Before anything is ticked there is no invoice to take a currency from, and the
+              request would be built in the organisation's own — so that is what the zero is in.
+              The CHECKBOX guard above still keys off `requestCurrency`, which stays null until a
+              real selection fixes it; nothing is refused on the strength of a default. */}
+          <span className="kpi-value-compact num">{fmtMoneyExact(amount, requestCurrency ?? org?.base_currency)}</span>
         </SubPanel>
 
         <div><label className="label" htmlFor="payment-request-notes">הערות</label><input id="payment-request-notes" className="input" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>

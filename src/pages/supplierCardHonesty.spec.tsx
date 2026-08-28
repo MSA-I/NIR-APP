@@ -31,7 +31,7 @@ const authState = vi.hoisted(() => ({ role: 'owner' as string }));
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
     profile: { id: 'user-1', role: authState.role, org_id: 'org-test', full_name: 'בודק' },
-    org: { id: 'org-test', settings: {} },
+    org: { id: 'org-test', settings: {}, base_currency: 'ILS' },
     session: {},
     roleLabels: {},
     organizationAccess: { mode: 'active', canWrite: true },
@@ -45,6 +45,7 @@ const SUPPLIER = {
   id: 'sup-1', org_id: 'org-test', name: 'אחים כהן', tax_id: null, contact_name: null,
   phone: '02-5891000', whatsapp: null, email: null, address: null, min_order_amount: 1250,
   payment_terms: null, notes: null, status: 'active', delivery_days: [], cutoff_time: null,
+  default_currency: 'ILS', country_code: 'IL',
   deleted_at: null, created_at: '2026-07-01', updated_at: '2026-07-27',
   rating: null, rating_updated_at: null, rating_note: null,
 };
@@ -52,7 +53,8 @@ const SUPPLIER = {
 const METRICS = {
   supplier_id: 'sup-1', otd_samples: 0, on_time_pct: null, avg_lead_days: null,
   open_exceptions: null, exceptions_lifetime: null, open_credits: null,
-  open_credits_amount: null, price_changes_window: null, priced_items: null,
+  open_credits_amount: null, open_credits_currency: null,
+  price_changes_window: null, priced_items: null,
 };
 
 /** Wire the card's whole Promise.all; returns per-endpoint call ledgers. */
@@ -70,12 +72,13 @@ function wireCard({ consolidatedCount = 0 } = {}) {
     })),
     http.get(`${SUPABASE_URL}/rest/v1/payments`, () => {
       calls.payments += 1;
-      return HttpResponse.json([{ id: 'pay-1', paid_date: '2026-08-02', amount: 150, method: null, reference: null }]);
+      return HttpResponse.json([{ id: 'pay-1', paid_date: '2026-08-02', amount: 150, currency: 'ILS', method: null, reference: null }]);
     }),
     http.get(`${SUPABASE_URL}/rest/v1/credit_requests`, () => HttpResponse.json([])),
-    http.get(`${SUPABASE_URL}/rest/v1/supplier_balances`, () => {
+    // 0218: one row per supplier AND currency, so a supplier owed in two currencies returns two.
+    http.get(`${SUPABASE_URL}/rest/v1/supplier_balances_by_currency`, () => {
       calls.balances += 1;
-      return HttpResponse.json({ supplier_id: 'sup-1', open_balance: 150 });
+      return HttpResponse.json([{ supplier_id: 'sup-1', currency: 'ILS', open_balance_in_currency: 150 }]);
     }),
     http.get(`${SUPABASE_URL}/rest/v1/supplier_metrics`, () => HttpResponse.json(METRICS)),
     http.get(`${SUPABASE_URL}/rest/v1/supplier_products`, () => HttpResponse.json([])),
@@ -113,7 +116,7 @@ describe('SupplierCard — role-honest financial display', () => {
     expect(calls.balances).toBe(0);
     // The balance tile is a permission message, not a measured zero.
     expect(screen.getByText('זמין לבעלים בלבד')).toBeInTheDocument();
-    expect(screen.queryByText(fmtMoneyExact(0))).toBeNull();
+    expect(screen.queryByText(fmtMoneyExact(0, 'ILS'))).toBeNull();
     // The tab refuses to claim a count it cannot know.
     const paymentsTab = screen.getByRole('tab', { name: 'תשלומים (—)' });
     await user.click(paymentsTab);

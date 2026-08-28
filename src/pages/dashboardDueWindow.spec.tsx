@@ -38,7 +38,10 @@ vi.mock('../lib/supabase', async () => {
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
     profile: { id: 'u-1', role: 'owner', full_name: 'בודק', org_id: 'org-1' },
-    org: { settings: {} },
+    // The organisation states the currency it keeps its own books in (0217). Every screen
+    // reads it for DISPLAY ORDER and for which currency a single-figure tile is about; it is
+    // never a conversion target.
+    org: { settings: {}, base_currency: 'ILS' },
     session: {},
     organizationAccess: { mode: 'active', canWrite: true },
   }),
@@ -73,27 +76,38 @@ beforeAll(() => {
   }
 });
 
+/**
+ * The facts as the snapshot RPC returns them since 0218: the money figures are a list per
+ * currency, the counts stay counts. Every case below is shekel-only — a due window holding two
+ * currencies is two windows, and the tile renders a line each.
+ */
 type PaymentRequestFacts = {
   dueDateCoverage: number;
   activeCount: number;
   overdue: number | null;
   dueToday: number | null;
-  overdueAmount: number | null;
-  dueWithin7Amount: number | null;
+  overdueAmountByCurrency: { currency: string; amount: number }[] | null;
+  dueWithin7AmountByCurrency: { currency: string; amount: number }[] | null;
   dueWithin7Count: number | null;
 };
+
+/** `null` stays null — unmeasured; a number becomes the one-currency list the server sends. */
+const ils = (amount: number | null) => (amount == null ? null : [{ currency: 'ILS', amount }]);
 
 /** Everything on the screen except the payment-request facts under test answers empty. */
 function snapshotWith(paymentRequests: PaymentRequestFacts) {
   return {
-    money: { openBalance: null, openInvoiceCount: 0 },
+    money: { openBalanceByCurrency: null, openInvoiceCount: 0 },
     paymentRequests: { pendingApproval: 0, drafts: 0, ...paymentRequests },
-    credits: { count: 0, sum: null },
+    credits: { count: 0, sumByCurrency: null },
     bank: { unmatched: 0, suggested: 0 },
     invoices: { pendingApproval: 0, toReview: 0, notSent: 0 },
-    openOrders: { count: 0, committed: null, remaining: 0, noDate: 0, late: 0, awaitingConfirmation: 0 },
+    openOrders: {
+      count: 0, committedByCurrency: null, remainingByCurrency: [],
+      noDate: 0, late: 0, awaitingConfirmation: 0,
+    },
     openSupplierCount: 0,
-    topBalances: [],
+    topBalancesByCurrency: [],
   };
 }
 
@@ -128,17 +142,17 @@ describe('לתשלום בשבוע הקרוב — הכסף, לא כיסוי הת�
   it('מציג סכום כולל ומפריד ממנו את מה שכבר באיחור', async () => {
     const tile = await renderWith({
       dueDateCoverage: 2, activeCount: 3, overdue: 1, dueToday: 0,
-      overdueAmount: 10, dueWithin7Amount: 35, dueWithin7Count: 1,
+      overdueAmountByCurrency: ils(10), dueWithin7AmountByCurrency: ils(35), dueWithin7Count: 1,
     });
 
     // The headline is the whole obligation: what is late PLUS what falls due inside the window.
     // "מתוכם" below only holds if the two lines are parts of this figure.
-    expect(tile.textContent).toContain(fmtMoneyRounded(45));
+    expect(tile.textContent).toContain(fmtMoneyRounded(45, 'ILS'));
     // The WORD carries the meaning. The alert ink beside it is a repetition, not the carrier —
     // strip the colour and the sentence still says which half of the money is late.
     expect(tile.textContent).toContain('מתוכם באיחור');
-    expect(tile.textContent).toContain(fmtMoneyRounded(10));
-    expect(tile.textContent).toContain(fmtMoneyRounded(35));
+    expect(tile.textContent).toContain(fmtMoneyRounded(10, 'ILS'));
+    expect(tile.textContent).toContain(fmtMoneyRounded(35, 'ILS'));
     // Each figure names how many requests stand behind it, so the amount is auditable.
     expect(tile.textContent).toMatch(/1 דרישות/);
   });
@@ -151,7 +165,7 @@ describe('לתשלום בשבוע הקרוב — הכסף, לא כיסוי הת�
   it('פס הפיצול מחלק לפי הכסף שחייב לזוז, לא לפי מספר הדרישות', async () => {
     const tile = await renderWith({
       dueDateCoverage: 2, activeCount: 3, overdue: 1, dueToday: 0,
-      overdueAmount: 10, dueWithin7Amount: 30, dueWithin7Count: 4,
+      overdueAmountByCurrency: ils(10), dueWithin7AmountByCurrency: ils(30), dueWithin7Count: 4,
     });
 
     const segments = [...tile.querySelectorAll('.split-bar > span')].map((s) => (s as HTMLElement).style.width);
@@ -163,22 +177,22 @@ describe('לתשלום בשבוע הקרוב — הכסף, לא כיסוי הת�
   it('חלון בלי כסף — אין פס, ולא פס בחלוקת אפס', async () => {
     const tile = await renderWith({
       dueDateCoverage: 2, activeCount: 3, overdue: 0, dueToday: 0,
-      overdueAmount: 0, dueWithin7Amount: 0, dueWithin7Count: 0,
+      overdueAmountByCurrency: ils(0), dueWithin7AmountByCurrency: ils(0), dueWithin7Count: 0,
     });
 
     // Requests exist and are dated, so the tile still shows ₪0 rather than the empty sentence.
     // The bar has nothing to divide by: it must be absent, not a NaN% pair of widths.
-    expect(tile.textContent).toContain(fmtMoneyRounded(0));
+    expect(tile.textContent).toContain(fmtMoneyRounded(0, 'ILS'));
     expect(tile.querySelector('.split-bar')).toBeNull();
   });
 
   it('חלון ריק מעל דרישות מתוארכות הוא אפס מדוד, לא "—"', async () => {
     const tile = await renderWith({
       dueDateCoverage: 2, activeCount: 3, overdue: 2, dueToday: 0,
-      overdueAmount: 45, dueWithin7Amount: 0, dueWithin7Count: 0,
+      overdueAmountByCurrency: ils(45), dueWithin7AmountByCurrency: ils(0), dueWithin7Count: 0,
     });
 
-    expect(tile.textContent).toContain(fmtMoneyRounded(0));
+    expect(tile.textContent).toContain(fmtMoneyRounded(0, 'ILS'));
     expect(tile.textContent).toContain('מתוכם באיחור');
     expect(tile.textContent).not.toContain('אין דרישות תשלום פעילות עם תאריך פירעון');
   });
@@ -186,11 +200,11 @@ describe('לתשלום בשבוע הקרוב — הכסף, לא כיסוי הת�
   it('בלי אף דרישה מתוארכת — משפט במקום מספר, אף פעם לא ₪0', async () => {
     const tile = await renderWith({
       dueDateCoverage: 0, activeCount: 2, overdue: null, dueToday: null,
-      overdueAmount: null, dueWithin7Amount: null, dueWithin7Count: null,
+      overdueAmountByCurrency: null, dueWithin7AmountByCurrency: null, dueWithin7Count: null,
     });
 
     expect(tile.textContent).toContain('אין דרישות תשלום פעילות עם תאריך פירעון');
-    expect(tile.textContent).not.toContain(fmtMoneyRounded(0));
+    expect(tile.textContent).not.toContain(fmtMoneyRounded(0, 'ILS'));
     // The subtitle still says what the tile MEASURES ("כולל מה שכבר באיחור"); what must not
     // appear is the breakdown line, which would be a claim about an amount nobody measured.
     expect(tile.textContent).not.toContain('מתוכם באיחור');
@@ -204,7 +218,7 @@ describe('לתשלום בשבוע הקרוב — הכסף, לא כיסוי הת�
   it('מקשר לרשימה שמסננת בדיוק את מה שנספר', async () => {
     const tile = await renderWith({
       dueDateCoverage: 2, activeCount: 3, overdue: 1, dueToday: 0,
-      overdueAmount: 10, dueWithin7Amount: 35, dueWithin7Count: 1,
+      overdueAmountByCurrency: ils(10), dueWithin7AmountByCurrency: ils(35), dueWithin7Count: 1,
     });
 
     const link = within(tile).getByRole('link', { name: 'כל דרישות התשלום בחלון' });
@@ -214,7 +228,7 @@ describe('לתשלום בשבוע הקרוב — הכסף, לא כיסוי הת�
   it('בלי נתונים אין קישור — אין לאן ללכת', async () => {
     const tile = await renderWith({
       dueDateCoverage: 0, activeCount: 2, overdue: null, dueToday: null,
-      overdueAmount: null, dueWithin7Amount: null, dueWithin7Count: null,
+      overdueAmountByCurrency: null, dueWithin7AmountByCurrency: null, dueWithin7Count: null,
     });
 
     expect(within(tile).queryByRole('link')).toBeNull();
