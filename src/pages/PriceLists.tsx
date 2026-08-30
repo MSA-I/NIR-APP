@@ -363,7 +363,10 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
   return (
     <Modal open onClose={onClose} title={`עדכון מחיר — ${productLabel(row.product)} (${row.supplier.name})`} busy={busy} statusMessage={busy ? 'שומר את המחיר' : undefined}>
       <div className="space-y-4">
-        <div><label className="label" htmlFor="price-list-price">מחיר חדש (₪)</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
+        {/* The row already carries its currency and every READ on this screen honours it — the
+            table, the trend column, the chart axis and the history table all format from
+            `r.currency`. This one label was the exception, and it is the field that WRITES. */}
+        <div><label className="label" htmlFor="price-list-price">{`מחיר חדש (${row.currency})`}</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
         <div><label className="label" htmlFor="price-list-date">בתוקף מתאריך</label><input id="price-list-date" type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="rounded" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> זמין אצל הספק</label>
         <div><label className="label" htmlFor="price-list-reason">סיבת העדכון (רשות)</label><input id="price-list-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>

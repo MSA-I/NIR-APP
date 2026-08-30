@@ -85,12 +85,18 @@ export function SuppliersList() {
     // Same shape as the card query (Promise.all): suppliers + balances + metrics in parallel,
     // merged through Maps. The list answers "who needs my attention"; the card answers "why".
     const [supRes, balRes, metRes] = await Promise.all([
-      // Explicit columns, not `*` (0112). `suppliers.bank_details` is no longer selectable by
-      // any client role — the column privilege was revoked so that no crafted query reaches the
-      // account money is sent to — and `select('*')` expands to include it, which would fail the
-      // whole screen. The edit dialog fetches it on demand through financial_supplier_directory.
+      /* Explicit columns, not `*` (0112). `suppliers.bank_details` is no longer selectable by
+         any client role — the column privilege was revoked so that no crafted query reaches the
+         account money is sent to — and `select('*')` expands to include it, which would fail the
+         whole screen. The edit dialog fetches it on demand through financial_supplier_directory.
+
+         SUPPLIER_COLUMNS, not a second copy of it. This query used to spell the list out again,
+         and the copy fell behind: `default_currency` arrived on suppliers in 0217 and in the
+         shared constant, never here. So `r.default_currency` was undefined on every row of this
+         screen and `fmtMoneyExact(amount, undefined)` drew the minimum order as `—` for every
+         supplier that had one — a value that was in the database the whole time. */
       supabase.from('suppliers')
-        .select('id, org_id, name, tax_id, contact_name, phone, whatsapp, email, address, delivery_days, cutoff_time, min_order_amount, payment_terms, notes, status, deleted_at, created_at, updated_at, rating, rating_updated_at, rating_note, supplier_categories(category_id, categories(name))')
+        .select(`${SUPPLIER_COLUMNS}, supplier_categories(category_id, categories(name))`)
         .is('deleted_at', null).order('name'),
       financial
         ? supabase.from('supplier_balances_by_currency').select('*')
@@ -508,7 +514,12 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
             }} />
         </div>
         <div><label className="label" htmlFor="supplier-cutoff">שעת סגירת הזמנות</label><input id="supplier-cutoff" type="time" className="input" value={f.cutoff_time} onChange={(e) => set('cutoff_time', e.target.value)} /></div>
-        <div><label className="label" htmlFor="supplier-minimum">מינימום הזמנה (₪)</label><input id="supplier-minimum" type="number" className="input num" value={f.min_order_amount} onChange={(e) => set('min_order_amount', e.target.value)} /></div>
+        {/* The currency comes from the supplier row, never from a symbol typed into the label.
+            `currency-baseline.json` records that min_order_amount is stated in
+            `suppliers.default_currency`, and a euro supplier's minimum was being labelled ₪.
+            A supplier that does not exist yet has no currency to name, so the label does not
+            invent one — it says where the currency comes from instead. */}
+        <div><label className="label" htmlFor="supplier-minimum">{supplier ? `מינימום הזמנה (${supplier.default_currency})` : 'מינימום הזמנה'}</label><input id="supplier-minimum" type="number" className="input num" value={f.min_order_amount} onChange={(e) => set('min_order_amount', e.target.value)} />{!supplier && <p className="text-xs text-ink-muted mt-1">במטבע ברירת המחדל של הספק.</p>}</div>
         <div><label className="label" htmlFor="supplier-payment-terms">תנאי תשלום</label><input id="supplier-payment-terms" className="input" placeholder="שוטף + 30" value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} /></div>
         <SubPanel className="sm:col-span-2 space-y-3">
           <div>
