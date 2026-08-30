@@ -37,16 +37,21 @@ const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-d
 type WeeklyPoint = { week: string; total: number; count: number; label: string };
 /**
  * 0218 split every money figure on this snapshot into one entry per currency, and renamed each key
- * with it. The dashboard is one screen for a whole business, so it does two different things with
- * them, and the difference is deliberate (plan §3.1):
+ * with it. What this screen DOES with those entries is `OPEN-DECISIONS #301` (owner, 30.08.2026):
  *
- *   A FIGURE THE READER GLANCES AT   — the KPI strip, the attention rows — renders every currency,
- *     one line each, ordered with the organisation's own first. Two lines are the honest shape;
- *     one line is what every business sees today.
- *   A FIGURE THE SCREEN COMPUTES WITH — the due-window split bar, the month-over-month delta, the
- *     charts — works inside the ORGANISATION'S OWN CURRENCY only, and the screen says so when
- *     there is money outside it. A ratio, a percentage change or a bar width across two currencies
- *     is not a smaller version of the truth, it is a different number entirely.
+ *   ONE CURRENCY AT A TIME, AND THE READER PICKS IT. Every figure that carries money — the KPI
+ *     strip, the attention rows, the due-window bar, the deltas, the charts, the supplier list —
+ *     is in the currency the picker is on. Nothing is summed across currencies and nothing is
+ *     converted; the picker names the others and one click reads them instead.
+ *   COUNTS OF THINGS STAY WHOLE. Exceptions, invoices to review, the role queue: these have no
+ *     unit, so there is nothing about them for a currency to make wrong.
+ *
+ * This REPLACES the two-mode rule of `0217`/plan §3.1, under which a glanced-at figure rendered
+ * every currency as its own line while the figures computed beside it were quietly base-currency
+ * only. That shape was honest per figure and unreadable per screen: it handed the reader two
+ * numbers and no way to compare either of them with the trend under it. The half of it that was
+ * right survives unchanged and is now the whole rule — a ratio, a percentage change or a bar width
+ * across two currencies is not a smaller version of the truth, it is a different number entirely.
  */
 type ManagementDashboardSnapshot = {
   money: {
@@ -646,7 +651,7 @@ export default function Dashboard() {
        WHICH one is the reader's choice now, not a constant. `#277` had this screen render each
        currency as its own line wherever a figure was glanced at, which meant a business holding
        shekels and dollars read two figures everywhere and could compare neither with anything.
-       The owner's ruling (30.08.2026) is that the control centre shows ONE currency at a time and
+       The owner's ruling (`#301`, 30.08.2026) is that the control centre shows ONE currency at a time and
        the reader picks it. That is the only reading of "one currency" that neither converts (there
        is no rate source, and CLAUDE.md forbids inventing one) nor hides (every currency the
        business holds is one click away, and the picker names them all).
