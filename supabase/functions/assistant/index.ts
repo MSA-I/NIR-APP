@@ -53,7 +53,7 @@ import {
   loadAuthorizedConversationContext,
   loadAuthorizedConversationViews,
 } from "./history.ts";
-import { assertAssistantProviderTextAllowed } from "./input-classification.ts";
+import { classifyAssistantProviderText } from "./input-classification.ts";
 import {
   type AssistantTurnOutcome,
   buildInstructions,
@@ -327,7 +327,17 @@ export async function handler(req: Request): Promise<Response> {
   try {
     // Browser-authored free text is classified before quota checks, history reads, egress leases
     // or provider construction. Refused text is neither sent nor persisted as a failed run.
-    assertAssistantProviderTextAllowed(request.question);
+    //
+    // Which is why the refusal is logged here. Because nothing is written to `assistant_runs`, an
+    // input refusal is the one user-visible failure this product cannot count: on 27.08.2026 the
+    // table held eight rows, all `succeeded`, while three ordinary questions were being refused
+    // with HTTP 400. The classification is a closed vocabulary and the question text is never
+    // logged — the point is to know THAT this fires, not what was in it.
+    const inputDecision = classifyAssistantProviderText(request.question);
+    if (!inputDecision.allowed) {
+      console.error("assistant input refused", inputDecision.reason);
+      throw new AssistantEdgeError("assistant_input_restricted");
+    }
     const actor = await resolveActorContext(caller, userResult.data.user.id);
     if (!actor.capabilities.ui) {
       throw new AssistantEdgeError("assistant_disabled");

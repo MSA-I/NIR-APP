@@ -232,3 +232,44 @@ describe('lookup is deterministic and has no fallback', () => {
     expect(first.length).toBeLessThanOrEqual(PRODUCT_HELP_MATCH_LIMIT);
   });
 });
+
+/**
+ * The matcher, against the way the question actually arrives.
+ *
+ * Measured 27.08.2026: eleven of eighteen ordinary product-help questions matched no entry, and
+ * the owner's own question in production — "אם אני רוצה להכניס ספק ידני איך אני עושה את זה" —
+ * was answered `no_capability`. Two separate causes, and this block pins both:
+ *
+ *  1. Hebrew attaches ה/ב/ל/מ/ו/כ/ש to the word, so " מחירונים " was never a padded substring of
+ *     " המחירונים ". That is grammar, and it is fixed in the matcher.
+ *  2. A topic can exist under a phrasing nobody types. That is vocabulary, and it is fixed by
+ *     keywords — including the supplier screens, which had no entry at all because the suppliers
+ *     LIST was missing from `APP_ROUTE_POLICY`.
+ */
+describe('a question phrased the way a person phrases it', () => {
+  const answered: readonly [string, string][] = [
+    ['אם אני רוצה להכניס ספק ידני איך אני עושה את זה', 'add_a_supplier'],
+    ['איך אני מוסיף ספק חדש?', 'add_a_supplier'],
+    ['איך אני עורך פרטי ספק?', 'add_a_supplier'],
+    ['איך אני מוסיף ספק חדש עם פרטי בנק?', 'update_supplier_bank_details'],
+    ['איך מעלים מחירון?', 'upload_price_list'],
+    ['איך סוגרים חריג?', 'resolve_an_exception'],
+    ['איפה רואים את המחירונים?', 'compare_supplier_prices'],
+    ['איך אני מוסיף מוצר חדש?', 'manage_product_catalogue'],
+  ];
+
+  it.each(answered)('answers %s', (question, expectedId) => {
+    expect(findProductHelp(question, 'owner').map((entry) => entry.id)).toContain(expectedId);
+  });
+
+  it('still answers nothing when the registry genuinely has no entry', () => {
+    // Not a coverage gap this change closes — an honest "no capability" is the correct answer
+    // here, and the matcher must not start inventing a nearest neighbour to avoid saying so.
+    expect(findProductHelp('איך אני מחליף את הלוגו של הארגון', 'owner')).toEqual([]);
+  });
+
+  it('does not let a prefix-stripped rendering widen what a role may see', () => {
+    // `suppliers` is staff-only. The relaxed matching is about spelling, never about permission.
+    expect(findProductHelp('איך אני מוסיף ספק חדש?', 'accountant')).toEqual([]);
+  });
+});

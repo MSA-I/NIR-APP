@@ -31,6 +31,9 @@ import AnswerView from './AnswerView';
  */
 const FALLBACK_CODES = [
   'assistant_disabled',
+  // A refused question is still a person who came here for an answer. Without this the input
+  // refusal was the one failure that offered no way forward at all — just a red paragraph.
+  'assistant_input_restricted',
   'assistant_not_entitled',
   'assistant_limit_reached',
   'assistant_limit_unknown',

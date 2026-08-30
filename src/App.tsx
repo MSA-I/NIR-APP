@@ -273,7 +273,7 @@ export default function App() {
 
         <Route path={APP_ROUTE_POLICY.dashboard.path} element={<Guard roles={APP_ROUTE_POLICY.dashboard.roles}><DashboardHome /></Guard>} />
 
-        <Route path="/suppliers" element={<Guard roles={STAFF}><SuppliersList /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.suppliers.path} element={<Guard roles={APP_ROUTE_POLICY.suppliers.roles}><SuppliersList /></Guard>} />
         <Route path={APP_ROUTE_POLICY.supplierDetail.path} element={<Guard roles={APP_ROUTE_POLICY.supplierDetail.roles}><SupplierCard /></Guard>} />
         <Route path={APP_ROUTE_POLICY.financialSupplierDetail.path} element={<Guard roles={APP_ROUTE_POLICY.financialSupplierDetail.roles}><FinancialSupplier /></Guard>} />
         <Route path={APP_ROUTE_POLICY.products.path} element={<Guard roles={APP_ROUTE_POLICY.products.roles}><Products /></Guard>} />

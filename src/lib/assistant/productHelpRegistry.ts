@@ -117,6 +117,41 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     updated_at: '2026-08-24',
   },
   {
+    id: 'add_a_supplier',
+    version: 1,
+    owner: 'product',
+    locale: 'he',
+    roles: ['owner', 'office'],
+    route: 'suppliers',
+    label: 'הוספת ספק חדש',
+    steps: [
+      'במסך הספקים לוחצים "ספק חדש" בראש המסך; כשעדיין אין ספקים הכפתור מופיע גם באמצע המסך הריק.',
+      'בטופס שנפתח שם הספק הוא השדה היחיד שחובה למלא. ח.פ, איש קשר, טלפון, WhatsApp, אימייל וכתובת אינם חובה.',
+      'ימי אספקה, שעת סגירת הזמנות, מינימום הזמנה ותנאי תשלום נקבעים כאן, והם אלה שההזמנות נשענות עליהם בהמשך.',
+      'לוחצים "שמירה". לעריכת ספק קיים פותחים אותו מהרשימה ולוחצים "עריכה" — אותו טופס.',
+      'הוספה ועריכה של ספק זמינות לבעלים ולמנהל הרכש בלבד, ורק כשהארגון אינו במצב קריאה בלבד.',
+    ],
+    source: 'src/pages/Suppliers.tsx',
+    updated_at: '2026-08-27',
+  },
+  {
+    id: 'update_supplier_bank_details',
+    version: 1,
+    owner: 'product',
+    locale: 'he',
+    roles: ['owner', 'office'],
+    route: 'suppliers',
+    label: 'עדכון פרטי הבנק של ספק',
+    steps: [
+      'פרטי הבנק אינם נערכים ברשימה: פותחים את כרטיס הספק ובוחרים את עדכון פרטי הבנק שלו.',
+      'המערכת מציגה לאישור לאיזה חשבון הפרטים עומדים להתעדכן, ומראה רק את הספרות האחרונות שלו.',
+      'חובה לכתוב סיבה לשינוי, ואז לאמת מחדש את הסיסמה — אימות טרי, גם אם ההתחברות עדיין פעילה.',
+      'השינוי נרשם ביומן הביקורת עם הסיבה שנכתבה. זו הסיבה שהמסלול ארוך מעדכון שדה רגיל.',
+    ],
+    source: 'src/pages/Suppliers.tsx',
+    updated_at: '2026-08-27',
+  },
+  {
     id: 'manage_product_catalogue',
     version: 1,
     owner: 'product',
@@ -382,11 +417,33 @@ export const PRODUCT_HELP_KEYWORDS: Readonly<Record<string, readonly string[]>> 
   see_business_state_now: ['מרכז הבקרה', 'מצב העסק', 'דשבורד', 'תמונת מצב', 'dashboard'],
   see_what_needs_attention: ['דורש טיפול', 'התראות', 'מסך ההתראות', 'מה דחוף', 'alerts'],
   compare_supplier_prices: ['השוואת מחירים', 'מחירי ספקים', 'התייקרות', 'התייקרויות', 'מחירונים', 'price list'],
-  upload_price_list: ['העלאת מחירון', 'לייבא מחירון', 'ייבוא מחירון', 'מחירון חדש', 'upload a price list'],
-  manage_product_catalogue: ['קטלוג המוצרים', 'מוצר חדש', 'מסך המוצרים', 'product catalogue'],
+  // Keywords are the phrases people TYPE, not the canonical name of the action. "העלאת מחירון" is
+  // how the button is labelled; "מעלים מחירון", "להעלות מחירון" and "לטעון מחירון" are how the
+  // question arrives. Eleven of eighteen ordinary help questions matched nothing on 27.08.2026,
+  // and roughly half of those were a topic that existed under a phrasing nobody uses out loud.
+  upload_price_list: [
+    'העלאת מחירון', 'לייבא מחירון', 'ייבוא מחירון', 'מחירון חדש', 'upload a price list',
+    'מעלים מחירון', 'להעלות מחירון', 'לטעון מחירון', 'מוסיפים מחירון', 'להוסיף מחירון',
+  ],
+  add_a_supplier: [
+    'ספק חדש', 'להוסיף ספק', 'מוסיפים ספק', 'הוספת ספק', 'להכניס ספק', 'מכניסים ספק',
+    'ליצור ספק', 'לפתוח ספק', 'עריכת ספק', 'לערוך ספק', 'פרטי ספק', 'רשימת הספקים',
+    'add a supplier', 'new supplier',
+  ],
+  update_supplier_bank_details: [
+    'פרטי בנק', 'פרטי הבנק', 'חשבון בנק של ספק', 'לעדכן בנק', 'עדכון פרטי בנק',
+    'supplier bank details',
+  ],
+  manage_product_catalogue: [
+    'קטלוג המוצרים', 'מוצר חדש', 'מסך המוצרים', 'product catalogue',
+    'להוסיף מוצר', 'מוסיפים מוצר', 'להכניס מוצר',
+  ],
   find_products_below_minimum: ['מתחת למינימום', 'מלאי נמוך', 'יתרת מלאי', 'ספירת מלאי', 'low stock'],
   check_invoice_status: ['מצב חשבונית', 'סטטוס חשבונית', 'מסך החשבוניות', 'חשבוניות כפולות', 'invoice status'],
-  resolve_an_exception: ['לסגור חריג', 'סגירת חריג', 'חריגים', 'מסך החריגים', 'exception'],
+  resolve_an_exception: [
+    'לסגור חריג', 'סגירת חריג', 'חריגים', 'מסך החריגים', 'exception',
+    'סוגרים חריג', 'לטפל בחריג', 'חריג',
+  ],
   track_a_credit: ['דרישת זיכוי', 'זיכויים', 'מעקב זיכוי', 'לקזז זיכוי', 'credit request'],
   open_a_payment_request: ['דרישת תשלום', 'דרישה חדשה', 'לשלוח לאישור', 'payment request'],
   see_recorded_payments: ['תשלומים שבוצעו', 'מסך התשלומים', 'אסמכתה', 'payments screen'],
@@ -511,6 +568,31 @@ function normalizeForMatch(value: string): string {
   return ` ${value.normalize('NFKC').toLocaleLowerCase('he').replace(NON_WORD, ' ').trim()} `;
 }
 
+/**
+ * Hebrew writes its articles, prepositions and conjunctions ATTACHED to the word — "המחירונים" is
+ * "the price lists", one token. Whole-word containment therefore fails on the most ordinary way a
+ * person phrases a question: the keyword "מחירונים" is not a padded substring of " המחירונים ",
+ * and "איפה רואים את המחירונים?" matched nothing at all.
+ *
+ * The question is rendered again with one and with two leading prefix letters removed from every
+ * word, and a keyword matches when it is contained in ANY rendering. Stripping is deliberately
+ * naive — "מחירון" also loses its מ in one rendering — which is exactly why the unstripped
+ * rendering is kept and searched too. Only the QUESTION is stripped; keywords are canonical.
+ */
+const HEBREW_LETTER = /[֐-׿]/u;
+const HEBREW_PREFIX_ONE = /^[ובלכמשה](?=[֐-׿]{3,}$)/u;
+
+function stripOneHebrewPrefix(token: string): string {
+  return HEBREW_LETTER.test(token) ? token.replace(HEBREW_PREFIX_ONE, '') : token;
+}
+
+function matchRenderings(value: string): readonly string[] {
+  const base = normalizeForMatch(value);
+  const once = ` ${base.trim().split(' ').map(stripOneHebrewPrefix).join(' ')} `;
+  const twice = ` ${once.trim().split(' ').map(stripOneHebrewPrefix).join(' ')} `;
+  return once === base ? [base] : twice === once ? [base, once] : [base, once, twice];
+}
+
 /** The canonical in-app path of the screen an entry describes. */
 export function productHelpPath(entry: ProductHelpEntry): string {
   return APP_ROUTE_POLICY[entry.route as AppRoutePolicyKey].path;
@@ -542,15 +624,15 @@ export function findProductHelp(
     // An explicit id is an exact lookup, not a hint: it either resolves for this role or it does not.
     return visible.filter((entry) => entry.id === options.id);
   }
-  const haystack = normalizeForMatch(query);
-  if (haystack.trim() === '') return [];
+  const haystacks = matchRenderings(query);
+  if (haystacks[0]!.trim() === '') return [];
 
   const matched: { entry: ProductHelpEntry; weight: number }[] = [];
   for (const entry of visible) {
     let weight = 0;
     for (const needle of [...(PRODUCT_HELP_KEYWORDS[entry.id] ?? []), entry.label]) {
       const normalized = normalizeForMatch(needle);
-      if (normalized.trim() !== '' && haystack.includes(normalized)) {
+      if (normalized.trim() !== '' && haystacks.some((hay) => hay.includes(normalized))) {
         weight = Math.max(weight, normalized.trim().length);
       }
     }

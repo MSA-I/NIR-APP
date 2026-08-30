@@ -44,8 +44,13 @@ export const ASSISTANT_ERROR_MESSAGES: Record<AssistantErrorCode, string> = {
   assistant_limit_unknown: 'לא ניתן לקבוע את מכסת העוזר במסלול הזה, ולכן הבקשה נדחתה.',
   assistant_rate_limited: 'נשאלו יותר מדי שאלות בזמן קצר. נסה שוב בעוד כמה דקות.',
   assistant_question_too_long: 'השאלה ארוכה מדי. נסה לנסח אותה קצר יותר.',
+  // Says what to do next, not what the asker did wrong. The old wording listed four things to
+  // "remove" from a question that, until 27.08.2026, usually contained none of them — a date or
+  // the words "פרטי בנק" were enough to trigger it — so the person read an accusation and
+  // concluded the assistant was broken. The classifier now fires only on an actual value, and the
+  // sentence can therefore point at the value and offer the way around it.
   assistant_input_restricted:
-    'השאלה כוללת מידע שלא ניתן לשלוח לעוזר. יש להסיר פרטי קשר, פרטי בנק, סיסמאות או תוכן מסמך גולמי.',
+    'השאלה כוללת פרט רגיש — מספר טלפון, אימייל, פרטי חשבון בנק או סיסמה — שאינו יוצא מהמערכת אל העוזר. אפשר לשאול את אותה שאלה בלי הפרט עצמו, למשל לפי שם הספק במקום המספר.',
   assistant_provider_unavailable: 'העוזר אינו זמין כרגע. הנתונים עצמם זמינים במסכים.',
   assistant_provider_timeout: 'העוזר לא השיב בזמן. אפשר לנסות שוב.',
   assistant_unsupported_answer: 'העוזר לא הצליח לבסס תשובה על נתוני המערכת, ולכן לא הוצגה תשובה.',
