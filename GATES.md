@@ -763,7 +763,7 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
 
 ## Phase 6 — evidence and rollout
 
-- [ ] P6-G1: the heavy gate is green on the SHA
+- [x] P6-G1: the heavy gate is green on the SHA
   CHECK: gh workflow run quality-gate.yml && gh run watch
   EXPECT: success
   ATTEMPT 28.08.2026: workflow-dispatch run `33196329682` on `16ad30a` failed at the Assistant
@@ -807,12 +807,31 @@ functions sum money in total, against the plan's estimate of ~23; the rest are p
   correctly rejected the changed autonomous writer until its authoritative body hash moved; 0242
   now re-pins it like 0230/0241. Locally, 0242 applies and rolls back, the P46 structural prefix and
   the full P68 falsification suite pass. Gate remains open for the next exact-SHA run.
+  EVIDENCE: `main` merge SHA `5faaef1f0472d0215003245c8b10c616206476be` passed build/verify
+  in [run 33205740685](https://github.com/MSA-I/NIR-APP/actions/runs/33205740685) and the full
+  quality gate in [run 33205740693](https://github.com/MSA-I/NIR-APP/actions/runs/33205740693):
+  SQL 98/98, Browser, Deno/Assistant contracts and dependency audit all succeeded. Browser's first
+  attempt had one transient `resolve_feature_flags` 502 after 42 passing scenarios; the single-job
+  rerun succeeded without a code change. PR #146 merged that exact tree to `main`.
 
-- [ ] P6-G2: the rollout matrix rows that were touched were actually executed
-  EVIDENCE: pending — the union of `Migration / חוזה DB` and `Frontend` rows requires backup, dry-run + ledger,
-  forward-only apply, postflight; build with production env, Pages, hash parity, canonical smoke.
-  The manual `schema_migrations` ledger row after `db-query.ps1` is part of it, not optional.
-  `worker/ocr` is out of scope and is **not** redeployed unless a gateway contract version moves.
+- [x] P6-G2: the rollout matrix rows that were touched were actually executed
+  EVIDENCE: Production rollout 28–29.08.2026 used clean detached SHA `5faaef1`. A schema/data/roles
+  backup was hashed at ledger `0212 / 207`; all 207 existing ledger identities matched the release
+  tree. Migrations `0217`–`0242` passed one-transaction dry-run/rollback, then applied forward-only
+  with exact name and source hash in every manual ledger row. Postflight ended `0242 / 233`, A5/A6
+  zero, 26/26 targets present, no null legacy currency, no ambiguous financial relationship and no
+  changed business-table count. Only `assistant` was deployed, v9 to v10, still `ACTIVE` with
+  `verify_jwt=true`; 22 other Edge versions stayed fixed, OPTIONS returned 200 and missing Auth 401
+  without a provider call. Production build contained only the Production Supabase host and no demo
+  seed/service-role marker. Pages deployment `e4445546-8b5e-48e6-999d-7196d938e374` is
+  `production/success` from `main@5faaef1`; canonical, Pages origin and unique deployment matched
+  357/357 public-file hashes. Connected read-only smoke covered 27 public/owner/office/accountant
+  screens with zero failures and preserved the migration head plus 11 business-table counts. A
+  Production transaction separately proved
+  USD 3,100, ILS 12,400, ILS 11,470 settlement, mixed-request refusal and a two-currency monthly
+  snapshot, then rollback restored the migration head plus 13 table counts with zero permanent
+  writes. `worker/ocr` did not
+  change and was not redeployed.
 
 ---
 
