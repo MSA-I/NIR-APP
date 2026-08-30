@@ -369,7 +369,8 @@ $wire_residue$;
 
 do $assert_residue$
 declare
-  v_src text;
+  v_src  text;
+  v_code text;
 begin
   select replace(p.prosrc, e'\r', '') into v_src
   from pg_catalog.pg_proc p
@@ -378,9 +379,21 @@ begin
   if position('delete_tenant_residue_rows' in v_src) = 0 then
     raise exception '0254: the residue sweep did not land in the staged teardown';
   end if;
+
+  -- ORDER IS MEASURED ON CODE, NOT ON COMMENTS, AND THAT IS NOT FUSSINESS. The sweep this file
+  -- inserts carries a comment that names tenant_delete_stages(), and that comment sits ABOVE the
+  -- call it documents. A position() over the whole body therefore finds the COMMENT first and
+  -- concludes the sweep runs after the staged delete -- so the assertion refused its own correct
+  -- patch, and the gate stopped on it. Dropping comment-only lines measures the two STATEMENTS
+  -- against each other, which is what this claim was always about.
+  select string_agg(kept.line, chr(10) order by kept.ord)
+    into v_code
+  from unnest(string_to_array(v_src, chr(10))) with ordinality as kept(line, ord)
+  where btrim(kept.line) not like '--%';
+
   -- The sweep has to precede the staged delete; behind it the foreign keys have already fired.
-  if position('delete_tenant_residue_rows' in v_src)
-     > position('tenant_delete_stages' in v_src) then
+  if position('delete_tenant_residue_rows' in v_code)
+     > position('tenant_delete_stages' in v_code) then
     raise exception '0254: the residue sweep landed after the staged delete, where it is too late';
   end if;
   if not (select p.prosecdef from pg_catalog.pg_proc p
