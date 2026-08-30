@@ -1,0 +1,3636 @@
+[
+  {
+    "file": "src/pages/Expenses.tsx",
+    "exempt": false,
+    "baselineLines": 67,
+    "matched": 46,
+    "orphanMatched": 24,
+    "fresh": 12,
+    "matchedList": [
+      {
+        "text": "החודש",
+        "keys": [
+          "dashboard.text_50",
+          "expenses.presetMonth"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "חודש קודם",
+        "keys": [
+          "dashboard.text_51",
+          "expenses.presetPrevMonth"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "3 חודשים",
+        "keys": [
+          "expenses.presetQuarter"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "שנה",
+        "keys": [
+          "expenses.presetYear"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "ללא קטגוריה",
+        "keys": [
+          "dashboard.text_19",
+          "expenses.get"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "קובץ ה-Excel הורד",
+        "keys": [
+          "reports.toast",
+          "expenses.toast",
+          "expenses.toast_2",
+          "productPurchase.toast"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "לפי ספק",
+        "keys": [
+          "expenses.text_3"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "ספק",
+        "keys": [
+          "suppliers.text_6",
+          "dashboard.text_16",
+          "orders.text_2",
+          "bank.label",
+          "documents.text_22",
+          "documents.text_34",
+          "documents.text_48",
+          "priceLists.text",
+          "priceLists.text_23",
+          "priceLists.text_27",
+          "paymentRequests.text",
+          "paymentRequests.text_35",
+          "onboarding.text_28",
+          "onboarding.text_35",
+          "onboarding.fieldSupplier",
+          "invoices.detailSupplier",
+          "reports.text_28",
+          "reports.text_42",
+          "reports.text_46",
+          "reports.xlSupplier",
+          "consolidated.text_4",
+          "expenses.text",
+          "expenses.text_6",
+          "expenses.text_14",
+          "exceptions.text_3",
+          "invoiceNew.text_9",
+          "supplierSplit.supplierWord",
+          "invoiceList.text_3",
+          "credits.text",
+          "payments.text",
+          "payments.text_8",
+          "receiptDetail.text_4",
+          "summaryStep.genericSupplier",
+          "analytics.supplier"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מטבע",
+        "keys": [
+          "documents.fieldCurrency",
+          "reports.xlCurrency"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "חשבוניות",
+        "keys": [
+          "nav.routeTitle_invoices",
+          "documents.routingInvoices",
+          "invoices.text_2",
+          "reports.kpiInvoices",
+          "reports.xlInvoices",
+          "payQueue.text_10",
+          "expenses.text_2",
+          "expenses.text_9",
+          "expenses.fmtNum",
+          "expenses.invoicesWord",
+          "invoiceNew.text_3",
+          "invoiceList.title",
+          "payments.text_5",
+          "accountantDashboard.text_12",
+          "globalSearch.groupInvoices"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סה״כ",
+        "keys": [
+          "suppliers.fmtMoneyExact_4",
+          "orders.fmtMoneyExact",
+          "orders.text_25",
+          "reports.fmtMoneyExact_5",
+          "reports.text_34",
+          "reports.text_40",
+          "consolidated.money_6",
+          "expenses.fmtMoneyExact",
+          "invoiceList.fmtMoneyExact",
+          "charts.total"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "% מהסך",
+        "keys": [
+          "expenses.Number",
+          "expenses.text_15",
+          "expenses.text_16"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "קטגוריות בהזמנות",
+        "keys": [
+          "expenses.book_append_sheet"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "קטגוריה",
+        "keys": [
+          "onboarding.text_26",
+          "onboarding.fieldCategory",
+          "expenses.text_4",
+          "expenses.map",
+          "products.text",
+          "products.text_17"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "ערך בהזמנות מקושרות",
+        "keys": [
+          "expenses.text_5",
+          "expenses.map_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מספר חשבונית",
+        "keys": [
+          "documents.fieldInvoiceNumber",
+          "reports.xlInvoiceNumber",
+          "consolidated.text_31",
+          "expenses.text_7",
+          "exceptions.detailInvoiceNumber",
+          "docAssessment.text_13"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "תאריך",
+        "keys": [
+          "suppliers.fmtDate",
+          "suppliers.fmtDate_3",
+          "suppliers.fmtDate_4",
+          "bank.fmtDate",
+          "priceLists.text_18",
+          "docReview.text_12",
+          "reports.text_30",
+          "reports.xlDate",
+          "consolidated.fmtDate",
+          "consolidated.fmtDate_2",
+          "expenses.text_8",
+          "exceptions.detailDate",
+          "invoiceList.fmtDate",
+          "payments.fmtDate"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סטטוס תשלום",
+        "keys": [
+          "reports.xlPaymentStatus",
+          "expenses.statusLabel"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "שגיאה",
+        "keys": [
+          "reports.message",
+          "expenses.message"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "הנתונים נטענים…",
+        "keys": [
+          "reports.text",
+          "expenses.text_10"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "שגיאה בטעינת הנתונים",
+        "keys": [
+          "reports.text_2",
+          "expenses.text_11"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "טווח התאריכים שגוי — מ־ אחרי עד",
+        "keys": [
+          "expenses.text_12"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין חשבוניות בטווח שנבחר",
+        "keys": [
+          "expenses.text_13",
+          "expenses.title_5"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "ריכוז הוצאות",
+        "keys": [
+          "nav.routeTitle_expenses",
+          "expenses.title"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "הורדת הריכוז כקובץ Excel",
+        "keys": [
+          "expenses.exportExcel"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "טווחי תאריכים מהירים",
+        "keys": [
+          "expenses.label"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "סה״כ הוצאות בטווח",
+        "keys": [
+          "expenses.title_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מספר חשבוניות",
+        "keys": [
+          "expenses.title_3",
+          "productPurchase.text_18",
+          "exportTemplates.fieldInvoiceCount"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "חשבוניות שאינן מחוקות בטווח",
+        "keys": [
+          "expenses.context"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "ממוצע לחשבונית",
+        "keys": [
+          "expenses.title_4"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין חשבוניות בטווח",
+        "keys": [
+          "expenses.text_21",
+          "expenses.emptyTitle"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "שנו את טווח התאריכים או בחרו אחד מהטווחים המהירים",
+        "keys": [
+          "expenses.subtitle"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מתעדכן…",
+        "keys": [
+          "bank.text_6",
+          "paymentRequests.text_3",
+          "expenses.text_17",
+          "products.text_5",
+          "invoiceList.text_6",
+          "credits.text_4"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "ייצוא Excel",
+        "keys": [
+          "reports.exportExcelLabel",
+          "expenses.exportExcelLabel",
+          "productPurchase.text_22"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "הדפסה",
+        "keys": [
+          "orders.print",
+          "orders.actionPrint",
+          "invoiceList.actionPrint"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מ־",
+        "keys": [
+          "dashboard.fmtMoneyExact",
+          "expenses.text_18"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "עד",
+        "keys": [
+          "expenses.text_19"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "תאריך ההתחלה חייב להיות מוקדם מתאריך הסיום או זהה לו.",
+        "keys": [
+          "expenses.text_20"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "הוצאות לפי ספק",
+        "keys": [
+          "expenses.text_23"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "פירוט מוצרים לפי קטגוריה",
+        "keys": [
+          "expenses.text_24"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מידע משלים מהזמנות מקושרות; אינו מחליף את סכומי החשבוניות בטבלת הספקים.",
+        "keys": [
+          "expenses.text_25"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "הצג פירוט",
+        "keys": [
+          "expenses.text_26"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "חשבוניות מקושרות בסך",
+        "keys": [
+          "expenses.linkedInvoicesLead"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מתוך",
+        "keys": [
+          "settings.fmtNum",
+          "orders.outOfWord",
+          "receiving.text_31",
+          "documents.text_58",
+          "priceListReview.text_3",
+          "priceListReview.text_32",
+          "orgSubscription.text_42",
+          "expenses.linkedInvoicesOf",
+          "emailOrderCard.text_3"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "אין בטווח חשבוניות עם הזמנה מקושרת ופריטי קטגוריה.",
+        "keys": [
+          "expenses.text_27"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "פילוח מוצרים וקטגוריות אינו חלק מההקשר החשבונאי המצומצם. סכומי הספקים והחשבוניות למעלה נשארים המקור המדויק, והייצוא אינו מוסיף פילוח שאינו זמין.",
+        "keys": [
+          "expenses.text_28"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": [
+      "קובץ ה-PDF הורד",
+      "הורדת הריכוז כקובץ PDF מעוצב עם הלוגו של הארגון",
+      "הדפסת הריכוז",
+      "סה״כ חלקי מספר החשבוניות, בכל מטבע בנפרד",
+      "ריכוז הוצאות — $",
+      "הופק $",
+      "הורדת PDF",
+      "מהסך ב",
+      "הוצאות עבור $",
+      "ב-$",
+      "הסכומים למטה הם ערכי פריטי ההזמנה במחירי snapshot.",
+      "חשבוניות בטווח — $"
+    ]
+  },
+  {
+    "file": "src/pages/Suppliers.tsx",
+    "exempt": false,
+    "baselineLines": 43,
+    "matched": 36,
+    "orphanMatched": 11,
+    "fresh": 17,
+    "matchedList": [
+      {
+        "text": "קטגוריות",
+        "keys": [
+          "suppliers.join",
+          "onboarding.title_3",
+          "onboarding.text_39",
+          "onboarding.stepCategories"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "איש קשר",
+        "keys": [
+          "suppliers.text_8",
+          "suppliers.set_3",
+          "onboarding.text_16",
+          "onboarding.fieldContact",
+          "supplierLog.fieldContactName"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "טלפון",
+        "keys": [
+          "status.channel_phone",
+          "settings.text_16",
+          "settings.text_36",
+          "suppliers.text_9",
+          "suppliers.set_4",
+          "onboarding.text_5",
+          "onboarding.text_17",
+          "onboarding.fieldPhone",
+          "supplierLog.fieldPhone"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מינ׳ הזמנה",
+        "keys": [
+          "suppliers.fmtMoneyExact",
+          "onboarding.toFixed"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "התראות",
+        "keys": [
+          "suppliers.text_10",
+          "nav.routeTitle_alerts",
+          "alerts.title",
+          "notificationBell.plain"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "יתרה פתוחה",
+        "keys": [
+          "suppliers.text_37",
+          "suppliers.fmtMoneyExact_2",
+          "suppliers.balanceHeader",
+          "financialSupplier.fmtMoneyRounded"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "סטטוס",
+        "keys": [
+          "settings.text_8",
+          "settings.text_17",
+          "settings.text_37",
+          "suppliers.text_11",
+          "suppliers.text_30",
+          "suppliers.text_43",
+          "suppliers.text_51",
+          "orders.text_4",
+          "bank.text_5",
+          "paymentRequests.text_2",
+          "reports.text_49",
+          "reports.xlStatus",
+          "exceptions.text_5",
+          "supplierLog.fieldStatus",
+          "credits.text_3",
+          "credits.text_13",
+          "supplierGroupCard.status"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "פרטי הבנק עודכנו ונרשמו ביומן הביקורת",
+        "keys": [
+          "suppliers.toast_9"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "ספק חדש",
+        "keys": [
+          "suppliers.setEditing",
+          "suppliers.setEditing_3",
+          "suppliers.newTitle",
+          "quickCreateSupplier.title",
+          "quickSupplierPicker.newSupplier"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "שומר את פרטי הספק",
+        "keys": [
+          "suppliers.savingStatus"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מינימום הזמנה",
+        "keys": [
+          "suppliers.fmtMoneyExact_3",
+          "onboarding.fieldMinOrder"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "שוטף + 30",
+        "keys": [
+          "suppliers.placeholder"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "זמין לבעלים בלבד",
+        "keys": [
+          "suppliers.text_38"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "חריגים פתוחים",
+        "keys": [
+          "suppliers.openExceptions",
+          "dashboard.title_5",
+          "dashboard.openExceptions",
+          "reports.kpiOpenExceptions",
+          "analytics.openExceptions",
+          "businessSummary.openExceptions"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "טרם חושבו מדדים",
+        "keys": [
+          "suppliers.metricsNotComputed"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "זיכויים פתוחים",
+        "keys": [
+          "suppliers.fmtNum",
+          "dashboard.text_30",
+          "answerView.toolOpenCredits",
+          "accountantDashboard.fmtNum_3",
+          "accountantDashboard.text_9",
+          "analytics.openCredits"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "תנאי תשלום",
+        "keys": [
+          "suppliers.text_23",
+          "suppliers.text_40",
+          "documents.fieldPaymentTerms",
+          "onboarding.text_19",
+          "onboarding.fieldPaymentTerms",
+          "supplierLog.fieldPaymentTerms"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מס׳ חשבונית",
+        "keys": [
+          "suppliers.text_45",
+          "invoiceList.text_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "תאריך",
+        "keys": [
+          "suppliers.fmtDate",
+          "suppliers.fmtDate_3",
+          "suppliers.fmtDate_4",
+          "bank.fmtDate",
+          "priceLists.text_18",
+          "docReview.text_12",
+          "reports.text_30",
+          "reports.xlDate",
+          "consolidated.fmtDate",
+          "consolidated.fmtDate_2",
+          "expenses.text_8",
+          "exceptions.detailDate",
+          "invoiceList.fmtDate",
+          "payments.fmtDate"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סה״כ",
+        "keys": [
+          "suppliers.fmtMoneyExact_4",
+          "orders.fmtMoneyExact",
+          "orders.text_25",
+          "reports.fmtMoneyExact_5",
+          "reports.text_34",
+          "reports.text_40",
+          "consolidated.money_6",
+          "expenses.fmtMoneyExact",
+          "invoiceList.fmtMoneyExact",
+          "charts.total"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "בדיקה",
+        "keys": [
+          "suppliers.text_46",
+          "reports.text_37",
+          "fileUpload.text_20",
+          "assistantDialog.text_13",
+          "invoiceList.text_4"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "תשלום",
+        "keys": [
+          "suppliers.text_47",
+          "reports.text_38",
+          "fileUpload.sourcePayment",
+          "invoiceList.text_5",
+          "financialSupplier.fmtDate"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "אין חשבוניות לספק זה",
+        "keys": [
+          "suppliers.noInvoices"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "סכום",
+        "keys": [
+          "suppliers.fmtMoneyExact_5",
+          "suppliers.fmtMoneyExact_6",
+          "bank.fmtMoneyExact",
+          "paymentRequests.fmtMoneyExact",
+          "reports.text_48",
+          "reports.xlAmount",
+          "consolidated.money",
+          "consolidated.amountWord",
+          "exceptions.detailAmount",
+          "credits.fmtMoneyExact",
+          "credits.fmtMoneyExact_3",
+          "payments.fmtMoneyExact",
+          "payments.fmtMoneyExact_2"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "אמצעי",
+        "keys": [
+          "suppliers.text_48",
+          "reports.xlMethod",
+          "payments.text_2"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "אסמכתא",
+        "keys": [
+          "suppliers.text_49",
+          "bank.text_2",
+          "docReview.text_13",
+          "reports.xlReference",
+          "payments.text_3",
+          "payments.text_10"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "אין תשלומים לספק זה",
+        "keys": [
+          "suppliers.emptyTitle_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מס׳",
+        "keys": [
+          "suppliers.numberHeader",
+          "orders.text",
+          "paymentRequests.numHeader",
+          "reports.text_29",
+          "credits.numberHeader",
+          "payments.numberHeader"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סיבה",
+        "keys": [
+          "settings.text_52",
+          "suppliers.statusLabel",
+          "inventory.text_32",
+          "docReview.text_29",
+          "reports.text_47",
+          "reports.xlReason",
+          "exceptions.detailReason",
+          "supplierLog.text_13",
+          "credits.statusLabel",
+          "credits.statusLabel_2"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "נפתח",
+        "keys": [
+          "suppliers.fmtDate_5",
+          "exceptions.fmtDate",
+          "credits.fmtDate"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "אין זיכויים לספק זה",
+        "keys": [
+          "suppliers.noCredits"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מוצר",
+        "keys": [
+          "suppliers.productLabel",
+          "orders.text_21",
+          "inventory.text_15",
+          "inventory.text_29",
+          "priceLists.productLabel",
+          "priceLists.text_9",
+          "priceLists.text_24",
+          "priceLists.text_28",
+          "onboarding.text_25",
+          "documentOps.text_14",
+          "priceUpload.colProduct",
+          "newOrder.productLabel",
+          "products.columnName",
+          "productPurchase.text",
+          "productPurchase.text_11",
+          "minimumFix.get",
+          "minimumFix.get_2",
+          "summaryStep.map",
+          "supplierGroupCard.fallbackProduct"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מחיר נוכחי",
+        "keys": [
+          "suppliers.fmtMoneyExact_7",
+          "priceLists.fmtMoneyExact",
+          "supplierLog.fieldCurrentPrice"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מחיר קודם",
+        "keys": [
+          "suppliers.fmtMoneyExact_8",
+          "priceLists.fmtMoneyExact_2",
+          "supplierLog.fieldPreviousPrice"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "שעת סגירת הזמנות",
+        "keys": [
+          "suppliers.set_7"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "פריטים",
+        "keys": [
+          "orders.text_3",
+          "receiving.itemsWord",
+          "supplierGroupCard.itemsOther"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": [
+      "עדכון פרטי בנק של ספק",
+      "הספק נוצר — פרטי הבנק דורשים אימות זהות",
+      "שומר את פרטי הבנק",
+      "יוסרו",
+      "עריכת ספק — $",
+      "מינימום הזמנה ($",
+      "במטבע ברירת המחדל של הספק.",
+      "פרטי הבנק של ״$",
+      "״ $",
+      "יעודכנו לחשבון $",
+      "שמסתיים ב־$",
+      "והשינוי יירשם ביומן הביקורת.",
+      "בסה״כ",
+      "חשבונית $",
+      "של $",
+      "דרישת זיכוי מספר $",
+      "עבור $"
+    ]
+  },
+  {
+    "file": "src/pages/Dashboard.tsx",
+    "exempt": false,
+    "baselineLines": 28,
+    "matched": 32,
+    "orphanMatched": 25,
+    "fresh": 16,
+    "matchedList": [
+      {
+        "text": "חשבוניות הממתינות לאישור",
+        "keys": [
+          "dashboard.text_20",
+          "businessSummary.awaitingApproval"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "אין חשבוניות לאישור",
+        "keys": [
+          "dashboard.text_21"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "דרישות תשלום הממתינות לאישור",
+        "keys": [
+          "dashboard.text_22"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין דרישות לאישור",
+        "keys": [
+          "dashboard.text_23"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "דרישות תשלום באיחור",
+        "keys": [
+          "dashboard.text_24"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין מספיק תאריכי פירעון כדי למדוד איחורים",
+        "keys": [
+          "dashboard.text_25"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין תשלומים באיחור",
+        "keys": [
+          "dashboard.text_26"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "תשלומים לביצוע היום",
+        "keys": [
+          "dashboard.text_27"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "לא הוגדרו תאריכי יעד",
+        "keys": [
+          "dashboard.text_28"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין תשלומים להיום",
+        "keys": [
+          "dashboard.text_29"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "חריגים פתוחים",
+        "keys": [
+          "suppliers.openExceptions",
+          "dashboard.title_5",
+          "dashboard.openExceptions",
+          "reports.kpiOpenExceptions",
+          "analytics.openExceptions",
+          "businessSummary.openExceptions"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "אין חריגים פתוחים",
+        "keys": [
+          "dashboard.noOpenExceptions"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "זיכויים פתוחים",
+        "keys": [
+          "suppliers.fmtNum",
+          "dashboard.text_30",
+          "answerView.toolOpenCredits",
+          "accountantDashboard.fmtNum_3",
+          "accountantDashboard.text_9",
+          "analytics.openCredits"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "אין זיכויים פתוחים",
+        "keys": [
+          "dashboard.text_31",
+          "accountantDashboard.text_10"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "התחייבויות רכש פתוחות",
+        "keys": [
+          "dashboard.openCommitments"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין התחייבויות פתוחות",
+        "keys": [
+          "dashboard.noOpenCommitments"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "הזמנות באיחור באספקה",
+        "keys": [
+          "dashboard.text_32"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין הזמנות באיחור",
+        "keys": [
+          "dashboard.text_33"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "הזמנות ממתינות לאישור ספק",
+        "keys": [
+          "dashboard.text_34"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "כל ההזמנות אושרו",
+        "keys": [
+          "dashboard.text_35"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "ספקים שהעלו מחירים (30 יום)",
+        "keys": [
+          "dashboard.text_36"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין שינויי מחירים",
+        "keys": [
+          "dashboard.text_37"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין רכש החודש",
+        "keys": [
+          "dashboard.text_42"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "סה״כ בטיפול",
+        "keys": [
+          "dashboard.totalLabel"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין נתוני חשבוניות לתקופה",
+        "keys": [
+          "dashboard.emptyMessage",
+          "dashboard.noInvoiceDataForPeriod"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "רכש",
+        "keys": [
+          "dashboard.comparisonSeries",
+          "nav.groupPurchasing",
+          "nav.text_6"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "תשלומים",
+        "keys": [
+          "dashboard.comparisonSeries_2",
+          "nav.routeTitle_payments",
+          "documents.routingPayments",
+          "reports.xlPayments",
+          "payments.text_7",
+          "accountantDashboard.text_11",
+          "accountantDashboard.comparisonSeries",
+          "globalSearch.groupPayments"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "אין רכש או תשלומים בשמונת השבועות האחרונים",
+        "keys": [
+          "dashboard.emptyMessage_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "חשבוניות",
+        "keys": [
+          "nav.routeTitle_invoices",
+          "documents.routingInvoices",
+          "invoices.text_2",
+          "reports.kpiInvoices",
+          "reports.xlInvoices",
+          "payQueue.text_10",
+          "expenses.text_2",
+          "expenses.text_9",
+          "expenses.fmtNum",
+          "expenses.invoicesWord",
+          "invoiceNew.text_3",
+          "invoiceList.title",
+          "payments.text_5",
+          "accountantDashboard.text_12",
+          "globalSearch.groupInvoices"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מתוכם באיחור",
+        "keys": [
+          "dashboard.ofWhichOverdue"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "דרישות",
+        "keys": [
+          "dashboard.requestsWord"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "לפירעון בשבעת הימים הקרובים",
+        "keys": [
+          "dashboard.dueWithinSevenDays"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": [
+      "בחומרה גבוהה",
+      "נותר לקבלה $",
+      "נמדד רכש בסכום $",
+      "אין תמהיל חיובי להצגה",
+      "הוצאות לפי קטגוריה: $",
+      "אחוז",
+      "יתרת חשבוניות פתוחות: $",
+      "חשבוניות פתוחות",
+      "חיסכון משוער $",
+      "המגמות והתמהיל מוצגים ב־",
+      "קיימת פעילות גם ב־",
+      "והיא אינה מחוברת אליהם.",
+      "דרישות התשלום הפעילות הן ב־",
+      "בלבד. ראו את מסך דרישות התשלום.",
+      "בנוסף קיימות דרישות ב־",
+      "שאינן מחוברות לסכום הזה."
+    ]
+  },
+  {
+    "file": "src/components/CurrencyTolerancesPanel.tsx",
+    "exempt": false,
+    "baselineLines": 39,
+    "matched": 8,
+    "orphanMatched": 0,
+    "fresh": 30,
+    "matchedList": [
+      {
+        "text": "התאמת תנועת בנק",
+        "keys": [
+          "bank.title_3"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "חשבוניות",
+        "keys": [
+          "nav.routeTitle_invoices",
+          "documents.routingInvoices",
+          "invoices.text_2",
+          "reports.kpiInvoices",
+          "reports.xlInvoices",
+          "payQueue.text_10",
+          "expenses.text_2",
+          "expenses.text_9",
+          "expenses.fmtNum",
+          "expenses.invoicesWord",
+          "invoiceNew.text_3",
+          "invoiceList.title",
+          "payments.text_5",
+          "accountantDashboard.text_12",
+          "globalSearch.groupInvoices"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "תשלומים",
+        "keys": [
+          "dashboard.comparisonSeries_2",
+          "nav.routeTitle_payments",
+          "documents.routingPayments",
+          "reports.xlPayments",
+          "payments.text_7",
+          "accountantDashboard.text_11",
+          "accountantDashboard.comparisonSeries",
+          "globalSearch.groupPayments"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "זיכויים",
+        "keys": [
+          "suppliers.text_5",
+          "nav.routeTitle_credits",
+          "documents.routingCredits",
+          "reports.text_45",
+          "reports.xlCredits",
+          "financialSupplier.text_8",
+          "credits.text_5",
+          "globalSearch.groupCredits"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "הזמנות",
+        "keys": [
+          "settings.text_46",
+          "settings.tableLabel_2",
+          "orders.ordersCrumb",
+          "nav.text",
+          "supplierProposal.text",
+          "globalSearch.groupOrders"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מחירונים",
+        "keys": [
+          "nav.routeTitle_prices",
+          "priceLists.title",
+          "onboarding.text_32",
+          "onboarding.text_48"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "היסטוריית מחירים",
+        "keys": [
+          "priceLists.setHistoryFor",
+          "priceLists.aria_label_2"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "הוספה",
+        "keys": [
+          "onboarding.add"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": [
+      "הפרש מותר בין שורה בתדפיס הבנק לבין התשלום שהיא סוגרת.",
+      "בקשת תשלום",
+      "הפרש מותר בין סכום הבקשה לבין החשבוניות שמאחוריה.",
+      "שורה בחשבונית",
+      "הפרש מותר בין כמות × מחיר פחות הנחה לבין סכום השורה. זהו סכום קטן — עודף, לא יחידה.",
+      "סה״כ החשבונית",
+      "הפרש מותר בין סכום הכותרת לבין סכום השורות.",
+      "מטבע הספרים",
+      "ברירת מחדל של ספק",
+      "בקשות תשלום",
+      "דרישות רכש",
+      "תדפיסי בנק",
+      "ספי אישור",
+      "שמירת הסטיות נכשלה. נסה שוב.",
+      "הסטיות נשמרו",
+      "התאמת בנק במטבע כזה נעצרת, ובדיקת סכום על מסמך מסומנת כלא בוצעה — עד שייקבע כאן ערך.",
+      "נוסף מראש — עדיין לא הופיע במסמך",
+      "דורש קביעה",
+      "סטיות סכום מותרות",
+      "כל מטבע מקבל אוטומטית הפרשים מותרים שנגזרים ממנו עצמו, ולכן אין מה להגדיר כדי להתחיל",
+      "לעבוד. השדות כאן הם לעקיפה בלבד — למלא רק אם ההפרש שהמערכת בחרה אינו מתאים לעסק.",
+      "הערכים הם סכומים באותו מטבע: אין שער המרה, ואף מספר אינו נגזר ממטבע אחר.",
+      "המערכת אינה מזהה את המטבע ולכן אין לו הפרש מותר.",
+      "ערך שנקבע ידנית.",
+      "אין ערך אוטומטי למטבע הזה — יש לקבוע.",
+      "פועל אוטומטית.",
+      "הוספת מטבע מראש",
+      "בחר מטבע",
+      "אפשר לקבוע ערכים למטבע לפני שמגיע בו מסמך ראשון, כדי לא להיתקל בעצירה בפעם הראשונה.",
+      "שמירת הסטיות"
+    ]
+  },
+  {
+    "file": "src/components/document-review/DocumentLineMapping.tsx",
+    "exempt": false,
+    "baselineLines": 31,
+    "matched": 8,
+    "orphanMatched": 0,
+    "fresh": 27,
+    "matchedList": [
+      {
+        "text": "יח׳",
+        "keys": [
+          "orders.text_22"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "שויך",
+        "keys": [
+          "docReview.text_31"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מק״ט",
+        "keys": [
+          "documents.lineSku",
+          "onboarding.text_27",
+          "onboarding.fieldSku",
+          "priceListReview.matchedBySku",
+          "products.text_2",
+          "products.set_3"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "ברקוד",
+        "keys": [
+          "documents.lineBarcode",
+          "priceListReview.matchedByBarcode",
+          "products.set_4",
+          "invoiceLineReview.updateLine_3"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "יצירה",
+        "keys": [
+          "supplierLog.actionInsert"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "ליחידה",
+        "keys": [
+          "newOrder.fmtMoneyExact",
+          "newOrder.fmtMoneyExact_2",
+          "supplierGroupCard.perUnit"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מוצרים",
+        "keys": [
+          "orders.productsWord",
+          "nav.routeTitle_products",
+          "receiving.text_43",
+          "onboarding.text_41",
+          "products.title",
+          "globalSearch.groupProducts"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מתוך",
+        "keys": [
+          "settings.fmtNum",
+          "orders.outOfWord",
+          "receiving.text_31",
+          "documents.text_58",
+          "priceListReview.text_3",
+          "priceListReview.text_32",
+          "orgSubscription.text_42",
+          "expenses.linkedInvoicesOf",
+          "emailOrderCard.text_3"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": [
+      "יצירת מוצרים ומחירים מתוך מסמך שהתקבל",
+      "לא היה מה ליצור",
+      "כל השורות שויכו למוצר. אפשר לאשר את המסמך.",
+      "לא שויך",
+      "תיאור במסמך",
+      "כמות ומחיר",
+      "סה״כ שורה",
+      "טוען מוצרים…",
+      "אין עדיין מוצרים בקטלוג",
+      "בחר מוצר קיים",
+      "יצירת מוצרים מהשורות שנבחרו",
+      "שורה $",
+      "נוצרו $",
+      "מוצרים, אך קביעת המחירים נכשלה: $",
+      "אפשר להשלים במסך המחירונים.",
+      "שורות שויכו למוצר קיים",
+      "שורות שאין להן מוצר בקטלוג",
+      "סמנו שורות וצרו מהן מוצרים, או פתחו שורה כדי לבחור לה מוצר קיים. נותרו",
+      "כל עוד הספק לא זוהה אי אפשר ליצור מוצרים — מוצר חדש נוצר עם מחיר אצל ספק מסוים.",
+      "אפשר לשייך לשורות מוצרים קיימים, ולזהות את הספק למעלה.",
+      "בחירת הכל",
+      "נבחרו",
+      "סימון $",
+      "שיוך למוצר קיים",
+      "מוצרים חדשים ייווצרו ויקבלו את המחיר שבמסמך אצל הספק.",
+      "שורות ישויכו למוצר שכבר קיים בקטלוג באותו שם — לא ייווצר מוצר כפול.",
+      "שורות יידלגו: אין להן שם מוצר במסמך. אפשר לשייך אותן ידנית."
+    ]
+  },
+  {
+    "file": "src/components/OrgSubscriptionPanel.tsx",
+    "exempt": false,
+    "baselineLines": 15,
+    "matched": 9,
+    "orphanMatched": 6,
+    "fresh": 12,
+    "matchedList": [
+      {
+        "text": "לא ניתן לקבוע כרגע אם רכישת מסלול זמינה. זה אינו אומר שהיא חסומה — רענון או ניסיון מאוחר יותר יראה את המצב העדכני.",
+        "keys": [
+          "orgSubscription.text_12"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "המסלול הנוכחי",
+        "keys": [
+          "orgSubscription.text_23"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מדרגה מעל",
+        "keys": [
+          "orgSubscription.text_24"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מדרגה מתחת",
+        "keys": [
+          "orgSubscription.text_25"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מסלול בתשלום",
+        "keys": [
+          "orgSubscription.text_26"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "לא נדרש אמצעי תשלום",
+        "keys": [
+          "orgSubscription.text_27"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מחיר",
+        "keys": [
+          "priceLists.fmtMoneyExact_4",
+          "priceLists.text_19",
+          "priceLists.text_25",
+          "priceLists.text_29",
+          "onboarding.fmtMoneyExact",
+          "onboarding.text_37",
+          "onboarding.fieldPrice",
+          "priceUpload.colPrice"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מסמכים",
+        "keys": [
+          "nav.groupDocuments",
+          "nav.text_3",
+          "nav.text_5",
+          "nav.barDocuments",
+          "orgSubscription.text_34",
+          "documentsInboxTail.documentsLabel"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "ללא הגבלה",
+        "keys": [
+          "pricingTail.unlimited"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": [
+      "ישראל בשקלים",
+      "גלובלי בדולרים",
+      "מטבע החיוב טרם אומת ואינו נגזר ממטבע התצוגה.",
+      "מומלץ",
+      "מכסה",
+      "חוזית",
+      "המחירים למטה מוצגים לפי שפת הממשק: עברית בשקלים ואנגלית בדולרים. זו תצוגה",
+      "בלבד; החיוב בפועל והמס נקבעים לפי מדינת החיוב המאומתת אצל ספק הסליקה.",
+      "מוצג קטלוג",
+      "לפני מס.",
+      "מטבע החיוב המאומת כרגע הוא $",
+      "פתוח ב־30 הימים הראשונים"
+    ]
+  },
+  {
+    "file": "src/pages/AcceptOperatorInvite.tsx",
+    "exempt": false,
+    "baselineLines": 17,
+    "matched": 4,
+    "orphanMatched": 0,
+    "fresh": 15,
+    "matchedList": [
+      {
+        "text": "קיים כבר חשבון לכתובת הזו, והסיסמה שהוזנה אינה נכונה.",
+        "keys": [
+          "acceptInvite.text"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "טוען",
+        "keys": [
+          "dashboard.text_18",
+          "ui.text",
+          "inventory.text_34",
+          "orgSubscription.text_41",
+          "planCard.loading"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סיסמה",
+        "keys": [
+          "login.text_10",
+          "signup.text_9"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "אימות סיסמה",
+        "keys": [
+          "settings.text_32",
+          "acceptInvite.text_5",
+          "resetPasswordTail.confirmPassword"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": [
+      "תוקף ההזמנה פג. ההזמנות לצוות תקפות לחמש עשרה דקות בלבד — יש לבקש קישור חדש.",
+      "ההזמנה בוטלה.",
+      "ההזמנה כבר נוצלה. אפשר להיכנס עם החשבון שנפתח.",
+      "הקישור אינו תקין.",
+      "מצטרף…",
+      "הצטרפות לצוות",
+      "למסך הכניסה",
+      "נשלח מייל אימות לכתובת. יש לאשר אותו ולפתוח שוב את הקישור — ואם חלפו חמש עשרה דקות",
+      "לבקש קישור חדש.",
+      "הוזמנת להצטרף לצוות התפעול של",
+      "בתפקיד",
+      "לפחות",
+      "תווים",
+      "ההצטרפות פותחת חשבון לניהול הפלטפורמה בלבד. היא אינה פותחת עסק ואינה מצרפת אותך לאף ארגון.",
+      "ניהול הפלטפורמה, לא ניהול עסק"
+    ]
+  },
+  {
+    "file": "src/pages/ProductPurchaseSummary.tsx",
+    "exempt": false,
+    "baselineLines": 21,
+    "matched": 13,
+    "orphanMatched": 5,
+    "fresh": 6,
+    "matchedList": [
+      {
+        "text": "הוצאה",
+        "keys": [
+          "productPurchase.text_8"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מחיר יחידה ממוצע",
+        "keys": [
+          "productPurchase.text_9",
+          "productPurchase.text_20"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "רכישות מוצרים",
+        "keys": [
+          "productPurchase.book_append_sheet"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מוצר",
+        "keys": [
+          "suppliers.productLabel",
+          "orders.text_21",
+          "inventory.text_15",
+          "inventory.text_29",
+          "priceLists.productLabel",
+          "priceLists.text_9",
+          "priceLists.text_24",
+          "priceLists.text_28",
+          "onboarding.text_25",
+          "documentOps.text_14",
+          "priceUpload.colProduct",
+          "newOrder.productLabel",
+          "products.columnName",
+          "productPurchase.text",
+          "productPurchase.text_11",
+          "minimumFix.get",
+          "minimumFix.get_2",
+          "summaryStep.map",
+          "supplierGroupCard.fallbackProduct"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "יחידה",
+        "keys": [
+          "documents.lineUnit",
+          "priceLists.formatUnit",
+          "onboarding.normalizeUnitInput",
+          "onboarding.formatUnit",
+          "productPurchase.formatUnit",
+          "invoiceLineReview.updateLine_5"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "הוזמן",
+        "keys": [
+          "docAssessment.text_24",
+          "receiptConflict.orderedWord",
+          "productPurchase.text_5",
+          "productPurchase.text_12",
+          "invoiceLineReview.formatQuantity_2"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "התקבל",
+        "keys": [
+          "status.credit_received",
+          "orders.text_26",
+          "consolidated.receivedWord",
+          "docAssessment.text_25",
+          "productPurchase.text_6",
+          "productPurchase.text_13"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "חויב",
+        "keys": [
+          "productPurchase.text_7",
+          "productPurchase.text_14"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "נרכש בפועל",
+        "keys": [
+          "productPurchase.text_4",
+          "productPurchase.text_15"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מספר ספקים",
+        "keys": [
+          "productPurchase.text_16",
+          "exportTemplates.fieldSupplierCount",
+          "summaryStep.label"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מספר הזמנות",
+        "keys": [
+          "productPurchase.text_17"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מספר חשבוניות",
+        "keys": [
+          "expenses.title_3",
+          "productPurchase.text_18",
+          "exportTemplates.fieldInvoiceCount"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "הוצאה ברוטו",
+        "keys": [
+          "productPurchase.text_19"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": [
+      "בכמה מטבעות",
+      "ריכוז רכישות מוצרים — $",
+      "הופק $",
+      "שורות חשבונית בסך",
+      "לא שויכו",
+      "לשורת הזמנה, ולכן אינן נספרות באף מוצר. הן ממתינות למיפוי ידני."
+    ]
+  },
+  {
+    "file": "src/lib/errors.ts",
+    "exempt": false,
+    "baselineLines": 16,
+    "matched": 2,
+    "orphanMatched": 0,
+    "fresh": 15,
+    "matchedList": [
+      {
+        "text": "לא הוגדרה מכסת מסמכים למסלול של הארגון, ולכן העיבוד נעצר מחשש לחיוב לא מבוקר. זו הגדרה במערכת ולא חריגה שלכם — יש לפנות לתמיכה.",
+        "keys": [
+          "errors.plan_limit_unknown"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מצב הסריקה השתנה ולא ניתן ליצור ממנה תיקון חדש. רענן את המסך ובדוק את הגרסה הנוכחית.",
+        "keys": [
+          "errors.document_scan_recovery_unavailable"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": [
+      "לא נקבעה סטיית סכום מותרת למטבע של התנועה, ולכן אי אפשר להשוות סכומים.",
+      "אפשר לקבוע אותה במסך ההגדרות, בקטע \"סטיות סכום מותרות\".",
+      "יש לפנות לבעל העסק כדי שיקבע אותה בהגדרות.",
+      "יש לקבוע אותה בהגדרות לפני ההתאמה.",
+      "התנועה והחשבונית אינן באותו מטבע. תנועה סוגרת חוב במטבע אחר רק דרך תשלום שרשם את שני הסכומים.",
+      "בקשת תשלום אחת יכולה לכלול חשבוניות במטבע אחד בלבד. יש לפצל לבקשה נפרדת לכל מטבע.",
+      "לסכום יש יותר ספרות אחרי הנקודה העשרונית ממה שהמטבע הזה מאפשר.",
+      "היכולת הזו אינה כלולה במסלול הנוכחי. במסך המנוי אפשר לראות באיזה מסלול היא נפתחת.",
+      "הארגון הגיע למספר המשתמשים הפעילים שמותר במסלול הנוכחי. יש להשבית משתמש או לעבור למסלול מתאים.",
+      "הארגון הגיע למספר הסניפים שמותר במסלול הנוכחי. יש לעבור למסלול מתאים לפני הוספת סניף.",
+      "מכסת המסלול אינה מוגדרת ולכן הפעולה נעצרה. זו הגדרה במערכת ולא חריגה שלכם — יש לפנות לתמיכה.",
+      "היכולת הזו אינה כלולה במסלול הנוכחי של העסק. אפשר לראות מה כולל כל מסלול במסך המנוי.",
+      "מספר המשתמשים במסלול הנוכחי מלא. אפשר לשחרר הזמנה ממתינה או להשבית משתמש קיים, ולראות במסך המנוי מה כולל כל מסלול.",
+      "אפשר לקבוע אותה במסך ההגדרות, בקטע",
+      "סטיות סכום מותרות"
+    ]
+  },
+  {
+    "file": "src/pages/dashboards/AccountantDashboard.tsx",
+    "exempt": false,
+    "baselineLines": 14,
+    "matched": 17,
+    "orphanMatched": 12,
+    "fresh": 0,
+    "matchedList": [
+      {
+        "text": "שולם החודש",
+        "keys": [
+          "reports.kpiPaidThisMonth",
+          "accountantDashboard.fmtMoneyRounded"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "יתרת חשבוניות פתוחות",
+        "keys": [
+          "dashboard.title_3",
+          "accountantDashboard.fmtMoneyRounded_2"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "תנועות בנק לא מותאמות",
+        "keys": [
+          "answerView.toolUnmatchedBankTransactions",
+          "financialSupplier.text_3",
+          "accountantDashboard.fmtNum",
+          "accountantDashboard.text_5"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "התאמות שממתינות לאישור",
+        "keys": [
+          "reports.kpiSuggested",
+          "financialSupplier.text_4",
+          "accountantDashboard.fmtNum_2",
+          "accountantDashboard.text_7"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "זיכויים פתוחים",
+        "keys": [
+          "suppliers.fmtNum",
+          "dashboard.text_30",
+          "answerView.toolOpenCredits",
+          "accountantDashboard.fmtNum_3",
+          "accountantDashboard.text_9",
+          "analytics.openCredits"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "ממתין להעברה לרו״ח",
+        "keys": [
+          "accountantDashboard.fmtNum_4"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "חשבוניות לבדיקה",
+        "keys": [
+          "accountantDashboard.text"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין חשבוניות לבדיקה",
+        "keys": [
+          "accountantDashboard.text_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "חשבוניות מאושרות שלא נשלחו לרו״ח",
+        "keys": [
+          "accountantDashboard.text_3"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "הכול נשלח לרו״ח",
+        "keys": [
+          "accountantDashboard.text_4"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין תנועות פתוחות",
+        "keys": [
+          "accountantDashboard.text_6"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין הצעות שממתינות לאישור",
+        "keys": [
+          "accountantDashboard.text_8"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין זיכויים פתוחים",
+        "keys": [
+          "dashboard.text_31",
+          "accountantDashboard.text_10"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "תשלומים",
+        "keys": [
+          "dashboard.comparisonSeries_2",
+          "nav.routeTitle_payments",
+          "documents.routingPayments",
+          "reports.xlPayments",
+          "payments.text_7",
+          "accountantDashboard.text_11",
+          "accountantDashboard.comparisonSeries",
+          "globalSearch.groupPayments"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "חיובי בנק",
+        "keys": [
+          "accountantDashboard.comparisonSeries_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "השוואת תשלומים שבוצעו מול חיובי בנק, שמונה שבועות",
+        "keys": [
+          "accountantDashboard.ariaLabel"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין תשלומים או תנועות בנק בשמונת השבועות האחרונים",
+        "keys": [
+          "accountantDashboard.emptyMessage_3"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": []
+  },
+  {
+    "file": "src/pages/Orders.tsx",
+    "exempt": false,
+    "baselineLines": 13,
+    "matched": 8,
+    "orphanMatched": 2,
+    "fresh": 8,
+    "matchedList": [
+      {
+        "text": "מס׳",
+        "keys": [
+          "suppliers.numberHeader",
+          "orders.text",
+          "paymentRequests.numHeader",
+          "reports.text_29",
+          "credits.numberHeader",
+          "payments.numberHeader"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "ספק",
+        "keys": [
+          "suppliers.text_6",
+          "dashboard.text_16",
+          "orders.text_2",
+          "bank.label",
+          "documents.text_22",
+          "documents.text_34",
+          "documents.text_48",
+          "priceLists.text",
+          "priceLists.text_23",
+          "priceLists.text_27",
+          "paymentRequests.text",
+          "paymentRequests.text_35",
+          "onboarding.text_28",
+          "onboarding.text_35",
+          "onboarding.fieldSupplier",
+          "invoices.detailSupplier",
+          "reports.text_28",
+          "reports.text_42",
+          "reports.text_46",
+          "reports.xlSupplier",
+          "consolidated.text_4",
+          "expenses.text",
+          "expenses.text_6",
+          "expenses.text_14",
+          "exceptions.text_3",
+          "invoiceNew.text_9",
+          "supplierSplit.supplierWord",
+          "invoiceList.text_3",
+          "credits.text",
+          "payments.text",
+          "payments.text_8",
+          "receiptDetail.text_4",
+          "summaryStep.genericSupplier",
+          "analytics.supplier"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "נוצרה",
+        "keys": [
+          "orders.fmtDate",
+          "paymentRequests.fmtDate_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אספקה",
+        "keys": [
+          "orders.fmtDate_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "פריטים",
+        "keys": [
+          "orders.text_3",
+          "receiving.itemsWord",
+          "supplierGroupCard.itemsOther"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סה״כ",
+        "keys": [
+          "suppliers.fmtMoneyExact_4",
+          "orders.fmtMoneyExact",
+          "orders.text_25",
+          "reports.fmtMoneyExact_5",
+          "reports.text_34",
+          "reports.text_40",
+          "consolidated.money_6",
+          "expenses.fmtMoneyExact",
+          "invoiceList.fmtMoneyExact",
+          "charts.total"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סטטוס",
+        "keys": [
+          "settings.text_8",
+          "settings.text_17",
+          "settings.text_37",
+          "suppliers.text_11",
+          "suppliers.text_30",
+          "suppliers.text_43",
+          "suppliers.text_51",
+          "orders.text_4",
+          "bank.text_5",
+          "paymentRequests.text_2",
+          "reports.text_49",
+          "reports.xlStatus",
+          "exceptions.text_5",
+          "supplierLog.fieldStatus",
+          "credits.text_3",
+          "credits.text_13",
+          "supplierGroupCard.status"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "הדפסה",
+        "keys": [
+          "orders.print",
+          "orders.actionPrint",
+          "invoiceList.actionPrint"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": [
+      "קובץ ה-PDF הורד",
+      "הורדת ההזמנה כקובץ PDF מעוצב עם הלוגו של הארגון",
+      "הורדת PDF",
+      "שים לב: סכום ההזמנה (",
+      ") נמוך ממינימום ההזמנה של הספק (",
+      "ההזמנה במטבע",
+      "ומינימום ההזמנה של הספק נקוב ב",
+      "), ולכן אין כאן בדיקת מינימום."
+    ]
+  },
+  {
+    "file": "src/components/document-review/DocumentReviewWorkspace.tsx",
+    "exempt": false,
+    "baselineLines": 12,
+    "matched": 13,
+    "orphanMatched": 9,
+    "fresh": 1,
+    "matchedList": [
+      {
+        "text": "לא ניתן לטעון תצוגה מאובטחת של המקור. אפשר לנסות לרענן את המסך.",
+        "keys": [
+          "docWorkspace.setSourceError"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "הדפדפן חסם את פתיחת המסמך. יש לאפשר חלונות קופצים ולנסות שוב.",
+        "keys": [
+          "docWorkspace.toast"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "לא ניתן ליצור קישור מאובטח חדש למסמך. יש לנסות שוב.",
+        "keys": [
+          "docWorkspace.toast_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "שולח מחדש…",
+        "keys": [
+          "docWorkspace.text_30"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "עיבוד מחדש",
+        "keys": [
+          "documents.text_64",
+          "documentOps.isActiveAttempt_2",
+          "documentOps.confirmLabel",
+          "docWorkspace.text_31"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "המסמך אינו זמין או שאין לך הרשאה לצפות בו.",
+        "keys": [
+          "docWorkspace.text_2",
+          "documentReviewPage.message_3"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מצב המסמך",
+        "keys": [
+          "documents.text_2",
+          "docWorkspace.text_3"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "שכבות בדיקה",
+        "keys": [
+          "docWorkspace.text_4"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "הערות",
+        "keys": [
+          "suppliers.set_9",
+          "documents.lineNotes",
+          "paymentRequests.setNotes",
+          "payQueue.setF_3",
+          "products.set_6",
+          "invoiceNew.set_3",
+          "supplierSplit.setNotes",
+          "docWorkspace.text_6",
+          "supplierLog.fieldNotes",
+          "payments.text_6",
+          "summaryStep.fmtDate_4"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "העיבוד נכשל.",
+        "keys": [
+          "docWorkspace.text_29"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "העיבוד נעצר. אפשר לטפל בו במרכז תפעול המסמכים.",
+        "keys": [
+          "docWorkspace.text_32"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "החילוץ חלקי. יש להשוות כל ערך למקור לפני מתן משוב.",
+        "keys": [
+          "docWorkspace.text_33"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "המסמך ותוצאות העיבוד זמינים לצפייה. פעולות בדיקה ועדכון אינן זמינות במצב קריאה בלבד.",
+        "keys": [
+          "docWorkspace.text_34"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": [
+      "תיקונים"
+    ]
+  },
+  {
+    "file": "src/pages/Payments.tsx",
+    "exempt": false,
+    "baselineLines": 16,
+    "matched": 9,
+    "orphanMatched": 3,
+    "fresh": 4,
+    "matchedList": [
+      {
+        "text": "מס׳",
+        "keys": [
+          "suppliers.numberHeader",
+          "orders.text",
+          "paymentRequests.numHeader",
+          "reports.text_29",
+          "credits.numberHeader",
+          "payments.numberHeader"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "ספק",
+        "keys": [
+          "suppliers.text_6",
+          "dashboard.text_16",
+          "orders.text_2",
+          "bank.label",
+          "documents.text_22",
+          "documents.text_34",
+          "documents.text_48",
+          "priceLists.text",
+          "priceLists.text_23",
+          "priceLists.text_27",
+          "paymentRequests.text",
+          "paymentRequests.text_35",
+          "onboarding.text_28",
+          "onboarding.text_35",
+          "onboarding.fieldSupplier",
+          "invoices.detailSupplier",
+          "reports.text_28",
+          "reports.text_42",
+          "reports.text_46",
+          "reports.xlSupplier",
+          "consolidated.text_4",
+          "expenses.text",
+          "expenses.text_6",
+          "expenses.text_14",
+          "exceptions.text_3",
+          "invoiceNew.text_9",
+          "supplierSplit.supplierWord",
+          "invoiceList.text_3",
+          "credits.text",
+          "payments.text",
+          "payments.text_8",
+          "receiptDetail.text_4",
+          "summaryStep.genericSupplier",
+          "analytics.supplier"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "תאריך",
+        "keys": [
+          "suppliers.fmtDate",
+          "suppliers.fmtDate_3",
+          "suppliers.fmtDate_4",
+          "bank.fmtDate",
+          "priceLists.text_18",
+          "docReview.text_12",
+          "reports.text_30",
+          "reports.xlDate",
+          "consolidated.fmtDate",
+          "consolidated.fmtDate_2",
+          "expenses.text_8",
+          "exceptions.detailDate",
+          "invoiceList.fmtDate",
+          "payments.fmtDate"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סכום",
+        "keys": [
+          "suppliers.fmtMoneyExact_5",
+          "suppliers.fmtMoneyExact_6",
+          "bank.fmtMoneyExact",
+          "paymentRequests.fmtMoneyExact",
+          "reports.text_48",
+          "reports.xlAmount",
+          "consolidated.money",
+          "consolidated.amountWord",
+          "exceptions.detailAmount",
+          "credits.fmtMoneyExact",
+          "credits.fmtMoneyExact_3",
+          "payments.fmtMoneyExact",
+          "payments.fmtMoneyExact_2"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "אמצעי",
+        "keys": [
+          "suppliers.text_48",
+          "reports.xlMethod",
+          "payments.text_2"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "אסמכתא",
+        "keys": [
+          "suppliers.text_49",
+          "bank.text_2",
+          "docReview.text_13",
+          "reports.xlReference",
+          "payments.text_3",
+          "payments.text_10"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "בוצע על ידי",
+        "keys": [
+          "payments.text_4",
+          "payments.text_11"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "תאריך תשלום",
+        "keys": [
+          "payments.fmtDate_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אמצעי תשלום",
+        "keys": [
+          "payments.text_9"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": [
+      "ירד מהחשבון בפועל",
+      "שער שנגזר מהתשלום",
+      "החוב נסגר ב",
+      "השער מחושב מתוך שני הסכומים שנרשמו בתשלום הזה ואינו נשמר במערכת."
+    ]
+  },
+  {
+    "file": "src/pages/Settings.tsx",
+    "exempt": false,
+    "baselineLines": 9,
+    "matched": 7,
+    "orphanMatched": 6,
+    "fresh": 6,
+    "matchedList": [
+      {
+        "text": "הפעלת משתמש",
+        "keys": [
+          "settings.text_48"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "השבתת משתמש",
+        "keys": [
+          "settings.text_47"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "המשתמש הופעל",
+        "keys": [
+          "settings.toast_7"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "המשתמש הושבת",
+        "keys": [
+          "settings.toast_6"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "שם הארגון לתצוגה",
+        "keys": [
+          "settings.setOrgName"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "שיעור מע״מ (%)",
+        "keys": [
+          "settings.setVatRate",
+          "onboarding.text_3",
+          "admin.text_35"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "טווח ימים להתאמת בנק",
+        "keys": [
+          "settings.setMatchDays"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": [
+      "ביטול הפעולה",
+      "ביטול הפעלת משתמש",
+      "ביטול השבתת משתמש",
+      "ההפעלה בוטלה — המשתמש מושבת",
+      "ההשבתה בוטלה — המשתמש פעיל",
+      "שינוי תפקיד משתמש"
+    ]
+  },
+  {
+    "file": "src/components/document-review/DocumentAssessmentPanel.tsx",
+    "exempt": false,
+    "baselineLines": 7,
+    "matched": 1,
+    "orphanMatched": 1,
+    "fresh": 10,
+    "matchedList": [
+      {
+        "text": "המסמך אושר ונרשם",
+        "keys": [
+          "docAssessment.toast"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": [
+      "קביעת מחיר ראשוני מתוך מסמך שהתקבל",
+      "מוצר שאין לו",
+      "מוצרים שאין להם",
+      "המסמך אושר ונרשם, אך עדכון המחירון נכשל: $",
+      "אפשר להשלים את המחירים במסך המחירונים.",
+      "המסמך אושר ונרשם, ונקבעו $",
+      "מחירים חדשים אצל הספק",
+      "לקבוע את המחירים שבמסמך כמחיר המוסכם אצל הספק — ל־",
+      "מחיר מוסכם.",
+      "מחיר מוסכם קיים לא ישתנה מהמסמך — הוא נשאר נקודת ההשוואה שמזהה חריגה במחיר."
+    ]
+  },
+  {
+    "file": "src/components/product-tour/ProductTour.tsx",
+    "exempt": false,
+    "baselineLines": 11,
+    "matched": 3,
+    "orphanMatched": 0,
+    "fresh": 8,
+    "matchedList": [
+      {
+        "text": "נסה שוב",
+        "keys": [
+          "dashboard.refetch"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "חזרה",
+        "keys": [
+          "priceLists.setPreview",
+          "onboarding.back",
+          "priceUpload.setPreview"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "הבא",
+        "keys": [
+          "ui.aria_label_7"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": [
+      "האלמנט לא זמין במסך הזה",
+      "ייתכן שהמסך עדיין נטען או שהפקד אינו זמין במצב הנוכחי. אפשר לנסות שוב או להמשיך לצעד הבא.",
+      "סגירת המדריך",
+      "דלג על השלב",
+      "לחיצה על האזור המודגש תמשיך לצעד הבא.",
+      "דלג על המדריך",
+      "מתוך $",
+      "צעד $"
+    ]
+  },
+  {
+    "file": "src/pages/Reports.tsx",
+    "exempt": false,
+    "baselineLines": 11,
+    "matched": 11,
+    "orphanMatched": 6,
+    "fresh": 0,
+    "matchedList": [
+      {
+        "text": "הדוח מתעדכן. הייצוא והסימון מושבתים עד להשלמת הרענון.",
+        "keys": [
+          "reports.text_6"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "חשבוניות",
+        "keys": [
+          "nav.routeTitle_invoices",
+          "documents.routingInvoices",
+          "invoices.text_2",
+          "reports.kpiInvoices",
+          "reports.xlInvoices",
+          "payQueue.text_10",
+          "expenses.text_2",
+          "expenses.text_9",
+          "expenses.fmtNum",
+          "expenses.invoicesWord",
+          "invoiceNew.text_3",
+          "invoiceList.title",
+          "payments.text_5",
+          "accountantDashboard.text_12",
+          "globalSearch.groupInvoices"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סה״כ חשבוניות",
+        "keys": [
+          "reports.kpiInvoiceTotal"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מע״מ",
+        "keys": [
+          "documents.fieldVatAmount",
+          "reports.fmtMoneyExact_2",
+          "reports.text_33",
+          "reports.kpiVat",
+          "reports.xlVat"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "שולם החודש",
+        "keys": [
+          "reports.kpiPaidThisMonth",
+          "accountantDashboard.fmtMoneyRounded"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "חשבוניות שטרם שולמו",
+        "keys": [
+          "reports.kpiUnpaid"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "תנועות בנק ללא התאמה",
+        "keys": [
+          "reports.kpiUnmatchedBank"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "התאמות שממתינות לאישור",
+        "keys": [
+          "reports.kpiSuggested",
+          "financialSupplier.text_4",
+          "accountantDashboard.fmtNum_2",
+          "accountantDashboard.text_7"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "זיכויים בחודש",
+        "keys": [
+          "reports.kpiCredits"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "חריגים פתוחים",
+        "keys": [
+          "suppliers.openExceptions",
+          "dashboard.title_5",
+          "dashboard.openExceptions",
+          "reports.kpiOpenExceptions",
+          "analytics.openExceptions",
+          "businessSummary.openExceptions"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סה״כ",
+        "keys": [
+          "suppliers.fmtMoneyExact_4",
+          "orders.fmtMoneyExact",
+          "orders.text_25",
+          "reports.fmtMoneyExact_5",
+          "reports.text_34",
+          "reports.text_40",
+          "consolidated.money_6",
+          "expenses.fmtMoneyExact",
+          "invoiceList.fmtMoneyExact",
+          "charts.total"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": []
+  },
+  {
+    "file": "src/pages/ConsolidatedInvoices.tsx",
+    "exempt": false,
+    "baselineLines": 10,
+    "matched": 7,
+    "orphanMatched": 3,
+    "fresh": 3,
+    "matchedList": [
+      {
+        "text": "סכום העוגן",
+        "keys": [
+          "consolidated.money_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "חשבוניות ביניים",
+        "keys": [
+          "consolidated.money_3"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "קבלות שהושלמו",
+        "keys": [
+          "consolidated.money_4"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "מספר חשבונית",
+        "keys": [
+          "documents.fieldInvoiceNumber",
+          "reports.xlInvoiceNumber",
+          "consolidated.text_31",
+          "expenses.text_7",
+          "exceptions.detailInvoiceNumber",
+          "docAssessment.text_13"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "תאריך",
+        "keys": [
+          "suppliers.fmtDate",
+          "suppliers.fmtDate_3",
+          "suppliers.fmtDate_4",
+          "bank.fmtDate",
+          "priceLists.text_18",
+          "docReview.text_12",
+          "reports.text_30",
+          "reports.xlDate",
+          "consolidated.fmtDate",
+          "consolidated.fmtDate_2",
+          "expenses.text_8",
+          "exceptions.detailDate",
+          "invoiceList.fmtDate",
+          "payments.fmtDate"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "לפני מע״מ",
+        "keys": [
+          "invoices.beforeVat",
+          "reports.fmtMoneyExact",
+          "reports.text_32",
+          "reports.xlBeforeVat",
+          "consolidated.money_5"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סה״כ",
+        "keys": [
+          "suppliers.fmtMoneyExact_4",
+          "orders.fmtMoneyExact",
+          "orders.text_25",
+          "reports.fmtMoneyExact_5",
+          "reports.text_34",
+          "reports.text_40",
+          "consolidated.money_6",
+          "expenses.fmtMoneyExact",
+          "invoiceList.fmtMoneyExact",
+          "charts.total"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": [
+      "מקורות נקובים במטבע אחר מהעוגן",
+      ") ואינם נכללים",
+      "בסכומים שלמעלה. הם מופיעים בטבלת המקורות, כל אחד במטבע שלו."
+    ]
+  },
+  {
+    "file": "src/pages/Credits.tsx",
+    "exempt": false,
+    "baselineLines": 13,
+    "matched": 9,
+    "orphanMatched": 0,
+    "fresh": 1,
+    "matchedList": [
+      {
+        "text": "מס׳",
+        "keys": [
+          "suppliers.numberHeader",
+          "orders.text",
+          "paymentRequests.numHeader",
+          "reports.text_29",
+          "credits.numberHeader",
+          "payments.numberHeader"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "ספק",
+        "keys": [
+          "suppliers.text_6",
+          "dashboard.text_16",
+          "orders.text_2",
+          "bank.label",
+          "documents.text_22",
+          "documents.text_34",
+          "documents.text_48",
+          "priceLists.text",
+          "priceLists.text_23",
+          "priceLists.text_27",
+          "paymentRequests.text",
+          "paymentRequests.text_35",
+          "onboarding.text_28",
+          "onboarding.text_35",
+          "onboarding.fieldSupplier",
+          "invoices.detailSupplier",
+          "reports.text_28",
+          "reports.text_42",
+          "reports.text_46",
+          "reports.xlSupplier",
+          "consolidated.text_4",
+          "expenses.text",
+          "expenses.text_6",
+          "expenses.text_14",
+          "exceptions.text_3",
+          "invoiceNew.text_9",
+          "supplierSplit.supplierWord",
+          "invoiceList.text_3",
+          "credits.text",
+          "payments.text",
+          "payments.text_8",
+          "receiptDetail.text_4",
+          "summaryStep.genericSupplier",
+          "analytics.supplier"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סיבה",
+        "keys": [
+          "settings.text_52",
+          "suppliers.statusLabel",
+          "inventory.text_32",
+          "docReview.text_29",
+          "reports.text_47",
+          "reports.xlReason",
+          "exceptions.detailReason",
+          "supplierLog.text_13",
+          "credits.statusLabel",
+          "credits.statusLabel_2"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סכום",
+        "keys": [
+          "suppliers.fmtMoneyExact_5",
+          "suppliers.fmtMoneyExact_6",
+          "bank.fmtMoneyExact",
+          "paymentRequests.fmtMoneyExact",
+          "reports.text_48",
+          "reports.xlAmount",
+          "consolidated.money",
+          "consolidated.amountWord",
+          "exceptions.detailAmount",
+          "credits.fmtMoneyExact",
+          "credits.fmtMoneyExact_3",
+          "payments.fmtMoneyExact",
+          "payments.fmtMoneyExact_2"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "חשבונית",
+        "keys": [
+          "bank.fmtDate_2",
+          "documents.docTypeInvoice",
+          "paymentRequests.fmtDate_4",
+          "invoices.text_3",
+          "consolidated.pageTypeInvoice",
+          "fileUpload.kindInvoice",
+          "fileUpload.sourceInvoice",
+          "credits.text_2",
+          "credits.text_14",
+          "payments.text_13",
+          "attachments.map"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סטטוס",
+        "keys": [
+          "settings.text_8",
+          "settings.text_17",
+          "settings.text_37",
+          "suppliers.text_11",
+          "suppliers.text_30",
+          "suppliers.text_43",
+          "suppliers.text_51",
+          "orders.text_4",
+          "bank.text_5",
+          "paymentRequests.text_2",
+          "reports.text_49",
+          "reports.xlStatus",
+          "exceptions.text_5",
+          "supplierLog.fieldStatus",
+          "credits.text_3",
+          "credits.text_13",
+          "supplierGroupCard.status"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "נפתח",
+        "keys": [
+          "suppliers.fmtDate_5",
+          "exceptions.fmtDate",
+          "credits.fmtDate"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מתעדכן…",
+        "keys": [
+          "bank.text_6",
+          "paymentRequests.text_3",
+          "expenses.text_17",
+          "products.text_5",
+          "invoiceList.text_6",
+          "credits.text_4"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "זיכויים",
+        "keys": [
+          "suppliers.text_5",
+          "nav.routeTitle_credits",
+          "documents.routingCredits",
+          "reports.text_45",
+          "reports.xlCredits",
+          "financialSupplier.text_8",
+          "credits.text_5",
+          "globalSearch.groupCredits"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": [
+      "סה״כ זיכויים פתוחים"
+    ]
+  },
+  {
+    "file": "src/components/Layout.tsx",
+    "exempt": false,
+    "baselineLines": 6,
+    "matched": 5,
+    "orphanMatched": 4,
+    "fresh": 1,
+    "matchedList": [
+      {
+        "text": "ניהול",
+        "keys": [
+          "layoutTail.management"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "בקרה",
+        "keys": [
+          "nav.text_8"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "ניהול רכש ותשלומים",
+        "keys": [
+          "nav.text_9"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "ניווט ראשי",
+        "keys": [
+          "nav.aria_label"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "חיפוש",
+        "keys": [
+          "common.search",
+          "nav.aria_label_3"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": [
+      "מדריך שימוש"
+    ]
+  },
+  {
+    "file": "src/pages/FinancialSupplier.tsx",
+    "exempt": false,
+    "baselineLines": 6,
+    "matched": 3,
+    "orphanMatched": 3,
+    "fresh": 3,
+    "matchedList": [
+      {
+        "text": "יתרה פתוחה",
+        "keys": [
+          "suppliers.text_37",
+          "suppliers.fmtMoneyExact_2",
+          "suppliers.balanceHeader",
+          "financialSupplier.fmtMoneyRounded"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "חשיפה שהגיעה למועד",
+        "keys": [
+          "financialSupplier.fmtMoneyRounded_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "אין במערכת מועדי פירעון שמאפשרים לחשב חשיפה שהגיעה למועד; לכן מוצג — ולא אפס.",
+        "keys": [
+          "financialSupplier.text_5"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": [
+      "חשבונית $",
+      "תשלום #$",
+      "זיכוי #$"
+    ]
+  },
+  {
+    "file": "src/pages/Invoices.tsx",
+    "exempt": false,
+    "baselineLines": 6,
+    "matched": 6,
+    "orphanMatched": 1,
+    "fresh": 0,
+    "matchedList": [
+      {
+        "text": "מס׳ חשבונית",
+        "keys": [
+          "suppliers.text_45",
+          "invoiceList.text_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "ספק",
+        "keys": [
+          "suppliers.text_6",
+          "dashboard.text_16",
+          "orders.text_2",
+          "bank.label",
+          "documents.text_22",
+          "documents.text_34",
+          "documents.text_48",
+          "priceLists.text",
+          "priceLists.text_23",
+          "priceLists.text_27",
+          "paymentRequests.text",
+          "paymentRequests.text_35",
+          "onboarding.text_28",
+          "onboarding.text_35",
+          "onboarding.fieldSupplier",
+          "invoices.detailSupplier",
+          "reports.text_28",
+          "reports.text_42",
+          "reports.text_46",
+          "reports.xlSupplier",
+          "consolidated.text_4",
+          "expenses.text",
+          "expenses.text_6",
+          "expenses.text_14",
+          "exceptions.text_3",
+          "invoiceNew.text_9",
+          "supplierSplit.supplierWord",
+          "invoiceList.text_3",
+          "credits.text",
+          "payments.text",
+          "payments.text_8",
+          "receiptDetail.text_4",
+          "summaryStep.genericSupplier",
+          "analytics.supplier"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "תאריך",
+        "keys": [
+          "suppliers.fmtDate",
+          "suppliers.fmtDate_3",
+          "suppliers.fmtDate_4",
+          "bank.fmtDate",
+          "priceLists.text_18",
+          "docReview.text_12",
+          "reports.text_30",
+          "reports.xlDate",
+          "consolidated.fmtDate",
+          "consolidated.fmtDate_2",
+          "expenses.text_8",
+          "exceptions.detailDate",
+          "invoiceList.fmtDate",
+          "payments.fmtDate"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "סה״כ",
+        "keys": [
+          "suppliers.fmtMoneyExact_4",
+          "orders.fmtMoneyExact",
+          "orders.text_25",
+          "reports.fmtMoneyExact_5",
+          "reports.text_34",
+          "reports.text_40",
+          "consolidated.money_6",
+          "expenses.fmtMoneyExact",
+          "invoiceList.fmtMoneyExact",
+          "charts.total"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "בדיקה",
+        "keys": [
+          "suppliers.text_46",
+          "reports.text_37",
+          "fileUpload.text_20",
+          "assistantDialog.text_13",
+          "invoiceList.text_4"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "תשלום",
+        "keys": [
+          "suppliers.text_47",
+          "reports.text_38",
+          "fileUpload.sourcePayment",
+          "invoiceList.text_5",
+          "financialSupplier.fmtDate"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": []
+  },
+  {
+    "file": "src/pages/neworder/MinimumFixPanel.tsx",
+    "exempt": false,
+    "baselineLines": 4,
+    "matched": 5,
+    "orphanMatched": 4,
+    "fresh": 1,
+    "matchedList": [
+      {
+        "text": "ספק לא זמין",
+        "keys": [
+          "supplierSplit.get",
+          "supplierSplit.get_3",
+          "minimumFix.supplierUnavailable"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "חסרים בדיוק",
+        "keys": [
+          "minimumFix.fmtMoneyExact"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "כדי לעמוד במינימום ההזמנה.",
+        "keys": [
+          "minimumFix.fmtMoneyExact_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "עובר את המינימום",
+        "keys": [
+          "minimumFix.text_5"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "עדיין חסר",
+        "keys": [
+          "minimumFix.fmtMoneyExact_3"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": [
+      "פתרונות עבור $"
+    ]
+  },
+  {
+    "file": "src/pages/neworder/SupplierGroupCard.tsx",
+    "exempt": false,
+    "baselineLines": 4,
+    "matched": 6,
+    "orphanMatched": 4,
+    "fresh": 0,
+    "matchedList": [
+      {
+        "text": "מינימום ספק",
+        "keys": [
+          "supplierGroupCard.supplierMinimum"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "חסר למינימום",
+        "keys": [
+          "supplierGroupCard.minimumShortfall"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "תרומת חיסכון",
+        "keys": [
+          "supplierGroupCard.savingsContribution"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "סטטוס",
+        "keys": [
+          "settings.text_8",
+          "settings.text_17",
+          "settings.text_37",
+          "suppliers.text_11",
+          "suppliers.text_30",
+          "suppliers.text_43",
+          "suppliers.text_51",
+          "orders.text_4",
+          "bank.text_5",
+          "paymentRequests.text_2",
+          "reports.text_49",
+          "reports.xlStatus",
+          "exceptions.text_5",
+          "supplierLog.fieldStatus",
+          "credits.text_3",
+          "credits.text_13",
+          "supplierGroupCard.status"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "דורש השלמה",
+        "keys": [
+          "docReview.text_32",
+          "supplierGroupCard.needsTopUp"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מוכן",
+        "keys": [
+          "supplierGroupCard.ready"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": []
+  },
+  {
+    "file": "src/components/document-review/PriceListAutomationReadiness.tsx",
+    "exempt": false,
+    "baselineLines": 5,
+    "matched": 2,
+    "orphanMatched": 0,
+    "fresh": 3,
+    "matchedList": [
+      {
+        "text": "שורה ללא שם",
+        "keys": [
+          "priceListReadiness.unnamedRow"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "שורה",
+        "keys": [
+          "invoices.text_17",
+          "priceListReview.text_44",
+          "priceListReadiness.text_11",
+          "priceListReadiness.fmtMoneyExact",
+          "invoiceLineReview.text_5",
+          "invoiceLineReview.text_8"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": [
+      "הכנת אצוות כיול מחירון לבדיקת בעלים",
+      "אישור אצוות כיול מחירון כמסומנת נכונה",
+      "סיבת הכנת האצווה (רשות)"
+    ]
+  },
+  {
+    "file": "src/components/InvoiceLineReviewModal.tsx",
+    "exempt": false,
+    "baselineLines": 5,
+    "matched": 0,
+    "orphanMatched": 0,
+    "fresh": 5,
+    "matchedList": [],
+    "freshList": [
+      "יש להשלים את כל נתוני השורות",
+      "תיקון שורות חשבונית",
+      "אין גרסת ראיה לשורות — יש לשמור תחילה את שורות החשבונית",
+      "הקצאה ידנית של שורות חשבונית להזמנות",
+      "סיבת תיקון השורות (רשות)"
+    ]
+  },
+  {
+    "file": "src/pages/neworder/SupplierSplitStep.tsx",
+    "exempt": false,
+    "baselineLines": 4,
+    "matched": 5,
+    "orphanMatched": 2,
+    "fresh": 0,
+    "matchedList": [
+      {
+        "text": "סה״כ",
+        "keys": [
+          "suppliers.fmtMoneyExact_4",
+          "orders.fmtMoneyExact",
+          "orders.text_25",
+          "reports.fmtMoneyExact_5",
+          "reports.text_34",
+          "reports.text_40",
+          "consolidated.money_6",
+          "expenses.fmtMoneyExact",
+          "invoiceList.fmtMoneyExact",
+          "charts.total"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "פריטים שנבחרו",
+        "keys": [
+          "supplierSplit.text_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "סה״כ משוער",
+        "keys": [
+          "supplierSplit.fmtMoneyExact_2"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "תוספת של",
+        "keys": [
+          "supplierSplit.fmtMoneyExact_3",
+          "supplierSplit.fmtMoneyExact_9"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "מול הזול ביותר",
+        "keys": [
+          "supplierSplit.fmtMoneyExact_4",
+          "supplierSplit.fmtMoneyExact_10"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": []
+  },
+  {
+    "file": "src/pages/Signup.tsx",
+    "exempt": false,
+    "baselineLines": 4,
+    "matched": 1,
+    "orphanMatched": 1,
+    "fresh": 4,
+    "matchedList": [
+      {
+        "text": "מעבר להתחברות",
+        "keys": [
+          "signup.text_2"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": [
+      "לא הצלחנו לשלוח מייל אישור חדש. יש להמתין דקה ולנסות שוב.",
+      "מייל אישור חדש נשלח.",
+      "שולח שוב…",
+      "שלחו שוב"
+    ]
+  },
+  {
+    "file": "src/components/WhatsAppConnectionCard.tsx",
+    "exempt": false,
+    "baselineLines": 3,
+    "matched": 1,
+    "orphanMatched": 0,
+    "fresh": 3,
+    "matchedList": [
+      {
+        "text": "חיבור מספר WhatsApp של הארגון",
+        "keys": [
+          "whatsappCard.title"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": [
+      "הפעלת ערוץ WhatsApp של הארגון",
+      "השבתת ערוץ WhatsApp של הארגון",
+      "ביטול חיבור WhatsApp ומחיקת הסוד מהכספת"
+    ]
+  },
+  {
+    "file": "src/pages/Pricing.tsx",
+    "exempt": false,
+    "baselineLines": 4,
+    "matched": 0,
+    "orphanMatched": 0,
+    "fresh": 4,
+    "matchedList": [],
+    "freshList": [
+      "בתקופת שימוש חודשית",
+      "מומלץ",
+      "כלול בכל מסלול",
+      "פתוח ב־30 הימים הראשונים"
+    ]
+  },
+  {
+    "file": "src/App.tsx",
+    "exempt": false,
+    "baselineLines": 3,
+    "matched": 0,
+    "orphanMatched": 0,
+    "fresh": 3,
+    "matchedList": [],
+    "freshList": [
+      "היכולת אינה כלולה במסלול",
+      "המסך נשאר סגור גם בבקשה ישירה לשרת. אפשר לראות באיזה מסלול הוא נפתח במסך המנוי.",
+      "למסלולים ולמחירים"
+    ]
+  },
+  {
+    "file": "src/components/SupplierCommunicationCard.tsx",
+    "exempt": false,
+    "baselineLines": 3,
+    "matched": 2,
+    "orphanMatched": 0,
+    "fresh": 1,
+    "matchedList": [
+      {
+        "text": "ביטול",
+        "keys": [
+          "common.cancel",
+          "settings.setRevokeTarget",
+          "settings.setRoleTarget",
+          "suppliers.text_35",
+          "orders.setDraftCancelTarget",
+          "orders.text_10",
+          "orders.setConfirm_2",
+          "orders.setSupplierConfirmOpen_3",
+          "bank.text_13",
+          "ui.text_12",
+          "documents.text_27",
+          "inventory.text_55",
+          "priceLists.text_20",
+          "paymentRequests.text_5",
+          "paymentRequests.text_20",
+          "paymentRequests.requestTransition",
+          "invoices.text_26",
+          "docReview.text_9",
+          "priceListReview.setNewProductFor",
+          "reports.setSnapshotOpen",
+          "payQueue.text_37",
+          "priceUpload.text_23",
+          "admin.text_37",
+          "webhookSettings.text_30",
+          "products.text_20",
+          "invoiceNew.setLeaveTarget",
+          "whatsappCard.setEditing",
+          "productNameReview.setDraft",
+          "exportPanel.setDraft",
+          "supplierComms.setEditing",
+          "docRemoval.text_12",
+          "quickCreate.text_7",
+          "feedbackButton.setOpen",
+          "quickCreateSupplier.cancel",
+          "reauthModal.cancel"
+        ],
+        "orphan": false
+      },
+      {
+        "text": "שמירה",
+        "keys": [
+          "common.save",
+          "settings.saveOrg",
+          "suppliers.save_2",
+          "priceLists.save",
+          "products.save",
+          "supplierComms.trim",
+          "quickCreateSupplier.save"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": [
+      "עדכון העדפות תקשורת מול הספק"
+    ]
+  },
+  {
+    "file": "src/pages/neworder/NewOrder.tsx",
+    "exempt": false,
+    "baselineLines": 3,
+    "matched": 3,
+    "orphanMatched": 3,
+    "fresh": 0,
+    "matchedList": [
+      {
+        "text": "המחירים נבדקו מחדש ולא נמצא שינוי נוסף בשורות ההזמנה.",
+        "keys": [
+          "newOrder.text_20"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "סכום ההזמנה",
+        "keys": [
+          "newOrder.orderTotal"
+        ],
+        "orphan": true
+      },
+      {
+        "text": "חזרה לסיכום ולאישור מחדש",
+        "keys": [
+          "newOrder.text_21"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": []
+  },
+  {
+    "file": "src/pages/SupplierProposalReview.tsx",
+    "exempt": false,
+    "baselineLines": 3,
+    "matched": 0,
+    "orphanMatched": 0,
+    "fresh": 3,
+    "matchedList": [],
+    "freshList": [
+      "החלטה על הצעת ספק להזמנה",
+      "הסיבה אינה חובה. מה שייכתב כאן יוצג חזרה במסך הזה לצד ההחלטה, ולא רק ביומן הביקורת",
+      "זה המקום להסביר לספק, ולמי שיקרא את ההזמנה אחר כך, מה נדחה ולמה."
+    ]
+  },
+  {
+    "file": "src/components/document-review/DocumentScanPreview.tsx",
+    "exempt": false,
+    "baselineLines": 2,
+    "matched": 1,
+    "orphanMatched": 1,
+    "fresh": 1,
+    "matchedList": [
+      {
+        "text": "הארגון במצב קריאה בלבד. אפשר לצפות בסריקה, אך אי אפשר לאשר אותה לחילוץ.",
+        "keys": [
+          "scanPreview.text_20"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": [
+      "בדוק שהדף שלם וקריא. האישור קובע שהמערכת תקרא נגזרת זו, לא את המקור."
+    ]
+  },
+  {
+    "file": "src/lib/reportTemplateExport.ts",
+    "exempt": false,
+    "baselineLines": 1,
+    "matched": 0,
+    "orphanMatched": 0,
+    "fresh": 2,
+    "matchedList": [],
+    "freshList": [
+      "התקופה כוללת יותר ממטבע אחד ($",
+      "), ולכן אין סכום כולל יחיד"
+    ]
+  },
+  {
+    "file": "src/pages/DocumentOperations.tsx",
+    "exempt": false,
+    "baselineLines": 2,
+    "matched": 0,
+    "orphanMatched": 0,
+    "fresh": 2,
+    "matchedList": [],
+    "freshList": [
+      "החזרת מסמך לתור העיבוד ממסך בקרת המסמכים",
+      "שחזור עיבוד תקוע ממסך בקרת המסמכים"
+    ]
+  },
+  {
+    "file": "src/components/FileUpload.tsx",
+    "exempt": false,
+    "baselineLines": 1,
+    "matched": 0,
+    "orphanMatched": 0,
+    "fresh": 1,
+    "matchedList": [],
+    "freshList": [
+      "הדפדפן אינו יכול לקרוא את פורמט התמונה. המקור יישמר ללא שינוי, ולאחר ההעלאה תופק בשרת נגזרת מוגבלת ובת־מעקב לצורך בדיקה וקריאת המסמך."
+    ]
+  },
+  {
+    "file": "src/components/PlanTicket.tsx",
+    "exempt": false,
+    "baselineLines": 1,
+    "matched": 1,
+    "orphanMatched": 0,
+    "fresh": 0,
+    "matchedList": [
+      {
+        "text": "טוען",
+        "keys": [
+          "dashboard.text_18",
+          "ui.text",
+          "inventory.text_34",
+          "orgSubscription.text_41",
+          "planCard.loading"
+        ],
+        "orphan": false
+      }
+    ],
+    "freshList": []
+  },
+  {
+    "file": "src/lib/workbook.ts",
+    "exempt": false,
+    "baselineLines": 1,
+    "matched": 0,
+    "orphanMatched": 0,
+    "fresh": 1,
+    "matchedList": [],
+    "freshList": [
+      "גיליון"
+    ]
+  },
+  {
+    "file": "src/pages/Inventory.tsx",
+    "exempt": false,
+    "baselineLines": 1,
+    "matched": 0,
+    "orphanMatched": 0,
+    "fresh": 1,
+    "matchedList": [],
+    "freshList": [
+      "מחירים בכמה מטבעות"
+    ]
+  },
+  {
+    "file": "src/pages/ProductNameRepairReview.tsx",
+    "exempt": false,
+    "baselineLines": 1,
+    "matched": 0,
+    "orphanMatched": 0,
+    "fresh": 1,
+    "matchedList": [],
+    "freshList": [
+      "אישור תיקון שם מוצר ממקור"
+    ]
+  },
+  {
+    "file": "src/pages/SupplierLog.tsx",
+    "exempt": false,
+    "baselineLines": 1,
+    "matched": 1,
+    "orphanMatched": 1,
+    "fresh": 0,
+    "matchedList": [
+      {
+        "text": "אין נתוני מחיר",
+        "keys": [
+          "supplierLog.text_7"
+        ],
+        "orphan": true
+      }
+    ],
+    "freshList": []
+  }
+]
