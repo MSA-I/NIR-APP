@@ -1997,6 +1997,10 @@ export const en: Dictionary = {
     creditOverrideReasonLabel: 'Reason for the exceptional approval:',
     checkingRequest: 'Checking the request…',
     sendToPayer: 'Hand to the payer',
+    invoiceOtherCurrencyLabel: 'Invoice {invoice} from {supplier} is in {invoiceCurrency} and cannot be added to a request in {requestCurrency}',
+    invoiceOtherCurrencyNote: 'The invoice is in {invoiceCurrency} and the request is being built in {requestCurrency}. One payment request is one transfer, so it carries a single currency — this invoice opens a request of its own.',
+    reasonOptionalLabel: 'Reason for the request (optional)',
+    creditsOtherCurrencyNet: 'None — the open credits are in a different currency from the request, and do not reduce it',
   },
 
   onboarding: {

@@ -2001,6 +2001,10 @@ export const he = {
     creditOverrideReasonLabel: 'סיבת אישור החריגה:',
     checkingRequest: 'בודק את הדרישה…',
     sendToPayer: 'העברה לגורם המבצע',
+    invoiceOtherCurrencyLabel: 'חשבונית {invoice} של {supplier} נקובה ב-{invoiceCurrency} ואינה ניתנת לצירוף לדרישה ב-{requestCurrency}',
+    invoiceOtherCurrencyNote: 'החשבונית נקובה ב-{invoiceCurrency} והדרישה נבנית ב-{requestCurrency}. דרישת תשלום אחת היא העברה אחת, ולכן היא כולה במטבע אחד — לחשבונית הזו נפתחת דרישה נפרדת.',
+    reasonOptionalLabel: 'סיבת יצירת הדרישה (רשות)',
+    creditsOtherCurrencyNet: 'אין — הזיכויים הפתוחים נקובים במטבע אחר מהדרישה, ואינם מקטינים אותה',
   },
 
   onboarding: {
