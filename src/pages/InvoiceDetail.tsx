@@ -704,7 +704,11 @@ function CreditFromInvoice({ invoice, draft, onClose, onSaved }: {
             {Object.entries(CREDIT_REASON).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </div>
-        <div><label className="label" htmlFor="invoice-credit-amount">סכום (₪)</label><input id="invoice-credit-amount" type="number" step="0.01" className="input num" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+        {/* A credit against a dollar invoice is a dollar credit — 0217's keys make anything else
+            unrepresentable, and 0241 carries the evidence currency through even when the invoice
+            cannot be resolved. The label said ₪ regardless, which made it the one place this
+            screen disagreed with the row it was about to write. */}
+        <div><label className="label" htmlFor="invoice-credit-amount">{`סכום (${invoice.currency})`}</label><input id="invoice-credit-amount" type="number" step="0.01" className="input num" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
         <div><label className="label" htmlFor="invoice-credit-notes">פירוט</label><textarea id="invoice-credit-notes" className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
         <div className="text-xs text-ink-muted">נפתח בתאריך {fmtDate(todayISO())} · הזיכוי ישפיע על יתרת הספק לאחר אישור/קיזוז</div>
       </div>

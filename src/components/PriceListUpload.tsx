@@ -234,13 +234,17 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
     }
     // Every rejection rule of import_supplier_prices is mirrored here per-row, so one bad line is
     // skipped with its reason instead of poisoning the whole batch server-side: in-file duplicates
-    // (first occurrence wins, like the OCR path), the ₪1M price cap, and inactive catalog matches.
+    // (first occurrence wins, like the OCR path), the 1,000,000 price cap, and inactive catalog
+    // matches. THE CAP CARRIES NO CURRENCY: `0023:2330` is a bare `> 1000000`, a ceiling on the
+    // size of the number rather than on an amount of money. The message used to call it
+    // ₪1,000,000, which described a shekel limit the server never had — and read as a much
+    // tighter rule than it is to anyone importing a price list in another currency.
     const seenKeys = new Set<string>();
     const { valid, skipped } = mapRows(sheet.rows, (row) => {
       const name = cellText(row, cols.product);
       const price = cellNumber(row, cols.price);
       if (!name || price == null || price <= 0) return skipRow('חסר שם מוצר או מחיר תקין');
-      if (price > 1_000_000) return skipRow('מחיר מעל הטווח המותר (עד ₪1,000,000)');
+      if (price > 1_000_000) return skipRow('מחיר מעל הטווח המותר (עד 1,000,000)');
       const key = nameKey(name);
       if (seenKeys.has(key)) return skipRow('מוצר חוזר בקובץ — נקלטת ההופעה הראשונה בלבד');
       seenKeys.add(key);

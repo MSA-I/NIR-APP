@@ -17,6 +17,7 @@ import {
   sendInvite, resendInvite, revokeInvite, type Invitation,
 } from '../lib/invitations';
 import { isActiveRole, type ActiveRole, type Profile } from '../lib/types';
+import { CurrencyTolerancesPanel } from '../components/CurrencyTolerancesPanel';
 import {
   BRAND_LOGO_TYPES,
   brandFailureAllowsNewCorrelation,
@@ -78,7 +79,6 @@ export default function Settings() {
   const [orgName, setOrgName] = useState(org?.name ?? '');
   const [vatRate, setVatRate] = useState(org?.vat_rate?.toString() ?? '18');
   const [matchDays, setMatchDays] = useState(org?.settings?.bank_match_days?.toString() ?? '7');
-  const [tolerance, setTolerance] = useState(org?.settings?.bank_match_amount_tolerance?.toString() ?? '1');
   const [busy, setBusy] = useState(false);
   const [logoPath, setLogoPath] = useState(org?.logo_path ?? null);
   const [logoVersion, setLogoVersion] = useState(org?.logo_updated_at ?? '');
@@ -168,16 +168,21 @@ export default function Settings() {
       return;
     }
     setBusy(true);
+    // merge, don't replace — settings also carries keys this screen doesn't edit
+    // (e.g. invite_expiry_days, read by invitation_expiry_days() in migration 0007)
+    const settings: Record<string, unknown> = {
+      ...(org?.settings ?? {}),
+      bank_match_days: Number(matchDays),
+    };
+    /* THE TOLERANCE KEYS ARE NOT WRITTEN HERE, and the spread above is why that is safe: this
+       screen no longer names them, so they travel through untouched. It used to save
+       `bank_match_amount_tolerance: Number(field)` — a whole-key overwrite that deleted every other
+       currency's tolerance on a screen that never mentioned another currency. They are edited in
+       CurrencyTolerancesPanel, one currency at a time (#288, #290). */
     const res = await supabase.from('organizations').update({
       name,
       vat_rate: Number(vatRate),
-      // merge, don't replace — settings also carries keys this screen doesn't edit
-      // (e.g. invite_expiry_days, read by invitation_expiry_days() in migration 0007)
-      settings: {
-        ...(org?.settings ?? {}),
-        bank_match_days: Number(matchDays),
-        bank_match_amount_tolerance: Number(tolerance),
-      },
+      settings,
     }).eq('id', profile!.org_id);
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
@@ -489,11 +494,16 @@ export default function Settings() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="sm:col-span-3"><label className="label" htmlFor="settings-org-name">שם הארגון לתצוגה</label><input id="settings-org-name" className="input" maxLength={120} value={orgName} disabled={!canWrite} onChange={(e) => setOrgName(e.target.value)} /></div>
           <div><label className="label" htmlFor="settings-vat-rate">שיעור מע״מ (%)</label><input id="settings-vat-rate" type="number" step="0.5" className="input num" value={vatRate} disabled={!canWrite} onChange={(e) => setVatRate(e.target.value)} /></div>
+          {/* The amount tolerance left this card for CurrencyTolerancesPanel below. It used to sit
+              here as one field labelled `(₪)`, which was three separate untruths: the business may
+              not keep its books in shekels, the same key holds a value per currency (#288), and
+              three sibling tolerances had no field at all. A day range is not an amount and stays. */}
           <div><label className="label" htmlFor="settings-match-days">טווח ימים להתאמת בנק</label><input id="settings-match-days" type="number" className="input num" value={matchDays} disabled={!canWrite} onChange={(e) => setMatchDays(e.target.value)} /></div>
-          <div><label className="label" htmlFor="settings-tolerance">סטיית סכום מותרת (₪)</label><input id="settings-tolerance" type="number" step="0.5" className="input num" value={tolerance} disabled={!canWrite} onChange={(e) => setTolerance(e.target.value)} /></div>
         </div>
         {canWrite && <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>שמירה</button></div>}
       </Card>
+
+      <CurrencyTolerancesPanel org={org} canWrite={canWrite} />
 
       <Card className="space-y-4">
         <div>

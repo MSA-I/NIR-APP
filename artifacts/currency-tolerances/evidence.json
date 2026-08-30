@@ -1,0 +1,13 @@
+{
+  "base": "http://localhost:5219",
+  "supabaseOrigin": "http://127.0.0.1:59999",
+  "intercepted": true,
+  "databaseTouched": false,
+  "screenshots": [
+    "p4-g3-supplier-minimum-column.png",
+    "p4-g2-supplier-minimum-usd.png",
+    "p3-g1-tolerances-panel.png",
+    "p1-g2-bank-usd-line.png"
+  ],
+  "consoleErrors": []
+}
