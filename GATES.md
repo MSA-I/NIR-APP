@@ -289,6 +289,12 @@ works. The answer was that it could, and that nothing but a decision was stoppin
   branch, plus exactly the two suites it adds.
   `Deno contracts + OCR worker` reports `skipping`, which is the classifier agreeing with this
   campaign's scope: no Edge function changed and `worker/ocr` was never touched.
+  ON WHICH SHA THIS IS TRUE. GitHub classifies the whole PR diff rather than the last commit, so
+  every push here re-runs the complete set — a docs-only commit included. The run above is the
+  first; the one on `c111632` repeated it, ends `TOTAL across 100 stages, 0 failed` and executes
+  both new suites again. The gate is therefore satisfied on whatever SHA is merged, because branch
+  protection will not accept a head commit that has not been through this itself. Recording one
+  SHA per push would be a chase; recording the mechanism is the durable fact.
 
 - [ ] P6-G2: the rollout matrix rows that were touched were actually executed
   ROWS: `Migration / חוזה DB` (backup, dry-run, forward-only apply, **manual ledger row**,
