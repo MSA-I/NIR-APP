@@ -95,6 +95,29 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   inventory pair (P3-G2). Remaining surfaces pending: invoices, receipt, documents, price lists,
   and mobile LTR with the safe area.
 
+  **BLOCKED for every balance-bearing screen, measured 30.08.2026 and recorded in `DEBT §71`.**
+  A headed capture of the accountant dashboard - the screen whose donut this branch just changed -
+  reached the error boundary in both languages. The network log says why:
+  `404 /rest/v1/invoice_balances` and `404 /rest/v1/supplier_balances`. Those two readers were
+  deleted on `main` by `0218`, whose commit message states the intent outright: "the balance
+  readers are replaced by name, so a stale caller fails loudly". This branch is based on `c04d37a`
+  and still calls both; the shared local database is at migration `0241`, the branch ends at
+  `0213`, and the local `management_dashboard_snapshot` now returns `topBalancesByCurrency` where
+  `Dashboard.tsx` reads `snapshot.topBalances`.
+
+  Three things follow, and the third is the one that matters for this gate. It is NOT a regression
+  from the translation work - the same call sites are there at `e3a6146`, before any of it. It is
+  NOT a CI failure - the quality gate resets the database to THIS branch's migrations, where both
+  views still exist, so the branch is green and will stay green. But it does mean no screen that
+  reads a balance can be photographed on this machine until the branch is rebased, because the
+  local stack is shared and resetting it to match the branch would destroy another line of work.
+  Screens that do not touch balances remain photographable, and the pairs already captured were
+  taken before `0218` reached this machine.
+
+  The capture attempt is not wasted evidence: both shots report `rawKeys: []`, and the English one
+  reports NO Hebrew anywhere in the rendered text - including inside the error boundary, which is
+  a surface nobody thinks to translate until they see it in the wrong language.
+
   **The inventory pair earned its cost on the first shot, which is the argument for this gate.**
   Both screenshots showed `nav.routeDesc_inventory` — a raw dictionary key — under the page title,
   in Hebrew as well as English. `routePresentationDescription` returns a `TKey`, `PageHeader`’s
