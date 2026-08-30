@@ -1380,6 +1380,54 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
   );
 }
 
+/**
+ * The one bound on a typed reason, declared once for every screen that asks for one.
+ *
+ * Deliberately not exported: a caller that can read it is a caller that can re-state it, and
+ * re-stating it per screen is exactly the drift this replaced. `reasonField.spec.tsx` asserts it
+ * from the rendered DOM instead.
+ */
+const REASON_MAX_LENGTH = 1000;
+
+/**
+ * The reason box an audited action carries, in one place.
+ *
+ * Five screens had grown their own copy — this dialog, `ReauthModal`, the document-review decision,
+ * the exception resolution note and the role-change dialog. Four were the same six lines; the fifth
+ * had drifted twice. `Settings.tsx` used a single-line `<input>` with NO bound at all, so the one
+ * reason in the product that could take an essay was the one attached to changing a person's role,
+ * and the document-review box carried a hand-written class list with no focus ring instead of
+ * `.input`. Neither was a decision — that is just the shape a copy takes when nobody owns it.
+ *
+ * `maxLength` is declared HERE and nowhere else among the callers, which is the whole point. The
+ * column is unbounded `text`, so the bound is a sanity limit on a justification rather than a
+ * schema constraint — and a limit that is re-typed per screen is a limit that drifts per screen.
+ * It already had.
+ *
+ * A free-form `notes` field (an invoice's note, a supplier's note) is NOT a reason and stays
+ * uncapped on purpose: truncating business content is worse than an unbounded box. This component
+ * is for the sentence that lands in `audit_logs`, and `reasonOr` is what fills it when nobody typed
+ * one (#299 — the box does not hold the button).
+ */
+export function ReasonField({ label, value, onChange, id, placeholder }: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  /** A stable id where a test or the browser gate names the field; generated otherwise. */
+  id?: string;
+  placeholder?: string;
+}) {
+  const generatedId = useId();
+  const fieldId = id ?? generatedId;
+  return (
+    <div>
+      <label className="label" htmlFor={fieldId}>{label}</label>
+      <textarea id={fieldId} className="input" rows={2} maxLength={REASON_MAX_LENGTH}
+        placeholder={placeholder} value={value} onChange={(event) => onChange(event.target.value)} />
+    </div>
+  );
+}
+
 export function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel, reasonLabel, danger, requireReason, busy }: {
   open: boolean; onClose: () => void; onConfirm: (reason?: string) => void;
   title: string; message: string; confirmLabel?: string; reasonLabel?: string; danger?: boolean; requireReason?: boolean; busy?: boolean;
@@ -1389,18 +1437,12 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
   // Same rule as `confirmText`: the fallback belongs in the body, where there is a reader.
   const reasonText = reasonLabel ?? t(OPTIONAL_REASON_LABEL_KEY);
   const [reason, setReason] = useState('');
-  const reasonId = useId();
   useEffect(() => { if (open) setReason(''); }, [open]);
   return (
     <Modal open={open} onClose={onClose} title={title} description={message} busy={busy}>
       {requireReason && (
         <div className="mb-4">
-          <label className="label" htmlFor={reasonId}>{reasonText}</label>
-          {/* maxLength matches every other audited reason field in the app (document-review's three
-              forms, the type-review decision). The column is unbounded text, so this is a consistency
-              and sanity bound on a justification — free-form `notes` fields stay uncapped on purpose,
-              since truncating business content would be worse than an unbounded box. */}
-          <textarea id={reasonId} className="input" rows={2} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />
+          <ReasonField label={reasonText} value={reason} onChange={setReason} />
         </div>
       )}
       <div className="flex gap-2 justify-end">

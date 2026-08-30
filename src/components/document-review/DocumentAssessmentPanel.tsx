@@ -5,7 +5,7 @@ import { todayISO } from '../../lib/format';
 import { AlertTriangle, Check, CircleCheck, Info, Loader2, ShieldAlert } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { fmtMoneyExact, fmtNum } from '../../lib/format';
-import { Disclosure, ICON, Note, useToast } from '../ui';
+import { Disclosure, ICON, Note, ReasonField, useToast } from '../ui';
 import { DocumentLineMapping } from './DocumentLineMapping';
 import { PrimaryDecision } from './PrimaryDecision';
 import {
@@ -388,16 +388,11 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
           same information in the order a decision is actually made. */}
       {editable && (
         <div className="card p-4">
-          <label className="block text-sm font-medium text-ink-soft" htmlFor="review-reason">
-            {t('docAssessment.text_18')}
-          </label>
-          <textarea
-            id="review-reason"
-            className="mt-2 min-h-20 w-full rounded-md border border-line bg-surface p-2 text-sm"
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            maxLength={1000}
-          />
+          {/* This box used to spell its own class list — `rounded-md`, `border-line`, `p-2`, and
+              no focus ring at all — while the four other reason boxes in the product used `.input`.
+              The id stays: it is the handle the review tests and the browser gate reach for. */}
+          <ReasonField id="review-reason" label={t('docAssessment.text_18')}
+            value={reason} onChange={setReason} />
           {/* Only where there is something to fill in. An always-present switch over an empty set
               is a promise the approval will not keep. */}
           {seedRows.length > 0 && (

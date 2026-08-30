@@ -7,7 +7,7 @@ import { AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, Note, ICON, type Column } from '../components/ui';
+import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, Note, ICON, ReasonField, type Column } from '../components/ui';
 import { EXCEPTION_TYPE, EXCEPTION_STATUS, SEVERITY } from '../lib/status';
 import { fmtDate, fmtMoneyExact, fmtNum } from '../lib/format';
 import { logAction } from '../lib/audit';
@@ -230,10 +230,8 @@ function ExceptionDetail({ row, canWrite, canOpenProcurement, onClose, onChanged
         )}
         {canWrite && ['open', 'in_progress'].includes(row.status) && (
           <>
-            <div>
-              <label className="label" htmlFor="exception-resolution-note">{t('exceptions.text_15')}</label>
-              <textarea id="exception-resolution-note" className="input" rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
-            </div>
+            <ReasonField id="exception-resolution-note" label={t('exceptions.text_15')}
+              value={note} onChange={setNote} />
             <div className="flex flex-wrap justify-end gap-2">
               {row.status === 'open' && <button className="btn-secondary" disabled={busy} onClick={() => void setStatus('in_progress')}>{t('exceptions.setStatus')}</button>}
               <button className="btn-ghost text-ink-muted" disabled={busy} onClick={() => void setStatus('dismissed')}>{t('exceptions.setStatus_2')}</button>
