@@ -1,4 +1,4 @@
-import { toHebrewError } from './errors';
+import { toErrorKey, toHebrewError } from './errors';
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 
@@ -23,6 +23,8 @@ import {
   type OfflineQueueDeps,
 } from './offlineQueue';
 import { OfflineStorageError, receiptPendingServerAcceptanceFromRows } from './offlineDb';
+import { he } from './i18n/dictionaries/he';
+import { en } from './i18n/dictionaries/en';
 import type {
   OfflineQueuedAction, OfflineQueueStore, OfflineReceiptDraft, SaveGoodsReceiptPayload,
 } from './offlineDb';
@@ -193,7 +195,7 @@ describe('failure classification', () => {
 });
 
 describe('submitting a receipt', () => {
-  it('queues with a Hebrew reason while offline and sends nothing', async () => {
+  it('queues with a resolvable condition while offline and sends nothing', async () => {
     const memory = memoryStore();
     const send = vi.fn();
     const queue = build({ store: memory.store, send, isOnline: () => false });
@@ -204,14 +206,22 @@ describe('submitting a receipt', () => {
 
     expect(outcome.kind).toBe('queued');
     expect(send).not.toHaveBeenCalled();
-    expect(outcome.kind === 'queued' && outcome.reason).toMatch(/[֐-׿]/);
+    // Split deliberately. The queue answers with a CONDITION — that half is what the screen and
+    // IndexedDB both receive — and the sentence a person reads is pinned in each dictionary. One
+    // assertion comparing a resolved sentence to itself would pass whether or not either language
+    // actually says anything.
+    expect(outcome.kind === 'queued' && outcome.queuedCondition).toBe('offline_queued_no_network');
+    expect(he.errors.offline_queued_no_network)
+      .toBe('אין חיבור לרשת. הקבלה נשמרה במכשיר ותישלח כשהחיבור יחזור.');
+    expect(en.errors.offline_queued_no_network)
+      .toBe('There is no network connection. The receipt is saved on this device and will be sent when the connection returns.');
     expect(queue.getSnapshot().pendingActions).toBe(1);
   });
 
   it('reports an explicit failure when IndexedDB refuses the queue write', async () => {
     const memory = memoryStore();
     memory.store.upsertQueuedAction = async () => {
-      throw new OfflineStorageError('האחסון המקומי אינו זמין.');
+      throw new OfflineStorageError('offline_storage_unavailable');
     };
     const queue = build({ store: memory.store, isOnline: () => false });
 
@@ -219,7 +229,11 @@ describe('submitting a receipt', () => {
       orderId: 'order-1', orderLabel: 'ספק', payload: payload('receipt-1'), observedAt: 1_000,
     });
 
-    expect(outcome).toEqual({ kind: 'rejected', message: 'האחסון המקומי אינו זמין.' });
+    // The storage error's own condition travels out untouched — it is more specific than anything
+    // the queue could substitute — and both languages carry a sentence for it.
+    expect(outcome).toEqual({ kind: 'rejected', failureCondition: 'offline_storage_unavailable' });
+    expect(he.errors.offline_storage_unavailable).toBe('לא ניתן לשמור את העבודה במכשיר הזה.');
+    expect(en.errors.offline_storage_unavailable).toBe('The work could not be saved on this device.');
     expect(queue.getSnapshot().pendingActions).toBe(0);
   });
 
@@ -365,6 +379,50 @@ describe('syncing the queue', () => {
     const source = readFileSync('src/pages/Receiving.tsx', 'utf8');
     expect(source).not.toContain('deleteReceiptDraft(');
     expect(source).toContain('Atomic queue finalization already deleted the exact accepted draft');
+  });
+
+  /**
+   * The oracle for both halves of the condition boundary, written to need no maintenance: it reads
+   * the two offline modules for every `offline_*` literal they can emit and demands that each one
+   * resolves to a real sentence in BOTH languages.
+   *
+   * A hand-kept list would have passed while the bug was live. Two conditions really were emitted
+   * with no pattern and no entry, so `errorText` answered with the generic fallback and the screen
+   * whose whole purpose is to say WHICH receipt failed and WHY said neither.
+   */
+  it('resolves every offline condition to a real sentence in both languages', () => {
+    const emitted = new Set<string>();
+    for (const file of ['src/lib/offlineQueue.ts', 'src/lib/offlineDb.ts']) {
+      const source = readFileSync(file, 'utf8');
+      for (const match of source.matchAll(/'(offline_[a-z0-9_]+)'/g)) emitted.add(match[1]);
+    }
+    // Positive control on the scan itself: an empty set would make every assertion below vacuous.
+    expect(emitted.size).toBeGreaterThanOrEqual(13);
+
+    for (const condition of emitted) {
+      const key = toErrorKey(new Error(condition));
+      expect(key, `${condition} matches no pattern in errors.ts`).not.toBe('fallback');
+      const hebrew = (he.errors as Record<string, string>)[key];
+      const english = (en.errors as Record<string, string>)[key];
+      expect(hebrew, `${key} has no Hebrew sentence`).toBeTruthy();
+      expect(english, `${key} has no English sentence`).toBeTruthy();
+      expect(hebrew).not.toBe(he.errors.fallback);
+      expect(english).not.toBe(en.errors.fallback);
+      // The English sentence is what an English reader gets; a Hebrew letter in it is a leak.
+      expect(english, `${key} leaks Hebrew into the English dictionary`).not.toMatch(/[֐-׿]/);
+    }
+  });
+
+  /**
+   * The other half of the same defect, and the half no unit test could see: the queue returned a
+   * condition and `Receiving` toasted it verbatim, so a person standing at a delivery whose send
+   * failed on a flaky connection was shown the literal text `offline_transport_failure`.
+   */
+  it('resolves the queue outcome in Receiving instead of printing the condition', () => {
+    const source = readFileSync('src/pages/Receiving.tsx', 'utf8');
+    expect(source).toContain('toast(errorText(outcome.queuedCondition))');
+    expect(source).toContain("toast(errorText(outcome.failureCondition), 'error')");
+    expect(source).not.toContain('toast(outcome.');
   });
 
   it('keeps an accepted receipt retryable when atomic local finalization fails', async () => {

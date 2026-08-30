@@ -76,8 +76,17 @@ interface LegacyCompatibleScope {
   actorUserId?: string;
 }
 
+/**
+ * A local-storage refusal, carried as a CONDITION rather than a sentence.
+ *
+ * The throw and the reading are not the same moment, and not necessarily the same language: one of
+ * these is written to IndexedDB and drawn on a later visit, and all of them reach a screen through
+ * `errorText`, which resolves in the language of whoever is looking. A Hebrew message here also
+ * matched no pattern in `toErrorKey`, so every one of them collapsed into the generic fallback and
+ * the specific refusal never reached the person it was written for.
+ */
 export class OfflineStorageError extends Error {
-  constructor(message = 'לא ניתן לשמור את העבודה במכשיר הזה.') {
+  constructor(message = 'offline_storage_unavailable') {
     super(message);
     this.name = 'OfflineStorageError';
   }
@@ -94,7 +103,7 @@ export function configureOfflineScopeResolver(resolver: OfflineScopeResolver) {
 async function requireOfflineScope(): Promise<OfflineScope> {
   const scope = await resolveOfflineScope();
   if (!scope?.orgId || !scope.actorUserId) {
-    throw new OfflineStorageError('לא ניתן לזהות את הארגון והמשתמש עבור השמירה המקומית.');
+    throw new OfflineStorageError('offline_scope_unresolved');
   }
   return scope;
 }
@@ -196,7 +205,7 @@ export interface OfflineQueuedAction extends LegacyCompatibleScope {
   observedAt: number;
   attempts: number;
   state: QueuedActionState;
-  /** Hebrew, per action. Never "הסנכרון נכשל" — the doc forbids a collective excuse (:90). */
+  /** A condition, per action. Never a collective "הסנכרון נכשל" — the doc forbids it (:90). */
   lastError: string | null;
   /** The server's own code, kept so the conflict screen can pick the right decision. */
   lastErrorCode: string | null;
@@ -508,13 +517,13 @@ export async function claimLegacyReceiptRecovery(orderId: string): Promise<boole
       return false;
     }
     if (currentDraft) {
-      throw new OfflineStorageError('כבר קיימת במכשיר טיוטה חדשה יותר להזמנה הזאת. השחזור לא בוצע.');
+      throw new OfflineStorageError('offline_recovery_newer_draft_exists');
     }
 
     const existing = await queue.index('by-scope-key')
       .get([scope.orgId, scope.actorUserId, plan.preview.receiptId]);
     if (existing) {
-      throw new OfflineStorageError('כבר קיימת במכשיר פעולה משויכת לקבלה הזאת. השחזור לא בוצע.');
+      throw new OfflineStorageError('offline_recovery_action_exists');
     }
 
     if (!currentOrder && plan.order) await scopedOrders.put(scoped(plan.order, scope));

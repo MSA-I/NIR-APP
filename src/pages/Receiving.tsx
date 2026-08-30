@@ -818,7 +818,11 @@ export function ReceiveOrder() {
         return;
       case 'queued':
         setConflict(null);
-        toast(outcome.reason);
+        // The queue answers with a condition, never a sentence: it is the same value it wrote to
+        // IndexedDB, and `OfflineQueueStatus` draws it on a later visit in whatever language the
+        // reader has then. Resolving it here is what stops a person at a delivery from being shown
+        // the literal words `offline_transport_failure`.
+        toast(errorText(outcome.queuedCondition));
         if (complete) {
           setDonePendingSync(true);
           setDoneReceiptId(receiptKey.receiptId);
@@ -834,7 +838,7 @@ export function ReceiveOrder() {
             ? { id: queuedConflict.id, syncVersion: queuedConflict.syncVersion }
             : null);
         }
-        toast(outcome.message, 'error');
+        toast(errorText(outcome.failureCondition), 'error');
         setConflict(await loadReceiptConflict({
           orderId: order.id,
           receiptId: receiptKey.receiptId,
@@ -847,7 +851,7 @@ export function ReceiveOrder() {
         }));
         return;
       case 'rejected':
-        toast(outcome.message, 'error');
+        toast(errorText(outcome.failureCondition), 'error');
         return;
     }
   }

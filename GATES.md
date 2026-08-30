@@ -398,6 +398,53 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   files. Dictionary parity passed at 5,280 keys per locale, and `extracted` reported 92 surfaces
   at zero. `zero` still exits 1 on 73/27, so this gate remains open.
 
+  **PROGRESS, 30.08.2026 - the offline queue and its local storage in this commit.** The pinned
+  count is now 637 Hebrew line(s) across 64 files. The protected set is now 577 lines in 39 files:
+  `offlineQueue.ts` keeps exactly one line, the clock clause `receiptAuditReason` appends to
+  `p_reason`, which lands in `audit_logs`. `offlineDb.ts` is the 93rd surface locked at zero. The
+  real remainder is **60 lines in 25 files**.
+
+  This surface was classified rather than extracted, and the classification found two live defects
+  that no test, no compiler and no other gate could see.
+
+  **The first: a condition was already being printed to a person as its own source code.** The
+  queue answered `{ kind: 'queued', reason }` where `reason` was sometimes a Hebrew sentence and
+  sometimes the literal string `offline_transport_failure`, and `Receiving` toasted it directly. So
+  somebody standing at a delivery whose send failed on a flaky connection - the exact scenario the
+  offline queue exists for - was shown the words `offline_transport_failure`. `tsc` was clean
+  because both are strings, which is iron rule 7 for the fourth time in this ledger. Renaming the
+  fields to `queuedCondition`/`failureCondition` is what produced the list of sites to fix; the
+  compiler named exactly one remaining consumer.
+
+  **The second: three Hebrew refusals were invisible in every language.** `OfflineStorageError`
+  carried Hebrew sentences, and `toErrorKey`'s patterns are all Latin, so `errorText` collapsed each
+  of them into the generic fallback. Measured before the change with a direct probe: the newer-draft
+  refusal, the existing-action refusal and the unresolved-scope refusal all returned `fallback`. The
+  restore path that exists to say WHY a restore was not performed said nothing specific, and had not
+  since those sentences were written.
+
+  Eleven conditions now carry paired dictionary copy, resolved at the render boundary. The Hebrew is
+  the same wording that was in the code, moved rather than rewritten. A new oracle scans both
+  modules for every `offline_*` literal they can emit and demands each resolve to a real, non-
+  fallback sentence in both languages with no Hebrew in the English one, so this class cannot come
+  back through a hand-maintained list. Positive controls on both halves: deleting one `errors.ts`
+  pattern gave `offline_queued_no_network matches no pattern in errors.ts`, and reverting the toast
+  to print the condition failed the Receiving source assertion; both restored, both green.
+
+  **A stale ratchet was uncovered here and is recorded rather than quietly fixed.**
+  `gate-i18n legacy-errors` pinned `toHebrewError` at 4 product call sites while the real count was
+  1. `git grep` at `e3a6146` and at `851cf7e` shows it was already 1 at both, so this batch did not
+  cause the drop - three earlier conversions on this branch took it without lowering the pin, and
+  the gate had been failing there unnoticed because it is not in the set the previous rounds ran.
+  The pin is now 1, with that history in a comment beside it.
+
+  Evidence: the stale-baseline negative control named exactly `offlineQueue.ts` 9 -> 1 and
+  `offlineDb.ts` 4 -> 0 and no others; the focused suite passed 28/28; the full suite passed
+  1,762/1,762; `npx tsc --noEmit` exit 0 and `check:jsx-space` passed on 126 TSX files. Dictionary
+  parity passed at 5,291 keys per locale; `extracted` reported 93 surfaces at zero; `ratchet`,
+  `abandon`, `currency-untouched`, `help-registry-paired` and `legacy-errors` all passed. `zero`
+  still exits 1 on 60/25, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

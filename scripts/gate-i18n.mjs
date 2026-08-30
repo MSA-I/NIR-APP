@@ -115,6 +115,7 @@ const EXTRACTED = [
   'src/components/PlanLimitNote.tsx',
   'src/components/QuickSupplierPicker.tsx',
   'src/pages/Inventory.tsx',
+  'src/lib/offlineDb.ts',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */
@@ -225,7 +226,11 @@ function zero() {
  * reason the Hebrew line count is pinned — a migration with no ratchet stops at whatever fraction
  * the day ran out on, and nobody notices which fraction that was.
  */
-const LEGACY_ERROR_CALLS = 4;
+// Lowered 4 -> 1 on 30.08.2026. The three conversions that earned the drop happened in earlier
+// commits on this branch without moving the pin, so this ratchet had been failing since at least
+// `e3a6146` while every OTHER i18n gate stayed green - which is how it went unseen. Verified with
+// `git grep` at both `e3a6146` and `851cf7e`: the product count was already 1 at each of them.
+const LEGACY_ERROR_CALLS = 1;
 
 function legacyErrors() {
   const files = [];

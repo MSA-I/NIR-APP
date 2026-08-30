@@ -421,11 +421,27 @@ const PATTERNS: [RegExp, string][] = [
   [/monthly_report_snapshot_unattributed_(invoices|payments|credits|exceptions)/i, 'monthly_report_snapshot_unattributed'],
   [/monthly_report_snapshot_legal_entity_invalid|unit_out_of_scope/i, 'monthly_report_snapshot_legal_entity_invalid'],
   [/monthly_report_snapshot_source_unavailable/i, 'monthly_report_snapshot_source_unavailable'],
-  // The offline queue's own two outcomes. It persists what it stored to IndexedDB and shows it on
+  // The offline queue's own outcomes. It persists what it stored to IndexedDB and shows it on
   // a later visit, so what it stores has to be a condition — a sentence written now would be shown
   // days later in whatever language happened to be active at the moment of the failure.
+  //
+  // The rest of this block used to be Hebrew sentences thrown from `offlineDb`/`offlineQueue`, and
+  // they matched nothing here: `errorText` collapsed each of them into the generic fallback, so the
+  // one screen built to say WHICH receipt failed and WHY said neither. Ordered longest-first, since
+  // `offline_storage_unavailable` would otherwise be shadowed by nothing but its own prefix.
   [/offline_finalization_incomplete/i, 'offline_finalization_incomplete'],
   [/offline_transport_failure/i, 'offline_transport_failure'],
+  [/offline_queued_no_network/i, 'offline_queued_no_network'],
+  [/offline_queued_session_expired/i, 'offline_queued_session_expired'],
+  [/offline_queued_syncing_elsewhere/i, 'offline_queued_syncing_elsewhere'],
+  [/offline_queued_server_version_stale/i, 'offline_queued_server_version_stale'],
+  [/offline_queued_changed_elsewhere/i, 'offline_queued_changed_elsewhere'],
+  [/offline_local_action_unidentified/i, 'offline_local_action_unidentified'],
+  [/offline_recovery_newer_draft_exists/i, 'offline_recovery_newer_draft_exists'],
+  [/offline_recovery_action_exists/i, 'offline_recovery_action_exists'],
+  [/offline_receipt_not_stored/i, 'offline_receipt_not_stored'],
+  [/offline_scope_unresolved/i, 'offline_scope_unresolved'],
+  [/offline_storage_unavailable/i, 'offline_storage_unavailable'],
   // The invitation codes (0007). They used to be a private map inside invitations.ts, which meant
   // the invitee — a person who has no account yet and no way to ask anyone — was the one reader
   // whose failures came from a second vocabulary.
