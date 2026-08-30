@@ -10,7 +10,7 @@ import { DOMAIN, key } from '../lib/query/keys';
 import { useOrgScope } from '../lib/query/orgScope';
 import { planTierClass } from './PlanBadge';
 import {
-  HEADLINE_QUOTA_KEY, PLAN_GRID, PlanCard, PlanLadderSkeleton, planEmphasis, type PlanFeatureRow,
+  HEADLINE_QUOTA_KEY, PLAN_GRID, PlanCard, PlanLadderSkeleton, planEmphasisKey, type PlanFeatureRow,
 } from './PlanCard';
 import { usageSnapshotQuery, type UsageRow } from './PlanLimitNote';
 import { ErrorNote, ICON, Modal, Note, Skeleton, StatusBadge } from './ui';
@@ -597,7 +597,12 @@ export function OrgSubscriptionPanel() {
                   chips={[
                     ...(currentTier === null ? []
                       : [current ? t('orgSubscription.text_23') : isUpgrade ? t('orgSubscription.text_24') : t('orgSubscription.text_25')]),
-                    ...(planEmphasis(option.plan_key) ? [planEmphasis(option.plan_key) as string] : []),
+                    // Resolved, not cast. The `as string` this line used to carry would have
+                    // silenced the very compiler error the rename exists to raise.
+                    ...(() => {
+                      const emphasisKey = planEmphasisKey(option.plan_key);
+                      return emphasisKey ? [t(emphasisKey)] : [];
+                    })(),
                   ]}
                   /* The one thing a row can say about the rung itself without inventing a
                      product description: whether it costs money. `option.paid` is the server's

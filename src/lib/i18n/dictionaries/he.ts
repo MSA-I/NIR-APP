@@ -5642,6 +5642,55 @@ export const he = {
     adjustmentDescription: 'יתרה נוכחית: {quantity}. הפעולה תירשם ביומן הביקורת.',
   },
 
+  fab: {
+    groupLabel: 'קיצורי דרך ופעולות',
+    uploading: 'מעלה מסמך',
+    retryUpload: 'ניסיון חוזר להעלאת {count} מסמכים',
+    retryFailedOnly: 'ניסיון חוזר לנכשלים בלבד ({count})',
+    pendingFiling: '{label} — {count} מסמכים ממתינים לשיוך',
+  },
+
+  quickCapture: {
+    retryHint: ' לחיצה נוספת תנסה רק את הכשלים הזמניים.',
+    partial: '{succeeded} הועלו וממתינים לבדיקה בתיקיית המסמכים, {failed} לא הושלמו.{detail}{retryHint}',
+    manyUploaded: '{count} קבצים הועלו וממתינים לבדיקה בתיקיית המסמכים',
+    oneUploaded: 'המסמך הועלה וממתין לבדיקה בתיקיית המסמכים',
+  },
+
+  pdfSource: {
+    loading: 'טוען את קובץ ה־PDF…',
+    documentError: 'לא ניתן להציג את קובץ ה־PDF בתוך המסך. אפשר לפתוח את המקור בקישור שמעל.',
+    pageError: 'לא ניתן להציג עמוד זה מתוך הקובץ.',
+  },
+
+  notificationBell: {
+    unknown: 'התראות — לא ניתן לבדוק כרגע אם יש חדשות',
+    unread: '{count} התראות חדשות',
+    plain: 'התראות',
+  },
+
+  assistantTrigger: {
+    resume: 'חזרה לבדיקה עם העוזר של {app}',
+    open: 'העוזר של {app}',
+  },
+
+  actionMenu: {
+    defaultLabel: 'פעולות',
+  },
+
+  planCard: {
+    emphasisPremium: 'המקיף ביותר',
+    loading: 'טוען',
+  },
+
+  planBadge: {
+    ariaLabel: 'המנוי שלי — {plan}',
+  },
+
+  subscriptionPage: {
+    title: 'המנוי שלי',
+  },
+
   charts: {
     noRecords: 'אין רשומות',
     total: 'סה״כ',

@@ -118,6 +118,16 @@ const EXTRACTED = [
   'src/lib/offlineDb.ts',
   'src/lib/assistant/summaryLines.ts',
   'src/components/charts.tsx',
+  'src/components/ActionMenu.tsx',
+  'src/components/AssistantPanel.tsx',
+  'src/components/document-review/PdfSourceView.tsx',
+  'src/components/Fab.tsx',
+  'src/components/NotificationBell.tsx',
+  'src/components/OfflineQueueStatus.tsx',
+  'src/components/PlanBadge.tsx',
+  'src/components/PlanCard.tsx',
+  'src/components/QuickCapture.tsx',
+  'src/pages/Subscription.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */

@@ -87,12 +87,17 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
        */
       if (summary.failed.length) {
         const detail = failures[0] ? ` ${errorText(new Error(failures[0].code))}` : '';
-        const retryHint = failed.length ? ' לחיצה נוספת תנסה רק את הכשלים הזמניים.' : '';
-        toast(`${summary.succeeded.length} הועלו וממתינים לבדיקה בתיקיית המסמכים, ${summary.failed.length} לא הושלמו.${detail}${retryHint}`, 'error');
+        const retryHint = failed.length ? t('quickCapture.retryHint') : '';
+        toast(t('quickCapture.partial', {
+          succeeded: summary.succeeded.length,
+          failed: summary.failed.length,
+          detail,
+          retryHint,
+        }), 'error');
       } else {
         toast(summary.succeeded.length > 1
-          ? `${summary.succeeded.length} קבצים הועלו וממתינים לבדיקה בתיקיית המסמכים`
-          : 'המסמך הועלה וממתין לבדיקה בתיקיית המסמכים');
+          ? t('quickCapture.manyUploaded', { count: summary.succeeded.length })
+          : t('quickCapture.oneUploaded'));
       }
       if (result.succeeded.length + registered > 0) {
         window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));

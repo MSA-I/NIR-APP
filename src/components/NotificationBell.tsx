@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { useUnreadNotifications } from '../lib/notifications';
 import { ICON } from './ui';
+import { useT } from '../lib/i18n/LocaleProvider';
 
 /**
  * The alert door, in the desktop end-cluster and in the phone header.
@@ -12,6 +13,7 @@ import { ICON } from './ui';
  * branches were one live style and one that nothing could reach.
  */
 export default function NotificationBell() {
+  const { t } = useT();
   const { profile } = useAuth();
   const allowed = profile?.role === 'owner' || profile?.role === 'office';
   const { count: unread, failed } = useUnreadNotifications(allowed);
@@ -23,9 +25,9 @@ export default function NotificationBell() {
      worse; what changes is the name the control answers to, so a person who hovers, or a screen
      reader, is told the difference. Loading deliberately keeps the plain name: it lasts a moment,
      and a skeleton in the chrome would flash on every route change. */
-  const label = failed ? 'התראות — לא ניתן לבדוק כרגע אם יש חדשות'
-    : unread && unread > 0 ? `${unread} התראות חדשות`
-      : 'התראות';
+  const label = failed ? t('notificationBell.unknown')
+    : unread && unread > 0 ? t('notificationBell.unread', { count: unread })
+      : t('notificationBell.plain');
   return (
     <Link to="/alerts" aria-label={label} title={label}
       data-notification-state={failed ? 'unknown' : unread == null ? 'loading' : unread > 0 ? 'unread' : 'clear'}

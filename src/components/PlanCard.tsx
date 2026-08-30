@@ -1,6 +1,8 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import type { ReactNode } from 'react';
 import { Check } from 'lucide-react';
 import { Card, ICON, Skeleton } from './ui';
+import type { TKey } from '../lib/i18n/t.ts';
 
 /**
  * ONE RUNG OF THE LADDER, AS A ROW. Used by both surfaces that show the ladder.
@@ -106,10 +108,15 @@ export type FigureTone = 'anchor' | 'compact' | 'quiet';
  * (#194/#201), not a marketed rung, and emphasising it would put the internal minimums one click
  * from a tenant screen.
  */
-export const PLAN_EMPHASIS: Record<string, string> = { premium: 'המקיף ביותר' };
+export const PLAN_EMPHASIS_KEY: Record<string, TKey> = { premium: 'planCard.emphasisPremium' };
 
-/** The single fallback: a rung the product does not point at carries no emphasis. */
-export const planEmphasis = (planKey: string): string | null => PLAN_EMPHASIS[planKey] ?? null;
+/**
+ * The single fallback: a rung the product does not point at carries no emphasis.
+ *
+ * `*_KEY`, so the compiler lists every render site. #202 makes this a STATIC marketing emphasis,
+ * which means it is copy — and copy that a caller spread straight into a rendered list.
+ */
+export const planEmphasisKey = (planKey: string): TKey | null => PLAN_EMPHASIS_KEY[planKey] ?? null;
 
 /**
  * THE ONE QUOTA A ROW PUTS AT FIGURE SIZE, and the same key on both surfaces.
@@ -183,7 +190,7 @@ export function PlanCard({
    * passed, so no caller can promote a rung the emphasis map does not name — which is #202's rule
    * turned into something a second surface cannot get wrong.
    */
-  const featured = planEmphasis(planKey) !== null;
+  const featured = planEmphasisKey(planKey) !== null;
 
   /**
    * The two palettes a row can wear, resolved once. Written as a table rather than as a ternary at
@@ -373,12 +380,13 @@ export function PlanLadderSkeleton({
   /** Must match the layout the caller then renders, or the page jumps when the data lands. */
   layout?: PlanCardLayout;
 }) {
+  const { t } = useT();
   const grid = layout === 'grid';
   return (
     <div role="status" aria-busy="true" className="space-y-4" data-testid={testId}>
-      {/* One accessible name for the whole region — a screen reader meets "טוען", not a wall of
-          empty boxes. Every `Skeleton` below is `aria-hidden`. */}
-      <span className="sr-only">טוען</span>
+      {/* One accessible name for the whole region — a screen reader meets the loading word, not a
+          wall of empty boxes. Every `Skeleton` below is `aria-hidden`. */}
+      <span className="sr-only">{t('planCard.loading')}</span>
       {heading && <Skeleton className="h-6 w-28" />}
       <ul className={grid ? PLAN_GRID : PLAN_LIST}>
         {Array.from({ length: rows }, (_, index) => (

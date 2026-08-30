@@ -5638,6 +5638,55 @@ export const en: Dictionary = {
     adjustmentDescription: 'Current balance: {quantity}. The action will be recorded in the audit log.',
   },
 
+  fab: {
+    groupLabel: 'Shortcuts and actions',
+    uploading: 'Uploading a document',
+    retryUpload: 'Retry uploading {count} documents',
+    retryFailedOnly: 'Retry only the failed ones ({count})',
+    pendingFiling: '{label} — {count} documents waiting to be filed',
+  },
+
+  quickCapture: {
+    retryHint: ' Pressing again will retry only the temporary failures.',
+    partial: '{succeeded} uploaded and waiting for review in the documents folder, {failed} did not finish.{detail}{retryHint}',
+    manyUploaded: '{count} files uploaded and waiting for review in the documents folder',
+    oneUploaded: 'The document was uploaded and is waiting for review in the documents folder',
+  },
+
+  pdfSource: {
+    loading: 'Loading the PDF file…',
+    documentError: 'The PDF file cannot be shown inside this screen. The source can be opened from the link above.',
+    pageError: 'This page cannot be shown from the file.',
+  },
+
+  notificationBell: {
+    unknown: 'Alerts — cannot check for new ones right now',
+    unread: '{count} new alerts',
+    plain: 'Alerts',
+  },
+
+  assistantTrigger: {
+    resume: 'Back to the check with the {app} assistant',
+    open: 'The {app} assistant',
+  },
+
+  actionMenu: {
+    defaultLabel: 'Actions',
+  },
+
+  planCard: {
+    emphasisPremium: 'The most complete',
+    loading: 'Loading',
+  },
+
+  planBadge: {
+    ariaLabel: 'My subscription — {plan}',
+  },
+
+  subscriptionPage: {
+    title: 'My subscription',
+  },
+
   charts: {
     noRecords: 'no records',
     total: 'Total',

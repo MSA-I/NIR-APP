@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 // ui.tsx already imports this module (DataTable's rowActions), so this is a cycle — an inert one:
 // ICON is only ever read inside render, long after both modules finish evaluating.
 import { ICON } from './ui';
+import { useT } from '../lib/i18n/LocaleProvider';
 
 export interface ActionMenuItem {
   key: string;
@@ -35,7 +36,11 @@ const VIEWPORT_PAD = 8; // px the menu keeps from the viewport edge
  * pattern: ArrowUp/ArrowDown cycle, Home/End, Enter/Space activate; disabled items are
  * skipped and inert.
  */
-export function ActionMenu({ items, label = 'פעולות' }: { items: ActionMenuItem[]; label?: string }) {
+export function ActionMenu({ items, label }: { items: ActionMenuItem[]; label?: string }) {
+  // The fallback moved out of the parameter list on purpose: a default there is evaluated where
+  // no hook can be called, so the one menu that does not name itself would have stayed Hebrew.
+  const { t } = useT();
+  const menuLabel = label ?? t('actionMenu.defaultLabel');
   const visible = items.filter((i) => !i.hidden);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -84,8 +89,8 @@ export function ActionMenu({ items, label = 'פעולות' }: { items: ActionMen
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (menuRef.current?.contains(t) || triggerRef.current?.contains(t)) return;
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
       close();
     };
     const onKey = (e: KeyboardEvent) => {
@@ -125,12 +130,12 @@ export function ActionMenu({ items, label = 'פעולות' }: { items: ActionMen
   return (
     <>
       <button ref={triggerRef} type="button" className="btn-ghost btn-icon rounded-none!"
-        aria-haspopup="menu" aria-expanded={open} aria-label={label}
+        aria-haspopup="menu" aria-expanded={open} aria-label={menuLabel}
         onClick={() => (open ? close() : setOpen(true))}>
         <MoreVertical size={ICON.sm} aria-hidden="true" />
       </button>
       {open && createPortal(
-        <div ref={menuRef} role="menu" aria-orientation="vertical" aria-label={label}
+        <div ref={menuRef} role="menu" aria-orientation="vertical" aria-label={menuLabel}
           onKeyDown={onMenuKeyDown}
           // Physical `left`, not `insetInlineStart`, and it stays that way. `pos.left` is a
           // PHYSICAL viewport coordinate: it comes out of getBoundingClientRect() above, already

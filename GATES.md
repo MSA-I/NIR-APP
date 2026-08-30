@@ -573,6 +573,35 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   parity passed at 5,303 keys per locale; `extracted` reported 95 surfaces at zero. `zero` still
   exits 1 on 42/21, so this gate remains open.
 
+  **PROGRESS, 30.08.2026 - ten interface components in this commit.** The pinned count is now
+  599 Hebrew line(s) across 52 files; the protected set remains 579 lines in 41 files, so the
+  real remainder is **20 lines in 11 files**. These are surfaces 96-105 locked at zero: `Fab`,
+  `QuickCapture`, `PdfSourceView`, `NotificationBell`, `AssistantPanel`, `PlanCard`,
+  `ActionMenu`, `OfflineQueueStatus`, `PlanBadge` and `Subscription`.
+
+  Three of them needed a shape change rather than a substitution, and each is the same lesson
+  in a different disguise: **the string was in a place that has no reader.**
+
+  * `PdfSourceView` held its loading node as a module-scope CONSTANT, built once, where there
+    is no hook and therefore no language. react-pdf takes a `ReactNode`, so it is a component
+    now - the same value with somewhere to ask.
+  * `ActionMenu` put its fallback in the PARAMETER LIST (`label = '...'`), which is evaluated
+    outside the body for the same reason. It moved into the body as `menuLabel`. Its local
+    `const t = e.target` was renamed to `target` first, following the `GlobalSearch` precedent:
+    rename the collision before wiring the hook, never after.
+  * `PlanCard` exported `PLAN_EMPHASIS`/`planEmphasis` returning a sentence. They are
+    `PLAN_EMPHASIS_KEY`/`planEmphasisKey` returning a `TKey`, and the rename found a live
+    `as string` in `OrgSubscriptionPanel` that spread the value straight into a rendered chip
+    list. That cast would have silenced the exact compiler error the rename exists to raise;
+    the site resolves the key now.
+
+  Evidence: the stale-baseline negative control named exactly these ten files and no others,
+  every one at its full count to zero; the full suite passed 1,767/1,767; `npx tsc --noEmit`
+  exit 0 and `check:jsx-space` passed on 126 TSX files. Dictionary parity passed at 5,325 keys
+  per locale; `extracted` reported 105 surfaces at zero, and `ratchet`, `abandon`,
+  `currency-untouched`, `help-registry-paired` and `legacy-errors` all passed. `zero` still
+  exits 1 on 20/11, so this gate remains open.
+
   One tooling hazard hit again while writing this batch and worth the line: a `\b` written through
   a shell heredoc arrives in the file as a real backspace character (0x08), silently turning
   `/\bsent\b/i` into a regex that matches nothing intended. This is the same corruption that

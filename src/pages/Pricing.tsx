@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { ErrorNote, Note } from '../components/ui';
 import { planTierClass } from '../components/PlanBadge';
 import {
-  HEADLINE_QUOTA_KEY, PLAN_LIST, PlanCard, PlanLadderSkeleton, planEmphasis, type PlanFeatureRow,
+  HEADLINE_QUOTA_KEY, PLAN_LIST, PlanCard, PlanLadderSkeleton, planEmphasisKey, type PlanFeatureRow,
 } from '../components/PlanCard';
 import { fmtNum } from '../lib/format';
 
@@ -233,7 +233,7 @@ export default function Pricing() {
       <ul data-testid="plan-cards" className={PLAN_LIST}>
         {plans.map((plan) => {
           const headline = quotaOf(plan.plan_key, HEADLINE_QUOTA_KEY);
-          const emphasis = planEmphasis(plan.plan_key);
+          const emphasisKey = planEmphasisKey(plan.plan_key);
           const measured = !!headline && headline.measured;
           return (
             <PlanCard
@@ -242,7 +242,7 @@ export default function Pricing() {
               label={plan.label}
               /* The same map the header chip and the account ladder read — DESIGN.md:503. */
               tierClass={planTierClass(plan.plan_key)}
-              chips={emphasis ? [emphasis] : []}
+              chips={emphasisKey ? [t(emphasisKey)] : []}
               /* The headline quota AS the figure, with the server's own label as its unit on the
                  same baseline. `unlimited` has no number to print, so the words carry the slot. */
               figure={!measured ? '—'

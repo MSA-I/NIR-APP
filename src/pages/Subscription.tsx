@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { CreditCard } from 'lucide-react';
 import { ICON, PageHeader } from '../components/ui';
 import { OrgSubscriptionPanel } from '../components/OrgSubscriptionPanel';
@@ -23,6 +24,7 @@ import { PlanLimitNote } from '../components/PlanLimitNote';
  * is the right amount of screen for "you are nowhere near the limit".
  */
 export default function Subscription() {
+  const { t } = useT();
   return (
     /* `max-w-7xl`, and the width is the ladder's, not the prose's. At `4xl` five plan cards were
        178px wide on a laptop — narrower than the button inside them — which is half of why they
@@ -34,7 +36,7 @@ export default function Subscription() {
       {/* No `meta`: `PageHeader` already prints the route's own description from the shared
           catalogue, and a second line saying the same thing in different words was exactly the
           cramped duplicated prose this package went out to remove. */}
-      <PageHeader title={<span className="flex items-center gap-2"><CreditCard size={ICON.xl} /> המנוי שלי</span>} />
+      <PageHeader title={<span className="flex items-center gap-2"><CreditCard size={ICON.xl} /> {t('subscriptionPage.title')}</span>} />
       <PlanLimitNote metricKey="documents.monthly" />
       <OrgSubscriptionPanel />
     </div>
