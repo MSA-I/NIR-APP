@@ -4,6 +4,7 @@ import { ICON, Modal, StatusBadge, useToast } from './ui';
 import { useQuery } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
 import { COMMUNICATION_CHANNEL } from '../lib/status';
+import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
 import {
   fetchSupplierCommunicationPreferences,
   setSupplierCommunicationPreferences,
@@ -47,7 +48,9 @@ export function SupplierCommunicationCard({ supplierId, supplierEmail, supplierP
   }
 
   async function save() {
-    if (busy || !reason.trim()) return;
+    // `busy` is re-entrancy, not validation. The reason no longer gates the save (owner,
+    // 11.08.2026) — `reasonOr` names the action for the ledger when the box was left empty.
+    if (busy) return;
     setBusy(true);
     try {
       await setSupplierCommunicationPreferences(supplierId, {
@@ -56,7 +59,7 @@ export function SupplierCommunicationCard({ supplierId, supplierEmail, supplierP
         emailOverride: emailOverride.trim() || null,
         whatsappOverride: whatsappOverride.trim() || null,
         remindersAllowed,
-        reason: reason.trim(),
+        reason: reasonOr(reason, 'עדכון העדפות תקשורת מול הספק'),
       });
       toast('העדפות התקשורת נשמרו ותועדו ביומן הביקורת');
       setEditing(false);
@@ -148,13 +151,13 @@ export function SupplierCommunicationCard({ supplierId, supplierEmail, supplierP
             הספק מאשר קבלת תזכורות אוטומטיות
           </label>
           <div>
-            <label className="label" htmlFor="comm-reason">סיבת השינוי (חובה — תתועד ביומן הביקורת)</label>
+            <label className="label" htmlFor="comm-reason">{OPTIONAL_REASON_LABEL}</label>
             <input id="comm-reason" className="input" value={reason}
               onChange={(e) => setReason(e.target.value)} />
           </div>
           <div className="flex justify-end gap-2">
             <button type="button" className="btn-secondary" disabled={busy} onClick={() => setEditing(false)}>ביטול</button>
-            <button type="button" className="btn-primary" disabled={busy || !reason.trim()} onClick={() => void save()}>שמירה</button>
+            <button type="button" className="btn-primary" disabled={busy} onClick={() => void save()}>שמירה</button>
           </div>
         </div>
       </Modal>

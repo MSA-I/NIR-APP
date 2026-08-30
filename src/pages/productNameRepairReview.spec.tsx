@@ -45,7 +45,10 @@ describe('ProductNameRepairReview', () => {
     expect(ready).toHaveTextContent('מחירון יולי.xlsx');
     expect(ready).toHaveTextContent('B7');
     expect(ready).toHaveTextContent(READY.source_checksum.slice(0, 12));
-    await user.type(within(ready).getByLabelText(/סיבה/), 'נבדק מול שורה 7');
+    // No box to fill: this queue's sibling on the same screen (`ProductNameReview`) carries the
+    // owner's ruling that approving a queued proposal must not be gated behind typed prose. The
+    // ledger still gets a sentence, and it says plainly that nobody wrote one.
+    expect(within(ready).queryByLabelText(/סיבה/)).toBeNull();
     await user.click(within(ready).getByRole('button', { name: 'אישור התיקון' }));
 
     await waitFor(() => expect(calls).toHaveLength(1));
@@ -54,8 +57,8 @@ describe('ProductNameRepairReview', () => {
       p_expected_old_name: READY.old_name,
       p_expected_proposed_name: READY.proposed_name,
       p_expected_source_checksum: READY.source_checksum,
-      p_reason: 'נבדק מול שורה 7',
     });
+    expect(String(calls[0].p_reason)).toContain('ללא הערה');
     expect(String(calls[0].p_idempotency_key)).not.toBe('');
     expect(applied).toHaveBeenCalledWith(READY.candidate_id);
   });
@@ -81,7 +84,6 @@ describe('ProductNameRepairReview', () => {
     const user = userEvent.setup();
     render(<ToastProvider><ProductNameRepairReview queue={[READY]} dryRunProduced onApplied={vi.fn()} /></ToastProvider>);
     const card = screen.getByTestId('repair-candidate-ready');
-    await user.type(within(card).getByLabelText(/סיבה/), 'נבדק מול המקור');
     await user.click(within(card).getByRole('button', { name: 'אישור התיקון' }));
     await waitFor(() => expect(keys).toHaveLength(1));
     await user.click(within(card).getByRole('button', { name: 'אישור התיקון' }));

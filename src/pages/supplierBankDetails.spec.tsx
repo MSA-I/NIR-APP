@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import type { ComponentProps } from 'react';
@@ -75,6 +75,22 @@ function trackBankRpc(status = 204, message?: string) {
   return bodies;
 }
 
+/** A password sign-in that comes back with a JWT carrying a password `amr` entry from just now. */
+function serveFreshToken() {
+  server.use(
+    http.post(`${SUPABASE_URL}/auth/v1/token`, () =>
+      HttpResponse.json({
+        access_token: tokenWithAge(0),
+        token_type: 'bearer',
+        expires_in: 3600,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        refresh_token: 'refresh-1',
+        user: { id: 'user-1', aud: 'authenticated', email: 'owner@example.com' },
+      }),
+    ),
+  );
+}
+
 function serveCurrentBankDetails(data: Record<string, unknown>[] = []) {
   server.use(
     http.get(`${SUPABASE_URL}/rest/v1/financial_supplier_bank_accounts`, () => HttpResponse.json(data)),
@@ -103,36 +119,55 @@ async function fillIsraelBank(user: ReturnType<typeof userEvent.setup>, suffix =
 }
 
 beforeEach(() => {
-  // Signed in seconds ago — ReauthModal's mandatory skip-when-fresh keeps the flow modal-free.
+  /* Signed in seconds ago. Everywhere else in the app that would skip the password prompt — but
+     NOT here: this flow passes `skipWhenFresh={false}` on purpose (#299, #106), so a fresh JWT
+     changes nothing and the dialog appears every time. The age is kept at 30s precisely so these
+     tests prove that: if the opt-out is ever dropped, they go red instead of quietly passing. */
   authState.session = sessionWithAge(30);
   serveCurrentBankDetails();
 });
 
+/** The single dialog the flow now stops at, and the field it carries. */
+const STEP_UP_HEADING = 'אימות זהות לעדכון פרטי בנק';
+const REASON_LABEL = 'סיבה (רשות — נרשמת ביומן הביקורת)';
+
+/**
+ * Walk the one interruption that is always there.
+ *
+ * Two dialogs became one (#299) — never none. The old reason-only `ConfirmDialog` was
+ * unconditional, so letting a fresh token skip the replacement would have made the single most
+ * financially consequential write in the app happen on one click with nothing on screen. This
+ * helper exists so every bank test pays that price explicitly rather than by omission.
+ */
+async function passStepUp(user: ReturnType<typeof userEvent.setup>, reason?: string) {
+  const dialog = await screen.findByRole('dialog', { name: STEP_UP_HEADING });
+  if (reason !== undefined) await user.type(within(dialog).getByLabelText(REASON_LABEL), reason);
+  await user.type(within(dialog).getByLabelText('סיסמה לאימות זהות טרי *'), 'owner-pass');
+  await user.click(within(dialog).getByRole('button', { name: /אישור זהות/ }));
+}
+
 describe('SupplierForm — structured bank-details flow (migration 0171)', () => {
-  it('routes a bank change through reason + step-up to the RPC, never the direct update', async () => {
+  it('routes a bank change through the step-up to the RPC, never the direct update', async () => {
     const user = userEvent.setup();
     const patched = trackSupplierPatch();
     const rpcBodies = trackBankRpc();
     const onSaved = renderForm();
 
     await fillIsraelBank(user);
+    serveFreshToken();
     await user.click(saveButton());
 
     // The generic save ran, and bank_details was NOT in it — the column left the UPDATE grant.
     await waitFor(() => expect(patched).toHaveLength(1));
     expect(Object.keys(patched[0])).not.toContain('bank_details');
 
-    // The dedicated step opens. Since 11.08.2026 the reason no longer locks it (owner ruling) --
-    // what still separates this from the generic save is the step-up boundary and the RPC below.
-    const dialogTitle = await screen.findByRole('heading', { name: 'עדכון פרטי בנק' });
-    expect(dialogTitle).toBeInTheDocument();
-    const confirmButton = screen.getByRole('button', { name: 'אישור העדכון' });
-    expect(rpcBodies).toHaveLength(0);
+    /* #299: the reason-only ConfirmDialog that used to stand here is gone — two interruptions
+       became one, not none. The remaining one is the password, and this flow refuses to let a
+       fresh JWT skip it, so the account the money leaves for never changes without a person
+       looking at it. The ledger still gets a sentence either way: the server refuses a blank
+       `p_reason` outright. */
+    await passStepUp(user);
 
-    await user.type(screen.getByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'), 'עדכון חשבון לפי מכתב מהספק');
-    await user.click(confirmButton);
-
-    // Fresh JWT ⇒ the step-up prompt is skipped and the RPC carries the reason.
     await waitFor(() => expect(rpcBodies).toHaveLength(1));
     expect(rpcBodies[0]).toEqual({
       p_supplier_id: 'sup-1',
@@ -145,9 +180,70 @@ describe('SupplierForm — structured bank-details flow (migration 0171)', () =>
         iban: null,
         bic: null,
       },
-      p_reason: 'עדכון חשבון לפי מכתב מהספק',
+      p_reason: 'עדכון פרטי בנק של ספק — ללא הערה מהמשתמש',
     });
+    expect(String(rpcBodies[0].p_reason).trim().length).toBeGreaterThan(0);
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    // One dialog, and only when it has something to ask: the ConfirmDialog is not hiding anywhere.
+    expect(screen.queryByRole('button', { name: 'אישור העדכון' })).toBeNull();
+  });
+
+  it('collapses the old two dialogs into the password step, and carries the typed reason through it', async () => {
+    authState.session = sessionWithAge(10 * 60);
+    const user = userEvent.setup();
+    trackSupplierPatch();
+    const rpcBodies = trackBankRpc();
+    serveFreshToken();
+    renderForm();
+
+    await fillIsraelBank(user, '404');
+    await user.click(saveButton());
+
+    // Exactly one interruption, and it is the password one. Nothing has reached the RPC yet.
+    const dialog = await screen.findByRole('dialog', { name: STEP_UP_HEADING });
+    expect(screen.getAllByRole('dialog', { name: STEP_UP_HEADING })).toHaveLength(1);
+    expect(rpcBodies).toHaveLength(0);
+
+    // It still says which account is about to change — that half of the removed dialog moved here.
+    expect(within(dialog).getByText(/יעודכנו לחשבון IL שמסתיים ב־404/)).toBeInTheDocument();
+
+    // The reason box rides along, and it does not gate the button: the confirm button is disabled
+    // by the empty PASSWORD, and enabling it takes a password, never a reason.
+    const confirm = within(dialog).getByRole('button', { name: /אישור זהות/ });
+    await user.type(within(dialog).getByLabelText(REASON_LABEL), 'החלפת חשבון לפי מכתב מהספק');
+    expect(confirm).toBeDisabled();
+    expect(rpcBodies).toHaveLength(0);
+
+    await user.type(within(dialog).getByLabelText('סיסמה לאימות זהות טרי *'), 'owner-pass');
+    await user.click(confirm);
+
+    await waitFor(() => expect(rpcBodies).toHaveLength(1));
+    expect(rpcBodies[0]).toMatchObject({
+      p_supplier_id: 'sup-1',
+      p_bank_details: { country_code: 'IL', account_number: '404' },
+      p_reason: 'החלפת חשבון לפי מכתב מהספק',
+    });
+  });
+
+  it('an empty reason box still succeeds — the ledger sentence is written for the user', async () => {
+    authState.session = sessionWithAge(10 * 60);
+    const user = userEvent.setup();
+    trackSupplierPatch();
+    const rpcBodies = trackBankRpc();
+    serveFreshToken();
+    renderForm();
+
+    await fillIsraelBank(user, '505');
+    await user.click(saveButton());
+
+    const dialog = await screen.findByRole('dialog', { name: STEP_UP_HEADING });
+    // Not a word typed in the box; the password alone opens the button (#299).
+    await user.type(within(dialog).getByLabelText('סיסמה לאימות זהות טרי *'), 'owner-pass');
+    await user.click(within(dialog).getByRole('button', { name: /אישור זהות/ }));
+
+    await waitFor(() => expect(rpcBodies).toHaveLength(1));
+    // Non-blank is the server's hard rule (`supplier_bank_details_reason_required`, 22023).
+    expect(rpcBodies[0].p_reason).toBe('עדכון פרטי בנק של ספק — ללא הערה מהמשתמש');
   });
 
   it('creation routes non-empty bank details through the reasoned RPC, never the INSERT (#106)', async () => {
@@ -169,16 +265,16 @@ describe('SupplierForm — structured bank-details flow (migration 0171)', () =>
 
     await user.type(screen.getByLabelText('שם הספק *'), 'ספק חדש עם בנק');
     await fillIsraelBank(user, '123');
+    serveFreshToken();
     await user.click(saveButton());
 
     // The INSERT itself must be bank-less — 0088 revoked the column grant (#106, option 2).
     await waitFor(() => expect(inserts).toHaveLength(1));
     expect(Object.keys(inserts[0])).not.toContain('bank_details');
 
-    // The same reasoned step an existing supplier's change takes, now for the fresh row.
-    await screen.findByRole('heading', { name: 'עדכון פרטי בנק' });
-    await user.type(screen.getByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'), 'הקמת ספק עם פרטי בנק');
-    await user.click(screen.getByRole('button', { name: 'אישור העדכון' }));
+    // The same audited step an existing supplier's change takes, now for the fresh row.
+    // The one interruption this flow always shows, fresh token or not (#299).
+    await passStepUp(user);
 
     await waitFor(() => expect(rpcBodies).toHaveLength(1));
     expect(rpcBodies[0]).toEqual({
@@ -192,7 +288,7 @@ describe('SupplierForm — structured bank-details flow (migration 0171)', () =>
         iban: null,
         bic: null,
       },
-      p_reason: 'הקמת ספק עם פרטי בנק',
+      p_reason: 'עדכון פרטי בנק של ספק — ללא הערה מהמשתמש',
     });
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
   });
@@ -224,11 +320,11 @@ describe('SupplierForm — structured bank-details flow (migration 0171)', () =>
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
     expect(inserts).toHaveLength(1);
     expect(rpcBodies).toHaveLength(0);
-    expect(screen.queryByRole('heading', { name: 'עדכון פרטי בנק' })).toBeNull();
-    expect(screen.queryByText('הספק נוצר — פרטי הבנק דורשים אימות וסיבה')).toBeNull();
+    expect(screen.queryByRole('heading', { name: STEP_UP_HEADING })).toBeNull();
+    expect(screen.queryByText('הספק נוצר — פרטי הבנק דורשים אימות זהות')).toBeNull();
   });
 
-  it('clearing an EXISTING supplier\'s bank details is still a reasoned, audited change', async () => {
+  it('clearing an EXISTING supplier\'s bank details is still an audited, stepped-up change', async () => {
     const user = userEvent.setup();
     serveCurrentBankDetails([{
       supplier_id: 'sup-1', account_holder: 'ספק בדיקה בעמ', country_code: 'IL',
@@ -241,56 +337,68 @@ describe('SupplierForm — structured bank-details flow (migration 0171)', () =>
 
     await waitFor(() => expect(bankType()).toHaveValue('IL'));
     await user.selectOptions(bankType(), '');
+    serveFreshToken();
     await user.click(saveButton());
 
-    // Erasing details that exist is a real change — it keeps the reason + step-up boundary.
-    await user.type(
-      await screen.findByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'),
-      'הספק סגר את החשבון',
-    );
-    await user.click(screen.getByRole('button', { name: 'אישור העדכון' }));
+    // Erasing details that exist is a real change — it keeps the step-up boundary and the ledger.
+    // The one interruption this flow always shows, fresh token or not (#299).
+    await passStepUp(user);
 
     await waitFor(() => expect(rpcBodies).toHaveLength(1));
     expect(rpcBodies[0]).toEqual({
       p_supplier_id: 'sup-1',
       p_bank_details: null,
-      p_reason: 'הספק סגר את החשבון',
+      p_reason: 'עדכון פרטי בנק של ספק — ללא הערה מהמשתמש',
     });
   });
 
-  it('prompts for a password inside the flow when the session is stale', async () => {
+  /**
+   * The dialog that was deleted was never the gate, and this is the test that says so. A stale JWT
+   * has to meet the password prompt before a single byte reaches `update_supplier_bank_details`,
+   * and a wrong password has to leave the RPC untouched — which is exactly what the server's
+   * `assert_recent_password_authentication()` (`0171:314`) enforces on its own side.
+   */
+  it('a stale session cannot reach the RPC without a correct password', async () => {
     authState.session = sessionWithAge(10 * 60);
     const user = userEvent.setup();
     trackSupplierPatch();
     const rpcBodies = trackBankRpc();
+    let attempts = 0;
     server.use(
-      http.post(`${SUPABASE_URL}/auth/v1/token`, () =>
-        HttpResponse.json({
+      http.post(`${SUPABASE_URL}/auth/v1/token`, () => {
+        attempts += 1;
+        if (attempts === 1) {
+          return HttpResponse.json({ error: 'invalid_grant', error_description: 'Invalid login credentials' }, { status: 400 });
+        }
+        return HttpResponse.json({
           access_token: tokenWithAge(0),
           token_type: 'bearer',
           expires_in: 3600,
           expires_at: Math.floor(Date.now() / 1000) + 3600,
           refresh_token: 'refresh-1',
           user: { id: 'user-1', aud: 'authenticated', email: 'owner@example.com' },
-        }),
-      ),
+        });
+      }),
     );
     renderForm();
 
     await fillIsraelBank(user, '20');
     await user.click(saveButton());
-    await user.type(
-      await screen.findByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'),
-      'החלפת חשבון',
-    );
-    await user.click(screen.getByRole('button', { name: 'אישור העדכון' }));
 
-    // A stale JWT does not slip through — the step-up dialog interposes before the RPC.
-    expect(await screen.findByRole('heading', { name: 'אימות זהות לעדכון פרטי בנק' })).toBeInTheDocument();
+    // The step-up dialog interposes; the write has not started.
+    const dialog = await screen.findByRole('dialog', { name: STEP_UP_HEADING });
     expect(rpcBodies).toHaveLength(0);
 
-    await user.type(screen.getByLabelText('סיסמה לאימות זהות טרי *'), 'owner-pass');
-    await user.click(screen.getByRole('button', { name: /אישור זהות/ }));
+    // A wrong password: the dialog stays, and still nothing reached the RPC.
+    await user.type(within(dialog).getByLabelText('סיסמה לאימות זהות טרי *'), 'wrong-pass');
+    await user.click(within(dialog).getByRole('button', { name: /אישור זהות/ }));
+    await waitFor(() => expect(attempts).toBe(1));
+    expect(rpcBodies).toHaveLength(0);
+    expect(screen.getByRole('dialog', { name: STEP_UP_HEADING })).toBeInTheDocument();
+
+    await user.type(within(dialog).getByLabelText('סיסמה לאימות זהות טרי *'), 'owner-pass');
+    await user.type(within(dialog).getByLabelText(REASON_LABEL), 'החלפת חשבון');
+    await user.click(within(dialog).getByRole('button', { name: /אישור זהות/ }));
 
     await waitFor(() => expect(rpcBodies).toHaveLength(1));
     expect(rpcBodies[0]).toMatchObject({
@@ -300,7 +408,7 @@ describe('SupplierForm — structured bank-details flow (migration 0171)', () =>
     });
   });
 
-  it('leaves the other-fields path untouched: no RPC, no reason dialog', async () => {
+  it('leaves the other-fields path untouched: no RPC, no step-up dialog', async () => {
     const user = userEvent.setup();
     const patched = trackSupplierPatch();
     const rpcBodies = trackBankRpc();
@@ -316,7 +424,7 @@ describe('SupplierForm — structured bank-details flow (migration 0171)', () =>
     expect(patched[0].phone).toBe('04-7654321');
     expect(Object.keys(patched[0])).not.toContain('bank_details');
     expect(rpcBodies).toHaveLength(0);
-    expect(screen.queryByRole('heading', { name: 'עדכון פרטי בנק' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: STEP_UP_HEADING })).toBeNull();
   });
 
   it('surfaces a step-up rejection through toHebrewError and keeps the dialog for a retry', async () => {
@@ -326,18 +434,21 @@ describe('SupplierForm — structured bank-details flow (migration 0171)', () =>
     const onSaved = renderForm();
 
     await fillIsraelBank(user, '31');
+    serveFreshToken();
     await user.click(saveButton());
-    await user.type(
-      await screen.findByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'),
-      'עדכון חשבון',
-    );
-    await user.click(screen.getByRole('button', { name: 'אישור העדכון' }));
+
+    // The first pass through the step-up is what sends the write the server then refuses.
+    await passStepUp(user);
 
     expect(
       await screen.findByText('נדרש אימות מחדש — הזינו סיסמה כדי לאשר פעולה רגישה.'),
     ).toBeInTheDocument();
-    // The reason dialog survives the failure — the user retries instead of retyping everything.
-    expect(screen.getByRole('heading', { name: 'עדכון פרטי בנק' })).toBeInTheDocument();
+    /* The dialog comes back for a retry, asking again and carrying an empty reason box. It must
+       never come back in a mode that could re-fire the write on its own: a refused sensitive
+       write that retries itself is an infinite loop against the server. */
+    const dialog = await screen.findByRole('dialog', { name: STEP_UP_HEADING });
+    expect(within(dialog).getByLabelText('סיסמה לאימות זהות טרי *')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(REASON_LABEL)).toHaveValue('');
     expect(onSaved).not.toHaveBeenCalled();
   });
 
@@ -352,9 +463,11 @@ describe('SupplierForm — structured bank-details flow (migration 0171)', () =>
     await user.type(screen.getByLabelText('קוד מדינה (ISO) *'), 'de');
     await user.type(screen.getByLabelText('IBAN *'), 'de89 3704 0044 0532 0130 00');
     await user.type(screen.getByLabelText('BIC / SWIFT'), 'cobadeffxxx');
+    serveFreshToken();
     await user.click(saveButton());
-    await user.type(await screen.findByLabelText('סיבה (רשות — נרשמת ביומן הביקורת)'), 'אישור מסמך ספק');
-    await user.click(screen.getByRole('button', { name: 'אישור העדכון' }));
+
+    // The one interruption this flow always shows, fresh token or not (#299).
+    await passStepUp(user);
 
     await waitFor(() => expect(rpcBodies).toHaveLength(1));
     expect(rpcBodies[0]).toMatchObject({

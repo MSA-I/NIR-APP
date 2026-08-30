@@ -3,8 +3,21 @@ import { CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { fmtMoneyExact } from '../../lib/format';
 import { toHebrewError } from '../../lib/errors';
+import { reasonOr } from '../../lib/reason';
 import { supabase } from '../../lib/supabase';
 import { ICON, Note } from '../ui';
+
+/**
+ * The two audit sentences this panel writes when its (optional) boxes are left empty.
+ *
+ * Preparation and approval are separate acts by separate people — the office prepares, the owner
+ * approves — so they may never collapse into one action name: a ledger that cannot tell them
+ * apart cannot answer "who approved these lines". `reason.ts` carries the ruling that a box which
+ * blocks the button produces "asdf"; the batch's real evidence is the rendered line count matching
+ * the server's, which the screen already enforces on its own.
+ */
+const PREPARE_ACTION = 'הכנת אצוות כיול מחירון לבדיקת בעלים';
+const REVIEW_ACTION = 'אישור אצוות כיול מחירון כמסומנת נכונה';
 
 interface CalibrationPreparationRow {
   shadow_run_id: string;
@@ -207,11 +220,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
   }
 
   async function prepareBatch(shadowRunId: string, rows: CalibrationPreparationRow[]) {
-    const reason = (prepareReasons[shadowRunId] ?? '').trim();
-    if (!reason) {
-      setActionError((current) => ({ ...current, [shadowRunId]: 'יש לציין סיבה להכנת האצווה.' }));
-      return;
-    }
+    const reason = reasonOr(prepareReasons[shadowRunId], PREPARE_ACTION);
     setBusyAction(`prepare:${shadowRunId}`);
     setActionError((current) => ({ ...current, [shadowRunId]: '' }));
     const response = await supabase.rpc('prepare_price_list_calibration_batch', {
@@ -229,11 +238,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
   }
 
   async function reviewBatch(shadowRunId: string, receipt: PreparationReceipt) {
-    const reason = (reviewReasons[shadowRunId] ?? '').trim();
-    if (!reason) {
-      setActionError((current) => ({ ...current, [shadowRunId]: 'יש לציין סיבה לאישור האצווה.' }));
-      return;
-    }
+    const reason = reasonOr(reviewReasons[shadowRunId], REVIEW_ACTION);
     setBusyAction(`review:${shadowRunId}`);
     setActionError((current) => ({ ...current, [shadowRunId]: '' }));
     const response = await supabase.rpc('record_price_list_calibration_batch', {
@@ -355,7 +360,9 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
               </div>
               {!receipt && (
                 <div className="space-y-2">
-                  <label className="label" htmlFor={`calibration-prepare-reason-${shadowRunId}`}>סיבת הכנת האצווה</label>
+                  {/* Two reason boxes can be on screen at once, so each keeps its own name — a
+                      shared "סיבה (רשות)" would be two controls with one label. */}
+                  <label className="label" htmlFor={`calibration-prepare-reason-${shadowRunId}`}>סיבת הכנת האצווה (רשות)</label>
                   <textarea id={`calibration-prepare-reason-${shadowRunId}`} className="input" rows={2} maxLength={1000}
                     value={prepareReasons[shadowRunId] ?? ''}
                     onChange={(event) => setPrepareReasons((current) => ({ ...current, [shadowRunId]: event.target.value }))} />
@@ -383,7 +390,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
               )}
               {receipt && profile?.role === 'owner' && !reviewReceipt && batchFullyShown && (
                 <div className="space-y-2">
-                  <label className="label" htmlFor={`calibration-review-reason-${shadowRunId}`}>סיבת אישור האצווה</label>
+                  <label className="label" htmlFor={`calibration-review-reason-${shadowRunId}`}>סיבת אישור האצווה (רשות)</label>
                   <textarea id={`calibration-review-reason-${shadowRunId}`} className="input" rows={2} maxLength={1000}
                     value={reviewReasons[shadowRunId] ?? ''}
                     onChange={(event) => setReviewReasons((current) => ({ ...current, [shadowRunId]: event.target.value }))} />

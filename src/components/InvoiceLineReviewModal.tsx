@@ -3,6 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toHebrewError } from '../lib/errors';
 import { fmtMoneyExact, formatQuantity, formatUnit, normalizeUnitInput } from '../lib/format';
+import { reasonOr } from '../lib/reason';
 import { ICON, Modal, Note, useToast } from './ui';
 
 export type InvoiceReviewCandidate = {
@@ -163,8 +164,12 @@ export function InvoiceLineReviewModal({
       || line.vat_rate == null || line.vat_rate < 0 || line.vat_rate > 100
       || line.line_total == null || line.line_total < 0
     ));
-    if (invalid || !evidenceReason.trim()) {
-      toast('יש להשלים את כל נתוני השורות ואת סיבת העדכון', 'error');
+    // Line data is still checked here — an evidence revision with a missing quantity or a negative
+    // price is a broken financial record, and the server would reject it anyway. The REASON is not
+    // checked: an empty box no longer blocks a legitimate correction (owner, 11.08.2026), and
+    // `reasonOr` below writes the ledger sentence instead of leaving `p_reason` blank.
+    if (invalid) {
+      toast('יש להשלים את כל נתוני השורות', 'error');
       return;
     }
 
@@ -178,7 +183,7 @@ export function InvoiceLineReviewModal({
       p_interpretation_id: null,
       p_actor_id: actorId,
       p_lines: parsed,
-      p_reason: evidenceReason.trim(),
+      p_reason: reasonOr(evidenceReason, 'תיקון שורות חשבונית'),
     });
     setBusy(null);
     if (result.error) {
@@ -190,8 +195,10 @@ export function InvoiceLineReviewModal({
   }
 
   async function saveMatches() {
-    if (!assessment.evidence_batch_id || !matchReason.trim()) {
-      toast('יש להזין סיבה להקצאה הידנית', 'error');
+    // An allocation hangs off a specific evidence version. Without one there is nothing to attach
+    // it to, so this guard stays; the reason box does not gate the button.
+    if (!assessment.evidence_batch_id) {
+      toast('אין גרסת ראיה לשורות — יש לשמור תחילה את שורות החשבונית', 'error');
       return;
     }
     const matches: {
@@ -232,7 +239,7 @@ export function InvoiceLineReviewModal({
       p_evidence_batch_id: assessment.evidence_batch_id,
       p_idempotency_key: matchKey,
       p_matches: matches,
-      p_reason: matchReason.trim(),
+      p_reason: reasonOr(matchReason, 'הקצאה ידנית של שורות חשבונית להזמנות'),
     });
     setBusy(null);
     if (result.error) {
@@ -302,7 +309,9 @@ export function InvoiceLineReviewModal({
               </fieldset>
             ))}
           </div>
-          <label className="mt-3 block"><span className="label">סיבת תיקון השורות</span><textarea className="input" rows={2} value={evidenceReason} onChange={(event) => { setEvidenceReason(event.target.value); setEvidenceKey(crypto.randomUUID()); }} /></label>
+          {/* Two reason boxes share this screen, so neither collapses into the generic
+              `OPTIONAL_REASON_LABEL` — each keeps its own name and only gains the optional mark. */}
+          <label className="mt-3 block"><span className="label">סיבת תיקון השורות (רשות)</span><textarea className="input" rows={2} value={evidenceReason} onChange={(event) => { setEvidenceReason(event.target.value); setEvidenceKey(crypto.randomUUID()); }} /></label>
           <div className="mt-3 flex justify-end">
             <button type="button" className="btn-primary" disabled={busy !== null} onClick={() => void saveEvidence()}>שמירת שורות ובדיקה מחדש</button>
           </div>
@@ -334,7 +343,7 @@ export function InvoiceLineReviewModal({
                   </div>
                 </fieldset>
               ))}
-              <label className="block"><span className="label">סיבת ההקצאה הידנית</span><textarea className="input" rows={2} value={matchReason} onChange={(event) => { setMatchReason(event.target.value); setMatchKey(crypto.randomUUID()); }} /></label>
+              <label className="block"><span className="label">סיבת ההקצאה הידנית (רשות)</span><textarea className="input" rows={2} value={matchReason} onChange={(event) => { setMatchReason(event.target.value); setMatchKey(crypto.randomUUID()); }} /></label>
               <div className="flex justify-end">
                 <button type="button" className="btn-primary" disabled={busy !== null} onClick={() => void saveMatches()}>שמירת הקצאות ובדיקה מחדש</button>
               </div>

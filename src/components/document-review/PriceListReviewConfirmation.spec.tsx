@@ -448,7 +448,7 @@ describe('כיול באצווה ו-dry-run מוצרים', () => {
     await waitFor(() => expect(screen.getAllByTestId('calibration-preparation-row'))
       .toHaveLength(CALIBRATION_LINES));
 
-    await user.type(screen.getByLabelText('סיבת הכנת האצווה'), 'בדיקת שורות המסמך');
+    await user.type(screen.getByLabelText('סיבת הכנת האצווה (רשות)'), 'בדיקת שורות המסמך');
     await user.click(screen.getByRole('button', { name: 'הכנת האצווה לבדיקת בעלים' }));
     await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith(
       'prepare_price_list_calibration_batch',
@@ -460,7 +460,7 @@ describe('כיול באצווה ו-dry-run מוצרים', () => {
       }),
     ));
 
-    await user.type(await screen.findByLabelText('סיבת אישור האצווה'), 'כל השורות נבדקו מול המקור');
+    await user.type(await screen.findByLabelText('סיבת אישור האצווה (רשות)'), 'כל השורות נבדקו מול המקור');
     await user.click(screen.getByRole('button', { name: 'אישור האצווה כמסומנת נכונה' }));
     await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith(
       'record_price_list_calibration_batch',
@@ -544,8 +544,8 @@ describe('כיול באצווה ו-dry-run מוצרים', () => {
     );
 
     expect(await screen.findByText('האצווה הוכנה על ידי מנהל המשרד.')).toBeInTheDocument();
-    expect(screen.queryByLabelText('סיבת הכנת האצווה')).toBeNull();
-    await user.type(screen.getByLabelText('סיבת אישור האצווה'), 'בדיקת בעלים מלאה');
+    expect(screen.queryByLabelText('סיבת הכנת האצווה (רשות)')).toBeNull();
+    await user.type(screen.getByLabelText('סיבת אישור האצווה (רשות)'), 'בדיקת בעלים מלאה');
     await user.click(screen.getByRole('button', { name: 'אישור האצווה כמסומנת נכונה' }));
     await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith(
       'record_price_list_calibration_batch',
@@ -574,7 +574,7 @@ describe('כיול באצווה ו-dry-run מוצרים', () => {
 
     expect(await screen.findByText(/אי אפשר לאשר שורות שלא נראו/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'אישור האצווה כמסומנת נכונה' })).toBeNull();
-    expect(screen.queryByLabelText('סיבת אישור האצווה')).toBeNull();
+    expect(screen.queryByLabelText('סיבת אישור האצווה (רשות)')).toBeNull();
     expect(mocks.rpc.mock.calls.some(([name]) => name === 'record_price_list_calibration_batch')).toBe(false);
   });
 
@@ -604,7 +604,7 @@ describe('כיול באצווה ו-dry-run מוצרים', () => {
       </MemoryRouter>,
     );
 
-    await user.type(await screen.findByLabelText('סיבת הכנת האצווה'), 'הכנת משרד');
+    await user.type(await screen.findByLabelText('סיבת הכנת האצווה (רשות)'), 'הכנת משרד');
     const prepare = screen.getByRole('button', { name: 'הכנת האצווה לבדיקת בעלים' });
     await user.click(prepare);
     await waitFor(() => expect(keys).toHaveLength(1));

@@ -3,6 +3,7 @@ import { toHebrewError } from "../lib/errors";
 import { Link } from 'react-router';
 import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, KeyRound, ClipboardCheck, ImageUp, Download, Undo2, UserCog, LogOut } from 'lucide-react';
 import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
+import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -95,7 +96,6 @@ export default function Settings() {
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [resendTarget, setResendTarget] = useState<Invitation | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<Invitation | null>(null);
-  const [accessTarget, setAccessTarget] = useState<Profile | null>(null);
   const [roleTarget, setRoleTarget] = useState<Profile | null>(null);
   const [nextRole, setNextRole] = useState<ActiveRole>('office');
   const [roleReason, setRoleReason] = useState('');
@@ -275,20 +275,66 @@ export default function Settings() {
     toast('הסיסמה הוחלפה. היא תידרש בכניסה הבאה.');
   }
 
-  async function toggleActive(u: Profile, reason?: string) {
+  /**
+   * One door, both directions. Returns the RAW server message rather than a toast, because one
+   * caller has to branch on `fresh_authentication_required` before deciding whether it is an
+   * error at all.
+   */
+  async function setProfileAccess(u: Profile, next: boolean, action: string): Promise<string | null> {
     setDialogBusy(true);
     const res = await supabase.rpc('manage_profile_access', {
       p_profile_id: u.id,
       p_role: u.role,
-      p_active: !u.active,
+      p_active: next,
       p_supplier_id: u.supplier_id,
-      p_reason: reason?.trim() ?? '',
+      // `manage_profile_access` refuses a blank reason (`profile_access_invalid`, 0061:257) and
+      // nobody types one any more, so the ledger gets a sentence that names the direction.
+      p_reason: reasonOr(null, action),
     });
     setDialogBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-    toast(u.active ? 'המשתמש הושבת' : 'המשתמש הופעל');
-    setAccessTarget(null);
+    return res.error ? res.error.message : null;
+  }
+
+  /**
+   * The confirmation dialog in front of this is gone (0225) — but the password step-up is NOT.
+   * The dialog only asked "are you sure?", which one press now answers; `ReauthModal` proves the
+   * person at the keyboard is the account holder, which nothing else does. The row action now
+   * queues this behind the step-up directly.
+   */
+  async function toggleActive(u: Profile) {
+    const next = !u.active;
+    const failure = await setProfileAccess(u, next, next ? 'הפעלת משתמש' : 'השבתת משתמש');
+    if (failure) { toast(toHebrewError(failure), 'error'); return; }
     void refetch();
+    toast(next ? 'המשתמש הופעל' : 'המשתמש הושבת', 'success', {
+      label: 'ביטול הפעולה',
+      onAct: () => { void undoAccess(u, next); },
+    });
+  }
+
+  /**
+   * The reversal, and the one place where "act, then offer Undo" meets a server that can refuse.
+   *
+   * `manage_profile_access` calls `assert_recent_password_authentication()`, which wants a password
+   * `amr` entry newer than five minutes. Inside that window the undo simply goes through. Outside
+   * it — a toast held open by a hover, a reader who took their time — the server raises
+   * `fresh_authentication_required`, and showing that as a red toast would be a dead end: the app
+   * would be reporting a lock it knows how to open. So the reversal is re-queued behind the
+   * step-up instead. Exactly once: a second refusal after a fresh password is a real failure and
+   * is surfaced as one, rather than looping the dialog.
+   *
+   * The reversal also writes a second `security_events` row of type `permission_change`. That is
+   * correct — the security ledger should carry both the change and its undoing.
+   */
+  async function undoAccess(u: Profile, applied: boolean, afterStepUp = false) {
+    const failure = await setProfileAccess(u, !applied, applied ? 'ביטול הפעלת משתמש' : 'ביטול השבתת משתמש');
+    if (failure && !afterStepUp && /fresh_authentication_required/i.test(failure)) {
+      setPendingSensitive({ run: () => void undoAccess(u, applied, true) });
+      return;
+    }
+    if (failure) { toast(toHebrewError(failure), 'error'); return; }
+    void refetch();
+    toast(applied ? 'ההפעלה בוטלה — המשתמש מושבת' : 'ההשבתה בוטלה — המשתמש פעיל');
   }
 
   function openRoleChange(u: Profile) {
@@ -312,7 +358,11 @@ export default function Settings() {
       p_role: nextRole,
       p_active: roleTarget.active,
       p_supplier_id: roleTarget.supplier_id,
-      p_reason: roleReason.trim(),
+      // The box no longer holds the button (`reason.ts`), so the ledger — not the typist — is what
+      // has to be kept whole: `manage_profile_access` rejects a blank reason outright
+      // (`profile_access_invalid`, 0061:257), and `reasonOr` hands it a sentence that names the
+      // action and says plainly that nobody explained it.
+      p_reason: reasonOr(roleReason, 'שינוי תפקיד משתמש'),
     });
     setDialogBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
@@ -428,7 +478,9 @@ export default function Settings() {
         icon: u.active ? Ban : Undo2,
         tone: u.active ? 'danger' : 'default',
         hidden: mine || !(u.active || (isActiveRole(u.role) && ASSIGNABLE_ROLES.includes(u.role))),
-        onSelect: () => setAccessTarget(u),
+        // Straight to the step-up: the password is the gate, and there is nothing left for a
+        // second dialog to ask that the toast’s Undo does not already answer.
+        onSelect: () => setPendingSensitive({ run: () => void toggleActive(u) }),
       },
     ];
   }
@@ -753,19 +805,6 @@ export default function Settings() {
         />
       </div>
 
-      <ConfirmDialog
-        open={!!accessTarget}
-        onClose={() => setAccessTarget(null)}
-        onConfirm={(reason) => { if (accessTarget) setPendingSensitive({ run: () => void toggleActive(accessTarget, reason) }); }}
-        title={accessTarget?.active ? 'השבתת משתמש' : 'הפעלת משתמש'}
-        message={accessTarget?.active
-          ? `הגישה של ${accessTarget?.full_name ?? ''} למערכת תיחסם.`
-          : `הגישה של ${accessTarget?.full_name ?? ''} למערכת תוחזר.`}
-        confirmLabel={accessTarget?.active ? 'השבתה' : 'הפעלה'}
-        danger={accessTarget?.active}
-        requireReason
-        busy={dialogBusy}
-      />
 
       <Modal
         open={!!roleTarget}
@@ -784,14 +823,14 @@ export default function Settings() {
             </select>
           </div>
           <div>
-            <label className="label" htmlFor="role-change-reason">סיבה</label>
+            <label className="label" htmlFor="role-change-reason">{OPTIONAL_REASON_LABEL}</label>
             <input id="role-change-reason" className="input" value={roleReason}
               onChange={(e) => setRoleReason(e.target.value)} placeholder="למשל: החלפת מנהל רכש" />
           </div>
           <div className="flex justify-end gap-2">
             <button className="btn-secondary" disabled={dialogBusy} onClick={() => setRoleTarget(null)}>ביטול</button>
             <button className="btn-primary"
-              disabled={dialogBusy || nextRole === roleTarget?.role || !roleReason.trim()}
+              disabled={dialogBusy || nextRole === roleTarget?.role}
               onClick={() => setPendingSensitive({ run: () => void changeRole() })}>שמירת התפקיד</button>
           </div>
         </div>

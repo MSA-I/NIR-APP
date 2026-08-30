@@ -14,7 +14,10 @@ import {
 
 const runtime = vi.hoisted(() => ({
   invoke: vi.fn(),
+  rpc: vi.fn(async (_command: string, _args: Record<string, unknown>) => ({ data: null, error: null })),
   refetch: vi.fn(async () => true),
+  /** Rows for `get_document_control_attempts`; empty unless a test needs the table populated. */
+  attempts: [] as Record<string, unknown>[],
   operationsMetrics: {
     window_days: 30,
     documents_waiting: 0,
@@ -39,7 +42,7 @@ vi.mock('../auth/AuthContext', () => ({
 vi.mock('../lib/supabase', () => ({
   supabase: {
     functions: { invoke: runtime.invoke },
-    rpc: vi.fn(),
+    rpc: runtime.rpc,
   },
 }));
 
@@ -73,9 +76,12 @@ vi.mock('../lib/useQuery', () => ({
     return result.data;
   },
   useQuery: (query: () => Promise<unknown>) => {
-    const data = String(query).includes('get_document_operations_metrics')
+    const source = String(query);
+    const data = source.includes('get_document_operations_metrics')
       ? runtime.operationsMetrics
-      : [];
+      : source.includes('get_document_control_attempts')
+        ? runtime.attempts
+        : [];
     return {
       data,
       loading: false,
@@ -173,21 +179,87 @@ describe('document control capability and UX contract', () => {
     expect(window.innerWidth).toBe(390);
     fireEvent.click(screen.getByRole('button', { name: 'שחזור עיבוד' }));
     const dialog = screen.getByRole('dialog', { name: 'שחזור עיבוד תקוע' });
-    fireEvent.change(within(dialog).getByRole('textbox'), {
-      target: { value: 'העיבוד תקוע מעל שמונה שעות' },
-    });
+    /* #299: the confirmation stayed — a recovery Edge call has no inverse — but the reason textarea
+       went. Nobody investigating a recovered job learns anything from a box its operator filled in
+       to get past it, and the Edge contract still refuses a blank reason, so the sentence below is
+       written for them. */
+    expect(within(dialog).queryByRole('textbox')).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: 'שחזור עיבוד' }));
 
     await waitFor(() => expect(runtime.invoke).toHaveBeenCalledWith(
       'recover-document-processing',
-      { body: { job_id: 'job-stuck', request_id: expect.any(String), reason: 'העיבוד תקוע מעל שמונה שעות' } },
+      {
+        body: {
+          job_id: 'job-stuck',
+          request_id: expect.any(String),
+          reason: 'שחזור עיבוד תקוע ממסך בקרת המסמכים — ללא הערה מהמשתמש',
+        },
+      },
     ));
+    // The Edge contract rejects anything that trims to nothing (`core.ts:48-55`).
+    const sent = runtime.invoke.mock.calls[0][1] as { body: { reason: string } };
+    expect(sent.body.reason.trim().length).toBeGreaterThan(0);
     expect(dialog).toHaveAttribute('aria-busy', 'true');
     await act(async () => {
       settleRecovery({ data: { outcome: 'requeued', job_id: 'job-successor', idempotent: false }, error: null });
     });
     expect(await screen.findByText('נפתח ניסיון עיבוד חדש.')).toHaveAttribute('role', 'status');
     viewport.mockRestore();
+  });
+
+  /**
+   * #299 drew a line through this screen: the two confirmations are load-bearing (there is no
+   * command that de-queues a processing job, and the recovery Edge call has no inverse), while the
+   * reason textarea in front of them was not. The risk of removing the box is not the missing nag —
+   * it is a blank string reaching a command that raises `reason_required` (`0093:25`), turning a
+   * removed annoyance into a failed operation. So both halves are pinned: no box, non-blank reason.
+   */
+  it('reprocesses after a confirmation with no reason box, and still sends a non-blank reason', async () => {
+    runtime.rpc.mockClear();
+    runtime.attempts = [{
+      id: 'attempt-failed', job_id: 'job-failed', document_id: 'document-failed',
+      file_name: 'חשבונית שנכשלה.pdf', status: 'failed', attempt_count: 3,
+      created_at: '2026-08-12T00:00:00.000Z', updated_at: '2026-08-12T00:20:00.000Z',
+      queue_age_seconds: 600, last_error_code: 'interpretation_failed',
+      price_list_outcome: null, is_stuck: false, stuck_reason: null,
+    }];
+    try {
+      const { default: DocumentOperations } = await import('./DocumentOperations');
+      render(createElement(
+        ToastProvider,
+        null,
+        createElement(
+          MemoryRouter,
+          { initialEntries: ['/documents/operations'] },
+          createElement(Routes, null, createElement(Route, {
+            path: '/documents/operations',
+            element: createElement(DocumentOperations),
+          })),
+        ),
+      ));
+
+      // The table paints a mobile card list and a desktop table at once; either menu opens the same
+      // dialog, so the first one is enough.
+      fireEvent.click(screen.getAllByRole('button', { name: 'פעולות עבור מסמך חשבונית שנכשלה.pdf' })[0]);
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'ניסיון נוסף' }));
+
+      // The confirmation is still there — a document handed back to the queue cannot be recalled.
+      const dialog = await screen.findByRole('dialog', { name: 'עיבוד המסמך מחדש' });
+      expect(runtime.rpc).not.toHaveBeenCalled();
+      // The ceremony is not: nothing to type before the button works.
+      expect(within(dialog).queryByRole('textbox')).toBeNull();
+
+      fireEvent.click(within(dialog).getByRole('button', { name: 'עיבוד מחדש' }));
+
+      await waitFor(() => expect(runtime.rpc).toHaveBeenCalledWith('reprocess_document', {
+        p_document_id: 'document-failed',
+        p_reason: 'החזרת מסמך לתור העיבוד ממסך בקרת המסמכים — ללא הערה מהמשתמש',
+      }));
+      const sent = runtime.rpc.mock.calls[0][1] as { p_reason: string };
+      expect(sent.p_reason.trim().length).toBeGreaterThan(0);
+    } finally {
+      runtime.attempts = [];
+    }
   });
 
   it('chooses current recoverable work and reads stable Edge error messages', async () => {

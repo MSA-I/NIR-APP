@@ -473,7 +473,7 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
         </SubPanel>
 
         <div><label className="label" htmlFor="payment-request-notes">הערות</label><input id="payment-request-notes" className="input" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-        <div><label className="label" htmlFor="payment-request-reason">סיבת יצירת הדרישה *</label><input id="payment-request-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+        <div><label className="label" htmlFor="payment-request-reason">סיבת יצירת הדרישה (רשות)</label><input id="payment-request-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
 
         {checking && <Note tone="idle">בודק כפילויות ויתרות עדכניות…</Note>}
         {checkError && <Note tone="alert">{checkError}</Note>}

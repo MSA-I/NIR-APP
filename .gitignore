@@ -34,3 +34,6 @@ deno.lock
 
 # Local screenshots from scripts/subscription-visual-check.cjs (manual visual verification)
 .plan-shots/
+
+# Local screenshots from scripts/toast-undo-visual-check.cjs (manual visual verification)
+.toast-shots/

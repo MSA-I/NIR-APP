@@ -11,6 +11,7 @@ import {
 import { SUPPLIER_PROPOSAL_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime, fmtMoneyExact, formatQuantity } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
+import { reasonOr } from '../lib/reason';
 import {
   createRevisionFromProposal, decideProposal, fetchProposal, type ProposalWithLines,
 } from '../lib/supplierPortal';
@@ -18,9 +19,21 @@ import type { SupplierOrderProposalLine } from '../lib/types';
 
 // The internal half of the supplier portal (0167): original order versus supplier proposal,
 // line by line, with an explicit accept/reject per row, a separate decision on the proposed
-// delivery date, a mandatory reason for any rejection, and — after deciding — one action that
-// turns the accepted changes into a NEW order revision. The proposal itself never mutates the
-// original order; it is evidence, and this screen is where the decision on it is recorded.
+// delivery date, an optional reason, and — after deciding — one action that turns the accepted
+// changes into a NEW order revision. The proposal itself never mutates the original order; it is
+// evidence, and this screen is where the decision on it is recorded.
+
+/**
+ * Named in the ledger when nobody typed a reason.
+ *
+ * The button is no longer blocked by an empty box (the owner's ruling in `reason.ts`), but the
+ * server still refuses a blank `p_reason` on any rejection — `decide_supplier_order_proposal`
+ * raises `decision_reason_required` (0167) whenever a line or the proposed delivery date is
+ * rejected. So the client always sends a sentence: a typed one when there is one, and otherwise
+ * this action name with `reasonOr`'s honest "nobody added a note". Sending `null` would have
+ * turned a legitimate rejection into a translated server error at the last step.
+ */
+const DECISION_ACTION = 'החלטה על הצעת ספק להזמנה';
 
 type Verdict = 'accepted' | 'rejected';
 
@@ -68,10 +81,9 @@ export default function SupplierProposalReview() {
 
   const { order } = data;
   const pending = proposal.status === 'submitted';
-  const anyRejected = proposal.lines.some((l) => verdicts[l.id] === 'rejected')
-    || (proposal.proposed_delivery_date !== null && !acceptDate);
+  // Completeness, not prose: a proposal decided on some of its rows is not a state the server
+  // accepts (`decisions_incomplete`, 0167), so this one really does have to hold the button.
   const allDecided = proposal.lines.every((l) => verdicts[l.id]);
-  const reasonMissing = anyRejected && reason.trim() === '';
 
   const setAll = (verdict: Verdict) => {
     const next: Record<string, Verdict> = {};
@@ -80,13 +92,13 @@ export default function SupplierProposalReview() {
   };
 
   async function submitDecision() {
-    if (!proposal || !allDecided || reasonMissing || busy) return;
+    if (!proposal || !allDecided || busy) return;
     setBusy(true);
     try {
       await decideProposal(proposal.id, {
         lineDecisions: proposal.lines.map((l) => ({ line_id: l.id, decision: verdicts[l.id] })),
         acceptDeliveryDate: proposal.proposed_delivery_date !== null ? acceptDate : false,
-        reason: reason.trim() || null,
+        reason: reasonOr(reason, DECISION_ACTION),
       });
       toast('ההחלטה נרשמה ותועדה ביומן הביקורת');
       void refetch();
@@ -142,7 +154,7 @@ export default function SupplierProposalReview() {
           <button
             type="button"
             className="btn-primary"
-            disabled={busy || !allDecided || reasonMissing}
+            disabled={busy || !allDecided}
             onClick={() => void submitDecision()}
           >
             <CheckCircle2 size={ICON.sm} aria-hidden="true" /> רישום ההחלטה
@@ -257,7 +269,7 @@ export default function SupplierProposalReview() {
         <div className="card space-y-3 p-4">
           <div>
             <label className="label" htmlFor="proposal-decision-reason">
-              סיבת ההחלטה {anyRejected ? '(חובה כאשר יש דחייה)' : '(לא חובה)'}
+              סיבת ההחלטה (רשות)
             </label>
             <input
               id="proposal-decision-reason"
@@ -269,9 +281,10 @@ export default function SupplierProposalReview() {
           {!allDecided && (
             <p className="text-sm text-ink-muted">יש להכריע על כל שורה לפני רישום ההחלטה.</p>
           )}
-          {reasonMissing && (
-            <p className="text-sm text-alert-fg">דחייה מחייבת סיבה — היא תתועד ביומן הביקורת.</p>
-          )}
+          <p className="text-sm text-ink-muted">
+            הסיבה אינה חובה. מה שייכתב כאן יוצג חזרה במסך הזה לצד ההחלטה, ולא רק ביומן הביקורת —
+            זה המקום להסביר לספק, ולמי שיקרא את ההזמנה אחר כך, מה נדחה ולמה.
+          </p>
           <p className="text-xs text-ink-faint">
             ההחלטה תירשם עם זהות המחליט, מועד וסיבה ביומן הביקורת. ההזמנה המקורית אינה משתנה;
             שינויים שאושרו ייכנסו לתוקף רק ביצירת רוויזיה חדשה.

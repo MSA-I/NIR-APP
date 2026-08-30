@@ -5,6 +5,7 @@ import { ReauthModal } from './ReauthModal';
 import { useQuery } from '../lib/useQuery';
 import { toHebrewError } from '../lib/errors';
 import type { StatusMeta } from '../lib/status';
+import { reasonOr } from '../lib/reason';
 import {
   configureWhatsAppConnection,
   fetchWhatsAppConnection,
@@ -43,10 +44,6 @@ const STATUS_TONE: Record<WhatsAppConnectionStatus, StatusMeta['tone']> = {
   error: 'alert',
 };
 
-/** The one refusal on this card that is about a FIELD rather than about the server, so it is the
-    one the reason inputs below mark themselves invalid for. */
-const REASON_REQUIRED = 'יש לנמק את הפעולה — הנימוק נרשם ביומן הביקורת.';
-
 type PendingAction =
   | { kind: 'configure' }
   | { kind: 'enable'; enabled: boolean }
@@ -64,7 +61,6 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
   const [stepUpFor, setStepUpFor] = useState<PendingAction | null>(null);
   const cardErrorId = useId();
   const modalErrorId = useId();
-  const reasonInvalid = error === REASON_REQUIRED || undefined;
 
   const [provider, setProvider] = useState<WhatsAppProvider>('twilio');
   const [providerAccountId, setProviderAccountId] = useState('');
@@ -90,12 +86,14 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
     setEditing(true);
   }
 
+  /**
+   * The only gate left before a state change is the identity proof. The reason box stopped
+   * blocking these buttons on 11.08.2026 (owner: nobody reads the notes), so an empty box goes
+   * straight to the step-up and `reasonOr` names the action for the ledger. The password is a
+   * different kind of check entirely — it proves who is acting, not why — and it stays.
+   */
   function requestStepUp(action: PendingAction) {
     setError(null);
-    if (!reason.trim()) {
-      setError(REASON_REQUIRED);
-      return;
-    }
     setStepUpFor(action);
   }
 
@@ -114,15 +112,20 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
           orderTemplateName: orderTemplateName.trim(),
           reminderTemplateName: reminderTemplateName.trim(),
           languageCode,
-          reason: reason.trim(),
+          reason: reasonOr(reason, 'חיבור מספר WhatsApp של הארגון'),
         });
         toast('החיבור נשמר. הפעלת הערוץ היא פעולה נפרדת.');
         setEditing(false);
       } else if (action.kind === 'enable') {
-        await setWhatsAppConnectionEnabled(action.enabled, reason.trim());
+        // Enable and disable are opposite facts about the channel, so the fallback sentence names
+        // the one that actually happened rather than a single word covering both.
+        await setWhatsAppConnectionEnabled(action.enabled, reasonOr(
+          reason,
+          action.enabled ? 'הפעלת ערוץ WhatsApp של הארגון' : 'השבתת ערוץ WhatsApp של הארגון',
+        ));
         toast(action.enabled ? 'הערוץ הופעל ותועד ביומן הביקורת' : 'הערוץ הושבת ותועד ביומן הביקורת');
       } else {
-        await revokeWhatsAppConnection(reason.trim());
+        await revokeWhatsAppConnection(reasonOr(reason, 'ביטול חיבור WhatsApp ומחיקת הסוד מהכספת'));
         toast('החיבור בוטל והסוד נמחק מהכספת');
       }
       setCredential('');
@@ -201,12 +204,13 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
       {isOwner && summary.configured && (
         <div className="mt-3 space-y-2">
           <div>
+            {/* Two reason boxes exist on this card — the one beside the enable/revoke buttons and
+                the one inside the wizard — so each keeps its own name and only gains the optional
+                mark, instead of both collapsing into the generic `OPTIONAL_REASON_LABEL`. */}
             <label className="label" htmlFor="whatsapp-connection-reason">
-              סיבת הפעולה (חובה — תתועד ביומן הביקורת)
+              סיבת הפעולה (רשות — תתועד ביומן הביקורת)
             </label>
             <input id="whatsapp-connection-reason" className="input" value={reason}
-              aria-invalid={reasonInvalid}
-              aria-describedby={reasonInvalid ? cardErrorId : undefined}
               onChange={(event) => setReason(event.target.value)} />
           </div>
           <div className="flex flex-wrap justify-end gap-2">
@@ -278,11 +282,9 @@ export function WhatsAppConnectionCard({ role }: { role: string | null | undefin
           </div>
           <div>
             <label className="label" htmlFor="whatsapp-configure-reason">
-              סיבת החיבור (חובה — תתועד ביומן הביקורת)
+              סיבת החיבור (רשות — תתועד ביומן הביקורת)
             </label>
             <input id="whatsapp-configure-reason" className="input" value={reason}
-              aria-invalid={reasonInvalid}
-              aria-describedby={reasonInvalid ? modalErrorId : undefined}
               onChange={(event) => setReason(event.target.value)} />
           </div>
           {error && <div id={modalErrorId}><ErrorNote message={error} /></div>}

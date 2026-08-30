@@ -17,6 +17,7 @@ import {
 } from '../components/ui';
 import { DocumentStatusBadge } from '../components/DocumentStatusBadge';
 import { ok, toHebrewError } from '../lib/errors';
+import { reasonOr } from '../lib/reason';
 import { fmtDateTime, fmtMoneyRounded, fmtNum } from '../lib/format';
 import { supabase } from '../lib/supabase';
 import { DOCUMENT_PROCESSING_CHANGED_EVENT, useDocumentProcessing } from '../lib/useDocumentProcessing';
@@ -27,6 +28,16 @@ import {
   selectPrimaryOperationalIssue,
   type OperationalAttemptState,
 } from './documentOperationsModel';
+
+/**
+ * What the two operational commands write to the ledger. Neither screen asks a person for a reason
+ * any more (#299), and both boundaries refuse a blank one — the RPC with `reason_required` (22023)
+ * and the Edge function with `invalid_request`. So the action name is the reason: it says which
+ * command ran, and `reasonOr` appends the admission that nobody added a note. Descriptive on
+ * purpose — `audit_logs` shows the string, not the button that produced it.
+ */
+const REPROCESS_ACTION = 'החזרת מסמך לתור העיבוד ממסך בקרת המסמכים';
+const RECOVER_STUCK_ACTION = 'שחזור עיבוד תקוע ממסך בקרת המסמכים';
 
 interface DocumentControlMetrics {
   window_days: number;
@@ -181,13 +192,17 @@ export default function DocumentOperations() {
     ]);
   }
 
-  async function reprocess(reason?: string) {
-    if (!canWrite || !reprocessTarget || !reason) return;
+  async function reprocess() {
+    // The reason left this dialog (#299), so `reason` left this guard with it. What the guard was
+    // actually for stays: no write without write access, and no write without a target row.
+    if (!canWrite || !reprocessTarget) return;
     setReprocessing(true);
     try {
       ok(await supabase.rpc('reprocess_document', {
         p_document_id: reprocessTarget.document_id,
-        p_reason: reason,
+        // `reprocess_document` raises `reason_required` (22023, `0093:25`) on a blank reason, so the
+        // ledger keeps a sentence even though nobody is asked to write one.
+        p_reason: reasonOr(null, REPROCESS_ACTION),
       }));
       toast('המסמך הוחזר לתור העיבוד.');
       setReprocessTarget(null);
@@ -200,15 +215,18 @@ export default function DocumentOperations() {
     }
   }
 
-  async function recoverStuck(reason?: string) {
-    if (!canRecoverStuck || !recoveryTarget || !reason) return;
+  async function recoverStuck() {
+    if (!canRecoverStuck || !recoveryTarget) return;
     setRecovering(true);
     try {
       const response = await supabase.functions.invoke('recover-document-processing', {
         body: {
           job_id: recoveryTarget.job_id,
           request_id: crypto.randomUUID(),
-          reason,
+          // The Edge contract rejects the request outright when the trimmed reason is shorter than
+          // one character (`recover-document-processing/core.ts:48-55`), so the same rule as the
+          // RPC above applies: the box is gone, the sentence is not.
+          reason: reasonOr(null, RECOVER_STUCK_ACTION),
         },
       });
       if (response.error) throw new Error(await recoveryInvokeErrorMessage(response) ?? response.error.message);
@@ -421,12 +439,16 @@ export default function DocumentOperations() {
         )}
       </section>
 
+      {/* Both confirmations stay: a document already handed to the queue cannot be pulled back out,
+          and the recovery Edge call has no inverse. What went is the reason textarea — nobody
+          investigating a requeue learns anything from a box the operator filled to get past it, and
+          the ledger keeps a truthful sentence either way (#299). */}
       <ConfirmDialog open={canWrite && reprocessTarget !== null} onClose={() => setReprocessTarget(null)}
-        onConfirm={(reason) => void reprocess(reason)} requireReason busy={reprocessing}
+        onConfirm={() => void reprocess()} busy={reprocessing}
         title="עיבוד המסמך מחדש" message="המסמך יחזור לתור העיבוד. ההיסטוריה הקודמת תישמר."
         confirmLabel="עיבוד מחדש" />
       <ConfirmDialog open={canRecoverStuck && recoveryTarget !== null} onClose={() => setRecoveryTarget(null)}
-        onConfirm={(reason) => void recoverStuck(reason)} requireReason busy={recovering}
+        onConfirm={() => void recoverStuck()} busy={recovering}
         title="שחזור עיבוד תקוע" message="השחזור ממשיך מהשלב הבטוח האחרון ואינו מעלה את הקובץ מחדש."
         confirmLabel="שחזור עיבוד" />
     </div>

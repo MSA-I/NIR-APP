@@ -1307,33 +1307,111 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
 }
 
 /* ---------- Toast ---------- */
-interface Toast { id: number; message: string; tone: 'success' | 'error' }
-const ToastContext = createContext<(message: string, tone?: 'success' | 'error') => void>(() => {});
+/**
+ * The optional third argument of `toast(...)` — an action the message OFFERS rather than a
+ * question the app asked first (0225). Two confirmation dialogs existed only because the action
+ * behind them could not be taken back; a reversible action does not need to be interrogated
+ * beforehand, it needs a way back afterwards.
+ */
+export interface ToastAction {
+  /** Imperative, short — this sits inside a pill: 'ביטול'. */
+  label: string;
+  /** Runs after the toast has already dismissed itself, so the reversal owns the next message. */
+  onAct: () => void;
+}
+export type ToastPush = (message: string, tone?: 'success' | 'error', action?: ToastAction) => void;
+
+interface Toast { id: number; message: string; tone: 'success' | 'error'; action?: ToastAction }
+
+/** A plain notice says its piece and leaves. Unchanged since the first toast shipped. */
+const TOAST_MS = 4000;
+/**
+ * A toast carrying a control has to be readable AND reachable: the reader has to finish the
+ * sentence, decide, and travel to the button. Four seconds is the time it takes to read
+ * "המוצר הושבת" — it is not the time it takes to change your mind about it.
+ */
+const TOAST_ACTION_MS = 8000;
+
+const ToastContext = createContext<ToastPush>(() => {});
 export const useToast = () => useContext(ToastContext);
 
 export function ToastProvider({ children, bottomNotice }: { children: ReactNode; bottomNotice?: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const push = (message: string, tone: 'success' | 'error' = 'success') => {
+  /** id → pending dismissal. Held in a ref so hover/focus can cancel and rearm one toast's timer
+      without re-rendering the stack, and so unmount can clear every one of them. */
+  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+
+  const clearTimer = useCallback((id: number) => {
+    const pending = timers.current.get(id);
+    if (pending !== undefined) { clearTimeout(pending); timers.current.delete(id); }
+  }, []);
+
+  const arm = useCallback((id: number, ms: number) => {
+    clearTimer(id);
+    timers.current.set(id, setTimeout(() => {
+      timers.current.delete(id);
+      setToasts((list) => list.filter((x) => x.id !== id));
+    }, ms));
+  }, [clearTimer]);
+
+  const dismiss = useCallback((id: number) => {
+    clearTimer(id);
+    setToasts((list) => list.filter((x) => x.id !== id));
+  }, [clearTimer]);
+
+  const push = useCallback<ToastPush>((message, tone = 'success', action) => {
     const id = Date.now() + Math.random();
-    setToasts((t) => [...t, { id, message, tone }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
-  };
+    setToasts((t) => [...t, { id, message, tone, action }]);
+    arm(id, action ? TOAST_ACTION_MS : TOAST_MS);
+  }, [arm]);
+
+  // The timers used to outlive the provider: every `setTimeout` was fired and forgotten, so a
+  // route change mid-toast left a callback that would `setState` on an unmounted tree.
+  useEffect(() => {
+    const pending = timers.current;
+    return () => { for (const handle of pending.values()) clearTimeout(handle); pending.clear(); };
+  }, []);
+
   return (
     <ToastContext.Provider value={push}>
       {children}
       <div className="mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 pointer-events-none no-print sm:start-6 sm:end-6">
         {toasts.length > 0 && (
           <div className="mobile-toast-offset flex flex-col gap-2 items-center pointer-events-auto">
-            {toasts.map((t) => (
-              // Each toast is its own live region (audit 2026-07-21): success is polite, an error is
-              // assertive so a screen reader interrupts to surface it. role follows suit (status/alert).
-              <div key={t.id}
-                role={t.tone === 'error' ? 'alert' : 'status'}
-                aria-live={t.tone === 'error' ? 'assertive' : 'polite'}
-                className={`rounded-lg px-4 py-2.5 text-sm text-on-solid shadow-toast ${t.tone === 'success' ? 'bg-ink-body' : 'bg-alert-solid'}`}>
-                {t.message}
-              </div>
-            ))}
+            {toasts.map((t) => {
+              const action = t.action;
+              // A toast with a control must not be yanked out from under the hand or the caret
+              // reaching for it. Hover and focus suspend the countdown; leaving restarts it whole.
+              const hold = action ? () => clearTimer(t.id) : undefined;
+              const resume = action ? () => arm(t.id, TOAST_ACTION_MS) : undefined;
+              return (
+                <div key={t.id}
+                  onMouseEnter={hold} onMouseLeave={resume}
+                  // onFocus/onBlur on the container: React maps them to focusin/focusout, so
+                  // focusing the button inside suspends the timer that would remove it.
+                  onFocus={hold} onBlur={resume}
+                  className={`flex items-center gap-3 rounded-lg text-sm text-on-solid shadow-toast ${
+                    action ? 'ps-4 pe-2 py-1.5' : 'px-4 py-2.5'
+                  } ${t.tone === 'success' ? 'bg-ink-body' : 'bg-alert-solid'}`}>
+                  {/* The live region is the SENTENCE, not the pill (0225). When the pill itself
+                      carried role=status, a screen reader announced the button's label as part of
+                      the message and re-announced the whole thing on every state change inside it.
+                      Success is polite, an error assertive so a reader interrupts to surface it. */}
+                  <span role={t.tone === 'error' ? 'alert' : 'status'}
+                    aria-live={t.tone === 'error' ? 'assertive' : 'polite'}>
+                    {t.message}
+                  </span>
+                  {action && (
+                    // A light secondary pill on a solid dark ground — the existing utility pair,
+                    // no new colour. `btn`'s min-h-11 is untouched: this is a real tap target.
+                    <button type="button" className="btn-secondary btn-sm shrink-0"
+                      onClick={() => { dismiss(t.id); action.onAct(); }}>
+                      {action.label}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
         {bottomNotice}

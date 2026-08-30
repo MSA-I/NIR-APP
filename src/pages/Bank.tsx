@@ -268,7 +268,7 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
         </SubPanel>
         <Note tone="await">הסרת ההתאמה מחזירה את תנועת הבנק לטיפול ואת דרישת התשלום לסטטוס ״בוצעה״. התשלום והקצאותיו אינם מתבטלים. התאמה ישירה לחשבונית דורשת תיקון כספי נפרד.</Note>
         <div>
-          <label className="label" htmlFor="bank-unmatch-reason">סיבה להסרת ההתאמה *</label>
+          <label className="label" htmlFor="bank-unmatch-reason">סיבה להסרת ההתאמה (רשות)</label>
           <input id="bank-unmatch-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
         <div className="flex justify-end gap-2">
