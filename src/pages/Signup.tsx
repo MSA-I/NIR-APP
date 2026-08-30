@@ -49,6 +49,8 @@ export default function Signup() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resendResult, setResendResult] = useState<{ ok: boolean; message: string } | null>(null);
   /** Set when a provider sent the browser back here with a session but no organization yet. */
   const [federated, setFederated] = useState<{ provider: FederatedProvider; email: string } | null>(
     null,
@@ -176,6 +178,25 @@ export default function Signup() {
     setSent(data?.message ?? null);
   }
 
+  async function resendConfirmation() {
+    setResending(true);
+    setResendResult(null);
+    const failureMessage = 'לא הצלחנו לשלוח מייל אישור חדש. יש להמתין דקה ולנסות שוב.';
+    try {
+      const { error: failure } = await supabase.auth.resend({
+        type: 'signup',
+        email: form.email.trim().toLowerCase(),
+      });
+      setResendResult(failure
+        ? { ok: false, message: failureMessage }
+        : { ok: true, message: 'מייל אישור חדש נשלח.' });
+    } catch {
+      setResendResult({ ok: false, message: failureMessage });
+    } finally {
+      setResending(false);
+    }
+  }
+
   if (sent) {
     return (
       <main className="mx-auto max-w-md px-4 py-8 sm:py-12">
@@ -186,6 +207,15 @@ export default function Signup() {
               a different answer per case would turn this page into a way to discover who has an
               account. */}
           <p className="text-sm text-ink-soft">{sent}</p>
+          {resendResult && (
+            <Note tone={resendResult.ok ? 'done' : 'alert'} role={resendResult.ok ? 'status' : 'alert'}>
+              {resendResult.message}
+            </Note>
+          )}
+          <button type="button" className="btn-secondary w-full" disabled={resending}
+            onClick={() => void resendConfirmation()}>
+            {resending ? 'שולח שוב…' : 'שלחו שוב'}
+          </button>
           <Link className="btn-secondary" to="/login">מעבר להתחברות</Link>
         </Card>
       </main>
