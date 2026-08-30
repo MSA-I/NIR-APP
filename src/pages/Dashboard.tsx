@@ -1013,8 +1013,14 @@ export default function Dashboard() {
             /* Said once, where the figures are, rather than repeated on every tile: the trend and
                mix figures above are the organisation's own currency, and this business also holds
                money in another. Nothing here is converted and nothing is hidden — the balances,
-               the credits and the commitments above list every currency they are in. */
-            <p className="text-xs text-ink-muted lg:order-2 lg:col-span-12">
+               the credits and the commitments above list every currency they are in.
+               `order-1`, WITH the money band it annotates, and NOT `order-2`: this line spans all
+               twelve columns, so sharing an order group with the six-column attention card leaves
+               it nowhere to sit on that row. It would open a row of its own between the attention
+               card and the two cards that belong beside it, dropping the deliveries card and the
+               role-queue card a full row down and stranding half a row of white space. Ordered
+               with the band, it closes the money zone instead of splitting the attention zone. */
+            <p className="order-first text-xs text-ink-muted lg:order-1 lg:col-span-12">
               המגמות והתמהיל מוצגים ב־{baseCurrency}. קיימת פעילות גם ב־{data.otherCurrencies.join(', ')}, והיא אינה מחוברת אליהם.
             </p>
           )}
