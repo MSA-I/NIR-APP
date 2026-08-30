@@ -275,9 +275,20 @@ works. The answer was that it could, and that nothing but a decision was stoppin
 
 ## Phase 6 — CI and rollout
 
-- [ ] P6-G1: the heavy gate is green on the SHA
-  CHECK: `gh workflow run quality-gate.yml && gh run watch`
+- [x] P6-G1: the heavy gate is green on the SHA
+  CHECK: open the PR on `main` and watch every required check
   EXPECT: success, including the new `p82` and `p83` stages
+  EVIDENCE: [PR #149](https://github.com/MSA-I/NIR-APP/pull/149) on
+  `6a703a9f1dba8429168cd0d64cc34da8201e7fc3`. build 50s, verify 1m43s, dependency audit 8s,
+  browser 9m48s, SQL suites 22m24s — all pass;
+  [build-gate 33301632356](https://github.com/MSA-I/NIR-APP/actions/runs/33301632356) and
+  [quality-gate 33301632382](https://github.com/MSA-I/NIR-APP/actions/runs/33301632382).
+  A GREEN TILE IS NOT PROOF A SUITE RAN, so the log was read rather than the badge: the clean
+  reset applied `0243`, `0244` and `0245`, `p82_assert` and `p83_assert` both appear with their
+  declared descriptions, and the run ends `TOTAL across 100 stages, 0 failed` — 98 before this
+  branch, plus exactly the two suites it adds.
+  `Deno contracts + OCR worker` reports `skipping`, which is the classifier agreeing with this
+  campaign's scope: no Edge function changed and `worker/ocr` was never touched.
 
 - [ ] P6-G2: the rollout matrix rows that were touched were actually executed
   ROWS: `Migration / חוזה DB` (backup, dry-run, forward-only apply, **manual ledger row**,
