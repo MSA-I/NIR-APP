@@ -135,12 +135,16 @@ export default function AccountantDashboard() {
             suppliers for this role. Each named slice now opens the invoice list searched for that
             supplier, which is a screen the accountant already has. Opening /suppliers/:id to the
             role would be a role-contract change (PRODUCT.md:23-30) and is left as
-            OPEN-DECISIONS #117. "אחר" gets no link: it is several suppliers summed, so there is no
-            single thing to open, and a link that lands on a wrong filter is worse than none. */}
+            OPEN-DECISIONS #117. The aggregate slice gets no link: it is several suppliers summed,
+            so there is no single thing to open, and a link that lands on a wrong filter is worse
+            than none. It is recognised by `slice.aggregate`, NOT by its word — this line used to
+            compare a supplier name against `t(...)`, which stops matching the moment the reader
+            changes language, and the bucket would then have been linked to a search for a supplier
+            that does not exist. */}
         <ChartCard title={t('accountantDashboard.title_3')} subtitle={t('accountantDashboard.subtitle_2')}>
           <CategoryDonut slices={data.supplierSlices} total={data.supplierTotal}
             ariaLabel={t('accountantDashboard.supplierBalancesAria', { total: fmtMoneyRounded(data.supplierTotal) })}
-            hrefFor={(slice) => (slice.name === t('accountantDashboard.text_13') || slice.name === '—'
+            hrefFor={(slice) => (slice.aggregate || slice.name === '—'
               ? null
               : `/invoices?q=${encodeURIComponent(slice.name)}&pay=open`)}
             hrefLabel={(slice) => t('accountantDashboard.openInvoicesOf', { supplier: slice.name })}

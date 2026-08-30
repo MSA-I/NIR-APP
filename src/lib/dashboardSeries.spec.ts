@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mergeWeeklyComparison, topCategoriesWithOther } from './dashboardSeries';
+import { he } from './i18n/dictionaries/he';
+import { en } from './i18n/dictionaries/en';
 
 describe('dashboard series', () => {
   it('groups the fifth category into other without changing or mutating totals', () => {
@@ -13,10 +15,24 @@ describe('dashboard series', () => {
     const before = structuredClone(input);
     const result = topCategoriesWithOther(input);
 
-    expect(result.map(({ name }) => name)).toEqual(['א', 'ב', 'ג', 'ד', 'אחר']);
+    // The four real categories keep the words a person gave them. The fifth row is the product's
+    // own bucket: it carries the FLAG and no name, because the word for it is copy and belongs to
+    // whoever is reading. Both halves are asserted — the structure here, the wording below.
+    expect(result.map(({ name }) => name)).toEqual(['א', 'ב', 'ג', 'ד', '']);
+    expect(result.map(({ aggregate }) => aggregate ?? false))
+      .toEqual([false, false, false, false, true]);
     expect(result.reduce((sum, category) => sum + category.total, 0))
       .toBe(input.reduce((sum, category) => sum + category.total, 0));
     expect(input).toEqual(before);
+  });
+
+  it('the aggregate bucket has a word in each language, and it is never a category name', () => {
+    expect(he.charts.otherSlice).toBe('אחר');
+    expect(en.charts.otherSlice).toBe('Other');
+    // The point of the flag: a screen that recognised this bucket by its rendered word stopped
+    // recognising it as soon as the word could change. The two words are deliberately different,
+    // so a comparison against either one fails in the other language.
+    expect(he.charts.otherSlice).not.toBe(en.charts.otherSlice);
   });
 
   it('emits a real other category once with the hidden remainder', () => {
@@ -28,7 +44,10 @@ describe('dashboard series', () => {
       { name: 'ד', total: 20 },
       { name: 'ה', total: 10 },
     ]);
-    expect(result.map(({ name }) => name)).toEqual(['א', 'ב', 'ג', 'ד', 'אחר']);
+    // A category a PERSON named "אחר" is still recognised and folded in — that literal stays in
+    // the module as data recognition, so one chart never shows two buckets with the same word.
+    expect(result.map(({ name }) => name)).toEqual(['א', 'ב', 'ג', 'ד', '']);
+    expect(result.at(-1)?.aggregate).toBe(true);
     expect(result.at(-1)?.total).toBe(17.5);
   });
 

@@ -520,6 +520,36 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   `abandon`, `currency-untouched`, `help-registry-paired` and `legacy-errors` all passed. `zero`
   still exits 1 on 49/23, so this gate remains open.
 
+  **PROGRESS, 30.08.2026 - the chart primitives and the donut's aggregate in this commit.** The
+  pinned count is now 621 Hebrew line(s) across 62 files. The protected set is now 579 lines in 41
+  files: `dashboardSeries.ts` keeps one, `CATEGORY_NAMED_OTHER`. The real remainder is **42 lines
+  in 21 files**. `charts.tsx` is the 95th surface locked at zero.
+
+  The local `t` came first. `charts.tsx` held `const t = chartTheme()` in five components, which is
+  the collision the first handoff recorded; it is `theme` now, and only then was the hook wired.
+
+  **The "everything else" slice was identified by its own word, and one screen already compared
+  that word to a translation.** `AccountantDashboard` decided whether to link a donut slice with
+  `slice.name === t('accountantDashboard.text_13')`, where that key holds `אחר`. On an English
+  screen `t(...)` returns `Other`, the comparison stops matching, and the aggregate - several
+  suppliers summed - would have been given a link to `/invoices?q=אחר`, a search for a supplier
+  that does not exist. `sliceColor` had the same shape and would have handed the aggregate an
+  entity's colour slot and an entity the aggregate's.
+
+  The bucket is now structural: `topCategoriesWithOther` emits `aggregate: true` and NO name, and
+  every consumer - the colour rule, the legend, the link callback, the dashboard's aria sentence -
+  reads the flag and resolves the word at the render boundary. The Hebrew literal that stays in
+  `dashboardSeries.ts` is the other half and is deliberately untouched: it recognises a category a
+  PERSON named `אחר` so that row is folded in, and one chart never shows two buckets with the same
+  word. `accountantDashboard.text_13` had no reader left and was deleted from both dictionaries
+  rather than left as copy nothing renders.
+
+  Evidence: the stale-baseline negative control named exactly `charts.tsx` 4 -> 0 and
+  `dashboardSeries.ts` 3 -> 1; focused series/donut suites passed 24/24; the full suite passed
+  1,767/1,767; `npx tsc --noEmit` exit 0 and `check:jsx-space` passed on 126 TSX files. Dictionary
+  parity passed at 5,303 keys per locale; `extracted` reported 95 surfaces at zero. `zero` still
+  exits 1 on 42/21, so this gate remains open.
+
   One tooling hazard hit again while writing this batch and worth the line: a `\b` written through
   a shell heredoc arrives in the file as a real backspace character (0x08), silently turning
   `/\bsent\b/i` into a regex that matches nothing intended. This is the same corruption that

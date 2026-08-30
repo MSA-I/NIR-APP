@@ -4750,7 +4750,6 @@ export const he = {
     emptyMessage: 'אין תשלומים לתקופה',
     title_3: 'יתרות פתוחות לפי ספק',
     subtitle_2: 'ארבעת הספקים עם היתרה הגבוהה וכל היתר',
-    text_13: 'אחר',
     emptyMessage_2: 'אין יתרות פתוחות',
     title_4: 'תשלומים מול חיובי בנק',
     subtitle_3: 'שמונה השבועות האחרונים',
@@ -5641,6 +5640,12 @@ export const he = {
     refresh: 'רענון',
     rowLabel: 'מלאי {product}',
     adjustmentDescription: 'יתרה נוכחית: {quantity}. הפעולה תירשם ביומן הביקורת.',
+  },
+
+  charts: {
+    noRecords: 'אין רשומות',
+    total: 'סה״כ',
+    otherSlice: 'אחר',
   },
 
   businessSummary: {

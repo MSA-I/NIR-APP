@@ -117,6 +117,7 @@ const EXTRACTED = [
   'src/pages/Inventory.tsx',
   'src/lib/offlineDb.ts',
   'src/lib/assistant/summaryLines.ts',
+  'src/components/charts.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */

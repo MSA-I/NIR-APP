@@ -186,25 +186,30 @@ describe('finding 12 — no group header over a single grouped link', () => {
 /* ================= finding 13 — four labels become four destinations ================= */
 
 describe('finding 13 — the accountant can open a supplier balance', () => {
+  // The aggregate row as `topCategoriesWithOther` now emits it: flagged, and with no name of its
+  // own. The previous fixture carried the Hebrew word and compared against it, which is exactly
+  // the shape that stopped working the moment a reader could switch language.
   const slices = [
     { name: 'ירקות השדה', total: 4000 },
-    { name: 'אחר', total: 1000 },
+    { name: '', aggregate: true, total: 1000 },
   ];
 
-  const renderDonut = (hrefFor?: (slice: { name: string; total: number }) => string | null) => render(
+  const renderDonut = (hrefFor?: (slice: { name: string; aggregate?: boolean; total: number }) => string | null) => render(
     <MemoryRouter>
       <CategoryDonut slices={slices} total={5000} ariaLabel="יתרות" emptyMessage="אין" hrefFor={hrefFor} />
     </MemoryRouter>,
   );
 
   it('links a named slice and leaves the aggregate alone', () => {
-    renderDonut((slice) => (slice.name === 'אחר' ? null : `/invoices?q=${encodeURIComponent(slice.name)}&pay=open`));
+    renderDonut((slice) => (slice.aggregate ? null : `/invoices?q=${encodeURIComponent(slice.name)}&pay=open`));
 
     const link = screen.getByRole('link', { name: 'ירקות השדה' });
     expect(link).toHaveAttribute('href', '/invoices?q=%D7%99%D7%A8%D7%A7%D7%95%D7%AA%20%D7%94%D7%A9%D7%93%D7%94&pay=open');
-    // "אחר" is several suppliers summed. A link that lands on one wrong filter is worse than none.
-    expect(screen.queryByRole('link', { name: 'אחר' })).toBeNull();
-    expect(screen.getByText('אחר')).toBeInTheDocument();
+    // The aggregate is several suppliers summed. A link onto one wrong filter is worse than none.
+    // The test environment is Hebrew, so the donut resolves the bucket's word to the Hebrew one —
+    // and it is the DICTIONARY being read here, not a constant the component holds.
+    expect(screen.queryByRole('link', { name: he.charts.otherSlice })).toBeNull();
+    expect(screen.getByText(he.charts.otherSlice)).toBeInTheDocument();
   });
 
   it('renders no links at all for the callers that pass nothing', () => {

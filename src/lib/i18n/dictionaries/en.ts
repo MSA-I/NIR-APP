@@ -4746,7 +4746,6 @@ export const en: Dictionary = {
     emptyMessage: 'No payments for the period',
     title_3: 'Open balances by supplier',
     subtitle_2: 'The four suppliers with the highest balance, and all the rest',
-    text_13: 'Other',
     emptyMessage_2: 'No open balances',
     title_4: 'Payments against bank charges',
     subtitle_3: 'The last eight weeks',
@@ -5637,6 +5636,12 @@ export const en: Dictionary = {
     refresh: 'Refresh',
     rowLabel: 'Inventory for {product}',
     adjustmentDescription: 'Current balance: {quantity}. The action will be recorded in the audit log.',
+  },
+
+  charts: {
+    noRecords: 'no records',
+    total: 'Total',
+    otherSlice: 'Other',
   },
 
   businessSummary: {

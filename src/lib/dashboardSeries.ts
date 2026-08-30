@@ -1,4 +1,24 @@
-export type DashboardCategory = { name: string; total: number };
+/**
+ * A category as the data has it. `name` is the word a person gave it and is never translated.
+ *
+ * `aggregate` marks the ONE row this module makes up: everything outside the top four, summed. It
+ * is the product's own bucket, so it carries no name at all - the word for it is copy, it belongs
+ * to whoever is reading, and it is resolved at the render boundary. Marking it structurally is
+ * also what makes it identifiable: a screen that recognised it by comparing the rendered word
+ * stopped recognising it the moment that word could change language.
+ */
+export type DashboardCategory = {
+  name: string;
+  total: number;
+  aggregate?: boolean;
+};
+
+/**
+ * A category a PERSON named "אחר". Data recognition, not copy: it is folded into the aggregate
+ * below so one chart never shows two buckets carrying the same word. Translating this would stop
+ * the fold from happening and put the collision back on the screen.
+ */
+const CATEGORY_NAMED_OTHER = 'אחר';
 export type DashboardWeeklyPoint = { week: string; total: number; count: number };
 // Index signature so a comparison row is a valid chart point-bag (ComparisonLineChart reads by key).
 export type DashboardWeeklyComparison = {
@@ -9,12 +29,15 @@ export type DashboardWeeklyComparison = {
 };
 
 export function topCategoriesWithOther(categories: readonly DashboardCategory[]): DashboardCategory[] {
-  const namedOther = categories.filter((category) => category.name === 'אחר');
-  const sorted = categories.filter((category) => category.name !== 'אחר').sort((a, b) => b.total - a.total);
+  const namedOther = categories.filter((category) => category.name === CATEGORY_NAMED_OTHER);
+  const sorted = categories
+    .filter((category) => category.name !== CATEGORY_NAMED_OTHER)
+    .sort((a, b) => b.total - a.total);
   const top = sorted.slice(0, 4);
   if (namedOther.length === 0 && sorted.length <= 4) return top;
   return [...top, {
-    name: 'אחר',
+    name: '',
+    aggregate: true,
     total: [...namedOther, ...sorted.slice(4)].reduce((sum, category) => sum + category.total, 0),
   }];
 }

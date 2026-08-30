@@ -794,8 +794,9 @@ export default function Dashboard() {
     : t('dashboard.text_42');
   const categoriesAria = data ? t('dashboard.categoriesAria', {
     points: categoryTotal > 0
+      // The aggregate row carries no name of its own; the word for it is copy, resolved here.
       ? data.categories.map((category) => t('dashboard.categoriesAriaPoint', {
-        name: category.name,
+        name: category.aggregate ? t('charts.otherSlice') : category.name,
         amount: fmtMoneyExact(category.total),
         percent: Math.round((category.total / categoryTotal) * 100),
       })).join(', ')

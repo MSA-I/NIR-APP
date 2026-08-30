@@ -39,13 +39,13 @@
     "src/pages/PriceLists.tsx": "Five lines stay under two protected classes. Three matchColumn header aliases are parser vocabulary for supplier spreadsheets: they must recognise the Hebrew headers a supplier printed regardless of the reader locale. Two reasonOr fallbacks reach p_reason and audit_logs for a manual price update and a bulk import; stored evidence must not change language with the reader. Every reader-facing sentence moved to paired keys, import results store raw counts, and submission months use the active locale.",
     "src/pages/Receiving.tsx": "Iron rule, docs/HANDOFF-english-language-20260827.md section 9: audit_logs is evidence and is never translated. The one line that stays composes the reason a conflict resolution writes — the base reason plus the reviewer own explanation — and it reaches p_reason through send(). Same split as PaymentRequests.tsx, InvoiceDetail.tsx and the other five. Everything a person READS on this surface was extracted, including the two device-freshness notes, the delivery-note lead-in and every aria-label on the quantity stepper.",
     "src/lib/offlineQueue.ts": "One line stays: the clock clause `receiptAuditReason` appends to `p_reason`, which lands in audit_logs. Iron rule, docs/HANDOFF-english-language-20260827.md section 9 - a log whose wording depends on who was reading is a log nobody can search. Everything else this module used to say in Hebrew is now a condition resolved at the render boundary: the queue writes conditions to IndexedDB and Receiving/OfflineQueueStatus resolve them in the reader's language.",
-    "src/lib/assistant/contracts.ts": "One line stays: ASSISTANT_SENT_CLAIM_MARKER, the Hebrew word validate.ts refuses a draft for using. It is input recognition over model-generated text, not reader copy, and scripts/check-assistant-no-send.mjs allows the banned literal on exactly that one anchored line - a second copy anywhere fails the guard. ASSISTANT_SENT_CLAIM_PATTERNS now carries the same refusal per locale and builds the Hebrew entry from this constant rather than repeating it. Everything a person reads - the draft label and the time-window/calendar-period labels - moved to TKey tables resolved by readerText() in the Edge function and t() in the browser."
+    "src/lib/assistant/contracts.ts": "One line stays: ASSISTANT_SENT_CLAIM_MARKER, the Hebrew word validate.ts refuses a draft for using. It is input recognition over model-generated text, not reader copy, and scripts/check-assistant-no-send.mjs allows the banned literal on exactly that one anchored line - a second copy anywhere fails the guard. ASSISTANT_SENT_CLAIM_PATTERNS now carries the same refusal per locale and builds the Hebrew entry from this constant rather than repeating it. Everything a person reads - the draft label and the time-window/calendar-period labels - moved to TKey tables resolved by readerText() in the Edge function and t() in the browser.",
+    "src/lib/dashboardSeries.ts": "One line stays: CATEGORY_NAMED_OTHER, the Hebrew word a PERSON may have given one of their own categories. It is data recognition - the row is folded into the aggregate so one chart never shows two buckets carrying the same word - and translating it would put that collision back on the screen. The aggregate row this module makes up carries no name at all now, only aggregate: true; the word for it is copy and is resolved at the render boundary."
   },
   "counts": {
     "src/auth/AuthContext.tsx": 1,
     "src/components/ActionMenu.tsx": 1,
     "src/components/AssistantPanel.tsx": 2,
-    "src/components/charts.tsx": 4,
     "src/components/document-review/DocumentPacketReview.tsx": 1,
     "src/components/document-review/DocumentReviewProposals.tsx": 4,
     "src/components/document-review/model.ts": 16,
@@ -63,7 +63,7 @@
     "src/lib/assistant/contracts.ts": 1,
     "src/lib/assistant/productHelpRegistry.ts": 84,
     "src/lib/assistant/runSession.ts": 3,
-    "src/lib/dashboardSeries.ts": 3,
+    "src/lib/dashboardSeries.ts": 1,
     "src/lib/exportTemplates.ts": 3,
     "src/lib/exportTemplateWorkbook.ts": 1,
     "src/lib/financialSuppliers.ts": 1,
