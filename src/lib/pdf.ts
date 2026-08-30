@@ -59,7 +59,7 @@ export interface PdfOptions {
    * Stamp the InPlace mark across every page. Driven by the `exports.unbranded_pdf` entitlement,
    * resolved by `exportWatermark()` against the server. Applied in the BROWSER on this path, which
    * makes it branding rather than enforcement — the enforced copy comes from `downloadDocumentPdf`
-   * below. DEBT §69.
+   * below. DEBT §72.
    */
   watermark: boolean;
   /** Landscape for the wide accountant grids; portrait for order sheets and invoices. */
@@ -291,7 +291,7 @@ export interface DocumentPdfOptions extends PdfOptions {
  *
  * TWO PRODUCERS, ONE OF WHICH IS BETTER IN EVERY WAY THAT MATTERS. The server renderer
  * (`supabase/functions/render-document` → `worker/render`) emits REAL TEXT rather than a picture,
- * and stamps where a reader cannot reach — so it answers DEBT §68 and §69 at once. The browser
+ * and stamps where a reader cannot reach — so it answers DEBT §68 and §72 at once. The browser
  * generator below it produces a correct document too, but its text is an image and its watermark
  * is branding.
  *

@@ -10,7 +10,7 @@ import { MAX_PDF_BYTES, MAX_RENDER_MS, PAGE_FORMAT } from './contract.mjs';
  * The client-side generator (`src/lib/pdf.ts`) rasterises the screen because no JavaScript PDF
  * engine implements the Unicode bidirectional algorithm — measured, and the reason is written up
  * there. That left two things open: the text was a picture (DEBT §68) and the watermark was
- * applied by the client, so it was branding rather than enforcement (DEBT §69).
+ * applied by the client, so it was branding rather than enforcement (DEBT §72).
  *
  * A browser here answers both. Chromium lays the Hebrew out — the same engine, the same print
  * stylesheet, the same result — and `page.pdf()` emits REAL TEXT, so the accountant can select and

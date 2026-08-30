@@ -3,7 +3,7 @@
 // map lives in ./status, which is where the admin screen imports it from.
 
 import { supabase } from './supabase';
-import type { OrgStatus, PlatformCustomer, PlatformOrg } from './types';
+import type { OrgStatus, PlatformCustomer, PlatformOrg, Role } from './types';
 
 export type { OrgStatus, PlatformCustomer, PlatformOrg };
 
@@ -26,7 +26,10 @@ export type PlatformCapability =
   | 'entitlement.override'
   | 'org.lifecycle'
   | 'offboarding.handle'
-  | 'platform.export';
+  | 'platform.export'
+  | 'user.view'
+  | 'user.access'
+  | 'operator.manage';
 
 /** Attention filters accepted by platform_customers(). An unknown value is rejected by the
     server rather than quietly returning nothing, so this union is the whole set. */
@@ -681,4 +684,239 @@ export function recordPurgeBackupEvidence(input: {
     p_restore_verified_at: input.restoreVerifiedAt,
     p_reason: input.reason,
   });
+}
+
+// ===== User administration (0214) =====
+// Two axes, kept apart here exactly as they are in the database: a TENANT user lives inside a
+// customer organization and is changed under `user.access`; a PLATFORM operator is one of ours
+// and is changed under `operator.manage`.
+
+/** One row of the cross-tenant user directory. `total_count` rides on every row, as everywhere
+    else in this file, so paging costs one round trip rather than two. */
+export interface PlatformUser {
+  id: string;
+  org_id: string;
+  org_name: string;
+  org_status: OrgStatus;
+  full_name: string;
+  email: string | null;
+  role: Role;
+  active: boolean;
+  created_at: string;
+  last_sign_in_at: string | null;
+  is_operator: boolean;
+  total_count: number;
+}
+
+export interface PlatformUserDetail {
+  id: string;
+  org_id: string;
+  org_name: string;
+  org_status: OrgStatus;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  role: Role;
+  active: boolean;
+  supplier_id: string | null;
+  created_at: string;
+  last_sign_in_at: string | null;
+  email_confirmed: boolean;
+  is_operator: boolean;
+  operator_roles: string[];
+  /** How many active owners the organization has. The screen needs it to explain WHY the last
+      one cannot be suspended, instead of only refusing. */
+  org_owner_count: number;
+}
+
+export interface PlatformUserEvent {
+  id: string;
+  occurred_at: string;
+  actor_email: string | null;
+  action: string;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  reason: string;
+}
+
+export type PlatformUserStatusFilter = 'active' | 'suspended' | 'never_signed_in';
+
+export interface PlatformUserListRequest {
+  search: string;
+  orgId: string | null;
+  status: PlatformUserStatusFilter | null;
+  role: Role | null;
+  page: number;
+  pageSize: number;
+}
+
+export async function fetchPlatformUsers(
+  request: PlatformUserListRequest,
+): Promise<{ rows: PlatformUser[]; total: number }> {
+  const rows = (await rpc<PlatformUser[]>('platform_users', {
+    p_search: request.search.trim() || null,
+    p_org_id: request.orgId,
+    p_status: request.status,
+    p_role: request.role,
+    p_limit: request.pageSize,
+    p_offset: request.page * request.pageSize,
+  })) ?? [];
+  return { rows, total: rows[0]?.total_count ?? 0 };
+}
+
+export async function fetchPlatformUserDetail(userId: string): Promise<PlatformUserDetail | null> {
+  const rows = (await rpc<PlatformUserDetail[]>('platform_user_detail', { p_user_id: userId })) ?? [];
+  return rows[0] ?? null;
+}
+
+export async function fetchPlatformUserEvents(userId: string): Promise<PlatformUserEvent[]> {
+  return (await rpc<PlatformUserEvent[]>('platform_user_events', { p_user_id: userId, p_limit: 50 })) ?? [];
+}
+
+export function setPlatformUserAccess(input: {
+  userId: string; role: Role; active: boolean; reason: string;
+}): Promise<unknown> {
+  return rpc('platform_set_user_access', {
+    p_user_id: input.userId,
+    p_role: input.role,
+    p_active: input.active,
+    p_reason: input.reason,
+  });
+}
+
+/** The console's opening counts. Zero rows means "you may not see this", which is why the
+    caller distinguishes null from a row of zeroes. */
+export interface PlatformOverview {
+  orgs_total: number;
+  orgs_active: number;
+  orgs_suspended: number;
+  users_total: number;
+  users_active: number;
+  users_suspended: number;
+  users_new_30d: number;
+  users_never_signed_in: number;
+  users_dormant_30d: number;
+  orgs_without_owner: number;
+  operators_total: number;
+  operators_without_role: number;
+}
+
+export async function fetchPlatformOverview(): Promise<PlatformOverview | null> {
+  const rows = (await rpc<PlatformOverview[]>('platform_user_overview', {})) ?? [];
+  return rows[0] ?? null;
+}
+
+export interface PlatformRole {
+  role_key: string;
+  label: string;
+  description: string;
+}
+
+export async function fetchPlatformRoles(): Promise<PlatformRole[]> {
+  // A plain table read: platform_roles carries a SELECT policy for operators (0151) and no write
+  // path at all, so there is nothing here an RPC would add.
+  const { data, error } = await supabase
+    .from('platform_roles')
+    .select('role_key, label, description')
+    .order('role_key');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PlatformRole[];
+}
+
+export interface PlatformOperatorEvent {
+  id: string;
+  occurred_at: string;
+  actor_email: string | null;
+  subject_email: string | null;
+  action: string;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  reason: string;
+}
+
+export async function fetchOperatorEvents(): Promise<PlatformOperatorEvent[]> {
+  return (await rpc<PlatformOperatorEvent[]>('platform_operator_events', { p_limit: 100 })) ?? [];
+}
+
+export function addOperator(input: {
+  email: string; note: string | null; roleKey: string; reason: string;
+}): Promise<unknown> {
+  return rpc('platform_add_operator', {
+    p_email: input.email,
+    p_note: input.note,
+    p_role_key: input.roleKey,
+    p_reason: input.reason,
+  });
+}
+
+export function removeOperator(userId: string, reason: string): Promise<unknown> {
+  return rpc('platform_remove_operator', { p_user_id: userId, p_reason: reason });
+}
+
+export function setOperatorRoles(input: {
+  userId: string; roleKeys: string[]; reason: string;
+}): Promise<unknown> {
+  return rpc('platform_set_operator_roles', {
+    p_user_id: input.userId,
+    p_role_keys: input.roleKeys,
+    p_reason: input.reason,
+  });
+}
+
+// ===== Operator invitations (0215) =====
+
+export interface OperatorInvitation {
+  id: string;
+  email: string;
+  role_key: string;
+  role_label: string;
+  status: 'pending' | 'accepted' | 'revoked' | 'expired';
+  expires_at: string;
+  created_at: string;
+  invited_by: string | null;
+}
+
+/** What the command returns to the inviter, once. `token` is never readable again — the row
+    stores only its digest — so the console has exactly one chance to hand it over. */
+export interface IssuedInvitation {
+  id: string;
+  email: string;
+  token: string;
+  expires_at: string;
+}
+
+export async function fetchOperatorInvitations(): Promise<OperatorInvitation[]> {
+  return (await rpc<OperatorInvitation[]>('platform_operator_invitations', {})) ?? [];
+}
+
+export function inviteOperator(input: {
+  email: string; roleKey: string; reason: string;
+}): Promise<IssuedInvitation> {
+  return rpc<IssuedInvitation>('platform_invite_operator', {
+    p_email: input.email,
+    p_role_key: input.roleKey,
+    p_reason: input.reason,
+  });
+}
+
+export function revokeOperatorInvitation(id: string, reason: string): Promise<unknown> {
+  return rpc('platform_revoke_operator_invitation', { p_id: id, p_reason: reason });
+}
+
+export interface InvitationLookup {
+  status: 'valid' | 'expired' | 'revoked' | 'accepted' | 'unknown';
+  email?: string;
+  role_key?: string;
+  role_label?: string;
+  expires_at?: string;
+}
+
+/** Callable without a session: the person holding the link has no account yet, and a blank form
+    is a worse answer than "this invitation expired". */
+export function lookupOperatorInvitation(token: string): Promise<InvitationLookup> {
+  return rpc<InvitationLookup>('lookup_platform_operator_invitation', { p_token: token });
+}
+
+export function acceptOperatorInvitation(token: string): Promise<{ role_key: string }> {
+  return rpc<{ role_key: string }>('accept_platform_operator_invitation', { p_token: token });
 }

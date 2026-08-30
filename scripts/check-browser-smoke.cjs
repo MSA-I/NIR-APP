@@ -2019,6 +2019,12 @@ async function adminState(browser) {
   try {
     await login(page, 'owner');
     await page.goto(`${baseURL}/operator`);
+    // Landing is still the claim, but the landing SCREEN changed: /operator now opens on the
+    // console's control centre, and platform operations moved to /admin/platform. The shell is
+    // what proves the guard let us in — it renders whichever capabilities the caller holds, while
+    // the control centre itself is capability-gated and this scenario mocks membership only.
+    await page.getByRole('navigation', { name: 'ניווט מסוף התפעול' }).waitFor({ timeout: 20_000 });
+    await page.goto(`${baseURL}/operator#/admin/platform`);
     await page.getByRole('heading', { name: 'ניהול פלטפורמה' }).waitFor({ timeout: 20_000 });
     const opener = page.getByRole('button', { name: 'ארגון חדש' });
     await opener.click();

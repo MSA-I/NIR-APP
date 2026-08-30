@@ -14,7 +14,7 @@ import {
  *
  * ─── WHAT THIS FUNCTION IS FOR, IN ONE SENTENCE ──────────────────────────────────────────────
  * The browser-side generator (`src/lib/pdf.ts`) makes a correct file and cannot make an enforced
- * one: it runs on the reader's machine, so the watermark is branding (DEBT §69) and the text is a
+ * one: it runs on the reader's machine, so the watermark is branding (DEBT §72) and the text is a
  * picture (DEBT §68). Moving the render to a machine the reader cannot reach answers both — the
  * stamp goes on where it cannot be removed, and Chromium's own `page.pdf()` emits real text.
  *
@@ -32,7 +32,7 @@ import {
  * browser context.
  *
  * That places the render service inside this function's trust boundary for the seconds a render
- * takes. It is stated here, in `worker/render/src/render.mjs`, and in DEBT §69 rather than being
+ * takes. It is stated here, in `worker/render/src/render.mjs`, and in DEBT §72 rather than being
  * discovered later; the mitigations are the shared secret, the path allowlist enforced on both
  * sides, and a context destroyed after every request.
  *

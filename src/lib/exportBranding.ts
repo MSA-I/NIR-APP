@@ -23,7 +23,7 @@ import { supabase } from './supabase';
  * AND IT IS BRANDING, NOT ACCESS CONTROL. The generator runs in the browser, so a determined
  * reader can strip the stamp. Enforcing it would mean generating the document server-side, which
  * is a different piece of work; nothing here should be read as a claim that it is enforced.
- * `DEBT §69`.
+ * `DEBT §72`.
  */
 export async function exportWatermark(): Promise<boolean> {
   const { data, error } = await supabase.rpc('my_export_watermark');
