@@ -296,7 +296,11 @@ drop policy if exists document_export_templates_select on public.document_export
 create policy document_export_templates_select on public.document_export_templates
   for select to authenticated using (
     org_id = auth_org()
-    and auth_role() in ('owner', 'office', 'kitchen')
+    -- `0047` wrote ('owner', 'office', 'kitchen') and `0133` retired the kitchen persona out of
+    -- every live policy. Recreating this one has to carry the ROLE LIST AS IT STANDS, not as the
+    -- creating migration wrote it -- p43 fails on a retired persona reappearing in an RLS
+    -- expression, and it is right to: a dormant branch is a login surface waiting to be re-enabled.
+    and auth_role() in ('owner', 'office')
     and (owner_user_id is null or owner_user_id = auth.uid())
     and private.auth_org_allows('exports.custom')
   );

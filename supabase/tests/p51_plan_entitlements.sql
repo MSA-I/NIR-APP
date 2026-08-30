@@ -197,9 +197,13 @@ rollback to savepoint p51_capability_probe;
 savepoint p51_monotonicity_probe;
 update plan_entitlements set boolean_value = false
  where plan_key = 'premium' and entitlement_key = 'bank.reconciliation';
-insert into private.plan_quota_decisions
-  (plan_key, entitlement_key, decided_limit, decided_value, previous_value, decision_ref)
-values ('premium', 'bank.reconciliation', null, false, true, 'p51 probe');
+-- The capability ledger, not the numeric one. This probe was written against `0248`'s first
+-- shape, which taught `plan_quota_decisions` to hold a yes/no; the merge of 30.08.2026 kept ONE
+-- ledger for that fact -- `private.plan_capability_decisions`, which `0246` had already built --
+-- so the probe records its decision where the resolver actually reads it.
+insert into private.plan_capability_decisions
+  (plan_key, entitlement_key, decided_value, previous_value, decision_ref, note)
+values ('premium', 'bank.reconciliation', false, true, 'OPEN-DECISIONS #274', 'p51 probe');
 select pg_temp.p51_assert(
   not exists (select 1 from private.plan_capability_violations()
               where assertion = 'capability_closed_without_decision')

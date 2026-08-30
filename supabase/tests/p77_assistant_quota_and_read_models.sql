@@ -78,7 +78,15 @@ insert into public.organizations (id, name, status) values
 -- default happens to be this month. The arms that need another tier set it themselves below.
 update public.organization_subscriptions set plan_key = 'free'
  where org_id in ('77000000-0000-4000-8000-000000000001', '77000000-0000-4000-8000-000000000002',
-                  '77000000-0000-4000-8000-000000000003', '77000000-0000-4000-8000-000000000005');
+                  '77000000-0000-4000-8000-000000000003');
+
+-- The prices tenant seats TWO people -- an owner and an accountant -- and since `0246` a rung's
+-- `users.max` is enforced at the write, so `free` (one seat) refuses the second profile. This
+-- tenant is about the comparison read models and asserts no plan figure of its own, so it is
+-- pinned to `pro` for the same reason the three above are pinned to `free`: a chosen rung, not
+-- whatever the birth trigger grants this month.
+update public.organization_subscriptions set plan_key = 'pro'
+ where org_id = '77000000-0000-4000-8000-000000000005';
 
 insert into auth.users (id, email, email_confirmed_at) values
   ('78000000-0000-4000-8000-000000000001', 'owner-intro-p77@example.test',
