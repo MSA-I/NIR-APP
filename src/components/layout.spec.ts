@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_SECTIONS, barSectionsForRole, drawerSectionsForRole, footerItemsForRole, pageTitleKeyFor, sectionsForRole } from './Layout';
+import { NAV_SECTIONS, barSectionsForRole, drawerSectionsForRole, footerItemsForRole, pageTitleKeyFor, sectionsForRole, withheldNavPathsAfterSetup } from './Layout';
 import { he } from '../lib/i18n/dictionaries/he';
 
 /** The words a key stands for, so a claim about COLLIDING LABELS stays a claim about words. */
@@ -55,6 +55,33 @@ describe('מעטפת הניווט', () => {
     expect(barSectionsForRole('owner').map((section) => say(section.section))).not.toContain('החשבון');
     expect(barSectionsForRole('owner').flatMap((section) => section.items).map((item) => item.to))
       .not.toContain('/settings');
+  });
+
+  /**
+   * The wizard is an ERRAND, and an errand ends (0258).
+   *
+   * Owner report 30.08.2026: "אם הוא ממלא את הפרטים כמו שצריך אין טעם שהמסך הזה יהיה זמין לו."
+   * It was offered for ever, beside Settings, in both surfaces, because the catalogue is the only
+   * thing that decided and the catalogue only knows about roles.
+   *
+   * The catalogue is deliberately NOT where this is answered — /onboarding stays owner-only there,
+   * and the route stays live because Settings keeps its link and the wizard is also the bulk import
+   * path. So the answer is a withholder, and what is pinned here is that it removes exactly one row
+   * and leaves the account group standing.
+   */
+  it('אשף ההקמה יורד מהתפריט אחרי שהבעלים סיים אותו במפורש', () => {
+    expect([...withheldNavPathsAfterSetup(null)]).toEqual([]);
+    expect([...withheldNavPathsAfterSetup(undefined)]).toEqual([]);
+
+    const finished = withheldNavPathsAfterSetup('2026-08-30T09:00:00.000Z');
+    expect([...finished]).toEqual(['/onboarding']);
+
+    // Retiring the errand must not retire the account group with it.
+    expect(footerItemsForRole('owner').filter((item) => !finished.has(item.to)).map((item) => item.to))
+      .toEqual(['/settings/subscription', '/settings']);
+
+    // ...and the role catalogue is untouched, which is what keeps the Settings link reachable.
+    expect(pathsFor('owner')).toContain('/onboarding');
   });
 
   it('כל יעד מורשה מופיע במקום אחד מוסבר בתפריט', () => {

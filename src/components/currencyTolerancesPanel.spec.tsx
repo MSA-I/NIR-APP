@@ -38,6 +38,7 @@ const org = (settings: Record<string, unknown>): Organization => ({
   status: 'active',
   logo_path: null,
   logo_updated_at: null,
+  onboarding_completed_at: null,
   settings: settings as Organization['settings'],
 });
 

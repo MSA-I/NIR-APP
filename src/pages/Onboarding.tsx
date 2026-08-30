@@ -32,7 +32,7 @@ type StepKey = (typeof STEPS)[number]['key'];
 const LAST_STEP = STEPS.length - 1;
 
 /**
- * Wizard progress lives in localStorage, not in the database.
+ * The wizard's CURSOR lives in localStorage. Its ENDING does not.
  *
  * What was actually imported is already durable — it is rows in `categories`, `suppliers`,
  * `products` and `supplier_products`, and the wizard reads those counts on every mount, so
@@ -40,7 +40,13 @@ const LAST_STEP = STEPS.length - 1;
  * Only the cursor (which step is open, which steps were deliberately skipped) is local, and
  * only that is lost when switching devices. It is deliberately not written to
  * `organizations.settings`: `Settings.tsx` replaces that object wholesale on save, which
- * would silently reset a wizard mid-run. A dedicated column would fix this — see the report.
+ * would silently reset a wizard mid-run.
+ *
+ * `completedAt` used to live here too, and that was the bug the owner reported: pressing finish
+ * recorded the ending in a place no other screen reads and no second browser sees, so the sidebar
+ * and the dashboard banner went on offering the wizard for ever. It now has the dedicated column
+ * this comment used to ask for — `organizations.onboarding_completed_at` (0258) — and the ending
+ * is read from `org`, not from here.
  *
  * Parsed-but-unconfirmed file contents are never persisted anywhere: an unconfirmed column
  * mapping must not survive a reload and get committed by accident.
@@ -48,10 +54,9 @@ const LAST_STEP = STEPS.length - 1;
 interface Progress {
   step: number;
   skipped: StepKey[];
-  completedAt: string | null;
 }
 
-const EMPTY_PROGRESS: Progress = { step: 0, skipped: [], completedAt: null };
+const EMPTY_PROGRESS: Progress = { step: 0, skipped: [] };
 const progressKey = (orgId: string) => `supplyflow.onboarding.${orgId}`;
 
 function loadProgress(orgId: string): Progress {
@@ -62,7 +67,6 @@ function loadProgress(orgId: string): Progress {
     return {
       step: typeof p.step === 'number' && p.step >= 0 && p.step <= LAST_STEP ? p.step : 0,
       skipped: Array.isArray(p.skipped) ? (p.skipped.filter((k) => typeof k === 'string') as StepKey[]) : [],
-      completedAt: typeof p.completedAt === 'string' ? p.completedAt : null,
     };
   } catch {
     return EMPTY_PROGRESS;
@@ -102,8 +106,9 @@ interface Snapshot {
 }
 
 export default function Onboarding() {
-  const { t } = useT();
-  const { profile, org } = useAuth();
+  const { errorText, t } = useT();
+  const { profile, org, refreshOrg } = useAuth();
+  const toast = useToast();
   const orgId = profile?.org_id ?? '';
   const [progress, setProgress] = useState<Progress>(() => (orgId ? loadProgress(orgId) : EMPTY_PROGRESS));
 
@@ -153,6 +158,26 @@ export default function Onboarding() {
     await refetch();
   }
 
+  /**
+   * The ending, written where every other screen can see it (0258).
+   *
+   * Returns whether it landed. A finish that failed must not navigate away as though it had
+   * worked: the owner would arrive at a dashboard still offering the wizard, with nothing on
+   * screen to say why. Failing here keeps them on the step with the reason in a toast and the
+   * button ready to try again.
+   */
+  async function finishSetup(): Promise<boolean> {
+    if (!orgId) return false;
+    const res = await supabase.from('organizations')
+      .update({ onboarding_completed_at: new Date().toISOString() })
+      .eq('id', orgId);
+    if (res.error) { toast(errorText(res.error.message), 'error'); return false; }
+    // The sidebar and the avatar menu are drawn from this column, and they are on screen right
+    // now. Without the re-read they would go on offering the wizard until the next full reload.
+    await refreshOrg();
+    return true;
+  }
+
   if (loading) return <SkeletonList rows={4} />;
   if (error) return <ErrorNote message={error} />;
 
@@ -166,7 +191,9 @@ export default function Onboarding() {
     categories: counts.categories > 0,
     suppliers: counts.suppliers > 0,
     products: counts.products > 0,
-    done: !!progress.completedAt,
+    // The one step whose truth is a statement rather than a count, and the only one that survives
+    // a change of browser now that it lives on the organisation.
+    done: !!org?.onboarding_completed_at,
   };
 
   return (
@@ -192,7 +219,7 @@ export default function Onboarding() {
             counts={counts}
             skipped={progress.skipped}
             onGoToStep={goTo}
-            onFinish={() => update({ completedAt: new Date().toISOString() })}
+            onFinish={finishSetup}
           />
         )}
       </Card>
@@ -1174,11 +1201,20 @@ function DoneStep({ counts, skipped, onGoToStep, onFinish }: {
   counts: Snapshot;
   skipped: StepKey[];
   onGoToStep: (i: number) => void;
-  onFinish: () => void;
+  /** Records the ending. Resolves `false` when it could not be saved — see `finishSetup`. */
+  onFinish: () => Promise<boolean>;
 }) {
   const { t } = useT();
   const navigate = useNavigate();
+  const [finishing, setFinishing] = useState(false);
   const pending = STEPS.filter((s) => s.key !== 'done' && skipped.includes(s.key));
+
+  async function finishAndLeave() {
+    setFinishing(true);
+    const saved = await onFinish();
+    setFinishing(false);
+    if (saved) navigate('/dashboard');
+  }
 
   const tiles: { label: string; value: number; to: string }[] = [
     { label: t('onboarding.text_39'), value: counts.categories, to: '/products' },
@@ -1228,8 +1264,11 @@ function DoneStep({ counts, skipped, onGoToStep, onFinish }: {
       </div>
 
       <div className="flex justify-end">
-        <button className="btn-primary" onClick={() => { onFinish(); navigate('/dashboard'); }}>
-          {t('onboarding.enterSystem')} <ChevronLeft size={ICON.sm} aria-hidden="true" />
+        <button className="btn-primary" disabled={finishing} onClick={() => { void finishAndLeave(); }}>
+          {t('onboarding.enterSystem')}{' '}
+          {finishing
+            ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" />
+            : <ChevronLeft size={ICON.sm} aria-hidden="true" />}
         </button>
       </div>
     </div>

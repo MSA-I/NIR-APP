@@ -212,6 +212,33 @@ export function footerItemsForRole(role: ActiveRole | undefined): NavItem[] {
   return role === 'owner' ? itemsFor(role, ['/settings/subscription', '/onboarding', '/settings']) : [];
 }
 
+const NOTHING_WITHHELD: ReadonlySet<string> = new Set();
+const SETUP_FINISHED_WITHHELD: ReadonlySet<string> = new Set(['/onboarding']);
+
+/**
+ * What a FINISHED setup withholds (0258).
+ *
+ * The wizard is the one entry in the account group that is an ERRAND rather than a place, and it
+ * was catalogued like a place: permanently, for every owner, in the sidebar and the avatar menu,
+ * with nothing that could ever retire it. An owner who had opened an account, signed in and filled
+ * the system was still being offered "set the system up" every session — their report, 30.08.2026.
+ *
+ * The signal is the owner's own explicit finish, not a row count: `organizations.
+ * onboarding_completed_at`. A count would answer a different question (see the column comment).
+ *
+ * Withheld here rather than removed from `sectionsForRole` for the reason `surfaced` states
+ * below: that function is the role catalogue, `layout.spec.ts` reads it as one, and this is not a
+ * question about roles. Withholding only ever REMOVES, so a group emptied by it disappears.
+ *
+ * The route stays live and `/settings` keeps its link on purpose — the same screen is the bulk
+ * import path, and a business buying a new price list months later needs it again.
+ */
+export function withheldNavPathsAfterSetup(
+  onboardingCompletedAt: string | null | undefined,
+): ReadonlySet<string> {
+  return onboardingCompletedAt ? SETUP_FINISHED_WITHHELD : NOTHING_WITHHELD;
+}
+
 /**
  * The drawer's own list.
  *
@@ -339,20 +366,25 @@ export default function Layout() {
   };
 
   /**
-   * What the PLAN withholds, applied on top of what the ROLE allows.
+   * What the PLAN and a FINISHED SETUP withhold, applied on top of what the ROLE allows.
    *
-   * Two different questions about the same list, kept as two steps: `sectionsForRole` is the role
-   * catalogue and `layout.spec.ts` asserts it as one, so folding the plan into it would make
-   * either question unreadable. Withholding only ever REMOVES rows, and a group emptied by it
-   * disappears rather than standing as a heading over nothing.
+   * Three different questions about the same list, kept as separate steps: `sectionsForRole` is the
+   * role catalogue and `layout.spec.ts` asserts it as one, so folding either of the others into it
+   * would make all three unreadable. Both withholders only ever REMOVE rows, so the catalogue stays
+   * the outer bound, and a group emptied by them disappears rather than standing as a heading over
+   * nothing.
    */
-  const withheld = useWithheldNavPaths();
-  const includedByPlan = (list: NavSection[]) => (withheld.size === 0 ? list : list
+  const planWithheld = useWithheldNavPaths();
+  const setupWithheld = withheldNavPathsAfterSetup(org?.onboarding_completed_at);
+  const withheld = setupWithheld.size === 0
+    ? planWithheld
+    : new Set([...planWithheld, ...setupWithheld]);
+  const surfaced = (list: NavSection[]) => (withheld.size === 0 ? list : list
     .map((section) => ({ ...section, items: section.items.filter((item) => !withheld.has(item.to)) }))
     .filter((section) => section.items.length > 0));
 
-  const sections = includedByPlan(barSectionsForRole(role));
-  const drawerSections = includedByPlan(drawerSectionsForRole(role));
+  const sections = surfaced(barSectionsForRole(role));
+  const drawerSections = surfaced(drawerSectionsForRole(role));
   const footerItems = footerItemsForRole(role).filter((item) => !withheld.has(item.to));
 
   // The current screen with a rewritten query — the pathname and hash are carried through so the
