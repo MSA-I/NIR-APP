@@ -3,7 +3,7 @@ import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, KeyRound, ClipboardCheck, ImageUp, Download, Undo2, UserCog, LogOut } from 'lucide-react';
-import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
+import { MIN_PASSWORD_LENGTH, passwordProblemOf } from '../lib/password';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -22,7 +22,7 @@ import { isActiveRole, type ActiveRole, type Profile } from '../lib/types';
 import {
   BRAND_LOGO_TYPES,
   brandFailureAllowsNewCorrelation,
-  brandLogoProblem,
+  brandLogoProblemKey,
 } from '../lib/organizationBranding';
 
 interface OffboardingState {
@@ -189,8 +189,8 @@ export default function Settings() {
 
   async function uploadLogo(file: File | undefined) {
     if (!file || !org) return;
-    const problem = await brandLogoProblem(file);
-    if (problem) { toast(problem, 'error'); return; }
+    const problemKey = await brandLogoProblemKey(file);
+    if (problemKey) { toast(t(problemKey), 'error'); return; }
     setLogoBusy(true);
     let keyName: string | null = null;
     try {
@@ -261,8 +261,8 @@ export default function Settings() {
     : null;
 
   async function changePassword() {
-    const problem = passwordProblem(newPassword, confirmPassword);
-    setPasswordError(problem);
+    const problem = passwordProblemOf(newPassword, confirmPassword);
+    setPasswordError(problem && t(problem.key, problem.vars));
     if (problem) return;
     setPasswordBusy(true);
     const res = await supabase.auth.updateUser({ password: newPassword });

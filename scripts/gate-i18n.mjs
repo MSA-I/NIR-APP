@@ -128,6 +128,14 @@ const EXTRACTED = [
   'src/components/PlanCard.tsx',
   'src/components/QuickCapture.tsx',
   'src/pages/Subscription.tsx',
+  'src/auth/AuthContext.tsx',
+  'src/lib/assistant/runSession.ts',
+  'src/lib/financialSuppliers.ts',
+  'src/lib/organizationBranding.ts',
+  'src/lib/password.ts',
+  'src/lib/platform.ts',
+  'src/lib/serverList.ts',
+  'src/main.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */

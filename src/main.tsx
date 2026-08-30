@@ -5,7 +5,7 @@ import './index.css';
 import App from './App';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './auth/AuthContext';
-import { LocaleProvider } from './lib/i18n/LocaleProvider';
+import { LocaleProvider, useT } from './lib/i18n/LocaleProvider';
 import { ProfileLocaleSync } from './lib/i18n/profileLocale';
 import { ToastProvider } from './components/ui';
 import { initObservability } from './lib/observability';
@@ -35,6 +35,9 @@ if ('serviceWorker' in navigator) {
 }
 
 function ServiceWorkerUpdateNotice() {
+  // Safe: this element is handed to `ToastProvider`, which sits INSIDE `LocaleProvider`, so the
+  // hook runs where a language exists. The element is only CREATED at module scope.
+  const { t } = useT();
   const [ready, setReady] = useState(false);
   useEffect(() => {
     const show = () => setReady(true);
@@ -45,10 +48,10 @@ function ServiceWorkerUpdateNotice() {
   return (
     <div role="status" className="phone-update-notice note-info pointer-events-auto">
       <div className="min-w-0 flex-1">
-        <div className="font-medium">גרסה חדשה מוכנה</div>
-        <div className="mt-0.5 text-xs">שמור עבודה פתוחה ורענן בזמן שנוח לך.</div>
+        <div className="font-medium">{t('appUpdate.title')}</div>
+        <div className="mt-0.5 text-xs">{t('appUpdate.body')}</div>
       </div>
-      <button type="button" className="btn-secondary shrink-0" onClick={() => window.location.reload()}>רענון</button>
+      <button type="button" className="btn-secondary shrink-0" onClick={() => window.location.reload()}>{t('appUpdate.refresh')}</button>
     </div>
   );
 }

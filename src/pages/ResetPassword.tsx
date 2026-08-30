@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router';
 import { KeyRound, Loader2 } from 'lucide-react';
 import { Card, ICON } from '../components/ui';
 import { supabase } from '../lib/supabase';
-import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
+import { MIN_PASSWORD_LENGTH, passwordProblemOf } from '../lib/password';
 import { APP_NAME } from '../lib/branding';
 
 type LinkState = 'checking' | 'ready' | 'invalid' | 'done';
@@ -62,8 +62,8 @@ export default function ResetPassword() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    const problem = passwordProblem(password, confirm);
-    setError(problem);
+    const problem = passwordProblemOf(password, confirm);
+    setError(problem && t(problem.key, problem.vars));
     if (problem) return;
     setBusy(true);
     const { error: updateError } = await supabase.auth.updateUser({ password });

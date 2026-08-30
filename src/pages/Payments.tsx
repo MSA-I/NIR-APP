@@ -10,7 +10,7 @@ import { DataTable, ErrorNote, Modal, PageHeader, SkeletonTable, useToast, ICON,
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import type { Payment } from '../lib/types';
 import {
-  SUPPLIER_SEARCH_NARROWED,
+  SUPPLIER_SEARCH_NARROWED_KEY,
   fetchServerList,
   formatSortParam,
   monthRangePredicates,
@@ -133,7 +133,7 @@ export default function Payments() {
     const reset = data?.pageReset ?? null;
     if (!reset || reset === handledReset.current) return;
     handledReset.current = reset;
-    toast(reset.message);
+    toast(t(reset.messageKey));
     patchParams({ page: pageToParam(reset.servedPage) });
   }, [data, toast, patchParams]);
 
@@ -194,7 +194,7 @@ export default function Payments() {
         mobileTitle={(r) => <>#{r.number} · {r.supplier.name}</>}
         toolbar={
           <>
-            {data.narrowed && <span className="text-xs text-await-fg" role="status">{SUPPLIER_SEARCH_NARROWED}</span>}
+            {data.narrowed && <span className="text-xs text-await-fg" role="status">{t(SUPPLIER_SEARCH_NARROWED_KEY)}</span>}
             {focused ? (
               <button className="btn-secondary" onClick={() => patchParams({ id: '', page: '' })}><X size={ICON.sm} aria-hidden="true" /> {t('payments.showingPayment', { number: focused.number })}</button>
             ) : monthFilter ? (

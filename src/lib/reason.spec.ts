@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { OPTIONAL_REASON_LABEL, reasonOr } from './reason';
+import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from './reason';
+import { he } from './i18n/dictionaries/he';
+import { en } from './i18n/dictionaries/en';
 
 /**
  * The owner's ruling of 11.08.2026 has two halves, and only the first one is visible on screen:
@@ -62,7 +64,11 @@ describe('the reason box no longer blocks a button', () => {
   });
 
   it('offers the same words everywhere the shared dialog is used', () => {
-    expect(OPTIONAL_REASON_LABEL).toContain('רשות');
-    expect(OPTIONAL_REASON_LABEL).not.toContain('חובה');
+    // Split: the module pins the KEY, each dictionary pins the claim that the box is optional.
+    expect(OPTIONAL_REASON_LABEL_KEY).toBe('reason.optionalLabel');
+    expect(he.reason.optionalLabel).toContain('רשות');
+    expect(he.reason.optionalLabel).not.toContain('חובה');
+    expect(en.reason.optionalLabel).toContain('optional');
+    expect(en.reason.optionalLabel).not.toMatch(/required/i);
   });
 });

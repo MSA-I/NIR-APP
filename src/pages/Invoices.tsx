@@ -15,7 +15,7 @@ import { canShare, shareInvoice } from '../lib/share';
 import type { Invoice } from '../lib/types';
 import { checkText, type CheckResult } from '../lib/checks';
 import {
-  SUPPLIER_SEARCH_NARROWED,
+  SUPPLIER_SEARCH_NARROWED_KEY,
   fetchServerList,
   formatSortParam,
   monthRangePredicates,
@@ -236,7 +236,7 @@ export function InvoicesList() {
     const reset = data?.pageReset ?? null;
     if (!reset || reset === handledReset.current) return;
     handledReset.current = reset;
-    toast(reset.message);
+    toast(t(reset.messageKey));
     patchParams({ page: pageToParam(reset.servedPage) });
   }, [data, toast, patchParams]);
 
@@ -349,7 +349,7 @@ export function InvoicesList() {
         ]}
         toolbar={
           <>
-            {data.narrowed && <span className="text-xs text-await-fg" role="status">{SUPPLIER_SEARCH_NARROWED}</span>}
+            {data.narrowed && <span className="text-xs text-await-fg" role="status">{t(SUPPLIER_SEARCH_NARROWED_KEY)}</span>}
             <select className="input w-auto! md:hidden" aria-label={t('invoiceList.aria_label')}
               value={reviewFilter} onChange={(e) => patchParams({ review: e.target.value, page: '' })}>
               {reviewFilterOptions(statusLabel, t('invoiceList.reviewFilterAll')).map(([value, label]) => <option key={value || 'all'} value={value}>{label}</option>)}

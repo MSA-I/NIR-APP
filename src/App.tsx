@@ -185,7 +185,7 @@ function AccountUnavailable() {
 }
 
 function BootstrapUnavailable() {
-  const { errorText, t } = useT();
+  const { errorText, t, tDynamic } = useT();
   const { bootstrapError, retryBootstrap, signOut } = useAuth();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -206,7 +206,13 @@ function BootstrapUnavailable() {
       <div className="card card-pad max-w-md text-center">
         <h1 className="page-title">{t('app.text_12')}</h1>
         <p className="text-ink-soft mt-2">
-          {bootstrapError ?? t('app.text_13')}{' '}{t('app.connectionRemainsActive')}
+          {/* `bootstrapError` carries EITHER the watchdog's own key or a raw server message, and
+              both are strings — so nothing but this line decides which a person sees. `tDynamic`
+              resolves the key and returns null for anything else, and the raw message is then
+              shown exactly as it arrived, which is what a support conversation needs. */}
+          {bootstrapError
+            ? (tDynamic(bootstrapError) ?? bootstrapError)
+            : t('app.text_13')}{' '}{t('app.connectionRemainsActive')}
         </p>
         <div className="mt-5 flex justify-center gap-2">
           <button className="btn-primary" disabled={busy} onClick={retryBootstrap}>{t('app.text_14')}</button>

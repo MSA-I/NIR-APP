@@ -44,6 +44,7 @@
  */
 
 import { readExactCount } from './queryResult';
+import type { TKey } from './i18n/t.ts';
 
 /* ------------------------------------------------------------------ predicates */
 
@@ -137,7 +138,9 @@ export interface ServerListRequest {
 export interface ServerListPageReset {
   requestedPage: number;
   servedPage: number;
-  message: string;
+  /** A key, resolved by whichever screen toasts it. Renamed with its contents so no caller can
+   *  keep printing it and still compile. */
+  messageKey: TKey;
 }
 
 /**
@@ -164,8 +167,7 @@ export interface ServerListResult<Row> {
 }
 
 /** Shown when a page disappeared underneath the user. Exported so wave 2 renders one wording. */
-export const PAGE_NO_LONGER_EXISTS =
-  'העמוד שביקשת כבר אינו קיים — ייתכן ששורות נמחקו בינתיים. מוצג העמוד האחרון הקיים.';
+export const PAGE_NO_LONGER_EXISTS_KEY: TKey = 'serverList.pageNoLongerExists';
 
 /* ------------------------------------------------------------------ errors */
 
@@ -484,7 +486,7 @@ export async function fetchServerList<Row>(
         page,
         pageReset: page === requestedPage
           ? null
-          : { requestedPage, servedPage: page, message: PAGE_NO_LONGER_EXISTS },
+          : { requestedPage, servedPage: page, messageKey: PAGE_NO_LONGER_EXISTS_KEY },
         cost: { requests, ms: performance.now() - startedAt },
       };
     }
@@ -570,8 +572,7 @@ export const SUPPLIER_SEARCH_ID_CAP = 150;
  * converted screens render one wording — the count on screen is only honest while the narrowing
  * is visible.
  */
-export const SUPPLIER_SEARCH_NARROWED =
-  'שמות ספקים רבים מדי תואמים לחיפוש, ולכן הוא בוצע על עמודות המסך בלבד. דייקו את שם הספק כדי לחפש גם לפי ספק.';
+export const SUPPLIER_SEARCH_NARROWED_KEY: TKey = 'serverList.supplierSearchNarrowed';
 
 export interface SupplierIdSearch {
   /** Empty either because no supplier matched or because the search was narrowed — check `narrowed`. */

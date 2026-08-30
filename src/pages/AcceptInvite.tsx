@@ -8,7 +8,7 @@ import { Card, ICON } from '../components/ui';
 import { homeFor } from '../auth/AuthContext';
 import { resolveRoleLabels } from '../lib/status';
 import { APP_NAME } from '../lib/branding';
-import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
+import { MIN_PASSWORD_LENGTH, passwordProblemOf } from '../lib/password';
 import {
   lookupInvitation, acceptInvitation, acceptErrorCondition,
   type InvitationLookup,
@@ -56,8 +56,8 @@ export default function AcceptInvite() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setFormError(null);
-    const problem = passwordProblem(password, confirm);
-    if (problem) { setFormError(problem); return; }
+    const problem = passwordProblemOf(password, confirm);
+    if (problem) { setFormError(t(problem.key, problem.vars)); return; }
 
     setBusy(true);
     try {

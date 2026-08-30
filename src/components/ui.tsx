@@ -10,7 +10,7 @@ import {
 import type { StatusMeta, Tone } from '../lib/status';
 import type { ServerSort } from '../lib/serverList';
 import { fmtMoneyRounded } from '../lib/format';
-import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
+import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';
 import { routePresentationDescription } from '../lib/routePresentation';
 import { pluralCategory } from '../lib/i18n/t';
 import { ActionMenu, type ActionMenuItem } from './ActionMenu';
@@ -1273,12 +1273,14 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
   );
 }
 
-export function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel, reasonLabel = OPTIONAL_REASON_LABEL, danger, requireReason, busy }: {
+export function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel, reasonLabel, danger, requireReason, busy }: {
   open: boolean; onClose: () => void; onConfirm: (reason?: string) => void;
   title: string; message: string; confirmLabel?: string; reasonLabel?: string; danger?: boolean; requireReason?: boolean; busy?: boolean;
 }) {
   const { t } = useT();
   const confirmText = confirmLabel ?? t('ui.ConfirmDialog');
+  // Same rule as `confirmText`: the fallback belongs in the body, where there is a reader.
+  const reasonText = reasonLabel ?? t(OPTIONAL_REASON_LABEL_KEY);
   const [reason, setReason] = useState('');
   const reasonId = useId();
   useEffect(() => { if (open) setReason(''); }, [open]);
@@ -1286,7 +1288,7 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
     <Modal open={open} onClose={onClose} title={title} description={message} busy={busy}>
       {requireReason && (
         <div className="mb-4">
-          <label className="label" htmlFor={reasonId}>{reasonLabel}</label>
+          <label className="label" htmlFor={reasonId}>{reasonText}</label>
           {/* maxLength matches every other audited reason field in the app (document-review's three
               forms, the type-review decision). The column is unbounded text, so this is a consistency
               and sanity bound on a justification — free-form `notes` fields stay uncapped on purpose,

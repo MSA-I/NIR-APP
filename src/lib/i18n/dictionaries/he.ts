@@ -4446,6 +4446,7 @@ export const he = {
   },
 
   financialSupplier: {
+    israeliAccount: '{holder} · בנק {bank} · סניף {branch} · חשבון {account}',
     text: 'הספק לא נמצא',
     text_2: 'עוסק / חברה:',
     fmtMoneyRounded: 'יתרה פתוחה',
@@ -5103,6 +5104,7 @@ export const he = {
   },
 
   app: {
+    bootstrapTimeout: 'טעינת פרטי החשבון נמשכה זמן רב מדי.',
     text: 'לא ניתן לטעון את המסך',
     text_2: 'ייתכן שהאפליקציה עודכנה בזמן שהכרטיסייה הייתה פתוחה.',
     reload: 'רענון וטעינה מחדש',
@@ -5640,6 +5642,39 @@ export const he = {
     refresh: 'רענון',
     rowLabel: 'מלאי {product}',
     adjustmentDescription: 'יתרה נוכחית: {quantity}. הפעולה תירשם ביומן הביקורת.',
+  },
+
+  assistantRun: {
+    done: 'הבדיקה הושלמה',
+    failed: 'הבקשה נכשלה',
+    restoredOne: 'הבדיקה הקודמת נטענה',
+    restoredMany: 'נטענה שיחה קודמת עם {count} בדיקות',
+  },
+
+  branding: {
+    logoTypeUnsupported: 'ניתן להעלות לוגו PNG, JPEG או WebP בלבד.',
+    logoTooLarge: 'גודל הלוגו המרבי הוא 2MB.',
+    logoContentMismatch: 'תוכן הקובץ אינו תואם לסוג התמונה שנבחר.',
+  },
+
+  password: {
+    tooShort: 'הסיסמה חייבת להכיל לפחות {min} תווים.',
+    mismatch: 'הסיסמאות אינן זהות.',
+  },
+
+  reason: {
+    optionalLabel: 'סיבה (רשות — נרשמת ביומן הביקורת)',
+  },
+
+  serverList: {
+    pageNoLongerExists: 'העמוד שביקשת כבר אינו קיים — ייתכן ששורות נמחקו בינתיים. מוצג העמוד האחרון הקיים.',
+    supplierSearchNarrowed: 'שמות ספקים רבים מדי תואמים לחיפוש, ולכן הוא בוצע על עמודות המסך בלבד. דייקו את שם הספק כדי לחפש גם לפי ספק.',
+  },
+
+  appUpdate: {
+    title: 'גרסה חדשה מוכנה',
+    body: 'שמור עבודה פתוחה ורענן בזמן שנוח לך.',
+    refresh: 'רענון',
   },
 
   fab: {

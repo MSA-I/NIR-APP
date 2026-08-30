@@ -1,3 +1,5 @@
+import type { TKey } from './i18n/t.ts';
+
 export const BRAND_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
 export const BRAND_LOGO_MAX_BYTES = 2 * 1024 * 1024;
 export const BRAND_CORRELATION_DISPOSITION_HEADER = 'x-supplyflow-correlation-disposition';
@@ -24,10 +26,14 @@ export function brandFailureAllowsNewCorrelation(error: unknown): boolean {
     && get.call(headers, BRAND_CORRELATION_DISPOSITION_HEADER) === BRAND_CORRELATION_ROTATE_VALUE;
 }
 
-export async function brandLogoProblem(file: File) {
+/**
+ * The refusal, as a KEY. A pure module cannot ask what language the reader chose, and the name
+ * carries `Key` so the compiler lists every screen that has to resolve one.
+ */
+export async function brandLogoProblemKey(file: File): Promise<TKey | null> {
   const extension = brandLogoExtension(file.type);
-  if (!extension) return 'ניתן להעלות לוגו PNG, JPEG או WebP בלבד.';
-  if (file.size > BRAND_LOGO_MAX_BYTES) return 'גודל הלוגו המרבי הוא 2MB.';
+  if (!extension) return 'branding.logoTypeUnsupported';
+  if (file.size > BRAND_LOGO_MAX_BYTES) return 'branding.logoTooLarge';
   const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
   const png = bytes.length >= 8
     && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, index) => bytes[index] === byte);
@@ -36,5 +42,5 @@ export async function brandLogoProblem(file: File) {
     && String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF'
     && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP';
   if ((extension === 'png' && png) || (extension === 'jpg' && jpeg) || (extension === 'webp' && webp)) return null;
-  return 'תוכן הקובץ אינו תואם לסוג התמונה שנבחר.';
+  return 'branding.logoContentMismatch';
 }

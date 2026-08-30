@@ -128,7 +128,7 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   expression reverted ⇒ 1 failed, restored ⇒ 11 passed. This is iron rule 7 arriving a second
   time, and the only thing that caught it was looking at the screen.
 
-- [ ] P2-G6: extraction is FINISHED — zero Hebrew outside the dictionaries and the documented exceptions
+- [x] P2-G6: extraction is FINISHED — zero Hebrew outside the dictionaries and the documented exceptions
   CHECK: node scripts/gate-i18n.mjs zero
   EXPECT: GATE_I18N_ZERO_OK
   EVIDENCE: pending — `exit=1`, `gate-i18n: extraction is not finished — 3634 Hebrew line(s) across 138 file(s)` (measured 28.08.2026 after PaymentRequests, Settings, Onboarding and InvoiceDetail; 4,982 at the start of the phase). **This oracle was replaced after the ledger's first run, and the ledger is what caught it.** It originally ran `ratchet`, which passes while thousands of lines remain, so the gate reported MET on its first day with 5,311 lines still hardcoded — the gate's English title and its command were measuring different things. `zero` fails until the count is actually zero.
@@ -601,6 +601,49 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   per locale; `extracted` reported 105 surfaces at zero, and `ratchet`, `abandon`,
   `currency-untouched`, `help-registry-paired` and `legacy-errors` all passed. `zero` still
   exits 1 on 20/11, so this gate remains open.
+
+  **MET, 30.08.2026. `node scripts/gate-i18n.mjs zero` exits 0:** `gate-i18n: nothing left to
+  extract; 44 documented exception(s) remain pinned`. The phase began this branch at 3,131
+  hardcoded Hebrew lines and this ledger opened at 5,311.
+
+  The last batch took the eleven remaining files. Eight reached zero - `AuthContext`,
+  `runSession`, `financialSuppliers`, `organizationBranding`, `password`, `platform`,
+  `serverList` and `main.tsx` - bringing the locked list to **113 surfaces**. Three did not, and
+  each is a protected class rather than unfinished work: `reason.ts` keeps the clause `reasonOr`
+  writes into `p_reason`, `orderDrafts.ts` keeps its fixed `p_reason`, and `nameKey.ts` keeps the
+  regex that strips the Hebrew quote marks a person types by hand so a spreadsheet name matches
+  a database name. All three are recorded on their baseline rows.
+
+  Four shapes recur in that batch and are worth naming, because each is a place where a string
+  had no reader to ask: a default in a PARAMETER LIST (`ActionMenu`, `ConfirmDialog`), a node
+  built at MODULE SCOPE (`PdfSourceView`), a pure module answering with a SENTENCE
+  (`organizationBranding`, `password`, `serverList`, `platform`), and a field whose NAME said key
+  while its contents were a sentence (`Summary.failures`, `ServerListPageReset.message`).
+
+  **A LIMIT OF THIS ORACLE, measured rather than assumed, and it changes how the gate must be
+  read.** `zero` never opens a source file. It reads `scripts/i18n-baseline.json`. A positive
+  control planted `const planted = '…'` in `src/lib/password.ts` - an extracted, non-exempt
+  surface - and BOTH `zero` and `extracted` still exited 0, because the baseline had not been
+  regenerated. `ratchet` is the half that scans source, and it failed immediately:
+  `src/lib/password.ts: NEW file with 1 Hebrew line(s), not in the baseline`. A second control,
+  planted in the exempt `format.ts`, was invisible to `zero` by design and caught by `ratchet` as
+  `45 → 46 (+1) — Hebrew was ADDED`.
+
+  So this gate is only true as a PAIR, on the same tree: `ratchet` proves the baseline still
+  describes the source, and `zero` proves that baseline has nothing left in it. Either one alone
+  can be green over a lie. Both were run on this commit, in that order.
+
+  Evidence on the final SHA: `zero`, `ratchet`, `extracted` (113 surfaces), `dictionaries`
+  (5,342 keys per locale, no Hebrew in the English one), `abandon`, `currency-untouched`,
+  `help-registry-paired` and `legacy-errors` all exit 0; `npx tsc --noEmit` exit 0;
+  `check:jsx-space` passed on 126 TSX files; the full suite passed **1,769/1,769**; Deno
+  assistant contracts passed 232/232.
+
+  **What this gate does NOT claim.** It measures SOURCE. `P2-G7` - no Hebrew word on a rendered
+  English screen - is a different measurement against a live DOM, its oracle does not exist yet,
+  and the two can disagree in both directions. `P2-G5` also stays open, and `DEBT §71` now
+  records that no balance-bearing screen can be photographed on this machine until the branch is
+  rebased onto the currency rework.
 
   One tooling hazard hit again while writing this batch and worth the line: a `\b` written through
   a shell heredoc arrives in the file as a real backspace character (0x08), silently turning

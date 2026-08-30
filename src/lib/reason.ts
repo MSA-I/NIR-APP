@@ -1,3 +1,5 @@
+import type { TKey } from './i18n/t.ts';
+
 /**
  * The reason an audited action carries, when nobody typed one.
  *
@@ -23,5 +25,11 @@ export function reasonOr(typed: string | null | undefined, action: string): stri
   return `${action} — ללא הערה מהמשתמש`;
 }
 
-/** The label for a reason box that no longer blocks the button. */
-export const OPTIONAL_REASON_LABEL = 'סיבה (רשות — נרשמת ביומן הביקורת)';
+/**
+ * The label for a reason box that no longer blocks the button.
+ *
+ * A key, unlike the clause above it: this one is read on a screen, while the clause is written
+ * into `p_reason` and lands in `audit_logs`, where a wording that followed the reader would make
+ * the ledger unsearchable.
+ */
+export const OPTIONAL_REASON_LABEL_KEY: TKey = 'reason.optionalLabel';

@@ -4,10 +4,12 @@ import { createClient } from '@supabase/supabase-js';
 import { server } from '../test/msw/server';
 import { SUPABASE_URL } from '../test/msw/handlers';
 import { toHebrewError } from './errors';
+import { he } from './i18n/dictionaries/he';
+import { en } from './i18n/dictionaries/en';
 import {
-  PAGE_NO_LONGER_EXISTS,
+  PAGE_NO_LONGER_EXISTS_KEY,
   SUPPLIER_SEARCH_ID_CAP,
-  SUPPLIER_SEARCH_NARROWED,
+  SUPPLIER_SEARCH_NARROWED_KEY,
   ServerListError,
   fetchServerList,
   formatSortParam,
@@ -201,10 +203,13 @@ describe('fetchServerList — a page that no longer exists', () => {
     expect(result.page).toBe(4);
     expect(result.rows).toHaveLength(2);
     expect(result.total).toBe(42);
-    expect(result.pageReset).toEqual({ requestedPage: 5, servedPage: 4, message: PAGE_NO_LONGER_EXISTS });
-    // Hebrew a business owner can act on, never "Requested range not satisfiable".
-    expect(result.pageReset?.message).toMatch(/[֐-׿]/);
-    expect(result.pageReset?.message).not.toContain('range');
+    expect(result.pageReset).toEqual({ requestedPage: 5, servedPage: 4, messageKey: PAGE_NO_LONGER_EXISTS_KEY });
+    // Split. The module answers with a key; each dictionary carries a sentence a business owner
+    // can act on, and neither is the server's "Requested range not satisfiable".
+    expect(he.serverList.pageNoLongerExists).toMatch(/[֐-׿]/);
+    expect(he.serverList.pageNoLongerExists).not.toContain('range');
+    expect(en.serverList.pageNoLongerExists).not.toContain('range');
+    expect(en.serverList.pageNoLongerExists).not.toMatch(/[֐-׿]/);
     // The 416, a count probe, then the page that exists.
     expect(seen.map((call) => call.method)).toEqual(['GET', 'HEAD', 'GET']);
     expect(result.cost.requests).toBe(3);
@@ -544,7 +549,9 @@ describe('searchSupplierIds — the two-step cross-table search', () => {
     // the search matches. Dropping the arm keeps the count honest; the screen must then show
     // SUPPLIER_SEARCH_NARROWED so the narrowing is visible rather than quiet.
     expect(result).toEqual({ ids: [], narrowed: true });
-    expect(SUPPLIER_SEARCH_NARROWED).toMatch(/[֐-׿]/);
+    expect(SUPPLIER_SEARCH_NARROWED_KEY).toBe('serverList.supplierSearchNarrowed');
+    expect(he.serverList.supplierSearchNarrowed).toMatch(/[֐-׿]/);
+    expect(en.serverList.supplierSearchNarrowed).not.toMatch(/[֐-׿]/);
   });
 
   it('returns every id at exactly the cap — 150 matches is not "too many"', async () => {

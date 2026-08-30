@@ -4442,6 +4442,7 @@ export const en: Dictionary = {
   },
 
   financialSupplier: {
+    israeliAccount: '{holder} · Bank {bank} · Branch {branch} · Account {account}',
     text: 'The supplier was not found',
     text_2: 'Business / company id:',
     fmtMoneyRounded: 'Open balance',
@@ -5099,6 +5100,7 @@ export const en: Dictionary = {
   },
 
   app: {
+    bootstrapTimeout: 'Loading the account details took too long.',
     text: 'This screen could not be loaded',
     text_2: 'The app may have been updated while this tab was open.',
     reload: 'Refresh and reload',
@@ -5636,6 +5638,39 @@ export const en: Dictionary = {
     refresh: 'Refresh',
     rowLabel: 'Inventory for {product}',
     adjustmentDescription: 'Current balance: {quantity}. The action will be recorded in the audit log.',
+  },
+
+  assistantRun: {
+    done: 'The check is complete',
+    failed: 'The request failed',
+    restoredOne: 'The previous check was loaded',
+    restoredMany: 'A previous conversation with {count} checks was loaded',
+  },
+
+  branding: {
+    logoTypeUnsupported: 'Only a PNG, JPEG or WebP logo can be uploaded.',
+    logoTooLarge: 'The largest logo size is 2MB.',
+    logoContentMismatch: 'The file content does not match the image type that was chosen.',
+  },
+
+  password: {
+    tooShort: 'The password must contain at least {min} characters.',
+    mismatch: 'The passwords do not match.',
+  },
+
+  reason: {
+    optionalLabel: 'Reason (optional — recorded in the audit log)',
+  },
+
+  serverList: {
+    pageNoLongerExists: 'The page you asked for no longer exists — rows may have been deleted meanwhile. The last existing page is shown.',
+    supplierSearchNarrowed: 'Too many supplier names match the search, so it ran on the screen columns only. Narrow the supplier name to search by supplier as well.',
+  },
+
+  appUpdate: {
+    title: 'A new version is ready',
+    body: 'Save any open work and refresh whenever it suits you.',
+    refresh: 'Refresh',
   },
 
   fab: {

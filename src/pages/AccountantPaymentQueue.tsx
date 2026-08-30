@@ -265,7 +265,7 @@ export default function AccountantPaymentQueue() {
         ...(suppliers.get(row.supplier_id) ?? {
           id: row.supplier_id, name: '—', tax_id: null, payment_terms: null, status: 'active', bank_details: null,
         }),
-        bank_details: formatSupplierBankAccount(bankAccounts.get(row.supplier_id)),
+        bank_details: formatSupplierBankAccount(bankAccounts.get(row.supplier_id), t),
       },
     }));
   });

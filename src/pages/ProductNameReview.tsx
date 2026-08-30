@@ -45,7 +45,7 @@ import { useId, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, Info, Pencil, RotateCcw, SkipForward } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Card, ICON, useToast } from '../components/ui';
-import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
+import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';
 import {
   MAX_DISPLAY_NAME_LENGTH,
   proposeDisplayName,
@@ -287,7 +287,7 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
               onChange={(event) => setDraft({ ...draft, value: event.target.value })} />
           </div>
           <div>
-            <label className="label" htmlFor={`${fieldId}-reason`}>{OPTIONAL_REASON_LABEL}</label>
+            <label className="label" htmlFor={`${fieldId}-reason`}>{t(OPTIONAL_REASON_LABEL_KEY)}</label>
             <textarea id={`${fieldId}-reason`} className="input" rows={2} maxLength={1000}
               value={draft.reason}
               onChange={(event) => setDraft({ ...draft, reason: event.target.value })} />

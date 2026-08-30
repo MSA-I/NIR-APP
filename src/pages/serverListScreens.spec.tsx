@@ -12,7 +12,14 @@ import { SUPABASE_URL } from '../test/msw/handlers';
 import { createAppQueryClient } from '../lib/query/client';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import { ToastProvider } from '../components/ui';
-import { PAGE_NO_LONGER_EXISTS, SUPPLIER_SEARCH_ID_CAP, SUPPLIER_SEARCH_NARROWED } from '../lib/serverList';
+import { PAGE_NO_LONGER_EXISTS_KEY, SUPPLIER_SEARCH_ID_CAP, SUPPLIER_SEARCH_NARROWED_KEY } from '../lib/serverList';
+import { translateIn } from '../lib/i18n/LocaleProvider';
+
+/* The screens render the key through the reader's dictionary, and the test environment is Hebrew
+   by default. Resolving here keeps the assertion about what a PERSON sees rather than about a
+   constant the module happens to export. */
+const PAGE_NO_LONGER_EXISTS = translateIn('he', PAGE_NO_LONGER_EXISTS_KEY);
+const SUPPLIER_SEARCH_NARROWED = translateIn('he', SUPPLIER_SEARCH_NARROWED_KEY);
 import { fmtMoneyExact } from '../lib/format';
 import { APP_ROUTE_POLICY } from '../lib/routePolicy';
 

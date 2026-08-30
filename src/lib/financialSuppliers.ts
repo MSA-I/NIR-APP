@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { fetchAll, fetchInChunks } from './supabasePaging';
 import { unwrap } from './useQuery';
 import type { SupplierBankDetails, SupplierBankMigrationItem } from './types';
+import type { TKey } from './i18n/t.ts';
 
 export interface FinancialSupplierDirectoryRow {
   id: string;
@@ -45,10 +46,27 @@ export async function financialSupplierBankAccountMap(ids: readonly string[]) {
   return new Map(rows.map((account) => [account.supplier_id!, account]));
 }
 
-export function formatSupplierBankAccount(account: SupplierBankDetails | null | undefined) {
+/**
+ * A pure module composing a line a person reads, so it takes the translator rather than a
+ * language — the precedent `model.ts` and `supplierLogChanges.ts` already set.
+ *
+ * The account holder, the numbers and `IBAN`/`BIC` are facts and stay exactly as they arrived;
+ * only the three Hebrew words naming which number is which were ever copy.
+ */
+export function formatSupplierBankAccount(
+  account: SupplierBankDetails | null | undefined,
+  t: (key: TKey, vars?: Record<string, string | number>) => string,
+) {
   if (!account) return null;
   if (account.country_code === 'IL') {
-    return `${account.account_holder} · בנק ${account.bank_code} · סניף ${account.branch_code} · חשבון ${account.account_number}`;
+    // `?? ''` rather than the previous template's behaviour: an absent code used to interpolate
+    // as the literal word `null` onto a payment screen, which reads as data.
+    return t('financialSupplier.israeliAccount', {
+      holder: account.account_holder,
+      bank: account.bank_code ?? '',
+      branch: account.branch_code ?? '',
+      account: account.account_number ?? '',
+    });
   }
   return `${account.account_holder} · IBAN ${account.iban}${account.bic ? ` · BIC ${account.bic}` : ''}`;
 }

@@ -24,7 +24,7 @@ import {
   type CanonicalBankImportRow,
 } from '../lib/bankImportWorkbook';
 import {
-  SUPPLIER_SEARCH_NARROWED,
+  SUPPLIER_SEARCH_NARROWED_KEY,
   fetchServerList,
   formatSortParam,
   monthRangePredicates,
@@ -153,7 +153,7 @@ export default function Bank() {
     const reset = data?.pageReset ?? null;
     if (!reset || reset === handledReset.current) return;
     handledReset.current = reset;
-    toast(reset.message);
+    toast(t(reset.messageKey));
     patchParams({ page: pageToParam(reset.servedPage) });
   }, [data, toast, patchParams]);
 
@@ -220,7 +220,7 @@ export default function Bank() {
         onRowClick={canOperateBank ? (r) => setSelected(r) : undefined}
         toolbar={
           <>
-            {data.narrowed && <span className="text-xs text-await-fg" role="status">{SUPPLIER_SEARCH_NARROWED}</span>}
+            {data.narrowed && <span className="text-xs text-await-fg" role="status">{t(SUPPLIER_SEARCH_NARROWED_KEY)}</span>}
             {idFilter && <button className="btn-ghost text-sm text-action" onClick={() => patchParams({ id: '', page: '' })}>{t('bank.patchParams')}</button>}
             <select className="input w-auto!" aria-label={t('bank.aria_label')} value={statusFilter} onChange={(e) => patchParams({ status: e.target.value, page: '' })}>
               <option value="">{t('bank.text_8')}</option>

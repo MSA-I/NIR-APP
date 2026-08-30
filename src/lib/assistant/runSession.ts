@@ -77,7 +77,7 @@ export function assistantAuthorizationFingerprint(
 export function useAssistantRunSession(
   authorizationFingerprint = 'assistant-authorization-unscoped',
 ): AssistantRunSession {
-  const { errorText: resolveError, locale } = useT();
+  const { errorText: resolveError, locale, t } = useT();
   const [question, setQuestion] = useState('');
   const [submittedQuestion, setSubmittedQuestion] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -140,7 +140,7 @@ export function useAssistantRunSession(
         setTurns((previous) => [...previous, { question: trimmed, result: next }]);
         setConversationId(next.conversation_id);
         setQuestion('');
-        setAnnouncement('הבדיקה הושלמה');
+        setAnnouncement(t('assistantRun.done'));
         return true;
       } catch (error) {
         if (
@@ -150,7 +150,7 @@ export function useAssistantRunSession(
         const raw = error instanceof Error ? error.message : String(error);
         setRawError(raw);
         setErrorText(resolveError(error));
-        setAnnouncement('הבקשה נכשלה');
+        setAnnouncement(t('assistantRun.failed'));
         return false;
       } finally {
         if (
@@ -198,7 +198,9 @@ export function useAssistantRunSession(
     setRawError(null);
     setErrorText(null);
     setAnnouncement(
-      restored.length === 1 ? 'הבדיקה הקודמת נטענה' : `נטענה שיחה קודמת עם ${restored.length} בדיקות`,
+      restored.length === 1
+        ? t('assistantRun.restoredOne')
+        : t('assistantRun.restoredMany', { count: restored.length }),
     );
     return true;
   }, [authorizationFingerprint]);

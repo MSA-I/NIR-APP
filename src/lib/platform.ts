@@ -119,7 +119,10 @@ async function invokeAdmin<T>(body: Record<string, unknown>): Promise<AdminOutco
     return { ok: false, message: error.message };
   }
 
-  if (!data) return { ok: false, message: 'הפונקציה לא החזירה תשובה' };
+  // A condition, like every other `message` this function returns: `Admin.tsx` already resolves
+  // them with `errorText`, and a Hebrew sentence matched no pattern there — so the one case this
+  // line exists to explain collapsed into the generic fallback.
+  if (!data) return { ok: false, message: 'platform_function_no_response' };
   return { ok: true, result: data };
 }
 

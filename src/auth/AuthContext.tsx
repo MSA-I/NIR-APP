@@ -6,6 +6,7 @@ import { unwrap } from '../lib/useQuery';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import { resolveRoleLabels } from '../lib/status';
 import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t.ts';
 import { cleanupPushBeforeSignOut } from '../lib/push';
 import {
   getRememberedOfflineBootstrap,
@@ -34,7 +35,12 @@ export interface SignOutResult {
  * user whose account was about to load.
  */
 export const BOOTSTRAP_TIMEOUT_MS = 15_000;
-export const BOOTSTRAP_TIMEOUT_MESSAGE = 'טעינת פרטי החשבון נמשכה זמן רב מדי.';
+/**
+ * A KEY, not a sentence. `bootstrapError` also carries raw server messages, so the boundary that
+ * draws it resolves with `tDynamic(...) ?? raw` — a known key becomes the reader's sentence, and
+ * anything else is shown exactly as it arrived, which is what a support conversation needs.
+ */
+export const BOOTSTRAP_TIMEOUT_KEY: TKey = 'app.bootstrapTimeout';
 
 interface AuthState {
   session: Session | null;
@@ -117,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // wedge; it makes the app recoverable without devtools.
     const watchdog = setTimeout(() => {
       if (cancelled) return;
-      setBootstrapError(BOOTSTRAP_TIMEOUT_MESSAGE);
+      setBootstrapError(BOOTSTRAP_TIMEOUT_KEY);
       setLoading(false);
     }, BOOTSTRAP_TIMEOUT_MS);
     (async () => {
