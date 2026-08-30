@@ -112,17 +112,17 @@ export default function ProductPurchaseSummary() {
       render: (r) => <span className="num">{fmtNum(r.received_qty)}</span> },
     { key: 'invoiced', header: t('productPurchase.text_7'), sortValue: (r) => r.invoiced_qty ?? -1,
       render: (r) => <span className="num">{fmtNum(r.invoiced_qty)}</span> },
-    { key: 'gross', header: 'הוצאה',
+    { key: 'gross', header: t('productPurchase.text_8'),
       /* Sorted on the base-currency figure when there is one: a column of spend across two
          currencies has no single ordering, and sorting on "the first entry" would silently rank
          by whichever currency happened to come back first. */
       sortValue: (r) => r.gross_amount_by_currency
         ?.find((entry) => entry.currency === org?.base_currency)?.amount ?? -1,
       render: (r) => <MoneyByCurrency amounts={r.gross_amount_by_currency} baseCurrency={org?.base_currency} /> },
-    { key: 'avg', header: 'מחיר יחידה ממוצע',
+    { key: 'avg', header: t('productPurchase.text_9'),
       sortValue: (r) => r.average_unit_price ?? -1,
       render: (r) => (r.spans_currencies
-        ? <span className="text-xs text-ink-muted">בכמה מטבעות</span>
+        ? <span className="text-xs text-ink-muted">{t('productPurchase.inSeveralCurrencies')}</span>
         : <span className="num">{fmtMoneyExact(r.average_unit_price, r.average_unit_price_currency)}</span>) },
     { key: 'sources', header: t('productPurchase.text_10'), priority: 3,
       sortValue: (r) => r.supplier_count,
@@ -163,22 +163,22 @@ export default function ProductPurchaseSummary() {
         // One column per currency would change shape with the data; one text column states every
         // figure with its own symbol and never adds two.
         await downloadWorkbook({
-          title: `ריכוז רכישות מוצרים — ${org.name}`,
-          subtitle: `${fmtDate(from)} – ${fmtDate(to)} · הופק ${fmtDate(todayISO())}`,
+          title: t('productPurchase.pdfTitle', { org: org.name }),
+          subtitle: t('productPurchase.pdfSubtitle', { from: fmtDate(from), to: fmtDate(to), generated: fmtDate(todayISO()) }),
           sheets: [{
-            name: 'רכישות מוצרים',
+            name: t('productPurchase.book_append_sheet'),
             columns: [
-              { header: 'מוצר', key: 'product', width: 32 },
-              { header: 'יחידה', key: 'unit', width: 10 },
-              { header: 'הוזמן', key: 'ordered', width: 10, type: 'number' },
-              { header: 'התקבל', key: 'received', width: 10, type: 'number' },
-              { header: 'חויב', key: 'invoiced', width: 10, type: 'number' },
-              { header: 'נרכש בפועל', key: 'canonical', width: 13, type: 'number' },
-              { header: 'מספר ספקים', key: 'suppliers', width: 12, type: 'number' },
-              { header: 'מספר הזמנות', key: 'orders', width: 12, type: 'number' },
-              { header: 'מספר חשבוניות', key: 'invoices', width: 13, type: 'number' },
-              { header: 'הוצאה ברוטו', key: 'gross', width: 20 },
-              { header: 'מחיר יחידה ממוצע', key: 'average', width: 20 },
+              { header: t('productPurchase.text_11'), key: 'product', width: 32 },
+              { header: t('productPurchase.formatUnit'), key: 'unit', width: 10 },
+              { header: t('productPurchase.text_12'), key: 'ordered', width: 10, type: 'number' },
+              { header: t('productPurchase.text_13'), key: 'received', width: 10, type: 'number' },
+              { header: t('productPurchase.text_14'), key: 'invoiced', width: 10, type: 'number' },
+              { header: t('productPurchase.text_15'), key: 'canonical', width: 13, type: 'number' },
+              { header: t('productPurchase.text_16'), key: 'suppliers', width: 12, type: 'number' },
+              { header: t('productPurchase.text_17'), key: 'orders', width: 12, type: 'number' },
+              { header: t('productPurchase.text_18'), key: 'invoices', width: 13, type: 'number' },
+              { header: t('productPurchase.text_19'), key: 'gross', width: 20 },
+              { header: t('productPurchase.text_20'), key: 'average', width: 20 },
             ],
             rows: data.products.map((row) => ({
               product: row.product_name,
@@ -193,7 +193,7 @@ export default function ProductPurchaseSummary() {
               gross: (row.gross_amount_by_currency ?? [])
                 .map((entry) => fmtMoneyExact(entry.amount, entry.currency)).join(' · '),
               average: row.spans_currencies
-                ? 'בכמה מטבעות'
+                ? t('productPurchase.inSeveralCurrencies')
                 : fmtMoneyExact(row.average_unit_price, row.average_unit_price_currency),
             })),
           }],
@@ -250,10 +250,10 @@ export default function ProductPurchaseSummary() {
           <p className="flex items-start gap-2 text-sm">
             <AlertTriangle size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
             <span>
-              <span className="num">{data.unmapped_invoice_lines}</span> שורות חשבונית בסך
+              <span className="num">{data.unmapped_invoice_lines}</span> {t('productPurchase.unmappedLinesLead')}
               <MoneyByCurrency amounts={data.unmapped_invoice_amount_by_currency}
-                baseCurrency={org?.base_currency} className="mx-1" /> לא שויכו
-              לשורת הזמנה, ולכן אינן נספרות באף מוצר. הן ממתינות למיפוי ידני.
+                baseCurrency={org?.base_currency} className="mx-1" /> {t('productPurchase.unmappedLinesMiddle')}
+              {t('productPurchase.unmappedLinesTail')}
             </span>
           </p>
         </Note>

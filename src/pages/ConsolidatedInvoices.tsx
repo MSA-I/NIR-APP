@@ -523,15 +523,14 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
 
       <Card pad={false} clip>
         <dl className="grid grid-cols-1 divide-y divide-line-soft sm:grid-cols-3 sm:divide-x sm:divide-y-0 sm:divide-x-reverse">
-          <div className="p-4"><dt className="text-xs text-ink-muted">סכום העוגן</dt><dd className="mt-1 text-lg font-semibold">{money(workspace.anchor?.total_amount ?? null, caseCurrency)}</dd></div>
-          <div className="p-4"><dt className="text-xs text-ink-muted">חשבוניות ביניים</dt><dd className="mt-1 text-lg font-semibold">{money(interimTotal, caseCurrency)}</dd></div>
-          <div className="p-4"><dt className="text-xs text-ink-muted">קבלות שהושלמו</dt><dd className="mt-1 text-lg font-semibold">{money(receiptTotal, caseCurrency)}</dd></div>
+          <div className="p-4"><dt className="text-xs text-ink-muted">{t('consolidated.money_2')}</dt><dd className="mt-1 text-lg font-semibold">{money(workspace.anchor?.total_amount ?? null, caseCurrency)}</dd></div>
+          <div className="p-4"><dt className="text-xs text-ink-muted">{t('consolidated.money_3')}</dt><dd className="mt-1 text-lg font-semibold">{money(interimTotal, caseCurrency)}</dd></div>
+          <div className="p-4"><dt className="text-xs text-ink-muted">{t('consolidated.money_4')}</dt><dd className="mt-1 text-lg font-semibold">{money(receiptTotal, caseCurrency)}</dd></div>
         </dl>
         {outOfCurrencySources.length > 0 && (
           <p className="border-t border-line-soft px-4 py-3 text-xs text-await-fg">
-            <span className="num">{outOfCurrencySources.length}</span> מקורות נקובים במטבע אחר מהעוגן
-            ({[...new Set(outOfCurrencySources.map((source) => source.currency))].join(', ')}) ואינם נכללים
-            בסכומים שלמעלה. הם מופיעים בטבלת המקורות, כל אחד במטבע שלו.
+            <span className="num">{outOfCurrencySources.length}</span> {t('consolidated.outOfCurrencySourcesLead')}
+            ({[...new Set(outOfCurrencySources.map((source) => source.currency))].join(', ')}{t('consolidated.outOfCurrencySourcesTail')}
           </p>
         )}
       </Card>
@@ -544,10 +543,10 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
         {workspace.anchor ? (
           <div className="space-y-4">
           <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div><dt className="text-xs text-ink-muted">מספר חשבונית</dt><dd className="num mt-1 font-medium" dir="ltr">{workspace.anchor.invoice_number}</dd></div>
-            <div><dt className="text-xs text-ink-muted">תאריך</dt><dd className="num mt-1 font-medium">{fmtDate(workspace.anchor.invoice_date)}</dd></div>
-            <div><dt className="text-xs text-ink-muted">לפני מע״מ</dt><dd className="mt-1 font-medium">{money(workspace.anchor.amount_before_vat, workspace.anchor.currency)}</dd></div>
-            <div><dt className="text-xs text-ink-muted">סה״כ</dt><dd className="mt-1 font-medium">{money(workspace.anchor.total_amount, workspace.anchor.currency)}</dd></div>
+            <div><dt className="text-xs text-ink-muted">{t('consolidated.text_31')}</dt><dd className="num mt-1 font-medium" dir="ltr">{workspace.anchor.invoice_number}</dd></div>
+            <div><dt className="text-xs text-ink-muted">{t('consolidated.fmtDate')}</dt><dd className="num mt-1 font-medium">{fmtDate(workspace.anchor.invoice_date)}</dd></div>
+            <div><dt className="text-xs text-ink-muted">{t('consolidated.money_5')}</dt><dd className="mt-1 font-medium">{money(workspace.anchor.amount_before_vat, workspace.anchor.currency)}</dd></div>
+            <div><dt className="text-xs text-ink-muted">{t('consolidated.money_6')}</dt><dd className="mt-1 font-medium">{money(workspace.anchor.total_amount, workspace.anchor.currency)}</dd></div>
           </dl>
           <div className="flex flex-wrap gap-2">
             {workspace.anchor.document_ids.map((documentId, index) => (

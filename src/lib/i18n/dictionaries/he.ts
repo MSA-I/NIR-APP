@@ -416,6 +416,9 @@ export const he = {
   },
 
   settings: {
+    undoAction: 'ביטול הפעולה',
+    enableUndone: 'ההפעלה בוטלה — המשתמש מושבת',
+    disableUndone: 'ההשבתה בוטלה — המשתמש פעיל',
     languageTitle: 'שפת הממשק',
     languageHint: 'השפה נבחרת אוטומטית לפי הדפדפן. בחירה כאן גוברת עליה ונשמרת לחשבון שלך.',
     languageOptionHe: 'עברית',
@@ -605,7 +608,7 @@ export const he = {
     trim: 'שם ספק הוא שדה חובה',
     toast_5: 'לא ניתן לעדכן פרטי בנק לפני טעינת המידע הקיים',
     toast_6: 'הספק עודכן',
-    toast_7: 'הספק נוצר — פרטי הבנק דורשים אימות וסיבה',
+    toast_7: 'הספק נוצר — פרטי הבנק דורשים אימות זהות',
     toast_8: 'הספק נוצר',
     toast_9: 'פרטי הבנק עודכנו ונרשמו ביומן הביקורת',
     toast_10: 'פרטי הבנק לא עודכנו — שאר השדות נשמרו',
@@ -710,6 +713,9 @@ export const he = {
     editTitle: 'עריכת ספק — {name}',
     newTitle: 'ספק חדש',
     savingStatus: 'שומר את פרטי הספק',
+    savingBankStatus: 'שומר את פרטי הבנק',
+    minimumOrderInCurrency: 'מינימום הזמנה ({currency})',
+    minimumOrderCurrencyHint: 'במטבע ברירת המחדל של הספק.',
     bankChangeMessage: 'פרטי הבנק של ״{name}״ יעודכנו לחשבון {country} שמסתיים ב־{last4}. השינוי דורש אימות סיסמה טרי ונרשם ביומן הביקורת.',
     bankRemoveMessage: 'פרטי הבנק של ״{name}״ יוסרו. השינוי דורש אימות סיסמה טרי ונרשם ביומן הביקורת.',
     tabOrders: 'הזמנות ({count})',
@@ -857,6 +863,10 @@ export const he = {
     updatedAt: 'עודכן ב-',
     noDataAvailable: 'אין נתונים זמינים',
     openInvoicesCount: '{count} חשבוניות פתוחות',
+    openInvoicesAria: 'יתרת חשבוניות פתוחות: {count} חשבוניות',
+    trendsInBaseCurrency: 'המגמות והתמהיל מוצגים ב־{base}. קיימת פעילות גם ב־{others}, והיא אינה מחוברת אליהם.',
+    dueWindowOtherOnly: 'דרישות התשלום הפעילות הן ב־{others} בלבד. ראו את מסך דרישות התשלום.',
+    dueWindowAlsoOther: 'בנוסף קיימות דרישות ב־{others}, שאינן מחוברות לסכום הזה.',
     paidThisMonth: 'שולם לספקים החודש',
     estimatedSaving: 'חיסכון משוער {amount}',
     estimatedSavingWithPct: 'חיסכון משוער {amount} · {percent}%',
@@ -870,6 +880,11 @@ export const he = {
   },
 
   orders: {
+    toastPdf: 'קובץ ה-PDF הורד',
+    exportPdf: 'הורדת ההזמנה כקובץ PDF מעוצב עם הלוגו של הארגון',
+    exportPdfLabel: 'הורדת PDF',
+    belowMinimumNote: 'שים לב: סכום ההזמנה ({total}) נמוך ממינימום ההזמנה של הספק ({minimum}).',
+    minimumCurrencyMismatch: 'ההזמנה במטבע {orderCurrency} ומינימום ההזמנה של הספק נקוב ב-{supplierCurrency} ({minimum}), ולכן אין כאן בדיקת מינימום.',
     toast: 'ההזמנה בוטלה',
     toast_2: 'ההזמנה סומנה כנשלחה לספק',
     cancelOrderDraft: 'ביטול טיוטה',
@@ -2565,6 +2580,8 @@ export const he = {
   },
 
   consolidated: {
+    outOfCurrencySourcesLead: 'מקורות נקובים במטבע אחר מהעוגן',
+    outOfCurrencySourcesTail: ') ואינם נכללים בסכומים שלמעלה. הם מופיעים בטבלת המקורות, כל אחד במטבע שלו.',
     spansCurrencies: 'שורות הקבלה נקובות ביותר ממטבע אחד',
     text: 'חשבונית מרכזת',
     text_2: 'העלאת העמודים לא הושלמה. אפשר לנסות שוב בלי ליצור פעולה חדשה.',
@@ -4347,6 +4364,12 @@ export const he = {
     text_19: 'הוצאה ברוטו',
     text_20: 'מחיר יחידה ממוצע',
     book_append_sheet: 'רכישות מוצרים',
+    inSeveralCurrencies: 'בכמה מטבעות',
+    pdfTitle: 'ריכוז רכישות מוצרים — {org}',
+    pdfSubtitle: '{from} – {to} · הופק {generated}',
+    unmappedLinesLead: 'שורות חשבונית בסך',
+    unmappedLinesMiddle: 'לא שויכו',
+    unmappedLinesTail: 'לשורת הזמנה, ולכן אינן נספרות באף מוצר. הן ממתינות למיפוי ידני.',
     toast: 'קובץ ה-Excel הורד',
     title: 'סיכום רכישות מוצרים',
     text_21: 'מכין קובץ…',
@@ -4651,6 +4674,9 @@ export const he = {
   },
 
   payments: {
+    settlementActual: 'ירד מהחשבון בפועל',
+    settlementRate: 'שער שנגזר מהתשלום',
+    settlementNote: 'החוב נסגר ב-{currency}. השער מחושב מתוך שני הסכומים שנרשמו בתשלום הזה ואינו נשמר במערכת.',
     text: 'ספק',
     fmtDate: 'תאריך',
     fmtMoneyExact: 'סכום',

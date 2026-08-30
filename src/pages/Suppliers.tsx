@@ -198,13 +198,13 @@ export function SuppliersList() {
     { key: 'rating', header: t('suppliers.text_7'), priority: 3, className: 'num', sortValue: (r) => r.rating ?? 0, render: (r) => r.rating != null
         ? <span className="inline-flex items-center gap-1"><Star size={ICON.xs} className="fill-star text-star" aria-hidden="true" />{r.rating}</span>
         : <span className="text-ink-ghost">—</span> },
-    { key: 'cats', header: 'קטגוריות', priority: 3, render: (r) => <span className="text-ink-muted">{r.categories?.join(', ') || '—'}</span> },
-    { key: 'contact', header: 'איש קשר', priority: 3, render: (r) => r.contact_name || '—' },
-    { key: 'phone', header: 'טלפון', render: (r) => <span dir="ltr">{r.phone || '—'}</span> },
-    { key: 'min', header: 'מינ׳ הזמנה', priority: 3, className: 'num', sortValue: (r) => r.min_order_amount ?? 0, render: (r) => fmtMoneyExact(r.min_order_amount, r.default_currency) },
-    { key: 'risk', header: 'התראות', mobileLabel: null, render: (r) => <RiskCell m={r.metrics} /> },
+    { key: 'cats', header: t('suppliers.join'), priority: 3, render: (r) => <span className="text-ink-muted">{r.categories?.join(', ') || '—'}</span> },
+    { key: 'contact', header: t('suppliers.text_8'), priority: 3, render: (r) => r.contact_name || '—' },
+    { key: 'phone', header: t('suppliers.text_9'), render: (r) => <span dir="ltr">{r.phone || '—'}</span> },
+    { key: 'min', header: t('suppliers.fmtMoneyExact'), priority: 3, className: 'num', sortValue: (r) => r.min_order_amount ?? 0, render: (r) => fmtMoneyExact(r.min_order_amount, r.default_currency) },
+    { key: 'risk', header: t('suppliers.text_10'), mobileLabel: null, render: (r) => <RiskCell m={r.metrics} /> },
     {
-      key: 'balance', header: 'יתרה פתוחה', className: 'num',
+      key: 'balance', header: t('suppliers.balanceHeader'), className: 'num',
       /* Sorted on the organisation's own currency: a column holding two currencies has no single
          ordering, and ranking by "the first entry" would order the table by whichever currency
          came back first. */
@@ -214,7 +214,7 @@ export function SuppliersList() {
         : <MoneyByCurrency amounts={r.open_balances} baseCurrency={org?.base_currency}
             className={r.open_balances.some((entry) => entry.amount > 0) ? 'text-await-fg font-medium' : ''} />),
     },
-    { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} /> },
+    { key: 'status', header: t('suppliers.text_11'), priority: 3, render: (r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} /> },
   ];
 
   if (loading) return <SkeletonTable cols={7} />;
@@ -490,7 +490,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
       if (nextBank) {
         // #106: the row exists bank-less; the details now take the same reasoned step-up
         // path a change to an existing supplier takes.
-        toast('הספק נוצר — פרטי הבנק דורשים אימות זהות');
+        toast(t('suppliers.toast_7'));
         startBankStep(nextBank, (res.data as { id: string }).id);
         return;
       }
@@ -518,7 +518,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
     // On failure the step-up dialog comes back for a retry — this time without the fresh-JWT skip,
     // so the retry is a deliberate act. The other fields are already saved.
     if (res.error) { toast(errorText(res.error.message), 'error'); setBankPrompt('retry'); return; }
-    toast('פרטי הבנק עודכנו ונרשמו ביומן הביקורת');
+    toast(t('suppliers.toast_9'));
     setBankStep(null);
     onSaved();
   }
@@ -535,9 +535,9 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   const days = [t('suppliers.text_15'), t('suppliers.text_16'), t('suppliers.text_17'), t('suppliers.text_18'), t('suppliers.text_19'), t('suppliers.text_20'), t('suppliers.text_21')];
 
   return (
-    <Modal open onClose={onClose} title={supplier ? `עריכת ספק — ${supplier.name}` : 'ספק חדש'} wide
+    <Modal open onClose={onClose} title={supplier ? t('suppliers.editTitle', { name: supplier.name }) : t('suppliers.newTitle')} wide
       busy={busy || bankBusy}
-      statusMessage={busy ? 'שומר את פרטי הספק' : bankBusy ? 'שומר את פרטי הבנק' : undefined}>
+      statusMessage={busy ? t('suppliers.savingStatus') : bankBusy ? t('suppliers.savingBankStatus') : undefined}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><label className="label" htmlFor="supplier-name">{t('suppliers.set')}</label><input id="supplier-name" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-tax-id">{t('suppliers.set_2')}</label><input id="supplier-tax-id" className="input" dir="ltr" value={f.tax_id} onChange={(e) => set('tax_id', e.target.value)} /></div>
@@ -558,14 +558,14 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
                 : [...f.delivery_days, day].sort());
             }} />
         </div>
-        <div><label className="label" htmlFor="supplier-cutoff">שעת סגירת הזמנות</label><input id="supplier-cutoff" type="time" className="input" value={f.cutoff_time} onChange={(e) => set('cutoff_time', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-cutoff">{t('suppliers.set_7')}</label><input id="supplier-cutoff" type="time" className="input" value={f.cutoff_time} onChange={(e) => set('cutoff_time', e.target.value)} /></div>
         {/* The currency comes from the supplier row, never from a symbol typed into the label.
             `currency-baseline.json` records that min_order_amount is stated in
             `suppliers.default_currency`, and a euro supplier's minimum was being labelled ₪.
             A supplier that does not exist yet has no currency to name, so the label does not
             invent one — it says where the currency comes from instead. */}
-        <div><label className="label" htmlFor="supplier-minimum">{supplier ? `מינימום הזמנה (${supplier.default_currency})` : 'מינימום הזמנה'}</label><input id="supplier-minimum" type="number" className="input num" value={f.min_order_amount} onChange={(e) => set('min_order_amount', e.target.value)} />{!supplier && <p className="text-xs text-ink-muted mt-1">במטבע ברירת המחדל של הספק.</p>}</div>
-        <div><label className="label" htmlFor="supplier-payment-terms">תנאי תשלום</label><input id="supplier-payment-terms" className="input" placeholder="שוטף + 30" value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-minimum">{supplier ? t('suppliers.minimumOrderInCurrency', { currency: supplier.default_currency }) : t('suppliers.fmtMoneyExact_3')}</label><input id="supplier-minimum" type="number" className="input num" value={f.min_order_amount} onChange={(e) => set('min_order_amount', e.target.value)} />{!supplier && <p className="text-xs text-ink-muted mt-1">{t('suppliers.minimumOrderCurrencyHint')}</p>}</div>
+        <div><label className="label" htmlFor="supplier-payment-terms">{t('suppliers.text_23')}</label><input id="supplier-payment-terms" className="input" placeholder={t('suppliers.placeholder')} value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} /></div>
         <SubPanel className="sm:col-span-2 space-y-3">
           <div>
             <label className="label" htmlFor="supplier-bank-kind">{t('suppliers.text_24')}</label>
@@ -646,7 +646,13 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         open={bankPrompt !== 'closed'}
         skipWhenFresh={false}
         title={t('suppliers.title_4')}
-        details={`פרטי הבנק של ״${supplier?.name ?? f.name}״ ${bankStep?.nextBank ? `יעודכנו לחשבון ${bankStep.nextBank.country_code} שמסתיים ב־${(bankStep.nextBank.account_number ?? bankStep.nextBank.iban ?? '').slice(-4)}` : 'יוסרו'}, והשינוי יירשם ביומן הביקורת.`}
+        details={bankStep?.nextBank
+          ? t('suppliers.bankChangeMessage', {
+            name: supplier?.name ?? f.name,
+            country: bankStep.nextBank.country_code,
+            last4: (bankStep.nextBank.account_number ?? bankStep.nextBank.iban ?? '').slice(-4),
+          })
+          : t('suppliers.bankRemoveMessage', { name: supplier?.name ?? f.name })}
         reasonLabel={t(OPTIONAL_REASON_LABEL_KEY)}
         onConfirm={(_session, reason) => {
           setBankPrompt('closed');
@@ -766,11 +772,11 @@ export function SupplierCard() {
     // balance === null means the balance reader is owner-gated for this caller, and a green
     // ₪0.00 there would be a fabricated measurement, not a permission message.
     data.balances === null
-      ? { label: 'יתרה פתוחה', value: '—', sub: 'זמין לבעלים בלבד', tone: 'idle' }
+      ? { label: t('suppliers.text_37'), value: '—', sub: t('suppliers.text_38'), tone: 'idle' }
       /* THE ROW #277 IS ABOUT. Two currencies are two balances, listed one under the other, and
          never a sum: ₪12,400 plus $3,100 is not 15,500, it is not a number at all. */
       : {
-        label: 'יתרה פתוחה',
+        label: t('suppliers.text_37'),
         value: data.balances.length
           ? data.balances.map((entry) => fmtMoneyExact(entry.amount, entry.currency)).join(' · ')
           : '—',
@@ -786,13 +792,13 @@ export function SupplierCard() {
     // No supplier_metrics row = the counts were never computed, which is not the same claim as
     // "zero open exceptions". fmtNum(null) renders — so the tile stays honest (constitution §"אין ערכים
     // סטטיים מזויפים"), matching how OTD and lead time above already behave.
-    { label: 'חריגים פתוחים', value: fmtNum(m?.open_exceptions ?? null), sub: m ? `${fmtNum(m.exceptions_lifetime)} בסה״כ` : 'טרם חושבו מדדים', tone: (m?.open_exceptions ?? 0) > 0 ? 'alert' : 'idle' },
+    { label: t('suppliers.openExceptions'), value: fmtNum(m?.open_exceptions ?? null), sub: m ? t('suppliers.exceptionsLifetime', { count: fmtNum(m.exceptions_lifetime) }) : t('suppliers.metricsNotComputed'), tone: (m?.open_exceptions ?? 0) > 0 ? 'alert' : 'idle' },
     /* 0223: the amount is null when this supplier holds open credits in more than one currency,
        because the view refuses to add them — the count is still true, and the sub-line says so. */
-    { label: 'זיכויים פתוחים', value: fmtNum(m?.open_credits ?? null), sub: fmtMoneyExact(m?.open_credits_amount ?? null, m?.open_credits_currency), tone: (m?.open_credits ?? 0) > 0 ? 'await' : 'idle' },
-    { label: t('suppliers.priceChanges90'), value: fmtNum(m?.price_changes_window ?? null), sub: m ? `${fmtNum(m.priced_items)} פריטים` : 'טרם חושבו מדדים', tone: 'idle' },
-    { label: 'מינימום הזמנה', value: fmtMoneyExact(s.min_order_amount, s.default_currency), tone: 'idle' },
-    { label: 'תנאי תשלום', value: s.payment_terms ?? '—', tone: 'idle', numeric: false },
+    { label: t('suppliers.fmtNum'), value: fmtNum(m?.open_credits ?? null), sub: fmtMoneyExact(m?.open_credits_amount ?? null, m?.open_credits_currency), tone: (m?.open_credits ?? 0) > 0 ? 'await' : 'idle' },
+    { label: t('suppliers.priceChanges90'), value: fmtNum(m?.price_changes_window ?? null), sub: m ? t('suppliers.pricedItems', { count: fmtNum(m.priced_items) }) : t('suppliers.metricsNotComputed'), tone: 'idle' },
+    { label: t('suppliers.fmtMoneyExact_3'), value: fmtMoneyExact(s.min_order_amount, s.default_currency), tone: 'idle' },
+    { label: t('suppliers.text_40'), value: s.payment_terms ?? '—', tone: 'idle', numeric: false },
   ];
 
   return (
@@ -864,23 +870,23 @@ export function SupplierCard() {
           </Note>
         )}
         <DataTable rows={data.invoices} columns={[
-          { key: 'num', header: 'מס׳ חשבונית', className: 'num', render: (r: Invoice) => r.invoice_number },
-          { key: 'date', header: 'תאריך', sortValue: (r: Invoice) => r.invoice_date, render: (r: Invoice) => fmtDate(r.invoice_date) },
-          { key: 'total', header: 'סה״כ', className: 'num', sortValue: (r: Invoice) => r.total_amount, render: (r: Invoice) => fmtMoneyExact(r.total_amount, r.currency) },
-          { key: 'review', header: 'בדיקה', render: (r: Invoice) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
-          { key: 'payment', header: 'תשלום', render: (r: Invoice) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
-        ]} rowLabel={(r) => `חשבונית ${r.invoice_number} של ${s.name}`} onRowClick={(r) => navigate(`/invoices/${r.id}`)} emptyTitle="אין חשבוניות לספק זה" />
+          { key: 'num', header: t('suppliers.text_45'), className: 'num', render: (r: Invoice) => r.invoice_number },
+          { key: 'date', header: t('suppliers.fmtDate_3'), sortValue: (r: Invoice) => r.invoice_date, render: (r: Invoice) => fmtDate(r.invoice_date) },
+          { key: 'total', header: t('suppliers.fmtMoneyExact_4'), className: 'num', sortValue: (r: Invoice) => r.total_amount, render: (r: Invoice) => fmtMoneyExact(r.total_amount, r.currency) },
+          { key: 'review', header: t('suppliers.text_46'), render: (r: Invoice) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
+          { key: 'payment', header: t('suppliers.text_47'), render: (r: Invoice) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
+        ]} rowLabel={(r) => t('suppliers.invoiceRowLabel', { number: r.invoice_number, supplier: s.name })} onRowClick={(r) => navigate(`/invoices/${r.id}`)} emptyTitle={t('suppliers.noInvoices')} />
         </TabPanel>
       )}
       {tab === 'payments' && (
         <TabPanel idPrefix="supplier" tabKey="payments">
         {data.payments ? (
           <DataTable rows={data.payments} columns={[
-            { key: 'date', header: 'תאריך', sortValue: (r: Payment) => r.paid_date, render: (r: Payment) => fmtDate(r.paid_date) },
-            { key: 'amount', header: 'סכום', className: 'num', sortValue: (r: Payment) => r.amount, render: (r: Payment) => fmtMoneyExact(r.amount, r.currency) },
-            { key: 'method', header: 'אמצעי', render: (r: Payment) => r.method ?? '—' },
-            { key: 'ref', header: 'אסמכתא', className: 'num', render: (r: Payment) => <span dir="ltr">{r.reference ?? '—'}</span> },
-          ]} emptyTitle="אין תשלומים לספק זה" />
+            { key: 'date', header: t('suppliers.fmtDate_4'), sortValue: (r: Payment) => r.paid_date, render: (r: Payment) => fmtDate(r.paid_date) },
+            { key: 'amount', header: t('suppliers.fmtMoneyExact_5'), className: 'num', sortValue: (r: Payment) => r.amount, render: (r: Payment) => fmtMoneyExact(r.amount, r.currency) },
+            { key: 'method', header: t('suppliers.text_48'), render: (r: Payment) => r.method ?? '—' },
+            { key: 'ref', header: t('suppliers.text_49'), className: 'num', render: (r: Payment) => <span dir="ltr">{r.reference ?? '—'}</span> },
+          ]} emptyTitle={t('suppliers.emptyTitle_2')} />
         ) : (
           <Note tone="info">{t('suppliers.text_50')}</Note>
         )}
@@ -889,12 +895,12 @@ export function SupplierCard() {
       {tab === 'credits' && (
         <TabPanel idPrefix="supplier" tabKey="credits">
         <DataTable rows={data.credits} columns={[
-          { key: 'num', header: 'מס׳', className: 'num', render: (r: CreditRequest) => `#${r.number}` },
-          { key: 'reason', header: 'סיבה', render: (r: CreditRequest) => CREDIT_REASON[r.reason] },
-          { key: 'amount', header: 'סכום', className: 'num', sortValue: (r: CreditRequest) => r.amount, render: (r: CreditRequest) => fmtMoneyExact(r.amount, r.currency) },
-          { key: 'status', header: 'סטטוס', render: (r: CreditRequest) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
-          { key: 'date', header: 'נפתח', sortValue: (r: CreditRequest) => r.created_at, render: (r: CreditRequest) => fmtDate(r.created_at) },
-        ]} rowLabel={(r) => `דרישת זיכוי מספר ${r.number} עבור ${s.name}`} onRowClick={() => navigate('/credits')} emptyTitle="אין זיכויים לספק זה" />
+          { key: 'num', header: t('suppliers.numberHeader'), className: 'num', render: (r: CreditRequest) => `#${r.number}` },
+          { key: 'reason', header: t('suppliers.statusLabel'), render: (r: CreditRequest) => CREDIT_REASON[r.reason] },
+          { key: 'amount', header: t('suppliers.fmtMoneyExact_6'), className: 'num', sortValue: (r: CreditRequest) => r.amount, render: (r: CreditRequest) => fmtMoneyExact(r.amount, r.currency) },
+          { key: 'status', header: t('suppliers.text_51'), render: (r: CreditRequest) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
+          { key: 'date', header: t('suppliers.fmtDate_5'), sortValue: (r: CreditRequest) => r.created_at, render: (r: CreditRequest) => fmtDate(r.created_at) },
+        ]} rowLabel={(r) => t('suppliers.creditRowLabel', { number: r.number, supplier: s.name })} onRowClick={() => navigate('/credits')} emptyTitle={t('suppliers.noCredits')} />
         </TabPanel>
       )}
       {tab === 'prices' && (
@@ -956,9 +962,9 @@ function SupplierPricesTab({ rows, history, submissions }: {
   }, [rows]);
 
   const columns: Column<PricedProduct>[] = [
-    { key: 'product', header: 'מוצר', sortValue: (r) => productLabel(r.product), render: (r) => <bdi className="font-medium text-ink">{productLabel(r.product)}</bdi> },
-    { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price, r.currency)}</span> },
-    { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => fmtMoneyExact(r.previous_price, r.currency) },
+    { key: 'product', header: t('suppliers.productLabel'), sortValue: (r) => productLabel(r.product), render: (r) => <bdi className="font-medium text-ink">{productLabel(r.product)}</bdi> },
+    { key: 'price', header: t('suppliers.fmtMoneyExact_7'), className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price, r.currency)}</span> },
+    { key: 'prev', header: t('suppliers.fmtMoneyExact_8'), className: 'num', render: (r) => fmtMoneyExact(r.previous_price, r.currency) },
     {
       key: 'change', header: t('suppliers.text_52'), sortValue: changePct,
       render: (r) => {

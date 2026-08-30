@@ -43,7 +43,9 @@
     "src/lib/dashboardSeries.ts": "One line stays: CATEGORY_NAMED_OTHER, the Hebrew word a PERSON may have given one of their own categories. It is data recognition - the row is folded into the aggregate so one chart never shows two buckets carrying the same word - and translating it would put that collision back on the screen. The aggregate row this module makes up carries no name at all now, only aggregate: true; the word for it is copy and is resolved at the render boundary.",
     "src/lib/reason.ts": "One line stays: the clause reasonOr writes when nobody typed a note. It is the value that goes into p_reason and lands in audit_logs - iron rule, HANDOFF-20260827 section 9. A ledger whose wording depended on who was reading would be a ledger nobody can search. The box's LABEL, which is read on a screen rather than written to the ledger, moved to OPTIONAL_REASON_LABEL_KEY.",
     "src/lib/nameKey.ts": "One line: the normalisation regex strips the Hebrew quote marks a person types by hand (gershayim/geresh) so a name from a spreadsheet matches a name in the database. Input recognition, not copy - removing the Hebrew range would stop the three-way match from recognising names it matches today.",
-    "src/lib/orderDrafts.ts": "One line: the fixed p_reason for finalising an order draft, which lands in audit_logs. Same iron rule as reason.ts and offlineQueue.ts."
+    "src/lib/orderDrafts.ts": "One line: the fixed p_reason for finalising an order draft, which lands in audit_logs. Same iron rule as reason.ts and offlineQueue.ts.",
+    "src/pages/Suppliers.tsx": "Iron rule, docs/HANDOFF-english-language-20260827.md section 9: audit_logs is evidence and is never translated. The one line that stays is BANK_DETAILS_ACTION, the reasonOr() fallback written into p_reason when someone changes a supplier's bank details without typing a reason. Everything a person READS on this surface was extracted, including all twenty-four table headers across the list and the five card tabs. Same split as PaymentRequests.tsx and the other seven.",
+    "src/pages/Settings.tsx": "Iron rule, docs/HANDOFF-english-language-20260827.md section 9: audit_logs is evidence and is never translated. The three lines that stay carry five reasons into p_reason — enabling a user, disabling one, undoing either, and changing a role. `manage_profile_access` refuses a blank reason (0061:257) and nobody types one any more, so the ledger gets a sentence that names the direction; a ledger whose wording depends on who was reading it cannot be searched. NOTE: `settings.text_47`/`text_48` hold English for two of these reasons — the English branch translated them, which is exactly what this class forbids. They are left in the dictionary unused rather than wired."
   },
   "counts": {
     "src/App.tsx": 3,
@@ -101,28 +103,22 @@
     "src/pages/AcceptOperatorInvite.tsx": 17,
     "src/pages/AccountantPaymentQueue.tsx": 22,
     "src/pages/Bank.tsx": 18,
-    "src/pages/ConsolidatedInvoices.tsx": 10,
-    "src/pages/Dashboard.tsx": 28,
     "src/pages/DocumentOperations.tsx": 2,
     "src/pages/DocumentReview.tsx": 1,
-    "src/pages/FinancialSupplier.tsx": 6,
     "src/pages/Inventory.tsx": 1,
     "src/pages/InvoiceDetail.tsx": 11,
     "src/pages/InvoiceNew.tsx": 2,
     "src/pages/Onboarding.tsx": 22,
-    "src/pages/Orders.tsx": 13,
     "src/pages/PaymentRequests.tsx": 26,
-    "src/pages/Payments.tsx": 16,
     "src/pages/PriceLists.tsx": 12,
     "src/pages/Pricing.tsx": 4,
     "src/pages/ProductNameRepairReview.tsx": 1,
     "src/pages/ProductNameReview.tsx": 2,
-    "src/pages/ProductPurchaseSummary.tsx": 21,
     "src/pages/Products.tsx": 9,
     "src/pages/Receiving.tsx": 5,
-    "src/pages/Settings.tsx": 9,
+    "src/pages/Settings.tsx": 3,
     "src/pages/Signup.tsx": 4,
     "src/pages/SupplierProposalReview.tsx": 3,
-    "src/pages/Suppliers.tsx": 43
+    "src/pages/Suppliers.tsx": 1
   }
 }

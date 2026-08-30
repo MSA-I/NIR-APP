@@ -412,6 +412,9 @@ export const en: Dictionary = {
   },
 
   settings: {
+    undoAction: 'Undo',
+    enableUndone: 'Enabling was undone — the user is disabled',
+    disableUndone: 'Disabling was undone — the user is active',
     languageTitle: 'Interface language',
     languageHint: 'The language follows your browser. A choice here overrides it and is saved to your account.',
     languageOptionHe: 'עברית',
@@ -601,7 +604,7 @@ export const en: Dictionary = {
     trim: 'A supplier name is required',
     toast_5: 'Bank details cannot be updated before the existing details have loaded',
     toast_6: 'Supplier updated',
-    toast_7: 'Supplier created — the bank details need verification and a reason',
+    toast_7: 'Supplier created — the bank details need an identity check',
     toast_8: 'Supplier created',
     toast_9: 'Bank details updated and recorded in the audit log',
     toast_10: 'Bank details were not updated — the other fields were saved',
@@ -706,6 +709,9 @@ export const en: Dictionary = {
     editTitle: 'Edit supplier — {name}',
     newTitle: 'New supplier',
     savingStatus: 'Saving the supplier details',
+    savingBankStatus: 'Saving the bank details',
+    minimumOrderInCurrency: 'Minimum order ({currency})',
+    minimumOrderCurrencyHint: 'In the supplier default currency.',
     bankChangeMessage: 'The bank details for "{name}" will be updated to a {country} account ending in {last4}. The change needs a fresh password check and is recorded in the audit log.',
     bankRemoveMessage: 'The bank details for "{name}" will be removed. The change needs a fresh password check and is recorded in the audit log.',
     tabOrders: 'Orders ({count})',
@@ -853,6 +859,10 @@ export const en: Dictionary = {
     updatedAt: 'Updated at',
     noDataAvailable: 'No data available',
     openInvoicesCount: '{count} open invoices',
+    openInvoicesAria: 'Open invoice balance: {count} invoices',
+    trendsInBaseCurrency: 'The trends and the mix are shown in {base}. There is activity in {others} too, and it is not folded into them.',
+    dueWindowOtherOnly: 'The active payment requests are in {others} only. See the payment requests screen.',
+    dueWindowAlsoOther: 'There are also requests in {others}, which are not folded into this figure.',
     paidThisMonth: 'Paid to suppliers this month',
     estimatedSaving: 'Estimated saving {amount}',
     estimatedSavingWithPct: 'Estimated saving {amount} · {percent}%',
@@ -866,6 +876,11 @@ export const en: Dictionary = {
   },
 
   orders: {
+    toastPdf: 'The PDF file was downloaded',
+    exportPdf: 'Download the order as a PDF laid out with the organisation logo',
+    exportPdfLabel: 'Download PDF',
+    belowMinimumNote: 'Note: the order total ({total}) is below the supplier minimum order ({minimum}).',
+    minimumCurrencyMismatch: 'The order is in {orderCurrency} and the supplier minimum order is stated in {supplierCurrency} ({minimum}), so no minimum check applies here.',
     toast: 'Order cancelled',
     toast_2: 'The order was marked as sent to the supplier',
     cancelOrderDraft: 'Cancel draft',
@@ -2561,6 +2576,8 @@ export const en: Dictionary = {
   },
 
   consolidated: {
+    outOfCurrencySourcesLead: 'sources are stated in a currency other than the anchor',
+    outOfCurrencySourcesTail: ') and are not included in the amounts above. They appear in the sources table, each in its own currency.',
     spansCurrencies: 'The receipt lines are priced in more than one currency',
     text: 'Consolidated invoice',
     text_2: 'Uploading the pages did not finish. It can be retried without creating a new action.',
@@ -4343,6 +4360,12 @@ export const en: Dictionary = {
     text_19: 'Gross spend',
     text_20: 'Average unit price',
     book_append_sheet: 'Product purchases',
+    inSeveralCurrencies: 'in several currencies',
+    pdfTitle: 'Product purchase summary — {org}',
+    pdfSubtitle: '{from} – {to} · produced {generated}',
+    unmappedLinesLead: 'invoice lines totalling',
+    unmappedLinesMiddle: 'were not matched',
+    unmappedLinesTail: 'to an order line, so they are counted against no product. They are waiting to be mapped by hand.',
     toast: 'The Excel file was downloaded',
     title: 'Product purchase summary',
     text_21: 'Preparing the file…',
@@ -4647,6 +4670,9 @@ export const en: Dictionary = {
   },
 
   payments: {
+    settlementActual: 'Actually left the account',
+    settlementRate: 'Rate derived from the payment',
+    settlementNote: 'The debt is settled in {currency}. The rate is worked out from the two amounts recorded on this payment and is not stored.',
     text: 'Supplier',
     fmtDate: 'Date',
     fmtMoneyExact: 'Amount',
