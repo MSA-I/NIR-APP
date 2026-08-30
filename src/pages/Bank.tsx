@@ -7,6 +7,7 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, Note, EmptyState, SubPanel, ICON, type ServerColumn } from '../components/ui';
+import { readTolerance } from '../lib/tolerances';
 import { BANK_TX_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, addCalendarDays } from '../lib/format';
 import { toHebrewError } from '../lib/errors';
@@ -224,7 +225,11 @@ export default function Bank() {
       {selected && (
         selected.status === 'matched'
           ? <UnmatchModal tx={selected} onClose={() => setSelected(null)} onChanged={() => { setSelected(null); void refetch(); }} />
-          : <MatchModal tx={selected} tolerance={org?.settings?.bank_match_amount_tolerance ?? 1} days={org?.settings?.bank_match_days ?? 7}
+          /* THE TOLERANCE IS READ IN THE LINE'S OWN CURRENCY, AND MAY BE null. This used to be
+             `?? 1` — a shekel-shaped 1 handed to a dollar statement line, which made the screen
+             offer matches that `0232` then refused with `bank_match_tolerance_unconfigured`.
+             #288 forbids inventing the number, so when it is missing the modal says so instead. */
+          : <MatchModal tx={selected} tolerance={readTolerance(org?.settings?.bank_match_amount_tolerance, selected.currency)} days={org?.settings?.bank_match_days ?? 7}
               onClose={() => setSelected(null)} onChanged={() => { setSelected(null); void refetch(); }} />
       )}
     </div>
@@ -424,7 +429,8 @@ interface Candidate {
 }
 
 function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
-  tx: TxRow; tolerance: number; days: number; onClose: () => void; onChanged: () => void;
+  /** `null` when this business has never stated a tolerance for THIS line's currency (#288). */
+  tx: TxRow; tolerance: number | null; days: number; onClose: () => void; onChanged: () => void;
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -462,7 +468,10 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
         : p.settlement_currency === tx.currency ? p.settlement_amount
         : null;
       if (paymentAmountInLineCurrency == null) continue;
-      const amountOk = Math.abs(paymentAmountInLineCurrency - tx.amount) <= tolerance;
+      // No tolerance for this currency means the amounts CANNOT be compared, not that they differ.
+      // A reference that matches exactly is still a real signal and needs no tolerance, so those
+      // candidates survive; nothing that rests on a numeric window does.
+      const amountOk = tolerance != null && Math.abs(paymentAmountInLineCurrency - tx.amount) <= tolerance;
       const dateOk = p.paid_date >= fromDate && p.paid_date <= toDate;
       const refOk = !!p.reference && !!tx.reference && p.reference === tx.reference;
       if (!amountOk && !refOk) continue;
@@ -494,7 +503,7 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
     const openInvoices = invoices.map((i) => ({ ...i, balance: balMap.get(i.id) ?? i.total_amount })).filter((i) => i.balance > 0);
 
     for (const inv of openInvoices) {
-      if (Math.abs(inv.balance - tx.amount) <= tolerance) {
+      if (tolerance != null && Math.abs(inv.balance - tx.amount) <= tolerance) {
         candidates.push({
           kind: 'invoice', id: inv.id,
           label: `חשבונית ${inv.invoice_number} · ${fmtDate(inv.invoice_date)} (יתרה ${fmtMoneyExact(inv.balance, inv.currency)})`,
@@ -647,6 +656,20 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
 
         {supplierId && !loading && !error && (
           <>
+            {/* A screen that quietly returns nothing teaches people the data is wrong. The reason
+                there are no amount-based suggestions here is a setting nobody has stated, and
+                saying so is the difference between a missing answer and a missing question (#293). */}
+            {/* One wrapper, not prose beside an expression: `.note` is a flex row and every raw
+                text run in it becomes its own flex item (noteProse.spec.ts). */}
+            {tolerance == null && (
+              <Note tone="await">
+                <span>
+                  {`אין סטיית סכום מותרת שהוגדרה עבור ${tx.currency} — ולכן אי אפשר להשוות סכומים, `
+                    + 'והמערכת אינה ממציאה מספר. הצעות לפי אסמכתא עדיין מוצגות, והתאמה ידנית פתוחה. '
+                    + 'בעל העסק יכול לקבוע את הערך במסך ההגדרות.'}
+                </span>
+              </Note>
+            )}
             <div>
               <div className="text-sm font-medium text-ink-soft mb-1.5">הצעות התאמה</div>
               {data?.candidates.length ? (

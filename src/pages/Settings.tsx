@@ -17,6 +17,7 @@ import {
   sendInvite, resendInvite, revokeInvite, type Invitation,
 } from '../lib/invitations';
 import { isActiveRole, type ActiveRole, type Profile } from '../lib/types';
+import { readTolerance, writeTolerance } from '../lib/tolerances';
 import {
   BRAND_LOGO_TYPES,
   brandFailureAllowsNewCorrelation,
@@ -78,7 +79,11 @@ export default function Settings() {
   const [orgName, setOrgName] = useState(org?.name ?? '');
   const [vatRate, setVatRate] = useState(org?.vat_rate?.toString() ?? '18');
   const [matchDays, setMatchDays] = useState(org?.settings?.bank_match_days?.toString() ?? '7');
-  const [tolerance, setTolerance] = useState(org?.settings?.bank_match_amount_tolerance?.toString() ?? '1');
+  // The shekel value specifically. The stored key may be a bare number or a per-currency map, and
+  // `.toString()` on the map would have put "[object Object]" in a numeric input.
+  const [tolerance, setTolerance] = useState(
+    readTolerance(org?.settings?.bank_match_amount_tolerance, 'ILS')?.toString() ?? '1',
+  );
   const [busy, setBusy] = useState(false);
   const [logoPath, setLogoPath] = useState(org?.logo_path ?? null);
   const [logoVersion, setLogoVersion] = useState(org?.logo_updated_at ?? '');
@@ -168,16 +173,27 @@ export default function Settings() {
       return;
     }
     setBusy(true);
+    // merge, don't replace — settings also carries keys this screen doesn't edit
+    // (e.g. invite_expiry_days, read by invitation_expiry_days() in migration 0007)
+    const settings: Record<string, unknown> = {
+      ...(org?.settings ?? {}),
+      bank_match_days: Number(matchDays),
+    };
+    /* THIS FIELD EDITS THE SHEKEL VALUE, NOT THE WHOLE KEY. It used to save
+       `bank_match_amount_tolerance: Number(tolerance)`, which overwrites every currency's tolerance
+       with one number — so on a business that had stated a dollar tolerance, one press of "save" on
+       a screen that never mentions dollars deleted it silently. `writeTolerance` changes the one
+       currency this field is about and returns the rest untouched (#288, #290). */
+    const nextTolerance = writeTolerance(
+      org?.settings?.bank_match_amount_tolerance, 'ILS', tolerance.trim() === '' ? null : Number(tolerance),
+    );
+    if (nextTolerance === undefined) delete settings.bank_match_amount_tolerance;
+    else settings.bank_match_amount_tolerance = nextTolerance;
+
     const res = await supabase.from('organizations').update({
       name,
       vat_rate: Number(vatRate),
-      // merge, don't replace — settings also carries keys this screen doesn't edit
-      // (e.g. invite_expiry_days, read by invitation_expiry_days() in migration 0007)
-      settings: {
-        ...(org?.settings ?? {}),
-        bank_match_days: Number(matchDays),
-        bank_match_amount_tolerance: Number(tolerance),
-      },
+      settings,
     }).eq('id', profile!.org_id);
     setBusy(false);
     if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }

@@ -1,5 +1,7 @@
 // Row types matching supabase/migrations/0001_init.sql (hand-maintained, pragmatic subset)
 
+import type { ToleranceSetting } from './tolerances';
+
 export type Role = 'owner' | 'kitchen' | 'office' | 'payer' | 'accountant' | 'supplier';
 
 /**
@@ -40,7 +42,18 @@ export interface Organization {
     logo_updated_at: string | null;
   settings: {
     bank_match_days: number;
-    bank_match_amount_tolerance: number;
+    /**
+     * A number OR a map from ISO code to amount (`#288`, `#290`). Both shapes are live: every
+     * organisation that predates 0219 holds the bare number, which `private.money_tolerance`
+     * reads as the ILS value and as nothing else. Typing this `number` alone is how the client
+     * came to invent a shekel-shaped 1 for dollar statement lines the server then refused.
+     * Read through `readTolerance`, write through `writeTolerance` — never by hand.
+     */
+    bank_match_amount_tolerance: ToleranceSetting;
+    /** The same two shapes, for the three tolerances that had no screen at all before this one. */
+    payment_request_amount_tolerance?: ToleranceSetting;
+    invoice_line_amount_tolerance?: ToleranceSetting;
+    invoice_document_amount_tolerance?: ToleranceSetting;
     // Per-tenant display names for roles. The user_role enum is fixed (it is baked into the
     // RLS policies); only the label moves. resolveRoleLabels() in status.ts honors a key
     // only if it already exists in ROLE_LABEL, so a settings blob can rename a role but
