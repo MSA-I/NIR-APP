@@ -4,7 +4,12 @@ export const MAX_SMALL_REQUEST_BYTES = 16 * 1024;
 export const MAX_RESOURCE_METADATA_BYTES = 64 * 1024;
 export const DEFAULT_LEASE_SECONDS = 120;
 export const GATEWAY_CONTRACT_HEADER = "x-ocr-gateway-contract-version";
-export const GATEWAY_CONTRACT_VERSION = "2";
+// 2 -> 3 (#20): the extraction payload gained a REQUIRED `normalizations` array, so a worker
+// built before it can no longer produce a payload this gateway accepts. The number moves on BOTH
+// sides in the same commit -- `worker/ocr/src/gateway.py` -- because moving it on one side leaves
+// a pool that reports `Up`, claims every job and fails `gateway_contract_mismatch` on every poll
+// while the screen says "waiting in queue". That is a3603c0: five days, zero documents processed.
+export const GATEWAY_CONTRACT_VERSION = "3";
 
 type JsonObject = Record<string, unknown>;
 
@@ -109,6 +114,21 @@ const MARK_KINDS = new Set([
   "unknown",
 ]);
 
+// #20. One entry per text correction the worker's parser EVALUATED, whether or not it changed
+// anything. `applied: false` with a null original says "evaluated, the stored text IS what the
+// document said"; `applied: true` carries the exact string the detector judged, before a
+// character moved. An empty array says no corrector ran on that parser path at all -- true for a
+// spreadsheet, never true for a PDF.
+//
+// REQUIRED here, and that is the whole reason GATEWAY_CONTRACT_VERSION moved to "3". A worker
+// that omits it is a worker that cannot say whether it rewrote the text, and the gateway is the
+// last place that can refuse such a payload before it becomes immutable evidence.
+//
+// The id set is closed and mirrors `worker/ocr/src/contract.py`. Adding a corrector is a contract
+// change on both sides of this wire, deliberately.
+const NORMALIZATION_IDS = new Set(["hebrew_visual_order"]);
+const MAX_NORMALIZATION_MEASUREMENTS = 16;
+
 const isRecord = (value: unknown): value is JsonObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -209,6 +229,56 @@ function validConfidence(value: unknown): boolean {
       value >= 0 && value <= 1);
 }
 
+function validNormalizations(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length > NORMALIZATION_IDS.size) return false;
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (
+      !hasExactKeys(entry, ["id", "applied", "original_text", "measurements"]) ||
+      typeof entry.id !== "string" || !NORMALIZATION_IDS.has(entry.id) ||
+      seen.has(entry.id) ||
+      typeof entry.applied !== "boolean"
+    ) {
+      return false;
+    }
+    seen.add(entry.id);
+    // The pairing, enforced rather than described. A correction that changed the text must carry
+    // what the text was; one that changed nothing must not carry a second copy of what it left
+    // alone, because storing one would be a claim that something happened.
+    if (entry.applied) {
+      if (
+        typeof entry.original_text !== "string" ||
+        !codePointLengthAtMost(entry.original_text, 2_000_000)
+      ) {
+        return false;
+      }
+    } else if (entry.original_text !== null) {
+      return false;
+    }
+    if (
+      !Array.isArray(entry.measurements) ||
+      entry.measurements.length > MAX_NORMALIZATION_MEASUREMENTS
+    ) {
+      return false;
+    }
+    const names = new Set<string>();
+    for (const measurement of entry.measurements) {
+      if (
+        !hasExactKeys(measurement, ["name", "value"]) ||
+        typeof measurement.name !== "string" ||
+        measurement.name.length === 0 || measurement.name.length > 100 ||
+        names.has(measurement.name) ||
+        typeof measurement.value !== "number" ||
+        !Number.isFinite(measurement.value)
+      ) {
+        return false;
+      }
+      names.add(measurement.name);
+    }
+  }
+  return true;
+}
+
 export function validateExtraction(value: unknown): value is JsonObject {
   if (
     !hasExactKeys(value, [
@@ -217,7 +287,9 @@ export function validateExtraction(value: unknown): value is JsonObject {
       "blocks",
       "tables",
       "marks",
+      "normalizations",
     ]) ||
+    !validNormalizations(value.normalizations) ||
     value.schema_version !== "1" ||
     !hasExactKeys(value.document, [
       "page_count",

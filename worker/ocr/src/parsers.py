@@ -24,7 +24,7 @@ except ImportError:  # pragma: no cover - guarded for older pinned wheels
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from .contract import validate_extraction
+from .contract import HEBREW_VISUAL_ORDER, validate_extraction
 from .errors import ProcessingError
 from .limits import DEFAULT_LIMITS, ExtractionLimits
 from .mime import mime_matches, sniff_mime, inspect_zip
@@ -49,6 +49,26 @@ HEBREW_RUN = re.compile("[֐-׿]+(?:[\"'׳״][֐-׿]+)*")
 HEBREW_FINALS = "ךםןףץ"
 
 
+def _hebrew_order_evidence(text: str) -> tuple[int, int, int]:
+    """The three numbers `_hebrew_is_reversed` decides on, returned instead of thrown away.
+
+    `(judged_words, final_letter_first, final_letter_last)`. The decision is one comparison over
+    the last two, so keeping them keeps the REASON: a reader of a stored extraction can see what
+    the detector saw, not merely that it fired. Words shorter than two letters cannot carry the
+    signal -- a single ם is both the first and the last letter -- and are counted by neither.
+    """
+    words = starts = ends = 0
+    for word in HEBREW_RUN.findall(text):
+        if len(word) < 2:
+            continue
+        words += 1
+        if word[0] in HEBREW_FINALS:
+            starts += 1
+        if word[-1] in HEBREW_FINALS:
+            ends += 1
+    return words, starts, ends
+
+
 def _hebrew_is_reversed(text: str) -> bool:
     """Detects a text layer stored in visual rather than logical order.
 
@@ -56,20 +76,58 @@ def _hebrew_is_reversed(text: str) -> bool:
     none ended with one. The same check over spreadsheet text and over image OCR returned 0 vs
     1701 and 0 vs 75, so the separation is unambiguous in both directions.
     """
-    starts = ends = 0
-    for word in HEBREW_RUN.findall(text):
-        if len(word) < 2:
-            continue
-        if word[0] in HEBREW_FINALS:
-            starts += 1
-        if word[-1] in HEBREW_FINALS:
-            ends += 1
+    _, starts, ends = _hebrew_order_evidence(text)
     return starts > ends
 
 
 def _reverse_hebrew_runs(text: str) -> str:
     """Restores logical order. Latin text, digits and layout are left untouched."""
     return HEBREW_RUN.sub(lambda match: match.group(0)[::-1], text)
+
+
+def _normalize_pdf_text_layer(
+    native_text: dict[int, str]
+) -> tuple[dict[int, str], dict[str, Any]]:
+    """Repairs a visual-order text layer AND returns the record of that decision beside it.
+
+    THE POINT OF RETURNING TWO THINGS. This correction used to be a one-line in-place overwrite.
+    It fixed the text and destroyed the question: afterwards nothing in the database could say
+    whether a document had printed Hebrew logically or whether this worker had turned it around,
+    so "what the supplier's document said" and "what this system decided it said" were one field
+    with one value. Every downstream reading -- a supplier name, an invoice number, a product
+    description a person later swears they never typed -- inherited that ambiguity.
+
+    `original_text` is the EXACT string the detector judged: the pages joined with a single
+    newline, before a character moved. That matters for verification rather than for display --
+    `_reverse_hebrew_runs` is its own inverse over these runs, so applying it to `original_text`
+    must reproduce the corrected pages joined the same way, and a test can say so instead of
+    trusting it.
+
+    Whole document, one decision, unchanged from before: a single page may not carry enough final
+    letters to judge, and a per-page vote would repair some pages of an invoice and not others.
+    """
+    original = "\n".join(native_text.values())
+    words, first_letter, last_letter = _hebrew_order_evidence(original)
+    # `_hebrew_is_reversed`'s rule, spelled here so the counts that go into the record and the
+    # comparison that decides are read from one measurement rather than two passes of the same
+    # regex. The self-check asserts the two agree on both fixtures, so this cannot drift into a
+    # second, quieter definition of "reversed".
+    applied = first_letter > last_letter
+    record = {
+        "id": HEBREW_VISUAL_ORDER,
+        "applied": applied,
+        # Non-null exactly when something changed. An unapplied correction storing a second copy
+        # of the untouched text would be a claim that a correction happened.
+        "original_text": original if applied else None,
+        "measurements": [
+            {"name": "hebrew_words", "value": words},
+            {"name": "final_letter_first", "value": first_letter},
+            {"name": "final_letter_last", "value": last_letter},
+        ],
+    }
+    if not applied:
+        return native_text, record
+    return {page: _reverse_hebrew_runs(text) for page, text in native_text.items()}, record
 
 
 def _languages(text: str) -> list[str]:
@@ -89,6 +147,7 @@ def _contract(
     tables: list[dict[str, Any]] | None = None,
     marks: list[dict[str, Any]] | None = None,
     partial: bool = False,
+    normalizations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "schema_version": "1",
@@ -101,6 +160,11 @@ def _contract(
         "blocks": blocks or [],
         "tables": tables or [],
         "marks": marks or [],
+        # Empty means "no corrector ran on this path", which is the truth for a spreadsheet, a
+        # CSV or an HTML page: none of them has a text layer that can be laid out backwards. It
+        # does NOT mean "nothing needed correcting" -- only an entry saying `applied: false` can
+        # claim that, and only the PDF path produces one.
+        "normalizations": normalizations or [],
     }
 
 
@@ -629,10 +693,12 @@ def _parse_pdf(
         if not text:
             missing.append(page_number)
 
-    # Decided once for the whole document: a single page may not contain enough final letters to
-    # judge, and a per-page decision could repair some pages and not others.
-    if _hebrew_is_reversed("\n".join(native_text.values())):
-        native_text = {page: _reverse_hebrew_runs(text) for page, text in native_text.items()}
+    # The correction and the RECORD of it, together. Before #20 this was an in-place overwrite:
+    # the pre-correction text existed nowhere afterwards and nothing said the correction had run,
+    # so the one place this system rewrites what a document said was also the one place it could
+    # not prove it had. `_normalize_pdf_text_layer` returns both, and the record travels in the
+    # payload as evidence -- never through the sanitizer, which 0182 keeps out of this path.
+    native_text, text_layer_normalization = _normalize_pdf_text_layer(native_text)
 
     for page_number in sorted(native_text):
         if native_text[page_number]:
@@ -730,6 +796,10 @@ def _parse_pdf(
         # A PDF whose every page carried a text layer never enters the OCR branch at all and comes
         # out False, which is the whole point: it was read in full.
         partial=bool(unattempted),
+        # Always present, applied or not. The PDF text layer is the only surface in this worker
+        # that gets corrected, so this is the only parser that can honestly claim a decision was
+        # made -- and it makes the claim on every PDF, including the ones it left alone.
+        normalizations=[text_layer_normalization],
     )
 
 

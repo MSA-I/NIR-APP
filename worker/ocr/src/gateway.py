@@ -16,7 +16,13 @@ from .errors import GatewayError, ProcessingError
 
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 GATEWAY_CONTRACT_HEADER = "x-ocr-gateway-contract-version"
-GATEWAY_CONTRACT_VERSION = "2"
+# 2 -> 3 (#20): the extraction payload gained a REQUIRED `normalizations` array, so a worker
+# built before it can no longer produce a payload this gateway accepts. The number moves on BOTH
+# sides in the same commit -- `supabase/functions/document-processing/contract.ts` -- because
+# moving it on one side leaves a pool that reports `Up`, claims every job and fails
+# `gateway_contract_mismatch` on every poll while the screen says "waiting in queue". That is
+# a3603c0: five days, zero documents. The VPS is redeployed with this change, not after it.
+GATEWAY_CONTRACT_VERSION = "3"
 CHECKSUM_RE = re.compile(r"^etag:[0-9a-fA-F]{16,128}(?:-[0-9]+)?$")
 EVIDENCE_SHA_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 

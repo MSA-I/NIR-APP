@@ -11,6 +11,33 @@ from .limits import DEFAULT_LIMITS, ExtractionLimits
 BLOCK_TYPES = {"text", "heading", "table", "image", "handwriting"}
 MARK_KINDS = {"circle", "check", "cross", "underline", "star", "custom", "unknown"}
 
+# WHAT `normalizations` IS FOR, AND WHY IT IS A CLOSED SET.
+#
+# A parser may CORRECT text it read from a document. `hebrew_visual_order` is the only such
+# correction today and it used to overwrite the text in place: the pre-correction string existed
+# nowhere afterwards, and nothing recorded that the correction had fired at all. Reading a stored
+# extraction, you could not tell a document that printed Hebrew in logical order from one this
+# worker silently repaired -- so "what the document said" and "what this system decided it said"
+# were the same field.
+#
+# One entry per correction the parser EVALUATED, whether or not it changed anything:
+#
+#   applied=False, original_text=None  -- evaluated, decided the text was already right. The
+#                                         stored text IS the original; that is the claim.
+#   applied=True,  original_text=str   -- changed. `original_text` is the exact string the
+#                                         detector judged, before any character moved.
+#
+# An EMPTY array is therefore not "nothing was corrected"; it is "no corrector ran on this path",
+# which is the honest answer for a spreadsheet or a CSV. The three states stay distinguishable,
+# and that distinction is the whole feature.
+#
+# The id set is closed on purpose, exactly like BLOCK_TYPES and MARK_KINDS. A second corrector is
+# a contract change on both sides of the gateway wire and must be seen as one -- an open string
+# would let a new correction reach stored evidence without anyone reviewing what it does to it.
+HEBREW_VISUAL_ORDER = "hebrew_visual_order"
+NORMALIZATION_IDS = {HEBREW_VISUAL_ORDER}
+MAX_NORMALIZATION_MEASUREMENTS = 16
+
 # WHAT `document.partial` MEANS. One rule, because every consumer reads the same field:
 #
 #   True  <=>  this extraction did not LOOK at part of the source.
@@ -29,8 +56,22 @@ MARK_KINDS = {"circle", "check", "cross", "underline", "star", "custom", "unknow
 # flag that is always True disables that gate entirely and a flag that is always False removes it.
 
 
-def _object(value: Any, keys: set[str], name: str) -> dict[str, Any]:
-    if type(value) is not dict or set(value) != keys:
+def _object(
+    value: Any, keys: set[str], name: str, *, optional: set[str] | None = None
+) -> dict[str, Any]:
+    """Exact key-set match, with a named and deliberately tiny escape hatch.
+
+    `optional` exists for ONE case and is not a general loosening: an OCR adapter describes what
+    it READ, never how the parser afterwards corrected it, so requiring `normalizations` from
+    `OcrAdapter.extract` would force every adapter -- and every benchmark ground-truth file on
+    disk -- to assert a decision it never made. The key is optional on the way IN and always
+    present on the way OUT (`validate_extraction` materializes `[]`), so the payload this worker
+    hands the gateway is still exact, which is what the Edge validator checks key for key.
+    """
+    if type(value) is not dict:
+        raise ProcessingError("invalid_extraction", f"{name} has an invalid shape")
+    present = set(value)
+    if not keys <= present or not present <= keys | (optional or set()):
         raise ProcessingError("invalid_extraction", f"{name} has an invalid shape")
     return value
 
@@ -71,12 +112,83 @@ def _confidence(value: Any, name: str) -> float | None:
     return number
 
 
+def _normalizations(value: Any, limits: ExtractionLimits) -> list[dict[str, Any]]:
+    if type(value) is not list:
+        raise ProcessingError("invalid_extraction", "normalizations must be an array")
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for index, raw in enumerate(value):
+        item = _object(
+            raw, {"id", "applied", "original_text", "measurements"}, f"normalizations[{index}]"
+        )
+        identifier = _string(item["id"], f"normalizations[{index}].id", nonempty=True)
+        if identifier not in NORMALIZATION_IDS:
+            raise ProcessingError("invalid_extraction", "Unknown normalization id")
+        if identifier in seen:
+            raise ProcessingError("invalid_extraction", "Normalization ids must be unique")
+        seen.add(identifier)
+        applied = item["applied"]
+        if type(applied) is not bool:
+            raise ProcessingError("invalid_extraction", "normalizations[].applied must be a bool")
+        original = item["original_text"]
+        # The pairing itself, enforced rather than described: a correction that changed the text
+        # MUST carry what the text was, and one that changed nothing must NOT carry a second copy
+        # of the text it left alone. Either half alone is a record nobody can act on.
+        if applied:
+            original = _string(original, f"normalizations[{index}].original_text")
+            if len(original) > limits.max_text_chars:
+                raise ProcessingError("invalid_extraction", "Preserved original text is too long")
+        elif original is not None:
+            raise ProcessingError(
+                "invalid_extraction", "An unapplied normalization must not carry an original"
+            )
+        measurements = item["measurements"]
+        if type(measurements) is not list or len(measurements) > MAX_NORMALIZATION_MEASUREMENTS:
+            raise ProcessingError("invalid_extraction", "measurements must be a bounded array")
+        # Name/value pairs rather than a fixed set of columns: the numbers a detector weighs are
+        # its own, and a second detector with different evidence must not need this contract
+        # reopened to say what it measured.
+        normalized_measurements: list[dict[str, Any]] = []
+        names: set[str] = set()
+        for position, entry in enumerate(measurements):
+            measurement = _object(
+                entry, {"name", "value"}, f"normalizations[{index}].measurements[{position}]"
+            )
+            name = _string(measurement["name"], "measurement name", nonempty=True)
+            if len(name) > 100:
+                raise ProcessingError("invalid_extraction", "Measurement name is too long")
+            if name in names:
+                raise ProcessingError("invalid_extraction", "Measurement names must be unique")
+            names.add(name)
+            # Type-checked through `_number`, stored in the type it arrived in. These are counts;
+            # rendering "13 words" as 13.0 in stored evidence would be this contract inventing a
+            # precision the detector never claimed.
+            value = measurement["value"]
+            _number(value, "measurement value")
+            normalized_measurements.append({"name": name, "value": value})
+        result.append(
+            {
+                "id": identifier,
+                "applied": applied,
+                "original_text": original,
+                "measurements": normalized_measurements,
+            }
+        )
+    return result
+
+
 def validate_extraction(
     payload: Any, limits: ExtractionLimits = DEFAULT_LIMITS
 ) -> dict[str, Any]:
-    root = _object(payload, {"schema_version", "document", "blocks", "tables", "marks"}, "payload")
+    root = _object(
+        payload,
+        {"schema_version", "document", "blocks", "tables", "marks"},
+        "payload",
+        optional={"normalizations"},
+    )
     if root["schema_version"] != "1":
         raise ProcessingError("invalid_extraction", "Unsupported extraction schema version")
+    normalizations = _normalizations(root.get("normalizations", []), limits)
 
     document = _object(
         root["document"], {"page_count", "detected_languages", "plain_text", "partial"}, "document"
@@ -204,6 +316,7 @@ def validate_extraction(
         "blocks": normalized_blocks,
         "tables": normalized_tables,
         "marks": normalized_marks,
+        "normalizations": normalizations,
     }
     try:
         serialized = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()

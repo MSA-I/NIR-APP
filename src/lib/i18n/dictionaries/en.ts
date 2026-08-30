@@ -4982,6 +4982,12 @@ export const en: Dictionary = {
     onlyNameTheBusiness: 'All that is left is to name the business.',
     passwordRule: 'At least {min} characters.',
     alreadyHaveAccount: 'Already have an account?',
+    backupEmailLabel: 'Alternate email address',
+    backupEmailWhy: 'The address we received is a forwarding one that can be switched off. The alternate address is how we reach you if it closes.',
+    backupEmailMalformed: 'The alternate email address is not valid.',
+    backupEmailTooLong: 'The alternate email address is too long.',
+    backupEmailSameAsPrimary: 'That is the same address. The backup has to be a different one.',
+    backupEmailStillRelay: 'That is also a forwarding address that can be switched off, so it is not a backup.',
   },
 
   docRemoval: {

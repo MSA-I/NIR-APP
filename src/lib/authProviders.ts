@@ -41,6 +41,28 @@ export function enabledFederatedProviders(): FederatedProvider[] {
 }
 
 /**
+ * Whether the backup-address requirement (owner decision #270) is switched on.
+ *
+ * It lives HERE, beside `VITE_APPLE_SIGNUP_ENABLED`, because the owner tied the two together:
+ * "build it now, enforce it only when Apple is switched on". A person can only end up holding a
+ * Private Relay address by signing in with Apple, so a requirement that were on while Apple is off
+ * would apply to nobody — and one that stayed off after Apple was turned on would let the first
+ * Apple owner in through the door the decision exists to close. Keeping both switches in one file
+ * is what makes "flip them together" a thing a reader can see rather than remember.
+ *
+ * Read at module scope for the same reason the provider switches are: Vite substitutes
+ * `import.meta.env` at build time, so this is not a runtime switch and flipping it means a
+ * rebuild. `public-signup` reads its own copy from `REQUIRE_BACKUP_EMAIL` and reaches the same
+ * answer through the same pure function; neither side may refuse on an unset switch.
+ */
+const BACKUP_EMAIL_REQUIREMENT_ENFORCED =
+  import.meta.env.VITE_REQUIRE_BACKUP_EMAIL === 'true';
+
+export function backupEmailRequirementEnforced(): boolean {
+  return BACKUP_EMAIL_REQUIREMENT_ENFORCED;
+}
+
+/**
  * Start the provider hand-off, always returning the browser to `/signup`.
  *
  * The destination is the same from either screen and that is the point: the provider proves an

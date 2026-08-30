@@ -105,6 +105,9 @@ function extractionPayload() {
       ]],
     }],
     marks: [],
+    // Required from gateway contract version 3 onward. A spreadsheet-shaped price list has no
+    // text layer to lay out backwards, so the honest value is the empty array: no corrector ran.
+    normalizations: [],
   };
 }
 

@@ -6,12 +6,18 @@ import { Building2, MailCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Card, ErrorNote, ICON, Note } from '../components/ui';
 import {
+  backupEmailRequirementEnforced,
   enabledFederatedProviders,
   FEDERATED_PROVIDER_LABEL,
   FEDERATED_PROVIDERS,
   startFederatedSignup,
   type FederatedProvider,
 } from '../lib/authProviders';
+import {
+  backupEmailProblem,
+  backupEmailRequired,
+  type BackupEmailProblem,
+} from '../lib/backupEmail';
 
 const MIN_PASSWORD_LENGTH = 10;
 
@@ -22,6 +28,21 @@ const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function isFederatedProvider(value: unknown): value is FederatedProvider {
   return typeof value === 'string' && (FEDERATED_PROVIDERS as readonly string[]).includes(value);
 }
+
+/**
+ * The hint under the backup-address field, per refusal. `missing` maps to nothing on purpose: an
+ * untouched field is not a mistake yet, exactly as the primary address and password already work
+ * on this screen — the greyed-out button is what says the form is not finished.
+ */
+const BACKUP_EMAIL_HINT: Record<BackupEmailProblem, 'signup.backupEmailMalformed'
+  | 'signup.backupEmailTooLong' | 'signup.backupEmailSameAsPrimary'
+  | 'signup.backupEmailStillRelay' | null> = {
+  missing: null,
+  malformed: 'signup.backupEmailMalformed',
+  too_long: 'signup.backupEmailTooLong',
+  same_as_primary: 'signup.backupEmailSameAsPrimary',
+  still_a_relay: 'signup.backupEmailStillRelay',
+};
 
 /**
  * Self-service signup (0159) — the screen that reversed OPEN-DECISIONS #12.
@@ -47,9 +68,22 @@ function isFederatedProvider(value: unknown): value is FederatedProvider {
 
 export default function Signup() {
   const { t } = useT();
-  const [form, setForm] = useState({ organization: '', name: '', email: '', password: '' });
+  const [form, setForm] = useState({
+    organization: '', name: '', email: '', password: '', backupEmail: '',
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Set when the SERVER said a backup address is required and this screen had not asked for one.
+   *
+   * The requirement is read from a build-time switch on both sides, so the two can disagree for
+   * exactly as long as one deploy is ahead of the other. Without this the disagreement is a dead
+   * end: the visitor is refused for a field the form never showed them, with no way to comply.
+   * With it, the cost of a skew is one extra step instead of a signup nobody can complete —
+   * which is the same "an unmeasured answer is not a refusal" instinct `DEBT §79` applies to the
+   * entitlement question, pointed at the other side of the same request.
+   */
+  const [serverAskedForBackup, setServerAskedForBackup] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
   const [resendResult, setResendResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -106,10 +140,31 @@ export default function Signup() {
     }
   }
 
+  /**
+   * The Edge function's own answer, when it sent one, plus the single code this screen ACTS on.
+   *
+   * `backup_email_required` means the server is asking for a field the form did not draw — the two
+   * build-time switches are out of step. Drawing it here turns a dead end into one more step.
+   */
+  async function applyFailure(failure: unknown, fallback: string) {
+    const context = (failure as { context?: Response }).context;
+    if (context && typeof context.json === 'function') {
+      try {
+        const payload = await context.json() as { error?: { code?: string; message?: string } };
+        if (payload?.error?.code === 'backup_email_required') setServerAskedForBackup(true);
+        if (payload?.error?.message) { setError(payload.error.message); return; }
+      } catch {
+        // no JSON body — fall through to the transport message
+      }
+    }
+    setError(fallback);
+  }
+
   /** The federated branch: the provider proved the address, so only the business name is missing. */
   async function finishFederatedSignup(provider: FederatedProvider) {
     setBusy(true);
     setError(null);
+    const backup = form.backupEmail.trim();
     const { data, error: failure } = await supabase.functions.invoke<{ message?: string }>(
       'public-signup',
       {
@@ -117,21 +172,15 @@ export default function Signup() {
           identity: provider,
           organization_name: form.organization.trim(),
           full_name: form.name.trim(),
+          // Present only when there is one to send. A relay signup with enforcement off nominates
+          // nothing, and the request stays the three keys it has always been.
+          ...(backup ? { backup_email: backup } : {}),
         },
       },
     );
     setBusy(false);
     if (failure) {
-      const context = (failure as { context?: Response }).context;
-      if (context && typeof context.json === 'function') {
-        try {
-          const payload = await context.json() as { error?: { message?: string } };
-          if (payload?.error?.message) { setError(payload.error.message); return; }
-        } catch {
-          // no JSON body — fall through to the transport message
-        }
-      }
-      setError(t('signup.setError'));
+      await applyFailure(failure, t('signup.setError'));
       return;
     }
     // The account is confirmed and signed in already, so there is nothing to wait for.
@@ -143,14 +192,31 @@ export default function Signup() {
   // invalid before anyone has typed would announce a failure the visitor has not made.
   const emailProblem = form.email.trim().length > 0 && !EMAIL_SHAPE.test(form.email.trim());
   const passwordProblem = form.password.length > 0 && form.password.length < MIN_PASSWORD_LENGTH;
+
+  /**
+   * The address this signup will actually be keyed by — the provider's when one signed us in, and
+   * only otherwise the one being typed. A federated session has no password fields at all, so
+   * reading `form.email` here would ask an Apple owner about an address they never entered.
+   */
+  const primaryEmail = federated ? federated.email : form.email.trim();
+  const askBackupEmail = serverAskedForBackup
+    || backupEmailRequired(primaryEmail, { enforced: backupEmailRequirementEnforced() });
+  const backupProblem = backupEmailProblem(form.backupEmail, primaryEmail);
+  const backupHint = form.backupEmail.trim().length > 0 && backupProblem
+    ? BACKUP_EMAIL_HINT[backupProblem]
+    : null;
+  const backupSatisfied = !askBackupEmail || backupProblem === null;
+
   const ready = form.organization.trim().length > 0
     && form.name.trim().length > 0
     && EMAIL_SHAPE.test(form.email.trim())
-    && form.password.length >= MIN_PASSWORD_LENGTH;
+    && form.password.length >= MIN_PASSWORD_LENGTH
+    && backupSatisfied;
 
   async function submit() {
     setBusy(true);
     setError(null);
+    const backup = form.backupEmail.trim();
     const { data, error: failure } = await supabase.functions.invoke<{ message?: string }>(
       'public-signup',
       {
@@ -159,22 +225,16 @@ export default function Signup() {
           full_name: form.name.trim(),
           email: form.email.trim(),
           password: form.password,
+          // The fifth field, and only when the visitor was actually asked for one. A password
+          // signup with a real address still sends exactly the four keys 0159 defined.
+          ...(backup ? { backup_email: backup } : {}),
         },
       },
     );
     setBusy(false);
 
     if (failure) {
-      const context = (failure as { context?: Response }).context;
-      if (context && typeof context.json === 'function') {
-        try {
-          const payload = await context.json() as { error?: { message?: string } };
-          if (payload?.error?.message) { setError(payload.error.message); return; }
-        } catch {
-          // no JSON body — fall through to the transport message
-        }
-      }
-      setError(t('signup.setError_2'));
+      await applyFailure(failure, t('signup.setError_2'));
       return;
     }
     setSent(data?.message ?? null);
@@ -288,6 +348,27 @@ export default function Signup() {
           </div>
         )}
 
+        {/* The fifth field (owner decision #270), drawn only for an address a third party can
+            switch off — or when the server said it wants one and this bundle did not know. It is
+            its own row rather than a third cell in the grid above, because the federated branch
+            hides that grid entirely and this field has to survive without it. */}
+        {askBackupEmail && (
+          <div>
+            <label className="label" htmlFor="signup-backup-email">
+              {t('signup.backupEmailLabel')}
+            </label>
+            <input id="signup-backup-email" type="email" dir="ltr" className="input"
+              value={form.backupEmail} autoComplete="email"
+              aria-invalid={backupHint !== null || undefined}
+              aria-describedby={`signup-backup-email-why${error ? ' signup-problem' : ''}`}
+              onChange={(event) => setForm({ ...form, backupEmail: event.target.value })} />
+            <p id="signup-backup-email-why"
+              className={`mt-1 text-xs ${backupHint ? 'text-alert-fg' : 'text-ink-muted'}`}>
+              {backupHint ? t(backupHint) : t('signup.backupEmailWhy')}
+            </p>
+          </div>
+        )}
+
         <Note tone="idle">
           <span className="min-w-0 flex-1">
             {t('signup.text_10')}
@@ -296,7 +377,7 @@ export default function Signup() {
 
         {federated ? (
           <button type="button" className="btn-primary w-full"
-            disabled={busy || form.organization.trim().length < 2}
+            disabled={busy || form.organization.trim().length < 2 || !backupSatisfied}
             onClick={() => void finishFederatedSignup(federated.provider)}>
             {busy ? t('signup.text_11') : t('signup.text_12')}
           </button>

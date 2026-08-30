@@ -126,6 +126,11 @@ export function sliceExtractionByPages(
       plain_text: blocks.map((block) => block.text).join("\n\n"),
       partial: source.document.partial,
     },
+    // Carried whole rather than sliced. The correction was decided once for the DOCUMENT -- a
+    // single page rarely carries enough final letters to judge -- so every chunk inherits the
+    // same decision, and re-deriving a per-chunk one here would invent a fact the parser refused
+    // to claim. `buildProviderPayload` drops it again before anything is sent to a model.
+    normalizations: source.normalizations,
     blocks,
     tables: source.tables.filter((table) => inRange(table.page))
       .map((table) => ({ ...table, page: localPage(table.page) })),

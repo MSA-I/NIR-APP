@@ -20,6 +20,11 @@ document content, ground truth, model weights, and run outputs stay outside Git.
 - `ExtractionContract` version `1` from every adapter; changing the contract per
   engine is not permitted.
 
+`payload.normalizations` (DEBT #20) is OPTIONAL in ground truth and required only
+on the wire to the gateway. A ground-truth file describes what a document SAYS;
+only the parser can say what it afterwards corrected, so a corpus file that omits
+the key still validates and is scored exactly as before.
+
 Each ground-truth JSON file has this shape:
 
 ```json

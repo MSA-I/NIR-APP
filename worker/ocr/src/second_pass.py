@@ -205,6 +205,11 @@ def improve(
             "blocks": ordered,
             "tables": payload["tables"],
             "marks": payload["marks"],
+            # Carried, not re-derived. This pass re-reads pixels; it never touches a text layer,
+            # so it can neither add a correction nor withdraw one. Letting the key fall out here
+            # would have `validate_extraction` refill it with `[]` -- which reads as "no corrector
+            # ran", quietly turning a recorded decision back into the silence #20 is about.
+            "normalizations": payload.get("normalizations", []),
         }
         try:
             validated = validate_extraction(merged, limits)

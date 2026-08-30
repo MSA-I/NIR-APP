@@ -113,6 +113,25 @@ export interface ExtractionContract {
     plain_text: string;
     partial: boolean;
   };
+  /**
+   * #20 -- what the worker's parser corrected, and what the document said before it did.
+   *
+   * OPTIONAL here and required at the gateway, and the asymmetry is the point: this type reads
+   * rows that are already stored, including every extraction written before the record existed.
+   * Absent means "this extraction predates the record", which is a different fact from an empty
+   * array ("no corrector ran on that parser path") and from `applied: false` ("a corrector ran
+   * and left the text alone"). Collapsing the three would put the ambiguity back.
+   *
+   * `buildProviderPayload` deliberately does NOT forward this to the model. The model is asked
+   * what the document says; handing it a second, backwards copy of the same text would be noise
+   * at best and a second injection surface at worst.
+   */
+  normalizations?: Array<{
+    id: string;
+    applied: boolean;
+    original_text: string | null;
+    measurements: Array<{ name: string; value: number }>;
+  }>;
   blocks: Array<{
     id: string;
     page: number;

@@ -30,6 +30,12 @@ const payload = {
   }],
   tables: [],
   marks: [],
+  normalizations: [{
+    id: "hebrew_visual_order",
+    applied: false,
+    original_text: null,
+    measurements: [{ name: "hebrew_words", value: 1 }],
+  }],
 };
 
 Deno.test("document processing request and extraction contracts", () => {
@@ -45,6 +51,82 @@ Deno.test("document processing request and extraction contracts", () => {
     validateExtraction({
       ...payload,
       blocks: [{ ...payload.blocks[0], bbox: [0.8, 0, 0.2, 1] }],
+    }),
+    false,
+  );
+
+  // #20 -- the pairing between a stored value and its original, checked at the last point where
+  // the payload is still refusable. Each case below is a DIFFERENT way of losing the evidence,
+  // and every one of them used to be representable.
+  const applied = {
+    ...payload,
+    normalizations: [{
+      id: "hebrew_visual_order",
+      applied: true,
+      original_text: 'הלבק רוקמ ךמסמ',
+      measurements: [
+        { name: "hebrew_words", value: 3 },
+        { name: "final_letter_first", value: 2 },
+        { name: "final_letter_last", value: 0 },
+      ],
+    }],
+  };
+  assert.equal(validateExtraction(applied), true);
+  // A worker that omits the array entirely: it cannot say whether it rewrote the text, which is
+  // exactly the state GATEWAY_CONTRACT_VERSION moved to "3" to make impossible.
+  assert.equal(
+    validateExtraction(
+      Object.fromEntries(
+        Object.entries(payload).filter(([key]) => key !== "normalizations"),
+      ),
+    ),
+    false,
+  );
+  // Correction applied, original thrown away -- the exact defect #20 names.
+  assert.equal(
+    validateExtraction({
+      ...applied,
+      normalizations: [{ ...applied.normalizations[0], original_text: null }],
+    }),
+    false,
+  );
+  // ...and the other half: nothing changed, yet a second copy of the text is carried anyway,
+  // which would read as a correction nobody made.
+  assert.equal(
+    validateExtraction({
+      ...payload,
+      normalizations: [{
+        ...payload.normalizations[0],
+        original_text: "בדיקה",
+      }],
+    }),
+    false,
+  );
+  // An unreviewed corrector cannot reach stored evidence by inventing an id.
+  assert.equal(
+    validateExtraction({
+      ...applied,
+      normalizations: [{ ...applied.normalizations[0], id: "transliterate" }],
+    }),
+    false,
+  );
+  assert.equal(
+    validateExtraction({
+      ...applied,
+      normalizations: [{
+        ...applied.normalizations[0],
+        measurements: [{ name: "hebrew_words", value: Number.NaN }],
+      }],
+    }),
+    false,
+  );
+  assert.equal(
+    validateExtraction({
+      ...applied,
+      normalizations: [
+        applied.normalizations[0],
+        applied.normalizations[0],
+      ],
     }),
     false,
   );
@@ -221,7 +303,9 @@ Deno.test("document processing request and extraction contracts", () => {
 });
 
 Deno.test("gateway contract handshake is exact and header based", () => {
-  assert.equal(GATEWAY_CONTRACT_VERSION, "2");
+  // Moved 2 -> 3 with `normalizations`. This literal and `GATEWAY_CONTRACT_VERSION` in
+  // `worker/ocr/src/gateway.py` are the pair a3603c0 broke by moving only one of them.
+  assert.equal(GATEWAY_CONTRACT_VERSION, "3");
   assert.equal(
     gatewayContractMatches(
       new Headers({
