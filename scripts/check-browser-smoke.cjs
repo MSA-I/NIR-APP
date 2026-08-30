@@ -811,7 +811,11 @@ async function receivingAccessibility(browser) {
     await assertFullMobileActions(page, 'receiving detail accessibility',
       ['order', 'dashboard', 'capture', 'receive', 'documents']);
     assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail lost its contextual phone taskbar');
-    assert.equal(await page.getByText('סיבת השמירה / ההשלמה').count(), 0, 'routine receiving must not ask for a reason');
+    // Same repair as the order-approval claim below: the phrase this looked for exists nowhere,
+    // so the assertion could not fail. The reason box a routine receipt would grow is
+    // `ConfirmDialog`'s.
+    assert.equal(await page.getByText('סיבה (רשות — נרשמת ביומן הביקורת)').count(), 0,
+      'routine receiving must not ask for a reason');
     await page.getByRole('button', { name: 'מלא עבור מוצר בדיקת נגישות' }).waitFor();
     assert.equal(await page.locator('button[aria-pressed]').count(), 5, 'receiving status controls lost pressed state');
     await page.screenshot({ path: path.join(outDir, 'receiving-390.png'), fullPage: true });
@@ -1498,11 +1502,18 @@ async function orderSupplierComparison(browser) {
     assert.equal(await summaryStep.getAttribute('aria-current'), 'step', 'summary step did not become current');
     assert.equal(await page.getByRole('dialog', { name: 'סיכום ההזמנה' }).count(), 0, 'summary regressed to a review dialog');
     const minimumSummary = page.locator('section[aria-labelledby="minimum-summary-title"]');
-    await minimumSummary.getByRole('heading', { name: /1 ספקים מתחת למינימום ההזמנה שלהם.*תישלח כרגיל/ }).waitFor();
+    // ONE breach reads as one supplier. `1 ספקים` was never Hebrew; the singular branch
+    // (`summaryStep.minimumOne`) was introduced when this screen was extracted and this line was
+    // not moved with it. Nothing caught it because the browser gate had never run on this branch.
+    await minimumSummary.getByRole('heading', { name: /ספק אחד מתחת למינימום ההזמנה שלו.*תישלח כרגיל/ }).waitFor();
     assert((await minimumSummary.innerText()).includes('24.50'), 'summary omitted the exact supplier shortfall');
     const confirm = page.getByRole('button', { name: 'אשר ושלח הזמנות' });
     assert(await confirm.isEnabled(), 'supplier minimum incorrectly blocked final approval');
-    assert.equal(await page.getByText('סיבת אישור ההזמנה').count(), 0, 'routine order approval asks for a reason');
+    // The absence claim has to name a label the product can actually render, or it passes for
+    // the wrong reason forever. `סיבת אישור ההזמנה` exists nowhere any more; the reason box a
+    // routine approval would grow is `ConfirmDialog`'s, and this is its wording.
+    assert.equal(await page.getByText('סיבה (רשות — נרשמת ביומן הביקורת)').count(), 0,
+      'routine order approval asks for a reason');
     await captureOrderState('summary');
 
     await qualitySupplierPrice(60);
