@@ -807,7 +807,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         meta={!archive ? 'כל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.' : undefined}
         actions={<>
           {canUpload && !archive && (
-            <button type="button" className="btn-primary" onClick={() => setUploadOpen(true)}>
+            <button type="button" data-tour-anchor="documents-upload" className="btn-primary" onClick={() => setUploadOpen(true)}>
               <Upload size={ICON.sm} /> העלאת מסמך
             </button>
           )}

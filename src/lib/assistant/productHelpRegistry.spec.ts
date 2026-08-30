@@ -116,8 +116,8 @@ describe('the guard fires — deliberately broken snapshots are rejected by name
   });
 
   it('rejects a route that is not a key of APP_ROUTE_POLICY (a removed screen)', () => {
-    expect(productHelpRegistryDefects(snapshot([{ ...HEALTHY, route: 'receiving' }])))
-      .toContain('entry[0]:route_not_in_policy:receiving');
+    expect(productHelpRegistryDefects(snapshot([{ ...HEALTHY, route: 'removedScreen' }])))
+      .toContain('entry[0]:route_not_in_policy:removedScreen');
   });
 
   it('rejects roles that exceed the route Guard (a drifted role)', () => {

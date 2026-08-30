@@ -882,6 +882,7 @@ export default function Dashboard() {
           owner on a rung with no look renders it too — never an empty 20px band under the heading.
           `compact` drops the 44px action-row touch floor, which on a 20px text line is a 24px hole
           under a heading, and pins the chip's own hit area at 24×24 instead (WCAG 2.5.8 AA). */}
+      <div data-tour-anchor="dashboard-heading">
       <PageHeader title={<span className="font-normal">{pageTitle}</span>}
         meta={firstName
           ? <span className="flex flex-wrap items-center gap-2">
@@ -909,6 +910,7 @@ export default function Dashboard() {
               <RefreshCw size={ICON.sm} aria-hidden="true" className={fetching ? 'animate-spin ' : ''} />
           </button>
         </div>} />
+      </div>
 
       {/* The capsule strip lived here briefly (T7.3) and was removed by owner decision
           ("לא רלוונטי") — the money strip and the due-window tile already carry the day's figures. */}
@@ -929,6 +931,7 @@ export default function Dashboard() {
           not see a link it cannot open. It sits OUTSIDE the .dash-enter grid on purpose — the
           quality gate pins the heading order inside it. */}
       {data?.firstRun && profile?.role === 'owner' && (
+        <div data-tour-first-run="true">
         <Note tone="info" className="flex flex-wrap items-center justify-between gap-3">
           <span className="min-w-0 flex-1">
             עדיין לא הוגדרו ספקים, ולכן המסכים שלמטה ריקים. אשף ההקמה ממלא קטגוריות, ספקים, מוצרים
@@ -936,6 +939,7 @@ export default function Dashboard() {
           </span>
           <Link to="/onboarding" className="btn-primary min-h-11 shrink-0 whitespace-nowrap">פתיחת אשף ההקמה</Link>
         </Note>
+        </div>
       )}
 
       {/* flex, not space-y: `order` below only moves flex/grid children, and margins cannot be
@@ -949,8 +953,10 @@ export default function Dashboard() {
           order (attention h2 first, deliveries h2 second), so placement is CSS `order` only. */}
       {data && (
         <div className="dash-enter flex flex-col gap-5 lg:grid lg:grid-cols-12 lg:gap-6">
-          <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול" baseCurrency={baseCurrency}
-            className="lg:order-2 lg:col-span-6 [--dash-step-mobile:1] [--dash-step:1]" />
+          <div data-tour-anchor="dashboard-attention"
+            className="lg:order-2 lg:col-span-6 [--dash-step-mobile:1] [--dash-step:1]">
+            <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול" baseCurrency={baseCurrency} />
+          </div>
 
           <DeliveriesZone today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount}
             className="lg:order-3 lg:col-span-3 [--dash-step-mobile:2] [--dash-step:2]" />

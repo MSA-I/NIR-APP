@@ -166,7 +166,7 @@ export default function PriceLists() {
         actions={canWrite ? (
           <div className="flex flex-wrap gap-2">
             <button className="btn-secondary" onClick={() => setImportOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> ייבוא רב־ספקים מ־Excel</button>
-            <button className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> העלאת מחירון</button>
+            <button data-tour-anchor="prices-upload" className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> העלאת מחירון</button>
           </div>
         ) : (
           /* „מנהל רכש”, not „משרד”: PRODUCT.md:13 and status.ts's ROLE_LABEL both name `office`

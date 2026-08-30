@@ -29,8 +29,11 @@ export const APP_ROUTE_POLICY = {
   products: { path: '/products', roles: STAFF_ROLES },
   inventory: { path: '/inventory', roles: STAFF_ROLES },
   prices: { path: '/prices', roles: STAFF_ROLES },
+  newOrder: { path: '/orders/new', roles: STAFF_ROLES },
   orders: { path: '/orders', roles: STAFF_ROLES },
   orderDetail: { path: '/orders/:id', roles: STAFF_ROLES },
+  receiving: { path: '/receiving', roles: STAFF_ROLES },
+  documents: { path: '/documents', roles: STAFF_ROLES },
   invoices: { path: '/invoices', roles: ACTIVE_ROLES },
   invoiceDetail: { path: '/invoices/:id', roles: ACTIVE_ROLES },
   credits: { path: '/credits', roles: ACTIVE_ROLES },
@@ -40,8 +43,10 @@ export const APP_ROUTE_POLICY = {
   exceptions: { path: '/exceptions', roles: ACTIVE_ROLES },
   alerts: { path: '/alerts', roles: STAFF_ROLES },
   expenses: { path: '/expenses', roles: MONEY_ROLES },
+  reports: { path: '/reports', roles: MONEY_ROLES },
   productReport: { path: '/reports/products', roles: ACTIVE_ROLES },
   analytics: { path: '/analytics', roles: STAFF_ROLES },
+  onboarding: { path: '/onboarding', roles: ['owner'] },
 } as const satisfies Record<string, AppRoutePolicyEntry>;
 
 export type AppRoutePolicyKey = keyof typeof APP_ROUTE_POLICY;

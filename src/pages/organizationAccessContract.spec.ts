@@ -41,7 +41,10 @@ describe('organization access after Trial retirement', () => {
     expect(auth).toContain("window.addEventListener('focus', onFocus)");
     expect(auth).toContain("document.addEventListener('visibilitychange', onVisibility)");
     expect(app).toContain('if (write && !organizationAccess.canWrite)');
-    for (const path of ['/orders/new', '/receiving/:orderId', '/invoices/new', '/pay', '/onboarding']) {
+    for (const route of ['newOrder', 'onboarding']) {
+      expect(app).toContain(`path={APP_ROUTE_POLICY.${route}.path} element={<Guard roles={APP_ROUTE_POLICY.${route}.roles} write>`);
+    }
+    for (const path of ['/receiving/:orderId', '/invoices/new', '/pay']) {
       expect(app).toMatch(new RegExp(`path="${path.replace('/', '\\/')}"[^\n]+<Guard[^\n]+ write>`));
     }
     for (const retiredCopy of ['תקופת הניסיון', 'ימי חסד', 'Grace', 'Trial']) {

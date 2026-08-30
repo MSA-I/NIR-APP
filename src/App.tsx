@@ -280,20 +280,20 @@ export default function App() {
         <Route path={APP_ROUTE_POLICY.inventory.path} element={<Guard roles={APP_ROUTE_POLICY.inventory.roles}><Inventory /></Guard>} />
         <Route path={APP_ROUTE_POLICY.prices.path} element={<Guard roles={APP_ROUTE_POLICY.prices.roles}><PriceLists /></Guard>} />
 
-        <Route path="/orders/new" element={<Guard roles={STAFF} write><NewOrder /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.newOrder.path} element={<Guard roles={APP_ROUTE_POLICY.newOrder.roles} write><NewOrder /></Guard>} />
         <Route path={APP_ROUTE_POLICY.orders.path} element={<Guard roles={APP_ROUTE_POLICY.orders.roles}><OrdersList /></Guard>} />
         {/* Before /orders/:id so "proposals" is not read as an order id. */}
         <Route path="/orders/proposals/:proposalId" element={<Guard roles={STAFF}><SupplierProposalReview /></Guard>} />
         <Route path={APP_ROUTE_POLICY.orderDetail.path} element={<Guard roles={APP_ROUTE_POLICY.orderDetail.roles}><OrderDetail /></Guard>} />
 
-        <Route path="/receiving" element={<Guard roles={STAFF}><ReceivingList /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.receiving.path} element={<Guard roles={APP_ROUTE_POLICY.receiving.roles}><ReceivingList /></Guard>} />
         <Route path="/receiving/:orderId" element={<Guard roles={STAFF} write><ReceiveOrder /></Guard>} />
         <Route path="/receipts/:receiptId" element={<Guard roles={STAFF}><ReceiptDetail /></Guard>} />
 
         <Route path={APP_ROUTE_POLICY.invoices.path} element={<Guard roles={APP_ROUTE_POLICY.invoices.roles}><InvoicesList /></Guard>} />
         <Route path="/invoices/new" element={<Guard roles={STAFF} write><InvoiceNew /></Guard>} />
         <Route path={APP_ROUTE_POLICY.invoiceDetail.path} element={<Guard roles={APP_ROUTE_POLICY.invoiceDetail.roles}><InvoiceDetail /></Guard>} />
-        <Route path="/documents" element={<Guard roles={STAFF}><DocumentsGallery /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.documents.path} element={<Guard roles={APP_ROUTE_POLICY.documents.roles}><DocumentsGallery /></Guard>} />
         <Route path="/documents/operations" element={<Guard roles={['owner']}><DocumentOperations /></Guard>} />
         <Route path="/documents/consolidated-invoices" element={<Guard roles={READERS}><ConsolidatedInvoices /></Guard>} />
         {/* The same register, narrowed to what the interpretation layer could not place. A second
@@ -312,7 +312,7 @@ export default function App() {
         <Route path={APP_ROUTE_POLICY.exceptions.path} element={<Guard roles={APP_ROUTE_POLICY.exceptions.roles}><Exceptions /></Guard>} />
         <Route path={APP_ROUTE_POLICY.alerts.path} element={<Guard roles={APP_ROUTE_POLICY.alerts.roles}><Alerts /></Guard>} />
         <Route path={APP_ROUTE_POLICY.expenses.path} element={<Guard roles={APP_ROUTE_POLICY.expenses.roles}><Expenses /></Guard>} />
-        <Route path="/reports" element={<Guard roles={['owner', 'accountant']}><Reports /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.reports.path} element={<Guard roles={APP_ROUTE_POLICY.reports.roles}><Reports /></Guard>} />
         {/* The product purchase summary reads spend per product — the tenant's commercial
             position — so its readers are the money roles, matching get_product_purchase_summary's
             own role check rather than being wider than it. */}
@@ -325,7 +325,7 @@ export default function App() {
         <Route path="/settings" element={<Guard roles={['owner']}><Settings /></Guard>} />
         <Route path="/settings/webhooks" element={<Guard roles={['owner']}><WebhookSettings /></Guard>} />
         <Route path="/settings/subscription" element={<Guard roles={['owner']}><Subscription /></Guard>} />
-        <Route path="/onboarding" element={<Guard roles={['owner']} write><Onboarding /></Guard>} />
+        <Route path={APP_ROUTE_POLICY.onboarding.path} element={<Guard roles={APP_ROUTE_POLICY.onboarding.roles} write><Onboarding /></Guard>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
