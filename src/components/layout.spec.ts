@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_SECTIONS, barSectionsForRole, drawerSectionsForRole, footerItemsForRole, pageTitleFor, sectionsForRole } from './Layout';
+import { NAV_SECTIONS, barSectionsForRole, drawerSectionsForRole, footerItemsForRole, pageTitleKeyFor, sectionsForRole } from './Layout';
+import { he } from '../lib/i18n/dictionaries/he';
+
+/** The words a key stands for, so a claim about COLLIDING LABELS stays a claim about words. */
+const say = (key: string) => (key === '' ? '' : (he.nav as Record<string, string>)[key.replace(/^nav\./, '')]);
 import { isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
 import type { ActiveRole } from '../lib/types';
 import { routePresentationTitle, STATIC_ROUTE_TITLES } from '../lib/routePresentation';
@@ -27,15 +31,15 @@ describe('מעטפת הניווט', () => {
     const owner = sectionsForRole('owner');
     // Above every heading: the control room (the answer to §12) and the most frequent action.
     expect(owner[0].items.map((item) => item.to)).toEqual(['/dashboard', '/orders/new']);
-    expect(owner.map((section) => section.section)).toEqual([
+    expect(owner.map((section) => say(section.section))).toEqual([
       '', 'רכש', 'מסמכים', 'כספים', 'בקרה ודוחות', 'החשבון',
     ]);
     // A role never sees the paths its catalogue entry withholds, so one list serves all three
     // without three copies to drift apart: an accountant's 'רכש' resolves to nothing and is
     // dropped rather than shown empty.
-    expect(sectionsForRole('accountant').map((section) => section.section))
+    expect(sectionsForRole('accountant').map((section) => say(section.section)))
       .toEqual(['', 'מסמכים', 'כספים', 'בקרה ודוחות']);
-    expect(sectionsForRole('office').map((section) => section.section))
+    expect(sectionsForRole('office').map((section) => say(section.section)))
       .toEqual(['', 'רכש', 'מסמכים', 'כספים', 'בקרה ודוחות']);
     // Ordered within the group by how a procurement day actually runs, not alphabetically.
     expect(owner[1].items.map((item) => item.to)).toEqual([
@@ -48,7 +52,7 @@ describe('מעטפת הניווט', () => {
     // on desktop it is reached through the avatar disc, so the pill must not repeat it.
     expect(sectionsForRole('owner').at(-1)?.items.map((item) => item.to))
       .toEqual(['/settings/subscription', '/onboarding', '/settings']);
-    expect(barSectionsForRole('owner').map((section) => section.section)).not.toContain('החשבון');
+    expect(barSectionsForRole('owner').map((section) => say(section.section))).not.toContain('החשבון');
     expect(barSectionsForRole('owner').flatMap((section) => section.items).map((item) => item.to))
       .not.toContain('/settings');
   });
@@ -78,12 +82,12 @@ describe('מעטפת הניווט', () => {
   it('קבוצה בעלת שם עם יעד אחד היא קישור, לא דיסקלוזר', () => {
     const singles = (role: ActiveRole) => sectionsForRole(role)
       .filter((section) => section.section && section.items.length === 1)
-      .map((section) => section.section);
+      .map((section) => say(section.section));
     // Under the subject grouping no owner or office group is down to one row. The accountant's
     // 'מסמכים' is: consolidated invoices is the only document screen that role may reach.
     expect(singles('owner')).toEqual([]);
     expect(singles('office')).toEqual([]);
-    expect(singles('accountant')).toEqual(['מסמכים']);
+    expect(singles('accountant')).toEqual([say('nav.groupDocuments')]);
   });
 
   it('לרואה החשבון נשאר מסלול הביצוע', () => {
@@ -112,8 +116,8 @@ describe('מעטפת הניווט', () => {
 
   it('כל תווית ניווט נגזרת משם המסך הקנוני', () => {
     for (const item of NAV_SECTIONS.flatMap((section) => section.items)) {
-      expect(item.label).toBe(routePresentationTitle(item.to));
-      expect(pageTitleFor(item.to)).toBe(item.label);
+      expect(item.labelKey).toBe(routePresentationTitle(item.to));
+      expect(pageTitleKeyFor(item.to)).toBe(item.labelKey);
     }
   });
 
@@ -152,18 +156,21 @@ describe('סרגל הפעולות המהירות במובייל', () => {
    * named them apart; only this bar was writing its own labels.
    */
   it('תווית בסרגל היא שם המסך הקנוני, ואין שתי מילים זהות לשני מסכים', () => {
-    const SHORT_FORMS: Record<string, string> = { '/documents': 'מסמכים' };
+    const SHORT_FORMS: Record<string, string> = { '/documents': 'nav.barDocuments' };
     for (const action of QUICK_ACTION_LINKS) {
       const path = action.to!.split('?')[0];
-      expect(action.label).toBe(SHORT_FORMS[path] ?? routePresentationTitle(path));
+      expect(action.labelKey).toBe(SHORT_FORMS[path] ?? routePresentationTitle(path));
     }
+    // The short form is a DIFFERENT word from the catalogue's, not the same one under another key.
+    expect(say('nav.barDocuments')).toBe('מסמכים');
+    expect(say(routePresentationTitle('/documents')!)).not.toBe(say('nav.barDocuments'));
     // The two payment screens must not collide anywhere a single role can see both. One label may
     // repeat across surfaces — that is the same screen named twice — but never over two routes.
     expect(routePresentationTitle('/pay')).not.toBe(routePresentationTitle('/payments'));
     const byLabel = new Map<string, Set<string>>();
     for (const { label, to } of [
-      ...quickActionsFor('accountant').filter((a) => a.kind === 'link').map((a) => ({ label: a.label, to: a.to!.split('?')[0] })),
-      ...sectionsForRole('accountant').flatMap((s) => s.items).map((i) => ({ label: i.label, to: i.to })),
+      ...quickActionsFor('accountant').filter((a) => a.kind === 'link').map((a) => ({ label: say(a.labelKey), to: a.to!.split('?')[0] })),
+      ...sectionsForRole('accountant').flatMap((s) => s.items).map((i) => ({ label: say(i.labelKey), to: i.to })),
     ]) {
       byLabel.set(label, (byLabel.get(label) ?? new Set()).add(to));
     }
@@ -187,8 +194,8 @@ describe('סרגל הפעולות המהירות במובייל', () => {
         sectionsForRole(role).flatMap((section) => section.items),
       );
     }
-    expect(drawerSectionsForRole('owner').map((section) => section.section)).toContain('החשבון');
-    expect(barSectionsForRole('owner').map((section) => section.section)).not.toContain('החשבון');
+    expect(drawerSectionsForRole('owner').map((section) => say(section.section))).toContain('החשבון');
+    expect(barSectionsForRole('owner').map((section) => say(section.section))).not.toContain('החשבון');
   });
 
   // The desktop speed-dial test that used to sit here went with the speed-dial itself (owner

@@ -7,6 +7,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {} }));
 import { financialBankStatusCounts, financialDueExposure } from './FinancialSupplier';
 import { NAV_SECTIONS } from '../components/Layout';
 import { APP_ROUTE_POLICY } from '../lib/routePolicy';
+import { he } from '../lib/i18n/dictionaries/he';
 
 const source = readFileSync(join(process.cwd(), 'src', 'pages', 'FinancialSupplier.tsx'), 'utf8');
 const app = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
@@ -39,8 +40,12 @@ describe('financial supplier capability boundary', () => {
       { id: 's1', tx_date: '2026-08-02', amount: 20, currency: 'ILS', status: 'suggested' },
       { id: 'm1', tx_date: '2026-08-03', amount: 30, currency: 'ILS', status: 'matched' },
     ])).toEqual({ unmatched: 1, suggested: 1 });
-    expect(source).toContain('תנועות בנק לא מותאמות');
-    expect(source).toContain('התאמות שממתינות לאישור');
+    // The two headings moved into the dictionary, so the claim splits rather than weakens: the
+    // screen renders both keys, and the keys still name the two counts as different things.
+    expect(source).toContain("t('financialSupplier.text_3')");
+    expect(source).toContain("t('financialSupplier.text_4')");
+    expect(he.financialSupplier.text_3).toBe('תנועות בנק לא מותאמות');
+    expect(he.financialSupplier.text_4).toBe('התאמות שממתינות לאישור');
   });
 
   it('does not request procurement-sensitive supplier data', () => {
@@ -64,7 +69,8 @@ describe('financial supplier capability boundary', () => {
     expect(app).toContain('roles={APP_ROUTE_POLICY.analytics.roles}');
     const navigation = NAV_SECTIONS.flatMap((section) => section.items)
       .find((item) => item.to === '/analytics');
-    expect(navigation).toMatchObject({ label: 'ביצועי ספקים', roles: ['owner', 'office'] });
+    expect(navigation).toMatchObject({ roles: ['owner', 'office'] });
+    expect(he.nav[navigation!.labelKey.replace(/^nav./, '') as keyof typeof he.nav]).toBe('ביצועי ספקים');
     expect(navigation?.roles).not.toContain('accountant');
   });
 

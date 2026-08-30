@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { Card, ICON, Modal, StatusBadge } from '../components/ui';
@@ -29,6 +30,7 @@ export default function CustomerOnboarding({ orgId, steps, may, busy, run }: {
   busy: boolean;
   run: (action: () => Promise<unknown>, done: string) => void;
 }) {
+  const { statusLabel } = useT();
   const [editing, setEditing] = useState<OnboardingStep | null>(null);
 
   if (steps.length === 0) return null;
@@ -47,7 +49,7 @@ export default function CustomerOnboarding({ orgId, steps, may, busy, run }: {
             <span className="min-w-44 text-sm text-ink-body">{step.label}</span>
             <StatusBadge meta={ONBOARDING_STEP_STATE[step.state]} />
             {step.source !== 'none' && (
-              <span className="text-xs text-ink-muted">{ONBOARDING_SOURCE[step.source]}</span>
+              <span className="text-xs text-ink-muted">{statusLabel(ONBOARDING_SOURCE[step.source])}</span>
             )}
             {step.achieved_at && (
               <span className="text-xs text-ink-muted">{fmtDate(step.achieved_at)}</span>

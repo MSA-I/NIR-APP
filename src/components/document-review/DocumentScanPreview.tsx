@@ -1,6 +1,7 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
+import type { TKey } from '../../lib/i18n/t';
 import { useEffect, useRef, useState } from 'react';
 import { Check, CornerDownLeft, Loader2, Pencil, ScanLine } from 'lucide-react';
-import { toHebrewError } from '../../lib/errors';
 import { supabase } from '../../lib/supabase';
 import {
   acceptDocumentScan,
@@ -14,7 +15,12 @@ import { ICON, Note, useToast } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
 
 const DEFAULT_CORNERS: ScanCorners = [[0.05, 0.05], [0.95, 0.05], [0.95, 0.95], [0.05, 0.95]];
-const CORNER_LABELS = ['פינה שמאלית עליונה', 'פינה ימנית עליונה', 'פינה ימנית תחתונה', 'פינה שמאלית תחתונה'];
+const CORNER_KEYS: readonly TKey[] = [
+  'scanPreview.cornerTopLeft',
+  'scanPreview.cornerTopRight',
+  'scanPreview.cornerBottomRight',
+  'scanPreview.cornerBottomLeft',
+];
 
 interface Props {
   state: DocumentScanState;
@@ -24,19 +30,17 @@ interface Props {
   readOnly: boolean;
 }
 
-const SCAN_FAILURE_MESSAGES: Record<string, string> = {
-  corrupt_document: 'קובץ התמונה פגום או שאינו נתמך.',
-  decompressed_size_limit: 'רזולוציית התמונה גדולה מדי לעיבוד בטוח.',
-  file_size_limit: 'קובץ התמונה גדול מדי.',
-  processing_resource_failure: 'עיבוד התמונה חרג ממגבלת המשאבים.',
-  processing_timeout: 'עיבוד התמונה ארך זמן רב מדי.',
-  scan_image_too_small: 'התמונה קטנה מדי לזיהוי מסמך.',
+const SCAN_FAILURE_KEYS: Record<string, TKey> = {
+  corrupt_document: 'scanPreview.failureCorruptDocument',
+  decompressed_size_limit: 'scanPreview.failureDecompressedSizeLimit',
+  file_size_limit: 'scanPreview.failureFileSizeLimit',
+  processing_resource_failure: 'scanPreview.failureResourceLimit',
+  processing_timeout: 'scanPreview.failureTimeout',
+  scan_image_too_small: 'scanPreview.failureImageTooSmall',
 };
 
-function scanFailureMessage(code: string | null): string {
-  return code && SCAN_FAILURE_MESSAGES[code]
-    ? SCAN_FAILURE_MESSAGES[code]
-    : 'לא ניתן ליצור סריקה נקייה. אפשר לנסות להעלות צילום ברור יותר.';
+function scanFailureKey(code: string | null): TKey {
+  return (code && SCAN_FAILURE_KEYS[code]) || 'scanPreview.failureUnknown';
 }
 
 function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, recovery = false }: {
@@ -47,6 +51,7 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, rec
   readOnly: boolean;
   recovery?: boolean;
 }) {
+  const { errorText, t } = useT();
   const [corners, setCorners] = useState<ScanCorners>(
     state.manual_corners ?? state.detected_corners ?? DEFAULT_CORNERS,
   );
@@ -69,10 +74,10 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, rec
     try {
       if (recovery) await recoverDocumentScan(state.scan_job_id, corners);
       else await submitDocumentScanCorners(state.scan_job_id, corners);
-      toast('הפינות נשמרו. נוצרת סריקה חדשה.', 'success');
+      toast(t('scanPreview.toast'), 'success');
       await onChanged();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setSaving(false);
     }
@@ -83,21 +88,21 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, rec
     <div className="space-y-4">
       <Note tone="await">
         {recovery
-          ? 'מקם את ארבע הפינות על הדף המלא. הסריקה הקודמת תישמר כראיה ותיווצר סריקה חדשה.'
-          : 'גבולות הדף לא זוהו. מקם את ארבע הפינות על קצות המסמך ואז צור סריקה חדשה.'}
+          ? t('scanPreview.text')
+          : t('scanPreview.text_2')}
       </Note>
       <div ref={frame} dir="ltr" className="relative mx-auto max-w-4xl overflow-hidden rounded-lg bg-surface-sunken touch-none">
-        <img src={sourceUrl} alt={`המסמך המקורי ${fileName} לבחירת גבולות`} className="block h-auto w-full select-none" draggable={false} />
+        <img src={sourceUrl} alt={t('scanPreview.originalForCornersAlt', { fileName })} className="block h-auto w-full select-none" draggable={false} />
         <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           <polygon points={polygon} fill="none" stroke="currentColor" strokeWidth="0.65" className="text-action" />
         </svg>
         {corners.map(([x, y], index) => (
           <button
-            key={CORNER_LABELS[index]}
+            key={CORNER_KEYS[index]}
             type="button"
             className="absolute grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-action bg-surface text-action shadow-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
             style={{ insetInlineStart: `${x * 100}%`, insetBlockStart: `${y * 100}%` }}
-            aria-label={`${CORNER_LABELS[index]}. חצים מזיזים בחצי אחוז; Shift וחץ בשני אחוזים.`}
+            aria-label={t('scanPreview.cornerHandleAria', { corner: t(CORNER_KEYS[index]) })}
             disabled={readOnly}
             onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
             onPointerMove={(event) => {
@@ -120,8 +125,8 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, rec
           </button>
         ))}
       </div>
-      {!valid && <Note tone="alert" role="alert">ארבע הפינות חייבות ליצור מסגרת של דף בלי קווים מצטלבים.</Note>}
-      {readOnly && <Note tone="await">הארגון במצב קריאה בלבד, ולכן אי אפשר לשמור תיקון פינות.</Note>}
+      {!valid && <Note tone="alert" role="alert">{t('scanPreview.text_3')}</Note>}
+      {readOnly && <Note tone="await">{t('scanPreview.text_4')}</Note>}
       {/* Deliberately NOT pinned to the bottom of the phone. The two lower corner handles are
           dragged along the image's bottom edge, and a bar fixed over that band would sit on the
           controls this screen exists to operate. The button is directly under the frame here,
@@ -129,7 +134,7 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, rec
       <div className="flex justify-end">
         <button type="button" className="btn-primary" disabled={saving || !valid || readOnly} onClick={() => void submit()}>
           {saving ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <ScanLine size={ICON.md} aria-hidden="true" />}
-          {saving ? 'שומר ומעבד…' : 'יצירת סריקה מהפינות'}
+          {saving ? t('scanPreview.text_5') : t('scanPreview.text_6')}
         </button>
       </div>
     </div>
@@ -137,6 +142,7 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, rec
 }
 
 export function DocumentScanPreview({ state, originalStoragePath, fileName, onChanged, readOnly }: Props) {
+  const { errorText, t } = useT();
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [scanUrl, setScanUrl] = useState<string | null>(null);
   const [urlError, setUrlError] = useState<string | null>(null);
@@ -157,7 +163,7 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
     ]).then(([original, scan]) => {
       if (cancelled) return;
       if (original.error || !original.data?.signedUrl || (state.output_storage_path && (scan.error || !scan.data?.signedUrl))) {
-        setUrlError('לא ניתן לטעון את תצוגת הסריקה המאובטחת. אפשר לרענן ולנסות שוב.');
+        setUrlError(t('scanPreview.setUrlError'));
         return;
       }
       setOriginalUrl(original.data.signedUrl);
@@ -171,10 +177,10 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
     setAccepting(true);
     try {
       await acceptDocumentScan(state.output_id);
-      toast('הסריקה אושרה והמסמך נשלח לחילוץ.', 'success');
+      toast(t('scanPreview.toast_2'), 'success');
       await onChanged();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setAccepting(false);
     }
@@ -186,16 +192,16 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <ScanLine size={ICON.lg} className="text-action" aria-hidden="true" />
-            <h2 id="document-scan-title" className="section-title">הכנת סריקה לקריאה</h2>
+            <h2 id="document-scan-title" className="section-title">{t('scanPreview.text_7')}</h2>
           </div>
           <p className="mt-1 break-words text-sm text-ink-muted"><bdi>{fileName}</bdi></p>
         </div>
         <span className={state.status === 'accepted' ? 'badge-done' : state.status === 'failed' ? 'badge-alert' : 'badge-await'}>
-          {state.status === 'queued' ? 'ממתין לסריקה'
-            : state.status === 'processing' ? 'משפר תמונה'
-              : state.status === 'needs_corners' ? 'נדרשות פינות'
-                : state.status === 'ready' ? 'ממתין לאישור'
-                  : state.status === 'accepted' ? 'הסריקה אושרה' : 'הסריקה נכשלה'}
+          {state.status === 'queued' ? t('scanPreview.text_8')
+            : state.status === 'processing' ? t('scanPreview.text_9')
+              : state.status === 'needs_corners' ? t('scanPreview.text_10')
+                : state.status === 'ready' ? t('scanPreview.text_11')
+                  : state.status === 'accepted' ? t('scanPreview.text_12') : t('scanPreview.text_13')}
         </span>
       </div>
 
@@ -203,11 +209,11 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
       {(state.status === 'queued' || state.status === 'processing') && (
         <Note tone="info" role="status" className="flex items-center gap-2">
           <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />
-          <span className="min-w-0 flex-1">מזהה גבולות, מיישר פרספקטיבה ומסיר צללים ורעש. החילוץ יתחיל רק לאחר אישור התצוגה.</span>
+          <span className="min-w-0 flex-1">{t('scanPreview.text_14')}</span>
         </Note>
       )}
       {state.status === 'failed' && (
-        <Note tone="alert" role="alert"><span className="min-w-0 flex-1">הסריקה נכשלה. {scanFailureMessage(state.last_error_code)}</span></Note>
+        <Note tone="alert" role="alert"><span className="min-w-0 flex-1">{t('scanPreview.scanFailed')} {t(scanFailureKey(state.last_error_code))}</span></Note>
       )}
       {(state.status === 'needs_corners' || state.status === 'failed' || (state.status === 'ready' && editingCorners)) && originalUrl && (
         <ScanCornerEditor
@@ -223,19 +229,19 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
         <div className="space-y-4">
           {state.corners_source === 'full_frame_fallback' && (
             <Note tone="idle">
-              הדף ממלא את כל מסגרת המקור. לא זוהה מלבן גבולות אוטומטי, ולכן הסריקה שמרה את המסגרת המלאה במקום לחתוך ראיה.
+              {t('scanPreview.text_15')}
             </Note>
           )}
           <div className="grid min-w-0 gap-4 lg:grid-cols-2">
             <figure className="min-w-0 overflow-hidden rounded-2xl bg-surface-sunken">
-              <figcaption className="border-b border-line bg-surface px-3 py-2 text-sm font-medium text-ink-soft">המקור</figcaption>
-              <img src={originalUrl} alt={`המסמך המקורי ${fileName}`} className="block max-h-[58vh] w-full object-contain lg:max-h-[72vh]" />
+              <figcaption className="border-b border-line bg-surface px-3 py-2 text-sm font-medium text-ink-soft">{t('scanPreview.text_16')}</figcaption>
+              <img src={originalUrl} alt={t('scanPreview.originalAlt', { fileName })} className="block max-h-[58vh] w-full object-contain lg:max-h-[72vh]" />
             </figure>
             <figure className="min-w-0 overflow-hidden rounded-2xl bg-surface-sunken">
               <figcaption className="border-b border-line bg-surface px-3 py-2 text-sm font-medium text-ink-soft">
-                הסריקה המשופרת · {state.output_mode === 'black_and_white' ? 'שחור־לבן' : 'גווני אפור'}
+                {t('scanPreview.enhancedCaption')} · {state.output_mode === 'black_and_white' ? t('scanPreview.text_17') : t('scanPreview.text_18')}
               </figcaption>
-              <img src={scanUrl} alt={`סריקה משופרת של ${fileName}`} className="block max-h-[58vh] w-full object-contain lg:max-h-[72vh]" />
+              <img src={scanUrl} alt={t('scanPreview.enhancedAlt', { fileName })} className="block max-h-[58vh] w-full object-contain lg:max-h-[72vh]" />
             </figure>
           </div>
           {/* `accepted` is where the scan job stops, and it never advances again — so a sentence
@@ -246,7 +252,7 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
               lifecycle strip's answer, one card below, and it stays the only one. */}
           {state.status === 'ready' && (
             <div className="space-y-3 border-t border-line pt-4">
-              <Note tone="info">בשלב הזה הוכנה תמונת סריקה בלבד. עדיין לא חולצו מהמסמך ספק, מספר, תאריך, סכומים או שורות.</Note>
+              <Note tone="info">{t('scanPreview.text_19')}</Note>
               <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-ink-muted">
                 {readOnly
@@ -260,12 +266,12 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
                   is the exception path and sits beside it. */}
               <div className="flex flex-wrap gap-2">
               <button type="button" className="btn-secondary" disabled={accepting || readOnly} onClick={() => setEditingCorners(true)}>
-                <Pencil size={ICON.md} aria-hidden="true" /> תיקון גבולות
+                <Pencil size={ICON.md} aria-hidden="true" /> {t('scanPreview.fixCorners')}
               </button>
-              <PrimaryDecision label="אישור הסריקה והמשך לחילוץ">
+              <PrimaryDecision label={t('scanPreview.label')}>
                 <button type="button" className="btn-primary" disabled={accepting || readOnly} onClick={() => void accept()}>
                   {accepting ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <Check size={ICON.md} aria-hidden="true" />}
-                  {accepting ? 'מאשר…' : 'אישור והמשך לחילוץ'}
+                  {accepting ? t('scanPreview.text_22') : t('scanPreview.text_23')}
                 </button>
               </PrimaryDecision>
               </div>

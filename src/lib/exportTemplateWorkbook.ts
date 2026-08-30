@@ -60,17 +60,12 @@ export type WorkbookRejection =
   | 'no_sheets'
   | 'too_large';
 
-/** Hebrew, and each one says what to do next rather than only what went wrong. */
-export const WORKBOOK_REJECTION_MESSAGE: Record<WorkbookRejection, string> = {
-  macro_enabled:
-    'הקובץ מכיל מאקרו (‎.xlsm או ‎.xlsb). שמרו אותו מחדש כ-‎.xlsx רגיל והעלו שוב — התבנית נשלחת '
-    + 'לרואה החשבון בשם המערכת, ולכן אינה יכולה לשאת קוד.',
-  external_links:
-    'הקובץ מפנה לחוברות חיצוניות. הפניה כזו עובדת רק במחשב שבו נוצרה, ובכל מקום אחר תיתן מספר ישן '
-    + 'בלי להתריע. החליפו את ההפניות בערכים או ב-‎{{שדה}} והעלו שוב.',
-  unreadable: 'לא ניתן לקרוא את הקובץ. ודאו שזו חוברת Excel תקינה ולא קובץ מוגן בסיסמה.',
-  no_sheets: 'אין בחוברת אף גיליון קריא, ולכן אין מה למפות.',
-  too_large: 'הקובץ גדול מ-20MB. תבנית היא שלד מעוצב, לא הדוח עצמו.',
+export const WORKBOOK_REJECTION_KEY: Record<WorkbookRejection, import('./i18n/t').TKey> = {
+  macro_enabled: 'exportTemplateWorkbook.macroEnabled',
+  external_links: 'exportTemplateWorkbook.externalLinks',
+  unreadable: 'exportTemplateWorkbook.unreadable',
+  no_sheets: 'exportTemplateWorkbook.noSheets',
+  too_large: 'exportTemplateWorkbook.tooLarge',
 };
 
 export const WORKBOOK_MAX_BYTES = 20 * 1024 * 1024;
@@ -106,7 +101,7 @@ export function isMacroEnabledName(fileName: string): boolean {
 
 export class WorkbookRejected extends Error {
   constructor(public readonly reason: WorkbookRejection) {
-    super(WORKBOOK_REJECTION_MESSAGE[reason]);
+    super(reason);
     this.name = 'WorkbookRejected';
   }
 }

@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -8,7 +9,6 @@ import { useAuth } from '../auth/AuthContext';
 import { ICON, useToast } from '../components/ui';
 import { APP_NAME } from '../lib/branding';
 import { useGlowPointer } from '../lib/glowPointer';
-import { toHebrewError } from '../lib/errors';
 
 /**
  * The operator console's own chrome — deliberately NOT the tenant `Layout`. Layout is a tenant
@@ -103,6 +103,7 @@ function MenuGlyph() {
 }
 
 export default function OperatorShell() {
+  const { errorText } = useT();
   const { signOut, session } = useAuth();
   const location = useLocation();
   const toast = useToast();
@@ -134,7 +135,7 @@ export default function OperatorShell() {
     const result = await signOut();
     setBusy(false);
     if (result.error) {
-      toast(toHebrewError(result.error), 'error');
+      toast(errorText(result.error), 'error');
       return;
     }
     if (result.pushWarning) toast(result.pushWarning, 'error');

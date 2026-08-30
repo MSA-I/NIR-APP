@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState } from 'react';
 import { CloudOff, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router';
@@ -23,6 +24,7 @@ import { ICON } from './ui';
  *  - **a manual retry** (:85), which stays even though the queue also resumes by itself.
  */
 export default function OfflineQueueStatus() {
+  const { t, errorText } = useT();
   const queue = useOfflineQueue();
   const lastAutoAttempt = useRef('');
   const [photoProblems, setPhotoProblems] = useState<{
@@ -100,57 +102,57 @@ export default function OfflineQueueStatus() {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="flex items-center gap-1.5 font-medium text-ink">
           {!queue.online && <CloudOff size={ICON.xs} />}
-          {queue.online ? 'מחובר לרשת' : 'אין חיבור לרשת — העבודה נשמרת במכשיר'}
+          {queue.online ? t('offline.text') : t('offline.text_2')}
         </span>
         <span>
-          פעולות ממתינות:{' '}
+          {t('offline.text_3')}{' '}
           <span className="num" data-testid="offline-pending-actions">{queue.pendingActions}</span>
         </span>
         <span>
-          העלאות ממתינות לסנכרון:{' '}
+          {t('offline.text_4')}{' '}
           <span className="num" data-testid="offline-pending-uploads">{syncableUploads}</span>
         </span>
         {needsAttentionUploads > 0 && (
           <span className="text-alert-fg">
-            העלאות דורשות טיפול:{' '}
+            {t('offline.text_5')}{' '}
             <span className="num" data-testid="offline-attention-uploads">{needsAttentionUploads}</span>
           </span>
         )}
         <span>
-          סנכרון מוצלח אחרון:{' '}
+          {t('offline.text_6')}{' '}
           <span className="num" data-testid="offline-last-sync">
             {queue.lastSuccessfulSyncAt === null ? '—' : fmtDateTime(new Date(queue.lastSuccessfulSyncAt))}
           </span>
         </span>
-        {queue.syncing && <span className="text-ink-soft">מסנכרן…</span>}
+        {queue.syncing && <span className="text-ink-soft">{t('offline.text_7')}</span>}
         <button type="button" className="btn-ghost ms-auto min-h-11 text-xs"
           disabled={queue.syncing || !queue.online || !hasSyncableWork}
           onClick={() => void syncAll()}>
-          <RefreshCw size={ICON.xs} /> ניסיון סנכרון עכשיו
+          <RefreshCw size={ICON.xs} /> {t('offline.syncNow')}
         </button>
       </div>
 
       {!queue.storageAvailable && (
         <p className="mt-1.5 text-alert-fg">
-          הדפדפן הזה אינו מאפשר שמירה מקומית, ולכן טיוטה לא תישרד רענון או סגירת הכרטיסייה. אין לסמוך על עבודה לא-מקוונת במכשיר הזה.
+          {t('offline.text_8')}
         </p>
       )}
       {queue.sessionExpired && (
         <p className="mt-1.5 text-alert-fg">
-          פג תוקף החיבור. הטיוטות נשמרו במכשיר ואינן נשלחות עם אישורים מיושנים — יש להתחבר מחדש ואז לסנכרן.
+          {t('offline.text_9')}
         </p>
       )}
       {failures.length > 0 && (
         <ul className="mt-1.5 space-y-1">
           {failures.map((action) => (
             <li key={action.id} className="text-alert-fg">
-              {action.orderLabel}: {action.reason}
-              {action.attempts > 0 && <> <span className="num">(ניסיונות: {action.attempts})</span></>}
+              {action.orderLabel}: {errorText(action.reason)}
+              {action.attempts > 0 && <> <span className="num">({t('offline.attempts')}: {action.attempts})</span></>}
               {action.conflictCode && (
                 <>
-                  {' '}— נדרשת הכרעה.{' '}
+                  {' '}— {t('offline.needsDecision')}{' '}
                   <Link className="font-semibold underline underline-offset-2" to={`/receiving/${action.orderId}`}>
-                    פתיחת מסך הקבלה
+                    {t('offline.text_10')}
                   </Link>
                 </>
               )}
@@ -160,14 +162,14 @@ export default function OfflineQueueStatus() {
       )}
       {!queue.online && (
         <p className="mt-1.5 text-ink-soft">
-          מסכים אחרים דורשים רשת. קונכיית האפליקציה תישאר זמינה, אך נתונים עסקיים שלא נשמרו במסלול הקבלה לא יוצגו מהמטמון.
+          {t('offline.text_11')}
         </p>
       )}
       {photoProblems.length > 0 && (
         <ul className="mt-1.5 space-y-1">
           {photoProblems.map((photo) => (
             <li key={photo.id} className="text-alert-fg">
-              {photo.fileName}: {photo.reason}{photo.needsAttention && ' נדרשת התערבות; סנכרון כללי לא ינסה שוב.'}{photo.attempts > 0 && <> <span className="num">(ניסיונות: {photo.attempts})</span></>}
+              {photo.fileName}: {errorText(photo.reason)}{photo.needsAttention && t('offline.errorText')}{photo.attempts > 0 && <> <span className="num">{t('offline.attempts', { count: photo.attempts })}</span></>}
             </li>
           ))}
         </ul>

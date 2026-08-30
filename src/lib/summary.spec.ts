@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildSummary } from './summary';
 import { SUMMARY_METRIC_LINES } from './assistant/summaryLines.ts';
+import { translateIn } from './i18n/LocaleProvider';
 
 const rpc = vi.fn();
 vi.mock('./supabase', () => ({ supabase: { rpc: (...args: unknown[]) => rpc(...args) } }));
@@ -21,12 +22,17 @@ const allFive = () => [
   row('open_exceptions', 0),
 ];
 
+/**
+ * The shape half: every line carries the KEY, the route and the unit it was defined with. The
+ * wording half is below, against the dictionaries — split because a single assertion comparing
+ * `t(key)` to `t(key)` would pass whether or not either language says anything at all.
+ */
 const EXPECTED_LINES = [
-  { key: 'received_week', label: 'חשבוניות שנקלטו ב-7 הימים האחרונים', unit: 'count', to: '/invoices', currency: null },
-  { key: 'awaiting_approval', label: 'חשבוניות הממתינות לאישור', unit: 'count', to: '/invoices', currency: null },
-  { key: 'expected_payments', label: 'סכום פתוח בדרישות תשלום', unit: 'currency', to: '/payment-requests', currency: 'ILS' },
-  { key: 'suppliers_raised', label: 'ספקים שהעלו מחיר ב-30 הימים האחרונים', unit: 'count', to: '/prices', currency: null },
-  { key: 'open_exceptions', label: 'חריגים פתוחים', unit: 'count', to: '/exceptions', currency: null },
+  { key: 'received_week', labelKey: 'businessSummary.receivedWeek', labelVars: { days: 7 }, unit: 'count', to: '/invoices', currency: null },
+  { key: 'awaiting_approval', labelKey: 'businessSummary.awaitingApproval', unit: 'count', to: '/invoices', currency: null },
+  { key: 'expected_payments', labelKey: 'businessSummary.expectedPayments', unit: 'currency', to: '/payment-requests', currency: 'ILS' },
+  { key: 'suppliers_raised', labelKey: 'businessSummary.suppliersRaised', labelVars: { days: 30 }, unit: 'count', to: '/prices', currency: null },
+  { key: 'open_exceptions', labelKey: 'businessSummary.openExceptions', unit: 'count', to: '/exceptions', currency: null },
 ] as const;
 
 beforeEach(() => {
@@ -65,15 +71,18 @@ describe('הסיכום העסקי מול המודל השרתי (0165)', () => {
     expect(payments?.value).toBe(1234.56);
   });
 
-  it('measured:false הופך ל-value:null ולרשומת כשל עם התווית העברית — וארבעת האחרים נשארים שלמים', async () => {
+  it('measured:false הופך ל-value:null ולרשומת כשל עם מפתח התווית — וארבעת האחרים נשארים שלמים', async () => {
     rpc.mockResolvedValue({
       data: [...allFive().filter((r) => r.metric_key !== 'suppliers_raised'), row('suppliers_raised', null, false)],
       error: null,
     });
     const summary = await buildSummary();
     expect(summary.lines.find((line) => line.key === 'suppliers_raised')?.value).toBeNull();
+    // The field was always called `labelKey` and always held a Hebrew sentence, and `/alerts`
+    // renders it as `tDynamic(key) ?? key` — so the miss fell through to the raw Hebrew and read
+    // correctly for exactly one kind of reader. It is a key now, with its window as a variable.
     expect(summary.failures).toEqual([
-      { code: 'suppliers_raised', label: 'ספקים שהעלו מחיר ב-30 הימים האחרונים' },
+      { code: 'suppliers_raised', labelKey: 'businessSummary.suppliersRaised', labelVars: { days: 30 } },
     ]);
     expect(summary.complete).toBe(false);
     expect(summary.lines.filter((line) => line.value != null)).toHaveLength(4);
@@ -98,7 +107,7 @@ describe('הסיכום העסקי מול המודל השרתי (0165)', () => {
 
   it('כשלי סריקת ההתראות מצטרפים לפני כשלי המדדים, כמו בהתנהגות המקורית', async () => {
     scanAlerts.mockResolvedValue({
-      alerts: [], complete: false, failures: [{ code: 'scan_x', label: 'סריקה X' }],
+      alerts: [], complete: false, failures: [{ code: 'scan_x', labelKey: 'סריקה X' }],
     });
     rpc.mockResolvedValue({ data: [...allFive().slice(1), row('received_week', null, false)], error: null });
     const summary = await buildSummary();
@@ -126,6 +135,37 @@ describe('הסיכום העסקי מול המודל השרתי (0165)', () => {
     expect(sqlKeys.size).toBeGreaterThan(0);
     const labeledKeys = new Set(SUMMARY_METRIC_LINES.map((line) => line.key));
     expect([...sqlKeys].sort()).toEqual([...labeledKeys].sort());
+  });
+
+  it('כל תווית נושאת ניסוח מדויק בשתי השפות, כולל החלון כמשתנה', () => {
+    // The other half of the split. Both languages are pinned exactly, and the window arrives as a
+    // variable rather than baked in — a label that printed a literal `{days}` would pass a
+    // truthiness check and fail here.
+    const wording = {
+      he: {
+        receivedWeek: 'חשבוניות שנקלטו ב-7 הימים האחרונים',
+        awaitingApproval: 'חשבוניות הממתינות לאישור',
+        expectedPayments: 'סכום פתוח בדרישות תשלום',
+        suppliersRaised: 'ספקים שהעלו מחיר ב-30 הימים האחרונים',
+        openExceptions: 'חריגים פתוחים',
+      },
+      en: {
+        receivedWeek: 'Invoices received in the last 7 days',
+        awaitingApproval: 'Invoices awaiting approval',
+        expectedPayments: 'Open amount in payment requests',
+        suppliersRaised: 'Suppliers that raised a price in the last 30 days',
+        openExceptions: 'Open exceptions',
+      },
+    } as const;
+    for (const locale of ['he', 'en'] as const) {
+      for (const line of EXPECTED_LINES) {
+        const name = line.labelKey.slice('businessSummary.'.length) as keyof typeof wording['he'];
+        // `as const` narrows each row separately, so the three without a window have no such
+        // property at all rather than an undefined one.
+        const vars = 'labelVars' in line ? line.labelVars : undefined;
+        expect(translateIn(locale, line.labelKey, vars)).toBe(wording[locale][name]);
+      }
+    }
   });
 
   it('ההגדרות לא חוזרות לדפדפן — אין שאילתת טבלה ישירה ב-summary.ts', () => {

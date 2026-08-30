@@ -2,10 +2,13 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const OWNER_CHOICE_DEBTS = new Set(['20', '37', '66']);
+const OWNER_CHOICE_DEBTS = new Set(['20', '66']);
+// A heading that records a closing date is a resolved item, not open debt.
+const CLOSED_DEBT_HEADING = /נסגר(?:ה)?\s+\d{2}\.\d{2}\.\d{4}/u;
 const PLAN_NOW_DEBTS = new Set([
   '7', '8', '9', '10', '19', '17', '31', '32', '35', '41', '42', '45', '46', '47', '49', '50', '53',
   '25', '29', '30', '34', '52', '56', '57', '58', '59', '61', '62', '64', '65', '67',
+  '68', '70', '72', '76', '77', '78', '79',
 ]);
 
 const TERM_DEFINITIONS = [
@@ -26,7 +29,7 @@ const PLAIN_REPLACEMENTS = [
   [/`([^`]+)`/g, '$1'],
   [/DPA/gi, 'הסכם הגנת מידע'],
   [/MFA/gi, 'אימות בשני שלבים'],
-  [/webhooks?/gi, 'הודעות אוטומטיות בין מערכות'],
+  [/\bwebhooks?\b/gi, 'הודעות אוטומטיות בין מערכות'],
   [/RLS/g, 'הגבלות גישה לנתונים'],
   [/SECURITY DEFINER/gi, 'פעולה בעלת הרשאה מוגברת'],
   [/RPCs?/gi, 'פעולות שרת מאובטחות'],
@@ -499,7 +502,8 @@ function debtItem({ heading, body, lineNumber, section }) {
   const key = `debt:${keySuffix}`;
   const sourceTitle = simplify(heading.replace(/^§\s*/, '').replace(/^\d+(?:\s*\/\s*§?\d+)?\s*[—-]?\s*/, ''));
   const override = OVERRIDES[key] || {};
-  const requiresOwnerDecision = ids.some((id) => OWNER_CHOICE_DEBTS.has(id));
+  const closed = CLOSED_DEBT_HEADING.test(heading);
+  const requiresOwnerDecision = !closed && ids.some((id) => OWNER_CHOICE_DEBTS.has(id));
   const nextAction = NEXT_ACTION_OVERRIDES[key] || extractNextAction(body);
   const responsibility = debtResponsibility(nextAction, requiresOwnerDecision);
   const recommendation = debtRecommendation(ids, requiresOwnerDecision);
@@ -518,19 +522,22 @@ function debtItem({ heading, body, lineNumber, section }) {
     sourceTitle,
     sourceDetails: body,
     plainQuestion: override.plainQuestion || `מה צריך לעשות לגבי ${sourceTitle}?`,
-    plainContext: override.plainContext || `נשאר פער פעיל בנושא “${sourceTitle}”. הוא מוצג כאן כדי להבין את ההשפעה ולא כדי להמציא שאלה עסקית שאינה נדרשת.`,
-    currentDecisionPlain: 'הנושא עדיין פתוח כחוב פעיל.',
+    plainContext: closed
+      ? `הנושא “${sourceTitle}” נסגר. הוא נשאר כאן כתיעוד של מה שהיה ואיך זה נפתר, ואינו דורש ממך פעולה.`
+      : override.plainContext || `נשאר פער פעיל בנושא “${sourceTitle}”. הוא מוצג כאן כדי להבין את ההשפעה ולא כדי להמציא שאלה עסקית שאינה נדרשת.`,
+    currentDecisionPlain: closed ? 'הנושא נסגר ואינו חוב פעיל.' : 'הנושא עדיין פתוח כחוב פעיל.',
     whyItMatters: override.whyItMatters || implications[0],
     implications,
     impactAreas: impactAreas('debt', section, implications),
     whatItDoesNotDo: override.whatItDoesNotDo || 'הצגת החוב אינה משנה את המוצר ואינה מפעילה שירות או כתיבה לנתונים.',
-    nextAction,
-    responsibility,
-    ownerInstruction: requiresOwnerDecision ? 'בחר אחת מהאפשרויות המוצגות. לאחר מכן הסוכן יוכל להפוך אותה לתוכנית מימוש.' : 'אל תבחר פתרון טכני. קבע רק אם לקדם עכשיו, להשאיר בתור או לבקש הסבר נוסף.',
-    completionProof: debtCompletionProof(nextAction),
+    nextAction: closed ? 'אין צעד המשך. החוב נסגר, והראיה רשומה ברשם החובות.' : nextAction,
+    responsibility: closed ? 'אין טיפול פתוח. הפריט נשמר כתיעוד בלבד.' : responsibility,
+    ownerInstruction: closed ? 'לא נדרשת ממך פעולה.' : requiresOwnerDecision ? 'בחר אחת מהאפשרויות המוצגות. לאחר מכן הסוכן יוכל להפוך אותה לתוכנית מימוש.' : 'אל תבחר פתרון טכני. קבע רק אם לקדם עכשיו, להשאיר בתור או לבקש הסבר נוסף.',
+    completionProof: closed ? 'החוב כבר נסגר.' : debtCompletionProof(nextAction),
     recommendedPriority: recommendation.priority,
     recommendationReason: recommendation.reason,
-    status: requiresOwnerDecision ? 'needs-owner-decision' : 'technical-debt',
+    status: closed ? 'decided-history' : requiresOwnerDecision ? 'needs-owner-decision' : 'technical-debt',
+    closed,
     requiresOwnerDecision,
     changeMode: requiresOwnerDecision ? 'direct-answer' : 'information-only',
     options: override.options || [],

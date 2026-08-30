@@ -11,10 +11,11 @@ import {
   metricSampleSize,
   qualityVerdict,
   screenImageQuality,
-  weakCaptureHint,
-  weakCaptureRetryLabel,
-  weakCaptureTitle,
+  weakCaptureHintKey,
+  weakCaptureRetryLabelKey,
+  weakCaptureTitleKey,
 } from './imageQuality';
+import { translateIn } from './i18n/LocaleProvider';
 
 /* ---------- synthetic pixels with known properties ---------- */
 
@@ -348,7 +349,7 @@ describe('screenImageQuality and the batch budget', () => {
   });
 });
 
-describe('Hebrew copy', () => {
+describe('localized image-quality copy', () => {
   const weak = (verdict: 'blurry' | 'dark', name = 'a.jpg') => ({
     file: new File([''], name, { type: 'image/jpeg' }),
     verdict,
@@ -356,41 +357,52 @@ describe('Hebrew copy', () => {
   } as const);
 
   it('names the single failure without numbers or algorithm words', () => {
-    expect(weakCaptureTitle([weak('blurry')])).toBe('התמונה יצאה מטושטשת');
-    expect(weakCaptureTitle([weak('dark')])).toBe('התמונה חשוכה מדי');
-    expect(weakCaptureHint([weak('blurry')], 'camera')).toBe('כדאי לייצב את הטלפון ולצלם שוב.');
-    expect(weakCaptureHint([weak('dark')], 'camera')).toBe('כדאי להוסיף אור ולצלם שוב.');
+    expect(translateIn('he', weakCaptureTitleKey([weak('blurry')]))).toBe('התמונה יצאה מטושטשת');
+    expect(translateIn('he', weakCaptureTitleKey([weak('dark')]))).toBe('התמונה חשוכה מדי');
+    expect(translateIn('he', weakCaptureHintKey([weak('blurry')], 'camera'))).toBe('כדאי לייצב את הטלפון ולצלם שוב.');
+    expect(translateIn('he', weakCaptureHintKey([weak('dark')], 'camera'))).toBe('כדאי להוסיף אור ולצלם שוב.');
   });
 
   it('speaks about choosing, not shooting, when the file came from the picker', () => {
-    expect(weakCaptureHint([weak('blurry')], 'picker')).toBe('כדאי לבחור קובץ ברור יותר.');
-    expect(weakCaptureHint([weak('dark')], 'picker')).toBe('כדאי לבחור קובץ בהיר יותר.');
+    expect(translateIn('he', weakCaptureHintKey([weak('blurry')], 'picker'))).toBe('כדאי לבחור קובץ ברור יותר.');
+    expect(translateIn('he', weakCaptureHintKey([weak('dark')], 'picker'))).toBe('כדאי לבחור קובץ בהיר יותר.');
   });
 
   it('stays in the plural for a batch and does not name a cause it cannot name', () => {
-    expect(weakCaptureTitle([weak('blurry', 'a.jpg'), weak('dark', 'b.jpg')])).toBe('חלק מהתמונות לא יצאו טוב');
-    expect(weakCaptureHint([weak('blurry', 'a.jpg'), weak('blurry', 'b.jpg')], 'camera'))
+    expect(translateIn('he', weakCaptureTitleKey([weak('blurry', 'a.jpg'), weak('dark', 'b.jpg')]))).toBe('חלק מהתמונות לא יצאו טוב');
+    expect(translateIn('he', weakCaptureHintKey([weak('blurry', 'a.jpg'), weak('blurry', 'b.jpg')], 'camera')))
       .toBe('כדאי לייצב את הטלפון ולצלם אותן שוב.');
-    expect(weakCaptureHint([weak('blurry', 'a.jpg'), weak('dark', 'b.jpg')], 'camera')).toBe('כדאי לצלם אותן שוב.');
+    expect(translateIn('he', weakCaptureHintKey([weak('blurry', 'a.jpg'), weak('dark', 'b.jpg')], 'camera'))).toBe('כדאי לצלם אותן שוב.');
   });
 
   it('offers the action that matches where the file came from', () => {
-    expect(weakCaptureRetryLabel('camera')).toBe('צילום מחדש');
-    expect(weakCaptureRetryLabel('picker')).toBe('בחירת קובץ אחר');
+    expect(translateIn('he', weakCaptureRetryLabelKey('camera'))).toBe('צילום מחדש');
+    expect(translateIn('he', weakCaptureRetryLabelKey('picker'))).toBe('בחירת קובץ אחר');
+    expect(translateIn('en', weakCaptureRetryLabelKey('camera'))).toBe('Retake');
+    expect(translateIn('en', weakCaptureRetryLabelKey('picker'))).toBe('Choose another file');
+  });
+
+  it('resolves the same verdict structure in English', () => {
+    expect(translateIn('en', weakCaptureTitleKey([weak('blurry')]))).toBe('The photo came out blurry');
+    expect(translateIn('en', weakCaptureTitleKey([weak('dark')]))).toBe('The photo is too dark');
+    expect(translateIn('en', weakCaptureHintKey([weak('blurry')], 'camera'))).toBe('Hold the phone steady and take it again.');
+    expect(translateIn('en', weakCaptureHintKey([weak('dark', 'a'), weak('dark', 'b')], 'camera'))).toBe('Add more light and take them again.');
   });
 
   it('never mentions the measurement itself', () => {
     const forbidden = /laplacian|variance|luma|\d/i;
-    const samples = [
-      weakCaptureTitle([weak('blurry')]),
-      weakCaptureTitle([weak('dark')]),
-      weakCaptureTitle([weak('blurry', 'a'), weak('dark', 'b')]),
-      weakCaptureHint([weak('blurry')], 'camera'),
-      weakCaptureHint([weak('dark')], 'camera'),
-      weakCaptureHint([weak('blurry')], 'picker'),
-      weakCaptureRetryLabel('camera'),
-      weakCaptureRetryLabel('picker'),
+    const keys = [
+      weakCaptureTitleKey([weak('blurry')]),
+      weakCaptureTitleKey([weak('dark')]),
+      weakCaptureTitleKey([weak('blurry', 'a'), weak('dark', 'b')]),
+      weakCaptureHintKey([weak('blurry')], 'camera'),
+      weakCaptureHintKey([weak('dark')], 'camera'),
+      weakCaptureHintKey([weak('blurry')], 'picker'),
+      weakCaptureRetryLabelKey('camera'),
+      weakCaptureRetryLabelKey('picker'),
     ];
-    for (const sample of samples) expect(sample).not.toMatch(forbidden);
+    for (const locale of ['he', 'en'] as const) {
+      for (const key of keys) expect(translateIn(locale, key)).not.toMatch(forbidden);
+    }
   });
 });

@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Archive, ChevronDown, Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, RotateCcw, Search, Trash2, Undo2, Upload, X } from 'lucide-react';
@@ -8,14 +9,14 @@ import { INBOX_CHANGED_EVENT } from '../components/QuickCapture';
 import { ConfirmDialog, DataTable, ErrorNote, ICON, Modal, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
 import { PlanLimitNote } from '../components/PlanLimitNote';
 import { DocumentRemovalDialog } from '../components/DocumentRemovalDialog';
-import { ok, toHebrewError } from '../lib/errors';
+import { ok } from '../lib/errors';
 import { fmtDate, fmtDateTime, todayISO } from '../lib/format';
 import type { DocumentRow } from '../lib/types';
 import {
   DOCUMENT_KIND_OPTIONS,
   DOCUMENT_UPLOAD_ACCEPT,
   beginDocumentIntake,
-  documentKindLabel,
+  documentKindKey,
   documentUploadFailure,
   mergeDocumentUploadSummary,
   uploadDocument,
@@ -67,20 +68,27 @@ type AutoActionRow = {
  *  this invoice anyway" is a sentence about the software that would not be true. `decision` is
  *  jsonb, so the number can arrive as a JSON number or a numeric-as-string; both are accepted and
  *  anything else is unknown rather than NaN%. */
-function autoActionConfidence(action: AutoActionRow): string {
+function autoActionConfidence(action: AutoActionRow): string | null {
   const raw = action.decision?.decision_confidence;
   const value = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
-  if (!Number.isFinite(value)) return 'לא ידועה';
+  if (!Number.isFinite(value)) return null;
   return `${Math.round(value * 100)}%`;
 }
 
-function autoActionDescription(action: AutoActionRow): string {
-  return `החשבונית נוצרה ושויכה אוטומטית על ידי המערכת מתוך המסמך הזה, ללא אישור אדם, ברמת ביטחון ${autoActionConfidence(action)}.`;
+/** The confidence VALUE. The sentence around it is `documentStatus.autoAssignedByMachine`. */
+function autoActionConfidenceVars(action: AutoActionRow, unknownLabel: string): { confidence: string } {
+  return { confidence: autoActionConfidence(action) ?? unknownLabel };
 }
 
 type InvoicePick = { id: string; invoice_number: string; invoice_date: string; supplier: { name: string } | null };
 type ReceiptPick = { id: string; number: number; received_at: string; order: { supplier: { name: string } | null } | null };
-type RefileOption = { id: string; title: string; sub: string };
+type RefileOption = {
+  id: string;
+  kind: 'invoice' | 'receipt';
+  number: string | number;
+  supplierName: string | null;
+  sub: string;
+};
 
 /** The badge a person reads, over the stage the machine records.
  *
@@ -93,10 +101,11 @@ export function ProcessingBadge({ documentId, stage, doc }: {
   stage: DocumentProcessingStage | null;
   doc?: Pick<DocumentRow, 'entity_type' | 'entity_id'> | null;
 }) {
+  const { t } = useT();
   if (!stage) {
     return (
       <span data-testid="document-processing-status" data-document-id={documentId} className="badge-idle">
-        סטטוס לא זמין
+        {t('documents.text')}
       </span>
     );
   }
@@ -112,16 +121,17 @@ export function ProcessingFilterSelect({ value, onChange, includeAssignmentState
   value: DocumentStatusFilter | 'all'; onChange: (value: string) => void;
   includeAssignmentStates?: boolean;
 }) {
+  const { t } = useT();
   const options = includeAssignmentStates
     ? DOCUMENT_STATUS_FILTERS
     : DOCUMENT_STATUS_FILTERS.filter(({ value: option }) => option !== 'unassigned' && option !== 'assigned');
   return (
     <label>
-      <span className="label">מצב המסמך</span>
+      <span className="label">{t('documents.text_2')}</span>
       <select data-testid="documents-processing-filter" className="input" value={value}
         onChange={(event) => onChange(event.target.value)}>
-        <option value="all">הכול</option>
-        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        <option value="all">{t('documents.text_3')}</option>
+        {options.map((option) => <option key={option.value} value={option.value}>{t(option.labelKey)}</option>)}
       </select>
     </label>
   );
@@ -153,6 +163,7 @@ function isUnfiled(doc: DocumentRow) {
 function RefileModal({ doc, target, onClose, onDone }: {
   doc: DocumentRow; target: RefileTarget; onClose: () => void; onDone: () => void | Promise<unknown>;
 }) {
+  const { errorText, t } = useT();
   const toast = useToast();
   const [q, setQ] = useState('');
   const [dq, setDq] = useState('');
@@ -173,7 +184,9 @@ function RefileModal({ doc, target, onClose, onDone }: {
       const rows = unwrap(await query) as InvoicePick[];
       result = rows.map((row) => ({
         id: row.id,
-        title: `חשבונית ${row.invoice_number}${row.supplier ? ` — ${row.supplier.name}` : ''}`,
+        kind: 'invoice',
+        number: row.invoice_number,
+        supplierName: row.supplier?.name ?? null,
         sub: fmtDate(row.invoice_date),
       }));
     } else {
@@ -186,12 +199,31 @@ function RefileModal({ doc, target, onClose, onDone }: {
       if (dq && !numeric) rows = rows.filter((row) => row.order?.supplier?.name.includes(dq));
       result = rows.map((row) => ({
         id: row.id,
-        title: `קבלה #${row.number}${row.order?.supplier ? ` — ${row.order.supplier.name}` : ''}`,
+        kind: 'receipt',
+        number: row.number,
+        supplierName: row.order?.supplier?.name ?? null,
         sub: fmtDate(row.received_at),
       }));
     }
     return result;
   }, [target, dq]);
+
+  const optionTitle = (option: RefileOption) => {
+    if (option.kind === 'invoice') {
+      return t(option.supplierName
+        ? 'documentsInboxTail.invoiceTitleWithSupplier'
+        : 'documentsInboxTail.invoiceTitle', {
+        number: option.number,
+        ...(option.supplierName ? { supplier: option.supplierName } : {}),
+      });
+    }
+    return t(option.supplierName
+      ? 'documentsInboxTail.receiptTitleWithSupplier'
+      : 'documentsInboxTail.receiptTitle', {
+      number: option.number,
+      ...(option.supplierName ? { supplier: option.supplierName } : {}),
+    });
+  };
 
   async function assign(option: RefileOption) {
     setBusy(true);
@@ -200,41 +232,41 @@ function RefileModal({ doc, target, onClose, onDone }: {
         p_document_id: doc.id,
         p_entity_type: target,
         p_entity_id: option.id,
-        p_reason: target === 'invoice' ? 'שיוך מסמך לחשבונית' : 'שיוך מסמך לקבלת סחורה',
+        p_reason: target === 'invoice' ? t('documents.text_4') : t('documents.text_5'),
       }));
-      toast('המסמך שויך');
+      toast(t('documents.toast'));
       onClose();
       window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
       await onDone();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Modal open onClose={onClose} title={target === 'invoice' ? 'שיוך לחשבונית' : 'שיוך לקבלת סחורה'} busy={busy} statusMessage={busy ? 'משייך את המסמך' : undefined}>
-      <p className="mb-3 truncate text-sm text-ink-soft">המסמך: <bdi>{doc.file_name}</bdi></p>
+    <Modal open onClose={onClose} title={target === 'invoice' ? t('documents.text_6') : t('documents.text_7')} busy={busy} statusMessage={busy ? t('documents.text_8') : undefined}>
+      <p className="mb-3 truncate text-sm text-ink-soft">{t('documents.text_9')} <bdi>{doc.file_name}</bdi></p>
       <label className="mb-3 block">
-        <span className="sr-only">חיפוש יעד לשיוך</span>
+        <span className="sr-only">{t('documents.text_10')}</span>
         <span className="relative block">
           <Search size={ICON.sm} className="absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint" aria-hidden="true" />
           <input className="input ps-9!" value={q} onChange={(event) => setQ(event.target.value)}
-            placeholder={target === 'invoice' ? 'חיפוש לפי מספר חשבונית...' : 'חיפוש לפי מספר קבלה או ספק...'} />
+            placeholder={target === 'invoice' ? t('documents.text_11') : t('documents.text_12')} />
         </span>
       </label>
       {error ? (
         <ErrorNote message={error} />
       ) : loading ? (
-        <div className="space-y-2 text-sm text-ink-muted" role="status">טוען יעדים…</div>
+        <div className="space-y-2 text-sm text-ink-muted" role="status">{t('documents.text_13')}</div>
       ) : options?.length ? (
         <ul className="max-h-72 divide-y divide-line-soft overflow-y-auto border-y border-line-soft">
           {options.map((option) => (
             <li key={option.id}>
               <button type="button" disabled={busy} onClick={() => void assign(option)}
                 className="row-hover flex min-h-11 w-full items-center justify-between gap-3 px-3 py-2.5 text-start text-sm focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2 disabled:opacity-50">
-                <span className="min-w-0 truncate text-ink-body">{option.title}</span>
+                <span className="min-w-0 truncate text-ink-body">{optionTitle(option)}</span>
                 <span className="shrink-0 text-xs text-ink-muted">{option.sub}</span>
               </button>
             </li>
@@ -242,7 +274,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
         </ul>
       ) : (
         <p className="py-6 text-center text-sm text-ink-muted">
-          {dq ? 'לא נמצאו תוצאות' : target === 'invoice' ? 'אין חשבוניות במערכת' : 'אין קבלות סחורה במערכת'}
+          {dq ? t('documents.text_14') : target === 'invoice' ? t('documents.text_15') : t('documents.text_16')}
         </p>
       )}
     </Modal>
@@ -252,6 +284,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
 function UploadModal({ suppliers, onClose, onDone }: {
   suppliers: SupplierOption[]; onClose: () => void; onDone: () => void | Promise<unknown>;
 }) {
+  const { errorText, t } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [files, setFiles] = useState<File[]>([]);
@@ -270,7 +303,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
       const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, 'inbox', null, file, {
         supplierId: supplierId || null,
         documentDate: documentDate || null,
-      }));
+      }), { t, errorText });
       const failures = result.failed.map(({ item, error }) => ({ item, ...documentUploadFailure(error) }));
       const failed = failures.filter(({ retryable }) => retryable).map(({ item }) => item);
       const registered = failures.filter(({ registered: isRegistered }) => isRegistered).length;
@@ -282,28 +315,36 @@ function UploadModal({ suppliers, onClose, onDone }: {
         await onDone();
       }
       if (summary.failed.length) {
-        const currentFailure = failures[0]?.message;
-        toast(`${summary.succeeded.length} הועלו וממתינים לעיבוד, ${summary.failed.length} לא הושלמו.${currentFailure ? ` ${currentFailure}` : ''}`, 'error');
+        const currentFailure = failures[0] ? errorText(new Error(failures[0].code)) : null;
+        toast(t(currentFailure
+          ? 'documentsInboxTail.uploadPartialWithError'
+          : 'documentsInboxTail.uploadPartial', {
+          succeeded: summary.succeeded.length,
+          failed: summary.failed.length,
+          ...(currentFailure ? { error: currentFailure } : {}),
+        }), 'error');
       } else {
-        toast(summary.succeeded.length === 1 ? 'הועלה וממתין לעיבוד' : `${summary.succeeded.length} מסמכים הועלו וממתינים לעיבוד`);
+        toast(summary.succeeded.length === 1
+          ? t('documentsInboxTail.uploadOne')
+          : t('documentsInboxTail.uploadMany', { count: summary.succeeded.length }));
         onClose();
       }
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Modal open onClose={onClose} title="העלאת מסמך" busy={busy} statusMessage={busy ? 'מעלה את המסמכים' : undefined}>
+    <Modal open onClose={onClose} title={t('documents.title')} busy={busy} statusMessage={busy ? t('documents.text_17') : undefined}>
       <p className="mb-4 text-sm text-ink-muted">
-        הקובץ נשמר מיד ולא ילך לאיבוד. המערכת תזהה בעצמה מה סוג המסמך, מי הספק ולאיזו הזמנה הוא שייך,
-        ותציג את הממצאים לבדיקה ולאישור לפני שהם משפיעים על משהו.
+        {t('documents.text_18')}{' '}
+        {t('documents.text_19')}
       </p>
       <div className="space-y-3">
         <label className="block">
-          <span className="label">קובץ</span>
+          <span className="label">{t('documents.text_20')}</span>
           <input type="file" className="input" multiple
             accept={DOCUMENT_UPLOAD_ACCEPT}
             disabled={busy || !!uploadSummary?.failed.length}
@@ -321,18 +362,18 @@ function UploadModal({ suppliers, onClose, onDone }: {
             surface, and boxing it made the form read as two forms. */}
         <details className="border-t border-line-soft pt-1">
           <summary className="flex min-h-11 cursor-pointer list-none items-center text-sm text-action">
-            פרטים ידניים (לא חובה)
+            {t('documents.text_21')}
           </summary>
           <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2">
             <label>
-              <span className="label">ספק</span>
+              <span className="label">{t('documents.text_22')}</span>
               <select className="input" value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
-                <option value="">זיהוי אוטומטי</option>
+                <option value="">{t('documents.text_23')}</option>
                 {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
               </select>
             </label>
             <label>
-              <span className="label">תאריך מסמך</span>
+              <span className="label">{t('documents.text_24')}</span>
               <input type="date" className="input num" value={documentDate} onChange={(event) => setDocumentDate(event.target.value)} />
             </label>
           </div>
@@ -340,18 +381,21 @@ function UploadModal({ suppliers, onClose, onDone }: {
         {uploadSummary && (
           <Note tone={uploadSummary.failed.length ? 'alert' : 'done'}>
             <div role="status">
-              <div><span className="num">{uploadSummary.succeeded.length}</span> הועלו וממתינים לעיבוד · <span className="num">{uploadSummary.failed.length}</span> לא הושלמו</div>
-              {uploadSummary.failed.length > 0 && <div className="mt-1 text-xs">לא הושלמו: {uploadSummary.failed.join(', ')}. ניסיון חוזר ישלח רק קבצים שניתן לנסות שוב.</div>}
+              <div><span className="num">{uploadSummary.succeeded.length}</span> {t('documents.text_25')} <span className="num">{uploadSummary.failed.length}</span> {t('documents.text_26')}</div>
+              {uploadSummary.failed.length > 0 && <div className="mt-1 text-xs">{t(
+                'documentsInboxTail.failedSummary',
+                { files: uploadSummary.failed.join(', ') },
+              )}</div>}
             </div>
           </Note>
         )}
       </div>
       <div className="mt-5 flex justify-end gap-2">
-        <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
+        <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>{t('documents.text_27')}</button>
         {(!uploadSummary || files.length > 0) && (
           <button type="button" className="btn-primary" disabled={busy || files.length === 0} onClick={() => void submit()}>
             {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Upload size={ICON.sm} aria-hidden="true" />}
-            {uploadSummary?.failed.length ? 'ניסיון חוזר לנכשלים בלבד' : 'העלאה'}
+            {uploadSummary?.failed.length ? t('documents.text_28') : t('documents.text_29')}
           </button>
         )}
       </div>
@@ -365,6 +409,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
  *  `entity_type='archive'`: the documents interpretation could not place, which no one files by
  *  hand. One component either way, so "what is a document row" has a single answer. */
 export default function DocumentsGallery({ archive = false }: { archive?: boolean }) {
+  const { errorText, t } = useT();
   const [removalDoc, setRemovalDoc] = useState<DocumentRow | null>(null);
   const { profile, organizationAccess } = useAuth();
   const toast = useToast();
@@ -468,7 +513,10 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       job: processing.snapshots[doc.id]?.job,
       document: doc,
       autoAssigned: autoAction !== null,
-      autoAssignmentDescription: autoAction ? autoActionDescription(autoAction) : null,
+      autoAssignmentDescriptionKey: autoAction ? 'documentStatus.autoAssignedByMachine' : null,
+      autoAssignmentDescriptionVars: autoAction
+        ? autoActionConfidenceVars(autoAction, t('documentsInboxTail.unknownConfidence'))
+        : undefined,
     });
   };
 
@@ -480,7 +528,10 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   const interpretAttempts = useRef(new Map<string, number>());
   const interpretMounted = useRef(false);
   const [interpretRetryTick, setInterpretRetryTick] = useState(0);
-  const [interpretFailure, setInterpretFailure] = useState<{ jobId: string; message: string } | null>(null);
+  const [interpretFailure, setInterpretFailure] = useState<{
+    jobId: string;
+    code: 'interpret_failed';
+  } | null>(null);
   const { snapshots: processingSnapshots, refetch: refetchProcessing } = processing;
   useEffect(() => {
     // React Strict Mode runs setup -> cleanup -> setup in development. Resetting the ref in every
@@ -519,10 +570,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
               if (interpretMounted.current) setInterpretRetryTick((value) => value + 1);
             }, 1000 * 2 ** (attempts - 1));
           } else if (!cancelled) {
-            setInterpretFailure({
-              jobId: job.id,
-              message: 'החילוץ נשמר, אך שלב הפענוח לא הצליח לאחר שלושה ניסיונות. ניתן לנסות שוב בלי לקרוא את המסמך מחדש.',
-            });
+            setInterpretFailure({ jobId: job.id, code: 'interpret_failed' });
           }
           continue;
         }
@@ -615,13 +663,13 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         ? await beginDocumentIntake(retryDoc.id)
         : await supabase.rpc('reprocess_document', {
           p_document_id: retryDoc.id,
-          p_reason: 'עיבוד מחדש ביוזמת המשתמש ממסך המסמכים',
+          p_reason: t('documents.text_31'),
         }));
-      toast(wasUnprocessed ? 'המסמך נשלח לתור העיבוד' : 'המסמך הוחזר לתור העיבוד');
+      toast(wasUnprocessed ? t('documents.toast_2') : t('documents.toast_3'));
       setRetryDoc(null);
       window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setRetrying(false);
     }
@@ -639,12 +687,12 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         p_document_id: rescueDoc.id,
         p_reason: reason,
       }));
-      toast('המסמך הוחזר לתיקיית המסמכים');
+      toast(t('documents.toast_4'));
       setRescueDoc(null);
       window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
       await refetch();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setRescuing(false);
     }
@@ -671,13 +719,13 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         p_action_id: action.id,
         p_reason: reason,
       }));
-      toast('השיוך האוטומטי בוטל והמסמך חזר לתיקיית המסמכים');
+      toast(t('documents.toast_5'));
       setRevertDoc(null);
       window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
       window.dispatchEvent(new Event(DOCUMENT_PROCESSING_CHANGED_EVENT));
       await Promise.all([refetch(), refetchAutoActions()]);
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setReverting(false);
     }
@@ -694,12 +742,12 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       ok(await supabase.from('documents').update({
         deleted_at: new Date().toISOString(), deleted_by: profile?.id ?? null,
       }).eq('id', deleteDoc.id));
-      toast('המסמך הוסר');
+      toast(t('documents.toast_6'));
       setDeleteDoc(null);
       window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
       await refetch();
     } catch (error) {
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setDeleting(false);
     }
@@ -711,8 +759,8 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       if (openError || !url) throw openError ?? new Error('missing signed URL');
       return url.signedUrl;
     });
-    if (result === 'blocked') toast('הדפדפן חסם את חלון הצפייה. יש לאפשר חלונות קופצים ולנסות שוב.', 'error');
-    if (result === 'error') toast('שגיאה בפתיחת הקובץ', 'error');
+    if (result === 'blocked') toast(t('documents.toast_7'), 'error');
+    if (result === 'error') toast(t('documents.toast_8'), 'error');
   }
 
   // The filing column is a question about the documents folder and it has no answer on the
@@ -724,7 +772,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       // ONLY when no `mobileTitle` is supplied (ui.tsx:1336), and this screen supplies one: the
       // headline of every card was the file name, and directly beneath it stood "מסמך: <same file
       // name>" again. Two lines per row saying one thing. The desktop column is untouched.
-      key: 'file', header: 'מסמך', priority: 3, sortValue: (doc) => doc.file_name,
+      key: 'file', header: t('documents.text_32'), priority: 3, sortValue: (doc) => doc.file_name,
       // The icon used to sit in a 40px bordered, shaded tile — a thumbnail frame with no thumbnail
       // in it, repeated once per row, so a page of twenty documents carried twenty little boxes and
       // twenty extra hairlines. The icon alone still marks the column; the frame said nothing the
@@ -743,27 +791,29 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       // that missing evidence is `—` and never a fabricated value. Once the interpretation lands,
       // 0084's trigger writes the real subtype and this cell says it; a document that genuinely
       // IS `other` reaches a read state and reads "מסמך נוסף" honestly.
-      key: 'kind', header: 'סוג', sortValue: (doc) => doc.document_kind,
+      key: 'kind', header: t('documents.text_33'), sortValue: (doc) => doc.document_kind,
       render: (doc) => {
         const stage = processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed';
         const unread = doc.document_kind === 'other' && stage !== null
           && ['unprocessed', 'queued', 'processing', 'extracted'].includes(stage);
         return unread
-          ? <span className="text-ink-muted" title="המערכת טרם קראה את המסמך">—</span>
-          : documentKindLabel(doc.document_kind);
+          ? <span className="text-ink-muted" title={t('documents.title_2')}>—</span>
+          : t(documentKindKey(doc.document_kind));
       },
     },
-    { key: 'supplier', header: 'ספק', sortValue: (doc) => doc.supplier?.name ?? '', render: (doc) => doc.supplier?.name ?? '—' },
+    { key: 'supplier', header: t('documents.text_34'), sortValue: (doc) => doc.supplier?.name ?? '', render: (doc) => doc.supplier?.name ?? '—' },
     {
-      key: 'date', header: 'תאריך מסמך', className: 'num', sortValue: (doc) => doc.document_date ?? doc.created_at,
+      key: 'date', header: t('documents.text_35'), className: 'num', sortValue: (doc) => doc.document_date ?? doc.created_at,
       render: (doc) => (
-        <span title={doc.document_date ? undefined : `תאריך העלאה: ${fmtDateTime(doc.created_at)}`}>
-          {fmtDate(doc.document_date ?? doc.created_at)}{!doc.document_date && <span className="font-sans text-xs text-ink-muted"> (העלאה)</span>}
+        <span title={doc.document_date ? undefined : t('documentsInboxTail.uploadedAt', {
+          date: fmtDateTime(doc.created_at),
+        })}>
+          {fmtDate(doc.document_date ?? doc.created_at)}{!doc.document_date && <span className="font-sans text-xs text-ink-muted"> {t('documents.fmtDate')}</span>}
         </span>
       ),
     },
     {
-      key: 'processing', header: 'מצב', mobileLabel: null, priority: 3,
+      key: 'processing', header: t('documents.text_36'), mobileLabel: null, priority: 3,
       // Sorted by the state on screen, not by the stage underneath — with four labels, the seven
       // internal names would scatter identical-looking badges apart — and ranked by urgency rather
       // than by name, so ascending puts what waits on a person at the top. See USER_STATE_URGENCY.
@@ -779,6 +829,9 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   const hasFilters = !!(q || supplierId || kind || from || to || filing !== 'all' || processingFilter !== 'all');
   const advancedFilterCount = [supplierId, kind, from, to, !archive && filing !== 'all' ? filing : ''].filter(Boolean).length;
   const revertAction = revertDoc ? autoActionFor(revertDoc) : null;
+  const revertConfidence = revertAction
+    ? autoActionConfidence(revertAction) ?? t('documentsInboxTail.unknownConfidence')
+    : t('documentsInboxTail.unknownConfidence');
 
   // Heading and icon track the nav label, because pageTitleFor derives the tab title from the
   // sidebar item and a different word would put two names on one screen. `ארכיון מסמכים` qualifies
@@ -790,8 +843,8 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   // stand in for a failed read (gate B30) — a failed first load renders ErrorNote instead of the
   // table, and a failed refetch keeps its own ErrorNote above whatever rows survived.
   const empty = archive
-    ? { title: 'אין מסמכים בארכיון', subtitle: 'מסמכים שהמערכת לא הצליחה לשייך לאף קטגוריה יופיעו כאן' }
-    : { title: 'אין מסמכים במערכת', subtitle: 'מסמך חדש יופיע כאן מיד לאחר צילום או העלאה' };
+    ? { title: t('documents.text_37'), subtitle: t('documents.text_38') }
+    : { title: t('documents.text_39'), subtitle: t('documents.text_40') };
 
   return (
     <div className="space-y-4" data-testid="documents-page">
@@ -803,16 +856,16 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             0075 — file_document accepts ('archive', null) for owner/office, with a reason and an
             audit row — it simply has no control on this screen, because the intended filer is
             the interpretation layer (task C2, not yet written). */}
-      <PageHeader title={<span className="flex items-center gap-2"><HeadingIcon size={ICON.xl} aria-hidden="true" /> {archive ? 'ארכיון מסמכים' : 'תיקיית המסמכים'}</span>}
-        meta={!archive ? 'כל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.' : undefined}
+      <PageHeader title={<span className="flex items-center gap-2"><HeadingIcon size={ICON.xl} aria-hidden="true" /> {archive ? t('documents.text_41') : t('documents.text_42')}</span>}
+        meta={!archive ? t('documents.text_43') : undefined}
         actions={<>
           {canUpload && !archive && (
             <button type="button" data-tour-anchor="documents-upload" className="btn-primary" onClick={() => setUploadOpen(true)}>
-              <Upload size={ICON.sm} /> העלאת מסמך
+              <Upload size={ICON.sm} /> {t('documentsInboxTail.uploadDocument')}
             </button>
           )}
           <Link className="btn-secondary" to={archive ? '/documents' : '/documents/archive'}>
-            {archive ? <FolderOpen size={ICON.sm} /> : <Archive size={ICON.sm} />}{archive ? 'חזרה לתיקיית המסמכים' : 'ארכיון'}
+            {archive ? <FolderOpen size={ICON.sm} /> : <Archive size={ICON.sm} />}{archive ? t('documents.text_44') : t('documents.text_45')}
           </Link>
         </>} />
 
@@ -829,13 +882,13 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           data starts, and a second band above it only made the screen read as two stacked panels
           with the actual documents in the lower one. Controls, count line and the advanced fold
           are unchanged. */}
-      <section aria-label="סינון מסמכים">
+      <section aria-label={t('documents.aria_label')}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <label>
-            <span className="label">שם קובץ</span>
+            <span className="label">{t('documents.text_46')}</span>
             <span className="relative block">
               <Search size={ICON.sm} className="absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint" aria-hidden="true" />
-              <input type="search" className="input ps-9!" value={q} onChange={(event) => setQ(event.target.value)} placeholder="חיפוש מסמך..." />
+              <input type="search" className="input ps-9!" value={q} onChange={(event) => setQ(event.target.value)} placeholder={t('documents.placeholder')} />
             </span>
           </label>
           <ProcessingFilterSelect value={processingFilter} onChange={setProcessing}
@@ -843,7 +896,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         </div>
         <details className="group mt-3 border-t border-line-soft pt-2">
           <summary className="-mx-2 flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm font-medium text-action hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
-            מסננים נוספים
+            {t('documents.text_47')}
             {/* `badge-info` already applies `badge` — stacking both was one class saying the same
                 thing twice, and the pair invited a reader to think `badge` was load-bearing. */}
             {advancedFilterCount > 0 && <span className="badge-info num">{advancedFilterCount}</span>}
@@ -853,38 +906,40 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           </summary>
           <div className="grid grid-cols-1 gap-3 pt-3 sm:grid-cols-2 lg:grid-cols-4">
             <label>
-              <span className="label">ספק</span>
+              <span className="label">{t('documents.text_48')}</span>
               <select className="input" value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
-                <option value="">כל הספקים</option>
-                <option value="none">ללא ספק</option>
+                <option value="">{t('documents.text_49')}</option>
+                <option value="none">{t('documents.text_50')}</option>
                 {data?.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
               </select>
             </label>
             <label>
-              <span className="label">סוג מסמך</span>
+              <span className="label">{t('documents.text_51')}</span>
               <select className="input" value={kind} onChange={(event) => setKind(event.target.value)}>
-                <option value="">כל הסוגים</option>
-                {DOCUMENT_KIND_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                <option value="">{t('documents.text_52')}</option>
+                {DOCUMENT_KIND_OPTIONS.map((option) => <option key={option.value} value={option.value}>{t(option.labelKey)}</option>)}
               </select>
             </label>
             {!archive && (
               <label>
-                <span className="label">סטטוס תיוק</span>
+                <span className="label">{t('documents.text_53')}</span>
                 <select className="input" value={filing} onChange={(event) => setFiling(event.target.value)}>
-                  <option value="all">הכול</option>
-                  <option value="unfiled">לא משויכים</option>
-                  <option value="linked">משויכים</option>
+                  <option value="all">{t('documents.text_54')}</option>
+                  <option value="unfiled">{t('documents.text_55')}</option>
+                  <option value="linked">{t('documents.text_56')}</option>
                 </select>
               </label>
             )}
-            <label><span className="label">מתאריך</span><input type="date" className="input num" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
-            <label><span className="label">עד תאריך</span><input type="date" className="input num" value={to} onChange={(event) => setTo(event.target.value)} /></label>
-            <div className="flex items-end"><button type="button" className="btn-ghost min-h-11" disabled={!hasFilters} onClick={resetFilters}><X size={ICON.sm} /> ניקוי מסננים</button></div>
+            <label><span className="label">{t('documents.setFrom')}</span><input type="date" className="input num" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
+            <label><span className="label">{t('documents.setTo')}</span><input type="date" className="input num" value={to} onChange={(event) => setTo(event.target.value)} /></label>
+            <div className="flex items-end"><button type="button" className="btn-ghost min-h-11" disabled={!hasFilters} onClick={resetFilters}><X size={ICON.sm} /> {t('documents.text_57')}</button></div>
           </div>
         </details>
         {!loading && data && (
           <div className="mt-2 text-xs text-ink-muted" aria-live="polite">
-            מציג <span className="num">{filtered.length}</span> מתוך <span className="num">{data.docs.length}</span> מסמכים
+            {t('documentsInboxTail.showingPrefix')} <span className="num">{filtered.length}</span>{' '}
+            {t('documents.text_58')} <span className="num">{data.docs.length}</span>{' '}
+            {t('documentsInboxTail.documentsLabel')}
           </div>
         )}
       </section>
@@ -893,10 +948,10 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       {processing.error && (
         <Note tone="alert">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>{processing.error} הנתונים שכבר נטענו נשארו מוצגים.</span>
+            <span>{processing.error}{' '}{t('documentsInboxTail.loadedDataRemain')}</span>
             <button data-testid="documents-processing-retry" type="button" className="btn-secondary min-h-11"
               disabled={processing.fetching} onClick={() => void processing.refetch()}>
-              <RefreshCw size={ICON.sm} aria-hidden="true" /> ניסיון חוזר
+              <RefreshCw size={ICON.sm} aria-hidden="true" /> {t('documentsInboxTail.retry')}
             </button>
           </div>
         </Note>
@@ -904,23 +959,23 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       {interpretFailure && (
         <Note tone="alert">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>{interpretFailure.message}</span>
+            <span>{interpretFailure.code === 'interpret_failed' ? t('documents.text_30') : null}</span>
             <button type="button" className="btn-secondary min-h-11" onClick={() => {
               interpretAttempts.current.delete(interpretFailure.jobId);
               setInterpretFailure(null);
               setInterpretRetryTick((value) => value + 1);
             }}>
-              ניסיון פענוח נוסף
+              {t('documents.text_59')}
             </button>
           </div>
         </Note>
       )}
-      {fetching && data && <div className="text-xs text-ink-muted" role="status">רשימת המסמכים מתעדכנת…</div>}
-      {processing.fetching && processing.data && <div className="text-xs text-ink-muted" role="status">סטטוסי העיבוד מתעדכנים…</div>}
+      {fetching && data && <div className="text-xs text-ink-muted" role="status">{t('documents.text_60')}</div>}
+      {processing.fetching && processing.data && <div className="text-xs text-ink-muted" role="status">{t('documents.text_61')}</div>}
       {error && !data ? <ErrorNote message={error} /> : loading ? <SkeletonTable cols={6} /> : (
         <DataTable rows={filtered} columns={columns} pageSize={20}
-          tableLabel={archive ? 'ארכיון מסמכים' : 'תיקיית המסמכים'}
-          rowLabel={(doc) => `מסמך ${doc.file_name}`}
+          tableLabel={archive ? t('documents.text_62') : t('documents.text_63')}
+          rowLabel={(doc) => t('documentsInboxTail.documentRowLabel', { fileName: doc.file_name })}
           onRowClick={(doc) => review(doc)}
           mobileTitle={(doc) => <bdi>{doc.file_name}</bdi>}
           mobileTrailing={(doc) => (
@@ -938,13 +993,13 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             // `RotateCcw` undoes an automatic decision, `Undo2` returns a record to where it came
             // from. FileSearch and Eye on the same row are two different acts, not drift.
             return [
-              { key: 'review', label: 'בדיקת מסמך', icon: FileSearch, hidden: !snapshot?.job, onSelect: () => review(doc) },
-              { key: 'enqueue', label: 'שליחה לעיבוד', icon: RefreshCw, hidden: !canEnqueue || snapshot?.stage !== 'unprocessed', onSelect: () => setRetryDoc(doc) },
-              { key: 'retry', label: 'עיבוד מחדש', icon: RefreshCw,
+              { key: 'review', label: t('documents.review'), icon: FileSearch, hidden: !snapshot?.job, onSelect: () => review(doc) },
+              { key: 'enqueue', label: t('documents.setRetryDoc'), icon: RefreshCw, hidden: !canEnqueue || snapshot?.stage !== 'unprocessed', onSelect: () => setRetryDoc(doc) },
+              { key: 'retry', label: t('documents.text_64'), icon: RefreshCw,
                 hidden: !canRetry || !snapshot || !['failed', 'review', 'completed'].includes(snapshot.stage),
                 onSelect: () => setRetryDoc(doc) },
-              { key: 'export', label: 'ייצוא', icon: FileDown, hidden: snapshot?.stage !== 'review' && snapshot?.stage !== 'completed', onSelect: () => review(doc, 'export') },
-              { key: 'view', label: 'צפייה במקור', icon: Eye, onSelect: () => void open(doc) },
+              { key: 'export', label: t('documents.review_2'), icon: FileDown, hidden: snapshot?.stage !== 'review' && snapshot?.stage !== 'completed', onSelect: () => review(doc, 'export') },
+              { key: 'view', label: t('documents.open'), icon: Eye, onSelect: () => void open(doc) },
               // Not offered on the archive, for the same reason the upload button is not. isUnfiled
               // reads an archived row as unfiled (entity_id is null), so both would render — and
               // file_document's guard takes only a row still in the inbox (0019:167), so either
@@ -952,56 +1007,56 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
               // sitting here precisely because it could not be assigned to any target. Whether a
               // person may rescue a document from the archive is a real and open question; an
               // action that always errors is not an answer to it.
-              { key: 'invoice', label: 'שיוך לחשבונית', icon: FileInput, hidden: !canFile || archive || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'invoice' }) },
-              { key: 'receipt', label: 'שיוך לקבלת סחורה', icon: ReceiptText, hidden: !canFile || archive || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'goods_receipt' }) },
+              { key: 'invoice', label: t('documents.isUnfiled'), icon: FileInput, hidden: !canFile || archive || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'invoice' }) },
+              { key: 'receipt', label: t('documents.isUnfiled_2'), icon: ReceiptText, hidden: !canFile || archive || !isUnfiled(doc), onSelect: () => setRefile({ doc, target: 'goods_receipt' }) },
               // The clean complement of the two gates above: `!canFile || !archive`, so the
               // archive's filing action appears exactly where theirs do not. It is its own key
               // and its own RPC — rescue_document_from_archive, not file_document, whose guard
               // structurally refuses any non-inbox row (0019:167). The document returns to the
               // folder as unfiled, where those two actions then work on it for real.
-              { key: 'rescue', label: 'החזרה לטיפול', icon: Undo2, hidden: !canFile || !archive, onSelect: () => setRescueDoc(doc) },
+              { key: 'rescue', label: t('documents.setRescueDoc'), icon: Undo2, hidden: !canFile || !archive, onSelect: () => setRescueDoc(doc) },
               // The undo for a decision no human made. Gated on the AUTO-ACTION EXISTING, not on
               // the document being filed: "this row has an invoice" and "a machine wrote that
               // invoice" are different facts, and only the second one is reversible here — a
               // colleague's invoice is undone from the invoice screen, by its own command. The
               // role gate matches the server's (owner/office, the authority every comparable
               // reversal in this codebase uses); the server refuses regardless of what this hides.
-              { key: 'revert-auto', label: 'ביטול השיוך האוטומטי', icon: RotateCcw, tone: 'danger',
+              { key: 'revert-auto', label: t('documents.text_65'), icon: RotateCcw, tone: 'danger',
                 hidden: !canFile || !autoAction, onSelect: () => setRevertDoc(doc) },
               // Removal from the archive: no reason, by the owner's ruling (#110). Nothing new
               // in the database — decision #28's soft delete, the stored file kept for audit.
-              { key: 'delete', label: 'הסרה', icon: Trash2, tone: 'danger', hidden: !canFile || !archive, onSelect: () => setDeleteDoc(doc) },
+              { key: 'delete', label: t('documents.setDeleteDoc'), icon: Trash2, tone: 'danger', hidden: !canFile || !archive, onSelect: () => setDeleteDoc(doc) },
               // Removal WITH the consequences computed first (0116/0119), offered in the folder
               // rather than the archive. The archive's action above stays exactly as it is —
               // owner ruling #110 settled that removing an archived document needs no reason —
               // and this is the different case: a document that CREATED something. It asks for a
               // reason, shows what would go with it, and blocks the destructive option by name
               // when a safe reversal cannot be proven.
-              { key: 'remove-with-impact', label: 'הסרה עם תצוגת השפעה', icon: Trash2, tone: 'danger',
+              { key: 'remove-with-impact', label: t('documents.text_66'), icon: Trash2, tone: 'danger',
                 hidden: !canRemoveDocument || archive, onSelect: () => setRemovalDoc(doc) },
             ];
           }}
-          emptyTitle={data?.docs.length ? 'לא נמצאו מסמכים לפי הסינון' : empty.title}
-          emptySubtitle={data?.docs.length ? 'שנו או נקו את המסננים כדי לראות מסמכים נוספים' : empty.subtitle} />
+          emptyTitle={data?.docs.length ? t('documents.text_67') : empty.title}
+          emptySubtitle={data?.docs.length ? t('documents.text_68') : empty.subtitle} />
       )}
 
       {uploadOpen && <UploadModal suppliers={data?.suppliers ?? []} onClose={() => setUploadOpen(false)} onDone={refetch} />}
       {refile && <RefileModal doc={refile.doc} target={refile.target} onClose={() => setRefile(null)} onDone={refetch} />}
       <ConfirmDialog open={!!retryDoc} onClose={() => setRetryDoc(null)} onConfirm={() => void retry()}
-        title={processing.snapshots[retryDoc?.id ?? '']?.stage === 'unprocessed' ? 'שליחת המסמך לעיבוד' : 'עיבוד המסמך מחדש'}
+        title={processing.snapshots[retryDoc?.id ?? '']?.stage === 'unprocessed' ? t('documents.text_69') : t('documents.text_70')}
         message={processing.snapshots[retryDoc?.id ?? '']?.stage === 'unprocessed'
-          ? 'המסמך השמור יישלח כעת לתור העיבוד.'
-          : 'ניסיון חדש שומר את תוצאות העיבוד הקודמות ומוסיף ניסיון נפרד.'}
-        confirmLabel={processing.snapshots[retryDoc?.id ?? '']?.stage === 'unprocessed' ? 'שליחה לתור' : 'החזרה לתור'}
+          ? t('documents.text_71')
+          : t('documents.text_72')}
+        confirmLabel={processing.snapshots[retryDoc?.id ?? '']?.stage === 'unprocessed' ? t('documents.text_73') : t('documents.text_74')}
         busy={retrying} />
 
       {/* requireReason, always. The reason travels to audit_logs through the RPC, and the
           server refuses an empty one by name (reason_required) regardless of what the browser
           sends — this dialog is the courtesy, not the enforcement. */}
       <ConfirmDialog open={!!rescueDoc} onClose={() => setRescueDoc(null)} onConfirm={(reason) => void rescue(reason)}
-        title="החזרת מסמך לטיפול"
-        message={`המסמך "${rescueDoc?.file_name ?? ''}" יחזור לתיקיית המסמכים כלא משויך, ויהיה אפשר לשייך אותו לחשבונית או לקבלת סחורה.`}
-        confirmLabel="החזרה לטיפול" requireReason busy={rescuing} />
+        title={t('documents.title_3')}
+        message={t('documentsInboxTail.rescueMessage', { fileName: rescueDoc?.file_name ?? '' })}
+        confirmLabel={t('documents.confirmLabel')} requireReason busy={rescuing} />
 
       {/* The one dialog in this app that undoes a financial record nobody authorised by hand, so it
           says all four things before it offers the button: WHAT the machine did, at what
@@ -1010,17 +1065,20 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           to the whole episode, and the server refuses an empty one by name regardless. */}
       <ConfirmDialog open={!!revertDoc} onClose={() => setRevertDoc(null)}
         onConfirm={(reason) => void revertAutoAction(reason)}
-        title="ביטול השיוך האוטומטי"
-        message={`המסמך "${revertDoc?.file_name ?? ''}" שויך אוטומטית לחשבונית שהמערכת יצרה בעצמה, ללא אישור אדם, ברמת ביטחון ${revertAction ? autoActionConfidence(revertAction) : 'לא ידועה'}. הביטול יסיר את החשבונית (הרשומה נשמרת לביקורת), יחזיר את המסמך לתיקייה כלא משויך, ויסגור חריגה שנפתחה בעקבות השיוך — לא מפני שהפער נבדק. רישום היצירה ורישום הביטול נשמרים שניהם ביומן הביקורת.`}
-        confirmLabel="ביטול השיוך" danger requireReason busy={reverting} />
+        title={t('documents.title_4')}
+        message={t('documentsInboxTail.revertMessage', {
+          fileName: revertDoc?.file_name ?? '',
+          confidence: revertConfidence,
+        })}
+        confirmLabel={t('documents.confirmLabel_2')} danger requireReason busy={reverting} />
 
       {/* No requireReason, deliberately: #110 rules that removal from the archive needs none.
           The message says what actually happens to the bytes, because "הסרה" alone would read
           as destruction and the file is kept. */}
       <ConfirmDialog open={!!deleteDoc} onClose={() => setDeleteDoc(null)} onConfirm={() => void removeDoc()}
-        title="הסרת מסמך מהארכיון"
-        message={`המסמך "${deleteDoc?.file_name ?? ''}" יוסר מהרשימה. הקובץ נשמר לביקורת.`}
-        confirmLabel="הסרה" danger busy={deleting} />
+        title={t('documents.title_5')}
+        message={t('documentsInboxTail.deleteMessage', { fileName: deleteDoc?.file_name ?? '' })}
+        confirmLabel={t('documents.confirmLabel_3')} danger busy={deleting} />
 
       <DocumentRemovalDialog
         documentId={removalDoc?.id ?? ''}

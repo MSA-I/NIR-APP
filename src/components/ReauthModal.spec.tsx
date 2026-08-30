@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Session } from '@supabase/supabase-js';
 import { toHebrewError } from '../lib/errors';
+import { LocaleProvider } from '../lib/i18n/LocaleProvider';
 
 /**
  * The auth surface is mocked as functions, not as MSW traffic, on purpose: the assertions here
@@ -93,6 +94,17 @@ describe('hasFreshPasswordAuthentication — the client mirror of the 0031 asser
 });
 
 describe('ReauthModal', () => {
+  it('renders the stale-session prompt in English', () => {
+    render(
+      <LocaleProvider initialLocale="en">
+        <ReauthModal open onConfirm={vi.fn()} onCancel={vi.fn()} />
+      </LocaleProvider>,
+    );
+    expect(screen.getByRole('dialog', { name: 'Verify identity for a sensitive action' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Password for fresh identity verification *')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Verify identity' })).toBeInTheDocument();
+  });
+
   it('skips the prompt entirely when the JWT is fresh', async () => {
     const fresh = sessionWith(passwordToken(30));
     authState.session = fresh;

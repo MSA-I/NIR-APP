@@ -43,7 +43,8 @@ export function orderImageModel(order: WhatsAppOrder, orgName: string): OrderIma
     rows: order.items.map((item, i) => ({
       index: i + 1,
       name: item.product.name,
-      qty: formatQuantity(item.qty, item.product.unit),
+      // Hebrew on purpose: the image goes to the supplier, like the name beside it. See share.ts.
+      qty: formatQuantity(item.qty, item.product.unit, 'he'),
       sku: item.product.sku,
     })),
   };

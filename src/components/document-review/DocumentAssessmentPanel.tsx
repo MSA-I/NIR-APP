@@ -1,9 +1,9 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { reasonOr } from '../../lib/reason';
 import { todayISO } from '../../lib/format';
 import { AlertTriangle, Check, CircleCheck, Info, Loader2, ShieldAlert } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { toHebrewError } from '../../lib/errors';
 import { fmtMoneyExact, fmtNum } from '../../lib/format';
 import { Disclosure, ICON, Note, useToast } from '../ui';
 import { DocumentLineMapping } from './DocumentLineMapping';
@@ -13,13 +13,13 @@ import {
   approvalEffects,
   blockingFindings,
   canSubmit,
-  findingLabel,
+  findingText,
   formatLineRanges,
   groupFindings,
   priceSeedRows,
-  resolutionLabel,
+  resolutionText,
   reviewedProposal,
-  storageAndApprovalSentences,
+  storageAndApprovalKeys,
   type AssessmentLine,
   type DocumentReviewRead,
   type FindingGroup,
@@ -51,6 +51,7 @@ function Cell({ children }: { children: React.ReactNode }) {
 }
 
 function FindingRow({ group }: { group: FindingGroup }) {
+  const { t } = useT();
   const { finding, lines } = group;
   const Icon = finding.severity === 'warning' ? AlertTriangle
     : finding.severity === 'info' ? Info : ShieldAlert;
@@ -58,13 +59,13 @@ function FindingRow({ group }: { group: FindingGroup }) {
     <li className="flex items-start gap-2 text-sm">
       <Icon size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
       <span>
-        {findingLabel(finding)}
+        {findingText(finding, t)}
         {lines.length === 1 && (
-          <span className="text-ink-muted"> · שורה <span className="num">{lines[0]}</span></span>
+          <span className="text-ink-muted"> {t('docAssessment.text')} <span className="num">{lines[0]}</span></span>
         )}
         {lines.length > 1 && (
           <span className="text-ink-muted">
-            {' · '}<span className="num">{lines.length}</span> שורות: <span className="num">{formatLineRanges(lines)}</span>
+            {' · '}<span className="num">{lines.length}</span> {t('docAssessment.formatLineRanges')} <span className="num">{formatLineRanges(lines)}</span>
           </span>
         )}
       </span>
@@ -73,6 +74,7 @@ function FindingRow({ group }: { group: FindingGroup }) {
 }
 
 export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAssessmentPanelProps) {
+  const { errorText, t } = useT();
   const [read, setRead] = useState<DocumentReviewRead | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,7 +112,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
     });
     setLoading(false);
     if (result.error) {
-      setLoadError(toHebrewError(result.error));
+      setLoadError(errorText(result.error));
       return;
     }
     setLoadError(null);
@@ -179,11 +181,10 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
       // A fresh key per attempt, so a genuine second approval is possible while a retry of THIS
       // attempt — the dropped-connection case 0110 is built for — returns the first result.
       p_idempotency_key: crypto.randomUUID(),
-      p_reason: reasonOr(reason, 'אישור מסמך שהתקבל מהספק'),
+      p_reason: reasonOr(reason, t('docAssessment.reasonOr')),
     });
     if (result.error) {
-      setBusy(false);
-      toast(toHebrewError(result.error), 'error');
+      toast(errorText(result.error), 'error');
       return;
     }
 
@@ -204,7 +205,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
         p_effective_date: read.document_date ?? todayISO(),
         p_reason: reasonOr(reason, 'קביעת מחיר ראשוני מתוך מסמך שהתקבל'),
       });
-      if (seeded.error) seedFailure = toHebrewError(seeded.error);
+      if (seeded.error) seedFailure = errorText(seeded.error);
     }
     setBusy(false);
 
@@ -218,34 +219,34 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
     onApplied?.();
   }, [read, supplierId, orderId, edits, reason, toast, load, onApplied, seedPrices, seedRows]);
 
-  if (loading && !read) return <Note tone="info" role="status">טוען את בדיקת המסמך…</Note>;
+  if (loading && !read) return <Note tone="info" role="status">{t('docAssessment.text_2')}</Note>;
   if (loadError) return <Note tone="alert" role="alert">{loadError}</Note>;
   if (!read) return null;
 
-  const [storedSentence, approvedSentence] = storageAndApprovalSentences(read);
+  const [storedKey, approvedKey] = storageAndApprovalKeys(read);
   const assessment = read.assessment;
   const intakeCurrency = assessment?.currency ?? null;
   const editable = !read.data_approved && read.state !== 'awaiting_interpretation';
 
   return (
-    <section className="space-y-5" aria-label="בדיקת מסמך שהתקבל">
+    <section className="space-y-5" aria-label={t('docAssessment.aria_label')}>
       {/* The two states, as two sentences with two icons. Never one word covering both. */}
       <div className="card p-4">
         <p className="flex items-start gap-2 text-sm text-ink-body">
           <CircleCheck size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
-          <span>{storedSentence}</span>
+          <span>{t(storedKey)}</span>
         </p>
         <p className="mt-2 flex items-start gap-2 text-sm text-ink-body">
           {read.data_approved
             ? <CircleCheck size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
             : <Info size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />}
-          <span>{approvedSentence}</span>
+          <span>{t(approvedKey)}</span>
         </p>
       </div>
 
       {read.state === 'awaiting_interpretation' && (
         <Note tone="info" role="status">
-          המסמך נשמר וטרם נקרא. המסך יתעדכן כשתתקבל תוצאת עיבוד.
+          {t('docAssessment.text_3')}
         </Note>
       )}
 
@@ -253,7 +254,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
       {blocking.length > 0 && (
         <Note tone="alert" role="alert">
           <div className="min-w-0">
-            <p className="font-medium">יש לטפל לפני אישור:</p>
+            <p className="font-medium">{t('docAssessment.text_4')}</p>
             <ul className="mt-2 space-y-1">
               {blockingGroups.slice(0, VISIBLE_BLOCKING_GROUPS).map((group, index) => (
                 <FindingRow key={index} group={group} />
@@ -264,7 +265,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
             {blockingGroups.length > VISIBLE_BLOCKING_GROUPS && (
               <details className="group mt-2">
                 <summary className="min-h-11 cursor-pointer list-none py-2 text-sm font-medium underline underline-offset-4 [&::-webkit-details-marker]:hidden">
-                  עוד <span className="num">{blockingGroups.length - VISIBLE_BLOCKING_GROUPS}</span> סוגי חריגה
+                  {t('docAssessment.moreGroupsLead')}{' '}<span className="num">{blockingGroups.length - VISIBLE_BLOCKING_GROUPS}</span>{' '}{t('docAssessment.moreGroupsTail')}
                 </summary>
                 <ul className="mt-2 space-y-1">
                   {blockingGroups.slice(VISIBLE_BLOCKING_GROUPS).map((group, index) => (
@@ -295,13 +296,13 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
           explanation is indistinguishable from a guess. */}
       {read.supplier_resolution && (
         <div className="card p-4">
-          <h3 className="text-sm font-medium text-ink-soft">הספק</h3>
+          <h3 className="text-sm font-medium text-ink-soft">{t('docAssessment.text_5')}</h3>
           <p className="mt-1 text-sm text-ink-body">
             {read.supplier_resolution.resolved
-              ? `זוהה · ${resolutionLabel(read.supplier_resolution.matched_by)}`
+              ? t('docAssessment.supplierResolved', { evidence: resolutionText(read.supplier_resolution.matched_by, t) ?? '' })
               : read.supplier_resolution.reason === 'ambiguous'
-                ? 'יותר ממועמד אחד — נדרשת בחירה'
-                : 'לא זוהה מהמסמך'}
+                ? t('docAssessment.text_6')
+                : t('docAssessment.text_7')}
           </p>
           {read.supplier_resolution.candidates.length > 0 && (
             <ul className="mt-2 space-y-1 text-sm text-ink-muted">
@@ -309,7 +310,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
                 <li key={index}>
                   {String(candidate.name ?? candidate.supplier_id ?? '')}
                   {candidate.evidence ? ` — ${candidate.evidence}` : ''}
-                  {candidate.authoritative ? '' : ' (הצעה בלבד)'}
+                  {candidate.authoritative ? '' : t('docAssessment.text_8')}
                 </li>
               ))}
             </ul>
@@ -319,20 +320,20 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
 
       {read.order_resolution && (
         <div className="card p-4">
-          <h3 className="text-sm font-medium text-ink-soft">ההזמנה</h3>
+          <h3 className="text-sm font-medium text-ink-soft">{t('docAssessment.text_9')}</h3>
           <p className="mt-1 text-sm text-ink-body">
             {read.order_resolution.resolved
-              ? `זוהתה · ${resolutionLabel(read.order_resolution.matched_by)}`
+              ? t('docAssessment.orderResolved', { evidence: resolutionText(read.order_resolution.matched_by, t) ?? '' })
               : read.order_resolution.reason === 'ambiguous'
-                ? 'כמה הזמנות אפשריות — נדרשת בחירה'
+                ? t('docAssessment.text_10')
                 /* A document with no order is legitimate, not a failure (0107). */
-                : 'לא שויכה הזמנה — מצב לגיטימי'}
+                : t('docAssessment.text_11')}
           </p>
           {read.order_resolution.candidates.length > 0 && (
             <ul className="mt-2 space-y-1 text-sm text-ink-muted">
               {read.order_resolution.candidates.map((candidate, index) => (
                 <li key={index}>
-                  הזמנה <span className="num">{String(candidate.number ?? '')}</span>
+                  {t('docAssessment.orderWord')}{' '}<span className="num">{String(candidate.number ?? '')}</span>
                   {candidate.evidence ? ` — ${candidate.evidence}` : ''}
                 </li>
               ))}
@@ -343,23 +344,23 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
 
       {read.document_type === 'credit_note' && read.credit_resolution && (
         <div className="card p-4">
-          <h3 className="text-sm font-medium text-ink-soft">חשבונית המקור לזיכוי</h3>
+          <h3 className="text-sm font-medium text-ink-soft">{t('docAssessment.text_12')}</h3>
           {read.credit_resolution.resolved ? (
             <dl className="mt-2 space-y-1.5 text-sm">
               <div className="flex justify-between gap-4">
-                <dt className="text-ink-muted">מספר חשבונית</dt>
+                <dt className="text-ink-muted">{t('docAssessment.text_13')}</dt>
                 <dd><bdi>{read.credit_resolution.reference_invoice_number ?? '—'}</bdi></dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-ink-muted">סכום הזיכוי במסמך</dt>
+                <dt className="text-ink-muted">{t('docAssessment.text_14')}</dt>
                 <dd className="num font-medium">{fmtMoneyExact(read.credit_resolution.amount, intakeCurrency)}</dd>
               </div>
             </dl>
           ) : (
             <p className="mt-2 text-sm text-alert-fg">
               {read.credit_resolution.reason === 'ambiguous'
-                ? 'נמצאה יותר מחשבונית מקור אחת. המסמך נשאר לבדיקה עד לבחירה חד־משמעית.'
-                : 'לא ניתן לזהות חשבונית מקור אחת. המסמך נשאר לבדיקה ולא יירשם זיכוי.'}
+                ? t('docAssessment.text_15')
+                : t('docAssessment.text_16')}
             </p>
           )}
         </div>
@@ -368,14 +369,14 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
       {/* What will happen — and, just as importantly, what will not. Immediately above the button
           it describes, because that ordering is the whole point of the sentences (DESIGN.md §2). */}
       <div className="card p-4">
-        <h3 className="text-sm font-medium text-ink-soft">מה יקרה באישור</h3>
+        <h3 className="text-sm font-medium text-ink-soft">{t('docAssessment.text_17')}</h3>
         <ul className="mt-2 space-y-1.5">
           {effects.map((effect, index) => (
             <li key={index} className="flex items-start gap-2 text-sm text-ink-body">
               {effect.happens
                 ? <Check size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
                 : <span aria-hidden="true" className="mt-0.5 shrink-0 text-ink-muted">✕</span>}
-              <span>{effect.text}</span>
+              <span>{t(effect.textKey)}</span>
             </li>
           ))}
         </ul>
@@ -388,7 +389,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
       {editable && (
         <div className="card p-4">
           <label className="block text-sm font-medium text-ink-soft" htmlFor="review-reason">
-            סיבה (רשות — נרשמת ביומן הביקורת ובתיק המסמך)
+            {t('docAssessment.text_18')}
           </label>
           <textarea
             id="review-reason"
@@ -421,12 +422,12 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
               rather than left here, so it is read before the press and not five screens up. */}
           <PrimaryDecision
             className="mt-3"
-            label="אישור המסמך שהתקבל"
+            label={t('docAssessment.label')}
             hint={blocking.length > 0
               /* The button stays live: the server is the gate, and it names what it refused. A
                  client-side block would put a second decision-maker in the path and let the two
                  drift apart. */
-              ? 'יש ממצאים חוסמים. אפשר לנסות לאשר — השרת יבדוק שוב ויסביר בדיוק מה מונע.'
+              ? t('docAssessment.text_19')
               : null}
           >
             <button
@@ -436,7 +437,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
               onClick={() => void submit()}
             >
               {busy && <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" />}
-              אישור המסמך
+              {t('docAssessment.text_20')}
             </button>
           </PrimaryDecision>
         </div>
@@ -448,7 +449,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
         <div className="overflow-hidden card" data-testid="assessment-detail">
           {advisory.length > 0 && (
             <Disclosure
-              title="שווה לשים לב"
+              title={t('docAssessment.title')}
               count={advisoryGroups.length}
               tone={SEVERITY_TONE[advisory.some((finding) => finding.severity === 'warning') ? 'warning' : 'info']}
             >
@@ -461,7 +462,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
           {assessment && assessment.lines.length > 0 && (
             <Disclosure
               className={advisory.length > 0 ? 'border-t border-line-soft' : ''}
-              title="שורות מול המקורות"
+              title={t('docAssessment.title_2')}
               count={assessment.lines.length}
               onToggle={setLinesOpen}
             >
@@ -470,21 +471,21 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
                   className="table-scroll overflow-x-auto rounded-lg border border-line"
                   role="region"
                   tabIndex={0}
-                  aria-label="שורות המסמך מול ההזמנה, הקבלה והמחירון; ניתן לגלול בתוך הטבלה"
+                  aria-label={t('docAssessment.aria_label_2')}
                 >
                   <table className="min-w-full bg-surface">
                     <caption className="px-3 pt-2 text-start text-xs font-medium text-ink-soft">
-                      כל שורה מול ארבעת המקורות. ערך שאינו ידוע מוצג כמקף, לא כאפס.
+                      {t('docAssessment.text_21')}
                     </caption>
                     <thead className="table-head">
                       <tr className="border-b border-line">
-                        <th className="th" scope="col">תיאור</th>
-                        <th className="th" scope="col">כמות במסמך</th>
-                        <th className="th" scope="col">הוזמן</th>
-                        <th className="th" scope="col">התקבל</th>
-                        <th className="th" scope="col">מחיר במסמך</th>
-                        <th className="th" scope="col">מחיר מוסכם</th>
-                        <th className="th" scope="col">הפרש</th>
+                        <th className="th" scope="col">{t('docAssessment.text_22')}</th>
+                        <th className="th" scope="col">{t('docAssessment.text_23')}</th>
+                        <th className="th" scope="col">{t('docAssessment.text_24')}</th>
+                        <th className="th" scope="col">{t('docAssessment.text_25')}</th>
+                        <th className="th" scope="col">{t('docAssessment.text_26')}</th>
+                        <th className="th" scope="col">{t('docAssessment.text_27')}</th>
+                        <th className="th" scope="col">{t('docAssessment.text_28')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -499,7 +500,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
                             <td className="td">
                               {line.description || line.sku || line.barcode || '—'}
                               {line.product_id === null && (
-                                <span className="block text-xs text-ink-muted">מוצר לא מזוהה — נדרש מיפוי</span>
+                                <span className="block text-xs text-ink-muted">{t('docAssessment.text_29')}</span>
                               )}
                             </td>
                             <Cell>{fmtNum(line.quantity)}</Cell>
@@ -525,17 +526,17 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
       {assessment && assessment.order_items.some((item) => !item.on_this_document) && (
         <Note tone="idle" role="status">
           <div className="min-w-0">
-            <p className="font-medium">הוזמן ואינו מופיע במסמך הזה:</p>
+            <p className="font-medium">{t('docAssessment.text_30')}</p>
             <ul className="mt-2 space-y-1 text-sm">
               {assessment.order_items.filter((item) => !item.on_this_document).map((item) => (
                 <li key={item.purchase_order_item_id}>
-                  <bdi>{item.product_name}</bdi> · הוזמן <span className="num">{fmtNum(item.ordered_quantity)}</span>
+                  <bdi>{item.product_name}</bdi> {t('docAssessment.fmtNum')} <span className="num">{fmtNum(item.ordered_quantity)}</span>
                 </li>
               ))}
             </ul>
             {/* The server states this as a fact on every such finding; the screen must not quietly
                 turn it into a shortage. A supplier bills in instalments. */}
-            <p className="mt-2 text-sm">אין בכך טענה שהפריטים חסרים פיזית.</p>
+            <p className="mt-2 text-sm">{t('docAssessment.text_31')}</p>
           </div>
         </Note>
       )}
@@ -546,7 +547,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
           than the machine's reading, and the ledger records it as such. */}
       {Object.keys(edits).length > 0 && (
         <p className="text-sm text-ink-muted">
-          <span className="num">{Object.keys(edits).length}</span> שורות נקבעו ידנית.
+          <span className="num">{Object.keys(edits).length}</span>{' '}{t('docAssessment.linesEditedManually')}
         </p>
       )}
     </section>

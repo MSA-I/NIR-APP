@@ -4,7 +4,6 @@
 // types.ts only because that file belongs to another workstream; fold it in when convenient.
 
 import { supabase } from './supabase';
-import { toHebrewError } from './errors';
 import type { ActiveRole, Invitation, InvitationStatus, Role } from './types';
 
 /** The only three product personas. The frozen enum still carries retired historical values. */
@@ -62,7 +61,7 @@ async function callSendInvite(
     // Reached only when the Edge body could not be parsed, i.e. a transport failure — always a
     // machine string, never one of the function's own Hebrew messages (those return above). The
     // owner used to see "Failed to fetch" in a toast.
-    return { error: toHebrewError(error), result: null };
+    return { error: error instanceof Error ? error.message : String(error), result: null };
   }
 
   const failed = (data as { error?: InviteError } | null)?.error;
@@ -82,7 +81,7 @@ export async function revokeInvite(invitationId: string, reason: string): Promis
     p_reason: reason,
   });
   // Raw Postgres otherwise — the owner cancelling an invitation is not the audience for it.
-  return error ? toHebrewError(error) : null;
+  return error ? error.message : null;
 }
 
 /* ---------- Invitee side (public, no session yet) ---------- */
@@ -120,23 +119,21 @@ export async function acceptInvitation(token: string, fullName: string, phone: s
   return data as { org_id: string; role: Role };
 }
 
-/** DB-side codes (0007) → Hebrew. Anything unmapped falls back to the raw message. */
-export const ACCEPT_ERROR: Record<string, string> = {
-  invitation_unknown: 'קישור ההזמנה אינו תקין. בקש מהעסק לשלוח הזמנה חדשה.',
-  invitation_expired: 'תוקף ההזמנה פג. בקש מהעסק לשלוח הזמנה חדשה.',
-  invitation_accepted: 'ההזמנה כבר נוצלה. אפשר להתחבר עם הפרטים שהוגדרו.',
-  invitation_revoked: 'ההזמנה בוטלה על ידי העסק.',
-  email_mismatch: 'כתובת האימייל של החשבון אינה תואמת לזו שההזמנה נשלחה אליה.',
-  profile_exists: 'החשבון הזה כבר משויך לעסק במערכת.',
-  org_suspended: 'חשבון העסק מושהה. יש לפנות לעסק שהזמין אותך.',
-  full_name_required: 'יש להזין שם מלא.',
-  not_authenticated: 'ההתחברות נכשלה. נסה שוב.',
-  terms_consent_required: 'להשלמת ההצטרפות יש לאשר את תנאי השימוש ומדיניות הפרטיות.',
-};
+/**
+ * The DB-side codes (0007) this screen can meet.
+ *
+ * The wording used to live here as a private Hebrew map. That made the INVITEE — a person with no
+ * account yet, no session, and nobody in the product to ask — the one reader whose failures came
+ * from a second vocabulary. All ten are registered in src/lib/errors.ts now, so the raw code is
+ * simply passed through and resolved where it is drawn, in the invitee's own language.
+ */
+export const ACCEPT_ERROR_CODES = [
+  'invitation_unknown', 'invitation_expired', 'invitation_accepted', 'invitation_revoked',
+  'email_mismatch', 'profile_exists', 'org_suspended', 'full_name_required',
+  'not_authenticated', 'terms_consent_required',
+] as const;
 
-export function acceptErrorMessage(raw: string): string {
-  const key = Object.keys(ACCEPT_ERROR).find((k) => raw.includes(k));
-  // An unmapped code used to reach the invitee as raw Postgres, on the screen where they set their
-  // password for the first time. toHebrewError ends in a Hebrew fallback instead.
-  return key ? ACCEPT_ERROR[key] : toHebrewError(raw);
+/** The matched code, or the raw message when nothing matched — either resolves at the screen. */
+export function acceptErrorCondition(raw: string): string {
+  return ACCEPT_ERROR_CODES.find((code) => raw.includes(code)) ?? raw;
 }

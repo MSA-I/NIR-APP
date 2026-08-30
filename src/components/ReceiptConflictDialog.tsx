@@ -1,3 +1,5 @@
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t.ts';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { fmtDateTime, formatQuantity } from '../lib/format';
@@ -54,23 +56,23 @@ export interface ReceiptConflictState {
   serverActorName: string;
   serverOrderStatus: string | null;
   /** Set when the re-read itself could not be completed; the screen says so instead of guessing. */
-  rereadError: string | null;
+  rereadErrorKey: TKey | null;
 }
 
 export type ConflictOptionKind = 'resend-decided' | 'keep-local' | 'discard-local';
 
 export interface ConflictPresentation {
-  title: string;
+  titleKey: TKey;
   /** What the server actually said, in Hebrew, naming the situation rather than the error code. */
-  summary: string;
+  summaryKey: TKey;
   /** Whether a per-line human decision (local value / server value) is offered. */
   perLineDecision: boolean;
   /** Whether a resolution can produce a new server write at all. */
   resendable: boolean;
   requiresExplanation: boolean;
-  options: { kind: ConflictOptionKind; label: string; danger?: boolean }[];
+  options: { kind: ConflictOptionKind; labelKey: TKey; danger?: boolean }[];
   /** Honest note when a resolution writes nothing to the server, so no audit row is created. */
-  localOnlyNote: string | null;
+  localOnlyNoteKey: TKey | null;
 }
 
 /**
@@ -79,72 +81,60 @@ export interface ConflictPresentation {
  * Exported and pure so the mapping is a tested claim rather than JSX nobody can assert on.
  */
 export function conflictPresentation(code: ReceiptConflictCode): ConflictPresentation {
-  const keepLocal = { kind: 'keep-local' as const, label: 'השארת הטיוטה במכשיר' };
-  const discardLocal = { kind: 'discard-local' as const, label: 'מחיקת הטיוטה המקומית', danger: true };
-  const localOnly =
-    'הכרעה זו אינה שולחת פעולה לשרת, ולכן אינה נרשמת ביומן הביקורת. הרישום נוצר רק כשנשלחת קבלה.';
+  const keepLocal = { kind: 'keep-local' as const, labelKey: 'receiptConflict.keepLocal' as TKey };
+  const discardLocal = { kind: 'discard-local' as const, labelKey: 'receiptConflict.discardLocal' as TKey, danger: true };
+  const localOnly: TKey = 'receiptConflict.localOnlyNote';
 
   switch (code) {
     case 'receipt_qty_exceeds_order':
       return {
-        title: 'הכמויות בקבלה אינן תואמות למה שנותר בהזמנה',
-        summary:
-          'השרת דחה את הקבלה: לפחות שורה אחת חורגת מהכמות שנותרה, או שסטטוס "מלא" אינו שווה בדיוק ליתרה. '
-          + 'ייתכן שאדם אחר קלט מהזמנה זו בזמן שהמכשיר היה לא־מקוון. בחר לכל שורה מה נכון — הכמות שנרשמה '
-          + 'במכשיר או הכמות שהשרת מכיר — ואל תסמוך על מיזוג אוטומטי: אין כזה.',
+        titleKey: 'receiptConflict.qtyExceedsTitle',
+        summaryKey: 'receiptConflict.qtyExceedsSummary',
         perLineDecision: true,
         resendable: true,
         requiresExplanation: true,
-        options: [{ kind: 'resend-decided', label: 'שליחה לפי ההכרעה' }, keepLocal],
-        localOnlyNote: null,
+        options: [{ kind: 'resend-decided', labelKey: 'receiptConflict.resendDecided' }, keepLocal],
+        localOnlyNoteKey: null,
       };
     case 'receipt_draft_conflict':
       return {
-        title: 'קיימת טיוטת קבלה אחרת להזמנה הזו',
-        summary:
-          'בשרת פתוחה טיוטת קבלה אחרת לאותה הזמנה, ולכן הקבלה שנרשמה במכשיר לא נשלחה. '
-          + 'שתי טיוטות לאותה הזמנה אינן ניתנות למיזוג אוטומטי — צריך להחליט איזו מהן מתארת את המשלוח.',
+        titleKey: 'receiptConflict.draftConflictTitle',
+        summaryKey: 'receiptConflict.draftConflictSummary',
         perLineDecision: false,
         resendable: false,
         requiresExplanation: false,
         options: [keepLocal, discardLocal],
-        localOnlyNote: localOnly,
+        localOnlyNoteKey: localOnly,
       };
     case 'receipt_already_completed':
       return {
-        title: 'הקבלה הזו כבר הושלמה בשרת',
-        summary:
-          'הקבלה נסגרה בשרת עם תוכן אחר ממה שנרשם במכשיר. קבלה שהושלמה אינה נדרסת — '
-          + 'הטיוטה המקומית נשמרת ומוצגת, וההכרעה אנושית ומפורשת.',
+        titleKey: 'receiptConflict.alreadyCompletedTitle',
+        summaryKey: 'receiptConflict.alreadyCompletedSummary',
         perLineDecision: false,
         resendable: false,
         requiresExplanation: false,
         options: [keepLocal, discardLocal],
-        localOnlyNote: localOnly,
+        localOnlyNoteKey: localOnly,
       };
     case 'receipt_idempotency_conflict':
       return {
-        title: 'אותה קבלה כבר נשלחה עם פרטים אחרים',
-        summary:
-          'מפתח הקבלה מוכר לשרת, אך התוכן שנשמר תחתיו שונה מהתוכן שבמכשיר. השרת אינו מחליף תוכן של קבלה '
-          + 'קיימת בשקט, ולכן שום דבר לא נכתב. יש לבדוק מה נשמר בשרת לפני שמחליטים.',
+        titleKey: 'receiptConflict.idempotencyTitle',
+        summaryKey: 'receiptConflict.idempotencySummary',
         perLineDecision: false,
         resendable: false,
         requiresExplanation: false,
         options: [keepLocal, discardLocal],
-        localOnlyNote: localOnly,
+        localOnlyNoteKey: localOnly,
       };
     case 'purchase_order_not_receivable':
       return {
-        title: 'ההזמנה אינה במצב שמאפשר קבלת סחורה',
-        summary:
-          'סטטוס ההזמנה בשרת השתנה (למשל בוטלה) בזמן שהמכשיר היה לא־מקוון, ולכן לא ניתן לקלוט אליה סחורה. '
-          + 'הטיוטה נשמרת כדי שהדיווח על מה שהגיע לא יאבד; הטיפול דורש הכרעה עסקית בהזמנה עצמה.',
+        titleKey: 'receiptConflict.notReceivableTitle',
+        summaryKey: 'receiptConflict.notReceivableSummary',
         perLineDecision: false,
         resendable: false,
         requiresExplanation: false,
         options: [keepLocal, discardLocal],
-        localOnlyNote: localOnly,
+        localOnlyNoteKey: localOnly,
       };
   }
 }
@@ -170,7 +160,7 @@ interface ConflictReadInput {
 /**
  * Re-reads the server rows the conflict is about and pairs them with the local claim.
  *
- * A blocked or partial read degrades to `—` and a stated `rereadError`. Local work can still be kept
+ * A blocked or partial read degrades to `—` and a stated `rereadErrorKey`. Local work can still be kept
  * or discarded, but re-send is fail-closed: unknown server quantities are never converted to zero.
  */
 export async function loadReceiptConflict(input: ConflictReadInput): Promise<ReceiptConflictState> {
@@ -187,7 +177,7 @@ export async function loadReceiptConflict(input: ConflictReadInput): Promise<Rec
     serverReceiptAt: null,
     serverActorName: '—',
     serverOrderStatus: null,
-    rereadError: null,
+    rereadErrorKey: null,
   };
 
   const [items, order, receipts] = await Promise.all([
@@ -200,7 +190,7 @@ export async function loadReceiptConflict(input: ConflictReadInput): Promise<Rec
   ]);
 
   if (items.error || order.error || receipts.error) {
-    state.rereadError = 'לא ניתן היה לקרוא מחדש את נתוני ההזמנה מהשרת. ערכים לא ידועים מוצגים כ־—, ושליחה מחדש חסומה עד לקריאה מוצלחת.';
+    state.rereadErrorKey = 'receiptConflict.rereadFailed';
   }
 
   const serverItems = new Map(
@@ -318,6 +308,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
   onClose: () => void;
   onResolve: (resolution: ReceiptConflictResolution) => void;
 }) {
+  const { locale, statusLabel, t } = useT();
   const explanationId = useId();
   const [explanation, setExplanation] = useState('');
   const [choice, setChoice] = useState<Record<string, 'local' | 'server'>>({});
@@ -336,7 +327,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
   if (!conflict || !presentation) return null;
 
   const canResend = presentation.resendable
-    && conflict.rereadError === null
+    && conflict.rereadErrorKey === null
     && conflict.lines.length > 0
     && conflict.lines.every((line) => (
       line.orderedQty !== null
@@ -364,40 +355,40 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
   };
 
   return (
-    <Modal open onClose={onClose} title={presentation.title} wide busy={busy}
-      description={presentation.summary}>
+    <Modal open onClose={onClose} title={t(presentation.titleKey)} wide busy={busy}
+      description={t(presentation.summaryKey)}>
       <div className="space-y-4">
-        <Note tone="alert">{presentation.summary}</Note>
-        {conflict.rereadError && <Note tone="await">{conflict.rereadError}</Note>}
+        <Note tone="alert">{t(presentation.summaryKey)}</Note>
+        {conflict.rereadErrorKey && <Note tone="await">{t(conflict.rereadErrorKey)}</Note>}
 
         <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-ink-soft">הזמנה</dt>
+            <dt className="text-ink-soft">{t('receiptConflict.text')}</dt>
             <dd className="text-ink">
               {conflict.supplierName} · <span className="num">#{conflict.orderNumber ?? '—'}</span>
             </dd>
           </div>
           <div>
-            <dt className="text-ink-soft">סטטוס ההזמנה בשרת</dt>
+            <dt className="text-ink-soft">{t('receiptConflict.text_2')}</dt>
             <dd className="text-ink">{conflict.serverOrderStatus ?? '—'}</dd>
           </div>
           <div>
-            <dt className="text-ink-soft">נרשם במכשיר</dt>
+            <dt className="text-ink-soft">{t('receiptConflict.text_3')}</dt>
             <dd className="text-ink num">{receiptClock(conflict.localObservedAt)}</dd>
           </div>
           <div>
-            <dt className="text-ink-soft">חותמת הקבלה בשרת</dt>
+            <dt className="text-ink-soft">{t('receiptConflict.text_4')}</dt>
             <dd className="text-ink num">{fmtDateTime(conflict.serverReceiptAt)}</dd>
           </div>
           <div>
-            <dt className="text-ink-soft">מי עדכן בשרת</dt>
+            <dt className="text-ink-soft">{t('receiptConflict.text_5')}</dt>
             <dd className="text-ink">{conflict.serverActorName}</dd>
           </div>
           <div>
-            <dt className="text-ink-soft">סטטוס הקבלה בשרת</dt>
+            <dt className="text-ink-soft">{t('receiptConflict.text_6')}</dt>
             <dd className="text-ink">
-              {conflict.serverReceiptStatus === 'completed' ? 'הושלמה'
-                : conflict.serverReceiptStatus === 'draft' ? 'טיוטה' : '—'}
+              {conflict.serverReceiptStatus === 'completed' ? t('receiptConflict.text_7')
+                : conflict.serverReceiptStatus === 'draft' ? t('receiptConflict.text_8') : '—'}
             </dd>
           </div>
         </dl>
@@ -409,16 +400,16 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
             the oceanic `.table-head` bar, because that rule is scoped to `.th`. `whitespace-normal`
             is a deliberate local narrowing of `.td` for the two cells that hold prose. */}
         <div className="table-scroll overflow-x-auto" role="region" tabIndex={0}
-          aria-label="השוואת הכמויות בין המכשיר לשרת; ניתן לגלול בתוך הטבלה">
+          aria-label={t('receiptConflict.aria_label')}>
           <table className="w-full text-sm">
-            <caption className="sr-only">השוואת הכמויות בין המכשיר לשרת</caption>
+            <caption className="sr-only">{t('receiptConflict.text_9')}</caption>
             <thead className="table-head">
               <tr className="border-b border-line">
-                <th scope="col" className="th">פריט</th>
-                <th scope="col" className="th">במכשיר</th>
-                <th scope="col" className="th">בשרת</th>
+                <th scope="col" className="th">{t('receiptConflict.text_10')}</th>
+                <th scope="col" className="th">{t('receiptConflict.text_11')}</th>
+                <th scope="col" className="th">{t('receiptConflict.text_12')}</th>
                 {showLineDecision && (
-                  <th scope="col" className="th">ההכרעה</th>
+                  <th scope="col" className="th">{t('receiptConflict.text_13')}</th>
                 )}
               </tr>
             </thead>
@@ -428,23 +419,23 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
                   <td className="td whitespace-normal">
                     <div className="text-ink"><bdi>{line.productName}</bdi></div>
                     <div className="text-xs text-ink-muted">
-                      הוזמן <span className="num">{formatQuantity(line.orderedQty, line.unit)}</span>
+                      {t('receiptConflict.orderedWord')}{' '}<span className="num">{formatQuantity(line.orderedQty, line.unit, locale)}</span>
                     </div>
                   </td>
                   <td className="td">
                     <span className="num">{line.localQty}</span>{' '}
                     <span className="text-xs text-ink-muted">
-                      {RECEIPT_LINE_STATUS[line.localStatus]?.label ?? line.localStatus}
+                      {statusLabel(RECEIPT_LINE_STATUS[line.localStatus]) || line.localStatus}
                     </span>
                   </td>
                   <td className="td whitespace-normal">
                     <div>
-                      נותר לקבלה: <span className="num">{line.serverRemaining ?? '—'}</span>
+                      {t('receiptConflict.remainingWord')}{' '}<span className="num">{line.serverRemaining ?? '—'}</span>
                     </div>
                     <div className="text-xs text-ink-muted">
-                      התקבל בעבר: <span className="num">{line.serverReceivedQty ?? '—'}</span>
+                      {t('receiptConflict.receivedBeforeWord')}{' '}<span className="num">{line.serverReceivedQty ?? '—'}</span>
                       {line.serverDraftQty !== null && (
-                        <> · בטיוטת השרת: <span className="num">{line.serverDraftQty}</span></>
+                        <> {t('receiptConflict.text_14')} <span className="num">{line.serverDraftQty}</span></>
                       )}
                     </div>
                   </td>
@@ -455,10 +446,10 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
                           name — a screen-reader user meeting one chip out of context still hears
                           which product it decides. */}
                       <ToggleGroup
-                        label={`ההכרעה עבור ${line.productName}`}
+                        label={t('receiptConflict.decisionFor', { product: line.productName })}
                         value={choice[line.orderItemId]}
                         onChange={(value) => setChoice((current) => ({ ...current, [line.orderItemId]: value }))}
-                        items={([['local', 'המכשיר'], ['server', 'השרת']] as const).map(([value, label]) => ({
+                        items={([['local', t('receiptConflict.map')], ['server', t('receiptConflict.map_2')]] as const).map(([value, label]) => ({
                           key: value,
                           // Two spans, not one string with a hidden tail: the accessible-name
                           // algorithm trims every text node before joining them, so a leading
@@ -468,7 +459,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
                           label: (
                             <>
                               <span aria-hidden="true">{label}</span>
-                              <span className="sr-only">{`${label} עבור ${line.productName}`}</span>
+                              <span className="sr-only">{t('receiptConflict.optionFor', { option: label, product: line.productName })}</span>
                             </>
                           ),
                         }))}
@@ -484,35 +475,35 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
         {showLineDecision && (
           <p className="text-xs text-ink-muted">
             {disagreeing.length
-              ? <>שורות שבהן הערכים נבדלים: <span className="num">{disagreeing.length}</span>. מיזוג אוטומטי של כמויות אינו קיים בכוונה — כמות היא טענה על סחורה שהגיעה.</>
-              : 'הערכים במכשיר ובשרת זהים בשורות שנקראו. אם השרת דחה בכל זאת, בדוק את סטטוס ההזמנה ואת הקבלה שכבר קיימת.'}
+              ? <>{t('receiptConflict.text_15')} <span className="num">{disagreeing.length}</span>{t('receiptConflict.text_16')}</>
+              : t('receiptConflict.text_17')}
           </p>
         )}
 
         {presentation.requiresExplanation && canResend && (
           <div>
             <label className="label" htmlFor={explanationId}>
-              הסבר להכרעה (חובה — נרשם ביומן הביקורת עם הקבלה)
+              {t('receiptConflict.text_18')}
             </label>
             <textarea id={explanationId} className="input" rows={2} maxLength={1000}
               value={explanation} onChange={(event) => setExplanation(event.target.value)} />
           </div>
         )}
 
-        {presentation.localOnlyNote && <Note tone="info">{presentation.localOnlyNote}</Note>}
+        {presentation.localOnlyNoteKey && <Note tone="info">{t(presentation.localOnlyNoteKey)}</Note>}
 
         <div className="flex flex-wrap justify-end gap-2">
           {/* Not "סגירה": the Modal's own close control already answers to that name, and one dialog
               must not offer two identically named buttons. */}
           <button type="button" className="btn-secondary min-h-11" disabled={busy} onClick={onClose}>
-            סגירה בלי הכרעה
+            {t('receiptConflict.text_19')}
           </button>
           {availableOptions.map((option) => (
             <button key={option.kind} type="button"
               className={`${option.danger ? 'btn-danger' : 'btn-primary'} min-h-11`}
               disabled={busy || (option.kind === 'resend-decided' && presentation.requiresExplanation && !explanation.trim())}
               onClick={() => submit(option.kind)}>
-              {option.label}
+              {t(option.labelKey)}
             </button>
           ))}
         </div>

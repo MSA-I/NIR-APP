@@ -2,9 +2,15 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import { Camera, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { NOTE_MAX_LENGTH, submitFeedbackNote } from '../lib/feedback';
+import {
+  NOTE_MAX_LENGTH,
+  submitFeedbackNote,
+  type FeedbackOutcomeCode,
+} from '../lib/feedback';
 import { captureViewport, type ScreenshotCapture } from '../lib/screenshot';
 import { ICON, Modal, Note, useToast } from './ui';
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 
 /**
  * The design partner's note, from any screen, straight to the vendor.
@@ -46,6 +52,11 @@ import { ICON, Modal, Note, useToast } from './ui';
  */
 
 const COOLDOWN_MS = 30_000;
+const FEEDBACK_OUTCOME_KEY: Readonly<Record<Exclude<FeedbackOutcomeCode, 'save_failed'>, TKey>> = {
+  empty: 'feedbackButton.outcomeEmpty',
+  saved_not_delivered: 'feedbackButton.outcomeSavedNotDelivered',
+  delivered: 'feedbackButton.outcomeDelivered',
+};
 
 /**
  * `onShell` was removed on 26.08.2026 for the same reason as the bell's: it switched this trigger
@@ -61,6 +72,7 @@ export default function FeedbackButton({ variant = 'icon', tone = 'panel' }: {
    */
   tone?: 'panel' | 'shell';
 } = {}) {
+  const { errorText, t } = useT();
   const { profile } = useAuth();
   const location = useLocation();
   const toast = useToast();
@@ -127,7 +139,14 @@ export default function FeedbackButton({ variant = 'icon', tone = 'panel' }: {
     }, includeShot ? shot : null);
     setBusy(false);
 
-    toast(outcome.message, outcome.delivered ? 'success' : 'error');
+    const baseMessage = outcome.code === 'save_failed'
+      ? errorText(outcome.error)
+      : t(FEEDBACK_OUTCOME_KEY[outcome.code]);
+    const screenshotRequested = includeShot && shot !== null;
+    const outcomeMessage = screenshotRequested && !outcome.screenshotAttached
+      ? `${baseMessage} · ${t('feedbackButton.screenshotMissing')}`
+      : baseMessage;
+    toast(outcomeMessage, outcome.delivered ? 'success' : 'error');
 
     // The note is stored: closing is safe, and a second click must not send it twice.
     if (outcome.saved) {
@@ -139,7 +158,7 @@ export default function FeedbackButton({ variant = 'icon', tone = 'panel' }: {
     }
     // Nothing was stored — keep the dialog and the text exactly as written. Losing what somebody
     // took the trouble to type is the one failure this feature must never have.
-  }, [profile, note, location.pathname, location.search, location.hash, includeShot, shot, toast]);
+  }, [profile, note, location.pathname, location.search, location.hash, includeShot, shot, toast, errorText, t]);
 
   if (!profile) return null;
 
@@ -153,7 +172,7 @@ export default function FeedbackButton({ variant = 'icon', tone = 'panel' }: {
    * claimed a delivery that failed". The cooldown is about the WAIT; the outcome is the toast's
    * to report, and only it knows which one happened.
    */
-  const label = cooling ? 'אפשר לשלוח הערה נוספת בעוד רגע' : 'שליחת הערה';
+  const label = cooling ? t('feedbackButton.text') : t('feedbackButton.text_2');
 
   return (
     <>
@@ -169,7 +188,7 @@ export default function FeedbackButton({ variant = 'icon', tone = 'panel' }: {
               : 'text-ink-body hover:bg-surface-hover hover:text-ink'
           }`}>
           <MessageSquarePlus size={ICON.md} aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate text-start">{cooling ? label : 'שליחת הערה'}</span>
+          <span className="min-w-0 flex-1 truncate text-start">{cooling ? label : t('feedbackButton.text_3')}</span>
         </button>
       ) : (
         <button type="button" onClick={() => void openWithCapture()} disabled={cooling || capturing}
@@ -179,11 +198,11 @@ export default function FeedbackButton({ variant = 'icon', tone = 'panel' }: {
         </button>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title="שליחת הערה" busy={busy}
-        description="מה לא עבד, מה חסר, או מה היה מבלבל. ההערה מגיעה ישר אליי.">
+      <Modal open={open} onClose={() => setOpen(false)} title={t('feedbackButton.title')} busy={busy}
+        description={t('feedbackButton.description')}>
         <div className="space-y-4">
           <div>
-            <label className="label" htmlFor={noteId}>ההערה</label>
+            <label className="label" htmlFor={noteId}>{t('feedbackButton.text_4')}</label>
             <textarea id={noteId} ref={textareaRef} className="input" rows={5}
               maxLength={NOTE_MAX_LENGTH} value={note} disabled={busy}
               onChange={(e) => setNote(e.target.value)} />
@@ -197,22 +216,22 @@ export default function FeedbackButton({ variant = 'icon', tone = 'panel' }: {
                 <label className="flex min-h-11 items-center gap-2 text-sm text-ink-body">
                   <input type="checkbox" checked={includeShot} disabled={busy}
                     onChange={(event) => setIncludeShot(event.target.checked)} />
-                  <span>לצרף צילום של המסך</span>
+                  <span>{t('feedbackButton.text_5')}</span>
                 </label>
                 <button type="button" className="btn-ghost min-h-11 text-sm"
                   disabled={busy || capturing} onClick={() => void capture()}>
-                  <Camera size={ICON.sm} aria-hidden="true" /> צילום מחדש
+                  <Camera size={ICON.sm} aria-hidden="true" /> {t('feedbackButton.retakeScreenshot')}
                 </button>
               </div>
               {includeShot && (
                 <>
-                  <img src={shot.previewUrl} alt="תצוגה מקדימה של הצילום שיישלח"
+                  <img src={shot.previewUrl} alt={t('feedbackButton.alt')}
                     className="max-h-48 w-full rounded-lg border border-line object-contain object-top" />
                   {/* The disclosure the plan requires, in the words it needs to be in: this is a
                       picture of the screen, so whatever is on the screen is in it. */}
                   <p className="mt-2 text-xs text-await-fg">
-                    הצילום כולל את כל מה שמוצג על המסך כרגע — כולל שמות ספקים, סכומים ומספרי מסמכים.
-                    אפשר להסיר אותו, או לסגור, לסדר את המסך ולצלם מחדש.
+                    {t('feedbackButton.text_6')}{' '}
+                    {t('feedbackButton.text_7')}
                   </p>
                 </>
               )}
@@ -220,22 +239,22 @@ export default function FeedbackButton({ variant = 'icon', tone = 'panel' }: {
           )}
           {!shot && !capturing && (
             <Note tone="info" role="status">
-              לא ניתן היה לצלם את המסך בדפדפן הזה. ההערה תישלח בלי צילום.
+              {t('feedbackButton.text_8')}
             </Note>
           )}
 
           {/* Stated, not hidden: the person can see exactly what travels with their words. */}
           <p className="text-xs text-ink-muted">
-            נשלחים גם: המסך שאתה נמצא בו (<span dir="ltr" className="num">{location.pathname}</span>),
-            כותרת העמוד, הסינון שבחרת, התפקיד שלך, רוחב המסך וגרסת המערכת.
+            {t('feedbackButton.contextPrefix')} (<span dir="ltr" className="num">{location.pathname}</span>),{' '}
+            {t('feedbackButton.contextSuffix')}
           </p>
 
           <div className="flex justify-end gap-2">
             <button type="button" className="btn-secondary" disabled={busy}
-              onClick={() => setOpen(false)}>ביטול</button>
+              onClick={() => setOpen(false)}>{t('feedbackButton.setOpen')}</button>
             <button type="button" className="btn-primary" disabled={busy || !note.trim()}
               onClick={() => void send()}>
-                {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : 'שליחה'}
+                {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : t('feedbackButton.text_10')}
             </button>
           </div>
         </div>

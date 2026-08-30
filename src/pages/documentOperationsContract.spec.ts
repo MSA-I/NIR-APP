@@ -1,3 +1,6 @@
+import { he as heDict } from '../lib/i18n/dictionaries/he';
+import type { Dictionary as I18nDictionary } from '../lib/i18n/dictionaries/he';
+import { translate as i18nTranslate, type TKey as I18nKey } from '../lib/i18n/t';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createElement } from 'react';
@@ -6,8 +9,9 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../components/ui';
 import { NAV_SECTIONS } from '../components/Layout';
+import { he } from '../lib/i18n/dictionaries/he';
 import {
-  attemptStatusMeta,
+  attemptStatusKey,
   recoveryInvokeErrorMessage,
   selectPrimaryOperationalIssue,
 } from './documentOperationsModel';
@@ -100,12 +104,19 @@ const attempt = (status: string, price_list_outcome: string | null = null) => ({
   price_list_outcome,
 });
 
+
+/** A key resolved in Hebrew, so every expectation below keeps the exact phrase it asserted. */
+const say = (key: I18nKey | null | undefined): string =>
+  (key ? i18nTranslate(heDict as unknown as I18nDictionary, key) : '');
 describe('document control capability and UX contract', () => {
   it('keeps the stable owner-only route while naming it בקרת מסמכים everywhere', () => {
     expect(app).toContain('path="/documents/operations" element={<Guard roles={[\'owner\']}><DocumentOperations /></Guard>}');
     const navigation = NAV_SECTIONS.flatMap((section) => section.items)
       .find((item) => item.to === '/documents/operations');
-    expect(navigation).toMatchObject({ label: 'בקרת מסמכים', roles: ['owner'] });
+    // The item carries a key; the claim is still about the words, so it resolves through the
+    // dictionary rather than comparing key to key — which would pass whatever the words were.
+    expect(navigation).toMatchObject({ roles: ['owner'] });
+    expect(he.nav[navigation!.labelKey.replace(/^nav./, '') as keyof typeof he.nav]).toBe('בקרת מסמכים');
     expect(app).not.toContain('roles={[\'office\']}><DocumentOperations');
     expect(app).not.toContain('roles={[\'accountant\']}><DocumentOperations');
   });
@@ -129,11 +140,26 @@ describe('document control capability and UX contract', () => {
   });
 
   it('presents the quiet summary-to-tasks-to-details hierarchy with 44px actions', () => {
-    for (const label of ['דורש טיפול', 'בעיבוד', 'תקלות', 'הושלם']) {
-      expect(source).toContain(`title="${label}"`);
+    // Both halves of this claim split when the copy moved. The screen names four tiles by key,
+    // and each key still carries the word — checking only the keys would pass a tile relabelled
+    // in the dictionary, and checking only the words would pass a screen that stopped rendering
+    // them.
+    for (const [key, label] of [
+      ['title_2', 'דורש טיפול'],
+      ['title_3', 'בעיבוד'],
+      ['title_4', 'תקלות'],
+      ['kpiCompleted', 'הושלם'],
+    ] as const) {
+      expect(source).toContain(`title={t('documentOps.${key}')}`);
+      expect(he.documentOps[key]).toBe(label);
     }
-    expect(source.indexOf('מה קורה עכשיו')).toBeLessThan(source.indexOf('הפריט הדחוף ביותר'));
-    expect(source.indexOf('הפריט הדחוף ביותר')).toBeLessThan(source.indexOf('מסמכים אחרונים'));
+    // The ORDER claim is about where things sit on the screen, so it follows the keys — that is
+    // what the source now holds in the same three places.
+    expect(source.indexOf("t('documentOps.text_20')")).toBeLessThan(source.indexOf("t('documentOps.mostUrgentItem')"));
+    expect(source.indexOf("t('documentOps.mostUrgentItem')")).toBeLessThan(source.indexOf("t('documentOps.text_23')"));
+    expect(he.documentOps.text_20).toBe('מה קורה עכשיו');
+    expect(he.documentOps.mostUrgentItem).toBe('הפריט הדחוף ביותר');
+    expect(he.documentOps.text_23).toBe('מסמכים אחרונים');
     expect(source).toContain('grid grid-cols-2 gap-3 lg:grid-cols-4');
     // The 44px floor used to be pinned here as a literal `min-h-11` repeated on every control.
     // It moved to where it belongs: `@utility btn` in index.css sets `min-h-11`, and every
@@ -147,12 +173,12 @@ describe('document control capability and UX contract', () => {
   });
 
   it('maps processing states to clear Hebrew meanings', () => {
-    expect(attemptStatusMeta(attempt('queued')).label).toBe('ממתין לעיבוד');
-    expect(attemptStatusMeta(attempt('interpreting')).label).toBe('בעיבוד');
-    expect(attemptStatusMeta(attempt('completed')).label).toBe('הושלם');
-    expect(attemptStatusMeta(attempt('review')).label).toBe('נדרשת בדיקה');
-    expect(attemptStatusMeta(attempt('failed')).label).toBe('העיבוד נכשל');
-    expect(attemptStatusMeta(attempt('completed', 'partially_applied')).label).toBe('הוחל חלקית');
+    expect(say(attemptStatusKey(attempt('queued')).labelKey)).toBe('ממתין לעיבוד');
+    expect(say(attemptStatusKey(attempt('interpreting')).labelKey)).toBe('בעיבוד');
+    expect(say(attemptStatusKey(attempt('completed')).labelKey)).toBe('הושלם');
+    expect(say(attemptStatusKey(attempt('review')).labelKey)).toBe('נדרשת בדיקה');
+    expect(say(attemptStatusKey(attempt('failed')).labelKey)).toBe('העיבוד נכשל');
+    expect(say(attemptStatusKey(attempt('completed', 'partially_applied')).labelKey)).toBe('הוחל חלקית');
   });
 
   it('renders the recovery task at mobile width and announces its result', async () => {

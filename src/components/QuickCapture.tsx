@@ -1,8 +1,8 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from './ui';
-import { toHebrewError } from '../lib/errors';
 import {
   DOCUMENT_UPLOAD_ACCEPT,
   WeakCaptureDialog,
@@ -51,6 +51,7 @@ export function quickCaptureReviewTarget(
 export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
   openCapture: () => void; element: ReactNode; busy: boolean; retryCount: number;
 } {
+  const { errorText, t } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const location = useLocation();
@@ -70,7 +71,7 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
       const result = await runUploadBatch(files, async (file) => {
         const uploaded = await uploadDocument(profile.org_id, 'inbox', null, file);
         uploadedDocumentIds.push(uploaded.documentId);
-      });
+      }, { t, errorText });
       const failures = result.failed.map(({ item, error }) => ({ item, ...documentUploadFailure(error) }));
       const failed = failures.filter(({ retryable }) => retryable).map(({ item }) => item);
       const registered = failures.filter(({ registered: isRegistered }) => isRegistered).length;
@@ -85,13 +86,18 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
        * routes remain in place so navigation cannot discard work or hide partial failures.
        */
       if (summary.failed.length) {
-        const detail = failures[0] ? ` ${failures[0].message}` : '';
-        const retryHint = failed.length ? ' לחיצה נוספת תנסה רק את הכשלים הזמניים.' : '';
-        toast(`${summary.succeeded.length} הועלו וממתינים לבדיקה בתיקיית המסמכים, ${summary.failed.length} לא הושלמו.${detail}${retryHint}`, 'error');
+        const detail = failures[0] ? ` ${errorText(new Error(failures[0].code))}` : '';
+        const retryHint = failed.length ? t('quickCapture.retryHint') : '';
+        toast(t('quickCapture.partial', {
+          succeeded: summary.succeeded.length,
+          failed: summary.failed.length,
+          detail,
+          retryHint,
+        }), 'error');
       } else {
         toast(summary.succeeded.length > 1
-          ? `${summary.succeeded.length} קבצים הועלו וממתינים לבדיקה בתיקיית המסמכים`
-          : 'המסמך הועלה וממתין לבדיקה בתיקיית המסמכים');
+          ? t('quickCapture.manyUploaded', { count: summary.succeeded.length })
+          : t('quickCapture.oneUploaded'));
       }
       if (result.succeeded.length + registered > 0) {
         window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
@@ -105,7 +111,7 @@ export function useQuickCapture(onUploaded?: () => void | Promise<unknown>): {
       );
       if (reviewTarget) navigate(reviewTarget);
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       if (inputRef.current) inputRef.current.value = '';
       setBusy(false);

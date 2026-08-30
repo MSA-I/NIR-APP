@@ -5,8 +5,27 @@ import { describe, expect, it } from 'vitest';
 import { AttentionZone, Breadcrumbs, EmptyState, KpiCard, LifecycleStrip, PageHeader, RecordHeader, type AttentionItem } from './ui';
 
 const inRouter = (content: ReactNode) => <MemoryRouter>{content}</MemoryRouter>;
+const atRoute = (path: string, content: ReactNode) =>
+  <MemoryRouter initialEntries={[path]}>{content}</MemoryRouter>;
 
 describe('פרימיטיבי היררכיית עמוד', () => {
+  // The catalogue in `routePresentation.ts` hands back a KEY, and `description` is a `ReactNode`,
+  // so rendering the key straight out typechecked cleanly and printed `nav.routeDesc_inventory`
+  // under the title of every catalogued screen, in both languages. Every existing test here
+  // rendered at `/`, which is not in the catalogue, so none of them could see it. This one is
+  // pinned to a catalogued route on purpose.
+  it('מתרגם את תיאור המסלול מהקטלוג, ואינו מדפיס מפתח', () => {
+    const view = render(atRoute('/inventory', <PageHeader title="מלאי" />));
+    expect(screen.getByText('מעקב אחר היתרות שנספרו ואחר תנועות המלאי, וזיהוי מוצרים שירדו מתחת למינימום.')).toBeInTheDocument();
+    expect(view.container.textContent).not.toMatch(/nav.routeDesc/);
+    view.unmount();
+
+    // `description={null}` still opts out entirely, and a page that passes its own sentence
+    // still shows that sentence rather than the catalogue's.
+    const explicit = render(atRoute('/inventory', <PageHeader title="מלאי" description={null} />));
+    expect(explicit.container.textContent).not.toMatch(/מעקב אחר היתרות/);
+  });
+
   it('שומר על כותרות, הקשר, שלב נוכחי ופעולת המשך נגישים', () => {
     const view = render(inRouter(
       <PageHeader

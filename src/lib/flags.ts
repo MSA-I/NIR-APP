@@ -1,10 +1,10 @@
+import { useT } from './i18n/LocaleProvider';
 import { useCallback } from 'react';
 import { useQuery as useTanstackQuery } from '@tanstack/react-query';
 import { supabase } from './supabase';
 import { unwrap } from './useQuery';
 import { DOMAIN, key, type OrgScope } from './query/keys';
 import { useOrgScope } from './query/orgScope';
-import { toHebrewError } from './errors';
 
 /**
  * Feature-flag reads (migration 0059).
@@ -73,6 +73,7 @@ function normalizeResolvedFlags(data: unknown): Map<string, boolean> {
  * `DOMAIN`, invalidated by the same `invalidateOrg`/`clearOrg` as everything else.
  */
 export function useFeatureFlags(): FeatureFlagsState {
+  const { errorText } = useT();
   const org = useOrgScope();
   const query = useTanstackQuery({
     queryKey: flagsKey(org),
@@ -100,7 +101,7 @@ export function useFeatureFlags(): FeatureFlagsState {
     flags,
     isEnabled,
     loading: org !== null && query.isLoading,
-    error: org !== null && query.error ? toHebrewError(query.error) : null,
+    error: org !== null && query.error ? errorText(query.error) : null,
     refetch,
   };
 }

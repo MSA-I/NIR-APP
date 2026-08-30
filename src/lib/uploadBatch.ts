@@ -1,3 +1,5 @@
+import type { TKey } from './i18n/t';
+
 export interface UploadBatchResult<T> {
   succeeded: T[];
   failed: { item: T; error: unknown }[];
@@ -8,9 +10,15 @@ export interface UploadBatchSummary {
   failed: string[];
 }
 
+export interface UploadBatchI18n {
+  t: (key: TKey, vars?: Record<string, string | number>) => string;
+  errorText: (error: unknown) => string;
+}
+
 export type UploadBatchDelegate = <T>(
   items: readonly T[],
   upload: (item: T) => Promise<unknown>,
+  i18n: UploadBatchI18n,
 ) => Promise<UploadBatchResult<T>>;
 
 /**
@@ -31,14 +39,19 @@ export function setUploadBatchDelegate(delegate: UploadBatchDelegate | null) {
 /**
  * Runs every item even after a failure so a retry can contain only the failed subset.
  *
- * The signature is load-bearing — four live consumers call it exactly like this. The
+ * The item and upload arguments are load-bearing. The third argument carries the current
+ * locale resolvers so the global Upload Center never guesses a language outside React. The
  * implementation delegates to the Upload Center's global queue, which preserves the
  * sequential per-batch order the server contracts assume and surfaces each file's
  * upload state in the Center. The resolved result contract is identical either way:
  * one attempt per item, failures collected, order kept.
  */
-export async function runUploadBatch<T>(items: readonly T[], upload: (item: T) => Promise<unknown>): Promise<UploadBatchResult<T>> {
-  if (uploadBatchDelegate) return uploadBatchDelegate(items, upload);
+export async function runUploadBatch<T>(
+  items: readonly T[],
+  upload: (item: T) => Promise<unknown>,
+  i18n: UploadBatchI18n,
+): Promise<UploadBatchResult<T>> {
+  if (uploadBatchDelegate) return uploadBatchDelegate(items, upload, i18n);
   const succeeded: T[] = [];
   const failed: { item: T; error: unknown }[] = [];
   for (const item of items) {

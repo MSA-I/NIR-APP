@@ -5,6 +5,7 @@ import {
   Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { chartTheme } from '../lib/theme';
+import { useT } from '../lib/i18n/LocaleProvider';
 import { fmtMoneyCompact, fmtMoneyExact, fmtMoneyRounded } from '../lib/format';
 import type { DashboardWeeklyPoint } from '../lib/dashboardSeries';
 
@@ -136,12 +137,13 @@ export function ChartViewport({ className, label, style, children }: {
 export function TrendSparkline({ points, label, currency }: {
   points: DashboardWeeklyPoint[]; label: string; currency: string | null | undefined;
 }) {
+  const { t } = useT();
   const gradientId = `dashboardSpark${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
-  const t = chartTheme();
+  const theme = chartTheme();
   // T7.2 zero policy: the window is fetched in full, so a rowless week is a measured ₪0 — the
   // sparkline stays continuous. Callers already gate rendering on ≥2 active weeks (hasSpark).
   const plotted = points.map((point) => ({ ...point, total: point.count > 0 ? point.total : 0 }));
-  const ariaLabel = `${label}: ${points.map((point) => `${point.week} ${point.count ? fmtMoneyExact(point.total, currency) : 'אין רשומות'}`).join(', ')}`;
+  const ariaLabel = `${label}: ${points.map((point) => `${point.week} ${point.count ? fmtMoneyExact(point.total, currency) : t('charts.noRecords')}`).join(', ')}`;
 
   return (
     <ChartViewport className="h-7 min-w-16 flex-1" label={ariaLabel}>
@@ -150,11 +152,11 @@ export function TrendSparkline({ points, label, currency }: {
           <AreaChart data={plotted} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={t.bar} stopOpacity={0.18} />
-                <stop offset="100%" stopColor={t.bar} stopOpacity={0} />
+                <stop offset="0%" stopColor={theme.bar} stopOpacity={0.18} />
+                <stop offset="100%" stopColor={theme.bar} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <Area type="monotone" dataKey="total" stroke={t.bar} strokeWidth={1.5}
+            <Area type="monotone" dataKey="total" stroke={theme.bar} strokeWidth={1.5}
               fill={`url(#${gradientId})`} dot={{ r: 1.5, strokeWidth: 0 }} connectNulls={false}
               isAnimationActive={animation.active} animationDuration={500} animationEasing="ease-out"
               onAnimationEnd={animation.finish} />
@@ -187,7 +189,8 @@ export function SpendBarChart({
   valueFormatter?: (v: number) => string;
 }) {
   const format = valueFormatter ?? ((v: number) => fmtMoneyExact(v, currency));
-  const t = chartTheme();
+  const { t } = useT();
+  const theme = chartTheme();
   /* One bucket, one colour, taken from the SAME categorical palette the donut beside it uses
      (owner report 26.08.2026: "שהצבע בדאשבורד באזור של המגמות בהוצאות רכש שיהיה כמו הצבעים של
      תמהיל הרכש החודש"). The colour is keyed to the bucket's POSITION, so a month keeps its
@@ -203,7 +206,7 @@ export function SpendBarChart({
      `barLow` stays for a zero/negative bucket: nothing measured is not a category, and giving it
      a palette hue would claim it is one. */
   const bucketFill = (total: number, index: number) =>
-    (total <= 0 ? t.barLow : t.categorical[index % t.categorical.length]);
+    (total <= 0 ? theme.barLow : theme.categorical[index % theme.categorical.length]);
   return (
     <ChartViewport className={className} label={ariaLabel}>
       {(animation) => points.length ? (
@@ -211,8 +214,8 @@ export function SpendBarChart({
           <BarChart data={points} margin={{ top: 12, left: 8, right: 8 }}>
             {/* Reference bar language (T7.2): faint SOLID horizontal guides only, no on-bar
                 numbers — the dark tooltip and the ARIA text carry the values. */}
-            <CartesianGrid vertical={false} stroke={t.grid} />
-            <XAxis dataKey="key" tick={{ fontSize: 12, fill: t.tick }} axisLine={false} tickLine={false} />
+            <CartesianGrid vertical={false} stroke={theme.grid} />
+            <XAxis dataKey="key" tick={{ fontSize: 12, fill: theme.tick }} axisLine={false} tickLine={false} />
             <YAxis hide />
             {/* The tooltip swatch is looked up by the bucket's KEY, not by its value: two months
                 can hold the same amount, and matching on the number would have painted the swatch
@@ -222,7 +225,7 @@ export function SpendBarChart({
                 const index = points.findIndex((p) => p.key === entry.payload?.key);
                 return bucketFill(Number(entry.value ?? 0), index < 0 ? 0 : index);
               }} />} />
-            <Bar dataKey="total" name="סה״כ" radius={[8, 8, 0, 0]} maxBarSize={maxBarSize}
+            <Bar dataKey="total" name={t('charts.total')} radius={[8, 8, 0, 0]} maxBarSize={maxBarSize}
               isAnimationActive={animation.active} animationDuration={550} animationEasing="ease-out" onAnimationEnd={animation.finish}>
               {points.map((p, index) => <Cell key={p.key} fill={bucketFill(p.total, index)} />)}
             </Bar>
@@ -233,7 +236,15 @@ export function SpendBarChart({
   );
 }
 
-export type CategorySlice = { name: string; total: number };
+/**
+ * `aggregate` is what identifies the "everything else" slice, and it replaced a comparison against
+ * the word itself. A screen that recognised the bucket by matching the rendered text stopped
+ * recognising it the moment the reader could change language — `AccountantDashboard` compared a
+ * supplier name to `t(...)`, so on an English screen the aggregate would have been given a link to
+ * a search for a supplier that does not exist. The name is empty on that row on purpose: the word
+ * is copy, and copy is resolved here, where the reader's language is known.
+ */
+export type CategorySlice = { name: string; total: number; aggregate?: boolean };
 
 /* A category keeps its colour when the amounts move (24.08.2026).
    The old assignment was `DONUT_ORDER[index % 4]`, and `index` is the slice's RANK — the list
@@ -249,14 +260,20 @@ export type CategorySlice = { name: string; total: number };
    catalogue-wide mapping; the upgrade path, if that ever matters, is a persisted per-category
    slot, and it is not worth a table today.
 
-   "אחר" is pinned to the last step: it is an aggregate, never an entity, and it must not take a
-   slot from something that is. ONE definition, used by both the arc Cell and the legend swatch —
-   the duplicated expression they had before was an unchecked contract. */
-const OTHER_SLICE = 'אחר';
-function sliceColor(categorical: string[], name: string, allNames: readonly string[]) {
-  if (name === OTHER_SLICE) return categorical[categorical.length - 1];
-  const named = allNames.filter((candidate) => candidate !== OTHER_SLICE).sort((a, b) => a.localeCompare(b, 'he'));
-  const slot = named.indexOf(name);
+   The aggregate is pinned to the last step: it is an aggregate, never an entity, and it must not
+   take a slot from something that is. ONE definition, used by both the arc Cell and the legend
+   swatch — the duplicated expression they had before was an unchecked contract.
+
+   It is identified by `slice.aggregate` rather than by its word. The word is copy now, and a
+   colour rule that read copy would have handed the aggregate an entity's slot — and an entity the
+   aggregate's — on the first screen that rendered in the other language. */
+function sliceColor(categorical: string[], slice: CategorySlice, all: readonly CategorySlice[]) {
+  if (slice.aggregate) return categorical[categorical.length - 1];
+  const named = all
+    .filter((candidate) => !candidate.aggregate)
+    .map((candidate) => candidate.name)
+    .sort((a, b) => a.localeCompare(b, 'he'));
+  const slot = named.indexOf(slice.name);
   return categorical[(slot < 0 ? 0 : slot) % (categorical.length - 1)];
 }
 
@@ -266,8 +283,8 @@ function sliceColor(categorical: string[], name: string, allNames: readonly stri
  * `hrefFor` — G1, finding 13. Optional, and the legend is where it lands rather than the SVG arcs:
  * the arcs carry `rootTabIndex={-1}` and no text, so a link on them would be reachable by mouse
  * only, while the legend row already names the slice and its share. Returning `null` leaves that
- * row plain — the aggregated "אחר" slice is not a destination, because there is no one thing to
- * open. Callers that pass nothing keep exactly the markup they had.
+ * row plain — the aggregated slice is not a destination, because there is no one thing to open.
+ * Callers that pass nothing keep exactly the markup they had.
  */
 export function CategoryDonut({ slices, total, currency, ariaLabel, emptyMessage, hrefFor, hrefLabel }: {
   slices: CategorySlice[];
@@ -279,8 +296,10 @@ export function CategoryDonut({ slices, total, currency, ariaLabel, emptyMessage
   hrefFor?: (slice: CategorySlice) => string | null;
   hrefLabel?: (slice: CategorySlice) => string;
 }) {
-  const t = chartTheme();
-  const sliceNames = slices.map((slice) => slice.name);
+  const { t } = useT();
+  const theme = chartTheme();
+  /** The word for the product's own bucket, resolved once, where the reader's language is known. */
+  const sliceLabel = (slice: CategorySlice) => (slice.aggregate ? t('charts.otherSlice') : slice.name);
   if (total <= 0) {
     return <div className="flex h-24 items-center justify-center text-center text-sm text-ink-muted sm:h-44">{emptyMessage}</div>;
   }
@@ -297,40 +316,42 @@ export function CategoryDonut({ slices, total, currency, ariaLabel, emptyMessage
                 <Pie data={slices} dataKey="total" nameKey="name" innerRadius="55%" outerRadius="92%"
                   rootTabIndex={-1} tabIndex={-1} paddingAngle={2} stroke="none" isAnimationActive={animation.active} animationDuration={550}
                   animationEasing="ease-out" onAnimationEnd={animation.finish}>
-                  {slices.map((slice) => (
-                    <Cell key={slice.name} fill={sliceColor(t.categorical, slice.name, sliceNames)} />
+                  {slices.map((slice, index) => (
+                    <Cell key={slice.aggregate ? 'aggregate' : slice.name || index}
+                      fill={sliceColor(theme.categorical, slice, slices)} />
                   ))}
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 grid place-content-center text-center" aria-hidden="true">
               <span className="num text-xl font-semibold text-ink sm:text-2xl">{moneyShortFor(currency)(total)}</span>
-              <span className="text-xs text-ink-muted">סה״כ</span>
+              <span className="text-xs text-ink-muted">{t('charts.total')}</span>
             </div>
           </>
         )}
       </ChartViewport>
       <ul className="flex min-w-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs">
-        {slices.map((slice) => {
+        {slices.map((slice, index) => {
           const href = hrefFor?.(slice) ?? null;
           const pct = Math.round((slice.total / total) * 100);
           const swatch = (
             <span className="size-2 shrink-0 rounded-full" aria-hidden="true"
-              style={{ backgroundColor: sliceColor(t.categorical, slice.name, sliceNames) }} />
+              style={{ backgroundColor: sliceColor(theme.categorical, slice, slices) }} />
           );
+          const label = sliceLabel(slice);
           return (
-            <li key={slice.name}>
+            <li key={slice.aggregate ? 'aggregate' : slice.name || index}>
               {href ? (
                 <Link to={href} aria-label={hrefLabel?.(slice) ?? slice.name} title={fmtMoneyExact(slice.total, currency)}
                   className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-1.5 text-action hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
                   {swatch}
-                  <span className="max-w-32 truncate">{slice.name}</span>
+                  <span className="max-w-32 truncate">{label}</span>
                   <span className="num text-ink-muted">{pct}%</span>
                 </Link>
               ) : (
                 <div className="inline-flex min-h-11 items-center gap-1.5 px-1.5 text-ink-mid" title={fmtMoneyExact(slice.total, currency)}>
                   {swatch}
-                  <span className="max-w-32 truncate">{slice.name}</span>
+                  <span className="max-w-32 truncate">{label}</span>
                   <span className="num text-ink-muted">{pct}%</span>
                 </div>
               )}
@@ -422,7 +443,7 @@ export function ComparisonLineChart({
   legend?: boolean;
 }) {
   const format = valueFormatter ?? ((v: number) => fmtMoneyExact(v, currency));
-  const t = chartTheme();
+  const theme = chartTheme();
   const gradientBase = `cmpArea${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const hasData = points.length > 0 && points.some((point) => series.some((s) => point[s.key] != null));
   const lastIndex = points.length - 1;
@@ -452,10 +473,10 @@ export function ComparisonLineChart({
                   </linearGradient>
                 ))}
               </defs>
-              <XAxis dataKey={xKey} tick={{ fontSize: 12, fill: t.tick }} axisLine={false} tickLine={false} />
+              <XAxis dataKey={xKey} tick={{ fontSize: 12, fill: theme.tick }} axisLine={false} tickLine={false} />
               <YAxis hide />
               {/* T7.3g: dashed hover cursor — the owner drew exactly this on image #16. */}
-              <Tooltip cursor={{ stroke: t.tick, strokeWidth: 1, strokeDasharray: '4 4' }}
+              <Tooltip cursor={{ stroke: theme.tick, strokeWidth: 1, strokeDasharray: '4 4' }}
                 content={<DarkTooltip formatter={format} />} isAnimationActive={animation.active} />
               {series.map((s, index) => (
                 <Area key={s.key} type="monotone" dataKey={s.key} name={s.name} stroke={s.color} strokeWidth={2.5}
@@ -489,10 +510,10 @@ export function ComparisonLineChart({
                     const names = index === series.length - 1 ? endLabels(endPointY.current) : [];
                     return (
                       <g>
-                        {end && <circle cx={end.x} cy={end.y} r={END_DOT_R} fill={s.color} stroke={t.surface} strokeWidth={2} />}
+                        {end && <circle cx={end.x} cy={end.y} r={END_DOT_R} fill={s.color} stroke={theme.surface} strokeWidth={2} />}
                         {names.map((label) => (
                           <text key={series[label.index].key} x={label.x + END_DOT_R + 6} y={label.y}
-                            dominantBaseline="middle" fontSize={12} fontWeight={500} fill={t.label} textAnchor="start">
+                            dominantBaseline="middle" fontSize={12} fontWeight={500} fill={theme.label} textAnchor="start">
                             {series[label.index].name}
                           </text>
                         ))}
@@ -531,7 +552,7 @@ export function GroupedBarChart({
   valueFormatter?: (v: number) => string;
 }) {
   const format = valueFormatter ?? ((v: number) => fmtMoneyExact(v, currency));
-  const t = chartTheme();
+  const theme = chartTheme();
   const hasData = points.length > 0 && points.some((point) => series.some((s) => point[s.key] != null));
   return (
     <>
@@ -539,8 +560,8 @@ export function GroupedBarChart({
         {(animation) => hasData ? (
           <ResponsiveContainer>
             <BarChart data={points} margin={{ top: 12, left: 8, right: 8 }} barGap={3}>
-              <CartesianGrid vertical={false} stroke={t.grid} />
-              <XAxis dataKey={xKey} tick={{ fontSize: 12, fill: t.tick }} axisLine={false} tickLine={false} />
+              <CartesianGrid vertical={false} stroke={theme.grid} />
+              <XAxis dataKey={xKey} tick={{ fontSize: 12, fill: theme.tick }} axisLine={false} tickLine={false} />
               <YAxis hide />
               <Tooltip cursor={false} content={<DarkTooltip formatter={format} />} isAnimationActive={animation.active} />
               {series.map((s) => (

@@ -14,12 +14,26 @@
  * Relative imports of this file must spell the `.ts` extension — Deno cannot resolve an
  * extension-less path, and `allowImportingTsExtensions` is on for exactly this reason.
  */
+// A TYPE import, erased at build time, so the dependency-free rule above still holds in both
+// runtimes. It is what makes a wrong key a compile error rather than a sentence on a screen.
+import type { TKey } from '../i18n/t.ts';
 
 export type SummaryUnit = 'count' | 'currency';
 
 export interface SummaryMetricLine {
   key: string;
-  label: string;
+  /**
+   * The dictionary key for the line's wording. Named `labelKey`, not `label`, because a `TKey` is
+   * a string: the previous shape let both consumers print whatever this field held, and the field
+   * held Hebrew. `/alerts` already fell through to it raw, so an English reader was told which
+   * scan had failed in Hebrew.
+   */
+  labelKey: TKey;
+  /**
+   * What the wording interpolates. It travels beside the key rather than being baked into a
+   * sentence, so the trailing windows below still have exactly one definition each.
+   */
+  labelVars?: Record<string, string | number>;
   unit: SummaryUnit;
   /** In-app route where the figure can be inspected — the claim's evidence trail. */
   to: string;
@@ -36,9 +50,9 @@ const PRICE_INCREASE_WINDOW_DAYS = 30;
  * open decision #1 in docs/OPEN-DECISIONS.md, documented at the definition (0165).
  */
 export const SUMMARY_METRIC_LINES: readonly SummaryMetricLine[] = [
-  { key: 'received_week', label: `חשבוניות שנקלטו ב-${WEEK_DAYS} הימים האחרונים`, unit: 'count', to: '/invoices' },
-  { key: 'awaiting_approval', label: 'חשבוניות הממתינות לאישור', unit: 'count', to: '/invoices' },
-  { key: 'expected_payments', label: 'סכום פתוח בדרישות תשלום', unit: 'currency', to: '/payment-requests' },
-  { key: 'suppliers_raised', label: `ספקים שהעלו מחיר ב-${PRICE_INCREASE_WINDOW_DAYS} הימים האחרונים`, unit: 'count', to: '/prices' },
-  { key: 'open_exceptions', label: 'חריגים פתוחים', unit: 'count', to: '/exceptions' },
+  { key: 'received_week', labelKey: 'businessSummary.receivedWeek', labelVars: { days: WEEK_DAYS }, unit: 'count', to: '/invoices' },
+  { key: 'awaiting_approval', labelKey: 'businessSummary.awaitingApproval', unit: 'count', to: '/invoices' },
+  { key: 'expected_payments', labelKey: 'businessSummary.expectedPayments', unit: 'currency', to: '/payment-requests' },
+  { key: 'suppliers_raised', labelKey: 'businessSummary.suppliersRaised', labelVars: { days: PRICE_INCREASE_WINDOW_DAYS }, unit: 'count', to: '/prices' },
+  { key: 'open_exceptions', labelKey: 'businessSummary.openExceptions', unit: 'count', to: '/exceptions' },
 ];

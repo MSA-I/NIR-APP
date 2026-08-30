@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { Document, Page } from 'react-pdf';
 import './pdfWorker';
 import { Note } from '../ui';
+import { useT } from '../../lib/i18n/LocaleProvider';
 
 /**
  * The PDF branch of the source viewer: real in-app rendering via react-pdf instead of the old
@@ -22,13 +23,22 @@ interface PdfSourceViewProps {
   page: number;
 }
 
-const loadingNode = (
-  <div className="flex min-h-64 items-center justify-center p-6 text-sm text-ink-muted" role="status">
-    טוען את קובץ ה־PDF…
-  </div>
-);
+/**
+ * A component rather than the constant node it used to be: a constant is built once, at module
+ * scope, where there is no hook and therefore no reader. react-pdf takes a `ReactNode` for
+ * `loading`, so `<PdfLoading />` is the same value with a place to ask what language to speak.
+ */
+function PdfLoading() {
+  const { t } = useT();
+  return (
+    <div className="flex min-h-64 items-center justify-center p-6 text-sm text-ink-muted" role="status">
+      {t('pdfSource.loading')}
+    </div>
+  );
+}
 
 export default function PdfSourceView({ sourceUrl, page }: PdfSourceViewProps) {
+  const { t } = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
 
@@ -54,12 +64,10 @@ export default function PdfSourceView({ sourceUrl, page }: PdfSourceViewProps) {
     <div ref={containerRef} className="mx-auto w-full max-w-4xl bg-surface-sunken">
       <Document
         file={sourceUrl}
-        loading={loadingNode}
+        loading={<PdfLoading />}
         error={
           <div className="p-4">
-            <Note tone="alert" role="alert">
-              לא ניתן להציג את קובץ ה־PDF בתוך המסך. אפשר לפתוח את המקור בקישור שמעל.
-            </Note>
+            <Note tone="alert" role="alert">{t('pdfSource.documentError')}</Note>
           </div>
         }
         onLoadError={(error) => console.error('[document-review-pdf]', error.message)}
@@ -75,10 +83,10 @@ export default function PdfSourceView({ sourceUrl, page }: PdfSourceViewProps) {
             width={containerWidth ?? undefined}
             renderTextLayer={false}
             renderAnnotationLayer={false}
-            loading={loadingNode}
+            loading={<PdfLoading />}
             error={
               <div className="p-4">
-                <Note tone="alert" role="alert">לא ניתן להציג עמוד זה מתוך הקובץ.</Note>
+                <Note tone="alert" role="alert">{t('pdfSource.pageError')}</Note>
               </div>
             }
           />

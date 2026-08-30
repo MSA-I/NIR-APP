@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { FileCheck2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { openReservedPopup } from '../../lib/popup';
-import { documentProcessingFailureText, documentUiStatus } from '../../lib/documentStatus';
+import { useT } from '../../lib/i18n/LocaleProvider';
+import { documentProcessingFailureKey, documentUiStatus } from '../../lib/documentStatus';
 import { ICON, Note, useToast } from '../ui';
 import { DocumentStatusBadge } from '../DocumentStatusBadge';
 import { DocumentAssessmentPanel } from './DocumentAssessmentPanel';
@@ -25,6 +26,7 @@ interface DocumentReviewWorkspaceProps {
 }
 
 export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialPanel, readOnly = false, reprocessing = false, onReprocess }: DocumentReviewWorkspaceProps) {
+  const { t } = useT();
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [openingSource, setOpeningSource] = useState(false);
@@ -115,7 +117,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
         <Note tone="alert" role="alert" className="flex-wrap">
           <span className="min-w-0 flex-1">
             <strong>העיבוד נכשל.</strong>{' '}
-            {documentProcessingFailureText(snapshot.job?.last_error_code, snapshot.job?.last_error_message)}
+            {t(documentProcessingFailureKey(snapshot.job?.last_error_code, snapshot.job?.last_error_message))}
           </span>
           {!readOnly && onReprocess && (
             <button type="button" className="btn-secondary" disabled={reprocessing} onClick={onReprocess}>

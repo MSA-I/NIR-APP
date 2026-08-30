@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
-import { toHebrewError } from './errors';
 import { bidiIsolate, fmtDate, fmtMoneyExact, formatQuantity } from './format';
 import { openExternalPopup } from './popup';
+import type { TKey } from './i18n/t';
 
 /**
  * The slice of a purchase order the WhatsApp share needs. Both the Orders list rows and the
@@ -40,7 +40,10 @@ export function orderWhatsAppText(order: WhatsAppOrder, orgName: string, portalU
     ...(order.notes ? [`הערות: ${order.notes}`] : []),
     '',
     `פריטים (${order.items.length}):`,
-    ...order.items.map((i) => `• ${bidiIsolate(i.product.name)} — ${formatQuantity(i.qty, i.product.unit)}`),
+    // The unit is pinned to Hebrew for the same reason the product name is raw: this message is
+    // read by the supplier, not by the person who sent it. An English `2 crates` would arrive at
+    // a picker who counts ארגזים, and the whole message around it is Hebrew anyway.
+    ...order.items.map((i) => `• ${bidiIsolate(i.product.name)} — ${formatQuantity(i.qty, i.product.unit, 'he')}`),
     '',
     // The portal link (0167) rides the message when the operator issued one: the supplier can
     // approve or propose changes there instead of answering in free text. The closing lines
@@ -75,11 +78,19 @@ export function orderWhatsAppLink(order: WhatsAppOrder, orgName: string, portalU
  * `needsSentConfirmation` below decides whether to ASK afterwards; `markOrderSentToSupplier` is
  * the answer. Automatic confirmation waits for a verified WhatsApp Business delivery webhook.
  */
-export function openOrderWhatsApp(order: WhatsAppOrder, orgName: string, portalUrl?: string | null): { opened: boolean; error?: string } {
+export type OpenOrderWhatsAppErrorCode = 'missing_number' | 'popup_blocked';
+export const OPEN_ORDER_WHATSAPP_ERROR_KEY: Readonly<Record<OpenOrderWhatsAppErrorCode, TKey>> = {
+  missing_number: 'share.whatsappMissingNumber',
+  popup_blocked: 'share.whatsappPopupBlocked',
+};
+export function openOrderWhatsApp(order: WhatsAppOrder, orgName: string, portalUrl?: string | null): {
+  opened: boolean;
+  errorCode?: OpenOrderWhatsAppErrorCode;
+} {
   const link = orderWhatsAppLink(order, orgName, portalUrl);
-  if (!link) return { opened: false, error: 'לספק אין מספר WhatsApp זמין' };
+  if (!link) return { opened: false, errorCode: 'missing_number' };
   if (openExternalPopup(link) !== 'opened') {
-    return { opened: false, error: 'הדפדפן חסם את חלון WhatsApp. יש לאפשר חלונות קופצים ולנסות שוב.' };
+    return { opened: false, errorCode: 'popup_blocked' };
   }
   return { opened: true };
 }
@@ -101,7 +112,8 @@ export async function markOrderSentToSupplier(orderId: string): Promise<{ error?
     p_confirmation_note: null,
     p_expected_date: null,
   });
-  return res.error ? { error: toHebrewError(res.error.message) } : {};
+  // The condition, not a sentence: WhatsAppSendDialog draws it and resolves it there.
+  return res.error ? { error: res.error.message } : {};
 }
 
 /** True when the Web Share API is available (mobile browsers, some desktops). */
@@ -146,15 +158,23 @@ export async function shareOrderImage(blob: Blob, fileName: string): Promise<'sh
 export async function shareInvoice(
   inv: { invoice_number: string; invoice_date: string; total_amount: number; currency: string },
   supplierName: string,
+  t: (key: TKey, vars?: Record<string, string | number>) => string,
 ): Promise<void> {
   if (!canShare()) return;
   const text = [
-    `חשבונית ${inv.invoice_number} — ${supplierName}`,
-    `תאריך: ${fmtDate(inv.invoice_date)}`,
-    `סה"כ: ${fmtMoneyExact(inv.total_amount, inv.currency)}`,
+    t('share.invoiceLine', {
+      number: bidiIsolate(inv.invoice_number),
+      supplier: bidiIsolate(supplierName),
+    }),
+    t('share.invoiceDateLine', { date: fmtDate(inv.invoice_date) }),
+    // The invoice's own currency (0217): this figure is leaving the product.
+    t('share.invoiceTotalLine', { total: fmtMoneyExact(inv.total_amount, inv.currency) }),
   ].join('\n');
   try {
-    await navigator.share({ title: `חשבונית ${inv.invoice_number}`, text });
+    await navigator.share({
+      title: t('share.invoiceTitle', { number: bidiIsolate(inv.invoice_number) }),
+      text,
+    });
   } catch {
     // AbortError when the user dismisses the share sheet — nothing to surface.
   }

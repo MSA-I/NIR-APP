@@ -31,7 +31,11 @@ import {
  *   assistant-v2 (2026-08-20) -- values-only numerals: digits may never be copied out of labels
  *     or names; windows and scopes are described in words. Matches the validator ruling.
  */
-export const ASSISTANT_PROMPT_VERSION = "assistant-v2";
+// v3: the answer language follows the reader instead of being pinned to Hebrew
+// (`OPEN-DECISIONS #283`). Any edit to `buildInstructions` is a bump here — the version is
+// stamped on every recorded run, so a stored answer can be traced to the instruction that
+// produced it.
+export const ASSISTANT_PROMPT_VERSION = "assistant-v3";
 
 // The egress lease and the budget that must never outlive it -- interpret-document's arithmetic,
 // copied deliberately: total budget = lease TTL minus a settlement margin, and every provider

@@ -1,7 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { supabase } from './supabase';
 import { unwrap } from './useQuery';
-import { toHebrewError } from './errors';
 import { BUSINESS_TIME_ZONE } from './format';
 import {
   configureOfflineScopeResolver,
@@ -27,8 +26,9 @@ import {
  * Three properties are load-bearing and each is a rule from the design document:
  *  - **Continue after failure** (`uploadBatch.ts:40-56` pattern): one bad action does not stop the
  *    rest, and a retry can then contain only what actually failed.
- *  - **A Hebrew reason per action**, never a collective "הסנכרון נכשל" (:90). Nobody standing at a
- *    truck can act on a sentence that does not say which receipt failed or why.
+ *  - **A reason per action**, never a collective "הסנכרון נכשל" (:90). Nobody standing at a truck
+ *    can act on a sentence that does not say which receipt failed or why. The reason travels as a
+ *    CONDITION and is resolved by whoever draws it, in the language they are reading.
  *  - **An expired session sends nothing.** The draft is kept and the person is asked to sign in
  *    (:97-98). Sending business writes with stale credentials is how a queue turns into a
  *    permission bypass, and RLS is not weakened for convenience.
@@ -82,10 +82,16 @@ export function isPermanentQueueFailure(error: unknown): boolean {
   return PERMANENT_SCOPE_PATTERN.test(`${code} ${raw}`);
 }
 
-function localStorageMessage(error: unknown): string {
+/**
+ * The condition a caller reports when the device refused to hold the work.
+ *
+ * `OfflineStorageError` already carries its own condition, which is more specific than anything
+ * this function could say; anything else is an unrecognised storage failure.
+ */
+function localStorageCondition(error: unknown): string {
   return error instanceof OfflineStorageError
     ? error.message
-    : 'לא ניתן לשמור את הקבלה במכשיר. הפעולה לא הוכנסה לתור.';
+    : 'offline_receipt_not_stored';
 }
 
 /* ============================ the audited reason (#100) ============================ */
@@ -156,11 +162,20 @@ const EMPTY_SNAPSHOT: OfflineQueueSnapshot = {
   actions: [],
 };
 
+/**
+ * What a submission answers with. Every human-facing member is a CONDITION, never a sentence.
+ *
+ * The fields are named `*Condition` rather than `reason`/`message` on purpose. Both of those read
+ * like something you can put on screen, and two of the conditions this queue already returned were
+ * codes — so a caller that printed them directly type-checked perfectly while showing a person the
+ * literal text `offline_transport_failure`. The name is what makes the mistake visible; the
+ * compiler then lists every place that has to resolve one.
+ */
 export type SubmitReceiptOutcome =
   | { kind: 'sent'; receiptId: string; result: { receipt_id: string } }
-  | { kind: 'queued'; reason: string }
-  | { kind: 'conflict'; code: ReceiptConflictCode; message: string }
-  | { kind: 'rejected'; message: string };
+  | { kind: 'queued'; queuedCondition: string }
+  | { kind: 'conflict'; code: ReceiptConflictCode; failureCondition: string }
+  | { kind: 'rejected'; failureCondition: string };
 
 export interface SubmitReceiptInput {
   orderId: string;
@@ -203,6 +218,14 @@ export interface OfflineQueue {
 }
 
 /* ============================ implementation ============================ */
+
+/**
+ * What a failed action stores. The RAW message, deliberately: this string is written to IndexedDB
+ * and drawn on a later visit, and `toErrorKey` would collapse anything it does not recognise into
+ * `fallback` — throwing away the one detail a support conversation needs. The screen that draws it
+ * runs the mapping then, when it also knows the language.
+ */
+const rawCondition = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
   let snapshot: OfflineQueueSnapshot = { ...EMPTY_SNAPSHOT, storageAvailable: deps.storageAvailable() };
@@ -267,10 +290,10 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
     return snapshot;
   }
 
-  async function enqueue(input: SubmitReceiptInput, reason: string | null): Promise<OfflineQueuedAction> {
+  async function enqueue(input: SubmitReceiptInput, condition: string | null): Promise<OfflineQueuedAction> {
     const scope = await deps.resolveScope();
     if (!scope) {
-      throw new OfflineStorageError('לא ניתן לזהות את הארגון והמשתמש עבור השמירה המקומית.');
+      throw new OfflineStorageError('offline_scope_unresolved');
     }
     const now = deps.now();
     return deps.store.upsertQueuedAction({
@@ -284,7 +307,7 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
       observedAt: input.observedAt,
       attempts: 0,
       state: 'pending',
-      lastError: reason,
+      lastError: condition,
       lastErrorCode: null,
       lastAttemptAt: null,
       createdAt: now,
@@ -293,30 +316,30 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
 
   async function submitReceipt(input: SubmitReceiptInput): Promise<SubmitReceiptOutcome> {
     if (!deps.isOnline()) {
-      const reason = 'אין חיבור לרשת. הקבלה נשמרה במכשיר ותישלח כשהחיבור יחזור.';
+      const queuedCondition = 'offline_queued_no_network';
       try {
-        await enqueue(input, reason);
+        await enqueue(input, queuedCondition);
       } catch (error) {
         await refresh();
-        return { kind: 'rejected', message: localStorageMessage(error) };
+        return { kind: 'rejected', failureCondition: localStorageCondition(error) };
       }
       await refresh();
-      return { kind: 'queued', reason };
+      return { kind: 'queued', queuedCondition };
     }
     const actorUserId = await deps.getUsableActorId();
     const scope = await deps.resolveScope();
     if (!actorUserId || !scope || actorUserId !== scope.actorUserId) {
       // The draft is kept and NOTHING is sent: stale credentials never carry a business write.
       sessionExpired = true;
-      const reason = 'פג תוקף החיבור. הקבלה נשמרה במכשיר ותישלח לאחר התחברות מחדש.';
+      const queuedCondition = 'offline_queued_session_expired';
       try {
-        await enqueue(input, reason);
+        await enqueue(input, queuedCondition);
       } catch (error) {
         await refresh();
-        return { kind: 'rejected', message: localStorageMessage(error) };
+        return { kind: 'rejected', failureCondition: localStorageCondition(error) };
       }
       await refresh();
-      return { kind: 'queued', reason };
+      return { kind: 'queued', queuedCondition };
     }
     sessionExpired = false;
     const sentAt = deps.now();
@@ -327,17 +350,17 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
       queued = await enqueue(input, null);
     } catch (error) {
       await refresh();
-      return { kind: 'rejected', message: localStorageMessage(error) };
+      return { kind: 'rejected', failureCondition: localStorageCondition(error) };
     }
     if (queued.id == null) {
       await refresh();
-      return { kind: 'rejected', message: 'לא ניתן לזהות את הפעולה המקומית שנשמרה.' };
+      return { kind: 'rejected', failureCondition: 'offline_local_action_unidentified' };
     }
     const claimed = await deps.store.claimQueuedAction(queued.id, leaseOwner, sentAt);
     if (!claimed || claimed.syncVersion == null) {
-      const reason = 'הקבלה נשמרה במכשיר ומסונכרנת כעת בחלון אחר.';
+      const queuedCondition = 'offline_queued_syncing_elsewhere';
       await refresh();
-      return { kind: 'queued', reason };
+      return { kind: 'queued', queuedCondition };
     }
     let serverAccepted = false;
     try {
@@ -350,9 +373,9 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
         claimed.id!, leaseOwner, claimed.syncVersion, sentAt, deps.now(),
       );
       if (!accepted) {
-        const reason = 'השרת קיבל גרסה קודמת, ושינויים חדשים יותר נשארו במכשיר לסנכרון.';
+        const queuedCondition = 'offline_queued_server_version_stale';
         await refresh();
-        return { kind: 'queued', reason };
+        return { kind: 'queued', queuedCondition };
       }
       try {
         await deps.store.setLastSuccessfulSyncAt(sentAt);
@@ -366,9 +389,12 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
       const permanentFailure = isPermanentQueueFailure(error);
       const transportFailure = isTransportFailure(error);
       const finalizationFailure = serverAccepted;
+      // Conditions, not sentences. What lands here is written to IndexedDB and drawn on a later
+      // visit — possibly days later, possibly by a different person on the same device — so the
+      // language belongs to whoever opens the screen, not to this moment.
       const failureMessage = finalizationFailure
-        ? 'השרת קיבל את הקבלה, אך הניקוי המקומי לא הושלם. הפעולה נשארה לתיקון בטוח בניסיון הבא.'
-        : toHebrewError(error);
+        ? 'offline_finalization_incomplete'
+        : rawCondition(error);
       const updated = await deps.store.updateClaimedQueuedAction(
         claimed.id!,
         leaseOwner,
@@ -385,25 +411,25 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
         deps.now(),
       );
       if (!updated) {
-        const reason = 'הפעולה השתנתה בחלון אחר ונשארה במכשיר לסנכרון.';
+        const queuedCondition = 'offline_queued_changed_elsewhere';
         await refresh();
-        return { kind: 'queued', reason };
+        return { kind: 'queued', queuedCondition };
       }
       if (finalizationFailure) {
         await refresh();
-        return { kind: 'queued', reason: failureMessage };
+        return { kind: 'queued', queuedCondition: failureMessage };
       }
       if (conflict) {
         await refresh();
-        return { kind: 'conflict', code: conflict, message: toHebrewError(error) };
+        return { kind: 'conflict', code: conflict, failureCondition: rawCondition(error) };
       }
       if (transportFailure) {
-        const reason = 'השליחה נכשלה בגלל תקלת רשת. הקבלה נשמרה במכשיר ותישלח בניסיון הבא.';
+        const queuedCondition = 'offline_transport_failure';
         await refresh();
-        return { kind: 'queued', reason };
+        return { kind: 'queued', queuedCondition };
       }
       await refresh();
-      return { kind: 'rejected', message: toHebrewError(error) };
+      return { kind: 'rejected', failureCondition: rawCondition(error) };
     }
   }
 
@@ -470,8 +496,8 @@ export function createOfflineQueue(deps: OfflineQueueDeps): OfflineQueue {
           const conflict = receiptConflictCode(error);
           const permanentFailure = isPermanentQueueFailure(error);
           const failureMessage = serverAccepted
-            ? 'השרת קיבל את הקבלה, אך הניקוי המקומי לא הושלם. הפעולה נשארה לתיקון בטוח בניסיון הבא.'
-            : toHebrewError(error);
+            ? 'offline_finalization_incomplete'
+            : rawCondition(error);
           await deps.store.updateClaimedQueuedAction(
             claimed.id,
             leaseOwner,

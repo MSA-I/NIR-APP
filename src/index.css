@@ -1277,6 +1277,145 @@ html { transition: --glow-x 0.12s ease-out, --glow-y 0.12s ease-out; }
   translate: -50% -50%;
 }
 
+/* The two consent documents, and the one place in the signed-in product that is a DOCUMENT
+   rather than a screen.
+ *
+ * Ported from the marketing site's /terms and /privacy (owner instruction, 28.08.2026: the two
+ * pages in the app should look like the ones on the landing page). What was ported is the
+ * READING SHELL, not the colours: every value here is an existing token, so a retheme moves this
+ * page with the rest of the product instead of leaving a hand-painted document behind.
+ *
+ * Why a dark ground for a page of small text, when the rest of the app is light: this is not a
+ * working screen. Nobody scans it against a table or reads it beside a chart — it is opened once,
+ * from /login or from the invitation, read end to end, and closed. The ground is the same Onyx the
+ * navigation shell already wears, so the document reads as the product's own edge rather than as a
+ * fifth surface.
+ *
+ * 44rem is the measure, not a container width: at the body size below it lands near 70 characters
+ * a line, which is where a long legal paragraph stops losing the reader between lines. */
+.legal-doc {
+  min-block-size: 100dvh;
+  /* `flow-root`, not the default: the footer's block-end margin escaped the container and left
+     a band of page canvas under the document. A screenshot found it; the layout was otherwise
+     correct. */
+  display: flow-root;
+  background-color: var(--color-shell);
+  /* The two washes the marketing site paints with a shader. Both are oceanic, both are tokens,
+     and both are anchored to the block start so the page darkens as it is read. */
+  background-image:
+    radial-gradient(120% 70% at 85% -10%, color-mix(in oklab, var(--color-action-solid) 24%, transparent), transparent 60%),
+    radial-gradient(90% 50% at 0% 6%, color-mix(in oklab, var(--color-action) 45%, transparent), transparent 65%);
+  background-attachment: fixed;
+  color: var(--color-shell-ink-soft);
+}
+
+.legal-doc__column {
+  max-inline-size: 44rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+/* The bar spans the window while its contents keep the reading column. Contained instead, it
+   blurred a 44rem strip with two hard edges in the middle of the screen. */
+.legal-doc__bar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 20;
+  border-block-end: 1px solid color-mix(in oklab, var(--color-shell-ink) 12%, transparent);
+  background-color: color-mix(in oklab, var(--color-shell) 82%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.legal-doc__bar-in {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding-block: 0.75rem;
+}
+
+.legal-doc__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin-inline-start: auto;
+}
+
+.legal-doc__nav a {
+  color: var(--color-shell-ink-dim);
+  font-size: 0.875rem;
+  min-block-size: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.legal-doc__nav a:hover { color: var(--color-shell-ink); }
+
+.legal-doc__eyebrow {
+  margin-block-start: clamp(2rem, 6vh, 3.5rem);
+  color: var(--color-shell-ink-dim);
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.legal-doc h1 {
+  margin-block: 0.75rem 1rem;
+  color: var(--color-shell-ink);
+  font-size: clamp(2rem, 5.5vw, 3rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.legal-doc__version {
+  color: var(--color-shell-ink-dim);
+  font-size: 0.8125rem;
+}
+
+.legal-doc__section { margin-block-start: clamp(2rem, 5vh, 3rem); }
+
+.legal-doc__section h2 {
+  margin-block-end: 0.75rem;
+  color: var(--color-shell-ink);
+  font-size: clamp(1.25rem, 3vw, 1.6rem);
+  font-weight: 700;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.legal-doc__section p {
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.legal-doc__section p + p { margin-block-start: 0.9rem; }
+
+/* Bold inside a paragraph is a label on a clause, so it takes the brightest ink rather than a
+   second colour: the emphasis is weight, and nothing on this page is a status. */
+.legal-doc__section strong { color: var(--color-shell-ink); font-weight: 600; }
+
+.legal-doc__foot {
+  margin-block: clamp(2.5rem, 6vh, 4rem) clamp(3rem, 8vh, 5rem);
+  padding-block-start: 1.5rem;
+  border-block-start: 1px solid color-mix(in oklab, var(--color-shell-ink) 12%, transparent);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+
+.legal-doc__foot a {
+  color: var(--color-shell-ink-dim);
+  font-size: 0.875rem;
+  min-block-size: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.legal-doc__foot a:hover { color: var(--color-shell-ink); }
+
 /* Reduced-motion coverage beyond the page fade (audit 2026-07-21). The skeleton pulse is pure
    decoration — its static slate-200 fill still reads as a placeholder — so it stops entirely.
    A spinner, by contrast, encodes live "loading" state, so it must keep turning; it is only

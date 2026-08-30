@@ -8,8 +8,20 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { FILING_REASON_LABELS, filingReason } from './model';
+import { FILING_REASON_KEYS, filingReason } from './model';
 import type { ReviewSnapshot } from './model';
+import { he } from '../../lib/i18n/dictionaries/he';
+import type { Dictionary } from '../../lib/i18n/dictionaries/he';
+import { translate } from '../../lib/i18n/t';
+import type { TKey } from '../../lib/i18n/t';
+
+/**
+ * These functions take the translator now, because the module is pure and cannot hold a hook.
+ * The tests inject the HEBREW one: every assertion below still names the literal sentence, so a
+ * wrong dictionary entry fails here. Comparing `t(key)` to `t(key)` would pass either way.
+ */
+const t = ((key, vars) => translate(he as unknown as Dictionary, key, vars)) as
+  (key: TKey, vars?: Record<string, string | number>) => string;
 
 const migrationsDir = join(process.cwd(), 'supabase', 'migrations');
 
@@ -54,7 +66,7 @@ describe('every stop the ladder can reach has a sentence', () => {
   });
 
   it('labels every code the SQL can assign', () => {
-    const missing = ladderCodes().filter((code) => !(code in FILING_REASON_LABELS));
+    const missing = ladderCodes().filter((code) => !(code in FILING_REASON_KEYS));
     expect(missing).toEqual([]);
   });
 
@@ -62,54 +74,54 @@ describe('every stop the ladder can reach has a sentence', () => {
     // Kept honest in both directions: a stale sentence is a promise about a state that no longer
     // exists. `already_decided` is a pre-refusal rather than an outcome, so it is allowed here.
     const codes = new Set([...ladderCodes(), 'already_decided']);
-    expect(Object.keys(FILING_REASON_LABELS).filter((k) => !codes.has(k))).toEqual([]);
+    expect(Object.keys(FILING_REASON_KEYS).filter((k) => !codes.has(k))).toEqual([]);
   });
 });
 
 describe('what the reviewer is told', () => {
   it('names the stop the owner actually hit', () => {
-    const text = filingReason(snapshotWith([filing({ reason_code: 'not_an_invoice' })]));
+    const text = filingReason(snapshotWith([filing({ reason_code: 'not_an_invoice' })]), t);
     expect(text).toContain('אין עדיין פקודת כתיבה אוטומטית בטוחה');
   });
 
   it('explains an unreadable currency without silently calling it shekels', () => {
-    const text = filingReason(snapshotWith([filing({ reason_code: 'currency_unrecognised' })]));
+    const text = filingReason(snapshotWith([filing({ reason_code: 'currency_unrecognised' })]), t);
     expect(text).toContain('המטבע שהודפס');
     expect(text).not.toContain('שקל');
   });
 
   it('says nothing when the machine wrote the record — a null code is not a stop', () => {
-    expect(filingReason(snapshotWith([filing({ reason_code: null })]))).toBeNull();
+    expect(filingReason(snapshotWith([filing({ reason_code: null })]), t)).toBeNull();
   });
 
   it('survives a snapshot that has no filings field at all', () => {
     // Regression: the first version dereferenced `snapshot.filings` and threw
     // "Cannot read properties of undefined", which renders as a blank review screen.
-    expect(filingReason({} as unknown as ReviewSnapshot)).toBeNull();
+    expect(filingReason({} as unknown as ReviewSnapshot, t)).toBeNull();
   });
 
   it('says nothing when there is no machine filing at all', () => {
-    expect(filingReason(snapshotWith([]))).toBeNull();
-    expect(filingReason(snapshotWith([filing({ decided_by: 'human', reason_code: 'not_an_invoice' })])))
+    expect(filingReason(snapshotWith([]), t)).toBeNull();
+    expect(filingReason(snapshotWith([filing({ decided_by: 'human', reason_code: 'not_an_invoice' })]), t))
       .toBeNull();
   });
 
   it('ignores a reverted filing — an undone decision is not the current reason', () => {
     expect(filingReason(snapshotWith([
       filing({ reason_code: 'not_an_invoice', reverted_at: '2026-08-07T12:00:00Z' }),
-    ]))).toBeNull();
+    ]), t)).toBeNull();
   });
 
   it('reads the newest filing when a document was decided more than once', () => {
     const text = filingReason(snapshotWith([
       filing({ id: 'old', reason_code: 'autonomy_disabled', decided_at: '2026-08-07T09:00:00Z' }),
       filing({ id: 'new', reason_code: 'supplier_unidentified', decided_at: '2026-08-07T11:00:00Z' }),
-    ]));
+    ]), t);
     expect(text).toContain('הספק לא הותאם');
   });
 
   it('never prints a bare enum, even for an arm nobody labelled', () => {
-    const text = filingReason(snapshotWith([filing({ reason_code: 'some_future_arm' })]));
+    const text = filingReason(snapshotWith([filing({ reason_code: 'some_future_arm' })]), t);
     expect(text).not.toContain('some_future_arm');
     expect(text).toContain('ההכרעה אצלך');
   });

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { he } from '../../lib/i18n/dictionaries/he';
 
 /**
  * The step bar renders twice — a compact row of numbered buttons on a phone, the chip strip from
@@ -21,13 +22,19 @@ import { describe, expect, it } from 'vitest';
 const source = readFileSync(join(process.cwd(), 'src/pages/neworder/NewOrder.tsx'), 'utf8');
 
 const stepper = (() => {
-  const start = source.indexOf('<nav aria-label="שלבי הזמנה">');
+  // The label moved into the dictionary; the anchor moved with it, and the sentence it used to
+  // be is asserted below rather than dropped.
+  const start = source.indexOf("<nav aria-label={t('newOrder.aria_label')}>");
   const end = source.indexOf('</nav>', start);
   if (start < 0 || end < 0) throw new Error('the step bar markup moved — update this test with it');
   return source.slice(start, end);
 })();
 
 describe('the step bar announces one name per step, at every width', () => {
+  it('still calls itself the order steps', () => {
+    expect(he.newOrder.aria_label).toBe('שלבי הזמנה');
+  });
+
   it('renders both a phone and a desktop variant', () => {
     expect(stepper).toContain('sm:hidden');
     expect(stepper).toContain('sm:flex');

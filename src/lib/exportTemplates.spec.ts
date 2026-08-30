@@ -1,6 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { he } from './i18n/dictionaries/he';
+import { en } from './i18n/dictionaries/en';
+import type { Dictionary } from './i18n/dictionaries/he';
+import type { TKey } from './i18n/t';
+
+const resolve = (dictionary: Dictionary, key: TKey): string => {
+  const [namespace, entry] = key.split('.');
+  return (dictionary as unknown as Record<string, Record<string, string>>)[namespace][entry] ?? '';
+};
 import {
   EXPORT_DEFINITIONS,
   exportDefinition,
@@ -35,16 +44,33 @@ describe('the field catalogue', () => {
     }
   });
 
-  it('gives every field a key, a Hebrew label and a sample', () => {
+  it('gives every field a key, a label and a sample, in both languages', () => {
     // The sample is not decoration: the mapping dropdown shows it, and "23,112.00" beside "סה״כ
-    // מע״מ" is how somebody notices they picked the wrong one before approving.
+    // מע״מ" is how somebody notices they picked the wrong one before approving. Both now come
+    // from the dictionary, so the claim is that each key RESOLVES — a missing entry would put a
+    // raw key in the dropdown, which is worse than an untranslated word.
     for (const definition of EXPORT_DEFINITIONS) {
       expect(definition.fields.length).toBeGreaterThan(4);
+      expect(resolve(he, definition.titleKey).length).toBeGreaterThan(0);
+      expect(resolve(en, definition.titleKey).length).toBeGreaterThan(0);
+      expect(resolve(he, definition.descriptionKey).length).toBeGreaterThan(0);
+      expect(resolve(en, definition.descriptionKey).length).toBeGreaterThan(0);
       for (const field of definition.fields) {
         expect(field.key).toMatch(/^[a-z][a-z0-9_]*$/);
-        expect(field.label.trim().length).toBeGreaterThan(0);
-        expect(field.sample.trim().length).toBeGreaterThan(0);
+        for (const dictionary of [he, en]) {
+          expect(resolve(dictionary, field.labelKey).trim().length, field.key).toBeGreaterThan(0);
+          expect(resolve(dictionary, field.sampleKey).trim().length, field.key).toBeGreaterThan(0);
+        }
       }
+    }
+  });
+
+  it('keeps the canonical Hebrew title, because it is stored and audited', () => {
+    // `p_name` defaults to it and `p_reason` composes it (ExportTemplatesPanel), so it is a value
+    // that goes INTO the system rather than copy — the one field here that does not follow the
+    // reader.
+    for (const definition of EXPORT_DEFINITIONS) {
+      expect(definition.title).toMatch(/[֐-׿]/);
     }
   });
 

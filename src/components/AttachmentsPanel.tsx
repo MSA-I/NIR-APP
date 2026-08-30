@@ -1,9 +1,10 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { Eye, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { fmtDate, fmtDateTime } from '../lib/format';
-import { ok, toHebrewError } from '../lib/errors';
+import { ok } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import type { DocumentRow } from '../lib/types';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -38,6 +39,7 @@ interface AttachmentItem {
 /** One invoice document register: direct invoice files and linked delivery notes share the
  *  same rows, vocabulary and actions instead of living in nested cards and galleries. */
 export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string; receipts: LinkedReceipt[] }) {
+  const { errorText, t } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,12 +65,12 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
       : Promise.resolve([] as DocumentRow[]);
     const [invoiceDocs, receiptDocs] = await Promise.all([invoicePromise, receiptPromise]);
     const items: AttachmentItem[] = [
-      ...invoiceDocs.map((doc) => ({ doc, source: 'חשבונית', sourceDate: null, direct: true })),
+      ...invoiceDocs.map((doc) => ({ doc, source: t('attachments.map'), sourceDate: null, direct: true })),
       ...receiptDocs.map((doc) => {
         const receipt = receiptById.get(doc.entity_id ?? '');
         return {
           doc,
-          source: receipt ? `קבלת סחורה #${receipt.number}` : 'קבלת סחורה',
+          source: receipt ? t('attachments.sourceReceiptNumbered', { number: receipt.number }) : t('attachments.sourceReceipt'),
           sourceDate: receipt?.received_at ?? null,
           direct: false,
         };
@@ -95,7 +97,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
         .eq('id', invoiceId).eq('financial_role', 'payable').single()) as { supplier_id: string; invoice_date: string };
       const result = await runUploadBatch(files, (file) => uploadDocument(profile.org_id, 'invoice', invoiceId, file, {
         documentKind: 'invoice', supplierId: invoice.supplier_id, documentDate: invoice.invoice_date,
-      }));
+      }), { t, errorText });
       const failures = result.failed.map(({ item, error }) => ({ item, ...documentUploadFailure(error) }));
       const failed = failures.filter(({ retryable }) => retryable).map(({ item }) => item);
       const registered = failures.filter(({ registered: isRegistered }) => isRegistered).length;
@@ -104,10 +106,15 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
       setUploadSummary(summary);
       if (result.succeeded.length || registered) await refetch();
       if (summary.failed.length) {
-        const detail = failures[0] ? ` ${failures[0].message}` : '';
-        toast(`${summary.succeeded.length} הועלו וממתינים לעיבוד, ${summary.failed.length} לא הושלמו.${detail}`, 'error');
+        const detail = failures[0] ? ` ${errorText(new Error(failures[0].code))}` : '';
+        toast(`${t('attachments.uploadedSomeFailed', {
+        succeeded: summary.succeeded.length,
+        failed: summary.failed.length,
+      })}${detail}`, 'error');
       } else {
-        toast(result.succeeded.length === 1 ? 'הועלה וממתין לעיבוד' : `${result.succeeded.length} קבצים הועלו וממתינים לעיבוד`);
+        toast(result.succeeded.length === 1
+        ? t('attachments.uploadedOne')
+        : t('attachments.uploadedMany', { count: result.succeeded.length }));
       }
     } catch (e) {
       setRetryFiles(files);
@@ -115,7 +122,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
         succeeded: [],
         failed: files.map((item) => ({ item, error: e })),
       }));
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -134,8 +141,8 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
       if (error || !url) throw error ?? new Error('missing signed URL');
       return url.signedUrl;
     });
-    if (result === 'blocked') toast('הדפדפן חסם את חלון הצפייה. יש לאפשר חלונות קופצים ולנסות שוב.', 'error');
-    if (result === 'error') toast('שגיאה בפתיחת הקובץ', 'error');
+    if (result === 'blocked') toast(t('attachments.toast'), 'error');
+    if (result === 'error') toast(t('attachments.toast_2'), 'error');
   }
 
   async function remove(doc: DocumentRow) {
@@ -144,11 +151,11 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
       ok(await supabase.from('documents').update({
         deleted_at: new Date().toISOString(), deleted_by: profile?.id ?? null,
       }).eq('id', doc.id));
-      toast('המסמך הוסר');
+      toast(t('attachments.toast_3'));
       setPendingDelete(null);
       await refetch();
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setDeleting(false);
     }
@@ -158,13 +165,13 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
     <section aria-labelledby="invoice-attachments-title">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 id="invoice-attachments-title" className="section-title">מסמכים מצורפים</h2>
-          <p className="text-xs text-ink-muted">חשבונית ותעודות משלוח מקבלות מקושרות</p>
+          <h2 id="invoice-attachments-title" className="section-title">{t('attachments.text')}</h2>
+          <p className="text-xs text-ink-muted">{t('attachments.text_2')}</p>
         </div>
         {canUpload && <>
           <button type="button" className="btn-secondary" disabled={busy || retryFiles.length > 0} onClick={() => inputRef.current?.click()}>
             {busy ? <Loader2 size={ICON.sm} className="animate-spin" /> : <Upload size={ICON.sm} />}
-            הוספת קבצים
+            {t('attachments.text_3')}
           </button>
           <input ref={inputRef} type="file" hidden multiple accept={DOCUMENT_UPLOAD_ACCEPT} data-document-upload-input
             onChange={(event) => void onPick(event.target.files)} />
@@ -174,13 +181,13 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
       {uploadSummary && (
         <Note tone={uploadSummary.failed.length ? 'alert' : 'done'} className="mb-2">
           <div role="status">
-            <div><span className="num">{uploadSummary.succeeded.length}</span> הועלו וממתינים לעיבוד · <span className="num">{uploadSummary.failed.length}</span> לא הושלמו</div>
+            <div><span className="num">{uploadSummary.succeeded.length}</span> {t('attachments.text_4')} <span className="num">{uploadSummary.failed.length}</span> {t('attachments.text_5')}</div>
             {uploadSummary.failed.length > 0 && (
               <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs">נכשלו: {uploadSummary.failed.join(', ')}</span>
+                <span className="text-xs">{t('attachments.failedList', { files: uploadSummary.failed.join(', ') })}</span>
                 {retryFiles.length > 0 && (
                   <button type="button" className="btn-ghost btn-sm" disabled={busy} onClick={() => void uploadFiles(retryFiles, uploadSummary)}>
-                    ניסיון חוזר לנכשלים בלבד
+                    {t('attachments.text_6')}
                   </button>
                 )}
               </div>
@@ -195,7 +202,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
         <ErrorNote message={error} />
       ) : loading ? (
         <div className="divide-y divide-line-soft border-y border-line-strong" role="status" aria-busy="true">
-          <span className="sr-only">טוען מסמכים</span>
+          <span className="sr-only">{t('attachments.text_7')}</span>
           {[0, 1].map((index) => (
             <div key={index} className="flex min-h-16 items-center gap-3 py-2">
               <Skeleton className="size-11 rounded-none" />
@@ -241,19 +248,19 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
                           ? <DocumentStatusBadge status={documentUiStatus({
                             status: stage, job: processing.snapshots[doc.id]?.job, document: doc,
                           })} />
-                          : <><Skeleton className="h-6 w-24" /><span className="sr-only">סטטוס העיבוד נטען</span></>}
+                          : <><Skeleton className="h-6 w-24" /><span className="sr-only">{t('attachments.text_8')}</span></>}
                       </span>
                     )}
                     {canReview && (
                       <Link to={`/documents/${doc.id}/review`} className="link inline-flex min-h-11 items-center" data-document-review-link>
-                        בדיקת מסמך
+                        {t('attachments.text_9')}
                       </Link>
                     )}
                   </div>
                 </div>
-                <ActionMenu label={`פעולות עבור ${doc.file_name}`} items={[
-                  { key: 'view', label: 'צפייה', icon: Eye, onSelect: () => void open(doc) },
-                  { key: 'delete', label: 'הסרה', icon: Trash2, tone: 'danger', hidden: !direct || !canDelete, onSelect: () => setPendingDelete(doc) },
+                <ActionMenu label={t('attachments.actionsFor', { file: doc.file_name })} items={[
+                  { key: 'view', label: t('attachments.open'), icon: Eye, onSelect: () => void open(doc) },
+                  { key: 'delete', label: t('attachments.setPendingDelete'), icon: Trash2, tone: 'danger', hidden: !direct || !canDelete, onSelect: () => setPendingDelete(doc) },
                 ]} />
               </li>
             );
@@ -264,17 +271,17 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
            is behind `canUpload`, so a role without it is told who to ask instead of being pointed
            at a button that is not on their screen. */
         <div className="border-y border-dashed border-line px-3 py-5 text-center text-sm text-ink-muted">
-          אין מסמכים מצורפים.{' '}
+          {t('attachments.noAttachments')}{' '}
           {canUpload
-            ? 'ניתן לצרף חשבונית או תעודת משלוח דרך «הוספת קבצים» למעלה.'
-            : 'צירוף מסמכים זמין לבעלים, למשרד ולמנהל המטבח.'}
+            ? t('attachments.text_10')
+            : t('attachments.text_11')}
         </div>
       )}
 
       <ConfirmDialog open={pendingDelete !== null} onClose={() => setPendingDelete(null)}
         onConfirm={() => { if (pendingDelete) void remove(pendingDelete); }}
-        title="הסרת מסמך" message={`המסמך "${pendingDelete?.file_name ?? ''}" יוסר מהרשימה. הקובץ נשמר לביקורת.`}
-        confirmLabel="הסרה" danger busy={deleting} />
+        title={t('attachments.removeTitle')} message={t('attachments.removeMessage', { file: pendingDelete?.file_name ?? '' })}
+        confirmLabel={t('attachments.confirmLabel')} danger busy={deleting} />
     </section>
   );
 }

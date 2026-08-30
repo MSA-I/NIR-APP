@@ -1,5 +1,5 @@
+import type { TKey } from './i18n/t';
 import { supabase } from './supabase';
-import { toHebrewError } from './errors';
 import type { StatusMeta } from './status';
 
 // Tenant-side surface of email order delivery (0168), extended by 0190 with what the provider
@@ -42,11 +42,11 @@ export type EmailChannelState =
  *  vocabulary belongs to #238's channel, not to the stored provider status ladder — and the tone
  *  is a claim: `delivered` is the only state that may read as done. */
 export const EMAIL_CHANNEL_STATE: Record<EmailChannelState, StatusMeta> = {
-  pending: { label: 'טרם נמסרה', tone: 'idle' },
-  accepted: { label: 'נמסרה לספק המייל', tone: 'info' },
-  delivered: { label: 'נמסרה לנמען', tone: 'done' },
-  delivery_failed: { label: 'המסירה נכשלה', tone: 'alert' },
-  unknown: { label: 'מצב לא ידוע', tone: 'alert' },
+  pending: { key: 'emailChannel_pending', tone: 'idle' },
+  accepted: { key: 'emailChannel_accepted', tone: 'info' },
+  delivered: { key: 'emailChannel_delivered', tone: 'done' },
+  delivery_failed: { key: 'emailChannel_delivery_failed', tone: 'alert' },
+  unknown: { key: 'emailChannel_unknown', tone: 'alert' },
 };
 
 /** The statuses a resend may be offered from. `accepted`/`delivered` are already with the
@@ -58,41 +58,37 @@ export const EMAIL_RETRYABLE_STATUSES: readonly EmailMessageStatus[] = [
   'queued', 'failed', 'bounced',
 ];
 
-/** The bounded reason vocabulary 0190 CHECKs, turned into one Hebrew sentence each. The provider's
- *  own sentence is passed through separately as secondary detail: it is length-capped in the
- *  database and is evidence, not the explanation the business reads. */
-const DELIVERY_REASON: Record<string, string> = {
-  bounce_permanent:
-    'שרת הדואר של הנמען דחה את ההודעה סופית — סביר שכתובת המייל שגויה, נסגרה או חסומה.',
-  bounce_transient:
-    'שרת הדואר של הנמען דחה את ההודעה זמנית — למשל תיבה מלאה או עומס אצל הנמען.',
-  bounce_undetermined:
-    'ההודעה הוחזרה משרת הדואר של הנמען, וספק המייל לא הצליח לקבוע אם הסיבה קבועה או זמנית.',
-  bounce_unclassified:
-    'ההודעה הוחזרה משרת הדואר של הנמען מסיבה שספק המייל לא סיווג.',
-  lease_expired:
-    'השליחה נקטעה לפני שהתקבלה תשובה מספק המייל, ולכן לא ידוע אם ההודעה יצאה.',
+/** The bounded reason vocabulary 0190 CHECKs, turned into one sentence each — in the reader's
+ *  language, so what this module answers is the KEY of that sentence. The provider's own sentence
+ *  is passed through separately as secondary detail: it is length-capped in the database, it is
+ *  evidence, and it is written in whatever language the provider chose. */
+const DELIVERY_REASON: Record<string, TKey> = {
+  bounce_permanent: 'emailOrderCard.bouncePermanent',
+  bounce_transient: 'emailOrderCard.bounceTransient',
+  bounce_undetermined: 'emailOrderCard.bounceUndetermined',
+  bounce_unclassified: 'emailOrderCard.bounceUnclassified',
+  lease_expired: 'emailOrderCard.leaseExpired',
 };
 
-const SEND_FAILED = 'ספק המייל לא קיבל את ההודעה לטיפול, ולכן היא מעולם לא יצאה לנמען.';
+const SEND_FAILED: TKey = 'emailOrderCard.sendFailed';
 
 export interface EmailDeliveryReason {
-  /** The one Hebrew sentence the business reads. */
-  sentence: string;
+  /** The key of the one sentence the business reads. */
+  key: TKey;
   /** The provider's own wording, capped by the database. Evidence, shown as secondary detail. */
   providerDetail: string | null;
 }
 
-/** Explains a failed email channel in Hebrew, or answers null when there is nothing to explain.
- *  An unrecognized code falls back to a generic sentence rather than showing a raw code to a
- *  business user — and never invents a diagnosis the provider did not give. */
+/** Names a failed email channel, or answers null when there is nothing to explain. An
+ *  unrecognized code falls back to a generic sentence rather than showing a raw code to a business
+ *  user — and never invents a diagnosis the provider did not give. */
 export function emailDeliveryReason(message: EmailOrderMessage): EmailDeliveryReason | null {
   if (message.delivery_state !== 'delivery_failed' && message.status !== 'unknown') return null;
   const code = message.error_code ?? '';
-  const sentence = DELIVERY_REASON[code]
+  const key = DELIVERY_REASON[code]
     ?? (message.status === 'bounced' ? DELIVERY_REASON.bounce_unclassified : SEND_FAILED);
   const detail = (message.error_message ?? '').trim();
-  return { sentence, providerDetail: detail && detail !== sentence ? detail : null };
+  return { key, providerDetail: detail || null };
 }
 
 export interface EmailOrderMessage {
@@ -128,7 +124,7 @@ export async function fetchSupplierCommunicationPreferences(
     .select('*')
     .eq('supplier_id', supplierId)
     .maybeSingle();
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return res.data as SupplierCommunicationPreferences | null;
 }
 
@@ -154,7 +150,7 @@ export async function setSupplierCommunicationPreferences(
     p_reminders_allowed: input.remindersAllowed,
     p_reason: input.reason,
   });
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
 }
 
 export async function fetchOrderEmailMessage(orderId: string): Promise<EmailOrderMessage | null> {
@@ -163,7 +159,7 @@ export async function fetchOrderEmailMessage(orderId: string): Promise<EmailOrde
     .eq('order_id', orderId)
     .eq('kind', 'order')
     .maybeSingle();
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return res.data as EmailOrderMessage | null;
 }
 
@@ -195,7 +191,8 @@ export async function sendOrderEmail(orderId: string, reason: string): Promise<S
     } else if (body && typeof body === 'object' && 'error' in body) {
       code = String((body as { error: unknown }).error);
     }
-    return { ok: false, state: 'error', error: toHebrewError(code) };
+    // The code travels; EmailOrderCard resolves it when it draws the toast.
+    return { ok: false, state: 'error', error: code };
   }
   return res.data as SendOrderEmailResult;
 }
@@ -205,5 +202,5 @@ export async function resetOrderEmailMessage(messageId: string, reason: string):
     p_message_id: messageId,
     p_reason: reason,
   });
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
 }

@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { supabase } from '../lib/supabase';
@@ -91,6 +92,7 @@ interface QuotaRow {
 const PAGE_WRAPPER = 'mx-auto max-w-6xl space-y-6 px-4 py-12';
 
 export default function Pricing() {
+  const { t } = useT();
   const [state, setState] = useState<{
     catalogue: PlanRow[];
     quotas: QuotaRow[];
@@ -110,7 +112,7 @@ export default function Pricing() {
       if (cancelled) return;
       if (catalogue.error || quotas.error || features.error) {
         setState({ catalogue: [], quotas: [], features: [], loading: false,
-          error: 'לא ניתן לטעון את המסלולים כרגע.' });
+          error: t('pricingTail.loadFailed') });
         return;
       }
       setState({
@@ -164,7 +166,7 @@ export default function Pricing() {
       // `text-ink-muted` here would be invisible on the inverted fill.
       return { key, text: <><span>—</span> {label}</>, affirmative: false };
     }
-    if (row.unlimited) return { key, text: `${label} ללא הגבלה`, affirmative: true };
+    if (row.unlimited) return { key, text: t('pricingTail.unlimitedFeature', { label }), affirmative: true };
     return {
       key,
       text: <><span className="num font-medium">{fmtNum(row.numeric_limit)}</span> {label}</>,
@@ -182,8 +184,8 @@ export default function Pricing() {
    */
   const header = (
     <header className="space-y-2">
-      <h1 className="page-title">מסלולים</h1>
-      <p className="text-ink-body">אותה שליטה. קצב שמתאים לעסק שלך.</p>
+      <h1 className="page-title">{t('pricingTail.title')}</h1>
+      <p className="text-ink-body">{t('pricingTail.subtitle')}</p>
     </header>
   );
 
@@ -201,9 +203,7 @@ export default function Pricing() {
   const notice = (
     <Note tone="info">
       <span className="min-w-0 flex-1">
-        המסלולים נבדלים גם בנפח וגם ביכולות. המחיר אינו מפורסם בדף הזה לפני ההשקה; בתוך החשבון
-        מוצג מחיר לפי שפת הממשק, בעוד שהחיוב בפועל נקבע רק לפי כתובת החיוב המאומתת מול ספק
-        הסליקה. פתיחת חשבון והמסלול החינמי אינם דורשים אמצעי תשלום.
+        {t('pricingTail.notice')}
       </span>
     </Note>
   );
@@ -262,7 +262,7 @@ export default function Pricing() {
                  slot holding «—» would be a page about a price it refuses to give. */
               priceLabel={quotaLabel(HEADLINE_QUOTA_KEY)}
               figure={!measured ? '—'
-                : headline.unlimited ? 'ללא הגבלה'
+                : headline.unlimited ? t('pricingTail.unlimited')
                   : fmtNum(headline.numeric_limit)}
               figureIsWords={!measured || headline.unlimited}
               term={measured && !headline.unlimited ? 'בתקופת שימוש חודשית' : undefined}
@@ -288,17 +288,15 @@ export default function Pricing() {
       </ul>
 
       <p className="text-sm text-ink-muted">
-        המכסות נספרות בתקופת שימוש חודשית של הארגון. חריגה עוצרת עיבוד חדש בלבד — שום מסמך אינו
-        נמחק ושום דבר שכבר נעשה אינו נחסם למפרע.
+        {t('pricingTail.quotaPeriod')}
       </p>
       {hasUnmeasured && (
         <p className="text-sm text-ink-muted">
-          מכסה שהמערכת אינה מודדת היום מוצגת כ«—» ואינה מפורסמת כמספר, כדי שלא תיווצר הבטחה שאין
-          מאחוריה מדידה.
+          {t('pricingTail.unmeasuredNote')}
         </p>
       )}
 
-      <Link className="btn-primary" to="/signup">פתיחת חשבון חינם</Link>
+      <Link className="btn-primary" to="/signup">{t('pricingTail.openFreeAccount')}</Link>
     </main>
   );
 }

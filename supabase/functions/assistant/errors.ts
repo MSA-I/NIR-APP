@@ -1,11 +1,15 @@
-// The assistant's error surface. The closed union and its Hebrew text are canonical in
+// The assistant's error surface. The closed union is canonical in
 // src/lib/assistant/errorCodes.ts (re-exported by contracts.ts); this module adds only what a
-// server boundary needs on top of them -- an HTTP status per code, an Error subclass, and the
+// server boundary needs on top of it -- an HTTP status per code, an Error subclass, and the
 // CORS/JSON plumbing every function in this repo carries.
-import {
-  ASSISTANT_ERROR_MESSAGES,
-  type AssistantErrorCode,
-} from "../../../src/lib/assistant/contracts.ts";
+//
+// IT NO LONGER CARRIES A SENTENCE. The wording moved into the `errors` namespace of the two
+// dictionaries, under these exact codes, so each failure has one answer PER LANGUAGE. A server
+// that shipped one Hebrew sentence in the body would be a second wording of the same failure,
+// and it would be the wrong language for half the people who can now read this product. The
+// client has always preferred `error.code` over `error.message` (`client.ts:56`), so the body
+// carrying only the code is what it already reads.
+import type { AssistantErrorCode } from "../../../src/lib/assistant/contracts.ts";
 
 export type AssistantEdgeErrorCode = AssistantErrorCode;
 
@@ -30,10 +34,6 @@ const STATUS: Record<AssistantEdgeErrorCode, number> = {
   assistant_invalid_request: 400,
   assistant_persistence_failed: 503,
 };
-
-export function assistantErrorMessage(code: AssistantEdgeErrorCode): string {
-  return ASSISTANT_ERROR_MESSAGES[code];
-}
 
 export class AssistantEdgeError extends Error {
   readonly code: AssistantEdgeErrorCode;
@@ -80,6 +80,6 @@ export function fail(
   error: AssistantEdgeError,
 ): Response {
   return json(cors, {
-    error: { code: error.code, message: assistantErrorMessage(error.code) },
+    error: { code: error.code },
   }, error.status);
 }

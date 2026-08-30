@@ -1,4 +1,5 @@
 import { exportDefinition } from './exportTemplates';
+import type { TKey } from './i18n/t.ts';
 import { fmtDateTime } from './format';
 import type {
   WorkbookCellType, WorkbookMatrixRow, WorkbookMatrixSheet, WorkbookSheet, WorkbookSpec,
@@ -76,11 +77,16 @@ export interface MonthlyReportSnapshot {
   content_hash: string;
 }
 
+/**
+ * RESOLVED labels, not the status maps. The maps carry dictionary keys now, and a spreadsheet
+ * builder is the wrong place to be resolving a language — it would need a locale, and a workbook
+ * exported in the wrong one is a file somebody sends to their accountant.
+ */
 export interface MonthlyReportLabels {
-  invoiceReview: Record<string, { label: string } | undefined>;
-  invoicePayment: Record<string, { label: string } | undefined>;
+  invoiceReview: Record<string, string | undefined>;
+  invoicePayment: Record<string, string | undefined>;
   creditReason: Record<string, string | undefined>;
-  creditStatus: Record<string, { label: string } | undefined>;
+  creditStatus: Record<string, string | undefined>;
   exceptionType: Record<string, string | undefined>;
 }
 
@@ -155,6 +161,19 @@ function moneyFormat(currency: string): string {
   }
 }
 
+/**
+ * `<name> <ISO>` in a mixed month and the bare name otherwise (#287), so a shekel-only business
+ * gets exactly the workbook it had before the currency campaign. Excel refuses a sheet name over
+ * 31 characters and refuses the whole FILE rather than the sheet, and `create_monthly_report_snapshot`
+ * hashes what it is handed — so this throws rather than letting `sheetName()` quietly truncate two
+ * currencies down to one name.
+ */
+function namedSheet(name: string, currency: string, mixed: boolean): string {
+  const value = mixed ? `${name} ${currency}` : name;
+  if (value.length > 31) throw new Error(`monthly_report_sheet_name_too_long:${value}`);
+  return value;
+}
+
 /** Base currency first, then ISO order (#287), so a snapshot hash cannot depend on arrival order. */
 function orderedCurrencies(codes: Iterable<string>, baseCurrency: string): string[] {
   return [...new Set(codes)].filter((code) => /^[A-Z]{3}$/.test(code)).sort((a, b) => {
@@ -165,6 +184,7 @@ function orderedCurrencies(codes: Iterable<string>, baseCurrency: string): strin
 }
 
 export function buildMonthlyWorkbook(input: {
+  t: (key: TKey, vars?: Record<string, string | number>) => string;
   orgName: string | null | undefined;
   baseCurrency?: string;
   /** Locked snapshots include bank currencies even when no invoice/payment row carries them. */
@@ -174,7 +194,7 @@ export function buildMonthlyWorkbook(input: {
   data: MonthlyReportData;
   labels: MonthlyReportLabels;
 }): WorkbookSpec {
-  const { data } = input;
+  const { data, t } = input;
   const baseCurrency = input.baseCurrency ?? 'ILS';
   const currencies = orderedCurrencies([
     ...(input.currencyCodes ?? []),
@@ -197,19 +217,15 @@ export function buildMonthlyWorkbook(input: {
    * hashes what it is handed — so this throws rather than letting `sheetName()` quietly truncate
    * two currencies down to one name.
    */
-  const namedSheet = (name: string, currency: string) => {
-    const value = mixed ? `${name} ${currency}` : name;
-    if (value.length > 31) throw new Error(`monthly_report_sheet_name_too_long:${value}`);
-    return value;
-  };
+  const named = (name: string, currency: string) => namedSheet(name, currency, mixed);
 
   const summaryMatrix: WorkbookMatrixRow[] = [
-    pair('שם ארגון', input.orgName ?? '—'),
-    pair('חודש', input.month),
-    pair('נוצר בתאריך', input.generatedAt, 'date'),
-    pair('הערה', 'הקובץ משקף את הנתונים שהושלמו בזמן המצוין; הוא אינו snapshot טרנזקציוני.'),
+    pair(t('reports.xlOrgName'), input.orgName ?? '—'),
+    pair(t('reports.xlMonth'), input.month),
+    pair(t('reports.xlCreatedOn'), input.generatedAt, 'date'),
+    pair(t('reports.xlNote'), t('reports.xlNoteLive')),
     { cells: [] },
-    { cells: ['מדד', 'מספר רשומות', 'סכום', 'מטבע'], header: true },
+    { cells: [t('reports.xlMeasure'), t('reports.xlRecordCount'), t('reports.xlAmount'), t('reports.xlCurrency')], header: true },
   ];
   /* ONE SUMMARY BLOCK PER CURRENCY, AND NO COMBINED ROW — #287, and the sentence the whole
      currency campaign is measured against: 12,400 shekels and 3,100 dollars are not 15,500. The
@@ -225,15 +241,15 @@ export function buildMonthlyWorkbook(input: {
       moneyFormat: moneyFormat(currency),
     });
     summaryMatrix.push(
-      line('חשבוניות', invoices.length, sum(invoices, (row) => row.total_amount)),
-      line('לפני מע״מ', invoices.length, sum(invoices, (row) => row.amount_before_vat)),
-      line('מע״מ', invoices.length, sum(invoices, (row) => row.vat_amount)),
-      line('תשלומים', payments.length, sum(payments, (row) => row.amount)),
-      line('זיכויים', credits.length, sum(credits, (row) => row.amount)),
+      line(t('reports.xlInvoices'), invoices.length, sum(invoices, (row) => row.total_amount)),
+      line(t('reports.xlBeforeVat'), invoices.length, sum(invoices, (row) => row.amount_before_vat)),
+      line(t('reports.xlVat'), invoices.length, sum(invoices, (row) => row.vat_amount)),
+      line(t('reports.xlPayments'), payments.length, sum(payments, (row) => row.amount)),
+      line(t('reports.xlCredits'), credits.length, sum(credits, (row) => row.amount)),
     );
   }
   summaryMatrix.push({
-    cells: ['חריגים פתוחים כרגע', data.exceptions.length, null, null],
+    cells: [t('reports.xlOpenExceptionsNow'), data.exceptions.length, null, null],
     types: [undefined, 'number', 'money'],
   });
 
@@ -249,23 +265,23 @@ export function buildMonthlyWorkbook(input: {
    * path that never got the line. A caller cannot forget what it does not set.
    */
   return {
-    title: `דוח חודשי לרו״ח — ${input.orgName ?? '—'}`,
-    subtitle: `${input.month} · הופק ${fmtDateTime(input.generatedAt.toISOString())}`,
+    title: t('reports.xlTitleMonthly', { org: input.orgName ?? '—' }),
+    subtitle: t('reports.xlProducedAt', { month: input.month, at: fmtDateTime(input.generatedAt.toISOString()) }),
     sheets: [
-      { name: 'פרטי הדוח', widths: [30, 22, 16, 10], matrix: summaryMatrix },
+      { name: t('reports.xlSheetReportDetails'), widths: [30, 22, 16, 10], matrix: summaryMatrix },
       ...currencies.map((currency): WorkbookSheet => ({
-        name: namedSheet('חשבוניות', currency),
+        name: named(t('reports.xlInvoices'), currency),
         moneyFormat: moneyFormat(currency),
         columns: [
-          { header: 'ספק', key: 'supplier', width: 24 },
-          { header: 'מספר חשבונית', key: 'number', width: 16 },
-          { header: 'תאריך', key: 'date', width: 12, type: 'date' },
-          { header: 'לפני מע"מ', key: 'net', width: 14, type: 'money' },
-          { header: 'מע"מ', key: 'vat', width: 12, type: 'money' },
-          { header: 'סה"כ', key: 'total', width: 14, type: 'money' },
-          { header: 'מטבע', key: 'currency', width: 10 },
-          { header: 'סטטוס בדיקה', key: 'review', width: 14 },
-          { header: 'סטטוס תשלום', key: 'payment', width: 14 },
+          { header: t('reports.xlSupplier'), key: 'supplier', width: 24 },
+          { header: t('reports.xlInvoiceNumber'), key: 'number', width: 16 },
+          { header: t('reports.xlDate'), key: 'date', width: 12, type: 'date' },
+          { header: t('reports.xlBeforeVatQuoted'), key: 'net', width: 14, type: 'money' },
+          { header: t('reports.xlVatQuoted'), key: 'vat', width: 12, type: 'money' },
+          { header: t('reports.xlTotalQuoted'), key: 'total', width: 14, type: 'money' },
+          { header: t('reports.xlCurrency'), key: 'currency', width: 10 },
+          { header: t('reports.xlReviewStatus'), key: 'review', width: 14 },
+          { header: t('reports.xlPaymentStatus'), key: 'payment', width: 14 },
         ],
         rows: invoiceRows(currency).map((row) => ({
           supplier: row.supplier.name,
@@ -275,20 +291,20 @@ export function buildMonthlyWorkbook(input: {
           vat: row.vat_amount,
           total: row.total_amount,
           currency: row.currency,
-          review: input.labels.invoiceReview[row.review_status]?.label,
-          payment: input.labels.invoicePayment[row.payment_status]?.label,
+          review: input.labels.invoiceReview[row.review_status],
+          payment: input.labels.invoicePayment[row.payment_status],
         })),
       })),
       ...currencies.map((currency): WorkbookSheet => ({
-        name: namedSheet('תשלומים', currency),
+        name: named(t('reports.xlPayments'), currency),
         moneyFormat: moneyFormat(currency),
         columns: [
-          { header: 'ספק', key: 'supplier', width: 24 },
-          { header: 'תאריך', key: 'date', width: 12, type: 'date' },
-          { header: 'סכום', key: 'amount', width: 14, type: 'money' },
-          { header: 'מטבע', key: 'currency', width: 10 },
-          { header: 'אמצעי', key: 'method', width: 14 },
-          { header: 'אסמכתא', key: 'reference', width: 18 },
+          { header: t('reports.xlSupplier'), key: 'supplier', width: 24 },
+          { header: t('reports.xlDate'), key: 'date', width: 12, type: 'date' },
+          { header: t('reports.xlAmount'), key: 'amount', width: 14, type: 'money' },
+          { header: t('reports.xlCurrency'), key: 'currency', width: 10 },
+          { header: t('reports.xlMethod'), key: 'method', width: 14 },
+          { header: t('reports.xlReference'), key: 'reference', width: 18 },
         ],
         rows: paymentRows(currency).map((row) => ({
           supplier: row.supplier.name,
@@ -300,29 +316,29 @@ export function buildMonthlyWorkbook(input: {
         })),
       })),
       ...currencies.map((currency): WorkbookSheet => ({
-        name: namedSheet('זיכויים', currency),
+        name: named(t('reports.xlCredits'), currency),
         moneyFormat: moneyFormat(currency),
         columns: [
-          { header: 'ספק', key: 'supplier', width: 24 },
-          { header: 'סיבה', key: 'reason', width: 16 },
-          { header: 'סכום', key: 'amount', width: 14, type: 'money' },
-          { header: 'מטבע', key: 'currency', width: 10 },
-          { header: 'סטטוס', key: 'status', width: 14 },
+          { header: t('reports.xlSupplier'), key: 'supplier', width: 24 },
+          { header: t('reports.xlReason'), key: 'reason', width: 16 },
+          { header: t('reports.xlAmount'), key: 'amount', width: 14, type: 'money' },
+          { header: t('reports.xlCurrency'), key: 'currency', width: 10 },
+          { header: t('reports.xlStatus'), key: 'status', width: 14 },
         ],
         rows: creditRows(currency).map((row) => ({
           supplier: row.supplier.name,
           reason: input.labels.creditReason[row.reason],
           amount: row.amount,
           currency: row.currency,
-          status: input.labels.creditStatus[row.status]?.label,
+          status: input.labels.creditStatus[row.status],
         })),
       })),
       {
-        name: 'חריגים פתוחים כרגע',
+        name: t('reports.xlOpenExceptionsNow'),
         columns: [
-          { header: 'סוג', key: 'type', width: 16 },
-          { header: 'תיאור', key: 'title', width: 40 },
-          { header: 'ספק', key: 'supplier', width: 24 },
+          { header: t('reports.xlType'), key: 'type', width: 16 },
+          { header: t('reports.xlDescription'), key: 'title', width: 40 },
+          { header: t('reports.xlSupplier'), key: 'supplier', width: 24 },
         ],
         rows: data.exceptions.map((row) => ({
           type: input.labels.exceptionType[row.type],
@@ -354,7 +370,7 @@ export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthly
 }): WorkbookSpec {
   const base = buildMonthlyWorkbook(input);
 
-  const { data, summary } = input;
+  const { data, summary, t } = input;
   const currencies = orderedCurrencies([
     ...data.invoices.map((row) => row.currency),
     ...data.payments.map((row) => row.currency),
@@ -374,35 +390,40 @@ export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthly
     .filter((field) => !commonKeys.has(field.key))
     .map((field) => (moneyKeys.has(field.key)
       ? {
-        cells: [field.label, summary[field.key] ?? null, reportCurrency],
+        cells: [t(field.labelKey), summary[field.key] ?? null, reportCurrency],
         types: [undefined, 'money'] as const,
         moneyFormat: moneyFormat(reportCurrency),
       }
-      : pair(field.label, summary[field.key] ?? null, 'number')));
+      : pair(t(field.labelKey), summary[field.key] ?? null, 'number')));
 
   const summarySheet: WorkbookMatrixSheet = {
-    name: 'פרטי הדוח',
+    name: t('reports.xlSheetReportDetails'),
     widths: [28, 20, 16],
     moneyFormat: moneyFormat(reportCurrency),
     matrix: [
-      { cells: ['נתון', 'ערך', 'מטבע'], header: true },
+      { cells: [t('reports.xlField'), t('reports.xlValue'), t('reports.xlCurrency')], header: true },
       ...fieldRows,
       { cells: [] },
-      { cells: ['מדד', 'מספר רשומות'], header: true },
-      { cells: ['חשבוניות', data.invoices.length], types: [undefined, 'number'] },
-      { cells: ['תשלומים', data.payments.length], types: [undefined, 'number'] },
-      { cells: ['זיכויים', data.credits.length], types: [undefined, 'number'] },
-      { cells: ['חריגים פתוחים כרגע', data.exceptions.length], types: [undefined, 'number'] },
+      { cells: [t('reports.xlMeasure'), t('reports.xlRecordCount')], header: true },
+      { cells: [t('reports.xlInvoices'), data.invoices.length], types: [undefined, 'number'] },
+      { cells: [t('reports.xlPayments'), data.payments.length], types: [undefined, 'number'] },
+      { cells: [t('reports.xlCredits'), data.credits.length], types: [undefined, 'number'] },
+      { cells: [t('reports.xlOpenExceptionsNow'), data.exceptions.length], types: [undefined, 'number'] },
       { cells: [] },
-      pair('הערה', 'הקובץ משקף את הנתונים שהושלמו בזמן המצוין; הוא אינו snapshot טרנזקציוני.'),
+      pair(t('reports.xlNote'), t('reports.xlNoteLive')),
     ],
   };
 
   // The data sheets are already described by the base builder; only the summary sheet is replaced.
   return {
     title: base.title,
-    subtitle: `${summary.period_label ?? input.month} · ${summary.period_from ?? ''}–${summary.period_to ?? ''} · הופק ${summary.generated_at ?? fmtDateTime(input.generatedAt.toISOString())}`,
-    sheets: base.sheets.map((sheet) => sheet.name === 'פרטי הדוח' ? summarySheet : sheet),
+    subtitle: t('reports.xlStyledSubtitle', {
+      label: summary.period_label ?? input.month,
+      from: summary.period_from ?? '',
+      to: summary.period_to ?? '',
+      at: summary.generated_at ?? fmtDateTime(input.generatedAt.toISOString()),
+    }),
+    sheets: base.sheets.map((sheet) => sheet.name === t('reports.xlSheetReportDetails') ? summarySheet : sheet),
   };
 }
 
@@ -418,9 +439,10 @@ export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthly
  * is not better evidence for being plain.
  */
 export function buildLockedMonthlyWorkbook(input: {
+  t: (key: TKey, vars?: Record<string, string | number>) => string;
   snapshot: MonthlyReportSnapshot;
 }): WorkbookSpec {
-  const { snapshot } = input;
+  const { snapshot, t } = input;
   // v1/v2 rows predate currency columns. They were written while 0108 refused every non-ILS
   // document, so ILS is evidence about history rather than a display fallback.
   const invoiceRows = snapshot.invoice_rows.map((row) => ({ ...row, currency: row.currency ?? 'ILS' }));
@@ -440,22 +462,23 @@ export function buildLockedMonthlyWorkbook(input: {
   // without consulting today's label maps: their frozen raw value is the conservative fallback.
   const frozenLabels: MonthlyReportLabels = {
     invoiceReview: Object.fromEntries(invoiceRows.map((row) => [
-      row.review_status, { label: row.review_status_label ?? row.review_status },
+      row.review_status, row.review_status_label ?? row.review_status,
     ])),
     invoicePayment: Object.fromEntries(invoiceRows.map((row) => [
-      row.payment_status, { label: row.payment_status_label ?? row.payment_status },
+      row.payment_status, row.payment_status_label ?? row.payment_status,
     ])),
     creditReason: Object.fromEntries(creditRows.map((row) => [
       row.reason, row.reason_label ?? row.reason,
     ])),
     creditStatus: Object.fromEntries(creditRows.map((row) => [
-      row.status, { label: row.status_label ?? row.status },
+      row.status, row.status_label ?? row.status,
     ])),
     exceptionType: Object.fromEntries(snapshot.exception_rows.map((row) => [
       row.type, row.type_label ?? row.type,
     ])),
   };
   const base = buildMonthlyWorkbook({
+    t,
     orgName: snapshot.organization_name,
     baseCurrency,
     currencyCodes: currencies,
@@ -473,19 +496,19 @@ export function buildLockedMonthlyWorkbook(input: {
   const sum = <T>(rows: readonly T[], value: (row: T) => number) =>
     rows.reduce((total, row) => total + value(row), 0);
   const summaryMatrix: WorkbookMatrixRow[] = [
-    pair('סוג הדוח', 'דוח סופי נעול'),
-    pair('שם ארגון', snapshot.organization_name),
-    pair('ישות משפטית', snapshot.legal_entity_name),
-    pair('חודש', snapshot.report_month.slice(0, 7)),
-    pair('גרסת snapshot', snapshot.version, 'number'),
-    pair('גרסת מבנה הדוח', snapshot.report_version),
-    pair('נוצר בתאריך', snapshot.created_at, 'date'),
-    pair('נוצר על ידי', snapshot.created_by_name),
+    pair(t('reports.xlReportKind'), t('reports.xlLockedFinalReport')),
+    pair(t('reports.xlOrgName'), snapshot.organization_name),
+    pair(t('reports.xlLegalEntity'), snapshot.legal_entity_name),
+    pair(t('reports.xlMonth'), snapshot.report_month.slice(0, 7)),
+    pair(t('reports.xlSnapshotVersion'), snapshot.version, 'number'),
+    pair(t('reports.xlReportLayoutVersion'), snapshot.report_version),
+    pair(t('reports.xlCreatedOn'), snapshot.created_at, 'date'),
+    pair(t('reports.xlCreatedBy'), snapshot.created_by_name),
     pair('Snapshot ID', snapshot.id),
     pair('Checksum', snapshot.content_hash),
-    pair('הערה', 'דוח סופי זה נוצר רק מנתוני snapshot נעולים במסד הנתונים ומשקף את גבול הדוח החי במועד היצירה.'),
+    pair(t('reports.xlNote'), t('reports.xlNoteLocked')),
     { cells: [] },
-    { cells: ['מדד', 'מספר רשומות', 'סכום', 'מטבע'], header: true },
+    { cells: [t('reports.xlMeasure'), t('reports.xlRecordCount'), t('reports.xlAmount'), t('reports.xlCurrency')], header: true },
   ];
   /* THE FROZEN FIGURES, READ PER CURRENCY FROM THE FROZEN ROWS. `snapshot.totals` still carries
      the scalar v1/v2 sums, and they are deliberately NOT used for the money columns here: a
@@ -502,41 +525,45 @@ export function buildLockedMonthlyWorkbook(input: {
       moneyFormat: moneyFormat(currency),
     });
     summaryMatrix.push(
-      line('חשבוניות', invoices.length, sum(invoices, (row) => row.total_amount)),
-      line('לפני מע״מ', invoices.length, sum(invoices, (row) => row.amount_before_vat)),
-      line('מע״מ', invoices.length, sum(invoices, (row) => row.vat_amount)),
-      line('תשלומים', payments.length, sum(payments, (row) => row.amount)),
-      line('זיכויים', credits.length, sum(credits, (row) => row.amount)),
-      line('תנועות בנק', bank.length, sum(bank, (row) => row.amount)),
+      line(t('reports.xlInvoices'), invoices.length, sum(invoices, (row) => row.total_amount)),
+      line(t('reports.xlBeforeVat'), invoices.length, sum(invoices, (row) => row.amount_before_vat)),
+      line(t('reports.xlVat'), invoices.length, sum(invoices, (row) => row.vat_amount)),
+      line(t('reports.xlPayments'), payments.length, sum(payments, (row) => row.amount)),
+      line(t('reports.xlCredits'), credits.length, sum(credits, (row) => row.amount)),
+      line(t('reports.xlBankTransactions'), bank.length, sum(bank, (row) => row.amount)),
     );
   }
   summaryMatrix.push({
-    cells: ['חריגים פתוחים בעת היצירה', snapshot.totals.exception_count, null, null],
+    cells: [t('reports.xlOpenExceptionsAtCreation'), snapshot.totals.exception_count, null, null],
     types: [undefined, 'number', 'money'],
   });
 
   const summarySheet: WorkbookMatrixSheet = {
-    name: 'פרטי הדוח',
+    name: t('reports.xlSheetReportDetails'),
     widths: [30, 34, 16, 10],
     matrix: summaryMatrix,
   };
 
   return {
-    title: `דוח סופי נעול — ${snapshot.organization_name} · ${snapshot.legal_entity_name}`,
-    subtitle: `${snapshot.report_month.slice(0, 7)} · גרסה ${snapshot.version} · נוצר ${fmtDateTime(snapshot.created_at)}`,
+    title: t('reports.xlTitleLocked', { org: snapshot.organization_name, entity: snapshot.legal_entity_name }),
+    subtitle: t('reports.xlLockedSubtitle', {
+      month: snapshot.report_month.slice(0, 7),
+      version: snapshot.version,
+      at: fmtDateTime(snapshot.created_at),
+    }),
     sheets: [
-      ...base.sheets.map((sheet) => sheet.name === 'פרטי הדוח' ? summarySheet : sheet),
+      ...base.sheets.map((sheet) => sheet.name === t('reports.xlSheetReportDetails') ? summarySheet : sheet),
       ...currencies.map((currency): WorkbookSheet => ({
-        name: mixed ? `תנועות בנק ${currency}` : 'תנועות בנק',
+        name: namedSheet(t('reports.xlBankTransactions'), currency, mixed),
         moneyFormat: moneyFormat(currency),
         columns: [
-          { header: 'תאריך', key: 'date', width: 12, type: 'date' },
-          { header: 'תיאור', key: 'description', width: 40 },
-          { header: 'סכום', key: 'amount', width: 14, type: 'money' },
-          { header: 'מטבע', key: 'currency', width: 10 },
-          { header: 'סוג', key: 'direction', width: 10 },
-          { header: 'אסמכתא', key: 'reference', width: 18 },
-          { header: 'סטטוס', key: 'status', width: 14 },
+          { header: t('reports.xlDate'), key: 'date', width: 12, type: 'date' },
+          { header: t('reports.xlDescription'), key: 'description', width: 40 },
+          { header: t('reports.xlAmount'), key: 'amount', width: 14, type: 'money' },
+          { header: t('reports.xlCurrency'), key: 'currency', width: 10 },
+          { header: t('reports.xlType'), key: 'direction', width: 10 },
+          { header: t('reports.xlReference'), key: 'reference', width: 18 },
+          { header: t('reports.xlStatus'), key: 'status', width: 14 },
         ],
         rows: bankRows.filter((row) => row.currency === currency).map((row) => ({
           date: row.tx_date,

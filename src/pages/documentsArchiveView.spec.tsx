@@ -11,6 +11,8 @@ import { createAppQueryClient } from '../lib/query/client';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import { ToastProvider } from '../components/ui';
 import { enqueueUploadCenterBatch, resetUploadCenterForTests } from '../components/UploadCenter';
+import { translateIn } from '../lib/i18n/LocaleProvider';
+import { toHebrewError } from '../lib/errors';
 
 /**
  * The gallery and the archive partition the register: an archived document belongs to exactly one
@@ -136,6 +138,9 @@ describe('מרכז ההעלאות בתיקיית המסמכים', () => {
         new File(['pdf'], 'queued-from-modal.pdf', { type: 'application/pdf' }),
       ], async (_file, context) => {
         context.markRegistered('doc-from-modal');
+      }, {
+        t: (key, vars) => translateIn('he', key, vars),
+        errorText: toHebrewError,
       });
     });
     server.use(documents, ...quietTraffic);

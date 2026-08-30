@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
 import {
   WorkbookRejected,
+  WORKBOOK_REJECTION_KEY,
   fillTemplateWorkbook,
   isMacroEnabledName,
   parseTemplateWorkbook,
 } from './exportTemplateWorkbook';
+import { translateIn } from './i18n/LocaleProvider';
 
 /**
  * Package K — the accountant's own workbook as the template.
@@ -45,7 +47,8 @@ describe('what the upload refuses', () => {
       parseTemplateWorkbook('report.xlsm', new ArrayBuffer(8));
     } catch (error) {
       expect((error as WorkbookRejected).reason).toBe('macro_enabled');
-      expect((error as Error).message).toContain('מאקרו');
+      expect(translateIn('he', WORKBOOK_REJECTION_KEY[(error as WorkbookRejected).reason])).toContain('מאקרו');
+      expect(translateIn('en', WORKBOOK_REJECTION_KEY[(error as WorkbookRejected).reason])).toContain('macro');
     }
   });
 

@@ -96,12 +96,26 @@ Deno.test("OPTIONS answers the preflight without touching anything", async () =>
 });
 
 Deno.test("request router separates provider turns from history reads before any spend path", () => {
+  // An older caller that never heard of `locale` still parses, and lands on `null` — which the
+  // handler reads as "the caller did not say" and answers in the product’s base language.
   assert.deepEqual(
     parseAssistantRequest({ question: "שאלה", conversation_id: null, route: null }),
     {
       kind: "ask",
-      request: { question: "שאלה", conversation_id: null, route: null },
+      request: { question: "שאלה", conversation_id: null, route: null, locale: null },
     },
+  );
+  assert.deepEqual(
+    parseAssistantRequest({ question: "how", conversation_id: null, route: null, locale: "en" }),
+    {
+      kind: "ask",
+      request: { question: "how", conversation_id: null, route: null, locale: "en" },
+    },
+  );
+  // A language the help registry has no rows for is a refusal, not a silent fallback.
+  assert.deepEqual(
+    parseAssistantRequest({ question: "q", conversation_id: null, route: null, locale: "fr" }),
+    { kind: "invalid", questionTooLong: false },
   );
   assert.deepEqual(
     parseAssistantRequest({ operation: "history_list" }),

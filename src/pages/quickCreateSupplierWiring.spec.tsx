@@ -56,13 +56,18 @@ vi.mock('../auth/AuthContext', () => ({ useAuth: () => auth.current }));
 
 import {
   SupplierSelectField,
-  QUICK_CREATE_SUPPLIER_HINT,
-  SUPPLIER_FIELD_NO_CREATE_HINT,
-  SUPPLIER_FIELD_QUICK_CREATE_HINT,
+  QUICK_CREATE_SUPPLIER_HINT_KEY,
+  SUPPLIER_FIELD_NO_CREATE_HINT_KEY,
+  SUPPLIER_FIELD_QUICK_CREATE_HINT_KEY,
   mergeCreatedSuppliers,
   useQuickSupplier,
   type SupplierOption,
 } from '../components/QuickSupplierPicker';
+import { translateIn } from '../lib/i18n/LocaleProvider';
+
+const QUICK_CREATE_SUPPLIER_HINT = translateIn('he', QUICK_CREATE_SUPPLIER_HINT_KEY);
+const SUPPLIER_FIELD_NO_CREATE_HINT = translateIn('he', SUPPLIER_FIELD_NO_CREATE_HINT_KEY);
+const SUPPLIER_FIELD_QUICK_CREATE_HINT = translateIn('he', SUPPLIER_FIELD_QUICK_CREATE_HINT_KEY);
 import { PriceListUploadModal } from '../components/PriceListUpload';
 import InvoiceNew from './InvoiceNew';
 import PaymentRequests from './PaymentRequests';

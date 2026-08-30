@@ -46,24 +46,28 @@ export function countAboveAverage(
   return over;
 }
 
-export interface AlertScanDefinition<T> {
+export interface AlertScanDefinition<T, K extends string = string> {
   code: string;
-  label: string;
+  /**
+   * Dictionary key, not a label: this module is pure and cannot ask what language a reader uses.
+   * Generic in the key type so a caller's `TKey` survives the round trip — this file imports
+   * nothing, which is the whole reason it can be exercised without a database or a browser.
+   */
+  labelKey: K;
   run: () => Promise<T | null>;
 }
 
-export const PRICE_INCREASE_SCOPE_DETAIL =
-  'לפי המחירון בלבד. מחירי שורות החשבונית בפועל אינם חלק מהסריקה הזאת';
+export const PRICE_INCREASE_SCOPE_DETAIL_KEY = 'alerts.priceIncrease_detail';
 
-export async function settleAlertScans<T>(scans: readonly AlertScanDefinition<T>[]) {
+export async function settleAlertScans<T, K extends string>(scans: readonly AlertScanDefinition<T, K>[]) {
   const settled = await Promise.allSettled(scans.map((scan) => scan.run()));
   const alerts: T[] = [];
-  const failures: { code: string; label: string }[] = [];
+  const failures: { code: string; labelKey: K }[] = [];
   settled.forEach((result, index) => {
     if (result.status === 'fulfilled') {
       if (result.value) alerts.push(result.value);
     } else {
-      failures.push({ code: scans[index].code, label: scans[index].label });
+      failures.push({ code: scans[index].code, labelKey: scans[index].labelKey });
     }
   });
   return { alerts, failures, complete: failures.length === 0 };

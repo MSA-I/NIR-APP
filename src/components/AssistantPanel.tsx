@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useLocation } from 'react-router';
@@ -32,6 +33,7 @@ import { ICON } from './ui';
 export default function AssistantPanel({ session: sharedSession }: {
   session?: AssistantRunSession;
 } = {}) {
+  const { t } = useT();
   const { isEnabled } = useFeatureFlags();
   const { session: authSession, profile, org, organizationAccess, accessStatus } = useAuth();
   const location = useLocation();
@@ -119,8 +121,8 @@ export default function AssistantPanel({ session: sharedSession }: {
   if (!isEnabled(ASSISTANT_FLAG_KEYS.ui)) return null;
 
   const label = hasActiveCheck
-    ? `חזרה לבדיקה עם העוזר של ${APP_NAME}`
-    : `העוזר של ${APP_NAME}`;
+    ? t('assistantTrigger.resume', { app: APP_NAME })
+    : t('assistantTrigger.open', { app: APP_NAME });
   return (
     <>
       <button

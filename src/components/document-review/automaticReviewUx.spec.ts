@@ -1,3 +1,4 @@
+import { he } from '../../lib/i18n/dictionaries/he';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -12,9 +13,17 @@ const reprocessMigration = readFileSync(join(process.cwd(), 'supabase', 'migrati
 
 describe('automatic document review UX', () => {
   it('does not ask for type approval and puts price-list results before generic review panels', () => {
-    expect(proposals).toContain('אין צורך באישור ידני');
+    // The sentence moved to the dictionary, so the claim splits: the screen renders that key, and
+    // the key carries that wording. Either half alone would pass while the other was broken.
+    expect(proposals).toContain("t('docReview.text_2')");
+    expect(he.docReview.text_2).toContain('אין צורך באישור ידני');
+    // These two stay whole-repo absence checks. They are about copy that must not EXIST anywhere,
+    // so extraction does not weaken them — it only moves where the string could hide, and the
+    // dictionary is now one of those places.
     expect(proposals).not.toContain('אישור הסוג המוצע');
     expect(proposals).not.toContain('דחיית ההצעה');
+    expect(JSON.stringify(he.docReview)).not.toContain('אישור הסוג המוצע');
+    expect(JSON.stringify(he.docReview)).not.toContain('דחיית ההצעה');
     expect(workspace).toContain("const isPriceList = snapshot.interpretation?.payload.document_type === 'price_list'");
     expect(workspace).toMatch(/isPriceList\r?\n\s+\? <PriceListReviewConfirmation/);
   });
@@ -28,8 +37,12 @@ describe('automatic document review UX', () => {
 
   it('allows a completed price list to be reprocessed without deleting its previous result', () => {
     expect(documentsInbox).toContain("['failed', 'review', 'completed'].includes(snapshot.stage)");
-    expect(documentsInbox).toContain('ניסיון חדש שומר את תוצאות העיבוד הקודמות');
-    expect(documentsInbox).toContain("p_reason: 'עיבוד מחדש ביוזמת המשתמש ממסך המסמכים'");
+    // The sentence moved into the dictionary, so the claim moves with it: the screen renders
+    // the key, and the key still carries the promise this contract is about.
+    expect(documentsInbox).toContain("t('documents.text_72')");
+    expect(he.documents.text_72).toContain('ניסיון חדש שומר את תוצאות העיבוד הקודמות');
+    expect(documentsInbox).toContain("p_reason: t('documents.text_31')");
+    expect(he.documents.text_31).toBe('עיבוד מחדש ביוזמת המשתמש ממסך המסמכים');
     expect(documentsInbox).not.toContain("requireReason={processing.snapshots[retryDoc?.id ?? '']?.stage !== 'unprocessed'}");
     expect(reprocessMigration).toContain("j.status in ('queued', 'leased', 'extracted', 'interpreting')");
     expect(reprocessMigration).not.toMatch(/j\.status in \([^)]*'review'/);
@@ -38,16 +51,19 @@ describe('automatic document review UX', () => {
   it('opens every document row in review while source viewing stays an explicit signed-link action', () => {
     expect(documentsInbox).toContain('onRowClick={(doc) => review(doc)}');
     expect(documentsInbox).toContain('navigate(`/documents/${encodeURIComponent(doc.id)}/review${query}`)');
-    expect(documentsInbox).toContain("{ key: 'view', label: 'צפייה במקור'");
+    expect(documentsInbox).toContain("{ key: 'view', label: t('documents.open')");
+    expect(he.documents.open).toBe('צפייה במקור');
     expect(documentsInbox).toContain("supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300)");
     expect(documentsInbox).not.toContain('onRowClick={(doc) => void open(doc)}');
   });
 
   it('keeps an unprocessed document in review with a clear enqueue action', () => {
     expect(documentReview).toContain("snapshot.stage === 'unprocessed'");
-    expect(documentReview).toContain('הקובץ נשמר, אך טרם נשלח לעיבוד');
+    expect(documentReview).toContain("t('documentReviewPage.text_5')");
+    expect(he.documentReviewPage.text_5).toContain('הקובץ נשמר, אך טרם נשלח לעיבוד');
     expect(documentReview).toContain("supabase.rpc('enqueue_document_processing'");
-    expect(documentReview).toContain('שליחה לעיבוד');
+    expect(documentReview).toContain("t('documentReviewPage.text_8')");
+    expect(he.documentReviewPage.text_8).toBe('שליחה לעיבוד');
     expect(documentReview).toContain('new Event(DOCUMENT_PROCESSING_CHANGED_EVENT)');
   });
 });

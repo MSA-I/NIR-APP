@@ -13,6 +13,7 @@ import {
   type SourceReference,
   type ToolEnvelope,
 } from "../../../../src/lib/assistant/contracts.ts";
+import type { ReaderLocale } from "../reader-locale.ts";
 
 export interface ToolRpcResult {
   data: unknown;
@@ -58,6 +59,13 @@ export interface ToolContext {
   actor: ActorContext;
   evidence: RunEvidence;
   now: () => Date;
+  /**
+   * The language this run is being READ in. Not on `ActorContext` on purpose: that shape is
+   * identity resolved server-side and its docblock says so, while this is a preference the
+   * caller states. It is required rather than optional so a tool that shows a person a sentence
+   * cannot quietly keep answering in Hebrew.
+   */
+  locale: ReaderLocale;
 }
 
 export interface AssistantTool {

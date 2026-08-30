@@ -1,8 +1,8 @@
+import { useT } from './lib/i18n/LocaleProvider';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router';
 import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { useAuth, homeFor } from './auth/AuthContext';
 import { RecordSkeleton, useToast } from './components/ui';
-import { toHebrewError } from './lib/errors';
 import { reportError } from './lib/observability';
 import { isActiveRole, type ActiveRole } from './lib/types';
 import { ACTIVE_ORGANIZATION_ACCESS } from './lib/organizationAccess';
@@ -64,6 +64,17 @@ const WebhookSettings = lazy(() => import('./pages/WebhookSettings'));
 const Subscription = lazy(() => import('./pages/Subscription'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 
+function LazyRouteFailure() {
+  const { t } = useT();
+  return (
+    <div role="alert" className="card card-pad mx-auto my-8 max-w-lg text-center">
+      <h1 className="page-title">{t('app.text')}</h1>
+      <p className="mt-2 text-sm text-ink-soft">{t('app.text_2')}</p>
+      <button type="button" className="btn-primary mt-5" onClick={() => window.location.reload()}>{t('app.reload')}</button>
+    </div>
+  );
+}
+
 class LazyRouteErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
 
@@ -78,13 +89,7 @@ class LazyRouteErrorBoundary extends Component<{ children: ReactNode }, { failed
 
   render() {
     if (!this.state.failed) return this.props.children;
-    return (
-      <div role="alert" className="card card-pad mx-auto my-8 max-w-lg text-center">
-        <h1 className="page-title">לא ניתן לטעון את המסך</h1>
-        <p className="mt-2 text-sm text-ink-soft">ייתכן שהאפליקציה עודכנה בזמן שהכרטיסייה הייתה פתוחה.</p>
-        <button type="button" className="btn-primary mt-5" onClick={() => window.location.reload()}>רענון וטעינה מחדש</button>
-      </div>
-    );
+    return <LazyRouteFailure />;
   }
 }
 
@@ -125,17 +130,18 @@ function PlanCapabilityUnavailable() {
 }
 
 function ReadOnlyUnavailable() {
+  const { t } = useT();
   const { organizationAccess = ACTIVE_ORGANIZATION_ACCESS } = useAuth();
   const offboarding = organizationAccess.mode === 'offboarding';
   return (
     <div role="alert" className="card card-pad mx-auto max-w-xl text-center">
-      <h1 className="page-title">המערכת במצב קריאה בלבד</h1>
+      <h1 className="page-title">{t('app.text_3')}</h1>
       <p className="mt-2 text-sm text-ink-soft">
         {offboarding
-          ? 'הארגון נמצא בתהליך סיום שירות ולכן המערכת במצב קריאה בלבד. המידע הקיים נשמר וזמין לצפייה ולייצוא עד להשלמת התהליך.'
-          : 'הגישה לכתיבה אינה זמינה כרגע. המידע הקיים נשמר וזמין לצפייה ולייצוא; לפרטים יש לפנות למנהל המערכת.'}
+          ? t('app.text_4')
+          : t('app.text_5')}
       </p>
-      <a className="btn-secondary mt-5" href="/dashboard">חזרה למרכז הבקרה</a>
+      <a className="btn-secondary mt-5" href="/dashboard">{t('app.text_6')}</a>
     </div>
   );
 }
@@ -173,6 +179,7 @@ function DashboardHome() {
  * deactivated user or a missing profile, so it must not guess which one it is.
  */
 function AccountUnavailable() {
+  const { errorText, t } = useT();
   const { signOut } = useAuth();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -182,7 +189,7 @@ function AccountUnavailable() {
     const result = await signOut();
     setBusy(false);
     if (result.error) {
-      toast(toHebrewError(result.error), 'error');
+      toast(errorText(result.error), 'error');
       return;
     }
     if (result.pushWarning) toast(result.pushWarning, 'error');
@@ -191,13 +198,10 @@ function AccountUnavailable() {
   return (
     <div className="min-h-dvh flex items-center justify-center p-6">
       <div className="card card-pad max-w-md text-center">
-        <h1 className="page-title">החשבון אינו זמין</h1>
-        <p className="text-ink-soft mt-2">
-          לא ניתן לטעון את פרטי החשבון. ייתכן שהגישה הושעתה או שהמשתמש הושבת.
-          לפרטים יש לפנות למנהל המערכת.
-        </p>
+        <h1 className="page-title">{t('app.text_7')}</h1>
+        <p className="text-ink-soft mt-2">{t('app.accountUnavailableBody')}</p>
         <button className="btn-secondary mt-5" disabled={busy} onClick={() => void handleSignOut()}>
-          {busy ? 'מתנתק…' : 'התנתקות'}
+          {busy ? t('app.signingOut') : t('app.signOut')}
         </button>
       </div>
     </div>
@@ -205,6 +209,7 @@ function AccountUnavailable() {
 }
 
 function BootstrapUnavailable() {
+  const { errorText, t, tDynamic } = useT();
   const { bootstrapError, retryBootstrap, signOut } = useAuth();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -214,7 +219,7 @@ function BootstrapUnavailable() {
     const result = await signOut();
     setBusy(false);
     if (result.error) {
-      toast(toHebrewError(result.error), 'error');
+      toast(errorText(result.error), 'error');
       return;
     }
     if (result.pushWarning) toast(result.pushWarning, 'error');
@@ -223,14 +228,20 @@ function BootstrapUnavailable() {
   return (
     <div className="min-h-dvh flex items-center justify-center p-6">
       <div className="card card-pad max-w-md text-center">
-        <h1 className="page-title">לא ניתן לטעון את החשבון</h1>
+        <h1 className="page-title">{t('app.text_12')}</h1>
         <p className="text-ink-soft mt-2">
-          {bootstrapError ?? 'אירעה תקלה זמנית בטעינת פרטי החשבון.'} החיבור נשאר פעיל ואפשר לנסות שוב.
+          {/* `bootstrapError` carries EITHER the watchdog's own key or a raw server message, and
+              both are strings — so nothing but this line decides which a person sees. `tDynamic`
+              resolves the key and returns null for anything else, and the raw message is then
+              shown exactly as it arrived, which is what a support conversation needs. */}
+          {bootstrapError
+            ? (tDynamic(bootstrapError) ?? bootstrapError)
+            : t('app.text_13')}{' '}{t('app.connectionRemainsActive')}
         </p>
         <div className="mt-5 flex justify-center gap-2">
-          <button className="btn-primary" disabled={busy} onClick={retryBootstrap}>ניסיון חוזר</button>
+          <button className="btn-primary" disabled={busy} onClick={retryBootstrap}>{t('app.text_14')}</button>
           <button className="btn-secondary" disabled={busy} onClick={() => void handleSignOut()}>
-            {busy ? 'מתנתק…' : 'התנתקות'}
+            {busy ? t('app.signingOut') : t('app.signOut')}
           </button>
         </div>
       </div>
@@ -239,14 +250,15 @@ function BootstrapUnavailable() {
 }
 
 function OfflineReceivingOnly() {
+  const { t } = useT();
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="card card-pad max-w-md text-center">
-        <h1 className="page-title">העבודה הלא־מקוונת מוגבלת לקבלת סחורה</h1>
+        <h1 className="page-title">{t('app.text_17')}</h1>
         <p className="mt-2 text-ink-soft">
-          זהות המשתמש והארגון נטענו מהאימות האחרון במכשיר. עד חזרת הרשת אפשר לפתוח רק משימות קבלה שכבר נשמרו כאן; הרשאות ושינויים בשרת יאומתו מחדש לפני סנכרון.
+          {t('app.text_18')}
         </p>
-        <a className="btn-primary mt-5" href="/receiving">מעבר לקבלת סחורה</a>
+        <a className="btn-primary mt-5" href="/receiving">{t('app.text_19')}</a>
       </div>
     </div>
   );

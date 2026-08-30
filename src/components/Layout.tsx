@@ -1,3 +1,5 @@
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 import { Link, Outlet, useNavigate, useLocation, useSearchParams } from 'react-router';
 import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, X, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight, ScrollText, CircleHelp } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -16,7 +18,6 @@ import { ConfirmDialog, ICON, useDialogLayer, useToast } from './ui';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
 import { pendingOfflineWork } from '../lib/offlineQueue';
 import { isActiveRole, type ActiveRole } from '../lib/types';
-import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { ACTIVE_ORGANIZATION_ACCESS } from '../lib/organizationAccess';
 import { isRouteFamilyActive, sectionOf } from '../lib/quickActions';
@@ -28,8 +29,8 @@ import { OwnerProductTour, useProductTourLocale, type OwnerProductTourHandle } f
 /** Paper panel, floating pill, or the onyx drawer. See `linkCls`. */
 type NavSurface = 'pill' | 'panel' | 'shell';
 
-export interface NavItem { to: string; label: string; icon: typeof LayoutDashboard; roles: ActiveRole[] }
-export interface NavSection { section: string; items: NavItem[]; collapsible?: boolean }
+export interface NavItem { to: string; labelKey: TKey; icon: typeof LayoutDashboard; roles: ActiveRole[] }
+export interface NavSection { section: TKey | ''; items: NavItem[]; collapsible?: boolean }
 
 /* "The menu is open" is a place, not a component state (owner, 19.08.2026: the iPhone back gesture
    left the application instead of returning to the menu the screen was chosen from). Opening the
@@ -45,7 +46,7 @@ export interface NavSection { section: string; items: NavItem[]; collapsible?: b
 const MENU_PARAM = 'menu';
 
 function navItem(to: StaticRoutePath, icon: typeof LayoutDashboard, roles: ActiveRole[]): NavItem {
-  return { to, label: staticRouteTitle(to), icon, roles };
+  return { to, labelKey: staticRouteTitle(to), icon, roles };
 }
 
 /* NAV_SHORT_LABELS stood here until 28.08.2026. It existed because the desktop pill was one slim
@@ -84,7 +85,7 @@ export const NAV_SECTIONS: NavSection[] = [
     // Documents stand apart from כספים because a scanned page is not yet a financial fact: it is
     // read and filed first, and only then becomes an invoice or a credit. The queue that does the
     // reading belongs beside the ledgers it feeds, not inside them.
-    section: 'מסמכים',
+    section: 'nav.text_5',
     items: [
       navItem('/documents/operations', Activity, ['owner']),
       navItem('/documents/consolidated-invoices', FileCheck2, ['owner', 'office', 'accountant']),
@@ -93,7 +94,7 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    section: 'רכש',
+    section: 'nav.text_6',
     items: [
       navItem('/orders', ClipboardList, ['owner', 'office']),
       navItem('/receiving', PackageCheck, ['owner', 'office']),
@@ -104,7 +105,7 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    section: 'כספים',
+    section: 'nav.text_7',
     items: [
       navItem('/invoices', FileText, ['owner', 'office', 'accountant']),
       navItem('/credits', RotateCcw, ['owner', 'office', 'accountant']),
@@ -115,7 +116,7 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    section: 'בקרה',
+    section: 'nav.text_8',
     items: [
       navItem('/alerts', Bell, ['owner', 'office']),
       navItem('/exceptions', AlertTriangle, ['owner', 'office', 'accountant']),
@@ -157,24 +158,24 @@ export const NAV_SECTIONS: NavSection[] = [
  * one list serves owner, office and accountant without three copies to drift apart: an accountant's
  * 'רכש' group resolves to nothing and is dropped.
  */
-const NAV_GROUPS: readonly { section: string; paths: readonly string[] }[] = [
+const NAV_GROUPS: readonly { section: TKey | ''; paths: readonly string[] }[] = [
   // The control room first — it is the answer to §12, "what needs attention now" — and the single
   // most frequent action after it. Nothing else earns a place above a group heading.
   { section: '', paths: ['/dashboard', '/orders/new'] },
-  { section: 'רכש', paths: ['/orders', '/receiving', '/suppliers', '/products', '/prices', '/inventory'] },
+  { section: 'nav.groupPurchasing', paths: ['/orders', '/receiving', '/suppliers', '/products', '/prices', '/inventory'] },
   // Documents stand apart from כספים because a scanned page is not yet a financial fact: it is
   // read and filed first, and only then becomes an invoice or a credit.
-  { section: 'מסמכים', paths: ['/documents', '/documents/consolidated-invoices', '/documents/archive', '/documents/operations'] },
-  { section: 'כספים', paths: ['/invoices', '/credits', '/payment-requests', '/payments', '/pay', '/bank'] },
-  { section: 'בקרה ודוחות', paths: ['/alerts', '/exceptions', '/expenses', '/reports', '/analytics', '/supplier-log'] },
+  { section: 'nav.groupDocuments', paths: ['/documents', '/documents/consolidated-invoices', '/documents/archive', '/documents/operations'] },
+  { section: 'nav.groupFinance', paths: ['/invoices', '/credits', '/payment-requests', '/payments', '/pay', '/bank'] },
+  { section: 'nav.groupControlReports', paths: ['/alerts', '/exceptions', '/expenses', '/reports', '/analytics', '/supplier-log'] },
   // Last, and the separation DESIGN.md:509 asks for: the contract the business runs under, and the
   // screens that configure it, are not one more work destination. It is owner-only by catalogue,
   // so the group simply does not resolve for anybody else.
-  { section: 'החשבון', paths: ['/settings/subscription', '/onboarding', '/settings'] },
+  { section: 'nav.groupAccount', paths: ['/settings/subscription', '/onboarding', '/settings'] },
 ];
 
 /** The account group lives in the avatar menu on desktop; showing it twice on one screen is noise. */
-const DESKTOP_HIDDEN_SECTION = 'החשבון';
+const DESKTOP_HIDDEN_SECTION: TKey = 'nav.groupAccount';
 
 function catalogItem(path: string, role: ActiveRole): NavItem | null {
   const item = NAV_SECTIONS.flatMap((section) => section.items).find((candidate) => candidate.to === path);
@@ -233,11 +234,19 @@ export function drawerSectionsForRole(role: ActiveRole | undefined): NavSection[
    destination renders as a plain link rather than a disclosure (DESIGN.md:507, "דיסקלוזר מעל פריט
    אחד הוא דלת עם מכסה"), which `topNavGroup`'s caller below decides and the drawer inherits. */
 
-export function pageTitleFor(pathname: string): string {
-  return routePresentationTitle(pathname) ?? APP_NAME;
+/**
+ * The browser title, as a KEY or the product name.
+ *
+ * Returns `null` for a route the catalogue does not name, so the caller decides — `APP_NAME` is
+ * the product's own name and is not translated, which makes it the one value here that must not
+ * go through `t`.
+ */
+export function pageTitleKeyFor(pathname: string): TKey | null {
+  return routePresentationTitle(pathname);
 }
 
 export default function Layout() {
+  const { errorText, t } = useT();
   useGlowPointer();
   const productTourLocale = useProductTourLocale();
   const { session, profile, org, roleLabels, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, accessStatus = 'unknown', signOut } = useAuth();
@@ -288,7 +297,8 @@ export default function Layout() {
   const orgLogoUrl = org?.logo_path
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
     : null;
-  const currentTitle = pageTitleFor(location.pathname);
+  const currentTitleKey = pageTitleKeyFor(location.pathname);
+  const currentTitle = currentTitleKey ? t(currentTitleKey) : APP_NAME;
   const routeBack = routeBackPresentation(location.pathname);
 
   /**
@@ -522,7 +532,7 @@ export default function Layout() {
     if (detail.pending.length) {
       const saved = await Promise.all(detail.pending);
       if (saved.some((result) => !result)) {
-        toast('לא ניתן להתנתק לפני שמירת טיוטת ההזמנה. יש לנסות שוב.', 'error');
+        toast(t('nav.toast'), 'error');
         return;
       }
     }
@@ -538,7 +548,7 @@ export default function Layout() {
     }
     const result = await signOut();
     if (result.error) {
-      toast(toHebrewError(result.error), 'error');
+      toast(errorText(result.error), 'error');
       return;
     }
     navigate('/login');
@@ -594,12 +604,14 @@ export default function Layout() {
     const surface = opts?.surface ?? 'panel';
     const active = isRouteFamilyActive(location.pathname, item.to);
     const section = active ? sectionOf(item.to) : null;
+    // The table holds a KEY (module scope cannot call a hook); it is resolved here, where one has.
+    const itemLabel = t(item.labelKey);
     return (
       <Link key={item.to} to={item.to} className={linkCls(active, surface)} aria-current={active ? 'page' : undefined}
         data-section={section ?? undefined} data-tour-anchor={tourNavigationAnchor(item.to)}
         onClick={() => setOpenGroup(null)}>
         {surface !== 'pill' && <item.icon size={ICON.md} aria-hidden="true" />}
-        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+        <span className="min-w-0 flex-1 truncate">{itemLabel}</span>
         {item.to === '/documents' && inboxCount != null && inboxCount > 0 && (
           <span className="badge num bg-action-soft text-action-on-soft ms-auto">{inboxCount}</span>
         )}
@@ -625,7 +637,7 @@ export default function Layout() {
           ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
           : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
       }`}>
-      <LogOut size={ICON.md} aria-hidden="true" /> התנתקות
+      <LogOut size={ICON.md} aria-hidden="true" /> {t('layoutTail.signOut')}
     </button>
   );
 
@@ -697,7 +709,7 @@ export default function Layout() {
             Link rather than a decorated div so it lands in the tab order, announces itself and
             honours a middle click; the image stays alt="" because the accessible name belongs to
             the link, and repeating it would make a screen reader say the brand twice. */}
-        <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
+        <Link to="/dashboard" aria-label={t('layoutTail.homeAria', { app: APP_NAME })}
           className="-m-2 flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 hover:bg-shell-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset">
           {brandMark('drawer')}
           <div className="min-w-0">
@@ -769,7 +781,7 @@ export default function Layout() {
         <button type="button" id={`top-nav-group-${s.section}`} aria-expanded={open}
           className={groupTriggerCls(active, open)}
           onClick={() => setOpenGroup(open ? null : s.section)}>
-          <span className="whitespace-nowrap">{s.section}</span>
+          <span className="whitespace-nowrap">{s.section ? t(s.section) : ''}</span>
           <ChevronDown size={ICON.xs} aria-hidden="true" className={`transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
         {/* Mounted always, hidden when closed: the active link keeps existing in the DOM (the
@@ -790,7 +802,7 @@ export default function Layout() {
   const topAccountMenu = (
     <div className="relative">
       <button type="button" id="top-nav-group-account" aria-expanded={accountOpen}
-        aria-label={`תפריט החשבון של ${profile?.full_name || 'המשתמש'}`}
+        aria-label={t('layoutTail.accountMenu', { name: profile?.full_name || t('layoutTail.user') })}
         className={`grid size-10 place-items-center rounded-full bg-action text-sm font-medium text-on-solid shadow-card transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${accountOpen ? 'scale-95' : 'hover:scale-105'}`}
         onClick={() => setOpenGroup(accountOpen ? null : 'account')}>
         <span aria-hidden="true">{initials}</span>
@@ -832,7 +844,7 @@ export default function Layout() {
           like a primary button at the logical start, z-above the top bar (z-40). */}
       <a href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:start-3 focus:z-50 focus:rounded-lg focus:bg-action focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-on-solid focus:shadow-menu focus:outline-none focus:ring-2 focus:ring-focus">
-        דלג לתוכן
+        {t('nav.text_11')}
       </a>
       {/* Desktop navigation (T7.2, reference layout) — no bar. Floating pills on the glowing
           canvas: an outlined logo pill at the start, a centered WHITE pill holding the text-only
@@ -849,7 +861,7 @@ export default function Layout() {
               it described the person instead of the tenant.
               It also cost the navigation 19px of the row while it was here, which is 19px the
               1100px band did not have. */}
-          <Link to="/dashboard" aria-label={`${APP_NAME} — מעבר למרכז הבקרה`}
+          <Link to="/dashboard" aria-label={t('layoutTail.homeAria', { app: APP_NAME })}
             /* HEIGHT PINNED TO THE SEARCH FIELD, not left to the padding (owner: "הבועה צריכה
                להתאים בגודלה לאותו גודל של התיבת חיפוש"). `.input` is `min-h-11`; `h-11` here is
                the same 44px from the same token, so the two ends of the row cannot drift apart
@@ -941,7 +953,7 @@ export default function Layout() {
         <button type="button"
           data-tour-anchor="primary-navigation"
           className="btn-ghost btn-icon group rounded-full"
-          onClick={openMobileMenu} aria-label="פתיחת תפריט" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
+          onClick={openMobileMenu} aria-label={t('nav.aria_label_2')} aria-expanded={mobileOpen} aria-controls="mobile-navigation">
           {/* The three lines fold into an X while the drawer comes in (owner, 26.08.2026, with the
               reference component). It is drawn here rather than taken from lucide because lucide
               ships `Menu` and `X` as two finished icons, and the thing being asked for is the
@@ -1008,7 +1020,7 @@ export default function Layout() {
                 measures zero, so the name starts flush against the menu button. */}
             <div data-shell-lead>
               {routeBack && (
-                <Link to={routeBack.to} aria-label={routeBack.label} title={routeBack.label}
+                <Link to={routeBack.to} aria-label={t(routeBack.label)} title={t(routeBack.label)}
                   className="btn-ghost btn-icon rounded-full">
                   <ArrowRight size={ICON.xl} aria-hidden="true" />
                 </Link>
@@ -1079,7 +1091,7 @@ export default function Layout() {
               האפליקציה והמילים בהירות"). The drawer was light paper from T7.3j and is the app's
               own dark again — opaque, never translucent: T7.3k already recorded that translucency
               here blends with the scrim and the page behind it and reads as a murky blue tint. */}
-          <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label="תפריט ראשי"
+          <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label={t('nav.aria_label_4')}
             tabIndex={-1} className="drawer-enter phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-shell text-shell-ink focus:outline-none" onClick={(e) => e.stopPropagation()}>
             {/* Positioned INSIDE the safe-area padding, not on top of it. `absolute top-2 end-2`
                 measured from the panel's border box, so on a notched device the drawer's
@@ -1087,8 +1099,8 @@ export default function Layout() {
                 close button sitting under the notch. The phone header solves the same problem with
                 `max(0.75rem, env(safe-area-inset-top))`; this does it with the same expression. */}
             <button type="button" className="btn-ghost btn-icon absolute end-2 rounded-full text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink" style={{ insetBlockStart: 'max(0.5rem, env(safe-area-inset-top))' }}
-              onClick={() => closeMobileMenu()} aria-label="סגירת תפריט"><X size={ICON.lg} aria-hidden="true" /></button>
-            {sidebar(drawerSections, 'יעדים נוספים')}
+              onClick={() => closeMobileMenu()} aria-label={t('nav.aria_label_5')}><X size={ICON.lg} aria-hidden="true" /></button>
+            {sidebar(drawerSections, t('nav.sidebar'))}
           </aside>
         </div>
       )}
@@ -1096,12 +1108,12 @@ export default function Layout() {
       {/* The utility header merged into the top bar (T7.1); search/bell/feedback live there now. */}
       {accessStatus !== 'unknown' && organizationAccess.mode === 'read_only' && (
         <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:px-6">
-          הגישה לכתיבה אינה זמינה כרגע. המידע הקיים נשמר וזמין לצפייה ולייצוא; לפרטים יש לפנות למנהל המערכת.
+          {t('nav.text_12')}
         </div>
       )}
       {accessStatus !== 'unknown' && organizationAccess.mode === 'offboarding' && (
         <div role="alert" className="no-print border-b border-alert-line bg-alert-wash px-4 py-3 text-sm text-alert-fg lg:px-6">
-          הארגון נמצא בתהליך סיום שירות והמערכת במצב קריאה בלבד. המידע נשמר וזמין לצפייה ולייצוא. בעל הארגון יכול לבטל את הבקשה בתוך 30 ימים ממועד הגשתה.
+          {t('nav.text_13')}
         </div>
       )}
       {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring.
@@ -1134,13 +1146,15 @@ export default function Layout() {
           and "1 העלאה" are different work, and a person deciding whether to sign out on a phone
           with no signal needs to know which of the two they are about to leave behind. */}
       <ConfirmDialog open={pendingOffline !== null} danger
-        title="יש נתונים שטרם סונכרנו"
+        title={t('nav.title')}
         message={pendingOffline
-          ? `במכשיר הזה ממתינות ${pendingOffline.actions} פעולות קבלה ו-${pendingOffline.uploads} העלאות שלא נשלחו לשרת. `
-            + 'התנתקות מוחקת את הסשן, והפעולות האלה יישלחו רק לאחר התחברות מחדש באותו מכשיר ובאותו דפדפן. '
-            + 'מומלץ להתחבר לרשת, לסנכרן, ורק אז להתנתק.'
+          ? t('layoutTail.pendingOffline', { actions: pendingOffline.actions, uploads: pendingOffline.uploads })
+            + ' '
+            + t('nav.text_14')
+            + ' '
+            + t('nav.text_15')
           : ''}
-        confirmLabel="התנתקות בכל זאת"
+        confirmLabel={t('nav.confirmLabel')}
         onClose={() => setPendingOffline(null)}
         onConfirm={() => { setPendingOffline(null); void handleSignOut(true); }} />
     </div>

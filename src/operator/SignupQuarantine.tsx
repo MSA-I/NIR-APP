@@ -1,9 +1,9 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { MailWarning, ShieldAlert } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';
 import { Card, ConfirmDialog, ErrorNote, ICON, Note, PageHeader, SkeletonTable, useToast } from '../components/ui';
 import { fmtDate, fmtNum } from '../lib/format';
-import { toHebrewError } from '../lib/errors';
 import {
   fetchAbandonedSignupCandidates, fetchMyCapabilities, fetchQuarantineQueue, resolveQuarantine,
   type AbandonedSignupCandidate, type PlatformCapability, type QuarantineEntry,
@@ -23,6 +23,7 @@ import {
  * row lock inside the deleting transaction. There is deliberately no button for it here.
  */
 export default function SignupQuarantine() {
+  const { errorText } = useT();
   const toast = useToast();
   const [pending, setPending] = useState<{ entry: QuarantineEntry; resolution: 'released' | 'escalated' } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -51,7 +52,7 @@ export default function SignupQuarantine() {
       await resolveQuarantine({ queueId: entry.id, resolution, reason });
     } catch (rpcError) {
       setBusy(false);
-      toast(toHebrewError((rpcError as Error).message), 'error');
+      toast(errorText((rpcError as Error).message), 'error');
       return;
     }
     setBusy(false);

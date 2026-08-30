@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
-import { toHebrewError } from './errors';
+import type { TKey } from './i18n/t';
+
+type Translator = (key: TKey, vars?: Record<string, string | number>) => string;
 
 /**
  * Tenant-side surface of the WhatsApp provider connection (0191 over 0028/0029).
@@ -52,11 +54,11 @@ export const WHATSAPP_PROVIDER_LABEL: Record<WhatsAppProvider, string> = {
   meta_cloud: 'Meta Cloud API',
 };
 
-export const WHATSAPP_CONNECTION_STATUS_LABEL: Record<WhatsAppConnectionStatus, string> = {
-  pending: 'הוגדר, טרם הופעל',
-  active: 'פעיל',
-  disabled: 'מושבת',
-  error: 'תקלה בחיבור',
+export const WHATSAPP_CONNECTION_STATUS_KEY: Record<WhatsAppConnectionStatus, TKey> = {
+  pending: 'whatsappConnection.pending',
+  active: 'whatsappConnection.active',
+  disabled: 'whatsappConnection.disabled',
+  error: 'whatsappConnection.error',
 };
 
 /**
@@ -79,12 +81,12 @@ export interface WhatsAppConnectionSummary {
 
 const EMPTY = '—';
 
-export function summarizeConnection(view: WhatsAppConnectionView | null): WhatsAppConnectionSummary {
+export function summarizeConnection(view: WhatsAppConnectionView | null, t: Translator): WhatsAppConnectionSummary {
   if (!view || !view.configured) {
     return {
       configured: false,
       providerLabel: EMPTY,
-      statusLabel: 'לא מחובר',
+      statusLabel: t('whatsappConnection.notConnected'),
       maskedSender: EMPTY,
       credentialLabel: EMPTY,
       languageLabel: EMPTY,
@@ -95,13 +97,13 @@ export function summarizeConnection(view: WhatsAppConnectionView | null): WhatsA
   return {
     configured: true,
     providerLabel: view.provider ? WHATSAPP_PROVIDER_LABEL[view.provider] : EMPTY,
-    statusLabel: view.status ? WHATSAPP_CONNECTION_STATUS_LABEL[view.status] : EMPTY,
+    statusLabel: view.status ? t(WHATSAPP_CONNECTION_STATUS_KEY[view.status]) : EMPTY,
     maskedSender: view.maskedSender ?? EMPTY,
-    credentialLabel: view.credentialConfigured ? 'שמור בכספת, אינו ניתן לצפייה' : EMPTY,
+    credentialLabel: view.credentialConfigured ? t('whatsappConnection.credentialStored') : EMPTY,
     languageLabel: view.languageCode === 'he'
-      ? 'עברית'
+      ? t('whatsappConnection.hebrew')
       : view.languageCode === 'en'
-        ? 'אנגלית'
+        ? t('whatsappConnection.english')
         : view.languageCode ?? EMPTY,
     providerDeliveryAvailable: view.status === 'active' && view.credentialConfigured,
     manualShareAvailable: true,
@@ -136,7 +138,7 @@ export function toConnectionView(payload: ConnectionStatusPayload | null): Whats
 
 export async function fetchWhatsAppConnection(): Promise<WhatsAppConnectionView> {
   const res = await supabase.rpc('get_whatsapp_connection_status');
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return toConnectionView(res.data as ConnectionStatusPayload | null);
 }
 
@@ -158,7 +160,7 @@ export async function configureWhatsAppConnection(
     p_language_code: input.languageCode,
     p_reason: input.reason,
   });
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return toConnectionView(res.data as ConnectionStatusPayload | null);
 }
 
@@ -170,12 +172,12 @@ export async function setWhatsAppConnectionEnabled(
     p_enabled: enabled,
     p_reason: reason,
   });
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return toConnectionView(res.data as ConnectionStatusPayload | null);
 }
 
 export async function revokeWhatsAppConnection(reason: string): Promise<WhatsAppConnectionView> {
   const res = await supabase.rpc('revoke_whatsapp_provider_connection', { p_reason: reason });
-  if (res.error) throw new Error(toHebrewError(res.error.message));
+  if (res.error) throw new Error(res.error.message);
   return toConnectionView(res.data as ConnectionStatusPayload | null);
 }

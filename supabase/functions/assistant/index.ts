@@ -70,6 +70,8 @@ import {
   type MinimalReadClient,
 } from "./tools/reads.ts";
 import { buildRegistry, RunEvidence } from "./tools/registry.ts";
+import { type ReaderLocale } from "./reader-locale.ts";
+import { PRODUCT_HELP_BASE_LOCALE } from "../../../src/lib/assistant/productHelpRegistry.ts";
 
 const REGISTRY = buildRegistry([
   getBusinessSummaryTool,
@@ -378,6 +380,10 @@ export async function handler(req: Request): Promise<Response> {
 
     const runId = crypto.randomUUID();
     const evidence = new RunEvidence();
+    // One value, read once, used by both halves of the run: the language the tools resolve
+    // their sentences in and the language the model is told to answer in. Splitting it would
+    // let an English answer arrive over Hebrew help steps.
+    const locale: ReaderLocale = request.locale ?? PRODUCT_HELP_BASE_LOCALE;
     const toolContext = {
       // The caller-bound client satisfies MinimalReadClient structurally; every tool read runs
       // under the caller's JWT with explicit column projections (reads.ts), so RLS applies and
@@ -386,6 +392,7 @@ export async function handler(req: Request): Promise<Response> {
       actor,
       evidence,
       now: () => new Date(),
+      locale,
     };
     // Defence in depth, not a second opinion: parseAssistantConfig already refused an incomplete
     // #179 evidence set before this request had a config at all. This re-decides over the rows
@@ -398,7 +405,7 @@ export async function handler(req: Request): Promise<Response> {
       model: config.model,
       maxOutputTokens: config.maxOutputTokens,
       timeoutMs: config.timeoutMs,
-      instructions: buildInstructions(),
+      instructions: buildInstructions(locale),
       tools: [...REGISTRY.values()].map((tool) => ({
         name: tool.name,
         description: tool.description,

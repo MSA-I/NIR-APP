@@ -5,7 +5,7 @@
 // classification can support nothing. An answer that fails twice ships no prose at all.
 import {
   ASSISTANT_DRAFT_ROLES,
-  ASSISTANT_SENT_CLAIM_MARKER,
+  ASSISTANT_SENT_CLAIM_PATTERNS,
   type AssistantAnswer,
   AssistantAnswerSchema,
   DIGIT_PATTERN,
@@ -128,7 +128,12 @@ export function validateAnswer(
       }
       // Nothing in this product sends a supplier message, so a draft that says it was sent is a
       // false statement about the product itself -- the one lie no citation could ever support.
-      if (block.text.includes(ASSISTANT_SENT_CLAIM_MARKER)) {
+      //
+      // EVERY language is checked, not the run's own. A Hebrew reader can ask for an English body
+      // and an English reader for a Hebrew one; the model chooses the words. Gating the refusal on
+      // the run locale would leave exactly one language unguarded per run, which is the same hole
+      // in a smaller shape.
+      if (Object.values(ASSISTANT_SENT_CLAIM_PATTERNS).some((p) => p.test(block.text))) {
         errors.push(`block:${index}:draft_claims_sent`);
       }
       const draftFacts: Fact[] = [];

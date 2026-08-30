@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Banknote, Calculator, ChevronLeft, FileDown, FileSpreadsheet, Loader2, Printer, ReceiptText, type LucideIcon } from 'lucide-react';
+import { useT } from '../lib/i18n/LocaleProvider';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useParamState } from '../lib/useParamState';
@@ -106,6 +107,7 @@ function StripStat({ title, value, context, icon: Icon }: {
 export default function Expenses() {
   const { profile, org } = useAuth();
   const baseCurrency = org?.base_currency ?? null;
+  const { statusLabel } = useT();
   const toast = useToast();
   const defaults = presetRange('month');
   // useParamState seeds from the URL and re-syncs when it changes; the URL is also WRITTEN
@@ -325,7 +327,7 @@ export default function Expenses() {
               date: i.invoice_date,
               currency: i.currency,
               total: i.total_amount,
-              status: INVOICE_PAYMENT_STATUS[i.payment_status]?.label,
+              status: statusLabel(INVOICE_PAYMENT_STATUS[i.payment_status]),
             })),
           },
         ],

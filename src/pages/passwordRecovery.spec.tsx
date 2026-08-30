@@ -23,6 +23,7 @@ import { http, HttpResponse } from 'msw';
 import { vi } from 'vitest';
 import { server } from '../test/msw/server';
 import { SUPABASE_URL } from '../test/msw/handlers';
+import { LocaleProvider } from '../lib/i18n/LocaleProvider';
 
 /** Real supabase-js against the MSW base URL — the wire behaviour stays real. */
 vi.mock('../lib/supabase', async () => {
@@ -57,6 +58,13 @@ describe('invitation role lists', () => {
 });
 
 describe('/forgot-password', () => {
+  it('renders recovery instructions in English', () => {
+    render(<LocaleProvider initialLocale="en"><MemoryRouter><ForgotPassword /></MemoryRouter></LocaleProvider>);
+    expect(screen.getByRole('heading', { name: 'Reset password' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send reset link' })).toBeInTheDocument();
+  });
+
   it('sends recover with the typed address and a /reset-password redirect, then says the neutral sentence', async () => {
     const captured: { url: string; body: Record<string, unknown> }[] = [];
     server.use(
@@ -96,6 +104,12 @@ describe('/forgot-password', () => {
 });
 
 describe('/reset-password', () => {
+  it('reports a dead recovery link in English', async () => {
+    render(<LocaleProvider initialLocale="en"><MemoryRouter><ResetPassword /></MemoryRouter></LocaleProvider>);
+    await screen.findByText(/The link is invalid or has expired/);
+    expect(screen.getByRole('link', { name: 'Send a new link' })).toHaveAttribute('href', '/forgot-password');
+  });
+
   it('with no session and no tokens, reports a dead link and offers a fresh one', async () => {
     render(<MemoryRouter><ResetPassword /></MemoryRouter>);
     await screen.findByText(/הקישור אינו תקין או שפג תוקפו/);

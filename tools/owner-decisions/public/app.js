@@ -119,7 +119,7 @@ function glossaryMarkup(item) {
 }
 
 function debtActionMarkup(item) {
-  if (item.type !== 'debt') return '';
+  if (item.type !== 'debt' || item.closed) return '';
   const savedPriority = state.debtPriorities?.[item.key]?.priority;
   const priority = pendingDebtPriorities.get(item.key) || savedPriority;
   const recommendationLabel = item.recommendedPriority === 'plan_now' ? 'לקדם בתוכנית הקרובה' : 'להשאיר בתור כרגע';

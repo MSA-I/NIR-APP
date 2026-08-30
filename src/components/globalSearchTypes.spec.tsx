@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation } from 'react-router';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/msw/server';
 import { SUPABASE_URL } from '../test/msw/handlers';
+import { LocaleProvider } from '../lib/i18n/LocaleProvider';
 
 /** Real supabase-js against the MSW base URL — the wire behaviour stays real. */
 vi.mock('../lib/supabase', async () => {
@@ -51,8 +52,8 @@ function useGlobalSearch(rows: unknown[] = HITS) {
   return calls;
 }
 
-function renderSearch() {
-  return render(<MemoryRouter><GlobalSearch /></MemoryRouter>);
+function renderSearch(locale: 'he' | 'en' = 'he') {
+  return render(<LocaleProvider initialLocale={locale}><MemoryRouter><GlobalSearch /></MemoryRouter></LocaleProvider>);
 }
 
 /** Where did useNavigate land — MemoryRouter keeps the URL out of jsdom, so read the router. */
@@ -70,6 +71,19 @@ beforeEach(() => {
 });
 
 describe('GlobalSearch — ALLOWED is display order, not the gate (migration 0069)', () => {
+  it('renders group copy in English while preserving result data from the server', async () => {
+    const user = userEvent.setup();
+    useGlobalSearch();
+    renderSearch('en');
+
+    await user.type(screen.getByRole('combobox', { name: 'Global search' }), 'bak');
+    await waitFor(() => expect(groupNames()).toEqual(
+      ['Suppliers', 'Products', 'Invoices', 'Orders', 'Order drafts', 'Payments', 'Credits'],
+    ));
+    expect(screen.getByRole('option', { name: /מאפה זהב אורי גולן/ })).toBeInTheDocument();
+    expect(screen.getByText('7 results found')).toBeInTheDocument();
+  });
+
   it('renders every type an owner can reach, in the map order and not the wire order', async () => {
     const user = userEvent.setup();
     const calls = useGlobalSearch();
@@ -134,6 +148,21 @@ describe('GlobalSearch — ALLOWED is display order, not the gate (migration 006
 
     await user.type(screen.getByRole('combobox', { name: 'חיפוש כללי' }), 'מאפ');
     expect(await screen.findByRole('alert')).toHaveTextContent('החיפוש נכשל — נסה שוב');
+    expect(screen.queryByRole('option')).toBeNull();
+  });
+
+  it('resolves a failed-search code in English', async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.post(`${SUPABASE_URL}/rest/v1/rpc/global_search`, () => HttpResponse.json(
+        { message: 'permission denied for function global_search', code: '42501', details: null, hint: null },
+        { status: 403 },
+      )),
+    );
+    renderSearch('en');
+
+    await user.type(screen.getByRole('combobox', { name: 'Global search' }), 'bak');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Search failed — try again');
     expect(screen.queryByRole('option')).toBeNull();
   });
 });

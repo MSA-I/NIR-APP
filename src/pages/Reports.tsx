@@ -1,6 +1,7 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { Fragment, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { FileDown, FileSpreadsheet, Printer, Send, CheckCircle2, LockKeyhole, Download, Loader2 } from 'lucide-react';
+import { FileSpreadsheet, Printer, Send, CheckCircle2, LockKeyhole, Download, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -11,17 +12,15 @@ import { addCalendarDays, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthIn
 import { MoneyByCurrency, sortByBaseCurrency } from '../components/Money';
 import type { MoneyAmount } from '../lib/types';
 import { useParamState } from '../lib/useParamState';
-import { toHebrewError } from '../lib/errors';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { buildLockedMonthlyWorkbook, buildStyledMonthlyWorkbook, monthlyReportScreenTotals, type MonthlyReportLabels, type MonthlyReportSnapshot } from '../lib/monthlyReport';
 
 import { financialSupplierMap } from '../lib/financialSuppliers';
-import { downloadDocumentPdf } from '../lib/pdf';
-import { exportWatermark } from '../lib/exportBranding';
 import { downloadWorkbook, safeFileName } from '../lib/workbook';
 import {
   downloadRenderedWorkbook,
   monthlyReportTemplateValues,
+  reportTemplateErrorText,
   renderConfiguredReportTemplate,
 } from '../lib/reportTemplateExport';
 
@@ -41,21 +40,24 @@ interface InvoiceBalanceRow {
   balance_in_currency: number;
 }
 
-function toSnapshotHebrewError(error: unknown): string {
+function toSnapshotCondition(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
-  if (/monthly_report_snapshot_unattributed_bank_transactions/i.test(raw)) {
-    return 'לא ניתן ליצור דוח סופי: כל תנועות הבנק בחודש חייבות התאמה מאושרת לחשבונית או לתשלום המשויכים לישות משפטית אחת.';
-  }
-  if (/monthly_report_snapshot_unattributed_(invoices|payments|credits|bank_transactions|exceptions)/i.test(raw)) {
-    return 'לא ניתן ליצור דוח סופי: קיימות רשומות ללא שיוך חד־משמעי לישות משפטית. יש להשלים את השיוך לפני ניסיון נוסף.';
-  }
+  // Returns the CONDITION, not a sentence. Every one of these is registered in src/lib/errors.ts,
+  // so the screen resolves them exactly like every other failure and this function is not a
+  // second, page-local error vocabulary.
+  //
+  // Two unattributed-record conditions used to return a Hebrew SENTENCE from right here — exactly
+  // the page-local vocabulary the paragraph above says was retired. `errorText()` was handed a
+  // sentence, found no condition matching it, and passed it through unchanged, so it looked
+  // correct and would have stayed Hebrew in an English session. They are registered in
+  // `errors.ts` now and reach this function's caller by falling through to `raw`.
   if (/monthly_report_snapshot_legal_entity_invalid|unit_out_of_scope/i.test(raw)) {
-    return 'הישות המשפטית אינה זמינה או אינה בתחום ההרשאה שלך. יש לבחור ישות אחרת.';
+    return 'monthly_report_snapshot_legal_entity_invalid';
   }
   if (/monthly_report_snapshot_source_unavailable/i.test(raw)) {
-    return 'לא ניתן להשלים כעת את צילום המצב. הנתונים לא נשמרו ויש לנסות שוב.';
+    return 'monthly_report_snapshot_source_unavailable';
   }
-  return toHebrewError(error);
+  return raw;
 }
 
 export default function Reports() {
@@ -64,6 +66,7 @@ export default function Reports() {
   const orgLogoUrl = org?.logo_path
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
     : null;
+  const { errorText, statusLabel, t, tDynamic } = useT();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   // The month lives in the URL beside the legal entity, so leaving for an invoice and coming back
@@ -100,12 +103,19 @@ export default function Reports() {
   const canMutateExport = canManageExport && organizationAccess.canWrite;
   const requestedUnitId = searchParams.get('unit');
 
+  // Resolved here, where a language exists, rather than inside the workbook builder: a spreadsheet
+  // exported in the wrong language is a file somebody sends to their accountant.
+  const resolveMetas = (map: Record<string, { key: string }>): Record<string, string> =>
+    Object.fromEntries(Object.entries(map).map(([value, meta]) => [value, statusLabel(meta)]));
+  const resolveKeys = (map: Record<string, string>): Record<string, string> =>
+    Object.fromEntries(Object.entries(map).map(([value, key]) => [value, tDynamic(`status.${key}`) ?? key]));
+
   const reportLabels: MonthlyReportLabels = {
-    invoiceReview: INVOICE_REVIEW_STATUS,
-    invoicePayment: INVOICE_PAYMENT_STATUS,
-    creditReason: CREDIT_REASON,
-    creditStatus: CREDIT_STATUS,
-    exceptionType: EXCEPTION_TYPE,
+    invoiceReview: resolveMetas(INVOICE_REVIEW_STATUS),
+    invoicePayment: resolveMetas(INVOICE_PAYMENT_STATUS),
+    creditReason: resolveKeys(CREDIT_REASON),
+    creditStatus: resolveMetas(CREDIT_STATUS),
+    exceptionType: resolveKeys(EXCEPTION_TYPE),
   };
 
   const { data, loading, fetching, error } = useQuery(async () => {
@@ -243,13 +253,14 @@ export default function Reports() {
         // custom template still throws above rather than landing here — that contract is
         // renderConfiguredReportTemplate's, untouched.
         await downloadWorkbook(buildStyledMonthlyWorkbook({
+          t,
           orgName: org.name, baseCurrency: org.base_currency, month, generatedAt: data.generatedAt, data,
           labels: reportLabels, summary: values,
         }), fileName);
       }
-      toast('קובץ ה-Excel הורד');
+      toast(t('reports.toast'));
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(reportTemplateErrorText(e, t, errorText), 'error');
     } finally {
       setBusy(false);
     }
@@ -262,38 +273,17 @@ export default function Reports() {
    * A4 LANDSCAPE, matching `@page monthly-report` in src/index.css. The invoice grid carries
    * eleven columns; portrait would either crush the supplier name or spill the page.
    */
-  async function exportPdf() {
-    const element = printAreaRef.current;
-    if (!element || fetching || error) return;
-    setBusy(true);
-    try {
-      const slug = safeFileName(org?.name?.replace(/\s+/g, '-') ?? '', 'inplace');
-      await downloadDocumentPdf({
-        element,
-        path: `/reports?month=${month}`,
-        fileName: `${slug}-report-${month}.pdf`,
-        watermark: await exportWatermark(),
-        orientation: 'landscape',
-      });
-      toast('קובץ ה-PDF הורד');
-    } catch (e) {
-      toast(toHebrewError(e), 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function downloadSnapshot(snapshot: MonthlyReportSnapshot) {
     try {
       const orgSlug = safeFileName(snapshot.organization_name.replace(/\s+/g, '-'), '');
       const unitSlug = safeFileName(snapshot.legal_entity_name.replace(/\s+/g, '-'), '');
       await downloadWorkbook(
-        buildLockedMonthlyWorkbook({ snapshot }),
+        buildLockedMonthlyWorkbook({ t, snapshot }),
         `${orgSlug || 'inplace'}-${unitSlug || 'legal-entity'}-final-report-${snapshot.report_month.slice(0, 7)}-v${snapshot.version}.xlsx`,
       );
-      toast(`גרסה ${snapshot.version} הורדה מה-snapshot הנעול`);
+      toast(t('reports.versionDownloaded', { version: snapshot.version }));
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     }
   }
 
@@ -308,10 +298,10 @@ export default function Reports() {
         p_unit_id: selectedUnitId,
       })) as MonthlyReportSnapshot;
       setSnapshotOpen(false);
-      toast(`דוח סופי נעול גרסה ${snapshot.version} נוצר בהצלחה`);
+      toast(t('reports.snapshotCreated', { version: snapshot.version }));
       void refetchLockedReports();
     } catch (e) {
-      const message = toSnapshotHebrewError(e);
+      const message = errorText(toSnapshotCondition(e));
       // The toast stays for the immediate, announced feedback; the Note is what survives it.
       toast(message, 'error');
       setSnapshotBlock({
@@ -332,10 +322,10 @@ export default function Reports() {
         p_snapshot_id: snapshot.id,
         p_reason: reason.trim() || null,
       }));
-      toast(`גרסה ${snapshot.version} סומנה כהועברה לרו״ח`);
+      toast(t('reports.versionDelivered', { version: snapshot.version }));
       void refetchLockedReports();
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -343,7 +333,7 @@ export default function Reports() {
 
   if (loading) return <SkeletonCards count={6} cols={6} title />;
   if (error && !data) return <ErrorNote message={error} />;
-  if (!data) return <ErrorNote message="שגיאה" />;
+  if (!data) return <ErrorNote message={t('reports.message')} />;
 
   const balancesComplete = data.invoices.every((i) => i.balance !== null);
   /** Sum a month's rows WITHIN each currency. There is no other kind of total on this screen. */
@@ -374,7 +364,7 @@ export default function Reports() {
       ? b.amount - a.amount
       : a.currency === baseCurrency ? -1 : b.currency === baseCurrency ? 1 : a.currency < b.currency ? -1 : 1));
   // A disabled button looks clickable but does nothing; the title says why it is blocked.
-  const exportBlockedReason = fetching ? 'הנתונים נטענים…' : error ? 'שגיאה בטעינת הנתונים' : null;
+  const exportBlockedReason = fetching ? t('reports.text') : error ? t('reports.text_2') : null;
   // Card now renders whatever element it is told to (`as`), so the tiles stop composing the
   // card class string by hand; what stays here is only what makes a LINK out of one.
   const metricLinkClass = 'card-link-hover block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
@@ -383,11 +373,11 @@ export default function Reports() {
   ) ?? null;
   const latestSnapshot = lockedReports?.snapshots[0] ?? null;
   const snapshotBlockedReason = lockedReportsFetching
-    ? 'נתוני הדוחות הסופיים נטענים…'
+    ? t('reports.text_3')
     : lockedReportsError
-      ? 'שגיאה בטעינת הדוחות הסופיים'
+      ? t('reports.text_4')
       : !selectedLegalEntity
-        ? 'יש לבחור ישות משפטית מורשית'
+        ? t('reports.text_5')
         : null;
 
   return (
@@ -396,19 +386,14 @@ export default function Reports() {
       {fetching && data && <Note tone="idle">הדוח מתעדכן. הייצוא והסימון מושבתים עד להשלמת הרענון.</Note>}
       <div data-tour-anchor="reports-overview">
       <PageHeader className="no-print"
-        title={<span className="flex flex-wrap items-center gap-2">דוח חודשי לרואת חשבון <span className="badge-idle">דוח חי</span></span>}
-        meta={`הנתונים הושלמו ${fmtDateTime(data.generatedAt)} ואינם snapshot טרנזקציוני.`}
+        title={<span className="flex flex-wrap items-center gap-2">{t('reports.text_7')} <span className="badge-idle">{t('reports.text_8')}</span></span>}
+        meta={t('reports.liveMeta', { at: fmtDateTime(data.generatedAt) })}
         actions={<div className="flex flex-wrap items-center gap-2">
-          <label className="sr-only" htmlFor="monthly-report-month">חודש הדוח</label>
+          <label className="sr-only" htmlFor="monthly-report-month">{t('reports.text_9')}</label>
           {/* The native clear affordance emits '' — keep the previous month instead of a broken query. */}
           <input id="monthly-report-month" type="month" className="input w-auto!" value={month} onChange={(e) => { if (e.target.value) setMonth(e.target.value); }} />
-          <button className="btn-secondary" disabled={busy || fetching || !!error} title={exportBlockedReason ?? 'הורדת הדוח כקובץ Excel'} onClick={() => void exportExcel()}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={ICON.sm} aria-hidden="true" />} ייצוא Excel</button>
-          <button className="btn-secondary" disabled={busy || fetching || !!error} title={exportBlockedReason ?? 'הורדת הדוח כקובץ PDF מעוצב עם הלוגו של הארגון'} onClick={() => void exportPdf()}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileDown size={ICON.sm} aria-hidden="true" />} הורדת PDF</button>
-          {/* Print stays beside the generated file rather than being replaced by it, and the two
-              are not the same artefact: the browser's own print produces SELECTABLE text, which
-              the generated PDF cannot (src/lib/pdf.ts explains why). One is for reading and
-              filing, the other for copying a figure out of. */}
-          <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? 'הדפסת הדוח'} onClick={() => window.print()}><Printer size={ICON.sm} aria-hidden="true" /> הדפסה</button>
+          <button className="btn-secondary" disabled={busy || fetching || !!error} title={exportBlockedReason ?? t('reports.exportExcel')} onClick={() => void exportExcel()}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={ICON.sm} aria-hidden="true" />} {t('reports.exportExcelLabel')}</button>
+          <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? t('reports.print')} onClick={() => window.print()}><Printer size={ICON.sm} aria-hidden="true" /> {t('reports.text_10')}</button>
         </div>} />
       </div>
 
@@ -417,7 +402,7 @@ export default function Reports() {
           earns its own top-level row makes the catalogue longer without making anything easier
           to find. */}
       <p className="no-print text-sm">
-        <Link className="link" to="/reports/products">סיכום רכישות מוצרים ←</Link>
+        <Link className="link" to="/reports/products">{t('reports.text_11')}</Link>
       </p>
 
       <ConfirmDialog open={sendSnapshot !== null} onClose={() => setSendSnapshot(null)}
@@ -426,14 +411,14 @@ export default function Reports() {
           setPendingDelivery({ snapshot: sendSnapshot, reason: reason ?? '' });
           setSendSnapshot(null);
         }}
-        title="סימון דוח סופי כהועבר לרו״ח"
+        title={t('reports.title')}
         message={sendSnapshot
-          ? `הסימון יתייחס רק לגרסה ${sendSnapshot.version} הנעולה (${sendSnapshot.content_hash.slice(0, 12)}…). נתוני הדוח החי אינם נקראים בפעולה זו.`
+          ? t('reports.deliveryScope', { version: sendSnapshot.version, hash: sendSnapshot.content_hash.slice(0, 12) })
           : ''}
-        confirmLabel="סימון כהועבר" requireReason busy={busy} />
+        confirmLabel={t('reports.confirmLabel')} requireReason busy={busy} />
 
       <ReauthModal open={pendingDelivery !== null}
-        title="אימות זהות לסימון הדוח הסופי כהועבר"
+        title={t('reports.title_2')}
         onConfirm={() => {
           const pending = pendingDelivery;
           setPendingDelivery(null);
@@ -442,32 +427,32 @@ export default function Reports() {
         onCancel={() => setPendingDelivery(null)} />
 
       <ReauthModal open={snapshotReauthOpen}
-        title="אימות זהות ליצירת דוח סופי נעול"
+        title={t('reports.title_3')}
         onConfirm={() => { setSnapshotReauthOpen(false); void createSnapshot(); }}
         onCancel={() => setSnapshotReauthOpen(false)} />
 
       {canManageExport && (
         <>
           <Modal open={snapshotOpen} onClose={() => setSnapshotOpen(false)}
-            title="יצירת דוח סופי נעול"
-            description="הדוח ייווצר בשרת ממצב נתונים עקבי ויישמר כגרסה חדשה שאינה ניתנת לשינוי."
+            title={t('reports.title_4')}
+            description={t('reports.description')}
             busy={busy}>
             <dl className="mb-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-              <div><dt className="text-xs text-ink-muted">חודש הדיווח</dt><dd className="mt-0.5 font-medium">{fmtMonth(`${month}-01`)}</dd></div>
-              <div><dt className="text-xs text-ink-muted">ארגון</dt><dd className="mt-0.5 font-medium">{org?.name ?? '—'}</dd></div>
-              <div><dt className="text-xs text-ink-muted">ישות משפטית</dt><dd className="mt-0.5 font-medium">{selectedLegalEntity?.name ?? '—'}</dd></div>
-              <div><dt className="text-xs text-ink-muted">זמן יצירה</dt><dd className="num mt-0.5">{snapshotPreviewAt ? fmtDateTime(snapshotPreviewAt) : '—'}</dd></div>
-              <div><dt className="text-xs text-ink-muted">יוצר הדוח</dt><dd className="mt-0.5 font-medium">{profile?.full_name ?? '—'}</dd></div>
+              <div><dt className="text-xs text-ink-muted">{t('reports.reportMonth')}</dt><dd className="mt-0.5 font-medium">{fmtMonth(`${month}-01`)}</dd></div>
+              <div><dt className="text-xs text-ink-muted">{t('reports.text_12')}</dt><dd className="mt-0.5 font-medium">{org?.name ?? '—'}</dd></div>
+              <div><dt className="text-xs text-ink-muted">{t('reports.text_13')}</dt><dd className="mt-0.5 font-medium">{selectedLegalEntity?.name ?? '—'}</dd></div>
+              <div><dt className="text-xs text-ink-muted">{t('reports.fmtDateTime')}</dt><dd className="num mt-0.5">{snapshotPreviewAt ? fmtDateTime(snapshotPreviewAt) : '—'}</dd></div>
+              <div><dt className="text-xs text-ink-muted">{t('reports.text_14')}</dt><dd className="mt-0.5 font-medium">{profile?.full_name ?? '—'}</dd></div>
               <div>
-                <dt className="text-xs text-ink-muted">Snapshot קיים לחודש</dt>
-                <dd className="mt-0.5 font-medium">{latestSnapshot ? `כן — גרסה ${latestSnapshot.version}` : 'לא קיים עדיין'}</dd>
+                <dt className="text-xs text-ink-muted">{t('reports.text_15')}</dt>
+                <dd className="mt-0.5 font-medium">{latestSnapshot ? t('reports.snapshotYesVersion', { version: latestSnapshot.version }) : t('reports.snapshotNotYet')}</dd>
               </div>
             </dl>
-            <Note tone="await">הדוח הסופי משקף את כל החשבוניות שבדוח החי לחודש ולישות שנבחרו. כל תנועת בנק בחודש חייבת התאמה מאושרת לישות אחת; אחרת היצירה תיחסם. לאחר היצירה הגרסה אינה ניתנת לשינוי.</Note>
+            <Note tone="await">{t('reports.text_16')}</Note>
             <div className="mt-4 flex flex-wrap justify-end gap-2">
-              <button type="button" className="btn-secondary" disabled={busy} onClick={() => setSnapshotOpen(false)}>ביטול</button>
+              <button type="button" className="btn-secondary" disabled={busy} onClick={() => setSnapshotOpen(false)}>{t('reports.setSnapshotOpen')}</button>
               <button type="button" className="btn-primary" disabled={busy || !selectedLegalEntity} onClick={() => { setSnapshotOpen(false); setSnapshotReauthOpen(true); }}>
-                <LockKeyhole size={ICON.sm} aria-hidden="true" /> {latestSnapshot ? 'יצירת גרסה חדשה' : 'יצירת דוח סופי נעול'}
+                <LockKeyhole size={ICON.sm} aria-hidden="true" /> {latestSnapshot ? t('reports.text_17') : t('reports.text_18')}
               </button>
             </div>
           </Modal>
@@ -476,14 +461,14 @@ export default function Reports() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 id="locked-reports-title" className="section-title flex items-center gap-2"><LockKeyhole size={ICON.sm} aria-hidden="true" /> דוחות סופיים נעולים</h2>
-                  <span className="badge-done">דוח סופי נעול</span>
+                  <h2 id="locked-reports-title" className="section-title flex items-center gap-2"><LockKeyhole size={ICON.sm} aria-hidden="true" /> {t('reports.text_19')}</h2>
+                  <span className="badge-done">{t('reports.text_20')}</span>
                 </div>
-                <p className="mt-1 text-xs text-ink-muted">כל גרסה שייכת לישות משפטית אחת, נשמרת במסד הנתונים ואינה משתנה יחד עם הדוח החי.</p>
+                <p className="mt-1 text-xs text-ink-muted">{t('reports.text_21')}</p>
               </div>
               <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
                 <div className="min-w-0 sm:min-w-56">
-                  <label className="label" htmlFor="monthly-report-legal-entity">ישות משפטית</label>
+                  <label className="label" htmlFor="monthly-report-legal-entity">{t('reports.text_22')}</label>
                   <select id="monthly-report-legal-entity" className="input w-full" value={lockedReports?.selectedUnitId ?? ''}
                     disabled={lockedReportsLoading || lockedReportsFetching || !!lockedReportsError}
                     onChange={(event) => {
@@ -492,15 +477,15 @@ export default function Reports() {
                       else next.delete('unit');
                       setSearchParams(next, { replace: true });
                     }}>
-                    <option value="">בחירת ישות משפטית</option>
+                    <option value="">{t('reports.text_23')}</option>
                     {(lockedReports?.legalEntities ?? []).map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}
                   </select>
                 </div>
                 {canMutateExport && (
                   <button type="button" className="btn-primary self-end" disabled={busy || !!snapshotBlockedReason}
-                    title={snapshotBlockedReason ?? 'יצירת גרסה סופית נעולה'}
+                    title={snapshotBlockedReason ?? t('reports.text_24')}
                     onClick={() => { setSnapshotPreviewAt(new Date()); setSnapshotOpen(true); }}>
-                    <LockKeyhole size={ICON.sm} aria-hidden="true" /> יצירת דוח סופי לרו״ח
+                    <LockKeyhole size={ICON.sm} aria-hidden="true" /> {t('reports.produceForAccountant')}
                   </button>
                 )}
               </div>
@@ -514,14 +499,14 @@ export default function Reports() {
                     {snapshotBlock.bank && (
                       <span className="block mt-1">
                         <Link className="link" to={`/bank?month=${month}&status=unmatched`}>
-                          פתיחת {totals.unmatchedBank} תנועות הבנק ללא התאמה בחודש זה
+                          {t('reports.openUnmatchedBank', { count: totals.unmatchedBank })}
                         </Link>
                         {totals.suggestedBank > 0 && (
                           <> · <Link className="link" to={`/bank?month=${month}&status=suggested`}>
-                            {totals.suggestedBank} התאמות שממתינות לאישור
+                            {t('reports.suggestedAwaiting', { count: totals.suggestedBank })}
                           </Link></>
                         )}
-                        {' '}— תנועה שלא שויכה לספק חוסמת את סגירת החודש.
+                        {' '}{t('reports.unattributedBlocksClose')}
                       </span>
                     )}
                   </span>
@@ -530,10 +515,10 @@ export default function Reports() {
             )}
             {lockedReportsError && <div className="mt-4"><ErrorNote message={lockedReportsError} /></div>}
             {!lockedReportsError && !lockedReportsLoading && !lockedReports?.legalEntities.length && (
-              <div className="mt-4"><Note tone="await">לא נמצאה ישות משפטית מורשית להפקת דוח סופי.</Note></div>
+              <div className="mt-4"><Note tone="await">{t('reports.text_25')}</Note></div>
             )}
             {!lockedReportsError && requestedUnitId && !lockedReports?.selectedUnitId && (
-              <div className="mt-4"><Note tone="await">מזהה הישות המשפטית שבכתובת אינו תקין או שאינו מורשה למשתמש זה.</Note></div>
+              <div className="mt-4"><Note tone="await">{t('reports.text_26')}</Note></div>
             )}
             {selectedLegalEntity && (
               lockedReports?.snapshots.length ? (
@@ -541,15 +526,15 @@ export default function Reports() {
                   {lockedReports.snapshots.map((snapshot) => (
                     <li key={snapshot.id} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
-                        <div className="font-medium">{snapshot.legal_entity_name} · גרסה <span className="num">{snapshot.version}</span></div>
+                        <div className="font-medium">{snapshot.legal_entity_name} · {t('reports.versionWord')} <span className="num">{snapshot.version}</span></div>
                         <div className="mt-0.5 break-words text-xs text-ink-muted">
-                          נוצר {fmtDateTime(snapshot.created_at)} · {snapshot.created_by_name} · מבנה {snapshot.report_version}
+                          {t('reports.createdWord')} {fmtDateTime(snapshot.created_at)} · {snapshot.created_by_name} · {t('reports.layoutWord')} {snapshot.report_version}
                         </div>
                         {(() => {
                           const delivery = lockedReports.deliveries.find((item) => item.snapshot_id === snapshot.id);
                           return delivery ? (
                             <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-done-fg">
-                              <CheckCircle2 size={ICON.xs} aria-hidden="true" /> הועבר לרו״ח {fmtDateTime(delivery.sent_at)} · {delivery.sent_by_name} · {delivery.reason}
+                              <CheckCircle2 size={ICON.xs} aria-hidden="true" /> {t('reports.deliveredToAccountant')} {fmtDateTime(delivery.sent_at)} · {delivery.sent_by_name} · {delivery.reason}
                             </div>
                           ) : null;
                         })()}
@@ -557,17 +542,17 @@ export default function Reports() {
                       <div className="flex flex-wrap gap-2 self-start sm:self-auto">
                         {canMutateExport && !lockedReports.deliveries.some((item) => item.snapshot_id === snapshot.id) && (
                           <button type="button" className="btn-primary" disabled={busy} onClick={() => setSendSnapshot(snapshot)}>
-                            {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />} סימון כהועבר לרו״ח
+                            {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />} {t('reports.markDelivered')}
                           </button>
                         )}
                         <button type="button" className="btn-secondary" onClick={() => void downloadSnapshot(snapshot)}>
-                          <Download size={ICON.sm} aria-hidden="true" /> הורדת גרסה {snapshot.version}
+                          <Download size={ICON.sm} aria-hidden="true" /> {t('reports.downloadVersion')} {snapshot.version}
                         </button>
                       </div>
                     </li>
                   ))}
                 </ul>
-              ) : !lockedReportsFetching && <p className="mt-4 text-sm text-ink-muted">אין עדיין דוח סופי נעול לחודש ולישות המשפטית שנבחרו.</p>
+              ) : !lockedReportsFetching && <p className="mt-4 text-sm text-ink-muted">{t('reports.text_27')}</p>
             )}
           </Card>
         </>
@@ -580,8 +565,8 @@ export default function Reports() {
               html2canvas renders the live DOM: a display:none header is simply absent from the
               generated file (src/index.css states the rule). */}
           {orgLogoUrl && <img data-testid="monthly-report-logo" src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
-          <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}דוח חודשי ${fmtMonth(`${month}-01`)}`}</h2>
-          <p className="text-xs">נוצר {fmtDateTime(data.generatedAt)}</p>
+          <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}${t('reports.printHeading', { month: fmtMonth(`${month}-01`) })}`}</h2>
+          <p className="text-xs">{t('reports.createdWord')} {fmtDateTime(data.generatedAt)}</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -599,17 +584,17 @@ export default function Reports() {
         {data.exceptions.length > 0 && (
           <Note tone="await">
             <div className="w-full">
-              <h2 className="text-base font-semibold mb-2">חריגים פתוחים כרגע שדורשים טיפול לפני סגירת החודש ({data.exceptions.length})</h2>
+              <h2 className="text-base font-semibold mb-2">{t('reports.openExceptionsHeading', { count: data.exceptions.length })}</h2>
               <ul className="space-y-1 list-disc list-inside">
-                {data.exceptions.map((e) => <li key={e.id}>{EXCEPTION_TYPE[e.type]} — {e.title}</li>)}
+                {data.exceptions.map((e) => <li key={e.id}>{statusLabel(EXCEPTION_TYPE[e.type])} — {e.title}</li>)}
               </ul>
             </div>
           </Note>
         )}
 
         <Card pad={false} clip>
-          <div className="px-4 py-3 border-b border-line-soft section-title">חשבוניות {fmtMonth(`${month}-01`)}</div>
-          <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="חשבוניות בדוח">
+          <div className="px-4 py-3 border-b border-line-soft section-title">{t('reports.invoicesForMonth', { month: fmtMonth(`${month}-01`) })}</div>
+          <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label={t('reports.aria_label')}>
             {data.invoices.map((i) => (
               <li key={i.id} className="p-4">
                 <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
@@ -622,10 +607,10 @@ export default function Reports() {
                 {/* Four figures, not eleven. The wide grid below is where a month is reconciled;
                     a phone card that grew to match it would be a table with extra steps. */}
                 <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <div><dt className="text-xs text-ink-muted">לפני מע״מ</dt><dd className="num mt-0.5">{fmtMoneyExact(i.amount_before_vat, i.currency)}</dd></div>
-                  <div><dt className="text-xs text-ink-muted">מע״מ</dt><dd className="num mt-0.5">{fmtMoneyExact(i.vat_amount, i.currency)}</dd></div>
-                  <div><dt className="text-xs text-ink-muted">שולם</dt><dd className="num mt-0.5">{fmtMoneyExact(i.balance?.paid_amount, i.currency)}</dd></div>
-                  <div><dt className="text-xs text-ink-muted">יתרה לתשלום</dt><dd className="num mt-0.5">{fmtMoneyExact(i.balance?.balance_in_currency, i.currency)}</dd></div>
+                  <div><dt className="text-xs text-ink-muted">{t('reports.fmtMoneyExact')}</dt><dd className="num mt-0.5">{fmtMoneyExact(i.amount_before_vat, i.currency)}</dd></div>
+                  <div><dt className="text-xs text-ink-muted">{t('reports.fmtMoneyExact_2')}</dt><dd className="num mt-0.5">{fmtMoneyExact(i.vat_amount, i.currency)}</dd></div>
+                  <div><dt className="text-xs text-ink-muted">{t('reports.fmtMoneyExact_3')}</dt><dd className="num mt-0.5">{fmtMoneyExact(i.balance?.paid_amount, i.currency)}</dd></div>
+                  <div><dt className="text-xs text-ink-muted">{t('reports.fmtMoneyExact_4')}</dt><dd className="num mt-0.5">{fmtMoneyExact(i.balance?.balance_in_currency, i.currency)}</dd></div>
                 </dl>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <StatusBadge meta={INVOICE_REVIEW_STATUS[i.review_status]} />
@@ -634,7 +619,7 @@ export default function Reports() {
                 {i.notes && <p className="mt-3 break-words text-xs text-ink-muted">{i.notes}</p>}
               </li>
             ))}
-            {!data.invoices.length && <li><EmptyState title="אין חשבוניות בחודש זה" /></li>}
+            {!data.invoices.length && <li><EmptyState title={t('reports.title_5')} /></li>}
             {/* A total row standing over no rows is not information — the empty sentence above
                 already said everything there is to say about this month. */}
             {totals.hasInvoices && (
@@ -643,7 +628,7 @@ export default function Reports() {
               </li>
             )}
           </ul>
-          <div className="report-table-wrap table-scroll hidden overflow-x-auto xl:block print:block" tabIndex={0} role="region" aria-label="חשבוניות בדוח — טבלה נגללת">
+          <div className="report-table-wrap table-scroll hidden overflow-x-auto xl:block print:block" tabIndex={0} role="region" aria-label={t('reports.aria_label_2')}>
             <table className="report-invoices w-full">
               {/* Widths apply in PRINT only, where the table is `table-layout: fixed`: A4 landscape
                   at 9mm margins leaves 279mm, and left to itself the browser hands ספק half of it
@@ -655,11 +640,11 @@ export default function Reports() {
                 <col className="print:w-[8%]" /><col className="print:w-[8%]" />
               </colgroup>
               <thead className="table-head"><tr>
-                <th scope="col" className="th">ספק</th><th scope="col" className="th">מס׳</th><th scope="col" className="th">תאריך</th>
-                <th scope="col" className="th">תאריך קליטה</th>
-                <th scope="col" className="th">לפני מע״מ</th><th scope="col" className="th">מע״מ</th><th scope="col" className="th">סה״כ</th>
-                <th scope="col" className="th">שולם</th><th scope="col" className="th">יתרה</th>
-                <th scope="col" className="th">בדיקה</th><th scope="col" className="th">תשלום</th>
+                <th scope="col" className="th">{t('reports.text_28')}</th><th scope="col" className="th">{t('reports.text_29')}</th><th scope="col" className="th">{t('reports.text_30')}</th>
+                <th scope="col" className="th">{t('reports.text_31')}</th>
+                <th scope="col" className="th">{t('reports.text_32')}</th><th scope="col" className="th">{t('reports.text_33')}</th><th scope="col" className="th">{t('reports.text_34')}</th>
+                <th scope="col" className="th">{t('reports.text_35')}</th><th scope="col" className="th">{t('reports.text_36')}</th>
+                <th scope="col" className="th">{t('reports.text_37')}</th><th scope="col" className="th">{t('reports.text_38')}</th>
               </tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {data.invoices.map((i) => {
@@ -673,9 +658,9 @@ export default function Reports() {
                           {/* A mark, not a twelfth column: "הועברה לרו״ח" is one bit per invoice and
                               a whole column of it would cost width the figures need. */}
                           {i.export_status === 'sent' && (
-                            <span className="ms-1 text-done-fg" title={INVOICE_EXPORT_STATUS.sent.label}>
+                            <span className="ms-1 text-done-fg" title={statusLabel(INVOICE_EXPORT_STATUS.sent)}>
                               <span aria-hidden="true">✓</span>
-                              <span className="sr-only">{INVOICE_EXPORT_STATUS.sent.label}</span>
+                              <span className="sr-only">{statusLabel(INVOICE_EXPORT_STATUS.sent)}</span>
                             </span>
                           )}
                         </td>
@@ -696,8 +681,8 @@ export default function Reports() {
                       {(i.notes || credited > 0) && (
                         <tr className="hidden print:table-row">
                           <td className="td text-ink-muted" colSpan={11}>
-                            {credited > 0 && <span className="me-4">זוכה <span className="num">{fmtMoneyExact(credited, i.currency)}</span></span>}
-                            {i.notes && <span className="break-words">הערות: {i.notes}</span>}
+                            {credited > 0 && <span className="me-4">{t('reports.fmtMoneyExact_6')} <span className="num">{fmtMoneyExact(credited, i.currency)}</span></span>}
+                            {i.notes && <span className="break-words">{t('reports.notesLabel')} {i.notes}</span>}
                           </td>
                         </tr>
                       )}
@@ -707,12 +692,12 @@ export default function Reports() {
                 {/* This table is also the printed sheet the accountant receives. Without this row
                     a first month printed a header, an empty body and a ₪0.00 total line. */}
                 {!data.invoices.length && (
-                  <tr><td className="td" colSpan={11}><EmptyState className="print:hidden" title="אין חשבוניות בחודש זה" /><span className="hidden text-ink-muted print:inline">אין חשבוניות בחודש זה</span></td></tr>
+                  <tr><td className="td" colSpan={11}><EmptyState className="print:hidden" title={t('reports.title_6')} /><span className="hidden text-ink-muted print:inline">{t('reports.text_39')}</span></td></tr>
                 )}
               </tbody>
               {totals.hasInvoices && (
               <tfoot><tr className="border-t-2 border-line font-semibold">
-                <th scope="row" className="td text-start font-semibold" colSpan={4}>סה״כ</th>
+                <th scope="row" className="td text-start font-semibold" colSpan={4}>{t('reports.text_40')}</th>
                 {/* A footer line per currency, never one line covering two. In a shekel-only
                     month — every month this product has recorded — this renders exactly the
                     single figure it always did. */}
@@ -730,59 +715,59 @@ export default function Reports() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card pad={false} clip>
-            <div className="px-4 py-3 border-b border-line-soft section-title">תשלומים לפי ספק</div>
-            <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="תשלומים לפי ספק">
+            <div className="px-4 py-3 border-b border-line-soft section-title">{t('reports.text_41')}</div>
+            <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label={t('reports.aria_label_3')}>
               {paymentsBySupplier.map((row) => (
                 <li key={`${row.name}|${row.currency}`} className="flex min-h-11 min-w-0 items-center justify-between gap-3 px-4 py-3">
                   <span className="min-w-0 break-words text-sm">{row.name}</span>
                   <span className="num shrink-0 font-medium">{fmtMoneyExact(row.amount, row.currency)}</span>
                 </li>
               ))}
-              {!paymentsBySupplier.length && <li><EmptyState title="אין תשלומים בחודש זה" /></li>}
+              {!paymentsBySupplier.length && <li><EmptyState title={t('reports.title_7')} /></li>}
             </ul>
-            <div className="report-table-wrap table-scroll hidden overflow-x-auto xl:block print:block" tabIndex={0} role="region" aria-label="תשלומים לפי ספק — טבלה נגללת">
+            <div className="report-table-wrap table-scroll hidden overflow-x-auto xl:block print:block" tabIndex={0} role="region" aria-label={t('reports.aria_label_4')}>
             <table className="w-full">
-              <thead className="table-head"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סכום ששולם</th></tr></thead>
+              <thead className="table-head"><tr><th scope="col" className="th">{t('reports.text_42')}</th><th scope="col" className="th">{t('reports.text_43')}</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {paymentsBySupplier.map((row) => (
                   <tr key={`${row.name}|${row.currency}`}><td className="td">{row.name}</td><td className="td num font-medium">{fmtMoneyExact(row.amount, row.currency)}</td></tr>
                 ))}
-                {!paymentsBySupplier.length && <tr><td className="td" colSpan={2}><EmptyState className="print:hidden" title="אין תשלומים בחודש זה" /><span className="hidden text-ink-muted print:inline">אין תשלומים בחודש זה</span></td></tr>}
+                {!paymentsBySupplier.length && <tr><td className="td" colSpan={2}><EmptyState className="print:hidden" title={t('reports.title_8')} /><span className="hidden text-ink-muted print:inline">{t('reports.text_44')}</span></td></tr>}
               </tbody>
             </table>
             </div>
           </Card>
 
           <Card pad={false} clip>
-            <div className="px-4 py-3 border-b border-line-soft section-title">זיכויים</div>
-            <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label="זיכויים בדוח">
+            <div className="px-4 py-3 border-b border-line-soft section-title">{t('reports.text_45')}</div>
+            <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label={t('reports.aria_label_5')}>
               {data.credits.map((c) => (
                 <li key={c.id} className="p-4">
                   <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="break-words font-medium text-ink-body">{c.supplier.name}</div>
-                      <div className="mt-0.5 break-words text-xs text-ink-muted">{CREDIT_REASON[c.reason]}</div>
+                      <div className="mt-0.5 break-words text-xs text-ink-muted">{statusLabel(CREDIT_REASON[c.reason])}</div>
                     </div>
                     <span className="num shrink-0 font-medium">{fmtMoneyExact(c.amount, c.currency)}</span>
                   </div>
                   <div className="mt-3"><StatusBadge meta={CREDIT_STATUS[c.status]} /></div>
                 </li>
               ))}
-              {!data.credits.length && <li><EmptyState title="אין זיכויים בחודש זה" /></li>}
+              {!data.credits.length && <li><EmptyState title={t('reports.title_9')} /></li>}
             </ul>
-            <div className="report-table-wrap table-scroll hidden overflow-x-auto xl:block print:block" tabIndex={0} role="region" aria-label="זיכויים בדוח — טבלה נגללת">
+            <div className="report-table-wrap table-scroll hidden overflow-x-auto xl:block print:block" tabIndex={0} role="region" aria-label={t('reports.aria_label_6')}>
             <table className="w-full">
-              <thead className="table-head"><tr><th scope="col" className="th">ספק</th><th scope="col" className="th">סיבה</th><th scope="col" className="th">סכום</th><th scope="col" className="th">סטטוס</th></tr></thead>
+              <thead className="table-head"><tr><th scope="col" className="th">{t('reports.text_46')}</th><th scope="col" className="th">{t('reports.text_47')}</th><th scope="col" className="th">{t('reports.text_48')}</th><th scope="col" className="th">{t('reports.text_49')}</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {data.credits.map((c) => (
                   <tr key={c.number}>
                     <td className="td">{c.supplier.name}</td>
-                    <td className="td text-ink-muted">{CREDIT_REASON[c.reason]}</td>
+                    <td className="td text-ink-muted">{statusLabel(CREDIT_REASON[c.reason])}</td>
                     <td className="td num">{fmtMoneyExact(c.amount, c.currency)}</td>
                     <td className="td"><StatusBadge meta={CREDIT_STATUS[c.status]} /></td>
                   </tr>
                 ))}
-                {!data.credits.length && <tr><td className="td" colSpan={4}><EmptyState className="print:hidden" title="אין זיכויים בחודש זה" /><span className="hidden text-ink-muted print:inline">אין זיכויים בחודש זה</span></td></tr>}
+                {!data.credits.length && <tr><td className="td" colSpan={4}><EmptyState className="print:hidden" title={t('reports.title_10')} /><span className="hidden text-ink-muted print:inline">{t('reports.text_50')}</span></td></tr>}
               </tbody>
             </table>
             </div>

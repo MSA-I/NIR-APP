@@ -3,6 +3,7 @@
 // provider key and model are all present. It is not part of ordinary CI or feature activation.
 import { z } from "zod";
 import type { ActorContext, ToolEnvelope } from "../../../src/lib/assistant/contracts.ts";
+import { PRODUCT_HELP_BASE_LOCALE } from "../../../src/lib/assistant/productHelpRegistry.ts";
 import {
   ASSISTANT_EVALUATION_CORPUS,
   type AllowedAssistantEvaluationCase,
@@ -125,6 +126,7 @@ export async function executeSyntheticLiveEvaluation(
       actor: SYNTHETIC_ACTOR,
       evidence,
       now: () => new Date(testCase.fact.as_of),
+      locale: PRODUCT_HELP_BASE_LOCALE,
       db: {
         rpc: () => Promise.resolve({ data: null, error: { message: "synthetic_only" } }),
         countSentOrders: () => Promise.resolve({ count: null, error: { message: "synthetic_only" } }),
@@ -135,7 +137,7 @@ export async function executeSyntheticLiveEvaluation(
       model,
       maxOutputTokens: 2048,
       timeoutMs: 30_000,
-      instructions: buildInstructions(),
+      instructions: buildInstructions(PRODUCT_HELP_BASE_LOCALE),
       tools: [...registry.values()].map((tool) => ({
         name: tool.name,
         description: tool.description,

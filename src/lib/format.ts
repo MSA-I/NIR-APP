@@ -1,3 +1,5 @@
+import type { Locale } from './i18n/locale.ts';
+
 export const BUSINESS_TIME_ZONE = 'Asia/Jerusalem';
 
 /**
@@ -164,50 +166,73 @@ export function productLabel(product: { name: string; display_name: string | nul
   return product.display_name?.trim() || product.name;
 }
 
-const UNIT_FORMS: Record<string, { singular: string; plural?: string }> = {
-  'ארגז': { singular: 'ארגז', plural: 'ארגזים' },
+/**
+ * Every unit the product knows, keyed by every spelling a person or a price list writes.
+ *
+ * The English word lives on the CANONICAL row — the one whose key is its own singular — rather
+ * than in a second map beside this one, so an alias can never drift away from the word its
+ * canonical form carries. `formatQuantity.spec.ts` fails if a singular loses its English.
+ *
+ * This is a DISPLAY table and deliberately not a data change (`OPEN-DECISIONS #282`).
+ * `products.unit` stays Hebrew, because the stored value is the key `name_match_key` and the
+ * three-way match are built on: translating it in the database would move which rows count as the
+ * same product. An English reader sees `3 kg`; what is stored is still `ק״ג`.
+ */
+/**
+ * English plural category, taken from `Intl` rather than from `n === 1`.
+ *
+ * It is built here instead of imported from `i18n/t`, and that is not duplication for its own
+ * sake. `p2Reliability.spec.ts` imports THIS FILE into a bare Node process to prove the calendar
+ * does not depend on the machine's time zone, and that process cannot resolve an extensionless
+ * TypeScript specifier — a VALUE import of `./i18n/t` breaks that probe, which is how this line
+ * was found. The type of `Locale` still crosses, because a type import is erased.
+ */
+const enPlural = new Intl.PluralRules('en-US');
+
+export const UNIT_FORMS: Record<string, { singular: string; plural?: string; en?: { one: string; other: string } }> = {
+  'ארגז': { singular: 'ארגז', plural: 'ארגזים', en: { one: 'crate', other: 'crates' } },
   'ארגזים': { singular: 'ארגז', plural: 'ארגזים' },
-  'בקבוק': { singular: 'בקבוק', plural: 'בקבוקים' },
+  'בקבוק': { singular: 'בקבוק', plural: 'בקבוקים', en: { one: 'bottle', other: 'bottles' } },
   'בקבוקים': { singular: 'בקבוק', plural: 'בקבוקים' },
   'גל': { singular: 'גליל', plural: 'גלילים' },
-  'גליל': { singular: 'גליל', plural: 'גלילים' },
+  'גליל': { singular: 'גליל', plural: 'גלילים', en: { one: 'roll', other: 'rolls' } },
   'גלילים': { singular: 'גליל', plural: 'גלילים' },
-  'דלי': { singular: 'דלי', plural: 'דליים' },
+  'דלי': { singular: 'דלי', plural: 'דליים', en: { one: 'bucket', other: 'buckets' } },
   'דליים': { singular: 'דלי', plural: 'דליים' },
   'חבי': { singular: 'חבילה', plural: 'חבילות' },
-  'חבילה': { singular: 'חבילה', plural: 'חבילות' },
+  'חבילה': { singular: 'חבילה', plural: 'חבילות', en: { one: 'pack', other: 'packs' } },
   'חבילות': { singular: 'חבילה', plural: 'חבילות' },
-  'חבית': { singular: 'חבית', plural: 'חביות' },
+  'חבית': { singular: 'חבית', plural: 'חביות', en: { one: 'barrel', other: 'barrels' } },
   'חביות': { singular: 'חבית', plural: 'חביות' },
   'יח': { singular: 'יחידה', plural: 'יחידות' },
   "יח'": { singular: 'יחידה', plural: 'יחידות' },
   'יח׳': { singular: 'יחידה', plural: 'יחידות' },
-  'יחידה': { singular: 'יחידה', plural: 'יחידות' },
+  'יחידה': { singular: 'יחידה', plural: 'יחידות', en: { one: 'unit', other: 'units' } },
   'יחידות': { singular: 'יחידה', plural: 'יחידות' },
   'ליטר': { singular: 'ל׳' },
   'ליטרים': { singular: 'ל׳' },
   "ל'": { singular: 'ל׳' },
-  'ל׳': { singular: 'ל׳' },
-  'מארז': { singular: 'מארז', plural: 'מארזים' },
+  'ל׳': { singular: 'ל׳', en: { one: 'L', other: 'L' } },
+  'מארז': { singular: 'מארז', plural: 'מארזים', en: { one: 'multipack', other: 'multipacks' } },
   'מארזים': { singular: 'מארז', plural: 'מארזים' },
-  'מיכל': { singular: 'מיכל', plural: 'מיכלים' },
+  'מיכל': { singular: 'מיכל', plural: 'מיכלים', en: { one: 'container', other: 'containers' } },
   'מיכלים': { singular: 'מיכל', plural: 'מיכלים' },
-  'צרור': { singular: 'צרור', plural: 'צרורות' },
+  'צרור': { singular: 'צרור', plural: 'צרורות', en: { one: 'bunch', other: 'bunches' } },
   'צרורות': { singular: 'צרור', plural: 'צרורות' },
   "ק'ג": { singular: 'ק״ג' },
   'ק"ג': { singular: 'ק״ג' },
-  'ק״ג': { singular: 'ק״ג' },
+  'ק״ג': { singular: 'ק״ג', en: { one: 'kg', other: 'kg' } },
   'קג': { singular: 'ק״ג' },
   'קרט': { singular: 'קרטון', plural: 'קרטונים' },
-  'קרטון': { singular: 'קרטון', plural: 'קרטונים' },
+  'קרטון': { singular: 'קרטון', plural: 'קרטונים', en: { one: 'carton', other: 'cartons' } },
   'קרטונים': { singular: 'קרטון', plural: 'קרטונים' },
-  'שק': { singular: 'שק', plural: 'שקים' },
+  'שק': { singular: 'שק', plural: 'שקים', en: { one: 'sack', other: 'sacks' } },
   'שקים': { singular: 'שק', plural: 'שקים' },
-  'שקית': { singular: 'שקית', plural: 'שקיות' },
+  'שקית': { singular: 'שקית', plural: 'שקיות', en: { one: 'bag', other: 'bags' } },
   'שקיות': { singular: 'שקית', plural: 'שקיות' },
-  'שרוול': { singular: 'שרוול', plural: 'שרוולים' },
+  'שרוול': { singular: 'שרוול', plural: 'שרוולים', en: { one: 'sleeve', other: 'sleeves' } },
   'שרוולים': { singular: 'שרוול', plural: 'שרוולים' },
-  'תבנית': { singular: 'תבנית', plural: 'תבניות' },
+  'תבנית': { singular: 'תבנית', plural: 'תבניות', en: { one: 'tray', other: 'trays' } },
   'תבניות': { singular: 'תבנית', plural: 'תבניות' },
 };
 
@@ -221,18 +246,42 @@ export function normalizeUnitInput(unit: string | null | undefined) {
   return UNIT_FORMS[cleaned]?.singular ?? cleaned;
 }
 
-/** User-facing unit. Exact quantity 1 uses singular; every other measured quantity uses plural. */
-export function formatUnit(unit: string | null | undefined, quantity?: number | null) {
+/**
+ * User-facing unit, in the reader's language. Exact quantity 1 uses the singular; every other
+ * measured quantity uses the plural, and the plural CATEGORY comes from `Intl` rather than from
+ * `n === 1` — English and Hebrew disagree about 2, which is the whole reason `pluralCategory`
+ * exists.
+ *
+ * `locale` is REQUIRED and deliberately not defaulted to `he`. A default would have let every
+ * existing call site keep compiling while quietly staying Hebrew on an English screen — which is
+ * the failure this function exists to remove, and which `src/portal/i18n.ts` shipped for months.
+ * Making it required turned the change into a compile error per call site, and that list of
+ * errors IS the list of screens that show a unit.
+ *
+ * A unit the table does not know is a business's own word, and it is shown exactly as stored in
+ * both languages: inventing an English word for somebody's goods would be a guess.
+ */
+export function formatUnit(unit: string | null | undefined, locale: Locale, quantity?: number | null) {
   const cleaned = cleanUnit(unit);
   if (!cleaned) return '';
   const form = UNIT_FORMS[cleaned];
   if (!form) return cleaned;
+  if (locale === 'en') {
+    const english = UNIT_FORMS[form.singular]?.en;
+    if (!english) return form.singular; // a canonical form with no English — the spec fails first
+    return enPlural.select(quantity ?? 1) === 'one' ? english.one : english.other;
+  }
   return quantity != null && quantity !== 1 && form.plural ? form.plural : form.singular;
 }
 
-export function formatQuantity(quantity: number | null | undefined, unit: string | null | undefined) {
+/**
+ * The NUMBER here is still formatted `he-IL` in both languages, and that is P3-G1's business,
+ * not this one. It is invisible today — `he-IL` and `en-US` agree on the digits, the comma and
+ * the decimal point — and moving it belongs with the dates, in one deliberate change.
+ */
+export function formatQuantity(quantity: number | null | undefined, unit: string | null | undefined, locale: Locale) {
   if (quantity == null) return '—';
-  const label = formatUnit(unit, quantity);
+  const label = formatUnit(unit, locale, quantity);
   return `${fmtNum(quantity)}${label ? ` ${label}` : ''}`;
 }
 export const fmtDate = (v: string | Date | null | undefined) => (v ? dateFmt.format(new Date(v)) : '—');

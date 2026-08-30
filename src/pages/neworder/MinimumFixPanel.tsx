@@ -1,3 +1,4 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { ICON, Modal } from '../../components/ui';
 import { fmtMoneyExact } from '../../lib/format';
@@ -27,14 +28,15 @@ export default function MinimumFixPanel({
   onChoose,
   showOptionsWhenPassing = false,
 }: MinimumFixPanelProps) {
+  const { t } = useT();
   const shortfall = group?.shortfall ?? null;
   /* Every figure in this panel is one supplier's, in that supplier's own money — which is the same
      money their minimum order is stated in, and the reason the comparison below is a comparison. */
   const currency = group?.currency ?? supplier?.currency;
   const passed = !!group && !group.belowMinimum;
   const description = group
-    ? 'בחרו פעולה שמתאימה לחלוקת ההזמנה.'
-    : 'הספק המוצמד אינו זמין עוד. בחרו ספק חלופי או בטלו את ההצמדה.';
+    ? t('minimumFix.text')
+    : t('minimumFix.text_2');
 
   return (
     <Modal open={open} onClose={onClose} title={`פתרונות עבור ${supplier?.name ?? 'ספק לא זמין'}`} description={description}>
@@ -45,17 +47,17 @@ export default function MinimumFixPanel({
             ? <CheckCircle2 size={ICON.md} className="mt-0.5 shrink-0" aria-hidden="true" />
             : <AlertTriangle size={ICON.md} className="mt-0.5 shrink-0" aria-hidden="true" />}
           <div className="grid flex-1 gap-1 text-sm sm:grid-cols-3">
-            <Metric label="סכום נוכחי" value={fmtMoneyExact(group.subtotal, currency)} />
-            <Metric label="מינימום" value={fmtMoneyExact(group.supplier.minOrderAmount, group.supplier.currency)} />
-            <Metric label="חסר" value={group.supplier.minOrderAmount == null ? '—' : fmtMoneyExact(group.belowMinimum ? group.shortfall : 0, currency)} />
+            <Metric label={t('minimumFix.label')} value={fmtMoneyExact(group.subtotal, currency)} />
+            <Metric label={t('minimumFix.label_2')} value={fmtMoneyExact(group.supplier.minOrderAmount, group.supplier.currency)} />
+            <Metric label={t('minimumFix.label_3')} value={group.supplier.minOrderAmount == null ? '—' : fmtMoneyExact(group.belowMinimum ? group.shortfall : 0, currency)} />
           </div>
         </div>
       ) : (
-        <div className="note-alert mb-4">ההצמדה אינה תקפה, ולכן הפריט אינו יכול לעבור לשלב האישור.</div>
+        <div className="note-alert mb-4">{t('minimumFix.text_3')}</div>
       )}
 
       {passed && !showOptionsWhenPassing ? (
-        <div className="note-done">הקבוצה עוברת כעת את מינימום ההזמנה.</div>
+        <div className="note-done">{t('minimumFix.text_4')}</div>
       ) : options.length ? (
         <div className="space-y-2">
           {options.map((option, index) => {
@@ -81,7 +83,7 @@ export default function MinimumFixPanel({
           })}
         </div>
       ) : (
-        <div className="note-idle">לא נמצאה כרגע חלופה אוטומטית. ניתן לחזור ולשנות ספק או כמות ידנית.</div>
+        <div className="note-idle">{t('minimumFix.text_6')}</div>
       )}
     </Modal>
   );
@@ -96,22 +98,23 @@ function OptionLabel({ option, products, suppliers }: {
   products: ReadonlyMap<string, Product>;
   suppliers: ReadonlyMap<string, SplitSupplier>;
 }) {
-  const product = 'productId' in option ? products.get(option.productId)?.name ?? 'מוצר' : 'מוצר';
+  const { t } = useT();
+  const product = 'productId' in option ? products.get(option.productId)?.name ?? t('minimumFix.get') : t('minimumFix.get_2');
   if (option.kind === 'increase_qty') {
-    return <>הגדל &quot;{product}&quot; מ-<span className="num">{option.fromQty}</span> ל-<span className="num">{option.toQty}</span></>;
+    return <>{t('minimumFix.increaseQty', { product })} <span className="num">{option.fromQty}</span> {t('minimumFix.text_7')}<span className="num">{option.toQty}</span></>;
   }
   if (option.kind === 'move_line') {
-    const target = suppliers.get(option.toSupplierId)?.name ?? 'ספק חלופי';
+    const target = suppliers.get(option.toSupplierId)?.name ?? t('minimumFix.get_3');
     return option.requiresQty == null
-      ? <>העבר &quot;{product}&quot; ל&quot;{target}&quot;</>
-      : <>העבר ל&quot;{target}&quot; והגדל ל-<span className="num">{option.requiresQty}</span></>;
+      ? <>{t('minimumFix.moveLine', { product, target })}</>
+      : <>{t('minimumFix.moveLineAndRaise', { target })} <span className="num">{option.requiresQty}</span></>;
   }
   if (option.kind === 'move_group') {
-    const target = suppliers.get(option.toSupplierId)?.name ?? 'ספק חלופי';
-    return <>העבר את כל <span className="num">{option.lineCount}</span> הפריטים ל&quot;{target}&quot;</>;
+    const target = suppliers.get(option.toSupplierId)?.name ?? t('minimumFix.get_4');
+    return <>{t('minimumFix.text_8')} <span className="num">{option.lineCount}</span> {t('minimumFix.moveGroupTail', { target })}</>;
   }
-  if (option.kind === 'remove_line') return <>הסר &quot;{product}&quot; מההזמנה</>;
-  return <>הסר ושמור את &quot;{product}&quot; להזמנה הבאה</>;
+  if (option.kind === 'remove_line') return <>{t('minimumFix.removeLine', { product })}</>;
+  return <>{t('minimumFix.removeAndKeep', { product })}</>;
 }
 
 function optionOutcome(option: ResolutionOption): 'done' | 'await' | null {
@@ -140,8 +143,9 @@ function positiveDifference(minimum: number | null | undefined, subtotal: number
 }
 
 function OptionCost({ option, currency }: { option: ResolutionOption; currency: string | null | undefined }) {
-  if (option.kind === 'increase_qty') return <><span className="num">+{fmtMoneyExact(option.costDelta, currency)}</span> · סה״כ <span className="num">{fmtMoneyExact(option.subtotalAfter, currency)}</span></>;
-  if ((option.kind === 'move_line' || option.kind === 'move_group') && option.costDelta === 0) return <>ללא שינוי בעלות</>;
+  const { t } = useT();
+  if (option.kind === 'increase_qty') return <><span className="num">+{fmtMoneyExact(option.costDelta, currency)}</span> {t('minimumFix.fmtMoneyExact_4')} <span className="num">{fmtMoneyExact(option.subtotalAfter, currency)}</span></>;
+  if ((option.kind === 'move_line' || option.kind === 'move_group') && option.costDelta === 0) return <>{t('minimumFix.text_9')}</>;
   const value = option.kind === 'move_line' || option.kind === 'move_group' ? option.costDelta : -option.refund;
   return <span className="num">{value > 0 ? '+' : '−'}{fmtMoneyExact(Math.abs(value), currency)}</span>;
 }

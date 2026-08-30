@@ -5,8 +5,9 @@ import { isActiveRole, type Organization, type Profile } from '../lib/types';
 import { unwrap } from '../lib/useQuery';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import { resolveRoleLabels } from '../lib/status';
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t.ts';
 import { cleanupPushBeforeSignOut } from '../lib/push';
-import { toHebrewError } from '../lib/errors';
 import {
   getRememberedOfflineBootstrap,
   offlineAccessProjectionFromServer,
@@ -34,7 +35,12 @@ export interface SignOutResult {
  * user whose account was about to load.
  */
 export const BOOTSTRAP_TIMEOUT_MS = 15_000;
-export const BOOTSTRAP_TIMEOUT_MESSAGE = 'טעינת פרטי החשבון נמשכה זמן רב מדי.';
+/**
+ * A KEY, not a sentence. `bootstrapError` also carries raw server messages, so the boundary that
+ * draws it resolves with `tDynamic(...) ?? raw` — a known key becomes the reader's sentence, and
+ * anything else is shown exactly as it arrived, which is what a support conversation needs.
+ */
+export const BOOTSTRAP_TIMEOUT_KEY: TKey = 'app.bootstrapTimeout';
 
 interface AuthState {
   session: Session | null;
@@ -66,6 +72,8 @@ interface AuthState {
 const AuthContext = createContext<AuthState>(null as unknown as AuthState);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // AuthProvider sits INSIDE LocaleProvider (src/main.tsx), so a language already exists here.
+  const { errorText, statusLabel, t } = useT();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
@@ -115,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // wedge; it makes the app recoverable without devtools.
     const watchdog = setTimeout(() => {
       if (cancelled) return;
-      setBootstrapError(BOOTSTRAP_TIMEOUT_MESSAGE);
+      setBootstrapError(BOOTSTRAP_TIMEOUT_KEY);
       setLoading(false);
     }, BOOTSTRAP_TIMEOUT_MS);
     (async () => {
@@ -191,7 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setOfflineBootstrap(false);
             setAccess(READ_ONLY_ORGANIZATION_ACCESS);
             setAccessStatus('unknown');
-            setBootstrapError(toHebrewError('account_role_retired'));
+            setBootstrapError(errorText('account_role_retired'));
           } else if (cached) {
             // IndexedDB holds only scope keys, role and the server access projection. A minimal
             // profile is enough for the receiving guard; no Organization object is synthesized.
@@ -203,6 +211,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               phone: null,
               active: true,
               supplier_id: null,
+              // Offline bootstrap carries scope, not preferences. `null` is the honest answer:
+              // it means "this cache does not know what they chose", so the browser keeps
+              // deciding — the same thing NULL means in the column (0213).
+              locale: null,
             });
             setOrg(null);
             setIsPlatformAdmin(false);
@@ -217,7 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setOfflineBootstrap(false);
             setAccess(READ_ONLY_ORGANIZATION_ACCESS);
             setAccessStatus('unknown');
-            setBootstrapError(toHebrewError(error));
+            setBootstrapError(errorText(error));
           }
         }
       } finally {
@@ -228,7 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; clearTimeout(watchdog); };
   }, [session, bootstrapAttempt]);
 
-  const roleLabels = useMemo(() => resolveRoleLabels(org?.settings), [org?.settings]);
+  const roleLabels = useMemo(() => resolveRoleLabels(org?.settings, statusLabel), [org?.settings, statusLabel]);
 
   async function refreshOrganizationAccess() {
     if (!session || !profile || !org || offlineBootstrap) return;
@@ -290,7 +302,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signOut() {
     const push = await cleanupPushBeforeSignOut();
     const { error } = await supabase.auth.signOut();
-    return { error: error?.message ?? null, pushWarning: push.warning };
+    return { error: error?.message ?? null, pushWarning: push.warning ? t(push.warning) : null };
   }
 
   function retryBootstrap() {

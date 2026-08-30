@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { LocaleProvider } from '../../lib/i18n/LocaleProvider';
 import type { ReviewSnapshot } from './model';
 import { DocumentProcessingProgress } from './DocumentProcessingProgress';
 
@@ -111,6 +112,20 @@ describe('רצועת שלבי העיבוד', () => {
     // The words are still delivered — as the bar's `aria-valuetext`, asserted above — so a screen
     // reader loses nothing while the screen stops saying the same thing twice.
     expect(screen.queryByText('עמוד 7 מתוך 27')).toBeNull();
+  });
+
+  it('resolves the same measured reading stage in English', () => {
+    render(
+      <LocaleProvider initialLocale="en">
+        <DocumentProcessingProgress
+          snapshot={snapshot({ status: 'leased', attempt_count: 1, progress_done: 7, progress_total: 27 })}
+          now={NOW}
+        />
+      </LocaleProvider>,
+    );
+    expect(currentStepLabel()).toContain('Reading the document');
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'Page 7 of 27');
+    expect(document.body.textContent).not.toContain('קריאת המסמך');
   });
 
   it('לא ממציאה בר כשהעובד עדיין לא דיווח עמודים', () => {

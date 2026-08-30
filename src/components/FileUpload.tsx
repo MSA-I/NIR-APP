@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState } from 'react';
 import { Camera, FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { Link } from 'react-router';
@@ -6,18 +7,19 @@ import { useAuth } from '../auth/AuthContext';
 import { useToast, Skeleton, ConfirmDialog, ErrorNote, ICON, Modal, Note } from './ui';
 import { ActionMenu } from './ActionMenu';
 import {
-  WEAK_CAPTURE_LABEL,
-  WEAK_CAPTURE_PROCEED_LABEL,
+  WEAK_CAPTURE_LABEL_KEY,
+  WEAK_CAPTURE_PROCEED_LABEL_KEY,
   screenImageQuality,
-  weakCaptureHint,
-  weakCaptureRetryLabel,
-  weakCaptureTitle,
+  weakCaptureHintKey,
+  weakCaptureRetryLabelKey,
+  weakCaptureTitleKey,
   type CaptureSource,
   type WeakCapture,
 } from '../lib/imageQuality';
 import { DocumentStatusBadge } from './DocumentStatusBadge';
 import { documentUiStatus } from '../lib/documentStatus';
-import { ok, toHebrewError } from '../lib/errors';
+import { ok, toErrorKey } from '../lib/errors';
+import type { TKey } from '../lib/i18n/t.ts';
 import { useQuery, unwrap } from '../lib/useQuery';
 import type { DocumentKind, DocumentRow } from '../lib/types';
 import { fmtDateTime } from '../lib/format';
@@ -143,47 +145,29 @@ function documentRegistrationFailure(input: RegistrationFailureInput) {
     .join(' ');
 
   if (input.malformedResponse) {
-    return {
-      retryable: false,
-      message: 'הקובץ נשמר, אך התקבלה תשובת שרת לא תקינה. אין להעלות אותו שוב; נדרשת בדיקה.',
-    };
+    return { retryable: false, code: 'document_registration_malformed_response' };
   }
 
   if (code === 'PGRST202' || code === '42883' || /could not find the function|function .* does not exist/i.test(raw)) {
-    return {
-      retryable: false,
-      message: 'הקובץ נשמר, אך שירות הרישום אינו זמין בגרסת השרת. ניסיון חוזר לא יעזור כרגע; יש לפנות לתמיכה.',
-    };
+    return { retryable: false, code: 'document_registration_unavailable' };
   }
 
   if (code === 'PGRST300') {
-    return {
-      retryable: false,
-      message: 'הקובץ נשמר, אך שירות הרישום אינו מוגדר כראוי בשרת. ניסיון חוזר לא יעזור כרגע; יש לפנות לתמיכה.',
-    };
+    return { retryable: false, code: 'document_registration_misconfigured' };
   }
 
   if (code === '42501' || code === 'PGRST301' || code === 'PGRST302'
       || /not_authorized|permission|row-level security|\brls\b|jwt/i.test(raw)) {
-    return {
-      retryable: false,
-      message: 'הקובץ נשמר, אך אין הרשאה להשלים את הרישום. אין להעלות אותו שוב. יש להתחבר מחדש או לפנות למנהל.',
-    };
+    return { retryable: false, code: 'document_registration_not_authorized' };
   }
 
   if (code === '23505' || /document_upload_key_(?:conflict|retired)/i.test(raw)) {
-    return {
-      retryable: false,
-      message: 'הקובץ נשמר, אך מזהה ההעלאה כבר קשור לרישום אחר או שפרש. אין להעלות אותו שוב; נדרשת בדיקת תמיכה.',
-    };
+    return { retryable: false, code: 'document_registration_key_taken' };
   }
 
   if (code === '22023' || code === '22P02' || code === '23502' || code === '23503' || code === '23514'
       || /document_upload_key_invalid/i.test(raw)) {
-    return {
-      retryable: false,
-      message: 'הקובץ נשמר, אך פרטי הרישום אינם תקינים. אין להעלות אותו שוב; נדרשת בדיקה.',
-    };
+    return { retryable: false, code: 'document_registration_invalid' };
   }
 
   const retryable = status === 0
@@ -199,30 +183,38 @@ function documentRegistrationFailure(input: RegistrationFailureInput) {
     || /failed to fetch|fetch failed|network(?:error)?|connection (?:closed|reset)|timed? ?out/i.test(raw);
 
   if (retryable) {
-    return {
-      retryable: true,
-      message: 'הקובץ נשמר בבטחה, אך הרישום לא הושלם בגלל תקלה זמנית. ניסיון חוזר ישלים את הרישום בלבד — אין להעלות את הקובץ שוב.',
-    };
+    return { retryable: true, code: 'document_registration_transient' };
   }
 
-  return {
-    retryable: false,
-    message: 'הקובץ נשמר, אך רישום המסמך לא הושלם. אין להעלות אותו שוב; נדרשת בדיקה.',
-  };
+  return { retryable: false, code: 'document_registration_failed' };
 }
 
+/**
+ * What a failed upload MEANS: whether a retry can help, whether the row already exists, and where
+ * to resume. It no longer answers in words.
+ *
+ * It used to return `message` — a finished Hebrew sentence — and three things went wrong with
+ * that, all of them invisible. A `TusUploadError` carries a synthetic CODE rather than prose
+ * (`tus_upload_forbidden`), so that branch was putting a token in front of a person. The sentence
+ * was also written into IndexedDB as `lastError`, where `OfflineQueueStatus` reads it back
+ * through `errorText()` — which maps CODES, so a stored sentence always fell through to the
+ * generic one. And an English reader got Hebrew regardless.
+ *
+ * `code` goes to all three places instead, resolved at the moment of rendering. Every code here
+ * is registered in `src/lib/errors.ts`, which is the one error vocabulary in the product.
+ */
 export function documentUploadFailure(error: unknown) {
   if (error instanceof DocumentUploadError) {
-    return { message: error.message, retryable: error.retryable, registered: error.registered, resume: error.resume };
+    return { code: error.message, retryable: error.retryable, registered: error.registered, resume: error.resume };
   }
   if (error instanceof TusUploadCancelledError) {
-    return { message: 'ההעלאה בוטלה.', retryable: false, registered: false, resume: null };
+    return { code: 'document_upload_cancelled', retryable: false, registered: false, resume: null };
   }
   if (error instanceof TusUploadError) {
-    return { message: error.message, retryable: error.retryable, registered: false, resume: null };
+    return { code: error.message, retryable: error.retryable, registered: false, resume: null };
   }
   const raw = error instanceof Error ? error.message : String(error);
-  return { message: toHebrewError(error), retryable: TRANSIENT_ERROR_PATTERN.test(raw), registered: false, resume: null };
+  return { code: toErrorKey(error), retryable: TRANSIENT_ERROR_PATTERN.test(raw), registered: false, resume: null };
 }
 
 export function mergeDocumentUploadSummary(
@@ -244,14 +236,14 @@ export function mergeDocumentUploadSummary(
 
 function uploadMimeType(file: File) {
   if (file.size > DOCUMENT_UPLOAD_MAX_BYTES) {
-    throw new DocumentUploadError('הקובץ גדול מ־10MB. יש לבחור קובץ קטן יותר.', false);
+    throw new DocumentUploadError('document_upload_too_large', false);
   }
   const suppliedMime = file.type.trim().toLowerCase();
   if (DOCUMENT_MIME_TYPES.has(suppliedMime)) return suppliedMime;
   const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
   const extensionMime = DOCUMENT_MIME_BY_EXTENSION[extension];
   if (extensionMime) return extensionMime;
-  throw new DocumentUploadError('סוג הקובץ אינו נתמך. ניתן להעלות PDF, תמונה, Excel, Word, RTF, TXT, HTML או ODT.', false);
+  throw new DocumentUploadError('document_upload_type_unsupported', false);
 }
 
 /** Shared validation for document flows that register through a dedicated intake RPC. */
@@ -259,17 +251,17 @@ export function documentUploadMimeType(file: File): string {
   return uploadMimeType(file);
 }
 
-export const DOCUMENT_KIND_OPTIONS: { value: DocumentKind; label: string }[] = [
-  { value: 'invoice', label: 'חשבונית' },
-  { value: 'delivery_note', label: 'תעודת משלוח' },
-  { value: 'credit', label: 'זיכוי' },
-  { value: 'quote', label: 'הצעת מחיר' },
-  { value: 'payment_confirmation', label: 'אישור תשלום' },
-  { value: 'other', label: 'מסמך נוסף' },
+export const DOCUMENT_KIND_OPTIONS: { value: DocumentKind; labelKey: TKey }[] = [
+  { value: 'invoice', labelKey: 'fileUpload.kindInvoice' },
+  { value: 'delivery_note', labelKey: 'fileUpload.kindDeliveryNote' },
+  { value: 'credit', labelKey: 'fileUpload.kindCredit' },
+  { value: 'quote', labelKey: 'fileUpload.kindQuote' },
+  { value: 'payment_confirmation', labelKey: 'fileUpload.kindPaymentConfirmation' },
+  { value: 'other', labelKey: 'fileUpload.kindOther' },
 ];
 
-export function documentKindLabel(kind: DocumentKind) {
-  return DOCUMENT_KIND_OPTIONS.find((option) => option.value === kind)?.label ?? 'מסמך נוסף';
+export function documentKindKey(kind: DocumentKind): TKey {
+  return DOCUMENT_KIND_OPTIONS.find((option) => option.value === kind)?.labelKey ?? 'fileUpload.kindOther';
 }
 
 export interface DocumentMetadata {
@@ -333,12 +325,12 @@ function defaultDocumentKind(entityType: string): DocumentKind {
   return 'other';
 }
 
-/** Hebrew source labels for the Upload Center's "originating entity" column. */
-const ENTITY_SOURCE_LABELS: Record<string, string> = {
-  invoice: 'חשבונית',
-  goods_receipt: 'קבלת סחורה',
-  payment: 'תשלום',
-  inbox: 'תיבת המסמכים',
+/** Source labels for the Upload Center's "originating entity" column, as keys. */
+const ENTITY_SOURCE_KEYS: Record<string, TKey> = {
+  invoice: 'fileUpload.sourceInvoice',
+  goods_receipt: 'fileUpload.sourceGoodsReceipt',
+  payment: 'fileUpload.sourcePayment',
+  inbox: 'fileUpload.sourceInbox',
 };
 
 /**
@@ -438,7 +430,7 @@ export async function uploadDocument(
         malformedResponse: !registered.error && typeof registeredData?.document_id !== 'string',
       });
       throw new DocumentUploadError(
-        failure.message,
+        failure.code,
         failure.retryable,
         false,
         nextResume,
@@ -476,8 +468,8 @@ export async function uploadDocument(
     });
     throw new DocumentUploadError(
       failure.retryable
-        ? 'הקובץ נשמר ונרשם, אך לא התקבל אישור על הכניסה לתור בגלל תקלה זמנית. ניסיון חוזר ישלים רק את שליחת העיבוד.'
-        : 'הקובץ נשמר ונרשם, אך לא נכנס לתור העיבוד. ניתן לנסות עיבוד מחדש מגלריית המסמכים.',
+        ? 'document_enqueue_transient'
+        : 'document_enqueue_failed',
       failure.retryable,
       true,
       nextResume,
@@ -517,7 +509,7 @@ async function queuePendingDocumentPhoto(
   documentKind: DocumentKind,
   file: File,
   resume: DocumentUploadResume | null = null,
-  failure: { message: string; retryable: boolean } | null = null,
+  failure: { code: string; retryable: boolean } | null = null,
 ) {
   uploadMimeType(file);
   await putPendingPhoto({
@@ -531,7 +523,7 @@ async function queuePendingDocumentPhoto(
     documentId: resume?.documentId ?? null,
     attempts: failure ? 1 : 0,
     state: failure ? (failure.retryable ? 'failed' : 'needs_attention') : 'pending',
-    lastError: failure?.message ?? null,
+    lastError: failure?.code ?? null,
     lastAttemptAt: failure ? Date.now() : null,
     createdAt: Date.now(),
   });
@@ -595,7 +587,7 @@ async function runPendingDocumentPhotoSync() {
         documentId: failure.resume?.documentId ?? photo.documentId ?? null,
         attempts: (photo.attempts ?? 0) + 1,
         state: failure.retryable ? 'failed' : 'needs_attention',
-        lastError: failure.message,
+        lastError: failure.code,
         lastAttemptAt: Date.now(),
         syncLeaseOwner: null,
         syncLeaseExpiresAt: null,
@@ -675,23 +667,24 @@ export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDi
   onUploadAnyway: () => void;
   onDismiss: () => void;
 }) {
+  const { t } = useT();
   const goodCount = pick.files.length - pick.weak.length - pick.serverRequired.length;
   const serverOnly = pick.weak.length === 0 && pick.serverRequired.length > 0;
   return (
     <Modal
       open={pick.weak.length > 0 || pick.serverRequired.length > 0}
       onClose={onDismiss}
-      title={serverOnly ? 'בדיקת התמונה תושלם בשרת' : weakCaptureTitle(pick.weak)}
+      title={serverOnly ? t('fileUpload.weakCaptureTitle') : t(weakCaptureTitleKey(pick.weak))}
       description={serverOnly
         ? 'הדפדפן אינו יכול לקרוא את פורמט התמונה. המקור יישמר ללא שינוי, ולאחר ההעלאה תופק בשרת נגזרת מוגבלת ובת־מעקב לצורך בדיקה וקריאת המסמך.'
-        : weakCaptureHint(pick.weak, source)}
+        : t(weakCaptureHintKey(pick.weak, source))}
     >
       {pick.files.length > 1 && (
         <ul className="mb-3 divide-y divide-line-soft rounded-lg border border-line-soft text-sm">
           {pick.weak.map((item, index) => (
             <li key={`${item.file.name}-${index}`} className="flex items-center gap-2 px-3 py-2">
               <span className="min-w-0 flex-1 truncate text-ink-body"><bdi>{item.file.name}</bdi></span>
-              <span className="badge-await shrink-0">{WEAK_CAPTURE_LABEL[item.verdict]}</span>
+              <span className="badge-await shrink-0">{t(WEAK_CAPTURE_LABEL_KEY[item.verdict])}</span>
             </li>
           ))}
         </ul>
@@ -700,25 +693,25 @@ export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDi
         <Note tone="info" className="mb-3">
           <span className="min-w-0 flex-1">
             {pick.serverRequired.length === 1
-              ? 'תמונה אחת דורשת פענוח שרתי. המקור יועלה כפי שהוא ולא יוחלף.'
-              : <><span className="num">{pick.serverRequired.length}</span> תמונות דורשות פענוח שרתי. קובצי המקור יועלו כפי שהם ולא יוחלפו.</>}
+              ? t('fileUpload.text_2')
+              : <><span className="num">{pick.serverRequired.length}</span> {t('fileUpload.text_3')}</>}
           </span>
         </Note>
       )}
       {goodCount > 0 && (
         <Note tone="idle" className="mb-3">
           {goodCount === 1
-            ? 'קובץ אחד תקין יעלה בכל מקרה.'
-            : <><span className="num">{goodCount}</span> קבצים תקינים יעלו בכל מקרה.</>}
+            ? t('fileUpload.text_4')
+            : <><span className="num">{goodCount}</span> {t('fileUpload.text_5')}</>}
         </Note>
       )}
       <div className="flex flex-wrap justify-end gap-2">
         <button type="button" className={serverOnly ? 'btn-primary' : 'btn-secondary'} onClick={onUploadAnyway}>
-          {serverOnly ? 'שמירת המקור והמשך' : WEAK_CAPTURE_PROCEED_LABEL}
+          {serverOnly ? t('fileUpload.text_6') : t(WEAK_CAPTURE_PROCEED_LABEL_KEY)}
         </button>
         {!serverOnly && (
           <button type="button" className="btn-primary" onClick={onRetake}>
-            {weakCaptureRetryLabel(source)}
+            {t(weakCaptureRetryLabelKey(source))}
           </button>
         )}
       </div>
@@ -729,6 +722,7 @@ export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDi
 export function DocumentList({ entityType, entityId, canUpload = true, capture }: {
   entityType: string; entityId: string; canUpload?: boolean; capture?: boolean;
 }) {
+  const { errorText, t } = useT();
   const { profile, organizationAccess } = useAuth();
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -791,8 +785,8 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
         setUploadSummary(null);
         await offlineQueue.refresh();
         toast(files.length === 1
-          ? 'התמונה נשמרה במכשיר וממתינה לסנכרון.'
-          : `${files.length} תמונות נשמרו במכשיר וממתינות לסנכרון.`);
+          ? t('fileUpload.text_7')
+          : t('fileUpload.photosQueuedLocally', { count: files.length }));
         return;
       }
       const metadata = await entityMetadata(entityType, entityId, documentKind);
@@ -803,7 +797,9 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
           enqueueProcessing: canMutateDocuments,
         }, { resume: resumeRef.current.get(file) ?? null }),
         {
-          source: ENTITY_SOURCE_LABELS[entityType] ?? 'מסמך מצורף',
+          t,
+          errorText,
+          source: t(ENTITY_SOURCE_KEYS[entityType] ?? 'fileUpload.text_8'),
           retry: true,
           classifyFailure: (file, error) => {
             const failure = documentUploadFailure(error);
@@ -812,7 +808,9 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
             if (failure.resume) resumeRef.current.set(file, failure.resume);
             else resumeRef.current.delete(file);
             return {
-              message: failure.message,
+              // The Center renders this as prose, so the code is resolved HERE — inside a
+              // component, in the reader's language — rather than travelling as a token.
+              message: errorText(new Error(failure.code)),
               retryable: failure.retryable,
               registered: failure.registered,
               storedSafely: failure.resume !== null || failure.registered,
@@ -834,7 +832,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
             documentKind,
             failure.item,
             failure.resume,
-            { message: failure.message, retryable: failure.retryable },
+            { code: failure.code, retryable: failure.retryable },
           );
           if (failure.retryable) locallyQueuedForSync.add(failure.item);
           else locallyNeedsAttention.add(failure.item);
@@ -856,15 +854,15 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
       setUploadSummary(summary);
       if (result.succeeded.length || registered) await refetch();
       if (summary.failed.length) {
-        const succeededLabel = canMutateDocuments ? 'הועלו וממתינים לעיבוד' : 'הועלו';
-        const detail = failures[0] ? ` ${failures[0].message}` : '';
-        toast(`${summary.succeeded.length} ${succeededLabel}, ${summary.failed.length} לא הושלמו.${detail}`, 'error');
+        const succeededLabel = canMutateDocuments ? t('fileUpload.text_9') : t('fileUpload.text_10');
+        const detail = failures[0] ? ` ${failures[0].code}` : '';
+        toast(t('fileUpload.batchPartial', { succeeded: summary.succeeded.length, label: succeededLabel, failed: summary.failed.length }) + detail, 'error');
       } else if (locallyQueuedForSync.size) {
-        toast(`${locallyQueuedForSync.size} קבצים נשמרו במכשיר וממתינים לסנכרון.`);
+        toast(t('fileUpload.filesQueuedLocally', { count: locallyQueuedForSync.size }));
       } else {
         toast(canMutateDocuments
-          ? result.succeeded.length === 1 ? 'הועלה וממתין לעיבוד' : `${result.succeeded.length} קבצים הועלו וממתינים לעיבוד`
-          : result.succeeded.length === 1 ? 'הקובץ הועלה בהצלחה' : `${result.succeeded.length} קבצים הועלו בהצלחה`);
+          ? result.succeeded.length === 1 ? t('fileUpload.uploadedOnePending') : t('fileUpload.uploadedManyPending', { count: result.succeeded.length })
+          : result.succeeded.length === 1 ? t('fileUpload.uploadedOne') : t('fileUpload.uploadedMany', { count: result.succeeded.length }));
       }
     } catch (e) {
       const failure = documentUploadFailure(e);
@@ -873,7 +871,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
         succeeded: [],
         failed: files.map((item) => ({ item, error: e })),
       }));
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
       busyRef.current = false;
@@ -915,8 +913,8 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
       if (error || !data) throw error ?? new Error('missing signed URL');
       return data.signedUrl;
     });
-    if (result === 'blocked') toast('הדפדפן חסם את חלון הצפייה. יש לאפשר חלונות קופצים ולנסות שוב.', 'error');
-    if (result === 'error') toast('שגיאה בפתיחת הקובץ', 'error');
+    if (result === 'blocked') toast(t('fileUpload.toast'), 'error');
+    if (result === 'error') toast(t('fileUpload.toast_2'), 'error');
   }
 
   // Soft delete (migration 0010). Was a one-click hard delete of both the row and the stored
@@ -932,11 +930,11 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
       ok(await supabase.from('documents')
         .update({ deleted_at: new Date().toISOString(), deleted_by: profile?.id ?? null })
         .eq('id', doc.id));
-      toast('המסמך הוסר');
+      toast(t('fileUpload.toast_3'));
       setPending(null);
       await refetch();
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setDeleting(false);
     }
@@ -945,7 +943,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <span className="text-sm font-medium text-ink-soft flex items-center gap-1.5"><Paperclip size={ICON.sm} /> מסמכים מצורפים</span>
+        <span className="text-sm font-medium text-ink-soft flex items-center gap-1.5"><Paperclip size={ICON.sm} /> {t('fileUpload.text_11')}</span>
         {/* The "סוג" select that stood here — delivery note / invoice / other, chosen before the
             camera opened — is gone. This is the receiving screen: the person holding the phone is
             standing at the truck with the paper in the other hand, and the one question they
@@ -956,7 +954,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
         {canUploadNow && <div className="flex flex-wrap items-center gap-2">
           <button className="btn-secondary btn-sm" disabled={busy || screening || retryFiles.length > 0} onClick={() => inputRef.current?.click()}>
             {busy || screening ? <Loader2 size={ICON.sm} className="animate-spin" /> : capture ? <Camera size={ICON.sm} /> : <Paperclip size={ICON.sm} />}
-              {capture ? 'צילום / העלאה' : 'העלאת קובץ'}
+              {capture ? t('fileUpload.text_12') : t('fileUpload.text_13')}
           </button>
         </div>}
         <input ref={inputRef} type="file" hidden multiple accept={DOCUMENT_UPLOAD_ACCEPT} data-document-upload-input
@@ -976,7 +974,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
       {locallyQueued > 0 && (
         <Note tone="await" className="mb-2">
           <span className="min-w-0 flex-1">
-            <span className="num">{locallyQueued}</span> קבצים שמורים במכשיר וממתינים לסנכרון.
+            <span className="num">{locallyQueued}</span> {t('fileUpload.filesStoredOnDevice')}
           </span>
         </Note>
       )}
@@ -984,15 +982,15 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
         <Note tone={uploadSummary.failed.length ? 'alert' : 'done'} className="mb-2">
           <div role="status">
             <div>
-              <span className="num">{uploadSummary.succeeded.length}</span> {canMutateDocuments ? 'הועלו וממתינים לעיבוד' : 'הועלו'} ·{' '}
-              <span className="num">{uploadSummary.failed.length}</span> לא הושלמו
+              <span className="num">{uploadSummary.succeeded.length}</span> {canMutateDocuments ? t('fileUpload.text_14') : t('fileUpload.text_15')} ·{' '}
+              <span className="num">{uploadSummary.failed.length}</span> {t('fileUpload.notCompleted')}
             </div>
             {uploadSummary.failed.length > 0 && (
               <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs">נכשלו: {uploadSummary.failed.join(', ')}</span>
+                <span className="text-xs">{t('fileUpload.failedList', { files: uploadSummary.failed.join(', ') })}</span>
                 {retryFiles.length > 0 && (
                   <button type="button" className="btn-ghost btn-sm" disabled={busy} onClick={() => void uploadFiles(retryFiles, uploadSummary)}>
-                    ניסיון חוזר לנכשלים בלבד
+                    {t('fileUpload.text_16')}
                   </button>
                 )}
               </div>
@@ -1002,14 +1000,14 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
       )}
       {error && docs && <ErrorNote message={error} />}
       {processing.error && docs && <ErrorNote message={processing.error} />}
-      {fetching && docs && <div className="mb-2 text-xs text-ink-muted" role="status">רשימת המסמכים מתעדכנת…</div>}
+      {fetching && docs && <div className="mb-2 text-xs text-ink-muted" role="status">{t('fileUpload.text_17')}</div>}
       {error && !docs ? (
         <ErrorNote message={error} />
       ) : loading ? (
         // Not cosmetic: `docs` is null while fetching, and the empty branch below claims
         // "no documents". On an invoice that reads as "no scan attached" when there is one.
         <div className="border border-line-soft rounded-lg divide-y divide-line-soft" role="status" aria-busy="true">
-          <span className="sr-only">טוען מסמכים</span>
+          <span className="sr-only">{t('fileUpload.text_18')}</span>
           {[0, 1].map((i) => (
             <div key={i} className="flex items-center gap-2 px-3 py-2.5">
               <Skeleton className="h-3.5 w-3.5 shrink-0" />
@@ -1026,7 +1024,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
               <li key={d.id} className="flex min-h-14 flex-wrap items-center gap-2 px-3 py-2 text-sm">
                 <FileText size={ICON.sm} className="shrink-0 text-ink-faint" />
                 <button className="link min-w-32 flex-1 truncate text-start" onClick={() => void open(d)}><bdi>{d.file_name}</bdi></button>
-                <span className="hidden text-xs text-ink-muted sm:inline">{documentKindLabel(d.document_kind)}</span>
+                <span className="hidden text-xs text-ink-muted sm:inline">{t(documentKindKey(d.document_kind))}</span>
                 {/* G1, finding 20 — same badge, same four human states as the documents folder.
                     The raw stage stays on `data-document-processing-status`. */}
                 {canReview && (
@@ -1035,7 +1033,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
                       ? <DocumentStatusBadge status={documentUiStatus({
                         status: stage, job: processing.snapshots[d.id]?.job, document: d,
                       })} />
-                      : <><Skeleton className="h-6 w-24" /><span className="sr-only">סטטוס העיבוד נטען</span></>}
+                      : <><Skeleton className="h-6 w-24" /><span className="sr-only">{t('fileUpload.text_19')}</span></>}
                   </span>
                 )}
                 <span className="text-xs text-ink-muted">{fmtDateTime(d.created_at)}</span>
@@ -1050,13 +1048,13 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
                     (DESIGN.md:586). In the menu it is `tone="danger"`: alert-coloured, always. */}
                 {canReview && (
                   <Link to={`/documents/${d.id}/review`} className="btn-ghost btn-sm" data-document-review-link>
-                    בדיקה
+                    {t('fileUpload.text_20')}
                   </Link>
                 )}
-                <ActionMenu label={`פעולות עבור ${d.file_name}`} items={[
+                <ActionMenu label={t('fileUpload.actionsFor', { file: d.file_name })} items={[
                   {
                     key: 'delete',
-                    label: 'מחיקה',
+                    label: t('fileUpload.text_21'),
                     icon: Trash2,
                     tone: 'danger',
                     hidden: !canDelete,
@@ -1068,16 +1066,16 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
           })}
         </ul>
       ) : (
-        <div className="text-sm text-ink-muted border border-dashed border-line rounded-lg px-3 py-4 text-center">אין מסמכים</div>
+        <div className="text-sm text-ink-muted border border-dashed border-line rounded-lg px-3 py-4 text-center">{t('fileUpload.text_22')}</div>
       )}
 
       <ConfirmDialog
         open={pending !== null}
         onClose={() => setPending(null)}
         onConfirm={() => { if (pending) void remove(pending); }}
-        title="הסרת מסמך"
-        message={`המסמך "${pending?.file_name ?? ''}" יוסר מהרשימה. הקובץ עצמו נשמר, וההסרה ניתנת לביטול על ידי מנהל המערכת.`}
-        confirmLabel="הסרה"
+        title={t('fileUpload.title')}
+        message={t('fileUpload.removeConfirm', { file: pending?.file_name ?? '' })}
+        confirmLabel={t('fileUpload.confirmLabel')}
         danger
         busy={deleting}
       />

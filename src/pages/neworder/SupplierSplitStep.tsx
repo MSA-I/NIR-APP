@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Split, Trash2 } from 'lucide-react';
 import { fmtMoneyExact, formatQuantity, formatUnit, productLabel, todayISO } from '../../lib/format';
+import { useT } from '../../lib/i18n/LocaleProvider';
+import type { TKey } from '../../lib/i18n/t.ts';
 import { compareLine, summarizeComparison, type LineComparison } from '../../lib/orderComparison';
 import { centsFromUnits, lineUnits, moneyFromCents } from '../../lib/orderSavings';
 import {
@@ -62,6 +64,7 @@ export default function SupplierSplitStep({
   onContinue,
   baseCurrency,
 }: SupplierSplitStepProps) {
+  const { locale, t } = useT();
   const [focusedSupplierId, setFocusedSupplierId] = useState<string | null>(null);
   const [panelMode, setPanelMode] = useState<'all' | 'move_group'>('all');
   const options = useMemo(
@@ -110,15 +113,15 @@ export default function SupplierSplitStep({
       )}
 
       {showConsolidation && (
-        <section className="note-info flex-wrap items-center" aria-label="אפשרות איחוד הזמנה">
+        <section className="note-info flex-wrap items-center" aria-label={t('supplierSplit.aria_label')}>
           <div className="min-w-0 flex-1">
-            <strong className="block text-ink">אפשר לאחד את כל הסל אצל {singleSupplier.name}</strong>
+            <strong className="block text-ink">{t('supplierSplit.consolidateWith', { supplier: singleSupplier.name })}</strong>
             <span className="mt-0.5 block text-xs">
               <ConsolidationCost savings={split.savings.savings} currency={split.savings.currency} /> · סה״כ <span className="num font-semibold">{fmtMoneyExact(split.savings.singleSupplierTotal, split.savings.currency)}</span>
             </span>
           </div>
           <button type="button" className="btn-secondary shrink-0" disabled={busy} onClick={() => onConsolidate(singleSupplierId)}>
-            אחד אצל {singleSupplier.name}
+            {t('supplierSplit.text')} {singleSupplier.name}
           </button>
         </section>
       )}
@@ -135,11 +138,11 @@ export default function SupplierSplitStep({
             const resolved = resolvedByProduct.get(item.productId);
             return (
               <div key={item.productId} className="grid items-center gap-2 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(9rem,auto)_auto_2.75rem] sm:gap-4 sm:px-4">
-                <div className="min-w-0"><div className="break-words text-sm font-medium text-ink-body"><bdi>{productLabel(item.product)}</bdi></div><div className="text-xs text-ink-muted">{formatUnit(item.product.unit)}</div></div>
-                <div className="text-sm"><span className="text-ink-muted">כמות </span><b className="num">{formatQuantity(item.qty, item.product.unit)}</b></div>
-                <div className="text-xs text-ink-muted">{resolved?.supplierId ? supplierById.get(resolved.supplierId)?.name ?? 'ספק לא זמין' : 'טרם הוקצה ספק'}</div>
+                <div className="min-w-0"><div className="break-words text-sm font-medium text-ink-body"><bdi>{productLabel(item.product)}</bdi></div><div className="text-xs text-ink-muted">{formatUnit(item.product.unit, locale)}</div></div>
+                <div className="text-sm"><span className="text-ink-muted">{t('supplierSplit.formatQuantity')} </span><b className="num">{formatQuantity(item.qty, item.product.unit, locale)}</b></div>
+                <div className="text-xs text-ink-muted">{resolved?.supplierId ? supplierById.get(resolved.supplierId)?.name ?? t('supplierSplit.get') : t('supplierSplit.get_2')}</div>
                 <div className="num text-sm font-semibold">{fmtMoneyExact(resolved?.lineTotal, resolved?.currency)}</div>
-                <button type="button" className="btn-ghost btn-icon text-alert-fg" onClick={() => onRemove(item.productId)} aria-label={`הסרת ${productLabel(item.product)}`}><Trash2 size={ICON.sm} aria-hidden="true" /></button>
+                <button type="button" className="btn-ghost btn-icon text-alert-fg" onClick={() => onRemove(item.productId)} aria-label={t('supplierSplit.removeLabel', { product: productLabel(item.product) })}><Trash2 size={ICON.sm} aria-hidden="true" /></button>
               </div>
             );
           })}
@@ -159,7 +162,7 @@ export default function SupplierSplitStep({
       />
 
       <section aria-labelledby="supplier-split-title" className="border-y border-line-strong bg-surface">
-        <div className="flex items-center gap-2 border-b border-line-soft px-3 py-3 sm:px-4"><Split size={ICON.md} aria-hidden="true" /><h2 id="supplier-split-title" className="section-title">פיצול הזמנות לספקים</h2></div>
+        <div className="flex items-center gap-2 border-b border-line-soft px-3 py-3 sm:px-4"><Split size={ICON.md} aria-hidden="true" /><h2 id="supplier-split-title" className="section-title">{t('supplierSplit.text_3')}</h2></div>
         <div className="divide-y divide-line-strong">
           {split.groups.map((group) => (
             <SupplierGroupCard
@@ -175,12 +178,12 @@ export default function SupplierSplitStep({
       </section>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="sm:col-span-2"><label className="label" htmlFor="new-order-notes">הערות</label><input id="new-order-notes" className="input" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="למשל: אספקה לכניסה הראשית" /></div>
-        <div><label className="label" htmlFor="new-order-expected-date">אספקה מבוקשת</label><input id="new-order-expected-date" type="date" className="input" value={expectedDate} min={todayISO()} onChange={(event) => setExpectedDate(event.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="new-order-notes">{t('supplierSplit.setNotes')}</label><input id="new-order-notes" className="input" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={t('supplierSplit.placeholder')} /></div>
+        <div><label className="label" htmlFor="new-order-expected-date">{t('supplierSplit.todayISO')}</label><input id="new-order-expected-date" type="date" className="input" value={expectedDate} min={todayISO()} onChange={(event) => setExpectedDate(event.target.value)} /></div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line-strong bg-surface px-3 py-3 sm:px-4">
-        <button type="button" className="btn-secondary" disabled={busy} onClick={onBack}>חזרה למוצרים וכמויות</button>
-        <button type="button" className="btn-primary" disabled={busy || split.blocked.length > 0} onClick={onContinue}>המשך לסיכום ואישור</button>
+        <button type="button" className="btn-secondary" disabled={busy} onClick={onBack}>{t('supplierSplit.text_4')}</button>
+        <button type="button" className="btn-primary" disabled={busy || split.blocked.length > 0} onClick={onContinue}>{t('supplierSplit.text_5')}</button>
       </div>
 
       <MinimumFixPanel
@@ -210,11 +213,12 @@ function BlockedSurface({ blocked, cartByProduct, offersByProduct, supplierById,
   onUnpin: (productId: string) => void;
   onAlternatives: (supplierId: string) => void;
 }) {
+  const { t } = useT();
   return (
     <section className="note-alert block" aria-labelledby="blocked-lines-title">
       <div className="flex items-start gap-2">
         <AlertTriangle size={ICON.md} className="mt-0.5 shrink-0" aria-hidden="true" />
-        <div><h2 id="blocked-lines-title" className="font-semibold">יש פריטים שדורשים תיקון לפני אישור</h2><p className="mt-0.5 text-xs">לא ניתן ליצור הזמנה עד שלכל פריט יש ספק וכמות תקפים.</p></div>
+        <div><h2 id="blocked-lines-title" className="font-semibold">{t('supplierSplit.text_6')}</h2><p className="mt-0.5 text-xs">{t('supplierSplit.text_7')}</p></div>
       </div>
       <div className="mt-3 divide-y divide-alert-line border-y border-alert-line">
         {blocked.map((line) => {
@@ -232,18 +236,18 @@ function BlockedSurface({ blocked, cartByProduct, offersByProduct, supplierById,
             <div key={line.productId} className={`flex flex-wrap items-center gap-2 px-2 py-3 ${line.status === 'pin_below_min_qty' ? 'bg-await-wash text-await-fg' : ''}`}>
               <div className="min-w-0 flex-1">
                 <div className="font-medium"><bdi>{productLabel(item.product)}</bdi></div>
-                <div className="mt-0.5 text-xs">{blockedReason(line.status, pinnedSupplierId ? supplierById.get(pinnedSupplierId)?.name ?? null : null)}</div>
-                {line.status === 'pin_below_min_qty' && requiredQty != null && <span className="badge-await mt-1">הצמדה לא תקפה · מינימום <span className="num ms-1">{requiredQty}</span></span>}
+                <div className="mt-0.5 text-xs">{blockedReason(line.status, pinnedSupplierId ? supplierById.get(pinnedSupplierId)?.name ?? null : null, t)}</div>
+                {line.status === 'pin_below_min_qty' && requiredQty != null && <span className="badge-await mt-1">{t('supplierSplit.text_8')} <span className="num ms-1">{requiredQty}</span></span>}
               </div>
               {line.status === 'pin_below_min_qty' && requiredQty != null && (
                 <button type="button" className="btn-secondary btn-sm" onClick={() => onQty(line.productId, requiredQty)}>
-                  הגדל ל-<span className="num">{requiredQty}</span>{addedCost != null ? <> · <span className="num">+{fmtMoneyExact(addedCost, line.currency ?? supplierById.get(line.assignment.mode === 'pinned' ? line.assignment.supplierId : '')?.default_currency)}</span></> : null}
+                  {t('supplierSplit.raiseTo')}<span className="num">{requiredQty}</span>{addedCost != null ? <> · <span className="num">+{fmtMoneyExact(addedCost, line.currency ?? supplierById.get(line.assignment.mode === 'pinned' ? line.assignment.supplierId : '')?.default_currency)}</span></> : null}
                 </button>
               )}
-              {line.status === 'no_usable_offer' && requiredQty != null && <button type="button" className="btn-secondary btn-sm" onClick={() => onQty(line.productId, requiredQty)}>הגדל ל-<span className="num">{requiredQty}</span></button>}
-              {line.status === 'pin_supplier_gone' && pinnedSupplierId && <button type="button" className="btn-secondary btn-sm" onClick={() => onAlternatives(pinnedSupplierId)}>הצג ספקים חלופיים</button>}
-              {(line.status === 'pin_below_min_qty' || line.status === 'pin_supplier_gone') && <button type="button" className="btn-ghost btn-sm" onClick={() => onUnpin(line.productId)}>חזרה לבחירה אוטומטית</button>}
-              <button type="button" className="btn-ghost btn-sm text-alert-fg" onClick={() => onRemove(line.productId)}><Trash2 size={ICON.xs} aria-hidden="true" /> הסר</button>
+              {line.status === 'no_usable_offer' && requiredQty != null && <button type="button" className="btn-secondary btn-sm" onClick={() => onQty(line.productId, requiredQty)}>{t('supplierSplit.onQty')}<span className="num">{requiredQty}</span></button>}
+              {line.status === 'pin_supplier_gone' && pinnedSupplierId && <button type="button" className="btn-secondary btn-sm" onClick={() => onAlternatives(pinnedSupplierId)}>{t('supplierSplit.onAlternatives')}</button>}
+              {(line.status === 'pin_below_min_qty' || line.status === 'pin_supplier_gone') && <button type="button" className="btn-ghost btn-sm" onClick={() => onUnpin(line.productId)}>{t('supplierSplit.onUnpin')}</button>}
+              <button type="button" className="btn-ghost btn-sm text-alert-fg" onClick={() => onRemove(line.productId)}><Trash2 size={ICON.xs} aria-hidden="true" /> {t('supplierSplit.onRemove')}</button>
             </div>
           );
         })}
@@ -262,6 +266,7 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, baseCu
   onChoose: (item: SupplierCartItem, offer: SupplierProduct) => void;
   onUnpin: (productId: string) => void;
 }) {
+  const { t } = useT();
   const resolved = new Map([...split.groups.flatMap((group) => group.lines), ...split.blocked].map((line) => [line.productId, line]));
   const rows = cart.map((item) => {
     const chosen = resolved.get(item.productId);
@@ -285,9 +290,9 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, baseCu
   return (
     <section aria-labelledby="supplier-comparison-title" className="border-y border-line-strong bg-surface">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line-soft px-3 py-3 sm:px-4">
-        <div><h2 id="supplier-comparison-title" className="section-title">השוואת מחיר לכל מוצר</h2><p className="mt-0.5 text-xs text-ink-muted">לחצו על ספק כדי להצמיד אותו למוצר. ספק עם מינימום כמות יגדיל את הכמות באותה לחיצה.</p></div>
+        <div><h2 id="supplier-comparison-title" className="section-title">{t('supplierSplit.text_9')}</h2><p className="mt-0.5 text-xs text-ink-muted">{t('supplierSplit.text_10')}</p></div>
         <div className="text-start sm:text-end">
-          <span className="block text-xs text-ink-muted">נחסך מול האפשרות הזולה הבאה</span>
+          <span className="block text-xs text-ink-muted">{t('supplierSplit.text_11')}</span>
           {/* `—` and never ₪0.00: with nothing in the basket holding a runner-up there is no
               comparison to report, and a zero would be a claim about the money rather than the
               absence of one. */}
@@ -306,7 +311,7 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, baseCu
             <div key={item.productId} className="px-3 py-3 text-sm sm:px-4">
               <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0"><div className="font-medium text-ink-body"><bdi>{productLabel(item.product)}</bdi></div><LineComparisonNote comparison={comparison} /></div>
-                <div className="text-xs text-ink-muted">כמות <span className="num">{item.qty}</span></div>
+                <div className="text-xs text-ink-muted">{t('supplierSplit.text_12')} <span className="num">{item.qty}</span></div>
               </div>
               {offers.length ? <div className="divide-y divide-line-soft border-y border-line-soft">
                 {offers.map((offer) => {
@@ -321,17 +326,20 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, baseCu
                   return (
                     <div key={offer.id} className={`flex items-stretch ${isSelected ? 'bg-surface-selected' : ''}`}>
                       <button type="button" onClick={() => onChoose(item, offer)} aria-pressed={isSelected}
-                        aria-label={`בחירת ${supplierById.get(offer.supplier_id)?.name ?? 'ספק'} עבור ${productLabel(item.product)}`}
+                        aria-label={t('supplierSplit.chooseSupplierLabel', {
+                          supplier: supplierById.get(offer.supplier_id)?.name ?? t('supplierSplit.supplierWord'),
+                          product: productLabel(item.product),
+                        })}
                         className="grid min-h-11 min-w-0 flex-1 gap-1 px-2 py-2 text-start row-hover cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-4">
-                        <div className="font-medium text-ink-body">{supplierById.get(offer.supplier_id)?.name ?? 'ספק לא זמין'}{isSelected && <span className="ms-2 text-xs text-action">{isPinned ? 'מוצמד' : 'בחירה אוטומטית'}</span>}{offer.min_qty != null && <span className="badge-await ms-2">מינ׳ <span className="num ms-1">{offer.min_qty}</span></span>}</div>
+                        <div className="font-medium text-ink-body">{supplierById.get(offer.supplier_id)?.name ?? t('supplierSplit.get_3')}{isSelected && <span className="ms-2 text-xs text-action">{isPinned ? t('supplierSplit.get_4') : t('supplierSplit.get_5')}</span>}{offer.min_qty != null && <span className="badge-await ms-2">{t('supplierSplit.get_6')} <span className="num ms-1">{offer.min_qty}</span></span>}</div>
                         <div className="text-xs text-ink-muted"><span className="num">{fmtMoneyExact(offer.current_price, offer.currency)}</span> × <span className="num">{adjustedQty}</span> = <strong className="num text-ink">{fmtMoneyExact(lineTotal, offer.currency)}</strong></div>
                         <div className={`text-xs font-medium sm:min-w-36 sm:text-end ${difference == null ? 'text-ink-muted' : difference <= 0 ? 'text-done-fg' : 'text-await-fg'}`}>
                           {offer.min_qty != null && adjustedQty !== item.qty
-                            ? <>הכמות תגדל ל-<span className="num">{adjustedQty}</span></>
+                            ? <>{t('supplierSplit.text_13')}<span className="num">{adjustedQty}</span></>
                             : difference === 0
-                              ? 'המחיר הנמוך ביותר'
+                              ? t('supplierSplit.text_14')
                               : difference == null
-                                ? 'אין בסיס השוואה'
+                                ? t('supplierSplit.text_15')
                                 : <SignedAmount value={difference} currency={offer.currency} />}
                         </div>
                       </button>
@@ -339,11 +347,11 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, baseCu
                           auto assignment, which may legitimately land on this same supplier. The
                           badge beside it then flips 'מוצמד' → 'בחירה אוטומטית', so the pair still
                           reads as one true sentence instead of a button that did nothing. */}
-                      {isPinned && <button type="button" className="btn-ghost btn-sm m-1 shrink-0" onClick={() => onUnpin(item.productId)}>חזרה לבחירה אוטומטית</button>}
+                      {isPinned && <button type="button" className="btn-ghost btn-sm m-1 shrink-0" onClick={() => onUnpin(item.productId)}>{t('supplierSplit.onUnpin_2')}</button>}
                     </div>
                   );
                 })}
-              </div> : <div className="text-alert-fg">אין הצעת מחיר פעילה למוצר</div>}
+              </div> : <div className="text-alert-fg">{t('supplierSplit.text_16')}</div>}
             </div>
           );
         })}
@@ -352,18 +360,31 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, baseCu
   );
 }
 
-function blockedReason(status: OrderSplit['blocked'][number]['status'], supplierName: string | null): string {
-  if (status === 'no_offers') return 'אין הצעת מחיר פעילה למוצר.';
-  if (status === 'no_usable_offer') return 'אין הצעה שעומדת בכמות שנבחרה.';
-  if (status === 'pin_supplier_gone') return `הספק המוצמד${supplierName ? ` ${supplierName}` : ''} אינו זמין עוד.`;
-  return 'הכמות נמוכה ממינימום הכמות של הספק המוצמד.';
+/**
+ * Why a line cannot be assigned. The translator is a parameter rather than a hook: this is a pure
+ * mapping from a split status to a sentence, and its only caller is a render that already has one.
+ */
+function blockedReason(
+  status: OrderSplit['blocked'][number]['status'],
+  supplierName: string | null,
+  t: (key: TKey, vars?: Record<string, string | number>) => string,
+): string {
+  if (status === 'no_offers') return t('supplierSplit.blockedNoOffers');
+  if (status === 'no_usable_offer') return t('supplierSplit.blockedNoUsableOffer');
+  if (status === 'pin_supplier_gone') {
+    return supplierName
+      ? t('supplierSplit.blockedPinnedGoneNamed', { supplier: supplierName })
+      : t('supplierSplit.blockedPinnedGone');
+  }
+  return t('supplierSplit.blockedBelowMinimum');
 }
 
 function ConsolidationCost({ savings, currency }: { savings: number | null; currency: string | null }) {
-  if (savings == null || savings === 0) return <>ללא שינוי בעלות</>;
+  const { t } = useT();
+  if (savings == null || savings === 0) return <>{t('supplierSplit.text_17')}</>;
   return savings > 0
-    ? <>האיחוד מוסיף <span className="num font-semibold">{fmtMoneyExact(savings, currency)}</span></>
-    : <>האיחוד חוסך <span className="num font-semibold">{fmtMoneyExact(Math.abs(savings), currency)}</span></>;
+    ? <>{t('supplierSplit.fmtMoneyExact_5')} <span className="num font-semibold">{fmtMoneyExact(savings, currency)}</span></>
+    : <>{t('supplierSplit.fmtMoneyExact_6')} <span className="num font-semibold">{fmtMoneyExact(Math.abs(savings), currency)}</span></>;
 }
 
 function hasGroupMoveTarget(group: OrderSplit['groups'][number], input: SplitInput): boolean {
@@ -382,14 +403,15 @@ function exactLineTotal(qty: number, unitPrice: number): number {
  * showing a figure it cannot support.
  */
 function LineComparisonNote({ comparison }: { comparison: LineComparison }) {
+  const { t } = useT();
   if (comparison.status === 'saved') {
-    return <p className="mt-0.5 text-xs text-done-fg">נחסכו <span className="num">{fmtMoneyExact(comparison.savedVsNext, comparison.currency)}</span> מול האפשרות הזולה הבאה</p>;
+    return <p className="mt-0.5 text-xs text-done-fg">{t('supplierSplit.fmtMoneyExact_7')} <span className="num">{fmtMoneyExact(comparison.savedVsNext, comparison.currency)}</span> {t('supplierSplit.fmtMoneyExact_8')}</p>;
   }
   if (comparison.status === 'overpaying') {
-    return <p className="mt-0.5 text-xs text-await-fg">תוספת של <span className="num">{fmtMoneyExact(comparison.extraVsCheapest, comparison.currency)}</span> מול הזול ביותר</p>;
+    return <p className="mt-0.5 text-xs text-await-fg">{t('supplierSplit.fmtMoneyExact_9')} <span className="num">{fmtMoneyExact(comparison.extraVsCheapest, comparison.currency)}</span> {t('supplierSplit.fmtMoneyExact_10')}</p>;
   }
-  if (comparison.status === 'same_price') return <p className="mt-0.5 text-xs text-ink-muted">אותו מחיר גם באפשרות הבאה</p>;
-  if (comparison.status === 'single_offer') return <p className="mt-0.5 text-xs text-ink-muted">הצעה יחידה — אין בסיס להשוואה</p>;
+  if (comparison.status === 'same_price') return <p className="mt-0.5 text-xs text-ink-muted">{t('supplierSplit.text_18')}</p>;
+  if (comparison.status === 'single_offer') return <p className="mt-0.5 text-xs text-ink-muted">{t('supplierSplit.text_19')}</p>;
   return <p className="mt-0.5 text-xs text-ink-muted num">—</p>;
 }
 

@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router';
 import { useAuth, homeFor } from '../auth/AuthContext';
@@ -45,6 +46,7 @@ function isFederatedProvider(value: unknown): value is FederatedProvider {
  */
 
 export default function Signup() {
+  const { t } = useT();
   const [form, setForm] = useState({ organization: '', name: '', email: '', password: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,7 +102,7 @@ export default function Signup() {
     setError(null);
     const { error: failure } = await startFederatedSignup(provider);
     if (failure) {
-      setError(`ההתחברות עם ${FEDERATED_PROVIDER_LABEL[provider]} אינה זמינה כרגע.`);
+      setError(t('signup.federatedUnavailable', { provider: FEDERATED_PROVIDER_LABEL[provider] }));
     }
   }
 
@@ -129,7 +131,7 @@ export default function Signup() {
           // no JSON body — fall through to the transport message
         }
       }
-      setError('ההרשמה נכשלה. יש לנסות שוב, ואם הבעיה חוזרת לפנות לתמיכה.');
+      setError(t('signup.setError'));
       return;
     }
     // The account is confirmed and signed in already, so there is nothing to wait for.
@@ -172,7 +174,7 @@ export default function Signup() {
           // no JSON body — fall through to the transport message
         }
       }
-      setError('ההרשמה נכשלה. יש לנסות שוב, ואם הבעיה חוזרת לפנות לתמיכה.');
+      setError(t('signup.setError_2'));
       return;
     }
     setSent(data?.message ?? null);
@@ -202,7 +204,7 @@ export default function Signup() {
       <main className="mx-auto max-w-md px-4 py-8 sm:py-12">
         <Card className="space-y-3 text-center">
           <MailCheck size={ICON.hero} aria-hidden="true" className="mx-auto text-done-fg" />
-          <h1 className="page-title">בדקו את תיבת הדואר</h1>
+          <h1 className="page-title">{t('signup.text')}</h1>
           {/* Deliberately the same sentence whether the address was new or already registered:
               a different answer per case would turn this page into a way to discover who has an
               account. */}
@@ -225,9 +227,9 @@ export default function Signup() {
   return (
     <main className="mx-auto max-w-md px-4 py-8 sm:py-12">
       <Card className="space-y-4">
-        <h1 className="page-title flex items-center gap-2"><Building2 size={ICON.xl} aria-hidden="true" /> פתיחת חשבון</h1>
+        <h1 className="page-title flex items-center gap-2"><Building2 size={ICON.xl} aria-hidden="true" /> {t('signup.text_3')}</h1>
         <p className="text-sm text-ink-soft">
-          החשבון נפתח מיד, וההתחברות אפשרית לאחר אישור כתובת האימייל.
+          {t('signup.text_4')}
         </p>
 
         {error && <div id="signup-problem"><ErrorNote message={error} /></div>}
@@ -236,23 +238,24 @@ export default function Signup() {
           <Note tone="idle">
             <span className="min-w-0 flex-1">
               {federated.email
-                ? <>מחובר כ־<span dir="ltr">{federated.email}</span> עם {FEDERATED_PROVIDER_LABEL[federated.provider]}.</>
-                : <>מחובר עם {FEDERATED_PROVIDER_LABEL[federated.provider]}.</>}
-              {' '}נשאר רק לתת שם לעסק.
+                ? <>{t('signup.text_5')}<span dir="ltr">{federated.email}</span>{' '}
+                  {t('signup.signedInWith', { provider: FEDERATED_PROVIDER_LABEL[federated.provider] })}</>
+                : <>{t('signup.signedInWithNoEmail', { provider: FEDERATED_PROVIDER_LABEL[federated.provider] })}</>}
+              {' '}{t('signup.onlyNameTheBusiness')}
             </span>
           </Note>
         )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="label" htmlFor="signup-organization">שם העסק</label>
+            <label className="label" htmlFor="signup-organization">{t('signup.text_6')}</label>
             <input id="signup-organization" className="input" value={form.organization}
               autoComplete="organization"
               aria-describedby={error ? 'signup-problem' : undefined}
               onChange={(event) => setForm({ ...form, organization: event.target.value })} />
           </div>
           <div>
-            <label className="label" htmlFor="signup-name">שם מלא</label>
+            <label className="label" htmlFor="signup-name">{t('signup.text_7')}</label>
             <input id="signup-name" className="input" value={form.name} autoComplete="name"
               aria-describedby={error ? 'signup-problem' : undefined}
               onChange={(event) => setForm({ ...form, name: event.target.value })} />
@@ -261,7 +264,7 @@ export default function Signup() {
         {!federated && (
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="label" htmlFor="signup-email">אימייל</label>
+              <label className="label" htmlFor="signup-email">{t('signup.text_8')}</label>
               {/* The screen has always judged this address — that is what greys out the button.
                   It simply never told the field, so a screen reader met a dead control and no
                   reason for it. */}
@@ -272,14 +275,14 @@ export default function Signup() {
                 onChange={(event) => setForm({ ...form, email: event.target.value })} />
             </div>
             <div>
-              <label className="label" htmlFor="signup-password">סיסמה</label>
+              <label className="label" htmlFor="signup-password">{t('signup.text_9')}</label>
               <input id="signup-password" type="password" dir="ltr" className="input"
                 value={form.password} autoComplete="new-password"
                 aria-invalid={passwordProblem || undefined}
                 aria-describedby={`signup-password-rule${error ? ' signup-problem' : ''}`}
                 onChange={(event) => setForm({ ...form, password: event.target.value })} />
               <p id="signup-password-rule" className={`mt-1 text-xs ${passwordProblem ? 'text-alert-fg' : 'text-ink-muted'}`}>
-                לפחות {MIN_PASSWORD_LENGTH} תווים.
+                {t('signup.passwordRule', { min: MIN_PASSWORD_LENGTH })}
               </p>
             </div>
           </div>
@@ -287,7 +290,7 @@ export default function Signup() {
 
         <Note tone="idle">
           <span className="min-w-0 flex-1">
-            החשבון נפתח במסלול ההתחלתי. שינוי מסלול נעשה מול השירות ואינו נבחר בטופס הזה.
+            {t('signup.text_10')}
           </span>
         </Note>
 
@@ -295,32 +298,32 @@ export default function Signup() {
           <button type="button" className="btn-primary w-full"
             disabled={busy || form.organization.trim().length < 2}
             onClick={() => void finishFederatedSignup(federated.provider)}>
-            {busy ? 'פותח חשבון…' : 'פתיחת חשבון'}
+            {busy ? t('signup.text_11') : t('signup.text_12')}
           </button>
         ) : (
           <button type="button" className="btn-primary w-full" disabled={busy || !ready}
             onClick={() => void submit()}>
-            {busy ? 'פותח חשבון…' : 'פתיחת חשבון'}
+            {busy ? t('signup.text_13') : t('signup.text_14')}
           </button>
         )}
 
         {!federated && providers.length > 0 && (
           <>
-            <p className="text-center text-xs text-ink-muted">או</p>
+            <p className="text-center text-xs text-ink-muted">{t('signup.text_15')}</p>
             {providers.map((provider) => (
               <button key={provider} type="button" className="btn-secondary w-full" disabled={busy}
                 onClick={() => void continueWith(provider)}>
-                המשך עם {FEDERATED_PROVIDER_LABEL[provider]}
+                {t('signup.text_16')} {FEDERATED_PROVIDER_LABEL[provider]}
               </button>
             ))}
             <p className="text-center text-xs text-ink-muted">
-              פתיחת עסק חדש בלבד. הצטרפות לעסק קיים נעשית מהזמנה שנשלחה אליך.
+              {t('signup.text_17')}
             </p>
           </>
         )}
 
         <p className="text-center text-sm text-ink-muted">
-          כבר יש חשבון? <Link className="link" to="/login">התחברות</Link>
+          {t('signup.alreadyHaveAccount')}{' '}<Link className="link" to="/login">{t('signup.text_18')}</Link>
         </p>
       </Card>
     </main>

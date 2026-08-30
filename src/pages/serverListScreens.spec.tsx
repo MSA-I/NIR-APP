@@ -12,7 +12,14 @@ import { SUPABASE_URL } from '../test/msw/handlers';
 import { createAppQueryClient } from '../lib/query/client';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import { ToastProvider } from '../components/ui';
-import { PAGE_NO_LONGER_EXISTS, SUPPLIER_SEARCH_ID_CAP, SUPPLIER_SEARCH_NARROWED } from '../lib/serverList';
+import { PAGE_NO_LONGER_EXISTS_KEY, SUPPLIER_SEARCH_ID_CAP, SUPPLIER_SEARCH_NARROWED_KEY } from '../lib/serverList';
+import { translateIn } from '../lib/i18n/LocaleProvider';
+
+/* The screens render the key through the reader's dictionary, and the test environment is Hebrew
+   by default. Resolving here keeps the assertion about what a PERSON sees rather than about a
+   constant the module happens to export. */
+const PAGE_NO_LONGER_EXISTS = translateIn('he', PAGE_NO_LONGER_EXISTS_KEY);
+const SUPPLIER_SEARCH_NARROWED = translateIn('he', SUPPLIER_SEARCH_NARROWED_KEY);
 import { fmtMoneyExact } from '../lib/format';
 import { APP_ROUTE_POLICY } from '../lib/routePolicy';
 
@@ -359,8 +366,15 @@ describe('active-persona boundaries for the without-order signal', () => {
         : [];
     });
 
+  /**
+   * The dictionaries are excluded because they are CONTENT, not callers. A translation key can
+   * legitimately contain the words of a database field — `alerts.scan_invoice_without_order` names
+   * the scan whose findings this test is about — and counting that as a call site would make this
+   * boundary check fire on a wording change.
+   */
   const holdersOf = (dir: string, extensions: string[], needle: string): string[] =>
     sourceFilesUnder(dir, extensions)
+      .filter((name) => !name.includes('i18n/dictionaries/'))
       .filter((name) => readFileSync(join(dir, name), 'utf8').includes(needle))
       .sort();
 

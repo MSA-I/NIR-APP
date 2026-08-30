@@ -11,11 +11,15 @@
 import { describe, expect, it } from 'vitest';
 import { summarizeChecks } from './checkSummary';
 import type { CheckResult } from './checks';
+import { he } from './i18n/dictionaries/he';
+import type { Dictionary } from './i18n/dictionaries/he';
+import { translate, type TKey } from './i18n/t';
+
+const say = (key: TKey) => translate(he as unknown as Dictionary, key);
 
 const OVER_ALLOCATED: CheckResult = {
-  code: 'allocation_vs_balance',
+  code: 'allocation_vs_balance_one',
   severity: 'critical',
-  message: 'חשבונית מקושרת אחת מוקצית מעל היתרה שנותרה — יש לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן',
 };
 
 describe('summarizeChecks', () => {
@@ -25,16 +29,17 @@ describe('summarizeChecks', () => {
     expect(summary.blocking).toEqual([OVER_ALLOCATED]);
     expect(summary.warnings).toEqual([]);
     expect(summary.info).toEqual([]);
-    expect(summary.action).toBe('יש לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן');
+    expect(summary.actionKey).toBe('checks.actionAllocationVsBalance');
+    expect(say(summary.actionKey!)).toBe('יש לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן');
   });
 
   it('sorts a warning and an info finding without blocking on either', () => {
     const warning: CheckResult = {
-      code: 'open_credit', severity: 'warning', amount: 250,
-      message: 'זיכויים פתוחים טרם קוזזו מהדרישה',
+      code: 'payment_request_open_credit', severity: 'warning', amount: 250,
+      vars: { total: '250 ₪' },
     };
     const info: CheckResult = {
-      code: 'existing_pr', severity: 'info', message: 'קיימת דרישת תשלום מקושרת לחשבונית זו',
+      code: 'existing_pr', severity: 'info', vars: { numbers: '7' },
     };
 
     const summary = summarizeChecks([warning, info]);
@@ -43,7 +48,7 @@ describe('summarizeChecks', () => {
     expect(summary.warnings).toEqual([warning]);
     expect(summary.info).toEqual([info]);
     // Nothing blocks, so there is no block to clear — an action here would be advice nobody asked for.
-    expect(summary.action).toBeNull();
+    expect(summary.actionKey).toBeNull();
   });
 
   it('leaves the action null for a blocking code with no established remedy', () => {
@@ -51,24 +56,24 @@ describe('summarizeChecks', () => {
     // is a judgement call. Silence is the correct output — an invented instruction on a payment
     // screen is followed, fails, and teaches the user the screen does not know what it is doing.
     const summary = summarizeChecks([
-      { code: 'similar_pr', severity: 'critical', message: 'קיימת דרישת תשלום פעילה לאותו ספק באותו סכום' },
+      { code: 'similar_pr', severity: 'critical', vars: { numbers: '12' } },
     ]);
 
     expect(summary.blocking).toHaveLength(1);
-    expect(summary.action).toBeNull();
+    expect(summary.actionKey).toBeNull();
   });
 
   it('reports a clean run as clean', () => {
-    expect(summarizeChecks([])).toEqual({ blocking: [], warnings: [], info: [], action: null });
+    expect(summarizeChecks([])).toEqual({ blocking: [], warnings: [], info: [], actionKey: null });
   });
 
   it('still finds the remedy when the blocking check is not the first finding', () => {
     const summary = summarizeChecks([
-      { code: 'invoice_unapproved', severity: 'critical', message: 'הדרישה כוללת חשבונית שטרם אושרה לתשלום' },
+      { code: 'invoice_unapproved', severity: 'critical' },
       OVER_ALLOCATED,
     ]);
 
     expect(summary.blocking).toHaveLength(2);
-    expect(summary.action).toBe('יש לבטל את הדרישה ולפתוח דרישה חדשה בסכום המעודכן');
+    expect(summary.actionKey).toBe('checks.actionAllocationVsBalance');
   });
 });

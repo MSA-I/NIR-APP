@@ -4,9 +4,10 @@ import {
   partitionSupplierCredits,
   type SupplierCreditBalance,
 } from './AccountantPaymentQueue';
-import { ALLOCATION_REFUSAL_MESSAGES, toHebrewError } from '../lib/errors';
+import { ALLOCATION_REFUSAL_MESSAGES, toErrorKey, toHebrewError } from '../lib/errors';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { he } from '../lib/i18n/dictionaries/he';
 
 describe('credit allocations in the accountant payment queue', () => {
   const invoices = [
@@ -263,11 +264,21 @@ describe('what the payment-execution screen says about credits', () => {
     join(process.cwd(), 'src', 'pages', 'AccountantPaymentQueue.tsx'), 'utf8');
 
   it('labels remaining credit, its invoice, status and cash without calling the approved total cash', () => {
-    expect(source).toContain('זמין לקיזוז');
-    expect(source).toContain('יתרה זמינה');
-    expect(source).toContain('משויך לחשבונית');
-    expect(source).toContain('סכום להעברה בפועל');
+    // Four labels moved into the dictionary, so each claim splits: the screen renders that key,
+    // and the key carries that wording. The NEGATIVE claim below is the reason this matters —
+    // "the approved total is not cash" is a statement about what the screen must never say, and
+    // after extraction the dictionary is a second place that phrase could hide.
+    for (const [key, label] of [
+      ['text_26', 'זמין לקיזוז'],
+      ['availableBalance', 'יתרה זמינה'],
+      ['text_27', 'משויך לחשבונית'],
+      ['text_36', 'סכום להעברה בפועל'],
+    ] as const) {
+      expect(source).toContain(`t('payQueue.${key}')`);
+      expect(he.payQueue[key]).toBe(label);
+    }
     expect(source).not.toContain('סכום מאושר להעברה');
+    expect(JSON.stringify(he.payQueue)).not.toContain('סכום מאושר להעברה');
   });
 
   it('renders an unknown credit offset as — and never as a measured zero', () => {
@@ -277,13 +288,17 @@ describe('what the payment-execution screen says about credits', () => {
   });
 
   it('asks the accountant which invoice an unlinked credit lands on, with nothing preselected', () => {
-    expect(source).toContain('חשבונית שממנה יקוזז הזיכוי');
-    expect(source).toContain('בחר חשבונית…');
+    expect(source).toContain("t('payQueue.text_28')");
+    expect(he.payQueue.text_28).toBe('חשבונית שממנה יקוזז הזיכוי');
+    expect(source).toContain("t('payQueue.text_29')");
+    expect(he.payQueue.text_29).toBe('בחר חשבונית…');
     expect(source).toContain('<option value="">');
     // The placeholder the owner\'s ruling replaced: unlinked credits are no longer excluded, and
     // the screen no longer says the question is open.
     expect(source).not.toContain('אינם ניתנים לקיזוז כאן');
     expect(source).not.toContain('טרם הוכרעה');
+    expect(JSON.stringify(he.payQueue)).not.toContain('אינם ניתנים לקיזוז כאן');
+    expect(JSON.stringify(he.payQueue)).not.toContain('טרם הוכרעה');
     // No implicit target may creep back in through array order.
     expect(source).not.toContain('invoices[0]');
     expect(source).not.toContain('pr.invoices[0]');
@@ -316,7 +331,9 @@ describe('the Hebrew the accountant reads when the credit allocation is refused'
 
   it.each(Object.keys(ALLOCATION_REFUSAL_MESSAGES))(
     'says the same thing about %s inline as it does through toHebrewError', (code) => {
-      expect(toHebrewError(new Error(code))).toBe(ALLOCATION_REFUSAL_MESSAGES[code]);
+      // Both sides are dictionary KEYS now, which is the claim this test always made: the inline
+      // refusal and the thrown one name the same failure, so they cannot drift into two wordings.
+      expect(toErrorKey(new Error(code))).toBe(ALLOCATION_REFUSAL_MESSAGES[code]);
     });
 
   it('no longer maps the refusal 0173 removed', () => {

@@ -30,6 +30,8 @@
  *     File. Non-images (PDF, Office, unknown) remain not applicable.
  */
 
+import type { TKey } from './i18n/t';
+
 /** Mirrors MAX_METRIC_SAMPLE_PIXELS in `worker/ocr/src/scanning.py:30`. */
 export const MAX_METRIC_SAMPLE_PIXELS = 1_000_000;
 
@@ -321,37 +323,41 @@ export async function findWeakCaptures(files: readonly File[]): Promise<WeakCapt
   return (await screenImageQuality(files)).weak;
 }
 
-/* ---------- Hebrew copy ---------- */
+/* ---------- reader-facing copy keys ---------- */
 
 /** Camera captures are re-taken; files chosen from storage are re-chosen. */
 export type CaptureSource = 'camera' | 'picker';
 
-export const WEAK_CAPTURE_LABEL: Record<Exclude<ImageQualityVerdict, 'ok'>, string> = {
-  blurry: 'מטושטשת',
-  dark: 'חשוכה',
+export const WEAK_CAPTURE_LABEL_KEY: Record<Exclude<ImageQualityVerdict, 'ok'>, TKey> = {
+  blurry: 'imageQuality.blurryLabel',
+  dark: 'imageQuality.darkLabel',
 };
 
-export function weakCaptureTitle(weak: readonly WeakCapture[]): string {
-  if (weak.length !== 1) return 'חלק מהתמונות לא יצאו טוב';
-  return weak[0].verdict === 'blurry' ? 'התמונה יצאה מטושטשת' : 'התמונה חשוכה מדי';
+export function weakCaptureTitleKey(weak: readonly WeakCapture[]): TKey {
+  if (weak.length !== 1) return 'imageQuality.multipleTitle';
+  return weak[0].verdict === 'blurry' ? 'imageQuality.blurryTitle' : 'imageQuality.darkTitle';
 }
 
-export function weakCaptureHint(weak: readonly WeakCapture[], source: CaptureSource): string {
+export function weakCaptureHintKey(weak: readonly WeakCapture[], source: CaptureSource): TKey {
   const verdicts = new Set(weak.map((item) => item.verdict));
   const only = verdicts.size === 1 ? weak[0]?.verdict : null;
   if (source === 'picker') {
-    if (only === 'blurry') return 'כדאי לבחור קובץ ברור יותר.';
-    if (only === 'dark') return 'כדאי לבחור קובץ בהיר יותר.';
-    return 'כדאי לבחור קבצים אחרים.';
+    if (only === 'blurry') return 'imageQuality.pickerBlurryHint';
+    if (only === 'dark') return 'imageQuality.pickerDarkHint';
+    return 'imageQuality.pickerMixedHint';
   }
-  const again = weak.length === 1 ? 'שוב' : 'אותן שוב';
-  if (only === 'blurry') return `כדאי לייצב את הטלפון ולצלם ${again}.`;
-  if (only === 'dark') return `כדאי להוסיף אור ולצלם ${again}.`;
-  return `כדאי לצלם ${again}.`;
+  if (weak.length === 1) {
+    if (only === 'blurry') return 'imageQuality.cameraBlurryOneHint';
+    if (only === 'dark') return 'imageQuality.cameraDarkOneHint';
+    return 'imageQuality.cameraMixedOneHint';
+  }
+  if (only === 'blurry') return 'imageQuality.cameraBlurryManyHint';
+  if (only === 'dark') return 'imageQuality.cameraDarkManyHint';
+  return 'imageQuality.cameraMixedManyHint';
 }
 
-export function weakCaptureRetryLabel(source: CaptureSource): string {
-  return source === 'camera' ? 'צילום מחדש' : 'בחירת קובץ אחר';
+export function weakCaptureRetryLabelKey(source: CaptureSource): TKey {
+  return source === 'camera' ? 'imageQuality.retake' : 'imageQuality.chooseAnother';
 }
 
-export const WEAK_CAPTURE_PROCEED_LABEL = 'העלאה בכל זאת';
+export const WEAK_CAPTURE_PROCEED_LABEL_KEY: TKey = 'imageQuality.uploadAnyway';

@@ -1,9 +1,10 @@
+import type { TKey } from '../lib/i18n/t';
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
-import { toHebrewError } from "../lib/errors";
 import { Link } from 'react-router';
 import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, KeyRound, ClipboardCheck, ImageUp, Download, Undo2, UserCog, LogOut } from 'lucide-react';
-import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
-import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
+import { MIN_PASSWORD_LENGTH, passwordProblemOf } from '../lib/password';
+import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -11,6 +12,7 @@ import { Card, PageHeader, SkeletonCards, useToast, ErrorNote, ICON, Note, DataT
 import { ActionMenu, type ActionMenuItem } from '../components/ActionMenu';
 import { ExportTemplatesPanel } from '../components/ExportTemplatesPanel';
 import { ReauthModal } from '../components/ReauthModal';
+import { LanguageSetting } from '../lib/i18n/LanguageSetting';
 import { INVITATION_STATUS } from '../lib/status';
 import { fmtDate, fmtDateTime, fmtNum } from '../lib/format';
 import {
@@ -22,7 +24,7 @@ import { CurrencyTolerancesPanel } from '../components/CurrencyTolerancesPanel';
 import {
   BRAND_LOGO_TYPES,
   brandFailureAllowsNewCorrelation,
-  brandLogoProblem,
+  brandLogoProblemKey,
 } from '../lib/organizationBranding';
 
 interface OffboardingState {
@@ -44,14 +46,14 @@ interface OffboardingState {
   can_owner_cancel: boolean;
 }
 
-const OFFBOARDING_STATUS_LABELS: Record<OffboardingState['status'], string> = {
-  requested: 'הבקשה נשלחה',
-  approved: 'הבקשה אושרה — הייצוא ממתין להכנה',
-  export_building: 'מכינים את קובצי הייצוא',
-  export_ready: 'הייצוא מוכן להורדה',
-  export_failed: 'הכנת הייצוא דורשת טיפול',
-  cancelled: 'הבקשה בוטלה',
-  reactivated: 'הארגון הופעל מחדש',
+const OFFBOARDING_STATUS_KEYS: Record<OffboardingState['status'], TKey> = {
+  requested: 'settings.offboardingRequested',
+  approved: 'settings.offboardingApproved',
+  export_building: 'settings.offboardingExportBuilding',
+  export_ready: 'settings.offboardingExportReady',
+  export_failed: 'settings.offboardingExportFailed',
+  cancelled: 'settings.offboardingCancelled',
+  reactivated: 'settings.offboardingReactivated',
 };
 
 /** Keep command identity across a lost response or refresh; clear it only after reconciliation. */
@@ -72,6 +74,7 @@ async function logoUploadSessionKey(orgId: string, file: File): Promise<string> 
 }
 
 export default function Settings() {
+  const { errorText, t } = useT();
   const { profile, org, roleLabels, organizationAccess, refreshOrganizationAccess } = useAuth();
   const canWrite = organizationAccess?.canWrite ?? true;
   // The two roles 0126's template commands accept. Named once, used by the panel gate below.
@@ -133,7 +136,7 @@ export default function Settings() {
         });
         if (requested.error) throw requested.error;
         window.sessionStorage.removeItem(keyName);
-        toast('בקשת סיום השירות התקבלה. המערכת עברה למצב קריאה בלבד.');
+        toast(t('settings.toast'));
       } else if (action === 'cancel') {
         if (!offboarding?.id) throw new Error('offboarding_request_unknown');
         const keyName = `supplyflow:offboarding:cancel:${offboarding.id}`;
@@ -144,7 +147,7 @@ export default function Settings() {
         });
         if (cancelled.error) throw cancelled.error;
         window.sessionStorage.removeItem(keyName);
-        toast('בקשת סיום השירות בוטלה והגישה המלאה שוחזרה.');
+        toast(t('settings.toast_2'));
       } else {
         if (!offboarding?.id) throw new Error('offboarding_request_unknown');
         const link = await supabase.functions.invoke<{ signed_url: string; expires_at: string }>('tenant-export', {
@@ -155,7 +158,7 @@ export default function Settings() {
       }
       await Promise.all([refetchOffboarding(), refreshOrganizationAccess()]);
     } catch (actionError) {
-      toast(toHebrewError(actionError), 'error');
+      toast(errorText(actionError), 'error');
     } finally {
       setOffboardingBusy(false);
     }
@@ -164,7 +167,7 @@ export default function Settings() {
   async function saveOrg() {
     const name = orgName.trim();
     if (!name || name.length > 120) {
-      toast('שם הארגון חייב לכלול 1–120 תווים.', 'error');
+      toast(t('settings.toast_3'), 'error');
       return;
     }
     setBusy(true);
@@ -185,14 +188,14 @@ export default function Settings() {
       settings,
     }).eq('id', profile!.org_id);
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-    toast('ההגדרות נשמרו — ייכנסו לתוקף בכניסה הבאה');
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
+    toast(t('settings.toast_4'));
   }
 
   async function uploadLogo(file: File | undefined) {
     if (!file || !org) return;
-    const problem = await brandLogoProblem(file);
-    if (problem) { toast(problem, 'error'); return; }
+    const problemKey = await brandLogoProblemKey(file);
+    if (problemKey) { toast(t(problemKey), 'error'); return; }
     setLogoBusy(true);
     let keyName: string | null = null;
     try {
@@ -215,13 +218,13 @@ export default function Settings() {
       setLogoVersion(uploaded.data.updated_at);
       window.sessionStorage.removeItem(keyName);
       toast(uploaded.data.cleanup_failed
-        ? 'הלוגו נשמר, אך ניקוי הגרסה הקודמת נכשל.'
-        : 'הלוגו נשמר. בכניסה הבאה יופיע בכל הממשק.');
+        ? t('settings.text')
+        : t('settings.text_2'));
     } catch (error) {
       if (keyName && brandFailureAllowsNewCorrelation(error)) {
         window.sessionStorage.removeItem(keyName);
       }
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setLogoBusy(false);
     }
@@ -246,13 +249,13 @@ export default function Settings() {
       setLogoPath(null);
       setLogoVersion('');
       toast(removed.data?.cleanup_failed
-        ? 'הלוגו הוסר מהממשק, אך ניקוי קובץ המקור נכשל.'
-        : 'הלוגו הוסר.');
+        ? t('settings.text_3')
+        : t('settings.text_4'));
     } catch (error) {
       if (brandFailureAllowsNewCorrelation(error)) {
         window.sessionStorage.removeItem(keyName);
       }
-      toast(toHebrewError(error), 'error');
+      toast(errorText(error), 'error');
     } finally {
       setLogoBusy(false);
     }
@@ -263,16 +266,16 @@ export default function Settings() {
     : null;
 
   async function changePassword() {
-    const problem = passwordProblem(newPassword, confirmPassword);
-    setPasswordError(problem);
+    const problem = passwordProblemOf(newPassword, confirmPassword);
+    setPasswordError(problem && t(problem.key, problem.vars));
     if (problem) return;
     setPasswordBusy(true);
     const res = await supabase.auth.updateUser({ password: newPassword });
     setPasswordBusy(false);
-    if (res.error) { setPasswordError(toHebrewError(res.error.message)); return; }
+    if (res.error) { setPasswordError(errorText(res.error.message)); return; }
     setNewPassword('');
     setConfirmPassword('');
-    toast('הסיסמה הוחלפה. היא תידרש בכניסה הבאה.');
+    toast(t('settings.toast_5'));
   }
 
   /**
@@ -304,7 +307,7 @@ export default function Settings() {
   async function toggleActive(u: Profile) {
     const next = !u.active;
     const failure = await setProfileAccess(u, next, next ? 'הפעלת משתמש' : 'השבתת משתמש');
-    if (failure) { toast(toHebrewError(failure), 'error'); return; }
+    if (failure) { toast(errorText(failure), 'error'); return; }
     void refetch();
     toast(next ? 'המשתמש הופעל' : 'המשתמש הושבת', 'success', {
       label: 'ביטול הפעולה',
@@ -332,7 +335,7 @@ export default function Settings() {
       setPendingSensitive({ run: () => void undoAccess(u, applied, true) });
       return;
     }
-    if (failure) { toast(toHebrewError(failure), 'error'); return; }
+    if (failure) { toast(errorText(failure), 'error'); return; }
     void refetch();
     toast(applied ? 'ההפעלה בוטלה — המשתמש מושבת' : 'ההשבתה בוטלה — המשתמש פעיל');
   }
@@ -365,8 +368,8 @@ export default function Settings() {
       p_reason: reasonOr(roleReason, 'שינוי תפקיד משתמש'),
     });
     setDialogBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-    toast(`התפקיד עודכן ל${roleLabels[nextRole] ?? nextRole}`);
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
+    toast(t('settings.roleUpdated', { role: roleLabels[nextRole] ?? nextRole }));
     setRoleTarget(null);
     void refetch();
   }
@@ -384,11 +387,10 @@ export default function Settings() {
     // address but one, and the owner found out only when the person said they got nothing.
     if (result?.deliveryLimited) {
       setInviteNotice(
-        `ההזמנה נוצרה עבור ${invitee} וממתינה ברשימה — אבל אין דומיין שליחה מאומת, ולכן המייל לא `
-        + 'יגיע אליו. יש ליצור קשר בדרך אחרת, ולשלוח מחדש לאחר אימות דומיין.',
+        t('settings.inviteCreatedNoDomain', { invitee }) + t('settings.text_5'),
       );
     } else {
-      toast(`ההזמנה נשלחה אל ${invitee}`);
+      toast(t('settings.inviteSent', { invitee }));
     }
     setInviteEmail('');
     void refetchInvites();
@@ -401,7 +403,7 @@ export default function Settings() {
     setDialogBusy(false);
     if (err) { toast(err, 'error'); return; }
 
-    toast('ההזמנה נשלחה מחדש — הקישור הקודם בוטל');
+    toast(t('settings.toast_8'));
     setResendTarget(null);
     void refetchInvites();
   }
@@ -413,26 +415,26 @@ export default function Settings() {
     setDialogBusy(false);
     if (err) { toast(err, 'error'); return; }
 
-    toast('ההזמנה בוטלה');
+    toast(t('settings.toast_9'));
     setRevokeTarget(null);
     void refetchInvites();
   }
 
   const inviteColumns: Column<Invitation>[] = [
     {
-      key: 'email', header: 'אימייל',
+      key: 'email', header: t('settings.text_6'),
       render: (r) => <span dir="ltr" className="font-medium">{r.email}</span>,
       sortValue: (r) => r.email,
     },
-    { key: 'role', header: 'תפקיד', render: (r) => roleLabels[r.role] ?? r.role },
+    { key: 'role', header: t('settings.text_7'), render: (r) => roleLabels[r.role] ?? r.role },
     {
-      key: 'status', header: 'סטטוס',
+      key: 'status', header: t('settings.text_8'),
       render: (r) => <StatusBadge meta={INVITATION_STATUS[invitationStatusOf(r)]} />,
       sortValue: (r) => invitationStatusOf(r),
     },
-    { key: 'expires', header: 'בתוקף עד', render: (r) => fmtDate(r.expires_at), sortValue: (r) => r.expires_at },
+    { key: 'expires', header: t('settings.fmtDate'), render: (r) => fmtDate(r.expires_at), sortValue: (r) => r.expires_at },
     {
-      key: 'sent', header: 'נשלחה',
+      key: 'sent', header: t('settings.text_9'),
       render: (r) => (
         <span className="text-ink-muted">
           {fmtDateTime(r.last_sent_at)}{r.send_count > 1 && ` (×${r.send_count})`}
@@ -452,8 +454,8 @@ export default function Settings() {
     const status = invitationStatusOf(r);
     const settled = status === 'accepted' || status === 'revoked';
     return [
-      { key: 'resend', label: 'שליחה מחדש', icon: Send, hidden: !canWrite || settled, onSelect: () => setResendTarget(r) },
-      { key: 'revoke', label: 'ביטול', icon: Ban, tone: 'danger', hidden: !canWrite || settled, onSelect: () => setRevokeTarget(r) },
+      { key: 'resend', label: t('settings.setResendTarget'), icon: Send, hidden: !canWrite || settled, onSelect: () => setResendTarget(r) },
+      { key: 'revoke', label: t('settings.setRevokeTarget'), icon: Ban, tone: 'danger', hidden: !canWrite || settled, onSelect: () => setRevokeTarget(r) },
     ];
   }
 
@@ -469,12 +471,12 @@ export default function Settings() {
     const mine = !canWrite || u.id === profile?.id;
     return [
       {
-        key: 'role', label: 'שינוי תפקיד', icon: UserCog,
+        key: 'role', label: t('settings.text_10'), icon: UserCog,
         hidden: mine || !u.active,
         onSelect: () => openRoleChange(u),
       },
       {
-        key: 'access', label: u.active ? 'השבתה' : 'הפעלה',
+        key: 'access', label: u.active ? t('settings.text_11') : t('settings.text_12'),
         icon: u.active ? Ban : Undo2,
         tone: u.active ? 'danger' : 'default',
         hidden: mine || !(u.active || (isActiveRole(u.role) && ASSIGNABLE_ROLES.includes(u.role))),
@@ -487,20 +489,20 @@ export default function Settings() {
 
   const userColumns: Column<Profile>[] = [
     {
-      key: 'name', header: 'שם', priority: 1,
+      key: 'name', header: t('settings.text_13'), priority: 1,
       render: (u) => (
         <span className="font-medium">
           {u.full_name}
-          {u.id === profile?.id && <span className="ms-2 text-xs text-ink-muted">(אתה)</span>}
+          {u.id === profile?.id && <span className="ms-2 text-xs text-ink-muted">{t('settings.text_14')}</span>}
         </span>
       ),
       sortValue: (u) => u.full_name ?? '',
     },
-    { key: 'role', header: 'תפקיד', render: (u) => roleLabels[u.role] ?? u.role, sortValue: (u) => u.role },
-    { key: 'phone', header: 'טלפון', className: 'num', render: (u) => <span dir="ltr">{u.phone ?? '—'}</span> },
+    { key: 'role', header: t('settings.text_15'), render: (u) => roleLabels[u.role] ?? u.role, sortValue: (u) => u.role },
+    { key: 'phone', header: t('settings.text_16'), className: 'num', render: (u) => <span dir="ltr">{u.phone ?? '—'}</span> },
     {
-      key: 'status', header: 'סטטוס', mobileLabel: null,
-      render: (u) => (u.active ? <span className="badge-done">פעיל</span> : <span className="badge-idle">מושבת</span>),
+      key: 'status', header: t('settings.text_17'), mobileLabel: null,
+      render: (u) => (u.active ? <span className="badge-done">{t('settings.text_18')}</span> : <span className="badge-idle">{t('settings.text_19')}</span>),
       sortValue: (u) => (u.active ? 0 : 1),
     },
   ];
@@ -537,12 +539,12 @@ export default function Settings() {
           (19.08.2026) and the subscription moved to /settings/subscription (25.08.2026); the
           header kept advertising both. A meta line that names areas the screen no longer has
           sends people scrolling for something that is not there. */}
-      <PageHeader title={<span className="flex items-center gap-2"><SettingsIcon size={ICON.xl} aria-hidden="true" /> הגדרות מערכת</span>}
-        meta="עסק, צוות ואבטחה"
-        actions={<Link className="btn-secondary" to="/onboarding"><ClipboardCheck size={ICON.sm} aria-hidden="true" /> רשימת הקמה</Link>} />
+      <PageHeader title={<span className="flex items-center gap-2"><SettingsIcon size={ICON.xl} aria-hidden="true" /> {t('settings.text_20')}</span>}
+        meta={t('settings.meta')}
+        actions={<Link className="btn-secondary" to="/onboarding"><ClipboardCheck size={ICON.sm} aria-hidden="true" /> {t('settings.text_21')}</Link>} />
 
       <Card className="space-y-4">
-        <h2 className="section-title">הגדרות עסק</h2>
+        <h2 className="section-title">{t('settings.text_22')}</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="sm:col-span-3"><label className="label" htmlFor="settings-org-name">שם הארגון לתצוגה</label><input id="settings-org-name" className="input" maxLength={120} value={orgName} disabled={!canWrite} onChange={(e) => setOrgName(e.target.value)} /></div>
           <div><label className="label" htmlFor="settings-vat-rate">שיעור מע״מ (%)</label><input id="settings-vat-rate" type="number" step="0.5" className="input num" value={vatRate} disabled={!canWrite} onChange={(e) => setVatRate(e.target.value)} /></div>
@@ -552,24 +554,25 @@ export default function Settings() {
               three sibling tolerances had no field at all. A day range is not an amount and stays. */}
           <div><label className="label" htmlFor="settings-match-days">טווח ימים להתאמת בנק</label><input id="settings-match-days" type="number" className="input num" value={matchDays} disabled={!canWrite} onChange={(e) => setMatchDays(e.target.value)} /></div>
         </div>
-        {canWrite && <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>שמירה</button></div>}
+        {canWrite && <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>{t('settings.saveOrg')}</button></div>}
       </Card>
 
+      <LanguageSetting />
       <CurrencyTolerancesPanel org={org} canWrite={canWrite} />
 
       <Card className="space-y-4">
         <div>
-          <h2 className="section-title flex items-center gap-2"><ImageUp size={ICON.md} aria-hidden="true" /> לוגו הארגון</h2>
-          <p className="mt-1 text-sm text-ink-muted">PNG, JPEG או WebP עד 2MB. הלוגו מופיע בסרגל המערכת ובהדפסת הדוח החודשי.</p>
+          <h2 className="section-title flex items-center gap-2"><ImageUp size={ICON.md} aria-hidden="true" /> {t('settings.text_23')}</h2>
+          <p className="mt-1 text-sm text-ink-muted">{t('settings.text_24')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {logoUrl ? <img src={logoUrl} alt={`לוגו ${orgName}`} className="h-14 w-28 rounded-lg border border-line bg-white object-contain p-1" /> : <div className="flex h-14 w-28 items-center justify-center rounded-lg border border-dashed border-line text-xs text-ink-muted">ללא לוגו</div>}
+          {logoUrl ? <img src={logoUrl} alt={t('settings.logoAlt', { org: orgName })} className="h-14 w-28 rounded-lg border border-line bg-white object-contain p-1" /> : <div className="flex h-14 w-28 items-center justify-center rounded-lg border border-dashed border-line text-xs text-ink-muted">{t('settings.noLogo')}</div>}
           {canWrite && <label className="btn-secondary cursor-pointer">
-            <ImageUp size={ICON.sm} aria-hidden="true" /> {logoPath ? 'החלפת לוגו' : 'העלאת לוגו'}
+            <ImageUp size={ICON.sm} aria-hidden="true" /> {logoPath ? t('settings.text_25') : t('settings.text_26')}
             <input type="file" className="sr-only" accept={BRAND_LOGO_TYPES.join(',')} disabled={logoBusy}
               onChange={(event) => { void uploadLogo(event.target.files?.[0]); event.currentTarget.value = ''; }} />
           </label>}
-          {canWrite && logoPath && <button type="button" className="btn-ghost" disabled={logoBusy} onClick={() => void removeLogo()}>הסרת לוגו</button>}
+          {canWrite && logoPath && <button type="button" className="btn-ghost" disabled={logoBusy} onClick={() => void removeLogo()}>{t('settings.removeLogo')}</button>}
         </div>
       </Card>
 
@@ -597,30 +600,30 @@ export default function Settings() {
 
       <Card className="space-y-4">
         <div>
-          <h2 className="section-title flex items-center gap-2"><LogOut size={ICON.md} aria-hidden="true" /> סיום שירות וייצוא מידע</h2>
+          <h2 className="section-title flex items-center gap-2"><LogOut size={ICON.md} aria-hidden="true" /> {t('settings.text_27')}</h2>
           <p className="mt-1 text-sm text-ink-muted">
-            בקשת סיום שירות מעבירה את הארגון מיד למצב קריאה בלבד. המידע נשאר זמין לצפייה, והמערכת מכינה ייצוא של הנתונים העסקיים ב־CSV וב־JSON יחד עם מסמכי המקור.
+            {t('settings.text_28')}
           </p>
         </div>
         {offboardingError && <ErrorNote message={offboardingError} />}
         {offboarding && (
           <SubPanel className="text-sm">
-            <div className="font-medium text-ink">{OFFBOARDING_STATUS_LABELS[offboarding.status]}</div>
+            <div className="font-medium text-ink">{t(OFFBOARDING_STATUS_KEYS[offboarding.status])}</div>
             <div className="mt-1 text-ink-muted">
-              הבקשה נפתחה ב־<span className="num">{fmtDateTime(offboarding.requested_at)}</span>. אפשר לבטל עד <span className="num">{fmtDateTime(offboarding.cancellation_deadline)}</span>.
+              {t('settings.offboardingOpenedAt')}<span className="num">{fmtDateTime(offboarding.requested_at)}</span>{t('settings.fmtDateTime')} <span className="num">{fmtDateTime(offboarding.cancellation_deadline)}</span>.
             </div>
             {offboarding.status === 'export_ready' && offboarding.export_completed_at && (
               <div className="mt-1 text-ink-muted">
-                הייצוא הושלם ב־<span className="num">{fmtDateTime(offboarding.export_completed_at)}</span>. קישור חדש יהיה תקף לשבעה ימים וניתן לביטול.
+                {t('settings.offboardingExportDoneAt')}<span className="num">{fmtDateTime(offboarding.export_completed_at)}</span>{t('settings.offboardingExportDoneTail')}
               </div>
             )}
             {offboarding.status === 'export_building' && offboarding.export_parts_total > 0 && (
               <div className="mt-1 text-ink-muted" role="status">
-                הושלמו <span className="num">{fmtNum(offboarding.export_parts_completed)}</span> מתוך <span className="num">{fmtNum(offboarding.export_parts_total)}</span> חלקי ייצוא. אפשר לצאת מהמסך; ההתקדמות נשמרת בשרת.
+                {t('settings.offboardingPartsBefore')}<span className="num">{fmtNum(offboarding.export_parts_completed)}</span> {t('settings.fmtNum')} <span className="num">{fmtNum(offboarding.export_parts_total)}</span>{t('settings.offboardingPartsTail')}
               </div>
             )}
             {offboarding.status === 'export_failed' && (
-              <div role="alert" className="mt-2 text-alert-fg">הכנת הייצוא לא הושלמה. מנהל השירות יכול להפעיל ניסיון חוזר בטוח.</div>
+              <div role="alert" className="mt-2 text-alert-fg">{t('settings.text_29')}</div>
             )}
           </SubPanel>
         )}
@@ -628,19 +631,19 @@ export default function Settings() {
           {!offboardingOpen && (
             <button type="button" className="btn-secondary text-alert-fg" disabled={offboardingBusy}
               onClick={() => setOffboardingAction('request')}>
-              <LogOut size={ICON.sm} aria-hidden="true" /> בקשת סיום שירות
+              <LogOut size={ICON.sm} aria-hidden="true" /> {t('settings.requestClosure')}
             </button>
           )}
           {offboarding?.status === 'export_ready' && (
             <button type="button" className="btn-primary" disabled={offboardingBusy}
               onClick={() => setOffboardingAction('download')}>
-              <Download size={ICON.sm} aria-hidden="true" /> יצירת קישור הורדה
+              <Download size={ICON.sm} aria-hidden="true" /> {t('settings.createDownloadLink')}
             </button>
           )}
           {offboardingOpen && offboarding.can_owner_cancel && (
             <button type="button" className="btn-secondary" disabled={offboardingBusy}
               onClick={() => setOffboardingAction('cancel')}>
-              <Undo2 size={ICON.sm} aria-hidden="true" /> ביטול בקשת הסיום
+              <Undo2 size={ICON.sm} aria-hidden="true" /> {t('settings.cancelClosure')}
             </button>
           )}
         </div>
@@ -648,7 +651,7 @@ export default function Settings() {
 
       <Card className="space-y-4">
         <div>
-          <h2 className="section-title flex items-center gap-2"><KeyRound size={ICON.md} aria-hidden="true" /> החלפת הסיסמה שלך</h2>
+          <h2 className="section-title flex items-center gap-2"><KeyRound size={ICON.md} aria-hidden="true" /> {t('settings.text_30')}</h2>
           {/* OPEN-DECISIONS #114, decided 09.08.2026: employees recover their own password via
               "שכחתי סיסמה" on the login screen (ForgotPassword → ResetPassword). An org owner
               still cannot reset another user's password — that stays closed by decision, and the
@@ -661,12 +664,12 @@ export default function Settings() {
               on this screen where helper text piled up on itself. The decision it recorded
               (#114) is unchanged and is still in the comment above. */}
           <p className="text-sm text-ink-muted mt-1">
-            הסיסמה מוחלפת מיד ותידרש בכניסה הבאה. השדות כאן משנים את הסיסמה שלך בלבד.
+            {t('settings.text_31')}
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 sm:items-end">
           <div>
-            <label className="label" htmlFor="new-password">סיסמה חדשה ({MIN_PASSWORD_LENGTH} תווים לפחות)</label>
+            <label className="label" htmlFor="new-password">{t('settings.newPasswordLabel', { min: MIN_PASSWORD_LENGTH })}</label>
             {/* `passwordProblem` judges the PAIR, so both fields are marked and both point at the
                 one message. A banner nobody's field is tied to leaves a screen-reader user to
                 guess which of the two boxes the sentence is about. */}
@@ -676,14 +679,14 @@ export default function Settings() {
               value={newPassword} onChange={(e) => { setNewPassword(e.target.value); setPasswordError(null); }} />
           </div>
           <div>
-            <label className="label" htmlFor="confirm-password">אימות סיסמה</label>
+            <label className="label" htmlFor="confirm-password">{t('settings.text_32')}</label>
             <input id="confirm-password" type="password" className="input" dir="ltr" autoComplete="new-password"
               aria-invalid={passwordError ? true : undefined}
               aria-describedby={passwordError ? 'settings-password-problem' : undefined}
               value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); setPasswordError(null); }} />
           </div>
           <button className="btn-primary" disabled={passwordBusy || !newPassword || !confirmPassword}
-            onClick={() => void changePassword()}>החלפה</button>
+            onClick={() => void changePassword()}>{t('settings.changePassword')}</button>
         </div>
         {passwordError && <div id="settings-password-problem"><ErrorNote message={passwordError} /></div>}
       </Card>
@@ -693,22 +696,22 @@ export default function Settings() {
           The section is what still names the whole surface for a screen reader. */}
       <section className="space-y-2" aria-labelledby="settings-users-heading">
         <h2 id="settings-users-heading" className="section-title flex items-center gap-2">
-          <Users size={ICON.md} aria-hidden="true" /> משתמשים והרשאות
+          <Users size={ICON.md} aria-hidden="true" /> {t('settings.usersHeading')}
         </h2>
         <DataTable
-          tableLabel="משתמשים"
+          tableLabel={t('settings.tableLabel')}
           rows={roster}
           columns={userColumns}
           rowActions={userActions}
           rowLabel={(u) => u.full_name ?? u.id}
-          emptyTitle="אין משתמשים ברשימה"
-          emptySubtitle="עובד שיצטרף דרך הזמנה יופיע כאן"
+          emptyTitle={t('settings.emptyTitle')}
+          emptySubtitle={t('settings.emptySubtitle')}
         />
         {historicalActive.length > 0 && (
           <SubPanel>
             <Note tone="await" role="status">
               <span className="min-w-0 flex-1">
-                תפקיד היסטורי — יש להעביר לתפקיד פעיל או להשבית. החשבונות האלה אינם יכולים להיכנס למערכת, והם נשארים כאן עד שיוכרעו.
+                {t('settings.text_33')}
               </span>
             </Note>
             <ul className="mt-3 divide-y divide-line-soft">
@@ -718,7 +721,7 @@ export default function Settings() {
                   <span className="text-sm text-ink-muted">{roleLabels[u.role] ?? u.role}</span>
                   {/* Same items as the table row, same menu — this strip is a second view of a
                       roster row, not a second set of controls. */}
-                  <span className="ms-auto"><ActionMenu items={userActions(u)} label={`פעולות עבור ${u.full_name ?? u.id}`} /></span>
+                  <span className="ms-auto"><ActionMenu items={userActions(u)} label={t('settings.userActionsLabel', { name: u.full_name ?? u.id })} /></span>
                 </li>
               ))}
             </ul>
@@ -731,22 +734,22 @@ export default function Settings() {
           find-in-page, which a native <details> still answers. */}
       {archived.length > 0 && (
         <Card pad={false} clip>
-          <Disclosure title="ארכיון משתמשים" count={archived.length}
-            summary="תפקידים שפרשו מהמוצר — לקריאה בלבד">
+          <Disclosure title={t('settings.title')} count={archived.length}
+            summary={t('settings.summary')}>
             {/* Stays a raw table on purpose: it is read-only history behind a fold, and a
                 DataTable here would put a search box, a page footer and a row count inside a
                 closed <details>. It carries the full table contract instead — `.table-scroll`,
                 `.th`/`.td` with `scope`, and a focusable, named scroll region. */}
-            <div className="table-scroll overflow-x-auto [contain:layout]" role="region" aria-label="טבלת ארכיון משתמשים" tabIndex={0}>
+            <div className="table-scroll overflow-x-auto [contain:layout]" role="region" aria-label={t('settings.aria_label')} tabIndex={0}>
               <table className="w-full">
-                <thead className="table-head"><tr><th scope="col" className="th">שם</th><th scope="col" className="th">תפקיד</th><th scope="col" className="th">טלפון</th><th scope="col" className="th">סטטוס</th></tr></thead>
+                <thead className="table-head"><tr><th scope="col" className="th">{t('settings.text_34')}</th><th scope="col" className="th">{t('settings.text_35')}</th><th scope="col" className="th">{t('settings.text_36')}</th><th scope="col" className="th">{t('settings.text_37')}</th></tr></thead>
                 <tbody className="divide-y divide-line-soft">
                   {archived.map((u) => (
                     <tr key={u.id}>
                       <td className="td font-medium">{u.full_name}</td>
                       <td className="td">{roleLabels[u.role] ?? u.role}</td>
                       <td className="td" dir="ltr">{u.phone ?? '—'}</td>
-                      <td className="td"><span className="badge-idle">מושבת</span></td>
+                      <td className="td"><span className="badge-idle">{t('settings.text_38')}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -758,31 +761,31 @@ export default function Settings() {
 
       {canWrite && <Card className="space-y-4">
         <div>
-          <h2 className="section-title flex items-center gap-2"><MailPlus size={ICON.md} aria-hidden="true" /> הזמנת עובד</h2>
+          <h2 className="section-title flex items-center gap-2"><MailPlus size={ICON.md} aria-hidden="true" /> {t('settings.text_39')}</h2>
           <p className="text-sm text-ink-muted mt-1">
-            נשלח מייל עם קישור אישי להגדרת שם וסיסמה. הקישור תקף 7 ימים.
+            {t('settings.text_40')}
           </p>
           <p className="text-sm text-ink-muted mt-1">
-            ניתן להזמין מנהל, מנהל רכש או רואה חשבון. ספקים ועובדי תפעול אינם חשבונות מערכת.
+            {t('settings.text_41')}
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_11rem_auto] gap-3 sm:items-end">
           <div>
-            <label className="label" htmlFor="inviteEmail">אימייל</label>
+            <label className="label" htmlFor="inviteEmail">{t('settings.text_42')}</label>
             <input id="inviteEmail" type="email" className="input" dir="ltr" placeholder="name@example.com"
               aria-invalid={inviteError ? true : undefined}
               aria-describedby={inviteError ? 'invite-email-problem' : undefined}
               value={inviteEmail} onChange={(e) => { setInviteEmail(e.target.value); setInviteError(null); }} />
           </div>
           <div>
-            <label className="label" htmlFor="inviteRole">תפקיד</label>
+            <label className="label" htmlFor="inviteRole">{t('settings.text_43')}</label>
             <select id="inviteRole" className="input" value={inviteRole}
               onChange={(e) => { setInviteRole(e.target.value as ActiveRole); setInviteError(null); }}>
               {INVITABLE_ROLES.map((r) => <option key={r} value={r}>{roleLabels[r]}</option>)}
             </select>
           </div>
           <button className="btn-primary" disabled={inviting || !inviteEmail.trim()} onClick={() => void onInvite()}>
-            {inviting ? 'שולח…' : 'שליחת הזמנה'}
+            {inviting ? t('settings.text_44') : t('settings.text_45')}
           </button>
         </div>
         {inviteError && <div id="invite-email-problem"><ErrorNote message={inviteError} /></div>}
@@ -790,18 +793,18 @@ export default function Settings() {
       </Card>}
 
       <div className="space-y-2">
-        <h2 className="section-title">הזמנות</h2>
+        <h2 className="section-title">{t('settings.text_46')}</h2>
         <DataTable
           rows={invitations ?? []}
           columns={inviteColumns}
           searchable
           searchFn={(r, q) => r.email.toLowerCase().includes(q)}
-          tableLabel="הזמנות"
-          searchLabel="חיפוש בהזמנות עובדים"
+          tableLabel={t('settings.tableLabel_2')}
+          searchLabel={t('settings.searchLabel')}
           rowActions={invitationActions}
-          rowLabel={(r) => `הזמנה עבור ${r.email}`}
-          emptyTitle="לא נשלחו הזמנות"
-          emptySubtitle="הזמנה שנשלחה תופיע כאן עם הסטטוס והתוקף שלה"
+          rowLabel={(r) => t('settings.invitationRowLabel', { email: r.email })}
+          emptyTitle={t('settings.emptyTitle_2')}
+          emptySubtitle={t('settings.emptySubtitle_2')}
         />
       </div>
 
@@ -809,13 +812,13 @@ export default function Settings() {
       <Modal
         open={!!roleTarget}
         onClose={() => setRoleTarget(null)}
-        title={`שינוי תפקיד — ${roleTarget?.full_name ?? ''}`}
-        description={`תפקיד נוכחי: ${roleTarget ? (roleLabels[roleTarget.role] ?? roleTarget.role) : ''}`}
+        title={t('settings.roleChangeTitle', { name: roleTarget?.full_name ?? '' })}
+        description={t('settings.currentRole', { role: roleTarget ? (roleLabels[roleTarget.role] ?? roleTarget.role) : '' })}
         busy={dialogBusy}
       >
         <div className="space-y-4">
           <div>
-            <label className="label" htmlFor="role-change-select">תפקיד חדש</label>
+            <label className="label" htmlFor="role-change-select">{t('settings.text_51')}</label>
             {/* The enum carries historical roles; ASSIGNABLE_ROLES is the active product contract. */}
             <select id="role-change-select" className="input" value={nextRole}
               onChange={(e) => setNextRole(e.target.value as ActiveRole)}>
@@ -823,15 +826,15 @@ export default function Settings() {
             </select>
           </div>
           <div>
-            <label className="label" htmlFor="role-change-reason">{OPTIONAL_REASON_LABEL}</label>
+            <label className="label" htmlFor="role-change-reason">{t(OPTIONAL_REASON_LABEL_KEY)}</label>
             <input id="role-change-reason" className="input" value={roleReason}
-              onChange={(e) => setRoleReason(e.target.value)} placeholder="למשל: החלפת מנהל רכש" />
+              onChange={(e) => setRoleReason(e.target.value)} placeholder={t('settings.placeholder')} />
           </div>
           <div className="flex justify-end gap-2">
-            <button className="btn-secondary" disabled={dialogBusy} onClick={() => setRoleTarget(null)}>ביטול</button>
+            <button className="btn-secondary" disabled={dialogBusy} onClick={() => setRoleTarget(null)}>{t('settings.setRoleTarget')}</button>
             <button className="btn-primary"
               disabled={dialogBusy || nextRole === roleTarget?.role}
-              onClick={() => setPendingSensitive({ run: () => void changeRole() })}>שמירת התפקיד</button>
+              onClick={() => setPendingSensitive({ run: () => void changeRole() })}>{t('settings.setPendingSensitive')}</button>
           </div>
         </div>
       </Modal>
@@ -840,9 +843,9 @@ export default function Settings() {
         open={!!resendTarget}
         onClose={() => setResendTarget(null)}
         onConfirm={() => void onResend()}
-        title="שליחת ההזמנה מחדש"
-        message={`יישלח מייל חדש אל ${resendTarget?.email ?? ''} עם קישור חדש ותוקף מחודש. הקישור הקודם יפסיק לעבוד.`}
-        confirmLabel="שליחה"
+        title={t('settings.title_2')}
+        message={t('settings.resendMessage', { email: resendTarget?.email ?? '' })}
+        confirmLabel={t('settings.confirmLabel')}
         busy={dialogBusy}
       />
 
@@ -850,9 +853,9 @@ export default function Settings() {
         open={!!revokeTarget}
         onClose={() => setRevokeTarget(null)}
         onConfirm={(reason) => void onRevoke(reason)}
-        title="ביטול ההזמנה"
-        message={`הקישור שנשלח אל ${revokeTarget?.email ?? ''} יפסיק לעבוד מיידית.`}
-        confirmLabel="ביטול ההזמנה"
+        title={t('settings.title_3')}
+        message={t('settings.revokeMessage', { email: revokeTarget?.email ?? '' })}
+        confirmLabel={t('settings.confirmLabel_2')}
         danger
         requireReason
         busy={dialogBusy}
@@ -860,17 +863,17 @@ export default function Settings() {
 
       <ReauthModal
         open={!!pendingSensitive}
-        title="אימות זהות לשינוי הרשאות"
+        title={t('settings.title_4')}
         onConfirm={() => { const pending = pendingSensitive; setPendingSensitive(null); pending?.run(); }}
         onCancel={() => setPendingSensitive(null)}
       />
       <ReauthModal
         open={offboardingAction !== null}
         title={offboardingAction === 'request'
-          ? 'אימות זהות לפני בקשת סיום שירות'
+          ? t('settings.text_53')
           : offboardingAction === 'cancel'
-            ? 'אימות זהות לפני ביטול בקשת הסיום'
-            : 'אימות זהות לפני יצירת קישור ייצוא'}
+            ? t('settings.text_54')
+            : t('settings.text_55')}
         onConfirm={() => {
           const action = offboardingAction;
           setOffboardingAction(null);

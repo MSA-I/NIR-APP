@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
-import { AuthProvider, BOOTSTRAP_TIMEOUT_MS, BOOTSTRAP_TIMEOUT_MESSAGE, useAuth } from './AuthContext';
+import { AuthProvider, BOOTSTRAP_TIMEOUT_MS, BOOTSTRAP_TIMEOUT_KEY, useAuth } from './AuthContext';
+import { he } from '../lib/i18n/dictionaries/he';
+import { en } from '../lib/i18n/dictionaries/en';
 
 /**
  * The bug this pins: a bootstrap that never settles.
@@ -72,6 +74,11 @@ describe('auth bootstrap watchdog', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(BOOTSTRAP_TIMEOUT_MS + 1000); });
     // `loading` false plus a bootstrapError with no profile is the exact condition
     // App.tsx renders <BootstrapUnavailable /> on, which carries retry and sign-out.
-    expect(screen.getByText(`SETTLED:${BOOTSTRAP_TIMEOUT_MESSAGE}`)).toBeTruthy();
+    // The watchdog now settles on a KEY, so the state assertion pins the key and the two
+    // dictionaries pin the sentence. `App.tsx` is what turns it into words, with `tDynamic`, so a
+    // raw server message coming through the same field still reaches support unchanged.
+    expect(screen.getByText(`SETTLED:${BOOTSTRAP_TIMEOUT_KEY}`)).toBeTruthy();
+    expect(he.app.bootstrapTimeout).toBe('טעינת פרטי החשבון נמשכה זמן רב מדי.');
+    expect(en.app.bootstrapTimeout).toBe('Loading the account details took too long.');
   });
 });

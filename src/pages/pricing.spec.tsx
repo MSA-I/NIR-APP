@@ -1,6 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LocaleProvider } from '../lib/i18n/LocaleProvider';
+import type { Locale } from '../lib/i18n/locale';
 import Pricing from './Pricing';
 /* Read, never restated: the promoted rung is a fact of the shared presentation file that the
    marketing site reads too, and a test that spelled the key out would pass while they drifted. */
@@ -111,7 +113,9 @@ beforeEach(() => {
   });
 });
 
-const renderPage = () => render(<MemoryRouter><Pricing /></MemoryRouter>);
+const renderPage = (locale: Locale = 'he') => render(
+  <LocaleProvider initialLocale={locale}><MemoryRouter><Pricing /></MemoryRouter></LocaleProvider>,
+);
 const settle = () => screen.findByTestId('plan-cards');
 /** One rung's card, addressed the way every other surface addresses one. */
 const card = (planKey: string) =>
@@ -324,5 +328,15 @@ describe('דף המסלולים הציבורי', () => {
     renderPage();
     await settle();
     expect(screen.getByRole('main').className).toBe(loadingClass);
+  });
+
+  it('renders the public-plan promise in English', async () => {
+    renderPage('en');
+    await settle();
+
+    expect(screen.getByRole('heading', { name: 'Plans' })).toBeInTheDocument();
+    expect(screen.getByText(/The price is not published on this page/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open a free account' })).toBeInTheDocument();
+    expect(screen.queryByText('פתיחת חשבון חינם')).toBeNull();
   });
 });

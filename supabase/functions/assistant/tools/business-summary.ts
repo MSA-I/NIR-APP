@@ -18,6 +18,7 @@ import type {
   ToolEnvelope,
 } from "../../../../src/lib/assistant/contracts.ts";
 import { SUMMARY_METRIC_LINES } from "../../../../src/lib/assistant/summaryLines.ts";
+import { readerText } from "../reader-locale.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
 
 // The trailing windows are defined in 0165 (and echoed by the labels in summaryLines.ts); these
@@ -92,7 +93,8 @@ export const getBusinessSummaryTool: AssistantTool = {
           .sort((a, b) => a.currency.localeCompare(b.currency))
         : [matching.find((row) => row.currency == null) ?? matching[0]].filter(Boolean) as SummaryMetricRow[];
       if (selected.length === 0) {
-        failures.push({ code: line.key, label: line.label });
+        const lineLabel = readerText(ctx.locale, line.labelKey, line.labelVars);
+        failures.push({ code: line.key, label: lineLabel });
         // Counts still have a truthful unit when the whole RPC failed, so retain their null facts:
         // the model may say they were not measured but can never turn them into zero. A missing
         // money row has no currency to attach to it, and inventing ILS would violate the contract
@@ -101,7 +103,7 @@ export const getBusinessSummaryTool: AssistantTool = {
           facts.push(ctx.evidence.fact({
             kind: "metric.count",
             subject: null,
-            label: line.label,
+            label: lineLabel,
             value: null,
             unit: "count",
             tool: "get_business_summary",
@@ -111,7 +113,7 @@ export const getBusinessSummaryTool: AssistantTool = {
           sources.push(ctx.evidence.source({
             entity: "organization",
             entity_id: ctx.actor.orgId,
-            label: line.label,
+            label: lineLabel,
             route: line.to,
             classification: "tenant_standard",
           }));
@@ -121,7 +123,8 @@ export const getBusinessSummaryTool: AssistantTool = {
       for (const row of selected) {
         const value = metricValue(row);
         const currency = line.unit === "currency" ? row.currency : null;
-        const label = currency ? `${line.label} (${currency})` : line.label;
+        const base = readerText(ctx.locale, line.labelKey, line.labelVars);
+        const label = currency ? `${base} (${currency})` : base;
         if (value === null) failures.push({ code: currency ? `${line.key}:${currency}` : line.key, label });
         facts.push(ctx.evidence.fact({
           kind: line.unit === "currency" ? "metric.money" : "metric.count",

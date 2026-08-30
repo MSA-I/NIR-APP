@@ -1,5 +1,5 @@
 /**
- * Hebrew-facing error text.
+ * Failure text, as dictionary keys.
  *
  * supabase-js returns `{ data, error }` and never throws, so a failed write reaches the user
  * either as nothing at all or as a raw Postgres string. This maps the messages the app can
@@ -13,7 +13,9 @@
 
 // Imported from the dependency-free half of the assistant contracts on purpose: this file is
 // pulled in by most of the app, and `./assistant/contracts` carries Zod for its schemas.
-import { ASSISTANT_ERROR_CODES, ASSISTANT_ERROR_MESSAGES } from './assistant/errorCodes';
+import { ASSISTANT_ERROR_CODES } from './assistant/errorCodes';
+// The Hebrew dictionary, for the transitional `toHebrewError` only. `toErrorKey` needs no language.
+import { he } from './i18n/dictionaries/he';
 
 /**
  * The payment-execution split, refused by name.
@@ -31,21 +33,21 @@ import { ASSISTANT_ERROR_CODES, ASSISTANT_ERROR_MESSAGES } from './assistant/err
  * `allocation_invoice_coverage_mismatch`), mapped separately below.
  */
 export const ALLOCATION_REFUSAL_MESSAGES: Record<string, string> = {
-  credit_allocation_exceeds_remaining: 'סכום הקיזוז חורג מיתרת הזיכוי הזמינה',
-  credit_allocation_exceeds_invoice: 'סכום הקיזוז חורג מסכום החשבונית שהזיכוי מקוזז מולה',
+  credit_allocation_exceeds_remaining: 'credit_allocation_exceeds_remaining',
+  credit_allocation_exceeds_invoice: 'credit_allocation_exceeds_invoice',
   // OPEN-DECISIONS #243/#244 as the owner settled them on 23.08.2026: an unlinked credit may be
   // offset against any invoice of the same supplier, and the link is recorded at the moment of
   // allocation. Which invoice it lands on is therefore a decision with a money consequence, and
   // the absence of a decision is a refusal — not a default.
   credit_allocation_invoice_required:
-    'יש לבחור לאיזו חשבונית נזקף כל זיכוי שאינו משויך לחשבונית. המערכת לא תבחר עבורך — החשבונית שתיבחר היא זו שתקוזז',
+    'credit_allocation_invoice_required',
   // Client-only, and the server agrees by a broader name: a linked credit simply cannot be moved,
   // and naming a different invoice for it is answered there with `allocation_target_invalid`.
   credit_invoice_link_immutable:
-    'זיכוי שכבר משויך לחשבונית מקוזז מולה בלבד ואי אפשר להעבירו לחשבונית אחרת',
-  credit_invoice_not_in_request: 'החשבונית שנבחרה לזיכוי אינה מחשבוניות דרישת התשלום הזו',
+    'credit_invoice_link_immutable',
+  credit_invoice_not_in_request: 'credit_invoice_not_in_request',
   payment_cash_amount_required:
-    'חייב להישאר סכום להעברה בפועל — לא ניתן לכסות את מלוא הדרישה בזיכויים',
+    'payment_cash_amount_required',
 };
 
 /**
@@ -85,15 +87,13 @@ const PATTERNS: [RegExp, string][] = [
   // not two. FIRST in the list on purpose: the generic /timeout|timed out/ pattern below would
   // otherwise swallow assistant_provider_timeout, and /not_authorized/ sits below for the same
   // reason notification_preference_not_authorized does.
-  ...ASSISTANT_ERROR_CODES.map((code): [RegExp, string] => [
-    new RegExp(code, 'i'),
-    ASSISTANT_ERROR_MESSAGES[code],
-  ]),
+  // The code IS the dictionary key, so this pairs each pattern with itself.
+  ...ASSISTANT_ERROR_CODES.map((code): [RegExp, string] => [new RegExp(code, 'i'), code]),
   // Two different refusals that must never read the same. One says "you used what you have"; the
   // other says "nobody has told the system what you have", which is our problem, not the
   // customer's, and sending them to buy an upgrade for it would be wrong.
   [/plan_limit_reached/i,
-    'הגעתם למכסת התקופה במסלול הנוכחי — מסמכים או עמודי סריקה. המסמכים הקיימים והדוחות נשארים זמינים; לעיבוד מסמך חדש יש לשדרג מסלול או להמתין לתחילת תקופת השימוש הבאה.'],
+    'plan_limit_reached'],
   [/plan_limit_unknown/i,
     'לא הוגדרה מכסת מסמכים למסלול של הארגון, ולכן העיבוד נעצר מחשש לחיוב לא מבוקר. זו הגדרה במערכת ולא חריגה שלכם — יש לפנות לתמיכה.'],
   [/plan_capability_required/i,
@@ -105,47 +105,47 @@ const PATTERNS: [RegExp, string][] = [
   [/plan_user_limit_unknown|plan_branch_limit_unknown/i,
     'מכסת המסלול אינה מוגדרת ולכן הפעולה נעצרה. זו הגדרה במערכת ולא חריגה שלכם — יש לפנות לתמיכה.'],
   [/not_platform_capability/i,
-    'הפעולה הזו אינה כלולה בהרשאות המפעיל שלך. ההרשאות מוקצות מחוץ למוצר.'],
+    'not_platform_capability'],
   [/platform_filter_unknown/i,
-    'הסינון שנשלח אינו מוכר. רענן את המסך ובחר סינון מהרשימה.'],
+    'platform_filter_unknown'],
   [/entitlement_override_exists/i,
-    'כבר קיים חריג פעיל להרשאה הזו. יש לבטל אותו לפני שמגדירים חריג חדש.'],
+    'entitlement_override_exists'],
   [/subscription_plan_inactive/i,
-    'המסלול הזה אינו מוצע ללקוחות חדשים ואי אפשר להעביר אליו ארגון.'],
+    'subscription_plan_inactive'],
   // The billing adapter's single refusal for every unproven-provider path -- checkout and
   // cancellation alike. Without it a refused cancellation fell through to FALLBACK, which for an
   // action the customer believes they just performed is close enough to silence. Our state, not
   // theirs, and it promises no date because none has been decided. Wording provisional (#203).
   [/not_configured/i,
-    'הפעולה אינה זמינה עדיין: חיבור ספק הסליקה טרם הוגדר במערכת. זו הגדרה אצלנו ולא משהו שחסר מצדכם, ושום דבר במנוי לא השתנה.'],
+    'not_configured'],
   [/internal_note_already_resolved/i,
-    'משימת המעקב כבר נסגרה. פתיחה מחדש נעשית ברשומה חדשה, כדי שהסגירה הקודמת תישאר מתועדת.'],
+    'internal_note_already_resolved'],
   [/internal_note_immutable|platform_lifecycle_event_immutable/i,
-    'רשומות פנימיות ויומן הפלטפורמה אינם ניתנים לעריכה או למחיקה לאחר השמירה.'],
+    'internal_note_immutable'],
   [/proposal_pending_decision/i,
-    'לספק כבר יש הצעה שממתינה להחלטה על ההזמנה הזו. יש להכריע עליה לפני הנפקת קישור או שליחה מחדש.'],
+    'proposal_pending_decision'],
   [/order_not_linkable|email_order_not_sendable/i,
-    'ההזמנה אינה במצב שניתן לשלוח לספק — רק הזמנה מוכנה לשליחה או שנשלחה זמינה לכך.'],
-  [/link_already_revoked/i, 'הקישור כבר בוטל.'],
-  [/proposal_already_decided/i, 'כבר נרשמה החלטה על ההצעה הזו. רענן את המסך כדי לראות אותה.'],
-  [/decision_reason_required/i, 'דחייה של שורה או של תאריך אספקה מוצע מחייבת סיבה — היא תתועד ביומן הביקורת.'],
-  [/decisions_incomplete|decisions_invalid/i, 'יש להכריע על כל שורה בהצעה — אישור או דחייה — לפני הרישום.'],
-  [/revision_already_created/i, 'כבר נוצרה רוויזיה מההצעה הזו.'],
+    'order_not_linkable'],
+  [/link_already_revoked/i, 'link_already_revoked'],
+  [/proposal_already_decided/i, 'proposal_already_decided'],
+  [/decision_reason_required/i, 'decision_reason_required'],
+  [/decisions_incomplete|decisions_invalid/i, 'decisions_incomplete'],
+  [/revision_already_created/i, 'revision_already_created'],
   [/revision_empty|proposal_not_accepted/i,
-    'אי אפשר ליצור רוויזיה: אין אף שורה שאושרה עם כמות תקינה.'],
+    'revision_empty'],
   [/email_channel_disabled/i,
-    'לספק זה לא הוגדר ערוץ מייל. יש להגדיר את העדפות התקשורת בכרטיס הספק תחילה.'],
+    'email_channel_disabled'],
   [/email_destination_missing|communication_email_destination_missing/i,
-    'לספק אין כתובת מייל — יש להזין כתובת בכרטיס הספק או בהעדפות התקשורת.'],
+    'email_destination_missing'],
   [/communication_whatsapp_destination_missing/i,
-    'לספק אין מספר WhatsApp תקין — יש להזין מספר בכרטיס הספק או בהעדפות התקשורת.'],
-  [/communication_email_invalid/i, 'כתובת המייל שהוזנה אינה תקינה.'],
-  [/communication_whatsapp_invalid/i, 'מספר ה-WhatsApp שהוזן אינו תקין. יש להזין מספר ישראלי.'],
+    'communication_whatsapp_destination_missing'],
+  [/communication_email_invalid/i, 'communication_email_invalid'],
+  [/communication_whatsapp_invalid/i, 'communication_whatsapp_invalid'],
   [/email_message_retry_limit/i,
-    'נוצלו כל ניסיונות השליחה להזמנה זו. בעל העסק יכול לאפס את הניסיונות מהמסך הזה.'],
-  [/email_message_not_resettable/i, 'ניתן לאפס רק שליחה שנכשלה או שנתקעה במצב לא ידוע.'],
+    'email_message_retry_limit'],
+  [/email_message_not_resettable/i, 'email_message_not_resettable'],
   [/accepted_document_scan_immutable|document_scan_superseded_by_recovery/i,
-    'הסריקה כבר אושרה או הוחלפה ואי אפשר לשנות את הראיה הקודמת. רענן את המסך כדי לראות את הגרסה הנוכחית.'],
+    'accepted_document_scan_immutable'],
   [/document_scan_recovery_unavailable|document_scan_processing_state_invalid/i,
     'מצב הסריקה השתנה ולא ניתן ליצור ממנה תיקון חדש. רענן את המסך ובדוק את הגרסה הנוכחית.'],
   // 0252/#298. The refusal names what is missing and where it opens — never a price, never a
@@ -156,31 +156,31 @@ const PATTERNS: [RegExp, string][] = [
   [/user_seats_exhausted/i,
     'מספר המשתמשים במסלול הנוכחי מלא. אפשר לשחרר הזמנה ממתינה או להשבית משתמש קיים, ולראות במסך המנוי מה כולל כל מסלול.'],
   [/retired_identity_requires_platform_reactivation/i,
-    'זהות של תפקיד שפרש יכולה לחזור לחשבון פעיל רק דרך מנהל השירות, שמעדכן יחד את התפקיד ואת חסימת הכניסה.'],
+    'retired_identity_requires_platform_reactivation'],
   [/account_role_retired|role_not_invitable/i,
-    'התפקיד הזה הוצא מהמוצר והחשבון אינו פעיל. ניתן להיכנס רק כמנהל, מנהל רכש או רואה חשבון.'],
+    'account_role_retired'],
   [/offboarding_already_requested/i,
-    'כבר קיימת בקשת סיום שירות פעילה. רענן את המסך כדי לראות את מצבה.'],
+    'offboarding_already_requested'],
   [/offboarding_cancellation_window_closed/i,
-    'חלון הביטול בן 30 הימים הסתיים. המידע נשאר זמין לצפייה ולייצוא; להפעלה מחדש יש לפנות למנהל השירות.'],
+    'offboarding_cancellation_window_closed'],
   [/offboarding_export_not_ready|export_not_ready/i,
-    'הייצוא עדיין אינו מוכן להורדה. מצבו יוצג כאן לאחר השלמת ההכנה.'],
+    'offboarding_export_not_ready'],
   [/offboarding_export_lease_lost|offboarding_export_not_building/i,
-    'ניסיון הכנת הייצוא הוחלף בניסיון חדש יותר. רענן את המסך לפני ניסיון נוסף.'],
+    'offboarding_export_lease_lost'],
   [/offboarding_request_unknown/i,
-    'בקשת סיום השירות אינה זמינה עוד. רענן את המסך.'],
+    'offboarding_request_unknown'],
   [/offboarding_reactivation_window_closed/i,
-    'לא ניתן להפעיל את הארגון מחדש במסלול האוטומטי. נדרשת בדיקה של מנהל השירות.'],
+    'offboarding_reactivation_window_closed'],
   [/export_build_failed|export_storage_upload_failed|export_file_download_failed/i,
-    'הכנת הייצוא לא הושלמה. הנתונים לא נמחקו ומנהל השירות יכול להפעיל ניסיון חוזר בטוח.'],
+    'export_build_failed'],
   [/organization_read_only/i,
-    'תקופת הניסיון הסתיימה והמערכת במצב קריאה בלבד. המידע נשמר וזמין לצפייה ולייצוא; להפעלה מחדש יש לפנות למנהל השירות.'],
+    'organization_read_only'],
   [/payment_request_not_executable/i,
-    'דרישת התשלום אינה במצב שמאפשר ביצוע. רענן את המסך ובדוק את הסטטוס.'],
+    'payment_request_not_executable'],
   [/payment_execution_fields_required/i,
-    'יש להשלים תאריך, אסמכתה וסיבת ביצוע.'],
+    'payment_execution_fields_required'],
   [/payment_execution_conflict|payment_request_idempotency_conflict|invoice_idempotency_conflict|receipt_idempotency_conflict|bank_payment_idempotency_conflict|credit_request_idempotency_conflict/i,
-    'אותה פעולה כבר נשלחה עם פרטים אחרים. רענן את המסך לפני ניסיון נוסף.'],
+    'payment_execution_conflict'],
   // Ahead of the server's allocation family on purpose: `credit_allocation_exceeds_invoice` and
   // its siblings are specific readings of the same failure, and the generic sentences below would
   // otherwise answer a question the specific ones already answer better.
@@ -189,58 +189,58 @@ const PATTERNS: [RegExp, string][] = [
     text,
   ]),
   [/allocation_exceeds_balance|payment_request_allocation_invalid/i,
-    'הסכום שהוקצה גבוה מהיתרה הפתוחה. רענן את הנתונים ועדכן את החלוקה.'],
+    'allocation_exceeds_balance'],
   [/allocation_total_mismatch|bank_allocation_total_mismatch/i,
-    'סכום החלוקה אינו תואם לסכום הפעולה.'],
+    'allocation_total_mismatch'],
   // 0173: the executor checks each invoice of the request separately — cash allocated to it plus
   // credit offset against it must equal exactly what the request allocated to that invoice. It
   // fires when the split drifted from the request between preview and execution, so the sentence
   // sends the accountant back to the split rather than to the total.
   [/allocation_invoice_coverage_mismatch/i,
-    'הסכום שהוקצה לאחת מחשבוניות הדרישה אינו מכוסה במדויק על ידי ההעברה והזיכויים שיוחסו לה. רענן את המסך ובדוק את החלוקה בין החשבוניות.'],
+    'allocation_invoice_coverage_mismatch'],
   // 0173: the credit and the invoice it was pointed at belong to different suppliers. Its own
   // sentence rather than an arm of allocation_target_invalid, because it is the one refusal here
   // that says the two records were never related — no refresh and no re-split will change that.
   [/credit_allocation_supplier_mismatch/i,
-    'הזיכוי שייך לספק אחר מזה של החשבונית שנבחרה. אפשר לקזז זיכוי רק מול חשבונית של אותו ספק.'],
+    'credit_allocation_supplier_mismatch'],
   // The server's containment refusal for a single allocation row: an invoice or a credit that is
   // not this org's, not this supplier's, not in this request, not in a state that can be
   // allocated, an amount above what is left of it — or a credit that already names an invoice
   // being pointed at a different one, which the server refuses here rather than by its own name.
   [/allocation_target_invalid|allocation_invalid/i,
-    'אחת מהקצאות התשלום אינה תקינה: החשבונית או הזיכוי אינם שייכים לספק ולדרישה הזו, או שהסכום גבוה מהיתרה שנותרה. רענן את המסך ובדוק את הבחירה.'],
+    'allocation_target_invalid'],
   [/payment_request_checks_failed/i,
-    'בדיקות השרת מצאו חשבונית ששולמה או יתרה שהשתנתה. רענן ובדוק את הדרישה.'],
+    'payment_request_checks_failed'],
   [/payment_request_checks_mismatch/i,
-    'פרטי דרישת התשלום השתנו מאז הבדיקה. רענן את המסך ובדוק שוב.'],
+    'payment_request_checks_mismatch'],
   [/payment_request_credit_override_required/i,
-    'לספק קיימים זיכויים פתוחים. יש לבחור באישור החריג, לקרוא את האזהרה ולציין סיבה.'],
+    'payment_request_credit_override_required'],
   [/payment_request_credit_total_changed|payment_request_credit_supplier_mismatch/i,
-    'נתוני הספק או הזיכויים השתנו. רענן את הדרישה ועבור שוב על האזהרה לפני אישור.'],
+    'payment_request_credit_total_changed'],
   [/payment_request_credit_override_replay_mismatch|payment_request_credit_override_invalid/i,
-    'פרטי אישור החריגה אינם תואמים לדרישה. רענן את המסך לפני ניסיון נוסף.'],
+    'payment_request_credit_override_replay_mismatch'],
   [/payment_request_credit_override_not_required/i,
-    'הזיכויים הפתוחים אינם קיימים עוד. רענן ואשר במסלול הרגיל.'],
+    'payment_request_credit_override_not_required'],
   [/payment_request_credit_scope_unresolved|payment_request_scope_unresolved|payment_request_scope_invalid/i,
-    'לא ניתן לאמת את הישות המשפטית של הדרישה או של זיכוי פתוח. האישור נחסם לבדיקה.'],
+    'payment_request_credit_scope_unresolved'],
   [/payment_request_transition_invalid/i,
-    'לא ניתן להעביר את דרישת התשלום לסטטוס שנבחר מהמצב הנוכחי.'],
+    'payment_request_transition_invalid'],
   [/payment_request_unknown/i,
-    'דרישת התשלום אינה זמינה עוד. רענן את המסך.'],
+    'payment_request_unknown'],
   [/payment_request_supplier_invalid|payment_request_invalid/i,
-    'פרטי דרישת התשלום אינם תקינים.'],
+    'payment_request_supplier_invalid'],
   [/bank_transaction_already_matched|payment_already_bank_matched/i,
-    'התנועה או התשלום כבר הותאמו. רענן את המסך כדי לראות את ההתאמה.'],
+    'bank_transaction_already_matched'],
   [/bank_transaction_not_matchable|bank_transaction_not_ignorable/i,
-    'מצב תנועת הבנק השתנה ואינו מאפשר את הפעולה.'],
+    'bank_transaction_not_matchable'],
   [/bank_transaction_unknown/i,
-    'תנועת הבנק אינה זמינה עוד.'],
+    'bank_transaction_unknown'],
   [/bank_payment_invalid|bank_supplier_invalid|bank_match_invalid/i,
-    'התשלום, הספק או פרטי ההתאמה אינם תואמים לתנועת הבנק.'],
+    'bank_payment_invalid'],
   [/bank_row_replayed/i,
-    'הייבוא בוטל: לפחות אחת מתנועות הבנק כבר קיימת במערכת.'],
+    'bank_row_replayed'],
   [/bank_import_invalid_rows|bank_import_invalid/i,
-    'הייבוא בוטל: הקובץ כולל שורה לא תקינה או פרטי קובץ חסרים.'],
+    'bank_import_invalid_rows'],
   // G1, finding 5: the old text said "רענן ובדוק את השורות", and a refresh cannot help with any of
   // the conditions this code actually covers. `save_goods_receipt` (0023:1505-1525) raises it when
   // the row count differs from the order's, when a row names an item that is not on the order, when
@@ -248,200 +248,291 @@ const PATTERNS: [RegExp, string][] = [
   // real-world cause being an item that arrived and was never ordered. Naming the constraint is the
   // only advice that leads anywhere, since a receipt cannot carry a line the order does not have.
   [/receipt_qty_exceeds_order/i,
-    'הקבלה אינה תואמת לשורות ההזמנה. ניתן לקלוט רק את פריטי ההזמנה, בכמות שנותרה ובסטטוס התואם לה — פריט שלא הוזמן אינו יכול להתווסף לקבלה.'],
+    'receipt_qty_exceeds_order'],
   // Split apart in wave 8: the offline queue can hit either of these while a device was
   // disconnected, and the conflict screen asks a different question for each — "another draft
   // exists for this order" is not "this receipt is already closed".
   [/receipt_draft_conflict/i,
-    'קיימת טיוטת קבלה אחרת להזמנה הזו. יש להכריע איזו טיוטה מתארת את המשלוח לפני שמירה.'],
+    'receipt_draft_conflict'],
   [/receipt_already_completed/i,
-    'הקבלה הזו כבר הושלמה בשרת ואינה נדרסת. הטיוטה נשמרה במכשיר ונדרשת הכרעה.'],
+    'receipt_already_completed'],
   [/inventory_movement_id_conflict/i,
-    'אותה פעולת מלאי כבר נשלחה עם פרטים אחרים. השאר את החלון פתוח ורענן את נתוני המלאי לפני ניסיון נוסף.'],
+    'inventory_movement_id_conflict'],
   [/inventory_stocktake_required/i,
-    'לא ניתן לרשום שינוי לפני ספירה פיזית ראשונה של המוצר.'],
+    'inventory_stocktake_required'],
   [/inventory_insufficient_stock/i,
-    'הפעולה תיצור יתרה שלילית ולכן נחסמה. בדוק את הכמות או בצע ספירה פיזית.'],
+    'inventory_insufficient_stock'],
   [/inventory_negative_override_forbidden/i,
-    'אישור יתרה שלילית זמין לבעלים בלבד.'],
+    'inventory_negative_override_forbidden'],
   [/inventory_product_unknown/i,
-    'המוצר אינו פעיל או אינו זמין עוד. רענן את מסך המלאי.'],
+    'inventory_product_unknown'],
   [/inventory_movement_invalid/i,
-    'כמות תנועת המלאי או הסיבה אינן תקינות.'],
+    'inventory_movement_invalid'],
   [/inventory_not_authorized/i,
-    'אין לך הרשאה לבצע את פעולת המלאי הזו.'],
+    'inventory_not_authorized'],
   [/purchase_order_not_receivable/i,
-    'ההזמנה אינה במצב שמאפשר קבלת סחורה.'],
+    'purchase_order_not_receivable'],
   [/purchase_order_unknown|goods_receipt_invalid/i,
-    'ההזמנה או הקבלה אינן זמינות עוד.'],
+    'purchase_order_unknown'],
   [/invoice_amounts_invalid/i,
-    'סכומי החשבונית אינם תקינים או שסכום הביניים והמע״מ אינם שווים לסכום הכולל.'],
+    'invoice_amounts_invalid'],
   [/invoice_order_invalid|invoice_receipt_invalid|invoice_supplier_invalid/i,
-    'הספק, ההזמנה או הקבלה המקושרים אינם תואמים לחשבונית.'],
+    'invoice_order_invalid'],
   [/invoice_review_transition_invalid/i,
-    'לא ניתן להעביר את החשבונית לסטטוס שנבחר מהמצב הנוכחי.'],
+    'invoice_review_transition_invalid'],
   [/invoice_has_financial_references/i,
-    'לא ניתן למחוק חשבונית שמקושרת לדרישת תשלום, תשלום, זיכוי, התאמת בנק או דוח שנשלח. יש לטפל בקשר הכספי במסך המתאים.'],
+    'invoice_has_financial_references'],
   [/invoice_not_found/i,
-    'החשבונית אינה זמינה עוד.'],
+    'invoice_not_found'],
   // Two guards, two sentences (0146). They shared one line until the owner hit it: a supplier with
   // a forgotten draft order and no money owed was told he had an open balance.
   [/supplier_has_open_balance/i,
-    'לא ניתן למחוק ספק שיש לו יתרה פתוחה. יש לסגור את היתרה לפני המחיקה.'],
+    'supplier_has_open_balance'],
   [/supplier_has_active_orders/i,
-    'לא ניתן למחוק ספק שיש לו הזמנה פעילה. יש לסיים או לבטל את ההזמנה לפני המחיקה.'],
+    'supplier_has_active_orders'],
   [/supplier_not_found|product_not_found/i,
-    'הרשומה אינה זמינה עוד. רענן את המסך.'],
+    'supplier_not_found'],
   [/purchase_order_cancel_invalid/i,
-    'לא ניתן לבטל הזמנה שכבר התקבלה, גם באופן חלקי.'],
+    'purchase_order_cancel_invalid'],
   [/invoice_fields_required|invoice_review_fields_required/i,
-    'חסרים פרטים הנדרשים לשמירת החשבונית.'],
+    'invoice_fields_required'],
   [/credit_request_not_fully_allocated/i,
-    'הזיכוי טרם נוצל. אפשר לסמן אותו כמקוזז רק אחרי שהוא שובץ בתשלום בפועל.'],
+    'credit_request_not_fully_allocated'],
   [/credit_request_transition_invalid/i,
-    'לא ניתן להעביר את הזיכוי לסטטוס שנבחר מהמצב הנוכחי.'],
+    'credit_request_transition_invalid'],
   [/credit_request_invoice_unknown|credit_request_unknown/i,
-    'הזיכוי או החשבונית המקושרת אינם זמינים עוד. רענן את המסך.'],
+    'credit_request_invoice_unknown'],
   [/credit_request_invoice_not_approved/i,
-    'הנהלת חשבונות יכולה לטפל בזיכוי רק לאחר אישור החשבונית המקושרת.'],
+    'credit_request_invoice_not_approved'],
   [/credit_request_amount_invalid|credit_request_fields_required|credit_request_transition_fields_required/i,
-    'חסרים פרטים או שסכום הזיכוי אינו תקין.'],
+    'credit_request_amount_invalid'],
   [/price_import_target_invalid/i,
-    'הייבוא בוטל: ספק או מוצר אינם זמינים או אינם שייכים לחשבון הזה.'],
+    'price_import_target_invalid'],
   [/price_import_invalid/i,
-    'הייבוא בוטל: קיימת שורה כפולה או מחיר שאינו בטווח המותר.'],
+    'price_import_invalid'],
   [/price_submission_idempotency_conflict/i,
-    'ההגשה כבר נקלטה עם פרטי קובץ אחרים. רענן את היסטוריית ההגשות לפני ניסיון נוסף.'],
+    'price_submission_idempotency_conflict'],
   [/price_submission_intake_busy/i,
-    'הקובץ כבר נמצא בתהליך קליטה. המתן רגע ונסה שוב.'],
+    'price_submission_intake_busy'],
   [/price_submission_file_changed/i,
-    'הקובץ השתנה בזמן הקליטה. בחר אותו מחדש ונסה שוב.'],
+    'price_submission_file_changed'],
   [/price_submission_file_missing|price_submission_intake_required/i,
-    'הקובץ הזמני אינו זמין עוד. בחר את הקובץ מחדש ונסה שוב.'],
+    'price_submission_file_missing'],
   [/price_submission_supplier_invalid/i,
-    'הספק אינו זמין עוד. רענן את המסך לפני הגשה נוספת.'],
+    'price_submission_supplier_invalid'],
   [/price_submission_intake_invalid|price_submission_invalid/i,
-    'פרטי קובץ המחירון אינם תקינים. השתמש בתבנית המעודכנת ונסה שוב.'],
+    'price_submission_intake_invalid'],
   [/price_values_invalid/i,
-    'המחיר, התאריך או הזמינות אינם תקינים.'],
+    'price_values_invalid'],
   [/supplier_product_not_found/i,
-    'שורת המחיר אינה זמינה עוד. רענן את המחירון.'],
+    'supplier_product_not_found'],
   [/month_export_legacy_snapshot_missing/i,
-    'הדוח ההיסטורי סומן בעבר ללא צילום מצב. נדרשת בדיקה ידנית לפני ניסיון נוסף.'],
+    'month_export_legacy_snapshot_missing'],
   [/month_export_snapshot_conflict/i,
-    'החודש כבר סומן עם רשימת חשבוניות אחרת ולא יורחב בשקט.'],
+    'month_export_snapshot_conflict'],
   [/month_export_invoice_invalid|month_export_duplicate_invoice|month_export_invalid/i,
-    'רשימת החשבוניות או החודש אינם תקינים לדוח שנבחר.'],
+    'month_export_invoice_invalid'],
   [/Invalid month/i,
-    'החודש שנבחר אינו תקין — בחר חודש בפורמט תקין'],
+    'invalid'],
   // `queryResult.ts` throws this instead of ever letting a missing COUNT render as 0 — zero is a
   // claim about the business. The sentence says the list is unverified, not empty.
   [/count_unavailable/i,
-    'לא ניתן לאמת כרגע את מספר הרשומות ברשימה. רענן את המסך ונסה שוב.'],
+    'count_unavailable'],
   // Migration 0068 / migration 0068. Ahead of the generic `not_authorized` line below on purpose:
   // PATTERNS is scanned in order, and `notification_preference_not_authorized` would otherwise be
   // answered by the generic sentence instead of by one that names the setting.
   [/notification_preference_not_authorized/i,
-    'לא ניתן לעדכן את העדפות ההתראות כרגע. יש להתחבר מחדש ולנסות שוב.'],
+    'notification_preference_not_authorized'],
   [/notification_event_unknown/i,
-    'סוג ההתראה הזה אינו מוכר למערכת. רענן את הדף ונסה שוב.'],
+    'notification_event_unknown'],
   [/notification_preference_invalid/i,
-    'העדפת ההתראה שנשלחה אינה תקינה.'],
+    'notification_preference_invalid'],
   [/financial_command_rpc_required|invoice_soft_delete_rpc_required|supplier_soft_delete_rpc_required|product_active_rpc_required|purchase_order_cancel_rpc_required/i,
-    'הנתונים השתנו דרך מסלול ישן שנחסם. רענן את האפליקציה ונסה שוב.'],
+    'financial_command_rpc_required'],
   [/fresh_authentication_required/i,
-    'נדרש אימות מחדש — הזינו סיסמה כדי לאשר פעולה רגישה.'],
+    'fresh_authentication_required'],
   // 0071: the server refuses to leave an active member with zero scope grants. Without this
   // sentence the browser would show a bare Postgres string for the one refusal whose whole
   // purpose is to prevent a silent ₪0 on a financial screen.
   [/scope_last_grant_required/i,
-    'לא ניתן להסיר את הרשאת היחידה האחרונה של משתמש פעיל — הוא יאבד גישה לכל הנתונים הכספיים והמסכים יציגו אפס. הענק יחידה אחרת לפני הצמצום, או השבת את המשתמש.'],
+    'scope_last_grant_required'],
   [/invoice_create_not_authorized|invoice_review_not_authorized|credit_request_create_not_authorized|credit_request_transition_not_authorized|price_write_not_authorized|price_import_not_authorized|price_submission_not_authorized|price_submission_intake_service_only|month_export_not_authorized|not_authorized/i,
-    'אין לך הרשאה לבצע את הפעולה הזו.'],
+    'invoice_create_not_authorized'],
   [/draft_unknown/i,
-    'הטיוטה אינה זמינה עוד. ייתכן שבוטלה או אושרה בחלון אחר.'],
+    'draft_unknown'],
   [/draft_invalid_supplier_selection|draft_supplier_unavailable/i,
-    'אחד הספקים שנבחרו אינו זמין עוד. יש לבחור ספק מחדש.'],
+    'draft_invalid_supplier_selection'],
   [/draft_price_changed/i,
-    'המחירים השתנו. הסיכום רוענן ויש לעבור עליו ולאשר שוב.'],
+    'draft_price_changed'],
   [/document_already_filed/i,
     // "יעד עסקי" is the entity_type column talking. A bookkeeper files a document against an
     // invoice or a goods receipt, so that is what the message names.
-    'המסמך כבר משויך לחשבונית או לקבלת סחורה.'],
+    'document_already_filed'],
   [/document_processing_active/i,
-    'המסמך כבר נמצא בתור או בעיבוד. רענן את מרכז התפעול לפני ניסיון נוסף.'],
+    'document_processing_active'],
   [/document_target_unknown/i,
-    'יעד התיוק אינו זמין עוד. יש לבחור יעד אחר.'],
+    'document_target_unknown'],
   // The archive screen's most likely real race: two clerks, one rescues the document, the
   // other's list is stale. Both refusals name exactly what happened, so the second person is
   // told the truth instead of getting the generic fallback.
   [/document_not_in_archive/i,
-    'המסמך כבר אינו בארכיון. ייתכן שהוחזר לטיפול בחלון אחר.'],
+    'document_not_in_archive'],
   [/document_unknown/i,
-    'המסמך אינו זמין עוד. ייתכן שהוסר בחלון אחר.'],
+    'document_unknown'],
   // 0077 section 4b. Reversal is a ONE-WAY DOOR, and its likeliest real failure is not an attack —
   // it is two clerks looking at one list, the second a few seconds behind. Both refusals say what
   // actually happened instead of the generic fallback, and `auto_action_unknown` deliberately does
   // not distinguish "another tenant's" from "does not exist": that distinction is the leak.
   [/auto_action_already_reverted|document_auto_action_immutable/i,
-    'השיוך האוטומטי כבר בוטל. רענן את המסך כדי לראות את המצב העדכני.'],
+    'auto_action_already_reverted'],
   [/auto_action_unknown/i,
-    'השיוך האוטומטי אינו זמין עוד. רענן את המסך.'],
+    'auto_action_unknown'],
   // 0076. The autonomy command refuses by name rather than by constraint, so each refusal can be
   // answered with the rule that was broken. `autonomy_policy_reason_required` is deliberately NOT
   // here: it contains `reason_required`, and the generic sentence below is already the right one.
   [/autonomy_policy_not_tightening/i,
-    'הסף שהוזן נמוך מרצפת המערכת. דייר רשאי לדרוש ביטחון גבוה יותר, לעולם לא נמוך יותר.'],
+    'autonomy_policy_not_tightening'],
   [/autonomy_policy_invalid/i,
-    'סף הביטחון חייב להיות מספר גדול מ-0 ועד 1, ויש לבחור ארגון ומצב.'],
+    'autonomy_policy_invalid'],
   [/autonomy_policy_unknown/i,
-    'מדיניות האוטונומיה המבוקשת אינה קיימת במערכת.'],
+    'autonomy_policy_unknown'],
   [/not_platform_admin/i,
-    'הפעולה הזו פתוחה למנהלי פלטפורמה בלבד.'],
+    'not_platform_admin'],
   [/reason_required/i,
-    'יש להזין סיבה לביצוע הפעולה.'],
+    'reason_required'],
   // Its own sentence rather than an arm of reason_required: telling someone who just wrote 1001
   // characters that they must enter a reason is a worse answer than the raw constraint name it
   // replaces. Ahead of nothing in particular — it collides with no other pattern.
   [/reason_too_long/i,
-    'הסיבה ארוכה מדי. יש לקצר אותה ל-1000 תווים לכל היותר.'],
+    'reason_too_long'],
   [/row-level security|permission denied|insufficient privilege/i,
-    'אין לך הרשאה לבצע את הפעולה הזו.'],
+    'level'],
   [/duplicate key value|already exists/i,
-    'הרשומה כבר קיימת במערכת.'],
+    'duplicate'],
   [/violates foreign key constraint/i,
-    'לא ניתן להשלים את הפעולה — קיימות רשומות אחרות שמקושרות לרשומה זו.'],
+    'violates'],
   [/null value in column .* violates not-null/i,
-    'חסר שדה חובה.'],
+    'null'],
   [/violates check constraint/i,
-    'אחד הערכים שהוזנו אינו תקין.'],
+    'violates_2'],
   [/JWT expired|Invalid Refresh Token|refresh_token_not_found/i,
-    'פג תוקף החיבור. יש להתחבר מחדש.'],
+    'expired'],
   [/Invalid login credentials/i,
-    'אימייל או סיסמה שגויים.'],
+    'invalid_2'],
   [/Email not confirmed/i,
-    'כתובת המייל טרם אומתה.'],
+    'email'],
   [/already registered/i,
-    'כתובת המייל כבר רשומה במערכת.'],
+    'already'],
   [/FunctionsHttpError|Edge Function returned a non-2xx status code/i,
-    'שירות הפעולה אינו זמין כרגע. נסה שוב בעוד מספר דקות.'],
+    'functionshttperror'],
   [/Failed to fetch|NetworkError|ERR_NETWORK|fetch failed|FunctionsFetchError|Failed to send a request to the Edge Function|FunctionsRelayError/i,
-    'אין חיבור לשרת. בדוק את החיבור לאינטרנט ונסה שוב.'],
+    'failed'],
   [/timeout|timed out/i,
-    'הפעולה ארכה זמן רב מדי. נסה שוב.'],
+    'timeout'],
   [/payload too large|exceeded the maximum allowed size/i,
-    'הקובץ גדול מדי.'],
+    'payload'],
+  // The upload surface's own conditions. The first three are synthetic codes `tusUpload.ts` raises
+  // for HTTP verdicts that carry no message of their own; the last three are the renewal RPC's real
+  // error strings, which used to be matched by a duplicate table inside that file. One vocabulary,
+  // one place — a second table is a second answer waiting to disagree with this one.
+  [/tus_upload_forbidden/i, 'tus_upload_forbidden'],
+  [/tus_upload_conflict/i, 'tus_upload_conflict'],
+  [/tus_upload_too_large/i, 'tus_upload_too_large'],
+  [/document_upload_reservation_registered/i, 'document_upload_reservation_registered'],
+  [/document_upload_reservation_lifetime_exceeded/i, 'document_upload_reservation_lifetime_exceeded'],
+  [/document_upload_reservation_unknown/i, 'document_upload_reservation_unknown'],
+  // The registration half of the same surface. `uploadDocument` stores the file first and
+  // registers it second, so every one of these means THE FILE IS SAFE and only the row is
+  // missing — which is why each sentence says so, and why none of them says "upload it again".
+  [/document_registration_malformed_response/i, 'document_registration_malformed_response'],
+  [/document_registration_unavailable/i, 'document_registration_unavailable'],
+  [/document_registration_misconfigured/i, 'document_registration_misconfigured'],
+  [/document_registration_not_authorized/i, 'document_registration_not_authorized'],
+  [/document_registration_key_taken/i, 'document_registration_key_taken'],
+  [/document_registration_invalid/i, 'document_registration_invalid'],
+  [/document_registration_transient/i, 'document_registration_transient'],
+  [/document_registration_failed/i, 'document_registration_failed'],
+  [/document_enqueue_transient/i, 'document_enqueue_transient'],
+  [/document_enqueue_failed/i, 'document_enqueue_failed'],
+  [/document_upload_cancelled/i, 'document_upload_cancelled'],
+  [/document_upload_too_large/i, 'document_upload_too_large'],
+  [/document_upload_type_unsupported/i, 'document_upload_type_unsupported'],
+  // Two screens used to keep their own status-to-sentence tables. The conditions live here now,
+  // where a reader can see the whole vocabulary at once instead of hunting it per page.
+  [/price_list_confirm_session_expired/i, 'price_list_confirm_session_expired'],
+  [/price_list_confirm_forbidden/i, 'price_list_confirm_forbidden'],
+  [/price_list_confirm_conflict/i, 'price_list_confirm_conflict'],
+  [/price_list_confirm_unavailable/i, 'price_list_confirm_unavailable'],
+  [/monthly_report_snapshot_unattributed_bank_transactions/i, 'monthly_report_snapshot_unattributed_bank'],
+  [/monthly_report_snapshot_unattributed_(invoices|payments|credits|exceptions)/i, 'monthly_report_snapshot_unattributed'],
+  [/monthly_report_snapshot_legal_entity_invalid|unit_out_of_scope/i, 'monthly_report_snapshot_legal_entity_invalid'],
+  [/monthly_report_snapshot_source_unavailable/i, 'monthly_report_snapshot_source_unavailable'],
+  // The offline queue's own outcomes. It persists what it stored to IndexedDB and shows it on
+  // a later visit, so what it stores has to be a condition — a sentence written now would be shown
+  // days later in whatever language happened to be active at the moment of the failure.
+  //
+  // The rest of this block used to be Hebrew sentences thrown from `offlineDb`/`offlineQueue`, and
+  // they matched nothing here: `errorText` collapsed each of them into the generic fallback, so the
+  // one screen built to say WHICH receipt failed and WHY said neither. Ordered longest-first, since
+  // `offline_storage_unavailable` would otherwise be shadowed by nothing but its own prefix.
+  [/offline_finalization_incomplete/i, 'offline_finalization_incomplete'],
+  [/offline_transport_failure/i, 'offline_transport_failure'],
+  [/offline_queued_no_network/i, 'offline_queued_no_network'],
+  [/offline_queued_session_expired/i, 'offline_queued_session_expired'],
+  [/offline_queued_syncing_elsewhere/i, 'offline_queued_syncing_elsewhere'],
+  [/offline_queued_server_version_stale/i, 'offline_queued_server_version_stale'],
+  [/offline_queued_changed_elsewhere/i, 'offline_queued_changed_elsewhere'],
+  [/offline_local_action_unidentified/i, 'offline_local_action_unidentified'],
+  [/offline_recovery_newer_draft_exists/i, 'offline_recovery_newer_draft_exists'],
+  [/offline_recovery_action_exists/i, 'offline_recovery_action_exists'],
+  [/offline_receipt_not_stored/i, 'offline_receipt_not_stored'],
+  [/offline_scope_unresolved/i, 'offline_scope_unresolved'],
+  [/offline_storage_unavailable/i, 'offline_storage_unavailable'],
+  // The invitation codes (0007). They used to be a private map inside invitations.ts, which meant
+  // the invitee — a person who has no account yet and no way to ask anyone — was the one reader
+  // whose failures came from a second vocabulary.
+  [/invitation_unknown/i, 'invitation_unknown'],
+  [/invitation_expired/i, 'invitation_expired'],
+  [/invitation_accepted/i, 'invitation_accepted'],
+  [/invitation_revoked/i, 'invitation_revoked'],
+  [/email_mismatch/i, 'email_mismatch'],
+  [/profile_exists/i, 'profile_exists'],
+  [/org_suspended/i, 'org_suspended'],
+  [/full_name_required/i, 'full_name_required'],
+  [/not_authenticated/i, 'not_authenticated'],
+  [/terms_consent_required/i, 'terms_consent_required'],
 ];
 
-const FALLBACK = 'הפעולה נכשלה. אם הבעיה חוזרת — פנה לתמיכה.';
+const FALLBACK = 'fallback';
 
-/** Turns any thrown value or Supabase error message into Hebrew. */
-export function toHebrewError(e: unknown): string {
+/**
+ * Turns any thrown value or Supabase error message into a DICTIONARY KEY.
+ *
+ * A key and not a sentence, because the moment of failure and the moment of display are not the
+ * same moment. The offline queue catches a write error now and shows it when the device comes
+ * back; a query client catches one before any component has rendered. Resolving text at the throw
+ * would freeze the language that happened to be active then. A key travels, and whoever draws it
+ * on a screen resolves it in the language that reader is actually using.
+ */
+export function toErrorKey(e: unknown): string {
   const raw = e instanceof Error ? e.message : typeof e === 'string' ? e : String(e);
   // The original is what a developer needs; the return value is what the user reads.
   if (raw) console.error('[supplyflow]', raw);
-  for (const [re, text] of PATTERNS) if (re.test(raw)) return text;
+  for (const [re, key] of PATTERNS) if (re.test(raw)) return key;
   return FALLBACK;
+}
+
+/**
+ * The Hebrew sentence for a failure, resolved immediately.
+ *
+ * TRANSITIONAL, and deliberately named for what it does. `useT().errorText` is the one that
+ * follows the reader's language; this one is Hebrew whatever the reader chose. Every remaining
+ * call is therefore a screen that has not been converted yet, and the count of them is PINNED by
+ * `node scripts/gate-i18n.mjs legacy-errors` so it can only go down. When it reaches zero this
+ * function goes with it.
+ */
+export function toHebrewError(e: unknown): string {
+  return (he.errors as Record<string, string>)[toErrorKey(e)] ?? he.errors.fallback;
 }
 
 /**

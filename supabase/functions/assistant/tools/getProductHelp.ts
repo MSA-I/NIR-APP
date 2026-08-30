@@ -16,6 +16,7 @@ import type {
   SourceReference,
 } from "../../../../src/lib/assistant/contracts.ts";
 import { PRODUCT_HELP_LOCALES } from "../../../../src/lib/assistant/contracts.ts";
+import { readerText } from "../reader-locale.ts";
 import {
   findProductHelp,
   PRODUCT_HELP_BASE_LOCALE,
@@ -33,8 +34,10 @@ const inputSchema = z
     question: z.string().trim().max(200).default(""),
     /** An exact registry id, when a previous turn already named one. Never a guess. */
     entry_id: z.string().trim().max(120).nullish().transform((value) => value ?? ""),
-    locale: z.enum(PRODUCT_HELP_LOCALES).nullish()
-      .transform((value) => value ?? PRODUCT_HELP_BASE_LOCALE),
+    // Not defaulted here any more: `null` used to become Hebrew, which made the reader’s own
+    // language reachable only when the model guessed it. The fallback moved into `run`, where
+    // the run’s actual locale is known (`OPEN-DECISIONS #283`).
+    locale: z.enum(PRODUCT_HELP_LOCALES).nullish(),
   })
   .strict();
 
@@ -42,6 +45,12 @@ export const NO_REGISTRY_MATCH = {
   code: "product_help_not_registered",
   label: "אין רשומת עזרה מאושרת שעונה על השאלה הזו",
 } as const;
+
+/** The canonical screen name for a path, in the reader’s language, or null when unnamed. */
+function screenLabel(path: string, locale: Parameters<typeof readerText>[0]): string | null {
+  const key = routePresentationTitle(path);
+  return key ? readerText(locale, key) : null;
+}
 
 export const getProductHelp: AssistantTool = {
   name: "get_product_help",
@@ -69,7 +78,9 @@ export const getProductHelp: AssistantTool = {
           { type: "string", enum: [...PRODUCT_HELP_LOCALES] },
           { type: "null" },
         ],
-        description: "שפת הרשומה המבוקשת, או null לברירת המחדל (עברית)",
+        description:
+          "שפת הרשומה המבוקשת. יש לבחור את השפה שבה המשתמש כתב את השאלה: " +
+          "\"en\" לשאלה באנגלית, \"he\" לשאלה בעברית. null נופל לשפה שבה המשתמש קורא את המערכת.",
       },
     },
     required: ["question", "entry_id", "locale"],
@@ -80,7 +91,13 @@ export const getProductHelp: AssistantTool = {
   requiredRoles: ["owner", "office", "accountant"],
   classification: "public_product_metadata",
   run(ctx: ToolContext, input: unknown) {
-    const { question, entry_id, locale } = inputSchema.parse(input);
+    const parsed = inputSchema.parse(input);
+    const { question, entry_id } = parsed;
+    // The model may still name a language — a Hebrew reader asking in English should get the
+    // English steps. What changed is the FALLBACK: silence now means the reader’s own language
+    // instead of Hebrew, and the reader’s language is a fact the server holds rather than a
+    // guess the model makes.
+    const locale = parsed.locale ?? ctx.locale ?? PRODUCT_HELP_BASE_LOCALE;
     const asOf = ctx.now().toISOString();
     const filters = {
       question: sanitizeText(question, 200),
@@ -165,7 +182,10 @@ export const getProductHelp: AssistantTool = {
         id: "candidate",
         entity: "organization",
         entity_id: ctx.actor.orgId,
-        label: routePresentationTitle(path) ?? entry.label,
+        // `routePresentationTitle` returns a dictionary KEY since the interface was extracted.
+        // Handing it straight to a `SourceReference` label put `nav.routeTitle_inventory` in
+        // front of a person; it is resolved in their language instead.
+        label: screenLabel(path, locale) ?? entry.label,
         route: path,
         classification: "public_product_metadata",
       };

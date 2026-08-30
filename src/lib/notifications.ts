@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { supabase } from './supabase';
+import type { TKey } from './i18n/t';
 
 export interface NotificationRow {
   id: string;
@@ -176,22 +177,22 @@ export interface NotificationPreference {
  * because silently hiding a preference the server is honouring would be worse than an untranslated
  * label.
  */
-export const NOTIFICATION_EVENT_LABELS: Record<string, { label: string; detail: string }> = {
+export const NOTIFICATION_EVENT_LABELS: Record<string, { labelKey: TKey; detailKey: TKey }> = {
   duplicate_invoice: {
-    label: 'חשד לחשבונית כפולה',
-    detail: 'אותו ספק ואותו מספר חשבונית נקלטו יותר מפעם אחת',
+    labelKey: 'notificationEvents.duplicateInvoice',
+    detailKey: 'notificationEvents.duplicateInvoiceDetail',
   },
   payment_due: {
-    label: 'תשלום שמועד הפירעון שלו מתקרב או עבר',
-    detail: 'נבדק פעם ביום, רק על דרישות תשלום שהוזן להן תאריך',
+    labelKey: 'notificationEvents.paymentDue',
+    detailKey: 'notificationEvents.paymentDueDetail',
   },
   price_increase: {
-    label: 'עליית מחיר במחירון של ספק',
-    detail: 'לפי המחירון — לא לפי מה שנגבה בחשבונית',
+    labelKey: 'notificationEvents.priceIncrease',
+    detailKey: 'notificationEvents.priceIncreaseDetail',
   },
   document_processing_stalled: {
-    label: 'עיבוד המסמכים נעצר',
-    detail: 'מסמכים ממתינים בתור ואיש אינו קורא אותם — נבדק כל חמש דקות',
+    labelKey: 'notificationEvents.documentStalled',
+    detailKey: 'notificationEvents.documentStalledDetail',
   },
 };
 

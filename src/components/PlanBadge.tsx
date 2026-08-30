@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { supabase } from '../lib/supabase';
@@ -117,6 +118,7 @@ export function PlanBadge({ compact = false }: {
    */
   compact?: boolean;
 } = {}) {
+  const { t } = useT();
   const { profile } = useAuth();
   const org = useOrgScope();
   const isOwner = profile?.role === 'owner';
@@ -153,7 +155,7 @@ export function PlanBadge({ compact = false }: {
       // `@layer components` rule and these are utilities, which Tailwind v4 emits after it. No
       // `!`, and no arbitrary-variant reach-in from outside.
       className={`plan-badge-trigger${compact ? ' min-h-0 min-w-0' : ''}`}
-      aria-label={`המנוי שלי — ${plan.plan_label}`}>
+      aria-label={t('planBadge.ariaLabel', { plan: plan.plan_label })}>
       <span data-testid="plan-badge-chip"
         // `justify-center` so a label narrower than 24px sits in the middle of its floor rather
         // than against the start edge; `badge` already centres vertically.

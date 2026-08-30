@@ -1,19 +1,17 @@
+import type { TKey } from '../../lib/i18n/t';
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { reasonOr } from '../../lib/reason';
 import { CheckCircle2, Loader2, Plus } from 'lucide-react';
 import { Link } from 'react-router';
-import { toHebrewError } from '../../lib/errors';
 import { supabase } from '../../lib/supabase';
 import type { PriceListPredictedLine } from '../../lib/useDocumentProcessing';
 import { useAuth } from '../../auth/AuthContext';
 import { ConfirmDialog, ICON, Note, SubPanel } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
 import { PriceListAutomationReadiness } from './PriceListAutomationReadiness';
-import { FILING_REASON_LABELS, type ReviewSnapshot } from './model';
+import { FILING_REASON_KEYS, type ReviewSnapshot } from './model';
 import { bidiIsolate, formatUnit, normalizeUnitInput } from '../../lib/format';
-
-/** The one create-product refusal that is about the NAME FIELD rather than about the server. */
-const NEW_PRODUCT_NAME_REQUIRED = 'יש להזין שם למוצר החדש.';
 
 interface PriceListReviewConfirmationProps {
   snapshot: ReviewSnapshot;
@@ -58,8 +56,8 @@ interface SubmissionReceipt {
   idempotent: boolean;
 }
 
-function valueText(value: string | number | null): string {
-  return value === null ? 'לא זוהה' : String(value);
+function valueText(value: string | number | null, t: (key: TKey) => string): string {
+  return value === null ? t('priceListReview.valueNotRecognised') : String(value);
 }
 
 /** Best-effort name prefill for a new product, taken from the line's own extracted values. */
@@ -81,10 +79,10 @@ function emptyDrafts(count: number): LineDraft[] {
   }));
 }
 
-const MATCHED_BY_LABELS: Record<string, string> = {
-  supplier_sku: 'מק״ט הספק',
-  sku: 'מק״ט',
-  barcode: 'ברקוד',
+const MATCHED_BY_KEYS: Record<string, TKey> = {
+  supplier_sku: 'priceListReview.matchedBySupplierSku',
+  sku: 'priceListReview.matchedBySku',
+  barcode: 'priceListReview.matchedByBarcode',
 };
 
 /**
@@ -172,8 +170,8 @@ function currentMonth(now: Date): string {
 // the screen unusable; a page is a window on the same list, not a different list.
 const PAGE_SIZE = 50;
 
-function parseReceipt(value: unknown): SubmissionReceipt {
-  if (!value || typeof value !== 'object') throw new Error('השרת לא החזיר קבלת הגשה תקינה.');
+function parseReceipt(value: unknown, t: (key: TKey) => string): SubmissionReceipt {
+  if (!value || typeof value !== 'object') throw new Error(t('priceListReview.receiptMalformed'));
   const row = value as Record<string, unknown>;
   if (typeof row.submission_id !== 'string'
       || typeof row.revision !== 'number'
@@ -181,12 +179,13 @@ function parseReceipt(value: unknown): SubmissionReceipt {
       || typeof row.rejected_count !== 'number'
       || typeof row.unchanged_count !== 'number'
       || typeof row.idempotent !== 'boolean') {
-    throw new Error('השרת לא החזיר קבלת הגשה תקינה.');
+  const { t } = useT();
+    throw new Error(t('priceListReview.receiptMalformed'));
   }
   return row as unknown as SubmissionReceipt;
 }
 
-async function recoverStoredReceipt(interpretationId: string): Promise<SubmissionReceipt | null> {
+async function recoverStoredReceipt(interpretationId: string, t: (key: TKey) => string): Promise<SubmissionReceipt | null> {
   const result = await supabase.from('supplier_price_submissions')
     .select('id,revision,accepted_count,rejected_count,unchanged_count')
     .eq('id', interpretationId)
@@ -201,7 +200,7 @@ async function recoverStoredReceipt(interpretationId: string): Promise<Submissio
     rejected_count: result.data.rejected_count,
     unchanged_count: result.data.unchanged_count,
     idempotent: true,
-  });
+  }, t);
 }
 
 function hasHttpResponse(error: unknown): boolean {
@@ -209,7 +208,7 @@ function hasHttpResponse(error: unknown): boolean {
   return Boolean(context && typeof context.json === 'function' && typeof context.status === 'number');
 }
 
-async function edgeErrorMessage(error: unknown) {
+async function edgeErrorCondition(error: unknown) {
   const context = (error as { context?: Response } | null)?.context;
   if (context && typeof context.json === 'function') {
     try {
@@ -218,12 +217,14 @@ async function edgeErrorMessage(error: unknown) {
         return body.error.detail ? `${body.error.message} (${body.error.detail})` : body.error.message;
       }
     } catch { /* use the transport mapping below */ }
-    if (context.status === 401) return 'פג תוקף החיבור. יש להתחבר מחדש לפני אישור המחירון.';
-    if (context.status === 403) return 'אין לך הרשאה לאשר את המחירון הזה.';
-    if (context.status === 409) return 'מצב המסמך השתנה. רענן את המסך ובדוק שוב.';
-    if (context.status === 404 || context.status >= 500) return 'שירות קליטת המחירונים אינו זמין כרגע.';
+    // Conditions, not sentences: all four are registered in src/lib/errors.ts, so the screen
+    // resolves them like every other failure instead of this file owning four private wordings.
+    if (context.status === 401) return 'price_list_confirm_session_expired';
+    if (context.status === 403) return 'price_list_confirm_forbidden';
+    if (context.status === 409) return 'price_list_confirm_conflict';
+    if (context.status === 404 || context.status >= 500) return 'price_list_confirm_unavailable';
   }
-  return toHebrewError(error);
+  return error instanceof Error ? error.message : String(error);
 }
 
 export function PriceListReviewConfirmation({
@@ -231,6 +232,7 @@ export function PriceListReviewConfirmation({
   actorId,
   onRefetch,
 }: PriceListReviewConfirmationProps) {
+  const { errorText, locale, t } = useT();
   const interpretation = snapshot.interpretation;
   const lineItems = interpretation?.payload.line_items ?? [];
   const autoDecision = snapshot.priceListDecision;
@@ -354,7 +356,7 @@ export function PriceListReviewConfirmation({
         options.sort((left, right) => left.name.localeCompare(right.name, 'he'));
         if (!cancelled) setProducts(options);
       } catch (loadError) {
-        if (!cancelled) setCatalogError(toHebrewError(loadError));
+        if (!cancelled) setCatalogError(errorText(loadError));
       } finally {
         if (!cancelled) setCatalogLoading(false);
       }
@@ -371,12 +373,12 @@ export function PriceListReviewConfirmation({
     }
     setRecoveryLoading(true);
     setRecoveryError(null);
-    void recoverStoredReceipt(interpretation.id).then((storedReceipt) => {
+    void recoverStoredReceipt(interpretation.id, t).then((storedReceipt) => {
       if (cancelled) return;
       if (storedReceipt) setReceipt(storedReceipt);
-      else setRecoveryError('המשימה הושלמה, אך לא נמצאה קבלה תואמת לפירוש הנוכחי. לא ניתן לבנות הגשה חדשה במצב זה.');
+      else setRecoveryError(t('priceListReview.setRecoveryError'));
     }).catch((loadError) => {
-      if (!cancelled) setRecoveryError(`לא ניתן לשחזר את קבלת ההגשה: ${toHebrewError(loadError)}`);
+      if (!cancelled) setRecoveryError(t('priceListReview.receiptRecoveryFailed', { message: errorText(loadError) }));
     }).finally(() => {
       if (!cancelled) setRecoveryLoading(false);
     });
@@ -440,7 +442,7 @@ export function PriceListReviewConfirmation({
   // so the server invariant "האישור אינו יוצר מוצרים" stays intact — creation is its own user act.
   async function createProduct(index: number) {
     const name = newProductName.trim();
-    if (!name) { setCreateError(NEW_PRODUCT_NAME_REQUIRED); return; }
+    if (!name) { setCreateError(t('priceListReview.newProductNameRequired')); return; }
     if (!profile) return;
     setBusyCreate(true);
     setCreateError(null);
@@ -456,7 +458,7 @@ export function PriceListReviewConfirmation({
       updateDraft(index, { productId: product.id, ...(price === null ? {} : { priceText: price }) });
       setNewProductFor(null);
     } catch (insertError) {
-      setCreateError(toHebrewError(insertError));
+      setCreateError(errorText(insertError));
     } finally {
       setBusyCreate(false);
     }
@@ -466,13 +468,13 @@ export function PriceListReviewConfirmation({
     setReceipt(nextReceipt);
     setRecoveryError(null);
     if (!await onRefetch()) {
-      setRefreshWarning('המחירון נקלט והקבלה התקבלה, אך רענון המסמך נכשל. יש לרענן ידנית.');
+      setRefreshWarning(t('priceListReview.setRefreshWarning'));
     }
   }
 
   async function recoverAfterSubmission(interpretationId: string): Promise<'found' | 'missing' | 'failed'> {
     try {
-      const storedReceipt = await recoverStoredReceipt(interpretationId);
+      const storedReceipt = await recoverStoredReceipt(interpretationId, t);
       if (!storedReceipt) return 'missing';
       await finishWithReceipt(storedReceipt);
       return 'found';
@@ -491,7 +493,7 @@ export function PriceListReviewConfirmation({
     });
     setRevertBusy(false);
     if (result.error) {
-      setError(toHebrewError(result.error.message));
+      setError(errorText(result.error.message));
       return;
     }
     setRevertOpen(false);
@@ -506,34 +508,34 @@ export function PriceListReviewConfirmation({
       const response = await supabase.functions.invoke<SubmissionReceipt>('submit-price-list', { body: payload });
       if (response.error) {
         const responseReceived = hasHttpResponse(response.error);
-        const message = await edgeErrorMessage(response.error);
+        const message = errorText(await edgeErrorCondition(response.error));
         const recovery = await recoverAfterSubmission(payload.interpretationId);
         if (recovery === 'found') return;
         if (responseReceived && recovery === 'missing' && snapshot.job?.status === 'review') {
           setAttemptedPayload(null);
         }
         setError(recovery === 'failed'
-          ? `${message} לא ניתן היה לוודא אם נשמרה קבלה; ניסיון נוסף ישתמש בדיוק באותו אישור.`
+          ? t('priceListReview.receiptUnverified', { message })
           : message);
         return;
       }
 
       try {
-        await finishWithReceipt(parseReceipt(response.data));
+        await finishWithReceipt(parseReceipt(response.data, t));
       } catch (receiptError) {
         const recovery = await recoverAfterSubmission(payload.interpretationId);
         if (recovery !== 'found') {
           setError(recovery === 'failed'
-            ? 'השרת השיב, אך לא ניתן לקרוא או לשחזר את הקבלה. ניסיון נוסף ישתמש בדיוק באותו אישור.'
-            : receiptError instanceof Error ? receiptError.message : toHebrewError(receiptError));
+            ? t('priceListReview.text')
+            : receiptError instanceof Error ? receiptError.message : errorText(receiptError));
         }
       }
     } catch (submitError) {
       const recovery = await recoverAfterSubmission(payload.interpretationId);
       if (recovery !== 'found') {
-        const message = submitError instanceof Error ? submitError.message : toHebrewError(submitError);
+        const message = submitError instanceof Error ? submitError.message : errorText(submitError);
         setError(recovery === 'failed'
-          ? `${message} לא ניתן היה לוודא אם נשמרה קבלה; ניסיון נוסף ישתמש בדיוק באותו אישור.`
+          ? t('priceListReview.receiptUnverified', { message })
           : message);
       }
     } finally {
@@ -552,15 +554,15 @@ export function PriceListReviewConfirmation({
     const allowedProductIds = new Set(products.map(({ id }) => id));
 
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(targetMonth)) {
-      setError('יש לבחור חודש יעד.');
+      setError(t('priceListReview.setError'));
       return;
     }
     if (!approvedRows.length) {
-      setError('יש לאשר לפחות שורה אחת.');
+      setError(t('priceListReview.setError_2'));
       return;
     }
     if (approvedRows.some((row) => !allowedProductIds.has(row.productId) || !row.priceText)) {
-      setError('בכל שורה מאושרת יש לבחור מוצר קיים ולהקליד מחיר.');
+      setError(t('priceListReview.setError_3'));
       return;
     }
 
@@ -634,17 +636,17 @@ export function PriceListReviewConfirmation({
   const pager = pageCount > 1 && (
     <div className="flex flex-wrap items-center justify-between gap-2" data-testid="price-list-pager">
       <span className="text-sm text-ink-muted">
-        שורות <span className="num">{pageStart + 1}</span>–<span className="num">{pageStart + pageIndexes.length}</span>{' '}
-        מתוך <span className="num">{visibleIndexes.length}</span> · עמוד <span className="num">{currentPage + 1}</span> מתוך <span className="num">{pageCount}</span>
+        {t('priceListReview.pagerLines')}<span className="num">{pageStart + 1}</span>–<span className="num">{pageStart + pageIndexes.length}</span>{' '}
+        {t('priceListReview.text_3')} <span className="num">{visibleIndexes.length}</span> {t('priceListReview.text_2')} <span className="num">{currentPage + 1}</span> {t('priceListReview.text_3')} <span className="num">{pageCount}</span>
       </span>
       <div className="flex items-center gap-2">
         <button type="button" className="btn-secondary" data-testid="price-list-page-previous"
           disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
-          העמוד הקודם
+          {t('priceListReview.text_4')}
         </button>
         <button type="button" className="btn-secondary" data-testid="price-list-page-next"
           disabled={currentPage >= pageCount - 1} onClick={() => setPage(currentPage + 1)}>
-          העמוד הבא
+          {t('priceListReview.text_5')}
         </button>
       </div>
     </div>
@@ -653,7 +655,7 @@ export function PriceListReviewConfirmation({
     <button type="button" className="btn-secondary" data-testid="price-list-details-toggle"
       aria-expanded={detailsOpen} aria-controls="price-list-line-details"
       onClick={() => setDetailsOpen((open) => !open)}>
-      {detailsOpen ? 'הסתר פרטים' : 'פרטים נוספים'}
+      {detailsOpen ? t('priceListReview.text_6') : t('priceListReview.text_7')}
     </button>
   );
 
@@ -661,17 +663,17 @@ export function PriceListReviewConfirmation({
     <section className="card card-pad min-w-0" aria-labelledby="price-list-review-title" data-testid="price-list-review-confirmation">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id="price-list-review-title" className="section-title">תוצאות העלאת המחירון האחרונה</h2>
+          <h2 id="price-list-review-title" className="section-title">{t('priceListReview.text_8')}</h2>
           {/* Two different documents, two different true sentences. Describing the automatic intake
               on a document where it never ran — the ordinary case, because the calibrated scope gate
               of 0096 is not reachable from the product (DEBT-REGISTER §42) — told the reader the
               system had done something it had not. */}
           <p className="mt-1 text-sm text-ink-muted">
             {autoDecision || receipt
-              ? 'המערכת קולטת אוטומטית שורות בטוחות ויוצרת מוצר חדש כשיש שם ומק״ט או ברקוד. רק חריגים נשארים לבדיקה.'
+              ? t('priceListReview.text_9')
               : showControls
-                ? 'המערכת קראה את המחירון והתאימה את השורות שניתן לזהות לפי מק״ט או ברקוד; שם מוצר לעולם אינו מפתח התאמה. הקליטה עצמה ממתינה לאישורך.'
-                : 'המערכת קוראת את המחירון ומתאימה את השורות. התוצאה תופיע כאן בסיום.'}
+                ? t('priceListReview.text_10')
+                : t('priceListReview.text_11')}
           </p>
         </div>
         {/* „הקליטה בעיבוד” was shown on a document whose reading had finished and whose intake was
@@ -680,22 +682,22 @@ export function PriceListReviewConfirmation({
           ? 'badge-done'
           : autoDecision || showControls ? 'badge-await' : 'badge-info'}>
           {receipt || autoDecision?.submission_id
-            ? 'המחירון עודכן'
-            : autoDecision ? 'נדרשת בדיקה' : showControls ? 'ממתין לאישורך' : 'בעיבוד'}
+            ? t('priceListReview.text_12')
+            : autoDecision ? t('priceListReview.text_13') : showControls ? t('priceListReview.text_14') : t('priceListReview.text_15')}
         </span>
       </div>
 
       <dl className="mt-4 grid gap-3 sm:grid-cols-3">
         <div className="rounded-lg bg-surface-sunken p-3">
-          <dt className="text-sm font-medium text-ink-soft">הספק שהוצע בפירוש</dt>
-          <dd className="mt-1 break-words text-ink-body">{currentInterpretation.payload.supplier.suggested_name || 'לא זוהה'}</dd>
+          <dt className="text-sm font-medium text-ink-soft">{t('priceListReview.text_16')}</dt>
+          <dd className="mt-1 break-words text-ink-body">{currentInterpretation.payload.supplier.suggested_name || t('priceListReview.text_17')}</dd>
         </div>
         <div className="rounded-lg bg-surface-sunken p-3">
-          <dt className="text-sm font-medium text-ink-soft">מספר שורות שזוהו</dt>
+          <dt className="text-sm font-medium text-ink-soft">{t('priceListReview.text_18')}</dt>
           <dd className="num mt-1 text-ink-body">{lineItems.length}</dd>
         </div>
         <div className="rounded-lg bg-surface-sunken p-3">
-          <dt className="text-sm font-medium text-ink-soft">עמודים שנקראו</dt>
+          <dt className="text-sm font-medium text-ink-soft">{t('priceListReview.text_19')}</dt>
           <dd className="num mt-1 text-ink-body">{snapshot.extraction?.payload.document.page_count ?? '—'}</dd>
         </div>
       </dl>
@@ -715,34 +717,34 @@ export function PriceListReviewConfirmation({
       {autoDecision && (
         <SubPanel className="mt-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-semibold text-ink-body">תוצאת הקליטה האוטומטית</h3>
+            <h3 className="font-semibold text-ink-body">{t('priceListReview.text_20')}</h3>
             <span className={autoDecision.reverted_at
               ? 'badge-idle'
               : autoDecision.submission_id ? 'badge-done' : 'badge-await'}>
               {autoDecision.reverted_at
-                ? 'בוטלה'
+                ? t('priceListReview.text_21')
                 : autoDecision.outcome === 'auto_applied'
-                  ? 'נקלט במלואו'
+                  ? t('priceListReview.text_22')
                   : autoDecision.outcome === 'partially_applied'
-                    ? 'נקלט חלקית'
-                    : 'ממתין לבדיקה'}
+                    ? t('priceListReview.text_23')
+                    : t('priceListReview.text_24')}
             </span>
           </div>
           <p className="mt-2 text-sm text-ink-body">
-            <span className="num">{autoDecision.accepted_count}</span> שורות נקלטו ·{' '}
-            <span className="num">{autoDecision.waiting_count}</span> שורות ממתינות ·{' '}
-            <span className="num">{autoDecision.created_product_count}</span> מוצרים חדשים נוצרו
+            <span className="num">{autoDecision.accepted_count}</span>{t('priceListReview.autoAccepted')}{' '}
+            <span className="num">{autoDecision.waiting_count}</span>{t('priceListReview.autoWaiting')}{' '}
+            <span className="num">{autoDecision.created_product_count}</span>{t('priceListReview.autoCreated')}
           </p>
-          {autoDecision.reason_code && FILING_REASON_LABELS[autoDecision.reason_code] && (
+          {autoDecision.reason_code && FILING_REASON_KEYS[autoDecision.reason_code] && (
             <p className="mt-2 text-sm text-ink-muted">
-              {FILING_REASON_LABELS[autoDecision.reason_code]}
+              {t(FILING_REASON_KEYS[autoDecision.reason_code])}
             </p>
           )}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             {detailsToggle}
             {!autoDecision.reverted_at && autoDecision.submission_id && (
               <button type="button" className="btn-danger" onClick={() => setRevertOpen(true)}>
-                ביטול הקליטה האוטומטית
+                {t('priceListReview.text_25')}
               </button>
               )}
           </div>
@@ -756,43 +758,43 @@ export function PriceListReviewConfirmation({
       {recoveryLoading && !receipt && (
         <Note tone="info" role="status" className="mt-4">
           <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />
-          <span className="min-w-0 flex-1">בודק אם כבר נשמרה קבלת הגשה לפירוש הזה.</span>
+          <span className="min-w-0 flex-1">{t('priceListReview.text_26')}</span>
         </Note>
       )}
       {recoveryError && !receipt && (
         <Note tone="alert" role="alert" className="mt-4 flex-wrap">
           <span className="min-w-0 flex-1">{recoveryError}</span>
-          <button type="button" className="btn-secondary" disabled={recoveryLoading} onClick={() => setRecoveryRevision((value) => value + 1)}>בדיקה חוזרת של הקבלה</button>
+          <button type="button" className="btn-secondary" disabled={recoveryLoading} onClick={() => setRecoveryRevision((value) => value + 1)}>{t('priceListReview.setRecoveryRevision')}</button>
         </Note>
       )}
       {!ownsDocument && !receipt && (
-        <Note tone="idle" className="mt-4">האישור זמין רק למעלה המסמך בתפקיד בעלים, משרד או ספק.</Note>
+        <Note tone="idle" className="mt-4">{t('priceListReview.text_27')}</Note>
       )}
       {ownsDocument && !receipt && !attemptedPayload && !recoveryLoading && !recoveryError
         && snapshot.job?.status !== 'review' && snapshot.job?.status !== 'completed' && (
-        <Note tone="idle" className="mt-4">אפשר לאשר רק כשהמסמך במצב „נדרשת בדיקה”.</Note>
+        <Note tone="idle" className="mt-4">{t('priceListReview.text_28')}</Note>
       )}
       {attemptedPayload && !receipt && (
         <Note tone="await" className="mt-4 flex-wrap">
           <span className="min-w-0 flex-1">
-            האישור ננעל לאחר הניסיון הראשון: <span className="num">{attemptedPayload.approvedRows.length}</span> שורות לחודש <span className="num">{attemptedPayload.targetMonth.slice(0, 7)}</span>. ניסיון חוזר אינו מאפשר שינוי מוצר, מחיר, זמינות, חודש או סיבה.
+            {t('priceListReview.lockedAfterFirst')}<span className="num">{attemptedPayload.approvedRows.length}</span> {t('priceListReview.slice')} <span className="num">{attemptedPayload.targetMonth.slice(0, 7)}</span>{t('priceListReview.replayNoChanges')}
           </span>
           {canReplay && (
             <button type="button" className="btn-secondary" disabled={busy} onClick={() => void submitPayload(attemptedPayload)}>
               {busy && <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />}
-              שחזור קבלה באותו אישור
+              {t('priceListReview.text_29')}
             </button>
           )}
         </Note>
       )}
       {catalogError && showControls && (
         <Note tone="alert" role="alert" className="mt-4 flex-wrap">
-          <span className="min-w-0 flex-1">לא ניתן לטעון את קטלוג המוצרים: {catalogError}</span>
-          <button type="button" className="btn-secondary" onClick={() => setCatalogRevision((value) => value + 1)}>ניסיון נוסף</button>
+          <span className="min-w-0 flex-1">{t('priceListReview.catalogLoadFailed')} {catalogError}</span>
+          <button type="button" className="btn-secondary" onClick={() => setCatalogRevision((value) => value + 1)}>{t('priceListReview.setCatalogRevision')}</button>
         </Note>
       )}
       {showControls && !catalogLoading && !catalogError && products.length === 0 && (
-        <Note tone="alert" className="mt-4">אין מוצרים קיימים זמינים להתאמה, ולכן לא ניתן לאשר שורות.</Note>
+        <Note tone="alert" className="mt-4">{t('priceListReview.text_30')}</Note>
       )}
 
       {/* The whole decision, above the lines rather than below them: what was read, what is
@@ -802,37 +804,37 @@ export function PriceListReviewConfirmation({
           {catalogLoading ? (
             <p className="flex items-center gap-2 text-sm text-ink-muted" role="status">
               <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />
-              מתאים את השורות לקטלוג המוצרים…
+              {t('priceListReview.text_31')}
             </p>
           ) : (
             <p className="text-sm font-medium text-ink-body" role="status" data-testid="price-list-intake-summary">
-              <span className="num">{readyIndexes.length}</span> מתוך <span className="num">{lineItems.length}</span> שורות זוהו במלואן — מוצר קיים ומחיר
+              <span className="num">{readyIndexes.length}</span> {t('priceListReview.text_32')} <span className="num">{lineItems.length}</span>{t('priceListReview.fullyRecognised')}
               {/* What the machine read, which stays true after a person or a bulk creation has
                   since handled some of it. How much is still open is the note further down. */}
               {unmatchedIndexes.length > 0 && (
-                <> · <span className="num">{unmatchedIndexes.length}</span> שורות לא זוהו אוטומטית</>
+                <> · <span className="num">{unmatchedIndexes.length}</span> {t('priceListReview.text_33')}</>
               )}
             </p>
           )}
           {selectedCount !== readyIndexes.length && !catalogLoading && (
             <p className="mt-1 text-xs text-ink-muted" role="status">
-              נבחרו כרגע <span className="num">{selectedCount}</span> שורות לקליטה.
+              {t('priceListReview.selectedNow')}<span className="num">{selectedCount}</span>{t('priceListReview.selectedNowTail')}
             </p>
           )}
           {predictionsMissing && !catalogLoading && (
             <Note tone="info" className="mt-3">
-              לא נמצאה התאמה אוטומטית שמורה למסמך הזה, ולכן אין מה למלא מראש. אפשר לאשר את השורות
-              ידנית תחת „פרטים נוספים”.
+              {t('priceListReview.text_34')}{' '}
+              {t('priceListReview.text_35')}
             </Note>
           )}
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label>
-              <span className="label">חודש יעד *</span>
+              <span className="label">{t('priceListReview.text_36')}</span>
               <input type="month" className="input num" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} disabled={busy} />
-              <span className="mt-1 block text-xs text-ink-muted">החודש קובע לאיזו גרסת מחירון ישויכו המחירים שנבחרו.</span>
+              <span className="mt-1 block text-xs text-ink-muted">{t('priceListReview.text_37')}</span>
             </label>
             <label>
-              <span className="label">הערה ליומן הביקורת — רשות</span>
+              <span className="label">{t('priceListReview.text_38')}</span>
               <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} />
             </label>
           </div>
@@ -845,30 +847,30 @@ export function PriceListReviewConfirmation({
               disclosure toggle is not the action this screen is for. */}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             {detailsToggle}
-            <PrimaryDecision label="קליטת המחירון">
+            <PrimaryDecision label={t('priceListReview.label')}>
               <button type="button" className="btn-primary" data-testid="price-list-intake-confirm"
                 disabled={busy || selectedCount === 0 || catalogLoading || !!catalogError || products.length === 0}
                 onClick={() => void confirmPriceList()}>
                   {busy ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <CheckCircle2 size={ICON.md} aria-hidden="true" />}
-                {busy ? 'קולט את המחירון…' : <>קליטת <span className="num">{selectedCount}</span> המחירים שנבחרו</>}
+                {busy ? t('priceListReview.text_39') : <>{t('priceListReview.text_40')} <span className="num">{selectedCount}</span> {t('priceListReview.text_41')}</>}
               </button>
             </PrimaryDecision>
           </div>
           {pendingIndexes.length > 0 && !catalogLoading && (
             <Note tone="await" className="mt-3 flex-wrap">
               <span className="min-w-0 flex-1">
-                <span className="num">{pendingIndexes.length}</span> שורות לא הותאמו לבד ולא ייקלטו בלחיצה הזאת — מק״ט או ברקוד חסר, לא חד־משמעי, או מחיר שלא נקרא.
+                <span className="num">{pendingIndexes.length}</span>{t('priceListReview.unmatchedExplain')}
               </span>
               <button type="button" className="btn-secondary" data-testid="price-list-show-unmatched"
                 onClick={() => { setOnlyUnmatched(true); setDetailsOpen(true); }}>
-                טיפול בשורות שנותרו
+                {t('priceListReview.text_42')}
               </button>
             </Note>
           )}
         </div>
       )}
 
-      {lineItems.length === 0 && <p className="mt-4 text-sm text-ink-muted">לא זוהו שורות מחיר לאישור.</p>}
+      {lineItems.length === 0 && <p className="mt-4 text-sm text-ink-muted">{t('priceListReview.text_43')}</p>}
       {detailsOpen && lineItems.length > 0 && (
       <div id="price-list-line-details" className="mt-4 space-y-3">
         {showControls && pendingIndexes.length > 0 && (
@@ -876,7 +878,7 @@ export function PriceListReviewConfirmation({
             <input type="checkbox" className="size-5 shrink-0" checked={onlyUnmatched}
               data-testid="price-list-unmatched-filter"
               onChange={(event) => { setOnlyUnmatched(event.target.checked); setPage(0); }} />
-            הצג רק את <span className="num">{pendingIndexes.length}</span> השורות שדורשות טיפול
+            {t('priceListReview.showOnlyBefore')}<span className="num">{pendingIndexes.length}</span>{t('priceListReview.showOnlyAfter')}
           </label>
         )}
         {showControls && markableOnPage.length > 0 && (
@@ -884,7 +886,7 @@ export function PriceListReviewConfirmation({
             <input type="checkbox" className="size-5 shrink-0" checked={allMarkedOnPage} disabled={busy}
               data-testid="price-list-page-select-all"
               onChange={(event) => setApprovedOnPage(event.target.checked)} />
-            סימון <span className="num">{markableOnPage.length}</span> השורות המוכנות בעמוד הזה
+            {t('priceListReview.markReadyBefore')}<span className="num">{markableOnPage.length}</span>{t('priceListReview.markReadyAfter')}
           </label>
         )}
         {pager}
@@ -900,16 +902,16 @@ export function PriceListReviewConfirmation({
           return (
             <SubPanel as="article" key={`${item.source_row ?? 'none'}-${index}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-semibold text-ink-body">שורה <span className="num">{index + 1}</span></h3>
+                <h3 className="font-semibold text-ink-body">{t('priceListReview.text_44')} <span className="num">{index + 1}</span></h3>
                 <div className="flex items-center gap-2">
                   {autoLine && (
                     <span className={autoLine.outcome === 'applied' ? 'badge-done' : 'badge-await'}>
                       {autoLine.outcome === 'applied'
-                        ? autoLine.product_created ? 'מוצר חדש נוצר ונקלט' : 'נקלטה אוטומטית'
-                        : 'ממתינה'}
+                        ? autoLine.product_created ? t('priceListReview.text_45') : t('priceListReview.text_46')
+                        : t('priceListReview.text_47')}
                     </span>
                   )}
-                  <span className="text-xs text-ink-muted">שורת מקור <span className="num">{item.source_row ?? '—'}</span></span>
+                  <span className="text-xs text-ink-muted">{t('priceListReview.text_48')} <span className="num">{item.source_row ?? '—'}</span></span>
                 </div>
               </div>
               <SubPanel className="mt-3">
@@ -917,15 +919,16 @@ export function PriceListReviewConfirmation({
                     {Object.entries(item.values).map(([key, value]) => (
                       <div key={key} className="min-w-0 rounded-lg bg-surface-sunken p-2">
                         <dt className="text-xs font-medium text-ink-muted">{key}</dt>
-                        <dd className="mt-1 break-words text-sm text-ink-body">{valueText(value)}</dd>
+                        <dd className="mt-1 break-words text-sm text-ink-body">{valueText(value, t)}</dd>
                       </div>
                     ))}
                   </dl>
 
                   {autoLine?.reason_code && (
                     <Note tone="await" className="mt-3">
-                      {FILING_REASON_LABELS[autoLine.reason_code]
-                        ?? 'השורה ממתינה לבדיקה ידנית.'}
+                      {autoLine.reason_code in FILING_REASON_KEYS
+                        ? t(FILING_REASON_KEYS[autoLine.reason_code])
+                        : t('priceListReview.text_49')}
                     </Note>
                   )}
 
@@ -935,10 +938,10 @@ export function PriceListReviewConfirmation({
                   {prediction && (
                     <Note tone={matched ? 'done' : 'await'} className="mt-3">
                       {matched
-                        ? <>הותאם לפי {MATCHED_BY_LABELS[prediction.matched_by ?? ''] ?? 'מפתח שלא נרשם'} למוצר „{matchedProductName ?? '—'}”; המחיר שנקרא <span className="num">{prediction.proposed_unit_price}</span>{prediction.current_unit_price !== null && <> במקום <span className="num">{prediction.current_unit_price}</span></>}</>
-                        : prediction.reason_code && FILING_REASON_LABELS[prediction.reason_code]
-                          ? FILING_REASON_LABELS[prediction.reason_code]
-                          : 'המערכת לא התאימה את השורה לבד. ההכרעה כאן.'}
+                        ? <>{t('priceListReview.matchedByBefore')} {(prediction.matched_by ?? '') in MATCHED_BY_KEYS ? t(MATCHED_BY_KEYS[prediction.matched_by ?? '']) : t('priceListReview.text_50')} {t('priceListReview.matchedForProduct')} „{matchedProductName ?? '—'}”{t('priceListReview.matchedPriceRead')} <span className="num">{prediction.proposed_unit_price}</span>{prediction.current_unit_price !== null && <> {t('priceListReview.text_51')} <span className="num">{prediction.current_unit_price}</span></>}</>
+                        : prediction.reason_code && prediction.reason_code in FILING_REASON_KEYS
+                          ? t(FILING_REASON_KEYS[prediction.reason_code])
+                          : t('priceListReview.text_52')}
                     </Note>
                   )}
 
@@ -946,27 +949,27 @@ export function PriceListReviewConfirmation({
                     <div className="mt-3 border-t border-line pt-3">
                   <label className="flex min-h-11 items-center gap-3 font-medium text-ink-body">
                     <input type="checkbox" className="size-5 shrink-0" checked={draft.approved} onChange={(event) => updateDraft(index, { approved: event.target.checked })} disabled={busy} />
-                    אני מאשר שורה זו לקליטה
+                    {t('priceListReview.text_53')}
                   </label>
                   {/* Live regardless of the tick above: describing the line is the work, approving
                       it is the conclusion. Choosing a product also drops in the price this row
                       printed, so an exception line costs one control, not three. */}
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <label>
-                      <span className="label">מוצר קיים *</span>
+                      <span className="label">{t('priceListReview.text_54')}</span>
                       <select className="input" value={draft.productId} disabled={busy || catalogLoading || !!catalogError}
                         onChange={(event) => {
                           const price = event.target.value ? predictedPriceText(index, draft) : null;
                           updateDraft(index, { productId: event.target.value, ...(price === null ? {} : { priceText: price }) });
                         }}>
-                        <option value="">בחירת מוצר</option>
+                        <option value="">{t('priceListReview.text_55')}</option>
                         {products.map((product) => (
-                          <option key={product.id} value={product.id}>{bidiIsolate(product.name)} · {formatUnit(product.unit)}{product.sku ? ` · ${product.sku}` : ''}</option>
+                          <option key={product.id} value={product.id}>{bidiIsolate(product.name)} · {formatUnit(product.unit, locale)}{product.sku ? ` · ${product.sku}` : ''}</option>
                         ))}
                       </select>
                     </label>
                     <label>
-                      <span className="label">מחיר ידני *</span>
+                      <span className="label">{t('priceListReview.text_56')}</span>
                       <input className="input num" inputMode="decimal" maxLength={64} value={draft.priceText} onChange={(event) => updateDraft(index, { priceText: event.target.value })} disabled={busy} />
                     </label>
                   </div>
@@ -978,35 +981,35 @@ export function PriceListReviewConfirmation({
                       <SubPanel className="mt-3">
                         <div className="grid gap-3 sm:grid-cols-2">
                           <label>
-                            <span className="label">שם המוצר החדש *</span>
+                            <span className="label">{t('priceListReview.text_57')}</span>
                             <input className="input" maxLength={120} value={newProductName} disabled={busyCreate}
-                              aria-invalid={createError === NEW_PRODUCT_NAME_REQUIRED || undefined}
+                              aria-invalid={createError === t('priceListReview.newProductNameRequired') || undefined}
                               aria-describedby={createError ? createErrorId : undefined}
                               onChange={(event) => setNewProductName(event.target.value)} />
                           </label>
                           <label>
-                            <span className="label">יחידת מידה</span>
+                            <span className="label">{t('priceListReview.text_58')}</span>
                             <input className="input" maxLength={30} value={newProductUnit} onChange={(event) => setNewProductUnit(event.target.value)} disabled={busyCreate} />
                           </label>
                         </div>
                         {createError && <div id={createErrorId}><Note tone="alert" role="alert" className="mt-3">{createError}</Note></div>}
                         <div className="mt-3 flex justify-end gap-2">
-                          <button type="button" className="btn-secondary" disabled={busyCreate} onClick={() => { setNewProductFor(null); setCreateError(null); }}>ביטול</button>
+                          <button type="button" className="btn-secondary" disabled={busyCreate} onClick={() => { setNewProductFor(null); setCreateError(null); }}>{t('priceListReview.setNewProductFor')}</button>
                           <button type="button" className="btn-primary" disabled={busyCreate} onClick={() => void createProduct(index)}>
                             {busyCreate && <Loader2 className="animate-spin" size={ICON.sm} aria-hidden="true" />}
-                            יצירת המוצר והתאמת השורה
+                            {t('priceListReview.text_59')}
                           </button>
                         </div>
                       </SubPanel>
                     ) : (
                       <button type="button" className="btn-ghost mt-2 text-sm text-action" disabled={busy || busyCreate}
                         onClick={() => { setNewProductFor(index); setNewProductName(guessLineName(item.values)); setNewProductUnit('יח׳'); setCreateError(null); }}>
-                        <Plus size={ICON.sm} aria-hidden="true" /> המוצר לא קיים בקטלוג? יצירת מוצר חדש מהשורה
+                        <Plus size={ICON.sm} aria-hidden="true" /> {t('priceListReview.createProductFromLine')}
                       </button>
                     )}
                   <label className="mt-3 flex min-h-11 items-center gap-3 text-sm text-ink-body">
                     <input type="checkbox" className="size-5 shrink-0" checked={draft.available} onChange={(event) => updateDraft(index, { available: event.target.checked })} disabled={busy} />
-                    המוצר זמין אצל הספק
+                    {t('priceListReview.text_60')}
                   </label>
                     </div>
                   )}
@@ -1023,8 +1026,8 @@ export function PriceListReviewConfirmation({
       {receipt && (
         <div className="mt-4 rounded-lg border border-done-line bg-done-wash p-4" aria-live="polite">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-semibold text-ink-body">קבלת קליטת מחירון</h3>
-            <span className={receipt.idempotent ? 'badge-info' : 'badge-done'}>{receipt.idempotent ? 'בקשה חוזרת — ללא כפילות' : 'נקלטה הגשה חדשה'}</span>
+            <h3 className="font-semibold text-ink-body">{t('priceListReview.text_61')}</h3>
+            <span className={receipt.idempotent ? 'badge-info' : 'badge-done'}>{receipt.idempotent ? t('priceListReview.text_62') : t('priceListReview.text_63')}</span>
           </div>
           <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
             <div><dt className="inline font-medium">גרסה: </dt><dd className="inline num">{receipt.revision}</dd></div>
@@ -1033,7 +1036,7 @@ export function PriceListReviewConfirmation({
             <div><dt className="inline font-medium">שורות ללא שינוי: </dt><dd className="inline num">{receipt.unchanged_count}</dd></div>
           </dl>
           <div className="mt-4">
-            <Link className="btn-secondary" to={returnPath}>חזרה למסך המחירונים</Link>
+            <Link className="btn-secondary" to={returnPath}>{t('priceListReview.text_69')}</Link>
           </div>
         </div>
       )}
@@ -1043,9 +1046,9 @@ export function PriceListReviewConfirmation({
         busy={revertBusy}
         danger
         requireReason
-        title="ביטול קליטת המחירון האוטומטית"
-        message="המחירים יוחזרו בפעולת פיצוי מתועדת. אם מחיר השתנה מאז הקליטה, הביטול ייחסם כדי לא לדרוס שינוי מאוחר."
-        confirmLabel="ביטול הקליטה"
+        title={t('priceListReview.title')}
+        message={t('priceListReview.message')}
+        confirmLabel={t('priceListReview.confirmLabel')}
         onClose={() => setRevertOpen(false)}
         onConfirm={(reason) => void revertAutoIntake(reason ?? '')}
       />

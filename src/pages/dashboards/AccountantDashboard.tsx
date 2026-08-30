@@ -1,3 +1,4 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { Link } from 'react-router';
 import { Banknote, ReceiptText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -26,6 +27,7 @@ type SupBal = { supplier_id: string; currency: string; open_balance_in_currency:
  * prices, purchase orders or supplier_metrics (RLS returns nothing there). Empty → "—"/empty-state.
  */
 export default function AccountantDashboard() {
+  const { t } = useT();
   const { org } = useAuth();
   const baseCurrency = org?.base_currency ?? null;
   const { data, loading, error } = useQuery(async () => {
@@ -135,17 +137,19 @@ export default function AccountantDashboard() {
   if (!data) return null;
 
   return (
-    <DashboardFrame title="מרכז הבקרה — הנהלת חשבונות" actions={<>
-      <Link to="/pay" className="btn-primary"><Banknote size={ICON.sm} aria-hidden="true" /> תשלומים</Link>
-      <Link to="/invoices" className="btn-secondary"><ReceiptText size={ICON.sm} aria-hidden="true" /> חשבוניות</Link>
+    <DashboardFrame title={t('accountantDashboard.title')} actions={<>
+      <Link to="/pay" className="btn-primary"><Banknote size={ICON.sm} aria-hidden="true" /> {t('accountantDashboard.text_11')}</Link>
+      <Link to="/invoices" className="btn-secondary"><ReceiptText size={ICON.sm} aria-hidden="true" /> {t('accountantDashboard.text_12')}</Link>
     </>}>
       <AttentionZone items={data.attention} baseCurrency={baseCurrency} />
       <Scorecard items={data.kpis} />
       <div className="grid gap-5 lg:grid-cols-2">
-        <ChartCard title="תשלומים לפי חודש" subtitle="סך התשלומים לספקים בארבעת החודשים האחרונים">
+        <ChartCard title={t('accountantDashboard.title_2')} subtitle={t('accountantDashboard.subtitle')}>
           <SpendBarChart points={data.monthly}
-            ariaLabel={`תשלומים לפי חודש: ${data.monthly.map((p) => `${p.key} ${p.label || 'אין תשלומים'}`).join(', ')}`}
-            emptyMessage="אין תשלומים לתקופה" currency={baseCurrency} />
+            ariaLabel={t('accountantDashboard.monthlyAria', {
+              points: data.monthly.map((p) => `${p.key} ${p.label || t('accountantDashboard.noPayments')}`).join(', '),
+            })}
+            emptyMessage={t('accountantDashboard.emptyMessage')} currency={baseCurrency} />
         </ChartCard>
         {/* G1, finding 13. "כמה אני חייב לספק הזה?" ended here for an accountant: four labels in a
             pie and nothing to click. The permission was never the problem — `p0_supplier_balance_rows()`
@@ -154,16 +158,20 @@ export default function AccountantDashboard() {
             suppliers for this role. Each named slice now opens the invoice list searched for that
             supplier, which is a screen the accountant already has. Opening /suppliers/:id to the
             role would be a role-contract change (PRODUCT.md:23-30) and is left as
-            OPEN-DECISIONS #117. "אחר" gets no link: it is several suppliers summed, so there is no
-            single thing to open, and a link that lands on a wrong filter is worse than none. */}
-        <ChartCard title="יתרות פתוחות לפי ספק" subtitle="ארבעת הספקים עם היתרה הגבוהה וכל היתר">
+            OPEN-DECISIONS #117. The aggregate slice gets no link: it is several suppliers summed,
+            so there is no single thing to open, and a link that lands on a wrong filter is worse
+            than none. It is recognised by `slice.aggregate`, NOT by its word — this line used to
+            compare a supplier name against `t(...)`, which stops matching the moment the reader
+            changes language, and the bucket would then have been linked to a search for a supplier
+            that does not exist. */}
+        <ChartCard title={t('accountantDashboard.title_3')} subtitle={t('accountantDashboard.subtitle_2')}>
           <CategoryDonut slices={data.supplierSlices} total={data.supplierTotal} currency={baseCurrency}
-            ariaLabel={`יתרות פתוחות לפי ספק, סה״כ ${fmtMoneyRounded(data.supplierTotal, baseCurrency)}`}
-            hrefFor={(slice) => (slice.name === 'אחר' || slice.name === '—'
+            ariaLabel={t('accountantDashboard.supplierBalancesAria', { total: fmtMoneyRounded(data.supplierTotal, baseCurrency) })}
+            hrefFor={(slice) => (slice.aggregate || slice.name === '—'
               ? null
               : `/invoices?q=${encodeURIComponent(slice.name)}&pay=open`)}
-            hrefLabel={(slice) => `חשבוניות פתוחות של ${slice.name}`}
-            emptyMessage="אין יתרות פתוחות" />
+            hrefLabel={(slice) => t('accountantDashboard.openInvoicesOf', { supplier: slice.name })}
+            emptyMessage={t('accountantDashboard.emptyMessage_2')} />
           {data.supplierBalances.length > 0 && <div className="mt-4 divide-y divide-line border-t border-line">
             {data.supplierBalances.map((supplier) => <Link key={supplier.supplier_id}
               to={`/finance/suppliers/${supplier.supplier_id}`}
@@ -174,7 +182,7 @@ export default function AccountantDashboard() {
         </ChartCard>
         {/* T7.2: the reference's paired-bars rendering — each week gets a payments bar beside a
             bank-debits bar, round caps, dot legend below. */}
-        <ChartCard title="תשלומים מול חיובי בנק" subtitle="שמונה השבועות האחרונים" className="lg:col-span-2">
+        <ChartCard title={t('accountantDashboard.title_4')} subtitle={t('accountantDashboard.subtitle_3')} className="lg:col-span-2">
           <GroupedBarChart points={data.weeklyActive ? data.weekly : []} xKey="week"
             series={comparisonSeries({ key: 'payments', name: 'תשלומים' }, { key: 'bank', name: 'חיובי בנק' })}
             ariaLabel="השוואת תשלומים שבוצעו מול חיובי בנק, שמונה שבועות"

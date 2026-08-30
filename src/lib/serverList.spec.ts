@@ -4,10 +4,12 @@ import { createClient } from '@supabase/supabase-js';
 import { server } from '../test/msw/server';
 import { SUPABASE_URL } from '../test/msw/handlers';
 import { toHebrewError } from './errors';
+import { he } from './i18n/dictionaries/he';
+import { en } from './i18n/dictionaries/en';
 import {
-  PAGE_NO_LONGER_EXISTS,
+  PAGE_NO_LONGER_EXISTS_KEY,
   SUPPLIER_SEARCH_ID_CAP,
-  SUPPLIER_SEARCH_NARROWED,
+  SUPPLIER_SEARCH_NARROWED_KEY,
   ServerListError,
   fetchServerList,
   formatSortParam,
@@ -201,10 +203,13 @@ describe('fetchServerList — a page that no longer exists', () => {
     expect(result.page).toBe(4);
     expect(result.rows).toHaveLength(2);
     expect(result.total).toBe(42);
-    expect(result.pageReset).toEqual({ requestedPage: 5, servedPage: 4, message: PAGE_NO_LONGER_EXISTS });
-    // Hebrew a business owner can act on, never "Requested range not satisfiable".
-    expect(result.pageReset?.message).toMatch(/[֐-׿]/);
-    expect(result.pageReset?.message).not.toContain('range');
+    expect(result.pageReset).toEqual({ requestedPage: 5, servedPage: 4, messageKey: PAGE_NO_LONGER_EXISTS_KEY });
+    // Split. The module answers with a key; each dictionary carries a sentence a business owner
+    // can act on, and neither is the server's "Requested range not satisfiable".
+    expect(he.serverList.pageNoLongerExists).toMatch(/[֐-׿]/);
+    expect(he.serverList.pageNoLongerExists).not.toContain('range');
+    expect(en.serverList.pageNoLongerExists).not.toContain('range');
+    expect(en.serverList.pageNoLongerExists).not.toMatch(/[֐-׿]/);
     // The 416, a count probe, then the page that exists.
     expect(seen.map((call) => call.method)).toEqual(['GET', 'HEAD', 'GET']);
     expect(result.cost.requests).toBe(3);
@@ -544,7 +549,9 @@ describe('searchSupplierIds — the two-step cross-table search', () => {
     // the search matches. Dropping the arm keeps the count honest; the screen must then show
     // SUPPLIER_SEARCH_NARROWED so the narrowing is visible rather than quiet.
     expect(result).toEqual({ ids: [], narrowed: true });
-    expect(SUPPLIER_SEARCH_NARROWED).toMatch(/[֐-׿]/);
+    expect(SUPPLIER_SEARCH_NARROWED_KEY).toBe('serverList.supplierSearchNarrowed');
+    expect(he.serverList.supplierSearchNarrowed).toMatch(/[֐-׿]/);
+    expect(en.serverList.supplierSearchNarrowed).not.toMatch(/[֐-׿]/);
   });
 
   it('returns every id at exactly the cap — 150 matches is not "too many"', async () => {
@@ -570,7 +577,7 @@ describe('searchSupplierIds — the two-step cross-table search', () => {
 
     expect(failure).toBeInstanceOf(ServerListError);
     expect((failure as ServerListError).code).toBe('request_failed');
-    expect((failure as ServerListError).hebrew).toBe('אין לך הרשאה לבצע את הפעולה הזו.');
+    expect(toHebrewError(failure as ServerListError)).toBe('אין לך הרשאה לבצע את הפעולה הזו.');
   });
 
   it('composes the screen columns with the supplier arm when there are ids', async () => {
@@ -690,10 +697,11 @@ describe('fetchServerList — errors', () => {
     const error = failure as ServerListError;
     expect(error.code).toBe('request_failed');
     expect(error.status).toBe(403);
-    expect(error.hebrew).toBe('אין לך הרשאה לבצע את הפעולה הזו.');
-    expect(error.hebrew).not.toContain('permission denied');
-    // `useQuery` maps whatever it catches through `toHebrewError` again. Keeping `message` raw is
-    // what stops that second pass from collapsing a specific sentence into the generic fallback.
+    expect(toHebrewError(error)).toBe('אין לך הרשאה לבצע את הפעולה הזו.');
+    expect(toHebrewError(error)).not.toContain('permission denied');
+    // `useQuery` resolves whatever it catches. Keeping `message` raw is what stops that pass from
+    // collapsing a specific sentence into the generic fallback — which is the whole reason the
+    // pre-resolved `.hebrew` field was removed rather than translated.
     expect(toHebrewError(error)).toBe('אין לך הרשאה לבצע את הפעולה הזו.');
   });
 
@@ -704,12 +712,12 @@ describe('fetchServerList — errors', () => {
 
     const error = failure as ServerListError;
     expect(error.code).toBe('count_unavailable');
-    expect(error.hebrew).toBe('לא ניתן לאמת כרגע את מספר הרשומות ברשימה. רענן את המסך ונסה שוב.');
+    expect(toHebrewError(error)).toBe('לא ניתן לאמת כרגע את מספר הרשומות ברשימה. רענן את המסך ונסה שוב.');
     // Named mapping, not the FALLBACK sentence — and the raw message stays mappable upstream.
-    expect(error.hebrew).not.toContain('פנה לתמיכה');
-    expect(toHebrewError(error)).toBe(error.hebrew);
+    expect(toHebrewError(error)).not.toContain('פנה לתמיכה');
+    expect(toHebrewError(error)).toBe(toHebrewError(new Error(error.message)));
     // The sentence says "unverified", never "empty": a 0 here would be a claim about the business.
-    expect(error.hebrew).not.toContain('0');
+    expect(toHebrewError(error)).not.toContain('0');
   });
 
   it('never lets a Postgres string reach the reader', async () => {
@@ -720,7 +728,7 @@ describe('fetchServerList — errors', () => {
 
     const failure = await fetchServerList<Row>(client, request()).catch((e: unknown) => e);
 
-    const hebrew = (failure as ServerListError).hebrew;
+    const hebrew = toHebrewError(failure as ServerListError);
     expect(hebrew).toBe('חסר שדה חובה.');
     expect(hebrew).not.toMatch(/[a-z]{4,}/);
   });

@@ -10,7 +10,6 @@
 
 import * as tus from 'tus-js-client';
 import { supabase } from './supabase';
-import { toHebrewError } from './errors';
 
 export const DOCUMENTS_BUCKET = 'documents';
 
@@ -42,8 +41,14 @@ export class TusUploadCancelledError extends Error {
 }
 
 /**
- * A tus failure with a user-ready Hebrew message. `retryable` follows the transport:
+ * A tus failure carrying a RAW CONDITION, not a sentence. `retryable` follows the transport:
  * no response / 5xx can be retried; a 4xx verdict (policy, conflict, size) cannot.
+ *
+ * `message` used to be Hebrew, composed here. It is now the condition itself — either a synthetic
+ * code for an HTTP verdict that carries no message of its own, or the raw string the server sent —
+ * and whoever draws it resolves it with `useT().errorText`. An upload can fail while the tab is in
+ * the background and be reported minutes later; the language belongs to the reader at that moment,
+ * not to this module at the moment of failure.
  */
 export class TusUploadError extends Error {
   constructor(message: string, readonly retryable: boolean) {
@@ -113,41 +118,34 @@ function translateTusError(error: Error): TusUploadError {
   if (status === 403) {
     // The MIME gates fail closed (e.g. octet-stream), the bucket policy rejects a foreign
     // path, and an expired reservation dies at the same status — one calm sentence for all.
-    return new TusUploadError(
-      'השרת דחה את ההעלאה: סוג הקובץ אינו מורשה, הנתיב אינו זמין או שהקצאת ההעלאה פגה. יש לנסות שוב.',
-      false,
-    );
+    return new TusUploadError('tus_upload_forbidden', false);
   }
   if (status === 409) {
-    return new TusUploadError('קובץ כבר קיים בנתיב הזה באחסון. יש לרענן את המסך ולנסות שוב.', false);
+    return new TusUploadError('tus_upload_conflict', false);
   }
   if (status === 413) {
-    return new TusUploadError('הקובץ גדול מדי להעלאה.', false);
+    return new TusUploadError('tus_upload_too_large', false);
   }
   const detailed = error as Partial<tus.DetailedError>;
   const cause = detailed.causingError ?? error;
-  // toHebrewError logs the original for the developer and maps network/5xx wording.
-  return new TusUploadError(toHebrewError(cause), status === null || status >= 500);
+  // The raw cause travels; errors.ts already knows how to read a network or 5xx string, and it
+  // reads it at the moment somebody looks.
+  return new TusUploadError(cause instanceof Error ? cause.message : String(cause), status === null || status >= 500);
 }
 
 /**
- * The renew RPC's error codes (OPEN-DECISIONS #95). `registered` is the
- * money rule at the renewal boundary: the document already exists — never re-upload.
+ * The renew RPC's error codes (OPEN-DECISIONS #95). `registered` is the money rule at the renewal
+ * boundary: the document already exists — never re-upload.
+ *
+ * The wording used to live here in a private table. It is in `src/lib/errors.ts` now with every
+ * other failure, matched by these same three strings — so this function just passes the condition
+ * through and the three codes have one answer per language instead of one here and one there.
  */
-const RENEWAL_ERROR_HEBREW: [RegExp, string][] = [
-  [/document_upload_reservation_registered/i,
-    'המסמך כבר נרשם במערכת — אין להעלות אותו שוב.'],
-  [/document_upload_reservation_lifetime_exceeded/i,
-    'חלון ההעלאה הסתיים. יש להתחיל את ההעלאה מחדש.'],
-  [/document_upload_reservation_unknown/i,
-    'הקצאת ההעלאה אינה קיימת עוד. יש להתחיל את ההעלאה מחדש.'],
-];
+const RENEWAL_ERROR_CODES = /document_upload_reservation_(registered|lifetime_exceeded|unknown)/i;
 
 function translateRenewalError(renewError: unknown, patchError: Error): TusUploadError {
   const raw = renewError instanceof Error ? renewError.message : String(renewError);
-  for (const [pattern, text] of RENEWAL_ERROR_HEBREW) {
-    if (pattern.test(raw)) return new TusUploadError(text, false);
-  }
+  if (RENEWAL_ERROR_CODES.test(raw)) return new TusUploadError(raw, false);
   return translateTusError(patchError);
 }
 
@@ -171,7 +169,7 @@ export function tusUploadToDocuments(file: File | Blob, options: TusDocumentUplo
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (sessionError || !accessToken) {
-        reject(new TusUploadError(toHebrewError(sessionError?.message ?? 'JWT expired'), false));
+        reject(new TusUploadError(sessionError?.message ?? 'JWT expired', false));
         return;
       }
       if (cancelled) {

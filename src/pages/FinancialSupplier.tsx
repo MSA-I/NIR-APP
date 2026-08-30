@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { Link, useParams } from 'react-router';
 import { Banknote, ReceiptText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -40,6 +41,7 @@ export function financialBankStatusCounts(rows: BankRow[]) {
 }
 
 export default function FinancialSupplier() {
+  const { t } = useT();
   const { id } = useParams<{ id: string }>();
   const { org } = useAuth();
   const { data, loading, error } = useQuery(async () => {
@@ -105,33 +107,33 @@ export default function FinancialSupplier() {
   }, [id]);
 
   if (loading) return <RecordSkeleton />;
-  if (error || !data) return <ErrorNote message={error ?? 'הספק לא נמצא'} />;
+  if (error || !data) return <ErrorNote message={error ?? t('financialSupplier.text')} />;
 
   return (
     <div className="space-y-5">
       <RecordHeader
-        breadcrumbs={<Breadcrumbs items={[{ label: 'מרכז הבקרה', to: '/dashboard' }, { label: `כרטיס ספק פיננסי — ${data.supplier.name}` }]} />}
-        title={`כרטיס ספק פיננסי — ${data.supplier.name}`}
+        breadcrumbs={<Breadcrumbs items={[{ label: t('financialSupplier.dashboardCrumb'), to: '/dashboard' }, { label: t('financialSupplier.recordTitle', { supplier: data.supplier.name }) }]} />}
+        title={t('financialSupplier.recordTitle', { supplier: data.supplier.name })}
         status={<StatusBadge meta={SUPPLIER_STATUS[data.supplier.status]} />}
         meta={(
           <>
-            <span>עוסק / חברה: <span className="num">{data.supplier.tax_id ?? '—'}</span></span>
-            <span>תנאי תשלום: {data.supplier.payment_terms ?? '—'}</span>
+            <span>{t('financialSupplier.text_2')} <span className="num">{data.supplier.tax_id ?? '—'}</span></span>
+            <span>{t('financialSupplier.paymentTermsLabel')} {data.supplier.payment_terms ?? '—'}</span>
           </>
         )} />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card><div className="text-sm text-ink-muted">יתרה פתוחה</div><div className="mt-1 kpi-value"><MoneyByCurrency amounts={data.openBalances} baseCurrency={org?.base_currency} shape="rounded" /></div></Card>
         <Card><div className="text-sm text-ink-muted">חשיפה שהגיעה למועד</div><div className="mt-1 kpi-value"><MoneyByCurrency amounts={data.dueExposure} baseCurrency={org?.base_currency} shape="rounded" /></div></Card>
-        <Card><div className="text-sm text-ink-muted">תנועות בנק לא מותאמות</div><div className="mt-1 kpi-value num">{data.bankStatusCounts.unmatched}</div></Card>
-        <Card><div className="text-sm text-ink-muted">התאמות שממתינות לאישור</div><div className="mt-1 kpi-value num">{data.bankStatusCounts.suggested}</div></Card>
+        <Card><div className="text-sm text-ink-muted">{t('financialSupplier.text_3')}</div><div className="mt-1 kpi-value num">{data.bankStatusCounts.unmatched}</div></Card>
+        <Card><div className="text-sm text-ink-muted">{t('financialSupplier.text_4')}</div><div className="mt-1 kpi-value num">{data.bankStatusCounts.suggested}</div></Card>
       </div>
 
       {data.dueExposure == null && <Note tone="info">אין במערכת מועדי פירעון שמאפשרים לחשב חשיפה שהגיעה למועד; לכן מוצג — ולא אפס.</Note>}
 
       <Card as="section" aria-labelledby="finance-invoices">
-        <h2 id="finance-invoices" className="section-title flex items-center gap-2"><ReceiptText size={ICON.md} aria-hidden="true" /> חשבוניות זמינות לתפקיד</h2>
-        {!data.invoices.length ? <EmptyState title="אין חשבוניות זמינות לספק" /> : (
+        <h2 id="finance-invoices" className="section-title flex items-center gap-2"><ReceiptText size={ICON.md} aria-hidden="true" /> {t('financialSupplier.text_6')}</h2>
+        {!data.invoices.length ? <EmptyState title={t('financialSupplier.title')} /> : (
           <div className="mt-3 divide-y divide-line">
             {data.invoices.map((invoice) => {
               const balance = data.balanceByInvoice.get(invoice.id);
@@ -146,20 +148,20 @@ export default function FinancialSupplier() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card as="section" aria-labelledby="finance-payments">
-          <h2 id="finance-payments" className="section-title flex items-center gap-2"><Banknote size={ICON.md} aria-hidden="true" /> תשלומים והקצאות</h2>
-          {!data.payments.length ? <EmptyState title="אין תשלומים לספק" /> : <div className="mt-3 divide-y divide-line">
+          <h2 id="finance-payments" className="section-title flex items-center gap-2"><Banknote size={ICON.md} aria-hidden="true" /> {t('financialSupplier.text_7')}</h2>
+          {!data.payments.length ? <EmptyState title={t('financialSupplier.title_2')} /> : <div className="mt-3 divide-y divide-line">
             {data.payments.map((payment) => <div key={payment.id} className="flex min-h-12 items-center justify-between gap-3 py-2 text-sm">
-              <span>תשלום <span className="num">#{payment.number}</span><span className="block text-xs text-ink-muted num">{fmtDate(payment.paid_date)} · {payment.method ?? '—'}</span></span>
-              <span className="text-end num">{fmtMoneyRounded(payment.amount, payment.currency)}<span className="block text-xs text-ink-muted">הוקצה: {fmtMoneyRounded(data.allocatedByPayment.get(payment.id) ?? 0, payment.currency)}</span></span>
+              <span>{t('financialSupplier.fmtDate')} <span className="num">#{payment.number}</span><span className="block text-xs text-ink-muted num">{fmtDate(payment.paid_date)} · {payment.method ?? '—'}</span></span>
+              <span className="text-end num">{fmtMoneyRounded(payment.amount, payment.currency)}<span className="block text-xs text-ink-muted">{t('financialSupplier.allocatedLabel')} {fmtMoneyRounded(data.allocatedByPayment.get(payment.id) ?? 0, payment.currency)}</span></span>
             </div>)}
           </div>}
         </Card>
 
         <Card as="section" aria-labelledby="finance-credits">
-          <h2 id="finance-credits" className="section-title">זיכויים</h2>
-          {!data.credits.length ? <EmptyState title="אין זיכויים לספק" /> : <div className="mt-3 divide-y divide-line">
+          <h2 id="finance-credits" className="section-title">{t('financialSupplier.text_8')}</h2>
+          {!data.credits.length ? <EmptyState title={t('financialSupplier.title_3')} /> : <div className="mt-3 divide-y divide-line">
             {data.credits.map((credit) => <div key={credit.id} className="flex min-h-12 items-center justify-between gap-3 py-2 text-sm">
-              <span>זיכוי <span className="num">#{credit.number}</span><span className="block text-xs text-ink-muted num">{fmtDate(credit.created_at)}</span></span>
+              <span>{t('financialSupplier.fmtDate_2')} <span className="num">#{credit.number}</span><span className="block text-xs text-ink-muted num">{fmtDate(credit.created_at)}</span></span>
               <span className="text-end"><StatusBadge meta={CREDIT_STATUS[credit.status]} /><span className="ms-2 num">{fmtMoneyRounded(credit.amount, credit.currency)}</span></span>
             </div>)}
           </div>}
@@ -167,10 +169,10 @@ export default function FinancialSupplier() {
       </div>
 
       <Card as="section" aria-labelledby="finance-requests">
-        <h2 id="finance-requests" className="section-title">דרישות תשלום</h2>
-        {!data.requests.length ? <EmptyState title="אין דרישות תשלום מאושרות לספק" /> : <div className="mt-3 divide-y divide-line">
+        <h2 id="finance-requests" className="section-title">{t('financialSupplier.text_9')}</h2>
+        {!data.requests.length ? <EmptyState title={t('financialSupplier.title_4')} /> : <div className="mt-3 divide-y divide-line">
           {data.requests.map((request) => <div key={request.id} className="flex min-h-12 items-center justify-between gap-3 py-2 text-sm">
-            <span>דרישה <span className="num">#{request.number}</span><span className="block text-xs text-ink-muted">מועד: <span className="num">{fmtDate(request.due_date)}</span></span></span>
+            <span>{t('financialSupplier.fmtDate_3')} <span className="num">#{request.number}</span><span className="block text-xs text-ink-muted">{t('financialSupplier.fmtDate_4')} <span className="num">{fmtDate(request.due_date)}</span></span></span>
             <span className="text-end"><StatusBadge meta={PAYMENT_REQUEST_STATUS[request.status]} /><span className="ms-2 num">{fmtMoneyRounded(request.amount, request.currency)}</span></span>
           </div>)}
         </div>}
@@ -178,20 +180,20 @@ export default function FinancialSupplier() {
 
       <Card as="section" aria-labelledby="finance-bank">
         <div className="flex items-center justify-between gap-3">
-          <h2 id="finance-bank" className="section-title">התאמת בנק</h2>
-          <Link className="link text-sm" to="/bank">למסך ההתאמות</Link>
+          <h2 id="finance-bank" className="section-title">{t('financialSupplier.text_10')}</h2>
+          <Link className="link text-sm" to="/bank">{t('financialSupplier.text_11')}</Link>
         </div>
-        {!data.bank.length ? <EmptyState title="אין תנועות בנק לספק" /> : <div className="mt-3 divide-y divide-line">
+        {!data.bank.length ? <EmptyState title={t('financialSupplier.title_5')} /> : <div className="mt-3 divide-y divide-line">
           {data.bank.slice(0, 10).map((row) => <Link key={row.id} to={`/bank?id=${row.id}`} className="flex min-h-12 items-center justify-between gap-3 py-2 text-sm">
-            <span>תנועה מיום <span className="num">{fmtDate(row.tx_date)}</span></span>
+            <span>{t('financialSupplier.fmtDate_5')} <span className="num">{fmtDate(row.tx_date)}</span></span>
             <span className="text-end"><StatusBadge meta={BANK_TX_STATUS[row.status]} /><span className="ms-2 num">{fmtMoneyRounded(row.amount, row.currency)}</span></span>
           </Link>)}
         </div>}
       </Card>
 
       <Card as="section" aria-labelledby="finance-activity">
-        <h2 id="finance-activity" className="section-title">פעילות פיננסית אחרונה</h2>
-        {!data.activity.length ? <EmptyState title="אין פעילות פיננסית להצגה" /> : <div className="mt-3 divide-y divide-line">
+        <h2 id="finance-activity" className="section-title">{t('financialSupplier.text_12')}</h2>
+        {!data.activity.length ? <EmptyState title={t('financialSupplier.title_6')} /> : <div className="mt-3 divide-y divide-line">
           {data.activity.map((row, index) => <div key={`${row.label}-${row.date}-${index}`} className="flex min-h-11 items-center justify-between gap-3 py-2 text-sm">
             <span>{row.label}<span className="block text-xs text-ink-muted num">{fmtDate(row.date)}</span></span>
             <span className="num">{fmtMoneyRounded(row.amount, row.currency)}</span>

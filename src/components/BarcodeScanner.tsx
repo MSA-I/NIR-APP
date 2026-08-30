@@ -3,6 +3,8 @@ import { ScanLine } from 'lucide-react';
 import { useFeatureFlags } from '../lib/flags';
 import { matchDeliveryLineProduct, type DeliveryNoteLine } from './document-review/model';
 import { ICON, Modal, Note } from './ui';
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 
 /**
  * Barcode-assisted goods receiving (הכרעה #102, OPEN-DECISIONS #102).
@@ -83,38 +85,49 @@ export function matchScannedBarcode(
 type CameraState =
   | { kind: 'starting' }
   | { kind: 'scanning' }
-  | { kind: 'unavailable'; message: string };
+  | { kind: 'unavailable'; code: CameraFailureCode };
 
-const CAMERA_DENIED =
-  'הדפדפן לא נתן הרשאה למצלמה, ולכן הסריקה כבויה. אפשר לאשר גישה למצלמה בהגדרות האתר, או להקליד את הקוד למטה.';
-const CAMERA_MISSING =
-  'לא נמצאה מצלמה זמינה במכשיר הזה. אפשר להקליד את הקוד למטה.';
-const CAMERA_INSECURE =
-  'הדפדפן מאפשר מצלמה רק בחיבור מאובטח (HTTPS). אפשר להקליד את הקוד למטה.';
-const READER_FAILED =
-  'לא ניתן לטעון את מנוע הסריקה. אפשר להקליד את הקוד למטה.';
+type CameraFailureCode = 'denied' | 'missing' | 'insecure' | 'reader_failed';
+const CAMERA_FAILURE_KEY: Readonly<Record<CameraFailureCode, TKey>> = {
+  denied: 'barcodeScanner.cameraDenied',
+  missing: 'barcodeScanner.cameraMissing',
+  insecure: 'barcodeScanner.cameraInsecure',
+  reader_failed: 'barcodeScanner.readerFailed',
+};
 
-function cameraFailureMessage(error: unknown): string {
+function cameraFailureCode(error: unknown): CameraFailureCode {
   const name = (error as { name?: string } | null)?.name ?? '';
-  if (name === 'NotAllowedError' || name === 'SecurityError') return CAMERA_DENIED;
-  if (name === 'NotFoundError' || name === 'OverconstrainedError' || name === 'DevicesNotFoundError') return CAMERA_MISSING;
-  return CAMERA_DENIED;
+  if (name === 'NotAllowedError' || name === 'SecurityError') return 'denied';
+  if (name === 'NotFoundError' || name === 'OverconstrainedError' || name === 'DevicesNotFoundError') return 'missing';
+  return 'denied';
 }
 
-function describeResult(result: BarcodeScanResult): { tone: 'done' | 'await' | 'alert'; text: string } {
+function describeResult(result: BarcodeScanResult): {
+  tone: 'done' | 'await' | 'alert';
+  key: TKey;
+  vars: Record<string, string | number>;
+} {
   switch (result.kind) {
     case 'match':
-      return { tone: 'done', text: `הקוד ${result.code} זוהה: ${result.name}. הכמות נשארת להזנה שלך.` };
+      return {
+        tone: 'done',
+        key: 'barcodeScanner.resultMatch',
+        vars: { code: result.code, name: result.name },
+      };
     case 'ambiguous':
       return {
         tone: 'alert',
-        text: `הקוד ${result.code} מופיע ביותר ממוצר אחד בהזמנה הזו (${result.candidates
-          .map((candidate) => candidate.name).join(', ')}), ולכן לא ניתן לקבוע איזה מהם הגיע. יש לבחור את השורה ידנית.`,
+        key: 'barcodeScanner.resultAmbiguous',
+        vars: {
+          code: result.code,
+          candidates: result.candidates.map((candidate) => candidate.name).join(', '),
+        },
       };
     case 'none':
       return {
         tone: 'await',
-        text: `הקוד ${result.code} אינו מופיע בפריטי ההזמנה הזו. אפשר לבחור את השורה ידנית — לא נבחר דבר עבורך.`,
+        key: 'barcodeScanner.resultNone',
+        vars: { code: result.code },
       };
   }
 }
@@ -126,6 +139,7 @@ function ScannerDialog({ entries, onClose, onPick }: {
   onClose: () => void;
   onPick: (result: BarcodeScanResult) => void;
 }) {
+  const { t } = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const manualId = useId();
   const [camera, setCamera] = useState<CameraState>({ kind: 'starting' });
@@ -145,16 +159,16 @@ function ScannerDialog({ entries, onClose, onPick }: {
 
     (async () => {
       // The permission decision is asked for directly rather than left to the library, so the two
-      // failures a person can act on -- "you said no" and "there is no camera" -- arrive as Hebrew
-      // sentences instead of a library exception.
+      // failures a person can act on -- "you said no" and "there is no camera" -- arrive as
+      // product codes resolved in the reader language instead of a library exception.
       if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-        setCamera({ kind: 'unavailable', message: window.isSecureContext === false ? CAMERA_INSECURE : CAMERA_MISSING });
+        setCamera({ kind: 'unavailable', code: window.isSecureContext === false ? 'insecure' : 'missing' });
         return;
       }
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       } catch (error) {
-        if (!cancelled) setCamera({ kind: 'unavailable', message: cameraFailureMessage(error) });
+        if (!cancelled) setCamera({ kind: 'unavailable', code: cameraFailureCode(error) });
         return;
       }
       if (cancelled) {
@@ -177,7 +191,7 @@ function ScannerDialog({ entries, onClose, onPick }: {
       } catch (error) {
         console.error('[supplyflow] barcode reader failed to start', error);
         for (const track of stream.getTracks()) track.stop();
-        if (!cancelled) setCamera({ kind: 'unavailable', message: READER_FAILED });
+        if (!cancelled) setCamera({ kind: 'unavailable', code: 'reader_failed' });
       }
     })();
 
@@ -188,41 +202,43 @@ function ScannerDialog({ entries, onClose, onPick }: {
     };
   }, [handleCode]);
 
-  const message = result ? describeResult(result) : null;
+  const resultDescription = result ? describeResult(result) : null;
 
   return (
-    <Modal open onClose={onClose} title="סריקת ברקוד" description="סריקה מזהה את השורה בהזמנה. הכמות תמיד נשארת להזנה ידנית.">
+    <Modal open onClose={onClose} title={t('barcodeScanner.title')} description={t('barcodeScanner.description')}>
       <div className="space-y-3">
         {camera.kind === 'unavailable'
-          ? <Note tone="await" role="status">{camera.message}</Note>
+          ? <Note tone="await" role="status">{t(CAMERA_FAILURE_KEY[camera.code])}</Note>
           : (
             <>
               <div className="overflow-hidden rounded-2xl bg-surface-sunken">
                 {/* muted + playsInline: iOS refuses to play an inline camera preview without both. */}
-                <video ref={videoRef} className="block w-full" muted playsInline aria-label="תצוגת מצלמה לסריקת ברקוד" />
+                <video ref={videoRef} className="block w-full" muted playsInline aria-label={t('barcodeScanner.aria_label')} />
               </div>
               <p className="text-xs text-ink-muted" role="status">
-                {camera.kind === 'starting' ? 'מפעיל את המצלמה…' : 'כוון את המצלמה אל הברקוד על האריזה.'}
+                {camera.kind === 'starting' ? t('barcodeScanner.text') : t('barcodeScanner.text_2')}
               </p>
             </>
           )}
 
-        {message && <Note tone={message.tone} role="status">{message.text}</Note>}
+        {resultDescription && <Note tone={resultDescription.tone} role="status">
+          {t(resultDescription.key, resultDescription.vars)}
+        </Note>}
 
         <form className="flex flex-wrap items-end gap-2"
           onSubmit={(event) => { event.preventDefault(); if (manual.trim()) handleCode(manual); }}>
           <div className="min-w-40 flex-1">
-            <label className="label" htmlFor={manualId}>הזנת קוד ידנית</label>
+            <label className="label" htmlFor={manualId}>{t('barcodeScanner.text_3')}</label>
             <input id={manualId} className="input num min-h-11" inputMode="numeric" autoComplete="off"
               value={manual} onChange={(event) => setManual(event.target.value)} />
           </div>
-          <button type="submit" className="btn-secondary min-h-11" disabled={!manual.trim()}>בדיקת הקוד</button>
+          <button type="submit" className="btn-secondary min-h-11" disabled={!manual.trim()}>{t('barcodeScanner.trim')}</button>
         </form>
 
         <div className="flex justify-end">
           {/* Named apart from the Modal's own close control: two buttons answering to "סגירה" in one
               dialog give a screen-reader user two identical choices with different behaviour. */}
-          <button type="button" className="btn-secondary min-h-11" onClick={onClose}>סיום סריקה</button>
+          <button type="button" className="btn-secondary min-h-11" onClick={onClose}>{t('barcodeScanner.text_4')}</button>
         </div>
       </div>
     </Modal>
@@ -239,13 +255,14 @@ export default function BarcodeScanControl({ entries, onPick }: {
   entries: readonly BarcodeCatalogueEntry[];
   onPick: (result: BarcodeScanResult) => void;
 }) {
+  const { t } = useT();
   const { isEnabled } = useFeatureFlags();
   const [open, setOpen] = useState(false);
   if (!isEnabled('receiving.barcode')) return null;
   return (
     <>
       <button type="button" className="btn-secondary min-h-11" onClick={() => setOpen(true)}>
-        <ScanLine size={ICON.sm} /> סריקת ברקוד
+        <ScanLine size={ICON.sm} /> {t('barcodeScanner.openScanner')}
       </button>
       {open && <ScannerDialog entries={entries} onClose={() => setOpen(false)} onPick={onPick} />}
     </>

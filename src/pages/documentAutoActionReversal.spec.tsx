@@ -10,6 +10,7 @@ import { SUPABASE_URL } from '../test/msw/handlers';
 import { createAppQueryClient } from '../lib/query/client';
 import { OrgScopeProvider } from '../lib/query/orgScope';
 import { ToastProvider } from '../components/ui';
+import { LocaleProvider } from '../lib/i18n/LocaleProvider';
 
 /**
  * Task C5, browser half — and this file is the first place in `src/` where the browser says what
@@ -97,15 +98,17 @@ const traffic = (autoActions: unknown[] = [AUTO_ACTION]) => [
   }),
 ];
 
-function renderGallery() {
+function renderGallery(locale: 'he' | 'en' = 'he') {
   const Wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={createAppQueryClient()}>
-      <OrgScopeProvider org="org-1">
-        <ToastProvider>
-          <MemoryRouter>{children}</MemoryRouter>
-        </ToastProvider>
-      </OrgScopeProvider>
-    </QueryClientProvider>
+    <LocaleProvider initialLocale={locale}>
+      <QueryClientProvider client={createAppQueryClient()}>
+        <OrgScopeProvider org="org-1">
+          <ToastProvider>
+            <MemoryRouter>{children}</MemoryRouter>
+          </ToastProvider>
+        </OrgScopeProvider>
+      </QueryClientProvider>
+    </LocaleProvider>
   );
   render(<DocumentsGallery />, { wrapper: Wrapper });
 }
@@ -116,6 +119,16 @@ const openMenuFor = async (fileName: string) =>
   userEvent.click(screen.getAllByRole('button', { name: `פעולות עבור מסמך ${fileName}` })[0]);
 
 describe('מה השורה אומרת על מסמך ששויך אוטומטית', () => {
+  it('משנה את מעטפת האוטומציה לאנגלית ושומר את שם קובץ המקור', async () => {
+    ROLE.current = 'owner';
+    server.use(...traffic([{ ...AUTO_ACTION, decision: { decision_confidence: null } }]));
+    renderGallery('en');
+
+    expect(await screen.findAllByText('Assigned automatically')).not.toHaveLength(0);
+    expect(screen.getAllByText(/at unknown confidence/)).not.toHaveLength(0);
+    expect(screen.getAllByText(MACHINE)).not.toHaveLength(0);
+  });
+
   it('אומרת שהחשבונית נוצרה על ידי המערכת, ברמת הביטחון שבה פעלה', async () => {
     ROLE.current = 'owner';
     server.use(...traffic());

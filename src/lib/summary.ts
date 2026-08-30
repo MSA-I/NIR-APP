@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { scanAlerts, type Alert } from './alerts';
 import { SUMMARY_METRIC_LINES, type SummaryUnit } from './assistant/summaryLines.ts';
+import type { TKey } from './i18n/t';
 
 /**
  * Business summary (סעיף 10).
@@ -30,7 +31,8 @@ export type { SummaryUnit } from './assistant/summaryLines.ts';
 
 export interface SummaryLine {
   key: string;
-  label: string;
+  labelKey: TKey;
+  labelVars?: Record<string, string | number>;
   /** null means "no data behind this figure" and must render as `—`. Zero is a real zero. */
   value: number | null;
   unit: SummaryUnit;
@@ -68,13 +70,29 @@ export interface Summary {
   lines: SummaryLine[];
   alerts: Alert[];
   complete: boolean;
-  failures: { code: string; label: string }[];
+  failures: SummaryFailure[];
   generatedAt: Date;
+}
+
+/**
+ * A scan or metric that could not be measured, named so a reader knows what the answer is missing.
+ *
+ * Both halves carry a KEY. The alert scans always did; the metric lines pushed their Hebrew
+ * SENTENCE into a field called `labelKey`, and `/alerts` renders it with `tDynamic(key) ?? key` —
+ * so the miss fell through to the raw Hebrew and the field's name hid it. It read correctly in
+ * Hebrew, which is why nothing caught it.
+ */
+export interface SummaryFailure {
+  code: string;
+  labelKey: TKey;
+  labelVars?: Record<string, string | number>;
+  /** Present when the failure is one currency's row of a money metric. */
+  currency?: string;
 }
 
 export async function buildSummary(): Promise<Summary> {
   const [rows, alertScan] = await Promise.all([fetchMetricRows(), scanAlerts()]);
-  const failures: { code: string; label: string }[] = [...alertScan.failures];
+  const failures: SummaryFailure[] = [...alertScan.failures];
   const lines = SUMMARY_METRIC_LINES.flatMap((definition): SummaryLine[] => {
     const matching = rows?.filter((row) => row.metric_key === definition.key) ?? [];
     if (definition.unit === 'currency') {
@@ -83,20 +101,24 @@ export async function buildSummary(): Promise<Summary> {
           typeof row.currency === 'string' && /^[A-Z]{3}$/.test(row.currency))
         .sort((a, b) => a.currency.localeCompare(b.currency));
       if (currencyRows.length === 0) {
-        failures.push({ code: definition.key, label: definition.label });
+        failures.push({ code: definition.key, labelKey: definition.labelKey, labelVars: definition.labelVars });
         return [{ ...definition, value: null, currency: null }];
       }
       return currencyRows.map((row) => {
         const value = metricValue(row);
         if (value == null) failures.push({
           code: `${definition.key}:${row.currency}`,
-          label: `${definition.label} (${row.currency})`,
+          labelKey: definition.labelKey,
+          labelVars: definition.labelVars,
+          currency: row.currency,
         });
         return { ...definition, value, currency: row.currency };
       });
     }
     const value = metricValue(matching.find((row) => row.currency == null) ?? matching[0]);
-    if (value == null) failures.push({ code: definition.key, label: definition.label });
+    if (value == null) {
+      failures.push({ code: definition.key, labelKey: definition.labelKey, labelVars: definition.labelVars });
+    }
     return [{ ...definition, value, currency: null }];
   });
 

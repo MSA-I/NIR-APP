@@ -1,3 +1,5 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
+import type { TKey } from '../../lib/i18n/t.ts';
 import { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router';
@@ -13,7 +15,6 @@ import {
 } from '../../lib/assistant/client';
 import type { AssistantHistoryView } from '../../lib/assistant/contracts';
 import type { AssistantRunSession } from '../../lib/assistant/runSession';
-import { toHebrewError } from '../../lib/errors';
 import { useFeatureFlags } from '../../lib/flags';
 import { APP_NAME } from '../../lib/branding';
 import { fmtDateTime } from '../../lib/format';
@@ -82,32 +83,40 @@ function useAssistantDesktopMode(): boolean {
  *   get_purchase_comparison, get_dashboard_snapshot, draft_supplier_reminder -> owner + office
  *   get_unmatched_bank_transactions -> owner + accountant
  */
-const ROLE_EXAMPLES = {
+/**
+ * The example questions, as KEYS rather than sentences — and the reason is not tidiness.
+ *
+ * Clicking one SENDS it: the example becomes the question the assistant is asked. Since
+ * `OPEN-DECISIONS #283` the assistant answers in the reader's language, so an English reader
+ * clicking a Hebrew example would be asking in a language they did not choose and reading the
+ * answer in one they did. The example has to be in their language before it is sent, not after.
+ */
+const ROLE_EXAMPLE_KEYS: Record<'owner' | 'office' | 'accountant', readonly TKey[]> = {
   owner: [
-    'מה דורש טיפול עכשיו?',
-    'איך נראית תמונת המצב העסקית החודש?',
-    'כמה כסף ממתין לזיכוי?',
-    'אילו מוצרים התייקרו החודש?',
-    'מה החשיפה לתשלומים בשבוע הקרוב?',
-    'אילו תנועות בנק אינן מותאמות?',
+    'assistantDialog.exampleWhatNeedsAttention',
+    'assistantDialog.exampleBusinessPicture',
+    'assistantDialog.exampleCreditsPending',
+    'assistantDialog.examplePriceRises',
+    'assistantDialog.examplePaymentExposure',
+    'assistantDialog.exampleUnmatchedBank',
   ],
   office: [
-    'מה דורש טיפול עכשיו?',
-    'למה החשבונית חסומה?',
-    'אילו הזמנות נשלחו ולא אושרו?',
-    'אילו מוצרים התייקרו החודש?',
-    'אילו ספקים מאחרים באספקה?',
-    'אילו פריטים במלאי בסיכון?',
+    'assistantDialog.exampleWhatNeedsAttention',
+    'assistantDialog.exampleInvoiceBlocked',
+    'assistantDialog.exampleOrdersUnconfirmed',
+    'assistantDialog.examplePriceRises',
+    'assistantDialog.exampleLateSuppliers',
+    'assistantDialog.exampleInventoryRisk',
   ],
   accountant: [
-    'אילו תנועות בנק אינן מותאמות?',
-    'מה דורש טיפול עכשיו?',
-    'למה החשבונית חסומה?',
-    'כמה חשבוניות נקלטו ב־7 הימים האחרונים?',
-    'האם ההזמנה, הקבלה והחשבונית מתאימות זו לזו?',
-    'איפה רואים חשבוניות שממתינות לאישור?',
+    'assistantDialog.exampleUnmatchedBank',
+    'assistantDialog.exampleWhatNeedsAttention',
+    'assistantDialog.exampleInvoiceBlocked',
+    'assistantDialog.exampleInvoicesLastWeek',
+    'assistantDialog.exampleThreeWayMatch',
+    'assistantDialog.exampleWhereApprovals',
   ],
-} as const;
+};
 
 function needsFallback(rawError: string): boolean {
   return FALLBACK_CODES.some((code) => rawError.includes(code));
@@ -139,6 +148,7 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
   authorizationFingerprint: string;
   onOpen: (turns: AssistantHistoryView[], expectedAuthorizationFingerprint: string) => void;
 }) {
+  const { errorText, t } = useT();
   const { data, loading, error, refetch } = useAssistantConversations(authorizationFingerprint);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -156,10 +166,10 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
 
   return (
     <div>
-      <h3 className="mb-1 text-xs font-medium text-ink-muted">בדיקות קודמות</h3>
+      <h3 className="mb-1 text-xs font-medium text-ink-muted">{t('assistantDialog.text')}</h3>
       {loading && (
         <div role="status" aria-busy="true" className="space-y-2 py-1">
-          <span className="sr-only">טוען שיחות קודמות</span>
+          <span className="sr-only">{t('assistantDialog.text_2')}</span>
           <Skeleton className="h-4 w-3/4" />
           <Skeleton className="h-4 w-2/3" />
         </div>
@@ -173,7 +183,7 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
               type="button"
               className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-start transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
               disabled={openingId !== null}
-              aria-label={`פתיחת הבדיקה ${conversation.title}`}
+              aria-label={t('assistantDialog.openCheckLabel', { title: conversation.title })}
               onClick={() => {
                 const expectedAuthorizationFingerprint = authorizationFingerprint;
                 setOpeningId(conversation.id);
@@ -185,7 +195,7 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
                   })
                   .catch((e) => {
                     setOpeningId(null);
-                    setOpenError(toHebrewError(e));
+                    setOpenError(errorText(e));
                   });
               }}
             >
@@ -196,7 +206,7 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
             <button
               type="button"
               className="btn-ghost btn-icon rounded-full"
-              aria-label={`מחיקת הבדיקה ${conversation.title}`}
+              aria-label={t('assistantDialog.deleteCheckLabel', { title: conversation.title })}
               onClick={() => setPendingDelete(conversation.id)}
             >
               <Trash2 size={ICON.sm} aria-hidden="true" />
@@ -209,9 +219,9 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
       <ConfirmDialog
         open={pendingDelete !== null}
         danger
-        title="מחיקת בדיקה"
-        message="השאלה והממצאים שנשמרו בבדיקה יימחקו. הנתונים העסקיים עצמם אינם מושפעים."
-        confirmLabel="מחיקה"
+        title={t('assistantDialog.title')}
+        message={t('assistantDialog.message')}
+        confirmLabel={t('assistantDialog.confirmLabel')}
         onClose={() => setPendingDelete(null)}
         onConfirm={() => {
           const id = pendingDelete;
@@ -219,7 +229,7 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
           if (!id) return;
           void deleteAssistantConversation(id)
             .then(() => refetch())
-            .catch((e) => setDeleteError(toHebrewError(e)));
+            .catch((e) => setDeleteError(errorText(e)));
         }}
       />
     </div>
@@ -231,6 +241,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
   onClose: () => void;
   onMobileSourceNavigate: () => void;
 }) {
+  const { t } = useT();
   const { isEnabled } = useFeatureFlags();
   const { profile } = useAuth();
   const desktop = useAssistantDesktopMode();
@@ -267,7 +278,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
   const role = profile && isActiveRole(profile.role) ? profile.role : null;
   const canOpenAlerts = role !== null && appRouteAllowsRole('alerts', role);
   const canOpenDashboard = role !== null && appRouteAllowsRole('dashboard', role);
-  const examples = role ? ROLE_EXAMPLES[role] : [];
+  const examples = role ? ROLE_EXAMPLE_KEYS[role] : [];
   const closeForProductNavigation = () => {
     if (!desktop) onMobileSourceNavigate();
   };
@@ -280,7 +291,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
    * nothing more. Once the thread has content it keeps doing its job for a screen reader and
    * stops restating itself above every answer.
    */
-  const description = 'העוזר מציג רק נתונים שהמערכת מדדה, ולכל ממצא מצרף עדכניות ומקור לבדיקה.';
+  const description = t('assistantDialog.text_3');
 
   return createPortal(
     <div
@@ -309,7 +320,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
             <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-action text-on-solid" aria-hidden="true">
               <Sparkles size={ICON.lg} />
             </span>
-            <h2 id={titleId} className="min-w-0 flex-1 truncate font-semibold text-ink">העוזר של {APP_NAME}</h2>
+            <h2 id={titleId} className="min-w-0 flex-1 truncate font-semibold text-ink">{t('assistantDialog.heading', { app: APP_NAME })}</h2>
             {(result || conversationId) && (
               <button
                 type="button"
@@ -317,10 +328,10 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
                 disabled={pending}
                 onClick={resetConversation}
               >
-                <RotateCcw size={ICON.xs} aria-hidden="true" /> בדיקה חדשה
+                <RotateCcw size={ICON.xs} aria-hidden="true" /> {t('assistantDialog.newCheck')}
               </button>
             )}
-            <button type="button" className="btn-ghost btn-icon rounded-full" onClick={() => requestClose()} aria-label="סגירת הבדיקה">
+            <button type="button" className="btn-ghost btn-icon rounded-full" onClick={() => requestClose()} aria-label={t('assistantDialog.aria_label')}>
               <X size={ICON.lg} aria-hidden="true" />
             </button>
           </div>
@@ -330,7 +341,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
               subtitle read „בדיקה תפעולית מבוססת ר…”, which drops exactly the two words the header
               is required to keep. A promise about what the surface may do cannot be the part that
               ellipsis eats. */}
-          <p className="mt-0.5 text-xs leading-snug text-ink-muted ps-12">בדיקה תפעולית מבוססת ראיות · לקריאה בלבד</p>
+          <p className="mt-0.5 text-xs leading-snug text-ink-muted ps-12">{t('assistantDialog.text_4')}</p>
         </div>
 
         {/* Band 2 of 3 — the scrolling conversation, one tonal step below the header and the
@@ -354,13 +365,13 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
             so a fact keeps its value, its freshness and its source wherever it sits in the thread.
           */}
           {turns.length > 0 && (
-            <ol className="space-y-5" aria-label="השיחה עם העוזר">
+            <ol className="space-y-5" aria-label={t('assistantDialog.aria_label_2')}>
               {turns.map((turn) => (
                 <li key={turn.result.run_id} className="space-y-2">
                   <UserTurn question={turn.question} />
                   <div className="card page-fade rounded-ss-sm p-3">
                     <p className="mb-2 text-xs text-ink-muted">
-                      עודכן ל־<span className="num">{fmtDateTime(turn.result.as_of)}</span>
+                      {t('assistantDialog.updatedTo')}<span className="num">{fmtDateTime(turn.result.as_of)}</span>
                     </p>
                     {role && (
                       <AnswerView
@@ -387,7 +398,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
               signal reads as a hang — and at 2s it is already calmer than the slowed spinner. */}
           {pending && (
             <div role="status" aria-busy="true" className="page-fade flex justify-start">
-              <span className="sr-only">בודק את הנתונים המורשים</span>
+              <span className="sr-only">{t('assistantDialog.text_5')}</span>
               <span data-assistant-typing className="card flex items-center gap-1.5 rounded-ss-sm px-4 py-4" aria-hidden="true">
                 <span className="size-2 animate-pulse rounded-full bg-action [animation-delay:0ms]" />
                 <span className="size-2 animate-pulse rounded-full bg-action [animation-delay:200ms]" />
@@ -405,19 +416,19 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
               {showFallback && canOpenDashboard && (
                 <Note tone="info">
                   <span className="min-w-0 flex-1">
-                    המסכים ממשיכים לעבוד גם בלי העוזר:{' '}
+                    {t('assistantDialog.screensStillWork')}{' '}
                     {canOpenAlerts && (
                       <>
                         <Link to={APP_ROUTE_POLICY.alerts.path} onClick={closeForProductNavigation} className="underline underline-offset-2">
-                          מסך ההתראות
+                          {t('assistantDialog.text_6')}
                         </Link>{' '}
-                        סורק מה דורש טיפול, ו
+                        {t('assistantDialog.text_7')}
                       </>
                     )}
                     <Link to={APP_ROUTE_POLICY.dashboard.path} onClick={closeForProductNavigation} className="underline underline-offset-2">
-                      מרכז הבקרה
+                      {t('assistantDialog.text_8')}
                     </Link>{' '}
-                    מציג את תמונת המצב המלאה.
+                    {t('assistantDialog.text_9')}
                   </span>
                 </Note>
               )}
@@ -433,25 +444,25 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
                 <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-action text-on-solid" aria-hidden="true">
                   <Sparkles size={ICON.xl} />
                 </span>
-                <h3 id={`${titleId}-start`} className="section-title mt-3">מה תרצה לבדוק?</h3>
+                <h3 id={`${titleId}-start`} className="section-title mt-3">{t('assistantDialog.whatToCheck')}</h3>
                 <p id={descriptionId} className="mt-1 text-sm leading-relaxed text-ink-muted">{description}</p>
               </div>
               {examples.length > 0 && (
                 <>
-                  <p className="mt-6 text-xs font-medium text-ink-muted">אפשר להתחיל מדוגמה שמתאימה להרשאות שלך.</p>
+                  <p className="mt-6 text-xs font-medium text-ink-muted">{t('assistantDialog.text_10')}</p>
                   {/* Paper on paper, not a wash. Six of these stacked in the old cool tint turned
                       the empty state into a block of colour that belonged to no other screen; as
                       cards on the sunken band they read the way every other list of choices in
                       the product reads, and the hover is the app's one neutral pointer step. */}
                   <div className="mt-2 flex flex-col gap-2">
-                    {examples.map((example) => (
+                    {examples.map((exampleKey) => (
                       <button
-                        key={example}
+                        key={exampleKey}
                         type="button"
                         className="row-hover min-h-11 rounded-2xl border border-line-soft bg-surface px-4 text-start text-sm font-medium text-ink-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                        onClick={() => setQuestion(example)}
+                        onClick={() => setQuestion(t(exampleKey))}
                       >
-                        {example}
+                        {t(exampleKey)}
                       </button>
                     ))}
                   </div>
@@ -491,8 +502,8 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
               className="input resize-none rounded-2xl pe-14"
               rows={2}
               maxLength={ASSISTANT_QUESTION_MAX_CHARS}
-              placeholder={examples[0] ?? 'מה תרצה לבדוק?'}
-              aria-label="שאלה לבדיקה"
+              placeholder={examples[0] ?? t('assistantDialog.text_11')}
+              aria-label={t('assistantDialog.aria_label_3')}
               value={question}
               disabled={pending}
               onChange={(event) => setQuestion(event.target.value)}
@@ -512,7 +523,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
             <button
               type="submit"
               className="btn-primary btn-icon absolute end-2.5 top-1/2 -translate-y-1/2 rounded-full"
-              aria-label={pending ? 'שולח' : 'בדיקה'}
+              aria-label={pending ? t('assistantDialog.text_12') : t('assistantDialog.text_13')}
               disabled={pending || !question.trim()}
             >
               {pending

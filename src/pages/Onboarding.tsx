@@ -1,5 +1,6 @@
+import type { TKey } from '../lib/i18n/t';
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { toHebrewError } from "../lib/errors";
 import { Link, useNavigate } from 'react-router';
 import {
   Building2, Tags, Truck, Package, CheckCircle2, Upload, Check, X, Plus,
@@ -20,12 +21,12 @@ import type { Category } from '../lib/types';
 /* ================= step model ================= */
 
 const STEPS = [
-  { key: 'business', label: 'פרטי העסק', icon: Building2 },
-  { key: 'categories', label: 'קטגוריות', icon: Tags },
-  { key: 'suppliers', label: 'ספקים', icon: Truck },
-  { key: 'products', label: 'מוצרים ומחירון', icon: Package },
-  { key: 'done', label: 'סיום', icon: CheckCircle2 },
-] as const;
+  { key: 'business', labelKey: 'onboarding.stepBusiness', icon: Building2 },
+  { key: 'categories', labelKey: 'onboarding.stepCategories', icon: Tags },
+  { key: 'suppliers', labelKey: 'onboarding.stepSuppliers', icon: Truck },
+  { key: 'products', labelKey: 'onboarding.stepProducts', icon: Package },
+  { key: 'done', labelKey: 'onboarding.stepDone', icon: CheckCircle2 },
+] as const satisfies readonly { key: string; labelKey: TKey; icon: typeof Building2 }[];
 
 type StepKey = (typeof STEPS)[number]['key'];
 const LAST_STEP = STEPS.length - 1;
@@ -91,11 +92,6 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-// Was `e instanceof Error ? e.message : 'אירעה שגיאה בלתי צפויה'` — which put the raw message on the
-// reachable branch and the Hebrew on the one a Supabase error never takes. Every caller below
-// (:424, :540, :562, and the two spliced into Hebrew sentences) inherited that.
-const errMsg = toHebrewError;
-
 /* ================= page ================= */
 
 interface Snapshot {
@@ -106,6 +102,7 @@ interface Snapshot {
 }
 
 export default function Onboarding() {
+  const { t } = useT();
   const { profile, org } = useAuth();
   const orgId = profile?.org_id ?? '';
   const [progress, setProgress] = useState<Progress>(() => (orgId ? loadProgress(orgId) : EMPTY_PROGRESS));
@@ -175,11 +172,11 @@ export default function Onboarding() {
   return (
     <div className="space-y-5 max-w-4xl">
       <PageHeader
-        title="הקמת המערכת"
-        description="ארבעה שלבים קצרים שממלאים את המערכת בנתוני העסק. אפשר לדלג על כל שלב ולהשלים אותו מאוחר יותר."
+        title={t('onboarding.title')}
+        description={t('onboarding.description')}
         actions={(
           <Link className="btn-ghost text-ink-muted whitespace-nowrap" to="/dashboard">
-            כניסה למערכת <ChevronLeft size={ICON.sm} aria-hidden="true" />
+            {t('onboarding.enterSystem')} <ChevronLeft size={ICON.sm} aria-hidden="true" />
           </Link>
         )} />
 
@@ -202,11 +199,11 @@ export default function Onboarding() {
 
       <div className="flex items-center justify-between">
         <button className="btn-secondary" disabled={progress.step === 0} onClick={() => goTo(progress.step - 1)}>
-          <ChevronRight size={ICON.sm} aria-hidden="true" /> חזרה
+          <ChevronRight size={ICON.sm} aria-hidden="true" /> {t('onboarding.back')}
         </button>
         {step.key !== 'done' && (
           <button className="btn-ghost text-ink-muted" onClick={skipCurrent}>
-            דילוג על השלב <ChevronLeft size={ICON.sm} aria-hidden="true" />
+            {t('onboarding.skipStep')} <ChevronLeft size={ICON.sm} aria-hidden="true" />
           </button>
         )}
       </div>
@@ -222,6 +219,7 @@ function Stepper({ current, doneByData, skipped, onSelect }: {
   skipped: StepKey[];
   onSelect: (i: number) => void;
 }) {
+  const { t } = useT();
   return (
     <ol className="card flex flex-wrap overflow-hidden">
       {STEPS.map((s, i) => {
@@ -243,14 +241,14 @@ function Stepper({ current, doneByData, skipped, onSelect }: {
               </span>
               <span className="min-w-0">
                 <span className={`block text-sm truncate ${active ? 'font-semibold text-ink' : 'text-ink-mid'}`}>
-                  {s.label}
+                  {t(s.labelKey)}
                 </span>
                 <span className="block text-xs text-ink-muted">
                   {/* „סיכום" and not „שלב 5": the header promises four short steps that fill the
                       system with business data, and that is what the first four do. The last entry
                       reviews what was entered and closes the wizard — numbering it made the screen
                       contradict its own heading (audit 2026-08-25). */}
-                  {done ? 'הושלם' : wasSkipped ? 'דולג' : s.key === 'done' ? 'סיכום' : `שלב ${i + 1}`}
+                  {done ? t('onboarding.badgeDone') : wasSkipped ? t('onboarding.badgeSkipped') : s.key === 'done' ? t('onboarding.badgeSummary') : t('onboarding.badgeStepN', { n: i + 1 })}
                 </span>
               </span>
             </button>
@@ -264,6 +262,7 @@ function Stepper({ current, doneByData, skipped, onSelect }: {
 /* ================= step 1 — business details ================= */
 
 function BusinessStep({ onSaved }: { onSaved: () => void }) {
+  const { errorText, t } = useT();
   const { profile, org } = useAuth();
   const toast = useToast();
   const business = (org?.settings as unknown as { business?: OrgBusiness } | undefined)?.business ?? {};
@@ -283,9 +282,9 @@ function BusinessStep({ onSaved }: { onSaved: () => void }) {
 
   async function save() {
     const name = f.name.trim();
-    if (!name) { toast('שם העסק הוא שדה חובה', 'error'); return; }
+    if (!name) { toast(t('onboarding.toast'), 'error'); return; }
     const vat = Number(f.vat_rate);
-    if (!Number.isFinite(vat) || vat < 0 || vat > 100) { toast('שיעור מע״מ חייב להיות בין 0 ל־100', 'error'); return; }
+    if (!Number.isFinite(vat) || vat < 0 || vat > 100) { toast(t('onboarding.isFinite'), 'error'); return; }
 
     setBusy(true);
     const res = await supabase.from('organizations').update({
@@ -303,8 +302,8 @@ function BusinessStep({ onSaved }: { onSaved: () => void }) {
       },
     }).eq('id', profile!.org_id);
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-    toast('פרטי העסק נשמרו');
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
+    toast(t('onboarding.toast_2'));
     onSaved();
   }
 
@@ -312,39 +311,39 @@ function BusinessStep({ onSaved }: { onSaved: () => void }) {
     <div className="space-y-5">
       <StepHeading
         icon={<Building2 size={ICON.md} aria-hidden="true" />}
-        title="פרטי העסק"
-        subtitle="השם מופיע בכל מסמך שהמערכת מפיקה. שיעור המע״מ נשמר בנפרד בכל חשבונית, כך ששינוי עתידי לא משנה חשבוניות קיימות."
+        title={t('onboarding.title_2')}
+        subtitle={t('onboarding.subtitle')}
       />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <label className="label" htmlFor="onboarding-business-name">שם העסק *</label>
+          <label className="label" htmlFor="onboarding-business-name">{t('onboarding.text')}</label>
           <input id="onboarding-business-name" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} />
         </div>
         <div>
-          <label className="label" htmlFor="onboarding-tax-id">ח.פ / עוסק מורשה</label>
+          <label className="label" htmlFor="onboarding-tax-id">{t('onboarding.text_2')}</label>
           <input id="onboarding-tax-id" className="input" dir="ltr" value={f.tax_id} onChange={(e) => set('tax_id', e.target.value)} />
         </div>
         <div>
-          <label className="label" htmlFor="onboarding-vat-rate">שיעור מע״מ (%)</label>
+          <label className="label" htmlFor="onboarding-vat-rate">{t('onboarding.text_3')}</label>
           <input id="onboarding-vat-rate" type="number" step="0.5" min="0" max="100" className="input num"
             value={f.vat_rate} onChange={(e) => set('vat_rate', e.target.value)} />
         </div>
         <div>
-          <label className="label" htmlFor="onboarding-contact-email">אימייל ליצירת קשר</label>
+          <label className="label" htmlFor="onboarding-contact-email">{t('onboarding.text_4')}</label>
           <input id="onboarding-contact-email" className="input" dir="ltr" value={f.contact_email} onChange={(e) => set('contact_email', e.target.value)} />
         </div>
         <div>
-          <label className="label" htmlFor="onboarding-contact-phone">טלפון</label>
+          <label className="label" htmlFor="onboarding-contact-phone">{t('onboarding.text_5')}</label>
           <input id="onboarding-contact-phone" className="input" dir="ltr" value={f.contact_phone} onChange={(e) => set('contact_phone', e.target.value)} />
         </div>
         <div className="sm:col-span-2">
-          <label className="label" htmlFor="onboarding-address">כתובת</label>
+          <label className="label" htmlFor="onboarding-address">{t('onboarding.text_6')}</label>
           <input id="onboarding-address" className="input" value={f.address} onChange={(e) => set('address', e.target.value)} />
         </div>
       </div>
       <div className="flex justify-end">
         <button className="btn-primary" disabled={busy} onClick={() => void save()}>
-          {busy && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />} שמירה והמשך
+          {busy && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />} {t('onboarding.saveAndContinue')}
         </button>
       </div>
     </div>
@@ -356,17 +355,39 @@ function BusinessStep({ onSaved }: { onSaved: () => void }) {
 /**
  * Suggestions only — nothing is added until the user clicks.
  *
- * These names are copied verbatim from `starter_categories` in `supabase/seed.sql` so the
- * seed and the wizard offer one list instead of two that drift. Keep them byte-identical:
- * the seed inserts `on conflict (org_id, name) do nothing`, so a stray character (a maqaf
- * instead of a hyphen in "אריזה וחד-פעמי", say) would silently create a duplicate category
- * rather than dedupe against the seeded one.
+ * OWNER DECISION, 28.08.2026: a suggestion is STORED IN THE LANGUAGE IT WAS OFFERED IN. An English
+ * session that clicks "Raw materials" gets a category called `Raw materials`, not `חומרי גלם`.
+ * That is a deliberate exception to the rule that an organisation's own vocabulary is never
+ * translated for it: nothing is being translated here, because nothing existed yet — the click
+ * CREATES the category, and it should be created in the language the person is working in.
+ *
+ * What this costs, recorded rather than discovered later. These names used to be byte-identical
+ * to `starter_categories` in `supabase/seed.sql`, so that an org which ran the seed and then the
+ * wizard deduped through `on conflict (org_id, name) do nothing` instead of ending up with two
+ * rows for one idea. In English that dedupe no longer happens — the seed's row is Hebrew and the
+ * wizard's is English. It is accepted because `seed.sql` is a manual, operator-run baseline
+ * (its own header says so) and not part of tenant signup, so the two rarely meet.
+ *
+ * The Hebrew list stayed byte-identical for the same reason, and is NOT: `seed.sql:49` writes
+ * "אריזה וחד־פעמי" with a MAQAF (U+05BE) and this list writes a HYPHEN-MINUS (U+002D). `nameKey`
+ * strips quotes and collapses whitespace but does not touch dashes, so those two are different
+ * keys and a Hebrew org that met both already gets the duplicate this comment warned about. That
+ * is a pre-existing defect in the seed, reported separately; it is not this feature's to fix.
  */
-const CATEGORY_SUGGESTIONS = ['חומרי גלם', 'ציוד', 'חומרי ניקיון', 'אריזה וחד-פעמי', 'ציוד משרדי', 'תחזוקה ותיקונים', 'שירותים'];
+const CATEGORY_SUGGESTIONS = [
+  { labelKey: 'onboarding.categoryRawMaterials' },
+  { labelKey: 'onboarding.categoryEquipment' },
+  { labelKey: 'onboarding.categoryCleaning' },
+  { labelKey: 'onboarding.categoryPackaging' },
+  { labelKey: 'onboarding.categoryOffice' },
+  { labelKey: 'onboarding.categoryMaintenance' },
+  { labelKey: 'onboarding.categoryServices' },
+] as const satisfies readonly { labelKey: TKey }[];
 
 interface CategoryDraft { id: string | null; name: string }
 
 function CategoriesStep({ onSaved }: { onSaved: () => void }) {
+  const { errorText, t } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const { data, loading, error } = useQuery<Category[]>(async () =>
@@ -387,7 +408,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
   function add(name: string) {
     const clean = name.trim();
     if (!clean) return;
-    if (taken.has(nameKey(clean))) { toast('קטגוריה בשם זה כבר ברשימה', 'error'); return; }
+    if (taken.has(nameKey(clean))) { toast(t('onboarding.has'), 'error'); return; }
     setItems([...list, { id: null, name: clean }]);
     setDraft('');
   }
@@ -403,7 +424,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
       for (const c of removed) {
         const res = await supabase.from('categories').delete().eq('id', c.id);
         // a category already attached to products or suppliers is protected by a foreign key
-        if (res.error) throw new Error(`לא ניתן למחוק את הקטגוריה "${c.name}" — היא כבר משויכת למוצרים או לספקים.`);
+        if (res.error) throw new Error(t('onboarding.categoryDeleteBlocked', { name: c.name }));
       }
 
       for (const c of list) {
@@ -423,10 +444,10 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
         if (res.error) throw new Error(res.error.message);
       }
 
-      toast('הקטגוריות נשמרו');
+      toast(t('onboarding.toast_3'));
       onSaved();
     } catch (e) {
-      setSaveError(errMsg(e));
+      setSaveError(errorText(e));
     } finally {
       setBusy(false);
     }
@@ -435,33 +456,33 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
   if (loading) return <SkeletonList rows={4} />;
   if (error) return <ErrorNote message={error} />;
 
-  const suggestions = CATEGORY_SUGGESTIONS.filter((s) => !taken.has(nameKey(s)));
+  const suggestions = CATEGORY_SUGGESTIONS.filter((s) => !taken.has(nameKey(t(s.labelKey))));
 
   return (
     <div className="space-y-5">
       <StepHeading
         icon={<Tags size={ICON.md} aria-hidden="true" />}
-        title="קטגוריות"
-        subtitle="קטגוריות מקבצות מוצרים וספקים לצורכי סינון ודוחות. אפשר להתחיל בלי אף קטגוריה ולהוסיף בהמשך."
+        title={t('onboarding.title_3')}
+        subtitle={t('onboarding.subtitle_2')}
       />
 
       {saveError && <ErrorNote message={saveError} />}
 
       <div className="flex gap-2">
-        <input className="input" aria-label="שם קטגוריה חדשה" placeholder="שם קטגוריה" value={draft}
+        <input className="input" aria-label={t('onboarding.aria_label')} placeholder={t('onboarding.placeholder')} value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(draft); } }} />
-        <button className="btn-secondary whitespace-nowrap" onClick={() => add(draft)}><Plus size={ICON.sm} aria-hidden="true" /> הוספה</button>
+        <button className="btn-secondary whitespace-nowrap" onClick={() => add(draft)}><Plus size={ICON.sm} aria-hidden="true" /> {t('onboarding.add')}</button>
       </div>
 
       {suggestions.length > 0 && (
         <div>
-          <div className="text-xs font-medium text-ink-muted mb-2">הצעות — לחיצה מוסיפה לרשימה</div>
+          <div className="text-xs font-medium text-ink-muted mb-2">{t('onboarding.text_7')}</div>
           <div className="flex flex-wrap gap-1.5">
             {suggestions.map((s) => (
-              <button key={s} type="button" aria-label={`הוספת הקטגוריה ${s}`} onClick={() => add(s)}
+              <button key={s.labelKey} type="button" aria-label={t('onboarding.addCategoryLabel', { name: t(s.labelKey) })} onClick={() => add(t(s.labelKey))}
                 className="btn-secondary btn-sm">
-                <Plus size={ICON.xs} aria-hidden="true" />{s}
+                <Plus size={ICON.xs} aria-hidden="true" />{t(s.labelKey)}
               </button>
             ))}
           </div>
@@ -469,17 +490,17 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
       )}
 
       {list.length === 0 ? (
-        <EmptyState title="אין עדיין קטגוריות" subtitle="הוסף קטגוריה, בחר מההצעות, או דלג על השלב" />
+        <EmptyState title={t('onboarding.title_4')} subtitle={t('onboarding.subtitle_3')} />
       ) : (
         <ul className="border border-line rounded-lg divide-y divide-line-soft">
           {list.map((c, i) => (
             <li key={c.id ?? `new-${i}`} className="flex items-center gap-2 px-3 py-2">
               <input className="input border-transparent! bg-transparent! focus:bg-surface! focus:border-line-strong!"
-                aria-label={`שם הקטגוריה ${c.name || i + 1}`}
+                aria-label={t('onboarding.categoryNameLabel', { name: c.name || i + 1 })}
                 value={c.name}
                 onChange={(e) => setItems(list.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
-              {!c.id && <span className="badge-info shrink-0">חדשה</span>}
-              <button type="button" className="btn-ghost btn-icon" aria-label={`הסרת ${c.name}`}
+              {!c.id && <span className="badge-info shrink-0">{t('onboarding.text_8')}</span>}
+              <button type="button" className="btn-ghost btn-icon" aria-label={t('onboarding.removeCategoryLabel', { name: c.name })}
                 onClick={() => setItems(list.filter((_, j) => j !== i))}>
                 <X size={ICON.sm} aria-hidden="true" />
               </button>
@@ -490,7 +511,7 @@ function CategoriesStep({ onSaved }: { onSaved: () => void }) {
 
       <div className="flex justify-end">
         <button className="btn-primary" disabled={busy} onClick={() => void save()}>
-          {busy && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />} שמירה והמשך
+          {busy && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />} {t('onboarding.saveAndContinue')}
         </button>
       </div>
     </div>
@@ -513,6 +534,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
   onDone: () => void;
   children?: ReactNode;
 }) {
+  const { errorText, t } = useT();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [sheet, setSheet] = useState<SheetData | null>(null);
@@ -537,19 +559,19 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
   async function onFile(file: File) {
     setFailure(null);
     try {
-      const data = await readSheet(file);
+      const data = await readSheet(file, t);
       setSheet(data);
       setCols(autoMapColumns(data.headers, fields));
       setParsed(null);
     } catch (e) {
-      toast(errMsg(e), 'error');
+      toast(errorText(e), 'error');
     }
   }
 
   function buildPreview() {
     if (!sheet) return;
     if (missingRequired.length) {
-      toast(`יש למפות עמודה עבור: ${missingRequired.map((f) => f.label).join(', ')}`, 'error');
+      toast(t('onboarding.mapColumnsMissing', { fields: missingRequired.map((f) => f.label).join(', ') }), 'error');
       return;
     }
     setParsed(parse(sheet.rows, cols));
@@ -564,7 +586,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
       setReport(nextReport);
       setConfirming(false);
     } catch (e) {
-      setFailure(errMsg(e));
+      setFailure(errorText(e));
     } finally {
       setBusy(false);
     }
@@ -576,14 +598,14 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
       <div className="space-y-4">
         <Note tone="done">
           <div className="w-full">
-            <div className="font-medium mb-1">הייבוא הסתיים</div>
+            <div className="font-medium mb-1">{t('onboarding.text_9')}</div>
             <ul className="space-y-0.5">{report.map((line, i) => <li key={i}>{line}</li>)}</ul>
           </div>
         </Note>
         {parsed && parsed.skipped.length > 0 && <SkippedPanel skipped={parsed.skipped} />}
         <div className="flex justify-between">
-          <button className="btn-secondary" onClick={reset}>ייבוא קובץ נוסף</button>
-          <button type="button" className="btn-primary" onClick={onDone}>המשך <ChevronLeft size={ICON.sm} aria-hidden="true" /></button>
+          <button className="btn-secondary" onClick={reset}>{t('onboarding.text_10')}</button>
+          <button type="button" className="btn-primary" onClick={onDone}>{t('onboarding.text_11')} <ChevronLeft size={ICON.sm} aria-hidden="true" /></button>
         </div>
       </div>
     );
@@ -595,24 +617,24 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
       <div className="space-y-4">
         {failure && <ErrorNote message={failure} />}
         <div className="text-sm text-ink-soft">
-          <b>{sheet.fileName}</b> — {parsed.valid.length} שורות מוכנות לייבוא
-          {parsed.skipped.length > 0 && <>, {parsed.skipped.length} ידולגו</>}. שום דבר לא נשמר עד לאישור.
+          <b>{sheet.fileName}</b> — {t('onboarding.rowsReady', { count: parsed.valid.length })}
+          {parsed.skipped.length > 0 && <>{t('onboarding.rowsWillSkip', { count: parsed.skipped.length })}</>}{t('onboarding.nothingSavedYet')}
         </div>
 
         {parsed.valid.length > 0 ? (
-          <DataTable rows={parsed.valid} columns={columns} pageSize={10} mobile="scroll" rowLabel={(row) => `שורת ייבוא ${row.row}`} />
+          <DataTable rows={parsed.valid} columns={columns} pageSize={10} mobile="scroll" rowLabel={(row) => t('onboarding.importRowLabel', { row: row.row })} />
         ) : (
-          <EmptyState title="אין שורות תקינות לייבוא" subtitle="בדוק את מיפוי העמודות או את תוכן הקובץ" />
+          <EmptyState title={t('onboarding.title_5')} subtitle={t('onboarding.subtitle_4')} />
         )}
 
         {parsed.skipped.length > 0 && <SkippedPanel skipped={parsed.skipped} />}
 
         <div className="flex justify-between gap-2">
           <button className="btn-secondary" disabled={busy} onClick={() => setParsed(null)}>
-            <ChevronRight size={ICON.sm} aria-hidden="true" /> חזרה למיפוי
+            <ChevronRight size={ICON.sm} aria-hidden="true" /> {t('onboarding.backToMapping')}
           </button>
           <button className="btn-primary" disabled={busy || parsed.valid.length === 0} onClick={() => setConfirming(true)}>
-            {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Upload size={ICON.sm} aria-hidden="true" />} אישור וייבוא
+            {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <Upload size={ICON.sm} aria-hidden="true" />} {t('onboarding.confirmAndImport')}
           </button>
         </div>
 
@@ -621,9 +643,9 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
           onClose={() => setConfirming(false)}
           onConfirm={(reason) => void run(reason)}
           busy={busy}
-          title="אישור ייבוא"
+          title={t('onboarding.title_6')}
           message={confirmMessage(parsed.valid.length)}
-          confirmLabel="ייבוא"
+          confirmLabel={t('onboarding.confirmLabel')}
           requireReason={requireReason}
         />
       </div>
@@ -635,7 +657,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
     return (
       <div className="space-y-4">
         <div className="text-sm text-ink-soft">
-          <b>{sheet.fileName}</b> — {sheet.rows.length} שורות. התאם כל שדה לעמודה בקובץ:
+          <b>{sheet.fileName}</b> — {t('onboarding.mapEachField', { count: sheet.rows.length })}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {fields.map((f) => (
@@ -643,7 +665,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
               <label className="label" htmlFor={`import-column-${f.key}`}>{f.label}{f.required && ' *'}</label>
               <select id={`import-column-${f.key}`} className="input" value={cols[f.key] ?? ''}
                 onChange={(e) => setCols((m) => ({ ...m, [f.key]: e.target.value }))}>
-                <option value="">— ללא —</option>
+                <option value="">{t('onboarding.text_12')}</option>
                 {sheet.headers.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </div>
@@ -653,7 +675,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
         {/* Not a DataTable: the columns come from whatever sheet the user picked, and the rows
             have no id — DataTable needs `T extends { id: string }`. So it stays raw and carries
             the raw-table contract instead: a keyboard-reachable scroller with a name. */}
-        <div className="table-scroll overflow-x-auto border border-line rounded-lg" tabIndex={0} role="region" aria-label="תצוגה מקדימה של הקובץ">
+        <div className="table-scroll overflow-x-auto border border-line rounded-lg" tabIndex={0} role="region" aria-label={t('onboarding.aria_label_2')}>
           <table className="w-full">
             <thead className="table-head"><tr>{sheet.headers.map((h) => <th key={h} scope="col" className="th">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-line-soft">
@@ -665,9 +687,9 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
         </div>
 
         <div className="flex justify-between gap-2">
-          <button className="btn-secondary" onClick={reset}>קובץ אחר</button>
+          <button className="btn-secondary" onClick={reset}>{t('onboarding.text_13')}</button>
           <button className="btn-primary" disabled={missingRequired.length > 0} onClick={buildPreview}>
-            תצוגה מקדימה <ChevronLeft size={ICON.sm} aria-hidden="true" />
+            {t('onboarding.preview')} <ChevronLeft size={ICON.sm} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -680,8 +702,8 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
       {children}
       <div className="rounded-lg border border-dashed border-line-strong py-10 text-center">
         <FileSpreadsheet size={ICON.hero} className="text-ink-ghost mx-auto mb-3" aria-hidden="true" />
-        <p className="text-sm text-ink-soft mb-4">בחר קובץ Excel (xlsx/xls) או CSV. תוכל להתאים עמודות ולראות תצוגה מקדימה לפני שמירה.</p>
-        <button className="btn-primary" onClick={() => fileRef.current?.click()}><Upload size={ICON.sm} aria-hidden="true" /> בחירת קובץ</button>
+        <p className="text-sm text-ink-soft mb-4">{t('onboarding.text_14')}</p>
+        <button className="btn-primary" onClick={() => fileRef.current?.click()}><Upload size={ICON.sm} aria-hidden="true" /> {t('onboarding.click')}</button>
         <input ref={fileRef} type="file" hidden accept=".xlsx,.xls,.csv"
           onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
       </div>
@@ -690,19 +712,20 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
 }
 
 function SkippedPanel({ skipped }: { skipped: { row: number; reason: string }[] }) {
+  const { t } = useT();
   const groups = groupSkipped(skipped);
   return (
     <Note tone="await">
       <div className="w-full">
         <div className="flex items-center gap-2 text-sm font-medium">
-          <AlertTriangle size={ICON.sm} aria-hidden="true" /> {skipped.length === 1 ? 'שורה אחת דולגה' : `${skipped.length} שורות דולגו`}
+          <AlertTriangle size={ICON.sm} aria-hidden="true" /> {skipped.length === 1 ? t('onboarding.oneRowSkipped') : t('onboarding.rowsSkipped', { count: skipped.length })}
         </div>
         <ul className="mt-2 space-y-1 text-xs">
           {groups.map((g) => (
             <li key={g.reason}>
               <b>{g.reason}</b> — {g.rows.length === 1
-                ? `שורה ${g.rows[0]}`
-                : `${g.rows.length} שורות (${g.rows.slice(0, 8).join(', ')}${g.rows.length > 8 ? ` ועוד ${g.rows.length - 8}` : ''})`}
+                ? t('onboarding.rowN', { row: g.rows[0] })
+                : t('onboarding.rowList', { count: g.rows.length, rows: g.rows.slice(0, 8).join(', ') + (g.rows.length > 8 ? t('onboarding.andMore', { more: g.rows.length - 8 }) : '') })}
             </li>
           ))}
         </ul>
@@ -725,15 +748,15 @@ function StepHeading({ icon, title, subtitle }: { icon: ReactNode; title: string
 
 /* ================= step 3 — suppliers ================= */
 
-const SUPPLIER_FIELDS: readonly FieldSpec[] = [
-  { key: 'name', label: 'שם הספק', aliases: ['ספק', 'supplier', 'name'], required: true },
-  { key: 'tax_id', label: 'ח.פ / עוסק', aliases: ['חפ', 'עוסק', 'tax id', 'vat'] },
-  { key: 'contact_name', label: 'איש קשר', aliases: ['contact', 'נציג'] },
-  { key: 'phone', label: 'טלפון', aliases: ['phone', 'נייד'] },
-  { key: 'email', label: 'אימייל', aliases: ['email', 'מייל', 'דואל'] },
-  { key: 'address', label: 'כתובת', aliases: ['address', 'עיר'] },
-  { key: 'payment_terms', label: 'תנאי תשלום', aliases: ['payment terms', 'תנאים'] },
-  { key: 'min_order_amount', label: 'מינימום הזמנה', aliases: ['מינימום', 'min order'] },
+const supplierFields = (t: (key: TKey) => string): readonly FieldSpec[] => [
+  { key: 'name', label: t('onboarding.fieldSupplierName'), aliases: ['שם הספק', 'ספק', 'supplier', 'name'], required: true },
+  { key: 'tax_id', label: t('onboarding.fieldTaxId'), aliases: ['ח.פ / עוסק', 'חפ', 'עוסק', 'tax id', 'vat'] },
+  { key: 'contact_name', label: t('onboarding.fieldContact'), aliases: ['איש קשר', 'contact', 'נציג'] },
+  { key: 'phone', label: t('onboarding.fieldPhone'), aliases: ['טלפון', 'phone', 'נייד'] },
+  { key: 'email', label: t('onboarding.fieldEmail'), aliases: ['אימייל', 'email', 'מייל', 'דואל'] },
+  { key: 'address', label: t('onboarding.fieldAddress'), aliases: ['כתובת', 'address', 'עיר'] },
+  { key: 'payment_terms', label: t('onboarding.fieldPaymentTerms'), aliases: ['תנאי תשלום', 'payment terms', 'תנאים'] },
+  { key: 'min_order_amount', label: t('onboarding.fieldMinOrder'), aliases: ['מינימום הזמנה', 'מינימום', 'min order'] },
 ];
 
 interface SupplierDraft extends ImportRow {
@@ -801,6 +824,7 @@ function ManualSuppliers({ onAdded }: { onAdded: (supplier: QuickCreatedSupplier
 }
 
 function SuppliersStep({ onDone }: { onDone: () => void }) {
+  const { t } = useT();
   const { profile } = useAuth();
   const existingSupplierKeys = useRef<Set<string>>(new Set());
   /** Bumped by a manual add so the sheet import's duplicate check sees the new name too. */
@@ -818,14 +842,14 @@ function SuppliersStep({ onDone }: { onDone: () => void }) {
     const seen = new Set<string>();
     return mapRows<SupplierDraft>(rows, (r, rowNumber) => {
       const name = cellText(r, cols.name);
-      if (!name) return skipRow('שורה ללא שם ספק');
+      if (!name) return skipRow(t('onboarding.skipRow'));
       const key = nameKey(name);
-      if (existing.has(key)) return skipRow('ספק בשם זה כבר קיים במערכת');
-      if (seen.has(key)) return skipRow('שם ספק חוזר פעמיים בקובץ');
+      if (existing.has(key)) return skipRow(t('onboarding.has_2'));
+      if (seen.has(key)) return skipRow(t('onboarding.has_3'));
       seen.add(key);
 
       const min = cellNumber(r, cols.min_order_amount);
-      if (min != null && (min < 0 || min > 10_000_000)) return skipRow('מינימום הזמנה מחוץ לטווח סביר');
+      if (min != null && (min < 0 || min > 10_000_000)) return skipRow(t('onboarding.skipRow_2'));
 
       return {
         id: `r${rowNumber}`,
@@ -839,7 +863,7 @@ function SuppliersStep({ onDone }: { onDone: () => void }) {
         payment_terms: cellText(r, cols.payment_terms, 80) || null,
         min_order_amount: min,
       };
-    });
+    }, t('importSheet.invalidRow'));
   };
 
   async function commit(rows: SupplierDraft[]): Promise<string[]> {
@@ -858,20 +882,20 @@ function SuppliersStep({ onDone }: { onDone: () => void }) {
         status: 'active',
       })));
       if (res.error) {
-        throw new Error(`${inserted} ספקים נוצרו, ואז הייבוא נעצר: ${res.error.message}`);
+        throw new Error(t('onboarding.suppliersImportStopped', { count: inserted, message: res.error.message }));
       }
       inserted += part.length;
     }
-    return [`נוצרו ${inserted} ספקים.`];
+    return [t('onboarding.suppliersCreated', { count: inserted })];
   }
 
   const columns: Column<SupplierDraft>[] = [
-    { key: 'name', header: 'שם הספק', render: (r) => <span className="font-medium text-ink">{r.name}</span> },
-    { key: 'contact', header: 'איש קשר', render: (r) => r.contact_name ?? '—' },
-    { key: 'phone', header: 'טלפון', render: (r) => <span dir="ltr">{r.phone ?? '—'}</span> },
-    { key: 'email', header: 'אימייל', render: (r) => <span dir="ltr">{r.email ?? '—'}</span> },
-    { key: 'terms', header: 'תנאי תשלום', render: (r) => r.payment_terms ?? '—' },
-    { key: 'min', header: 'מינ׳ הזמנה', className: 'num', render: (r) => (r.min_order_amount != null ? r.min_order_amount.toFixed(2) : '—') },
+    { key: 'name', header: t('onboarding.text_15'), render: (r) => <span className="font-medium text-ink">{r.name}</span> },
+    { key: 'contact', header: t('onboarding.text_16'), render: (r) => r.contact_name ?? '—' },
+    { key: 'phone', header: t('onboarding.text_17'), render: (r) => <span dir="ltr">{r.phone ?? '—'}</span> },
+    { key: 'email', header: t('onboarding.text_18'), render: (r) => <span dir="ltr">{r.email ?? '—'}</span> },
+    { key: 'terms', header: t('onboarding.text_19'), render: (r) => r.payment_terms ?? '—' },
+    { key: 'min', header: t('onboarding.toFixed'), className: 'num', render: (r) => (r.min_order_amount != null ? r.min_order_amount.toFixed(2) : '—') },
   ];
 
   if (loading) return <SkeletonList rows={4} />;
@@ -881,23 +905,23 @@ function SuppliersStep({ onDone }: { onDone: () => void }) {
     <div className="space-y-5">
       <StepHeading
         icon={<Truck size={ICON.md} aria-hidden="true" />}
-        title="הספקים שלך"
-        subtitle="אפשר להעלות רשימה מקובץ, ואפשר פשוט להקליד. ספק שכבר קיים במערכת באותו שם לא ייווצר פעמיים."
+        title={t('onboarding.title_7')}
+        subtitle={t('onboarding.subtitle_5')}
       />
       <ManualSuppliers onAdded={(supplier) => {
         existingSupplierKeys.current.add(nameKey(supplier.name));
         setManualAdds((count) => count + 1);
       }} />
       <SheetImport
-        fields={SUPPLIER_FIELDS}
+        fields={supplierFields(t)}
         parse={parse}
         columns={columns}
         commit={commit}
-        confirmMessage={(n) => `ייווצרו ${n} ספקים חדשים. אפשר לערוך או להשבית אותם אחר כך במסך הספקים.`}
+        confirmMessage={(n) => t('onboarding.suppliersConfirm', { count: n })}
         onDone={onDone}>
         <p className="text-sm text-ink-soft">
-          העמודה היחידה שחייבת להיות מופיעה היא <b>שם הספק</b>. כל היתר — ח.פ, איש קשר, טלפון, אימייל, כתובת,
-          תנאי תשלום ומינימום הזמנה — אופציונליים וניתן להשלים אותם ידנית בהמשך.
+          {t('onboarding.onlyRequiredColumn')} <b>{t('onboarding.text_20')}</b>{t('onboarding.allTheRest')}
+          {t('onboarding.text_21')}
         </p>
       </SheetImport>
     </div>
@@ -906,13 +930,13 @@ function SuppliersStep({ onDone }: { onDone: () => void }) {
 
 /* ================= step 4 — products + price list ================= */
 
-const PRODUCT_FIELDS: readonly FieldSpec[] = [
-  { key: 'name', label: 'שם המוצר', aliases: ['מוצר', 'product', 'פריט'], required: true },
-  { key: 'category', label: 'קטגוריה', aliases: ['category', 'קבוצה'] },
-  { key: 'unit', label: 'יחידת מידה', aliases: ['יחידה', 'unit'] },
-  { key: 'sku', label: 'מק״ט', aliases: ['sku', 'קטלוגי', 'code'] },
-  { key: 'supplier', label: 'ספק', aliases: ['supplier'] },
-  { key: 'price', label: 'מחיר', aliases: ['price', 'עלות'] },
+const productFields = (t: (key: TKey) => string): readonly FieldSpec[] => [
+  { key: 'name', label: t('onboarding.fieldProductName'), aliases: ['שם המוצר', 'מוצר', 'product', 'פריט'], required: true },
+  { key: 'category', label: t('onboarding.fieldCategory'), aliases: ['קטגוריה', 'category', 'קבוצה'] },
+  { key: 'unit', label: t('onboarding.fieldUnit'), aliases: ['יחידת מידה', 'יחידה', 'unit'] },
+  { key: 'sku', label: t('onboarding.fieldSku'), aliases: ['מק״ט', 'sku', 'קטלוגי', 'code'] },
+  { key: 'supplier', label: t('onboarding.fieldSupplier'), aliases: ['ספק', 'supplier'] },
+  { key: 'price', label: t('onboarding.fieldPrice'), aliases: ['מחיר', 'price', 'עלות'] },
 ];
 
 interface ProductDraft extends ImportRow {
@@ -935,6 +959,7 @@ interface CatalogIndex {
 }
 
 function ProductsStep({ onDone }: { onDone: () => void }) {
+  const { errorText, locale, t } = useT();
   const { org } = useAuth();
   const { profile } = useAuth();
   const index = useRef<CatalogIndex>({ products: new Map(), suppliers: new Map(), categories: new Map() });
@@ -960,11 +985,11 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
     const seen = new Set<string>();
     return mapRows<ProductDraft>(rows, (r, rowNumber) => {
       const name = cellText(r, cols.name);
-      if (!name) return skipRow('שורה ללא שם מוצר');
+      if (!name) return skipRow(t('onboarding.skipRow_3'));
 
       const supplier = cellText(r, cols.supplier);
       const pairKey = `${nameKey(name)}|${nameKey(supplier)}`;
-      if (seen.has(pairKey)) return skipRow('שילוב מוצר וספק חוזר פעמיים בקובץ');
+      if (seen.has(pairKey)) return skipRow(t('onboarding.has_4'));
       seen.add(pairKey);
 
       const rawPrice = cellNumber(r, cols.price);
@@ -973,18 +998,18 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
 
       if (rawPrice != null && (rawPrice <= 0 || rawPrice > 1_000_000)) {
         price = null;
-        priceNote = 'מחיר מחוץ לטווח סביר — לא ייובא';
+        priceNote = t('onboarding.text_22');
       } else if (rawPrice != null && !supplier) {
         price = null;
-        priceNote = 'מחיר ללא ספק — לא ייובא';
+        priceNote = t('onboarding.text_23');
       } else if (rawPrice != null && !suppliers.has(nameKey(supplier))) {
         price = null;
-        priceNote = 'ספק לא נמצא בשם מדויק — המחיר לא ייובא';
+        priceNote = t('onboarding.text_24');
       }
 
       const existingProductId = products.get(nameKey(name)) ?? null;
       if (existingProductId && price == null) {
-        return skipRow('מוצר קיים כבר במערכת ואין בשורה מחיר חדש');
+        return skipRow(t('onboarding.skipRow_4'));
       }
 
       return {
@@ -992,14 +1017,14 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
         row: rowNumber,
         name,
         category: cellText(r, cols.category, 80),
-        unit: normalizeUnitInput(cellText(r, cols.unit, 40) || 'יחידה'),
+        unit: normalizeUnitInput(cellText(r, cols.unit, 40) || t('onboarding.normalizeUnitInput')),
         sku: cellText(r, cols.sku, 60) || null,
         supplier,
         price,
         existingProductId,
         priceNote,
       };
-    });
+    }, t('importSheet.invalidRow'));
   };
 
   async function commit(rows: ProductDraft[], reason?: string): Promise<string[]> {
@@ -1014,7 +1039,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
       const res = await supabase.from('categories')
         .insert(newCategoryNames.map((name, i) => ({ org_id: orgId, name, sort: categories.size + i })))
         .select('id, name');
-      if (res.error) throw new Error(`יצירת הקטגוריות נכשלה: ${res.error.message}`);
+      if (res.error) throw new Error(t('onboarding.categoriesCreateFailed', { message: res.error.message }));
       for (const c of (res.data ?? []) as { id: string; name: string }[]) categories.set(nameKey(c.name), c.id);
     }
 
@@ -1030,7 +1055,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
         sku: r.sku,
         active: true,
       }))).select('id, name');
-      if (res.error) throw new Error(`${createdProducts} מוצרים נוצרו, ואז הייבוא נעצר: ${res.error.message}`);
+      if (res.error) throw new Error(t('onboarding.productsImportStopped', { count: createdProducts, message: res.error.message }));
       for (const p of (res.data ?? []) as { id: string; name: string }[]) products.set(nameKey(p.name), p.id);
       createdProducts += part.length;
     }
@@ -1057,7 +1082,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
       });
       if (imported.error) {
         priceFailures.push(...priceRows.map((row) => row.sourceRow));
-        priceBatchError = errMsg(imported.error);
+        priceBatchError = errorText(imported.error);
       } else {
         const result = imported.data as { created: number; updated: number; unchanged: number };
         pricesSet = result.created + result.updated;
@@ -1065,31 +1090,34 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
       }
     }
 
-    const lines = [`נוצרו ${createdProducts} מוצרים.`];
-    if (newCategoryNames.length) lines.push(`נוצרו ${newCategoryNames.length} קטגוריות חדשות מתוך הקובץ.`);
-    lines.push(pricesSet ? `נקבעו ${pricesSet} מחירי ספק.` : 'לא נקבעו מחירי ספק בייבוא הזה.');
-    if (pricesUnchanged) lines.push(`${pricesUnchanged} מחירים כבר היו זהים ולא יצרו היסטוריה נוספת.`);
+    const lines = [t('onboarding.productsCreated', { count: createdProducts })];
+    if (newCategoryNames.length) lines.push(t('onboarding.categoriesCreated', { count: newCategoryNames.length }));
+    lines.push(pricesSet ? t('onboarding.pricesSet', { count: pricesSet }) : t('onboarding.noPricesSet'));
+    if (pricesUnchanged) lines.push(t('onboarding.pricesUnchanged', { count: pricesUnchanged }));
     if (priceFailures.length) {
-      lines.push(`${priceFailures.length} מחירים לא נשמרו (שורות ${priceFailures.slice(0, 10).join(', ')}${priceFailures.length > 10 ? ' ועוד' : ''}).${priceBatchError ? ` הסיבה: ${priceBatchError}` : ''}`);
+      lines.push(t('onboarding.pricesFailed', {
+        count: priceFailures.length,
+        rows: priceFailures.slice(0, 10).join(', ') + (priceFailures.length > 10 ? t('onboarding.andMoreShort') : ''),
+      }) + (priceBatchError ? t('onboarding.failureReason', { message: priceBatchError }) : ''));
     }
     return lines;
   }
 
   const columns: Column<ProductDraft>[] = [
-    { key: 'name', header: 'מוצר', render: (r) => <span className="font-medium text-ink">{r.name}</span> },
-    { key: 'cat', header: 'קטגוריה', render: (r) => r.category || '—' },
-    { key: 'unit', header: 'יחידה', render: (r) => formatUnit(r.unit) },
-    { key: 'sku', header: 'מק״ט', render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
-    { key: 'supplier', header: 'ספק', render: (r) => r.supplier || '—' },
+    { key: 'name', header: t('onboarding.text_25'), render: (r) => <span className="font-medium text-ink">{r.name}</span> },
+    { key: 'cat', header: t('onboarding.text_26'), render: (r) => r.category || '—' },
+    { key: 'unit', header: t('onboarding.formatUnit'), render: (r) => formatUnit(r.unit, locale) },
+    { key: 'sku', header: t('onboarding.text_27'), render: (r) => <span dir="ltr">{r.sku ?? '—'}</span> },
+    { key: 'supplier', header: t('onboarding.text_28'), render: (r) => r.supplier || '—' },
     // The imported sheet belongs to one supplier, and its prices are that supplier's own
     // currency. During onboarding no supplier has been created with any other, so this is the
     // organisation's — stated, not assumed away.
-    { key: 'price', header: 'מחיר', className: 'num', render: (r) => fmtMoneyExact(r.price, org?.base_currency) },
+    { key: 'price', header: t('onboarding.fmtMoneyExact'), className: 'num', render: (r) => fmtMoneyExact(r.price, org?.base_currency) },
     {
-      key: 'note', header: 'הערה',
+      key: 'note', header: t('onboarding.text_29'),
       render: (r) => {
         if (r.priceNote) return <span className="text-await-fg text-xs">{r.priceNote}</span>;
-        if (r.existingProductId) return <span className="text-ink-muted text-xs">מוצר קיים — יתווסף רק המחיר</span>;
+        if (r.existingProductId) return <span className="text-ink-muted text-xs">{t('onboarding.text_30')}</span>;
         return <span className="text-ink-ghost">—</span>;
       },
     },
@@ -1118,22 +1146,22 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
       {counts?.suppliers === 0 && (
         <Note tone="await">
           <span className="min-w-0 flex-1">
-            עדיין אין ספקים במערכת, ולכן עמודת מחיר לא תיובא — המוצרים ייווצרו בלי מחירון.
-            אפשר לחזור לשלב הספקים, או לייבא מחירון בהמשך ממסך <b>מחירונים</b>.
+            {t('onboarding.text_31')}
+            {t('onboarding.backToSuppliersOrLater')} <b>{t('onboarding.text_32')}</b>.
           </span>
         </Note>
       )}
       <SheetImport
-        fields={PRODUCT_FIELDS}
+        fields={productFields(t)}
         parse={parse}
         columns={columns}
         commit={commit}
         requireReason
-        confirmMessage={(n) => `${n} שורות ייכתבו למערכת: מוצרים חדשים, קטגוריות חסרות ומחירי ספק.`}
+        confirmMessage={(n) => t('onboarding.productsConfirm', { count: n })}
         onDone={onDone}>
         <p className="text-sm text-ink-soft">
-          חובה למפות <b>שם המוצר</b> בלבד. אם הקובץ מכיל גם <b>ספק</b> וגם <b>מחיר</b>, ייבנה מהם מחירון —
-          שם הספק חייב להיות זהה לשם שכבר קיים במערכת.
+          {t('onboarding.mustMap')} <b>{t('onboarding.text_33')}</b> {t('onboarding.text_34')} <b>{t('onboarding.text_35')}</b> {t('onboarding.text_36')} <b>{t('onboarding.text_37')}</b>{t('onboarding.priceListBuilt')}
+          {t('onboarding.text_38')}
         </p>
       </SheetImport>
     </div>
@@ -1148,41 +1176,42 @@ function DoneStep({ counts, skipped, onGoToStep, onFinish }: {
   onGoToStep: (i: number) => void;
   onFinish: () => void;
 }) {
+  const { t } = useT();
   const navigate = useNavigate();
   const pending = STEPS.filter((s) => s.key !== 'done' && skipped.includes(s.key));
 
   const tiles: { label: string; value: number; to: string }[] = [
-    { label: 'קטגוריות', value: counts.categories, to: '/products' },
-    { label: 'ספקים', value: counts.suppliers, to: '/suppliers' },
-    { label: 'מוצרים', value: counts.products, to: '/products' },
-    { label: 'מחירי ספק', value: counts.prices, to: '/prices' },
+    { label: t('onboarding.text_39'), value: counts.categories, to: '/products' },
+    { label: t('onboarding.text_40'), value: counts.suppliers, to: '/suppliers' },
+    { label: t('onboarding.text_41'), value: counts.products, to: '/products' },
+    { label: t('onboarding.text_42'), value: counts.prices, to: '/prices' },
   ];
 
   return (
     <div className="space-y-5">
       <StepHeading
         icon={<CheckCircle2 size={ICON.md} aria-hidden="true" />}
-        title="הכול מוכן"
-        subtitle="זה מה שיש כרגע במערכת. אפשר להתחיל לעבוד ולהשלים את השאר בכל רגע."
+        title={t('onboarding.title_9')}
+        subtitle={t('onboarding.subtitle_7')}
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {tiles.map((t) => (
-          <Card as={Link} key={t.label} to={t.to} className="card-link-hover">
-            <div className="text-xs font-medium text-ink-muted">{t.label}</div>
-            <div className="kpi-value num text-start text-ink mt-1">{t.value}</div>
+        {tiles.map((tile) => (
+          <Card as={Link} key={tile.label} to={tile.to} className="card-link-hover">
+            <div className="text-xs font-medium text-ink-muted">{tile.label}</div>
+            <div className="kpi-value num text-start text-ink mt-1">{tile.value}</div>
           </Card>
         ))}
       </div>
 
       {pending.length > 0 && (
         <SubPanel>
-          <div className="text-sm font-medium text-ink-mid">שלבים שדילגת עליהם</div>
+          <div className="text-sm font-medium text-ink-mid">{t('onboarding.text_43')}</div>
           <div className="flex flex-wrap gap-2 mt-2">
             {pending.map((s) => (
               <button key={s.key} type="button" className="btn-secondary btn-sm"
                 onClick={() => onGoToStep(STEPS.findIndex((x) => x.key === s.key))}>
-                {s.label}
+                {t(s.labelKey)}
               </button>
             ))}
           </div>
@@ -1190,17 +1219,17 @@ function DoneStep({ counts, skipped, onGoToStep, onFinish }: {
       )}
 
       <div className="rounded-lg border border-line px-4 py-3 text-sm text-ink-soft">
-        <div className="font-medium text-ink-mid mb-1">מה הלאה</div>
+        <div className="font-medium text-ink-mid mb-1">{t('onboarding.text_44')}</div>
         <ul className="space-y-1">
-          <li>· הוספת משתמשי צוות והרשאות — מסך <Link className="link" to="/settings">הגדרות</Link>.</li>
-          <li>· עדכון מחירון או ייבוא נוסף — מסך <Link className="link" to="/prices">מחירונים</Link>.</li>
-          <li>· יצירת ההזמנה הראשונה — מסך <Link className="link" to="/orders/new">הזמנה חדשה</Link>.</li>
+          <li>{t('onboarding.text_45')} <Link className="link" to="/settings">{t('onboarding.text_46')}</Link>.</li>
+          <li>{t('onboarding.text_47')} <Link className="link" to="/prices">{t('onboarding.text_48')}</Link>.</li>
+          <li>{t('onboarding.text_49')} <Link className="link" to="/orders/new">{t('onboarding.text_50')}</Link>.</li>
         </ul>
       </div>
 
       <div className="flex justify-end">
         <button className="btn-primary" onClick={() => { onFinish(); navigate('/dashboard'); }}>
-          כניסה למערכת <ChevronLeft size={ICON.sm} aria-hidden="true" />
+          {t('onboarding.enterSystem')} <ChevronLeft size={ICON.sm} aria-hidden="true" />
         </button>
       </div>
     </div>

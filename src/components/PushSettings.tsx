@@ -1,10 +1,11 @@
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 import { useEffect, useState } from 'react';
 import { BellRing, SlidersHorizontal } from 'lucide-react';
 import { ICON, Note, Skeleton, useToast } from './ui';
 import { getPushStatus, subscribePush, unsubscribePush, isIOS, isStandalone, type PushStatus } from '../lib/push';
 import { useQuery } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
-import { toHebrewError } from '../lib/errors';
 import {
   NOTIFICATION_EVENT_LABELS,
   readNotificationPreferences,
@@ -20,12 +21,12 @@ import {
 
 // Status → the one line shown under the toggle. 'no-key' is a legitimate environment
 // (dev without VAPID keys) and must read as configuration, not as a failure.
-const PUSH_STATUS_LINE: Record<PushStatus, string> = {
-  unsupported: 'הדפדפן הזה אינו תומך בהתראות דחיפה',
-  'no-key': 'לא מוגדר בסביבה זו',
-  denied: 'ההתראות נחסמו בהגדרות הדפדפן — כדי להפעיל יש לאפשר אותן שם',
-  subscribed: 'התראות פעילות במכשיר זה',
-  'not-subscribed': 'התראות כבויות במכשיר זה',
+const PUSH_STATUS_KEY: Record<PushStatus, TKey> = {
+  unsupported: 'pushSettings.statusUnsupported',
+  'no-key': 'pushSettings.statusNoKey',
+  denied: 'pushSettings.statusDenied',
+  subscribed: 'pushSettings.statusSubscribed',
+  'not-subscribed': 'pushSettings.statusNotSubscribed',
 };
 
 /**
@@ -50,6 +51,7 @@ export function PushSection() {
 }
 
 function PushDeviceCard() {
+  const { t } = useT();
   const toast = useToast();
   const [status, setStatus] = useState<PushStatus | null>(null); // null = still checking
   const [busy, setBusy] = useState(false);
@@ -66,29 +68,31 @@ function PushDeviceCard() {
     setBusy(true);
     const err = status === 'subscribed' ? await unsubscribePush() : await subscribePush();
     setBusy(false);
-    if (err) toast(err, 'error');
-    else toast(status === 'subscribed' ? 'ההתראות כובו במכשיר זה' : 'ההתראות הופעלו במכשיר זה');
+    if (err) toast(t(err), 'error');
+    else toast(status === 'subscribed' ? t('pushSettings.toast') : t('pushSettings.toast_2'));
     setStatus(await getPushStatus());
   }
 
   return (
     <div className="card card-pad space-y-4">
       <div>
-        <h2 className="section-title flex items-center gap-2"><BellRing size={ICON.md} /> התראות דחיפה</h2>
+        <h2 className="section-title flex items-center gap-2"><BellRing size={ICON.md} /> {t('pushSettings.text')}</h2>
         <p className="text-sm text-ink-muted mt-1">
-          התראה מיידית למכשיר זה על עליית מחיר, חשד לחשבונית כפולה ותשלום שמתקרב לפירעון או עבר אותו.
+          {t('pushSettings.text_2')}
         </p>
       </div>
 
       {iosNeedsInstall && (
         <Note tone="info">
-          ב-iPhone יש להוסיף את האפליקציה למסך הבית (שיתוף ← הוספה למסך הבית) לפני הפעלת התראות
+          {t('pushSettings.text_3')}
         </Note>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-sm text-ink-muted">
-          {status === null ? 'בודק…' : iosNeedsInstall ? 'התראות יהיו זמינות לאחר ההוספה למסך הבית' : PUSH_STATUS_LINE[status]}
+          {status === null
+            ? t('pushSettings.text_4')
+            : iosNeedsInstall ? t('pushSettings.text_5') : t(PUSH_STATUS_KEY[status])}
         </span>
         {(canToggle || iosNeedsInstall) && (
           <button
@@ -96,7 +100,7 @@ function PushDeviceCard() {
             disabled={busy || iosNeedsInstall || !canToggle}
             onClick={() => void toggle()}
           >
-            {status === 'subscribed' ? 'כבה התראות במכשיר זה' : 'הפעל התראות למכשיר זה'}
+            {status === 'subscribed' ? t('pushSettings.text_6') : t('pushSettings.text_7')}
           </button>
         )}
       </div>
@@ -108,16 +112,16 @@ function PushDeviceCard() {
 
 type Channel = 'push' | 'inapp';
 
-const CHANNEL_LABEL: Record<Channel, string> = {
-  push: 'דחיפה למכשיר',
-  inapp: 'התראה במערכת',
+const CHANNEL_KEY: Record<Channel, TKey> = {
+  push: 'pushSettings.channelPush',
+  inapp: 'pushSettings.channelInApp',
 };
 
 /** The one line under each event, stating what the current pair of switches actually does. */
-function deliveryLine(preference: NotificationPreference): string {
-  if (!preference.inapp_enabled) return 'לא נרשמת בפעמון — ולכן גם לא נשלחת דחיפה למכשיר';
-  if (!preference.push_enabled) return 'מופיעה בפעמון ובמסך ההתראות; לא נשלחת דחיפה למכשיר';
-  return 'מופיעה בפעמון ובמסך ההתראות, ונשלחת גם כדחיפה למכשיר';
+function deliveryKey(preference: NotificationPreference): TKey {
+  if (!preference.inapp_enabled) return 'pushSettings.deliveryNeither';
+  if (!preference.push_enabled) return 'pushSettings.deliveryInAppOnly';
+  return 'pushSettings.deliveryBoth';
 }
 
 /**
@@ -136,6 +140,7 @@ function deliveryLine(preference: NotificationPreference): string {
  * discover which switch silences the audit trail.
  */
 export function NotificationMatrix() {
+  const { errorText, t } = useT();
   const toast = useToast();
   const { data, loading, error, refetch } = useQuery<NotificationPreference[]>(
     () => readNotificationPreferences(),
@@ -155,9 +160,9 @@ export function NotificationMatrix() {
         channel === 'inapp' ? next : preference.inapp_enabled,
       );
       await refetch();
-      toast('העדפת ההתראה נשמרה');
+      toast(t('pushSettings.toast_3'));
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setPending(null);
     }
@@ -167,20 +172,19 @@ export function NotificationMatrix() {
     <div className="card card-pad space-y-4">
       <div>
         <h2 className="section-title flex items-center gap-2">
-          <SlidersHorizontal size={ICON.md} /> אילו התראות מגיעות אליי
+          <SlidersHorizontal size={ICON.md} /> {t('pushSettings.whichAlertsHeading')}
         </h2>
         <p className="text-sm text-ink-muted mt-1">
-          ההגדרה היא שלך בלבד ותקפה בכל המכשירים. כברירת מחדל הכול פעיל.
-          <strong className="font-medium"> כיבוי הדחיפה מסיר רק את ההתראה למכשיר</strong> — ההתראה
-          ממשיכה להופיע בפעמון ובמסך ההתראות. כיבוי ההתראה במערכת הוא זה שמסיר את הרשומה עצמה, ואיתה
-          גם הדחיפה.
+          {t('pushSettings.text_8')}{' '}
+          <strong className="font-medium">{t('pushSettings.text_9')}</strong>{' '}
+          {t('pushSettings.pushOffKeepsRecord')}
         </p>
       </div>
 
       {/* The house skeleton idiom (ui.tsx:41-48): one spoken "טוען", not three narrated boxes. */}
       {loading && (
         <div className="space-y-3" role="status" aria-busy="true">
-          <span className="sr-only">טוען העדפות התראה</span>
+          <span className="sr-only">{t('pushSettings.text_12')}</span>
           <Skeleton className="h-12" />
           <Skeleton className="h-12" />
           <Skeleton className="h-12" />
@@ -199,12 +203,12 @@ export function NotificationMatrix() {
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-x-4 sm:gap-y-2">
                   <div className="min-w-0 sm:flex-1">
                     <div className="text-sm font-medium text-ink-body">
-                      {copy?.label ?? preference.event_code}
+                      {copy ? t(copy.labelKey) : preference.event_code}
                     </div>
-                    {copy && <div className="text-xs text-ink-muted mt-0.5">{copy.detail}</div>}
-                    <div className="text-xs text-ink-soft mt-1">{deliveryLine(preference)}</div>
+                    {copy && <div className="text-xs text-ink-muted mt-0.5">{t(copy.detailKey)}</div>}
+                    <div className="text-xs text-ink-soft mt-1">{t(deliveryKey(preference))}</div>
                     {!preference.configured && (
-                      <div className="text-xs text-ink-faint mt-0.5">ברירת המחדל — לא שינית כאן דבר</div>
+                      <div className="text-xs text-ink-faint mt-0.5">{t('pushSettings.text_13')}</div>
                     )}
                   </div>
                   {/* ONE column below `sm`, not two — measured, not a preference. The row's content
@@ -223,12 +227,12 @@ export function NotificationMatrix() {
                           type="button"
                           role="switch"
                           aria-checked={on}
-                          aria-label={`${CHANNEL_LABEL[channel]} — ${copy?.label ?? preference.event_code}`}
+                          aria-label={t('pushSettings.channelAria', { channel: t(CHANNEL_KEY[channel]), event: copy ? t(copy.labelKey) : preference.event_code })}
                           disabled={busy}
                           className={on ? 'btn-secondary' : 'btn-ghost'}
                           onClick={() => void change(preference, channel, !on)}
                         >
-                          {CHANNEL_LABEL[channel]} · {on ? 'פעיל' : 'כבוי'}
+                          {t(CHANNEL_KEY[channel])} · {on ? t('pushSettings.text_14') : t('pushSettings.text_15')}
                         </button>
                       );
                     })}

@@ -1,5 +1,5 @@
+import { useT } from '../i18n/LocaleProvider';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { toHebrewError } from '../errors';
 import { askAssistant } from './client';
 import type { AssistantHistoryView, AssistantRunResult } from './contracts';
 
@@ -77,6 +77,7 @@ export function assistantAuthorizationFingerprint(
 export function useAssistantRunSession(
   authorizationFingerprint = 'assistant-authorization-unscoped',
 ): AssistantRunSession {
+  const { errorText: resolveError, locale, t } = useT();
   const [question, setQuestion] = useState('');
   const [submittedQuestion, setSubmittedQuestion] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -127,6 +128,10 @@ export function useAssistantRunSession(
           conversation_id: conversationId,
           // Context only — the server treats it as neither authorization nor a data filter.
           route: route?.slice(0, 200) ?? null,
+          // The language this person is reading the product in, so the answer, the help steps
+          // and the warnings under them arrive in it (`OPEN-DECISIONS #283`). A preference, not
+          // an identity claim — see the field’s docblock in `contracts.ts`.
+          locale,
         });
         if (
           authorizationEpochRef.current !== authorizationEpoch ||
@@ -135,7 +140,7 @@ export function useAssistantRunSession(
         setTurns((previous) => [...previous, { question: trimmed, result: next }]);
         setConversationId(next.conversation_id);
         setQuestion('');
-        setAnnouncement('הבדיקה הושלמה');
+        setAnnouncement(t('assistantRun.done'));
         return true;
       } catch (error) {
         if (
@@ -144,8 +149,8 @@ export function useAssistantRunSession(
         ) return false;
         const raw = error instanceof Error ? error.message : String(error);
         setRawError(raw);
-        setErrorText(toHebrewError(error));
-        setAnnouncement('הבקשה נכשלה');
+        setErrorText(resolveError(error));
+        setAnnouncement(t('assistantRun.failed'));
         return false;
       } finally {
         if (
@@ -193,7 +198,9 @@ export function useAssistantRunSession(
     setRawError(null);
     setErrorText(null);
     setAnnouncement(
-      restored.length === 1 ? 'הבדיקה הקודמת נטענה' : `נטענה שיחה קודמת עם ${restored.length} בדיקות`,
+      restored.length === 1
+        ? t('assistantRun.restoredOne')
+        : t('assistantRun.restoredMany', { count: restored.length }),
     );
     return true;
   }, [authorizationFingerprint]);

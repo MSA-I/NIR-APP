@@ -1,3 +1,5 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
+import type { TKey } from '../../lib/i18n/t';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { Check, ChevronLeft, Copy, NotepadText, ThumbsDown, ThumbsUp } from 'lucide-react';
@@ -9,12 +11,11 @@ import type {
   SourceReference,
 } from '../../lib/assistant/contracts';
 import {
-  ASSISTANT_DRAFT_LABEL,
+  ASSISTANT_DRAFT_LABEL_KEY,
   ASSISTANT_DRAFT_ROLES,
 } from '../../lib/assistant/contracts';
 import { assistantSourceRouteDecision } from '../../lib/assistant/routeAccess';
 import { sendAssistantFeedback } from '../../lib/assistant/client';
-import { toHebrewError } from '../../lib/errors';
 import { fmtDate, fmtDateTime, fmtMoneyExact, fmtNum } from '../../lib/format';
 import { Disclosure, ICON, Note } from '../ui';
 
@@ -47,41 +48,38 @@ function factValueText(fact: Fact): string {
 }
 
 /**
- * Honest Hebrew for each named absence. `undefined_business_rule` says the PRODUCT has not
- * defined the rule — not that there is no data; the two would send the user in opposite
- * directions.
+ * An honest sentence for each named absence, in the reader's language. The SERVER names the
+ * reason and the name never moves; the sentence is copy. `undefined_business_rule` says the
+ * PRODUCT has not defined the rule — not that there is no data; the two would send the user in
+ * opposite directions.
  */
-const NO_ANSWER_TEXT: Record<NoAnswerReason, string> = {
-  no_capability:
-    'אין לעוזר יכולת בדוקה שעונה על השאלה הזו, ולכן לא ניתנה תשובה. הנתונים עצמם זמינים במסכים.',
-  not_measured:
-    'הבדיקה רצה אך לא הצליחה למדוד את הנתון המבוקש, ולכן אין תשובה — וזה שונה מ"הכול תקין".',
-  not_permitted:
-    'ההרשאות של החשבון הזה אינן מגיעות לנתונים שהשאלה דורשת, ולכן לא ניתנה תשובה.',
-  undefined_business_rule:
-    'המוצר טרם הגדיר את הכלל העסקי שהשאלה נשענת עליו, ולכן העוזר לא ענה. אין פירוש הדבר שאין נתונים.',
+const NO_ANSWER_KEY: Record<NoAnswerReason, TKey> = {
+  no_capability: 'answerView.noAnswerNoCapability',
+  not_measured: 'answerView.noAnswerNotMeasured',
+  not_permitted: 'answerView.noAnswerNotPermitted',
+  undefined_business_rule: 'answerView.noAnswerUndefinedBusinessRule',
 };
 
-const ASSISTANT_TOOL_LABELS: Record<string, string> = {
-  get_business_summary: 'סיכום עסקי',
-  get_open_alerts: 'התראות פתוחות',
-  get_dashboard_snapshot: 'תמונת מצב ניהולית',
-  get_purchase_metrics: 'מדדי רכש',
-  explain_invoice_block: 'סיבת חסימת חשבונית',
-  compare_order_receipt_invoice: 'התאמת הזמנה, קבלה וחשבונית',
-  get_open_credits: 'זיכויים פתוחים',
-  get_orders_awaiting_confirmation: 'הזמנות שממתינות לאישור ספק',
-  get_unmatched_bank_transactions: 'תנועות בנק לא מותאמות',
-  get_supplier_performance: 'ביצועי ספקים',
-  get_inventory_risk: 'סיכון מלאי',
-  get_payment_exposure: 'חשיפה לתשלום',
-  find_entity: 'חיפוש רשומה',
-  get_product_help: 'עזרה על המוצר',
-  draft_supplier_reminder: 'נתוני תזכורת לספק',
+const ASSISTANT_TOOL_KEYS: Record<string, TKey> = {
+  get_business_summary: 'answerView.toolBusinessSummary',
+  get_open_alerts: 'answerView.toolOpenAlerts',
+  get_dashboard_snapshot: 'answerView.toolDashboardSnapshot',
+  get_purchase_metrics: 'answerView.toolPurchaseMetrics',
+  explain_invoice_block: 'answerView.toolInvoiceBlock',
+  compare_order_receipt_invoice: 'answerView.toolThreeWayMatch',
+  get_open_credits: 'answerView.toolOpenCredits',
+  get_orders_awaiting_confirmation: 'answerView.toolOrdersAwaitingConfirmation',
+  get_unmatched_bank_transactions: 'answerView.toolUnmatchedBankTransactions',
+  get_supplier_performance: 'answerView.toolSupplierPerformance',
+  get_inventory_risk: 'answerView.toolInventoryRisk',
+  get_payment_exposure: 'answerView.toolPaymentExposure',
+  find_entity: 'answerView.toolFindEntity',
+  get_product_help: 'answerView.toolProductHelp',
+  draft_supplier_reminder: 'answerView.toolSupplierReminder',
 };
 
-function toolLabel(tool: string): string {
-  return ASSISTANT_TOOL_LABELS[tool] ?? 'בדיקה תפעולית';
+function toolKey(tool: string): TKey {
+  return ASSISTANT_TOOL_KEYS[tool] ?? 'answerView.toolFallback';
 }
 
 function SourceLink({ source, onNavigate, active = false }: {
@@ -89,6 +87,7 @@ function SourceLink({ source, onNavigate, active = false }: {
   onNavigate: () => void;
   active?: boolean;
 }) {
+  const { t } = useT();
   if (!source.route) return <span className="text-xs text-ink-muted">{source.label}</span>;
   return (
     <Link
@@ -98,7 +97,7 @@ function SourceLink({ source, onNavigate, active = false }: {
       className={`inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-xs font-medium text-action-on-soft underline underline-offset-2 hover:bg-surface-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-focus ${active ? 'bg-surface-selected text-ink' : ''}`}
     >
       <ChevronLeft size={ICON.sm} aria-hidden="true" />
-      פתיחת מקור: {source.label}
+      {t('answerView.text')} {source.label}
     </Link>
   );
 }
@@ -114,6 +113,7 @@ function EvidenceTrail({ facts, sources, sourceIsCurrent, onNavigate }: {
   sourceIsCurrent: (source: SourceReference) => boolean;
   onNavigate: () => void;
 }) {
+  const { t } = useT();
   return (
     <>
       {facts.length > 0 && (
@@ -122,7 +122,7 @@ function EvidenceTrail({ facts, sources, sourceIsCurrent, onNavigate }: {
             <div key={fact.id} className="flex items-start justify-between gap-3">
               <dt className="min-w-0 text-xs text-ink-muted">
                 <span className="block">{fact.label}</span>
-                <span className="mt-0.5 block text-xs">נמדד ל־<span className="num">{fmtDateTime(fact.as_of)}</span></span>
+                <span className="mt-0.5 block text-xs">{t('answerView.fmtDateTime')}<span className="num">{fmtDateTime(fact.as_of)}</span></span>
               </dt>
               <dd className="num shrink-0 text-sm font-medium text-ink-mid">{factValueText(fact)}</dd>
             </div>
@@ -159,6 +159,7 @@ function DraftBlock({ text, facts, sources, sourceIsCurrent, onNavigate }: {
   sourceIsCurrent: (source: SourceReference) => boolean;
   onNavigate: () => void;
 }) {
+  const { t } = useT();
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   async function copyDraft() {
@@ -173,19 +174,19 @@ function DraftBlock({ text, facts, sources, sourceIsCurrent, onNavigate }: {
 
   return (
     <section
-      aria-label={ASSISTANT_DRAFT_LABEL}
+      aria-label={t(ASSISTANT_DRAFT_LABEL_KEY)}
       className="rounded-2xl border-s-2 border-action-line bg-action-wash p-3"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-xs font-medium text-ink-soft">
-          <NotepadText size={ICON.sm} aria-hidden="true" /> {ASSISTANT_DRAFT_LABEL}
+          <NotepadText size={ICON.sm} aria-hidden="true" /> {t(ASSISTANT_DRAFT_LABEL_KEY)}
         </h3>
         <button
           type="button"
           className="btn-ghost btn-sm"
           onClick={() => void copyDraft()}
         >
-          <Copy size={ICON.xs} aria-hidden="true" /> העתקת הטיוטה
+          <Copy size={ICON.xs} aria-hidden="true" /> {t('answerView.copyDraft')}
         </button>
       </div>
       <p dir="auto" className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink-body">
@@ -195,20 +196,21 @@ function DraftBlock({ text, facts, sources, sourceIsCurrent, onNavigate }: {
           shown it. Empty while idle; `sr-only` keeps the resting state out of the layout. */}
       <p role="status" className={copy === 'idle' ? 'sr-only' : 'mt-1.5 text-xs text-ink-muted'}>
         {copy === 'copied'
-          ? 'הטיוטה הועתקה. אפשר להדביק אותה בכלי ההתכתבות שלך.'
+          ? t('answerView.text_2')
           : copy === 'failed'
-            ? 'לא ניתן להעתיק אוטומטית — יש לסמן את הטקסט ולהעתיק ידנית.'
+            ? t('answerView.text_3')
             : ''}
       </p>
       <EvidenceTrail facts={facts} sources={sources} sourceIsCurrent={sourceIsCurrent} onNavigate={onNavigate} />
       <p className="mt-2 text-xs text-ink-muted">
-        זו הצעת ניסוח בלבד. המערכת אינה פונה לספק במקומך ואינה בוחרת נמען או ערוץ.
+        {t('answerView.text_4')}
       </p>
     </section>
   );
 }
 
 function FeedbackControl({ runId }: { runId: string }) {
+  const { errorText, t } = useT();
   const [state, setState] = useState<'idle' | 'busy' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -220,7 +222,7 @@ function FeedbackControl({ runId }: { runId: string }) {
       setState('sent');
     } catch (e) {
       // Write path: translated here, where it is shown (the useQuery.ts convention).
-      setError(toHebrewError(e));
+      setError(errorText(e));
       setState('idle');
     }
   }
@@ -228,18 +230,18 @@ function FeedbackControl({ runId }: { runId: string }) {
   if (state === 'sent') {
     return (
       <p className="flex items-center gap-1.5 text-xs text-ink-muted">
-        <Check size={ICON.xs} className="text-done-fg" aria-hidden="true" /> המשוב נרשם. תודה.
+        <Check size={ICON.xs} className="text-done-fg" aria-hidden="true" /> {t('answerView.feedbackRecorded')}
       </p>
     );
   }
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs text-ink-muted">האם התשובה עזרה?</span>
+      <span className="text-xs text-ink-muted">{t('answerView.text_5')}</span>
       <button type="button" className="btn-ghost btn-sm" disabled={state === 'busy'} onClick={() => void send(true)}>
-        <ThumbsUp size={ICON.xs} aria-hidden="true" /> מועיל
+        <ThumbsUp size={ICON.xs} aria-hidden="true" /> {t('answerView.helpful')}
       </button>
       <button type="button" className="btn-ghost btn-sm" disabled={state === 'busy'} onClick={() => void send(false)}>
-        <ThumbsDown size={ICON.xs} aria-hidden="true" /> לא מועיל
+        <ThumbsDown size={ICON.xs} aria-hidden="true" /> {t('answerView.notHelpful')}
       </button>
       {error && <span role="alert" className="text-xs text-alert-fg">{error}</span>}
     </div>
@@ -252,12 +254,13 @@ export default function AnswerView({ result, role, onNavigate }: {
   /** A source link leaves the panel for the screen it names; the dialog closes itself here. */
   onNavigate: () => void;
 }) {
+  const { t } = useT();
   const location = useLocation();
   const factById = new Map(result.facts.map((fact) => [fact.id, fact]));
   const sourceById = new Map(result.sources
     .filter((source) => assistantSourceRouteDecision(source, role) === 'allowed')
     .map((source) => [source.id, source]));
-  const incompleteTools = result.tools_used.filter((tool) => !tool.complete).map((tool) => toolLabel(tool.tool));
+  const incompleteTools = result.tools_used.filter((tool) => !tool.complete).map((tool) => t(toolKey(tool.tool)));
   const sourceIsCurrent = (source: SourceReference): boolean => {
     if (!source.route) return false;
     const [path, query = ''] = source.route.split('?', 2);
@@ -270,8 +273,9 @@ export default function AnswerView({ result, role, onNavigate }: {
       {!result.complete && (
         <Note tone="alert">
           <span className="min-w-0 flex-1">
-            הבדיקה חלקית{incompleteTools.length > 0 ? ` — לא הושלמו: ${incompleteTools.join(', ')}` : ''}.
-            הממצאים שכן נבדקו מוצגים, אך אי אפשר לקבוע שהכול תקין.
+            {incompleteTools.length > 0
+              ? t('answerView.partialCheckWithTools', { tools: incompleteTools.join(', ') })
+              : t('answerView.partialCheck')}
           </span>
         </Note>
       )}
@@ -325,19 +329,19 @@ export default function AnswerView({ result, role, onNavigate }: {
         result.answer.no_answer_reason === 'not_measured'
           ? (
             <p className="text-sm font-medium leading-relaxed text-alert-fg">
-              {NO_ANSWER_TEXT[result.answer.no_answer_reason]}
+              {t(NO_ANSWER_KEY[result.answer.no_answer_reason])}
             </p>
           )
           : (
             <Note tone="info">
-              <span className="min-w-0 flex-1">{NO_ANSWER_TEXT[result.answer.no_answer_reason]}</span>
+              <span className="min-w-0 flex-1">{t(NO_ANSWER_KEY[result.answer.no_answer_reason])}</span>
             </Note>
           )
       )}
 
       {result.answer.next_steps.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="text-xs font-medium text-ink-muted">להמשך:</span>
+          <span className="text-xs font-medium text-ink-muted">{t('answerView.text_7')}</span>
           {result.answer.next_steps.map((step) => {
             const source = sourceById.get(step.source_id);
             return source ? (
@@ -354,12 +358,12 @@ export default function AnswerView({ result, role, onNavigate }: {
 
       {result.tools_used.length > 0 && (
         <div className="rounded-2xl ring-1 ring-line-soft">
-          <Disclosure title="היקף הבדיקה" count={result.tools_used.length}>
+          <Disclosure title={t('answerView.title')} count={result.tools_used.length}>
             <ul className="space-y-1 text-xs text-ink-muted">
               {result.tools_used.map((tool) => (
                 <li key={tool.tool} className="flex items-center justify-between gap-3">
-                  <span>{toolLabel(tool.tool)}</span>
-                  <span>{tool.complete ? 'הושלם' : 'חלקי'}</span>
+                  <span>{t(toolKey(tool.tool))}</span>
+                  <span>{tool.complete ? t('answerView.text_8') : t('answerView.text_9')}</span>
                 </li>
               ))}
             </ul>

@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { Link } from 'react-router';
 import { type ReactNode } from 'react';
 import { ArrowUpLeft, Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RefreshCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
@@ -89,16 +90,17 @@ const currenciesBeside = (entries: MoneyAmount[] | null | undefined, base: strin
 // stays neutral on purpose: more purchasing is not "good" or "bad", so the trend hues (which are
 // business claims) do not apply here.
 function DeltaChip({ value }: { value: number }) {
+  const { t } = useT();
   const rounded = Math.round(value);
   const Icon = rounded > 0 ? TrendingUp : rounded < 0 ? TrendingDown : null;
   return (
     <span
       className="ms-auto inline-flex items-center gap-1 text-xs font-medium text-ink-mid"
-      title="מול אותם ימים בחודש הקודם"
+      title={t('dashboard.title')}
     >
       {Icon && <Icon size={ICON.xs} aria-hidden="true" />}
       <span className="num" dir="ltr">{rounded > 0 ? '+' : ''}{rounded}%</span>
-      <span className="sr-only">מול אותם ימים בחודש הקודם</span>
+      <span className="sr-only">{t('dashboard.text')}</span>
     </span>
   );
 }
@@ -124,13 +126,16 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
   /** The one currency this tile's figure is in. A tile shows one number, so it shows one unit. */
   currency: string | null | undefined;
 }) {
+  const { t } = useT();
   // T7.2 (Crextio strip): the icon sits flat beside the label — no chip box; the tone lives on
   // the figure alone.
   const toneCls = { done: 'text-done-fg', await: 'text-await-fg', idle: 'text-ink' }[tone];
   const hasSpark = value != null && spark != null && spark.filter((point) => point.count > 0).length >= 2;
   const linkLabel = [
     `${title}: ${glanceMoney(value, currency)}`,
-    delta != null ? `${Math.round(delta) > 0 ? '+' : ''}${Math.round(delta)}% מול אותם ימים בחודש הקודם` : null,
+    delta != null
+      ? t('dashboard.deltaVsPreviousMonth', { delta: `${Math.round(delta) > 0 ? '+' : ''}${Math.round(delta)}` })
+      : null,
     context,
     aux,
   ].filter(Boolean).join('. ');
@@ -154,9 +159,9 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
       {/* One context line, never the same sentence twice: the start slot names the period (or the
           delta's baseline), the end slot exists only when it adds a DIFFERENT fact. */}
       <div className="mt-1 flex items-center justify-between gap-3 text-xs text-ink-muted">
-        <span>{delta != null ? 'מול אותם ימים בחודש הקודם' : context}</span>
-        {(aux ?? (hasSpark ? 'מגמת 8 שבועות' : null)) && (
-          <span className="min-w-0 text-end leading-snug">{aux ?? 'מגמת 8 שבועות'}</span>
+        <span>{delta != null ? t('dashboard.text_2') : context}</span>
+        {(aux ?? (hasSpark ? t('dashboard.text_3') : null)) && (
+          <span className="min-w-0 text-end leading-snug">{aux ?? t('dashboard.text_4')}</span>
         )}
       </div>
     </Card>
@@ -213,13 +218,14 @@ function RoleQueueCard({ queue, total, className = '' }: {
   total: number;
   className?: string;
 }) {
+  const { t } = useT();
   const rows = [
-    { label: 'הזמנות ממתינות לקבלת סחורה (ניר)', count: queue.receiving, to: '/orders?status=open' },
-    { label: 'חשבוניות לבדיקה (מזכירות)', count: queue.invoicesToReview, to: '/invoices?review=received' },
-    { label: 'טיוטות דרישת תשלום (מזכירות)', count: queue.prDrafts, to: '/payment-requests' },
-    { label: 'דרישות לאישור הנהלה', count: queue.prPendingApproval, to: '/payment-requests?status=pending_approval' },
-    { label: 'חריגים בחומרה גבוהה (הנהלה)', count: queue.highExceptions, to: '/exceptions?status=open&severity=high' },
-    { label: 'חשבוניות שטרם הועברו לרו״ח', count: queue.notSentToAccountant, to: '/invoices?export=not_sent' },
+    { label: t('dashboard.text_5'), count: queue.receiving, to: '/orders?status=open' },
+    { label: t('dashboard.text_6'), count: queue.invoicesToReview, to: '/invoices?review=received' },
+    { label: t('dashboard.text_7'), count: queue.prDrafts, to: '/payment-requests' },
+    { label: t('dashboard.text_8'), count: queue.prPendingApproval, to: '/payment-requests?status=pending_approval' },
+    { label: t('dashboard.text_9'), count: queue.highExceptions, to: '/exceptions?status=open&severity=high' },
+    { label: t('dashboard.text_10'), count: queue.notSentToAccountant, to: '/invoices?export=not_sent' },
   ];
   // The reference's dot-matrix rendering, on TRUE data: one dot per open task in the queue,
   // capped at 12 (the number beside carries the exact count; the dots are aria-hidden texture).
@@ -227,16 +233,16 @@ function RoleQueueCard({ queue, total, className = '' }: {
   return (
     <section className={`relative rounded-3xl bg-shell p-4 text-shell-ink shadow-dashboard sm:p-5 ${className}`} aria-labelledby="role-queues-title">
       {/* The reference's corner circle-chip: a round paper-on-dark arrow to the full queue. */}
-      <Link to="/alerts" aria-label="לכל ההתראות והמשימות"
+      <Link to="/alerts" aria-label={t('dashboard.aria_label')}
         className="group absolute end-3 top-3 grid size-11 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
         <span className="grid size-9 place-items-center rounded-full bg-shell-ink/10 text-shell-ink transition-colors group-hover:bg-shell-ink/20">
           <ArrowUpLeft size={ICON.sm} aria-hidden="true" />
         </span>
       </Link>
-      <h2 id="role-queues-title" className="section-title pe-16 text-shell-ink">משימות לפי תפקיד</h2>
+      <h2 id="role-queues-title" className="section-title pe-16 text-shell-ink">{t('dashboard.text_11')}</h2>
       <div className="mt-1.5 flex items-baseline gap-2">
         <span className="kpi-hero num text-shell-ink">{total}</span>
-        <span className="text-xs text-shell-ink-dim">משימות פתוחות בכל התורים</span>
+        <span className="text-xs text-shell-ink-dim">{t('dashboard.text_12')}</span>
       </div>
       <ul className="mt-3 space-y-0.5 text-sm">
         {rows.map((row) => (
@@ -289,10 +295,11 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
   noDateCount: number;
   className?: string;
 }) {
+  const { t } = useT();
   const distinctSuppliers = (rows: DeliveryOrder[]) => new Set(rows.map((o) => o.supplier_id)).size;
   const groups = [
-    { key: 'today', label: 'היום', rows: today, suppliers: distinctSuppliers(today), emptyLabel: 'אין אספקות מתוכננות להיום' },
-    { key: 'tomorrow', label: 'מחר', rows: tomorrow, suppliers: distinctSuppliers(tomorrow), emptyLabel: 'אין אספקות מתוכננות למחר' },
+    { key: 'today', label: t('dashboard.distinctSuppliers'), rows: today, suppliers: distinctSuppliers(today), emptyLabel: t('dashboard.distinctSuppliers_2') },
+    { key: 'tomorrow', label: t('dashboard.distinctSuppliers_3'), rows: tomorrow, suppliers: distinctSuppliers(tomorrow), emptyLabel: t('dashboard.distinctSuppliers_4') },
   ];
   const total = today.length + tomorrow.length;
 
@@ -300,22 +307,22 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
   // a quiet card could read "all clear" while five undated orders are still in flight.
   const noDateHint = noDateCount > 0 ? (
     <Link to="/orders" className="inline-flex min-h-11 items-center text-xs text-ink-muted hover:text-ink-mid active:text-ink">
-      <span className="num me-1">{noDateCount}</span> הזמנות פתוחות ללא תאריך אספקה
+      <span className="num me-1">{noDateCount}</span> {t('dashboard.openOrdersNoDate')}
     </Link>
   ) : null;
 
   return (
     <Card as="section" className={className} aria-labelledby="deliveries-title">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-        <h2 id="deliveries-title" className="section-title">אספקות היום ומחר</h2>
-        <p className="text-xs text-ink-muted">ספקים שאמורים לספק סחורה</p>
+        <h2 id="deliveries-title" className="section-title">{t('dashboard.text_13')}</h2>
+        <p className="text-xs text-ink-muted">{t('dashboard.text_14')}</p>
       </div>
       {/* Measured zero for both days → the existing all-clear idiom (the zone never hides). */}
       {total === 0 ? (
         <div className="mt-2 border-t border-line-soft pt-2">
           <div className="flex min-h-11 items-center gap-2 text-sm text-ink-muted">
             <Check size={ICON.sm} className="shrink-0 text-done-fg" aria-hidden="true" />
-            <span>אין אספקות מתוכננות להיום ומחר</span>
+            <span>{t('dashboard.text_15')}</span>
             <span className="badge-idle num ms-auto">0</span>
           </div>
           {noDateHint}
@@ -327,7 +334,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
               <span key={group.key} className="flex items-baseline gap-1.5">
                 <span className="text-xs font-medium text-ink-muted">{group.label}</span>
                 <span className={`kpi-value-compact num ${group.suppliers > 0 ? 'text-ink' : 'text-ink-muted'}`}>{group.suppliers}</span>
-                <span className="text-xs text-ink-muted">{group.suppliers === 1 ? 'ספק' : 'ספקים'}</span>
+                <span className="text-xs text-ink-muted">{group.suppliers === 1 ? t('dashboard.text_16') : t('dashboard.text_17')}</span>
               </span>
             ))}
             <ChevronDown size={ICON.sm} className="ms-auto shrink-0 text-ink-ghost transition-transform group-open:rotate-180" aria-hidden="true" />
@@ -381,9 +388,10 @@ const pad = (n: number) => String(n).padStart(2, '0');
 // the money strip, the trend card and the folded detail card. One role="status" region with a single "טוען"
 // for screen readers — SkeletonRegion is not exported, so we compose the house pattern from Skeleton.
 function DashboardSkeleton() {
+  const { t } = useT();
   return (
     <div role="status" aria-busy="true" className="dashboard-depth">
-      <span className="sr-only">טוען</span>
+      <span className="sr-only">{t('dashboard.text_18')}</span>
 
       {/* header: page title + freshness stamp */}
       <div className="flex items-center justify-between">
@@ -500,6 +508,7 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
+  const { statusLabel, t } = useT();
   const { profile, org } = useAuth();
   const baseCurrency = org?.base_currency ?? null;
   /* The tier mark on the greeting line is owner-only, and the gate is repeated HERE rather than
@@ -718,7 +727,7 @@ export default function Dashboard() {
       if (it.order.currency !== baseCurrency) continue;
       const orderDate = localDateKey(it.order.created_at);
       if (orderDate < monthStart || orderDate > todayISO) continue;
-      const cat = it.product?.category?.name ?? 'ללא קטגוריה';
+      const cat = it.product?.category?.name ?? t('dashboard.text_19');
       byCat.set(cat, (byCat.get(cat) ?? 0) + it.qty * it.unit_price);
     }
     const categories = topCategoriesWithOther([...byCat.entries()].map(([name, total]) => ({ name, total })))
@@ -812,9 +821,9 @@ export default function Dashboard() {
   // browser title — so the greeting never desyncs the wayfinding catalogue. full_name can be ''
   // during offline bootstrap; a nameless greeting falls back to the plain screen name.
   const businessHour = Number(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: BUSINESS_TIME_ZONE }).format(new Date()));
-  const dayGreeting = businessHour < 5 ? 'לילה טוב' : businessHour < 12 ? 'בוקר טוב' : businessHour < 18 ? 'צהריים טובים' : 'ערב טוב';
+  const dayGreeting = businessHour < 5 ? t('dashboard.text_38') : businessHour < 12 ? t('dashboard.text_39') : businessHour < 18 ? t('dashboard.text_40') : t('dashboard.text_41');
   const firstName = profile?.full_name?.trim().split(/\s+/)[0] ?? '';
-  const pageTitle = firstName ? `${dayGreeting}, ${firstName}` : 'מרכז הבקרה';
+  const pageTitle = firstName ? t('dashboard.greetingWithName', { greeting: dayGreeting, name: firstName }) : t('dashboard.controlCentre');
   const taskTotal = data ? Object.values(data.queue).reduce((sum, count) => sum + count, 0) : 0;
   const weeklyComparison = (() => {
     if (!data) return [];
@@ -840,15 +849,22 @@ export default function Dashboard() {
   const dueSplitTotal = data?.dueWindow && data.dueWindow.overdueAmount != null && data.dueWindow.dueWithin7Amount != null
     ? data.dueWindow.overdueAmount + data.dueWindow.dueWithin7Amount
     : 0;
-  /* The open-balance list is ONE currency group (the organisation own first). A supplier owed
-     in another currency appears in that currency group, never converted into this one. */
-  const topBalancesCurrency = data?.topBalancesByCurrency.find((group) => group.rows === data.topBalances)?.currency ?? baseCurrency;
-  const monthlyAria = data ? `הוצאות רכש לפי חודש: ${data.monthly.length
-    ? data.monthly.map((point) => `${point.month} ${point.count ? fmtMoneyExact(point.total, baseCurrency) : 'אין חשבוניות'}`).join(', ')
-    : 'אין נתוני חשבוניות לתקופה'}` : '';
-  const weeklyAria = `השוואת רכש ותשלומים לפי שבוע: ${weeklyComparison.map((point) => (
-    `${point.week}, רכש ${point.purchases == null ? 'אין רשומות' : fmtMoneyExact(point.purchases, baseCurrency)}, תשלומים ${point.payments == null ? 'אין רשומות' : fmtMoneyExact(point.payments, baseCurrency)}`
-  )).join('; ')}`;
+  /* The open-balance list is ONE currency group (the organisation's own first). A supplier
+     owed in another currency appears in that group, never converted into this one. */
+  const topBalancesCurrency = data?.topBalancesByCurrency
+    .find((group) => group.rows === data.topBalances)?.currency ?? baseCurrency;
+  const monthlyAria = data ? t('dashboard.monthlyAria', {
+    points: data.monthly.length
+      ? data.monthly.map((point) => `${point.month} ${point.count ? fmtMoneyExact(point.total, baseCurrency) : t('dashboard.noInvoices')}`).join(', ')
+      : t('dashboard.noInvoiceDataForPeriod'),
+  }) : '';
+  const weeklyAria = t('dashboard.weeklyAria', {
+    points: weeklyComparison.map((point) => t('dashboard.weeklyAriaPoint', {
+      week: point.week,
+      purchases: point.purchases == null ? t('dashboard.noRecords') : fmtMoneyExact(point.purchases, baseCurrency),
+      payments: point.payments == null ? t('dashboard.noRecords') : fmtMoneyExact(point.payments, baseCurrency),
+    })).join('; '),
+  });
   const categoryEmptyMessage = data?.categories.length
     ? `נמדד רכש בסכום ${fmtMoneyExact(categoryTotal, baseCurrency)}; אין תמהיל חיובי להצגה`
     : 'אין רכש החודש';
@@ -886,7 +902,7 @@ export default function Dashboard() {
       <PageHeader title={<span className="font-normal">{pageTitle}</span>}
         meta={firstName
           ? <span className="flex flex-wrap items-center gap-2">
-            מרכז הבקרה
+            {t('dashboard.text_43')}
             {/* DESKTOP ONLY, and the first build without this printed the chip TWICE on a phone
                 dashboard — once on the header's subtitle line and again here, 120px apart. The
                 header slot is the PHONE's ruling and it holds on every screen; this line is the
@@ -901,12 +917,12 @@ export default function Dashboard() {
           <span aria-live="polite" aria-atomic="true">
             {data?.fetchedAt && (
               <span key={data.fetchedAt.getTime()} className="freshness-settle">
-                עודכן ב-<span className="num">{timeFmt.format(data.fetchedAt)}</span>
+                {t('dashboard.updatedAt')} <span className="num">{timeFmt.format(data.fetchedAt)}</span>
               </span>
             )}
           </span>
           <button className="btn-ghost btn-icon" onClick={() => void refetch()} disabled={fetching}
-            aria-label="רענון נתוני מרכז הבקרה" title="רענון">
+            aria-label={t('dashboard.aria_label_2')} title={t('dashboard.title_2')}>
               <RefreshCw size={ICON.sm} aria-hidden="true" className={fetching ? 'animate-spin ' : ''} />
           </button>
         </div>} />
@@ -920,7 +936,7 @@ export default function Dashboard() {
       {error && (
         <Note tone="alert" className="flex items-center justify-between gap-3">
           <span>{error}</span>
-          <button className="btn-ghost min-h-11 shrink-0 whitespace-nowrap" onClick={() => void refetch()}>נסה שוב</button>
+          <button className="btn-ghost min-h-11 shrink-0 whitespace-nowrap" onClick={() => void refetch()}>{t('dashboard.refetch')}</button>
         </Note>
       )}
 
@@ -934,10 +950,10 @@ export default function Dashboard() {
         <div data-tour-first-run="true">
         <Note tone="info" className="flex flex-wrap items-center justify-between gap-3">
           <span className="min-w-0 flex-1">
-            עדיין לא הוגדרו ספקים, ולכן המסכים שלמטה ריקים. אשף ההקמה ממלא קטגוריות, ספקים, מוצרים
-            ומחירון — ידנית או מקובץ Excel קיים — ואפשר לעצור ולהמשיך בכל שלב.
+            {t('dashboard.text_44')}{' '}
+            {t('dashboard.text_45')}
           </span>
-          <Link to="/onboarding" className="btn-primary min-h-11 shrink-0 whitespace-nowrap">פתיחת אשף ההקמה</Link>
+          <Link to="/onboarding" className="btn-primary min-h-11 shrink-0 whitespace-nowrap">{t('dashboard.text_46')}</Link>
         </Note>
         </div>
       )}
@@ -975,23 +991,23 @@ export default function Dashboard() {
               className="card-link-hover block min-h-24 px-4 py-3.5 sm:px-5">
               <div className="flex items-center gap-2">
                 <ReceiptText size={ICON.md} className="shrink-0 text-ink-muted" aria-hidden="true" />
-                <span className="text-xs font-medium text-ink-muted">יתרת חשבוניות פתוחות</span>
+                <span className="text-xs font-medium text-ink-muted">{t('dashboard.title_3')}</span>
               </div>
               <div className="mt-2 kpi-hero text-await-fg" dir="ltr">
                 <MoneyByCurrency amounts={data.money.openBalanceByCurrency} baseCurrency={baseCurrency} shape="rounded" />
               </div>
               <div className="mt-1 flex items-center justify-between gap-3 text-xs text-ink-muted">
-                <span>נכון לעכשיו</span>
-                <span>{data.money.openBalanceByCurrency == null ? 'אין נתונים זמינים' : `${data.money.openInvoiceCount} חשבוניות פתוחות`}</span>
+                <span>{t('dashboard.context')}</span>
+                <span>{data.money.openBalanceByCurrency == null ? t('dashboard.noDataAvailable') : `${data.money.openInvoiceCount} חשבוניות פתוחות`}</span>
               </div>
             </Card>
-            <BandStat title="שולם לספקים החודש" value={data.money.paidMonth} tone="done" to={`/payments?month=${data.money.monthKey}`}
-              icon={Banknote} context="מתחילת החודש" delta={data.money.paidDelta} currency={baseCurrency}
-              spark={data.paidWeekly} sparkLabel="מגמת תשלומים לספקים בשמונה השבועות האחרונים" />
-            <BandStat title="נרכש החודש" value={data.money.purchasedMonth} to="/orders?status=all"
-              icon={ShoppingCart} context="מתחילת החודש" delta={data.money.purchasedDelta} currency={baseCurrency}
+            <BandStat title={t('dashboard.paidThisMonth')} value={data.money.paidMonth} tone="done" to={`/payments?month=${data.money.monthKey}`}
+              icon={Banknote} context={t('dashboard.context_2')} delta={data.money.paidDelta} currency={baseCurrency}
+              spark={data.paidWeekly} sparkLabel={t('dashboard.sparkLabel')} />
+            <BandStat title={t('dashboard.title_4')} value={data.money.purchasedMonth} to="/orders?status=all"
+              icon={ShoppingCart} context={t('dashboard.context_3')} delta={data.money.purchasedDelta} currency={baseCurrency}
               aux={data.savings != null ? `חיסכון משוער ${fmtMoneyRounded(data.savings, baseCurrency)}${data.savingsPct != null ? ` · ${data.savingsPct.toFixed(0)}%` : ''}` : undefined}
-              spark={data.weekly} sparkLabel="מגמת רכש בשמונה השבועות האחרונים" />
+              spark={data.weekly} sparkLabel={t('dashboard.sparkLabel_2')} />
           </div>
           {data.otherCurrencies.length > 0 && (
             /* Said once, where the figures are, rather than repeated on every tile: the trend and
@@ -1011,7 +1027,7 @@ export default function Dashboard() {
               board heading still names the region; separation inside it is card + spacing, not
               hairlines. */}
           <section className="lg:order-5 lg:col-span-12 [--dash-step-mobile:4] [--dash-step:4]" aria-labelledby="trends-title">
-            <h2 id="trends-title" className="section-title">מגמות</h2>
+            <h2 id="trends-title" className="section-title">{t('dashboard.text_47')}</h2>
 
             <div className="mt-3 grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
               <Card as="section" className="lg:col-span-5" aria-labelledby="monthly-trend-title">
@@ -1021,13 +1037,13 @@ export default function Dashboard() {
                     monthly claim survives the on-bar labels' removal. */}
                 <div className="flex min-h-8 flex-wrap items-start justify-between gap-x-4 gap-y-2">
                   <div>
-                    <h3 id="monthly-trend-title" className="text-sm font-semibold text-ink-body">הוצאות רכש לפי חודש</h3>
-                    <p className="text-xs text-ink-muted">חשבוניות שהתקבלו בארבעת החודשים האחרונים</p>
+                    <h3 id="monthly-trend-title" className="text-sm font-semibold text-ink-body">{t('dashboard.text_48')}</h3>
+                    <p className="text-xs text-ink-muted">{t('dashboard.text_49')}</p>
                   </div>
                   {data.headline.current != null && (
                     <div className="flex items-start text-xs">
                       <div className="pe-3 text-end">
-                        <div className="text-ink-muted">החודש</div>
+                        <div className="text-ink-muted">{t('dashboard.text_50')}</div>
                         <div className="flex items-baseline gap-1.5">
                           <span className="num text-sm font-semibold text-ink">{glanceMoney(data.headline.current, baseCurrency)}</span>
                           {/* Neutral ink, same reasoning as DeltaChip above: this is the month's
@@ -1043,7 +1059,7 @@ export default function Dashboard() {
                       </div>
                       {data.headline.previous != null && (
                         <div className="border-s border-line-soft ps-3 text-end">
-                          <div className="text-ink-muted">חודש קודם</div>
+                          <div className="text-ink-muted">{t('dashboard.text_51')}</div>
                           <div className="num text-sm font-semibold text-ink-mid">{glanceMoney(data.headline.previous, baseCurrency)}</div>
                         </div>
                       )}
@@ -1058,8 +1074,8 @@ export default function Dashboard() {
               </Card>
 
               <Card as="section" className="lg:col-span-4" aria-labelledby="category-trend-title">
-                <h3 id="category-trend-title" className="text-sm font-semibold text-ink-body">תמהיל הרכש החודש</h3>
-                <p className="text-xs text-ink-muted">ארבע הקטגוריות הגדולות וכל היתר</p>
+                <h3 id="category-trend-title" className="text-sm font-semibold text-ink-body">{t('dashboard.text_52')}</h3>
+                <p className="text-xs text-ink-muted">{t('dashboard.text_53')}</p>
                 <CategoryDonut slices={data.categories} total={categoryTotal} currency={baseCurrency} ariaLabel={categoriesAria} emptyMessage={categoryEmptyMessage} />
               </Card>
 
@@ -1076,11 +1092,11 @@ export default function Dashboard() {
                   to render. It gets a two-segment split bar, NOT the ring back: the objection
                   above was never "no graphic", it was "not a percentage of a window we chose". */}
               <Card as="section" className="lg:col-span-3" aria-labelledby="due-window-title">
-                <h3 id="due-window-title" className="text-sm font-semibold text-ink-body">לתשלום בשבוע הקרוב</h3>
-                <p className="text-xs text-ink-muted">דרישות תשלום פעילות, כולל מה שכבר באיחור</p>
+                <h3 id="due-window-title" className="text-sm font-semibold text-ink-body">{t('dashboard.text_54')}</h3>
+                <p className="text-xs text-ink-muted">{t('dashboard.text_55')}</p>
                 {data.dueWindow == null ? (
                   <p className="mt-4 flex min-h-24 items-center text-sm text-ink-muted sm:min-h-40">
-                    אין דרישות תשלום פעילות עם תאריך פירעון
+                    {t('dashboard.text_56')}
                   </p>
                 ) : data.dueWindow.overdueAmount == null || data.dueWindow.dueWithin7Amount == null ? (
                   /* Active dated requests exist, but none of them is in the organisation's own
@@ -1124,15 +1140,15 @@ export default function Dashboard() {
                       </p>
                     </div>
                     <Link className="link self-start text-sm" to="/payment-requests?due=soon">
-                      כל דרישות התשלום בחלון
+                      {t('dashboard.text_57')}
                     </Link>
                   </div>
                 )}
               </Card>
 
               <Card as="section" className="lg:col-span-12" aria-labelledby="weekly-trend-title">
-                <h3 id="weekly-trend-title" className="text-sm font-semibold text-ink-body">רכש מול תשלומים</h3>
-                <p className="text-xs text-ink-muted">שמונה השבועות האחרונים</p>
+                <h3 id="weekly-trend-title" className="text-sm font-semibold text-ink-body">{t('dashboard.text_58')}</h3>
+                <p className="text-xs text-ink-muted">{t('dashboard.text_59')}</p>
                 {/* The series names ride the ends of their own lines now — no legend row. The
                     zero policy keeps the lines continuous, so a window with NO activity at all is
                     passed as [] to keep the honest empty state (two flat zero lines are not data). */}
@@ -1152,13 +1168,13 @@ export default function Dashboard() {
               reads as a tile of the reference grid; the role queues left this fold for the dark
               card above, so nothing here is said twice. */}
           <section className="lg:order-6 lg:col-span-12 [--dash-step-mobile:5] [--dash-step:5]" aria-labelledby="operations-title">
-            <h2 id="operations-title" className="section-title">תמונת מצב תפעולית</h2>
+            <h2 id="operations-title" className="section-title">{t('dashboard.text_60')}</h2>
             <Card className="mt-3">
-              <OperationsDisclosure title="חריגים פתוחים" count={data.exceptionCount}
-                summary={data.queue.highExceptions ? `${data.queue.highExceptions} בחומרה גבוהה` : undefined}
-                empty="אין חריגים פתוחים כרגע">
+              <OperationsDisclosure title={t('dashboard.title_5')} count={data.exceptionCount}
+                summary={data.queue.highExceptions ? t('dashboard.highSeverity', { count: data.queue.highExceptions }) : undefined}
+                empty={t('dashboard.empty')}>
                 <div className="flex justify-end">
-                  <Link to="/exceptions?status=open" className="btn-ghost min-h-11 text-xs">לכל החריגים <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
+                  <Link to="/exceptions?status=open" className="btn-ghost min-h-11 text-xs">{t('dashboard.text_61')} <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
                 </div>
                 <ul className="divide-y divide-line-soft">
                   {data.exceptions.map((exception) => (
@@ -1166,7 +1182,7 @@ export default function Dashboard() {
                       <Link to={`/exceptions?id=${exception.id}`} className="block min-h-11 rounded-lg px-2 py-2 text-sm hover:bg-surface-hover active:bg-surface-selected">
                         <div className="flex items-center gap-2">
                           <StatusBadge meta={SEVERITY[exception.severity]} />
-                          <span className="text-xs text-ink-muted">{EXCEPTION_TYPE[exception.type]}</span>
+                          <span className="text-xs text-ink-muted">{statusLabel(EXCEPTION_TYPE[exception.type])}</span>
                         </div>
                         <div className="mt-0.5 break-words text-ink-mid sm:truncate">{exception.title}</div>
                       </Link>
@@ -1177,28 +1193,28 @@ export default function Dashboard() {
                   <div className="mt-3 flex flex-wrap gap-x-4 border-t border-line-soft pt-2 text-xs">
                     {data.meta.suspectedDup > 0 && (
                       <Link to="/exceptions?type=duplicate_invoice,duplicate_payment" className="inline-flex min-h-11 items-center text-ink-muted hover:text-ink-mid active:text-ink">
-                        חשד לכפילות: <span className="num font-medium">{data.meta.suspectedDup}</span>
+                        {t('dashboard.suspectedDuplicates')} <span className="num font-medium">{data.meta.suspectedDup}</span>
                       </Link>
                     )}
                     {data.meta.unmatchedBank > 0 && (
                       <Link to="/bank?status=unmatched" className="inline-flex min-h-11 items-center text-ink-muted hover:text-ink-mid active:text-ink">
-                        תנועות בנק לא מותאמות: <span className="num font-medium">{data.meta.unmatchedBank}</span>
+                        {t('dashboard.unmatchedBank')} <span className="num font-medium">{data.meta.unmatchedBank}</span>
                       </Link>
                     )}
                     {data.meta.suggestedBank > 0 && (
                       <Link to="/bank?status=suggested" className="inline-flex min-h-11 items-center text-ink-muted hover:text-ink-mid active:text-ink">
-                        התאמות שממתינות לאישור: <span className="num font-medium">{data.meta.suggestedBank}</span>
+                        {t('dashboard.suggestedBank')} <span className="num font-medium">{data.meta.suggestedBank}</span>
                       </Link>
                     )}
                   </div>
                 )}
               </OperationsDisclosure>
 
-              <OperationsDisclosure title="מוצרים שהתייקרו לאחרונה" count={data.priceIncreaseCount}
-                summary={data.priceIncreases[0] ? `עלייה מרבית ${data.priceIncreases[0].pct.toFixed(1)}%` : undefined}
-                empty="אין התייקרויות אחרונות">
+              <OperationsDisclosure title={t('dashboard.title_6')} count={data.priceIncreaseCount}
+                summary={data.priceIncreases[0] ? t('dashboard.largestIncrease', { percent: data.priceIncreases[0].pct.toFixed(1) }) : undefined}
+                empty={t('dashboard.empty_2')}>
                 <div className="flex justify-end">
-                  <Link to="/prices?increases=1" className="btn-ghost min-h-11 text-xs">לכל המחירונים <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
+                  <Link to="/prices?increases=1" className="btn-ghost min-h-11 text-xs">{t('dashboard.text_62')} <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
                 </div>
                 <ul className="divide-y divide-line-soft">
                   {data.priceIncreases.map((price, index) => (
@@ -1209,7 +1225,7 @@ export default function Dashboard() {
                           <span className="ms-2 text-xs text-ink-muted">{price.supplier.name}</span>
                         </span>
                         <span className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 sm:justify-start">
-                          <span className="text-xs text-ink-muted">מ־<span className="num">{fmtMoneyExact(price.previous_price, price.currency)}</span> ל־<span className="num">{fmtMoneyExact(price.current_price, price.currency)}</span></span>
+                          <span className="text-xs text-ink-muted">{t('dashboard.fmtMoneyExact')}<span className="num">{fmtMoneyExact(price.previous_price, price.currency)}</span> {t('dashboard.fmtMoneyExact_2')}<span className="num">{fmtMoneyExact(price.current_price, price.currency)}</span></span>
                           {/* One vocabulary per element: a price that rose is a DIRECTION, so the
                               figure and its arrow both speak trend-*. The span used to be alert-fg
                               with a trend-up arrow inside it — two languages in one number. */}
@@ -1223,11 +1239,11 @@ export default function Dashboard() {
                 </ul>
               </OperationsDisclosure>
 
-              <OperationsDisclosure title="ספקים עם יתרה פתוחה" count={data.openSupplierCount}
+              <OperationsDisclosure title={t('dashboard.title_7')} count={data.openSupplierCount}
                 summary={data.topBalances[0] ? `${data.topBalances[0].name} · ${fmtMoneyExact(data.topBalances[0].balance, topBalancesCurrency)}` : undefined}
-                empty="אין יתרות פתוחות">
+                empty={t('dashboard.empty_3')}>
                 <div className="flex justify-end">
-                  <Link to="/suppliers?balance=open" className="btn-ghost min-h-11 text-xs">לכל הספקים <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
+                  <Link to="/suppliers?balance=open" className="btn-ghost min-h-11 text-xs">{t('dashboard.text_63')} <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
                 </div>
                 <ul className="divide-y divide-line-soft">
                   {data.topBalances.map((balance) => (

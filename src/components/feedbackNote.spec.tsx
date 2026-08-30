@@ -19,6 +19,7 @@ import { MemoryRouter } from 'react-router';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/msw/server';
 import { SUPABASE_URL } from '../test/msw/handlers';
+import { LocaleProvider } from '../lib/i18n/LocaleProvider';
 
 /** Real supabase-js against the MSW base URL — the wire behaviour stays real. */
 vi.mock('../lib/supabase', async () => {
@@ -56,13 +57,15 @@ import { ToastProvider } from './ui';
 
 const ROUTE = '/receiving/7';
 
-function renderButton() {
+function renderButton(locale: 'he' | 'en' = 'he') {
   return render(
-    <ToastProvider>
-      <MemoryRouter initialEntries={[ROUTE]}>
-        <FeedbackButton />
-      </MemoryRouter>
-    </ToastProvider>,
+    <LocaleProvider initialLocale={locale}>
+      <ToastProvider>
+        <MemoryRouter initialEntries={[ROUTE]}>
+          <FeedbackButton />
+        </MemoryRouter>
+      </ToastProvider>
+    </LocaleProvider>,
   );
 }
 
@@ -92,6 +95,24 @@ async function openAndSubmit(text: string) {
 beforeEach(() => { capturedShot = null; });
 
 describe('feedback note — the wire', () => {
+  it('renders the flow in English and preserves the note text', async () => {
+    const inserts: Record<string, unknown>[] = [];
+    server.use(
+      captureInsert(inserts),
+      http.post(`${SUPABASE_URL}/functions/v1/send-feedback`, () => HttpResponse.json({ ok: true })),
+    );
+    renderButton('en');
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Send a note' }));
+    await user.type(await screen.findByLabelText('Your note'), 'הטקסט שהמשתמש כתב');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByText(/The note was sent/)).toBeInTheDocument();
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0].note).toBe('הטקסט שהמשתמש כתב');
+  });
+
   it('sends the screen, the role and the viewport, and never a delivery column', async () => {
     const inserts: Record<string, unknown>[] = [];
     const sends: Record<string, unknown>[] = [];

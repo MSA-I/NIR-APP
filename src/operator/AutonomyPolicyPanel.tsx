@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useId, useState } from 'react';
 import { BrainCircuit, ListChecks, Loader2, PackageCheck, Scissors } from 'lucide-react';
 import {
@@ -5,7 +6,6 @@ import {
 } from '../components/document-review/serverLimits';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { toHebrewError } from '../lib/errors';
 import { Card, ConfirmDialog, ErrorNote, ICON, Note, useToast } from '../components/ui';
 
 /**
@@ -81,6 +81,7 @@ function PolicyCard({
   orgId: string;
   refetch: () => Promise<unknown>;
 }) {
+  const { errorText } = useT();
   const toast = useToast();
   const thresholdId = useId();
   const [threshold, setThreshold] = useState('');
@@ -100,7 +101,7 @@ function PolicyCard({
     });
     setBusy(false);
     if (result.error) {
-      toast(toHebrewError(result.error.message), 'error');
+      toast(errorText(result.error.message), 'error');
       return;
     }
     setPendingEnable(null);

@@ -11,12 +11,26 @@ import {
 import { currentMonthISO, fmtMoneyExact, monthRange, safeMonthISO } from './format';
 import { monthlyReportTemplateValues } from './reportTemplateExport';
 import { buildWorkbook, type WorkbookSpec } from './workbook';
+import { he } from '../lib/i18n/dictionaries/he';
+import type { Dictionary } from '../lib/i18n/dictionaries/he';
+import { translate } from '../lib/i18n/t';
+import type { TKey } from '../lib/i18n/t';
+
+/**
+ * The workbook builders take the translator now, and the tests inject the HEBREW one.
+ *
+ * Every expectation below still names a literal sheet name and column header, so a wrong
+ * dictionary entry fails here. Rewriting them to compare `t(key)` against `t(key)` would have
+ * passed whatever the words were — and the words ARE the file an accountant opens.
+ */
+const t = ((key, vars) => translate(he as unknown as Dictionary, key, vars)) as
+  (key: TKey, vars?: Record<string, string | number>) => string;
 
 const labels: MonthlyReportLabels = {
-  invoiceReview: { approved: { label: 'מאושרת' } },
-  invoicePayment: { unpaid: { label: 'לא שולמה' } },
+  invoiceReview: { approved: 'מאושרת' },
+  invoicePayment: { unpaid: 'לא שולמה' },
   creditReason: { shortage: 'חוסר' },
-  creditStatus: { open: { label: 'פתוח' } },
+  creditStatus: { open: 'פתוח' },
   exceptionType: { price_mismatch: 'פער מחיר' },
 };
 
@@ -133,6 +147,7 @@ const grid = (book: XLSX.WorkBook, name: string) =>
  */
 describe('accountant workbook — formula injection', () => {
   const bookOf = async () => read(buildMonthlyWorkbook({
+    t,
       orgName: '=cmd|calc',
       month: '2026-08',
       generatedAt: new Date('2026-08-10T00:00:00.000Z'),
@@ -219,7 +234,7 @@ describe('accountant workbook — currency is part of every amount', () => {
   };
 
   it('keeps the five existing sheet names in a single-currency month and adds currency columns', async () => {
-    const book = await read(buildMonthlyWorkbook({ ...input, baseCurrency: 'ILS' } as never));
+    const book = await read(buildMonthlyWorkbook({ ...input, baseCurrency: 'ILS', t } as never));
     expect(book.SheetNames).toEqual(['פרטי הדוח', 'חשבוניות', 'תשלומים', 'זיכויים', 'חריגים פתוחים כרגע']);
     const [invoice] = records(book, 'חשבוניות');
     expect(invoice['מטבע']).toBe('ILS');
@@ -231,8 +246,8 @@ describe('accountant workbook — currency is part of every amount', () => {
   });
 
   it('splits every mixed money surface by currency, base currency first, with no combined total', async () => {
-    const first = buildMonthlyWorkbook(mixedInput as never);
-    const second = buildMonthlyWorkbook(mixedInput as never);
+    const first = buildMonthlyWorkbook({ ...mixedInput, t } as never);
+    const second = buildMonthlyWorkbook({ ...mixedInput, t } as never);
     const names = (spec: WorkbookSpec) => spec.sheets.map((sheet) => sheet.name);
     expect(names(first)).toEqual(names(second));
     expect(names(first)).toEqual([
@@ -265,7 +280,7 @@ describe('accountant workbook — currency is part of every amount', () => {
 
   it('reads a pre-currency snapshot as ILS without changing its content hash', async () => {
     const before = snapshot.content_hash;
-    const book = await read(buildLockedMonthlyWorkbook({ snapshot }));
+    const book = await read(buildLockedMonthlyWorkbook({ t, snapshot }));
     const [invoice] = records(book, 'חשבוניות');
     expect(invoice['מטבע']).toBe('ILS');
     expect(snapshot.content_hash).toBe(before);
@@ -286,7 +301,7 @@ describe('accountant workbook — currency is part of every amount', () => {
       ],
     } satisfies MonthlyReportSnapshot;
     const before = JSON.stringify(mixedSnapshot);
-    const spec = buildLockedMonthlyWorkbook({ snapshot: mixedSnapshot });
+    const spec = buildLockedMonthlyWorkbook({ t, snapshot: mixedSnapshot });
     const names = spec.sheets.map((sheet) => sheet.name);
     expect(names).toContain('תנועות בנק USD');
     expect(names).toContain('תנועות בנק ILS');
@@ -306,6 +321,7 @@ describe('accountant workbook — currency is part of every amount', () => {
    */
   it('writes each currency with its own number of decimal places', async () => {
     const book = await read(buildMonthlyWorkbook({
+    t,
       ...mixedInput,
       baseCurrency: 'JPY',
       data: {
@@ -337,9 +353,9 @@ describe('accountant workbook — currency is part of every amount', () => {
  */
 describe('accountant workbook — styled built-in default', () => {
   it('opens right-to-left and carries the registry vocabulary on the summary sheet', async () => {
-    const book = await read(buildStyledMonthlyWorkbook({ ...input, summary }));
+    const book = await read(buildStyledMonthlyWorkbook({ ...input, summary, t }));
     expect(book.Sheets['פרטי הדוח']['!merges']).toHaveLength(2);
-    expect(await widthsWritten(buildStyledMonthlyWorkbook({ ...input, summary }))).toBe(true);
+    expect(await widthsWritten(buildStyledMonthlyWorkbook({ ...input, summary, t }))).toBe(true);
     const flat = grid(book, 'פרטי הדוח').flat().map(String);
     // The same labels a custom template maps — one vocabulary for both paths.
     for (const label of ['מספר חשבוניות', 'סה״כ לפני מע״מ', 'סה״כ מע״מ', 'סה״כ כולל מע״מ', 'זיכויים שקוזזו', 'הוצאה נטו', 'מספר ספקים']) {
@@ -348,7 +364,7 @@ describe('accountant workbook — styled built-in default', () => {
   });
 
   it('summary values equal the template values, and money cells carry the money format', async () => {
-    const book = await read(buildStyledMonthlyWorkbook({ ...input, summary }));
+    const book = await read(buildStyledMonthlyWorkbook({ ...input, summary, t }));
     const rows = grid(book, 'פרטי הדוח');
     const rowOf = (label: string) => rows.find((row) => row[0] === label)!;
     expect(rowOf('מספר חשבוניות')[1]).toBe(summary.invoice_count);
@@ -360,11 +376,12 @@ describe('accountant workbook — styled built-in default', () => {
   });
 
   it('styles the invoice sheet money columns and keeps neutralization intact', async () => {
-    const book = await read(buildStyledMonthlyWorkbook({ ...input, summary }));
+    const book = await read(buildStyledMonthlyWorkbook({ ...input, summary, t }));
     const [invoiceRow] = records(book, 'חשבוניות');
     expect(invoiceRow['סה"כ']).toBe(118);
     // The neutralization path is shared with the plain builder — a hostile name stays escaped.
     const hostile = await read(buildStyledMonthlyWorkbook({
+      t,
       ...input,
       data: { ...input.data, invoices: [{ ...input.data.invoices[0], supplier: { name: '=HYPERLINK("http://evil","x")' } }] },
       summary,
@@ -380,7 +397,7 @@ describe('accountant workbook — styled built-in default', () => {
    * registry renamed since must not appear in a version already archived.
    */
   it('keeps the registry summary out of the plain and locked builders', async () => {
-    for (const spec of [buildMonthlyWorkbook(input), buildLockedMonthlyWorkbook({ snapshot })]) {
+    for (const spec of [buildMonthlyWorkbook({ ...input, t }), buildLockedMonthlyWorkbook({ t, snapshot })]) {
       const book = await read(spec);
       const flat = grid(book, 'פרטי הדוח').flat().map(String);
       for (const label of ['הוצאה נטו', 'זיכויים שקוזזו', 'מספר ספקים']) {
@@ -392,14 +409,14 @@ describe('accountant workbook — styled built-in default', () => {
   });
 
   it('builds the locked workbook only from snapshot values, styling included', async () => {
-    const locked = await read(buildLockedMonthlyWorkbook({ snapshot }));
+    const locked = await read(buildLockedMonthlyWorkbook({ t, snapshot }));
     const rows = grid(locked, 'פרטי הדוח');
     const rowOf = (label: string) => rows.find((row) => row[0] === label)!;
     expect(rowOf('Checksum')[1]).toBe(snapshot.content_hash);
     expect(rowOf('גרסת snapshot')[1]).toBe(snapshot.version);
     expect(rowOf('חשבוניות')[2]).toBe(snapshot.totals.invoice_total);
     // Styling reaches the snapshot sheets too — widths and money formats carry no value.
-    expect(await widthsWritten(buildLockedMonthlyWorkbook({ snapshot }))).toBe(true);
+    expect(await widthsWritten(buildLockedMonthlyWorkbook({ t, snapshot }))).toBe(true);
     const [bankRow] = records(locked, 'תנועות בנק');
     expect(bankRow['סכום']).toBe(118);
   });
@@ -412,9 +429,9 @@ describe('accountant workbook — styled built-in default', () => {
  */
 describe('accountant workbook — right-to-left in the produced file', () => {
   const builders: [string, () => WorkbookSpec][] = [
-    ['buildMonthlyWorkbook', () => buildMonthlyWorkbook(input)],
-    ['buildStyledMonthlyWorkbook', () => buildStyledMonthlyWorkbook({ ...input, summary })],
-    ['buildLockedMonthlyWorkbook', () => buildLockedMonthlyWorkbook({ snapshot })],
+    ['buildMonthlyWorkbook', () => buildMonthlyWorkbook({ ...input, t })],
+    ['buildStyledMonthlyWorkbook', () => buildStyledMonthlyWorkbook({ t, ...input, summary })],
+    ['buildLockedMonthlyWorkbook', () => buildLockedMonthlyWorkbook({ t, snapshot })],
   ];
 
   it.each(builders)('%s marks every worksheet right-to-left', async (_name, build) => {

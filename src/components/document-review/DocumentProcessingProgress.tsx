@@ -1,5 +1,6 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
 import { LifecycleStrip, type LifecycleStep } from '../ui';
-import { documentStatusElapsedLabel, isDocumentProcessingStuck } from '../../lib/documentStatus';
+import { documentStatusElapsed, isDocumentProcessingStuck } from '../../lib/documentStatus';
 import type { DocumentProcessingSnapshot } from '../../lib/useDocumentProcessing';
 
 /**
@@ -13,13 +14,6 @@ import type { DocumentProcessingSnapshot } from '../../lib/useDocumentProcessing
  * "בעיבוד" — so an owner watching an 8-minute-old document had no way to tell a busy queue from a
  * broken upload. Splitting the wait from the work is the whole point of the first two steps.
  */
-const STEPS: readonly LifecycleStep[] = [
-  { key: 'queued', label: 'ממתין בתור' },
-  { key: 'reading', label: 'קריאת המסמך' },
-  { key: 'interpreting', label: 'פירוש הנתונים' },
-  { key: 'review', label: 'מוכן לבדיקה' },
-];
-
 type StepKey = 'queued' | 'reading' | 'interpreting' | 'review';
 
 function activeStep(status: string): StepKey | null {
@@ -53,6 +47,13 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
   snapshot: DocumentProcessingSnapshot;
   now?: number;
 }) {
+  const { t } = useT();
+  const steps: readonly LifecycleStep[] = [
+    { key: 'queued', label: t('documentProcessingProgress.queued') },
+    { key: 'reading', label: t('documentProcessingProgress.reading') },
+    { key: 'interpreting', label: t('documentProcessingProgress.interpreting') },
+    { key: 'review', label: t('documentProcessingProgress.review') },
+  ];
   const job = snapshot.job;
   // No job is not a step-zero state, it is the absence of the process this strip describes.
   if (!job) return null;
@@ -79,8 +80,8 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
   const hasProgress = (current === 'reading' || current === 'interpreting') && !stopped
     && typeof done === 'number' && typeof total === 'number' && total > 0;
   const progressLabel = current === 'reading'
-    ? `עמוד ${done} מתוך ${total}`
-    : `מקטע ${done} מתוך ${total}`;
+    ? t('documentProcessingProgress.pageProgress', { done: done ?? 0, total: total ?? 0 })
+    : t('documentProcessingProgress.chunkProgress', { done: done ?? 0, total: total ?? 0 });
 
   // The step label above already names the step. This line may only add what it does not say:
   // how long, how far, or that nothing is required of the reader. "ממתין לעובד פנוי" named a
@@ -98,19 +99,20 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
     detail = null;
   } else if (current === 'queued') {
     // Measured from the upload, which is what the person waiting is measuring too.
-    const waited = documentStatusElapsedLabel(
+    const waitedParts = documentStatusElapsed(
       job.queue_age_seconds ?? seconds(job.created_at, now),
     );
+    const waited = waitedParts ? t(waitedParts.key, waitedParts.vars) : null;
     detail = job.status === 'awaiting_scan'
-      ? 'הסריקה ממתינה לאישור לפני שהקריאה מתחילה.'
+      ? t('documentProcessingProgress.awaitingScanApproval')
       : waited
-        ? `ממתין ${waited}. העבודה תתחיל מעצמה.`
-        : 'העבודה תתחיל מעצמה.';
+        ? t('documentProcessingProgress.queuedWaited', { waited })
+        : t('documentProcessingProgress.queuedAutomatic');
   } else if (current === 'reading') {
     // An unknown page count stays unknown. A "0 מתוך 0" here would be a claim about the document
     // that nobody has made yet — the constitution's dash rule, applied to a counter. DESIGN.md §5
     // requires the strip to SAY so rather than fall silent, so this branch keeps a sentence.
-    detail = hasProgress ? null : 'מספר העמודים עדיין לא ידוע.';
+    detail = hasProgress ? null : t('documentProcessingProgress.pageCountUnknown');
   } else if (current === 'interpreting') {
     detail = hasProgress
       ? null
@@ -120,13 +122,13 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
         // (0081:21-22 says so on purpose), so an environment can exist where nothing dispatches
         // and only opening the document starts the work. A sentence promising that it "starts by
         // itself shortly" would be a claim about deployment state that this component cannot see.
-        ? 'הקריאה הסתיימה. הפירוש עוד לא התחיל.'
-        : 'מספר המקטעים עדיין לא ידוע.';
+        ? t('documentProcessingProgress.interpretationNotStarted')
+        : t('documentProcessingProgress.chunkCountUnknown');
   }
 
   return (
     <LifecycleStrip
-      steps={STEPS}
+      steps={steps}
       current={current}
       failed={stopped}
       detail={detail}

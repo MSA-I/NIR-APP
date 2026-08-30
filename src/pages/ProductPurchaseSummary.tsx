@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useMemo, useState } from 'react';
 import { AlertTriangle, FileSpreadsheet, Info, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -6,10 +7,10 @@ import { fmtDate, fmtMoneyExact, fmtNum, formatUnit, todayISO } from '../lib/for
 import { Card, DataTable, ErrorNote, ICON, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
 import { useAuth } from '../auth/AuthContext';
 import { MoneyByCurrency } from '../components/Money';
-import { toHebrewError } from '../lib/errors';
 import {
   downloadRenderedWorkbook,
   productPurchaseTemplateValues,
+  reportTemplateErrorText,
   renderConfiguredReportTemplate,
 } from '../lib/reportTemplateExport';
 import { downloadWorkbook } from '../lib/workbook';
@@ -66,6 +67,7 @@ function monthStart(): string {
 }
 
 export default function ProductPurchaseSummary() {
+  const { t, errorText, locale } = useT();
   const { org } = useAuth();
   const toast = useToast();
   const [from, setFrom] = useState(monthStart);
@@ -83,32 +85,32 @@ export default function ProductPurchaseSummary() {
 
   const columns: Column<SummaryRow & { id: string }>[] = [
     {
-      key: 'product', header: 'מוצר', sortValue: (r) => r.product_name,
+      key: 'product', header: t('productPurchase.text'), sortValue: (r) => r.product_name,
       render: (r) => (
         <div>
           <div className="font-medium text-ink"><bdi>{r.product_name}</bdi></div>
           <div className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-ink-muted">
-            {r.unit && <span>{formatUnit(r.unit)}</span>}
+            {r.unit && <span>{formatUnit(r.unit, locale)}</span>}
             {/* Provenance, not decoration. "Some of this rests on the supplier's word" is the
                 difference between a number you can quote back to them and one you cannot. */}
-            {r.includes_invoice_only_quantity && <span>· חלק מהכמות לפי החשבונית בלבד</span>}
-            {r.includes_unevidenced_quantity && <span>· חלק מהשורות טרם אושרו בראיה</span>}
+            {r.includes_invoice_only_quantity && <span>{t('productPurchase.text_2')}</span>}
+            {r.includes_unevidenced_quantity && <span>{t('productPurchase.text_3')}</span>}
           </div>
         </div>
       ),
     },
     {
-      key: 'canonical', header: 'נרכש בפועל', priority: 1,
+      key: 'canonical', header: t('productPurchase.text_4'), priority: 1,
       sortValue: (r) => r.canonical_qty ?? -1,
       render: (r) => <span className="num font-semibold">{fmtNum(r.canonical_qty)}</span>,
     },
     // Ordered, received and invoiced stay side by side. The rows worth opening are the ones where
     // they disagree, and one merged figure hides exactly that.
-    { key: 'ordered', header: 'הוזמן', sortValue: (r) => r.ordered_qty ?? -1,
+    { key: 'ordered', header: t('productPurchase.text_5'), sortValue: (r) => r.ordered_qty ?? -1,
       render: (r) => <span className="num">{fmtNum(r.ordered_qty)}</span> },
-    { key: 'received', header: 'התקבל', sortValue: (r) => r.received_qty ?? -1,
+    { key: 'received', header: t('productPurchase.text_6'), sortValue: (r) => r.received_qty ?? -1,
       render: (r) => <span className="num">{fmtNum(r.received_qty)}</span> },
-    { key: 'invoiced', header: 'חויב', sortValue: (r) => r.invoiced_qty ?? -1,
+    { key: 'invoiced', header: t('productPurchase.text_7'), sortValue: (r) => r.invoiced_qty ?? -1,
       render: (r) => <span className="num">{fmtNum(r.invoiced_qty)}</span> },
     { key: 'gross', header: 'הוצאה',
       /* Sorted on the base-currency figure when there is one: a column of spend across two
@@ -122,7 +124,7 @@ export default function ProductPurchaseSummary() {
       render: (r) => (r.spans_currencies
         ? <span className="text-xs text-ink-muted">בכמה מטבעות</span>
         : <span className="num">{fmtMoneyExact(r.average_unit_price, r.average_unit_price_currency)}</span>) },
-    { key: 'sources', header: 'ספקים · הזמנות · חשבוניות', priority: 3,
+    { key: 'sources', header: t('productPurchase.text_10'), priority: 3,
       sortValue: (r) => r.supplier_count,
       render: (r) => (
         <span className="num text-ink-muted">
@@ -180,7 +182,7 @@ export default function ProductPurchaseSummary() {
             ],
             rows: data.products.map((row) => ({
               product: row.product_name,
-              unit: formatUnit(row.unit),
+              unit: formatUnit(row.unit, locale),
               ordered: row.ordered_qty,
               received: row.received_qty,
               invoiced: row.invoiced_qty,
@@ -197,9 +199,9 @@ export default function ProductPurchaseSummary() {
           }],
         }, fileName);
       }
-      toast('קובץ ה-Excel הורד');
+      toast(t('productPurchase.toast'));
     } catch (exportError) {
-      toast(toHebrewError(exportError), 'error');
+      toast(reportTemplateErrorText(exportError, t, errorText), 'error');
     } finally {
       setExporting(false);
     }
@@ -208,22 +210,22 @@ export default function ProductPurchaseSummary() {
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
-      <PageHeader title="סיכום רכישות מוצרים"
-        meta={data ? `${rows.length} מוצרים · ${data.from} עד ${data.to}` : undefined}
+      <PageHeader title={t('productPurchase.title')}
+        meta={data ? t('productPurchase.meta', { count: rows.length, from: data.from, to: data.to }) : undefined}
         actions={<button className="btn-secondary" type="button" onClick={() => void exportExcel()}
           disabled={exporting || loading || !!error || !data || rows.length === 0 || from > to}>
             {exporting ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={ICON.sm} aria-hidden="true" />}
-          {exporting ? 'מכין קובץ…' : 'ייצוא Excel'}
+          {exporting ? t('productPurchase.text_21') : t('productPurchase.text_22')}
         </button>} />
 
       <Card pad={false} className="flex flex-wrap items-end gap-3 p-3">
         <div>
-          <label className="label" htmlFor="summary-from">מתאריך</label>
+          <label className="label" htmlFor="summary-from">{t('productPurchase.text_23')}</label>
           <input id="summary-from" type="date" className="input num" value={from}
             onChange={(event) => setFrom(event.target.value)} />
         </div>
         <div>
-          <label className="label" htmlFor="summary-to">עד תאריך</label>
+          <label className="label" htmlFor="summary-to">{t('productPurchase.text_24')}</label>
           <input id="summary-to" type="date" className="input num" value={to}
             onChange={(event) => setTo(event.target.value)} />
         </div>
@@ -235,8 +237,8 @@ export default function ProductPurchaseSummary() {
         <p className="flex items-start gap-2 text-sm">
           <Info size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
           <span>
-            „נרכש בפועל” נספר <strong>פעם אחת</strong> לכל משלוח: קבלה שהושלמה גוברת על החשבונית,
-            והחשבונית משמשת רק כשאין ראיית קבלה. „הוזמן” אינו נספר כרכישה.
+            <strong>{t('productPurchase.countedOnceRule')}</strong>{' '}
+            {t('productPurchase.countedOnceDetail')}
           </span>
         </p>
       </Note>
@@ -260,8 +262,8 @@ export default function ProductPurchaseSummary() {
       {loading && !data ? <SkeletonTable cols={8} /> : (
         <DataTable rows={rows} columns={columns} searchable mobile="cards"
           searchFn={(r, q) => r.product_name.toLowerCase().includes(q)}
-          emptyTitle="אין רכישות בטווח שנבחר"
-          emptySubtitle="הזמנות שאינן טיוטה בטווח התאריכים יופיעו כאן, עם מה שהתקבל וחויב מולן." />
+          emptyTitle={t('productPurchase.emptyTitle')}
+          emptySubtitle={t('productPurchase.emptySubtitle')} />
       )}
     </div>
   );

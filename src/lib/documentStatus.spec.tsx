@@ -1,3 +1,6 @@
+import { he as heDict } from './i18n/dictionaries/he';
+import type { Dictionary as I18nDictionary } from './i18n/dictionaries/he';
+import { translate as i18nTranslate, type TKey as I18nKey } from './i18n/t';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { DocumentStatusBadge } from '../components/DocumentStatusBadge';
@@ -5,9 +8,9 @@ import {
   DOCUMENT_STUCK_ATTEMPT_COUNT,
   documentMatchesStatusFilter,
   documentMatchesFilingFilter,
-  documentProcessingFailureText,
-  documentProcessingStuckText,
-  documentStatusElapsedLabel,
+  documentProcessingFailureKey,
+  documentProcessingStuckKey,
+  documentStatusElapsed,
   documentStatusFilterFromParam,
   documentUiStatus,
 } from './documentStatus';
@@ -25,6 +28,10 @@ const job = (status: 'queued' | 'leased' | 'extracted' | 'interpreting' | 'revie
   ...over,
 });
 
+
+/** A key resolved in Hebrew, so every expectation below keeps the exact phrase it asserted. */
+const say = (key: I18nKey | null | undefined): string =>
+  (key ? i18nTranslate(heDict as unknown as I18nDictionary, key) : '');
 describe('documentUiStatus precedence', () => {
   it('maps every persisted pipeline stage into one canonical UI state', () => {
     const states = [
@@ -46,24 +53,24 @@ describe('documentUiStatus precedence', () => {
       job: job('leased', { progress_done: 7, progress_total: 27 }),
       document: inbox, evaluatedAt: NOW,
     });
-    expect(reading.progressLabel).toBe('עמוד 7 מתוך 27');
+    expect(reading.progress).toEqual({ done: 7, total: 27 });
 
     // A worker build that does not report, a job that has not been opened yet, and a job already
     // past the pages: three different facts, one honest screen answer.
-    expect(documentUiStatus({ job: job('leased'), document: inbox, evaluatedAt: NOW }).progressLabel).toBeNull();
+    expect(documentUiStatus({ job: job('leased'), document: inbox, evaluatedAt: NOW }).progress).toBeNull();
     expect(documentUiStatus({
       job: job('queued', { progress_done: 3, progress_total: 9 }),
       document: inbox, evaluatedAt: NOW,
-    }).progressLabel).toBeNull();
+    }).progress).toBeNull();
     expect(documentUiStatus({
       job: job('interpreting', { progress_done: 9, progress_total: 9 }),
       document: inbox, evaluatedAt: NOW,
-    }).progressLabel).toBeNull();
+    }).progress).toBeNull();
     // Zero pages is not a page count; it would render as "עמוד 0 מתוך 0".
     expect(documentUiStatus({
       job: job('leased', { progress_done: 0, progress_total: 0 }),
       document: inbox, evaluatedAt: NOW,
-    }).progressLabel).toBeNull();
+    }).progress).toBeNull();
   });
 
   it('shows the page counter on the badge itself', () => {
@@ -77,8 +84,10 @@ describe('documentUiStatus precedence', () => {
   it('keeps never-enqueued and actively queued documents distinct', () => {
     const unprocessed = documentUiStatus({ status: 'unprocessed', document: inbox, evaluatedAt: NOW });
     const queued = documentUiStatus({ status: 'queued', document: inbox, evaluatedAt: NOW });
-    expect(unprocessed).toMatchObject({ state: 'unassigned', loading: false, label: 'לא משויך' });
-    expect(queued).toMatchObject({ state: 'processing', loading: true, label: 'ממתין לעיבוד' });
+    expect(unprocessed).toMatchObject({ state: 'unassigned', loading: false });
+    expect(say(unprocessed.labelKey)).toBe('לא משויך');
+    expect(queued).toMatchObject({ state: 'processing', loading: true });
+    expect(say(queued.labelKey)).toBe('ממתין לעיבוד');
   });
 
   it('active + inbox is only processing, never unassigned', () => {
@@ -107,14 +116,15 @@ describe('documentUiStatus precedence', () => {
   it('completed + inbox becomes unassigned', () => {
     const status = documentUiStatus({ job: job('completed'), document: inbox, evaluatedAt: NOW });
     expect(status.state).toBe('unassigned');
-    expect(status.label).toBe('לא משויך');
+    expect(say(status.labelKey)).toBe('לא משויך');
     expect(status.countsAsUnassigned).toBe(true);
   });
 
   it('completed without a filing row reports completion without inventing a target', () => {
     const status = documentUiStatus({ status: 'completed', evaluatedAt: NOW });
-    expect(status).toMatchObject({ state: 'completed', label: 'הושלם', countsAsUnassigned: false });
-    expect(status.label).not.toContain('שויך');
+    expect(status).toMatchObject({ state: 'completed', countsAsUnassigned: false });
+    expect(say(status.labelKey)).toBe('הושלם');
+    expect(say(status.labelKey)).not.toContain('שויך');
   });
 
   it('names both supported business assignment targets', () => {
@@ -128,8 +138,8 @@ describe('documentUiStatus precedence', () => {
       document: { entity_type: 'goods_receipt', entity_id: 'receipt-1' },
       evaluatedAt: NOW,
     });
-    expect(invoice.label).toBe('שויך לחשבונית');
-    expect(receipt.label).toBe('שויך לקבלת סחורה');
+    expect(say(invoice.labelKey)).toBe('שויך לחשבונית');
+    expect(say(receipt.labelKey)).toBe('שויך לקבלת סחורה');
   });
 
   it('archive is a completed no-target decision and never claims a business assignment', () => {
@@ -139,7 +149,7 @@ describe('documentUiStatus precedence', () => {
       evaluatedAt: NOW,
     });
     expect(status.state).toBe('historical');
-    expect(status.label).toBe('אורכב');
+    expect(say(status.labelKey)).toBe('אורכב');
     expect(status.countsAsUnassigned).toBe(false);
   });
 
@@ -159,16 +169,21 @@ describe('documentUiStatus precedence', () => {
   });
 
   it('keeps the supervisory explanation for an automatic assignment', () => {
-    const explanation = 'נוצרה ושויכה אוטומטית ללא אישור אדם ברמת ביטחון 92%.';
+    // The sentence lives in the dictionary now and takes the confidence as a VALUE, so the claim
+    // is the same one split in two: the status carries the key and the number, and the key carries
+    // the supervisory fact — that nobody approved this.
     const status = documentUiStatus({
       job: job('completed'),
       document: { entity_type: 'invoice', entity_id: 'invoice-1' },
       autoAssigned: true,
-      autoAssignmentDescription: explanation,
+      autoAssignmentDescriptionKey: 'documentStatus.autoAssignedByMachine',
+      autoAssignmentDescriptionVars: { confidence: '92%' },
       evaluatedAt: NOW,
     });
-    expect(status.label).toBe('שויך אוטומטית');
-    expect(status.description).toBe(explanation);
+    expect(say(status.labelKey)).toBe('שויך אוטומטית');
+    expect(status.descriptionKey).toBe('documentStatus.autoAssignedByMachine');
+    expect(status.descriptionVars).toEqual({ confidence: '92%' });
+    expect(heDict.documentStatus.autoAssignedByMachine).toContain('ללא אישור אדם');
   });
 
   it('superseded failed attempt is history, not a current failure', () => {
@@ -179,7 +194,7 @@ describe('documentUiStatus precedence', () => {
     });
     expect(status.state).toBe('historical');
     expect(status.tone).toBe('idle');
-    expect(status.description).toContain('היסטורי');
+    expect(say(status.descriptionKey)).toContain('היסטורי');
   });
 
   it('a stale server-active attempt is stuck and keeps the persisted age', () => {
@@ -230,8 +245,8 @@ describe('documentUiStatus precedence', () => {
     // Was pinned on "הפסיק להגיב" — the tail of "העובד שעיבד את המסמך הפסיק להגיב וההרשאה הזמנית
     // שלו פגה", which described our worker and its lease to a bookkeeper. The claim worth pinning
     // is the one the reader acts on: it stopped, and it is not coming back by itself.
-    expect(status.description).toContain('נפסק');
-    expect(status.description).not.toMatch(/עובד|הרשאה זמנית|lease_expired/);
+    expect(say(status.descriptionKey)).toContain('נפסק');
+    expect(status.descriptionKey).not.toMatch(/עובד|הרשאה זמנית|lease_expired/);
   });
 
   it('every stuck reason ends on the fact that waiting will not help', () => {
@@ -239,7 +254,7 @@ describe('documentUiStatus precedence', () => {
     // ("לפי הגיל ומספר הניסיונות שנשמרו בשרת") left that decision unmade.
     for (const reason of [null, 'lease_expired', 'no_progress', 'active_over_two_hours',
       'claim_attempt_limit_reached']) {
-      const text = documentProcessingStuckText(reason);
+      const text = say(documentProcessingStuckKey(reason));
       expect(text).toMatch(/לא ימשיך מעצמו|לא התחדש|אינו מתקדם|לא התקדם/);
       expect(text).not.toMatch(/עובד|שרת|ניסיונות שנשמרו/);
     }
@@ -264,9 +279,9 @@ describe('documentUiStatus precedence', () => {
   });
 
   it('turns provider error codes into actionable Hebrew without exposing the raw code', () => {
-    const gateway = documentProcessingFailureText('gateway_invalid_response');
-    const provider = documentProcessingFailureText('provider_output_truncated');
-    const unknown = documentProcessingFailureText('unexpected_internal_code');
+    const gateway = say(documentProcessingFailureKey('gateway_invalid_response'));
+    const provider = say(documentProcessingFailureKey('provider_output_truncated'));
+    const unknown = say(documentProcessingFailureKey('unexpected_internal_code'));
     expect(gateway).toContain('הקובץ נשמר');
     expect(provider).toContain('תוצאה מלאה');
     expect(unknown).toContain('אפשר לנסות שוב');
@@ -297,12 +312,17 @@ describe('document status filtering and filing contracts', () => {
   });
 
   it('formats persisted processing age at the user-facing boundaries', () => {
-    expect(documentStatusElapsedLabel(null)).toBeNull();
-    expect(documentStatusElapsedLabel(0)).toBe('פחות מדקה');
-    expect(documentStatusElapsedLabel(59)).toBe('פחות מדקה');
-    expect(documentStatusElapsedLabel(60)).toBe('1 דק׳');
-    expect(documentStatusElapsedLabel(3_600)).toBe('1 שע׳');
-    expect(documentStatusElapsedLabel(86_400)).toBe('1 ימים');
+    // The boundaries are the claim; the phrase is resolved so it stays the exact one asserted.
+    const elapsed = (seconds: number | null): string | null => {
+      const parts = documentStatusElapsed(seconds);
+      return parts ? i18nTranslate(heDict as unknown as I18nDictionary, parts.key, parts.vars) : null;
+    };
+    expect(documentStatusElapsed(null)).toBeNull();
+    expect(elapsed(0)).toBe('פחות מדקה');
+    expect(elapsed(59)).toBe('פחות מדקה');
+    expect(elapsed(60)).toBe('1 דק׳');
+    expect(elapsed(3_600)).toBe('1 שע׳');
+    expect(elapsed(86_400)).toBe('1 ימים');
   });
 });
 
@@ -322,16 +342,16 @@ describe('one description carries one extra fact, or none at all', () => {
     // The description ships as `title` AND as sr-only text on every row, so a sentence that
     // rephrases the badge is the same fact twice — once for everyone, twice for a screen reader.
     for (const status of cases) {
-      expect(status.description).not.toContain(status.label);
+      expect(say(status.descriptionKey)).not.toContain(say(status.labelKey));
     }
   });
 
   it('states with nothing to add carry an empty description rather than filler', () => {
-    expect(documentUiStatus({ status: 'completed', evaluatedAt: NOW }).description).toBe('');
-    expect(documentUiStatus({ status: null, evaluatedAt: NOW }).description).toBe('');
+    expect(documentUiStatus({ status: 'completed', evaluatedAt: NOW }).descriptionKey).toBeNull();
+    expect(documentUiStatus({ status: null, evaluatedAt: NOW }).descriptionKey).toBeNull();
     expect(documentUiStatus({
       status: 'completed', document: { entity_type: 'invoice', entity_id: 'i-1' }, evaluatedAt: NOW,
-    }).description).toBe('');
+    }).descriptionKey).toBeNull();
   });
 
   it('renders neither an empty title nor an empty sr-only span for those states', () => {
@@ -344,9 +364,9 @@ describe('one description carries one extra fact, or none at all', () => {
 
   it('speaks about invoices and goods receipts, never about an entity_type', () => {
     for (const status of cases) {
-      expect(status.description).not.toContain('יעד עסקי');
+      expect(say(status.descriptionKey)).not.toContain('יעד עסקי');
     }
-    expect(documentUiStatus({ status: 'completed', document: inbox, evaluatedAt: NOW }).description)
+    expect(say(documentUiStatus({ status: 'completed', document: inbox, evaluatedAt: NOW }).descriptionKey))
       .toBe('צריך לשייך אותו לחשבונית או לקבלת סחורה.');
   });
 });

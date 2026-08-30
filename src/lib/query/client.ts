@@ -1,5 +1,4 @@
 import { QueryClient } from '@tanstack/react-query';
-import { toHebrewError } from '../errors';
 import { orgRoot, type OrgScope } from './keys';
 
 /**
@@ -46,9 +45,6 @@ export function createAppQueryClient() {
     },
   });
 }
-
-/** Normalise any thrown value to the Hebrew string the UI renders. */
-export const normalizeError = (error: unknown): string => toHebrewError(error);
 
 /**
  * Drop everything cached for a tenant.

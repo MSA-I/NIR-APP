@@ -1,6 +1,6 @@
+import { useT } from './i18n/LocaleProvider';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery as useCachedQuery, keepPreviousData as keepPreviousDataFn } from '@tanstack/react-query';
-import { toHebrewError } from './errors';
 import { createRequestGate } from './requestGate';
 import { orgRoot } from './query/keys';
 import { useOrgScope } from './query/orgScope';
@@ -81,6 +81,7 @@ function useCachedQueryMode<T>(
   org: string | null,
   options: QueryOptions,
 ): QueryState<T> {
+  const { errorText } = useT();
   const fnRef = useRef(fn);
   fnRef.current = fn;
 
@@ -107,13 +108,14 @@ function useCachedQueryMode<T>(
     // implies undefined data, so untouched consumers get an identical value either way.
     loading: query.isLoading && query.data === undefined,
     fetching: query.isFetching,
-    error: query.error ? toHebrewError(query.error) : null,
+    error: query.error ? errorText(query.error) : null,
     refetch,
   };
 }
 
 /** The original implementation, preserved byte-for-byte in behaviour. */
 function useLegacyQueryMode<T>(fn: () => Promise<T>, deps: unknown[], active: boolean): QueryState<T> {
+  const { errorText } = useT();
   const [data, setData] = useState<T | null>(null);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +141,7 @@ function useLegacyQueryMode<T>(fn: () => Promise<T>, deps: unknown[], active: bo
     } catch (e) {
       // Every page renders this through ErrorNote, so a raw Postgres string here reaches
       // a Hebrew-speaking user on any screen that fails to load.
-      if (gate.isCurrent(request)) setError(toHebrewError(e));
+      if (gate.isCurrent(request)) setError(errorText(e));
       return false;
     } finally {
       if (gate.isCurrent(request)) setFetching(false);

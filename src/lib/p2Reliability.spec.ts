@@ -17,6 +17,24 @@ import { buildMonthlyWorkbook } from './monthlyReport';
 import { buildWorkbook } from './workbook';
 import * as XLSX from 'xlsx';
 import { readExactCount } from './queryResult';
+import { he } from '../lib/i18n/dictionaries/he';
+import type { Dictionary } from '../lib/i18n/dictionaries/he';
+import { translate } from '../lib/i18n/t';
+import type { TKey } from '../lib/i18n/t';
+
+/**
+ * The workbook builders take the translator now, and the tests inject the HEBREW one.
+ *
+ * Every expectation below still names a literal sheet name and column header, so a wrong
+ * dictionary entry fails here. Rewriting them to compare `t(key)` against `t(key)` would have
+ * passed whatever the words were — and the words ARE the file an accountant opens.
+ */
+const t = ((key, vars) => translate(he as unknown as Dictionary, key, vars)) as
+  (key: TKey, vars?: Record<string, string | number>) => string;
+const uploadI18n = {
+  t,
+  errorText: (error: unknown) => error instanceof Error ? error.message : String(error),
+};
 
 test('calendar, paging, reports and retry reliability contracts', async () => {
 assert.deepEqual(monthRange('2026-07'), { start: '2026-07-01', end: '2026-08-01' });
@@ -92,11 +110,12 @@ const scaleInvoices = Array.from({ length: 1501 }, (_, index) => ({
   review_status: 'received', payment_status: 'unpaid',
 }));
 const reportWorkbook = buildMonthlyWorkbook({
+  t,
   orgName: 'ארגון בדיקה', month: '2026-07', generatedAt: new Date('2026-07-22T10:00:00.000Z'),
   data: { invoices: scaleInvoices, payments: [], credits: [], exceptions: [] },
   labels: {
-    invoiceReview: { received: { label: 'נקלטה' } },
-    invoicePayment: { unpaid: { label: 'לא שולמה' } },
+    invoiceReview: { received: 'נקלטה' },
+    invoicePayment: { unpaid: 'לא שולמה' },
     creditReason: {}, creditStatus: {}, exceptionType: {},
   },
 });
@@ -157,10 +176,14 @@ await assert.rejects(readExactCount(Promise.resolve({ count: null, error: null }
 
 const firstUpload = await runUploadBatch(['first.pdf', 'second.pdf'], async (name) => {
   if (name === 'second.pdf') throw new Error('network');
-});
+}, uploadI18n);
 assert.deepEqual(firstUpload.succeeded, ['first.pdf']);
 assert.deepEqual(firstUpload.failed.map(({ item }) => item), ['second.pdf']);
-const retryUpload = await runUploadBatch(firstUpload.failed.map(({ item }) => item), async () => undefined);
+const retryUpload = await runUploadBatch(
+  firstUpload.failed.map(({ item }) => item),
+  async () => undefined,
+  uploadI18n,
+);
 assert.deepEqual(retryUpload.succeeded, ['second.pdf']);
 assert.equal(retryUpload.failed.length, 0);
 const firstUploadSummary = mergeUploadBatchSummary(null, firstUpload, String);
@@ -171,12 +194,12 @@ assert.deepEqual(mergeUploadBatchSummary(firstUploadSummary, retryUpload, String
 
 const alert = { code: 'found' };
 const scan = await settleAlertScans([
-  { code: 'found', label: 'found', run: async () => alert },
-  { code: 'empty', label: 'empty', run: async () => null },
-  { code: 'failed', label: 'failed', run: async () => { throw new Error('private detail'); } },
+  { code: 'found', labelKey: 'alerts.scan_found', run: async () => alert },
+  { code: 'empty', labelKey: 'alerts.scan_empty', run: async () => null },
+  { code: 'failed', labelKey: 'alerts.scan_failed', run: async () => { throw new Error('private detail'); } },
 ]);
 assert.deepEqual(scan.alerts, [alert]);
 assert.equal(scan.complete, false);
-assert.deepEqual(scan.failures, [{ code: 'failed', label: 'failed' }]);
+assert.deepEqual(scan.failures, [{ code: 'failed', labelKey: 'alerts.scan_failed' }]);
 
 });

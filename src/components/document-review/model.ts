@@ -1,3 +1,4 @@
+import type { TKey } from '../../lib/i18n/t';
 import type { DocumentExportTemplate } from '../../lib/documentExport';
 import type {
   DocumentAnnotation,
@@ -45,109 +46,107 @@ export type ReviewTarget =
       label: string;
     };
 
-export const DOCUMENT_TYPE_LABELS: Record<InterpretationContract['document_type'], string> = {
-  invoice: 'חשבונית',
-  delivery_note: 'תעודת משלוח',
-  credit_note: 'חשבונית זיכוי',
-  price_list: 'מחירון',
-  quote: 'הצעת מחיר',
-  payment_confirmation: 'אישור תשלום',
-  // "קבלה" plain, because that is what the paper says. The distinction from אישור תשלום above is
-  // whose document it is: that one is ours, this one is the supplier's (0104).
-  tax_receipt: 'קבלה',
-  other: 'מסמך אחר',
+export const DOCUMENT_TYPE_KEYS: Record<InterpretationContract['document_type'], TKey> = {
+  invoice: 'documents.docTypeInvoice',
+  delivery_note: 'documents.docTypeDeliveryNote',
+  credit_note: 'documents.docTypeCreditNote',
+  price_list: 'documents.docTypePriceList',
+  quote: 'documents.docTypeQuote',
+  payment_confirmation: 'documents.docTypePaymentConfirmation',
+  tax_receipt: 'documents.docTypeTaxReceipt',
+  other: 'documents.docTypeOther',
 };
 
-export const MARK_KIND_LABELS: Record<ExtractionContract['marks'][number]['kind'], string> = {
-  circle: 'עיגול',
-  check: 'סימון וי',
-  cross: 'איקס',
-  underline: 'קו תחתון',
-  star: 'כוכב',
-  custom: 'סימון מותאם',
-  unknown: 'סימון לא מזוהה',
+export const MARK_KIND_KEYS: Record<ExtractionContract['marks'][number]['kind'], TKey> = {
+  circle: 'documents.markCircle',
+  check: 'documents.markCheck',
+  cross: 'documents.markCross',
+  underline: 'documents.markUnderline',
+  star: 'documents.markStar',
+  custom: 'documents.markCustom',
+  unknown: 'documents.markUnknown',
 };
 
 // `claude` is a legacy stored token, kept because it is baked into two CHECK constraints in
 // migration 0046. Per the project constitution the display label changes here, not the enum.
-export const ANNOTATION_SOURCE_LABELS: Record<DocumentAnnotation['source'], string> = {
-  claude: 'הצעה אוטומטית',
-  rule: 'כלל שנלמד',
-  user: 'הערת משתמש',
+export const ANNOTATION_SOURCE_KEYS: Record<DocumentAnnotation['source'], TKey> = {
+  claude: 'documents.annotationSourceAuto',
+  rule: 'documents.annotationSourceRule',
+  user: 'documents.annotationSourceUser',
 };
 
 // The model names these keys itself, so this can never be exhaustive. Every entry here was
 // observed coming back from a real Hebrew invoice; anything unlisted falls through to the raw key
 // rather than being guessed at, because a wrong Hebrew label is worse than an English one.
-const FIELD_KEY_LABELS: Record<string, string> = {
-  invoice_number: 'מספר חשבונית',
-  invoice_date: 'תאריך חשבונית',
-  document_number: 'מספר מסמך',
-  document_date: 'תאריך המסמך',
-  print_date: 'תאריך הדפסה',
-  due_date: 'תאריך לתשלום',
-  supplier_name: 'שם הספק',
-  supplier_vat_id: 'ח.פ / עוסק מורשה',
-  supplier_phone: 'טלפון הספק',
-  customer_name: 'שם הלקוח',
-  customer_company_id: 'ח.פ הלקוח',
-  currency: 'מטבע',
-  subtotal: 'סכום לפני מע״מ',
-  total: 'סכום כולל',
-  total_amount: 'סכום כולל',
-  vat_amount: 'מע״מ',
-  vat_rate: 'שיעור מע״מ',
-  discount: 'הנחה',
-  allocation_number: 'מספר הקצאה',
-  delivery_note_number: 'מספר תעודת משלוח',
-  order_number: 'מספר הזמנה',
-  payment_terms: 'תנאי תשלום',
-  document_title: 'כותרת המסמך',
-  document_copy_status: 'מקור או העתק',
+const FIELD_KEY_KEYS: Record<string, TKey> = {
+  invoice_number: 'documents.fieldInvoiceNumber',
+  invoice_date: 'documents.fieldInvoiceDate',
+  document_number: 'documents.fieldDocumentNumber',
+  document_date: 'documents.fieldDocumentDate',
+  print_date: 'documents.fieldPrintDate',
+  due_date: 'documents.fieldDueDate',
+  supplier_name: 'documents.fieldSupplierName',
+  supplier_vat_id: 'documents.fieldSupplierVatId',
+  supplier_phone: 'documents.fieldSupplierPhone',
+  customer_name: 'documents.fieldCustomerName',
+  customer_company_id: 'documents.fieldCustomerCompanyId',
+  currency: 'documents.fieldCurrency',
+  subtotal: 'documents.fieldSubtotal',
+  total: 'documents.fieldTotal',
+  total_amount: 'documents.fieldTotal',
+  vat_amount: 'documents.fieldVatAmount',
+  vat_rate: 'documents.fieldVatRate',
+  discount: 'documents.fieldDiscount',
+  allocation_number: 'documents.fieldAllocationNumber',
+  delivery_note_number: 'documents.fieldDeliveryNoteNumber',
+  order_number: 'documents.fieldOrderNumber',
+  payment_terms: 'documents.fieldPaymentTerms',
+  document_title: 'documents.fieldDocumentTitle',
+  document_copy_status: 'documents.fieldDocumentCopyStatus',
 };
 
 // Kept separate from FIELD_KEY_LABELS rather than merged: `total` and `amount` mean the document
 // total at document level and the line total inside a row. One shared map would have to pick one
 // of the two and would be wrong wherever it guessed.
-const LINE_ITEM_KEY_LABELS: Record<string, string> = {
-  sku: 'מק״ט',
-  product_code: 'מק״ט',
-  item_code: 'מק״ט',
-  catalog_number: 'מק״ט',
-  barcode: 'ברקוד',
-  product_name: 'שם מוצר',
-  description: 'תיאור',
-  name: 'תיאור',
-  quantity: 'כמות',
-  qty: 'כמות',
-  unit: 'יחידה',
-  unit_price: 'מחיר ליחידה',
-  price: 'מחיר ליחידה',
-  price_per_unit: 'מחיר ליחידה',
-  line_total: 'סה״כ לשורה',
-  total: 'סה״כ לשורה',
-  total_price: 'סה״כ לשורה',
-  line_amount: 'סה״כ לשורה',
-  amount: 'סה״כ לשורה',
-  discount: 'הנחה',
-  discount_amount: 'סכום הנחה',
-  discount_rate: 'שיעור הנחה',
-  vat_rate: 'שיעור מע״מ',
-  // Distinct from the document-level מע״מ on purpose: a line that prints its own VAT amount is
-  // stating a different fact from the header total, and 0077 refuses to derive either one.
-  line_vat_amount: 'מע״מ לשורה',
-  package_size: 'גודל אריזה',
-  notes: 'הערות',
+const LINE_ITEM_KEY_KEYS: Record<string, TKey> = {
+  sku: 'documents.lineSku',
+  product_code: 'documents.lineSku',
+  item_code: 'documents.lineSku',
+  catalog_number: 'documents.lineSku',
+  barcode: 'documents.lineBarcode',
+  product_name: 'documents.lineProductName',
+  description: 'documents.lineDescription',
+  name: 'documents.lineDescription',
+  quantity: 'documents.lineQuantity',
+  qty: 'documents.lineQuantity',
+  unit: 'documents.lineUnit',
+  unit_price: 'documents.lineUnitPrice',
+  price: 'documents.lineUnitPrice',
+  price_per_unit: 'documents.lineUnitPrice',
+  line_total: 'documents.lineTotal',
+  total: 'documents.lineTotal',
+  total_price: 'documents.lineTotal',
+  line_amount: 'documents.lineTotal',
+  amount: 'documents.lineTotal',
+  discount: 'documents.lineDiscount',
+  discount_amount: 'documents.lineDiscountAmount',
+  discount_rate: 'documents.lineDiscountRate',
+  vat_rate: 'documents.lineVatRate',
+  line_vat_amount: 'documents.lineVatAmount',
+  package_size: 'documents.linePackageSize',
+  notes: 'documents.lineNotes',
 };
 
 /** Hebrew name for a proposed field, falling back to the key the model chose. */
-export function fieldKeyLabel(key: string): string {
-  return FIELD_KEY_LABELS[key.trim().toLowerCase()] ?? key;
+export function fieldKeyLabel(key: string, t: (key: TKey) => string): string {
+  const hit = FIELD_KEY_KEYS[key.trim().toLowerCase()];
+  return hit ? t(hit) : key;
 }
 
 /** Hebrew name for a key inside a proposed line item, falling back to the model's own key. */
-export function lineItemKeyLabel(key: string): string {
-  return LINE_ITEM_KEY_LABELS[key.trim().toLowerCase()] ?? key;
+export function lineItemKeyLabel(key: string, t: (key: TKey) => string): string {
+  const hit = LINE_ITEM_KEY_KEYS[key.trim().toLowerCase()];
+  return hit ? t(hit) : key;
 }
 
 /**
@@ -180,11 +179,11 @@ const CONFIDENCE_PARTIAL = 0.7;
  * came off the page cleanly, not that the value is the right one. Only the human approval step
  * says that, and a provider's self-reported confidence never can.
  */
-export function confidenceLabel(value: number | null | undefined): string {
-  if (!usableConfidence(value)) return 'רמת הזיהוי אינה ידועה';
-  if (value >= CONFIDENCE_CLEAR) return 'זוהה בבירור';
-  if (value >= CONFIDENCE_PARTIAL) return 'זוהה חלקית';
-  return 'לא ודאי';
+export function confidenceLabel(value: number | null | undefined, t: (key: TKey) => string): string {
+  if (!usableConfidence(value)) return t('documents.confidenceUnknown');
+  if (value >= CONFIDENCE_CLEAR) return t('documents.confidenceClear');
+  if (value >= CONFIDENCE_PARTIAL) return t('documents.confidencePartial');
+  return t('documents.confidenceUncertain');
 }
 
 /**
@@ -213,12 +212,57 @@ function usableConfidence(value: number | null | undefined): value is number {
  * invoice-fraud error, so a grade below "clearly" states the obligation instead of leaving the
  * reviewer to infer it. Unknown is not permission to skip the check — it is the reason to run it.
  */
-export function supplierMatchCaution(value: number | null | undefined): string | null {
+export function supplierMatchCaution(value: number | null | undefined, t: (key: TKey) => string): string | null {
   // Same usability test as the grade, so a broken payload cannot buy silence here either.
   if (usableConfidence(value) && value >= CONFIDENCE_CLEAR) return null;
   return usableConfidence(value)
-    ? 'הספק לא זוהה בבירור. יש לאמת את שם הספק מול המסמך לפני שמאשרים ממנו חשבונית או תשלום.'
-    : 'לא ידוע באיזו ודאות זוהה הספק. יש לאמת את שם הספק מול המסמך לפני שמאשרים ממנו חשבונית או תשלום.';
+    ? t('documents.supplierCautionUnclear')
+    : t('documents.supplierCautionUnknown');
+}
+
+/**
+ * The raw number, for the technical disclosure only — never for an everyday screen.
+ *
+ * Absent prints — and never 0% (CLAUDE.md: an absent metric shows —, because zero is itself a
+ * statement about the reading). A measured zero does print as 0%: something did measure it.
+ *
+ * Two decimals, trailing zeros stripped, rather than whole percent. Whole percent rounded 0.899 to
+ * "90%" on the one surface built for diagnosis, beside a screen grading it "זוהה חלקית" against a
+ * documented 0.9 threshold — a contradiction produced entirely by the display. `toFixed` also
+ * absorbs the binary-float noise that makes 0.87*100 come out as 87.00000000000001, the same
+ * reason `DocumentSourceViewer`'s `pct` exists. Any fixed precision still rounds, so the
+ * disclosure says so in words rather than claiming the number is untouched.
+ *
+ * Values outside the contract's 0–1 print as they are. The disclosure exists to show a broken
+ * payload, not to launder it — only `confidenceLabel` refuses to grade one.
+ */
+export function confidencePercent(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  return `${Number((value * 100).toFixed(2))}%`;
+}
+
+/**
+ * Where on the page a block sits, as prose — the accessible locator that reaches screen readers
+ * through the aria-labels of both the overlay shortcuts and the keyboard list, for images and
+ * (since wave 6, via react-pdf) for PDF pages alike.
+ *
+ * An axis that spans the whole page is dropped rather than printed. Both paths that actually run
+ * in production are full-width by construction: `parsers.py` gives digital PDF text FULL_BBOX
+ * [0,0,1,1], and the OpenAI OCR adapter synthesises one full-width band per line. Printing
+ * "0%–100% לרוחב" on every row is noise that hides the one number that varies, and it reaches
+ * screen readers through the aria-labels too.
+ */
+export function bboxDescription(
+  box: ExtractionContract['blocks'][number]['bbox'] | null,
+  t: (key: TKey, vars?: Record<string, string | number>) => string,
+): string {
+  if (!box) return t('documents.bboxUnavailable');
+  const [xMin, yMin, xMax, yMax] = box.map((value) => Math.round(value * 100));
+  const axes = [
+    xMin === 0 && xMax === 100 ? null : t('documents.bboxAcross', { min: xMin, max: xMax }),
+    yMin === 0 && yMax === 100 ? null : t('documents.bboxDown', { min: yMin, max: yMax }),
+  ].filter((axis): axis is string => axis !== null);
+  return axes.length ? t('documents.bboxAt', { axes: axes.join(', ') }) : t('documents.bboxWholePage');
 }
 
 // Keys are chosen by the model, not fixed by the contract, so they are matched by name. Only
@@ -443,7 +487,7 @@ export interface CreditDraft {
  * a credit note states an amount, not a cause. Guessing it would put an invented business fact on
  * a financial record, so it stays the reviewer's choice on the same dropdown as always.
  */
-export function creditDraftFromInterpretation(payload: InterpretationContract): CreditDraft {
+export function creditDraftFromInterpretation(payload: InterpretationContract, t: (key: TKey, vars?: Record<string, string | number>) => string): CreditDraft {
   const field = (candidates: readonly string[]): string | number | boolean | null => {
     for (const key of candidates) {
       const hit = payload.fields.find((item) => item.key.trim().toLowerCase() === key);
@@ -466,7 +510,7 @@ export function creditDraftFromInterpretation(payload: InterpretationContract): 
     creditedInvoiceNumber: typeof credited === 'string' || typeof credited === 'number'
       ? String(credited).trim()
       : '',
-    notes: lines.length ? `לפי המסמך: ${lines.join(', ')}` : '',
+    notes: lines.length ? t('documents.creditNotesFromDocument', { lines: lines.join(', ') }) : '',
   };
 }
 
@@ -542,66 +586,36 @@ export function correctionKey(
  * Each sentence says what happened AND what the person can do, because "not_an_invoice" alone
  * reads like a fault when it is the system working correctly.
  */
-export const FILING_REASON_LABELS: Record<string, string> = {
-  autonomy_disabled:
-    'האוטומציה כבויה, ולכן כל מסמך ממתין להכרעת אדם. אפשר להדליק אותה בהגדרות.',
-  organization_inactive:
-    'הארגון אינו פעיל, ולכן המערכת אינה כותבת רשומות. יש לפנות לתמיכה.',
-  document_type_other:
-    'לא זוהה סוג מסמך מוכר, ולכן המסמך הועבר לארכיון. אפשר לחלץ אותו משם עם סיבה.',
-  confidence_unknown:
-    'המערכת לא החזירה רמת זיהוי, ולכן לא פעלה לבד. יש לבדוק את ההצעה מול המסמך.',
-  below_confidence_threshold:
-    'רמת הזיהוי נמוכה מהסף שהוגדר לארגון, ולכן ההכרעה נשארה אצלך.',
-  // The one the owner actually hit, and the one most likely to look like a bug.
-  not_an_invoice:
-    'לסוג המסמך הזה אין עדיין פקודת כתיבה אוטומטית בטוחה ליעד העסקי, ולכן הוא ממתין להשלמה — גם בזיהוי מלא.',
-  not_a_price_list:
-    'המסמך אינו מחירון, ולכן לא בוצע עדכון מחירים אוטומטי.',
-  not_a_delivery_note:
-    'המסמך אינו תעודת משלוח, ולכן לא נפתחה טיוטת קליטה.',
-  order_unresolved:
-    'לא ניתן היה לקבוע לאיזו הזמנה שייכת התעודה — אין מספר הזמנה מודפס, והפריטים מתאימים ליותר מהזמנה פתוחה אחת או לאף אחת. אפשר לבחור הזמנה ולקלוט ידנית.',
-  receipt_draft_conflict:
-    'כבר קיימת טיוטת קליטה פתוחה להזמנה הזאת. יש להשלים או למחוק אותה לפני שנפתחת טיוטה נוספת.',
-  no_line_matched:
-    'אף שורה בתעודה לא הותאמה לפריט שהוזמן, ולכן אין ממה לפתוח טיוטה.',
-  line_not_on_order:
-    'הפריט אינו מופיע בהזמנה שאליה שויכה התעודה, ולכן הוא לא נכנס לטיוטה.',
-  line_already_received:
-    'כל הכמות שהוזמנה מהפריט הזה כבר נקלטה, ולכן השורה לא נוספה לטיוטה.',
-  line_quantity_unreadable:
-    'לא נקראה כמות ברורה בשורה. כמות שלא נקראה אינה אפס, ולכן השורה ממתינה.',
-  line_quantity_exceeds_order:
-    'הכמות שבתעודה גדולה מהיתרה שנותרה בהזמנה. השורה ממתינה כדי שלא תיווצר טיוטה שאי אפשר לשמור.',
-  line_product_repeated:
-    'אותו פריט מופיע ביותר משורה אחת בתעודה. המערכת לא חיברה את הכמויות והשורות ממתינות.',
-  supplier_unidentified:
-    'הספק לא הותאם לספק קיים במערכת, ואין למה לשייך את הסכום. אפשר לבחור ספק או ליצור אחד חדש.',
-  currency_unrecognised:
-    'לא ניתן לזהות את המטבע שהודפס במסמך, ולכן לא נוצרה רשומה כספית. יש לבחור קוד מטבע תקף מול המסמך.',
-  invoice_identity_missing:
-    'חסרים מספר חשבונית או תאריך, ולכן לא ניתן ליצור רשומה כספית.',
-  invoice_number_unrepresentable:
-    'מספר החשבונית מכיל תווים שהמערכת אינה יכולה להשוות מולם, ולכן היא לא יצרה רשומה.',
-  invoice_number_unreasonable:
-    'מספר החשבונית ארוך מדי מכדי להיות מספר אמיתי — ככל הנראה שגיאת קריאה.',
-  total_missing:
-    'לא נקרא סכום מהמסמך, וחשבונית בלי סכום אינה חשבונית.',
-  amounts_unreconciled:
-    'הסכום לפני מע״מ, המע״מ והסה״כ אינם מסתכמים זה לזה. יש להשוות מול המסמך.',
-  payment_allocation_conflict:
-    'קיימת התנגשות בהקצאת תשלום, ולכן הפעולה נעצרה לבדיקה.',
-  duplicate_invoice_number:
-    'כבר קיימת חשבונית עם אותו מספר לאותו ספק. המערכת עצרה כדי שלא תיווצר כפילות.',
-  line_product_unmatched:
-    'לא נמצא מק״ט או ברקוד שמאפשר לזהות או ליצור את המוצר בבטחה, ולכן השורה ממתינה.',
-  line_product_ambiguous:
-    'המק״ט או הברקוד מתאימים ליותר ממוצר אחד. המערכת לא ניחשה והשורה ממתינה.',
-  line_price_unreadable:
-    'לא נקרא מחיר יחידה חיובי ותקין, ולכן השורה ממתינה לבדיקה.',
-  already_decided:
-    'למסמך הזה כבר יש הכרעה, ולכן האוטומציה לא פעלה שוב.',
+export const FILING_REASON_KEYS: Record<string, TKey> = {
+  autonomy_disabled: 'documents.filing_autonomy_disabled',
+  organization_inactive: 'documents.filing_organization_inactive',
+  document_type_other: 'documents.filing_document_type_other',
+  confidence_unknown: 'documents.filing_confidence_unknown',
+  below_confidence_threshold: 'documents.filing_below_confidence_threshold',
+  not_an_invoice: 'documents.filing_not_an_invoice',
+  not_a_price_list: 'documents.filing_not_a_price_list',
+  not_a_delivery_note: 'documents.filing_not_a_delivery_note',
+  order_unresolved: 'documents.filing_order_unresolved',
+  receipt_draft_conflict: 'documents.filing_receipt_draft_conflict',
+  no_line_matched: 'documents.filing_no_line_matched',
+  line_not_on_order: 'documents.filing_line_not_on_order',
+  line_already_received: 'documents.filing_line_already_received',
+  line_quantity_unreadable: 'documents.filing_line_quantity_unreadable',
+  line_quantity_exceeds_order: 'documents.filing_line_quantity_exceeds_order',
+  line_product_repeated: 'documents.filing_line_product_repeated',
+  supplier_unidentified: 'documents.filing_supplier_unidentified',
+  currency_unrecognised: 'documents.filing_currency_unrecognised',
+  invoice_identity_missing: 'documents.filing_invoice_identity_missing',
+  invoice_number_unrepresentable: 'documents.filing_invoice_number_unrepresentable',
+  invoice_number_unreasonable: 'documents.filing_invoice_number_unreasonable',
+  total_missing: 'documents.filing_total_missing',
+  amounts_unreconciled: 'documents.filing_amounts_unreconciled',
+  payment_allocation_conflict: 'documents.filing_payment_allocation_conflict',
+  duplicate_invoice_number: 'documents.filing_duplicate_invoice_number',
+  line_product_unmatched: 'documents.filing_line_product_unmatched',
+  line_product_ambiguous: 'documents.filing_line_product_ambiguous',
+  line_price_unreadable: 'documents.filing_line_price_unreadable',
+  already_decided: 'documents.filing_already_decided',
 };
 
 /**
@@ -612,7 +626,7 @@ export const FILING_REASON_LABELS: Record<string, string> = {
  * 0079 has a reason nobody recorded. Guessing between them on screen would be a claim about the
  * past that the data does not support.
  */
-export function filingReason(snapshot: ReviewSnapshot): string | null {
+export function filingReason(snapshot: ReviewSnapshot, t: (key: TKey) => string): string | null {
   // `?? []` is not defensive noise — it was earned. The first version read `snapshot.filings`
   // directly and took the whole review screen down with "Cannot read properties of undefined"
   // wherever a snapshot predated the field. An explanatory sentence going missing is a small
@@ -622,10 +636,10 @@ export function filingReason(snapshot: ReviewSnapshot): string | null {
     .sort((a, b) => b.decided_at.localeCompare(a.decided_at));
   const code = machineFilings[0]?.reason_code;
   if (!code) return null;
-  return FILING_REASON_LABELS[code]
-    // An arm added to the ladder without a sentence here must not print a bare enum at a
-    // bookkeeper. It says the honest minimum instead.
-    ?? 'המערכת עצרה ולא יצרה רשומה. ההכרעה אצלך.';
+  const key = FILING_REASON_KEYS[code];
+  // An arm added to the ladder without a sentence here must not print a bare enum at a
+  // bookkeeper. It says the honest minimum instead.
+  return key ? t(key) : t('documents.filingStoppedGeneric');
 }
 
 export type DocumentRoutingSummary = {
@@ -638,49 +652,50 @@ export type DocumentRoutingSummary = {
 };
 
 /** Describes only writes the authoritative document row proves happened. */
-export function documentRoutingSummary(snapshot: ReviewSnapshot): DocumentRoutingSummary {
+export function documentRoutingSummary(snapshot: ReviewSnapshot, t: (key: TKey, vars?: Record<string, string | number>) => string): DocumentRoutingSummary {
   const doc = snapshot.document;
   const payload = snapshot.interpretation?.payload;
   const lineCount = payload?.line_items.length ?? 0;
+  const receipt = doc?.entity_type === 'goods_receipt' ? t('documents.routingAndReceipt') : '';
   const lineSummary = lineCount === 0
-    ? 'לא זוהו במסמך שורות פריט.'
-    : `${lineCount === 1 ? 'שורת פריט אחת' : `${lineCount} שורות פריט`} נשמר${lineCount === 1 ? 'ה' : 'ו'} בפירוש המסמך${doc?.entity_type === 'goods_receipt' ? ' ובקבלת הסחורה' : ''}.`;
+    ? t('documents.routingNoLines')
+    : t(lineCount === 1 ? 'documents.routingOneLine' : 'documents.routingManyLines', { count: lineCount, receipt });
 
   if (!doc || !payload) {
-    return { completed: false, headline: 'עדיין אין תוצאת שיוך', destination: 'ממתין לפירוש המסמך', lineSummary, path: null, actionLabel: null };
+    return { completed: false, headline: t('documents.routingPendingHeadline'), destination: t('documents.routingPendingDestination'), lineSummary, path: null, actionLabel: null };
   }
 
   if (doc.entity_type === 'invoice' && doc.entity_id) {
-    return { completed: true, headline: 'נוצרה חשבונית והיא שויכה למסמך', destination: 'חשבוניות', lineSummary, path: `/invoices/${doc.entity_id}`, actionLabel: 'פתיחת החשבונית' };
+    return { completed: true, headline: t('documents.routingInvoiceHeadline'), destination: t('documents.routingInvoices'), lineSummary, path: `/invoices/${doc.entity_id}`, actionLabel: t('documents.routingOpenInvoice') };
   }
   if (doc.entity_type === 'goods_receipt' && doc.entity_id) {
-    return { completed: true, headline: 'המסמך שויך לקבלת סחורה', destination: 'קבלות סחורה', lineSummary, path: `/receipts/${doc.entity_id}`, actionLabel: 'פתיחת קבלת הסחורה' };
+    return { completed: true, headline: t('documents.routingReceiptHeadline'), destination: t('documents.routingReceipts'), lineSummary, path: `/receipts/${doc.entity_id}`, actionLabel: t('documents.routingOpenReceipt') };
   }
   if (doc.entity_type === 'payment' && doc.entity_id) {
-    return { completed: true, headline: 'המסמך שויך לתשלום קיים', destination: 'תשלומים', lineSummary, path: '/payments', actionLabel: 'פתיחת התשלומים' };
+    return { completed: true, headline: t('documents.routingPaymentHeadline'), destination: t('documents.routingPayments'), lineSummary, path: '/payments', actionLabel: t('documents.routingOpenPayments') };
   }
   if (doc.entity_type === 'supplier' && doc.entity_id) {
-    return { completed: true, headline: 'המסמך שויך לכרטיס הספק', destination: 'ספקים', lineSummary, path: `/suppliers/${doc.entity_id}`, actionLabel: 'פתיחת הספק' };
+    return { completed: true, headline: t('documents.routingSupplierHeadline'), destination: t('documents.routingSuppliers'), lineSummary, path: `/suppliers/${doc.entity_id}`, actionLabel: t('documents.routingOpenSupplier') };
   }
   if (doc.entity_type === 'archive') {
-    return { completed: true, headline: 'המסמך סווג והועבר לארכיון', destination: 'ארכיון המסמכים', lineSummary, path: '/documents/archive', actionLabel: 'פתיחת הארכיון' };
+    return { completed: true, headline: t('documents.routingArchiveHeadline'), destination: t('documents.routingArchive'), lineSummary, path: '/documents/archive', actionLabel: t('documents.routingOpenArchive') };
   }
 
-  const destination = ({
-    invoice: 'חשבוניות',
-    delivery_note: 'קבלות סחורה',
-    credit_note: 'זיכויים',
-    price_list: 'מוצרים ומחירים',
-    quote: 'מסמכי ספק',
-    payment_confirmation: 'תשלומים',
+  const destination = t(({
+    invoice: 'documents.routingInvoices',
+    delivery_note: 'documents.routingReceipts',
+    credit_note: 'documents.routingCredits',
+    price_list: 'documents.routingPriceList',
+    quote: 'documents.routingSupplierDocs',
+    payment_confirmation: 'documents.routingPayments',
     // A receipt is evidence about something already recorded, so it has no ledger of its own to
     // be filed into — it is filed beside the invoice or payment it proves (OPEN-DECISIONS #141).
-    tax_receipt: 'חשבונית או תשלום קיימים',
-    other: 'ארכיון המסמכים',
-  } as const)[payload.document_type];
+    tax_receipt: 'documents.routingExistingInvoiceOrPayment',
+    other: 'documents.routingArchive',
+  } as const satisfies Record<InterpretationContract['document_type'], TKey>)[payload.document_type]);
   return {
     completed: false,
-    headline: 'המסמך נקרא, אך עדיין לא נכתבה רשומה ביעד',
+    headline: t('documents.routingReadNotWritten'),
     destination,
     lineSummary,
     path: null,
@@ -789,14 +804,14 @@ export function canManageOrganizationRules(role: Role): boolean {
   return role === 'owner' || role === 'office';
 }
 
-export function ruleWhy(rule: DocumentLearningRule | null | undefined): string {
-  if (!rule) return 'הכלל התאים לסימון לפי הקדימות שנשמרה במערכת.';
-  const owner = rule.user_id ? 'כלל אישי' : 'כלל ארגוני';
+export function ruleWhy(rule: DocumentLearningRule | null | undefined, t: (key: TKey, vars?: Record<string, string | number>) => string): string {
+  if (!rule) return t('documents.ruleWhyFallback');
+  const owner = rule.user_id ? t('documents.ruleOwnerPersonal') : t('documents.ruleOwnerOrg');
   const context = rule.supplier_id
-    ? 'לספק ולסוג המסמך'
+    ? t('documents.ruleScopeSupplierAndType')
     : rule.document_type
-      ? 'לסוג המסמך'
-      : 'גלובלי';
-  const fingerprint = rule.mark_fingerprint ? 'וטביעת הסימון התאימה' : 'ללא הגבלת טביעת סימון';
-  return `${owner} ${context}, גרסה ${rule.version}; ${fingerprint}.`;
+      ? t('documents.ruleScopeType')
+      : t('documents.ruleScopeGlobal');
+  const fingerprint = rule.mark_fingerprint ? t('documents.ruleFingerprintMatched') : t('documents.ruleFingerprintAny');
+  return t('documents.ruleWhy', { owner, context, version: rule.version, fingerprint });
 }

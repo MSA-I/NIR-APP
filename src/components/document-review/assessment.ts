@@ -11,6 +11,8 @@
  * and to say plainly what pressing the button will and will not do.
  */
 
+import type { TKey } from '../../lib/i18n/t.ts';
+
 export type FindingSeverity = 'critical' | 'error' | 'warning' | 'info';
 
 export interface AssessmentFinding {
@@ -129,32 +131,32 @@ export interface DocumentReviewRead {
  * label for a summary line. A code with no entry falls back to the code itself rather than to
  * "שגיאה לא ידועה", because a bookkeeper on the phone to support can read a code aloud.
  */
-export const FINDING_LABELS: Record<string, string> = {
-  duplicate_document: 'מסמך כפול',
-  supplier_mismatch: 'ההזמנה שייכת לספק אחר',
-  currency_unrecognised: 'לא ניתן לזהות את המטבע',
-  currency_assumed_from_supplier: 'המטבע נלקח מברירת המחדל של הספק',
-  document_order_currency_mismatch: 'מטבע המסמך שונה ממטבע ההזמנה',
-  price_baseline_currency_mismatch: 'המחיר המוסכם שמור במטבע אחר',
-  product_unidentified: 'מוצר לא מזוהה',
-  product_repeated_on_document: 'מוצר חוזר ביותר משורה אחת',
-  product_charged_not_ordered: 'מוצר שחויב ולא הוזמן',
-  ordered_not_on_document: 'הוזמן ואינו במסמך הזה',
-  quantity_unreadable: 'כמות שלא ניתן לקרוא',
-  quantity_above_ordered: 'כמות מעל מה שהוזמן',
-  quantity_differs_from_ordered: 'כמות שונה מההזמנה',
-  quantity_above_received: 'כמות מעל מה שהתקבל',
-  receipt_recorded_exception: 'נרשמו חסר, פגם או החזרה',
-  unit_or_packaging_mismatch: 'אי-התאמת יחידה או אריזה',
-  legacy_order_unit_snapshot_missing: 'להזמנה ההיסטורית אין יחידת מידה שמורה',
-  price_above_baseline: 'מחיר מעל המחיר המוסכם',
-  price_below_baseline: 'מחיר מתחת למחיר המוסכם',
-  price_baseline_unknown: 'אין מחיר מוסכם להשוואה',
-  vat_rate_mismatch: 'שיעור מע"מ שונה',
-  line_arithmetic_discrepancy: 'חישוב שורה שאינו מסתדר',
-  header_total_differs_from_lines: 'סה"כ בכותרת שונה מסכום השורות',
-  header_arithmetic_discrepancy: 'סה"כ לפני מע"מ ומע"מ אינם מסתכמים לסה"כ',
-  credit_required: 'נדרש זיכוי',
+export const FINDING_LABEL_KEYS: Record<string, TKey> = {
+  duplicate_document: 'assessment.findingDuplicateDocument',
+  supplier_mismatch: 'assessment.findingSupplierMismatch',
+  currency_unrecognised: 'assessment.findingCurrencyUnrecognised',
+  currency_assumed_from_supplier: 'assessment.findingCurrencyAssumedFromSupplier',
+  document_order_currency_mismatch: 'assessment.findingDocumentOrderCurrencyMismatch',
+  price_baseline_currency_mismatch: 'assessment.findingPriceBaselineCurrencyMismatch',
+  product_unidentified: 'assessment.findingProductUnidentified',
+  product_repeated_on_document: 'assessment.findingProductRepeatedOnDocument',
+  product_charged_not_ordered: 'assessment.findingProductChargedNotOrdered',
+  ordered_not_on_document: 'assessment.findingOrderedNotOnDocument',
+  quantity_unreadable: 'assessment.findingQuantityUnreadable',
+  quantity_above_ordered: 'assessment.findingQuantityAboveOrdered',
+  quantity_differs_from_ordered: 'assessment.findingQuantityDiffersFromOrdered',
+  quantity_above_received: 'assessment.findingQuantityAboveReceived',
+  receipt_recorded_exception: 'assessment.findingReceiptRecordedException',
+  unit_or_packaging_mismatch: 'assessment.findingUnitOrPackagingMismatch',
+  legacy_order_unit_snapshot_missing: 'assessment.findingLegacyOrderUnitSnapshotMissing',
+  price_above_baseline: 'assessment.findingPriceAboveBaseline',
+  price_below_baseline: 'assessment.findingPriceBelowBaseline',
+  price_baseline_unknown: 'assessment.findingPriceBaselineUnknown',
+  vat_rate_mismatch: 'assessment.findingVatRateMismatch',
+  line_arithmetic_discrepancy: 'assessment.findingLineArithmeticDiscrepancy',
+  header_total_differs_from_lines: 'assessment.findingHeaderTotalDiffersFromLines',
+  header_arithmetic_discrepancy: 'assessment.findingHeaderArithmeticDiscrepancy',
+  credit_required: 'assessment.findingCreditRequired',
 };
 
 /**
@@ -170,20 +172,20 @@ export const FINDING_LABELS: Record<string, string> = {
  * both inferences about which delivery this is, and 0120 and 0090 respectively record that they are
  * safe only because a person confirms them.
  */
-export const RESOLUTION_LABELS: Record<string, string> = {
+export const RESOLUTION_LABEL_KEYS: Record<string, TKey> = {
   // Supplier (0106), strongest evidence first.
-  tax_id: 'ח.פ / עוסק מורשה תואם',
-  document_supplier: 'הספק מזוהה במסמך עצמו',
-  supplier_sku: 'מק"ט ספק מודפס',
-  barcode: 'ברקוד מודפס',
-  exact_name: 'שם ספק תואם במדויק',
-  model_suggestion: 'הצעת המערכת — לאישור אדם',
+  tax_id: 'assessment.resolutionTaxId',
+  document_supplier: 'assessment.resolutionDocumentSupplier',
+  supplier_sku: 'assessment.resolutionSupplierSku',
+  barcode: 'assessment.resolutionBarcode',
+  exact_name: 'assessment.resolutionExactName',
+  model_suggestion: 'assessment.resolutionModelSuggestion',
   // Order (0107 + 0120), strongest evidence first.
-  by_number: 'מספר ההזמנה מודפס על המסמך',
-  by_items: 'ההזמנה מכילה את כל המוצרים שבמסמך',
-  by_date_proximity: 'תאריך המסמך קרוב לאספקה הצפויה — כדאי לוודא',
-  single_open_order: 'ההזמנה הפתוחה היחידה של הספק — כדאי לוודא',
-  open_order: 'הזמנה פתוחה — לבחירת אדם',
+  by_number: 'assessment.resolutionByNumber',
+  by_items: 'assessment.resolutionByItems',
+  by_date_proximity: 'assessment.resolutionByDateProximity',
+  single_open_order: 'assessment.resolutionSingleOpenOrder',
+  open_order: 'assessment.resolutionOpenOrder',
 };
 
 /**
@@ -191,13 +193,19 @@ export const RESOLUTION_LABELS: Record<string, string> = {
  * barcode both point at it, and falls back to the token itself for anything this build has not met —
  * an unfamiliar token read aloud to support beats "לא ידוע".
  */
-export function resolutionLabel(matchedBy: string | null | undefined): string | null {
+export function resolutionText(
+  matchedBy: string | null | undefined,
+  t: (key: TKey) => string,
+): string | null {
   if (!matchedBy) return null;
   return matchedBy
     .split(',')
     .map((token) => token.trim())
     .filter(Boolean)
-    .map((token) => RESOLUTION_LABELS[token] || token)
+    .map((token) => {
+      const key = RESOLUTION_LABEL_KEYS[token];
+      return key ? t(key) : token;
+    })
     .join(' · ') || null;
 }
 
@@ -205,8 +213,17 @@ export const SEVERITY_ORDER: Record<FindingSeverity, number> = {
   critical: 0, error: 1, warning: 2, info: 3,
 };
 
-export function findingLabel(finding: AssessmentFinding): string {
-  return finding.message || FINDING_LABELS[finding.code] || finding.code;
+/**
+ * `finding.message` comes first and is NEVER translated: it is the server's own sentence about
+ * this document, written by `0108` with the document's own numbers in it, and it is the same
+ * class as OCR text — it arrived, it is not interface. Only the fallback label belongs to this
+ * file, and only that is a key. A code with no entry still falls back to the CODE, because a
+ * bookkeeper on the phone to support can read a code aloud.
+ */
+export function findingText(finding: AssessmentFinding, t: (key: TKey) => string): string {
+  if (finding.message) return finding.message;
+  const key = FINDING_LABEL_KEYS[finding.code];
+  return key ? t(key) : finding.code;
 }
 
 /** Findings that stop approval, hardest first. These are the work list, not a report. */
@@ -236,7 +253,10 @@ export interface FindingGroup {
 export function groupFindings(findings: AssessmentFinding[]): FindingGroup[] {
   const groups = new Map<string, FindingGroup>();
   for (const finding of findings) {
-    const key = `${finding.code}|${findingLabel(finding)}`;
+    // The grouping key is IDENTITY, not display. It used to be the rendered label, which meant
+    // two findings grouped or split depending on what language the reader was in — and the label
+    // is derived from exactly these two fields anyway.
+    const key = `${finding.code}|${finding.message ?? ''}`;
     const existing = groups.get(key);
     const group = existing ?? { finding, lines: [] };
     if (!existing) groups.set(key, group);
@@ -268,7 +288,13 @@ export function advisoryFindings(assessment: DocumentAssessment | null): Assessm
 export interface ApprovalEffect {
   /** `false` means "this will NOT happen" — the sentences that build trust in the button. */
   happens: boolean;
-  text: string;
+  /**
+   * A key, not a sentence, and renamed from `text` so the screen that draws these could not keep
+   * compiling while printing `assessment.effectInvoiceCreated` under an approval button. Each one
+   * is a statement about `public.apply_reviewed_document` (0110); what changes here is the
+   * language it is read in, never which branch it describes.
+   */
+  textKey: TKey;
 }
 
 /**
@@ -286,37 +312,37 @@ export function approvalEffects(
   switch (documentType) {
     case 'invoice':
       return [
-        { happens: true, text: 'תיווצר חשבונית ספק במצב "התקבלה" — לא מאושרת לתשלום' },
-        { happens: true, text: 'שורות המסמך יישמרו כראיה לבדיקת ההתאמה' },
+        { happens: true, textKey: 'assessment.effectInvoiceCreated' },
+        { happens: true, textKey: 'assessment.effectInvoiceLinesKept' },
         orderResolved
-          ? { happens: true, text: 'החשבונית תקושר להזמנה שנבחרה' }
-          : { happens: false, text: 'לא תקושר הזמנה — המסמך יישמר בלי הזמנה, וזה מצב לגיטימי' },
-        { happens: false, text: 'לא ישתנו כמויות שהתקבלו ולא סטטוס ההזמנה — חיוב אינו קבלה' },
-        { happens: false, text: 'לא יבוצע תשלום ולא תאושר החשבונית לתשלום' },
+          ? { happens: true, textKey: 'assessment.effectInvoiceLinkedToOrder' }
+          : { happens: false, textKey: 'assessment.effectInvoiceNoOrder' },
+        { happens: false, textKey: 'assessment.effectInvoiceNoReceiptChange' },
+        { happens: false, textKey: 'assessment.effectInvoiceNoPayment' },
       ];
     case 'delivery_note':
       return [
-        { happens: true, text: 'תיווצר טיוטת קבלת סחורה מקושרת להזמנה שנבחרה' },
-        { happens: true, text: 'השורות שהמיפוי שלהן ברור ייכנסו לטיוטה' },
-        { happens: false, text: 'לא ישתנו כמויות שהתקבלו, מלאי או סטטוס ההזמנה' },
-        { happens: false, text: 'לא תיווצר חשבונית ולא חיוב' },
-        { happens: false, text: 'רק אישור נפרד שהסחורה התקבלה בפועל ישלים את הקבלה' },
+        { happens: true, textKey: 'assessment.effectDeliveryDraftCreated' },
+        { happens: true, textKey: 'assessment.effectDeliveryClearLines' },
+        { happens: false, textKey: 'assessment.effectDeliveryNoStockChange' },
+        { happens: false, textKey: 'assessment.effectDeliveryNoInvoice' },
+        { happens: false, textKey: 'assessment.effectDeliveryNeedsConfirmation' },
       ];
     case 'tax_receipt':
       return [
-        { happens: true, text: 'הקבלה תקושר לחשבונית קיימת או לתשלום שכבר נרשם' },
-        { happens: false, text: 'לא תיווצר חשבונית, לא תשלום ולא חיוב מכל סוג' },
-        { happens: false, text: 'אם לא ניתן לקשר — לא ייווצר קישור, והמסמך יישאר לבדיקה ידנית' },
+        { happens: true, textKey: 'assessment.effectReceiptLinked' },
+        { happens: false, textKey: 'assessment.effectReceiptNoInvoice' },
+        { happens: false, textKey: 'assessment.effectReceiptNoLink' },
       ];
     case 'credit_note':
       return [
-        { happens: true, text: 'יירשם זיכוי ספק במצב "התקבל" ויקושר לחשבונית המקור' },
-        { happens: true, text: 'מסמך הזיכוי יישמר כראיה עם הפירוש שאושר' },
-        { happens: false, text: 'הזיכוי לא יקוזז מיתרה בעצם האישור' },
-        { happens: false, text: 'לא יבוצע תשלום ולא ישתנה סכום חשבונית המקור' },
+        { happens: true, textKey: 'assessment.effectCreditRecorded' },
+        { happens: true, textKey: 'assessment.effectCreditEvidenceKept' },
+        { happens: false, textKey: 'assessment.effectCreditNoOffset' },
+        { happens: false, textKey: 'assessment.effectCreditNoPayment' },
       ];
     default:
-      return [{ happens: false, text: 'לסוג המסמך הזה אין עדיין מסלול אישור' }];
+      return [{ happens: false, textKey: 'assessment.effectNoApprovalRoute' }];
   }
 }
 
@@ -327,14 +353,14 @@ export function approvalEffects(
  * file cannot be lost. Nothing about their business has changed. One word — "נשמר" — covering both
  * is how someone walks away believing an invoice was recorded when it is sitting in a queue.
  */
-export function storageAndApprovalSentences(read: DocumentReviewRead): [string, string] {
+export function storageAndApprovalKeys(read: DocumentReviewRead): [TKey, TKey] {
   return [
     read.file_stored
-      ? 'הקובץ נשמר באחסון הפרטי ולא ילך לאיבוד'
-      : 'הקובץ עדיין לא נשמר',
+      ? 'assessment.fileStored'
+      : 'assessment.fileNotStored',
     read.data_approved
-      ? 'הנתונים אושרו ונרשמו במערכת'
-      : 'הנתונים עדיין לא אושרו — שום דבר כספי לא נרשם',
+      ? 'assessment.dataApproved'
+      : 'assessment.dataNotApproved',
   ];
 }
 

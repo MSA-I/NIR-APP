@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { APP_NAME } from '../lib/branding';
-import { Card } from '../components/ui';
+import { useT } from '../lib/i18n/LocaleProvider';
 
 /**
  * Terms of service + privacy policy (package 7, owner decision 09.08.2026: the agent drafts).
@@ -38,182 +38,168 @@ import { Card } from '../components/ui';
  * region regardless. Section 2 keeps the sub-processor list; the provider-side facts get their own
  * heading rather than a clause at the end of a dense paragraph, because a disclosure buried in
  * prose is the same half-truth in a politer form.
+ *
+ * 2026-08-28 — TWO BINDING VERSIONS, one per language. Owner decision, OPEN-DECISIONS #280,
+ * chosen over both cheaper readings after all three were spelled out: serving the Hebrew document
+ * to everyone, or translating for convenience while the Hebrew governs. Neither was chosen.
+ *
+ * What that means for whoever edits this file next, and it is the whole of the decision:
+ *
+ *   * There is NO sentence anywhere saying the Hebrew governs, and adding one would contradict
+ *     the decision rather than clarify it. Somebody who signed in English agreed to the English
+ *     text, and that is the text they must be shown if they ask what they agreed to.
+ *   * Every future amendment is TWO legal amendments and needs review of BOTH. A gap between the
+ *     two versions is not a wording slip — it is two different undertakings. The owner accepted
+ *     that price explicitly.
+ *   * The wording lives in the `legal` namespace of both dictionaries rather than in this file.
+ *     `apply-ns.mjs` refuses a namespace where a key exists on one side only, so a half-translated
+ *     document cannot compile, and `en.ts` is type-checked key-for-key against `he.ts`.
+ *   * `TERMS_VERSION` is bumped, because the English document is new text that people will
+ *     consent to. The header rule above applies to it exactly as it applies to the Hebrew.
+ *
+ * The drafting caveat has NOT gone away and matters more now, not less: this is not legal advice,
+ * a lawyer's review is the owner's call, and there are now two documents to review. `GATES.md`
+ * P2-G9 must not be marked met on a green test run.
+ *
+ * Spacing between a bold label and the sentence after it is `{' '}` in the markup rather than a
+ * space baked into the dictionary value. A leading or trailing space inside a translated string
+ * is invisible in review and disappears on the first well-meaning trim.
  */
-export const TERMS_VERSION = '2026-08-24';
+export const TERMS_VERSION = '2026-08-28';
 
+/**
+ * The reading shell, ported from the marketing site's /terms and /privacy (owner instruction,
+ * 28.08.2026). It is the one page in the signed-in product that is a DOCUMENT rather than a
+ * screen: a 44rem measure on the navigation shell's own Onyx, a sticky bar that spans the window
+ * while its contents keep the column, and no card — a card frames a working surface, and there is
+ * nothing here to work with.
+ *
+ * The lockup is the product's mark, not this document's title. It used to be the page's only
+ * <h1>, which left the actual subject as an <h2> with no h1 above it. The mark keeps its alt text
+ * and stops being a heading; the title is the h1 and the clauses are h2, so the outline has no
+ * skipped level.
+ *
+ * Only the SHELL was ported. The marketing site's lede says the Hebrew version is the one that
+ * governs, and `OPEN-DECISIONS #280` retired that sentence: both versions bind. Copying the look
+ * and the copy together would have quietly reinstated the reading the owner did not choose.
+ */
 function LegalShell({ title, children }: { title: string; children: React.ReactNode }) {
+  const { t } = useT();
   return (
-    <div className="min-h-dvh bg-action px-4 py-6 sm:py-10">
-      <div className="max-w-2xl mx-auto space-y-4">
-        {/* The lockup is the product's mark, not this document's title. It used to be the page's
-            only <h1>, which left the actual subject — „תנאי שימוש" — as an <h2> with no h1 above
-            it. The mark keeps its alt text and stops being a heading; the title becomes the h1.
-            Same treatment on all four standalone auth screens. */}
-        <div className="text-center">
+    <div className="legal-doc">
+      <header className="legal-doc__bar">
+        <div className="legal-doc__column legal-doc__bar-in">
           <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="166" height="36"
-            className="mx-auto h-auto w-40" />
+            className="h-auto w-32" />
+          <nav className="legal-doc__nav" aria-label={t('legal.navLabel')}>
+            <Link to="/terms">{t('legal.linkTerms')}</Link>
+            <Link to="/privacy">{t('legal.linkPrivacy')}</Link>
+            <Link to="/login">{t('legal.linkLogin')}</Link>
+          </nav>
         </div>
-        <Card className="space-y-4">
-          <h1 className="page-title">{title}</h1>
-          <p className="text-xs text-ink-muted">גרסה: {TERMS_VERSION}</p>
-          <div className="space-y-4 text-sm leading-relaxed text-ink-mid [&_h3]:font-semibold [&_h3]:text-ink [&_h3]:mt-2">
-            {children}
-          </div>
-          <div className="pt-3 border-t border-line-soft flex gap-4 text-sm">
-            <Link className="link" to="/terms">תנאי שימוש</Link>
-            <Link className="link" to="/privacy">מדיניות פרטיות</Link>
-            <Link className="link" to="/login">מסך הכניסה</Link>
-          </div>
-        </Card>
-      </div>
+      </header>
+      <main className="legal-doc__column">
+        <p className="legal-doc__eyebrow">{t('legal.eyebrow')}</p>
+        <h1>{title}</h1>
+        <p className="legal-doc__version">{t('legal.version', { version: TERMS_VERSION })}</p>
+        {children}
+        <div className="legal-doc__foot">
+          <Link to="/terms">{t('legal.linkTerms')}</Link>
+          <Link to="/privacy">{t('legal.linkPrivacy')}</Link>
+          <Link to="/login">{t('legal.linkLogin')}</Link>
+        </div>
+      </main>
     </div>
   );
 }
 
 export function TermsOfService() {
+  const { t } = useT();
   return (
-    <LegalShell title="תנאי שימוש">
-      <section>
-        <h3>1. השירות</h3>
-        <p>
-          {APP_NAME} היא מערכת לניהול רכש, חשבוניות ותשלומים לעסקים ("השירות"), המופעלת על ידי
-          מפעילת השירות ("המפעילה"). השימוש בשירות מיועד לעסקים ולמשתמשים שהוזמנו על ידי עסק
-          ("הלקוח"), והוא כפוף לתנאים אלה. הצטרפות לשירות מהווה הסכמה לתנאים ולמדיניות הפרטיות.
-        </p>
+    <LegalShell title={t('legal.termsTitle')}>
+      <section className="legal-doc__section">
+        <h2>{t('legal.terms1Title')}</h2>
+        <p>{t('legal.terms1Body', { app: APP_NAME })}</p>
       </section>
-      <section>
-        <h3>2. חשבונות והרשאות</h3>
-        <p>
-          כל משתמש פועל תחת חשבון אישי ובתפקיד שהוגדר לו על ידי הלקוח. המשתמש אחראי לשמירת
-          סודיות פרטי ההתחברות שלו ולכל פעולה שתבוצע מחשבונו. פעולות רגישות נרשמות ביומן ביקורת.
-        </p>
+      <section className="legal-doc__section">
+        <h2>{t('legal.terms2Title')}</h2>
+        <p>{t('legal.terms2Body')}</p>
       </section>
-      <section>
-        <h3>3. הנתונים של הלקוח</h3>
-        <p>
-          הנתונים העסקיים שהלקוח מזין או מעלה (ספקים, הזמנות, חשבוניות, מסמכים) שייכים ללקוח.
-          המפעילה מעבדת אותם אך ורק לצורך מתן השירות, כמפורט במדיניות הפרטיות, ואינה מוכרת אותם
-          לצדדים שלישיים.
-        </p>
+      <section className="legal-doc__section">
+        <h2>{t('legal.terms3Title')}</h2>
+        <p>{t('legal.terms3Body')}</p>
       </section>
-      <section>
-        <h3>4. עיבוד אוטומטי של מסמכים</h3>
-        <p>
-          השירות כולל קריאה ופירוש אוטומטיים של מסמכים (OCR ומודל בינה מלאכותית). תוצאת הפירוש
-          עשויה להיות שגויה; היא מסומנת ככזו כשהביטחון נמוך, וניתנת תמיד לבדיקה ולביטול על ידי
-          משתמש מורשה. האחריות על נכונות הרשומות הכספיות מוטלת בסופו של דבר על הלקוח.
-        </p>
+      <section className="legal-doc__section">
+        <h2>{t('legal.terms4Title')}</h2>
+        <p>{t('legal.terms4Body')}</p>
       </section>
-      <section>
-        <h3>5. זמינות ואחריות</h3>
-        <p>
-          המפעילה פועלת לזמינות גבוהה של השירות אך אינה מתחייבת לזמינות רציפה. השירות ניתן כפי
-          שהוא (AS-IS). המפעילה לא תישא באחריות לנזק עקיף או תוצאתי; אחריותה הכוללת מוגבלת לסכום
-          ששילם הלקוח בגין השירות בשנים-עשר החודשים שקדמו לאירוע. אין באמור לגרוע מאחריות שלא
-          ניתן להגבילה על פי דין.
-        </p>
+      <section className="legal-doc__section">
+        <h2>{t('legal.terms5Title')}</h2>
+        <p>{t('legal.terms5Body')}</p>
       </section>
-      <section>
-        <h3>6. סיום והתנתקות</h3>
-        <p>
-          הלקוח רשאי להפסיק את השימוש בכל עת. עם סיום ההתקשרות זכאי הלקוח לקבל העתק של נתוניו
-          בפורמט מקובל, בפנייה למפעילה. המפעילה רשאית להשעות חשבון בשל הפרה מהותית של תנאים אלה,
-          בהודעה מנומקת.
-        </p>
+      <section className="legal-doc__section">
+        <h2>{t('legal.terms6Title')}</h2>
+        <p>{t('legal.terms6Body')}</p>
       </section>
-      <section>
-        <h3>7. שינוי בתנאים ודין</h3>
-        <p>
-          עדכון מהותי בתנאים ילווה בעדכון מספר הגרסה ובהודעה למשתמשים. על תנאים אלה חל הדין
-          הישראלי, וסמכות השיפוט נתונה לבתי המשפט המוסמכים בישראל.
-        </p>
+      <section className="legal-doc__section">
+        <h2>{t('legal.terms7Title')}</h2>
+        <p>{t('legal.terms7Body')}</p>
       </section>
     </LegalShell>
   );
 }
 
 export function PrivacyPolicy() {
+  const { t } = useT();
   return (
-    <LegalShell title="מדיניות פרטיות">
-      <section>
-        <h3>1. מה נאסף, ולמה</h3>
+    <LegalShell title={t('legal.privacyTitle')}>
+      <section className="legal-doc__section">
+        <h2>{t('legal.privacy1Title')}</h2>
         <p>
-          <strong>פרטי חשבון:</strong> שם, כתובת אימייל, טלפון (אופציונלי) ותפקיד — לצורך זיהוי,
-          הרשאות והתחברות. <strong>נתונים עסקיים:</strong> ספקים, הזמנות, חשבוניות, תשלומים
-          ומסמכים שהלקוח מעלה — לצורך מתן השירות עצמו. <strong>יומני פעילות:</strong> פעולות
-          רגישות נרשמות ביומן ביקורת עם זהות המבצע והסיבה — לצורך אבטחה ואחריותיות.
-          <strong> נתונים טכניים:</strong> אסימוני התחברות והתראות דחיפה במכשיר — לצורך תפעול.
-          הבסיס החוקי לעיבוד: קיום ההתקשרות עם הלקוח והסכמת המשתמש בעת ההצטרפות.
+          <strong>{t('legal.privacy1AccountLabel')}</strong>{' '}{t('legal.privacy1AccountBody')}{' '}
+          <strong>{t('legal.privacy1BusinessLabel')}</strong>{' '}{t('legal.privacy1BusinessBody')}{' '}
+          <strong>{t('legal.privacy1AuditLabel')}</strong>{' '}{t('legal.privacy1AuditBody')}{' '}
+          <strong>{t('legal.privacy1TechnicalLabel')}</strong>{' '}{t('legal.privacy1TechnicalBody')}
         </p>
       </section>
-      <section>
-        <h3>2. מי מעבד את הנתונים</h3>
+      <section className="legal-doc__section">
+        <h2>{t('legal.privacy2Title')}</h2>
+        <p>{t('legal.privacy2Body')}</p>
+      </section>
+      <section className="legal-doc__section">
+        <h2>{t('legal.privacy3Title')}</h2>
+        <p>{t('legal.privacy3Intro')}</p>
         <p>
-          הנתונים מאוחסנים ומעובדים אצל ספקי משנה המשמשים את השירות: ‏Supabase (מסד נתונים,
-          אימות ואחסון קבצים), ‏OpenAI (פירוש אוטומטי של תוכן מסמכים שהועלו), ‏Cloudflare (אירוח
-          האפליקציה), ‏Resend (משלוח מיילים תפעוליים) ו-Sentry (דיווח תקלות). המפעילה אינה
-          מוכרת מידע אישי ואינה משתמשת בו לפרסום.
+          <strong>{t('legal.privacy3TrainingLabel')}</strong>{' '}{t('legal.privacy3TrainingBody')}{' '}
+          <strong>{t('legal.privacy3RetentionLabel')}</strong>{' '}{t('legal.privacy3RetentionLead')}{' '}
+          <strong>{t('legal.privacy3RetentionWindow')}</strong>{' '}{t('legal.privacy3RetentionTail')}{' '}
+          <strong>{t('legal.privacy3ReviewLabel')}</strong>{' '}{t('legal.privacy3ReviewLead')}{' '}
+          <strong>{t('legal.privacy3ReviewContractors')}</strong>{' '}{t('legal.privacy3ReviewTail')}
+        </p>
+        <p>
+          <strong>{t('legal.privacy3AsksLabel')}</strong>{' '}{t('legal.privacy3AsksLead')}{' '}
+          <strong>{t('legal.privacy3AsksNot')}</strong>{' '}{t('legal.privacy3AsksMiddle')}{' '}
+          <strong>{t('legal.privacy3AsksPromise')}</strong>{t('legal.privacy3AsksEnd')}
+        </p>
+        <p>
+          <strong>{t('legal.privacy3LocationLabel')}</strong>{' '}{t('legal.privacy3LocationBody')}
         </p>
       </section>
-      <section>
-        <h3>3. מה קורה אצל ספק המודל</h3>
-        <p>
-          כשמסמך נשלח לפירוש אוטומטי, תוכנו מגיע ל-OpenAI. הפרטים שלהלן נבדקו בתנאים הרשמיים
-          של הספק ב-24.08.2026, והם תיאור של מה שהספק אומר — לא התחייבות של המפעילה במקומו.
-        </p>
-        <p>
-          <strong>אימון:</strong> לפי תנאי הספק, נתונים שנשלחים דרך ה-API אינם משמשים לאימון
-          מודלים, אלא אם הארגון בחר במפורש לשתף אותם. המפעילה לא בחרה בכך.{' '}
-          <strong>שמירה:</strong> הספק רשאי לשמור קלט ופלט <strong>עד 30 יום</strong> לצורך
-          מתן השירות ואיתור שימוש לרעה, ולתקופה ארוכה יותר אם הדין מחייב או אם הדבר נדרש
-          להגנה על השירות או על צד שלישי מפני נזק.{' '}
-          <strong>עיון אנושי:</strong> יומני השימוש-לרעה עשויים לכלול את הטקסט עצמו, ולפי תנאי
-          הספק הם נגישים לעובדים מורשים שלו <strong>וגם לקבלני צד-שלישי</strong> המחויבים
-          בסודיות, לצורך בדיקת שימוש לרעה בלבד.
-        </p>
-        <p>
-          <strong>מה שהמערכת עושה, ומה שאין בו הבטחה:</strong> בכל קריאה המערכת מבקשת מהספק שלא
-          לשמור את התשובה לשליפה מאוחרת (‏store: false). זו בקשה בממשק הספק ולא
-          התחייבות שלו, והיא <strong>אינה</strong> מונעת את יומני השימוש-לרעה שתוארו למעלה.
-          הסדר של אפס-שימור אצל הספק דורש אישור מוקדם והסכם נפרד; כל עוד אין הסכם כזה,{' '}
-          <strong>המפעילה אינה מבטיחה אפס-שימור</strong>.
-        </p>
-        <p>
-          <strong>מיקום העיבוד:</strong> לא הוגדרה הגבלת אזור מול הספק, ולכן העיבוד והאחסון
-          הזמני אצלו עשויים להתבצע מחוץ לישראל, לרבות מחוץ לאיחוד האירופי. ישראל אינה אזור
-          נתמך אצל הספק. גם במסלולי הגבלת אזור, נתוני מערכת ומטא-דאטה עשויים לצאת מהאזור.
-        </p>
+      <section className="legal-doc__section">
+        <h2>{t('legal.privacy4Title')}</h2>
+        <p>{t('legal.privacy4Body')}</p>
       </section>
-      <section>
-        <h3>4. הפרדת לקוחות ואבטחה</h3>
-        <p>
-          נתוני כל לקוח מופרדים ברמת מסד הנתונים (Row-Level Security לפי ארגון), הגישה מוצפנת
-          (TLS), פעולות רגישות דורשות אימות סיסמה טרי, וקבצים נשמרים בדלי פרטי שהגישה אליו
-          מוגבלת לארגון בלבד.
-        </p>
+      <section className="legal-doc__section">
+        <h2>{t('legal.privacy5Title')}</h2>
+        <p>{t('legal.privacy5Body')}</p>
       </section>
-      <section>
-        <h3>5. שמירה ומחיקה</h3>
-        <p>
-          רשומות כספיות נשמרות לאורך תקופת ההתקשרות ובהתאם לחובות שמירת רשומות שבדין. מחיקת
-          רשומות כספיות היא "מחיקה רכה" המשמרת עקיבות ביקורת. עם סיום ההתקשרות ניתן לבקש העתק
-          של הנתונים ומחיקה של מה שאין חובה חוקית לשמור.
-        </p>
+      <section className="legal-doc__section">
+        <h2>{t('legal.privacy6Title')}</h2>
+        <p>{t('legal.privacy6Body')}</p>
       </section>
-      <section>
-        <h3>6. הזכויות שלך</h3>
-        <p>
-          בהתאם לחוק הגנת הפרטיות, התשמ"א-1981 (כפי שתוקן בתיקון 13), עומדת לך זכות לעיין במידע
-          שנאסף עליך, לבקש תיקון מידע שגוי ולבקש מחיקה בכפוף לחובות שבדין. פנייה בנושא — אל איש
-          הקשר של העסק שהזמין אותך, או אל מפעילת השירות.
-        </p>
-      </section>
-      <section>
-        <h3>7. עוגיות ואחסון מקומי</h3>
-        <p>
-          השירות משתמש באחסון מקומי בדפדפן לניהול ההתחברות ולעבודה לא-מקוונת (טיוטות קבלה
-          וצילומים שממתינים לחיבור). אין שימוש בעוגיות פרסום או מעקב צד-שלישי.
-        </p>
+      <section className="legal-doc__section">
+        <h2>{t('legal.privacy7Title')}</h2>
+        <p>{t('legal.privacy7Body')}</p>
       </section>
     </LegalShell>
   );

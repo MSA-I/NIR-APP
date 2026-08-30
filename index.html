@@ -15,7 +15,13 @@
     <link rel="icon" sizes="any" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="96x96" href="/icons/favicon-96.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <!-- Both subsets, and the Latin one is not only for English readers: its unicode-range
+         starts at U+0000-00FF, so it carries the DIGITS. Every price, quantity, date and
+         invoice number on a Hebrew screen is drawn from this file, and until it was listed
+         here the whole money column rendered in a fallback face and then reflowed. 19.7KB
+         next to the Hebrew subset's 12KB, on the critical path for both languages. -->
     <link rel="preload" href="/fonts/noto/NotoSansHebrew-Hebrew.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/noto/NotoSansHebrew-Latin.woff2" as="font" type="font/woff2" crossorigin />
     <!-- Product name only: the tenant is unknown until auth resolves, and AuthContext
          prefixes the organization name to this once it is. -->
     <title>InPlace</title>

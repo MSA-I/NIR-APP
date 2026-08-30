@@ -39,12 +39,13 @@
  * that actually makes the decision explicable a year later. Manual entry keeps an *optional* box,
  * because a conflict or a reversed name is the one place a human sentence is worth something.
  */
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 import { useId, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, Info, Pencil, RotateCcw, SkipForward } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Card, ICON, useToast } from '../components/ui';
-import { toHebrewError } from '../lib/errors';
-import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
+import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';
 import {
   MAX_DISPLAY_NAME_LENGTH,
   proposeDisplayName,
@@ -58,16 +59,16 @@ import type { Product } from '../lib/types';
 const APPROVE_ACTION = 'אישור השם הקנוני שהוצע למוצר';
 const MANUAL_ACTION = 'הזנת שם קנוני ידנית למוצר';
 
-const BLOCKED_SENTENCE: Record<DisplayNameBlocked['reason'], string> = {
-  suspected_visual_order: 'שם ככל הנראה שמור בסדר הפוך — לא ניתן להציע לו שם קנוני.',
-  too_short: 'לא נותר בשם די טקסט כדי להציע ממנו שם קנוני.',
+const BLOCKED_KEY: Record<DisplayNameBlocked['reason'], TKey> = {
+  suspected_visual_order: 'productNameReview.blockedVisualOrder',
+  too_short: 'productNameReview.blockedTooShort',
 };
 
 /** The state in words, so the meaning never rests on the badge's hue alone. */
-const VERDICT_LABEL: Record<DisplayNameVerdict['kind'], string> = {
-  proposal: 'הצעה מוכנה',
-  conflict: 'דורש הכרעה',
-  blocked: 'לא ניתן להציע',
+const VERDICT_KEY: Record<DisplayNameVerdict['kind'], TKey> = {
+  proposal: 'productNameReview.verdictProposal',
+  conflict: 'productNameReview.verdictConflict',
+  blocked: 'productNameReview.verdictBlocked',
 };
 
 const VERDICT_BADGE: Record<DisplayNameVerdict['kind'], string> = {
@@ -83,14 +84,14 @@ const VERDICT_BADGE: Record<DisplayNameVerdict['kind'], string> = {
  * sizes branch lists every size it found (two or more candidates), the over-length branch lists
  * the single name it composed.
  */
-function conflictSentence(verdict: DisplayNameConflict): string {
+function conflictKey(verdict: DisplayNameConflict): TKey {
   return verdict.candidates.length > 1
-    ? 'השם מציין יותר מגודל אחד, והגדלים אינם מתיישבים זה עם זה. ההכרעה ביניהם שלך — המערכת אינה בוחרת.'
-    : `השם הקנוני שנבנה ארוך מ־${MAX_DISPLAY_NAME_LENGTH} התווים שהעמודה מקבלת. קיצור הוא עריכה בשם שכל מסך יראה, ולכן נעשה בידיים.`;
+    ? 'productNameReview.conflictSizes'
+    : 'productNameReview.conflictTooLong';
 }
 
-const candidatesLabel = (verdict: DisplayNameConflict) =>
-  verdict.candidates.length > 1 ? 'הגדלים שנמצאו בשם' : 'השם שנבנה';
+const candidatesKey = (verdict: DisplayNameConflict): TKey =>
+  (verdict.candidates.length > 1 ? 'productNameReview.candidatesSizes' : 'productNameReview.candidatesComposed');
 
 export function ProductNameReview({ queue, onApproved }: {
   /**
@@ -101,6 +102,7 @@ export function ProductNameReview({ queue, onApproved }: {
   /** Fires with the id of a product that now carries a canonical name. */
   onApproved: (productId: string) => void;
 }) {
+  const { t } = useT();
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(() => new Set());
   const headingRef = useRef<HTMLHeadingElement>(null);
 
@@ -127,26 +129,25 @@ export function ProductNameReview({ queue, onApproved }: {
       <div className="space-y-2">
         <h2 id="name-review-heading" ref={headingRef} tabIndex={-1}
           className="text-lg font-semibold text-ink focus:outline-none">
-          שמות לאישור
+          {t('productNameReview.text')}
         </h2>
         <p className="text-sm text-ink-soft">
-          לכל מוצר מוצג השם השמור בקטלוג לצד השם הקנוני המוצע ומה יורד ממנו. השם השמור אינו משתנה —
-          הוא זה שנשלח לספק ושלפיו מתבצעת ההתאמה למחירונים. כל אישור נרשם ביומן הביקורת.
+          {t('productNameReview.intro')}
         </p>
       </div>
 
       {queue === null ? (
         <div className="note-idle" role="status">
           <Info size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
-          <p>הקטלוג לא נטען, ולכן לא ידוע כמה שמות ממתינים לאישור.</p>
+          <p>{t('productNameReview.text_4')}</p>
         </div>
       ) : pending.length === 0 ? (
         <div className="note-done" role="status">
           <Check size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
           <p>
             {skipped.size > 0
-              ? 'כל מה שנותר בתור דולג.'
-              : 'לכל המוצרים בקטלוג יש שם קנוני מאושר.'}
+              ? t('productNameReview.text_5')
+              : t('productNameReview.text_6')}
           </p>
         </div>
       ) : (
@@ -162,11 +163,10 @@ export function ProductNameReview({ queue, onApproved }: {
       {skipped.size > 0 && (
         <div className="note-idle flex-wrap items-center justify-between gap-3">
           <p>
-            דולגו במושב הזה: <span className="num">{skipped.size}</span>. הדילוג אינו נשמר בשרת —
-            המוצרים האלה יופיעו שוב בכניסה הבאה.
+            {t('productNameReview.skippedNote', { count: skipped.size })}
           </p>
           <button type="button" className="btn-ghost" onClick={() => setSkipped(new Set())}>
-            <RotateCcw size={ICON.sm} aria-hidden="true" /> החזרת המדולגים לתור
+            <RotateCcw size={ICON.sm} aria-hidden="true" /> {t('productNameReview.restoreSkipped')}
           </button>
         </div>
       )}
@@ -180,6 +180,7 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
   onApproved: (productId: string) => void;
   onSkip: (productId: string) => void;
 }) {
+  const { errorText, t } = useT();
   const toast = useToast();
   const fieldId = useId();
   const [busy, setBusy] = useState(false);
@@ -190,9 +191,9 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
     const value = displayName.trim();
     // The two shapes `set_product_display_name` refuses (0149), answered here so the reviewer is
     // told before a round trip rather than by a translated server error afterwards.
-    if (!value) { toast('יש להזין שם קנוני לפני השמירה', 'error'); return; }
+    if (!value) { toast(t('productNameReview.toast'), 'error'); return; }
     if (value.length > MAX_DISPLAY_NAME_LENGTH) {
-      toast(`השם הקנוני ארוך מ־${MAX_DISPLAY_NAME_LENGTH} תווים`, 'error');
+      toast(t('productNameReview.nameTooLong', { max: MAX_DISPLAY_NAME_LENGTH }), 'error');
       return;
     }
 
@@ -203,8 +204,8 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
       p_reason: reasonOr(typedReason, action),
     });
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-    toast('השם הקנוני נשמר');
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
+    toast(t('productNameReview.toast_2'));
     onApproved(product.id);
   }
 
@@ -215,31 +216,31 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
       data-verdict={verdict.kind}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-xs text-ink-muted">השם השמור בקטלוג</p>
+          <p className="text-xs text-ink-muted">{t('productNameReview.text_8')}</p>
           {/* bdi on every name: the catalogue mixes Hebrew, Latin and digits, and some rows are
               malformed outright — without isolation one bad name reorders the line around it. */}
           <h3 className="text-sm font-medium text-ink-mid break-words"><bdi>{product.name}</bdi></h3>
         </div>
-        <span className={VERDICT_BADGE[verdict.kind]}>{VERDICT_LABEL[verdict.kind]}</span>
+        <span className={VERDICT_BADGE[verdict.kind]}>{t(VERDICT_KEY[verdict.kind])}</span>
       </div>
 
       {verdict.kind === 'proposal' && (
         <div className="space-y-3">
           <div>
-            <p className="text-xs text-ink-muted">השם הקנוני המוצע</p>
+            <p className="text-xs text-ink-muted">{t('productNameReview.text_9')}</p>
             <p className="text-base font-medium text-ink break-words" data-testid="review-proposal">
               <bdi>{verdict.displayName}</bdi>
             </p>
             {unchanged && (
               <p className="text-xs text-ink-faint">
-                זהה לשם השמור — האישור מסמן שנבדק, ואינו משנה את מה שמוצג.
+                {t('productNameReview.text_10')}
               </p>
             )}
           </div>
           <div data-testid="review-dropped">
             {verdict.dropped.length > 0 ? (
               <>
-                <p className="text-xs text-ink-muted mb-1">יורד מהשם</p>
+                <p className="text-xs text-ink-muted mb-1">{t('productNameReview.text_11')}</p>
                 <ul className="flex flex-wrap gap-1.5">
                   {verdict.dropped.map((token, index) => (
                     <li key={`${token}-${index}`} className="badge-idle"><bdi>{token}</bdi></li>
@@ -247,7 +248,7 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
                 </ul>
               </>
             ) : (
-              <p className="text-xs text-ink-faint">לא יורד דבר מהשם השמור.</p>
+              <p className="text-xs text-ink-faint">{t('productNameReview.text_12')}</p>
             )}
           </div>
         </div>
@@ -257,9 +258,9 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
         <div className="note-await" data-testid="review-conflict">
           <AlertTriangle size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
           <div className="space-y-2">
-            <p>{conflictSentence(verdict)}</p>
+            <p>{t(conflictKey(verdict), { max: MAX_DISPLAY_NAME_LENGTH })}</p>
             <div>
-              <p className="text-xs mb-1">{candidatesLabel(verdict)}</p>
+              <p className="text-xs mb-1">{t(candidatesKey(verdict))}</p>
               <ul className="flex flex-wrap gap-1.5">
                 {verdict.candidates.map((candidate, index) => (
                   <li key={`${candidate}-${index}`} className="badge-await"><bdi>{candidate}</bdi></li>
@@ -273,20 +274,20 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
       {verdict.kind === 'blocked' && (
         <div className="note-idle" data-testid="review-blocked">
           <Info size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
-          <p>{BLOCKED_SENTENCE[verdict.reason]}</p>
+          <p>{t(BLOCKED_KEY[verdict.reason])}</p>
         </div>
       )}
 
       {draft ? (
         <div className="space-y-3">
           <div>
-            <label className="label" htmlFor={`${fieldId}-name`}>השם הקנוני</label>
+            <label className="label" htmlFor={`${fieldId}-name`}>{t('productNameReview.canonicalNameLabel')}</label>
             <input id={`${fieldId}-name`} className="input" value={draft.value}
               maxLength={MAX_DISPLAY_NAME_LENGTH}
               onChange={(event) => setDraft({ ...draft, value: event.target.value })} />
           </div>
           <div>
-            <label className="label" htmlFor={`${fieldId}-reason`}>{OPTIONAL_REASON_LABEL}</label>
+            <label className="label" htmlFor={`${fieldId}-reason`}>{t(OPTIONAL_REASON_LABEL_KEY)}</label>
             <textarea id={`${fieldId}-reason`} className="input" rows={2} maxLength={1000}
               value={draft.reason}
               onChange={(event) => setDraft({ ...draft, reason: event.target.value })} />
@@ -294,10 +295,10 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
           <div className="flex flex-wrap gap-2">
             <button type="button" className="btn-primary" disabled={busy}
               onClick={() => void commit(draft.value, MANUAL_ACTION, draft.reason)}>
-              שמירת השם
+              {t('productNameReview.text_13')}
             </button>
             <button type="button" className="btn-secondary" disabled={busy}
-              onClick={() => setDraft(null)}>ביטול</button>
+              onClick={() => setDraft(null)}>{t('productNameReview.setDraft')}</button>
           </div>
         </div>
       ) : (
@@ -307,7 +308,7 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
           {verdict.kind === 'proposal' && (
             <button type="button" className="btn-primary" disabled={busy}
               onClick={() => void commit(verdict.displayName, APPROVE_ACTION)}>
-              <Check size={ICON.sm} aria-hidden="true" /> אישור
+              <Check size={ICON.sm} aria-hidden="true" /> {t('productNameReview.approve')}
             </button>
           )}
           <button type="button" className="btn-secondary" disabled={busy}
@@ -315,11 +316,11 @@ function ReviewCard({ product, verdict, onApproved, onSkip }: {
               value: verdict.kind === 'proposal' ? verdict.displayName : '',
               reason: '',
             })}>
-            <Pencil size={ICON.sm} aria-hidden="true" /> עריכה ואישור
+            <Pencil size={ICON.sm} aria-hidden="true" /> {t('productNameReview.editAndApprove')}
           </button>
           <button type="button" className="btn-ghost" disabled={busy}
             onClick={() => onSkip(product.id)}>
-            <SkipForward size={ICON.sm} aria-hidden="true" /> דילוג
+            <SkipForward size={ICON.sm} aria-hidden="true" /> {t('productNameReview.skip')}
           </button>
         </div>
       )}

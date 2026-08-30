@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabase';
 import { Card, ICON } from '../components/ui';
 import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
-import { MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/password';
+import { useT } from '../lib/i18n/LocaleProvider';
+import { MIN_PASSWORD_LENGTH, passwordProblemOf } from '../lib/password';
 import {
   acceptOperatorInvitation, lookupOperatorInvitation, type InvitationLookup,
 } from '../lib/platform';
@@ -23,6 +24,7 @@ import {
  * and the two axes stay apart all the way down to the command (`accept_platform_operator_invitation`).
  */
 export default function AcceptOperatorInvite() {
+  const { t } = useT();
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
 
@@ -53,8 +55,8 @@ export default function AcceptOperatorInvite() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
-    const problem = passwordProblem(password, confirm);
-    if (problem) { setFormError(problem); return; }
+    const problem = passwordProblemOf(password, confirm);
+    if (problem) { setFormError(t(problem.key, problem.vars)); return; }
 
     setBusy(true);
     try {

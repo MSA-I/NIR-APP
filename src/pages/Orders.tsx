@@ -1,5 +1,6 @@
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { toHebrewError } from "../lib/errors";
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { FileDown, Loader2, Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle, Pencil, Copy, Plus, FileText } from 'lucide-react';
@@ -51,16 +52,17 @@ export function orderPrimaryAction(status: PoStatus, hasWhatsApp: boolean): Orde
 
 export function orderLifecycle(status: PoStatus, wasSent: boolean, wasConfirmed: boolean) {
   return [
-    ...(status === 'draft' ? [{ key: 'draft', label: 'טיוטה' }] : []),
-    ...(status === 'ready' ? [{ key: 'ready', label: 'מוכנה לשליחה לספק' }] : []),
-    ...(wasSent || status === 'sent' ? [{ key: 'sent', label: 'נשלחה לספק' }] : []),
-    ...(wasConfirmed || status === 'confirmed' || status === 'partial' ? [{ key: 'confirmed', label: 'אושרה' }] : []),
-    ...(status === 'partial' ? [{ key: 'partial', label: 'התקבלה חלקית' }] : []),
-    ...(status === 'received' ? [{ key: 'received', label: 'התקבלה' }] : []),
+    ...(status === 'draft' ? [{ key: 'draft', labelKey: 'orders.lifecycleDraft' as TKey }] : []),
+    ...(status === 'ready' ? [{ key: 'ready', labelKey: 'orders.lifecycleReady' as TKey }] : []),
+    ...(wasSent || status === 'sent' ? [{ key: 'sent', labelKey: 'orders.lifecycleSent' as TKey }] : []),
+    ...(wasConfirmed || status === 'confirmed' || status === 'partial' ? [{ key: 'confirmed', labelKey: 'orders.lifecycleConfirmed' as TKey }] : []),
+    ...(status === 'partial' ? [{ key: 'partial', labelKey: 'orders.lifecyclePartial' as TKey }] : []),
+    ...(status === 'received' ? [{ key: 'received', labelKey: 'orders.lifecycleReceived' as TKey }] : []),
   ];
 }
 
 export function OrdersList() {
+  const { errorText, statusLabel, t } = useT();
   const navigate = useNavigate();
   const { profile, org, organizationAccess } = useAuth();
   const toast = useToast();
@@ -104,9 +106,9 @@ export function OrdersList() {
       p_reason: reason ?? null,
     });
     setBusy(false);
-    if (res.error) { setCancelTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { setCancelTarget(null); toast(errorText(res.error.message), 'error'); return; }
     setCancelTarget(null);
-    toast('ההזמנה בוטלה');
+    toast(t('orders.toast'));
     void refetch();
   }
 
@@ -121,7 +123,7 @@ export function OrdersList() {
     setBusy(false);
     setSentConfirmTarget(null);
     if (res.error) { toast(res.error, 'error'); return; }
-    toast('ההזמנה סומנה כנשלחה לספק');
+    toast(t('orders.toast_2'));
     void refetch();
   }
 
@@ -129,12 +131,12 @@ export function OrdersList() {
     if (!draftCancelTarget) return;
     setBusy(true);
     try {
-      await cancelOrderDraft(draftCancelTarget.id, reason ?? 'ביטול טיוטה');
-      toast('הטיוטה בוטלה');
+      await cancelOrderDraft(draftCancelTarget.id, reason ?? t('orders.cancelOrderDraft'));
+      toast(t('orders.toast_3'));
       setDraftCancelTarget(null);
       void refetch();
     } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+      toast(errorText(failure), 'error');
     } finally {
       setBusy(false);
     }
@@ -159,14 +161,14 @@ export function OrdersList() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="הזמנות רכש"
-        meta={`${rows.length} הזמנות בתצוגה · ${data?.orders.length ?? 0} בסך הכול`}
-        actions={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={ICON.sm} aria-hidden="true" /> טיוטה חדשה</button>} />
+      <PageHeader title={t('orders.title')}
+        meta={t('orders.listMeta', { shown: rows.length, total: data?.orders.length ?? 0 })}
+        actions={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={ICON.sm} aria-hidden="true" /> {t('orders.navigate')}</button>} />
 
       {canWrite && !!data?.drafts.length && (
         <section aria-labelledby="my-drafts-title" className="border-y border-line-strong bg-surface">
           <div className="flex items-center justify-between gap-2 border-b border-line-soft px-3 py-3 sm:px-4">
-            <div><h2 id="my-drafts-title" className="section-title">הטיוטות שלי</h2><p className="mt-0.5 text-xs text-ink-muted">המשך בדיוק מהמקום שבו הפסקת</p></div>
+            <div><h2 id="my-drafts-title" className="section-title">{t('orders.text_5')}</h2><p className="mt-0.5 text-xs text-ink-muted">{t('orders.text_6')}</p></div>
             <span className="badge badge-idle num">{data?.drafts.length ?? 0}</span>
           </div>
           {data?.drafts.length ? (
@@ -174,46 +176,46 @@ export function OrdersList() {
               {data.drafts.map((draft) => (
                 <div key={draft.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-3 sm:px-4">
                   <div className="min-w-0">
-                    <div className="font-medium text-ink-body">טיוטה <span className="num">#{draft.number}</span></div>
-                    <div className="text-xs text-ink-muted">עודכנה {fmtDateTime(draft.updated_at)} · <span className="num">{draft.items.length}</span> מוצרים · {fmtMoneyExact(draftTotal(draft), draft.currency)}</div>
+                    <div className="font-medium text-ink-body">{t('orders.text_7')} <span className="num">#{draft.number}</span></div>
+                    <div className="text-xs text-ink-muted">{t('orders.draftUpdated', { at: fmtDateTime(draft.updated_at) })} · <span className="num">{draft.items.length}</span> {t('orders.productsWord')} · {fmtMoneyExact(draftTotal(draft), draft.currency)}</div>
                   </div>
                   <div className="ms-auto flex gap-2">
-                    <button type="button" className="btn-secondary" onClick={() => navigate(`/orders/new?draft=${draft.id}`)}>המשך עריכה</button>
-                    <button type="button" className="btn-danger" onClick={() => setDraftCancelTarget(draft)}>ביטול</button>
+                    <button type="button" className="btn-secondary" onClick={() => navigate(`/orders/new?draft=${draft.id}`)}>{t('orders.continueEditing')}</button>
+                    <button type="button" className="btn-danger" onClick={() => setDraftCancelTarget(draft)}>{t('orders.setDraftCancelTarget')}</button>
                   </div>
                 </div>
               ))}
             </div>
-          ) : <EmptyState title="אין טיוטות פעילות" subtitle="טיוטה שתתחיל ולא תסיים תחכה לך כאן." icon={<FileText size={ICON.hero} />} />}
+          ) : <EmptyState title={t('orders.title_2')} subtitle={t('orders.subtitle')} icon={<FileText size={ICON.hero} />} />}
         </section>
       )}
 
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || String(r.number).includes(q)}
-        searchLabel="חיפוש בהזמנות רכש"
-        rowLabel={(r) => `הזמנת רכש מספר ${r.number} עבור ${r.supplier.name}`}
+        searchLabel={t('orders.searchLabel')}
+        rowLabel={(r) => t('orders.rowLabel', { number: r.number, supplier: r.supplier.name })}
         onRowClick={(r) => navigate(`/orders/${r.id}`)}
         mobile="cards"
         mobileTitle={(r) => <><span className="num">#{r.number}</span> · {r.supplier.name}</>}
         mobileTrailing={(r) => <StatusBadge meta={PO_STATUS[r.status]} />}
         rowActions={(r) => [
-          { key: 'edit', label: 'עריכה', icon: Pencil, hidden: !canWrite, onSelect: () => navigate(`/orders/${r.id}`) },
-          { key: 'duplicate', label: 'שכפול', icon: Copy, hidden: !canWrite, onSelect: () => navigate(`/orders/new?from=${r.id}`) },
+          { key: 'edit', label: t('orders.actionEdit'), icon: Pencil, hidden: !canWrite, onSelect: () => navigate(`/orders/${r.id}`) },
+          { key: 'duplicate', label: t('orders.actionDuplicate'), icon: Copy, hidden: !canWrite, onSelect: () => navigate(`/orders/new?from=${r.id}`) },
           {
-            key: 'whatsapp', label: 'פתיחת ההזמנה ב-WhatsApp', icon: MessageCircle,
+            key: 'whatsapp', label: t('orders.text_8'), icon: MessageCircle,
             hidden: !canWrite || !(r.supplier.whatsapp || r.supplier.phone) || !['draft', 'ready', 'sent'].includes(r.status),
             onSelect: () => sendWhatsApp(r),
           },
           {
             // Reachable without WhatsApp too: the order may have gone out by phone, email or a
             // printed sheet, and the status must still be recordable.
-            key: 'mark-sent', label: 'סמן כנשלחה לספק', icon: Send,
+            key: 'mark-sent', label: t('orders.text_9'), icon: Send,
             hidden: !canWrite || !needsSentConfirmation(r.status),
             onSelect: () => setSentConfirmTarget(r),
           },
-          { key: 'print', label: 'הדפסה', icon: Printer, onSelect: () => navigate(`/orders/${r.id}?print=1`) },
+          { key: 'print', label: t('orders.actionPrint'), icon: Printer, onSelect: () => navigate(`/orders/${r.id}?print=1`) },
           {
-            key: 'cancel', label: 'ביטול', icon: XCircle, tone: 'danger',
+            key: 'cancel', label: t('orders.text_10'), icon: XCircle, tone: 'danger',
             hidden: !canWrite || ['received', 'cancelled'].includes(r.status),
             onSelect: () => setCancelTarget(r),
           },
@@ -221,14 +223,14 @@ export function OrdersList() {
         activeFilters={statusFilter === 'all' ? 0 : 1}
         onClearFilters={() => setStatusFilter('all')}
         toolbar={
-          <select className="input w-auto!" aria-label="סינון הזמנות רכש לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="open">הזמנות פתוחות</option>
-            <option value="all">הכל</option>
-            {Object.entries(PO_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          <select className="input w-auto!" aria-label={t('orders.aria_label')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="open">{t('orders.text_11')}</option>
+            <option value="all">{t('orders.text_12')}</option>
+            {Object.entries(PO_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
           </select>
         }
-        emptyTitle="עדיין אין הזמנות רכש" emptySubtitle="אפשר ליצור טיוטה חדשה כדי להתחיל את תהליך הרכש"
-        emptyAction={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={ICON.sm} aria-hidden="true" /> טיוטה חדשה</button>} />
+        emptyTitle={t('orders.emptyTitle')} emptySubtitle={t('orders.emptySubtitle')}
+        emptyAction={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={ICON.sm} aria-hidden="true" /> {t('orders.navigate_2')}</button>} />
 
       <WhatsAppSendDialog order={waTarget} orgName={org?.name ?? ''}
         onClose={(openedText) => {
@@ -239,20 +241,20 @@ export function OrdersList() {
         }} />
       <ConfirmDialog open={!!sentConfirmTarget} onClose={() => setSentConfirmTarget(null)}
         onConfirm={() => void confirmSent()}
-        title="סימון ההזמנה כנשלחה לספק"
+        title={t('orders.title_3')}
         message={sentConfirmTarget
-          ? `האם ההודעה על הזמנה #${sentConfirmTarget.number} עבור ${sentConfirmTarget.supplier.name} נשלחה בפועל לספק? `
-            + 'המערכת אינה יכולה לדעת זאת בעצמה. הסימון יירשם עם מועד השליחה ויתועד ביומן הביקורת.'
+          ? `${t('orders.sentConfirmQuestion', { number: sentConfirmTarget.number, supplier: sentConfirmTarget.supplier.name })} `
+            + t('orders.text_13')
           : ''}
-        confirmLabel="כן, נשלחה לספק" busy={busy} />
+        confirmLabel={t('orders.confirmLabel')} busy={busy} />
       <ConfirmDialog open={!!cancelTarget} onClose={() => setCancelTarget(null)}
         onConfirm={(reason) => void cancelOrder(reason)}
-        title="ביטול הזמנה" message="האם לבטל את ההזמנה? הפעולה תתועד ביומן הביקורת."
+        title={t('orders.title_4')} message={t('orders.message')}
         danger requireReason busy={busy} />
       <ConfirmDialog open={!!draftCancelTarget} onClose={() => setDraftCancelTarget(null)}
         onConfirm={(reason) => void cancelDraft(reason)}
-        title="ביטול טיוטה" message="הטיוטה תבוטל ולא תופיע עוד להמשך. הפעולה תתועד ביומן הביקורת."
-        confirmLabel="ביטול הטיוטה" danger requireReason busy={busy} />
+        title={t('orders.title_5')} message={t('orders.message_2')}
+        confirmLabel={t('orders.confirmLabel_2')} danger requireReason busy={busy} />
     </div>
   );
 }
@@ -274,6 +276,7 @@ type FullOrder = PurchaseOrder & {
 };
 
 export function OrderDetail() {
+  const { errorText, locale, t } = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, org, organizationAccess } = useAuth();
@@ -329,10 +332,10 @@ export function OrderDetail() {
       p_confirmation_note: confirmationNote,
       p_expected_date: expectedDate,
     });
-    if (res.error) { setBusy(false); toast(toHebrewError(res.error.message), 'error'); return false; }
+    if (res.error) { setBusy(false); toast(errorText(res.error.message), 'error'); return false; }
     setBusy(false);
     setConfirm(null);
-    toast('הסטטוס עודכן');
+    toast(t('orders.toast_4'));
     void refetch();
     return true;
   }
@@ -345,9 +348,9 @@ export function OrderDetail() {
       p_reason: reason ?? null,
     });
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     setConfirm(null);
-    toast('ההזמנה בוטלה');
+    toast(t('orders.toast_5'));
     void refetch();
   }
 
@@ -366,7 +369,7 @@ export function OrderDetail() {
     setBusy(false);
     setSentConfirmOpen(false);
     if (res.error) { toast(res.error, 'error'); return; }
-    toast('ההזמנה סומנה כנשלחה לספק');
+    toast(t('orders.toast_6'));
     void refetch();
   }
 
@@ -390,14 +393,14 @@ export function OrderDetail() {
       });
       toast('קובץ ה-PDF הורד');
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setExportingPdf(false);
     }
   }
 
   if (loading) return <RecordSkeleton />;
-  if (error || !order) return <ErrorNote message={error ?? 'הזמנה לא נמצאה'} />;
+  if (error || !order) return <ErrorNote message={error ?? t('orders.text_14')} />;
 
   // Every price on this sheet is a snapshot taken in the ORDER's currency, so the total is that
   // currency and nothing here needs a second one.
@@ -412,52 +415,53 @@ export function OrderDetail() {
 
   const waLink = orderWhatsAppLink(order, orgName);
   const primaryKey = canWrite ? orderPrimaryAction(order.status, !!waLink) : null;
-  const nextAction = primaryKey === 'ready' ? 'סימון ההזמנה כמוכנה לשליחה'
-    : primaryKey === 'sent' ? 'סימון ההזמנה כנשלחה לספק'
-      : primaryKey === 'whatsapp' ? 'פתיחת ההזמנה ב-WhatsApp ואישור השליחה'
-        : primaryKey === 'confirm' ? 'תיעוד אישור הספק'
-          : primaryKey === 'receive' ? 'קבלת הסחורה' : undefined;
+  const nextAction = primaryKey === 'ready' ? t('orders.text_15')
+    : primaryKey === 'sent' ? t('orders.text_16')
+      : primaryKey === 'whatsapp' ? t('orders.text_17')
+        : primaryKey === 'confirm' ? t('orders.text_18')
+          : primaryKey === 'receive' ? t('orders.text_19') : undefined;
   const primaryAction = primaryKey === 'ready' ? (
-    <button className="btn-primary" disabled={busy} onClick={() => void setStatus('ready', 'סימון הזמנה כמוכנה לשליחה')}><CheckCircle2 size={ICON.sm} aria-hidden="true" /> סימון כמוכנה לשליחה</button>
+    <button className="btn-primary" disabled={busy} onClick={() => void setStatus('ready', t('orders.setStatus'))}><CheckCircle2 size={ICON.sm} aria-hidden="true" /> {t('orders.setStatus_2')}</button>
   ) : primaryKey === 'sent' ? (
-    <button className="btn-primary" disabled={busy} onClick={() => setSentConfirmOpen(true)}><Send size={ICON.sm} aria-hidden="true" /> סימון כנשלחה לספק</button>
+    <button className="btn-primary" disabled={busy} onClick={() => setSentConfirmOpen(true)}><Send size={ICON.sm} aria-hidden="true" /> {t('orders.setSentConfirmOpen')}</button>
   ) : primaryKey === 'whatsapp' ? (
-    <button className="btn-primary" disabled={busy} onClick={() => sendWhatsApp()}><MessageCircle size={ICON.sm} aria-hidden="true" /> פתיחה ב-WhatsApp</button>
+    <button className="btn-primary" disabled={busy} onClick={() => sendWhatsApp()}><MessageCircle size={ICON.sm} aria-hidden="true" /> {t('orders.sendWhatsApp')}</button>
   ) : primaryKey === 'confirm' ? (
-    <button className="btn-primary" disabled={busy} onClick={() => setSupplierConfirmOpen(true)}><CheckCircle2 size={ICON.sm} aria-hidden="true" /> הספק אישר</button>
+    <button className="btn-primary" disabled={busy} onClick={() => setSupplierConfirmOpen(true)}><CheckCircle2 size={ICON.sm} aria-hidden="true" /> {t('orders.setSupplierConfirmOpen')}</button>
   ) : primaryKey === 'receive' ? (
-    <button className="btn-primary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={ICON.sm} aria-hidden="true" /> קבלת סחורה</button>
+    <button className="btn-primary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={ICON.sm} aria-hidden="true" /> {t('orders.receiveGoods')}</button>
   ) : null;
   // Only observed/current stages are included. Purchase orders are normally created as `ready`,
   // and a fully received order did not necessarily pass through `confirmed` or `partial`, so
   // rendering the whole theoretical graph as complete
   // would invent history the record does not carry.
-  const lifecycleSteps = orderLifecycle(order.status, !!order.sent_at, !!order.confirmed_at);
+  const lifecycleSteps = orderLifecycle(order.status, !!order.sent_at, !!order.confirmed_at)
+    .map((step) => ({ key: step.key, label: t(step.labelKey) }));
 
   return (
     <div className="space-y-4">
       <RecordHeader className="no-print"
-        breadcrumbs={<Breadcrumbs items={[{ label: 'הזמנות', to: '/orders' }, { label: `#${order.number}` }]} />}
-        title={<span>הזמנה <span className="num">#{order.number}</span></span>}
+        breadcrumbs={<Breadcrumbs items={[{ label: t('orders.ordersCrumb'), to: '/orders' }, { label: `#${order.number}` }]} />}
+        title={<span>{t('orders.text_20')} <span className="num">#{order.number}</span></span>}
         status={<StatusBadge meta={PO_STATUS[order.status]} />}
-        meta={<><span>{order.supplier.name}</span><span className="num font-semibold text-ink-body">{fmtMoneyExact(total, order.currency)}</span><span>נוצרה {fmtDateTime(order.created_at)}</span>{order.sent_at && <span>נשלחה {fmtDateTime(order.sent_at)}</span>}{order.revision_number > 1 && order.revised_from_order_id && (
+        meta={<><span>{order.supplier.name}</span><span className="num font-semibold text-ink-body">{fmtMoneyExact(total, order.currency)}</span><span>{t('orders.createdAt', { at: fmtDateTime(order.created_at) })}</span>{order.sent_at && <span>{t('orders.sentAt', { at: fmtDateTime(order.sent_at) })}</span>}{order.revision_number > 1 && order.revised_from_order_id && (
           <button type="button" className="underline" onClick={() => navigate(`/orders/${order.revised_from_order_id}`)}>
-            רוויזיה <span className="num">{order.revision_number}</span> — להזמנה המקורית
+            {t('orders.revisionWord')} <span className="num">{order.revision_number}</span> {t('orders.toOriginalOrder')}
           </button>
         )}</>}
         primaryAction={primaryAction}
         secondaryActions={<>
           {canWrite && ['draft', 'sent'].includes(order.status) && waLink && primaryKey !== 'whatsapp' && (
-            <button className="btn-secondary" disabled={busy} onClick={() => sendWhatsApp()}><MessageCircle size={ICON.sm} aria-hidden="true" /> {order.status === 'sent' ? 'פתיחה חוזרת ב-WhatsApp' : 'פתיחה ב-WhatsApp'}</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => sendWhatsApp()}><MessageCircle size={ICON.sm} aria-hidden="true" /> {order.status === 'sent' ? t('orders.sendWhatsApp_2') : t('orders.sendWhatsApp_3')}</button>
           )}
           {/* When WhatsApp is the primary action the confirmation still has to be reachable on its
               own: the order may have gone out by phone or email, or the operator may have dismissed
               the prompt after sending. Opening WhatsApp is not what records the send. */}
           {canWrite && primaryKey === 'whatsapp' && (
-            <button className="btn-secondary" disabled={busy} onClick={() => setSentConfirmOpen(true)}><Send size={ICON.sm} aria-hidden="true" /> סמן כנשלחה לספק</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => setSentConfirmOpen(true)}><Send size={ICON.sm} aria-hidden="true" /> {t('orders.setSentConfirmOpen_2')}</button>
           )}
           {canWrite && order.status === 'sent' && (
-            <button className="btn-secondary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={ICON.sm} aria-hidden="true" /> קבלת סחורה</button>
+            <button className="btn-secondary" onClick={() => navigate(`/receiving/${order.id}`)}><PackageCheck size={ICON.sm} aria-hidden="true" /> {t('orders.receiveGoods')}</button>
           )}
           {/* G1, finding 14 — the same URL Receiving.tsx:638 builds, from the order this time.
               An invoice can only be linked to an order through these parameters (InvoiceNew.tsx
@@ -468,7 +472,7 @@ export function OrderDetail() {
               from the supplier, so the action is to upload it, not to type it. */}
           {canWrite && !['draft', 'cancelled'].includes(order.status) && (
             <button className="btn-secondary" onClick={() => navigate('/documents')}>
-              <FileText size={ICON.sm} aria-hidden="true" /> העלאת החשבונית שהתקבלה
+              <FileText size={ICON.sm} aria-hidden="true" /> {t('orders.uploadInvoiceReceived')}
             </button>
           )}
           <button className="btn-secondary" disabled={exportingPdf} onClick={() => void exportPdf()} title="הורדת ההזמנה כקובץ PDF מעוצב עם הלוגו של הארגון">{exportingPdf ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileDown size={ICON.sm} aria-hidden="true" />} הורדת PDF</button>
@@ -476,7 +480,7 @@ export function OrderDetail() {
               text, which the rasterised PDF cannot (src/lib/pdf.ts explains why). */}
           <button className="btn-secondary" onClick={() => window.print()}><Printer size={ICON.sm} aria-hidden="true" /> הדפסה</button>
           {canWrite && !['received', 'cancelled'].includes(order.status) && (
-            <button type="button" className="btn-danger" onClick={() => setConfirm({ status: 'cancelled', label: 'ביטול הזמנה' })}><XCircle size={ICON.sm} aria-hidden="true" /> ביטול</button>
+            <button type="button" className="btn-danger" onClick={() => setConfirm({ status: 'cancelled', label: t('orders.setConfirm') })}><XCircle size={ICON.sm} aria-hidden="true" /> {t('orders.setConfirm_2')}</button>
           )}
         </>}
         lifecycle={order.status === 'cancelled' ? undefined : <LifecycleStrip steps={lifecycleSteps} current={order.status} nextAction={nextAction} />} />
@@ -485,7 +489,7 @@ export function OrderDetail() {
         <Note tone="done" className="no-print">
           <CheckCircle2 size={ICON.sm} className="mt-0.5 shrink-0" />
           <span>
-            הספק אישר את קבלת ההזמנה ב-{fmtDateTime(order.confirmed_at)}
+            {t('orders.fmtDateTime')}{fmtDateTime(order.confirmed_at)}
             {order.confirmation_note && <span className="text-done-fg"> · {order.confirmation_note}</span>}
           </span>
         </Note>
@@ -522,35 +526,37 @@ export function OrderDetail() {
             display:none heading is simply absent from the generated PDF (src/index.css). */}
         <div aria-hidden="true" className="print-only mb-4">
           {orgLogoUrl && <img src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
-          <h2 className="text-xl font-semibold">{`הזמנת רכש #${order.number}${orgName ? ` — ${orgName}` : ''}`}</h2>
-          <div className="text-sm mt-1">ספק: {order.supplier.name} · תאריך: {fmtDate(order.created_at)} {order.expected_date && `· אספקה מבוקשת: ${fmtDate(order.expected_date)}`}</div>
+          <h2 className="text-xl font-semibold">{orgName
+            ? t('orders.printTitleWithOrg', { number: order.number, org: orgName })
+            : t('orders.printTitle', { number: order.number })}</h2>
+          <div className="text-sm mt-1">{t('orders.printSupplier', { supplier: order.supplier.name })} · {t('orders.printDate', { date: fmtDate(order.created_at) })} {order.expected_date && t('orders.printExpected', { date: fmtDate(order.expected_date) })}</div>
         </div>
-        <ul className="divide-y divide-line-soft lg:hidden print:hidden" aria-label="פריטי ההזמנה">
+        <ul className="divide-y divide-line-soft lg:hidden print:hidden" aria-label={t('orders.aria_label_2')}>
           {order.items.map((item) => (
             <li key={item.id} className="py-3 first:pt-0 last:pb-0">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0"><div className="font-medium text-ink-body"><bdi>{productLabel(item.product)}</bdi></div><div className="mt-1 text-xs text-ink-muted"><span className="num">{formatQuantity(item.qty, item.product.unit)}</span> × <span className="num">{fmtMoneyExact(item.unit_price, order.currency)}</span></div></div>
+                <div className="min-w-0"><div className="font-medium text-ink-body"><bdi>{productLabel(item.product)}</bdi></div><div className="mt-1 text-xs text-ink-muted"><span className="num">{formatQuantity(item.qty, item.product.unit, locale)}</span> × <span className="num">{fmtMoneyExact(item.unit_price, order.currency)}</span></div></div>
                 <span className="num shrink-0 font-semibold">{fmtMoneyExact(item.qty * item.unit_price, order.currency)}</span>
               </div>
-              {order.status !== 'draft' && <div className="mt-2 text-xs text-ink-muted">התקבל: <span className={`num ${item.received_qty >= item.qty ? 'text-done-fg' : item.received_qty > 0 ? 'text-await-fg' : ''}`}>{item.received_qty}</span> מתוך <span className="num">{item.qty}</span></div>}
+              {order.status !== 'draft' && <div className="mt-2 text-xs text-ink-muted">{t('orders.receivedLabel')} <span className={`num ${item.received_qty >= item.qty ? 'text-done-fg' : item.received_qty > 0 ? 'text-await-fg' : ''}`}>{item.received_qty}</span> {t('orders.outOfWord')} <span className="num">{item.qty}</span></div>}
             </li>
           ))}
-          <li className="flex items-center justify-between pt-3 font-semibold"><span>סה״כ להזמנה</span><span className="num">{fmtMoneyExact(total, order.currency)}</span></li>
+          <li className="flex items-center justify-between pt-3 font-semibold"><span>{t('orders.fmtMoneyExact_2')}</span><span className="num">{fmtMoneyExact(total, order.currency)}</span></li>
         </ul>
-        <div className="table-scroll hidden overflow-x-auto lg:block print:block print:overflow-visible" tabIndex={0} role="region" aria-label="שורות ההזמנה">
+        <div className="table-scroll hidden overflow-x-auto lg:block print:block print:overflow-visible" tabIndex={0} role="region" aria-label={t('orders.aria_label_3')}>
         <table className="w-full">
           <thead className="table-head border-b border-line-soft">
             <tr>
-              <th scope="col" className="th">מוצר</th><th scope="col" className="th">יח׳</th><th scope="col" className="th">כמות</th>
-              <th scope="col" className="th">מחיר יח׳ (בעת ההזמנה)</th><th scope="col" className="th">סה״כ</th>
-              {order.status !== 'draft' && <th scope="col" className="th no-print">התקבל</th>}
+              <th scope="col" className="th">{t('orders.text_21')}</th><th scope="col" className="th">{t('orders.text_22')}</th><th scope="col" className="th">{t('orders.text_23')}</th>
+              <th scope="col" className="th">{t('orders.text_24')}</th><th scope="col" className="th">{t('orders.text_25')}</th>
+              {order.status !== 'draft' && <th scope="col" className="th no-print">{t('orders.text_26')}</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-line-soft">
             {order.items.map((i) => (
               <tr key={i.id}>
                 <td className="td font-medium text-ink-body"><bdi>{productLabel(i.product)}</bdi></td>
-                <td className="td">{formatUnit(i.product.unit)}</td>
+                <td className="td">{formatUnit(i.product.unit, locale)}</td>
                 <td className="td num">{i.qty}</td>
                 <td className="td num">{fmtMoneyExact(i.unit_price, order.currency)}</td>
                 <td className="td num">{fmtMoneyExact(i.qty * i.unit_price, order.currency)}</td>
@@ -564,19 +570,19 @@ export function OrderDetail() {
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-line">
-              <th scope="row" className="td text-start font-semibold" colSpan={4}>סה״כ להזמנה</th>
+              <th scope="row" className="td text-start font-semibold" colSpan={4}>{t('orders.text_27')}</th>
               <td className="td num font-semibold">{fmtMoneyExact(total, order.currency)}</td>
               {order.status !== 'draft' && <td className="no-print" />}
             </tr>
           </tfoot>
         </table>
         </div>
-        {order.notes && <div className="mt-3 text-sm text-ink-soft">הערות: {order.notes}</div>}
+        {order.notes && <div className="mt-3 text-sm text-ink-soft">{t('orders.notesLabel')} {order.notes}</div>}
       </Card>
 
       <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)}
         onConfirm={(reason) => confirm && void cancelOrder(reason)}
-        title={confirm?.label ?? ''} message="האם לבטל את ההזמנה? הפעולה תתועד ביומן הביקורת." danger requireReason busy={busy} />
+        title={confirm?.label ?? ''} message={t('orders.message_3')} danger requireReason busy={busy} />
 
       <WhatsAppSendDialog order={waOpen ? order : null} orgName={orgName}
         onClose={(openedText) => {
@@ -588,23 +594,23 @@ export function OrderDetail() {
           and tells us nothing afterwards, so the app asks instead of assuming. */}
       <ConfirmDialog open={sentConfirmOpen} onClose={() => setSentConfirmOpen(false)}
         onConfirm={() => void confirmSent()}
-        title="סימון ההזמנה כנשלחה לספק"
-        message={`האם ההודעה על הזמנה #${order.number} עבור ${order.supplier.name} נשלחה בפועל לספק? `
-          + 'המערכת אינה יכולה לדעת זאת בעצמה. הסימון יירשם עם מועד השליחה ויתועד ביומן הביקורת.'}
-        confirmLabel="כן, נשלחה לספק" busy={busy} />
+        title={t('orders.title_6')}
+        message={`${t('orders.sentConfirmQuestion', { number: order.number, supplier: order.supplier.name })} `
+          + t('orders.text_28')}
+        confirmLabel={t('orders.confirmLabel_3')} busy={busy} />
 
-      <Modal open={supplierConfirmOpen} onClose={() => setSupplierConfirmOpen(false)} title="אישור קבלת הזמנה ע״י הספק" busy={busy} statusMessage={busy ? 'שומר את אישור הספק' : undefined}>
-        <p className="text-sm text-ink-soft mb-3">מועד האישור והמשתמש המסמן יתועדו במערכת וביומן הביקורת.</p>
-        <label className="label" htmlFor="supplier-confirm-note">איך התקבל האישור? (לא חובה)</label>
-        <input id="supplier-confirm-note" className="input" placeholder='למשל: "אושר ב-WhatsApp ע״י דוד"' value={confirmNote} onChange={(e) => setConfirmNote(e.target.value)} />
-        <label className="label mt-3" htmlFor="supplier-confirm-date">אספקה מבוקשת (לא חובה — לעדכון תאריך היעד)</label>
+      <Modal open={supplierConfirmOpen} onClose={() => setSupplierConfirmOpen(false)} title={t('orders.title_7')} busy={busy} statusMessage={busy ? t('orders.setSupplierConfirmOpen_2') : undefined}>
+        <p className="text-sm text-ink-soft mb-3">{t('orders.text_29')}</p>
+        <label className="label" htmlFor="supplier-confirm-note">{t('orders.text_30')}</label>
+        <input id="supplier-confirm-note" className="input" placeholder={t('orders.setConfirmNote')} value={confirmNote} onChange={(e) => setConfirmNote(e.target.value)} />
+        <label className="label mt-3" htmlFor="supplier-confirm-date">{t('orders.text_31')}</label>
         <input id="supplier-confirm-date" type="date" className="input" min={todayISO()} value={confirmExpected} onChange={(e) => setConfirmExpected(e.target.value)} />
         <div className="flex justify-end gap-2 mt-5">
-          <button className="btn-secondary" disabled={busy} onClick={() => setSupplierConfirmOpen(false)}>ביטול</button>
+          <button className="btn-secondary" disabled={busy} onClick={() => setSupplierConfirmOpen(false)}>{t('orders.setSupplierConfirmOpen_3')}</button>
           <button className="btn-primary" disabled={busy} onClick={() => void (async () => {
             const saved = await setStatus(
               'confirmed',
-              'אישור ספק להזמנה',
+              t('orders.text_32'),
               confirmNote.trim() || null,
               confirmExpected || null,
             );
@@ -614,7 +620,7 @@ export function OrderDetail() {
               setConfirmExpected('');
             }
           })()}>
-            <CheckCircle2 size={ICON.sm} aria-hidden="true" /> אישור
+            <CheckCircle2 size={ICON.sm} aria-hidden="true" /> {t('orders.approve')}
           </button>
         </div>
       </Modal>

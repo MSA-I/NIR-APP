@@ -40,10 +40,12 @@
  * the more dangerous lie.
  */
 
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 import { useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
-import { ok, toHebrewError } from '../lib/errors';
+import { ok } from '../lib/errors';
 import { unwrap } from '../lib/useQuery';
 import { fetchAll } from '../lib/supabasePaging';
 import { nameKey } from '../lib/nameKey';
@@ -74,16 +76,16 @@ export function quickProductRow(orgId: string, name: string, unit: string): Quic
   return { org_id: orgId, name: name.trim(), unit: normalizeUnitInput(unit), active: true };
 }
 
-const NAME_REQUIRED = 'שם מוצר הוא שדה חובה';
-const SUPPLIER_REQUIRED = 'יש לבחור ספק — בלי מחירון לספק לא ניתן להזמין את המוצר';
+const NAME_REQUIRED: TKey = 'quickCreate.nameRequired';
+const SUPPLIER_REQUIRED: TKey = 'quickCreate.supplierRequired';
 /** `import_supplier_prices` refuses above 1,000,000 (`0023`); say the limit before the round trip. */
-const PRICE_REQUIRED = 'יש להזין מחיר גדול מאפס ולא גבוה ממיליון';
+const PRICE_REQUIRED: TKey = 'quickCreate.priceRequired';
 
 type ExistingProduct = Pick<Product, 'id' | 'name' | 'unit' | 'active'>;
 
 /** What the duplicate IS, not merely that one exists — the name is the thing that collided. */
-function describeExisting(row: ExistingProduct) {
-  return [row.name, row.unit, row.active ? 'פעיל' : 'לא פעיל'].join(' · ');
+function describeExisting(row: ExistingProduct, t: (key: TKey) => string) {
+  return [row.name, row.unit, t(row.active ? 'quickCreate.active' : 'quickCreate.inactive')].join(' · ');
 }
 
 export function QuickCreateProduct({ suppliers, initialName, onClose, onCreated }: {
@@ -95,6 +97,7 @@ export function QuickCreateProduct({ suppliers, initialName, onClose, onCreated 
   /** Fires after BOTH writes succeed. The product is real and it has a price for `supplierId`. */
   onCreated: (product: Product) => void | Promise<void>;
 }) {
+  const { errorText, t } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [name, setName] = useState(initialName ?? '');
@@ -102,7 +105,12 @@ export function QuickCreateProduct({ suppliers, initialName, onClose, onCreated 
   const [supplierId, setSupplierId] = useState('');
   const [price, setPrice] = useState('');
   const [reason, setReason] = useState('');
+  // Two pieces of state for one refusal: `error` is the sentence on screen, `errorKey` is the
+  // thing the form can still reason about — which is what `aria-invalid` below asks. Comparing
+  // resolved sentences would stop being true the moment the reader changed language.
   const [error, setError] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState<TKey | null>(null);
+  const refuse = (key: TKey) => { setError(t(key)); setErrorKey(key); };
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
   const [duplicate, setDuplicate] = useState<ExistingProduct | null>(null);
@@ -116,16 +124,17 @@ export function QuickCreateProduct({ suppliers, initialName, onClose, onCreated 
   const spent = busy || created;
 
   async function save() {
-    if (!name.trim()) { setError(NAME_REQUIRED); return; }
-    if (!supplierId) { setError(SUPPLIER_REQUIRED); return; }
+    if (!name.trim()) { refuse(NAME_REQUIRED); return; }
+    if (!supplierId) { refuse(SUPPLIER_REQUIRED); return; }
     const parsedPrice = Number(price);
     if (!Number.isFinite(parsedPrice) || parsedPrice <= 0 || parsedPrice > 1_000_000) {
-      setError(PRICE_REQUIRED); return;
+      refuse(PRICE_REQUIRED); return;
     }
-    if (!profile?.org_id) { setError(toHebrewError(new Error('not_authorized'))); return; }
+    if (!profile?.org_id) { setError(errorText(new Error('not_authorized'))); setErrorKey(null); return; }
 
     setBusy(true);
     setError(null);
+    setErrorKey(null);
     try {
       // Warns, never blocks — same rule as the supplier door. Two genuinely similar product names
       // do occur, and refusing would rebuild the dead end this dialog exists to remove. Skipped
@@ -164,61 +173,61 @@ export function QuickCreateProduct({ suppliers, initialName, onClose, onCreated 
 
       pendingProduct.current = null;
       setCreated(true);
-      toast('המוצר נוצר ושויך לספק');
+      toast(t('quickCreate.toast'));
       await onCreated(product);
     } catch (failure) {
       setError(pendingProduct.current
-        ? `${toHebrewError(failure)} — המוצר נוצר בקטלוג אך עדיין ללא מחיר לספק. אפשר לנסות שוב, או להשלים את המחיר במסך המחירונים.`
-        : toHebrewError(failure));
+        ? t('quickCreate.createdWithoutPrice', { error: errorText(failure) })
+        : errorText(failure));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Modal open onClose={onClose} title="מוצר חדש" busy={busy}
-      description="המוצר ייווצר בקטלוג, יקבל מחיר אצל הספק שנבחר, ויתווסף להזמנה הזו — ויופיע גם בהזמנות הבאות."
-      statusMessage={busy ? 'יוצר את המוצר' : undefined}>
+    <Modal open onClose={onClose} title={t('quickCreate.title')} busy={busy}
+      description={t('quickCreate.description')}
+      statusMessage={busy ? t('quickCreate.text') : undefined}>
       <div className="space-y-4">
         {error && <ErrorNote message={error} />}
         {duplicate && (
           <Note tone="await" role="alert">
-            <div className="font-medium">מוצר בשם זה כבר קיים בקטלוג</div>
-            <div className="mt-1 text-sm">{describeExisting(duplicate)}</div>
+            <div className="font-medium">{t('quickCreate.text_2')}</div>
+            <div className="mt-1 text-sm">{describeExisting(duplicate, t)}</div>
           </Note>
         )}
         <div>
-          <label className="label" htmlFor="quick-product-name">שם המוצר *</label>
+          <label className="label" htmlFor="quick-product-name">{t('quickCreate.text_3')}</label>
           <input id="quick-product-name" className="input" value={name} disabled={spent}
-            aria-invalid={error === NAME_REQUIRED || undefined}
+            aria-invalid={errorKey === NAME_REQUIRED || undefined}
             onChange={(event) => { setName(event.target.value); setDuplicate(null); }} />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="label" htmlFor="quick-product-unit">יחידת מידה</label>
+            <label className="label" htmlFor="quick-product-unit">{t('quickCreate.text_4')}</label>
             <input id="quick-product-unit" className="input" value={unit} disabled={spent}
               onChange={(event) => setUnit(event.target.value)} />
           </div>
           <div>
-            <label className="label" htmlFor="quick-product-price">מחיר ליחידה *</label>
+            <label className="label" htmlFor="quick-product-price">{t('quickCreate.text_5')}</label>
             <input id="quick-product-price" className="input num" type="number" min="0" step="0.01"
               dir="ltr" value={price} disabled={spent}
-              aria-invalid={error === PRICE_REQUIRED || undefined}
+              aria-invalid={errorKey === PRICE_REQUIRED || undefined}
               onChange={(event) => setPrice(event.target.value)} />
           </div>
         </div>
-        <SupplierSelectField picker={picker} id="quick-product-supplier" label="ספק *"
-          value={supplierId} placeholder="בחר ספק" disabled={spent} />
+        <SupplierSelectField picker={picker} id="quick-product-supplier" label={t('quickCreate.label')}
+          value={supplierId} placeholder={t('quickCreate.placeholder')} disabled={spent} />
         <div>
-          <label className="label" htmlFor="quick-product-reason">סיבה (רשות)</label>
+          <label className="label" htmlFor="quick-product-reason">{t('quickCreate.text_6')}</label>
           <input id="quick-product-reason" className="input" value={reason} disabled={spent}
             onChange={(event) => setReason(event.target.value)} />
         </div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
-        <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
+        <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>{t('quickCreate.text_7')}</button>
         <button type="button" className="btn-primary" disabled={spent} onClick={() => void save()}>
-          {created ? 'נוצר' : busy ? 'שומר…' : duplicate ? 'צור בכל זאת' : 'הוספה להזמנה'}
+          {created ? t('quickCreate.text_8') : busy ? t('quickCreate.text_9') : duplicate ? t('quickCreate.text_10') : t('quickCreate.text_11')}
         </button>
       </div>
     </Modal>

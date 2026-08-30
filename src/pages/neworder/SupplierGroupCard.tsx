@@ -1,3 +1,5 @@
+import { useT } from '../../lib/i18n/LocaleProvider';
+import { pluralCategory } from '../../lib/i18n/t';
 import { fmtMoneyExact } from '../../lib/format';
 import { ActionMenu } from '../../components/ActionMenu';
 import type { SupplierGroup } from '../../lib/orderSplit';
@@ -12,24 +14,23 @@ interface SupplierGroupCardProps {
 }
 
 export default function SupplierGroupCard({ group, products, onOpenFix, onOpenGroupMove, canMoveGroup }: SupplierGroupCardProps) {
-  /* One card, one supplier, one currency (0217). `group.currency` IS the supplier's own money —
-     orderSplit refuses an offer priced in anything else — which is what makes the minimum below a
-     comparison rather than two numbers side by side. */
+  const { locale, t } = useT();
+  /* One card, one supplier, one currency (0217). `group.currency` IS the supplier's own money. */
   const { supplier, subtotal, currency, belowMinimum, shortfall, savingsContribution } = group;
   return (
     <div className={belowMinimum ? 'bg-await-wash' : ''}>
       <div className="flex flex-wrap items-center gap-2 px-3 py-3 sm:px-4">
         <div className="min-w-0">
           <div className="font-semibold text-ink-body">{supplier.name}</div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted"><span><span className="num">{group.lines.length}</span> פריטים</span>{belowMinimum && <span className="badge-await">מתחת למינימום</span>}</div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted"><span><span className="num">{group.lines.length}</span>{' '}{t(pluralCategory(locale, group.lines.length) === 'one' ? 'supplierGroupCard.itemOne' : 'supplierGroupCard.itemsOther')}</span>{belowMinimum && <span className="badge-await">{t('supplierGroupCard.belowMinimum')}</span>}</div>
         </div>
         <div className="ms-auto text-end">
           <div className="num font-semibold text-ink">{fmtMoneyExact(subtotal, currency)}</div>
-          <div className="text-xs text-ink-muted">סכום הזמנה</div>
+          <div className="text-xs text-ink-muted">{t('supplierGroupCard.orderTotal')}</div>
         </div>
-        <ActionMenu label={`פעולות עבור ${supplier.name}`} items={[{
+        <ActionMenu label={t('uiTail.actionsFor', { row: supplier.name })} items={[{
           key: 'move-group',
-          label: 'העבר את כל הקבוצה ל…',
+          label: t('supplierGroupCard.moveGroup'),
           disabled: !canMoveGroup,
           onSelect: onOpenGroupMove,
         }]} />
@@ -45,9 +46,9 @@ export default function SupplierGroupCard({ group, products, onOpenFix, onOpenGr
       <div className="divide-y divide-line-soft">
         {group.lines.map((line) => (
           <div key={line.productId} className="grid gap-1 px-3 py-2.5 text-sm sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center sm:gap-5 sm:px-4">
-            <span className="min-w-0 break-words font-medium text-ink-body">{products.get(line.productId)?.name ?? 'מוצר'}</span>
-            <span className="text-xs text-ink-muted">כמות <span className="num text-ink">{line.qty}</span></span>
-            <span className="text-xs text-ink-muted"><span className="num text-ink">{fmtMoneyExact(line.unitPrice, line.currency)}</span> ליחידה</span>
+            <span className="min-w-0 break-words font-medium text-ink-body">{products.get(line.productId)?.name ?? t('supplierGroupCard.fallbackProduct')}</span>
+            <span className="text-xs text-ink-muted">{t('supplierGroupCard.quantity')}{' '}<span className="num text-ink">{line.qty}</span></span>
+            <span className="text-xs text-ink-muted"><span className="num text-ink">{fmtMoneyExact(line.unitPrice, line.currency)}</span>{' '}{t('supplierGroupCard.perUnit')}</span>
             <strong className="num text-ink sm:text-end">{fmtMoneyExact(line.lineTotal, line.currency)}</strong>
           </div>
         ))}
@@ -55,9 +56,9 @@ export default function SupplierGroupCard({ group, products, onOpenFix, onOpenGr
 
       {belowMinimum && (
         <div className="note-await mx-3 mb-3 mt-3 flex-wrap items-center justify-between sm:mx-4">
-          <span>חסרים <strong className="num">{fmtMoneyExact(shortfall, currency)}</strong> למינימום ההזמנה.</span>
+          <span>{t('supplierGroupCard.shortfallPrefix')}{' '}<strong className="num">{fmtMoneyExact(shortfall, currency)}</strong>{' '}{t('supplierGroupCard.minimumSuffix')}</span>
           <button type="button" className="btn-secondary w-full border-await-line text-await-fg sm:w-auto" onClick={onOpenFix}>
-            הצג פתרונות
+            {t('supplierGroupCard.showSolutions')}
           </button>
         </div>
       )}

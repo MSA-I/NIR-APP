@@ -1,3 +1,5 @@
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 import { useNavigate } from 'react-router';
 import { useEffect, useRef } from 'react';
 import { RefreshCw, ChevronLeft, ShieldCheck, TriangleAlert, BellOff } from 'lucide-react';
@@ -22,13 +24,14 @@ const SEVERITY_BADGE: Record<AlertSeverity, string> = {
   info: 'badge-info',
 };
 
-const SEVERITY_LABEL: Record<AlertSeverity, string> = {
-  critical: 'דחוף',
-  warning: 'לטיפול',
-  info: 'מידע',
+const SEVERITY_KEY: Record<AlertSeverity, TKey> = {
+  critical: 'alerts.severityCritical',
+  warning: 'alerts.severityWarning',
+  info: 'alerts.severityInfo',
 };
 
 export default function Alerts() {
+  const { t, tDynamic } = useT();
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { data, loading, fetching, error, refetch } = useQuery<Summary>(() => buildSummary(), []);
@@ -71,41 +74,41 @@ export default function Alerts() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="התראות" meta={
+      <PageHeader title={t('alerts.title')} meta={
           <span>
-            נבדק {fmtDateTime(data.generatedAt)}{fetching ? ' · מתעדכן כעת' : ''}
+            {t('alerts.checkedAt', { at: fmtDateTime(data.generatedAt) })}{fetching ? t('alerts.fmtDateTime') : ''}
           </span>
         } actions={<button className="btn-secondary" onClick={() => void refetch()} disabled={fetching}>
           {/* One refresh mark for the whole product: RefreshCw at ICON.sm, spinning while the
               view is refetching, label unchanged. The busy state stays INSIDE the button
               (DESIGN.md:554) instead of only greying it out. */}
               <RefreshCw size={ICON.sm} aria-hidden="true" className={fetching ? 'animate-spin ' : ''} />
-          רענון
+          {t('alerts.text')}
         </button>} />
 
       {(error || !data.complete) && (
         <Note tone="alert">
           <TriangleAlert size={ICON.sm} className="mt-0.5 shrink-0" />
           <span>
-            {error ?? `הסריקה חלקית: ${data.failures.map((failure) => failure.label).join(', ')}. הממצאים שכן נטענו מוצגים, אך אי אפשר לקבוע שהכול תקין.`}
+            {error ?? t('alertsPage.partialScan', { scans: data.failures.map((failure) => tDynamic(failure.labelKey, failure.labelVars) ?? failure.labelKey).join(', ') })}
           </span>
         </Note>
       )}
 
       <div>
         <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h2 className="section-title">דורש טיפול</h2>
+          <h2 className="section-title">{t('alerts.text_2')}</h2>
           {present.length > 1 && (
             /* Was a BADGE wearing `cursor-pointer` — no height floor, no focus ring, and the
                pressed chip took its colour from severity, so the control changed shape as well
                as state. ToggleGroup is the one pick-one-of-N control; severity colour still
                rides the row badge below, where it describes an alert rather than a filter. */
             <ToggleGroup<string>
-              label="סינון התראות לפי סוג"
+              label={t('alerts.label')}
               value={sevFilter}
               onChange={setSevFilter}
               className="gap-1"
-              items={[{ key: '', label: 'הכל' }, ...present.map((s) => ({ key: s as string, label: SEVERITY_LABEL[s] }))]} />
+              items={[{ key: '', label: t('alerts.map') }, ...present.map((s) => ({ key: s as string, label: t(SEVERITY_KEY[s]) }))]} />
           )}
         </div>
         {data.complete && data.alerts.length === 0 ? (
@@ -114,18 +117,18 @@ export default function Alerts() {
           <Card pad={false}>
             <EmptyState
               icon={<ShieldCheck size={ICON.hero} className="text-done-fg" />}
-              title="לא נמצאו התראות פתוחות"
-              subtitle="בבדיקות שהמערכת יודעת להריץ לא נמצאה התראה פתוחה." />
+              title={t('alerts.title_2')}
+              subtitle={t('alerts.subtitle')} />
           </Card>
         ) : shown.length > 0 ? (
           <Card pad={false} clip className="divide-y divide-line-soft">
             {shown.map((a) => (
               <button key={a.code} onClick={() => navigate(a.to)}
                 className="w-full text-start flex items-center gap-3 px-4 py-3 row-hover cursor-pointer">
-                <span className={`${SEVERITY_BADGE[a.severity]} shrink-0`}>{SEVERITY_LABEL[a.severity]}</span>
+                <span className={`${SEVERITY_BADGE[a.severity]} shrink-0`}>{t(SEVERITY_KEY[a.severity])}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium text-ink-body">{a.title}</span>
-                  <span className="block text-xs text-ink-muted mt-0.5">{a.detail}</span>
+                  <span className="block text-sm font-medium text-ink-body">{t(a.title.key as TKey, a.title.vars)}</span>
+                  <span className="block text-xs text-ink-muted mt-0.5">{t(a.detail.key as TKey, a.detail.vars)}</span>
                 </span>
                 <ChevronLeft size={ICON.sm} className="text-ink-ghost shrink-0" aria-hidden="true" />
               </button>
@@ -133,15 +136,15 @@ export default function Alerts() {
           </Card>
         ) : data.alerts.length > 0 ? (
           <Card pad={false}>
-            <EmptyState title="אין התראות מסוג זה"
-              action={<button type="button" className="btn-secondary" onClick={() => setSevFilter('')}>הצג הכל</button>} />
+            <EmptyState title={t('alerts.title_3')}
+              action={<button type="button" className="btn-secondary" onClick={() => setSevFilter('')}>{t('alerts.setSevFilter')}</button>} />
           </Card>
         ) : (
           <Card pad={false}>
             <EmptyState
               icon={<TriangleAlert size={ICON.hero} className="text-await-fg" />}
-              title="הסריקה לא הושלמה"
-              subtitle="ולכן אין אפשרות לקבוע שאין התראות פתוחות." />
+              title={t('alerts.title_4')}
+              subtitle={t('alerts.subtitle_2')} />
           </Card>
         )}
       </div>
@@ -149,8 +152,8 @@ export default function Alerts() {
       {/* Naming what is not covered belongs on the screen, not only in the docs: a manager
           who reads this page as complete would stop looking elsewhere. */}
       <p className="text-xs text-ink-muted leading-relaxed">
-        אינו נבדק: מלאי נמוך (אין מעקב כמויות במערכת) · חריגה בתקציב (לא הוגדר תקציב).
-        מועדי פירעון נבדקים רק על דרישות תשלום שהוזן להן תאריך.
+        {t('alerts.text_3')}{' '}
+        {t('alerts.text_4')}
       </p>
 
       {/* WHAT THE BELL COUNTED. Until 26.08.2026 the bell's number and this screen described two
@@ -159,11 +162,11 @@ export default function Alerts() {
           count of 23 opened a page that mentioned none of them and then cleared the number. */}
       <div>
         <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="section-title">נשלח אליך</h2>
+          <h2 className="section-title">{t('alerts.text_5')}</h2>
           {/* The cap is honest only because the screen prints it, and the grouping only because
               the screen prints how many times each condition was announced. */}
           <span className="text-xs text-ink-muted">
-            {`עד ${NOTIFICATION_FEED_LIMIT} ההודעות האחרונות לחשבון הזה, מקובצות לפי הנושא`}
+            {t('alerts.feedLimitNote', { limit: NOTIFICATION_FEED_LIMIT })}
           </span>
         </div>
         {feed.loading ? (
@@ -176,19 +179,22 @@ export default function Alerts() {
               <button key={group.key} onClick={() => navigate(group.latest.target_url)}
                 className="w-full text-start flex items-center gap-3 px-4 py-3 row-hover cursor-pointer">
                 <span className={`${SEVERITY_BADGE[group.latest.severity]} shrink-0`}>
-                  {SEVERITY_LABEL[group.latest.severity]}
+                  {t(SEVERITY_KEY[group.latest.severity])}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium text-ink-body">
                     {group.latest.title}
                     {/* Frozen at arrival — see `newOnArrival`. Without it the mark would vanish
                         mid-read, the moment the acknowledgement lands. */}
-                    {newOnArrival.current?.has(group.key) && <span className="badge-info ms-2 align-middle">חדש</span>}
+                    {newOnArrival.current?.has(group.key) && <span className="badge-info ms-2 align-middle">{t('alerts.has')}</span>}
                   </span>
                   <span className="block text-xs text-ink-muted mt-0.5">{group.latest.body}</span>
                   <span className="block text-xs text-ink-muted mt-0.5">
                     {group.occurrences > 1
-                      ? `נשלחה ${group.occurrences} פעמים · האחרונה ${fmtDateTime(new Date(group.latest.created_at))}`
+                      ? t('alerts.sentTimes', {
+                        times: group.occurrences,
+                        latest: fmtDateTime(new Date(group.latest.created_at)),
+                      })
                       : fmtDateTime(new Date(group.latest.created_at))}
                   </span>
                 </span>
@@ -200,8 +206,8 @@ export default function Alerts() {
           <Card pad={false}>
             <EmptyState
               icon={<BellOff size={ICON.hero} className="text-ink-ghost" />}
-              title="לא נשלחו אליך הודעות"
-              subtitle="הודעות נשלחות על חשד לכפילות, על מועד פירעון, על עליית מחיר במחירון ועל עיבוד מסמכים שנעצר." />
+              title={t('alerts.title_5')}
+              subtitle={t('alerts.subtitle_3')} />
           </Card>
         )}
       </div>

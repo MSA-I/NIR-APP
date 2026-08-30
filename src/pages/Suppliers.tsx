@@ -1,10 +1,10 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { Plus, Phone, Mail, MapPin, Clock, Truck, Star, TrendingUp, TrendingDown, Pencil, Trash2, Upload, Landmark } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { toHebrewError } from '../lib/errors';
 import { useAuth } from '../auth/AuthContext';
 import { Breadcrumbs, Card, DataTable, StatusBadge, useToast, Modal, ErrorNote, Note, ConfirmDialog, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, SubPanel, Tabs, TabPanel, ToggleGroup, ICON, type Column } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
@@ -15,7 +15,7 @@ import { fmtMoneyExact, fmtNum, fmtDate, fmtDays, productLabel } from '../lib/fo
 import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission, SupplierBankDetails, SupplierBankMigrationItem, MoneyAmount } from '../lib/types';
 import { MoneyByCurrency } from '../components/Money';
 import { SUPPLIER_COLUMNS } from '../lib/supplierColumns';
-import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
+import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';
 import { SupplierCommunicationCard } from '../components/SupplierCommunicationCard';
 import { readFinancialSupplierBankAccount, readSupplierBankMigrationItem } from '../lib/financialSuppliers';
 
@@ -55,6 +55,7 @@ function otdTone(m: SupplierMetrics | null | undefined): ScoreTone {
 
 // The one decision-support column: open exceptions + open credits, empty (calm) when clean.
 function RiskCell({ m }: { m?: SupplierMetrics }) {
+  const { t } = useT();
   const ex = m?.open_exceptions ?? 0;
   const cr = m?.open_credits ?? 0;
   if (!ex && !cr) return <span className="text-ink-ghost">—</span>;
@@ -62,13 +63,14 @@ function RiskCell({ m }: { m?: SupplierMetrics }) {
     <span className="flex items-center gap-1">
       {/* Singular is not a rounding error in Hebrew: the plural form read "1 חריגים" on every
           supplier that had exactly one, in both the table and the mobile card. */}
-      {ex > 0 && <span className="badge-alert">{ex} {ex === 1 ? 'חריג' : 'חריגים'}</span>}
-      {cr > 0 && <span className="badge-await">{cr} {cr === 1 ? 'זיכוי' : 'זיכויים'}</span>}
+      {ex > 0 && <span className="badge-alert">{ex} {ex === 1 ? t('suppliers.text_2') : t('suppliers.text_3')}</span>}
+      {cr > 0 && <span className="badge-await">{cr} {cr === 1 ? t('suppliers.text_4') : t('suppliers.text_5')}</span>}
     </span>
   );
 }
 
 export function SuppliersList() {
+  const { errorText, statusLabel, t } = useT();
   const navigate = useNavigate();
   const { profile, org, organizationAccess } = useAuth();
   const toast = useToast();
@@ -148,7 +150,7 @@ export function SuppliersList() {
     // which this guard would mistake for "no money owed" and let the supplier vanish while
     // invoices are open. Unprovable = refuse, same as a failed check.
     if (!financial) {
-      toast('מחיקת ספק דורשת אימות יתרה פתוחה — זמין לבעלים בלבד', 'error');
+      toast(t('suppliers.toast'), 'error');
       return;
     }
     const [balRes, poRes] = await Promise.all([
@@ -158,18 +160,18 @@ export function SuppliersList() {
     ]);
     const err = balRes.error ?? poRes.error;
     // If the check itself failed we cannot prove the supplier is safe to delete — refuse.
-    if (err) { toast(toHebrewError(err.message), 'error'); return; }
+    if (err) { toast(errorText(err.message), 'error'); return; }
     // ANY currency in which this supplier is still owed money blocks the deletion. A netting
     // across currencies is exactly how a supplier with a dollar debt and a shekel credit could
     // have been deleted with money outstanding — the server's own guard was fixed the same way.
     const openBalance = ((balRes.data ?? []) as { open_balance_in_currency: number }[])
       .reduce((worst, row) => Math.max(worst, row.open_balance_in_currency), 0);
     if (openBalance > 0) {
-      toast('לא ניתן למחוק ספק שיש לו יתרה פתוחה. יש לסגור את היתרה לפני המחיקה.', 'error');
+      toast(t('suppliers.toast_2'), 'error');
       return;
     }
     if ((poRes.count ?? 0) > 0) {
-      toast('לא ניתן למחוק ספק שיש לו הזמנה פעילה. יש לסיים או לבטל את ההזמנה לפני המחיקה.', 'error');
+      toast(t('suppliers.toast_3'), 'error');
       return;
     }
     setDeleteTarget(s);
@@ -185,15 +187,15 @@ export function SuppliersList() {
       p_reason: reason ?? null,
     });
     setBusyDelete(false);
-    if (res.error) { setDeleteTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { setDeleteTarget(null); toast(errorText(res.error.message), 'error'); return; }
     setDeleteTarget(null);
-    toast('הספק נמחק');
+    toast(t('suppliers.toast_4'));
     void refetch();
   }
 
   const columns: Column<SupplierWithBalance>[] = [
-    { key: 'name', header: 'ספק', priority: 3, sortValue: (r) => r.name, render: (r) => <span className="font-medium text-ink">{r.name}</span> },
-    { key: 'rating', header: 'דירוג', priority: 3, className: 'num', sortValue: (r) => r.rating ?? 0, render: (r) => r.rating != null
+    { key: 'name', header: t('suppliers.text_6'), priority: 3, sortValue: (r) => r.name, render: (r) => <span className="font-medium text-ink">{r.name}</span> },
+    { key: 'rating', header: t('suppliers.text_7'), priority: 3, className: 'num', sortValue: (r) => r.rating ?? 0, render: (r) => r.rating != null
         ? <span className="inline-flex items-center gap-1"><Star size={ICON.xs} className="fill-star text-star" aria-hidden="true" />{r.rating}</span>
         : <span className="text-ink-ghost">—</span> },
     { key: 'cats', header: 'קטגוריות', priority: 3, render: (r) => <span className="text-ink-muted">{r.categories?.join(', ') || '—'}</span> },
@@ -220,43 +222,46 @@ export function SuppliersList() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="ספקים"
+      <PageHeader title={t('suppliers.title')}
         meta={financial
-          ? `${data?.length ?? 0} ספקים · ${(data ?? []).filter((supplier) => (supplier.open_balances ?? []).some((entry) => entry.amount > 0)).length} עם יתרה פתוחה`
-          : `${data?.length ?? 0} ספקים`}
-        actions={canWrite && <button data-tour-anchor="suppliers-new" className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> ספק חדש</button>} />
+          ? t('suppliers.listMetaFinancial', {
+            count: data?.length ?? 0,
+            withBalance: (data ?? []).filter((supplier) => (supplier.open_balances ?? []).some((b) => b.amount > 0)).length,
+          })
+          : t('suppliers.listMeta', { count: data?.length ?? 0 })}
+        actions={canWrite && <button data-tour-anchor="suppliers-new" className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> {t('suppliers.setEditing')}</button>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.contact_name ?? '').toLowerCase().includes(q) || (r.tax_id ?? '').toLowerCase().includes(q)}
-        searchLabel="חיפוש בספקים"
-        rowLabel={(r) => `ספק ${r.name}`}
+        searchLabel={t('suppliers.searchLabel')}
+        rowLabel={(r) => t('suppliers.rowLabel', { name: r.name })}
         onRowClick={(r) => navigate(`/suppliers/${r.id}`)}
         mobile="cards"
         mobileTitle={(r) => r.name}
         mobileTrailing={(r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} />}
         rowActions={canWrite ? (r) => [
-          { key: 'edit', label: 'עריכה', icon: Pencil, onSelect: () => setEditing(r) },
+          { key: 'edit', label: t('suppliers.setEditing_2'), icon: Pencil, onSelect: () => setEditing(r) },
           ...(canStartSupplierCommerce(r.status) ? [
-            { key: 'price-list', label: 'העלאת מחירון', icon: Upload, onSelect: () => setPriceUploadFor(r) },
+            { key: 'price-list', label: t('suppliers.setPriceUploadFor'), icon: Upload, onSelect: () => setPriceUploadFor(r) },
           ] : []),
-          { key: 'delete', label: 'מחיקה', icon: Trash2, tone: 'danger', onSelect: () => void requestDelete(r) },
+          { key: 'delete', label: t('suppliers.requestDelete'), icon: Trash2, tone: 'danger', onSelect: () => void requestDelete(r) },
         ] : undefined}
         activeFilters={(balanceFilter === 'open' ? 1 : 0) + (statusFilter ? 1 : 0)}
         onClearFilters={() => { setBalanceFilter(''); setStatusFilter(''); }}
         toolbar={
           <>
-            <select className="input w-auto!" aria-label="סינון ספקים לפי יתרה פתוחה" value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)}>
-              <option value="">כל הספקים</option>
-              <option value="open">עם יתרה פתוחה</option>
+            <select className="input w-auto!" aria-label={t('suppliers.aria_label')} value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)}>
+              <option value="">{t('suppliers.text_12')}</option>
+              <option value="open">{t('suppliers.text_13')}</option>
             </select>
-            <select className="input w-auto!" aria-label="סינון ספקים לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">כל הסטטוסים</option>
-              {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            <select className="input w-auto!" aria-label={t('suppliers.aria_label_2')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">{t('suppliers.text_14')}</option>
+              {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
             </select>
           </>
         }
-        emptyTitle="עדיין אין ספקים"
-        emptySubtitle="הוסף את הספק הראשון כדי להתחיל לנהל רכש, מחירים ויתרות"
-        emptyAction={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> ספק חדש</button>} />
+        emptyTitle={t('suppliers.emptyTitle')}
+        emptySubtitle={t('suppliers.emptySubtitle')}
+        emptyAction={canWrite && <button className="btn-primary" onClick={() => setEditing('new')}><Plus size={ICON.sm} aria-hidden="true" /> {t('suppliers.setEditing_3')}</button>} />
       {editing && <SupplierForm supplier={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refetch(); }} />}
       {priceUploadFor && (
         <PriceListUploadModal supplier={{ id: priceUploadFor.id, name: priceUploadFor.name }}
@@ -265,9 +270,9 @@ export function SuppliersList() {
 
       <ConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}
         onConfirm={(reason) => void deleteSupplier(reason)}
-        title="מחיקת ספק"
-        message={`הספק ״${deleteTarget?.name ?? ''}״ יוסר מהרשימות (מחיקה רכה — ההיסטוריה הכספית נשמרת). הפעולה תתועד ביומן הביקורת.`}
-        confirmLabel="מחיקה" danger requireReason busy={busyDelete} />
+        title={t('suppliers.title_2')}
+        message={t('suppliers.deleteMessage', { name: deleteTarget?.name ?? '' })}
+        confirmLabel={t('suppliers.confirmLabel')} danger requireReason busy={busyDelete} />
     </div>
   );
 }
@@ -293,6 +298,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
    */
   focus?: 'bank';
 }) {
+  const { errorText, statusLabel, t } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -376,7 +382,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         bic: current.bic ?? '',
       });
     }).catch((error) => {
-      if (!cancelled) setBankLoadError(toHebrewError(error));
+      if (!cancelled) setBankLoadError(errorText(error));
     });
     return () => { cancelled = true; };
   }, [supplier]);
@@ -395,7 +401,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   function bankPayload(): SupplierBankDetails | null {
     if (!bank.kind) return null;
     const accountHolder = bank.account_holder.trim();
-    if (!accountHolder) throw new Error('יש להזין שם בעל חשבון');
+    if (!accountHolder) throw new Error(t('suppliers.Error'));
     if (bank.kind === 'IL') {
       const bankCode = bank.bank_code.replace(/\s+/g, '');
       const branchCode = bank.branch_code.replace(/\s+/g, '');
@@ -403,7 +409,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
       if (!/^\d{1,3}$/.test(bankCode)
           || !/^\d{1,3}$/.test(branchCode)
           || !/^[0-9-]{1,20}$/.test(accountNumber)) {
-        throw new Error('יש להזין מספר בנק, סניף וחשבון ישראליים תקינים');
+        throw new Error(t('suppliers.Error_2'));
       }
       return {
         account_holder: accountHolder,
@@ -422,7 +428,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         || !/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/.test(iban)
         || iban.slice(0, 2) !== countryCode
         || (bic && !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(bic))) {
-      throw new Error('יש להזין קוד מדינה, IBAN ו־BIC תקינים');
+      throw new Error(t('suppliers.Error_3'));
     }
     return {
       account_holder: accountHolder,
@@ -436,14 +442,14 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   }
 
   async function save() {
-    if (!f.name.trim()) { toast('שם ספק הוא שדה חובה', 'error'); return; }
+    if (!f.name.trim()) { toast(t('suppliers.trim'), 'error'); return; }
     let nextBank: SupplierBankDetails | null | undefined;
     if (bankTouched) {
-      if (bankLoadError) { toast('לא ניתן לעדכן פרטי בנק לפני טעינת המידע הקיים', 'error'); return; }
+      if (bankLoadError) { toast(t('suppliers.toast_5'), 'error'); return; }
       try {
         nextBank = bankPayload();
       } catch (error) {
-        toast(toHebrewError(error), 'error');
+        toast(errorText(error), 'error');
         return;
       }
     }
@@ -467,15 +473,15 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
     if (supplier) {
       const res = await supabase.from('suppliers').update(row).eq('id', supplier.id);
       setBusy(false);
-      if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+      if (res.error) { toast(errorText(res.error.message), 'error'); return; }
       if (nextBank !== undefined) { startBankStep(nextBank, supplier.id); return; }
-      toast('הספק עודכן');
+      toast(t('suppliers.toast_6'));
       onSaved();
     } else {
       const res = await supabase.from('suppliers')
         .insert({ ...row, org_id: profile!.org_id }).select('id').single();
       setBusy(false);
-      if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+      if (res.error) { toast(errorText(res.error.message), 'error'); return; }
       // `nextBank` truthiness, not `!== undefined`: on a NEW supplier `null` means the user opened
       // the bank select and chose "ללא פרטי בנק", i.e. saved nothing. There is no prior value to
       // clear on a row that was just inserted bank-less, so demanding a reason and a password
@@ -488,7 +494,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         startBankStep(nextBank, (res.data as { id: string }).id);
         return;
       }
-      toast('הספק נוצר');
+      toast(t('suppliers.toast_8'));
       onSaved();
     }
   }
@@ -511,7 +517,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
     setBankBusy(false);
     // On failure the step-up dialog comes back for a retry — this time without the fresh-JWT skip,
     // so the retry is a deliberate act. The other fields are already saved.
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); setBankPrompt('retry'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); setBankPrompt('retry'); return; }
     toast('פרטי הבנק עודכנו ונרשמו ביומן הביקורת');
     setBankStep(null);
     onSaved();
@@ -522,27 +528,27 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   function cancelBankStep() {
     setBankStep(null);
     setBankPrompt('closed');
-    toast('פרטי הבנק לא עודכנו — שאר השדות נשמרו', 'error');
+    toast(t('suppliers.toast_10'), 'error');
     onSaved();
   }
 
-  const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+  const days = [t('suppliers.text_15'), t('suppliers.text_16'), t('suppliers.text_17'), t('suppliers.text_18'), t('suppliers.text_19'), t('suppliers.text_20'), t('suppliers.text_21')];
 
   return (
     <Modal open onClose={onClose} title={supplier ? `עריכת ספק — ${supplier.name}` : 'ספק חדש'} wide
       busy={busy || bankBusy}
       statusMessage={busy ? 'שומר את פרטי הספק' : bankBusy ? 'שומר את פרטי הבנק' : undefined}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div><label className="label" htmlFor="supplier-name">שם הספק *</label><input id="supplier-name" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} /></div>
-        <div><label className="label" htmlFor="supplier-tax-id">ח.פ / עוסק</label><input id="supplier-tax-id" className="input" dir="ltr" value={f.tax_id} onChange={(e) => set('tax_id', e.target.value)} /></div>
-        <div><label className="label" htmlFor="supplier-contact">איש קשר</label><input id="supplier-contact" className="input" value={f.contact_name} onChange={(e) => set('contact_name', e.target.value)} /></div>
-        <div><label className="label" htmlFor="supplier-phone">טלפון</label><input id="supplier-phone" className="input" dir="ltr" value={f.phone} onChange={(e) => set('phone', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-name">{t('suppliers.set')}</label><input id="supplier-name" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-tax-id">{t('suppliers.set_2')}</label><input id="supplier-tax-id" className="input" dir="ltr" value={f.tax_id} onChange={(e) => set('tax_id', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-contact">{t('suppliers.set_3')}</label><input id="supplier-contact" className="input" value={f.contact_name} onChange={(e) => set('contact_name', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-phone">{t('suppliers.set_4')}</label><input id="supplier-phone" className="input" dir="ltr" value={f.phone} onChange={(e) => set('phone', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-whatsapp">WhatsApp</label><input id="supplier-whatsapp" className="input" dir="ltr" value={f.whatsapp} onChange={(e) => set('whatsapp', e.target.value)} /></div>
-        <div><label className="label" htmlFor="supplier-email">אימייל</label><input id="supplier-email" className="input" dir="ltr" value={f.email} onChange={(e) => set('email', e.target.value)} /></div>
-        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-address">כתובת</label><input id="supplier-address" className="input" value={f.address} onChange={(e) => set('address', e.target.value)} /></div>
+        <div><label className="label" htmlFor="supplier-email">{t('suppliers.set_5')}</label><input id="supplier-email" className="input" dir="ltr" value={f.email} onChange={(e) => set('email', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-address">{t('suppliers.set_6')}</label><input id="supplier-address" className="input" value={f.address} onChange={(e) => set('address', e.target.value)} /></div>
         <div>
-          <span className="label">ימי אספקה</span>
-          <ToggleGroup label="ימי אספקה"
+          <span className="label">{t('suppliers.text_22')}</span>
+          <ToggleGroup label={t('suppliers.label')}
             items={days.map((d, i) => ({ key: String(i), label: d }))}
             value={f.delivery_days.map(String)}
             onChange={(key) => {
@@ -562,34 +568,34 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         <div><label className="label" htmlFor="supplier-payment-terms">תנאי תשלום</label><input id="supplier-payment-terms" className="input" placeholder="שוטף + 30" value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} /></div>
         <SubPanel className="sm:col-span-2 space-y-3">
           <div>
-            <label className="label" htmlFor="supplier-bank-kind">סוג פרטי הבנק</label>
+            <label className="label" htmlFor="supplier-bank-kind">{t('suppliers.text_24')}</label>
             <select id="supplier-bank-kind" ref={bankFieldRef} className="input" value={bank.kind}
               onChange={(event) => setBankField('kind', event.target.value)}>
-              <option value="">ללא פרטי בנק</option>
-              <option value="IL">חשבון בישראל</option>
-              <option value="international">חשבון בינלאומי</option>
+              <option value="">{t('suppliers.text_25')}</option>
+              <option value="IL">{t('suppliers.text_26')}</option>
+              <option value="international">{t('suppliers.text_27')}</option>
             </select>
           </div>
           {legacyBank && (
             <Note tone="await">
-              <span className="block font-medium">טקסט ישן לבדיקה בלבד — אינו מקור לתשלום</span>
+              <span className="block font-medium">{t('suppliers.text_28')}</span>
               <span className="block mt-1" dir="ltr">{legacyBank.legacy_bank_details}</span>
-              <span className="block mt-1">יש להזין ולאשר ידנית את השדות המובנים. המערכת אינה מפרשת את הטקסט.</span>
+              <span className="block mt-1">{t('suppliers.text_29')}</span>
             </Note>
           )}
-          {bankLoadError && <ErrorNote message="טעינת פרטי הבנק הקיימים נכשלה. עדכון בנק חסום; שאר פרטי הספק עדיין ניתנים לעריכה." />}
+          {bankLoadError && <ErrorNote message={t('suppliers.message')} />}
           {bank.kind && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-holder">שם בעל החשבון *</label><input id="supplier-bank-holder" className="input" value={bank.account_holder} onChange={(event) => setBankField('account_holder', event.target.value)} /></div>
+              <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-holder">{t('suppliers.setBankField')}</label><input id="supplier-bank-holder" className="input" value={bank.account_holder} onChange={(event) => setBankField('account_holder', event.target.value)} /></div>
               {bank.kind === 'IL' ? (
                 <>
-                  <div><label className="label" htmlFor="supplier-bank-code">מספר בנק *</label><input id="supplier-bank-code" inputMode="numeric" dir="ltr" className="input" value={bank.bank_code} onChange={(event) => setBankField('bank_code', event.target.value)} /></div>
-                  <div><label className="label" htmlFor="supplier-bank-branch">מספר סניף *</label><input id="supplier-bank-branch" inputMode="numeric" dir="ltr" className="input" value={bank.branch_code} onChange={(event) => setBankField('branch_code', event.target.value)} /></div>
-                  <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-account">מספר חשבון *</label><input id="supplier-bank-account" inputMode="numeric" dir="ltr" className="input" value={bank.account_number} onChange={(event) => setBankField('account_number', event.target.value)} /></div>
+                  <div><label className="label" htmlFor="supplier-bank-code">{t('suppliers.setBankField_2')}</label><input id="supplier-bank-code" inputMode="numeric" dir="ltr" className="input" value={bank.bank_code} onChange={(event) => setBankField('bank_code', event.target.value)} /></div>
+                  <div><label className="label" htmlFor="supplier-bank-branch">{t('suppliers.setBankField_3')}</label><input id="supplier-bank-branch" inputMode="numeric" dir="ltr" className="input" value={bank.branch_code} onChange={(event) => setBankField('branch_code', event.target.value)} /></div>
+                  <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-account">{t('suppliers.setBankField_4')}</label><input id="supplier-bank-account" inputMode="numeric" dir="ltr" className="input" value={bank.account_number} onChange={(event) => setBankField('account_number', event.target.value)} /></div>
                 </>
               ) : (
                 <>
-                  <div><label className="label" htmlFor="supplier-bank-country">קוד מדינה (ISO) *</label><input id="supplier-bank-country" maxLength={2} dir="ltr" className="input uppercase" value={bank.country_code} onChange={(event) => setBankField('country_code', event.target.value)} /></div>
+                  <div><label className="label" htmlFor="supplier-bank-country">{t('suppliers.setBankField_5')}</label><input id="supplier-bank-country" maxLength={2} dir="ltr" className="input uppercase" value={bank.country_code} onChange={(event) => setBankField('country_code', event.target.value)} /></div>
                   <div><label className="label" htmlFor="supplier-bank-bic">BIC / SWIFT</label><input id="supplier-bank-bic" dir="ltr" className="input uppercase" value={bank.bic} onChange={(event) => setBankField('bic', event.target.value)} /></div>
                   <div className="sm:col-span-2"><label className="label" htmlFor="supplier-bank-iban">IBAN *</label><input id="supplier-bank-iban" dir="ltr" className="input uppercase" value={bank.iban} onChange={(event) => setBankField('iban', event.target.value)} /></div>
                 </>
@@ -598,10 +604,10 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
           )}
         </SubPanel>
         <div>
-          <label className="label" htmlFor="supplier-status">סטטוס</label>
+          <label className="label" htmlFor="supplier-status">{t('suppliers.text_30')}</label>
           <select id="supplier-status" className="input" value={f.status} onChange={(e) => set('status', e.target.value)}
             aria-describedby="supplier-status-hint">
-            {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
           </select>
           {/* OPEN-DECISIONS #115, decided 09.08.2026 (owner delegated): `inactive` means
               "לא להזמין ממנו יותר" — the procurement doors close (new order, price-list upload),
@@ -610,20 +616,20 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
               an invoice from a supplier deactivated yesterday is the commonest event after
               deactivation, and blocking it would manufacture the dead end #115 warned about. */}
           <p id="supplier-status-hint" className="mt-1 text-xs text-ink-muted">
-            ״לא פעיל״ = לא מזמינים ממנו יותר: הספק מוסתר בהזמנה חדשה ובהעלאת מחירון. בקליטת חשבונית,
-            בדרישת תשלום ובהתאמות בנק הוא ממשיך להופיע, כדי שניתן יהיה לסגור מולו חשבון פתוח.
+            {t('suppliers.text_31')}{' '}
+            {t('suppliers.text_32')}
           </p>
         </div>
         <fieldset>
-          <legend className="label">דירוג ספק</legend>
+          <legend className="label">{t('suppliers.text_33')}</legend>
           <div className="pt-1"><RatingStars value={f.rating} onChange={(n) => set('rating', n || null)} /></div>
         </fieldset>
-        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-rating-note">הערת דירוג</label><input id="supplier-rating-note" className="input" placeholder="למה הדירוג הזה?" value={f.rating_note} onChange={(e) => set('rating_note', e.target.value)} /></div>
-        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-notes">הערות</label><textarea id="supplier-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-rating-note">{t('suppliers.text_34')}</label><input id="supplier-rating-note" className="input" placeholder={t('suppliers.placeholder_2')} value={f.rating_note} onChange={(e) => set('rating_note', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="supplier-notes">{t('suppliers.set_9')}</label><textarea id="supplier-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
-        <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-        <button className="btn-primary" disabled={busy} onClick={() => void save()}>{busy ? 'שומר…' : 'שמירה'}</button>
+        <button className="btn-secondary" disabled={busy} onClick={onClose}>{t('suppliers.text_35')}</button>
+        <button className="btn-primary" disabled={busy} onClick={() => void save()}>{busy ? t('suppliers.save') : t('suppliers.save_2')}</button>
       </div>
 
       {/* One interruption, not two (#299). The password step is the whole gate; the sentence that
@@ -639,9 +645,9 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
       <ReauthModal
         open={bankPrompt !== 'closed'}
         skipWhenFresh={false}
-        title="אימות זהות לעדכון פרטי בנק"
+        title={t('suppliers.title_4')}
         details={`פרטי הבנק של ״${supplier?.name ?? f.name}״ ${bankStep?.nextBank ? `יעודכנו לחשבון ${bankStep.nextBank.country_code} שמסתיים ב־${(bankStep.nextBank.account_number ?? bankStep.nextBank.iban ?? '').slice(-4)}` : 'יוסרו'}, והשינוי יירשם ביומן הביקורת.`}
-        reasonLabel={OPTIONAL_REASON_LABEL}
+        reasonLabel={t(OPTIONAL_REASON_LABEL_KEY)}
         onConfirm={(_session, reason) => {
           setBankPrompt('closed');
           void saveBankDetails(reasonOr(reason, BANK_DETAILS_ACTION));
@@ -654,6 +660,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
 
 /* ================= Supplier card ================= */
 export function SupplierCard() {
+  const { locale, t } = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
@@ -740,16 +747,16 @@ export function SupplierCard() {
   }, [editParam, canWrite, setEditParam]);
 
   const tabs = useMemo(() => ([
-    { key: 'orders' as const, label: `הזמנות (${data?.orders.length ?? 0})` },
-    { key: 'invoices' as const, label: `חשבוניות (${data?.invoices.length ?? 0})` },
+    { key: 'orders' as const, label: t('suppliers.tabOrders', { count: data?.orders.length ?? 0 }) },
+    { key: 'invoices' as const, label: t('suppliers.tabInvoices', { count: data?.invoices.length ?? 0 }) },
     // — and not 0: a role that may not read payments has no count to claim.
-    { key: 'payments' as const, label: `תשלומים (${data?.payments ? data.payments.length : '—'})` },
-    { key: 'credits' as const, label: `זיכויים (${data?.credits.length ?? 0})` },
-    { key: 'prices' as const, label: `מחירים (${data?.prices.length ?? 0})` },
+    { key: 'payments' as const, label: t('suppliers.tabPayments', { count: data?.payments ? data.payments.length : '—' }) },
+    { key: 'credits' as const, label: t('suppliers.tabCredits', { count: data?.credits.length ?? 0 }) },
+    { key: 'prices' as const, label: t('suppliers.tabPrices', { count: data?.prices.length ?? 0 }) },
   ]), [data]);
 
   if (loading) return <RecordSkeleton />;
-  if (error || !data) return <ErrorNote message={error ?? 'ספק לא נמצא'} />;
+  if (error || !data) return <ErrorNote message={error ?? t('suppliers.text_36')} />;
   const s = data.supplier;
   const m = data.metrics;
 
@@ -770,12 +777,12 @@ export function SupplierCard() {
         tone: data.balances.some((entry) => entry.amount > 0) ? 'await' : 'done',
       },
     {
-      label: 'עמידה בזמנים',
+      label: t('suppliers.text_39'),
       value: m && m.otd_samples > 0 ? fmtPct(m.on_time_pct) : '—',
-      sub: m && m.otd_samples > 0 ? `${m.otd_samples} אספקות` : 'אין תאריך אספקה מוזן',
+      sub: m && m.otd_samples > 0 ? t('suppliers.otdSamples', { count: m.otd_samples }) : t('suppliers.noDeliveryDate'),
       tone: otdTone(m),
     },
-    { label: 'זמן אספקה ממוצע', value: fmtLeadDays(m?.avg_lead_days ?? null), sub: 'מהשליחה ועד קבלה', tone: 'idle' },
+    { label: t('suppliers.fmtLeadDays'), value: fmtLeadDays(m?.avg_lead_days ?? null, locale), sub: t('suppliers.fmtLeadDays_2'), tone: 'idle' },
     // No supplier_metrics row = the counts were never computed, which is not the same claim as
     // "zero open exceptions". fmtNum(null) renders — so the tile stays honest (constitution §"אין ערכים
     // סטטיים מזויפים"), matching how OTD and lead time above already behave.
@@ -783,7 +790,7 @@ export function SupplierCard() {
     /* 0223: the amount is null when this supplier holds open credits in more than one currency,
        because the view refuses to add them — the count is still true, and the sub-line says so. */
     { label: 'זיכויים פתוחים', value: fmtNum(m?.open_credits ?? null), sub: fmtMoneyExact(m?.open_credits_amount ?? null, m?.open_credits_currency), tone: (m?.open_credits ?? 0) > 0 ? 'await' : 'idle' },
-    { label: 'שינויי מחיר (90 הימים האחרונים)', value: fmtNum(m?.price_changes_window ?? null), sub: m ? `${fmtNum(m.priced_items)} פריטים` : 'טרם חושבו מדדים', tone: 'idle' },
+    { label: t('suppliers.priceChanges90'), value: fmtNum(m?.price_changes_window ?? null), sub: m ? `${fmtNum(m.priced_items)} פריטים` : 'טרם חושבו מדדים', tone: 'idle' },
     { label: 'מינימום הזמנה', value: fmtMoneyExact(s.min_order_amount, s.default_currency), tone: 'idle' },
     { label: 'תנאי תשלום', value: s.payment_terms ?? '—', tone: 'idle', numeric: false },
   ];
@@ -791,12 +798,12 @@ export function SupplierCard() {
   return (
     <div className="space-y-4">
       <RecordHeader
-        breadcrumbs={<Breadcrumbs items={[{ label: 'ספקים', to: '/suppliers' }, { label: s.name }]} />}
+        breadcrumbs={<Breadcrumbs items={[{ label: t('suppliers.text_41'), to: '/suppliers' }, { label: s.name }]} />}
         title={s.name}
         status={<><StatusBadge meta={SUPPLIER_STATUS[s.status]} /><span className="inline-flex items-center gap-2">
               <RatingStars value={s.rating} />
               {s.rating != null && s.rating_updated_at && (
-                <span className="text-xs font-normal text-ink-muted" title={s.rating_note ?? undefined}>עודכן {fmtDate(s.rating_updated_at)}</span>
+                <span className="text-xs font-normal text-ink-muted" title={s.rating_note ?? undefined}>{t('suppliers.ratingUpdated', { date: fmtDate(s.rating_updated_at) })}</span>
               )}
             </span></>}
         meta={<>
@@ -804,20 +811,20 @@ export function SupplierCard() {
             {s.phone && <span className="flex items-center gap-1"><Phone size={ICON.xs} aria-hidden="true" /><span dir="ltr">{s.phone}</span></span>}
             {s.email && <span className="flex items-center gap-1"><Mail size={ICON.xs} aria-hidden="true" /><span dir="ltr">{s.email}</span></span>}
             {s.address && <span className="flex items-center gap-1"><MapPin size={ICON.xs} aria-hidden="true" />{s.address}</span>}
-            {s.delivery_days.length > 0 && <span className="flex items-center gap-1"><Truck size={ICON.xs} aria-hidden="true" />ימי אספקה {fmtDays(s.delivery_days)}</span>}
-            {s.cutoff_time && <span className="flex items-center gap-1"><Clock size={ICON.xs} aria-hidden="true" />סגירת הזמנות {s.cutoff_time.slice(0, 5)}</span>}
+            {s.delivery_days.length > 0 && <span className="flex items-center gap-1"><Truck size={ICON.xs} aria-hidden="true" />{t('suppliers.deliveryDays', { days: fmtDays(s.delivery_days) })}</span>}
+            {s.cutoff_time && <span className="flex items-center gap-1"><Clock size={ICON.xs} aria-hidden="true" />{t('suppliers.orderCutoff', { time: s.cutoff_time.slice(0, 5) })}</span>}
           </>}
         primaryAction={canWrite && canStartSupplierCommerce(s.status)
-          ? <button className="btn-primary" onClick={() => setUploadOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> העלאת מחירון</button>
+          ? <button className="btn-primary" onClick={() => setUploadOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> {t('suppliers.setUploadOpen')}</button>
           : null}
         secondaryActions={canWrite && <>
             {/* Named, not buried: "החליף מספר חשבון" is the task, and it used to be four steps
                 inside a form of twenty fields. Navigates rather than calling setEditing directly,
                 so the address is the one another screen can link to. */}
             <button className="btn-secondary" onClick={() => navigate(`/suppliers/${s.id}?edit=bank`)}>
-              <Landmark size={ICON.sm} aria-hidden="true" /> עדכון פרטי בנק
+              <Landmark size={ICON.sm} aria-hidden="true" /> {t('suppliers.updateBankDetails')}
             </button>
-            <button className="btn-secondary" onClick={() => setEditing(true)}>עריכה</button>
+            <button className="btn-secondary" onClick={() => setEditing(true)}>{t('suppliers.setEditing_4')}</button>
           </>} />
 
       <Scorecard items={scoreItems} />
@@ -831,16 +838,16 @@ export function SupplierCard() {
       {/* Tabs generates exactly these ids (tabId/panelId with idPrefix "supplier"), so the
           panels below keep the wiring they already had. */}
       <Tabs items={tabs} value={tab} onChange={(key) => setTab(key as typeof tab)}
-        label={`מידע עבור ${s.name}`} idPrefix="supplier" />
+        label={t('suppliers.tabsLabel', { name: s.name })} idPrefix="supplier" />
 
       {tab === 'orders' && (
         <TabPanel idPrefix="supplier" tabKey="orders">
         <DataTable rows={data.orders} columns={[
-          { key: 'num', header: 'מס׳', className: 'num', render: (r: PurchaseOrder) => `#${r.number}` },
-          { key: 'date', header: 'תאריך', sortValue: (r: PurchaseOrder) => r.created_at, render: (r: PurchaseOrder) => fmtDate(r.created_at) },
-          { key: 'expected', header: 'אספקה צפויה', render: (r: PurchaseOrder) => fmtDate(r.expected_date) },
-          { key: 'status', header: 'סטטוס', render: (r: PurchaseOrder) => <StatusBadge meta={PO_STATUS[r.status]} /> },
-        ]} rowLabel={(r) => `הזמנת רכש מספר ${r.number} עבור ${s.name}`} onRowClick={(r) => navigate(`/orders/${r.id}`)} emptyTitle="אין הזמנות לספק זה" />
+          { key: 'num', header: t('suppliers.numberHeader'), className: 'num', render: (r: PurchaseOrder) => `#${r.number}` },
+          { key: 'date', header: t('suppliers.fmtDate'), sortValue: (r: PurchaseOrder) => r.created_at, render: (r: PurchaseOrder) => fmtDate(r.created_at) },
+          { key: 'expected', header: t('suppliers.fmtDate_2'), render: (r: PurchaseOrder) => fmtDate(r.expected_date) },
+          { key: 'status', header: t('suppliers.text_43'), render: (r: PurchaseOrder) => <StatusBadge meta={PO_STATUS[r.status]} /> },
+        ]} rowLabel={(r) => t('suppliers.orderRowLabel', { number: r.number, supplier: s.name })} onRowClick={(r) => navigate(`/orders/${r.id}`)} emptyTitle={t('suppliers.noOrders')} />
         </TabPanel>
       )}
       {tab === 'invoices' && (
@@ -850,9 +857,9 @@ export function SupplierCard() {
              prose (noteProse.spec — .note is a flex row and shreds raw text into columns). */
           <Note tone="info">
             <span>
-              <span className="num">{data.consolidatedCount}</span> מסמכי חשבונית של ספק זה אוחדו לחשבונית
-              מרכזת ואינם מוצגים כאן —{' '}
-              <button className="underline" onClick={() => navigate('/documents/consolidated-invoices')}>לחשבוניות המרכזות</button>
+              <span className="num">{data.consolidatedCount}</span> {t('suppliers.consolidatedLead')}
+              {t('suppliers.text_44')}{' '}
+              <button className="underline" onClick={() => navigate('/documents/consolidated-invoices')}>{t('suppliers.navigate')}</button>
             </span>
           </Note>
         )}
@@ -875,7 +882,7 @@ export function SupplierCard() {
             { key: 'ref', header: 'אסמכתא', className: 'num', render: (r: Payment) => <span dir="ltr">{r.reference ?? '—'}</span> },
           ]} emptyTitle="אין תשלומים לספק זה" />
         ) : (
-          <Note tone="info">צפייה בתשלומים וביתרה הפתוחה של ספק זמינה לבעלים בלבד.</Note>
+          <Note tone="info">{t('suppliers.text_50')}</Note>
         )}
         </TabPanel>
       )}
@@ -919,6 +926,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
   /** null = the viewer's role cannot read the submissions ledger (not the same as "no history"). */
   submissions: SupplierPriceSubmission[] | null;
 }) {
+  const { t } = useT();
   const histBySp = useMemo(() => {
     const map = new Map<string, number[]>();
     for (const h of history) {
@@ -952,7 +960,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
     { key: 'price', header: 'מחיר נוכחי', className: 'num', sortValue: (r) => r.current_price, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.current_price, r.currency)}</span> },
     { key: 'prev', header: 'מחיר קודם', className: 'num', render: (r) => fmtMoneyExact(r.previous_price, r.currency) },
     {
-      key: 'change', header: 'שינוי', sortValue: changePct,
+      key: 'change', header: t('suppliers.text_52'), sortValue: changePct,
       render: (r) => {
         const pct = changePct(r);
         if (!r.previous_price || pct === 0) return <span className="text-ink-faint">—</span>;
@@ -966,45 +974,45 @@ function SupplierPricesTab({ rows, history, submissions }: {
       },
     },
     {
-      key: 'trend', header: 'מגמה',
+      key: 'trend', header: t('suppliers.text_53'),
       render: (r) => {
         const pts = histBySp.get(r.id) ?? [];
         return pts.length >= 2 ? <PriceSparkline points={pts} /> : <span className="text-ink-ghost">—</span>;
       },
     },
-    { key: 'date', header: 'בתוקף מ־', sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
+    { key: 'date', header: t('suppliers.fmtDate_6'), sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
   ];
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-4 text-sm">
-        <span className="text-ink-soft">התייקרו: <b className="text-trend-up-fg">{summary.up}</b></span>
-        <span className="text-ink-soft">הוזלו: <b className="text-trend-down-fg">{summary.down}</b></span>
-        <span className="text-ink-soft">שינוי חציוני: <b className="num">{summary.median == null ? '—' : `${summary.median > 0 ? '+' : ''}${summary.median.toFixed(1)}%`}</b></span>
+        <span className="text-ink-soft">{t('suppliers.text_54')} <b className="text-trend-up-fg">{summary.up}</b></span>
+        <span className="text-ink-soft">{t('suppliers.text_55')} <b className="text-trend-down-fg">{summary.down}</b></span>
+        <span className="text-ink-soft">{t('suppliers.medianChange')} <b className="num">{summary.median == null ? '—' : `${summary.median > 0 ? '+' : ''}${summary.median.toFixed(1)}%`}</b></span>
       </div>
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => productLabel(r.product).toLowerCase().includes(q) || r.product.name.toLowerCase().includes(q)}
-        searchLabel="חיפוש במחירון הספק"
-        emptyTitle="אין מחירון לספק זה" />
+        searchLabel={t('suppliers.searchLabel_2')}
+        emptyTitle={t('suppliers.emptyTitle_3')} />
 
       {submissions !== null && (
         <section className="card p-4" aria-labelledby="supplier-card-submissions-heading">
-          <h3 id="supplier-card-submissions-heading" className="section-title mb-3">היסטוריית מחירונים</h3>
+          <h3 id="supplier-card-submissions-heading" className="section-title mb-3">{t('suppliers.text_56')}</h3>
           {submissions.length ? (
             <div className="divide-y divide-line-soft">
               {submissions.map((submission) => (
                 <div key={submission.id} className="py-2.5 first:pt-0 last:pb-0">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-medium text-ink">{submissionMonthLabel(submission.target_month)} · גרסה <span className="num">{submission.revision}</span></div>
+                    <div className="font-medium text-ink">{submissionMonthLabel(submission.target_month)} · {t('suppliers.revisionWord')} <span className="num">{submission.revision}</span></div>
                     <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
                   </div>
                   <div className="mt-1 text-sm text-ink-muted break-words">
-                    {submission.file_name ?? 'הגשה מדור קודם'} · נקלטו <span className="num">{submission.accepted_count}</span> · ללא שינוי <span className="num">{submission.unchanged_count}</span> · נדחו <span className="num">{submission.rejected_count}</span>
+                    {submission.file_name ?? t('suppliers.text_57')} · {t('suppliers.acceptedWord')} <span className="num">{submission.accepted_count}</span> {t('suppliers.text_58')} <span className="num">{submission.unchanged_count}</span> {t('suppliers.text_59')} <span className="num">{submission.rejected_count}</span>
                   </div>
                 </div>
               ))}
             </div>
-          ) : <p className="text-sm text-ink-muted">עדיין לא נקלט מחירון לספק זה.</p>}
+          ) : <p className="text-sm text-ink-muted">{t('suppliers.text_60')}</p>}
         </section>
       )}
     </div>

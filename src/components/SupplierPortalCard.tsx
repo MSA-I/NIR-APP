@@ -1,15 +1,15 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Link2, Copy, Loader2, RefreshCcw, Send, XCircle, Inbox } from 'lucide-react';
 import { ConfirmDialog, ICON, Note, StatusBadge, useToast } from './ui';
 import { useQuery } from '../lib/useQuery';
 import { fmtDateTime } from '../lib/format';
-import { toHebrewError } from '../lib/errors';
 import { SUPPLIER_LINK_STATE, SUPPLIER_PROPOSAL_STATUS } from '../lib/status';
 import {
   buildPortalUrl, fetchOrderLink, fetchOrderProposal, issueOrderLink, linkState, revokeOrderLink,
 } from '../lib/supplierPortal';
-import { openOrderWhatsApp, type WhatsAppOrder } from '../lib/share';
+import { OPEN_ORDER_WHATSAPP_ERROR_KEY, openOrderWhatsApp, type WhatsAppOrder } from '../lib/share';
 
 /**
  * The supplier-portal panel on an order (0167): issue / regenerate / revoke the one live link,
@@ -24,6 +24,7 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
   orgName: string;
   canWrite: boolean;
 }) {
+  const { errorText, statusLabel, t } = useT();
   const navigate = useNavigate();
   const toast = useToast();
   const [issueOpen, setIssueOpen] = useState(false);
@@ -47,13 +48,13 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
   async function issue(reason?: string) {
     setBusy(true);
     try {
-      const issued = await issueOrderLink(order.id, reason?.trim() || 'הנפקת קישור פורטל לספק');
+      const issued = await issueOrderLink(order.id, reason?.trim() || t('portalCard.issueOrderLink'));
       setFreshUrl(buildPortalUrl(issued.token));
-      toast('הקישור הונפק. ניתן להעתיק או לשלוח אותו לספק — הוא לא יוצג שוב לאחר עזיבת המסך.');
+      toast(t('portalCard.toast'));
       setIssueOpen(false);
       void refetch();
     } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+      toast(errorText(failure), 'error');
     } finally {
       setBusy(false);
     }
@@ -63,13 +64,13 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
     if (!link) return;
     setBusy(true);
     try {
-      await revokeOrderLink(link.id, reason?.trim() || 'ביטול קישור פורטל');
+      await revokeOrderLink(link.id, reason?.trim() || t('portalCard.revokeOrderLink'));
       setFreshUrl(null);
-      toast('הקישור בוטל');
+      toast(t('portalCard.toast_2'));
       setRevokeOpen(false);
       void refetch();
     } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+      toast(errorText(failure), 'error');
     } finally {
       setBusy(false);
     }
@@ -79,16 +80,18 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
     if (!freshUrl) return;
     try {
       await navigator.clipboard.writeText(freshUrl);
-      toast('הקישור הועתק');
+      toast(t('portalCard.toast_3'));
     } catch {
-      toast('לא ניתן להעתיק אוטומטית — יש לסמן ולהעתיק את הקישור ידנית', 'error');
+      toast(t('portalCard.toast_4'), 'error');
     }
   }
 
   function openWhatsAppWithLink() {
     if (!freshUrl) return;
     const res = openOrderWhatsApp(order, orgName, freshUrl);
-    if (res.error) toast(res.error, 'error');
+    if (res.errorCode) {
+      toast(t(OPEN_ORDER_WHATSAPP_ERROR_KEY[res.errorCode]), 'error');
+    }
   }
 
   if (loading) return null;
@@ -98,7 +101,7 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
     <div className="card p-4 no-print">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink">
-          <Link2 size={ICON.sm} aria-hidden="true" /> פורטל ספק
+          <Link2 size={ICON.sm} aria-hidden="true" /> {t('portalCard.heading')}
         </h2>
         {state && <StatusBadge meta={SUPPLIER_LINK_STATE[state]} />}
       </div>
@@ -107,14 +110,14 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
         <Note tone={proposal.status === 'submitted' ? 'await' : 'info'} className="mt-3">
           <Inbox size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">
-            הספק שלח תשובה דרך הפורטל ({fmtDateTime(proposal.submitted_at)}) ·{' '}
-            {SUPPLIER_PROPOSAL_STATUS[proposal.status].label}.{' '}
+            {t('portalCard.supplierReplied', { at: fmtDateTime(proposal.submitted_at) })}{' '}
+            {statusLabel(SUPPLIER_PROPOSAL_STATUS[proposal.status])}.{' '}
             <button
               type="button"
               className="underline"
               onClick={() => navigate(`/orders/proposals/${proposal.id}`)}
             >
-              {proposal.status === 'submitted' ? 'מעבר לסקירה והחלטה' : 'צפייה בהצעה ובהחלטה'}
+              {proposal.status === 'submitted' ? t('portalCard.text') : t('portalCard.text_2')}
             </button>
           </span>
         </Note>
@@ -123,34 +126,34 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
       {freshUrl ? (
         <div className="mt-3 space-y-2">
           <p className="text-xs text-ink-muted">
-            הקישור מוצג פעם אחת בלבד — המערכת שומרת רק טביעת אצבע שלו.
+            {t('portalCard.text_3')}
           </p>
           <div className="flex items-center gap-2">
-            <input className="input num" dir="ltr" readOnly value={freshUrl} aria-label="קישור פורטל הספק"
+            <input className="input num" dir="ltr" readOnly value={freshUrl} aria-label={t('portalCard.aria_label')}
               onFocus={(e) => e.currentTarget.select()} />
             <button type="button" className="btn-secondary shrink-0" onClick={() => void copyFreshUrl()}>
-              <Copy size={ICON.sm} aria-hidden="true" /> העתקה
+              <Copy size={ICON.sm} aria-hidden="true" /> {t('portalCard.copy')}
             </button>
           </div>
           {(order.supplier.whatsapp || order.supplier.phone) && (
             <button type="button" className="btn-secondary" onClick={openWhatsAppWithLink}>
-              <Send size={ICON.sm} aria-hidden="true" /> פתיחת WhatsApp עם ההזמנה והקישור
+              <Send size={ICON.sm} aria-hidden="true" /> {t('portalCard.openWhatsApp')}
             </button>
           )}
         </div>
       ) : link && state === 'live' ? (
         <p className="mt-2 text-sm text-ink-muted">
-          הונפק {fmtDateTime(link.created_at)} · בתוקף עד {fmtDateTime(link.expires_at)}
+          {t('portalCard.issuedValidUntil', { issued: fmtDateTime(link.created_at), expires: fmtDateTime(link.expires_at) })}{' '}
           {link.opened_at
-            ? <> · נפתח על ידי הספק (<span className="num">{link.open_count}</span> פעמים)</>
-            : ' · טרם נפתח'}
-          . הקישור עצמו אינו נשמר במערכת — להצגתו מחדש יש להנפיק קישור חדש.
+            ? t('portalCard.openedBySupplier', { count: link.open_count })
+            : t('portalCard.notOpenedYet')}{' '}
+          {t('portalCard.linkNotStored')}
         </p>
       ) : link && state === 'expired' ? (
-        <p className="mt-2 text-sm text-ink-muted">הקישור פג תוקף ב-{fmtDateTime(link.expires_at)}.</p>
+        <p className="mt-2 text-sm text-ink-muted">{t('portalCard.expiredAt', { at: fmtDateTime(link.expires_at) })}</p>
       ) : !link && canIssue ? (
         <p className="mt-2 text-sm text-ink-muted">
-          קישור מאובטח וחד-הזמנתי שבו הספק מאשר את ההזמנה או מציע שינויים — ללא חשבון וללא התחברות.
+          {t('portalCard.text_8')}
         </p>
       ) : null}
 
@@ -161,14 +164,14 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
               onClick={() => setIssueOpen(true)}>
                 {busy ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" />
                 : link ? <RefreshCcw size={ICON.sm} aria-hidden="true" /> : <Link2 size={ICON.sm} aria-hidden="true" />}
-              {link ? 'הנפקת קישור חדש (מבטלת את הקודם)' : 'הנפקת קישור לספק'}
+              {link ? t('portalCard.text_9') : t('portalCard.text_10')}
             </button>
           )}
           {link && state === 'live' && (
             <button type="button" className="btn-danger" disabled={busy}
               onClick={() => setRevokeOpen(true)}>
                 {busy ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" /> : <XCircle size={ICON.sm} aria-hidden="true" />}
-              ביטול הקישור
+              {t('portalCard.text_11')}
             </button>
           )}
         </div>
@@ -176,16 +179,16 @@ export function SupplierPortalCard({ order, orgName, canWrite }: {
 
       <ConfirmDialog open={issueOpen} onClose={() => setIssueOpen(false)}
         onConfirm={(reason) => void issue(reason)}
-        title={link ? 'הנפקת קישור חדש לספק' : 'הנפקת קישור לספק'}
+        title={link ? t('portalCard.text_12') : t('portalCard.text_13')}
         message={link
-          ? 'יונפק קישור חדש והקישור הקודם יפסיק לפעול מיידית. הפעולה תתועד ביומן הביקורת.'
-          : 'יונפק קישור מאובטח להזמנה זו בלבד. הקישור יוצג פעם אחת ויפוג אוטומטית. הפעולה תתועד ביומן הביקורת.'}
-        confirmLabel="הנפקה" requireReason busy={busy} />
+          ? t('portalCard.text_14')
+          : t('portalCard.text_15')}
+        confirmLabel={t('portalCard.confirmLabel')} requireReason busy={busy} />
       <ConfirmDialog open={revokeOpen} onClose={() => setRevokeOpen(false)}
         onConfirm={(reason) => void revoke(reason)}
-        title="ביטול קישור הפורטל"
-        message="הספק לא יוכל עוד לפתוח את הקישור. הפעולה תתועד ביומן הביקורת."
-        confirmLabel="ביטול הקישור" danger requireReason busy={busy} />
+        title={t('portalCard.title')}
+        message={t('portalCard.message')}
+        confirmLabel={t('portalCard.confirmLabel_2')} danger requireReason busy={busy} />
     </div>
   );
 }

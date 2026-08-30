@@ -8,6 +8,7 @@
  * notice). The server halves — the damaged/returned credits and open_manual_exception
  * itself — are asserted in supabase/tests/p1_financial_commands.sql where they live.
  */
+import { he } from '../lib/i18n/dictionaries/he';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
@@ -44,7 +45,7 @@ import { PriceListUploadModal } from '../components/PriceListUpload';
 
 describe('item_not_ordered speaks Hebrew on /exceptions (#116, §17 step 1)', () => {
   it('carries the label §17 planned, so the type column never prints a raw enum token', () => {
-    expect(EXCEPTION_TYPE.item_not_ordered).toBe('פריט שלא הוזמן');
+    expect(he.status[EXCEPTION_TYPE.item_not_ordered as keyof typeof he.status]).toBe('פריט שלא הוזמן');
   });
 });
 

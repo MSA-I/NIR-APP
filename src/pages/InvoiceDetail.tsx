@@ -1,5 +1,7 @@
+import type { TKey } from '../lib/i18n/t';
+import type { Locale } from '../lib/i18n/locale';
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useRef, useState } from 'react';
-import { toHebrewError } from '../lib/errors';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { FileDown, Loader2, Send, CheckCircle2, RotateCcw, SearchCheck, FilePenLine } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -69,29 +71,29 @@ type ThreeWayAssessment = {
   candidate_context?: InvoiceReviewCandidate[];
 };
 
-const THREE_WAY_REASON_LABELS: Record<string, string> = {
-  definite_duplicate_invoice: 'נמצאה חשבונית נוספת של אותו ספק עם אותו מספר — יש לתקן את הכפילות לפני אישור.',
-  no_order_not_comparable: 'לחשבונית זו אין הזמנת רכש להשוואה',
-  invoice_lines_missing: 'אין שורות חשבונית זמינות להתאמה.',
-  duplicate_invoice_line_suspected: 'שורה זו חשודה ככפולה ונדרשת בדיקה; היא לא נמחקה ולא מוזגה.',
-  missing_order_item: 'לא נמצא פריט הזמנה תואם באופן חד־משמעי.',
-  multi_order_ambiguity: 'קיימות כמה התאמות אפשריות להזמנות שונות — נדרשת בחירה ידנית.',
-  incomplete_explicit_allocation: 'הכמות בשורה לא הוקצתה במלואה לפריטי ההזמנה.',
-  product_mismatch: 'המוצר בחשבונית שונה מהמוצר שהוזמן.',
-  unit_or_packaging_conversion_requires_review: 'היחידות דורשות יחס אריזה מפורש ומאושר; המערכת לא הסיקה המרה מהטקסט.',
-  legacy_order_unit_snapshot_missing: 'חסרה יחידת המידה שנשמרה בהזמנה, ולכן אי־אפשר להשוות בבטחה.',
-  unit_price_above_order: 'מחיר היחידה בחשבונית גבוה ממחיר ההזמנה ביותר מ־1%.',
-  unit_price_within_tolerance: 'מחיר היחידה שונה, אך הפער אינו עולה על 1%.',
-  unit_price_below_order: 'מחיר היחידה בחשבונית נמוך ממחיר ההזמנה.',
-  invoiced_quantity_above_ordered: 'הכמות שחויבה גבוהה מהכמות שהוזמנה.',
-  invoiced_quantity_above_received: 'הכמות שחויבה גבוהה מהכמות שהתקבלה.',
-  received_but_not_invoiced: 'התקבלה כמות שטרם חויבה בחשבונית.',
-  line_arithmetic_discrepancy: 'חישוב השורה אינו מסתכם נכון מעבר לסטייה המותרת במטבע החשבונית.',
-  invoice_net_total_discrepancy: 'סכום שורות החשבונית לפני מע״מ אינו תואם לסכום החשבונית.',
-  invoice_vat_total_discrepancy: 'סכום המע״מ בשורות אינו תואם לסכום המע״מ בחשבונית מעבר לסטייה המותרת במטבע החשבונית.',
-  invoice_grand_total_discrepancy: 'סך השורות אינו תואם לסך החשבונית מעבר לסטייה המותרת במטבע החשבונית.',
-  vat_rate_mismatch: 'שיעור המע״מ בשורה שונה משיעור המע״מ המצופה.',
-  expected_vat_rate_missing: 'אין שיעור מע״מ ארגוני מאושר להשוואה, ולכן לא ניתן לאשר את השורה.',
+const THREE_WAY_REASON_KEYS: Record<string, TKey> = {
+  definite_duplicate_invoice: 'invoices.reason_definite_duplicate_invoice',
+  no_order_not_comparable: 'invoices.reason_no_order_not_comparable',
+  invoice_lines_missing: 'invoices.reason_invoice_lines_missing',
+  duplicate_invoice_line_suspected: 'invoices.reason_duplicate_invoice_line_suspected',
+  missing_order_item: 'invoices.reason_missing_order_item',
+  multi_order_ambiguity: 'invoices.reason_multi_order_ambiguity',
+  incomplete_explicit_allocation: 'invoices.reason_incomplete_explicit_allocation',
+  product_mismatch: 'invoices.reason_product_mismatch',
+  unit_or_packaging_conversion_requires_review: 'invoices.reason_unit_or_packaging_conversion_requires_review',
+  legacy_order_unit_snapshot_missing: 'invoices.reason_legacy_order_unit_snapshot_missing',
+  unit_price_above_order: 'invoices.reason_unit_price_above_order',
+  unit_price_within_tolerance: 'invoices.reason_unit_price_within_tolerance',
+  unit_price_below_order: 'invoices.reason_unit_price_below_order',
+  invoiced_quantity_above_ordered: 'invoices.reason_invoiced_quantity_above_ordered',
+  invoiced_quantity_above_received: 'invoices.reason_invoiced_quantity_above_received',
+  received_but_not_invoiced: 'invoices.reason_received_but_not_invoiced',
+  line_arithmetic_discrepancy: 'invoices.reason_line_arithmetic_discrepancy',
+  invoice_net_total_discrepancy: 'invoices.reason_invoice_net_total_discrepancy',
+  invoice_vat_total_discrepancy: 'invoices.reason_invoice_vat_total_discrepancy',
+  invoice_grand_total_discrepancy: 'invoices.reason_invoice_grand_total_discrepancy',
+  vat_rate_mismatch: 'invoices.reason_vat_rate_mismatch',
+  expected_vat_rate_missing: 'invoices.reason_expected_vat_rate_missing',
 };
 
 /**
@@ -100,7 +102,12 @@ const THREE_WAY_REASON_LABELS: Record<string, string> = {
  * three-way match compares an invoice line against the order line it was matched to and a
  * matched pair the server would not have produced across two currencies.
  */
-function threeWayReasonDetails(reason: ThreeWayReason, currency: string) {
+function threeWayReasonDetails(
+  reason: ThreeWayReason,
+  t: (key: TKey, vars?: Record<string, string | number>) => string,
+  locale: Locale,
+  currency: string,
+) {
   if (reason.ordered_unit_price != null && reason.invoice_unit_price_normalized != null) {
     const difference = reason.difference_amount
       ?? reason.invoice_unit_price_normalized - reason.ordered_unit_price;
@@ -110,28 +117,28 @@ function threeWayReasonDetails(reason: ThreeWayReason, currency: string) {
   }
   if (reason.invoiced_quantity != null) {
     const values = [
-      reason.ordered_quantity == null ? null : `הוזמן ${reason.ordered_quantity}`,
-      reason.received_quantity == null ? null : `התקבל ${reason.received_quantity}`,
+      reason.ordered_quantity == null ? null : t('invoices.detailOrdered', { qty: reason.ordered_quantity }),
+      reason.received_quantity == null ? null : t('invoices.detailReceived', { qty: reason.received_quantity }),
       reason.prior_approved_invoiced_quantity == null
-        ? null : `אושר בחשבוניות קודמות ${reason.prior_approved_invoiced_quantity}`,
+        ? null : t('invoices.detailPriorApproved', { qty: reason.prior_approved_invoiced_quantity }),
       reason.current_invoice_quantity == null
-        ? null : `בחשבונית זו ${reason.current_invoice_quantity}`,
-      `חויב במצטבר ${reason.invoiced_quantity}`,
+        ? null : t('invoices.detailThisInvoice', { qty: reason.current_invoice_quantity }),
+      t('invoices.detailInvoicedTotal', { qty: reason.invoiced_quantity }),
     ].filter(Boolean);
     return values.join(' · ');
   }
   if (reason.invoice_quantity != null && reason.allocated_quantity != null) {
-    return `כמות בחשבונית ${reason.invoice_quantity} · הוקצתה ${reason.allocated_quantity}`;
+    return t('invoices.detailAllocation', { invoiced: reason.invoice_quantity, allocated: reason.allocated_quantity });
   }
   if (reason.expected_vat_rate != null && reason.actual_vat_rate != null) {
-    return `שיעור מצופה ${reason.expected_vat_rate}% · בפועל ${reason.actual_vat_rate}%`;
+    return t('invoices.detailVatRates', { expected: reason.expected_vat_rate, actual: reason.actual_vat_rate });
   }
-  if (reason.actual_vat_rate != null) return `שיעור בפועל ${reason.actual_vat_rate}%`;
+  if (reason.actual_vat_rate != null) return t('invoices.detailVatActual', { actual: reason.actual_vat_rate });
   if (reason.expected != null && reason.actual != null) {
-    return `מצופה ${fmtMoneyExact(reason.expected, currency)} · בפועל ${fmtMoneyExact(reason.actual, currency)}`;
+    return t('invoices.detailExpectedActual', { expected: fmtMoneyExact(reason.expected, currency), actual: fmtMoneyExact(reason.actual, currency) });
   }
   if (reason.invoice_unit && reason.order_unit) {
-    return `יחידה בחשבונית: ${formatUnit(reason.invoice_unit)} · יחידה בהזמנה: ${formatUnit(reason.order_unit)}`;
+    return t('invoices.detailUnits', { invoiceUnit: formatUnit(reason.invoice_unit, locale), orderUnit: formatUnit(reason.order_unit, locale) });
   }
   return null;
 }
@@ -152,11 +159,11 @@ function threeWayReasonDetails(reason: ThreeWayReason, currency: string) {
  * hiding a legal, reasoned, audited transition. Anything else that appears or disappears here is a
  * bug, not this change.
  */
-export const INVOICE_REVIEW_ACTIONS: { to: InvoiceReviewStatus; label: string }[] = [
-  { to: 'in_review', label: 'העברה לבדיקה' },
-  { to: 'pending_approval', label: 'העברה לאישור' },
-  { to: 'approved', label: 'אישור לתשלום' },
-  { to: 'investigation', label: 'סימון לבירור' },
+export const INVOICE_REVIEW_ACTIONS: { to: InvoiceReviewStatus; labelKey: TKey; auditLabel: string }[] = [
+  { to: 'in_review', labelKey: 'invoices.actionInReview', auditLabel: 'העברה לבדיקה' },
+  { to: 'pending_approval', labelKey: 'invoices.actionPendingApproval', auditLabel: 'העברה לאישור' },
+  { to: 'approved', labelKey: 'invoices.actionApproved', auditLabel: 'אישור לתשלום' },
+  { to: 'investigation', labelKey: 'invoices.actionInvestigation', auditLabel: 'סימון לבירור' },
 ];
 
 /**
@@ -167,7 +174,7 @@ export const INVOICE_REVIEW_ACTIONS: { to: InvoiceReviewStatus; label: string }[
  * so it falls back to the screen's own name rather than inventing a verb for it.
  */
 function reviewActionLabel(status: InvoiceReviewStatus): string {
-  return INVOICE_REVIEW_ACTIONS.find((action) => action.to === status)?.label ?? 'עדכון סטטוס בדיקת חשבונית';
+  return INVOICE_REVIEW_ACTIONS.find((action) => action.to === status)?.auditLabel ?? 'עדכון סטטוס בדיקת חשבונית';
 }
 
 export type InvoicePrimaryAction = InvoiceReviewStatus | 'payment-request';
@@ -183,16 +190,16 @@ export function invoicePrimaryAction(
 
 export function invoiceLifecycle(status: InvoiceReviewStatus) {
   if (status === 'received' || status === 'in_review') return [
-    { key: 'received', label: 'התקבלה' },
-    { key: 'in_review', label: 'בבדיקה' },
-    { key: 'pending_approval', label: 'ממתינה לאישור' },
-    { key: 'approved', label: 'מאושרת' },
-  ];
+    { key: 'received', labelKey: 'invoices.lifecycleReceived' },
+    { key: 'in_review', labelKey: 'invoices.lifecycleInReview' },
+    { key: 'pending_approval', labelKey: 'invoices.lifecyclePendingApproval' },
+    { key: 'approved', labelKey: 'invoices.lifecycleApproved' },
+  ] as const satisfies readonly { key: string; labelKey: TKey }[];
   if (status === 'pending_approval') return [
-    { key: 'pending_approval', label: 'ממתינה לאישור' },
-    { key: 'approved', label: 'מאושרת' },
-  ];
-  if (status === 'approved') return [{ key: 'approved', label: 'מאושרת' }];
+    { key: 'pending_approval', labelKey: 'invoices.lifecyclePendingApproval' },
+    { key: 'approved', labelKey: 'invoices.lifecycleApproved' },
+  ] as const satisfies readonly { key: string; labelKey: TKey }[];
+  if (status === 'approved') return [{ key: 'approved', labelKey: 'invoices.lifecycleApproved' }] as const satisfies readonly { key: string; labelKey: TKey }[];
   return [];
 }
 
@@ -221,6 +228,7 @@ export async function readAllowedInvoiceTransitions(
 }
 
 export default function InvoiceDetail() {
+  const { errorText, locale, t } = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, org, organizationAccess } = useAuth();
@@ -276,7 +284,7 @@ export default function InvoiceDetail() {
       allocations,
       allowedTransitions,
       threeWay: threeWayResult.error ? null : threeWayResult.data as ThreeWayAssessment,
-      threeWayError: threeWayResult.error ? toHebrewError(threeWayResult.error.message) : null,
+      threeWayError: threeWayResult.error ? errorText(threeWayResult.error.message) : null,
     };
   }, [id, isProcurementManager]);
 
@@ -323,7 +331,7 @@ export default function InvoiceDetail() {
       });
       toast('קובץ ה-PDF הורד');
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setExportingPdf(false);
     }
@@ -345,7 +353,7 @@ export default function InvoiceDetail() {
       // reviewer types what the paper says.
       setCreditDraft(res.error || !res.data
         ? { amount: '', creditedInvoiceNumber: '', notes: '' }
-        : creditDraftFromInterpretation((res.data as { payload: InterpretationContract }).payload));
+        : creditDraftFromInterpretation((res.data as { payload: InterpretationContract }).payload, t));
       setCreditOpen(true);
       const next = new URLSearchParams(params);
       next.delete('credit');
@@ -374,7 +382,7 @@ export default function InvoiceDetail() {
       });
       if (checkSequence.current === sequence && id === inv.id) setChecks(res);
     } catch {
-      if (checkSequence.current === sequence) setCheckError('הרצת הבדיקות נכשלה. לא ניתן להסיק שאין כפילות או תשלום קודם.');
+      if (checkSequence.current === sequence) setCheckError(t('invoices.setCheckError'));
     } finally {
       if (checkSequence.current === sequence) setChecking(false);
     }
@@ -392,9 +400,9 @@ export default function InvoiceDetail() {
       p_reason: reasonOr(reason, reviewActionLabel(status)),
     });
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     setReviewTarget(null);
-    toast('הסטטוס עודכן');
+    toast(t('invoices.toast'));
     void refetch();
   }
 
@@ -422,16 +430,16 @@ export default function InvoiceDetail() {
     });
     setBusy(false);
     setOverrideReauthOpen(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     setOverrideReason('');
     setOverrideIdempotencyKey(crypto.randomUUID());
-    toast('עקיפת חסימת ההתאמה נרשמה ביומן הביקורת');
+    toast(t('invoices.toast_2'));
     void refetch();
   }
 
   if (loading) return <RecordSkeleton />;
   if (error && !data) return <ErrorNote message={error} />;
-  if (!inv || !data) return <ErrorNote message="חשבונית לא נמצאה" />;
+  if (!inv || !data) return <ErrorNote message={t('invoices.message')} />;
 
   // null = the graph could not be read. The controls are then rendered DISABLED rather than
   // filtered by a guess: offering a transition the server may reject, or hiding one it would
@@ -443,23 +451,23 @@ export default function InvoiceDetail() {
   const primaryKey = graphUnavailable ? null : invoicePrimaryAction(transitions, inv.review_status, inv.payment_status);
   const primaryTransition = transitions.find((action) => action.to === primaryKey);
   const primaryAction = !isOffice ? null : primaryKey === 'payment-request' ? (
-    <button className="btn-primary" onClick={() => navigate(`/payment-requests?new=${inv.id}`)}><Send size={ICON.sm} aria-hidden="true" /> יצירת דרישת תשלום</button>
+    <button className="btn-primary" onClick={() => navigate(`/payment-requests?new=${inv.id}`)}><Send size={ICON.sm} aria-hidden="true" /> {t('invoices.text')}</button>
   ) : primaryTransition ? (
     <button className="btn-primary" disabled={busy} onClick={() => requestReview(primaryTransition.to)}>
       {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />
-        : primaryTransition.to === 'approved' ? <CheckCircle2 size={ICON.sm} aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />}{primaryTransition.label}
+        : primaryTransition.to === 'approved' ? <CheckCircle2 size={ICON.sm} aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />}{t(primaryTransition.labelKey)}
     </button>
   ) : null;
-  const nextAction = primaryKey === 'payment-request' ? 'יצירת דרישת תשלום'
-    : primaryTransition?.label;
-  const lifecycleSteps = invoiceLifecycle(inv.review_status);
+  const nextAction = primaryKey === 'payment-request' ? t('invoices.text')
+    : primaryTransition ? t(primaryTransition.labelKey) : undefined;
+  const lifecycleSteps = invoiceLifecycle(inv.review_status).map((s) => ({ key: s.key, label: t(s.labelKey) }));
 
   return (
     <div className="space-y-4 max-w-4xl">
       {error && <ErrorNote message={error} />}
       <RecordHeader className="no-print"
-        breadcrumbs={<Breadcrumbs items={[{ label: 'חשבוניות', to: '/invoices' }, { label: inv.invoice_number }]} />}
-        title={<>חשבונית <span dir="ltr" className="num">{inv.invoice_number}</span> — {inv.supplier.name}</>}
+        breadcrumbs={<Breadcrumbs items={[{ label: t('invoices.text_2'), to: '/invoices' }, { label: inv.invoice_number }]} />}
+        title={<>{t('invoices.text_3')} <span dir="ltr" className="num">{inv.invoice_number}</span> — {inv.supplier.name}</>}
         status={<StatusBadge meta={INVOICE_REVIEW_STATUS[inv.review_status]} />}
         meta={<><span className="num font-semibold text-ink-body">{fmtMoneyExact(inv.total_amount, inv.currency)}</span><StatusBadge meta={INVOICE_PAYMENT_STATUS[inv.payment_status]} />{!isProcurementManager && <StatusBadge meta={INVOICE_EXPORT_STATUS[inv.export_status]} />}</>}
         primaryAction={primaryAction}
@@ -468,7 +476,7 @@ export default function InvoiceDetail() {
             <button key={transition.to} className="btn-secondary" disabled={busy || graphUnavailable}
               onClick={() => requestReview(transition.to)}>
                 {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />
-                : transition.to === 'investigation' ? <SearchCheck size={ICON.sm} aria-hidden="true" /> : transition.to === 'approved' ? <CheckCircle2 size={ICON.sm} aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />}{transition.label}
+                : transition.to === 'investigation' ? <SearchCheck size={ICON.sm} aria-hidden="true" /> : transition.to === 'approved' ? <CheckCircle2 size={ICON.sm} aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />}{t(transition.labelKey)}
             </button>
           ))}
           {canEdit && <button className="btn-secondary" onClick={() => setCreditOpen(true)}><RotateCcw size={ICON.sm} aria-hidden="true" /> דרישת זיכוי</button>}
@@ -478,16 +486,16 @@ export default function InvoiceDetail() {
 
       {isOffice && graphUnavailable && (
         <Note tone="alert" role="alert">
-          לא ניתן לקרוא כרגע מהשרת אילו מעברי סטטוס מותרים מהמצב הנוכחי, ולכן עדכון הסטטוס חסום.
-          רענן את המסך ונסה שוב.
+          {t('invoices.text_4')}{' '}
+          {t('invoices.text_5')}
         </Note>
       )}
 
       <ConfirmDialog open={reviewTarget !== null} onClose={() => setReviewTarget(null)}
         onConfirm={(reason) => reviewTarget && void setReviewStatus(reviewTarget, reason)}
-        title="עדכון סטטוס בדיקת חשבונית"
-        message="המעבר והסיבה יישמרו יחד ביומן הביקורת."
-        confirmLabel="עדכון סטטוס" requireReason busy={busy} />
+        title={t('invoices.title')}
+        message={t('invoices.message_2')}
+        confirmLabel={t('invoices.confirmLabel')} requireReason busy={busy} />
 
       <ConfirmDialog open={overrideConfirmOpen} onClose={() => setOverrideConfirmOpen(false)}
         onConfirm={(reason) => {
@@ -495,12 +503,12 @@ export default function InvoiceDetail() {
           setOverrideConfirmOpen(false);
           setOverrideReauthOpen(true);
         }}
-        title="עקיפת חסימת 3-way match"
-        message="רק בעלים רשאי לעקוף חסימה. הסיבה, זהות המבצע וגרסת ההתאמה יישמרו ביומן הביקורת. כפילות חשבונית ודאית אינה ניתנת לעקיפה."
-        confirmLabel="המשך לאימות זהות" requireReason busy={busy} />
+        title={t('invoices.title_2')}
+        message={t('invoices.message_3')}
+        confirmLabel={t('invoices.confirmLabel_2')} requireReason busy={busy} />
 
       <ReauthModal open={overrideReauthOpen}
-        title="אימות זהות לעקיפת חסימת 3-way match"
+        title={t('invoices.title_3')}
         onConfirm={() => void overrideThreeWayMatch()}
         onCancel={() => { setOverrideReauthOpen(false); setOverrideReason(''); }} />
 
@@ -515,8 +523,8 @@ export default function InvoiceDetail() {
       {/* print-area on the money + details cards: shadows/borders drop in print so the sheet
           stays a clean invoice document (same convention as the Orders print sheet). */}
       <Card ref={moneyCardRef} pad={false} clip className={`grid ${isProcurementManager ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-4'}`}>
-        <div className="p-4 print-area"><div className="text-xs text-ink-muted">סה״כ חשבונית</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(inv.total_amount, inv.currency)}</div>
-          <div className="text-xs text-ink-muted mt-0.5">לפני מע״מ {fmtMoneyExact(inv.amount_before_vat, inv.currency)} + מע״מ {fmtMoneyExact(inv.vat_amount, inv.currency)}</div></div>
+        <div className="p-4 print-area"><div className="text-xs text-ink-muted">{t('invoices.fmtMoneyExact')}</div><div className="kpi-value-compact num text-start">{fmtMoneyExact(inv.total_amount, inv.currency)}</div>
+          <div className="text-xs text-ink-muted mt-0.5">{t('invoices.beforeVat')} {fmtMoneyExact(inv.amount_before_vat, inv.currency)}{t('invoices.plusVat')} {fmtMoneyExact(inv.vat_amount, inv.currency)}</div></div>
         {!isProcurementManager && (
           <>
             {/* No invoice_balances row = the ledger has not been computed for this invoice, which is a
@@ -526,29 +534,29 @@ export default function InvoiceDetail() {
             {/* Tone follows the VALUE, like the balance tile below and like Suppliers.tsx:496-497.
                 done-green on a 0.00 read as "paid ✓" to anyone scanning the row — and nothing had
                 been paid. Zero is the absence of a claim, which is what `idle` means (DESIGN.md). */}
-            <div className="border-s border-line-soft p-4 print-area"><div className="text-xs text-ink-muted">שולם</div><div className={`kpi-value-compact num text-start ${data.balance?.paid_amount ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(data.balance?.paid_amount ?? null, inv.currency)}</div></div>
+            <div className="border-s border-line-soft p-4 print-area"><div className="text-xs text-ink-muted">{t('invoices.kpiPaid')}</div><div className={`kpi-value-compact num text-start ${data.balance?.paid_amount ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(data.balance?.paid_amount ?? null, inv.currency)}</div></div>
             {/* credited = already offset, a settled claim like "paid" — done, not the retired violet
                 (audit 2026-07-21) — but only once something actually was credited. */}
-            <div className="border-t border-line-soft p-4 print-area sm:border-s sm:border-t-0"><div className="text-xs text-ink-muted">זוכה</div><div className={`kpi-value-compact num text-start ${data.balance?.credited_amount ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(data.balance?.credited_amount ?? null, inv.currency)}</div></div>
-            <div className="border-s border-t border-line-soft p-4 print-area sm:border-t-0"><div className="text-xs text-ink-muted">יתרה לתשלום</div><div className={`kpi-value-compact num text-start ${data.balance && data.balance.balance_in_currency > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance_in_currency ?? inv.total_amount, inv.currency)}</div></div>
+            <div className="border-t border-line-soft p-4 print-area sm:border-s sm:border-t-0"><div className="text-xs text-ink-muted">{t('invoices.kpiCredited')}</div><div className={`kpi-value-compact num text-start ${data.balance?.credited_amount ? 'text-done-fg' : 'text-idle-fg'}`}>{fmtMoneyExact(data.balance?.credited_amount ?? null, inv.currency)}</div></div>
+            <div className="border-s border-t border-line-soft p-4 print-area sm:border-t-0"><div className="text-xs text-ink-muted">{t('invoices.kpiBalance')}</div><div className={`kpi-value-compact num text-start ${data.balance && data.balance.balance_in_currency > 0 ? 'text-await-fg' : 'text-done-fg'}`}>{fmtMoneyExact(data.balance?.balance_in_currency ?? inv.total_amount, inv.currency)}</div></div>
           </>
         )}
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card ref={detailsCardRef} className="space-y-3 print-area">
-          <div className="section-title">פרטים</div>
+          <div className="section-title">{t('invoices.text_6')}</div>
           <dl className="text-sm space-y-2">
-            <div className="flex justify-between"><dt className="text-ink-muted">תאריך חשבונית</dt><dd>{fmtDate(inv.invoice_date)}</dd></div>
-            <div className="flex justify-between"><dt className="text-ink-muted">נקלטה במערכת</dt><dd>{fmtDate(inv.received_date)}</dd></div>
-            <div className="flex justify-between"><dt className="text-ink-muted">ספק</dt><dd>{canOpenProcurement ? <Link className="link" to={`/suppliers/${inv.supplier.id}`}>{inv.supplier.name}</Link> : inv.supplier.name}</dd></div>
-            <div className="flex justify-between"><dt className="text-ink-muted">הזמנות מקושרות</dt>
+            <div className="flex justify-between"><dt className="text-ink-muted">{t('invoices.fmtDate')}</dt><dd>{fmtDate(inv.invoice_date)}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">{t('invoices.fmtDate_2')}</dt><dd>{fmtDate(inv.received_date)}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">{t('invoices.detailSupplier')}</dt><dd>{canOpenProcurement ? <Link className="link" to={`/suppliers/${inv.supplier.id}`}>{inv.supplier.name}</Link> : inv.supplier.name}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">{t('invoices.text_7')}</dt>
               <dd className="flex gap-2">{inv.orders.length ? inv.orders.map((o) => (
                 canOpenProcurement
                   ? <Link key={o.order_id} className="link" to={`/orders/${o.order_id}`}>#{o.purchase_orders.number}</Link>
                   : <span key={o.order_id}>#{o.purchase_orders.number}</span>
               )) : '—'}</dd></div>
-            <div className="flex justify-between"><dt className="text-ink-muted">קבלות סחורה</dt>
+            <div className="flex justify-between"><dt className="text-ink-muted">{t('invoices.text_8')}</dt>
               <dd>{inv.receipts.length ? inv.receipts.map((r) => `#${r.goods_receipts.number}`).join(', ') : '—'}</dd></div>
           </dl>
           {inv.notes && <div className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-3 py-2">{inv.notes}</div>}
@@ -559,11 +567,11 @@ export default function InvoiceDetail() {
           <InvoiceAttachments invoiceId={inv.id} receipts={inv.receipts.map((r) => r.goods_receipts)} />
           {data.allocations.length > 0 && (
             <div className="mt-4">
-              <div className="text-sm font-medium text-ink-soft mb-2">תשלומים שהוקצו לחשבונית</div>
+              <div className="text-sm font-medium text-ink-soft mb-2">{t('invoices.text_9')}</div>
               <ul className="divide-y divide-line-soft border border-line-soft rounded-lg text-sm">
                 {data.allocations.map((a, i) => (
                   <li key={i} className="flex justify-between px-3 py-2">
-                    <span>תשלום #{a.payment.number} · {fmtDate(a.payment.paid_date)} {a.payment.reference && <span className="text-ink-muted" dir="ltr">({a.payment.reference})</span>}</span>
+                    <span>{t('invoices.paymentNo')}{a.payment.number} · {fmtDate(a.payment.paid_date)} {a.payment.reference && <span className="text-ink-muted" dir="ltr">({a.payment.reference})</span>}</span>
                     {/* An allocation is recorded in the DEBT's currency (#286), which is this
                         invoice's — a payment made from an account in another currency records
                         its settlement separately and never changes what the invoice owes. */}
@@ -579,8 +587,8 @@ export default function InvoiceDetail() {
       <Card as="section" className="no-print" aria-labelledby="invoice-three-way-title">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 id="invoice-three-way-title" className="section-title">התאמת הזמנה, קבלה וחשבונית</h2>
-            <p className="text-sm text-ink-muted mt-1">השוואה ברמת שורה מול הכמות שהוזמנה, הכמות שהתקבלה ומחיר ההזמנה.</p>
+            <h2 id="invoice-three-way-title" className="section-title">{t('invoices.text_10')}</h2>
+            <p className="text-sm text-ink-muted mt-1">{t('invoices.text_11')}</p>
           </div>
           {/* The tone dictionary's own class, not a hand-assembled pair: this was the one badge
               in the app wearing bg-*-soft with text-*-fg instead of text-*-on-soft, which is a
@@ -593,35 +601,35 @@ export default function InvoiceDetail() {
                     : data.threeWay.status === 'matched' ? 'badge-done'
                       : 'badge-info'
             }>
-              {data.threeWay.override_active ? 'אושרה עקיפה מתועדת'
-                : data.threeWay.status === 'review_required' ? 'נדרשת בדיקה'
-                  : data.threeWay.status === 'matched_with_warnings' ? 'תואם עם אזהרות'
-                    : data.threeWay.status === 'matched' ? 'תואם'
-                      : 'אין הזמנה להשוואה'}
+              {data.threeWay.override_active ? t('invoices.text_12')
+                : data.threeWay.status === 'review_required' ? t('invoices.text_13')
+                  : data.threeWay.status === 'matched_with_warnings' ? t('invoices.text_14')
+                    : data.threeWay.status === 'matched' ? t('invoices.text_15')
+                      : t('invoices.text_16')}
             </span>
           )}
           {isOffice && organizationAccess.canWrite && inv.review_status !== 'approved' && (
             <button className="btn-secondary" onClick={() => setLineReviewOpen(true)}>
-              <FilePenLine size={ICON.sm} aria-hidden="true" /> בדיקת שורות והתאמות
+              <FilePenLine size={ICON.sm} aria-hidden="true" /> {t('invoices.lineReview')}
             </button>
           )}
         </div>
 
-        {data.threeWayError && <ErrorNote message={`לא ניתן לטעון את בדיקת ההתאמה: ${data.threeWayError}`} />}
+        {data.threeWayError && <ErrorNote message={t('invoices.threeWayLoadFailed', { message: data.threeWayError })} />}
         {data.threeWay && (
           <div className="mt-4 space-y-3">
             {data.threeWay.reasons.length > 0 ? (
               <ul className="divide-y divide-line-soft border border-line-soft rounded-lg">
                 {data.threeWay.reasons.map((reason, index) => {
-                  const details = threeWayReasonDetails(reason, inv.currency);
+                  const details = threeWayReasonDetails(reason, t, locale, inv.currency);
                   return (
                     <li key={`${reason.code}-${reason.line_number ?? 'invoice'}-${index}`} className="px-3 py-2.5 text-sm">
                       <div className="flex items-start gap-2">
                         <span className={`mt-1.5 size-2 rounded-full shrink-0 ${reason.severity === 'critical' || reason.severity === 'error' ? 'bg-alert-solid' : reason.severity === 'warning' ? 'bg-await-solid' : 'bg-info-solid'}`} aria-hidden="true" />
                         <div>
                           <div className="font-medium text-ink">
-                            {reason.line_number != null && <span>שורה <span className="num">{reason.line_number}</span>: </span>}
-                            {THREE_WAY_REASON_LABELS[reason.code] ?? 'נמצא פער הדורש בדיקה.'}
+                            {reason.line_number != null && <span>{t('invoices.text_17')} <span className="num">{reason.line_number}</span>: </span>}
+                            {reason.code in THREE_WAY_REASON_KEYS ? t(THREE_WAY_REASON_KEYS[reason.code]) : t('invoices.text_18')}
                           </div>
                           {details && <div className="text-ink-muted num mt-0.5">{details}</div>}
                         </div>
@@ -631,17 +639,17 @@ export default function InvoiceDetail() {
                 })}
               </ul>
             ) : (
-              <Note tone="done" role="status">לא נמצאו פערים בהתאמת שורות החשבונית להזמנה ולקבלה.</Note>
+              <Note tone="done" role="status">{t('invoices.text_19')}</Note>
             )}
 
             {data.threeWay.lines.length > 0 && (
               <details>
-                <summary className="text-sm font-medium cursor-pointer">הצגת {data.threeWay.lines.length} שורות החשבונית</summary>
+                <summary className="text-sm font-medium cursor-pointer">{t('invoices.showInvoiceLines', { count: data.threeWay.lines.length })}</summary>
                 <ul className="mt-2 divide-y divide-line-soft border border-line-soft rounded-lg">
                   {data.threeWay.lines.map((line) => (
                     <li key={line.id} className="px-3 py-2 text-sm flex flex-wrap justify-between gap-2">
                       <span><span className="num text-ink-muted">{line.line_number}.</span> <bdi>{line.description}</bdi></span>
-                      <span className="num text-ink-muted">{formatQuantity(line.quantity, line.unit)} × {fmtMoneyExact(line.unit_price, inv.currency)} = {fmtMoneyExact(line.line_total, inv.currency)}</span>
+                      <span className="num text-ink-muted">{formatQuantity(line.quantity, line.unit, locale)} × {fmtMoneyExact(line.unit_price, inv.currency)} = {fmtMoneyExact(line.line_total, inv.currency)}</span>
                     </li>
                   ))}
                 </ul>
@@ -651,7 +659,7 @@ export default function InvoiceDetail() {
             {data.threeWay.override_active && data.threeWay.override && (
               <Note tone="await" role="status">
                 <span className="min-w-0 flex-1">
-                  החסימה נעקפה על ידי בעלים לאחר אימות זהות. סיבה: {data.threeWay.override.reason}
+                  {t('invoices.text_20')} {data.threeWay.override.reason}
                 </span>
               </Note>
             )}
@@ -662,7 +670,7 @@ export default function InvoiceDetail() {
                 <div className="flex justify-end">
                   <button className="btn-danger-quiet" disabled={busy}
                     onClick={() => setOverrideConfirmOpen(true)}>
-                    עקיפת חסימה לאחר אימות זהות
+                    {t('invoices.text_21')}
                   </button>
                 </div>
               )}
@@ -672,21 +680,21 @@ export default function InvoiceDetail() {
 
       <Card className="no-print">
         <div className="flex items-center justify-between mb-3">
-          <div className="section-title">בדיקות אוטומטיות</div>
+          <div className="section-title">{t('invoices.text_22')}</div>
           <button className="btn-secondary btn-sm" onClick={() => void runChecks()} disabled={checking}>
-            {checking ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <SearchCheck size={ICON.sm} aria-hidden="true" />} הרצת בדיקות
+            {checking ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <SearchCheck size={ICON.sm} aria-hidden="true" />} {t('invoices.runChecks')}
           </button>
         </div>
         {checkError && <Note tone="alert">{checkError}</Note>}
         {checks ? <CheckList checks={checks} /> : !checking && !checkError && /* Device-neutral wording: on a phone nobody clicks. */ (
-          <div className="text-sm text-ink-muted">״הרצת בדיקות״ משווה את החשבונית מול הזמנות, קבלות, תשלומים ותנועות בנק.</div>
+          <div className="text-sm text-ink-muted">{t('invoices.text_23')}</div>
         )}
       </Card>
 
       {creditOpen && (
         <CreditFromInvoice invoice={inv} draft={creditDraft}
           onClose={() => { setCreditOpen(false); setCreditDraft(null); }}
-          onSaved={() => { setCreditOpen(false); setCreditDraft(null); toast('דרישת הזיכוי נפתחה'); void refetch(); }} />
+          onSaved={() => { setCreditOpen(false); setCreditDraft(null); toast(t('invoices.setCreditOpen_2')); void refetch(); }} />
       )}
       {lineReviewOpen && profile && data.threeWay && (
         <InvoiceLineReviewModal
@@ -715,6 +723,7 @@ function CreditFromInvoice({ invoice, draft, onClose, onSaved }: {
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { errorText, statusLabel, t } = useT();
   const toast = useToast();
   const [creditRequestId] = useState(() => crypto.randomUUID());
   // The reason is never prefilled. `credit_reason` says why the business is owed money -- missing,
@@ -726,7 +735,7 @@ function CreditFromInvoice({ invoice, draft, onClose, onSaved }: {
 
   async function save() {
     const a = Number(amount);
-    if (!a || a <= 0) { toast('סכום זיכוי לא תקין', 'error'); return; }
+    if (!a || a <= 0) { toast(t('invoices.toast_3'), 'error'); return; }
     setBusy(true);
     const res = await supabase.rpc('create_invoice_credit_request', {
       p_credit_request_id: creditRequestId,
@@ -734,33 +743,29 @@ function CreditFromInvoice({ invoice, draft, onClose, onSaved }: {
       p_reason: reason,
       p_amount: a,
       p_notes: notes.trim() || null,
-      p_audit_reason: 'פתיחת דרישת זיכוי מחשבונית',
+      p_audit_reason: t('invoices.text_24'),
     });
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
     onSaved();
   }
 
   return (
-    <Modal open onClose={onClose} title={`דרישת זיכוי — חשבונית ${invoice.invoice_number}`} busy={busy} statusMessage={busy ? 'פותח את דרישת הזיכוי' : undefined}>
+    <Modal open onClose={onClose} title={t('invoices.creditModalTitle', { invoice: invoice.invoice_number })} busy={busy} statusMessage={busy ? t('invoices.creditModalBusy') : undefined}>
       <div className="space-y-4">
         <div>
-          <label className="label" htmlFor="invoice-credit-reason">סיבת הזיכוי</label>
+          <label className="label" htmlFor="invoice-credit-reason">{t('invoices.text_25')}</label>
           <select id="invoice-credit-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value as CreditReason)}>
-            {Object.entries(CREDIT_REASON).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            {Object.entries(CREDIT_REASON).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
           </select>
         </div>
-        {/* A credit against a dollar invoice is a dollar credit — 0217's keys make anything else
-            unrepresentable, and 0241 carries the evidence currency through even when the invoice
-            cannot be resolved. The label said ₪ regardless, which made it the one place this
-            screen disagreed with the row it was about to write. */}
-        <div><label className="label" htmlFor="invoice-credit-amount">{`סכום (${invoice.currency})`}</label><input id="invoice-credit-amount" type="number" step="0.01" className="input num" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
-        <div><label className="label" htmlFor="invoice-credit-notes">פירוט</label><textarea id="invoice-credit-notes" className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-        <div className="text-xs text-ink-muted">נפתח בתאריך {fmtDate(todayISO())} · הזיכוי ישפיע על יתרת הספק לאחר אישור/קיזוז</div>
+        <div><label className="label" htmlFor="invoice-credit-amount">{`${t('invoices.setAmount')} (${invoice.currency})`}</label><input id="invoice-credit-amount" type="number" step="0.01" className="input num" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-credit-notes">{t('invoices.setNotes')}</label><textarea id="invoice-credit-notes" className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+        <div className="text-xs text-ink-muted">{t('invoices.creditOpenedOn')} {fmtDate(todayISO())}{t('invoices.creditAffectsBalance')}</div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
-        <button className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-        <button className="btn-primary" disabled={busy} onClick={() => void save()}>פתיחת דרישת זיכוי</button>
+        <button className="btn-secondary" disabled={busy} onClick={onClose}>{t('invoices.text_26')}</button>
+        <button className="btn-primary" disabled={busy} onClick={() => void save()}>{t('invoices.save')}</button>
       </div>
     </Modal>
   );

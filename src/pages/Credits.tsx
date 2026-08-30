@@ -1,6 +1,6 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { useEffect, useState } from 'react';
 import { Eye, RotateCcw } from 'lucide-react';
-import { toHebrewError } from '../lib/errors';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { supabase } from '../lib/supabase';
@@ -20,6 +20,7 @@ type Row = Omit<CreditRequest, 'supplier' | 'invoice'> & {
 };
 
 export default function Credits() {
+  const { t } = useT();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { profile, org, organizationAccess } = useAuth();
@@ -81,27 +82,27 @@ export default function Credits() {
         meta={<>סה״כ זיכויים פתוחים: <b className="text-await-fg"><MoneyByCurrency amounts={openTotals} baseCurrency={org?.base_currency} /></b></>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.notes ?? '').toLowerCase().includes(q)}
-        searchLabel="חיפוש בדרישות זיכוי"
-        rowLabel={(r) => `דרישת זיכוי מספר ${r.number} עבור ${r.supplier.name}`}
+        searchLabel={t('credits.searchLabel')}
+        rowLabel={(r) => t('credits.rowLabel', { number: r.number, supplier: r.supplier.name })}
         onRowClick={(r) => setSelected(r)}
         rowActions={(r) => [
-          { key: 'open', label: 'פתיחת פרטים', icon: Eye, onSelect: () => setSelected(r) },
+          { key: 'open', label: t('credits.setSelected'), icon: Eye, onSelect: () => setSelected(r) },
         ]}
         toolbar={
           <>
-            <select className="input w-auto!" aria-label="סינון דרישות זיכוי לפי סטטוס" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="active">זיכויים פעילים</option>
-              <option value="all">הכל</option>
+            <select className="input w-auto!" aria-label={t('credits.aria_label')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="active">{t('credits.text_6')}</option>
+              <option value="all">{t('credits.text_7')}</option>
             </select>
-            <input type="month" className="input w-auto!" aria-label="סינון דרישות זיכוי לפי חודש" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} />
+            <input type="month" className="input w-auto!" aria-label={t('credits.aria_label_2')} value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} />
           </>
         }
         /* #49, decided 09.08.2026 (package 2): damaged and returned lines joined the receipt
            automation (0087), under the same checkbox the shortage credit uses. What still goes
            through the invoice is everything the receipt cannot know — wrong price, duplicate
            charge — so the subtitle names both routes for what they actually do. */
-        emptyTitle="אין זיכויים"
-        emptySubtitle="זיכוי על חוסר בכמות, על פריט פגום ועל החזרה נפתח אוטומטית בקבלת הסחורה (כשתיבת הזיכויים מסומנת). בכל מקרה אחר — למשל מחיר שגוי — דרישת הזיכוי נפתחת מתוך החשבונית של הספק." />
+        emptyTitle={t('credits.emptyTitle')}
+        emptySubtitle={t('credits.emptySubtitle')} />
 
       {selected && (
         <CreditDetail credit={selected} onClose={() => setSelected(null)}
@@ -122,14 +123,15 @@ export default function Credits() {
 function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
   credit: Row; onClose: () => void; onChanged: () => void; onOpenInvoice: (id: string) => void; canWrite: boolean;
 }) {
+  const { errorText, t } = useT();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
 
   const flow: { from: CreditStatus[]; to: CreditStatus; label: string }[] = [
-    { from: ['open'], to: 'requested', label: 'נדרש מהספק' },
-    { from: ['requested'], to: 'received', label: 'הזיכוי התקבל' },
-    { from: ['received'], to: 'offset', label: 'קוזז בתשלום' },
-    { from: ['offset'], to: 'closed', label: 'סגירה' },
+    { from: ['open'], to: 'requested', label: t('credits.text_8') },
+    { from: ['requested'], to: 'received', label: t('credits.text_9') },
+    { from: ['received'], to: 'offset', label: t('credits.text_10') },
+    { from: ['offset'], to: 'closed', label: t('credits.text_11') },
   ];
 
   async function setStatus(status: CreditStatus) {
@@ -138,22 +140,22 @@ function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
     const res = await supabase.rpc('transition_credit_request', {
       p_credit_request_id: credit.id,
       p_status: status,
-      p_reason: transition?.label ?? 'עדכון סטטוס זיכוי',
+      p_reason: transition?.label ?? t('credits.text_12'),
     });
     setBusy(false);
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-    toast('סטטוס הזיכוי עודכן');
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
+    toast(t('credits.toast'));
     onChanged();
   }
 
   return (
-    <Modal open onClose={onClose} title={`זיכוי #${credit.number} — ${credit.supplier.name}`} busy={busy} statusMessage={busy ? 'מעדכן את הזיכוי' : undefined}>
+    <Modal open onClose={onClose} title={t('credits.modalTitle', { number: credit.number, supplier: credit.supplier.name })} busy={busy} statusMessage={busy ? t('credits.updatingStatus') : undefined}>
       <dl className="text-sm space-y-2 mb-4">
         <div className="flex justify-between"><dt className="text-ink-muted">סיבה</dt><dd>{CREDIT_REASON[credit.reason]}</dd></div>
         <div className="flex justify-between"><dt className="text-ink-muted">סכום</dt><dd className="num font-semibold">{fmtMoneyExact(credit.amount, credit.currency)}</dd></div>
         <div className="flex justify-between"><dt className="text-ink-muted">סטטוס</dt><dd><StatusBadge meta={CREDIT_STATUS[credit.status]} /></dd></div>
         {credit.invoice && (
-          <div className="flex justify-between"><dt className="text-ink-muted">חשבונית</dt>
+          <div className="flex justify-between"><dt className="text-ink-muted">{t('credits.text_14')}</dt>
             <dd><button className="link num" onClick={() => onOpenInvoice(credit.invoice!.id)}>{credit.invoice.invoice_number}</button></dd></div>
         )}
         {credit.notes && <div className="bg-surface-sunken rounded-lg px-3 py-2 text-ink-soft">{credit.notes}</div>}

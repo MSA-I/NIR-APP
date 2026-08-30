@@ -12,10 +12,15 @@
  * too many; three copies of a corpus is how you find out when one of them drifts.
  */
 import { describe, expect, it } from 'vitest';
+import { he } from './i18n/dictionaries/he';
+import type { Dictionary } from './i18n/dictionaries/he';
+import { translate } from './i18n/t';
 import {
   MIN_WEBHOOK_SECRET_LENGTH,
   WEBHOOK_EVENT_CHOICES,
-  webhookErrorMessage,
+  WEBHOOK_UNMAPPED,
+  webhookErrorCode,
+  webhookErrorRefusal,
   webhookSecretRejection,
   webhookUrlRejection,
   type WebhookSubscription,
@@ -102,7 +107,17 @@ describe('webhookSecretRejection', () => {
   });
 });
 
-describe('webhookErrorMessage', () => {
+/**
+ * The refusal is a KEY now, so the claim below is in two halves and both are needed: the code
+ * resolves to a key, and the key carries a Hebrew sentence that is not the code. Comparing
+ * `t(key)` against `t(key)` would have passed whether the dictionary was right or not.
+ */
+const say = (raw: unknown): string => {
+  const refusal = webhookErrorRefusal(raw);
+  return translate(he as unknown as Dictionary, refusal.key, refusal.vars);
+};
+
+describe('webhookErrorRefusal', () => {
   it('maps every server code the owner can provoke to Hebrew', () => {
     for (const code of [
       'webhook_url_scheme_rejected',
@@ -123,23 +138,32 @@ describe('webhookErrorMessage', () => {
       'webhook_organization_read_only',
       'fresh_authentication_required',
     ]) {
-      const message = webhookErrorMessage(code);
+      const message = say(code);
       expect(message, code).toMatch(/[֐-׿]/);
       expect(message, code).not.toContain(code);
     }
   });
 
+  it('answers an unmapped failure with the fallback KEY, never with the text', () => {
+    // The sanitising now happens one step earlier, so it can also be asserted one step earlier:
+    // whatever the server said, the code that crosses the boundary is a name this file owns.
+    expect(webhookErrorCode('ERROR: permission denied for relation private.x at 10.0.3.7'))
+      .toBe(WEBHOOK_UNMAPPED);
+    expect(webhookErrorCode('webhook_url_port_rejected')).toBe('webhook_url_port_rejected');
+    expect(webhookErrorCode('webhook_verification_status_503')).toBe('webhook_verification_status_503');
+  });
+
   it('never lets a raw server string through', () => {
     const raw =
       'ERROR: permission denied for relation private.webhook_verification_attempts at 10.0.3.7';
-    const message = webhookErrorMessage(raw);
+    const message = say(raw);
     expect(message).not.toContain('10.0.3.7');
     expect(message).not.toContain('private.webhook_verification_attempts');
     expect(message).toMatch(/[֐-׿]/);
   });
 
   it('reports an upstream status by number without the upstream body', () => {
-    const message = webhookErrorMessage('webhook_verification_status_500');
+    const message = say('webhook_verification_status_500');
     expect(message).toContain('500');
     expect(message).toMatch(/[֐-׿]/);
   });
@@ -203,7 +227,10 @@ describe('WEBHOOK_EVENT_CHOICES', () => {
     expect(WEBHOOK_EVENT_CHOICES.length).toBeGreaterThan(0);
     for (const choice of WEBHOOK_EVENT_CHOICES) {
       expect(choice.value).toMatch(/^[a-z_]+\.[a-z_]+$/);
-      expect(choice.label).toMatch(/[֐-׿]/);
+      // The label is a key now, so the claim splits: the choice names a key, and the key carries
+      // a Hebrew word. A key with no dictionary row would otherwise reach a chip on the screen.
+      expect(choice.labelKey).toMatch(/^webhooks\./);
+      expect(translate(he as unknown as Dictionary, choice.labelKey)).toMatch(/[֐-׿]/);
     }
   });
 });

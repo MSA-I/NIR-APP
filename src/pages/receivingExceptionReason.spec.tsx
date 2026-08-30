@@ -41,8 +41,10 @@ describe('the manual-exception box asks the investigator\'s question', () => {
   it('is asking for something a person will read, not for the ledger alone', () => {
     // The fact that makes this box content: the exceptions screen prints `details.reason` back.
     const exceptions = source('Exceptions.tsx');
-    expect(exceptions).toContain("reason: 'סיבה'");
-    expect(exceptions).toContain('businessDetailLines(row.details)');
+    // The label is a KEY since the extraction; the claim is that the screen prints the reason
+    // back to a person, and `exceptions.detailReason` is that same line said in their language.
+    expect(exceptions).toContain("reason: 'exceptions.detailReason'");
+    expect(exceptions).toContain('businessDetailLines(row.details, t)');
   });
 
   it('shows the question on screen and still lets an empty box through', async () => {

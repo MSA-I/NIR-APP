@@ -7,10 +7,11 @@ import { z } from "zod";
 import {
   type Fact,
   TIME_WINDOW_DAYS,
-  TIME_WINDOW_LABELS,
+  TIME_WINDOW_LABEL_KEYS,
   TIME_WINDOWS,
 } from "../../../../src/lib/assistant/contracts.ts";
 import { addCalendarDays, toZoneISO } from "../time.ts";
+import { readerText } from "../reader-locale.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
 import { failure, num, record } from "./shared.ts";
 
@@ -50,7 +51,9 @@ export const getPurchaseMetrics: AssistantTool = {
     const asOf = ctx.now().toISOString();
     const to = toZoneISO(ctx.now());
     const from = addCalendarDays(to, -TIME_WINDOW_DAYS[window]);
-    const windowLabel = TIME_WINDOW_LABELS[window];
+    // Resolved in the run's language: this label is appended to a fact label a PERSON reads,
+    // so a Hebrew constant here would put Hebrew inside an English answer.
+    const windowLabel = readerText(ctx.locale, TIME_WINDOW_LABEL_KEYS[window]);
     const filters: Record<string, string | number | boolean | null> = {
       window,
       from,

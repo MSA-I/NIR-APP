@@ -1,7 +1,9 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { OPTIONAL_REASON_LABEL, reasonOr } from './reason';
+import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from './reason';
+import { he } from './i18n/dictionaries/he';
+import { en } from './i18n/dictionaries/en';
 
 /**
  * The owner's ruling of 11.08.2026 has two halves, and only the first one is visible on screen:
@@ -93,8 +95,12 @@ describe('the reason box no longer blocks a button', () => {
   });
 
   it('offers the same words everywhere the shared dialog is used', () => {
-    expect(OPTIONAL_REASON_LABEL).toContain('רשות');
-    expect(OPTIONAL_REASON_LABEL).not.toContain('חובה');
+    // Split: the module pins the KEY, each dictionary pins the claim that the box is optional.
+    expect(OPTIONAL_REASON_LABEL_KEY).toBe('reason.optionalLabel');
+    expect(he.reason.optionalLabel).toContain('רשות');
+    expect(he.reason.optionalLabel).not.toContain('חובה');
+    expect(en.reason.optionalLabel).toContain('optional');
+    expect(en.reason.optionalLabel).not.toMatch(/required/i);
   });
 
   /**
@@ -140,6 +146,8 @@ describe('the reason box no longer blocks a button', () => {
     for (const relative of productSources()) {
       if (relative === ALLOWED_DEFENSIVE_GATE) continue;
       if (relative.startsWith(STAFF_CONSOLE)) continue;
+      // The dictionaries hold the WORDS a refusal is said with, not a screen that refuses.
+      if (relative.startsWith('lib/i18n/dictionaries/')) continue;
       const source = readFileSync(join(process.cwd(), 'src', relative), 'utf8');
       if (GATE.test(source)) offenders.push(relative);
     }
@@ -160,6 +168,9 @@ describe('the reason box no longer blocks a button', () => {
     const offenders: string[] = [];
     for (const relative of productSources()) {
       if (relative === 'lib/errors.ts') continue;
+      // Same reason as errors.ts: the dictionaries hold the WORDS a server refusal is said with,
+      // and deleting them would make a real failure silent rather than making a screen kinder.
+      if (relative.startsWith('lib/i18n/dictionaries/')) continue;
       const source = readFileSync(join(process.cwd(), 'src', relative), 'utf8');
       if (refusals.test(source)) offenders.push(relative);
     }

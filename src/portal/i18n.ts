@@ -134,6 +134,6 @@ export function formatPortalQuantity(
 ): string {
   if (quantity == null) return '—';
   const amount = new Intl.NumberFormat(INTL_LOCALE[locale], { maximumFractionDigits: 2 }).format(quantity);
-  const label = locale === 'he' ? formatUnit(unit, quantity) : (unit?.trim() ?? '');
+  const label = formatUnit(unit, locale, quantity);
   return `${amount}${label ? ` ${label}` : ''}`;
 }

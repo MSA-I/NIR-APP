@@ -74,12 +74,21 @@ function fakeDb(orders: RowsResult<SentOrderRow> = emptyRows()): ToolReads {
   };
 }
 
+// The locale defaults to Hebrew, so every existing case keeps asserting the exact Hebrew
+// sentence it always asserted. Only the cases about the English reader pass "en".
 function ctxWith(
   db: ToolReads,
   role: ActorContext["role"] = "owner",
   drafts = true,
+  locale: ToolContext["locale"] = "he",
 ): ToolContext {
-  return { db, actor: actor(role, drafts), evidence: new RunEvidence(), now: () => NOW };
+  return {
+    db,
+    actor: actor(role, drafts),
+    evidence: new RunEvidence(),
+    now: () => NOW,
+    locale,
+  };
 }
 
 /* ============================================================================
@@ -139,6 +148,43 @@ Deno.test("a product-help source is issued only where routeAccess already allowl
     // validate.ts runs over it after generation.
     assert.equal(assistantSourceRouteDecision(source, role), "allowed", entry.id);
   }
+});
+
+Deno.test("an English reader gets the English entry without the model having to ask for it", async () => {
+  // No `locale` in the tool arguments AT ALL. Before `OPEN-DECISIONS #283` that meant Hebrew,
+  // so an English speaker got English steps only when the model happened to guess; the run’s
+  // own locale is now the fallback, and it is a fact the server holds.
+  const envelope = await getProductHelp.run(ctxWith(fakeDb(), "owner", true, "en"), {
+    question: "",
+    entry_id: "compare_supplier_prices",
+  });
+  assert.equal(envelope.result_count, 1);
+  const [row] = envelope.data as { locale: string; label: string; steps: string[] }[];
+  assert.equal(row.locale, "en");
+  assert.equal(row.label, "Comparing supplier prices");
+  assert.equal(envelope.facts[0].label, "רשומת עזרה — Comparing supplier prices");
+
+  // The source label is the SCREEN’s name, and `routePresentationTitle` returns a dictionary
+  // key since the interface was extracted. Unresolved it would put `nav.routeTitle_prices` in
+  // front of a person, and `tsc` would have been happy: `TKey` is a string.
+  assert.equal(envelope.sources[0].label, "Price lists");
+  for (const source of envelope.sources) {
+    assert.ok(!source.label.startsWith("nav."), source.label);
+  }
+});
+
+Deno.test("the model may still name a language, and it beats the reader’s own", async () => {
+  // A Hebrew reader asking in English, or the other way round: the argument is a deliberate
+  // override, so it wins. What changed is only what SILENCE means.
+  const envelope = await getProductHelp.run(ctxWith(fakeDb(), "owner", true, "en"), {
+    question: "",
+    entry_id: "compare_supplier_prices",
+    locale: "he",
+  });
+  const [row] = envelope.data as { locale: string; label: string }[];
+  assert.equal(row.locale, "he");
+  assert.equal(row.label, "השוואת מחירי ספקים");
+  assert.equal(envelope.sources[0].label, "מחירונים");
 });
 
 Deno.test("an unanswered product question is a named failure, never a nearest-entry guess", async () => {

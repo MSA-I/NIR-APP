@@ -1,5 +1,6 @@
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t.ts';
 import { useEffect, useId, useState } from 'react';
-import { toHebrewError } from "../lib/errors";
 import { Building2, ShieldCheck, Plus, Copy, MessageSquare, Archive, RefreshCw, Undo2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -35,14 +36,20 @@ interface PlatformOffboardingRequest {
   last_export_error: string | null;
 }
 
-const OFFBOARDING_STATUS: Record<PlatformOffboardingRequest['status'], string> = {
-  requested: 'ממתין לאישור',
-  approved: 'ממתין להכנת ייצוא',
-  export_building: 'הייצוא בהכנה',
-  export_ready: 'הייצוא מוכן',
-  export_failed: 'ניסיון הייצוא נכשל',
-  cancelled: 'בוטל בידי הלקוח',
-  reactivated: 'הופעל מחדש',
+/**
+ * The operator's reading of an offboarding request, which is NOT the customer's reading of the
+ * same row: `Settings.tsx` says "your request was sent" where this says "waiting for approval".
+ * Two audiences, two sentences, and the keys are separate so neither can be edited into the
+ * other by someone tidying up duplicates.
+ */
+const OFFBOARDING_STATUS_KEYS: Record<PlatformOffboardingRequest['status'], TKey> = {
+  requested: 'admin.offboardingStatusRequested',
+  approved: 'admin.offboardingStatusApproved',
+  export_building: 'admin.offboardingStatusExportBuilding',
+  export_ready: 'admin.offboardingStatusExportReady',
+  export_failed: 'admin.offboardingStatusExportFailed',
+  cancelled: 'admin.offboardingStatusCancelled',
+  reactivated: 'admin.offboardingStatusReactivated',
 };
 
 const emptyForm = (): NewOrgForm => ({
@@ -55,6 +62,7 @@ const emptyForm = (): NewOrgForm => ({
 });
 
 export default function Admin() {
+  const { errorText, t } = useT();
   const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [handover, setHandover] = useState<{ email: string; password: string; result: ProvisionResult } | null>(null);
@@ -86,7 +94,7 @@ export default function Admin() {
           p_request_id: request.id,
         });
         if (reactivated.error) throw reactivated.error;
-        toast('הארגון הופעל מחדש במצב פעיל.');
+        toast(t('admin.toast'));
       } else {
         if (action === 'approve') {
           const approved = await supabase.rpc('approve_organization_offboarding', {
@@ -99,13 +107,13 @@ export default function Admin() {
         });
         if (started.error) throw started.error;
         toast(action === 'approve'
-          ? 'הבקשה אושרה והכנת הייצוא הועברה לעיבוד.'
-          : 'ניסיון הכנת הייצוא הועבר מחדש לעיבוד.');
+          ? t('admin.text')
+          : t('admin.text_2'));
       }
       setOffboardingPending(null);
       await refetch();
     } catch (actionError) {
-      toast(toHebrewError(actionError), 'error');
+      toast(errorText(actionError), 'error');
     } finally {
       setBusy(false);
     }
@@ -124,45 +132,45 @@ export default function Admin() {
     });
     setBusy(false);
 
-    if (!res.ok) { toast(toHebrewError(res.message), 'error'); return; }
+    if (!res.ok) { toast(errorText(res.message), 'error'); return; }
     setCreating(false);
     setHandover({ email: form.ownerEmail.trim(), password: form.password, result: res.result });
     void refetch();
   }
 
   const offboardingColumns: Column<PlatformOffboardingRequest>[] = [
-    { key: 'organization', header: 'ארגון', render: (r) => <span className="font-medium text-ink">{r.organization_name}</span>, sortValue: (r) => r.organization_name },
+    { key: 'organization', header: t('admin.text_3'), render: (r) => <span className="font-medium text-ink">{r.organization_name}</span>, sortValue: (r) => r.organization_name },
     {
-      key: 'status', header: 'מצב', sortValue: (r) => r.status,
+      key: 'status', header: t('admin.text_4'), sortValue: (r) => r.status,
       render: (r) => (
         <div>
-          <div>{OFFBOARDING_STATUS[r.status]}</div>
+          <div>{t(OFFBOARDING_STATUS_KEYS[r.status])}</div>
           {r.status === 'export_building' && r.export_parts_total > 0 && (
             <div className="mt-0.5 text-xs text-ink-muted num">{fmtNum(r.export_parts_completed)} / {fmtNum(r.export_parts_total)}</div>
           )}
         </div>
       ),
     },
-    { key: 'requested', header: 'מועד הבקשה', render: (r) => fmtDate(r.requested_at), sortValue: (r) => r.requested_at },
-    { key: 'attempts', header: 'ניסיונות ייצוא', className: 'num', render: (r) => fmtNum(r.export_attempts), sortValue: (r) => r.export_attempts },
+    { key: 'requested', header: t('admin.fmtDate'), render: (r) => fmtDate(r.requested_at), sortValue: (r) => r.requested_at },
+    { key: 'attempts', header: t('admin.fmtNum'), className: 'num', render: (r) => fmtNum(r.export_attempts), sortValue: (r) => r.export_attempts },
   ];
 
   /** The same three gates the hand-rolled `actions` column carried, as the table's own row menu. */
   function offboardingActions(r: PlatformOffboardingRequest): ActionMenuItem[] {
     return [
       {
-        key: 'approve', label: 'אישור והכנת ייצוא',
+        key: 'approve', label: t('admin.text_5'),
         hidden: r.status !== 'requested',
         onSelect: () => setOffboardingPending({ request: r, action: 'approve' }),
       },
       {
         key: 'build', icon: RefreshCw,
-        label: r.status === 'export_failed' ? 'ניסיון חוזר' : r.status === 'export_building' ? 'בדיקה והמשך' : 'הכנת ייצוא',
+        label: r.status === 'export_failed' ? t('admin.text_6') : r.status === 'export_building' ? t('admin.text_7') : t('admin.text_8'),
         hidden: !['approved', 'export_building', 'export_failed'].includes(r.status),
         onSelect: () => setOffboardingPending({ request: r, action: 'build' }),
       },
       {
-        key: 'reactivate', label: 'הפעלה מחדש', icon: Undo2,
+        key: 'reactivate', label: t('admin.text_9'), icon: Undo2,
         hidden: ['cancelled', 'reactivated'].includes(r.status),
         onSelect: () => setOffboardingPending({ request: r, action: 'reactivate' }),
       },
@@ -171,7 +179,7 @@ export default function Admin() {
 
   if (loading) return <SkeletonTable cols={5} />;
   if (error) return <ErrorNote message={error} />;
-  if (!data?.isPlatformAdmin) return <ErrorNote message="המסך הזה פתוח למנהלי פלטפורמה בלבד." />;
+  if (!data?.isPlatformAdmin) return <ErrorNote message={t('admin.message')} />;
 
   return (
     <div className="space-y-4">
@@ -180,10 +188,10 @@ export default function Admin() {
           same rows here would be two answers to one question. Provisioning stays -- it is an
           action, not a list. */}
       <PageHeader
-        title={<span className="flex items-center gap-2"><ShieldCheck size={ICON.xl} aria-hidden="true" /> ניהול פלטפורמה</span>}
+        title={<span className="flex items-center gap-2"><ShieldCheck size={ICON.xl} aria-hidden="true" /> {t('admin.text_10')}</span>}
         actions={
           <button className="btn-primary" onClick={() => setCreating(true)}>
-            <Plus size={ICON.sm} aria-hidden="true" /> ארגון חדש
+            <Plus size={ICON.sm} aria-hidden="true" /> {t('admin.newOrganization')}
           </button>
         }
       />
@@ -194,35 +202,35 @@ export default function Admin() {
 
       <section className="space-y-3" aria-labelledby="offboarding-heading">
         <div>
-          <h2 id="offboarding-heading" className="section-title flex items-center gap-2"><Archive size={ICON.md} aria-hidden="true" /> סיום שירות וייצוא דיירים</h2>
-          <p className="mt-1 text-sm text-ink-muted">אישור מפעיל מתחיל הכנת ייצוא מבוקר. התהליך אינו מוחק מידע ואינו חוסם צפייה של הלקוח.</p>
+          <h2 id="offboarding-heading" className="section-title flex items-center gap-2"><Archive size={ICON.md} aria-hidden="true" /> {t('admin.text_11')}</h2>
+          <p className="mt-1 text-sm text-ink-muted">{t('admin.text_12')}</p>
         </div>
         <DataTable
           rows={data.offboarding}
           columns={offboardingColumns}
           searchable
           searchFn={(row, query) => row.organization_name.toLowerCase().includes(query)}
-          tableLabel="בקשות סיום שירות"
-          searchLabel="חיפוש בבקשות סיום שירות"
+          tableLabel={t('admin.tableLabel')}
+          searchLabel={t('admin.searchLabel')}
           rowActions={offboardingActions}
-          rowLabel={(row) => `בקשת סיום שירות של ${row.organization_name}`}
-          emptyTitle="אין בקשות סיום שירות"
-          emptySubtitle="בקשות שיוגשו בידי בעלי ארגונים יופיעו כאן"
+          rowLabel={(row) => t('admin.offboardingRowLabel', { organization: row.organization_name })}
+          emptyTitle={t('admin.emptyTitle')}
+          emptySubtitle={t('admin.emptySubtitle')}
         />
       </section>
       {handover && (
-        <Modal open onClose={() => setHandover(null)} title="הארגון הוקם — פרטי כניסה למסירה">
+        <Modal open onClose={() => setHandover(null)} title={t('admin.title')}>
           <div className="space-y-4">
             <p className="text-sm text-ink-soft">
-              הפרטים מוצגים פעם אחת בלבד. מסור אותם לבעל העסק בערוץ מאובטח ובקש ממנו להחליף סיסמה בכניסה הראשונה.
+              {t('admin.text_13')}
             </p>
-            <CredentialRow label="אימייל" value={handover.email} onCopy={() => toast('הועתק')} onCopyError={() => toast('ההעתקה נכשלה — יש להעתיק ידנית', 'error')} />
-            <CredentialRow label="סיסמה ראשונית" value={handover.password} onCopy={() => toast('הועתק')} onCopyError={() => toast('ההעתקה נכשלה — יש להעתיק ידנית', 'error')} />
+            <CredentialRow label={t('admin.label')} value={handover.email} onCopy={() => toast(t('admin.text_14'))} onCopyError={() => toast(t('admin.text_15'), 'error')} />
+            <CredentialRow label={t('admin.label_2')} value={handover.password} onCopy={() => toast(t('admin.text_16'))} onCopyError={() => toast(t('admin.text_17'), 'error')} />
             <div className="text-xs text-ink-muted">
-              נוצרו {fmtNum(handover.result.categories_created)} קטגוריות בסיס. הארגון נפתח בסטטוס פעיל.
+              {t('admin.handoverCategories', { count: fmtNum(handover.result.categories_created) })}
             </div>
             <div className="flex justify-end">
-              <button className="btn-primary" onClick={() => setHandover(null)}>סגירה</button>
+              <button className="btn-primary" onClick={() => setHandover(null)}>{t('admin.setHandover')}</button>
             </div>
           </div>
         </Modal>
@@ -231,8 +239,8 @@ export default function Admin() {
       <ReauthModal
         open={offboardingPending !== null}
         title={offboardingPending?.action === 'reactivate'
-          ? 'אימות זהות לפני הפעלת הארגון מחדש'
-          : 'אימות זהות לפני טיפול בייצוא הארגון'}
+          ? t('admin.text_18')
+          : t('admin.text_19')}
         onConfirm={() => { void applyOffboardingAction(); }}
         onCancel={() => setOffboardingPending(null)}
       />
@@ -262,6 +270,7 @@ interface FeedbackNoteRow {
 }
 
 function FeedbackNotes() {
+  const { statusLabel, t } = useT();
   const { data, loading, error } = useQuery(async () => unwrap(await supabase
     .from('feedback_notes')
     .select('id, created_at, note, route, role, viewport_width, app_release, sent_at, send_error, organizations(name)')
@@ -271,31 +280,31 @@ function FeedbackNotes() {
   const columns: Column<FeedbackNoteRow>[] = [
     {
       key: 'note',
-      header: 'ההערה',
+      header: t('admin.text_20'),
       priority: 1,
       mobileLabel: null,
       render: (r) => <span className="whitespace-pre-wrap text-ink-body">{r.note}</span>,
     },
     {
       key: 'org',
-      header: 'ארגון',
+      header: t('admin.text_21'),
       render: (r) => r.organizations?.name ?? '—',
     },
     {
       key: 'who',
-      header: 'תפקיד',
+      header: t('admin.text_22'),
       // The vendor's own screen, so the frozen defaults are the right vocabulary here — a tenant's
       // renamed role would say nothing to the reader of this table (status.ts:163-168).
-      render: (r) => ROLE_LABEL[r.role] ?? r.role,
+      render: (r) => statusLabel(ROLE_LABEL[r.role]) || r.role,
     },
     {
       key: 'route',
-      header: 'מסך',
+      header: t('admin.text_23'),
       render: (r) => <span dir="ltr" className="num">{r.route}</span>,
     },
     {
       key: 'device',
-      header: 'מכשיר',
+      header: t('admin.text_24'),
       priority: 3,
       render: (r) => (
         <span className="text-xs text-ink-muted">
@@ -306,17 +315,17 @@ function FeedbackNotes() {
     },
     {
       key: 'sent',
-      header: 'שליחה',
+      header: t('admin.text_25'),
       mobileLabel: null,
       // send_error is shown, not summarised: "לא נשלח" without the reason sends the reader to the
       // function logs for something the row already knows.
       render: (r) => (r.sent_at
-        ? <span className="badge-done">נשלח</span>
-        : <span className="badge-alert" title={r.send_error ?? undefined}>לא נשלח</span>),
+        ? <span className="badge-done">{t('admin.text_26')}</span>
+        : <span className="badge-alert" title={r.send_error ?? undefined}>{t('admin.text_27')}</span>),
     },
     {
       key: 'when',
-      header: 'מתי',
+      header: t('admin.text_28'),
       render: (r) => fmtDateTime(r.created_at),
     },
   ];
@@ -326,14 +335,14 @@ function FeedbackNotes() {
 
   return (
     <section className="space-y-2">
-      <h2 className="section-title flex items-center gap-2"><MessageSquare size={ICON.md} aria-hidden="true" /> הערות מלקוחות</h2>
+      <h2 className="section-title flex items-center gap-2"><MessageSquare size={ICON.md} aria-hidden="true" /> {t('admin.text_29')}</h2>
       <DataTable
         rows={data ?? []}
         columns={columns}
-        tableLabel="הערות מלקוחות"
-        rowLabel={(r) => `הערה מ-${r.organizations?.name ?? 'ארגון לא מזוהה'}`}
-        emptyTitle="אין הערות"
-        emptySubtitle="כפתור ההערות מופיע רק בארגון שהדגל feedback.notes דלוק בו"
+        tableLabel={t('admin.tableLabel_2')}
+        rowLabel={(r) => t('admin.noteRowLabel', { organization: r.organizations?.name ?? t('admin.unknownOrganization') })}
+        emptyTitle={t('admin.emptyTitle_2')}
+        emptySubtitle={t('admin.emptySubtitle_2')}
       />
     </section>
   );
@@ -342,6 +351,7 @@ function FeedbackNotes() {
 function CredentialRow({ label, value, onCopy, onCopyError }: {
   label: string; value: string; onCopy: () => void; onCopyError: () => void;
 }) {
+  const { t } = useT();
   const inputId = useId();
 
   async function copy() {
@@ -360,7 +370,7 @@ function CredentialRow({ label, value, onCopy, onCopyError }: {
         <input id={inputId} className="input" readOnly value={value} dir="ltr" />
         {/* `btn-icon`, not `p-2!`: the override zeroed the padding on one axis only, so the button
             was 44px tall and 36px wide — under the floor on the axis nobody measured. */}
-        <button className="btn-secondary btn-icon" aria-label={`העתקת ${label}`}
+        <button className="btn-secondary btn-icon" aria-label={t('admin.copyFieldLabel', { field: label })}
           onClick={() => void copy()}>
           <Copy size={ICON.sm} aria-hidden="true" />
         </button>
@@ -372,6 +382,7 @@ function CredentialRow({ label, value, onCopy, onCopyError }: {
 function NewOrgModal({ open, busy, onClose, onSubmit }: {
   open: boolean; busy: boolean; onClose: () => void; onSubmit: (form: NewOrgForm) => void;
 }) {
+  const { t } = useT();
   const [form, setForm] = useState<NewOrgForm>(emptyForm);
   const set = <K extends keyof NewOrgForm>(key: K, value: NewOrgForm[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -387,48 +398,48 @@ function NewOrgModal({ open, busy, onClose, onSubmit }: {
   }
 
   return (
-    <Modal open={open} onClose={close} title="הקמת ארגון חדש" wide busy={busy}>
+    <Modal open={open} onClose={close} title={t('admin.title_2')} wide busy={busy}>
       <div className="space-y-4">
         {/* `Note tone="idle"` — a neutral statement, and the one box the system already has for
             it. The hand-rolled version was a fifth spelling of `.note-idle`. */}
         <Note tone="idle">
           <Building2 size={ICON.sm} className="mt-0.5 shrink-0 text-ink-faint" aria-hidden="true" />
-          <span className="min-w-0 flex-1">נוצרים ארגון, משתמש בעלים וקטגוריות בסיס. הפעולה מבוטלת במלואה אם שלב כלשהו נכשל.</span>
+          <span className="min-w-0 flex-1">{t('admin.text_30')}</span>
         </Note>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
-            <label className="label" htmlFor="new-org-name">שם הארגון</label>
+            <label className="label" htmlFor="new-org-name">{t('admin.text_31')}</label>
             <input id="new-org-name" className="input" value={form.name} onChange={(e) => set('name', e.target.value)} />
           </div>
           <div>
-            <label className="label" htmlFor="new-org-owner-name">שם בעל העסק</label>
+            <label className="label" htmlFor="new-org-owner-name">{t('admin.text_32')}</label>
             <input id="new-org-owner-name" className="input" value={form.ownerName} onChange={(e) => set('ownerName', e.target.value)} />
           </div>
           <div>
-            <label className="label" htmlFor="new-org-owner-email">אימייל בעל העסק</label>
+            <label className="label" htmlFor="new-org-owner-email">{t('admin.text_33')}</label>
             <input id="new-org-owner-email" className="input" type="email" dir="ltr" value={form.ownerEmail} onChange={(e) => set('ownerEmail', e.target.value)} />
           </div>
           <div className="sm:col-span-2">
-            <label className="label" htmlFor="new-org-password">סיסמה ראשונית (לפחות 10 תווים)</label>
+            <label className="label" htmlFor="new-org-password">{t('admin.text_34')}</label>
             <div className="flex items-center gap-2">
               <input id="new-org-password" className="input" dir="ltr" value={form.password} onChange={(e) => set('password', e.target.value)} />
-              <button type="button" className="btn-secondary whitespace-nowrap" disabled={busy} onClick={() => set('password', generatePassword())}>הגרלה מחדש</button>
+              <button type="button" className="btn-secondary whitespace-nowrap" disabled={busy} onClick={() => set('password', generatePassword())}>{t('admin.set')}</button>
             </div>
           </div>
           <div>
-            <label className="label" htmlFor="new-org-vat">שיעור מע״מ (%)</label>
+            <label className="label" htmlFor="new-org-vat">{t('admin.text_35')}</label>
             <input id="new-org-vat" className="input num" type="number" step="0.5" value={form.vatRate} onChange={(e) => set('vatRate', e.target.value)} />
           </div>
           <div className="sm:col-span-2">
-            <label className="label" htmlFor="new-org-categories">קטגוריות בסיס (מופרדות בפסיק — ריק יוצר «כללי» בלבד)</label>
+            <label className="label" htmlFor="new-org-categories">{t('admin.text_36')}</label>
             <input id="new-org-categories" className="input" value={form.categories} onChange={(e) => set('categories', e.target.value)} />
           </div>
         </div>
 
         <div className="flex justify-end gap-2">
-          <button className="btn-secondary" disabled={busy} onClick={close}>ביטול</button>
-          <button className="btn-primary" disabled={busy || !ready} onClick={() => onSubmit(form)}>הקמה</button>
+          <button className="btn-secondary" disabled={busy} onClick={close}>{t('admin.text_37')}</button>
+          <button className="btn-primary" disabled={busy || !ready} onClick={() => onSubmit(form)}>{t('admin.onSubmit')}</button>
         </div>
       </div>
     </Modal>

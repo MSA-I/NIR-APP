@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n/LocaleProvider';
 import { Link, useLocation } from 'react-router';
 import type { CSSProperties } from 'react';
 import { Loader2 } from 'lucide-react';
@@ -34,6 +35,7 @@ export default function Fab({ inboxCount = null }: {
    */
   inboxCount?: number | null;
 } = {}) {
+  const { t } = useT();
   const { profile, organizationAccess = ACTIVE_ORGANIZATION_ACCESS } = useAuth();
   const { pathname } = useLocation();
   const { openCapture, element, busy, retryCount } = useQuickCapture();
@@ -69,16 +71,19 @@ export default function Fab({ inboxCount = null }: {
 
   return (
     <>
-      <div role="group" aria-label="קיצורי דרך ופעולות"
+      <div role="group" aria-label={t('fab.groupLabel')}
         style={{ '--mobile-action-count': mobileActions.length } as CSSProperties}
         className="mobile-action-bar fixed z-40 border-t border-line-soft bg-topbar/75 backdrop-blur-sm shadow-menu no-print lg:hidden">
-        {mobileActions.map(({ key, label, icon: Icon, kind, to }) => {
+        {mobileActions.map(({ key, labelKey, icon: Icon, kind, to }) => {
+          const label = t(labelKey);
           if (kind === 'capture') {
             return (
               <button key={key} type="button" className={`${restClass} mobile-action-raised`} data-quick-action-key={key}
                 disabled={busy} aria-busy={busy || undefined}
-                aria-label={busy ? 'מעלה מסמך' : retryCount ? `ניסיון חוזר להעלאת ${retryCount} מסמכים` : label}
-                title={retryCount ? `ניסיון חוזר לנכשלים בלבד (${retryCount})` : label}
+                aria-label={busy
+                  ? t('fab.uploading')
+                  : retryCount ? t('fab.retryUpload', { count: retryCount }) : label}
+                title={retryCount ? t('fab.retryFailedOnly', { count: retryCount }) : label}
                 onClick={openCapture}>
                 <span className="mobile-action-puck" aria-hidden="true">
                   {/* 26px has no rung on the ICON scale and is deliberate: the puck is 3.5rem, and
@@ -102,7 +107,7 @@ export default function Fab({ inboxCount = null }: {
           return (
             <Link key={key} to={to!}
               aria-current={current ? 'page' : undefined}
-              aria-label={pending == null ? undefined : `${label} — ${pending} מסמכים ממתינים לשיוך`}
+              aria-label={pending == null ? undefined : t('fab.pendingFiling', { label, count: pending })}
               className={current ? currentClass : restClass}
               data-quick-action-key={key}>
               <Icon size={ICON.lg} className={current ? 'shrink-0' : 'shrink-0 text-action'} aria-hidden="true" />

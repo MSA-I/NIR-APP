@@ -1,5 +1,6 @@
+import type { TKey } from './i18n/t';
 import { supabase } from './supabase';
-import { PRICE_INCREASE_SCOPE_DETAIL, settleAlertScans } from './alertRules';
+import { PRICE_INCREASE_SCOPE_DETAIL_KEY, settleAlertScans, type AlertScanDefinition } from './alertRules';
 import { addCalendarDays, todayISO } from './format';
 
 /**
@@ -20,13 +21,26 @@ import { addCalendarDays, todayISO } from './format';
 
 export type AlertSeverity = 'critical' | 'warning' | 'info';
 
+/** A dictionary key and the numbers that fill it. See `Alert` for why it is not a sentence. */
+export interface AlertText {
+  key: string;
+  vars?: Record<string, string | number>;
+}
+
 export interface Alert {
   code: string;
   severity: AlertSeverity;
-  /** Short headline. Always carries the count — an alert with no occurrences is never returned. */
-  title: string;
-  /** One line of context, including any limit on what the scan actually covered. */
-  detail: string;
+  /**
+   * Short headline as a KEY, not a sentence. Always carries the count — an alert with no
+   * occurrences is never returned.
+   *
+   * This module is pure: it has no React and therefore no way to ask what language the reader is
+   * in. It also runs when a screen loads and is drawn afterwards. Both point the same way — the
+   * scan says WHICH finding and HOW MANY, and the screen that draws it says it in words.
+   */
+  title: AlertText;
+  /** One line of context, including any limit on what the scan actually covered. Also a key. */
+  detail: AlertText;
   /** Where clicking it goes. */
   to: string;
 }
@@ -70,8 +84,8 @@ async function scanDuplicateInvoices(): Promise<Alert | null> {
   return {
     code: 'duplicate_invoice',
     severity: 'critical',
-    title: `${dupes} מספרי חשבונית מופיעים יותר מפעם אחת`,
-    detail: 'אותו ספק, אותו מספר חשבונית — חשד לחיוב כפול',
+    title: { key: 'alerts.duplicateInvoices_title', vars: { count: dupes } },
+    detail: { key: 'alerts.duplicateInvoices_detail' },
     to: '/invoices?attention=duplicates',
   };
 }
@@ -87,8 +101,8 @@ async function scanPriceIncreases(): Promise<Alert | null> {
   return {
     code: 'price_increase',
     severity: 'warning',
-    title: `${raised} מחירים עלו ב-${PRICE_INCREASE_WINDOW_DAYS} הימים האחרונים`,
-    detail: PRICE_INCREASE_SCOPE_DETAIL,
+    title: { key: 'alerts.priceIncrease_title', vars: { count: raised, days: PRICE_INCREASE_WINDOW_DAYS } },
+    detail: { key: PRICE_INCREASE_SCOPE_DETAIL_KEY },
     to: '/prices?increases=1',
   };
 }
@@ -105,8 +119,8 @@ async function scanPricedAboveAverage(): Promise<Alert | null> {
   return {
     code: 'above_average_price',
     severity: 'info',
-    title: `${over} הצעות מחיר גבוהות מהממוצע ביותר מ-${Math.round(ABOVE_AVG_MARGIN * 100)}%`,
-    detail: 'נמדד רק על מוצרים שיש להם שני ספקים ומעלה',
+    title: { key: 'alerts.aboveAverage_title', vars: { count: over, margin: Math.round(ABOVE_AVG_MARGIN * 100) } },
+    detail: { key: 'alerts.aboveAverage_detail' },
     to: '/prices',
   };
 }
@@ -120,8 +134,8 @@ async function scanInvoicesWithoutOrder(): Promise<Alert | null> {
   return {
     code: 'invoice_without_order',
     severity: 'info',
-    title: `${orphans} חשבוניות ללא הזמנת רכש מקושרת`,
-    detail: 'רכישה ישירה יכולה להיות כזו כדין — שווה לוודא שלא נשמט קישור',
+    title: { key: 'alerts.invoiceWithoutOrder_title', vars: { count: orphans } },
+    detail: { key: 'alerts.invoiceWithoutOrder_detail' },
     to: '/invoices?attention=without-order',
   };
 }
@@ -151,9 +165,9 @@ async function scanPaymentsDueSoon(): Promise<Alert | null> {
     code: 'payment_due_soon',
     severity: late ? 'critical' : 'warning',
     title: late
-      ? `${late} דרישות תשלום עברו את מועד הפירעון`
-      : `${total} דרישות תשלום לפירעון תוך ${DUE_SOON_DAYS} ימים`,
-    detail: 'מכסה רק דרישות תשלום שהוזן להן תאריך. לחשבוניות אין מועד פירעון במערכת',
+      ? { key: 'alerts.paymentDue_late', vars: { count: late } }
+      : { key: 'alerts.paymentDue_soon', vars: { count: total, days: DUE_SOON_DAYS } },
+    detail: { key: 'alerts.paymentDue_detail' },
     to: '/payment-requests?status=active&due=soon',
   };
 }
@@ -186,19 +200,19 @@ async function scanOrdersAwaitingConfirmation(): Promise<Alert | null> {
   return {
     code: 'orders_awaiting_confirmation',
     severity: 'warning',
-    title: `${total} הזמנות שנשלחו וטרם אושרו על ידי הספק`,
-    detail: 'ההזמנות נשלחו לספק אך טרם התקבל אישור קבלה — כדאי לוודא מולו.',
+    title: { key: 'alerts.ordersAwaiting_title', vars: { count: total } },
+    detail: { key: 'alerts.ordersAwaiting_detail' },
     to: '/orders?status=sent',
   };
 }
 
-const SCANS = [
-  { code: 'duplicate_invoice', label: 'חשבוניות כפולות', run: scanDuplicateInvoices },
-  { code: 'orders_awaiting_confirmation', label: 'הזמנות ללא אישור', run: scanOrdersAwaitingConfirmation },
-  { code: 'price_increase', label: 'עליות מחיר', run: scanPriceIncreases },
-  { code: 'above_average_price', label: 'מחירים מעל הממוצע', run: scanPricedAboveAverage },
-  { code: 'invoice_without_order', label: 'חשבוניות ללא הזמנה', run: scanInvoicesWithoutOrder },
-  { code: 'payment_due_soon', label: 'מועדי תשלום', run: scanPaymentsDueSoon },
+const SCANS: readonly AlertScanDefinition<Alert, TKey>[] = [
+  { code: 'duplicate_invoice', labelKey: 'alerts.scan_duplicate_invoice', run: scanDuplicateInvoices },
+  { code: 'orders_awaiting_confirmation', labelKey: 'alerts.scan_orders_awaiting_confirmation', run: scanOrdersAwaitingConfirmation },
+  { code: 'price_increase', labelKey: 'alerts.scan_price_increase', run: scanPriceIncreases },
+  { code: 'above_average_price', labelKey: 'alerts.scan_above_average_price', run: scanPricedAboveAverage },
+  { code: 'invoice_without_order', labelKey: 'alerts.scan_invoice_without_order', run: scanInvoicesWithoutOrder },
+  { code: 'payment_due_soon', labelKey: 'alerts.scan_payment_due_soon', run: scanPaymentsDueSoon },
 ];
 
 const SEVERITY_ORDER: Record<AlertSeverity, number> = { critical: 0, warning: 1, info: 2 };
@@ -214,7 +228,7 @@ const SEVERITY_ORDER: Record<AlertSeverity, number> = { critical: 0, warning: 1,
 export interface AlertScanResult {
   alerts: Alert[];
   complete: boolean;
-  failures: { code: string; label: string }[];
+  failures: { code: string; labelKey: TKey }[];
 }
 
 export async function scanAlerts(): Promise<AlertScanResult> {

@@ -13,6 +13,9 @@
  * them would prove the mock, not the screen.
  */
 
+import type { Dictionary as I18nDictionary } from '../lib/i18n/dictionaries/he';
+import { translate as i18nTranslate, type TKey as I18nKey } from '../lib/i18n/t';
+import { he } from '../lib/i18n/dictionaries/he';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -48,6 +51,10 @@ beforeAll(() => {
 
 /* ================= finding 7 — the camera at the truck ================= */
 
+
+/** A key resolved in Hebrew, so every expectation below keeps the phrase it asserted. */
+const say = (key: I18nKey | null | undefined): string =>
+  (key ? i18nTranslate(he as unknown as I18nDictionary, key) : '');
 describe('finding 7 — focused forms keep the full bar without losing capture', () => {
   const FOCUSED = ['/orders/new', '/invoices/new', '/receiving/abc-123'];
 
@@ -105,12 +112,18 @@ describe('focused-form navigation safety', () => {
   it('flushes the local receiving draft before following a link', () => {
     const text = source('Receiving.tsx');
     expect(text).toContain('draftAutosaver.current.flush()');
-    expect(text).toContain('לא ניתן לעבור מסך לפני שמירת טיוטת הקבלה');
+    // Same split as the invoice claim below: the screen renders the key, and the key still names
+    // what the person is being stopped from doing.
+    expect(text).toContain("t('receiving.leaveBlockedBySave'");
+    expect(he.receiving.leaveBlockedBySave).toContain('לא ניתן לעבור מסך לפני שמירת טיוטת הקבלה');
   });
 
   it('warns before abandoning a dirty new invoice', () => {
     const text = source('InvoiceNew.tsx');
-    expect(text).toContain('יציאה מחשבונית חדשה');
+    // The title moved into the dictionary, so the claim splits: the screen renders that key, and
+    // the key still names the thing a person is about to walk away from.
+    expect(text).toContain("t('invoiceNew.title_3')");
+    expect(he.invoiceNew.title_3).toBe('יציאה מחשבונית חדשה');
     expect(text).toContain("document.addEventListener('click', protectLink, true)");
     expect(text).toContain("window.addEventListener('beforeunload', beforeUnload)");
   });
@@ -173,25 +186,30 @@ describe('finding 12 — no group header over a single grouped link', () => {
 /* ================= finding 13 — four labels become four destinations ================= */
 
 describe('finding 13 — the accountant can open a supplier balance', () => {
+  // The aggregate row as `topCategoriesWithOther` now emits it: flagged, and with no name of its
+  // own. The previous fixture carried the Hebrew word and compared against it, which is exactly
+  // the shape that stopped working the moment a reader could switch language.
   const slices = [
     { name: 'ירקות השדה', total: 4000 },
-    { name: 'אחר', total: 1000 },
+    { name: '', aggregate: true, total: 1000 },
   ];
 
-  const renderDonut = (hrefFor?: (slice: { name: string; total: number }) => string | null) => render(
+  const renderDonut = (hrefFor?: (slice: { name: string; aggregate?: boolean; total: number }) => string | null) => render(
     <MemoryRouter>
       <CategoryDonut slices={slices} total={5000} currency="ILS" ariaLabel="יתרות" emptyMessage="אין" hrefFor={hrefFor} />
     </MemoryRouter>,
   );
 
   it('links a named slice and leaves the aggregate alone', () => {
-    renderDonut((slice) => (slice.name === 'אחר' ? null : `/invoices?q=${encodeURIComponent(slice.name)}&pay=open`));
+    renderDonut((slice) => (slice.aggregate ? null : `/invoices?q=${encodeURIComponent(slice.name)}&pay=open`));
 
     const link = screen.getByRole('link', { name: 'ירקות השדה' });
     expect(link).toHaveAttribute('href', '/invoices?q=%D7%99%D7%A8%D7%A7%D7%95%D7%AA%20%D7%94%D7%A9%D7%93%D7%94&pay=open');
-    // "אחר" is several suppliers summed. A link that lands on one wrong filter is worse than none.
-    expect(screen.queryByRole('link', { name: 'אחר' })).toBeNull();
-    expect(screen.getByText('אחר')).toBeInTheDocument();
+    // The aggregate is several suppliers summed. A link onto one wrong filter is worse than none.
+    // The test environment is Hebrew, so the donut resolves the bucket's word to the Hebrew one —
+    // and it is the DICTIONARY being read here, not a constant the component holds.
+    expect(screen.queryByRole('link', { name: he.charts.otherSlice })).toBeNull();
+    expect(screen.getByText(he.charts.otherSlice)).toBeInTheDocument();
   });
 
   it('renders no links at all for the callers that pass nothing', () => {
@@ -250,7 +268,7 @@ describe('finding 20 — everyday surfaces use the canonical document status', (
    */
   it('maps every pipeline stage onto a word a person can act on', () => {
     for (const stage of STAGES) {
-      const label = documentUiStatus({ status: stage, document: { entity_type: 'inbox', entity_id: null } }).label;
+      const label = say(documentUiStatus({ status: stage, document: { entity_type: 'inbox', entity_id: null } }).labelKey);
       expect(label).not.toMatch(/^טרם נשלח לעיבוד$|^ממתין לפירוש$/);
     }
   });
@@ -267,7 +285,8 @@ describe('finding 20 — everyday surfaces use the canonical document status', (
    */
   it('the stage table and the badge spell a shared state identically', () => {
     for (const stage of ['queued', 'processing', 'review', 'completed', 'failed'] as const) {
-      expect(DOCUMENT_PROCESSING_STAGE_META[stage].label).toBe(documentUiStatus({ status: stage }).label);
+      expect(he.status[DOCUMENT_PROCESSING_STAGE_META[stage].key as keyof typeof he.status])
+        .toBe(say(documentUiStatus({ status: stage }).labelKey));
     }
   });
 

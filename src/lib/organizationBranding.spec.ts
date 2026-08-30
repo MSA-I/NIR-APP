@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { he } from './i18n/dictionaries/he';
+import { en } from './i18n/dictionaries/en';
 import {
   BRAND_CORRELATION_DISPOSITION_HEADER,
   BRAND_CORRELATION_ROTATE_VALUE,
   brandFailureAllowsNewCorrelation,
-  brandLogoProblem,
+  brandLogoProblemKey,
 } from './organizationBranding';
 
 const read = (path: string) => readFileSync(join(process.cwd(), ...path.split('/')), 'utf8');
@@ -59,8 +61,11 @@ describe('organization branding wiring', () => {
       new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     ], 'logo.png', { type: 'image/png' });
     const disguisedHtml = new File(['<script>alert(1)</script>'], 'logo.png', { type: 'image/png' });
-    await expect(brandLogoProblem(png)).resolves.toBeNull();
-    await expect(brandLogoProblem(disguisedHtml)).resolves.toContain('אינו תואם');
+    await expect(brandLogoProblemKey(png)).resolves.toBeNull();
+    // The refusal is a key now; the sentence it stands for is pinned in both dictionaries.
+    await expect(brandLogoProblemKey(disguisedHtml)).resolves.toBe('branding.logoContentMismatch');
+    expect(he.branding.logoContentMismatch).toContain('אינו תואם');
+    expect(en.branding.logoContentMismatch).toMatch(/does not match/i);
   });
 
   it('uses the tenant logo in the authenticated shell and printed monthly report', () => {

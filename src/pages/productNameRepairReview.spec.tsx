@@ -5,6 +5,7 @@ import { http, HttpResponse } from 'msw';
 import { server } from '../test/msw/server';
 import { SUPABASE_URL } from '../test/msw/handlers';
 import { ToastProvider } from '../components/ui';
+import { LocaleProvider } from '../lib/i18n/LocaleProvider';
 
 vi.mock('../lib/supabase', async () => {
   const { createClient } = await import('@supabase/supabase-js');
@@ -29,6 +30,26 @@ const BLOCKED: ProductNameRepairCandidate = {
 };
 
 describe('ProductNameRepairReview', () => {
+  it('renders interface and reason codes in English while preserving source evidence', () => {
+    render(
+      <LocaleProvider initialLocale="en">
+        <ToastProvider>
+          <ProductNameRepairReview queue={[READY, BLOCKED]} dryRunProduced onApplied={vi.fn()} />
+        </ToastProvider>
+      </LocaleProvider>,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Source-name repair' })).toBeInTheDocument();
+    const ready = screen.getByTestId('repair-candidate-ready');
+    expect(ready).toHaveTextContent('Stored name');
+    expect(ready).toHaveTextContent(READY.old_name);
+    expect(ready).toHaveTextContent(READY.proposed_name!);
+    expect(ready).toHaveTextContent(READY.source_file_name);
+    const blocked = screen.getByTestId('repair-candidate-blocked');
+    expect(blocked).toHaveTextContent(/not found in this source/i);
+    expect(blocked).not.toHaveTextContent('המוצר לא נמצא במקור הזה');
+  });
+
   it('shows old/new and exact source proof, then approves only one row through the repair command', async () => {
     const calls: Record<string, unknown>[] = [];
     server.use(http.post(`${SUPABASE_URL}/rest/v1/rpc/apply_product_name_repair`, async ({ request }) => {

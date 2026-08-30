@@ -37,12 +37,14 @@
  *    reports "no duplicates" exactly when there are some. Migration `0053` answers it properly with
  *    the computed fields `invoice_has_duplicate` and `invoice_without_order`, which are ordinary
  *    boolean predicates here; what stays uninvitable is the client-side computation.
- * 5. **Every failure carries Hebrew.** `ServerListError.hebrew` is `toHebrewError` applied once, at
- *    the throw. See the note on `ServerListError` for why `message` deliberately stays raw.
+ * 5. **Every failure carries its RAW condition.** `ServerListError.message` is the string the
+ *    server actually sent. It used to also carry a pre-resolved Hebrew sentence in a `.hebrew`
+ *    field; nothing in the product ever read it, and resolving at the throw would have fixed the
+ *    language before anyone looked. Callers resolve with `useT().errorText`.
  */
 
-import { toHebrewError } from './errors';
 import { readExactCount } from './queryResult';
+import type { TKey } from './i18n/t.ts';
 
 /* ------------------------------------------------------------------ predicates */
 
@@ -136,7 +138,9 @@ export interface ServerListRequest {
 export interface ServerListPageReset {
   requestedPage: number;
   servedPage: number;
-  message: string;
+  /** A key, resolved by whichever screen toasts it. Renamed with its contents so no caller can
+   *  keep printing it and still compile. */
+  messageKey: TKey;
 }
 
 /**
@@ -163,8 +167,7 @@ export interface ServerListResult<Row> {
 }
 
 /** Shown when a page disappeared underneath the user. Exported so wave 2 renders one wording. */
-export const PAGE_NO_LONGER_EXISTS =
-  'העמוד שביקשת כבר אינו קיים — ייתכן ששורות נמחקו בינתיים. מוצג העמוד האחרון הקיים.';
+export const PAGE_NO_LONGER_EXISTS_KEY: TKey = 'serverList.pageNoLongerExists';
 
 /* ------------------------------------------------------------------ errors */
 
@@ -190,7 +193,6 @@ export type ServerListErrorCode =
  */
 export class ServerListError extends Error {
   readonly code: ServerListErrorCode;
-  readonly hebrew: string;
   readonly status: number | null;
 
   constructor(code: ServerListErrorCode, raw: string, status: number | null = null) {
@@ -198,7 +200,6 @@ export class ServerListError extends Error {
     this.name = 'ServerListError';
     this.code = code;
     this.status = status;
-    this.hebrew = toHebrewError(raw);
   }
 }
 
@@ -485,7 +486,7 @@ export async function fetchServerList<Row>(
         page,
         pageReset: page === requestedPage
           ? null
-          : { requestedPage, servedPage: page, message: PAGE_NO_LONGER_EXISTS },
+          : { requestedPage, servedPage: page, messageKey: PAGE_NO_LONGER_EXISTS_KEY },
         cost: { requests, ms: performance.now() - startedAt },
       };
     }
@@ -571,8 +572,7 @@ export const SUPPLIER_SEARCH_ID_CAP = 150;
  * converted screens render one wording — the count on screen is only honest while the narrowing
  * is visible.
  */
-export const SUPPLIER_SEARCH_NARROWED =
-  'שמות ספקים רבים מדי תואמים לחיפוש, ולכן הוא בוצע על עמודות המסך בלבד. דייקו את שם הספק כדי לחפש גם לפי ספק.';
+export const SUPPLIER_SEARCH_NARROWED_KEY: TKey = 'serverList.supplierSearchNarrowed';
 
 export interface SupplierIdSearch {
   /** Empty either because no supplier matched or because the search was narrowed — check `narrowed`. */

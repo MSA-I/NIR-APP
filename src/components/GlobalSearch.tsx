@@ -7,6 +7,8 @@ import { SUPPLIER_STATUS, PO_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, type
 import { fmtMoneyExact } from '../lib/format';
 import { isActiveRole, type ActiveRole, type Role, type SearchHit, type SearchEntity as EntityType } from '../lib/types';
 import { useAuth } from '../auth/AuthContext';
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 
 // SearchHit / SearchEntity now live in lib/types (imported above as EntityType).
 
@@ -16,8 +18,8 @@ import { useAuth } from '../auth/AuthContext';
 // borrowed from the matching supplier status so it tracks whatever section 6's Tone vocabulary
 // lands on rather than hardcoding a literal that its in-flight rewrite may rename again.
 const PRODUCT_STATUS: Record<string, StatusMeta> = {
-  active: { label: 'פעיל', tone: SUPPLIER_STATUS.active.tone },
-  inactive: { label: 'לא פעיל', tone: SUPPLIER_STATUS.inactive.tone },
+  active: { key: 'supplier_active', tone: SUPPLIER_STATUS.active.tone },
+  inactive: { key: 'supplier_inactive', tone: SUPPLIER_STATUS.inactive.tone },
 };
 
 // --- Per-role display order (NO LONGER THE GATE) ---------------------------------------
@@ -43,15 +45,15 @@ export function canGlobalSearch(role: Role | undefined): boolean {
   return isActiveRole(role) && ALLOWED[role].length > 0;
 }
 
-interface GroupMeta { label: string; icon: LucideIcon }
+interface GroupMeta { labelKey: TKey; icon: LucideIcon }
 const GROUPS: Record<EntityType, GroupMeta> = {
-  supplier: { label: 'ספקים', icon: Truck },
-  product:  { label: 'מוצרים', icon: Package },
-  invoice:  { label: 'חשבוניות', icon: FileText },
-  order:    { label: 'הזמנות', icon: ClipboardList },
-  draft:    { label: 'טיוטות הזמנה', icon: FilePen },
-  payment:  { label: 'תשלומים', icon: CreditCard },
-  credit:   { label: 'זיכויים', icon: RotateCcw },
+  supplier: { labelKey: 'globalSearch.groupSuppliers', icon: Truck },
+  product:  { labelKey: 'globalSearch.groupProducts', icon: Package },
+  invoice:  { labelKey: 'globalSearch.groupInvoices', icon: FileText },
+  order:    { labelKey: 'globalSearch.groupOrders', icon: ClipboardList },
+  draft:    { labelKey: 'globalSearch.groupDrafts', icon: FilePen },
+  payment:  { labelKey: 'globalSearch.groupPayments', icon: CreditCard },
+  credit:   { labelKey: 'globalSearch.groupCredits', icon: RotateCcw },
 };
 const GROUP_ORDER: EntityType[] = ['supplier', 'product', 'invoice', 'order', 'draft', 'payment', 'credit'];
 
@@ -95,13 +97,14 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
   onClose?: () => void;
 }) {
   const navigate = useNavigate();
+  const { t } = useT();
   const { profile } = useAuth();
   const allowed = useMemo(() => (profile && isActiveRole(profile.role) ? ALLOWED[profile.role] : []), [profile]);
 
   const [term, setTerm] = useState('');
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [searchError, setSearchError] = useState('');
+  const [searchFailed, setSearchFailed] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -121,13 +124,13 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
   // debounce alone cannot stop a slow old answer from overwriting a fast new one.
   useEffect(() => {
     const seq = ++seqRef.current;
-    if (q.length < 2) { setHits(null); setLoading(false); setSearchError(''); return; }
-    setSearchError('');
+    if (q.length < 2) { setHits(null); setLoading(false); setSearchFailed(false); return; }
+    setSearchFailed(false);
     setLoading(true);
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       const { data, error } = await supabase.rpc('global_search', { q, per_type: 5 });
       if (seq !== seqRef.current) return; // superseded — drop this response
-      if (error) { setHits(null); setSearchError('החיפוש נכשל — נסה שוב'); setLoading(false); return; }
+      if (error) { setHits(null); setSearchFailed(true); setLoading(false); return; }
       // Defence in depth over at most 30 rows, not the gate: 0069 decides the reachable types
       // server-side. See the ALLOWED comment above.
       const rows = ((data ?? []) as SearchHit[]).filter((h) => allowed.includes(h.entity));
@@ -135,7 +138,7 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
       setLoading(false);
       setActiveIndex(-1);
     }, 200);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [q, allowed]);
 
   // Visual grouping (spec order), linear keyboard navigation over the flattened list.
@@ -198,8 +201,10 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
   }
 
   const panelOpen = variant === 'mobile' || focused;
-  const liveMsg = hasTerm && hits ? `נמצאו ${hits.length} תוצאות` : '';
-  const hintLabels = allowed.map((e) => GROUPS[e].label).join(' · ');
+  const liveMsg = hasTerm && hits
+    ? t(hits.length === 1 ? 'globalSearch.resultsFoundOne' : 'globalSearch.resultsFoundMany', { count: hits.length })
+    : '';
+  const hintLabels = allowed.map((entity) => t(GROUPS[entity].labelKey)).join(' · ');
 
   const field = (
     <div className="relative w-full">
@@ -210,13 +215,13 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
         autoComplete="off"
         spellCheck={false}
         className="input ps-9! pe-9!"
-        placeholder="חיפוש ספקים, חשבוניות, הזמנות..."
+        placeholder={t('globalSearch.placeholder')}
         role="combobox"
         aria-expanded={panelOpen}
         aria-controls={listboxId}
         aria-autocomplete="list"
         aria-activedescendant={activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined}
-        aria-label="חיפוש כללי"
+        aria-label={t('globalSearch.aria_label')}
         value={term}
         onChange={(e) => setTerm(e.target.value)}
         onKeyDown={onKeyDown}
@@ -226,26 +231,26 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
       {loading && (
         <span role="status" className="absolute top-1/2 -translate-y-1/2 end-3 text-ink-faint">
           <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />
-          <span className="sr-only">מחפש</span>
+          <span className="sr-only">{t('globalSearch.text')}</span>
         </span>
       )}
     </div>
   );
 
-  const panelBody = searchError ? (
-    <div role="alert" className="px-3 py-6 text-center text-sm text-alert-fg">{searchError}</div>
+  const panelBody = searchFailed ? (
+    <div role="alert" className="px-3 py-6 text-center text-sm text-alert-fg">{t('globalSearch.setHits')}</div>
   ) : !hasTerm ? (
-    <div className="px-3 py-3 text-xs text-ink-faint">חיפוש {hintLabels}</div>
+    <div className="px-3 py-3 text-xs text-ink-faint">{t('globalSearch.searchHint', { groups: hintLabels })}</div>
   ) : loading && !hits ? null : hits && hits.length === 0 ? (
-    <div className="px-3 py-6 text-center text-sm text-ink-muted">לא נמצאו תוצאות עבור «{q}»</div>
+    <div className="px-3 py-6 text-center text-sm text-ink-muted">{t('globalSearch.noResultsFor', { query: q })}</div>
   ) : (
-    <ul id={listboxId} role="listbox" aria-label="תוצאות חיפוש" className="py-1">
+    <ul id={listboxId} role="listbox" aria-label={t('globalSearch.aria_label_2')} className="py-1">
       {renderGroups.map((g) => {
         const Icon = g.meta.icon;
         return (
-          <li key={g.entity} role="group" aria-label={g.meta.label}>
+          <li key={g.entity} role="group" aria-label={t(g.meta.labelKey)}>
             <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-xs font-semibold text-ink-muted">
-              <Icon size={ICON.xs} aria-hidden="true" /> {g.meta.label}
+              <Icon size={ICON.xs} aria-hidden="true" /> {t(g.meta.labelKey)}
             </div>
             <ul role="presentation">
               {g.items.map(({ hit, index }) => (
@@ -287,11 +292,11 @@ export default function GlobalSearch({ variant = 'desktop', onClose }: {
 
   if (variant === 'mobile') {
     return (
-      <div id="mobile-global-search" ref={panelRef} role="dialog" aria-modal="true" aria-label="חיפוש כללי" tabIndex={-1}
+      <div id="mobile-global-search" ref={panelRef} role="dialog" aria-modal="true" aria-label={t('globalSearch.aria_label_3')} tabIndex={-1}
         className="phone-safe-dialog lg:hidden fixed inset-0 z-50 bg-surface flex flex-col focus:outline-none">
         <div className="flex items-center gap-2 border-b border-line p-3">
           {field}
-          <button type="button" className="btn-ghost btn-icon rounded-full" onClick={() => closeMobileSearch()} aria-label="סגירה"><X size={ICON.lg} aria-hidden="true" /></button>
+          <button type="button" className="btn-ghost btn-icon rounded-full" onClick={() => closeMobileSearch()} aria-label={t('globalSearch.aria_label_4')}><X size={ICON.lg} aria-hidden="true" /></button>
         </div>
         <div className="flex-1 overflow-y-auto">{panelBody}</div>
         <div aria-live="polite" className="sr-only">{liveMsg}</div>

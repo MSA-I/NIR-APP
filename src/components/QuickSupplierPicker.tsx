@@ -31,6 +31,8 @@ import { Plus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { QuickCreateSupplier, type QuickCreatedSupplier } from './QuickCreateSupplier';
 import { ICON } from './ui';
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 
 /** All any supplier `<option>` needs. Every caller's row type is a superset of it. */
 /**
@@ -48,16 +50,15 @@ export type SupplierOption = { id: string; name: string; default_currency?: stri
  * select, and "the button is right there" is a claim only a sighted user can verify. The button's
  * hint then answers the other half — pressing it does not navigate away, it fills this field.
  */
-export const SUPPLIER_FIELD_QUICK_CREATE_HINT = 'אין ספק מתאים ברשימה? הכפתור ״ספק חדש״ שליד יוצר ספק ובוחר אותו כאן.';
-export const QUICK_CREATE_SUPPLIER_HINT = 'הספק החדש ייווצר וייבחר מיד בשדה זה';
+export const SUPPLIER_FIELD_QUICK_CREATE_HINT_KEY: TKey = 'quickSupplierPicker.fieldHint';
+export const QUICK_CREATE_SUPPLIER_HINT_KEY: TKey = 'quickSupplierPicker.buttonHint';
 
 /**
  * What an accountant sees when a financial workflow needs supplier context but supplier creation
  * remains an owner/office operation. The hint names the next action instead of presenting a silent
  * missing control.
  */
-export const SUPPLIER_FIELD_NO_CREATE_HINT =
-  'אין ספק מתאים ברשימה? הוספת ספק חדש שמורה לבעלים ולמנהל המשרד — יש לבקש מהם להוסיף אותו.';
+export const SUPPLIER_FIELD_NO_CREATE_HINT_KEY: TKey = 'quickSupplierPicker.noCreateHint';
 
 /**
  * The fetched list, plus anything created here that the fetch has not caught up with yet.
@@ -173,6 +174,7 @@ export function SupplierSelectField({
   describedBy?: string;
   className?: string;
 }) {
+  const { t } = useT();
   const fieldHintId = `${id}-quick-create-field-hint`;
   const buttonHintId = `${id}-quick-create-hint`;
   const noCreateHintId = `${id}-no-create-hint`;
@@ -205,7 +207,7 @@ export function SupplierSelectField({
   const selectDescribedBy = [describedBy, offered ? fieldHintId : null, noCreate ? noCreateHintId : null]
     .filter(Boolean).join(' ');
   const grouping = offered
-    ? { role: 'group', 'aria-label': `${label.replace(/\s*\*\s*$/, '')} — בחירה או יצירה` }
+    ? { role: 'group', 'aria-label': t('quickSupplierPicker.groupLabel', { label: label.replace(/\s*\*\s*$/, '') }) }
     : {};
   return (
     <div className={className}>
@@ -220,20 +222,20 @@ export function SupplierSelectField({
         {picker.canCreate && (
           <button type="button" className="btn-secondary shrink-0" disabled={disabled}
             aria-describedby={offered ? buttonHintId : undefined} onClick={picker.openDialog}>
-            <Plus size={ICON.sm} aria-hidden="true" /> ספק חדש
+            <Plus size={ICON.sm} aria-hidden="true" /> {t('quickSupplierPicker.newSupplier')}
           </button>
         )}
       </div>
       {offered && (
         <>
-          <span id={fieldHintId} className="sr-only">{SUPPLIER_FIELD_QUICK_CREATE_HINT}</span>
-          <span id={buttonHintId} className="sr-only">{QUICK_CREATE_SUPPLIER_HINT}</span>
+          <span id={fieldHintId} className="sr-only">{t(SUPPLIER_FIELD_QUICK_CREATE_HINT_KEY)}</span>
+          <span id={buttonHintId} className="sr-only">{t(QUICK_CREATE_SUPPLIER_HINT_KEY)}</span>
         </>
       )}
       {/* Visible and also connected to the select so the same next step reaches screen readers. */}
       {noCreate && (
         <p id={noCreateHintId} className="mt-1 text-xs text-ink-muted">
-          {SUPPLIER_FIELD_NO_CREATE_HINT}
+          {t(SUPPLIER_FIELD_NO_CREATE_HINT_KEY)}
         </p>
       )}
       {picker.dialogOpen && (

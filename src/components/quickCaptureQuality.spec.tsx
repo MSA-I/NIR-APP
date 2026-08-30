@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
+import { LocaleProvider } from '../lib/i18n/LocaleProvider';
+import type { Locale } from '../lib/i18n/locale';
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
@@ -86,7 +88,9 @@ function Capture() {
   );
 }
 
-const Harness = () => <MemoryRouter><Capture /></MemoryRouter>;
+const Harness = ({ locale = 'he' }: { locale?: Locale }) => (
+  <LocaleProvider initialLocale={locale}><MemoryRouter><Capture /></MemoryRouter></LocaleProvider>
+);
 
 /** The hidden input is display:none, so the pick is delivered the way the browser delivers it. */
 function pick(files: File[]) {
@@ -145,6 +149,19 @@ describe('QuickCapture quality warning', () => {
 
     expect(await screen.findByText('התמונה חשוכה מדי')).toBeInTheDocument();
     expect(screen.getByText('כדאי להוסיף אור ולצלם שוב.')).toBeInTheDocument();
+  });
+
+  it('resolves the weak-capture decision in English', async () => {
+    stubDecoder({ 'blurred.jpg': 'flat' });
+    render(<Harness locale="en" />);
+
+    pick([photo('blurred.jpg')]);
+
+    expect(await screen.findByText('The photo came out blurry')).toBeInTheDocument();
+    expect(screen.getByText('Hold the phone steady and take it again.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Upload anyway' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retake' })).toBeInTheDocument();
+    expect(screen.queryByText('התמונה יצאה מטושטשת')).toBeNull();
   });
 
   /** The owner's ruling: WARN, do not block. This is the test that pins it. */
