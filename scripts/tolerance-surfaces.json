@@ -1,0 +1,46 @@
+{
+  "__reason": "Every key the database asks `private.money_tolerance` for, classified once, by hand. A tolerance is an amount, so it has a currency (#288) — and an amount the owner cannot state is an amount the product invented or an amount nobody can supply. Decision #288 said a used currency with no configured value is 'shown in settings as needing a decision'; the database half of that landed in 0219/0227/0232 and the settings half did not, which is how three of these four keys came to be unconfigurable in ANY currency, shekels included. This file is the list check:tolerance-surfaces enforces, pinned the way scripts/currency-baseline.json is pinned: a key that reaches money_tolerance and is absent here fails the guard, so a fifth tolerance cannot be born without a screen.",
+
+  "__surfaces": {
+    "settings": "the settings screen lets the owner state this value per currency; the guard asserts the key literally appears in `surfaceFile`",
+    "missing": "no screen exists yet. Allowed only while `closedBy` names the phase that closes it, and reported on every run so it cannot be forgotten"
+  },
+
+  "surfaceFile": "src/pages/Settings.tsx",
+
+  "keys": {
+    "bank_match_amount_tolerance": {
+      "surface": "settings",
+      "ilsBaseline": 1,
+      "unconfigured": "refuse",
+      "why": "matching a statement line to a payment moves money, so a comparison that cannot be made must stop rather than proceed (0232 raises bank_match_tolerance_unconfigured)"
+    },
+    "payment_request_amount_tolerance": {
+      "surface": "missing",
+      "closedBy": "phase 3 of PLAN-currency-tolerances-20260830",
+      "ilsBaseline": 1,
+      "unconfigured": "skip",
+      "why": "0219 compares a request against the invoices behind it"
+    },
+    "invoice_line_amount_tolerance": {
+      "surface": "missing",
+      "closedBy": "phase 3 of PLAN-currency-tolerances-20260830",
+      "ilsBaseline": 0.05,
+      "unconfigured": "skip",
+      "why": "quantity x price minus discount, checked on the page itself. Five agorot, NOT one shekel: this is the small-change tolerance and #291 keeps it that way in every currency"
+    },
+    "invoice_document_amount_tolerance": {
+      "surface": "missing",
+      "closedBy": "phase 3 of PLAN-currency-tolerances-20260830",
+      "ilsBaseline": 1,
+      "unconfigured": "skip",
+      "why": "the header total against the sum of the lines"
+    }
+  },
+
+  "probes": {
+    "nope": "0219's own self-check calls money_tolerance with a key no organisation has, and asserts the answer is null. It proves the 'never invent a default' half of #288 and is not a product tolerance."
+  },
+
+  "__ilsBaselineNote": "The ILS numbers above are recorded so the guard can prove they have not drifted, and because #291 turns on them: three of the four are 'about one unit' and invoice_line is 'small change'. Collapsing them to one number per currency would loosen the line check twentyfold — a behaviour change wearing the costume of a simplification."
+}
