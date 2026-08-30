@@ -66,7 +66,7 @@ export default function Reports() {
   const orgLogoUrl = org?.logo_path
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
     : null;
-  const { errorText, statusLabel, t, tDynamic } = useT();
+  const { errorText, statusLabel, t, tDynamic, locale } = useT();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   // The month lives in the URL beside the legal entity, so leaving for an invoice and coming back
@@ -222,7 +222,7 @@ export default function Reports() {
       const { start, end } = monthRange(month);
       const values = monthlyReportTemplateValues({
         orgName: org.name,
-        periodLabel: fmtMonth(`${month}-01`),
+        periodLabel: fmtMonth(`${month}-01`, locale),
         periodFrom: fmtDate(start),
         periodTo: fmtDate(addCalendarDays(end, -1)),
         generatedAt: fmtDateTime(data.generatedAt),
@@ -438,7 +438,7 @@ export default function Reports() {
             description={t('reports.description')}
             busy={busy}>
             <dl className="mb-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-              <div><dt className="text-xs text-ink-muted">{t('reports.reportMonth')}</dt><dd className="mt-0.5 font-medium">{fmtMonth(`${month}-01`)}</dd></div>
+              <div><dt className="text-xs text-ink-muted">{t('reports.reportMonth')}</dt><dd className="mt-0.5 font-medium">{fmtMonth(`${month}-01`, locale)}</dd></div>
               <div><dt className="text-xs text-ink-muted">{t('reports.text_12')}</dt><dd className="mt-0.5 font-medium">{org?.name ?? '—'}</dd></div>
               <div><dt className="text-xs text-ink-muted">{t('reports.text_13')}</dt><dd className="mt-0.5 font-medium">{selectedLegalEntity?.name ?? '—'}</dd></div>
               <div><dt className="text-xs text-ink-muted">{t('reports.fmtDateTime')}</dt><dd className="num mt-0.5">{snapshotPreviewAt ? fmtDateTime(snapshotPreviewAt) : '—'}</dd></div>
@@ -565,7 +565,7 @@ export default function Reports() {
               html2canvas renders the live DOM: a display:none header is simply absent from the
               generated file (src/index.css states the rule). */}
           {orgLogoUrl && <img data-testid="monthly-report-logo" src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
-          <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}${t('reports.printHeading', { month: fmtMonth(`${month}-01`) })}`}</h2>
+          <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}${t('reports.printHeading', { month: fmtMonth(`${month}-01`, locale) })}`}</h2>
           <p className="text-xs">{t('reports.createdWord')} {fmtDateTime(data.generatedAt)}</p>
         </div>
 
@@ -593,7 +593,7 @@ export default function Reports() {
         )}
 
         <Card pad={false} clip>
-          <div className="px-4 py-3 border-b border-line-soft section-title">{t('reports.invoicesForMonth', { month: fmtMonth(`${month}-01`) })}</div>
+          <div className="px-4 py-3 border-b border-line-soft section-title">{t('reports.invoicesForMonth', { month: fmtMonth(`${month}-01`, locale) })}</div>
           <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label={t('reports.aria_label')}>
             {data.invoices.map((i) => (
               <li key={i.id} className="p-4">

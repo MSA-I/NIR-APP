@@ -103,12 +103,12 @@ const matchChannels: readonly ConsolidatedMatchChannel[] = [
 ];
 
 export default function ConsolidatedInvoices() {
-  const { errorText, t } = useT();
+  const { errorText, t, locale } = useT();
   const { profile, organizationAccess } = useAuth();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const toast = useToast();
-  const month = useMemo(() => previousJerusalemMonth(), []);
+  const month = useMemo(() => previousJerusalemMonth(new Date(), locale), [locale]);
   const caseId = params.get('case');
   const canWrite = organizationAccess.canWrite && (profile?.role === 'owner' || profile?.role === 'office');
   const [supplierId, setSupplierId] = useState('');

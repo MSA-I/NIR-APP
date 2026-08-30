@@ -27,7 +27,7 @@ type SupBal = { supplier_id: string; currency: string; open_balance_in_currency:
  * prices, purchase orders or supplier_metrics (RLS returns nothing there). Empty → "—"/empty-state.
  */
 export default function AccountantDashboard() {
-  const { t } = useT();
+  const { t, locale } = useT();
   const { org } = useAuth();
   const baseCurrency = org?.base_currency ?? null;
   const { data, loading, error } = useQuery(async () => {
@@ -99,7 +99,7 @@ export default function AccountantDashboard() {
     const basePayments = payments.filter((p) => p.currency === baseCurrency);
     const baseBank = bank.filter((b) => b.currency === baseCurrency);
     const monthly = monthlyBuckets(basePayments.map((p) => ({ date: p.paid_date, value: p.amount })), { monthKey, months: 4 })
-      .map((b) => ({ key: fmtMonth(`${b.key}-01`), label: b.count ? moneyFor(baseCurrency)(b.total) : '', total: b.total }));
+      .map((b) => ({ key: fmtMonth(`${b.key}-01`, locale), label: b.count ? moneyFor(baseCurrency)(b.total) : '', total: b.total }));
 
     const paidW = weeklyBuckets(basePayments.map((p) => ({ date: p.paid_date, value: p.amount })), { todayISO: today });
     const debitW = weeklyBuckets(baseBank.filter((b) => b.is_debit).map((b) => ({ date: b.tx_date, value: Math.abs(b.amount) })), { todayISO: today });

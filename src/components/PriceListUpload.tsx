@@ -6,6 +6,7 @@
 // Prices are still written only by the sanctioned RPCs — this file adds no new writer.
 
 import type { TKey } from '../lib/i18n/t';
+import { BASE_LOCALE, INTL_LOCALE, type Locale } from '../lib/i18n/locale';
 import { useT } from '../lib/i18n/LocaleProvider';
 import { useMemo, useRef, useState } from 'react';
 import { reasonOr } from '../lib/reason';
@@ -35,7 +36,7 @@ export const SUBMISSION_STATUS = {
   rejected: { key: 'submission_rejected', tone: 'alert' },
 } as const;
 
-export const submissionMonthLabel = (value: string) => new Intl.DateTimeFormat('he-IL', {
+export const submissionMonthLabel = (value: string, locale: Locale = BASE_LOCALE) => new Intl.DateTimeFormat(INTL_LOCALE[locale], {
   month: 'long', year: 'numeric', timeZone: 'UTC',
 }).format(new Date(`${value.slice(0, 7)}-01T00:00:00Z`));
 

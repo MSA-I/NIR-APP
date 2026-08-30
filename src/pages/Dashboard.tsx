@@ -508,7 +508,7 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
-  const { statusLabel, t } = useT();
+  const { statusLabel, t, locale } = useT();
   const { profile, org } = useAuth();
   const baseCurrency = org?.base_currency ?? null;
   /* The tier mark on the greeting line is owner-only, and the gate is repeated HERE rather than
@@ -668,7 +668,7 @@ export default function Dashboard() {
       const key = shiftCalendarMonth(monthKey, -(3 - idx));
       const bucket = byMonth.get(key) ?? { total: 0, count: 0 };
       const total = bucket.total;
-      return { key, month: fmtMonth(`${key}-01`), total, count: bucket.count, label: bucket.count ? moneyFor(baseCurrency)(total) : '' };
+      return { key, month: fmtMonth(`${key}-01`, locale), total, count: bucket.count, label: bucket.count ? moneyFor(baseCurrency)(total) : '' };
     });
     const monthly = invoices.length ? monthBuckets.map(({ month, total, count, label }) => ({ month, total, count, label })) : [];
     const curMonthBucket = byMonth.get(monthKey);

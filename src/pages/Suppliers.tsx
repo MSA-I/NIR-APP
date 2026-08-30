@@ -932,7 +932,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
   /** null = the viewer's role cannot read the submissions ledger (not the same as "no history"). */
   submissions: SupplierPriceSubmission[] | null;
 }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const histBySp = useMemo(() => {
     const map = new Map<string, number[]>();
     for (const h of history) {
@@ -1009,7 +1009,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
               {submissions.map((submission) => (
                 <div key={submission.id} className="py-2.5 first:pt-0 last:pb-0">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-medium text-ink">{submissionMonthLabel(submission.target_month)} · {t('suppliers.revisionWord')} <span className="num">{submission.revision}</span></div>
+                    <div className="font-medium text-ink">{submissionMonthLabel(submission.target_month, locale)} · {t('suppliers.revisionWord')} <span className="num">{submission.revision}</span></div>
                     <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
                   </div>
                   <div className="mt-1 text-sm text-ink-muted break-words">
