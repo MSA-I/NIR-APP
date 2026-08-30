@@ -1,0 +1,15 @@
+{
+  "name": "inplace-render",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Server-side PDF renderer: an application screen, laid out by Chromium, stamped where the reader cannot reach it.",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "self-check": "node self_check.mjs"
+  },
+  "dependencies": {
+    "pdf-lib": "1.17.1",
+    "playwright-core": "1.62.1"
+  }
+}

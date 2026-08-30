@@ -122,23 +122,15 @@ select pg_temp.p70_assert(
        or entitlement.numeric_limit is distinct from decision.decided_limit),
   'a decided quota did not reach the catalogue');
 
--- #274 superseded #196: capabilities now climb monotonically with the ladder. A higher rung may
--- add a capability, but may never remove one a lower rung already includes.
+-- #196 said tiers differ by volume only, and this asserted it literally: no boolean anywhere may
+-- be anything but true. **#274 cancelled #196 on 25.08.2026** and put two conditions in its place,
+-- so enforcing the withdrawn rule would have blocked the first capability the owner then chose to
+-- lock (`exports.unbranded_pdf`, #297). What replaces it is #274 itself, and it is deliberately
+-- the SAME function p51 calls: one definition, so the two suites cannot come to disagree about
+-- what the ladder is allowed to do.
 select pg_temp.p70_assert(
-  not exists (
-    select 1
-    from plan_entitlements lower_entitlement
-    join subscription_plans lower_plan on lower_plan.plan_key = lower_entitlement.plan_key
-    join plan_entitlements upper_entitlement
-      on upper_entitlement.entitlement_key = lower_entitlement.entitlement_key
-     and upper_entitlement.kind = 'boolean'
-    join subscription_plans upper_plan on upper_plan.plan_key = upper_entitlement.plan_key
-    where lower_entitlement.kind = 'boolean'
-      and lower_plan.active and upper_plan.active
-      and lower_plan.tier_order < upper_plan.tier_order
-      and lower_entitlement.boolean_value
-      and not upper_entitlement.boolean_value),
-  'a higher plan removes a capability included below it');
+  not exists (select 1 from private.plan_capability_violations()),
+  'a capability is closed without a recorded decision, or an upgrade would remove one -- #274');
 -- Every rung answers for every entitlement, or effective_entitlement() says `unavailable` and 0155
 -- reads that as a refusal on the customer's first document.
 select pg_temp.p70_assert(

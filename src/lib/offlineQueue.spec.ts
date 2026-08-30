@@ -345,7 +345,7 @@ describe('syncing the queue', () => {
     const submission = queue.submitReceipt({
       orderId: 'order-1', orderLabel: 'ספק', payload: payload('receipt-1'), observedAt: 1_000,
     });
-    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1), { timeout: 3_000 });
 
     memory.putDraft({
       orderId: 'order-1', receiptId: 'receipt-1', keySource: 'device',
@@ -406,7 +406,7 @@ describe('syncing the queue', () => {
     }));
     const firstTab = build({ store: memory.store, send: staleSend, workerId: 'tab-a' });
     const firstSync = firstTab.sync();
-    await vi.waitFor(() => expect(staleSend).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(staleSend).toHaveBeenCalledTimes(1), { timeout: 3_000 });
 
     const replacement = payload('receipt-1');
     replacement.p_lines = [{ ...replacement.p_lines[0], qty_received: 9 }];

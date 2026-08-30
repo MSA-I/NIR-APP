@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { unwrap } from './useQuery';
 import { exportDefinition, type ExportKey, type PlaceholderMapping } from './exportTemplates';
 import { fillTemplateWorkbook } from './exportTemplateWorkbook';
+import { downloadBytes, safeFileName, XLSX_MIME } from './workbook';
 
 export type ReportTemplateValues = Record<string, string | number | null>;
 
@@ -266,21 +267,17 @@ export async function renderConfiguredReportTemplate(input: {
   }
 
   try {
-    return fillTemplateWorkbook(bytes, input.values, mapping);
+    return await fillTemplateWorkbook(bytes, input.values, mapping);
   } catch {
     throw new ReportTemplateError('קובץ התבנית או מיפוי התאים פגומים. יש להעלות ולאשר את התבנית מחדש.');
   }
 }
 
 export function downloadRenderedWorkbook(bytes: Uint8Array, fileName: string): void {
-  const safeName = fileName.replace(/[\\/:*?"<>|]/g, '').trim() || 'inplace-export.xlsx';
-  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-  const url = URL.createObjectURL(new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = safeName.toLowerCase().endsWith('.xlsx') ? safeName : `${safeName}.xlsx`;
-  link.click();
-  URL.revokeObjectURL(url);
+  // The mechanics moved to workbook.ts and were wrong here in two ways that only show outside
+  // Chrome: the anchor was never appended to the document (a detached anchor's click is a no-op in
+  // Firefox), and the object URL was revoked in the same turn as the click, which can cancel a
+  // download that has not started reading the blob yet.
+  const safeName = safeFileName(fileName, 'inplace-export.xlsx');
+  downloadBytes(bytes, safeName.toLowerCase().endsWith('.xlsx') ? safeName : `${safeName}.xlsx`, XLSX_MIME);
 }

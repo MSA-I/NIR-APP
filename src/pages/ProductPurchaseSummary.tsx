@@ -12,8 +12,7 @@ import {
   productPurchaseTemplateValues,
   renderConfiguredReportTemplate,
 } from '../lib/reportTemplateExport';
-import { neutralizeSpreadsheetRow } from '../lib/documentExport';
-import * as XLSX from 'xlsx';
+import { downloadWorkbook } from '../lib/workbook';
 
 /**
  * Per-product purchase rollup — the screen for `get_product_purchase_summary` (0114).
@@ -153,27 +152,50 @@ export default function ProductPurchaseSummary() {
       if (templated) {
         downloadRenderedWorkbook(templated, fileName);
       } else {
-        const book = XLSX.utils.book_new();
-        const exportRows = data.products.map((row) => neutralizeSpreadsheetRow({
-          'מוצר': row.product_name,
-          'יחידה': formatUnit(row.unit),
-          'הוזמן': row.ordered_qty,
-          'התקבל': row.received_qty,
-          'חויב': row.invoiced_qty,
-          'נרכש בפועל': row.canonical_qty,
-          'מספר ספקים': row.supplier_count,
-          'מספר הזמנות': row.order_count,
-          'מספר חשבוניות': row.invoice_count,
-          /* One column per currency would change shape with the data; one text column states
-             every figure with its own symbol and never adds two. */
-          'הוצאה ברוטו': (row.gross_amount_by_currency ?? [])
-            .map((entry) => fmtMoneyExact(entry.amount, entry.currency)).join(' · '),
-          'מחיר יחידה ממוצע': row.spans_currencies
-            ? 'בכמה מטבעות'
-            : fmtMoneyExact(row.average_unit_price, row.average_unit_price_currency),
-        }));
-        XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(exportRows), 'רכישות מוצרים');
-        XLSX.writeFile(book, fileName);
+        // No custom template configured → the styled built-in. Until 28.08.2026 this branch wrote
+        // a bare SheetJS workbook: no RTL view, so an eleven-column Hebrew grid opened
+        // left-to-right, with every column at default width and money as raw numbers.
+        //
+        // The two money columns stay TEXT, and that is #287 rather than an oversight: a product
+        // bought in two currencies has two gross figures, and one numeric cell cannot hold them.
+        // One column per currency would change shape with the data; one text column states every
+        // figure with its own symbol and never adds two.
+        await downloadWorkbook({
+          title: `ריכוז רכישות מוצרים — ${org.name}`,
+          subtitle: `${fmtDate(from)} – ${fmtDate(to)} · הופק ${fmtDate(todayISO())}`,
+          sheets: [{
+            name: 'רכישות מוצרים',
+            columns: [
+              { header: 'מוצר', key: 'product', width: 32 },
+              { header: 'יחידה', key: 'unit', width: 10 },
+              { header: 'הוזמן', key: 'ordered', width: 10, type: 'number' },
+              { header: 'התקבל', key: 'received', width: 10, type: 'number' },
+              { header: 'חויב', key: 'invoiced', width: 10, type: 'number' },
+              { header: 'נרכש בפועל', key: 'canonical', width: 13, type: 'number' },
+              { header: 'מספר ספקים', key: 'suppliers', width: 12, type: 'number' },
+              { header: 'מספר הזמנות', key: 'orders', width: 12, type: 'number' },
+              { header: 'מספר חשבוניות', key: 'invoices', width: 13, type: 'number' },
+              { header: 'הוצאה ברוטו', key: 'gross', width: 20 },
+              { header: 'מחיר יחידה ממוצע', key: 'average', width: 20 },
+            ],
+            rows: data.products.map((row) => ({
+              product: row.product_name,
+              unit: formatUnit(row.unit),
+              ordered: row.ordered_qty,
+              received: row.received_qty,
+              invoiced: row.invoiced_qty,
+              canonical: row.canonical_qty,
+              suppliers: row.supplier_count,
+              orders: row.order_count,
+              invoices: row.invoice_count,
+              gross: (row.gross_amount_by_currency ?? [])
+                .map((entry) => fmtMoneyExact(entry.amount, entry.currency)).join(' · '),
+              average: row.spans_currencies
+                ? 'בכמה מטבעות'
+                : fmtMoneyExact(row.average_unit_price, row.average_unit_price_currency),
+            })),
+          }],
+        }, fileName);
       }
       toast('קובץ ה-Excel הורד');
     } catch (exportError) {

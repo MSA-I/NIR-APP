@@ -53,6 +53,7 @@ jobs:
     outputs:
       edge: ${{ steps.filter.outputs.edge }}
       ocr: ${{ steps.filter.outputs.ocr }}
+      render: ${{ steps.filter.outputs.render }}
       audit: ${{ steps.filter.outputs.audit }}
       sql: ${{ steps.filter.outputs.sql }}
       browser: ${{ steps.filter.outputs.browser }}
@@ -99,12 +100,14 @@ jobs:
           # import added later cannot silently fall outside the gate.
           edge='^(deno\.lock|src/lib/assistant/|supabase/(config\.toml|functions/))'
           ocr='^(docker-compose\.ocr\.yml|worker/ocr/)'
+          render='^(docker-compose\.render\.yml|worker/render/)'
           audit='^(package\.json|package-lock\.json)$'
           sql='^(supabase/(config\.toml|migrations/|tests/|demo/|seed\.sql)|scripts/(check-quality-gates\.ps1|ci-sql-suites\.mjs|ci-local-env\.mjs|fixtures/.*\.sql))'
           browser='^(src/|public/|index\.html|operator\.html|portal\.html|vite\.config\.[cm]?[jt]s|package\.json|package-lock\.json|supabase/(config\.toml|demo/|seed\.sql)|scripts/(check-browser-smoke\.cjs|ci-sql-suites\.mjs|ci-local-env\.mjs|create-users\.ps1|fixtures/))'
 
           if matches "$workflow|$edge"; then echo "edge=true" >> "$GITHUB_OUTPUT"; else echo "edge=false" >> "$GITHUB_OUTPUT"; fi
           if matches "$workflow|$ocr"; then echo "ocr=true" >> "$GITHUB_OUTPUT"; else echo "ocr=false" >> "$GITHUB_OUTPUT"; fi
+          if matches "$workflow|$render"; then echo "render=true" >> "$GITHUB_OUTPUT"; else echo "render=false" >> "$GITHUB_OUTPUT"; fi
           if matches "$workflow|$audit"; then echo "audit=true" >> "$GITHUB_OUTPUT"; else echo "audit=false" >> "$GITHUB_OUTPUT"; fi
           if matches "$workflow|$sql"; then echo "sql=true" >> "$GITHUB_OUTPUT"; else echo "sql=false" >> "$GITHUB_OUTPUT"; fi
           browser_required=false
@@ -133,7 +136,7 @@ jobs:
   # ---------------------------------------------------------------- contracts (no database)
   contracts:
     needs: changes
-    if: needs.changes.outputs.edge == 'true' || needs.changes.outputs.ocr == 'true'
+    if: needs.changes.outputs.edge == 'true' || needs.changes.outputs.ocr == 'true' || needs.changes.outputs.render == 'true'
     name: Deno contracts + OCR worker
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -344,6 +347,45 @@ jobs:
             --lock "$ASSISTANT_ROOT/deno.lock" \
             --frozen \
             "$ASSISTANT_ROOT/index.ts"
+      - name: Render-document contract
+        if: needs.changes.outputs.edge == 'true'
+        run: |
+          set -euo pipefail
+          npx --yes deno test \
+            --config supabase/functions/render-document/deno.json \
+            supabase/functions/render-document/contract_test.ts 2>&1 | tee deno-render-document.log
+          grep -Eq '[1-9][0-9]*[[:space:]]+passed' deno-render-document.log \
+            || { echo 'No render-document contract test completed.'; exit 1; }
+          ! grep -Eqi '[1-9][0-9]*[[:space:]]+(ignored|skipped)' deno-render-document.log \
+            || { echo 'Ignored or skipped cases are not acceptable in this gate.'; exit 1; }
+
+      # The version lives on both sides of the wire and a silent skew is how document processing
+      # stopped for five days. The gate compares the two literals rather than trusting a reviewer.
+      - name: Render contract versions agree across the wire
+        if: needs.changes.outputs.edge == 'true' || needs.changes.outputs.render == 'true'
+        run: |
+          set -euo pipefail
+          edge=$(grep -oE 'RENDER_CONTRACT_VERSION = "[^"]+"' supabase/functions/render-document/contract.ts | grep -oE '"[^"]+"' | tr -d '"')
+          worker=$(grep -oE "RENDER_CONTRACT_VERSION = '[^']+'" worker/render/src/contract.mjs | grep -oE "'[^']+'" | tr -d "'")
+          echo "edge=$edge worker=$worker"
+          test -n "$edge" && test "$edge" = "$worker" \
+            || { echo 'render contract version skew between the Edge function and worker/render'; exit 1; }
+
+      - name: Render service Compose validation
+        if: needs.changes.outputs.render == 'true'
+        env:
+          RENDER_SERVICE_TOKEN: validation-only
+          RENDER_APP_URL: https://validation.invalid
+        run: docker compose -f docker-compose.render.yml config --quiet
+
+      - name: Render worker self-check
+        if: needs.changes.outputs.render == 'true'
+        run: node worker/render/self_check.mjs
+
+      - name: Render worker image build
+        if: needs.changes.outputs.render == 'true'
+        run: docker build -t inplace-render:acceptance worker/render
+
       - name: OCR worker Compose validation
         if: needs.changes.outputs.ocr == 'true'
         run: docker compose -f docker-compose.ocr.yml config --quiet

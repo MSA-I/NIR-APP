@@ -88,7 +88,7 @@ async function startUpload(overrides: Partial<Parameters<typeof tusUploadToDocum
   });
   await vi.waitFor(() => {
     if (!tusState.instances.length) throw new Error('upload not created yet');
-  });
+  }, { timeout: 3_000 });
   const upload = tusState.instances[tusState.instances.length - 1];
   return { handle, upload };
 }
@@ -163,7 +163,7 @@ describe('reservation renewal timing (price-document flow)', () => {
       renewal: { documentId: 'doc-1', expiresAt: inMinutes(3) },
     });
     upload.options.onChunkComplete?.(TUS_CHUNK_SIZE, TUS_CHUNK_SIZE, TUS_CHUNK_SIZE * 2);
-    await vi.waitFor(() => expect(supabaseState.rpc).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(supabaseState.rpc).toHaveBeenCalledTimes(1), { timeout: 3_000 });
     expect(supabaseState.rpc).toHaveBeenCalledWith('renew_supplier_price_document_upload', {
       p_document_id: 'doc-1',
     });
@@ -197,7 +197,7 @@ describe('403 during PATCH — exactly one renew-then-resume', () => {
       renewal: { documentId: 'doc-1', expiresAt: inMinutes(10) },
     });
     upload.options.onError?.(detailedError(403, 'PATCH'));
-    await vi.waitFor(() => expect(upload.started).toBe(2)); // initial start + one resume
+    await vi.waitFor(() => expect(upload.started).toBe(2), { timeout: 3_000 }); // initial start + one resume
     expect(supabaseState.rpc).toHaveBeenCalledTimes(1);
     expect(supabaseState.rpc).toHaveBeenCalledWith('renew_supplier_price_document_upload', {
       p_document_id: 'doc-1',

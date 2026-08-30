@@ -179,34 +179,60 @@ export function parseTemplateWorkbook(fileName: string, bytes: ArrayBuffer): Par
 /**
  * Write the export's values into the template's placeholder cells and hand back the workbook.
  *
- * The original bytes go in and come out, so everything the template does that we did not touch —
- * merged cells, widths, sheet order, its own formulas — is still there. Only the placeholder cells
- * change, and every string written into one goes through the same neutraliser the standard exports
- * use: a supplier name of `=HYPERLINK(...)` is a formula to Excel no matter which of our files it
- * arrives in.
+ * ─── WHY THIS HALF MOVED TO ExcelJS (28.08.2026) ─────────────────────────────────────────────
+ * The accountant's own formatting IS the deliverable here — that is the entire point of letting
+ * them hand us their workbook. SheetJS CE drops cell fills and fonts when it writes (measured,
+ * DEBT §37), so the previous round trip took in a designed workbook and handed back a plainer one,
+ * and the promise "your layout becomes the export" rested on a preservation nobody had proved.
+ * ExcelJS loads and re-serialises the parts it does not understand, so styles, merges, widths,
+ * conditional formats and the sheet's own formulas survive.
+ *
+ * PARSING stays on SheetJS (`parseTemplateWorkbook` above), deliberately: the refusals live there —
+ * `vbaraw` for a renamed macro workbook, and the `[Book1.xlsx]` scan for external links — and both
+ * are proven. Reading was never the broken half.
+ *
+ * Only the placeholder cells change, and every string written into one goes through the same
+ * neutraliser the standard exports use: a supplier name of `=HYPERLINK(...)` is a formula to Excel
+ * no matter which of our files it arrives in.
+ *
+ * ONE HONEST LIMIT: a placeholder living inside a RICH TEXT run (a cell where one word is bold)
+ * is rewritten as a plain string, so that cell loses its inline mixed formatting. The cell's own
+ * font, fill and number format are unaffected. A template that formats a whole cell — the normal
+ * case — is untouched by this.
+ *
+ * workbook-rtl-exempt: this file LOADS the accountant's own workbook and hands it back. The sheet
+ * direction is theirs to decide and is already in the file they uploaded; forcing `rightToLeft`
+ * here would silently rewrite the layout we promised to preserve. The guard in workbook.spec.ts
+ * covers workbooks the product CREATES, and this creates none.
  */
-export function fillTemplateWorkbook(
+export async function fillTemplateWorkbook(
   bytes: ArrayBuffer,
   values: Record<string, string | number | null>,
   mapping?: PlaceholderMapping[],
-): Uint8Array {
-  const book = XLSX.read(bytes, { type: 'array', cellStyles: true, bookVBA: false });
+): Promise<Uint8Array> {
+  const { Workbook } = await import('exceljs');
+  const book = new Workbook();
+  await book.xlsx.load(bytes);
 
-  const writeFilledCell = (sheet: XLSX.WorkSheet, address: string, cell: XLSX.CellObject, filled: string) => {
-    if (filled === cell.v) return;
-    // A cell that is now purely one number stays a number, so the accountant's own formatting
-    // and any SUM over it keep working.
-    const asNumber = Number(filled);
-    if (filled.trim() !== '' && Number.isFinite(asNumber) && !/^0\d/.test(filled.trim())) {
-      sheet[address] = { t: 'n', v: asNumber, z: cell.z, s: cell.s } as XLSX.CellObject;
-    } else {
-      sheet[address] = {
-        t: 's',
-        v: neutralizeSpreadsheetString(filled) as string,
-        z: cell.z,
-        s: cell.s,
-      } as XLSX.CellObject;
+  /** The cell's text, whether it is a plain string or a rich-text run. Anything else is not text. */
+  const cellText = (value: unknown): string | null => {
+    if (typeof value === 'string') return value;
+    if (value && typeof value === 'object' && 'richText' in value) {
+      const runs = (value as { richText: { text: string }[] }).richText;
+      return Array.isArray(runs) ? runs.map((run) => run.text).join('') : null;
     }
+    return null;
+  };
+
+  const writeFilledCell = (cell: { value: unknown }, original: string, filled: string) => {
+    if (filled === original) return;
+    // A cell that is now purely one number stays a number, so the accountant's own formatting
+    // and any SUM over it keep working. Assigning `value` leaves `cell.style` — font, fill,
+    // border and number format — exactly as the template had it.
+    const asNumber = Number(filled);
+    cell.value = filled.trim() !== '' && Number.isFinite(asNumber) && !/^0\d/.test(filled.trim())
+      ? asNumber
+      : neutralizeSpreadsheetString(filled);
   };
 
   if (mapping) {
@@ -215,14 +241,15 @@ export function fillTemplateWorkbook(
     // explicitly mapped them differently. Sheet+cell is the frozen agreement in 0123/0126.
     for (const row of mapping) {
       if (!row.source) continue;
-      const sheet = book.Sheets[row.sheet];
-      const cell = sheet?.[row.cell] as XLSX.CellObject | undefined;
-      if (!sheet || !cell || typeof cell.v !== 'string') {
+      const sheet = book.getWorksheet(row.sheet);
+      const cell = sheet?.getCell(row.cell);
+      const original = cell ? cellText(cell.value) : null;
+      if (!sheet || !cell || original === null) {
         throw new Error(`export_template_cell_missing:${row.sheet}:${row.cell}`);
       }
       const escapedKey = row.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const exactPlaceholder = new RegExp(`\\{\\{\\s*${escapedKey}\\s*\\}\\}`, 'g');
-      if (!exactPlaceholder.test(cell.v)) {
+      if (!exactPlaceholder.test(original)) {
         throw new Error(`export_template_placeholder_mismatch:${row.sheet}:${row.cell}`);
       }
       exactPlaceholder.lastIndex = 0;
@@ -230,31 +257,27 @@ export function fillTemplateWorkbook(
       // Source keys are validated before download. A null is still a deliberate "no measured
       // value" and therefore leaves the placeholder visible instead of inventing zero.
       if (value === undefined || value === null) continue;
-      writeFilledCell(sheet, row.cell, cell, cell.v.replace(exactPlaceholder, String(value)));
+      writeFilledCell(cell, original, original.replace(exactPlaceholder, String(value)));
     }
 
-    return XLSX.write(book, { type: 'array', bookType: 'xlsx', cellStyles: true }) as Uint8Array;
+    return new Uint8Array(await book.xlsx.writeBuffer());
   }
 
-  for (const name of book.SheetNames) {
-    const sheet = book.Sheets[name];
-    if (!sheet?.['!ref']) continue;
-    const range = XLSX.utils.decode_range(sheet['!ref']);
-    for (let row = range.s.r; row <= range.e.r; row += 1) {
-      for (let column = range.s.c; column <= range.e.c; column += 1) {
-        const address = XLSX.utils.encode_cell({ r: row, c: column });
-        const cell = sheet[address] as XLSX.CellObject | undefined;
-        if (!cell || typeof cell.v !== 'string') continue;
-        const filled = cell.v.replace(PLACEHOLDER, (whole, key: string) => {
+  book.eachSheet((sheet) => {
+    sheet.eachRow({ includeEmpty: false }, (row) => {
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        const original = cellText(cell.value);
+        if (original === null) return;
+        const filled = original.replace(PLACEHOLDER, (whole, key: string) => {
           const value = values[key];
           // An unmapped placeholder is left exactly as it was, visibly. Replacing it with an empty
           // string would hand an accountant a blank cell that looks like a zero.
           return value === undefined || value === null ? whole : String(value);
         });
-        writeFilledCell(sheet, address, cell, filled);
-      }
-    }
-  }
+        writeFilledCell(cell, original, filled);
+      });
+    });
+  });
 
-  return XLSX.write(book, { type: 'array', bookType: 'xlsx', cellStyles: true }) as Uint8Array;
+  return new Uint8Array(await book.xlsx.writeBuffer());
 }
