@@ -334,7 +334,10 @@ insert into public.organization_offboarding_requests (
   now() - interval '8 years' + interval '7 years',
   false, '86a00000-0000-4000-8000-000000000001',
   now() - interval '8 years' + interval '1 day',
-  '86000000-0000-4000-8000-000000000001/offboarding/manifest.json',
+  -- check5 pins the path to {org}/offboarding/{request}/{generation}/manifest.json, and
+  -- export_generation is the UUID two lines above, not an ordinal.
+  '86000000-0000-4000-8000-000000000001/offboarding/86900000-0000-4000-8000-000000000001/'
+  || '86a00000-0000-4000-8000-000000000001/manifest.json',
   repeat('a', 64), 1024, 3);
 
 select pg_temp.p86_as('86100000-0000-4000-8000-000000000002', true);
