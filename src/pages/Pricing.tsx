@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { supabase } from '../lib/supabase';
 import { ErrorNote, Note } from '../components/ui';
-import { planTierClass } from '../components/PlanBadge';
 import {
-  HEADLINE_QUOTA_KEY, PLAN_LIST, PlanCard, PlanLadderSkeleton, planEmphasis, type PlanFeatureRow,
-} from '../components/PlanCard';
+  HEADLINE_QUOTA_KEY, PLAN_TRAY, PlanTicket, PlanTicketSkeleton, RECOMMENDED_PLAN,
+  type PlanTicketFeature,
+} from '../components/PlanTicket';
 import { fmtNum } from '../lib/format';
 import type { PlanFeatureRowData } from '../lib/planEntitlements';
 
@@ -155,7 +155,7 @@ export default function Pricing() {
    * It renders `—` and wears the dash glyph rather than a tick, because a check mark asserts that
    * the rung includes something and this row asserts nothing at all. Never `0`.
    */
-  const featureRow = (planKey: string, key: string): PlanFeatureRow => {
+  const featureRow = (planKey: string, key: string): PlanTicketFeature => {
     const row = quotaOf(planKey, key);
     const label = quotaLabel(key);
     if (!row || !row.measured || (!row.unlimited && row.numeric_limit === null)) {
@@ -223,7 +223,7 @@ export default function Pricing() {
       <main className={PAGE_WRAPPER}>
         {header}
         {notice}
-        <PlanLadderSkeleton rows={4} action={false} testId="pricing-skeleton" />
+        <PlanTicketSkeleton rows={4} action={false} testId="pricing-skeleton" />
       </main>
     );
   }
@@ -237,15 +237,14 @@ export default function Pricing() {
 
       {notice}
 
-      <ul data-testid="plan-cards" className={PLAN_LIST}>
+      <ul data-testid="plan-cards" className={PLAN_TRAY}>
         {plans.map((plan) => {
           const headline = quotaOf(plan.plan_key, HEADLINE_QUOTA_KEY);
-          const emphasis = planEmphasis(plan.plan_key);
           const measured = !!headline && headline.measured;
           const capabilityRows = state.features
             .filter((row) => row.plan_key === plan.plan_key)
             .sort((a, b) => a.display_order - b.display_order)
-            .map((row): PlanFeatureRow => ({
+            .map((row): PlanTicketFeature => ({
               key: row.entitlement_key,
               text: row.plan_key === 'free' && row.intro_included && !row.included
                 ? `${row.label} — פתוח ב־30 הימים הראשונים`
@@ -253,22 +252,32 @@ export default function Pricing() {
               affirmative: row.included || (row.plan_key === 'free' && row.intro_included),
             }));
           return (
-            <PlanCard
+            <PlanTicket
               key={plan.plan_key}
               planKey={plan.plan_key}
               label={plan.label}
-              /* The same map the header chip and the account ladder read — DESIGN.md:503. */
-              tierClass={planTierClass(plan.plan_key)}
-              chips={emphasis ? [emphasis] : []}
-              /* The headline quota AS the figure, with the server's own label as its unit on the
-                 same baseline. `unlimited` has no number to print, so the words carry the slot. */
+              /* THE FIGURE SLOT HOLDS THE QUOTA, NOT A PRICE, and its label says so. This page
+                 publishes no amount (owner decision 25.08.2026 / #267), so the largest true number
+                 it owns takes the slot the ticket reserves for its biggest figure. A price-shaped
+                 slot holding «—» would be a page about a price it refuses to give. */
+              priceLabel={quotaLabel(HEADLINE_QUOTA_KEY)}
               figure={!measured ? '—'
                 : headline.unlimited ? 'ללא הגבלה'
                   : fmtNum(headline.numeric_limit)}
-              figureTone={!measured ? 'quiet' : headline.unlimited ? 'compact' : 'anchor'}
-              figureNote={measured && !headline.unlimited ? quotaLabel(HEADLINE_QUOTA_KEY) : undefined}
+              figureIsWords={!measured || headline.unlimited}
+              term={measured && !headline.unlimited ? 'בתקופת שימוש חודשית' : undefined}
+              /* The badge, and ONLY from the shared presentation file. #202 forbids an emphasis
+                 keyed to the reader, and a stranger holds no rung to be keyed to in the first
+                 place; this is the one static mark, identical for everyone, and it is the same
+                 mark the marketing site prints (owner ruling 27.08.2026: «תיישר לפי הדף נחיתה»). */
+              badgeLabel={plan.plan_key === RECOMMENDED_PLAN ? 'מומלץ' : undefined}
+              /* No action on a card. A "בחרו מסלול" button would be a selection control for a
+                 selection that does not exist (#217/#224) — the single CTA under the list opens an
+                 account, which is the one thing a visitor can actually do. Every card lacks it
+                 equally, so no card is left short of its neighbours. */
               /* Every remaining entitlement the catalogue returns — the comparison the table used
                  to hold, one plan at a time and with no sideways scroll to trap a keyboard. */
+              featuresLabel="כלול בכל מסלול"
               features={quotaKeys
                 .filter((key) => key !== HEADLINE_QUOTA_KEY)
                 .map((key) => featureRow(plan.plan_key, key))

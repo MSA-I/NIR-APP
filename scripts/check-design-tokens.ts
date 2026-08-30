@@ -233,6 +233,54 @@ for (const found of outsideTheme.matchAll(CSS_COLOUR_LITERAL)) {
   });
 }
 
+/**
+ * Fifth scope — the ONE declared exemption, kept to exactly one file.
+ *
+ * Owner ruling 27.08.2026 (OPEN-DECISIONS #296): «צבע הנייר נשאר. המנויים זה הדבר היחיד שיכול
+ * לחרוג ממסגרת הצבעים של האפליקציה». The subscription plan card is drawn identically here and on
+ * the marketing site, so it is authored once in `src/styles/plan-card.css` and copied there; and
+ * because the two repositories give the SAME token names opposite values (`--color-ink` is a light
+ * ink on that dark page and the darkest ink there is here), the shared file cannot read a host
+ * token at all. It therefore carries absolute values — the thing every other file is forbidden.
+ *
+ * What this check defends is the word "היחיד". An exemption nobody counts is not an exemption, it
+ * is a hole: the next stylesheet added under `src/` would inherit the freedom without anyone
+ * ruling on it. So the rule is structural rather than textual — there are exactly two stylesheets
+ * in this project, and a third is a failure whatever it contains.
+ */
+const ALLOWED_STYLESHEETS = new Set(['index.css', 'styles/plan-card.css']);
+function* walkStylesheets(dir: string): Generator<string> {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) yield* walkStylesheets(path);
+    else if (entry.isFile() && entry.name.endsWith('.css')) yield path;
+  }
+}
+const stylesheets = [...walkStylesheets(srcRoot)].map((path) =>
+  relative(srcRoot, path).replace(/\\/g, '/'),
+);
+for (const sheet of stylesheets) {
+  if (ALLOWED_STYLESHEETS.has(sheet)) continue;
+  violations.push({
+    file: sheet,
+    line: 1,
+    match: sheet,
+    why:
+      'a second stylesheet outside the token layer — only src/styles/plan-card.css is exempt ' +
+      '(OPEN-DECISIONS #296), and that exemption covers the plan card alone. Put the colour in ' +
+      '@theme and the rule in index.css.',
+  });
+}
+for (const sheet of ALLOWED_STYLESHEETS) {
+  if (stylesheets.includes(sheet)) continue;
+  violations.push({
+    file: sheet,
+    line: 1,
+    match: sheet,
+    why: 'the declared stylesheet is missing — either it was deleted, or ALLOWED_STYLESHEETS is stale',
+  });
+}
+
 if (violations.length > 0) {
   console.error('check:tokens FAILED. Every colour goes through an @theme token (src/index.css + DESIGN.md together):');
   for (const v of violations) {
@@ -245,5 +293,7 @@ console.log(
   `check:tokens passed: ${scanned} .ts/.tsx files with zero raw palette classes, zero hex literals, ` +
     `zero stock Tailwind shadows and zero references to a colour outside the ${definedTokens.size} ` +
     'tokens @theme actually defines; ' +
-    'src/index.css keeps every colour literal inside @theme and uses no rgb()/hsl().',
+    'src/index.css keeps every colour literal inside @theme and uses no rgb()/hsl(); ' +
+    `${stylesheets.length} stylesheet(s) under src/, and the only one exempt from the token layer ` +
+    'is styles/plan-card.css (OPEN-DECISIONS #296).',
 );
