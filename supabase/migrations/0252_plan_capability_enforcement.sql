@@ -367,21 +367,21 @@ begin
 
   -- 6b. Monotonicity (#274). A capability open on a rung must be open on every rung above it, or
   -- an upgrade could take something away and the customer would find out by paying for it.
-  select string_agg(format('%s: %s open at %s, closed at %s',
-                           lower_plan.entitlement_key, lower_plan.entitlement_key,
-                           lower_plan.plan_key, upper_plan.plan_key), e'\n')
+  --
+  -- ASKED OF `0248`'s FUNCTION RATHER THAN RE-WRITTEN HERE. This file first carried its own copy
+  -- of the query, and the copy compared EVERY rung -- `legacy` included. That is wrong for the
+  -- reason `0248` states: `legacy` is the pre-cutover holding pen (#164). It is inactive, no new
+  -- customer can reach it, and nobody upgrades through it. `0246` opens everything on it exactly
+  -- so a parked customer loses nothing, and a whole-ladder comparison reads that promise as a
+  -- break. One definition, in private.plan_capability_violations(), and this migration and both
+  -- suites ask it the same question.
+  select string_agg(assertion || ' -- ' || detail, e'
+' order by assertion, detail)
     into v_break
-  from plan_entitlements lower_plan
-  join subscription_plans lower_rung on lower_rung.plan_key = lower_plan.plan_key
-  join plan_entitlements upper_plan
-    on upper_plan.entitlement_key = lower_plan.entitlement_key and upper_plan.kind = 'boolean'
-  join subscription_plans upper_rung on upper_rung.plan_key = upper_plan.plan_key
-  where lower_plan.kind = 'boolean'
-    and upper_rung.tier_order > lower_rung.tier_order
-    and lower_plan.boolean_value is true
-    and upper_plan.boolean_value is false;
+  from private.plan_capability_violations();
   if v_break is not null then
-    raise exception e'0252 monotonicity broken:\n%', v_break;
+    raise exception e'0252 capability assertions failed:
+%', v_break;
   end if;
 
   -- 6c. The ladder landed where the owner put it, read back rather than assumed.

@@ -34,7 +34,7 @@
  * rather than some number.
  */
 
-import { currencyMinorUnits } from './format';
+import { currencyMinorUnits } from './format.ts';
 
 /** The two shapes `organizations.settings[<key>]` is allowed to hold. */
 export type ToleranceSetting = number | Record<string, number>;
