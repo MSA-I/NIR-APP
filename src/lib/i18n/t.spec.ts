@@ -67,5 +67,37 @@ describe('the English dictionary', () => {
         expect(value.trim(), key).not.toBe('');
       }
     }
+  });
+
+  it('reaches for the singular sibling only when the count is one, and only when there is one', () => {
+    // English first, because it is the language the sibling exists for.
+    expect(translate(en as unknown as Dictionary, 'suppliers.listMeta', { count: 1 }, 'en')).toBe('1 supplier');
+    expect(translate(en as unknown as Dictionary, 'suppliers.listMeta', { count: 2 }, 'en')).toBe('2 suppliers');
+    expect(translate(en as unknown as Dictionary, 'suppliers.listMeta', { count: 0 }, 'en')).toBe('0 suppliers');
+
+    // Hebrew takes the same door. Its `two` category falls to the plural form on purpose — the
+    // three hand-rolled call sites this mechanism generalises already behave that way.
+    expect(translate(he as unknown as Dictionary, 'suppliers.listMeta', { count: 1 }, 'he')).toBe('ספק אחד');
+    expect(translate(he as unknown as Dictionary, 'suppliers.listMeta', { count: 2 }, 'he')).toBe('2 ספקים');
+
+    // A key with no sibling is untouched, which is what makes this additive rather than a
+    // migration: 47 counted phrases still have no `_one` and must keep rendering as they did.
+    expect(translate(en as unknown as Dictionary, 'suppliers.tabOrders', { count: 1 }, 'en')).toBe('Orders (1)');
+
+    // No count in vars means no lookup at all — a `{count}`-free key must not pay for this.
+    expect(translate(en as unknown as Dictionary, 'common.save', undefined, 'en')).toBe('Save');
+  });
+
+  it('pairs every singular sibling across both dictionaries', () => {
+    // `_one` keys are part of `Dictionary` like any other, so the compiler already forces parity.
+    // What it cannot see is a sibling whose BASE key was deleted, leaving a singular nobody can
+    // reach — the same class of orphan the audit found 462 of.
+    for (const namespace of Object.keys(he) as (keyof typeof he)[]) {
+      for (const key of Object.keys(he[namespace])) {
+        if (!key.endsWith('_one')) continue;
+        expect(Object.keys(he[namespace]), `${namespace}.${key}`)
+          .toContain(key.slice(0, -'_one'.length));
+      }
+    }
   });
 });

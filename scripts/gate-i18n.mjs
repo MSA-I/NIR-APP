@@ -13,6 +13,7 @@
  *   node scripts/gate-i18n.mjs currency-untouched -- translating the UI changed nothing about money
  *   node scripts/gate-i18n.mjs help-registry-paired -- every product-help topic exists in both locales
  *   node scripts/gate-i18n.mjs legacy-errors -- how many PRODUCT sites still show failures in Hebrew only
+ *   node scripts/gate-i18n.mjs plurals      -- how many counted phrases still read "1 items"
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -221,6 +222,18 @@ function abandon() {
   console.log('GATE_I18N_ABANDON_OK');
 }
 
+/**
+ * Delegates rather than parsing the dictionary a second time — same reason `ratchet` delegates to
+ * `check-i18n.ts`. Two parsers of the same file would drift, and the one that drifted would be the
+ * one nobody was watching.
+ */
+function plurals() {
+  const out = execFileSync(process.execPath, ['scripts/check-plurals.mjs'], { cwd: root, encoding: 'utf8' });
+  process.stdout.write(out);
+  if (!out.includes('check:plurals passed')) fail('gate-i18n: the plural ratchet did not report a pass');
+  console.log('GATE_I18N_PLURALS_OK');
+}
+
 function zero() {
   // The end-of-phase oracle, and deliberately NOT the same command as the ratchet.
   //
@@ -376,7 +389,7 @@ function helpRegistryPaired() {
 }
 
 const COMMANDS = {
-  ratchet, extracted, dictionaries, abandon, zero, legacyErrors,
+  ratchet, extracted, dictionaries, abandon, zero, legacyErrors, plurals,
   'legacy-errors': legacyErrors,
   currencyUntouched, 'currency-untouched': currencyUntouched,
   helpRegistryPaired, 'help-registry-paired': helpRegistryPaired,
