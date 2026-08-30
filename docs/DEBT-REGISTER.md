@@ -888,16 +888,16 @@ Hebrew and clears the field" — עם `Unable to find an element with the text: 
 - **הצעד הזול הבא:** בגל Twilio sender ללמד את השער להכיר גם אסימון מעבר של מסלול המייל, או
   להחליף את התנאי ב"קיים אירוע ספק שנצפה באחד הערוצים".
 
-### §69 — המערכת הרב־מטבעית ממומשת מקומית; ראיית Production עדיין פתוחה
+### §69 — נסגר 29.08.2026: המערכת הרב־מטבעית אומתה ב־Production
 
-- **מצב:** ‏`LOCAL_VERIFIED / CI_PENDING / NOT_DEPLOYED`. התוכנית
-  `docs/PLAN-multi-currency-20260828.md` מומשה במיגרציות `0217`–`0242` ובשכבות הלקוח ו־Edge.
-  השמות הישנים של קוראי היתרה נמחקו; יתרות, requests, credits, bank matching, settlement,
-  Assistant facts וחוברת רו״ח נושאים מטבע ואינם מסכמים מטבעות שונים.
-- **מה הוכח:** ‏P3–P5 ב־`GATES.md`; צילום ספק עם 12,400 ₪ ו־3,100 $ בשתי שורות; SQL ממוקד
-  ל־intake/payment/bank/snapshot; ‏Vitest מלא; TypeScript ושומרי money/currency/A5.
-- **מה לא הוכח:** ה־SHA טרם עבר `quality-gate.yml`, טרם מוזג ל־`main`, מיגרציות `0217`–`0242`
-  טרם הוחלו ב־Production, ה־frontend טרם נפרס, ואין smoke חי. אין לתאר את המערכת הרב־מטבעית
-  כ־Production-ready לפני ארבע הראיות האלה.
-- **הצעד הבא הזול:** סגירת P6-G1/P6-G2: CI על SHA סופי; גיבוי+dry-run+ledger+apply forward-only;
-  build Production, Pages/hash parity; smoke חי של ILS+USD, settlement ודוח מעורב.
+- **מצב:** ‏`CLOSED / PRODUCTION_VERIFIED`. ‏PR #146 מוזג ל־`main` ב־
+  `5faaef1f0472d0215003245c8b10c616206476be`; build/verify ושער האיכות המלא ירוקים על אותו
+  SHA. מיגרציות `0217`–`0242` הוחלו forward-only אחרי גיבוי ו־dry-run, וה־ledger החי הוא
+  `0242 / 233` עם source hash מדויק לכל אחת.
+- **מה הוכח חי:** ‏A5/A6 אפס, כל ספירות הנתונים נשמרו, `assistant` בלבד עלתה v9→v10 ונשארה
+  `ACTIVE`/`verify_jwt=true`, Pages הוא `production/success` מ־`main@5faaef1`, ושלושת ה־hosts
+  עברו 357/357 hash checks. ‏Smoke מחובר עבר 27 מסכים ואפס failures/כתיבות עסקיות. טרנזקציית
+  Production הוכיחה USD ‏3,100, ILS ‏12,400, settlement ‏ILS ‏11,470 ודוח דו־מטבעי; rollback
+  החזיר את ראש המיגרציות ועוד 13 ספירות טבלה והשאיר אפס כתיבות קבועות.
+- **אין צעד המשך לחוב זה.** ‏`worker/ocr` לא השתנה ולא נפרס. הרחבת המוצר לשערי חליפין חיצוניים
+  נשארת מחוץ לגבול האמון ואינה חלק מסגירת §69.
