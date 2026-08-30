@@ -187,9 +187,10 @@ select pg_temp.p86_assert(
   || 'would prove nothing');
 
 -- ----- the residue that carries no org_id -----
-insert into public.domain_events (id, sequence, event_type, org_id, entity_type, entity_id)
-values ('86600000-0000-4000-8000-000000000001',
-        nextval('public.domain_events_sequence_seq'), 'p86.tested',
+-- `sequence` is a GENERATED ALWAYS identity: the database assigns it, and naming it in the
+-- column list is refused outright rather than ignored.
+insert into public.domain_events (id, event_type, org_id, entity_type, entity_id)
+values ('86600000-0000-4000-8000-000000000001', 'p86.tested',
         '86000000-0000-4000-8000-000000000001', 'invoice',
         '86300000-0000-4000-8000-000000000001');
 

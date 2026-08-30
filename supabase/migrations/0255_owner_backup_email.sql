@@ -391,6 +391,15 @@ insert into private.tenant_export_registry (table_name, disposition, excluded_co
 values ('profile_backup_email_verifications', 'include', array['token_hash'],
         'Backup-address verification history without the bearer-token hashes that could redeem a challenge.');
 
+-- C1: 0196's fail-safe emptiness predicate. An unclassified public table carrying org_id counts
+-- as EVIDENCE, so leaving this one out would make every organization that ever nominated a backup
+-- address look "used" -- blocking both the abandoned-signup cleanup #175 decided on and, through
+-- the same predicate, the tenant teardown. A pending challenge is signup machinery, not business
+-- activity: the same argument `profiles` carries at 0196:49, for the same reason.
+insert into private.org_activity_evidence_registry (table_name, disposition, rationale)
+values ('profile_backup_email_verifications', 'not_evidence',
+        'A backup-address challenge is created by signup itself; its existence proves nothing was used.');
+
 -- Both tables: the new one for the first time, and `profiles` because adding a column to it is
 -- schema drift until someone says what the export does with it. `backup_email` is EXPORTED: it is
 -- the person's own stated contact address, neither a secret nor a credential. Re-derived here
@@ -537,6 +546,14 @@ begin
     into v_violations from private.tenant_export_registry_violations();
   if v_violations is not null then
     raise exception e'0255 tenant export assertions failed:\n%', v_violations;
+  end if;
+
+  -- The registry duty this file first shipped without: p75 C1 caught it, and an assertion here
+  -- catches the next one three hours earlier than the gate does.
+  select string_agg(detail, chr(10) order by detail)
+    into v_violations from private.org_activity_registry_violations();
+  if v_violations is not null then
+    raise exception e'0255 activity registry assertions failed:\n%', v_violations;
   end if;
 end
 $assert_0255$;
