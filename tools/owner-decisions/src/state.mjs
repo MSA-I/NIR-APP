@@ -190,8 +190,11 @@ export function reconcileSavedState(saved, catalog, now = new Date().toISOString
     if (item && item.sourceHash === request.sourceHash) reconsiderations.push(request);
     else staleReconsiderations.push({ ...request, staleDetectedAt: request.staleDetectedAt || now, supersededAt: request.supersededAt || null });
   }
+  // A stale answer blocks only while the item is still a question the owner can answer again.
+  // Once the register closes an item, the old answer stays in staleAnswers as history, but it
+  // must not gate finalization: the card offers no options, so nothing could ever clear it.
   const staleItems = [...new Set([
-    ...Object.keys(staleAnswers).filter((key) => itemMap.has(key)),
+    ...Object.keys(staleAnswers).filter((key) => itemMap.get(key)?.requiresOwnerDecision),
     ...staleReconsiderations.filter((request) => !request.supersededAt && itemMap.has(request.key)).map((request) => request.key),
   ])].sort();
   const debtPriorities = {};
@@ -204,9 +207,10 @@ export function reconcileSavedState(saved, catalog, now = new Date().toISOString
   for (const key of Object.keys(staleDebtPriorities)) {
     if (debtPriorities[key]) delete staleDebtPriorities[key];
   }
+  // Same rule for a priority left on a debt that has since closed: it carries no open choice.
   const allStaleItems = [...new Set([
     ...staleItems,
-    ...Object.keys(staleDebtPriorities).filter((key) => itemMap.has(key)),
+    ...Object.keys(staleDebtPriorities).filter((key) => itemMap.get(key)?.status === 'technical-debt'),
   ])].sort();
   const changed = saved.sourceCommit !== catalog.sourceCommit
     || saved.sourceFiles?.decisions !== catalog.sourceFiles?.decisions

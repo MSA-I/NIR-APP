@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const OWNER_CHOICE_DEBTS = new Set(['20', '66']);
+const OWNER_CHOICE_DEBTS = new Set(['20', '66', '76', '79']);
 // A heading that records a closing date is a resolved item, not open debt.
 const CLOSED_DEBT_HEADING = /נסגר(?:ה)?\s+\d{2}\.\d{2}\.\d{4}/u;
 const PLAN_NOW_DEBTS = new Set([
@@ -262,6 +262,19 @@ const OVERRIDES = {
     ],
     recommendation: 'require-backup-email',
   },
+  // #300 surfaced once the open marker was read from the register instead of a pinned id.
+  // No recommendation: #299 argues one way and `0249` the other, and the register does not rule.
+  'decision:300': {
+    plainQuestion: 'האם הכלל „תיבת סיבה לא תחסום פעולה" חל גם על מסכי צוות הפלטפורמה?',
+    plainContext: 'הכרעת 30.08 קבעה שתיבת סיבה לא תחסום פעולה לגיטימית בשום מסך. בקונסולת התפעול המצב שונה: שם הסיבה אינה רק שדה במסך אלא נדרשת על ידי השרת עצמו, ופעולה בלעדיה נדחית. לכן הסרת החסימה במסך בלבד לא הייתה משחררת פעולה אלא יוצרת כפתור שנכשל תמיד.',
+    whyItMatters: 'שתי ההכרעות נכתבו באותו שבוע בשני ענפים שלא ראו זה את זה. אם לא תוכרע, המסך והשרת ימשיכו להתנהג לפי שני כללים שונים.',
+    whatItDoesNotDo: 'הבחירה אינה משנה מסך או הרשאה היום. היא קובעת אם נדרש שינוי בשרת.',
+    currentDecisionPlain: 'טרם התקבלה החלטה. ברירת המחדל הממומשת: הכלל אינו חל על מסכי צוות הפלטפורמה.',
+    options: [
+      { id: 'keep-operator-required', label: 'לא — מסכי הצוות ימשיכו לדרוש סיבה', implication: 'אפס עבודה; זה המצב היום. הדרישה נשארת מוצדקת בכתב, אך המוצר מחזיק שני כללים שונים לשני סוגי מסכים.' },
+      { id: 'apply-299-to-operator', label: 'כן — להחיל את הכלל גם שם', implication: 'השינוי אינו במסך אלא בשרת: להסיר את דרישת הסיבה מהפקודות חוצות-הדיירים, והמסך נגרר אחריה. זו מיגרציה חדשה על משטח רגיש.' },
+    ],
+  },
   'debt:20': {
     plainQuestion: 'האם לשמור טקסט ממסמך בדיוק כפי שנקרא, או לתקן אותו אוטומטית?',
     plainContext: 'תיקון אוטומטי יכול להפוך טקסט לקריא יותר, אך גם לשנות בטעות את מה שהיה במסמך המקורי.',
@@ -298,6 +311,30 @@ const OVERRIDES = {
     ],
     recommendation: 'controlled-purge',
   },
+  // §76 and §79 each state their own alternatives in the register; the options below are those,
+  // not new ones. Both were raised to owner questions on 30.08.2026 at the owner's instruction.
+  'debt:76': {
+    plainQuestion: 'האם ניהול צוות הפלטפורמה יחייב אימות בשני שלבים, ומתי?',
+    plainContext: 'הפעולה שמוסיפה או מסירה אנשי צוות כבר צומצמה: רק בעל ההרשאה הגבוהה ביותר מבצע אותה, אי אפשר לשנות את עצמך, אי אפשר להסיר את האחרון, והיומן אינו ניתן לעריכה. מה שנשאר הוא שהאישור החוזר לפני הפעולה הוא סיסמה בלבד.',
+    whyItMatters: 'זו הפעולה היחידה שיכולה ליצור הרשאה חדשה. חשבון צוות שנגנב יכול להוסיף שותף נוסף בהרשאה הגבוהה ביותר, והמגבלות הקיימות מקטינות את הנזק אך אינן מונעות אותו.',
+    whatItDoesNotDo: 'הבחירה אינה מפעילה אימות בשני שלבים ואינה משנה היום אף הרשאה. היא קובעת רק מה יקרה כשהיכולת תהיה זמינה.',
+    options: [
+      { id: 'mfa-first-when-available', label: 'לחייב אימות בשני שלבים ברגע שהיכולת קיימת', implication: 'זו תהיה היכולת הראשונה שתדרוש אותו ולא האחרונה. עד אז שום דבר לא משתנה, אבל ברגע שהאימות נבנה הפעולה מתחברת אליו מיד.' },
+      { id: 'keep-password-until-rollout', label: 'להשאיר סיסמה עד להשקה כללית', implication: 'אפס עבודה עכשיו, והחשיפה נשארת פתוחה: חשבון צוות שנגנב יכול להעניק הרשאה גבוהה נוספת.' },
+    ],
+    recommendation: 'mfa-first-when-available',
+  },
+  'debt:79': {
+    plainQuestion: 'האם מספיק שמסך הניתוח מוסתר בתפריט, או שצריך לחסום אותו גם בשרת?',
+    plainContext: 'שאר סולם המסלולים כבר נאכף בשרת ולא רק במסך. מה שנשאר פתוח הוא מסך הניתוח בלבד: הוא מציג את אותם נתוני ספקים שמסך הספקים — שאינו נעול — מציג ממילא, ולכן חסימה בשרת הייתה לוקחת מספרים שהלקוח רואה מסך אחד משמאל.',
+    whyItMatters: 'לקוח במסלול שאינו כולל את הלוח ויקליד את הכתובת יראה אותו. השאלה היא אם זה מקובל, או שווה עבודה נפרדת.',
+    whatItDoesNotDo: 'הבחירה אינה משנה את המסלול של אף לקוח ואינה פותחת או סוגרת מסך היום.',
+    options: [
+      { id: 'accept-menu-only', label: 'לקבל — הסתרה בתפריט בלבד', implication: 'אפס עבודה, וזה המצב היום. מי שיקליד את הכתובת יראה את הלוח, אך לא נתונים שאינו רשאי לראות ממילא.' },
+      { id: 'separate-data', label: 'להפריד את נתוני הלוח ואז לחסום', implication: 'המסך ייחסם באמת, במחיר עבודה נפרדת: להפריד את הנתונים שהלוח מציג מאלה שמסך הספקים מציג. חסימה בשרת בלבד אינה מספיקה כאן.' },
+    ],
+    recommendation: 'accept-menu-only',
+  },
 };
 
 const NEXT_ACTION_OVERRIDES = {
@@ -329,6 +366,10 @@ const NEXT_ACTION_OVERRIDES = {
   'debt:52': 'לבודד את שתי הבדיקות התנודתיות, להריץ אותן עשר פעמים על מכונה שקטה ולתקן את גורם התזמון המשותף אם הכשל חוזר.',
   'debt:67': 'כאשר שער הדפדפן נכשל, לשמור אוטומטית את יומני שירותי הנתונים כדי שהכשל הבא יאובחן לפי ראיה ולא באמצעות הרצה חוזרת.',
   'debt:66': 'להחליט אם לאשר מסלול מחיקה מבוקר. אם יאושר, לפתוח חלון מחיקה צר בכל שומר רלוונטי ולהוכיח שארגון מלא נמחק עד הסוף.',
+  // §84 arrived with the 30.08 merge; its raw step is a shell command, which the plain layer must not carry.
+  'debt:84': 'להעביר את המסכים החדשים לתרגום קובץ אחר קובץ בעזרת הכלי שכבר קיים, ואז לעבור על הטקסט האנגלי לפני שהוא נכנס. הכלי משאיר בעברית כל דבר שאינו בטוח להעברה, וזה הרצוי במסכי כספים.',
+  'debt:76': 'להחליט אם ניהול צוות הפלטפורמה יחייב אימות בשני שלבים. אם כן — לחבר את הפעולה ליכולת הזאת ברגע שהיא קיימת, ולהוכיח שפעולה בלעדיה נדחית.',
+  'debt:79': 'להחליט אם מסך הניתוח יכול להישאר מוסתר בתפריט בלבד. אם לא — להפריד את הנתונים שהוא מציג מאלה שמסך הספקים מציג, ורק אז לחסום אותו בשרת.',
   'debt:65': 'להוסיף בדיקה קטנה לכל בקשת שילוב קוד, שמכשילה אותה בגלוי כאשר בסיס הבקשה אינו ענף הקוד הראשי.',
   'debt:64': 'להוסיף בדיקת פריסה שמסרבת להמשיך כאשר משימת הפירוש מתוזמנת אך הגדרת ההפעלה הסודית חסרה, ולתעד את ההגדרה הידנית.',
   'debt:63': 'בעת רישום החברה, לחתום על הסכם הגנת המידע מול OpenAI, לשמור את האישור ולהסיר את היתר הטרום־השקה הזמני.',
@@ -454,8 +495,12 @@ function impactAreas(type, section, implications) {
   };
 }
 
+// The register states an unsettled row as "**פתוח — טרם הוכרע**". Read that instead of
+// pinning an id: a decision added later is open on its own words, not by being listed here.
+const UNSETTLED_DECISION = /\*\*\s*פתוח\s*[—–-]\s*טרם\s+הוכרע/u;
+
 function decisionStatus(id, source) {
-  if (id === 270) return 'needs-owner-decision';
+  if (UNSETTLED_DECISION.test(source)) return 'needs-owner-decision';
   if (id === 68) return 'implementation-gap';
   if (/NOT_IMPLEMENTED|טרם מומש|לא מומש|פער מימוש/.test(source)) return 'decided-pending';
   return 'decided-history';
