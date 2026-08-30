@@ -104,6 +104,18 @@ function assertSurfaces() {
     return EXIT.surfaces;
   }
 
+  // Keys living in a component proves nothing if no screen renders it. A panel nobody mounts is
+  // the same silence this guard exists to end, and it would pass every other assertion here.
+  const mount = readFileSync(join(root, pinned.mountedIn.file), 'utf8');
+  if (!mount.includes(`<${pinned.mountedIn.component}`)) {
+    console.error(
+      `check:tolerance-surfaces surfaces FAILED — ${pinned.mountedIn.file} does not render\n`
+      + `  <${pinned.mountedIn.component} …>. The fields exist in a file no screen reaches, which is\n`
+      + '  indistinguishable from having no screen at all.',
+    );
+    return EXIT.surfaces;
+  }
+
   const missing = Object.entries(pinned.keys).filter(([, v]) => v.surface === 'missing');
   const undated = missing.filter(([, v]) => !v.closedBy).map(([key]) => key);
   if (undated.length > 0) {
