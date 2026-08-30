@@ -5608,4 +5608,32 @@ export const en: Dictionary = {
     tooLarge: 'The file is larger than 20MB. A template is a designed framework, not the report itself.',
   },
 
+  planLimitNote: {
+    unmeasuredPrefix: 'The {label} quota for the organisation\'s plan is shown as ',
+    unmeasuredSuffix: 'because no limit was configured, so new processing will stop. This is a system configuration issue — contact support.',
+    periodEnd: ' and ends on {date}',
+    exhausted: 'The full {label} quota for the current usage period has been used ({used} of {limit})',
+    used: '{used} of {limit} {label} have been used in the current usage period',
+    processingStopped: 'New processing is stopped until the next period begins. No document is deleted, and no completed action is blocked retroactively.',
+    existingUnaffected: 'Anything already received and saved is unaffected.',
+  },
+
+  inventoryTail: {
+    nearestDate: 'Nearest date: {date}',
+    onlyActivePrice: 'Only active price',
+    cheaperBy: '{amount} cheaper than the next price',
+    lastPurchase: ' · last purchase {amount}',
+    refresh: 'Refresh',
+    rowLabel: 'Inventory for {product}',
+    adjustmentDescription: 'Current balance: {quantity}. The action will be recorded in the audit log.',
+  },
+
+  quickSupplierPicker: {
+    fieldHint: 'No suitable supplier in the list? The nearby “New supplier” button creates one and selects it here.',
+    buttonHint: 'The new supplier will be created and selected in this field immediately',
+    noCreateHint: 'No suitable supplier in the list? Adding a new supplier is reserved for owners and purchasing managers — ask them to add it.',
+    groupLabel: '{label} — choose or create',
+    newSupplier: 'New supplier',
+  },
+
 };

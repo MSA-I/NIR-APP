@@ -380,6 +380,24 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   suite passed 1,760/1,760; `npx tsc --noEmit` and `check:jsx-space` passed. Dictionary parity
   passed at 5,261 keys per locale; `zero` still exits 1 on 91/30, so this gate remains open.
 
+  **PROGRESS, 30.08.2026 — plan-limit note + inventory tail + quick supplier picker in this
+  commit.** The pinned count is now 649 Hebrew line(s) across 65 files; the protected set remains
+  576 lines in 38 files, so the real remainder is **73 lines in 27 files**. These are surfaces
+  90-92 locked at zero. `PlanLimitNote` resolves its unmeasured-quota sentence around the em dash
+  as a prefix/suffix pair rather than two glued expressions, and the metric label, used, limit and
+  period end ride in as variables instead of being concatenated. `Inventory`'s remaining tail
+  copy - nearest incoming date, price-advantage line, refresh control, row aria-label and the
+  stock-adjustment description - moved to paired keys while quantities keep going through
+  `formatQuantity(_, _, locale)`. `QuickSupplierPicker`'s three exported hint constants were
+  renamed to `*_KEY` and now carry `TKey` values, which is iron rule 7 applied before a screen
+  could print a key: the compiler listed every consumer, and the wiring spec resolves them through
+  `translateIn('he', ...)` so its assertions still pin the exact Hebrew sentence rather than
+  comparing a key to itself. Evidence: the stale-baseline negative control named exactly these
+  three files at 7 -> 0, 6 -> 0 and 5 -> 0 and no others; focused suites passed 34/34; the full
+  suite passed 1,760/1,760; `npx tsc --noEmit` exit 0 and `check:jsx-space` passed on 126 TSX
+  files. Dictionary parity passed at 5,280 keys per locale, and `extracted` reported 92 surfaces
+  at zero. `zero` still exits 1 on 73/27, so this gate remains open.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER

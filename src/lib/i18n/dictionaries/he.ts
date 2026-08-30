@@ -5612,6 +5612,34 @@ export const he = {
     tooLarge: 'הקובץ גדול מ-20MB. תבנית היא שלד מעוצב, לא הדוח עצמו.',
   },
 
+  planLimitNote: {
+    unmeasuredPrefix: 'מכסת {label} למסלול של הארגון מוצגת כ',
+    unmeasuredSuffix: 'משום שלא נקבעה לה מגבלה, ולכן עיבוד חדש ייעצר. זו הגדרה במערכת — יש לפנות לתמיכה.',
+    periodEnd: ' ומסתיימת ב־{date}',
+    exhausted: 'נוצלה מלוא מכסת {label} בתקופת השימוש הנוכחית ({used} מתוך {limit})',
+    used: 'נוצלו {used} מתוך {limit} {label} בתקופת השימוש הנוכחית',
+    processingStopped: 'עיבוד חדש נעצר עד תחילת התקופה הבאה. שום מסמך אינו נמחק, ושום פעולה שכבר נעשתה אינה נחסמת למפרע.',
+    existingUnaffected: 'מה שכבר נקלט ונשמר אינו מושפע.',
+  },
+
+  inventoryTail: {
+    nearestDate: 'המועד הקרוב: {date}',
+    onlyActivePrice: 'מחיר פעיל יחיד',
+    cheaperBy: 'זול ב-{amount} מהמחיר הבא',
+    lastPurchase: ' · רכישה אחרונה {amount}',
+    refresh: 'רענון',
+    rowLabel: 'מלאי {product}',
+    adjustmentDescription: 'יתרה נוכחית: {quantity}. הפעולה תירשם ביומן הביקורת.',
+  },
+
+  quickSupplierPicker: {
+    fieldHint: 'אין ספק מתאים ברשימה? הכפתור ״ספק חדש״ שליד יוצר ספק ובוחר אותו כאן.',
+    buttonHint: 'הספק החדש ייווצר וייבחר מיד בשדה זה',
+    noCreateHint: 'אין ספק מתאים ברשימה? הוספת ספק חדש שמורה לבעלים ולמנהל המשרד — יש לבקש מהם להוסיף אותו.',
+    groupLabel: '{label} — בחירה או יצירה',
+    newSupplier: 'ספק חדש',
+  },
+
 } as const;
 
 /**

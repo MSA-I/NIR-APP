@@ -192,7 +192,7 @@ export default function Inventory() {
       render: (row) => (
         <span>
           <span className="block num">{formatQuantity(row.expected_incoming_quantity, row.unit, locale)}</span>
-          {row.next_expected_incoming_date && <span className="block text-xs text-ink-muted">המועד הקרוב: {fmtDate(row.next_expected_incoming_date)}</span>}
+          {row.next_expected_incoming_date && <span className="block text-xs text-ink-muted">{t('inventoryTail.nearestDate', { date: fmtDate(row.next_expected_incoming_date) })}</span>}
           {!!row.incoming_without_date_quantity && row.incoming_without_date_quantity > 0 && (
             <span className="block text-xs text-ink-muted">{t('inventory.fmtNum')} <span className="num">{fmtNum(row.incoming_without_date_quantity)}</span> {t('inventory.fmtNum_2')}</span>
           )}
@@ -218,8 +218,8 @@ export default function Inventory() {
         <span>
           <span className="block font-medium">{row.cheapest_supplier_name} · <span className="num">{fmtMoneyRounded(row.cheapest_unit_price)}</span></span>
           <span className="block text-xs text-ink-muted">
-            {row.price_advantage == null ? 'מחיר פעיל יחיד' : `זול ב-${fmtMoneyRounded(row.price_advantage)} מהמחיר הבא`}
-            {row.latest_purchase_unit_price == null ? '' : ` · רכישה אחרונה ${fmtMoneyRounded(row.latest_purchase_unit_price)}`}
+            {row.price_advantage == null ? t('inventoryTail.onlyActivePrice') : t('inventoryTail.cheaperBy', { amount: fmtMoneyRounded(row.price_advantage) })}
+            {row.latest_purchase_unit_price == null ? '' : t('inventoryTail.lastPurchase', { amount: fmtMoneyRounded(row.latest_purchase_unit_price) })}
           </span>
         </span>
       ),
@@ -309,7 +309,7 @@ export default function Inventory() {
         actions={
           <button type="button" className="btn-secondary" disabled={balances.fetching || movements.fetching}
             onClick={() => { void balances.refetch(); void movements.refetch(); }} aria-label={t('inventory.aria_label')}>
-              <RefreshCw size={ICON.sm} className={balances.fetching || movements.fetching ? 'animate-spin ' : ''} aria-hidden="true" /> רענון
+              <RefreshCw size={ICON.sm} className={balances.fetching || movements.fetching ? 'animate-spin ' : ''} aria-hidden="true" /> {t('inventoryTail.refresh')}
           </button>
         } />
 
@@ -382,7 +382,7 @@ export default function Inventory() {
                 </select>
               </label>
             }
-            rowLabel={(row) => `מלאי ${row.product_name}`}
+            rowLabel={(row) => t('inventoryTail.rowLabel', { product: row.product_name })}
             rowActions={(row) => [
               { key: 'stocktake', label: t('inventory.setCommand'), icon: ClipboardCheck, hidden: !canRecord, onSelect: () => setCommand({ product: row, type: 'stocktake' }) },
               { key: 'consumption', label: t('inventory.setCommand_2'), icon: Minus, hidden: !canRecord, onSelect: () => setCommand({ product: row, type: 'consumption' }) },
@@ -499,7 +499,7 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
 
   return (
     <Modal open onClose={onClose} busy={busy} title={`${copy.title} — ${product.product_name}`}
-      description={`יתרה נוכחית: ${formatQuantity(product.quantity_on_hand, product.unit, locale)}. הפעולה תירשם ביומן הביקורת.`}
+      description={t('inventoryTail.adjustmentDescription', { quantity: formatQuantity(product.quantity_on_hand, product.unit, locale) })}
       statusMessage={busy ? t('inventory.text_51') : undefined}>
       <div className="space-y-4">
         <div>

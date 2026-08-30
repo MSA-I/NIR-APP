@@ -4,6 +4,7 @@ import { fmtDate, fmtNum } from '../lib/format';
 import { DOMAIN, key } from '../lib/query/keys';
 import { useOrgScope } from '../lib/query/orgScope';
 import { Note } from './ui';
+import { useT } from '../lib/i18n/LocaleProvider';
 
 /**
  * The tenant-facing side of a plan limit — shown ONLY on the screen whose action is about to be
@@ -77,6 +78,7 @@ const THRESHOLDS = [60, 80, 100] as const;
 const FIRST_THRESHOLD = THRESHOLDS[0];
 
 export function PlanLimitNote({ metricKey }: { metricKey: string }) {
+  const { t } = useT();
   const org = useOrgScope();
   // `null` is the pre-bootstrap and suspended scope. `organization_usage_snapshot` is a tenant
   // resolver `anon` holds no EXECUTE on, and calling it before AuthProvider has an organisation
@@ -97,8 +99,8 @@ export function PlanLimitNote({ metricKey }: { metricKey: string }) {
     return (
       <Note tone="alert">
         <span className="min-w-0 flex-1">
-          מכסת {row.label} למסלול של הארגון מוצגת כ<span className="text-ink-muted">—</span> משום
-          שלא נקבעה לה מגבלה, ולכן עיבוד חדש ייעצר. זו הגדרה במערכת — יש לפנות לתמיכה.
+          {t('planLimitNote.unmeasuredPrefix', { label: row.label })}<span className="text-ink-muted">—</span>{' '}
+          {t('planLimitNote.unmeasuredSuffix')}
         </span>
       </Note>
     );
@@ -108,7 +110,7 @@ export function PlanLimitNote({ metricKey }: { metricKey: string }) {
   if (row.percent_used < FIRST_THRESHOLD) return null;
 
   const exhausted = (row.remaining ?? 0) <= 0;
-  const until = row.period_end ? ` ומסתיימת ב־${fmtDate(row.period_end)}` : '';
+  const until = row.period_end ? t('planLimitNote.periodEnd', { date: fmtDate(row.period_end) }) : '';
 
   return (
     // Below the ceiling this is a statement with no claim attached, and `idle` is the tone for
@@ -117,12 +119,12 @@ export function PlanLimitNote({ metricKey }: { metricKey: string }) {
     <Note tone={exhausted ? 'alert' : 'idle'}>
       <span className="min-w-0 flex-1">
         {exhausted
-          ? `נוצלה מלוא מכסת ${row.label} בתקופת השימוש הנוכחית (${fmtNum(row.used)} מתוך ${fmtNum(row.usage_limit)})`
-          : `נוצלו ${fmtNum(row.used)} מתוך ${fmtNum(row.usage_limit)} ${row.label} בתקופת השימוש הנוכחית`}
+          ? t('planLimitNote.exhausted', { label: row.label, used: fmtNum(row.used), limit: fmtNum(row.usage_limit) })
+          : t('planLimitNote.used', { label: row.label, used: fmtNum(row.used), limit: fmtNum(row.usage_limit) })}
         {until}.{' '}
         {exhausted
-          ? 'עיבוד חדש נעצר עד תחילת התקופה הבאה. שום מסמך אינו נמחק, ושום פעולה שכבר נעשתה אינה נחסמת למפרע.'
-          : 'מה שכבר נקלט ונשמר אינו מושפע.'}
+          ? t('planLimitNote.processingStopped')
+          : t('planLimitNote.existingUnaffected')}
       </span>
     </Note>
   );

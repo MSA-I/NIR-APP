@@ -112,6 +112,9 @@ const EXTRACTED = [
   'src/pages/neworder/SummaryStep.tsx',
   'src/pages/neworder/SupplierGroupCard.tsx',
   'src/lib/reportTemplateExport.ts',
+  'src/components/PlanLimitNote.tsx',
+  'src/components/QuickSupplierPicker.tsx',
+  'src/pages/Inventory.tsx',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */
