@@ -118,13 +118,14 @@ function Guard({ roles, children, write = false, capability }: {
 }
 
 function PlanCapabilityUnavailable() {
+  const { t } = useT();
   return (
     <div role="alert" className="card card-pad mx-auto max-w-xl text-center">
-      <h1 className="page-title">היכולת אינה כלולה במסלול</h1>
+      <h1 className="page-title">{t('nav.capabilityBlockedTitle')}</h1>
       <p className="mt-2 text-sm text-ink-soft">
-        המסך נשאר סגור גם בבקשה ישירה לשרת. אפשר לראות באיזה מסלול הוא נפתח במסך המנוי.
+        {t('nav.capabilityBlockedBody')}
       </p>
-      <a className="btn-primary mt-5" href="/settings/subscription">למסלולים ולמחירים</a>
+      <a className="btn-primary mt-5" href="/settings/subscription">{t('nav.capabilityBlockedAction')}</a>
     </div>
   );
 }

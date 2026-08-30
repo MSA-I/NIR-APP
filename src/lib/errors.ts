@@ -58,11 +58,10 @@ export const ALLOCATION_REFUSAL_MESSAGES: Record<string, string> = {
  * a screen that tells them to would be handing them a door that is locked. So the destination is
  * chosen by capability, not by hope.
  */
-export function toleranceRefusalMessage(canChangeSettings: boolean): string {
-  return 'לא נקבעה סטיית סכום מותרת למטבע של התנועה, ולכן אי אפשר להשוות סכומים. '
-    + (canChangeSettings
-      ? 'אפשר לקבוע אותה במסך ההגדרות, בקטע "סטיות סכום מותרות".'
-      : 'יש לפנות לבעל העסק כדי שיקבע אותה בהגדרות.');
+export function toleranceRefusalKey(canChangeSettings: boolean): string {
+  return canChangeSettings
+    ? 'bank_match_tolerance_unconfigured_owner'
+    : 'bank_match_tolerance_unconfigured_staff';
 }
 
 const PATTERNS: [RegExp, string][] = [
@@ -73,15 +72,13 @@ const PATTERNS: [RegExp, string][] = [
 
      The tolerance line here is the role-blind fallback for paths that do not know who is reading;
      a screen that knows uses `toleranceRefusalMessage` above and names the right destination. */
-  [/bank_match_tolerance_unconfigured/i,
-    'לא נקבעה סטיית סכום מותרת למטבע של התנועה, ולכן אי אפשר להשוות סכומים. '
-    + 'יש לקבוע אותה בהגדרות לפני ההתאמה.'],
+  [/bank_match_tolerance_unconfigured/i, 'bank_match_tolerance_unconfigured'],
   [/bank_match_currency_mismatch/i,
-    'התנועה והחשבונית אינן באותו מטבע. תנועה סוגרת חוב במטבע אחר רק דרך תשלום שרשם את שני הסכומים.'],
+    'bank_match_currency_mismatch'],
   [/payment_request_currency_mixed/i,
-    'בקשת תשלום אחת יכולה לכלול חשבוניות במטבע אחד בלבד. יש לפצל לבקשה נפרדת לכל מטבע.'],
+    'payment_request_currency_mixed'],
   [/invoice_currency_precision_invalid/i,
-    'לסכום יש יותר ספרות אחרי הנקודה העשרונית ממה שהמטבע הזה מאפשר.'],
+    'invoice_currency_precision_invalid'],
   // Assistant codes (contracts §8), generated from the canonical map so a failure reads
   // identically whether it surfaced from the Edge function or from a direct RPC — one wording,
   // not two. FIRST in the list on purpose: the generic /timeout|timed out/ pattern below would
@@ -95,15 +92,15 @@ const PATTERNS: [RegExp, string][] = [
   [/plan_limit_reached/i,
     'plan_limit_reached'],
   [/plan_limit_unknown/i,
-    'לא הוגדרה מכסת מסמכים למסלול של הארגון, ולכן העיבוד נעצר מחשש לחיוב לא מבוקר. זו הגדרה במערכת ולא חריגה שלכם — יש לפנות לתמיכה.'],
+    'plan_limit_unknown'],
   [/plan_capability_required/i,
-    'היכולת הזו אינה כלולה במסלול הנוכחי. במסך המנוי אפשר לראות באיזה מסלול היא נפתחת.'],
+    'plan_capability_required'],
   [/plan_user_limit_reached/i,
-    'הארגון הגיע למספר המשתמשים הפעילים שמותר במסלול הנוכחי. יש להשבית משתמש או לעבור למסלול מתאים.'],
+    'plan_user_limit_reached'],
   [/plan_branch_limit_reached/i,
-    'הארגון הגיע למספר הסניפים שמותר במסלול הנוכחי. יש לעבור למסלול מתאים לפני הוספת סניף.'],
+    'plan_branch_limit_reached'],
   [/plan_user_limit_unknown|plan_branch_limit_unknown/i,
-    'מכסת המסלול אינה מוגדרת ולכן הפעולה נעצרה. זו הגדרה במערכת ולא חריגה שלכם — יש לפנות לתמיכה.'],
+    'plan_user_limit_unknown'],
   [/not_platform_capability/i,
     'not_platform_capability'],
   [/platform_filter_unknown/i,
@@ -147,14 +144,14 @@ const PATTERNS: [RegExp, string][] = [
   [/accepted_document_scan_immutable|document_scan_superseded_by_recovery/i,
     'accepted_document_scan_immutable'],
   [/document_scan_recovery_unavailable|document_scan_processing_state_invalid/i,
-    'מצב הסריקה השתנה ולא ניתן ליצור ממנה תיקון חדש. רענן את המסך ובדוק את הגרסה הנוכחית.'],
+    'document_scan_recovery_unavailable'],
   // 0252/#298. The refusal names what is missing and where it opens — never a price, never a
   // "upgrade now" (OPEN-DECISIONS #202 forbids a personal plan recommendation), and never the
   // impression that something broke. The subscription screen is where the rungs are compared.
   [/capability_not_in_plan/i,
-    'היכולת הזו אינה כלולה במסלול הנוכחי של העסק. אפשר לראות מה כולל כל מסלול במסך המנוי.'],
+    'capability_not_in_plan'],
   [/user_seats_exhausted/i,
-    'מספר המשתמשים במסלול הנוכחי מלא. אפשר לשחרר הזמנה ממתינה או להשבית משתמש קיים, ולראות במסך המנוי מה כולל כל מסלול.'],
+    'user_seats_exhausted'],
   [/retired_identity_requires_platform_reactivation/i,
     'retired_identity_requires_platform_reactivation'],
   [/account_role_retired|role_not_invitable/i,

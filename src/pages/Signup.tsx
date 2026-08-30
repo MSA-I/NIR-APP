@@ -183,7 +183,7 @@ export default function Signup() {
   async function resendConfirmation() {
     setResending(true);
     setResendResult(null);
-    const failureMessage = 'לא הצלחנו לשלוח מייל אישור חדש. יש להמתין דקה ולנסות שוב.';
+    const failureMessage = t('signup.resendFailed');
     try {
       const { error: failure } = await supabase.auth.resend({
         type: 'signup',
@@ -191,7 +191,7 @@ export default function Signup() {
       });
       setResendResult(failure
         ? { ok: false, message: failureMessage }
-        : { ok: true, message: 'מייל אישור חדש נשלח.' });
+        : { ok: true, message: t('signup.resendSent') });
     } catch {
       setResendResult({ ok: false, message: failureMessage });
     } finally {
@@ -216,9 +216,9 @@ export default function Signup() {
           )}
           <button type="button" className="btn-secondary w-full" disabled={resending}
             onClick={() => void resendConfirmation()}>
-            {resending ? 'שולח שוב…' : 'שלחו שוב'}
+            {resending ? t('signup.resending') : t('signup.resendAction')}
           </button>
-          <Link className="btn-secondary" to="/login">מעבר להתחברות</Link>
+          <Link className="btn-secondary" to="/login">{t('signup.toLogin')}</Link>
         </Card>
       </main>
     );

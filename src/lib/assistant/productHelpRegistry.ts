@@ -485,6 +485,41 @@ const ENTRIES: readonly ProductHelpEntry[] = [
    * rather than retyped: a retyped `roles` could hand somebody a screen the Guard withholds.
    * ------------------------------------------------------------------------*/
   {
+    id: 'add_a_supplier',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office'],
+    route: 'suppliers',
+    label: 'Add a new supplier',
+    steps: [
+      'On the suppliers screen, select "New supplier" at the top; while there are no suppliers yet the button also appears in the middle of the empty screen.',
+      'In the form that opens, the supplier name is the only field that has to be filled in. Tax ID, contact, phone, WhatsApp, email and address are all optional.',
+      'Delivery days, the order cut-off time, the minimum order and the payment terms are set here, and they are what the orders lean on later.',
+      'Select "Save". To edit an existing supplier, open it from the list and select "Edit" — the same form.',
+      'Adding and editing a supplier are available to the owner and the purchasing manager only, and only while the organisation is not in read-only mode.',
+    ],
+    source: 'src/pages/Suppliers.tsx',
+    updated_at: '2026-08-27',
+  },
+  {
+    id: 'update_supplier_bank_details',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office'],
+    route: 'suppliers',
+    label: 'Update a supplier\'s bank details',
+    steps: [
+      'Bank details are not edited in the list: open the supplier card and choose to update its bank details.',
+      'The system shows for confirmation which account the details are about to be updated to, and shows only its last digits.',
+      'A reason for the change has to be written, and then the password re-checked — a fresh check, even if the session is still active.',
+      'The change is recorded in the audit log with the reason that was written. That is why this route is longer than updating an ordinary field.',
+    ],
+    source: 'src/pages/Suppliers.tsx',
+    updated_at: '2026-08-27',
+  },
+  {
     id: 'see_business_state_now',
     version: 1,
     owner: 'product',

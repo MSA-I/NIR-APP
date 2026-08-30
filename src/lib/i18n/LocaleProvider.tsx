@@ -172,8 +172,8 @@ export function LocaleProvider({
     return {
       locale,
       dir: dirFor(locale),
-      t: (key, vars) => translate(dictionary, key, vars),
-      tDynamic: (key, vars) => tryTranslate(dictionary, key, vars),
+      t: (key, vars) => translate(dictionary, key, vars, locale),
+      tDynamic: (key, vars) => tryTranslate(dictionary, key, vars, locale),
       statusLabel: (metaOrKey) => resolveStatus(dictionary, metaOrKey),
       errorText: (error) => resolveError(dictionary, error),
       setLocale,
@@ -194,7 +194,7 @@ export function LocaleProvider({
  * locale it is changing to, and this is that lookup.
  */
 export const translateIn = (locale: Locale, key: TKey, vars?: Record<string, string | number>): string =>
-  translate(DICTIONARIES[locale], key, vars);
+  translate(DICTIONARIES[locale], key, vars, locale);
 
 /** The one way a component asks what language it is in. See the context default above for why it never throws. */
 export const useT = (): LocaleState => useContext(LocaleContext);

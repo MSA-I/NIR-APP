@@ -39,8 +39,8 @@ export default function MinimumFixPanel({
     : t('minimumFix.text_2');
 
   return (
-    <Modal open={open} onClose={onClose} title={`פתרונות עבור ${supplier?.name ?? 'ספק לא זמין'}`} description={description}>
-      {group?.belowMinimum && shortfall != null && <p className="mb-3 text-sm text-ink-soft">חסרים בדיוק <strong className="num text-ink">{fmtMoneyExact(shortfall, currency)}</strong> כדי לעמוד במינימום ההזמנה.</p>}
+    <Modal open={open} onClose={onClose} title={t('minimumFix.modalTitle', { supplier: supplier?.name ?? t('minimumFix.supplierUnavailable') })} description={description}>
+      {group?.belowMinimum && shortfall != null && <p className="mb-3 text-sm text-ink-soft">{t('minimumFix.fmtMoneyExact')} <strong className="num text-ink">{fmtMoneyExact(shortfall, currency)}</strong> {t('minimumFix.fmtMoneyExact_2')}</p>}
       {group ? (
         <div className={passed ? 'note-done mb-4' : 'note-await mb-4'}>
           {passed
@@ -75,8 +75,8 @@ export default function MinimumFixPanel({
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1 text-xs">
                   <span className="text-ink-muted"><OptionCost option={option} currency={currency} /></span>
-                  {outcome === 'done' && <span className="badge-done">עובר את המינימום</span>}
-                  {outcome === 'await' && <span className="badge-await">עדיין חסר <span className="num ms-1">{fmtMoneyExact(remainingShortfall, currency)}</span></span>}
+                  {outcome === 'done' && <span className="badge-done">{t('minimumFix.text_5')}</span>}
+                  {outcome === 'await' && <span className="badge-await">{t('minimumFix.fmtMoneyExact_3')} <span className="num ms-1">{fmtMoneyExact(remainingShortfall, currency)}</span></span>}
                 </span>
               </button>
             );

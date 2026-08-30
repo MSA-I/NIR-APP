@@ -354,8 +354,8 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
                   {rows.map((row) => (
                     <li key={row.shadow_line_id} data-testid="calibration-preparation-row"
                       className="flex flex-wrap justify-between gap-2">
-                      <span><bdi>{row.product_name ?? row.matched_product_name ?? 'שורה ללא שם'}</bdi></span>
-                      <span className="text-ink-muted">שורה <span className="num">{row.source_row ?? row.line_index + 1}</span> · {fmtMoneyExact(row.proposed_unit_price, row.currency)}</span>
+                      <span><bdi>{row.product_name ?? row.matched_product_name ?? t('priceListReadiness.unnamedRow')}</bdi></span>
+                      <span className="text-ink-muted">{t('priceListReadiness.lineWord')} <span className="num">{row.source_row ?? row.line_index + 1}</span> · {fmtMoneyExact(row.proposed_unit_price, row.currency)}</span>
                     </li>
                   ))}
                 </ul>
@@ -364,7 +364,7 @@ export function PriceListAutomationReadiness({ documentId, interpretationId, ing
                 <div className="space-y-2">
                   {/* Two reason boxes can be on screen at once, so each keeps its own name — a
                       shared "סיבה (רשות)" would be two controls with one label. */}
-                  <label className="label" htmlFor={`calibration-prepare-reason-${shadowRunId}`}>סיבת הכנת האצווה (רשות)</label>
+                  <label className="label" htmlFor={`calibration-prepare-reason-${shadowRunId}`}>{t('priceListReadiness.prepareReasonLabel')}</label>
                   <textarea id={`calibration-prepare-reason-${shadowRunId}`} className="input" rows={2} maxLength={1000}
                     value={prepareReasons[shadowRunId] ?? ''}
                     onChange={(event) => setPrepareReasons((current) => ({ ...current, [shadowRunId]: event.target.value }))} />

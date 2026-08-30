@@ -30,6 +30,8 @@ import { currencyMinorUnits, fmtMoneyExact } from '../lib/format';
 import { derivedTolerance, storedTolerance, writeTolerance, type ToleranceSetting } from '../lib/tolerances';
 import { sortByBaseCurrency } from './Money';
 import { Card, SubPanel, Note, ErrorNote, Skeleton, ICON, useToast } from './ui';
+import { useT } from '../lib/i18n/LocaleProvider';
+import type { TKey } from '../lib/i18n/t';
 import type { Organization } from '../lib/types';
 
 /**
@@ -42,42 +44,42 @@ import type { Organization } from '../lib/types';
 const TOLERANCE_KEYS = [
   {
     key: 'bank_match_amount_tolerance',
-    label: 'התאמת תנועת בנק',
-    hint: 'הפרש מותר בין שורה בתדפיס הבנק לבין התשלום שהיא סוגרת.',
+    labelKey: 'tolerances.keyBankMatch',
+    hintKey: 'tolerances.keyBankMatchHint',
   },
   {
     key: 'payment_request_amount_tolerance',
-    label: 'בקשת תשלום',
-    hint: 'הפרש מותר בין סכום הבקשה לבין החשבוניות שמאחוריה.',
+    labelKey: 'tolerances.keyPaymentRequest',
+    hintKey: 'tolerances.keyPaymentRequestHint',
   },
   {
     key: 'invoice_line_amount_tolerance',
-    label: 'שורה בחשבונית',
-    hint: 'הפרש מותר בין כמות × מחיר פחות הנחה לבין סכום השורה. זהו סכום קטן — עודף, לא יחידה.',
+    labelKey: 'tolerances.keyInvoiceLine',
+    hintKey: 'tolerances.keyInvoiceLineHint',
   },
   {
     key: 'invoice_document_amount_tolerance',
-    label: 'סה״כ החשבונית',
-    hint: 'הפרש מותר בין סכום הכותרת לבין סכום השורות.',
+    labelKey: 'tolerances.keyInvoiceTotal',
+    hintKey: 'tolerances.keyInvoiceTotalHint',
   },
 ] as const;
 
 type ToleranceKey = (typeof TOLERANCE_KEYS)[number]['key'];
 
 /** What the currency list calls each place a currency was seen, in the manager's words. */
-const SOURCE_LABEL: Record<string, string> = {
-  base_currency: 'מטבע הספרים',
-  supplier_default: 'ברירת מחדל של ספק',
-  invoice: 'חשבוניות',
-  payment: 'תשלומים',
-  payment_request: 'בקשות תשלום',
-  credit_request: 'זיכויים',
-  purchase_order: 'הזמנות',
-  purchase_request: 'דרישות רכש',
-  bank_import: 'תדפיסי בנק',
-  supplier_product: 'מחירונים',
-  price_history: 'היסטוריית מחירים',
-  approval_threshold: 'ספי אישור',
+const SOURCE_LABEL: Record<string, TKey> = {
+  base_currency: 'tolerances.sourceBaseCurrency',
+  supplier_default: 'tolerances.sourceSupplierDefault',
+  invoice: 'tolerances.sourceInvoice',
+  payment: 'tolerances.sourcePayment',
+  payment_request: 'tolerances.sourcePaymentRequest',
+  credit_request: 'tolerances.sourceCreditRequest',
+  purchase_order: 'tolerances.sourcePurchaseOrder',
+  purchase_request: 'tolerances.sourcePurchaseRequest',
+  bank_import: 'tolerances.sourceBankImport',
+  supplier_product: 'tolerances.sourceSupplierProduct',
+  price_history: 'tolerances.sourcePriceHistory',
+  approval_threshold: 'tolerances.sourceApprovalThreshold',
 };
 
 interface CurrencyInUse { currency: string; sources: string[] }
@@ -89,6 +91,7 @@ export function CurrencyTolerancesPanel({ org, canWrite }: {
   org: Organization | null | undefined;
   canWrite: boolean;
 }) {
+  const { t } = useT();
   const toast = useToast();
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [added, setAdded] = useState<string[]>([]);
@@ -148,10 +151,10 @@ export function CurrencyTolerancesPanel({ org, canWrite }: {
 
     const res = await supabase.from('organizations').update({ settings: next }).eq('id', org.id);
     setBusy(false);
-    if (res.error) { toast('שמירת הסטיות נכשלה. נסה שוב.', 'error'); return; }
+    if (res.error) { toast(t('tolerances.saveFailed'), 'error'); return; }
     // The server honours the new value from the next request; the cached organisation in
     // AuthContext is what waits for the next sign-in, exactly as the card above this one says.
-    toast('הסטיות נשמרו');
+    toast(t('tolerances.saved'));
   }
 
   /* Currencies this platform cannot describe, which are the only ones with nothing to compare
@@ -172,12 +175,10 @@ export function CurrencyTolerancesPanel({ org, canWrite }: {
     <Card className="space-y-4">
       <div>
         <h2 className="section-title flex items-center gap-2">
-          <Coins size={ICON.md} aria-hidden="true" /> סטיות סכום מותרות
+          <Coins size={ICON.md} aria-hidden="true" /> {t('tolerances.title')}
         </h2>
         <p className="text-sm text-ink-muted mt-1">
-          כל מטבע מקבל אוטומטית הפרשים מותרים שנגזרים ממנו עצמו, ולכן אין מה להגדיר כדי להתחיל
-          לעבוד. השדות כאן הם לעקיפה בלבד — למלא רק אם ההפרש שהמערכת בחרה אינו מתאים לעסק.
-          הערכים הם סכומים באותו מטבע: אין שער המרה, ואף מספר אינו נגזר ממטבע אחר.
+          {t('tolerances.intro')}
         </p>
       </div>
 
@@ -197,8 +198,7 @@ export function CurrencyTolerancesPanel({ org, canWrite }: {
           {unanswerable.length > 0 && (
             <Note tone="await">
               <span>
-                {`${unanswerable.join(', ')}: המערכת אינה מזהה את המטבע ולכן אין לו הפרש מותר. `
-                  + 'התאמת בנק במטבע כזה נעצרת, ובדיקת סכום על מסמך מסומנת כלא בוצעה — עד שייקבע כאן ערך.'}
+                {t('tolerances.unanswerable', { currencies: unanswerable.join(', ') })}
               </span>
             </Note>
           )}
@@ -209,15 +209,15 @@ export function CurrencyTolerancesPanel({ org, canWrite }: {
               <SubPanel key={currency} className="space-y-3">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <span className="font-semibold num">{currency}</span>
-                  {currency === org?.base_currency && <span className="badge-idle">מטבע הספרים</span>}
+                  {currency === org?.base_currency && <span className="badge-idle">{t('tolerances.baseCurrencyBadge')}</span>}
                   <span className="text-xs text-ink-muted">
                     {sources.length === 0
-                      ? 'נוסף מראש — עדיין לא הופיע במסמך'
-                      : sources.map((s) => SOURCE_LABEL[s] ?? s).join(' · ')}
+                      ? t('tolerances.addedAhead')
+                      : sources.map((s) => (SOURCE_LABEL[s] ? t(SOURCE_LABEL[s]) : s)).join(' · ')}
                   </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {TOLERANCE_KEYS.map(({ key, label, hint }) => {
+                  {TOLERANCE_KEYS.map(({ key, labelKey, hintKey }) => {
                     const id = `tolerance-${key}-${currency}`;
                     const empty = shown(key, currency).trim() === '';
                     /* The placeholder carries the value ACTUALLY IN FORCE, so an empty box reads as
@@ -226,7 +226,7 @@ export function CurrencyTolerancesPanel({ org, canWrite }: {
                     const automatic = derivedTolerance(key, currency);
                     return (
                       <div key={key}>
-                        <label className="label" htmlFor={id}>{`${label} (${currency})`}</label>
+                        <label className="label" htmlFor={id}>{t('tolerances.fieldLabel', { label: t(labelKey), currency })}</label>
                         <input
                           id={id}
                           type="number"
@@ -235,15 +235,15 @@ export function CurrencyTolerancesPanel({ org, canWrite }: {
                           // has no meaning in a currency with no minor unit at all.
                           step={minor == null ? '0.01' : (10 ** -minor).toFixed(Math.max(minor, 0))}
                           className="input num"
-                          placeholder={automatic == null ? 'דורש קביעה' : fmtMoneyExact(automatic, currency)}
+                          placeholder={automatic == null ? t('tolerances.needsSetting') : fmtMoneyExact(automatic, currency)}
                           disabled={!canWrite}
                           value={shown(key, currency)}
                           onChange={(e) => setDraft((d) => ({ ...d, [fieldId(key, currency)]: e.target.value }))}
                         />
                         <p className="text-xs text-ink-muted mt-1">
-                          {!empty ? `${hint} ערך שנקבע ידנית.`
-                            : automatic == null ? `${hint} אין ערך אוטומטי למטבע הזה — יש לקבוע.`
-                            : `${hint} פועל אוטומטית.`}
+                          {!empty ? t('tolerances.hintManual', { hint: t(hintKey) })
+                            : automatic == null ? t('tolerances.hintNoAutomatic', { hint: t(hintKey) })
+                            : t('tolerances.hintAutomatic', { hint: t(hintKey) })}
                         </p>
                       </div>
                     );
@@ -256,26 +256,26 @@ export function CurrencyTolerancesPanel({ org, canWrite }: {
           {canWrite && addable.length > 0 && (
             <div className="flex flex-wrap items-end gap-2">
               <div>
-                <label className="label" htmlFor="tolerance-add-currency">הוספת מטבע מראש</label>
+                <label className="label" htmlFor="tolerance-add-currency">{t('tolerances.addCurrencyLabel')}</label>
                 <select id="tolerance-add-currency" className="input w-auto!" value={adding}
                   onChange={(e) => setAdding(e.target.value)}>
-                  <option value="">בחר מטבע</option>
+                  <option value="">{t('tolerances.chooseCurrency')}</option>
                   {addable.map((code) => <option key={code} value={code}>{code}</option>)}
                 </select>
               </div>
               <button className="btn-secondary" disabled={!adding}
                 onClick={() => { if (adding) { setAdded((a) => [...a, adding]); setAdding(''); } }}>
-                <Plus size={ICON.sm} aria-hidden="true" /> הוספה
+                <Plus size={ICON.sm} aria-hidden="true" /> {t('tolerances.addAction')}
               </button>
               <p className="basis-full text-xs text-ink-muted">
-                אפשר לקבוע ערכים למטבע לפני שמגיע בו מסמך ראשון, כדי לא להיתקל בעצירה בפעם הראשונה.
+                {t('tolerances.addHint')}
               </p>
             </div>
           )}
 
           {canWrite && (
             <div className="flex justify-end">
-              <button className="btn-primary" disabled={busy} onClick={() => void save()}>שמירת הסטיות</button>
+              <button className="btn-primary" disabled={busy} onClick={() => void save()}>{t('tolerances.saveAction')}</button>
             </div>
           )}
         </>

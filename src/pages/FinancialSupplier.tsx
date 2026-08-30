@@ -97,10 +97,10 @@ export default function FinancialSupplier() {
 
     // A feed, not a total: each line keeps its own currency and nothing here adds two of them.
     const activity = [
-      ...invoices.map((row) => ({ date: row.invoice_date, label: `חשבונית ${row.invoice_number}`, amount: row.total_amount, currency: row.currency })),
-      ...payments.map((row) => ({ date: row.paid_date, label: `תשלום #${row.number}`, amount: -row.amount, currency: row.currency })),
+      ...invoices.map((row) => ({ date: row.invoice_date, label: t('financialSupplier.activityInvoice', { number: row.invoice_number }), amount: row.total_amount, currency: row.currency })),
+      ...payments.map((row) => ({ date: row.paid_date, label: t('financialSupplier.activityPayment', { number: row.number }), amount: -row.amount, currency: row.currency })),
       ...credits.filter((row) => ['offset', 'closed'].includes(row.status))
-        .map((row) => ({ date: row.created_at, label: `זיכוי #${row.number}`, amount: -row.amount, currency: row.currency })),
+        .map((row) => ({ date: row.created_at, label: t('financialSupplier.activityCredit', { number: row.number }), amount: -row.amount, currency: row.currency })),
     ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
 
     return { supplier, invoices, credits, payments, requests, bank, balanceByInvoice, allocatedByPayment, openBalances, dueExposure, bankStatusCounts, activity };
@@ -123,13 +123,13 @@ export default function FinancialSupplier() {
         )} />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Card><div className="text-sm text-ink-muted">יתרה פתוחה</div><div className="mt-1 kpi-value"><MoneyByCurrency amounts={data.openBalances} baseCurrency={org?.base_currency} shape="rounded" /></div></Card>
-        <Card><div className="text-sm text-ink-muted">חשיפה שהגיעה למועד</div><div className="mt-1 kpi-value"><MoneyByCurrency amounts={data.dueExposure} baseCurrency={org?.base_currency} shape="rounded" /></div></Card>
+        <Card><div className="text-sm text-ink-muted">{t('financialSupplier.fmtMoneyRounded')}</div><div className="mt-1 kpi-value"><MoneyByCurrency amounts={data.openBalances} baseCurrency={org?.base_currency} shape="rounded" /></div></Card>
+        <Card><div className="text-sm text-ink-muted">{t('financialSupplier.fmtMoneyRounded_2')}</div><div className="mt-1 kpi-value"><MoneyByCurrency amounts={data.dueExposure} baseCurrency={org?.base_currency} shape="rounded" /></div></Card>
         <Card><div className="text-sm text-ink-muted">{t('financialSupplier.text_3')}</div><div className="mt-1 kpi-value num">{data.bankStatusCounts.unmatched}</div></Card>
         <Card><div className="text-sm text-ink-muted">{t('financialSupplier.text_4')}</div><div className="mt-1 kpi-value num">{data.bankStatusCounts.suggested}</div></Card>
       </div>
 
-      {data.dueExposure == null && <Note tone="info">אין במערכת מועדי פירעון שמאפשרים לחשב חשיפה שהגיעה למועד; לכן מוצג — ולא אפס.</Note>}
+      {data.dueExposure == null && <Note tone="info">{t('financialSupplier.text_5')}</Note>}
 
       <Card as="section" aria-labelledby="finance-invoices">
         <h2 id="finance-invoices" className="section-title flex items-center gap-2"><ReceiptText size={ICON.md} aria-hidden="true" /> {t('financialSupplier.text_6')}</h2>

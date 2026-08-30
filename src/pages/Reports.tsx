@@ -5,7 +5,7 @@ import { FileSpreadsheet, Printer, Send, CheckCircle2, LockKeyhole, Download, Lo
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { StatusBadge, useToast, ConfirmDialog, ErrorNote, PageHeader, SkeletonCards, Note, Modal, Card, EmptyState, ICON } from '../components/ui';
+import { Card, ConfirmDialog, EmptyState, ErrorNote, ICON, Modal, MonthPicker, Note, PageHeader, SkeletonCards, StatusBadge, useToast } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
 import { addCalendarDays, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange, safeMonthISO } from '../lib/format';
@@ -66,7 +66,7 @@ export default function Reports() {
   const orgLogoUrl = org?.logo_path
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
     : null;
-  const { errorText, statusLabel, t, tDynamic } = useT();
+  const { errorText, statusLabel, t, tDynamic, locale } = useT();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   // The month lives in the URL beside the legal entity, so leaving for an invoice and coming back
@@ -222,7 +222,7 @@ export default function Reports() {
       const { start, end } = monthRange(month);
       const values = monthlyReportTemplateValues({
         orgName: org.name,
-        periodLabel: fmtMonth(`${month}-01`),
+        periodLabel: fmtMonth(`${month}-01`, locale),
         periodFrom: fmtDate(start),
         periodTo: fmtDate(addCalendarDays(end, -1)),
         generatedAt: fmtDateTime(data.generatedAt),
@@ -383,15 +383,16 @@ export default function Reports() {
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
-      {fetching && data && <Note tone="idle">הדוח מתעדכן. הייצוא והסימון מושבתים עד להשלמת הרענון.</Note>}
+      {fetching && data && <Note tone="idle">{t('reports.text_6')}</Note>}
       <div data-tour-anchor="reports-overview">
       <PageHeader className="no-print"
         title={<span className="flex flex-wrap items-center gap-2">{t('reports.text_7')} <span className="badge-idle">{t('reports.text_8')}</span></span>}
         meta={t('reports.liveMeta', { at: fmtDateTime(data.generatedAt) })}
         actions={<div className="flex flex-wrap items-center gap-2">
-          <label className="sr-only" htmlFor="monthly-report-month">{t('reports.text_9')}</label>
-          {/* The native clear affordance emits '' — keep the previous month instead of a broken query. */}
-          <input id="monthly-report-month" type="month" className="input w-auto!" value={month} onChange={(e) => { if (e.target.value) setMonth(e.target.value); }} />
+          {/* Was `<input type="month">`, which renders its month NAME in Chrome's UI language
+              whatever the reader chose (DATE-PICKER.md). This one renders it in theirs — and it
+              cannot emit '' at all, which is what the native clear affordance used to do here. */}
+          <MonthPicker id="monthly-report-month" label={t('reports.text_9')} value={month} onChange={setMonth} />
           <button className="btn-secondary" disabled={busy || fetching || !!error} title={exportBlockedReason ?? t('reports.exportExcel')} onClick={() => void exportExcel()}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={ICON.sm} aria-hidden="true" />} {t('reports.exportExcelLabel')}</button>
           <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? t('reports.print')} onClick={() => window.print()}><Printer size={ICON.sm} aria-hidden="true" /> {t('reports.text_10')}</button>
         </div>} />
@@ -438,7 +439,7 @@ export default function Reports() {
             description={t('reports.description')}
             busy={busy}>
             <dl className="mb-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-              <div><dt className="text-xs text-ink-muted">{t('reports.reportMonth')}</dt><dd className="mt-0.5 font-medium">{fmtMonth(`${month}-01`)}</dd></div>
+              <div><dt className="text-xs text-ink-muted">{t('reports.reportMonth')}</dt><dd className="mt-0.5 font-medium">{fmtMonth(`${month}-01`, locale)}</dd></div>
               <div><dt className="text-xs text-ink-muted">{t('reports.text_12')}</dt><dd className="mt-0.5 font-medium">{org?.name ?? '—'}</dd></div>
               <div><dt className="text-xs text-ink-muted">{t('reports.text_13')}</dt><dd className="mt-0.5 font-medium">{selectedLegalEntity?.name ?? '—'}</dd></div>
               <div><dt className="text-xs text-ink-muted">{t('reports.fmtDateTime')}</dt><dd className="num mt-0.5">{snapshotPreviewAt ? fmtDateTime(snapshotPreviewAt) : '—'}</dd></div>
@@ -565,20 +566,20 @@ export default function Reports() {
               html2canvas renders the live DOM: a display:none header is simply absent from the
               generated file (src/index.css states the rule). */}
           {orgLogoUrl && <img data-testid="monthly-report-logo" src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
-          <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}${t('reports.printHeading', { month: fmtMonth(`${month}-01`) })}`}</h2>
+          <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}${t('reports.printHeading', { month: fmtMonth(`${month}-01`, locale) })}`}</h2>
           <p className="text-xs">{t('reports.createdWord')} {fmtDateTime(data.generatedAt)}</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">חשבוניות</div><div className="kpi-value-compact num">{data.invoices.length}</div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="kpi-value-compact text-start"><MoneyByCurrency amounts={orderedTotals(totals.invoices)} baseCurrency={baseCurrency} /></div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="kpi-value-compact text-start"><MoneyByCurrency amounts={orderedTotals(totals.vat)} baseCurrency={baseCurrency} /></div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className={`kpi-value-compact text-start ${totals.paid.length ? 'text-done-fg' : 'text-idle-fg'}`}><MoneyByCurrency amounts={orderedTotals(totals.paid)} baseCurrency={baseCurrency} /></div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`kpi-value-compact num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/bank?month=${month}&status=unmatched`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`kpi-value-compact num ${totals.unmatchedBank ? 'text-alert-fg' : ''}`}>{totals.unmatchedBank}</div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/bank?month=${month}&status=suggested`}><div className="text-xs text-ink-muted">התאמות שממתינות לאישור</div><div className={`kpi-value-compact num ${totals.suggestedBank ? 'text-await-fg' : ''}`}>{totals.suggestedBank}</div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/credits?month=${month}&status=all`}><div className="text-xs text-ink-muted">זיכויים בחודש</div><div className="kpi-value-compact num">{data.credits.length}</div></Card>
-          <Card as={Link} className={metricLinkClass} to="/exceptions?status=open"><div className="text-xs text-ink-muted">חריגים פתוחים</div><div className={`kpi-value-compact num ${data.exceptions.length ? 'text-await-fg' : ''}`}>{data.exceptions.length}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">{t('reports.kpiInvoices')}</div><div className="kpi-value-compact num">{data.invoices.length}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">{t('reports.kpiInvoiceTotal')}</div><div className="kpi-value-compact text-start"><MoneyByCurrency amounts={orderedTotals(totals.invoices)} baseCurrency={baseCurrency} /></div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">{t('reports.kpiVat')}</div><div className="kpi-value-compact text-start"><MoneyByCurrency amounts={orderedTotals(totals.vat)} baseCurrency={baseCurrency} /></div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">{t('reports.kpiPaidThisMonth')}</div><div className={`kpi-value-compact text-start ${totals.paid.length ? 'text-done-fg' : 'text-idle-fg'}`}><MoneyByCurrency amounts={orderedTotals(totals.paid)} baseCurrency={baseCurrency} /></div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}&pay=open`}><div className="text-xs text-ink-muted">{t('reports.kpiUnpaid')}</div><div className={`kpi-value-compact num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/bank?month=${month}&status=unmatched`}><div className="text-xs text-ink-muted">{t('reports.kpiUnmatchedBank')}</div><div className={`kpi-value-compact num ${totals.unmatchedBank ? 'text-alert-fg' : ''}`}>{totals.unmatchedBank}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/bank?month=${month}&status=suggested`}><div className="text-xs text-ink-muted">{t('reports.kpiSuggested')}</div><div className={`kpi-value-compact num ${totals.suggestedBank ? 'text-await-fg' : ''}`}>{totals.suggestedBank}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/credits?month=${month}&status=all`}><div className="text-xs text-ink-muted">{t('reports.kpiCredits')}</div><div className="kpi-value-compact num">{data.credits.length}</div></Card>
+          <Card as={Link} className={metricLinkClass} to="/exceptions?status=open"><div className="text-xs text-ink-muted">{t('reports.kpiOpenExceptions')}</div><div className={`kpi-value-compact num ${data.exceptions.length ? 'text-await-fg' : ''}`}>{data.exceptions.length}</div></Card>
         </div>
 
         {data.exceptions.length > 0 && (
@@ -593,7 +594,7 @@ export default function Reports() {
         )}
 
         <Card pad={false} clip>
-          <div className="px-4 py-3 border-b border-line-soft section-title">{t('reports.invoicesForMonth', { month: fmtMonth(`${month}-01`) })}</div>
+          <div className="px-4 py-3 border-b border-line-soft section-title">{t('reports.invoicesForMonth', { month: fmtMonth(`${month}-01`, locale) })}</div>
           <ul className="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden" aria-label={t('reports.aria_label')}>
             {data.invoices.map((i) => (
               <li key={i.id} className="p-4">
@@ -624,7 +625,7 @@ export default function Reports() {
                 already said everything there is to say about this month. */}
             {totals.hasInvoices && (
               <li className="flex min-h-11 flex-wrap items-center justify-between gap-2 bg-surface-sunken px-4 py-3 font-semibold">
-                <span>סה״כ</span><MoneyByCurrency amounts={orderedTotals(totals.invoices)} baseCurrency={baseCurrency} />
+                <span>{t('reports.text_40')}</span><MoneyByCurrency amounts={orderedTotals(totals.invoices)} baseCurrency={baseCurrency} />
               </li>
             )}
           </ul>

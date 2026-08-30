@@ -170,7 +170,7 @@ export function InvoiceLineReviewModal({
     // checked: an empty box no longer blocks a legitimate correction (owner, 11.08.2026), and
     // `reasonOr` below writes the ledger sentence instead of leaving `p_reason` blank.
     if (invalid) {
-      toast('יש להשלים את כל נתוני השורות', 'error');
+      toast(t('invoiceLineReview.completeAllLines'), 'error');
       return;
     }
 
@@ -199,7 +199,7 @@ export function InvoiceLineReviewModal({
     // An allocation hangs off a specific evidence version. Without one there is nothing to attach
     // it to, so this guard stays; the reason box does not gate the button.
     if (!assessment.evidence_batch_id) {
-      toast('אין גרסת ראיה לשורות — יש לשמור תחילה את שורות החשבונית', 'error');
+      toast(t('invoiceLineReview.noEvidenceVersion'), 'error');
       return;
     }
     const matches: {
@@ -312,7 +312,7 @@ export function InvoiceLineReviewModal({
           </div>
           {/* Two reason boxes share this screen, so neither collapses into the generic
               `OPTIONAL_REASON_LABEL` — each keeps its own name and only gains the optional mark. */}
-          <label className="mt-3 block"><span className="label">סיבת תיקון השורות (רשות)</span><textarea className="input" rows={2} value={evidenceReason} onChange={(event) => { setEvidenceReason(event.target.value); setEvidenceKey(crypto.randomUUID()); }} /></label>
+          <label className="mt-3 block"><span className="label">{t('invoiceLineReview.reasonLabel')}</span><textarea className="input" rows={2} value={evidenceReason} onChange={(event) => { setEvidenceReason(event.target.value); setEvidenceKey(crypto.randomUUID()); }} /></label>
           <div className="mt-3 flex justify-end">
             <button type="button" className="btn-primary" disabled={busy !== null} onClick={() => void saveEvidence()}>{t('invoiceLineReview.saveEvidence')}</button>
           </div>

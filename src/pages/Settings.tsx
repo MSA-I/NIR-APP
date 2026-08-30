@@ -309,8 +309,8 @@ export default function Settings() {
     const failure = await setProfileAccess(u, next, next ? 'הפעלת משתמש' : 'השבתת משתמש');
     if (failure) { toast(errorText(failure), 'error'); return; }
     void refetch();
-    toast(next ? 'המשתמש הופעל' : 'המשתמש הושבת', 'success', {
-      label: 'ביטול הפעולה',
+    toast(next ? t('settings.toast_7') : t('settings.toast_6'), 'success', {
+      label: t('settings.undoAction'),
       onAct: () => { void undoAccess(u, next); },
     });
   }
@@ -337,7 +337,7 @@ export default function Settings() {
     }
     if (failure) { toast(errorText(failure), 'error'); return; }
     void refetch();
-    toast(applied ? 'ההפעלה בוטלה — המשתמש מושבת' : 'ההשבתה בוטלה — המשתמש פעיל');
+    toast(applied ? t('settings.enableUndone') : t('settings.disableUndone'));
   }
 
   function openRoleChange(u: Profile) {
@@ -546,13 +546,13 @@ export default function Settings() {
       <Card className="space-y-4">
         <h2 className="section-title">{t('settings.text_22')}</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="sm:col-span-3"><label className="label" htmlFor="settings-org-name">שם הארגון לתצוגה</label><input id="settings-org-name" className="input" maxLength={120} value={orgName} disabled={!canWrite} onChange={(e) => setOrgName(e.target.value)} /></div>
-          <div><label className="label" htmlFor="settings-vat-rate">שיעור מע״מ (%)</label><input id="settings-vat-rate" type="number" step="0.5" className="input num" value={vatRate} disabled={!canWrite} onChange={(e) => setVatRate(e.target.value)} /></div>
+          <div className="sm:col-span-3"><label className="label" htmlFor="settings-org-name">{t('settings.setOrgName')}</label><input id="settings-org-name" className="input" maxLength={120} value={orgName} disabled={!canWrite} onChange={(e) => setOrgName(e.target.value)} /></div>
+          <div><label className="label" htmlFor="settings-vat-rate">{t('settings.setVatRate')}</label><input id="settings-vat-rate" type="number" step="0.5" className="input num" value={vatRate} disabled={!canWrite} onChange={(e) => setVatRate(e.target.value)} /></div>
           {/* The amount tolerance left this card for CurrencyTolerancesPanel below. It used to sit
               here as one field labelled `(₪)`, which was three separate untruths: the business may
               not keep its books in shekels, the same key holds a value per currency (#288), and
               three sibling tolerances had no field at all. A day range is not an amount and stays. */}
-          <div><label className="label" htmlFor="settings-match-days">טווח ימים להתאמת בנק</label><input id="settings-match-days" type="number" className="input num" value={matchDays} disabled={!canWrite} onChange={(e) => setMatchDays(e.target.value)} /></div>
+          <div><label className="label" htmlFor="settings-match-days">{t('settings.setMatchDays')}</label><input id="settings-match-days" type="number" className="input num" value={matchDays} disabled={!canWrite} onChange={(e) => setMatchDays(e.target.value)} /></div>
         </div>
         {canWrite && <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>{t('settings.saveOrg')}</button></div>}
       </Card>

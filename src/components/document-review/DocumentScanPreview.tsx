@@ -256,8 +256,8 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
               <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-ink-muted">
                 {readOnly
-                  ? 'הארגון במצב קריאה בלבד. אפשר לצפות בסריקה, אך אי אפשר לאשר אותה לחילוץ.'
-                  : 'בדוק שהדף שלם וקריא. האישור קובע שהמערכת תקרא נגזרת זו, לא את המקור.'}
+                  ? t('scanPreview.readOnly')
+                  : t('scanPreview.checkBeforeApproving')}
               </p>
               {/* The decision stays AFTER the two page images, and that is the exception to the
                   head-of-evidence placement `PrimaryDecision` documents: here the evidence is the
