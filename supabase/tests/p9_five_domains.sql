@@ -347,8 +347,8 @@ select pg_temp.p9_assert(
 -- always at the end of a twenty-minute gate rather than in seconds. See the check:* script that
 -- asserts a migration touching scope_definer_exemptions also touches this file.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 90,
-  'the definer exemption registry must stay at 90 rows -- 59 minus the three 0073 drained, '
+  (select count(*) from private.scope_definer_exemptions) = 92,
+  'the definer exemption registry must stay at 92 rows -- 59 minus the three 0073 drained, '
   || 'plus the one 0075:464 added for rescue_document_from_archive (not drainable: invoker '
   || 'would require granting UPDATE on document_filings to the browser), plus the one 0077 '
   || 'added for apply_document_interpretation (not drainable: it runs with no user JWT, so '
@@ -381,7 +381,10 @@ select pg_temp.p9_assert(
   || 'the five 0137 consolidated-invoice service-only or firing-row-local commands; plus the '
   || 'one 0168 email-delivery settlement (same empty-auth_scopes constraint as 0077: the sender '
   || 'settles with the service key and no user JWT, and the sent-stamp must live in the same '
-  || 'transaction as the provider evidence); zero silent additions');
+  || 'transaction as the provider evidence); plus two 0246 catalogue resolvers: '
+  || 'effective_entitlement is internal-only and must read private plan/referral state, while '
+  || 'get_public_plan_quotas intentionally returns the same global catalogue to every tenant and '
+  || 'therefore has no tenant scope an invoker could enforce; zero silent additions');
 
 select pg_temp.p9_assert(
   (select count(*) from private.scope_enforcement_violations()) = 0,

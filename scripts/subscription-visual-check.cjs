@@ -59,25 +59,37 @@ const ORGANIZATION = {
 };
 
 const PLAN_QUOTAS = [
-  ['free', 20], ['basic', 40], ['pro', 150], ['premium', 375],
-].map(([plan_key, numeric_limit]) => ({
+  ['free', 20, 1, 1], ['basic', 40, 5, 1], ['pro', 150, 15, 1], ['premium', 375, 30, 10],
+].flatMap(([plan_key, documents, users, branches]) => ([{
   plan_key, entitlement_key: 'documents.monthly', label: 'מסמכים', unit: 'מסמכים',
-  unlimited: false, numeric_limit, measured: true,
-})).concat(
-  ['free', 'basic', 'pro', 'premium'].map((plan_key) => ({
-    plan_key, entitlement_key: 'ocr_pages.monthly', label: 'עמודי OCR', unit: 'עמודים',
-    unlimited: false, numeric_limit: [200, 400, 1500, 3750][['free', 'basic', 'pro', 'premium'].indexOf(plan_key)],
-    measured: true,
-  })),
-  ['free', 'basic', 'pro', 'premium'].map((plan_key) => ({
+  unlimited: false, numeric_limit: documents, measured: true,
+}, {
     plan_key, entitlement_key: 'users.max', label: 'משתמשים', unit: 'משתמשים',
-    unlimited: false, numeric_limit: null, measured: false,
-  })),
-  ['free', 'basic', 'pro', 'premium'].map((plan_key) => ({
-    plan_key, entitlement_key: 'suppliers.max', label: 'ספקים', unit: 'ספקים',
-    unlimited: false, numeric_limit: null, measured: false,
-  })),
-);
+    unlimited: false, numeric_limit: users, measured: true,
+  }, {
+    plan_key, entitlement_key: 'branches.max', label: 'סניפים', unit: 'סניפים',
+    unlimited: false, numeric_limit: branches, measured: true,
+  }]));
+
+const FEATURE_DEFINITIONS = [
+  ['documents.automation', 'קריאה אוטומטית של מסמכים', 10, 2, true],
+  ['history.full', 'היסטוריה מלאה', 20, 2, true],
+  ['exports.custom', 'ייצוא Excel ודוחות לרו״ח', 30, 2, true],
+  ['reports.advanced', 'לוח ביצועי ספקים', 40, 2, true],
+  ['notifications.email', 'התראות ואוטומציות במייל', 50, 2, true],
+  ['bank.reconciliation', 'התאמות בנק', 60, 3, false],
+  ['payments.accountant_queue', 'תור תשלומים לרואה החשבון', 70, 3, false],
+  ['invoices.consolidated', 'חשבוניות מרכזות', 80, 3, false],
+  ['org.multi_unit', 'עד 10 סניפים', 90, 4, false],
+  ['integrations.api', 'חיבור למערכות אחרות', 100, 4, false],
+  ['support.premium', 'תמיכה מורחבת', 110, 4, false],
+];
+const PLAN_FEATURES = ['free', 'basic', 'pro', 'premium', 'business'].flatMap((plan_key, tier) =>
+  FEATURE_DEFINITIONS.map(([entitlement_key, label, display_order, minimumTier, intro]) => ({
+    plan_key, entitlement_key, label, display_order,
+    included: plan_key === 'business' || tier + 1 >= minimumTier,
+    intro_included: plan_key === 'free' && intro,
+  })));
 
 const option = (plan_key, label, tier_order, over = {}) => ({
   plan_key, label, tier_order, paid: plan_key !== 'free', contact_sales: false,
@@ -88,10 +100,16 @@ const OPTIONS = [
   option('premium', 'פרימיום', 4), option('business', 'ביזנס', 5, { contact_sales: true }),
 ];
 /** The catalogue the public page reads. Four rungs — #194 keeps `ביזנס` off it. */
-const CATALOGUE = OPTIONS.slice(0, 4).map((o) => ({
-  plan_key: o.plan_key, label: o.label, tier_order: o.tier_order, currency: 'ILS',
-  catalogue_version: 'il-2026-08', monthly_amount: null, yearly_amount: null,
-}));
+const CATALOGUE = ['ILS', 'USD'].flatMap((currency) => OPTIONS.slice(0, 4).map((o) => ({
+  plan_key: o.plan_key, label: o.label, tier_order: o.tier_order, currency,
+  catalogue_version: currency === 'ILS' ? 'il-2026-08' : 'global-2026-08',
+  monthly_amount: (currency === 'ILS'
+    ? { free: 0, basic: 69, pro: 249, premium: 449 }
+    : { free: 0, basic: 20, pro: 79, premium: 149 })[o.plan_key] ?? null,
+  yearly_amount: (currency === 'ILS'
+    ? { free: 0, basic: 690, pro: 2490, premium: 4490 }
+    : { free: 0, basic: 200, pro: 790, premium: 1490 })[o.plan_key] ?? null,
+})));
 
 const subscription = (over = {}) => ({
   plan_key: 'free', plan_label: 'חינם', is_paid_plan: false, status: 'active',
@@ -156,6 +174,8 @@ function rpcBody(name, state) {
     case 'my_plan_grant': return state.grant;
     case 'get_public_plan_quotas': return PLAN_QUOTAS;
     case 'get_public_plan_catalogue': return CATALOGUE;
+    case 'get_public_plan_features': return PLAN_FEATURES.filter((row) => row.plan_key !== 'business');
+    case 'my_plan_features': return PLAN_FEATURES;
     case 'organization_usage_snapshot': return USAGE;
     case 'organization_access_state': return [{ access_mode: 'active' }];
     case 'resolve_feature_flags': return [];

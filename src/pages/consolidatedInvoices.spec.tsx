@@ -14,7 +14,7 @@ describe('consolidated supplier invoice route and intake contract', () => {
   });
 
   it('allows all readers into one route while keeping mutations behind owner/office checks', () => {
-    expect(app).toContain('path="/documents/consolidated-invoices" element={<Guard roles={READERS}><ConsolidatedInvoices /></Guard>}');
+    expect(app).toContain('path="/documents/consolidated-invoices" element={<Guard roles={READERS} capability="invoices.consolidated"><ConsolidatedInvoices /></Guard>}');
     expect(page).toContain("profile?.role === 'owner' || profile?.role === 'office'");
     expect(page).toContain('!canWrite');
   });

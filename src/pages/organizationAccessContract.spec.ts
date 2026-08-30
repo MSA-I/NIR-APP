@@ -45,7 +45,7 @@ describe('organization access after Trial retirement', () => {
       expect(app).toContain(`path={APP_ROUTE_POLICY.${route}.path} element={<Guard roles={APP_ROUTE_POLICY.${route}.roles} write>`);
     }
     for (const path of ['/receiving/:orderId', '/invoices/new', '/pay']) {
-      expect(app).toMatch(new RegExp(`path="${path.replace('/', '\\/')}"[^\n]+<Guard[^\n]+ write>`));
+      expect(app).toMatch(new RegExp(`path="${path.replace('/', '\\/')}"[^\n]+<Guard[^\n]+ write(?:\\s[^>]*)?>`));
     }
     for (const retiredCopy of ['תקופת הניסיון', 'ימי חסד', 'Grace', 'Trial']) {
       expect(layout).not.toContain(retiredCopy);

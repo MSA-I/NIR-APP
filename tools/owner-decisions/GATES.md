@@ -1,6 +1,6 @@
 # Gates: InPlace owner decisions console
 
-OWNS: tools/owner-decisions/**, scripts/owner-decisions-server.mjs, START-OWNER-DECISIONS.cmd, package.json, PLAN.md
+OWNS: tools/owner-decisions/**, scripts/owner-decisions-server.mjs, START-OWNER-DECISIONS.cmd, package.json, docs/PLAN-owner-decisions-console.md
 
 Scope: local-only RTL decision console with complete source coverage, safe autosave, historical reconsideration, stale-source protection and visual proof
 

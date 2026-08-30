@@ -11,7 +11,7 @@ for (const source of ['docs/OPEN-DECISIONS.md', 'docs/DEBT-REGISTER.md']) {
 }
 
 const allowed = [
-  'PLAN.md',
+  'docs/PLAN-owner-decisions-console.md',
   'START-OWNER-DECISIONS.cmd',
   'package.json',
   'scripts/owner-decisions-server.mjs',
