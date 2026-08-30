@@ -63,10 +63,16 @@ select pg_temp.p79_assert(
       and not upper_entitlement.boolean_value),
   'a higher rung removes a capability held below it');
 
+-- THE SEAT COLUMN IS `basic = 1`, AND THAT IS A LATER RULING, NOT DRIFT. `0246` wrote #274's
+-- 1/5/15/30 and this assertion pinned them. On 28.08.2026 the owner moved `basic` to one member --
+-- "ההכרעה האחרונה גוברת" -- and `0252` applies it (#298), so adding a user is what `פרו` opens.
+-- The two numbers above `basic` were not contradicted and are unchanged, and the branch and
+-- automatic-document columns are #274's throughout. This suite states the ladder the database
+-- actually ends up with; the earlier figures live in `0246` and in #274.
 select pg_temp.p79_assert(
   (select count(*) from (values
     ('free', 1::numeric, 1::numeric, 5::numeric),
-    ('basic', 5::numeric, 1::numeric, 40::numeric),
+    ('basic', 1::numeric, 1::numeric, 40::numeric),
     ('pro', 15::numeric, 1::numeric, 150::numeric),
     ('premium', 30::numeric, 10::numeric, 375::numeric)
   ) expected(plan_key, users_max, branches_max, auto_max)

@@ -119,6 +119,34 @@ update plan_entitlements
    set unlimited = true, numeric_limit = null, updated_at = now()
  where entitlement_key = 'users.max' and kind = 'numeric' and plan_key in ('business', 'legacy');
 
+-- The seat ceilings move, so the record behind them moves with them. `0246` wrote #274's numbers
+-- into `private.plan_quota_decisions`; this ruling changes `basic`, and p51 reads that ledger to
+-- refuse any published ceiling with nobody's name on it. `business` and `legacy` become
+-- `unlimited` above and are therefore drained: an unlimited rung has no ceiling to justify, and a
+-- stale row would claim a decision that no longer describes the plan.
+insert into private.plan_quota_decisions
+  (plan_key, entitlement_key, decided_limit, previous_limit, previous_unlimited, decision_ref)
+select entitlement.plan_key, 'users.max', entitlement.numeric_limit,
+       previous.decided_limit, coalesce(previous.previous_unlimited, false), 'OPEN-DECISIONS #298'
+from public.plan_entitlements entitlement
+left join private.plan_quota_decisions previous
+  on previous.plan_key = entitlement.plan_key and previous.entitlement_key = 'users.max'
+where entitlement.entitlement_key = 'users.max'
+  and entitlement.kind = 'numeric'
+  and not entitlement.unlimited
+  and entitlement.numeric_limit is not null
+on conflict (plan_key, entitlement_key) do update
+  set decided_limit = excluded.decided_limit,
+      previous_limit = excluded.previous_limit,
+      decision_ref = excluded.decision_ref,
+      recorded_at = now();
+
+delete from private.plan_quota_decisions
+ where entitlement_key = 'users.max'
+   and plan_key in (
+     select plan_key from public.plan_entitlements
+      where entitlement_key = 'users.max' and kind = 'numeric' and unlimited);
+
 update private.entitlement_definitions
    set enforced_since = '0252'
  where entitlement_key in ('reports.advanced', 'bank.reconciliation', 'exports.custom', 'users.max');

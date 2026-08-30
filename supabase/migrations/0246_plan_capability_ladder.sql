@@ -135,6 +135,29 @@ set unlimited = true, numeric_limit = null, updated_at = now()
 where plan_key in ('business', 'legacy')
   and entitlement_key in ('users.max', 'branches.max', 'documents.automatic_monthly');
 
+-- AND THE RECORD BEHIND EVERY CEILING JUST STATED. #274 does not allow a published number with
+-- nobody's name on it, and `p51` asserts exactly that: a numeric row that is not `unlimited` must
+-- have a matching `decided_limit` in `private.plan_quota_decisions` (0184/0208), the ledger the
+-- numeric dials have always used. `business` and `legacy` are absent on purpose -- they are
+-- `unlimited`, so there is no ceiling to justify.
+--
+-- `previous_unlimited` is true because that is what 0184 left behind: every one of these keys was
+-- seeded open, and the record should say what the rung actually allowed rather than imply a
+-- smaller number that was never in force.
+insert into private.plan_quota_decisions
+  (plan_key, entitlement_key, decided_limit, previous_limit, previous_unlimited, decision_ref)
+select entitlement.plan_key, entitlement.entitlement_key, entitlement.numeric_limit,
+       null, true, 'OPEN-DECISIONS #274'
+from public.plan_entitlements entitlement
+where entitlement.kind = 'numeric'
+  and not entitlement.unlimited
+  and entitlement.numeric_limit is not null
+  and entitlement.entitlement_key in ('users.max', 'branches.max', 'documents.automatic_monthly')
+on conflict (plan_key, entitlement_key) do update
+  set decided_limit = excluded.decided_limit,
+      decision_ref = excluded.decision_ref,
+      recorded_at = now();
+
 -- ===== 3. One clock, one resolution rule =====
 
 -- A Free organization in the 30-day window resolves the five Basic boolean capabilities from the
