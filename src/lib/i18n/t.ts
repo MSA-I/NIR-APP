@@ -47,8 +47,17 @@ export function translate(
  * Deliberately NOT typed as `TKey`: the whole point is that the value is not known at compile
  * time. Callers pass `status.${row.status}` and handle the miss.
  */
-export function tryTranslate(dict: Dictionary, key: string): string | null {
-  return lookup(dict, key) ?? null;
+export function tryTranslate(
+  dict: Dictionary,
+  key: string,
+  vars?: Record<string, string | number>,
+): string | null {
+  const raw = lookup(dict, key);
+  if (raw == null) return null;
+  // Interpolation follows the same rule as `translate`: a variable with no value keeps its
+  // placeholder. A runtime key is no less likely to carry one — the business summary's window
+  // labels are reached only through this door, and without this they printed `{days}`.
+  return vars ? raw.replace(PLACEHOLDER, (match, name) => String(vars[name] ?? match)) : raw;
 }
 
 function lookup(dict: Dictionary, key: string): string | undefined {

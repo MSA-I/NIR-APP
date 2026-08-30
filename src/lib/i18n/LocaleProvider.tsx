@@ -62,7 +62,7 @@ interface LocaleState {
    * action. Returns `null` on a miss so the caller can fall back to the raw stored value, which
    * is the rule `status.ts` already states.
    */
-  tDynamic: (key: string) => string | null;
+  tDynamic: (key: string, vars?: Record<string, string | number>) => string | null;
   /**
    * The label for a `StatusMeta` — the shape `src/lib/status.ts` hands out, which carries a
    * dictionary key and a tone rather than text.
@@ -126,7 +126,7 @@ const LocaleContext = createContext<LocaleState>({
   locale: 'he',
   dir: 'rtl',
   t: (key, vars) => translate(FALLBACK_DICTIONARY, key, vars),
-  tDynamic: (key) => tryTranslate(FALLBACK_DICTIONARY, key),
+  tDynamic: (key, vars) => tryTranslate(FALLBACK_DICTIONARY, key, vars),
   statusLabel: (metaOrKey) => resolveStatus(FALLBACK_DICTIONARY, metaOrKey),
   errorText: (error) => resolveError(FALLBACK_DICTIONARY, error),
   setLocale: () => {},
@@ -173,7 +173,7 @@ export function LocaleProvider({
       locale,
       dir: dirFor(locale),
       t: (key, vars) => translate(dictionary, key, vars),
-      tDynamic: (key) => tryTranslate(dictionary, key),
+      tDynamic: (key, vars) => tryTranslate(dictionary, key, vars),
       statusLabel: (metaOrKey) => resolveStatus(dictionary, metaOrKey),
       errorText: (error) => resolveError(dictionary, error),
       setLocale,

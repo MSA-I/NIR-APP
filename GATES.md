@@ -490,6 +490,36 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   files; `check-assistant-no-send.mjs` passed. Dictionary parity passed at 5,296 keys per locale.
   `zero` still exits 1 on 54/24, so this gate remains open.
 
+  **PROGRESS, 30.08.2026 - the business summary's wording table in this commit.** The pinned count
+  is now 627 Hebrew line(s) across 63 files; the protected set remains 578 lines in 40 files, so
+  the real remainder is **49 lines in 23 files**. `assistant/summaryLines.ts` is the 94th surface
+  locked at zero.
+
+  This is the second dual-runtime file, and the same shape as the first: it is the ONE definition
+  of five metric names, consumed by `/alerts` in the browser and by `get_business_summary` in the
+  Edge function, so a number can never reach one consumer under a name the other does not know.
+  `label` became `labelKey: TKey` with the trailing window carried beside it as `labelVars`, so the
+  two windows still have exactly one definition each rather than being baked into a sentence.
+
+  **A leak the field's own name was hiding.** `Summary.failures` has always been typed
+  `{ code, labelKey }`, and `/alerts` renders it as `tDynamic(failure.labelKey) ?? failure.labelKey`.
+  The alert scans really did push keys. The metric lines pushed their Hebrew SENTENCE into that
+  same field, so `tDynamic` missed and the render fell through to the raw string - which was
+  Hebrew, so it looked right to every reader who could read it. An English reader was told which
+  scan had failed in Hebrew. The spec's own comment had recorded the debt and it is now paid; both
+  halves of `failures` carry keys, under the named type `SummaryFailure`.
+
+  `tryTranslate`/`tDynamic` gained the `vars` argument they were missing. Without it the window
+  labels would have rendered a literal `{days}` on the one path that reaches them - `translate`
+  has always interpolated, and the runtime-key door simply never did.
+
+  Evidence: the stale-baseline negative control named `summaryLines.ts` 5 -> 0 alone; focused
+  summary/i18n suites passed 31/31; Deno contracts passed 232/232; the full suite passed
+  1,766/1,766; `npx tsc --noEmit` exit 0 and `check:jsx-space` passed on 126 TSX files. Dictionary
+  parity passed at 5,301 keys per locale; `extracted` reported 94 surfaces at zero, and `ratchet`,
+  `abandon`, `currency-untouched`, `help-registry-paired` and `legacy-errors` all passed. `zero`
+  still exits 1 on 49/23, so this gate remains open.
+
   One tooling hazard hit again while writing this batch and worth the line: a `\b` written through
   a shell heredoc arrives in the file as a real backspace character (0x08), silently turning
   `/\bsent\b/i` into a regex that matches nothing intended. This is the same corruption that

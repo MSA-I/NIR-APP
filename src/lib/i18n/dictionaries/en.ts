@@ -5639,6 +5639,14 @@ export const en: Dictionary = {
     adjustmentDescription: 'Current balance: {quantity}. The action will be recorded in the audit log.',
   },
 
+  businessSummary: {
+    receivedWeek: 'Invoices received in the last {days} days',
+    awaitingApproval: 'Invoices awaiting approval',
+    expectedPayments: 'Open amount in payment requests',
+    suppliersRaised: 'Suppliers that raised a price in the last {days} days',
+    openExceptions: 'Open exceptions',
+  },
+
   assistantContracts: {
     draftLabel: 'Draft',
     timeWindowLast7Days: 'the last 7 days',

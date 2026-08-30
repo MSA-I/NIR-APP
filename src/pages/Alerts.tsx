@@ -90,7 +90,7 @@ export default function Alerts() {
         <Note tone="alert">
           <TriangleAlert size={ICON.sm} className="mt-0.5 shrink-0" />
           <span>
-            {error ?? t('alertsPage.partialScan', { scans: data.failures.map((failure) => tDynamic(failure.labelKey) ?? failure.labelKey).join(', ') })}
+            {error ?? t('alertsPage.partialScan', { scans: data.failures.map((failure) => tDynamic(failure.labelKey, failure.labelVars) ?? failure.labelKey).join(', ') })}
           </span>
         </Note>
       )}

@@ -5643,6 +5643,14 @@ export const he = {
     adjustmentDescription: 'יתרה נוכחית: {quantity}. הפעולה תירשם ביומן הביקורת.',
   },
 
+  businessSummary: {
+    receivedWeek: 'חשבוניות שנקלטו ב-{days} הימים האחרונים',
+    awaitingApproval: 'חשבוניות הממתינות לאישור',
+    expectedPayments: 'סכום פתוח בדרישות תשלום',
+    suppliersRaised: 'ספקים שהעלו מחיר ב-{days} הימים האחרונים',
+    openExceptions: 'חריגים פתוחים',
+  },
+
   assistantContracts: {
     draftLabel: 'טיוטה',
     timeWindowLast7Days: '7 הימים האחרונים',

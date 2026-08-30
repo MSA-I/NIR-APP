@@ -116,6 +116,7 @@ const EXTRACTED = [
   'src/components/QuickSupplierPicker.tsx',
   'src/pages/Inventory.tsx',
   'src/lib/offlineDb.ts',
+  'src/lib/assistant/summaryLines.ts',
 ];
 
 /** The one surface the owner decided not to translate (27.08.2026). */

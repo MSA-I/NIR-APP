@@ -17,6 +17,7 @@ import type {
   ToolEnvelope,
 } from "../../../../src/lib/assistant/contracts.ts";
 import { SUMMARY_METRIC_LINES } from "../../../../src/lib/assistant/summaryLines.ts";
+import { readerText } from "../reader-locale.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
 
 // The trailing windows are defined in 0165 (and echoed by the labels in summaryLines.ts); these
@@ -83,16 +84,19 @@ export const getBusinessSummaryTool: AssistantTool = {
     const failures: { code: string; label: string }[] = [];
     for (const line of SUMMARY_METRIC_LINES) {
       const value = metricValue(rows.get(line.key));
+      // Resolved once per line, in the run's language. A fact label is read by a PERSON, so a
+      // constant here would put Hebrew inside an English answer.
+      const label = readerText(ctx.locale, line.labelKey, line.labelVars);
       if (value === null) {
         // measured:false, a missing row and a non-finite value are all the same honest answer:
         // unmeasured. The fact still exists with value null so the model can SAY the line is
         // unmeasured -- it can never turn it into a number (validate.ts).
-        failures.push({ code: line.key, label: line.label });
+        failures.push({ code: line.key, label });
       }
       facts.push(ctx.evidence.fact({
         kind: line.unit === "currency" ? "metric.money" : "metric.count",
         subject: null,
-        label: line.label,
+        label,
         value,
         unit: line.unit === "currency" ? "ils" : "count",
         tool: "get_business_summary",
@@ -104,7 +108,7 @@ export const getBusinessSummaryTool: AssistantTool = {
       sources.push(ctx.evidence.source({
         entity: "organization",
         entity_id: ctx.actor.orgId,
-        label: line.label,
+        label,
         route: line.to,
         classification: "tenant_standard",
       }));
