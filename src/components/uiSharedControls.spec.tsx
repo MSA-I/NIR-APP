@@ -1,8 +1,8 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Card, ICON, Stepper, SubPanel, Tabs, TabPanel, ToggleGroup, panelId, tabId } from './ui';
+import { Card, ICON, Stepper, SubPanel, Tabs, TabPanel, ToastProvider, ToggleGroup, panelId, tabId, useToast, type ToastAction } from './ui';
 
 /*
  * The four controls added on 26.08.2026 to end the drift the UI audit measured: 15 hand-rolled
@@ -381,5 +381,109 @@ describe('ICON — סולם ולא מספרים חופשיים', () => {
     const rungs = [ICON.xs, ICON.sm, ICON.md, ICON.lg, ICON.xl, ICON.hero];
     expect(rungs).toEqual([...rungs].sort((a, b) => a - b));
     expect(new Set(rungs).size).toBe(rungs.length);
+  });
+});
+
+/*
+ * The toast grew an optional third argument on 30.08.2026: `toast(message, tone?, action?)`.
+ * It exists because two confirmation dialogs existed only for want of a way back — a reversible
+ * action does not need to be interrogated before it runs, it needs an Undo after it. The four
+ * tests below pin the parts an interactive toast gets wrong when it is bolted onto a passive one.
+ */
+describe('Toast — הצעת פעולה על ההודעה במקום שאלה לפניה', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function Pusher({ message, tone, action }: { message: string; tone?: 'success' | 'error'; action?: ToastAction }) {
+    const toast = useToast();
+    return <button type="button" onClick={() => toast(message, tone, action)}>הפעל</button>;
+  }
+
+  function pushToast(props: { message: string; tone?: 'success' | 'error'; action?: ToastAction }) {
+    render(<ToastProvider><Pusher {...props} /></ToastProvider>);
+    fireEvent.click(screen.getByRole('button', { name: 'הפעל' }));
+  }
+
+  /** The pill itself — the live region's parent, which is where hover and focus are handled. */
+  const pill = () => screen.getByRole('status').parentElement!;
+  const undo = () => screen.getByRole('button', { name: 'ביטול הפעולה' });
+
+  it('בלי action — אין כפתור, וההודעה נעלמת אחרי 4 שניות בדיוק כמו קודם', () => {
+    pushToast({ message: 'המוצר נשמר' });
+    expect(screen.getByRole('status')).toHaveTextContent('המוצר נשמר');
+    // The only button on screen is the harness's own trigger.
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+
+    act(() => { vi.advanceTimersByTime(3999); });
+    expect(screen.queryByRole('status')).not.toBeNull();
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('עם action — הכפתור מופיע, מסלק את ההודעה ואז מריץ את הפעולה', () => {
+    const onAct = vi.fn();
+    pushToast({ message: 'המוצר הושבת', action: { label: 'ביטול הפעולה', onAct } });
+
+    expect(screen.getByRole('status')).toHaveTextContent('המוצר הושבת');
+    fireEvent.click(undo());
+
+    expect(onAct).toHaveBeenCalledTimes(1);
+    // Dismissed by the press, not by a timer: nothing was advanced.
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  /*
+   * The reason the pill could not simply keep `role="status"` on itself. A live region announces
+   * its whole subtree, so a button inside it becomes part of the sentence a screen reader reads —
+   * and every change inside it re-announces the message. The sentence is the region; the control
+   * is its sibling.
+   */
+  it('אזור החי הוא הטקסט בלבד — הכפתור אינו בתוכו', () => {
+    pushToast({ message: 'המשתמש הושבת', action: { label: 'ביטול הפעולה', onAct: vi.fn() } });
+
+    const live = screen.getByRole('status');
+    expect(live).toHaveAttribute('aria-live', 'polite');
+    expect(live).toHaveTextContent('המשתמש הושבת');
+    expect(within(live).queryByRole('button')).toBeNull();
+    expect(live.contains(undo())).toBe(false);
+    expect(pill().contains(undo())).toBe(true);
+  });
+
+  it('שגיאה נשארת assertive גם כשהיא נושאת פעולה', () => {
+    pushToast({ message: 'הפעולה נכשלה', tone: 'error', action: { label: 'ביטול הפעולה', onAct: vi.fn() } });
+    const live = screen.getByRole('alert');
+    expect(live).toHaveAttribute('aria-live', 'assertive');
+    expect(within(live).queryByRole('button')).toBeNull();
+  });
+
+  it('פעולה קיימת מאריכה ל-8 שניות, ו-hover עוצר את הספירה עד היציאה', () => {
+    pushToast({ message: 'המוצר הושבת', action: { label: 'ביטול הפעולה', onAct: vi.fn() } });
+
+    // 4s is the plain toast's whole life; this one is still standing.
+    act(() => { vi.advanceTimersByTime(4000); });
+    expect(screen.queryByRole('status')).not.toBeNull();
+
+    fireEvent.mouseEnter(pill());
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(screen.queryByRole('status')).not.toBeNull();
+
+    // Leaving restarts the countdown whole, rather than resuming a nearly-expired one.
+    fireEvent.mouseLeave(pill());
+    act(() => { vi.advanceTimersByTime(7999); });
+    expect(screen.queryByRole('status')).not.toBeNull();
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('מיקוד מקלדת על כפתור הביטול עוצר את הספירה — הוא לא נשמט מתחת לאצבע', () => {
+    pushToast({ message: 'המוצר הושבת', action: { label: 'ביטול הפעולה', onAct: vi.fn() } });
+
+    fireEvent.focusIn(undo());
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(screen.queryByRole('status')).not.toBeNull();
+
+    fireEvent.focusOut(undo());
+    act(() => { vi.advanceTimersByTime(8000); });
+    expect(screen.queryByRole('status')).toBeNull();
   });
 });

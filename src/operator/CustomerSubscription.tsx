@@ -9,6 +9,7 @@ import {
   type BillingEventRow, type OrgEntitlement, type OrgSubscription, type PlatformCapability,
   type SubscriptionPlan,
 } from '../lib/platform';
+import { reasonOr } from '../lib/reason';
 
 const BILLING_INTERVAL: Record<string, string> = { monthly: 'חודשי', yearly: 'שנתי' };
 
@@ -257,7 +258,12 @@ export default function CustomerSubscription({
           plans={plans}
           subscription={subscription}
           onClose={() => setEditingPlan(false)}
-          onSubmit={(form) => { setEditingPlan(false); setPlanReauth(form); }}
+          // The password step-up below is untouched — only the typing gate is gone, so an empty
+          // box carries the honest audit sentence into the reauth payload.
+          onSubmit={(form) => {
+            setEditingPlan(false);
+            setPlanReauth({ ...form, reason: reasonOr(form.reason, 'שינוי מנוי הלקוח') });
+          }}
         />
       )}
       <ReauthModal
@@ -279,7 +285,10 @@ export default function CustomerSubscription({
           onClose={() => setGranting(null)}
           onSubmit={(form) => {
             setGranting(null);
-            setGrantReauth({ orgId, entitlementKey: granting.entitlement_key, ...form });
+            setGrantReauth({
+              orgId, entitlementKey: granting.entitlement_key, ...form,
+              reason: reasonOr(form.reason, `מתן חריג להרשאה ״${granting.label}״`),
+            });
           }}
         />
       )}
@@ -377,7 +386,7 @@ function PlanModal({ busy, plans, subscription, onClose, onSubmit }: {
           </div>
         </div>
         <div>
-          <label className="label" htmlFor="plan-reason">סיבת השינוי</label>
+          <label className="label" htmlFor="plan-reason">סיבת השינוי (רשות)</label>
           <textarea id="plan-reason" className="input" rows={2} maxLength={1000} value={form.reason}
             onChange={(event) => setForm({ ...form, reason: event.target.value })} />
         </div>
@@ -386,7 +395,7 @@ function PlanModal({ busy, plans, subscription, onClose, onSubmit }: {
         </p>
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-          <button type="button" className="btn-primary" disabled={busy || !form.reason.trim()}
+          <button type="button" className="btn-primary" disabled={busy}
             onClick={() => onSubmit(form)}>המשך לאימות</button>
         </div>
       </div>
@@ -409,7 +418,9 @@ function OverrideModal({ busy, entitlement, onClose, onSubmit }: {
   const [reason, setReason] = useState('');
 
   const numericReady = mode !== 'limit' || (limit.trim() !== '' && Number(limit) >= 0);
-  const ready = !!reason.trim() && numericReady;
+  // Only the numeric limit still gates the button: a missing limit has no override to grant, while
+  // a missing reason has one — it just carries the fallback audit sentence (`lib/reason.ts`).
+  const ready = numericReady;
 
   return (
     <Modal open onClose={onClose} title={`חריג — ${entitlement.label}`} busy={busy}>
@@ -448,7 +459,7 @@ function OverrideModal({ busy, entitlement, onClose, onSubmit }: {
             onChange={(event) => setExpires(event.target.value)} />
         </div>
         <div>
-          <label className="label" htmlFor="override-reason">סיבת החריג</label>
+          <label className="label" htmlFor="override-reason">סיבת החריג (רשות)</label>
           <textarea id="override-reason" className="input" rows={2} maxLength={1000} value={reason}
             onChange={(event) => setReason(event.target.value)} />
         </div>

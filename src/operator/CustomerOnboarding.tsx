@@ -4,6 +4,7 @@ import { Card, ICON, Modal, StatusBadge } from '../components/ui';
 import { fmtDate } from '../lib/format';
 import { ONBOARDING_SOURCE, ONBOARDING_STEP_STATE } from '../lib/status';
 import { setOnboardingStep, type OnboardingStep, type PlatformCapability } from '../lib/platform';
+import { reasonOr } from '../lib/reason';
 
 const RECORDABLE = [
   { value: 'in_progress', label: 'בתהליך' },
@@ -76,8 +77,14 @@ export default function CustomerOnboarding({ orgId, steps, may, busy, run }: {
           onClose={() => setEditing(null)}
           onSubmit={(state, reason) => {
             const target = editing.step_key;
+            const targetLabel = editing.label;
             setEditing(null);
-            run(() => setOnboardingStep({ orgId, stepKey: target, state, reason }), 'השלב נרשם');
+            // Recording the step no longer waits for the operator to type anything; when they do
+            // not, the ledger says which step was recorded and that nobody added a note.
+            run(() => setOnboardingStep({
+              orgId, stepKey: target, state,
+              reason: reasonOr(reason, `רישום שלב ההקמה ״${targetLabel}״`),
+            }), 'השלב נרשם');
           }}
         />
       )}
@@ -108,7 +115,7 @@ function StepModal({ busy, step, onClose, onSubmit }: {
           </select>
         </div>
         <div>
-          <label className="label" htmlFor="step-reason">מה ידוע</label>
+          <label className="label" htmlFor="step-reason">מה ידוע (רשות)</label>
           <textarea id="step-reason" className="input" rows={2} maxLength={1000} value={reason}
             onChange={(event) => setReason(event.target.value)} />
         </div>
@@ -117,7 +124,7 @@ function StepModal({ busy, step, onClose, onSubmit }: {
         </p>
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-          <button type="button" className="btn-primary" disabled={busy || !reason.trim()}
+          <button type="button" className="btn-primary" disabled={busy}
             onClick={() => onSubmit(state, reason)}>שמירה</button>
         </div>
       </div>

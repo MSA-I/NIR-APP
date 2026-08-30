@@ -1150,10 +1150,17 @@ export function ReceiveOrder() {
         onClose={() => setConflict(null)}
         onResolve={(resolution) => void resolveConflict(resolution)} />
 
+      {/* The box stays, and #290 is the reason it stays: what is typed here is not audit ceremony,
+          it is the exception's content. `open_manual_exception` copies it into `details.reason`
+          (`0087:165`) and `Exceptions.tsx` renders it back to whoever picks the exception up, under
+          the label "סיבה". So the question asked is the one the investigator needs answered — what
+          to look into — not why a button was pressed. It still does not block: an empty box goes
+          through and `reasonOr` writes an honest sentence in its place. */}
       <ConfirmDialog open={exceptionOpen} onClose={() => setExceptionOpen(false)}
         onConfirm={(reason) => void openManualException(reason ?? '')}
         title="פתיחת חריג לבירור"
         message={`ייפתח חריג "פריט שלא הוזמן" על הזמנה #${order?.number ?? ''}. הוא יופיע במסך החריגים בשיוך למנהל הרכש.`}
+        reasonLabel="מה צריך לברר? (רשות — יוצג למי שיטפל בחריג)"
         confirmLabel="פתיחת חריג" requireReason busy={exceptionBusy} />
     </div>
   );

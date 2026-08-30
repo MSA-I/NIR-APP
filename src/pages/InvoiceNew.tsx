@@ -393,7 +393,7 @@ export default function InvoiceNew() {
         <div><label className="label" htmlFor="invoice-new-vat">{domesticSupplier ? `מע״מ (${org?.vat_rate ?? 18}%)` : 'מע״מ לפי המסמך'}</label><input id="invoice-new-vat" type="number" step={amountStep} className="input num" value={f.vat} onChange={(e) => set('vat', e.target.value)} /></div>
         <div><label className="label" htmlFor="invoice-new-total">סה״כ לתשלום *</label><input id="invoice-new-total" type="number" step={amountStep} className="input num font-semibold" value={f.total} onChange={(e) => onTotal(e.target.value)} /></div>
         <div className="sm:col-span-2"><label className="label" htmlFor="invoice-new-notes">הערות</label><textarea id="invoice-new-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
-        <div className="sm:col-span-2"><label className="label" htmlFor="invoice-new-reason">סיבת קליטת החשבונית *</label><input id="invoice-new-reason" className="input" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>
+        <div className="sm:col-span-2"><label className="label" htmlFor="invoice-new-reason">סיבת קליטת החשבונית (רשות)</label><input id="invoice-new-reason" className="input" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>
       </Card>
 
       {(checks || checking || checkError) && (

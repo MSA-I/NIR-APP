@@ -4,8 +4,9 @@ import { toHebrewError } from '../lib/errors';
 import { Plus, Pencil, Copy, Power, Upload, History } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
+import { reasonOr } from '../lib/reason';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, Modal, useToast, ErrorNote, PageHeader, SkeletonTable, ConfirmDialog, ToggleGroup, ICON, type Column } from '../components/ui';
+import { DataTable, Modal, useToast, ErrorNote, PageHeader, SkeletonTable, ToggleGroup, ICON, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
 import { fmtMoneyExact, formatUnit, normalizeUnitInput, productLabel } from '../lib/format';
 import { useCategories } from './Suppliers';
@@ -36,7 +37,6 @@ export default function Products() {
   const [params, setParams] = useSearchParams();
   const [editing, setEditing] = useState<Product | null | 'new'>(null);
   const [clone, setClone] = useState<Product | null>(null); // "שכפול": prefill without an id
-  const [toggleTarget, setToggleTarget] = useState<ProductRow | null>(null);
   const [busyToggle, setBusyToggle] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [catFilter, setCatFilter] = useState('');
@@ -128,24 +128,50 @@ export default function Products() {
     setParams(next, { replace: true });
   }, [params, data, canWrite, setParams]);
 
-  // Activation changes availability for every future order. The RPC owns the row lock, reason
-  // and audit record so neither direction can bypass the same business control.
-  async function toggleActive(reason?: string) {
-    if (!toggleTarget) return;
-    const next = !toggleTarget.active;
+  /**
+   * Activation changes availability for every future order. The RPC owns the row lock, the reason
+   * and the audit record so neither direction can bypass the same business control.
+   *
+   * There is no confirmation dialog in front of it any more (0225). Asking "are you sure?" before
+   * a change that one press puts back is a tax on the ninety-nine cases to catch the one — and it
+   * bought nothing here, because the answer to a mis-press is the same RPC with the flag flipped.
+   * `set_product_active` answers idempotently when the row already holds the requested value, so a
+   * double press of Undo is a no-op rather than a second toggle.
+   */
+  async function setActive(row: ProductRow, next: boolean, action: string): Promise<boolean> {
     setBusyToggle(true);
     const res = await supabase.rpc('set_product_active', {
-      p_product_id: toggleTarget.id,
+      p_product_id: row.id,
       p_active: next,
-      p_reason: reason ?? null,
+      // Nobody types a reason for this any more, so the ledger gets a sentence naming the
+      // direction. One string for both directions would be false half the time.
+      p_reason: reasonOr(null, action),
     });
     setBusyToggle(false);
-    if (res.error) { setToggleTarget(null); toast(toHebrewError(res.error.message), 'error'); return; }
-    setToggleTarget(null);
-    toast(next ? 'המוצר הופעל' : 'המוצר הושבת');
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return false; }
     void refetch();
+    return true;
   }
 
+  async function toggleActive(row: ProductRow) {
+    if (busyToggle) return;
+    const next = !row.active;
+    if (!await setActive(row, next, next ? 'הפעלת מוצר' : 'השבתת מוצר')) return;
+    toast(next ? 'המוצר הופעל' : 'המוצר הושבת', 'success', {
+      label: 'ביטול הפעולה',
+      onAct: () => { void undoToggle(row, next); },
+    });
+  }
+
+  /**
+   * The reversal. It is a second audited write and a second `audit_logs` row on purpose: the
+   * ledger should show that the product was disabled and then re-enabled, because that is what
+   * happened. Collapsing the pair would make the ledger a summary of intent instead of a record.
+   */
+  async function undoToggle(row: ProductRow, applied: boolean) {
+    if (!await setActive(row, !applied, applied ? 'ביטול הפעלת מוצר' : 'ביטול השבתת מוצר')) return;
+    toast(applied ? 'ההפעלה בוטלה — המוצר מושבת' : 'ההשבתה בוטלה — המוצר פעיל');
+  }
   const columns: Column<ProductRow>[] = [
     // The catalogue table shows the approved name; the edit modal below goes on showing the raw
     // one, because that is the field it edits and the one matching and the supplier read.
@@ -260,7 +286,7 @@ export default function Products() {
             // A copy starts with no canonical name of its own: it is a different product, and the
             // name it will be shown under is a decision nobody has made about it yet.
             { key: 'duplicate', label: 'שכפול', icon: Copy, onSelect: () => setClone({ ...r, name: `${r.name} (עותק)`, display_name: null }) },
-            { key: 'toggle', label: r.active ? 'השבתה' : 'הפעלה', icon: Power, onSelect: () => setToggleTarget(r) },
+            { key: 'toggle', label: r.active ? 'השבתה' : 'הפעלה', icon: Power, onSelect: () => { void toggleActive(r); } },
           ] : undefined}
           toolbar={
             <select className="input w-auto!" aria-label="סינון מוצרים לפי קטגוריה" value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>
@@ -277,15 +303,6 @@ export default function Products() {
       {uploadOpen && (
         <PriceListUploadModal onClose={() => setUploadOpen(false)} onImported={() => void refetch()} />
       )}
-
-      <ConfirmDialog open={!!toggleTarget} onClose={() => setToggleTarget(null)}
-        onConfirm={(reason) => void toggleActive(reason)}
-        title={toggleTarget?.active ? 'השבתת מוצר' : 'הפעלת מוצר'}
-        message={toggleTarget?.active
-          ? `המוצר ״${toggleTarget ? productLabel(toggleTarget) : ''}״ לא יופיע יותר בהזמנות חדשות. הפעולה תתועד ביומן הביקורת.`
-          : `המוצר ״${toggleTarget ? productLabel(toggleTarget) : ''}״ יחזור להיות זמין להזמנות. הפעולה תתועד ביומן הביקורת.`}
-        confirmLabel={toggleTarget?.active ? 'השבתה' : 'הפעלה'}
-        requireReason busy={busyToggle} />
     </div>
   );
 }

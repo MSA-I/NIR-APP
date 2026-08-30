@@ -98,7 +98,8 @@ describe('ReauthModal', () => {
     authState.session = fresh;
     const onConfirm = vi.fn();
     render(<ReauthModal open onConfirm={onConfirm} onCancel={vi.fn()} />);
-    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(fresh));
+    // Second argument: the optional reason, empty because the dialog never painted a box to type in.
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(fresh, ''));
     // No dialog, no auth traffic: a user who signed in seconds ago is not asked again.
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(auth.signInWithPassword).not.toHaveBeenCalled();
@@ -119,7 +120,7 @@ describe('ReauthModal', () => {
     await user.type(screen.getByLabelText('סיסמה לאימות זהות טרי *'), 'secret-pass');
     await user.click(screen.getByRole('button', { name: /אישור זהות/ }));
 
-    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(freshSession));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(freshSession, ''));
     // The identity is always the signed-in user's — never a typed one.
     expect(auth.signInWithPassword).toHaveBeenCalledWith({ email: 'owner@example.com', password: 'secret-pass' });
     expect(auth.signOut).not.toHaveBeenCalled();
@@ -180,6 +181,107 @@ describe('ReauthModal', () => {
     expect(onCancel).toHaveBeenCalled();
     expect(auth.signInWithPassword).not.toHaveBeenCalled();
     expect(auth.signOut).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * #290 collapsed the supplier bank flow's two consecutive dialogs into this one, by letting the
+ * step-up carry an optional reason. The risk of that is a gate that quietly softened while a field
+ * was being added, so what is measured here is both: the field behaves like #290 requires, and
+ * every password rule above is untouched by its presence.
+ */
+describe('ReauthModal — the optional reason field', () => {
+  const REASON_LABEL = 'למה משנים? (רשות)';
+
+  it('has no reason box at all unless a label is given', () => {
+    render(<ReauthModal open onConfirm={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('hands back what was typed, and never blocks the button when nothing was', async () => {
+    const user = userEvent.setup();
+    const freshSession = { access_token: 'fresh', user: { id: 'user-1' } };
+    auth.signInWithPassword.mockResolvedValue({
+      data: { user: { id: 'user-1' }, session: freshSession },
+      error: null,
+    });
+    const onConfirm = vi.fn();
+    render(<ReauthModal open reasonLabel={REASON_LABEL} onConfirm={onConfirm} onCancel={vi.fn()} />);
+    await waitForInitialDialogFocus();
+
+    // An empty reason does not disable anything; an empty PASSWORD still does.
+    const confirm = screen.getByRole('button', { name: /אישור זהות/ });
+    expect(confirm).toBeDisabled();
+    await user.type(screen.getByLabelText('סיסמה לאימות זהות טרי *'), 'secret-pass');
+    expect(confirm).toBeEnabled();
+
+    await user.type(screen.getByLabelText(REASON_LABEL), 'החלפת חשבון לפי מכתב מהספק');
+    await user.click(confirm);
+
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(freshSession, 'החלפת חשבון לפי מכתב מהספק'));
+  });
+
+  it('confirms with an empty reason when the box is left alone', async () => {
+    const user = userEvent.setup();
+    const freshSession = { access_token: 'fresh', user: { id: 'user-1' } };
+    auth.signInWithPassword.mockResolvedValue({
+      data: { user: { id: 'user-1' }, session: freshSession },
+      error: null,
+    });
+    const onConfirm = vi.fn();
+    render(<ReauthModal open reasonLabel={REASON_LABEL} onConfirm={onConfirm} onCancel={vi.fn()} />);
+    await waitForInitialDialogFocus();
+
+    await user.type(screen.getByLabelText('סיסמה לאימות זהות טרי *'), 'secret-pass');
+    await user.click(screen.getByRole('button', { name: /אישור זהות/ }));
+
+    // '' is what the caller runs through `reasonOr` — the modal does not invent a sentence itself.
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(freshSession, ''));
+  });
+
+  it('does not let the reason field open a door around the password', async () => {
+    const user = userEvent.setup();
+    auth.signInWithPassword.mockResolvedValue({
+      data: { user: null, session: null },
+      error: new Error('Invalid login credentials'),
+    });
+    const onConfirm = vi.fn();
+    render(<ReauthModal open reasonLabel={REASON_LABEL} onConfirm={onConfirm} onCancel={vi.fn()} />);
+    await waitForInitialDialogFocus();
+
+    // A filled reason and a wrong password: nothing is confirmed, and the dialog stays.
+    await user.type(screen.getByLabelText(REASON_LABEL), 'סיבה משכנעת מאוד');
+    await user.type(screen.getByLabelText('סיסמה לאימות זהות טרי *'), 'wrong-pass');
+    await user.click(screen.getByRole('button', { name: /אישור זהות/ }));
+
+    expect(await screen.findByText('אימייל או סיסמה שגויים.')).toBeInTheDocument();
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('forgets the typed reason once the dialog closes', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <ReauthModal open reasonLabel={REASON_LABEL} onConfirm={vi.fn()} onCancel={vi.fn()} />,
+    );
+    await waitForInitialDialogFocus();
+    await user.type(screen.getByLabelText(REASON_LABEL), 'טיוטה שלא נשלחה');
+
+    rerender(<ReauthModal open={false} reasonLabel={REASON_LABEL} onConfirm={vi.fn()} onCancel={vi.fn()} />);
+    rerender(<ReauthModal open reasonLabel={REASON_LABEL} onConfirm={vi.fn()} onCancel={vi.fn()} />);
+
+    // Same rule the password field has always had: nothing survives a closed dialog.
+    expect(screen.getByLabelText(REASON_LABEL)).toHaveValue('');
+  });
+
+  it('says what is about to change when the caller supplies the sentence', () => {
+    render(
+      <ReauthModal open details="פרטי הבנק של ״ספק בדיקה״ יעודכנו." onConfirm={vi.fn()} onCancel={vi.fn()} />,
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('פרטי הבנק של ״ספק בדיקה״ יעודכנו.');
+    // The shared explanation is not replaced by it — both sentences are shown.
+    expect(dialog).toHaveTextContent('הפעולה רגישה ודורשת אימות סיסמה טרי');
   });
 });
 

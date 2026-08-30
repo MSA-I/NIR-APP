@@ -63,7 +63,7 @@ describe('InvoiceLineReviewModal', () => {
 
   it('appends a reasoned manual evidence revision without using product name as identity', async () => {
     const onSaved = renderModal();
-    fireEvent.change(screen.getByLabelText('סיבת תיקון השורות'), {
+    fireEvent.change(screen.getByLabelText('סיבת תיקון השורות (רשות)'), {
       target: { value: 'תיקון מול החשבונית המקורית' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'שמירת שורות ובדיקה מחדש' }));
@@ -93,7 +93,7 @@ describe('InvoiceLineReviewModal', () => {
     fireEvent.change(screen.getByLabelText('כמות להקצאה להזמנה 102'), {
       target: { value: '4' },
     });
-    fireEvent.change(screen.getByLabelText('סיבת ההקצאה הידנית'), {
+    fireEvent.change(screen.getByLabelText('סיבת ההקצאה הידנית (רשות)'), {
       target: { value: 'פיצול מאומת מול שתי תעודות המשלוח' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'שמירת הקצאות ובדיקה מחדש' }));
@@ -108,6 +108,34 @@ describe('InvoiceLineReviewModal', () => {
         { invoice_line_id: 'line-1', purchase_order_item_id: 'item-2', allocated_quantity: 4 },
       ],
     }));
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  // The two halves of the owner's 11.08.2026 ruling, one test per box: an empty reason must not
+  // block a legitimate correction, and it must not reach the server as a blank either — the
+  // command raises `reason_required` on a blank, and an audit row reading "" explains nothing.
+  it('שומר תיקון שורות גם כשלא נכתבה סיבה, ושולח משפט ליומן', async () => {
+    const onSaved = renderModal();
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת שורות ובדיקה מחדש' }));
+
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(1));
+    const payload = mocks.rpc.mock.calls[0][1] as { p_reason: string };
+    expect(payload.p_reason).toContain('ללא הערה');
+    expect(payload.p_reason.trim().length).toBeGreaterThan(0);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it('שומר הקצאה ידנית גם כשלא נכתבה סיבה, ושולח משפט ליומן', async () => {
+    const onSaved = renderModal();
+    fireEvent.change(screen.getByLabelText('כמות להקצאה להזמנה 101'), { target: { value: '6' } });
+    fireEvent.change(screen.getByLabelText('כמות להקצאה להזמנה 102'), { target: { value: '4' } });
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת הקצאות ובדיקה מחדש' }));
+
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(1));
+    expect(mocks.rpc.mock.calls[0][0]).toBe('record_invoice_line_matches');
+    const payload = mocks.rpc.mock.calls[0][1] as { p_reason: string };
+    expect(payload.p_reason).toContain('ללא הערה');
+    expect(payload.p_reason.trim().length).toBeGreaterThan(0);
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
 });

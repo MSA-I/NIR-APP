@@ -9,10 +9,14 @@ import type { WhatsAppConnectionView } from '../lib/whatsappConnection';
 
 /**
  * The connection card's contract. The server is the boundary -- owner, a fresh password and a
- * reason are enforced by the RPCs themselves (p73 proves that) -- so these assertions are about
- * what the SCREEN does: it never renders a credential, it never renders an unmasked sender, it
- * never lets a state change leave without a reason and a step-up, and it never lets a manual
- * share read as provider delivery.
+ * non-blank reason are enforced by the RPCs themselves (p73 proves that) -- so these assertions
+ * are about what the SCREEN does: it never renders a credential, it never renders an unmasked
+ * sender, it never lets a state change leave without a step-up, it never sends a blank reason,
+ * and it never lets a manual share read as provider delivery.
+ *
+ * What it deliberately no longer asserts is that an empty reason box BLOCKS the button. That gate
+ * was removed on 11.08.2026 by the owner's ruling; the reason is optional to type and mandatory
+ * in the ledger, which `reasonOr` reconciles.
  */
 const calls = vi.hoisted(() => ({
   configure: [] as unknown[],
@@ -125,21 +129,32 @@ describe('WhatsAppConnectionCard', () => {
     expect(screen.queryByRole('button', { name: /ביטול החיבור/ })).not.toBeInTheDocument();
   });
 
-  it('refuses to disable without a reason, and never reaches the server', async () => {
+  it('disabling with an empty reason still goes through the step-up, and sends a ledger sentence', async () => {
+    // The reason stopped gating this button on 11.08.2026 (owner: nobody reads these notes). The
+    // password step-up is a different check -- it proves WHO is acting, not why -- and this test
+    // exists as much to prove that it survived as to prove the reason no longer blocks.
     calls.view = ACTIVE;
     const user = userEvent.setup();
     renderCard('owner');
-    await user.click(await screen.findByRole('button', { name: /השבתת הערוץ/ }));
-    expect(await screen.findByText(/יש לנמק את הפעולה/)).toBeInTheDocument();
-    expect(stepUp.shown).toBe(0);
+    const disable = await screen.findByRole('button', { name: /השבתת הערוץ/ });
+    expect(disable).toBeEnabled();
+    await user.click(disable);
+    // Still nothing sent: the identity has not been proven yet.
     expect(calls.enable).toEqual([]);
+    expect(stepUp.shown).toBe(1);
+    await user.click(screen.getByRole('button', { name: 'אישור זהות' }));
+    await waitFor(() => expect(calls.enable).toHaveLength(1));
+    const sent = calls.enable[0] as { enabled: boolean; reason: string };
+    expect(sent.enabled).toBe(false);
+    expect(sent.reason).toContain('ללא הערה');
+    expect(sent.reason.trim().length).toBeGreaterThan(0);
   });
 
   it('disabling requires the step-up first, then sends the reason the audit will store', async () => {
     calls.view = ACTIVE;
     const user = userEvent.setup();
     renderCard('owner');
-    await user.type(await screen.findByLabelText(/סיבת הפעולה/), 'הספק ביקש להפסיק');
+    await user.type(await screen.findByLabelText(/סיבת הפעולה \(רשות/), 'הספק ביקש להפסיק');
     await user.click(screen.getByRole('button', { name: /השבתת הערוץ/ }));
     // Nothing has been sent yet: the identity has not been proven.
     expect(calls.enable).toEqual([]);
@@ -152,7 +167,7 @@ describe('WhatsAppConnectionCard', () => {
     calls.view = ACTIVE;
     const user = userEvent.setup();
     renderCard('owner');
-    await user.type(await screen.findByLabelText(/סיבת הפעולה/), 'סיום התקשרות');
+    await user.type(await screen.findByLabelText(/סיבת הפעולה \(רשות/), 'סיום התקשרות');
     await user.click(screen.getByRole('button', { name: /ביטול החיבור ומחיקת הסוד/ }));
     expect(calls.revoke).toEqual([]);
     await user.click(screen.getByRole('button', { name: 'אישור זהות' }));
@@ -169,7 +184,7 @@ describe('WhatsAppConnectionCard', () => {
     fireEvent.change(screen.getByLabelText('סוד הגישה של הארגון'), { target: { value: 'a-tenant-credential' } });
     fireEvent.change(screen.getByLabelText('מזהה תבנית הזמנה'), { target: { value: 'HXorder' } });
     fireEvent.change(screen.getByLabelText('מזהה תבנית תזכורת'), { target: { value: 'HXreminder' } });
-    fireEvent.change(screen.getByLabelText(/סיבת החיבור/), { target: { value: 'חיבור ראשוני' } });
+    fireEvent.change(screen.getByLabelText(/סיבת החיבור \(רשות/), { target: { value: 'חיבור ראשוני' } });
     await user.click(screen.getByRole('button', { name: 'שמירת החיבור' }));
     expect(calls.configure).toEqual([]);
     expect(stepUp.shown).toBe(1);

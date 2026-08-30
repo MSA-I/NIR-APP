@@ -15,6 +15,7 @@ import { fmtMoneyExact, fmtNum, fmtDate, fmtDays, productLabel } from '../lib/fo
 import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission, SupplierBankDetails, SupplierBankMigrationItem, MoneyAmount } from '../lib/types';
 import { MoneyByCurrency } from '../components/Money';
 import { SUPPLIER_COLUMNS } from '../lib/supplierColumns';
+import { OPTIONAL_REASON_LABEL, reasonOr } from '../lib/reason';
 import { SupplierCommunicationCard } from '../components/SupplierCommunicationCard';
 import { readFinancialSupplierBankAccount, readSupplierBankMigrationItem } from '../lib/financialSuppliers';
 
@@ -265,6 +266,13 @@ export function SuppliersList() {
   );
 }
 
+/**
+ * What the audit ledger records when the optional reason box was left empty (#290). The server
+ * refuses a blank `p_reason` outright (`supplier_bank_details_reason_required`, 22023), so this is
+ * not decoration — it is the string that keeps a legitimate change from failing at the boundary.
+ */
+const BANK_DETAILS_ACTION = 'עדכון פרטי בנק של ספק';
+
 // Exported for the wave-4 bank-details spec; the app itself reaches it only through this file.
 export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   supplier: SupplierRow | null;
@@ -284,10 +292,31 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   const [busy, setBusy] = useState(false);
   // The dedicated bank-details step (migration 0061). `suppliers.bank_details` left the direct
   // UPDATE column grant in 0061; changing it goes through `update_supplier_bank_details`
-  // (step-up + mandatory reason + audit). `bankStep` holds the new value while the reason
-  // dialog is up; `bankReauth` holds the confirmed reason while ReauthModal decides.
+  // (step-up + mandatory reason + audit). `bankStep` holds the new value while the step-up
+  // dialog is up.
+  //
+  // #290: this used to be TWO full-screen interruptions in a row for one action — a ConfirmDialog
+  // that existed only to collect a reason, and then the password prompt. The reason box moved into
+  // the password prompt itself, so the person is stopped once. Nothing about the gate moved with
+  // it: `update_supplier_bank_details` still calls `assert_recent_password_authentication()`
+  // (`0171:314`), and the only thing that ever satisfied it was a fresh password `amr` entry.
   const [bankStep, setBankStep] = useState<{ nextBank: SupplierBankDetails | null; supplierId: string } | null>(null);
-  const [bankReauth, setBankReauth] = useState<string | null>(null);
+  /**
+   * Which state that single dialog is in.
+   *
+   * `'ask'` is the first pass: a session whose JWT already carries a fresh password proof skips the
+   * prompt, exactly as it did before — the server accepts that same proof, so asking would be
+   * asking for a password the user typed seconds ago.
+   *
+   * `'retry'` is what a rejected write leaves behind, and it turns the skip OFF. Re-opening a
+   * skipping dialog after a failure would re-fire the write by itself, forever; and after a refused
+   * sensitive write, asking for the password again is stricter than the first pass, never weaker.
+   *
+   * It also has to be separate state from `bankStep`: `onConfirm` must close the dialog in the same
+   * tick it hands back the session, because a successful `signInWithPassword` refreshes the session
+   * and would otherwise make the still-open dialog "fresh" and fire the write a second time.
+   */
+  const [bankPrompt, setBankPrompt] = useState<'closed' | 'ask' | 'retry'>('closed');
   const [bankBusy, setBankBusy] = useState(false);
   const [legacyBank, setLegacyBank] = useState<SupplierBankMigrationItem | null>(null);
   const [bankLoadError, setBankLoadError] = useState<string | null>(null);
@@ -433,7 +462,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
       const res = await supabase.from('suppliers').update(row).eq('id', supplier.id);
       setBusy(false);
       if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
-      if (nextBank !== undefined) { setBankStep({ nextBank, supplierId: supplier.id }); return; }
+      if (nextBank !== undefined) { startBankStep(nextBank, supplier.id); return; }
       toast('הספק עודכן');
       onSaved();
     } else {
@@ -449,13 +478,18 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
       if (nextBank) {
         // #106: the row exists bank-less; the details now take the same reasoned step-up
         // path a change to an existing supplier takes.
-        toast('הספק נוצר — פרטי הבנק דורשים אימות וסיבה');
-        setBankStep({ nextBank, supplierId: (res.data as { id: string }).id });
+        toast('הספק נוצר — פרטי הבנק דורשים אימות זהות');
+        startBankStep(nextBank, (res.data as { id: string }).id);
         return;
       }
       toast('הספק נוצר');
       onSaved();
     }
+  }
+
+  function startBankStep(nextBank: SupplierBankDetails | null, supplierId: string) {
+    setBankStep({ nextBank, supplierId });
+    setBankPrompt('ask');
   }
 
   async function saveBankDetails(reason: string) {
@@ -464,11 +498,14 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
     const res = await supabase.rpc('update_supplier_bank_details', {
       p_supplier_id: bankStep.supplierId,
       p_bank_details: bankStep.nextBank,
-      p_reason: reason.trim(),
+      // Already non-blank — `reasonOr` ran at the call site, and the server raises
+      // `supplier_bank_details_reason_required` (22023) on anything that trims to nothing.
+      p_reason: reason,
     });
     setBankBusy(false);
-    // On failure the reason dialog stays open for a retry; the other fields are already saved.
-    if (res.error) { toast(toHebrewError(res.error.message), 'error'); return; }
+    // On failure the step-up dialog comes back for a retry — this time without the fresh-JWT skip,
+    // so the retry is a deliberate act. The other fields are already saved.
+    if (res.error) { toast(toHebrewError(res.error.message), 'error'); setBankPrompt('retry'); return; }
     toast('פרטי הבנק עודכנו ונרשמו ביומן הביקורת');
     setBankStep(null);
     onSaved();
@@ -478,7 +515,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   // user must hear that the bank change specifically did not happen.
   function cancelBankStep() {
     setBankStep(null);
-    setBankReauth(null);
+    setBankPrompt('closed');
     toast('פרטי הבנק לא עודכנו — שאר השדות נשמרו', 'error');
     onSaved();
   }
@@ -486,7 +523,9 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
   const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
   return (
-    <Modal open onClose={onClose} title={supplier ? `עריכת ספק — ${supplier.name}` : 'ספק חדש'} wide busy={busy} statusMessage={busy ? 'שומר את פרטי הספק' : undefined}>
+    <Modal open onClose={onClose} title={supplier ? `עריכת ספק — ${supplier.name}` : 'ספק חדש'} wide
+      busy={busy || bankBusy}
+      statusMessage={busy ? 'שומר את פרטי הספק' : bankBusy ? 'שומר את פרטי הבנק' : undefined}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><label className="label" htmlFor="supplier-name">שם הספק *</label><input id="supplier-name" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} /></div>
         <div><label className="label" htmlFor="supplier-tax-id">ח.פ / עוסק</label><input id="supplier-tax-id" className="input" dir="ltr" value={f.tax_id} onChange={(e) => set('tax_id', e.target.value)} /></div>
@@ -576,22 +615,27 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
         <button className="btn-primary" disabled={busy} onClick={() => void save()}>{busy ? 'שומר…' : 'שמירה'}</button>
       </div>
 
-      <ConfirmDialog
-        open={!!bankStep}
-        onClose={cancelBankStep}
-        onConfirm={(reason) => setBankReauth(reason ?? '')}
-        title="עדכון פרטי בנק"
-        message={`פרטי הבנק של ״${supplier?.name ?? f.name}״ ${bankStep?.nextBank ? `יעודכנו לחשבון ${bankStep.nextBank.country_code} שמסתיים ב־${(bankStep.nextBank.account_number ?? bankStep.nextBank.iban ?? '').slice(-4)}` : 'יוסרו'}. השינוי דורש אימות סיסמה טרי ונרשם ביומן הביקורת.`}
-        confirmLabel="אישור העדכון"
-        requireReason
-        busy={bankBusy}
-      />
-
+      {/* One interruption, not two (#290). The password step is the whole gate; the sentence that
+          used to be a separate ConfirmDialog — which account is about to change — is now this
+          dialog's description, and the reason box rides along as an optional field.
+          `skipWhenFresh={false}`, deliberately, and it is the one place in the app that opts out.
+          Everywhere else the skip is a kindness: the server would accept the fresh token anyway,
+          so asking again buys nothing. Here it would buy the thing that matters. Collapsing two
+          dialogs into one is a fix; collapsing them into none is not — and that is what a fresh
+          token would have done, because the ConfirmDialog this replaced was unconditional. This
+          field decides which account the money leaves for (#106), so it never changes without a
+          person seeing the account and typing something. One interruption, always. */}
       <ReauthModal
-        open={bankReauth !== null}
+        open={bankPrompt !== 'closed'}
+        skipWhenFresh={false}
         title="אימות זהות לעדכון פרטי בנק"
-        onConfirm={() => { const reason = bankReauth; setBankReauth(null); void saveBankDetails(reason ?? ''); }}
-        onCancel={() => setBankReauth(null)}
+        details={`פרטי הבנק של ״${supplier?.name ?? f.name}״ ${bankStep?.nextBank ? `יעודכנו לחשבון ${bankStep.nextBank.country_code} שמסתיים ב־${(bankStep.nextBank.account_number ?? bankStep.nextBank.iban ?? '').slice(-4)}` : 'יוסרו'}, והשינוי יירשם ביומן הביקורת.`}
+        reasonLabel={OPTIONAL_REASON_LABEL}
+        onConfirm={(_session, reason) => {
+          setBankPrompt('closed');
+          void saveBankDetails(reasonOr(reason, BANK_DETAILS_ACTION));
+        }}
+        onCancel={cancelBankStep}
       />
     </Modal>
   );

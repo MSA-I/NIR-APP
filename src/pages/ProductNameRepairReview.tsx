@@ -1,8 +1,22 @@
-import { useId, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { AlertTriangle, Check, FileSpreadsheet, LockKeyhole } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toHebrewError } from '../lib/errors';
+import { reasonOr } from '../lib/reason';
 import { Card, ICON, SubPanel, useToast } from '../components/ui';
+
+/**
+ * Named in the audit row; `reasonOr` completes the sentence when nobody typed one.
+ *
+ * This screen renders directly above `ProductNameReview` on `/products`, and that file's
+ * `WHY NO DIALOG DEMANDS A TYPED REASON` states the owner's ruling for exactly this queue:
+ * approving a queued proposal is the ordinary forward step, repeated row after row, and a box
+ * that blocks the button produces "asdf" rather than reasons. A required box here contradicted
+ * its sibling on the same screen, so it is gone. **Do not restore it** — the row already carries
+ * its own evidence (old name, source file, row, SHA-256), which is the part that makes the
+ * approval explicable a year later; the ledger keeps a truthful sentence either way.
+ */
+const APPROVE_ACTION = 'אישור תיקון שם מוצר ממקור';
 
 export interface ProductNameRepairCandidate {
   candidate_id: string;
@@ -80,20 +94,16 @@ function RepairCard({ candidate, onApplied }: {
   candidate: ProductNameRepairCandidate;
   onApplied: (candidateId: string) => void;
 }) {
-  const reasonId = useId();
   const toast = useToast();
   // One command identity per candidate card. A failed response must replay the same command,
   // otherwise the server cannot distinguish retry from a second approval attempt.
   const idempotencyKey = useRef(crypto.randomUUID());
-  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const ready = candidate.status === 'ready' && candidate.proposed_name !== null;
   const evidence = Object.entries(candidate.source_evidence)
     .filter(([, value]) => value != null && String(value).trim() !== '');
 
   async function apply() {
-    const typedReason = reason.trim();
-    if (!typedReason) { toast('יש לציין סיבה לפני אישור התיקון', 'error'); return; }
     setBusy(true);
     const result = await supabase.rpc('apply_product_name_repair', {
       p_candidate_id: candidate.candidate_id,
@@ -101,7 +111,7 @@ function RepairCard({ candidate, onApplied }: {
       p_expected_proposed_name: candidate.proposed_name,
       p_expected_source_checksum: candidate.source_checksum,
       p_idempotency_key: idempotencyKey.current,
-      p_reason: typedReason,
+      p_reason: reasonOr(null, APPROVE_ACTION),
     });
     setBusy(false);
     if (result.error) { toast(toHebrewError(result.error.message), 'error'); return; }
@@ -148,16 +158,9 @@ function RepairCard({ candidate, onApplied }: {
           <p>{candidate.reason_code ? REASON[candidate.reason_code] : 'אין ראיה מספקת לאישור שינוי.'}</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          <div>
-            <label className="label" htmlFor={reasonId}>סיבה לאישור התיקון</label>
-            <textarea id={reasonId} className="input" rows={2} maxLength={1000}
-              value={reason} onChange={(event) => setReason(event.target.value)} />
-          </div>
-          <button type="button" className="btn-primary" disabled={busy} onClick={() => void apply()}>
-            <Check size={ICON.sm} aria-hidden="true" /> אישור התיקון
-          </button>
-        </div>
+        <button type="button" className="btn-primary" disabled={busy} onClick={() => void apply()}>
+          <Check size={ICON.sm} aria-hidden="true" /> אישור התיקון
+        </button>
       )}
     </Card>
   );

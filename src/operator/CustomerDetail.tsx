@@ -19,6 +19,7 @@ import {
   resolveFollowUp, setCustomerAccount, upsertCustomerContact,
   type CustomerContact, type CustomerNote, type PlatformCapability,
 } from '../lib/platform';
+import { reasonOr } from '../lib/reason';
 import CustomerSubscription from './CustomerSubscription';
 import CustomerUsage from './CustomerUsage';
 import CustomerHealth from './CustomerHealth';
@@ -356,7 +357,9 @@ export default function CustomerDetail() {
             orgId,
             internalOwner: form.owner || null,
             customerSince: form.since || null,
-            reason: form.reason,
+            // The box no longer blocks the save, so the ledger gets an honest sentence rather
+            // than an empty string the server would refuse anyway.
+            reason: reasonOr(form.reason, 'עדכון פרטי חשבון הלקוח'),
           }), 'פרטי החשבון עודכנו')}
         />
       )}
@@ -375,7 +378,7 @@ export default function CustomerDetail() {
             email: form.email || null,
             phone: form.phone || null,
             preferredChannel: form.channel || null,
-            reason: form.reason,
+            reason: reasonOr(form.reason, `עדכון ${CUSTOMER_CONTACT_KIND[editingContact.kind]}`),
           }), 'איש הקשר נשמר')}
         />
       )}
@@ -446,13 +449,13 @@ function AccountModal({ busy, operators, initialOwner, initialSince, onClose, on
             onChange={(event) => setForm({ ...form, since: event.target.value })} />
         </div>
         <div>
-          <label className="label" htmlFor="account-reason">סיבת השינוי</label>
+          <label className="label" htmlFor="account-reason">סיבת השינוי (רשות)</label>
           <textarea id="account-reason" className="input" rows={2} maxLength={1000} value={form.reason}
             onChange={(event) => setForm({ ...form, reason: event.target.value })} />
         </div>
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>ביטול</button>
-          <button type="button" className="btn-primary" disabled={busy || !form.reason.trim()}
+          <button type="button" className="btn-primary" disabled={busy}
             onClick={() => onSubmit(form)}>שמירה</button>
         </div>
       </div>
@@ -482,7 +485,9 @@ function ContactModal({ busy, kind, existing, onClose, onSubmit }: {
   const reachable = !!(form.email.trim() || form.phone.trim());
   const channelReachable = !form.channel
     || (form.channel === 'email' ? !!form.email.trim() : !!form.phone.trim());
-  const ready = !!form.name.trim() && !!form.reason.trim() && reachable && channelReachable;
+  // The reason is deliberately absent from `ready`: nothing rejects a contact for lacking one, and
+  // a box that blocks a legitimate save produces "asdf" rather than a reason (`lib/reason.ts`).
+  const ready = !!form.name.trim() && reachable && channelReachable;
 
   return (
     <Modal open onClose={onClose} title={CUSTOMER_CONTACT_KIND[kind]} busy={busy}>
@@ -531,7 +536,7 @@ function ContactModal({ busy, kind, existing, onClose, onSubmit }: {
           )}
         </div>
         <div>
-          <label className="label" htmlFor="contact-reason">סיבת השינוי</label>
+          <label className="label" htmlFor="contact-reason">סיבת השינוי (רשות)</label>
           <textarea id="contact-reason" className="input" rows={2} maxLength={1000} value={form.reason}
             onChange={(event) => setForm({ ...form, reason: event.target.value })} />
         </div>

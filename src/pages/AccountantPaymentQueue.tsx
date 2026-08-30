@@ -717,7 +717,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
         </div>
         <div><label className="label" htmlFor="payment-execution-reference">אסמכתת העברה *</label><input id="payment-execution-reference" className="input num" dir="ltr" value={f.reference} onChange={(e) => setF((s) => ({ ...s, reference: e.target.value }))} /></div>
         <div><label className="label" htmlFor="payment-execution-notes">הערות</label><input id="payment-execution-notes" className="input" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></div>
-        <div><label className="label" htmlFor="payment-execution-reason">סיבת ביצוע / אישור הפעולה *</label><input id="payment-execution-reason" className="input" value={f.reason} onChange={(e) => setF((s) => ({ ...s, reason: e.target.value }))} /></div>
+        <div><label className="label" htmlFor="payment-execution-reason">סיבת ביצוע / אישור הפעולה (רשות)</label><input id="payment-execution-reason" className="input" value={f.reason} onChange={(e) => setF((s) => ({ ...s, reason: e.target.value }))} /></div>
 
         {/* The button below is disabled while the split cannot be computed; the reason is stated
             here instead of leaving the accountant to guess which figure is wrong, and the button
