@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { reasonOr } from '../../lib/reason';
+import { todayISO } from '../../lib/format';
 import { AlertTriangle, Check, CircleCheck, Info, Loader2, ShieldAlert } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toHebrewError } from '../../lib/errors';
 import { fmtMoneyExact, fmtNum } from '../../lib/format';
 import { Disclosure, ICON, Note, useToast } from '../ui';
+import { DocumentLineMapping } from './DocumentLineMapping';
 import { PrimaryDecision } from './PrimaryDecision';
 import {
   advisoryFindings,
@@ -14,6 +16,7 @@ import {
   findingLabel,
   formatLineRanges,
   groupFindings,
+  priceSeedRows,
   resolutionLabel,
   reviewedProposal,
   storageAndApprovalSentences,
@@ -85,6 +88,19 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
    * on the surface. This is the working, not the verdict.
    */
   const [linesOpen, setLinesOpen] = useState(false);
+  /**
+   * Write the document's prices into the supplier's price list — but only where there is no agreed
+   * price yet (owner, 28.08.2026: "המחירים והמוצרים יתעדכנו בהעלאת חשבונית של הספק, כי לא תמיד יש
+   * מחירון של ספק").
+   *
+   * SEEDING, NEVER OVERWRITING, and the distinction is the whole safety of it. `baseline_price` is
+   * what every price finding on this screen compares the document against; letting an invoice
+   * rewrite an EXISTING baseline would make each invoice agree with itself and quietly retire
+   * "מחיר מעל המחיר המוסכם" as a check. A line with no baseline has no such check to lose — the
+   * server already reports it as `price_baseline_unknown` — so filling it in only adds a
+   * comparison the business did not have before.
+   */
+  const [seedPrices, setSeedPrices] = useState(true);
   const toast = useToast();
 
   const load = useCallback(async () => {
@@ -118,6 +134,37 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
     () => approvalEffects(read?.document_type ?? null, Boolean(orderId)),
     [read?.document_type, orderId]);
 
+  /** The lines the server could not attach to a product. Membership is fixed by the server's own
+   *  answer, so a line does not leave the list the moment it is mapped — the list is the work, and
+   *  a row vanishing under the cursor is how a person loses their place in it. */
+  const unmatchedLines = useMemo(
+    () => (read?.assessment?.lines ?? []).filter((line) => line.product_id === null),
+    [read?.assessment]);
+
+  /** line_index → the product the reviewer chose. `edits` is the record; this is its projection. */
+  const mappedProducts = useMemo(() => {
+    const rows: Record<number, string> = {};
+    for (const [index, edit] of Object.entries(edits)) {
+      if (edit.product_id) rows[Number(index)] = edit.product_id;
+    }
+    return rows;
+  }, [edits]);
+
+  const mapLine = useCallback((lineIndex: number, productId: string | null) => {
+    setEdits((current) => {
+      const next = { ...current };
+      const line = { ...(next[lineIndex] ?? {}) };
+      if (productId) line.product_id = productId;
+      else delete line.product_id;
+      if (Object.keys(line).length === 0) delete next[lineIndex];
+      else next[lineIndex] = line;
+      return next;
+    });
+  }, []);
+
+  /** What an approval would write into the price list. The rule itself lives in assessment.ts. */
+  const seedRows = useMemo(() => priceSeedRows(read, edits, supplierId), [read, edits, supplierId]);
+
   /**
    * Every correction is a reason. The server takes one and writes it to the immutable application
    * ledger and to `audit_logs`, so "why did this invoice say ₪240" has an answer months later.
@@ -134,16 +181,42 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
       p_idempotency_key: crypto.randomUUID(),
       p_reason: reasonOr(reason, 'אישור מסמך שהתקבל מהספק'),
     });
-    setBusy(false);
     if (result.error) {
+      setBusy(false);
       toast(toHebrewError(result.error), 'error');
       return;
     }
-    toast('המסמך אושר ונרשם', 'success');
+
+    /**
+     * The price list is filled in AFTER the approval and only then, in a second command.
+     *
+     * It is not one transaction and cannot be made into one: `apply_reviewed_document` records the
+     * document, `import_supplier_prices` owns every `supplier_products` write (0023 revoked direct
+     * DML), and no RPC spans the two. The order is what makes the split honest — the document is
+     * recorded first, so a failure here leaves a correctly recorded document with an unchanged
+     * price list, which is exactly the state that existed before this feature. The reverse order
+     * could leave prices moved by a document nobody approved.
+     */
+    let seedFailure: string | null = null;
+    if (seedPrices && seedRows.length > 0) {
+      const seeded = await supabase.rpc('import_supplier_prices', {
+        p_rows: seedRows,
+        p_effective_date: read.document_date ?? todayISO(),
+        p_reason: reasonOr(reason, 'קביעת מחיר ראשוני מתוך מסמך שהתקבל'),
+      });
+      if (seeded.error) seedFailure = toHebrewError(seeded.error);
+    }
+    setBusy(false);
+
+    toast(seedFailure
+      ? `המסמך אושר ונרשם, אך עדכון המחירון נכשל: ${seedFailure}. אפשר להשלים את המחירים במסך המחירונים.`
+      : seedRows.length > 0 && seedPrices
+        ? `המסמך אושר ונרשם, ונקבעו ${seedRows.length} מחירים חדשים אצל הספק`
+        : 'המסמך אושר ונרשם', seedFailure ? 'error' : 'success');
     setReason('');
     await load();
     onApplied?.();
-  }, [read, supplierId, orderId, edits, reason, toast, load, onApplied]);
+  }, [read, supplierId, orderId, edits, reason, toast, load, onApplied, seedPrices, seedRows]);
 
   if (loading && !read) return <Note tone="info" role="status">טוען את בדיקת המסמך…</Note>;
   if (loadError) return <Note tone="alert" role="alert">{loadError}</Note>;
@@ -202,6 +275,20 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
             )}
           </div>
         </Note>
+      )}
+
+      {/* Directly under the complaint it answers. "מוצר לא מזוהה" is the most common blocking
+          finding on a new account — where the catalogue is empty, so EVERY line raises it — and
+          until 28.08.2026 the screen named the remedy without offering it. */}
+      {editable && unmatchedLines.length > 0 && (
+        <DocumentLineMapping
+          lines={unmatchedLines}
+          supplierId={supplierId}
+          currency={intakeCurrency}
+          mapped={mappedProducts}
+          onMap={mapLine}
+          disabled={busy}
+        />
       )}
 
       {/* Supplier and order, each with the evidence that decided it. A resolution with no
@@ -310,6 +397,25 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
             onChange={(event) => setReason(event.target.value)}
             maxLength={1000}
           />
+          {/* Only where there is something to fill in. An always-present switch over an empty set
+              is a promise the approval will not keep. */}
+          {seedRows.length > 0 && (
+            <label className="mt-3 flex items-start gap-2 text-sm text-ink-body">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 shrink-0"
+                checked={seedPrices}
+                onChange={(event) => setSeedPrices(event.target.checked)}
+              />
+              <span>
+                לקבוע את המחירים שבמסמך כמחיר המוסכם אצל הספק — ל־<span className="num">{seedRows.length}</span>{' '}
+                {seedRows.length === 1 ? 'מוצר שאין לו' : 'מוצרים שאין להם'} מחיר מוסכם.
+                <span className="block text-xs text-ink-muted">
+                  מחיר מוסכם קיים לא ישתנה מהמסמך — הוא נשאר נקודת ההשוואה שמזהה חריגה במחיר.
+                </span>
+              </span>
+            </label>
+          )}
           {/* The button stays exactly where it was written, at every width: between "מה יקרה
               באישור" and the folded working. The blocking sentence is passed as the button's hint
               rather than left here, so it is read before the press and not five screens up. */}
@@ -434,15 +540,15 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
         </Note>
       )}
 
-      {/* The edits map is wired for the line editor that lands with the mapping UI; keeping it in
-          state here means the proposal builder and its tests already carry the reviewer's
-          decisions end to end. */}
+{/* The mapping UI landed (28.08.2026), so the reviewer's decisions now arrive from a control
+          instead of from an `sr-only` button whose only job was to CLEAR them. The count stays: it
+          is the one place the screen says how much of this document is a person's judgement rather
+          than the machine's reading, and the ledger records it as such. */}
       {Object.keys(edits).length > 0 && (
         <p className="text-sm text-ink-muted">
-          <span className="num">{Object.keys(edits).length}</span> שורות תוקנו ידנית.
+          <span className="num">{Object.keys(edits).length}</span> שורות נקבעו ידנית.
         </p>
       )}
-      <button type="button" className="sr-only" onClick={() => setEdits({})}>נקה תיקונים</button>
     </section>
   );
 }

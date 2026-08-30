@@ -71,9 +71,20 @@ const QUOTAS = [
   ...['free', 'basic', 'pro', 'premium'].map((plan, index) =>
     quota(plan, 'documents.monthly', 'מסמכים', [25, 50, 300, 500][index])),
   ...['free', 'basic', 'pro', 'premium'].map((plan, index) =>
+    quota(plan, 'ocr_pages.monthly', 'עמודי סריקה', [500, 500, 6000, 5000][index])),
+  // Measured since the capability ladder (0246): both dials have a write guard behind them, so
+  // the page may publish a figure for them. They used to sit in the unmeasured block below.
+  ...['free', 'basic', 'pro', 'premium'].map((plan, index) =>
     quota(plan, 'users.max', 'משתמשים', [1, 5, 15, 30][index], { unit: 'users' })),
   ...['free', 'basic', 'pro', 'premium'].map((plan, index) =>
     quota(plan, 'branches.max', 'סניפים', [1, 1, 1, 10][index], { unit: 'branches' })),
+  // Unmeasured, so the page cannot publish #198's 20/40/100/250. The #197 ruling did not cover
+  // the assistant quota — re-verify this against the catalogue when the contract names land.
+  ...['free', 'basic', 'pro', 'premium'].map((plan) =>
+    quota(plan, 'assistant_runs.monthly', 'ריצות עוזר', null, { measured: false })),
+  // DEBT §56 — nothing measures this one.
+  ...['free', 'basic', 'pro', 'premium'].map((plan) =>
+    quota(plan, 'suppliers.max', 'ספקים', null, { measured: false })),
 ];
 
 const FEATURES = ['free', 'basic', 'pro', 'premium'].flatMap((planKey, tier) => [
@@ -267,6 +278,7 @@ describe('דף המסלולים הציבורי', () => {
     expect(screen.queryByRole('region', { name: /השוואת המסלולים/ })).not.toBeInTheDocument();
     // Every rung is reachable by reading, not by scrolling: each card holds its own quota rows.
     expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/משתמשים/);
+    expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/עמודי סריקה/);
   });
 
   /**

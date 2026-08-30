@@ -102,7 +102,6 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
                 <h3 className="font-semibold text-ink-body">תוצאת התצוגה המקדימה</h3>
                 <span className="badge-done">{formatLabel[result.format]} · <span className="num">{result.rows.length}</span> שורות</span>
               </div>
-              <p className="mt-2 break-all text-xs text-ink-muted">טביעת מקור: <span dir="ltr" className="tech-id">{result.checksum}</span></p>
               {/* role="region" is what makes aria-label announceable: a bare div has no role, so the
                   name was silently dropped by screen readers and the scroll container arrived unnamed. */}
               <div className="mt-3 table-scroll overflow-x-auto rounded-lg border border-line" role="region" tabIndex={0} aria-label="תצוגת טבלת הייצוא; ניתן לגלול בתוך הטבלה">

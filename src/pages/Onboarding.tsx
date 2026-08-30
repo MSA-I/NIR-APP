@@ -14,6 +14,7 @@ import {
   type FieldSpec, type MapResult, type SheetData, type SheetRow,
 } from '../lib/importSheet';
 import { fmtMoneyExact, formatUnit, normalizeUnitInput, todayISO } from '../lib/format';
+import { QuickCreateSupplier, type QuickCreatedSupplier } from '../components/QuickCreateSupplier';
 import type { Category } from '../lib/types';
 
 /* ================= step model ================= */
@@ -746,15 +747,70 @@ interface SupplierDraft extends ImportRow {
   min_order_amount: number | null;
 }
 
+/**
+ * Typing the suppliers in, for the business that has no supplier file to upload.
+ *
+ * Owner report 28.08.2026: "שתהיה אופציה לבחור שם ספק ולמלא ידנית, ואז המחירים והמוצרים יתעדכנו
+ * בהעלאת חשבונית של הספק. כי לא תמיד יש מחירון של ספק. כמו פיופ, עוצמה, גינדי, וכדו'."
+ *
+ * The step used to accept a spreadsheet and nothing else, so a kitchen whose suppliers are four
+ * names and no file had to leave the wizard, build the rows in /suppliers and come back — the same
+ * dead end `QuickCreateSupplier` was written for, in a different room. It is reused rather than
+ * re-implemented, which also keeps `bank_details` off this surface (DEBT §11 / #106: a supplier
+ * created with an attacker's bank details takes no step-up and raises no security event, so the
+ * field stays in exactly one form).
+ *
+ * The sentence under the button is the other half of the owner's ask, and it is a real promise
+ * rather than reassurance: a supplier with no price list is not a half-configured supplier, because
+ * the document review screen now creates products and seeds prices from the first invoice that
+ * arrives from them (`DocumentLineMapping`).
+ */
+function ManualSuppliers({ onAdded }: { onAdded: (supplier: QuickCreatedSupplier) => void }) {
+  const [open, setOpen] = useState(false);
+  const [added, setAdded] = useState<QuickCreatedSupplier[]>([]);
+
+  return (
+    <SubPanel className="p-4">
+      <h3 className="text-sm font-medium text-ink">אין קובץ ספקים? אפשר להקליד אותם</h3>
+      <p className="mt-1 text-sm text-ink-soft">
+        מקלידים שם ספק, וזהו. <b>אין צורך במחירון:</b> בפעם הראשונה שתעלו חשבונית מהספק הזה,
+        המוצרים שבה ייווצרו והמחירים שלהם ייקבעו מעצמם.
+      </p>
+      {added.length > 0 && (
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {added.map((supplier) => (
+            <li key={supplier.id} className="badge-done"><bdi>{supplier.name}</bdi></li>
+          ))}
+        </ul>
+      )}
+      <button type="button" className="btn-secondary mt-3" onClick={() => setOpen(true)}>
+        <Plus size={ICON.sm} aria-hidden="true" /> הוספת ספק
+      </button>
+      {open && (
+        <QuickCreateSupplier
+          onClose={() => setOpen(false)}
+          onCreated={(supplier) => {
+            setAdded((rows) => (rows.some((row) => row.id === supplier.id) ? rows : [...rows, supplier]));
+            setOpen(false);
+            onAdded(supplier);
+          }}
+        />
+      )}
+    </SubPanel>
+  );
+}
+
 function SuppliersStep({ onDone }: { onDone: () => void }) {
   const { profile } = useAuth();
   const existingSupplierKeys = useRef<Set<string>>(new Set());
+  /** Bumped by a manual add so the sheet import's duplicate check sees the new name too. */
+  const [manualAdds, setManualAdds] = useState(0);
 
   const { loading, error } = useQuery(async () => {
     const rows = unwrap(await supabase.from('suppliers').select('name').is('deleted_at', null)) as { name: string }[];
     existingSupplierKeys.current = new Set(rows.map((s) => nameKey(s.name)));
     return rows.length;
-  });
+  }, [manualAdds]);
 
   const parse: Parser<SupplierDraft> = (rows, cols) => {
     // resolved once per parse so a re-run after fixing the mapping sees the same baseline
@@ -825,9 +881,13 @@ function SuppliersStep({ onDone }: { onDone: () => void }) {
     <div className="space-y-5">
       <StepHeading
         icon={<Truck size={ICON.md} aria-hidden="true" />}
-        title="ייבוא ספקים"
-        subtitle="העלה את רשימת הספקים מקובץ קיים. ספק שכבר קיים במערכת באותו שם לא ייווצר פעמיים."
+        title="הספקים שלך"
+        subtitle="אפשר להעלות רשימה מקובץ, ואפשר פשוט להקליד. ספק שכבר קיים במערכת באותו שם לא ייווצר פעמיים."
       />
+      <ManualSuppliers onAdded={(supplier) => {
+        existingSupplierKeys.current.add(nameKey(supplier.name));
+        setManualAdds((count) => count + 1);
+      }} />
       <SheetImport
         fields={SUPPLIER_FIELDS}
         parse={parse}
@@ -1042,9 +1102,19 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
     <div className="space-y-5">
       <StepHeading
         icon={<Package size={ICON.md} aria-hidden="true" />}
-        title="ייבוא מוצרים ומחירון"
+        title="מוצרים ומחירון"
         subtitle="אותו קובץ יכול להכיל גם את המוצרים וגם מחיר לכל ספק. קטגוריה שאינה קיימת עדיין תיווצר אוטומטית."
       />
+      {/* The step is genuinely optional, and until 28.08.2026 nothing here said so — a business
+          with no price list read an empty catalogue as a setup it had failed to finish. It is not:
+          the document review screen builds products and prices from the first invoice that
+          arrives. Placed above the uploader, because it changes whether a person needs it at all. */}
+      <Note tone="idle">
+        <span className="min-w-0 flex-1">
+          אפשר לדלג על השלב הזה. אין חובה במחירון: כשמעלים חשבונית מספק, המוצרים שבה נוצרים
+          והמחירים שלהם נקבעים משם. השלב הזה נועד למי שכבר יש לו קובץ מוכן ורוצה להתחיל מלא.
+        </span>
+      </Note>
       {counts?.suppliers === 0 && (
         <Note tone="await">
           <span className="min-w-0 flex-1">

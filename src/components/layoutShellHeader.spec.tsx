@@ -1,6 +1,12 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
+/* Layout reads the plan's entitlements through the shared cache, so the shell needs a client
+   even where the read never fires: TanStack throws when there is no provider above it, before it
+   considers `enabled`. The org scope is deliberately left null here — that is what keeps the
+   query disabled and these specs off the network. */
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createAppQueryClient } from '../lib/query/client';
 
 /**
  * The shell header's contract, after the owner's two reports of 26.08.2026.
@@ -80,7 +86,7 @@ beforeEach(() => {
 
 function renderAt(path = '/dashboard') {
   render(
-    <ToastProvider>
+    <QueryClientProvider client={createAppQueryClient()}><ToastProvider>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route element={<Layout />}>
@@ -90,7 +96,7 @@ function renderAt(path = '/dashboard') {
           </Route>
         </Routes>
       </MemoryRouter>
-    </ToastProvider>,
+    </ToastProvider></QueryClientProvider>,
   );
 }
 

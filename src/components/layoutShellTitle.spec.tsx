@@ -2,6 +2,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { act, render } from '@testing-library/react';
 import { useEffect, useState } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router';
+/* Layout reads the plan's entitlements through the shared cache, so the shell needs a client
+   even where the read never fires: TanStack throws when there is no provider above it, before it
+   considers `enabled`. The org scope is deliberately left null here — that is what keeps the
+   query disabled and these specs off the network. */
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createAppQueryClient } from '../lib/query/client';
 
 /**
  * The phone bar's screen name follows the page's own heading (owner ruling, 26.08.2026).
@@ -127,7 +133,7 @@ function DisappearingHeading() {
 
 function renderAt(element: React.ReactNode = null) {
   render(
-    <ToastProvider>
+    <QueryClientProvider client={createAppQueryClient()}><ToastProvider>
       <MemoryRouter initialEntries={['/dashboard']}>
         <Routes>
           <Route element={<Layout />}>
@@ -135,7 +141,7 @@ function renderAt(element: React.ReactNode = null) {
           </Route>
         </Routes>
       </MemoryRouter>
-    </ToastProvider>,
+    </ToastProvider></QueryClientProvider>,
   );
 }
 
@@ -326,7 +332,7 @@ describe('שם המסך בסרגל הטלפון', () => {
   /** Leaving the shell must not leave two observers running over a detached tree. */
   it('מנתק את המשקיפים בפירוק', () => {
     const view = render(
-      <ToastProvider>
+      <QueryClientProvider client={createAppQueryClient()}><ToastProvider>
         <MemoryRouter initialEntries={['/dashboard']}>
           <Routes>
             <Route element={<Layout />}>
@@ -334,7 +340,7 @@ describe('שם המסך בסרגל הטלפון', () => {
             </Route>
           </Routes>
         </MemoryRouter>
-      </ToastProvider>,
+      </ToastProvider></QueryClientProvider>,
     );
     expect(io.disconnects).toBe(0);
     view.unmount();

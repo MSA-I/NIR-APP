@@ -117,19 +117,8 @@ const renderWorkspace = (supplierConfidence: number | null) => render(
   </MemoryRouter>,
 );
 
-const technicalDetails = () => screen.getByText('פרטים טכניים').closest('details') as HTMLDetailsElement;
 
-/**
- * Open it the way a reviewer does. The contents do not exist until then — the rows are one per
- * block and mark across the whole document, so they are built on demand rather than rendered and
- * re-diffed behind a shut disclosure on every workspace interaction.
- */
-async function openTechnicalDetails() {
-  await userEvent.click(screen.getByText('פרטים טכניים'));
-  return technicalDetails();
-}
-
-describe('confidence leaves the review screens and stays inside the disclosure', () => {
+describe('confidence leaves the review screens entirely', () => {
   it('prints no percentage in the two panels a reviewer reads', () => {
     renderWorkspace(0.62);
 
@@ -158,56 +147,29 @@ describe('confidence leaves the review screens and stays inside the disclosure',
     expect(proposals.getAllByText(/זוהה בבירור/).length).toBeGreaterThan(0);
   });
 
-  it('keeps every number, closed by default, inside פרטים טכניים', async () => {
+  it('offers no technical block at all — the disclosure and everything in it are gone', () => {
     renderWorkspace(0.62);
 
-    // Collapsed: the reviewer who does not want the machine never meets it — and while it is shut
-    // the rows are not built at all, which is what keeps a long price list from paying for them.
-    expect(technicalDetails().open).toBe(false);
-    expect(screen.queryByText('87%')).toBeNull();
-
-    const disclosure = within(await openTechnicalDetails());
-    expect(technicalDetails().open).toBe(true);
-
-    // Present and reachable in one click — document type, supplier, field, block, mark.
-    expect(disclosure.getByText('87%')).toBeInTheDocument();
-    expect(disclosure.getByText('62%')).toBeInTheDocument();
-    expect(disclosure.getByText('93%')).toBeInTheDocument();
-    expect(disclosure.getByText('71%')).toBeInTheDocument();
-    expect(disclosure.getByText('55%')).toBeInTheDocument();
-    // Evidence identifiers travel with them, or the number cannot be traced back to anything.
-    expect(disclosure.getAllByText('block-1').length).toBeGreaterThan(0);
-    expect(disclosure.getByText('mark-1')).toBeInTheDocument();
-  });
-
-  /**
-   * Owner report 25.08.2026: "כשכתוב לי פרטים טכניים אני לא אמור לראות שם מודל ו-ai ודברים כאלה".
-   * DESIGN.md already banned a model name on the assistant surface; this is the same rule reaching
-   * the document surface. The fixture deliberately carries `openai` / `gpt-4o-mini` in BOTH the
-   * extraction and the interpretation, so this test fails the moment either finds its way back
-   * onto the screen — and it asserts against the whole document, not the disclosure, because the
-   * rule is that a tenant never meets these words here, not that this one box hides them.
-   */
-  it('never prints the vendor or the model, while keeping the ids support needs', async () => {
-    renderWorkspace(0.62);
-    const disclosure = within(await openTechnicalDetails());
-
+    // Owner report 28.08.2026: "יש אזור שמראה פרטים טכניים - להסיר את זה משתמש לא אמור לראות
+    // את זה". The 25.08 ruling trimmed the vendor and the model out of this box; this one removes
+    // the box. Nothing is deleted from the database — `document_jobs`, `document_extractions` and
+    // `document_interpretations` still carry every id, checksum and confidence, and the operator
+    // console still reads them. They simply stop being printed at a tenant.
+    expect(screen.queryByText('פרטים טכניים')).toBeNull();
+    expect(screen.queryByText('גרסת עיבוד')).toBeNull();
+    expect(screen.queryByText('מזהה משימה')).toBeNull();
+    expect(screen.queryByText('טביעת מקור')).toBeNull();
+    expect(screen.queryByText('גרסת חוזה')).toBeNull();
     expect(screen.queryByText(/openai/i)).toBeNull();
     expect(screen.queryByText(/gpt-4o-mini/i)).toBeNull();
-    expect(screen.queryByText(/מנוע פירוש|מנוע חילוץ/)).toBeNull();
 
-    // What replaced them: our own revisions, which name no company and are what a support session
-    // actually needs to find one exact run.
-    expect(disclosure.getByText('גרסת עיבוד')).toBeInTheDocument();
-    expect(disclosure.getByText('מזהה משימה')).toBeInTheDocument();
-    expect(disclosure.getByText('טביעת מקור')).toBeInTheDocument();
-  });
-
-  it('shows — for a confidence the contract never carried, never a fabricated 0%', async () => {
-    renderWorkspace(null);
-    const disclosure = within(await openTechnicalDetails());
-    expect(disclosure.getAllByText('—').length).toBeGreaterThan(0);
-    expect(disclosure.queryByText('0%')).toBeNull();
+    // The fixture's five confidences, by value. None of them has a surface left on this screen.
+    for (const percentage of ['87%', '62%', '93%', '71%', '55%']) {
+      expect(screen.queryByText(percentage)).toBeNull();
+    }
+    expect(screen.queryByText(/[0-9]+%/)).toBeNull();
+    expect(screen.queryByText('block-1')).toBeNull();
+    expect(screen.queryByText('mark-1')).toBeNull();
   });
 });
 

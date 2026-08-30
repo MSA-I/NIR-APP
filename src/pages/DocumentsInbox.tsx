@@ -521,7 +521,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           } else if (!cancelled) {
             setInterpretFailure({
               jobId: job.id,
-              message: 'החילוץ נשמר, אך שלב הפענוח לא הצליח לאחר שלושה ניסיונות. ניתן לנסות שוב בלי להפעיל OCR מחדש.',
+              message: 'החילוץ נשמר, אך שלב הפענוח לא הצליח לאחר שלושה ניסיונות. ניתן לנסות שוב בלי לקרוא את המסמך מחדש.',
             });
           }
           continue;

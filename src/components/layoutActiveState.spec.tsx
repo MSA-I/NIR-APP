@@ -1,6 +1,12 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
+/* Layout reads the plan's entitlements through the shared cache, so the shell needs a client
+   even where the read never fires: TanStack throws when there is no provider above it, before it
+   considers `enabled`. The org scope is deliberately left null here — that is what keeps the
+   query disabled and these specs off the network. */
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createAppQueryClient } from '../lib/query/client';
 
 const authState = vi.hoisted(() => ({
   accessStatus: 'authoritative' as 'unknown' | 'authoritative' | 'offline',
@@ -53,7 +59,7 @@ beforeAll(() => {
 
 function renderAt(path: string) {
   render(
-    <ToastProvider>
+    <QueryClientProvider client={createAppQueryClient()}><ToastProvider>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route element={<Layout />}>
@@ -77,7 +83,7 @@ function renderAt(path: string) {
           </Route>
         </Routes>
       </MemoryRouter>
-    </ToastProvider>,
+    </ToastProvider></QueryClientProvider>,
   );
 }
 
@@ -99,15 +105,19 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
   });
 
   it('הארכיון אינו מדליק בטעות את תיקיית המסמכים', () => {
+    // The archive joined the menu in the 28.08.2026 reorganisation, so it now marks ITSELF. The
+    // defect this test was written for is unchanged and still guarded: the two are separate rows
+    // and standing on one must never light the other.
     renderAt('/documents/archive');
-    expect(currentLabels()).toEqual([]);
+    expect(currentLabels()).toEqual(['ארכיון מסמכים']);
   });
 
   it('בתיקיית המסמכים מסומנת תיקיית המסמכים', () => {
+    // The full name, on every surface. NAV_SHORT_LABELS existed while /documents was a plain link
+    // on a slim pill; it now lives inside the 'מסמכים' group panel, which always rendered the
+    // catalogue's own name — so there is no second set of labels left to drift.
     renderAt('/documents');
-    // T7.2: the floating pill shows the SHORT navigation label ("מסמכים"); the full name stays in
-    // the drawer, the page title and the routePresentation catalogue.
-    expect(currentLabels()).toEqual(['מסמכים']);
+    expect(currentLabels()).toEqual(['תיקיית המסמכים']);
   });
 
   it('יעד בקרה נדיר גלוי בסרגל הדסקטופ בלי disclosure כלל', () => {
@@ -122,20 +132,24 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
   });
 
   /**
-   * DESIGN.md:507 — "דיסקלוזר מעל פריט אחד הוא דלת עם מכסה". 'המנוי' held exactly one route
-   * (`/settings/subscription`) and still shipped as a button with a chevron and a panel, so the
-   * owner's subscription screen cost two clicks and a disclosure to reach. The rendered half of
-   * the rule: no `aria-expanded` trigger for a one-item group, and the destination is a link in
-   * the bar itself. `layout.spec.ts` asserts which groups those are.
+   * The rendered half of the 28.08.2026 grouping: four subject groups on the bar, the control room
+   * and the new-order action as plain links beside them, and the account group NOT on the bar at
+   * all — it is reached through the avatar disc, and printing it in both places on one screen is
+   * the duplication this reorganisation exists to remove.
+   *
+   * DESIGN.md:507 still holds ("דיסקלוזר מעל פריט אחד הוא דלת עם מכסה") and `layout.spec.ts`
+   * asserts the data half: under the subject grouping no owner group is down to one row.
    */
-  it('קבוצה בת פריט אחד היא קישור בגלולה, לא כפתור עם מכסה', () => {
+  it('ארבע קבוצות נושא בסרגל, והחשבון אינו אחת מהן', () => {
     renderAt('/dashboard');
     const bar = document.querySelector('nav[aria-label="ניווט ראשי"]')!;
-    expect(bar.querySelector('#top-nav-group-המנוי')).toBeNull();
     expect([...bar.querySelectorAll('button[aria-expanded]')].map((b) => b.textContent?.trim()))
-      .toEqual(['ניהול', 'בקרה']);
-    const subscription = within(bar as HTMLElement).getByRole('link', { name: 'המנוי' });
-    expect(subscription).toHaveAttribute('href', '/settings/subscription');
+      .toEqual(['רכש', 'מסמכים', 'כספים', 'בקרה ודוחות']);
+    expect(bar.querySelector('#top-nav-group-החשבון')).toBeNull();
+    expect(within(bar as HTMLElement).queryByRole('link', { name: 'הגדרות מערכת' })).toBeNull();
+    // The two that stand alone above the groups.
+    expect(within(bar as HTMLElement).getByRole('link', { name: 'מרכז הבקרה' })).toBeInTheDocument();
+    expect(within(bar as HTMLElement).getByRole('link', { name: 'הזמנה חדשה' })).toBeInTheDocument();
   });
 
   it('כותרת הדפדפן מפרידה מסך, דייר ומוצר', async () => {
@@ -153,9 +167,14 @@ describe('סימון הפריט הנוכחי בתפריט', () => {
     expect(within(drawer).getByRole('link', { name: 'ספקים' })).toHaveAttribute('aria-current', 'page');
     expect(within(drawer).getByRole('link', { name: 'קבלת סחורה' })).toBeInTheDocument();
     expect(within(drawer).getByRole('link', { name: 'הגדרות מערכת' })).toBeInTheDocument();
-    expect(within(drawer).getByText('עבודה שוטפת')).toBeInTheDocument();
-    expect(within(drawer).getByText('ניהול').closest('details')).toBeNull();
-    expect(within(drawer).getByText('בקרה').closest('details')).toBeNull();
+    // The drawer separates its groups with a rule and NOTHING else (owner, 28.08.2026: "אין צורך
+    // בפסי הפרדה לשים עוד טקסט - הפסי הפרדה מספיקים"). The group names still exist as data and
+    // still label the desktop dropdowns; they are not printed here.
+    for (const group of ['עבודה שוטפת', 'רכש', 'מסמכים', 'כספים', 'בקרה ודוחות', 'החשבון']) {
+      expect(within(drawer).queryByText(group)).toBeNull();
+    }
+    // Every group open, so every destination is one press away rather than behind a lid.
+    expect(within(drawer).getByRole('link', { name: 'תשלומים' }).closest('details')).toBeNull();
   });
 
   it('משאיר במגירה את קבוצת המסך הפעיל פתוחה ללא disclosure', () => {
@@ -220,12 +239,13 @@ describe('מבטא האזור בסמן הניווט הפעיל', () => {
     expect(mainRegion()).not.toHaveAttribute('data-section');
   });
 
-  it('אזור העבודה יודע את התחום גם כשאין פריט תפריט פעיל', () => {
-    // /documents/archive is a contextual destination: it is deliberately absent from the sidebar,
-    // so no item is current. The domain still comes from the URL — which is the point of deriving
-    // the accent from the route rather than from whichever link happens to be highlighted.
-    renderAt('/documents/archive');
-    expect(activeLink()).toBeNull();
+  it('אזור העבודה יודע את התחום מהכתובת, לא מהקישור המודגש', () => {
+    // The archive was a contextual destination with no menu row until 28.08.2026, and this test
+    // used its absence to prove the domain comes from the URL. It has a row now, so the same
+    // property is asserted where it still has teeth: a document being reviewed lights the FOLDER,
+    // and <main> still takes its domain from the address rather than from that link.
+    renderAt('/documents/abc/review');
+    expect(activeLink()?.textContent?.trim()).toBe('תיקיית המסמכים');
     expect(mainRegion()).toHaveAttribute('data-section', 'documents');
   });
 

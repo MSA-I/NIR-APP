@@ -12,7 +12,31 @@ import userEvent from '@testing-library/user-event';
 import type { AssessmentLine, DocumentReviewRead } from './assessment';
 
 const rpc = vi.hoisted(() => vi.fn());
-vi.mock('../../lib/supabase', () => ({ supabase: { rpc } }));
+/**
+ * `from` exists because the mapping card reads the catalogue and the supplier's name. It answers
+ * empty on purpose: the empty catalogue IS the new-account case, and the card has to be useful
+ * there. What the card does with rows of its own is asserted in DocumentLineMapping.spec.
+ */
+const from = vi.hoisted(() => vi.fn(() => {
+  const chain: Record<string, unknown> = {};
+  for (const method of ['select', 'eq', 'order', 'is']) {
+    chain[method] = () => chain;
+  }
+  chain.range = () => Promise.resolve({ data: [], error: null });
+  chain.maybeSingle = () => Promise.resolve({ data: null, error: null });
+  return chain;
+}));
+vi.mock('../../lib/supabase', () => ({ supabase: { rpc, from } }));
+
+/** The mapping card creates products, so it reads the tenant off the profile. */
+vi.mock('../../auth/AuthContext', () => ({
+  useAuth: () => ({
+    profile: { id: 'user-1', org_id: 'org-test', role: 'owner' },
+    org: { vat_rate: 18 },
+    session: {},
+    organizationAccess: { mode: 'active', canWrite: true },
+  }),
+}));
 
 import { DocumentAssessmentPanel } from './DocumentAssessmentPanel';
 
@@ -127,6 +151,60 @@ describe('הבדיקה מקפלת את העבודה של המכונה ולא א�
     expect(cta.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The button stays live even while blocked — the server is the gate (DESIGN.md).
     expect(cta).toBeEnabled();
+  });
+
+  it('נותן לשורה בלי מוצר את כלי המיפוי, מתחת לממצא החוסם ומעל הכפתור', async () => {
+    // The tester's case (28.08.2026): an invoice whose items the catalogue does not know. The
+    // screen named the problem and offered nothing; the assertion is that the control is now on
+    // the same screen, and in the position that makes the finding actionable rather than merely
+    // reported.
+    await renderPanel(reviewRead({
+      state: 'blocked',
+      assessment: {
+        ...reviewRead().assessment!,
+        approval_blocked: true,
+        severity: 'error',
+        lines: [line(0, { product_id: null, product_source: 'unmatched' }), line(1)],
+        findings: [{ code: 'product_unidentified', severity: 'error', message: 'לא ניתן לזהות איזה מוצר זה', line_index: 0 }],
+      },
+    }));
+
+    const card = await screen.findByTestId('document-line-mapping');
+    // One row per UNMATCHED line, not per line: the matched one needs no decision. Rows are shut,
+    // so there is no picker on screen until someone opens one — the owner's "מאות מוצרים" rule.
+    expect(within(card).getAllByRole('button', { expanded: false })).toHaveLength(1);
+    expect(card.querySelectorAll('select')).toHaveLength(0);
+
+    const blocking = screen.getByRole('alert');
+    const cta = screen.getByRole('button', { name: 'אישור המסמך' });
+    expect(blocking.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(card.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('אינו מציג כלי מיפוי כשכל השורות כבר משויכות למוצר', async () => {
+    await renderPanel();
+    expect(screen.queryByTestId('document-line-mapping')).toBeNull();
+  });
+
+  it('מציע לקבוע מחיר מוסכם רק לשורות שאין להן מחיר, ואומר שמחיר קיים לא ישתנה', async () => {
+    await renderPanel(reviewRead({
+      assessment: {
+        ...reviewRead().assessment!,
+        lines: [line(0, { baseline_price: null, baseline_source: null }), line(1)],
+      },
+    }));
+
+    // One product, not two: the second line already has an agreed price and is not offered.
+    const seed = screen.getByRole('checkbox');
+    expect(seed).toBeChecked();
+    const label = seed.closest('label') as HTMLLabelElement;
+    expect(label.textContent).toMatch(/מחיר מוסכם קיים לא ישתנה/);
+    expect(label.querySelector('.num')).toHaveTextContent('1');
+  });
+
+  it('אינו מציע לקבוע מחירים כשלכל השורות כבר יש מחיר מוסכם', async () => {
+    await renderPanel();
+    expect(screen.queryByRole('checkbox')).toBeNull();
   });
 
   it('משאיר את "מה יקרה באישור" צמוד לכפתור ומחוץ לקיפול', async () => {

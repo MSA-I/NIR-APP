@@ -335,7 +335,7 @@ export function DocumentPacketReview({ snapshot, readOnly, onRefetch }: Props) {
       {currentPacket.source_partial && (
         <Note tone="await" className="mt-4">
           <span className="min-w-0 flex-1">
-            לא כל הקובץ נקרא: לפחות עמוד אחד לא הניב טקסט. קריאת OCR בתשלום מוגבלת
+            לא כל הקובץ נקרא: לפחות עמוד אחד לא הניב טקסט. קריאת עמוד סרוק מוגבלת
             ל־<span className="num">{PAID_OCR_PAGE_CAP}</span> עמודים למסמך, ולכן בסריקה ארוכה יותר
             העמודים שמעבר לכך אינם נקראים כלל. טווחי העמודים למטה נגזרו ממה שכן נקרא, ולכן החבילה
             כולה דורשת אישור אדם — לא חלק מסוים בה.

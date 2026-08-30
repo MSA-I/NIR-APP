@@ -1,6 +1,12 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
+/* Layout reads the plan's entitlements through the shared cache, so the shell needs a client
+   even where the read never fires: TanStack throws when there is no provider above it, before it
+   considers `enabled`. The org scope is deliberately left null here — that is what keeps the
+   query disabled and these specs off the network. */
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createAppQueryClient } from '../lib/query/client';
 
 /**
  * The focus half of the route-announcement contract: Layout moves keyboard focus to #main so a
@@ -48,16 +54,16 @@ beforeAll(() => {
 
 function tree() {
   return (
-    <ToastProvider>
+    <QueryClientProvider client={createAppQueryClient()}><ToastProvider>
       <MemoryRouter initialEntries={['/dashboard']}>
         <Routes>
           <Route element={<Layout />}>
             <Route path="/dashboard" element={null} />
-            <Route path="/suppliers" element={null} />
+            <Route path="/orders/new" element={null} />
           </Route>
         </Routes>
       </MemoryRouter>
-    </ToastProvider>
+    </ToastProvider></QueryClientProvider>
   );
 }
 
@@ -80,8 +86,11 @@ describe('Layout — focus moves to #main only on an actual navigation', () => {
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     expect(document.activeElement).toBe(search);
 
-    // A real route change still announces itself by moving focus past the shell.
-    fireEvent.click(screen.getAllByRole('link', { name: /ספקים/ })[0]);
+    // A real route change still announces itself by moving focus past the shell. The
+    // destination is one of the bar's two plain links: after the 28.08.2026 grouping every other
+    // desktop destination sits inside a group panel that is `hidden` until its trigger is
+    // pressed, and a hidden link is not in the accessibility tree to be clicked.
+    fireEvent.click(screen.getAllByRole('link', { name: /הזמנה חדשה/ })[0]);
     await waitFor(() => expect(document.activeElement?.id).toBe('main'));
   });
 });

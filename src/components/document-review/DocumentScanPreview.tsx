@@ -251,7 +251,7 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
               <p className="text-sm text-ink-muted">
                 {readOnly
                   ? 'הארגון במצב קריאה בלבד. אפשר לצפות בסריקה, אך אי אפשר לאשר אותה לחילוץ.'
-                  : 'בדוק שהדף שלם וקריא. האישור קובע שה־OCR יקרא נגזרת זו, לא את המקור.'}
+                  : 'בדוק שהדף שלם וקריא. האישור קובע שהמערכת תקרא נגזרת זו, לא את המקור.'}
               </p>
               {/* The decision stays AFTER the two page images, and that is the exception to the
                   head-of-evidence placement `PrimaryDecision` documents: here the evidence is the

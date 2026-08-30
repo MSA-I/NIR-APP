@@ -408,6 +408,51 @@ export function reviewedProposal(
   };
 }
 
+/** One `supplier_products` row `import_supplier_prices` accepts. */
+export interface PriceSeedRow {
+  supplier_id: string;
+  product_id: string;
+  price: number;
+  available: true;
+}
+
+/**
+ * The prices an approval may write into the supplier's price list — and only those.
+ *
+ * SEEDING, NEVER OVERWRITING, and that distinction is the whole safety of the feature (owner,
+ * 28.08.2026: "המחירים והמוצרים יתעדכנו בהעלאת חשבונית של הספק, כי לא תמיד יש מחירון של ספק").
+ * `baseline_price` is what every price finding on the review screen compares the document against.
+ * Letting an invoice rewrite an EXISTING baseline would make each invoice agree with itself and
+ * quietly retire "מחיר מעל המחיר המוסכם" as a check — a control removed by a convenience. A line
+ * with no baseline has no such check to lose: the server already reports it as
+ * `price_baseline_unknown`, so filling it in only adds a comparison the business did not have.
+ *
+ * The normalized price wins where there is one, because that is the number the baseline is
+ * compared against — writing the printed price instead would seed a baseline in a different unit
+ * from the one the comparison uses, and every later invoice would look like a variance.
+ *
+ * One row per product. A product CREATED from a line already carries this price
+ * (`QuickCreateProduct` writes it), so a repeat here is the same number twice rather than a
+ * conflict; the map keeps the command's input clean either way.
+ */
+export function priceSeedRows(
+  read: DocumentReviewRead | null,
+  edits: Record<number, ReviewedLineEdit>,
+  supplierId: string | null,
+): PriceSeedRow[] {
+  if (!supplierId) return [];
+  const byProduct = new Map<string, PriceSeedRow>();
+  for (const line of read?.assessment?.lines ?? []) {
+    const productId = edits[line.line_index]?.product_id ?? line.product_id;
+    const price = line.normalized_unit_price ?? line.unit_price;
+    if (!productId || line.baseline_price != null || price == null || price <= 0) continue;
+    if (!byProduct.has(productId)) {
+      byProduct.set(productId, { supplier_id: supplierId, product_id: productId, price, available: true });
+    }
+  }
+  return [...byProduct.values()];
+}
+
 /**
  * May the button be pressed at all?
  *

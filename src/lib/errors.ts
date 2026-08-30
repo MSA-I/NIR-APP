@@ -148,6 +148,13 @@ const PATTERNS: [RegExp, string][] = [
     'הסריקה כבר אושרה או הוחלפה ואי אפשר לשנות את הראיה הקודמת. רענן את המסך כדי לראות את הגרסה הנוכחית.'],
   [/document_scan_recovery_unavailable|document_scan_processing_state_invalid/i,
     'מצב הסריקה השתנה ולא ניתן ליצור ממנה תיקון חדש. רענן את המסך ובדוק את הגרסה הנוכחית.'],
+  // 0252/#298. The refusal names what is missing and where it opens — never a price, never a
+  // "upgrade now" (OPEN-DECISIONS #202 forbids a personal plan recommendation), and never the
+  // impression that something broke. The subscription screen is where the rungs are compared.
+  [/capability_not_in_plan/i,
+    'היכולת הזו אינה כלולה במסלול הנוכחי של העסק. אפשר לראות מה כולל כל מסלול במסך המנוי.'],
+  [/user_seats_exhausted/i,
+    'מספר המשתמשים במסלול הנוכחי מלא. אפשר לשחרר הזמנה ממתינה או להשבית משתמש קיים, ולראות במסך המנוי מה כולל כל מסלול.'],
   [/retired_identity_requires_platform_reactivation/i,
     'זהות של תפקיד שפרש יכולה לחזור לחשבון פעיל רק דרך מנהל השירות, שמעדכן יחד את התפקיד ואת חסימת הכניסה.'],
   [/account_role_retired|role_not_invitable/i,

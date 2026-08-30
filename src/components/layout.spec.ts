@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_SECTIONS, drawerSectionsForRole, footerItemsForRole, pageTitleFor, sectionsForRole } from './Layout';
+import { NAV_SECTIONS, barSectionsForRole, drawerSectionsForRole, footerItemsForRole, pageTitleFor, sectionsForRole } from './Layout';
 import { isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
 import type { ActiveRole } from '../lib/types';
 import { routePresentationTitle, STATIC_ROUTE_TITLES } from '../lib/routePresentation';
@@ -14,36 +14,60 @@ describe('מעטפת הניווט', () => {
       .toEqual(Object.fromEntries(ACTIVE_ROLES.map((role) => [role, '/dashboard'])));
   });
 
-  it('העבודה היומית גלויה ומוגבלת, והאזורים הנדירים מתקפלים', () => {
+  /**
+   * ONE grouping, by subject (owner approval 28.08.2026).
+   *
+   * What this replaces: the file held two groupings of the same screens — by subject in
+   * NAV_SECTIONS, by frequency in four per-role path maps — and the drawer rendered the second.
+   * So 'ניהול' carried the product catalogue and the bank together, 'בקרה' carried document
+   * operations next to the reports, and finding מחירונים meant guessing which of the two mental
+   * models the menu was using. The owner's report: "יש בלאגן, לא מבינים את הניווט כמו שצריך".
+   */
+  it('קבוצה אחת לכל נושא, באותו סדר לכל תפקיד', () => {
     const owner = sectionsForRole('owner');
-    expect(owner[0].items.map((item) => item.to)).toEqual([
-      '/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers',
+    // Above every heading: the control room (the answer to §12) and the most frequent action.
+    expect(owner[0].items.map((item) => item.to)).toEqual(['/dashboard', '/orders/new']);
+    expect(owner.map((section) => section.section)).toEqual([
+      '', 'רכש', 'מסמכים', 'כספים', 'בקרה ודוחות', 'החשבון',
     ]);
-    expect(owner[0].items).toHaveLength(6);
-    // 'המנוי' is last and NOT collapsible: one item behind a disclosure is a door with a lid,
-    // and the point of the group (owner report 25.08.2026) was to stop the subscription being
-    // something you find by scrolling a settings screen.
-    expect(owner.slice(1).map((section) => [section.section, section.collapsible])).toEqual([
-      ['ניהול', true], ['בקרה', true], ['המנוי', undefined],
+    // A role never sees the paths its catalogue entry withholds, so one list serves all three
+    // without three copies to drift apart: an accountant's 'רכש' resolves to nothing and is
+    // dropped rather than shown empty.
+    expect(sectionsForRole('accountant').map((section) => section.section))
+      .toEqual(['', 'מסמכים', 'כספים', 'בקרה ודוחות']);
+    expect(sectionsForRole('office').map((section) => section.section))
+      .toEqual(['', 'רכש', 'מסמכים', 'כספים', 'בקרה ודוחות']);
+    // Ordered within the group by how a procurement day actually runs, not alphabetically.
+    expect(owner[1].items.map((item) => item.to)).toEqual([
+      '/orders', '/receiving', '/suppliers', '/products', '/prices', '/inventory',
     ]);
   });
 
-  it('פעולות ויעדים הקשריים אינם מתחרים בתפריט', () => {
+  it('קבוצת החשבון אחרונה, ואינה מופיעה פעמיים בדסקטופ', () => {
+    // DESIGN.md:509 — the owner's settings area is not one more work destination. It is last, and
+    // on desktop it is reached through the avatar disc, so the pill must not repeat it.
+    expect(sectionsForRole('owner').at(-1)?.items.map((item) => item.to))
+      .toEqual(['/settings/subscription', '/onboarding', '/settings']);
+    expect(barSectionsForRole('owner').map((section) => section.section)).not.toContain('החשבון');
+    expect(barSectionsForRole('owner').flatMap((section) => section.items).map((item) => item.to))
+      .not.toContain('/settings');
+  });
+
+  it('כל יעד מורשה מופיע במקום אחד מוסבר בתפריט', () => {
     const visible = new Set(pathsFor('owner'));
-    expect(visible.has('/orders/new')).toBe(false);
-    expect(visible.has('/documents/archive')).toBe(false);
-    expect(visible.has('/alerts')).toBe(false);
-    // The campaign's two new destinations are daily work, so they belong in the menu proper.
+    // /orders/new, /documents/archive and /alerts used to be deliberately absent, reachable only
+    // through the FAB, the archive link and the notification bell. That was defensible while the
+    // menu was a flat wall of nineteen rows; with the groups it is not — an owner who does not
+    // know the bell exists had no route to their own alerts. They keep their contextual doors.
+    for (const path of ['/orders/new', '/documents/archive', '/alerts']) {
+      expect(visible.has(path)).toBe(true);
+    }
     expect(visible.has('/documents/operations')).toBe(true);
     expect(visible.has('/documents/consolidated-invoices')).toBe(true);
     expect(visible.has('/inventory')).toBe(true);
-    // /onboarding joined the footer (09.08.2026) and this list is pinned, so the addition has to
-    // argue for itself here rather than slip in. The argument: the route existed with NO door at
-    // all — absent from NAV_SECTIONS, from quickActions, and from homeFor() — so the setup wizard
-    // could not be reopened by the owner it belongs to, even though it was built to be reopened.
-    // It sits in the footer, beside /settings, precisely so it does NOT compete with daily work,
-    // which is what the rest of this test protects.
-    expect(footerItemsForRole('owner').map((item) => item.to)).toEqual(['/onboarding', '/settings']);
+    // The desktop avatar menu holds the same account group the drawer shows as a section.
+    expect(footerItemsForRole('owner').map((item) => item.to))
+      .toEqual(['/settings/subscription', '/onboarding', '/settings']);
   });
 
   /**
@@ -55,9 +79,11 @@ describe('מעטפת הניווט', () => {
     const singles = (role: ActiveRole) => sectionsForRole(role)
       .filter((section) => section.section && section.items.length === 1)
       .map((section) => section.section);
-    expect(singles('owner')).toEqual(['המנוי']);
-    expect(singles('accountant')).toEqual(['ניהול']);
+    // Under the subject grouping no owner or office group is down to one row. The accountant's
+    // 'מסמכים' is: consolidated invoices is the only document screen that role may reach.
+    expect(singles('owner')).toEqual([]);
     expect(singles('office')).toEqual([]);
+    expect(singles('accountant')).toEqual(['מסמכים']);
   });
 
   it('לרואה החשבון נשאר מסלול הביצוע', () => {
@@ -91,13 +117,15 @@ describe('מעטפת הניווט', () => {
     }
   });
 
-  it('כל מסלול מורשה מוצג או מוחרג במכוון ל-surface הקשרי', () => {
-    const contextual = new Set(['/orders/new', '/documents/archive', '/alerts']);
+  it('כל מסלול מורשה מוצג — אין יותר יעד שרק מי שיודע עליו מוצא', () => {
+    // The exclusion list this test used to carry is empty. Every destination a role may reach now
+    // has a row in that role's menu; the contextual doors (FAB, bell, archive link) are shortcuts
+    // to a place the menu also names, which is what a shortcut is supposed to be.
     for (const role of ACTIVE_ROLES) {
       const allowed = NAV_SECTIONS.flatMap((section) => section.items)
         .filter((item) => item.roles.includes(role)).map((item) => item.to);
       const surfaced = new Set([...pathsFor(role), ...footerItemsForRole(role).map((item) => item.to)]);
-      expect(allowed.filter((path) => !surfaced.has(path))).toEqual(allowed.filter((path) => contextual.has(path)));
+      expect(allowed.filter((path) => !surfaced.has(path))).toEqual([]);
     }
     expect(pathsFor('accountant')).toContain('/credits');
   });
@@ -148,14 +176,19 @@ describe('סרגל הפעולות המהירות במובייל', () => {
     }
   });
 
-  it('מחזיר את כל יעדי הניווט למגירה תחת שכבת עבודה שוטפת', () => {
+  it('מחזיר את כל יעדי הניווט למגירה, כולל מה שהסרגל אינו מציג', () => {
+    // The drawer is the complete list; the desktop bar is the one that withholds — it drops the
+    // account group because the avatar disc already holds it. 'עבודה שוטפת' used to be pinned here
+    // as the drawer's name for the leading group; the drawer prints no headings now (owner,
+    // 28.08.2026), so a name that renders nowhere is not a contract worth keeping.
     for (const role of ACTIVE_ROLES) {
       const drawer = drawerSectionsForRole(role);
-      expect(drawer[0].section).toBe('עבודה שוטפת');
       expect(drawer.flatMap((section) => section.items)).toEqual(
         sectionsForRole(role).flatMap((section) => section.items),
       );
     }
+    expect(drawerSectionsForRole('owner').map((section) => section.section)).toContain('החשבון');
+    expect(barSectionsForRole('owner').map((section) => section.section)).not.toContain('החשבון');
   });
 
   // The desktop speed-dial test that used to sit here went with the speed-dial itself (owner
