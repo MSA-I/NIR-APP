@@ -3075,47 +3075,30 @@ async function documentVocabulary(browser) {
     assert(proposalText.includes('זוהה בבירור'),
       'the proposals panel stopped grading the reading in words as well as dropping the number');
 
-    // 0.95 is the fixture's supplier confidence and nothing else on the page rounds to it — the
-    // bbox descriptions in the source viewer are the other percentages here, and none is 95.
-    const technical = page.locator('details:has(summary:text-is("פרטים טכניים"))');
-    await technical.waitFor();
-    assert.equal(await technical.evaluate((node) => node.open), false,
-      'the technical disclosure is open before anyone asked for it');
-    const closedPage = await page.locator('#main').evaluate((node) => node.textContent || '');
-    assert.equal(closedPage.includes('95%'), false,
-      'the raw confidence is on the review screen while the disclosure is shut');
-
-    // Wait for the NUMBER, not for the `open` attribute. `open` flips synchronously — it is the
-    // browser's own toggle — while the rows are built by React one render after `onToggle` fires
-    // (DocumentReviewWorkspace.tsx:221,261 render them lazily so a long price list does not
-    // re-diff thousands of hidden rows on every interaction). Waiting on `open` reads the gap
-    // between the two and reports a defect that is not there; waiting on the content asserts the
-    // claim the scenario is actually making. A number that never arrives still fails, on timeout.
-    // The first gate run to include this scenario failed exactly here, which is the difference
-    // between jsdom — where testing-library wraps every click in act() and flushes React — and a
-    // real browser, which does not.
-    await technical.locator('summary').click();
-    await page.waitForFunction(() => {
-      const node = [...document.querySelectorAll('details')]
-        .find((element) => (element.querySelector('summary') || {}).textContent === 'פרטים טכניים');
-      return !!node && node.open && (node.textContent || '').includes('95%');
-    }, null, { timeout: 10_000 });
-    const opened = await technical.evaluate((node) => node.textContent || '');
-    assert(opened.includes('95%'),
-      'the supplier confidence is not reachable inside פרטים טכניים in one click');
+    // THE DISCLOSURE IS GONE, AND THAT IS THE CLAIM NOW (owner report 28.08.2026: "יש אזור
+    // שמראה פרטים טכניים - להסיר את זה משתמש לא אמור לראות את זה"). The 25.08 ruling trimmed the
+    // vendor and the model out of the box; this one removed the box. This scenario used to open it
+    // and read 0.95 back out of it — the fixture's supplier confidence — and that assertion went
+    // with the box it was about.
+    //
+    // Nothing is deleted from the database: `document_jobs`, `document_extractions` and
+    // `document_interpretations` still carry every id, checksum and confidence, and the operator
+    // console still reads them. What changed is that a tenant's review screen does not.
+    assert.equal(await page.locator('details:has(summary:text-is("פרטים טכניים"))').count(), 0,
+      'the technical disclosure is back on the review screen');
+    const wholePage = await page.locator('#main').evaluate((node) => node.textContent || '');
+    assert.equal(wholePage.includes('95%'), false,
+      'the raw supplier confidence is printed on the review screen');
 
     // Owner report 25.08.2026: no vendor and no model name reaches a tenant. The fixture carries
     // 'openai-fixture' / 'gpt-local-contract-fixture' on the interpretation and
     // 'private-fixture' / 'ocr-acceptance-hebrew' on the extraction precisely so this assertion
-    // has something to catch. Asserted on the WHOLE page, not the disclosure, because the rule is
-    // that the words are not on the screen -- not that one box happens to hide them.
-    const wholePage = await page.locator('#main').evaluate((node) => node.textContent || '');
+    // has something to catch. It outlives the disclosure: the rule was always that the words are
+    // not on the screen, never that one box happened to hide them.
     for (const banned of ['openai', 'gpt-', 'מנוע פירוש', 'מנוע חילוץ']) {
       assert.equal(wholePage.toLowerCase().includes(banned.toLowerCase()), false,
         `the review screen still prints the processing vendor or model: ${banned}`);
     }
-    assert(opened.includes('גרסת עיבוד'),
-      'the disclosure lost the processing-version row that replaced the two engine rows');
     await page.screenshot({ path: path.join(outDir, 'document-technical-disclosure-1440.png'), fullPage: true });
     report.screenshots.push('document-technical-disclosure-1440.png');
   } finally {
