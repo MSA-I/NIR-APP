@@ -47,7 +47,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Loader2, Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../auth/AuthContext';
-import { ok, toHebrewError } from '../../lib/errors';
+import { ok } from '../../lib/errors';
 import { unwrap } from '../../lib/useQuery';
 import { fetchAll } from '../../lib/supabasePaging';
 import { nameKey } from '../../lib/nameKey';
@@ -144,7 +144,7 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
   disabled?: boolean;
 }) {
   const { profile } = useAuth();
-  const { t } = useT();
+  const { t, errorText } = useT();
   const toast = useToast();
   const [catalogue, setCatalogue] = useState<CatalogueProduct[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -161,7 +161,7 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
       setCatalogue(rows);
       setLoadError(null);
     } catch (failure) {
-      setLoadError(toHebrewError(failure));
+      setLoadError(errorText(failure));
     }
   }, []);
 
@@ -236,7 +236,7 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
             p_reason: reasonOr('', 'יצירת מוצרים ומחירים מתוך מסמך שהתקבל'),
           }));
         } catch (failure) {
-          priceFailure = toHebrewError(failure);
+          priceFailure = errorText(failure);
         }
       }
 
@@ -259,7 +259,7 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
         ].filter(Boolean).join(' · ') || t('lineMapping.nothingToCreate'),
         priceFailure ? 'error' : 'success');
     } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+      toast(errorText(failure), 'error');
     } finally {
       setBusy(false);
     }

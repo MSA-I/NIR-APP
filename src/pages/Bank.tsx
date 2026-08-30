@@ -12,7 +12,7 @@ import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, Skeleto
 import { effectiveTolerance } from '../lib/tolerances';
 import { BANK_TX_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, addCalendarDays } from '../lib/format';
-import { toleranceRefusalMessage } from '../lib/errors';
+import { toleranceRefusalKey } from '../lib/errors';
 import type { BankTransaction, BankImport } from '../lib/types';
 import { useParamState } from '../lib/useParamState';
 import { SupplierSelectField, useQuickSupplier } from '../components/QuickSupplierPicker';
@@ -462,7 +462,7 @@ function MatchModal({ tx, tolerance, days, canChangeSettings, onClose, onChanged
   tx: TxRow; tolerance: number | null; days: number; canChangeSettings: boolean;
   onClose: () => void; onChanged: () => void;
 }) {
-  const { errorText, t } = useT();
+  const { errorText, t, tDynamic } = useT();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [supplierId, setSupplierId] = useState(tx.supplier_id ?? '');
@@ -711,8 +711,10 @@ function MatchModal({ tx, tolerance, days, canChangeSettings, onClose, onChanged
             {tolerance == null && (
               <Note tone="await">
                 <span>
-                  {`${tx.currency}: ${toleranceRefusalMessage(canChangeSettings)} `
-                    + 'הצעות לפי אסמכתא עדיין מוצגות, והתאמה ידנית פתוחה.'}
+                  {t('bank.toleranceRefusal', {
+                    currency: tx.currency,
+                    refusal: tDynamic(`errors.${toleranceRefusalKey(canChangeSettings)}`) ?? '',
+                  })}
                 </span>
               </Note>
             )}

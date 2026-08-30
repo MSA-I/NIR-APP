@@ -3,7 +3,6 @@ import { Link, useSearchParams } from 'react-router';
 import { AlertCircle, Loader2, MailCheck, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Card, ICON } from '../components/ui';
-import { toHebrewError } from '../lib/errors';
 import { APP_NAME } from '../lib/branding';
 import { useT } from '../lib/i18n/LocaleProvider';
 import { MIN_PASSWORD_LENGTH, passwordProblemOf } from '../lib/password';
@@ -24,7 +23,7 @@ import {
  * and the two axes stay apart all the way down to the command (`accept_platform_operator_invitation`).
  */
 export default function AcceptOperatorInvite() {
-  const { t } = useT();
+  const { t, errorText } = useT();
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
 
@@ -73,7 +72,7 @@ export default function AcceptOperatorInvite() {
         setFormError(
           /Invalid login credentials/i.test(error.message)
             ? t('operatorInvite.accountExistsWrongPassword')
-            : toHebrewError(error),
+            : errorText(error),
         );
         return;
       }
@@ -86,7 +85,7 @@ export default function AcceptOperatorInvite() {
       // session that was just established is what the guard will read.
       window.location.replace('/operator');
     } catch (error) {
-      setFormError(toHebrewError(error instanceof Error ? error.message : String(error)));
+      setFormError(errorText(error instanceof Error ? error.message : String(error)));
     } finally {
       setBusy(false);
     }

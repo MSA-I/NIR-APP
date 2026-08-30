@@ -157,9 +157,18 @@ function ratchet() {
 
 function extracted() {
   const baseline = JSON.parse(read('scripts/i18n-baseline.json'));
-  const offenders = EXTRACTED.filter((file) => (baseline.counts[file] ?? 0) > 0);
+  // A surface is "extracted" when everything a PERSON READS has moved. What stays behind on several
+  // of them is the class the register forbids translating — the reasonOr() values that reach
+  // `p_reason` and land in `audit_logs`, a value written into `products.unit`, a sheet name written
+  // into an .xlsx. Those are documented one by one in `__reason`, and counting them here made this
+  // gate contradict the baseline it reads: eleven surfaces that HAVE completed extraction were
+  // reported as offenders because they correctly kept an audit reason in Hebrew.
+  //
+  // So a documented file is judged on whether its reason exists, not on whether its count is zero.
+  // An undocumented file with Hebrew left is still a failure, which is the case this gate is for.
+  const offenders = EXTRACTED.filter((file) => (baseline.counts[file] ?? 0) > 0 && !baseline.__reason[file]);
   if (offenders.length) {
-    fail(`gate-i18n: these surfaces are listed as extracted but still carry Hebrew:\n  ${offenders.join('\n  ')}`);
+    fail(`gate-i18n: these surfaces are listed as extracted but still carry undocumented Hebrew:\n  ${offenders.join('\n  ')}`);
   }
   // Positive control: the guard must be able to see Hebrew when it is there. If NOTHING in the
   // baseline carries Hebrew, an empty offender list proves nothing about the check.
@@ -250,7 +259,7 @@ function zero() {
 // commits on this branch without moving the pin, so this ratchet had been failing since at least
 // `e3a6146` while every OTHER i18n gate stayed green - which is how it went unseen. Verified with
 // `git grep` at both `e3a6146` and `851cf7e`: the product count was already 1 at each of them.
-const LEGACY_ERROR_CALLS = 1;
+const LEGACY_ERROR_CALLS = 0;
 
 function legacyErrors() {
   const files = [];
@@ -272,6 +281,11 @@ function legacyErrors() {
     // out of the dictionary would pass against a broken dictionary. Counting them here would make
     // the ratchet punish exactly the assertions that make the migration safe.
     if (/\.spec\.tsx?$/.test(relative)) continue;
+    // The operator console is not translated at all (owner decision, 27.08.2026), so a Hebrew-only
+    // failure sentence is the RIGHT answer there rather than a screen left behind. Counting it made
+    // this gate measure something other than the sentence it prints — and it sat red at 2 against a
+    // pin of 1 for exactly that reason, unnoticed because it is not part of `npm run verify`.
+    if (relative.startsWith('src/operator/')) continue;
     const hits = (readFileSync(file, 'utf8').match(/\btoHebrewError\(/g) ?? []).length;
     if (hits) { found += hits; perFile.push([relative, hits]); }
   }

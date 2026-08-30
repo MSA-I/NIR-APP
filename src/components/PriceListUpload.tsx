@@ -10,7 +10,6 @@ import { useT } from '../lib/i18n/LocaleProvider';
 import { useMemo, useRef, useState } from 'react';
 import { reasonOr } from '../lib/reason';
 import { useNavigate } from 'react-router';
-import { toHebrewError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -102,7 +101,7 @@ export async function registerPriceDocument(reservation: Pick<PriceDocumentReser
   return parseRegistration(registered.data, reservation, t);
 }
 
-export async function uploadPriceDocument(orgId: string, supplierId: string, file: File, t: (key: TKey, vars?: Record<string, string | number>) => string) {
+export async function uploadPriceDocument(orgId: string, supplierId: string, file: File, t: (key: TKey, vars?: Record<string, string | number>) => string, errorText: (error: unknown) => string) {
   // Claimed in the synchronous prologue, before any await — null outside the Center's queue.
   const center = claimActiveUploadTask();
   if (!file.size) throw new PriceDocumentError(t('priceUpload.fileEmpty'));
@@ -147,7 +146,7 @@ export async function uploadPriceDocument(orgId: string, supplierId: string, fil
       documentId: reservation.document_id,
       pending: reservation,
       registrationError: registrationError instanceof PriceDocumentError
-        ? registrationError.message : toHebrewError(registrationError),
+        ? registrationError.message : errorText(registrationError),
     };
   }
 }
@@ -281,7 +280,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
         const batch = await enqueueUploadCenterBatch(
           [file],
           async () => {
-            outcome.value = await uploadPriceDocument(orgId, supplierId, file, t);
+            outcome.value = await uploadPriceDocument(orgId, supplierId, file, t, errorText);
             return outcome.value;
           },
           {

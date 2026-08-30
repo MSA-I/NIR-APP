@@ -29,6 +29,18 @@ export const en: Dictionary = {
    * it into something vaguer: the rule did not change with the language.
    */
   errors: {
+    bank_match_tolerance_unconfigured: 'No permitted amount difference has been set for this transaction\'s currency, so the amounts cannot be compared. One has to be set in settings before matching.',
+    bank_match_tolerance_unconfigured_owner: 'No permitted amount difference has been set for this transaction\'s currency, so the amounts cannot be compared. You can set one on the settings screen, under "Permitted amount differences".',
+    bank_match_tolerance_unconfigured_staff: 'No permitted amount difference has been set for this transaction\'s currency, so the amounts cannot be compared. Ask the business owner to set one in settings.',
+    bank_match_currency_mismatch: 'The transaction and the invoice are not in the same currency. A transaction settles a debt in another currency only through a payment that recorded both amounts.',
+    payment_request_currency_mixed: 'One payment request can hold invoices in a single currency only. It has to be split into a separate request per currency.',
+    invoice_currency_precision_invalid: 'The amount has more digits after the decimal point than this currency allows.',
+    plan_capability_required: 'This capability is not part of the current plan. The subscription screen shows which plan opens it.',
+    plan_user_limit_reached: 'The organisation has reached the number of active users the current plan allows. Disable a user, or move to a plan that fits.',
+    plan_branch_limit_reached: 'The organisation has reached the number of branches the current plan allows. Move to a plan that fits before adding a branch.',
+    plan_user_limit_unknown: 'The plan allowance is not configured, so the action stopped. That is a setting on our side, not something you did — please contact support.',
+    capability_not_in_plan: 'This capability is not part of the business\'s current plan. The subscription screen shows what each plan includes.',
+    user_seats_exhausted: 'The current plan\'s user seats are full. You can release a pending invitation or disable an existing user, and see what each plan includes on the subscription screen.',
     document_enqueue_transient: 'The file was saved and registered, but no confirmation of it entering the queue was received, because of a temporary fault. Retrying completes the processing request only.',
     document_enqueue_failed: 'The file was saved and registered, but it did not enter the processing queue. Processing can be retried from the document gallery.',
     document_registration_malformed_response: 'The file was saved, but the server returned an invalid response. Do not upload it again; it needs review.',
@@ -1037,6 +1049,7 @@ export const en: Dictionary = {
   },
 
   bank: {
+    toleranceRefusal: '{currency}: {refusal} Suggestions by reference are still shown, and matching by hand is open.',
     fmtDate: 'Date',
     text: 'Description',
     fmtMoneyExact: 'Amount',

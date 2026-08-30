@@ -8,7 +8,6 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useParamState } from '../lib/useParamState';
 import { DataTable, EmptyState, ErrorNote, ICON, Modal, Note, PageHeader, SkeletonCards, StatusBadge, ToggleGroup, useToast, type Column } from '../components/ui';
 import { INVOICE_PAYMENT_STATUS } from '../lib/status';
-import { toHebrewError } from '../lib/errors';
 import {
   addCalendarDays, daysInCalendarMonth, fmtDate, fmtMoneyExact, fmtNum,
   shiftCalendarMonth, todayISO,
@@ -108,7 +107,7 @@ function StripStat({ title, value, context, icon: Icon }: {
 export default function Expenses() {
   const { profile, org } = useAuth();
   const baseCurrency = org?.base_currency ?? null;
-  const { t, statusLabel } = useT();
+  const { t, statusLabel, errorText } = useT();
   const toast = useToast();
   const defaults = presetRange('month');
   // useParamState seeds from the URL and re-syncs when it changes; the URL is also WRITTEN
@@ -335,7 +334,7 @@ export default function Expenses() {
       }, fileName);
       toast(t('expenses.toast_2'));
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setExporting(false);
     }
@@ -358,7 +357,7 @@ export default function Expenses() {
       });
       toast(t('expenses.toastPdf'));
     } catch (e) {
-      toast(toHebrewError(e), 'error');
+      toast(errorText(e), 'error');
     } finally {
       setExporting(false);
     }
