@@ -151,6 +151,35 @@ test('changed decision source preserves the old answer separately and requires a
   assert.deepEqual(reconciled.staleItems, ['decision:270']);
 });
 
+test('an answer to a question the register has since closed keeps its history without blocking finalization', () => {
+  const initial = createInitialState(catalog, '2026-08-30T00:00:00.000Z');
+  const answered = recordAnswer(initial, catalog, {
+    key: 'decision:270',
+    sourceHash: 'a'.repeat(64),
+    selection: 'accept',
+    note: '',
+    expectedRevision: 0,
+  }, '2026-08-30T00:01:00.000Z');
+
+  // The register closes the item: its text changes and it stops being an owner question.
+  // The old answer can no longer be renewed, because the card offers no options at all.
+  const closedCatalog = {
+    ...catalog,
+    sourceFiles: { ...catalog.sourceFiles, decisions: 'new-decisions-hash' },
+    items: catalog.items.map((item) => item.key === 'decision:270'
+      ? { ...item, sourceHash: 'c'.repeat(64), requiresOwnerDecision: false, options: [] }
+      : item),
+  };
+  const reconciled = reconcileSavedState(answered, closedCatalog, '2026-08-30T00:02:00.000Z');
+
+  assert.equal(reconciled.staleAnswers['decision:270'].selection, 'accept', 'the earlier choice stays as history');
+  assert.deepEqual(reconciled.staleItems, [], 'a closed item must not gate the finish button');
+  assert.doesNotThrow(() => finalizeState(reconciled, closedCatalog, {
+    expectedRevision: reconciled.revision,
+    sourceCommit: closedCatalog.sourceCommit,
+  }, '2026-08-30T00:03:00.000Z'));
+});
+
 test('changed historical source preserves reconsideration and blocks finalization until renewed', () => {
   const initial = createInitialState(catalog, '2026-08-27T00:00:00.000Z');
   const requested = recordReconsideration(initial, catalog, {

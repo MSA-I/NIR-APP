@@ -11,10 +11,10 @@ const rootDir = path.resolve(here, '..', '..', '..');
 test('catalog covers the exact current decision and debt registries', async () => {
   const catalog = await buildCatalog({ rootDir, sourceCommit: 'test-sha' });
 
-  assert.equal(catalog.counts.decisions, 264);
-  assert.equal(catalog.counts.debts, 51);
-  assert.equal(catalog.items.length, 315);
-  assert.equal(new Set(catalog.items.map((item) => item.key)).size, 315);
+  assert.equal(catalog.counts.decisions, 288);
+  assert.equal(catalog.counts.debts, 67);
+  assert.equal(catalog.items.length, 355);
+  assert.equal(new Set(catalog.items.map((item) => item.key)).size, 355);
   assert.equal(catalog.sourceCommit, 'test-sha');
   assert.ok(catalog.items.some((item) => item.key === 'decision:270'));
   assert.ok(catalog.items.some((item) => item.key === 'debt:16-24'));
