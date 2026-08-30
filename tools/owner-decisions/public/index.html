@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>InPlace — מרכז החלטות</title>
+  <link rel="icon" type="image/svg+xml" href="/brand.svg">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!--
+  THESIS: החלטה לפני ארכיון; מסך אחד שמסביר השלכות ומסרב להיראות כמו לוח ניהול גנרי.
+  OWN-WORLD: נייר ניטרלי, מעטפת Onyx, פעולה Oceanic וחיטה רק להדגשה; משטחי עבודה רחבים ולא קיר כרטיסים.
+  STORY: הבעלים רואה מה דורש החלטה, מבין מה כל בחירה תשנה, עונה, ושולח תוצאה בטוחה לתכנון.
+  FIRST VIEWPORT: כותרת החלטית, אמת המקור, סיכום אופקי וההחלטות הדחופות; פעולת הסיום קבועה בתחתית.
+  FORM: operate console, form 1; seed owner-decision-ledger. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+  -->
+  <a class="skip-link" href="#decision-list">דלג להחלטות</a>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="InPlace — מרכז החלטות">
+      <img src="/brand.svg" alt="" width="34" height="34">
+      <span>InPlace</span>
+    </a>
+    <div class="topbar-copy">
+      <strong>מרכז החלטות</strong>
+    </div>
+    <div id="save-indicator" class="save-indicator" role="status" aria-live="polite">טוען…</div>
+  </header>
+
+  <main class="page-shell">
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <h1 id="page-title">מה צריך להחליט, ומה כל בחירה תשנה</h1>
+        <p class="intro-text">הבחירות נשמרות מיד במחשב הזה. הן אינן משנות את המוצר או את הנתונים עד שסוכן בודק אותן ומכין תוכנית מימוש.</p>
+      </div>
+      <aside class="source-note" aria-label="מצב מקור">
+        <span class="source-dot" aria-hidden="true"></span>
+        <div><strong id="source-status">מקור נבדק</strong><small id="source-commit">טוען גרסה…</small></div>
+      </aside>
+    </section>
+
+    <section id="summary" class="summary-grid" aria-label="סיכום התקדמות"></section>
+
+    <section class="control-panel" aria-label="חיפוש וסינון">
+      <nav id="view-tabs" class="view-tabs" aria-label="סוגי פריטים"></nav>
+      <label class="search-field">
+        <span>חיפוש במילים פשוטות</span>
+        <input id="search" type="search" autocomplete="off" placeholder="לדוגמה: מחיקת ארגון, דואר, תשלום">
+      </label>
+    </section>
+
+    <section class="list-heading" aria-labelledby="list-title">
+      <div>
+        <h2 id="list-title">החלטות ושאלות</h2>
+      </div>
+      <p id="result-count" class="result-count" aria-live="polite"></p>
+    </section>
+
+    <div id="global-message" class="global-message" role="alert" hidden></div>
+    <section id="decision-list" class="decision-list" aria-busy="true"></section>
+    <button id="load-more" class="load-more" type="button" hidden>הצג עוד</button>
+  </main>
+
+  <footer class="final-bar">
+    <div class="final-progress">
+      <span id="progress-label">טוען החלטות…</span>
+      <div class="progress-track" aria-hidden="true"><span id="progress-fill"></span></div>
+    </div>
+    <button id="finalize" class="finalize-button" type="button" disabled>סיימתי — מוכן לתכנון</button>
+  </footer>
+
+  <div id="live-region" class="sr-only" aria-live="polite"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
