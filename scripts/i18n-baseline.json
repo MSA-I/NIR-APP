@@ -106,7 +106,7 @@
     "src/pages/Bank.tsx": 18,
     "src/pages/ConsolidatedInvoices.tsx": 10,
     "src/pages/Credits.tsx": 13,
-    "src/pages/Dashboard.tsx": 28,
+    "src/pages/Dashboard.tsx": 25,
     "src/pages/dashboards/AccountantDashboard.tsx": 14,
     "src/pages/DocumentOperations.tsx": 2,
     "src/pages/DocumentReview.tsx": 1,

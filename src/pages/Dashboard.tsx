@@ -1,10 +1,10 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import { Link } from 'react-router';
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ArrowUpLeft, Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RefreshCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { unwrap, useQuery } from '../lib/useQuery';
-import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, Card, ICON, type AttentionItem } from '../components/ui';
+import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, Card, ICON, ToggleGroup, type AttentionItem } from '../components/ui';
 import { EXCEPTION_TYPE, PO_STATUS, SEVERITY } from '../lib/status';
 import {
   addCalendarDays, BUSINESS_TIME_ZONE, dateStartInstant, daysInCalendarMonth,
@@ -15,7 +15,6 @@ import {
 import { comparisonSeries } from '../lib/theme';
 import { mergeWeeklyComparison, topCategoriesWithOther } from '../lib/dashboardSeries';
 import { CategoryDonut, ComparisonLineChart, moneyFor, moneyShortFor, SpendBarChart, TrendSparkline } from '../components/charts';
-import { MoneyByCurrency } from '../components/Money';
 import type { MoneyAmount } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
 import { useAuth } from '../auth/AuthContext';
@@ -50,7 +49,16 @@ type WeeklyPoint = { week: string; total: number; count: number; label: string }
  *     is not a smaller version of the truth, it is a different number entirely.
  */
 type ManagementDashboardSnapshot = {
-  money: { openBalanceByCurrency: MoneyAmount[] | null; openInvoiceCount: number };
+  money: {
+    /* `invoiceCount` per entry has been in the RPC's payload since `0218` (`invoice_balance_money`
+       emits currency, amount and invoice_count together) and was dropped on the way into
+       TypeScript, because a screen that showed every currency at once only ever needed the one
+       total beside them. A screen that shows ONE currency needs that currency's count, or the
+       context line under a shekel balance counts dollar invoices too. */
+    openBalanceByCurrency: (MoneyAmount & { invoiceCount: number })[] | null;
+    /** Every open invoice, all currencies together. Kept for the callers that count documents. */
+    openInvoiceCount: number;
+  };
   paymentRequests: {
     pendingApproval: number;
     drafts: number;
@@ -516,6 +524,13 @@ export default function Dashboard() {
      holds it must not exist at all for them — a truthy `meta` node that renders nothing still
      draws an empty band under the heading. */
   const isOwner = profile?.role === 'owner';
+
+  /* WHICH currency the control centre is reading, and `null` for "whatever the organisation keeps
+     its books in". Null rather than `baseCurrency` on purpose: the organisation row can still be
+     loading when this state is created, and storing the answer to a question that has not been
+     answered yet would pin the picker to a stale currency for the rest of the session. The
+     resolution happens below, once, against the currencies the data actually came back with. */
+  const [pickedCurrency, setPickedCurrency] = useState<string | null>(null);
   const { data, loading, error, refetch, fetching } = useQuery(async () => {
     const now = new Date();
     const todayISO = businessTodayISO();
@@ -534,7 +549,7 @@ export default function Dashboard() {
 
     const [
       ordersRes, invoicesRes, paymentsRes, exceptionsRes, poItemsRes, priceUpRes,
-      reqItemsRes, offersRes, deliveriesRes, snapshotRes, supplierCountRes,
+      reqItemsRes, offersRes, deliveriesRes, snapshotRes, supplierCountRes, supplierBalanceRes,
     ] = await Promise.all([
       // recent orders (8 weeks) — purchased today/week/month + the weekly series. created_at is the
       // time axis, non-draft/cancelled the filter, at snapshot prices (OPEN-DECISIONS #4, locked).
@@ -561,6 +576,14 @@ export default function Dashboard() {
       // a quiet month. HEAD + exact count — no rows cross the wire, and it rides the same
       // Promise.all, so it costs no extra round trip.
       supabase.from('suppliers').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+      /* Who is owed money, and in WHICH currency. The snapshot already carries a supplier count,
+         but it is one number for the whole business ("a supplier owed in two currencies is ONE
+         supplier who needs attention" -- 0218), and it caps its supplier LIST at six per currency.
+         Neither can answer "how many suppliers are owed in the currency on screen", so the picker
+         would otherwise print the organisation's whole count above a single currency's list.
+         Two columns, no names and no amounts: this is counted, never rendered. The view is the
+         one the client is meant to read -- `security_invoker`, so RLS scopes it to this org. */
+      fetchAll((from, to) => supabase.from('supplier_balances_by_currency').select('supplier_id, currency').gt('open_balance_in_currency', 0).order('supplier_id').order('currency').range(from, to)),
     ]);
 
     const orders = ordersRes as unknown as { created_at: string; currency: string; items: { qty: number; unit_price: number }[] }[];
@@ -572,38 +595,18 @@ export default function Dashboard() {
     const reqItems = reqItemsRes as unknown as { qty: number; unit_price: number | null; product_id: string; request: { currency: string } }[];
     const offers = offersRes as unknown as { product_id: string; current_price: number; currency: string }[];
     const deliveries = deliveriesRes as unknown as DeliveryOrder[];
+    const supplierBalanceRows = supplierBalanceRes as unknown as { supplier_id: string; currency: string }[];
     const snapshot = unwrap(snapshotRes) as ManagementDashboardSnapshot | null;
     if (!snapshot) throw new Error('dashboard_snapshot_unavailable');
 
     const orderValue = (o: { items: { qty: number; unit_price: number }[] }) => o.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
 
-    // ── money strip (context). Every value is `number | null`: null when its source set is
-    // empty, so an empty org shows "—", never a fake "0" (CLAUDE.md:31,37). A measured 0 (there
-    // ARE rows this period, they just sum to 0) is legitimate and kept as a number.
-    /* THE ONE RULE FOR EVERY FIGURE THIS SCREEN COMPUTES ITSELF (0217, #277).
-       A month-over-month delta, a category mix, a savings percentage and a bar width are all
-       ratios, and a ratio across two currencies is not an approximation of anything. So each
-       aggregate below is taken inside the organisation's own currency, and `otherCurrencies`
-       collects what was left outside so the screen can say so rather than quietly under-report. */
-    const inBase = <T extends { currency: string }>(rows: readonly T[]) =>
-      rows.filter((row) => row.currency === baseCurrency);
-    const otherCurrencies = [...new Set([
-      ...orders.filter((o) => o.currency !== baseCurrency).map((o) => o.currency),
-      ...invoices.filter((i) => i.currency !== baseCurrency).map((i) => i.currency),
-      ...payments.filter((p) => p.currency !== baseCurrency).map((p) => p.currency),
-    ])].sort();
-
-    const ordersThisMonth = inBase(orders).filter((o) => {
-      const date = localDateKey(o.created_at);
-      return date >= monthStart && date <= todayISO;
-    });
-    const paymentsThisMonth = inBase(payments).filter((p) => {
-      const date = localDateKey(p.paid_date);
-      return date >= monthStart && date <= todayISO;
-    });
-    const purchasedMonth = ordersThisMonth.length ? ordersThisMonth.reduce((s, o) => s + orderValue(o), 0) : null;
-    const paidMonth = paymentsThisMonth.length ? paymentsThisMonth.reduce((s, p) => s + p.amount, 0) : null;
-    const { openBalanceByCurrency, openInvoiceCount } = snapshot.money;
+    /* ── what does NOT change with the currency being read, hoisted above the per-currency view so
+       one read serves every currency and the outer result too. Counts of documents, bank matches
+       and exceptions are counts of things, not sums of money: they answer "how many are waiting"
+       and carry no unit to be wrong about. The per-currency LISTS are here for the same reason —
+       the list is the same list whichever entry of it is being read. */
+    const { openBalanceByCurrency } = snapshot.money;
 
     // ── attention counts. A count of 0 is a real "all clear" (rendered in tier B as "✓ אין…").
     // `null` is reserved for what genuinely cannot be measured.
@@ -629,26 +632,63 @@ export default function Dashboard() {
     const lateDeliveries = snapshot.openOrders.late;
     const awaitingConfirmation = snapshot.openOrders.awaitingConfirmation;
 
+    // supplier open balances — id is KEPT so each row can link to /suppliers/:id (was dropped).
+    const topBalancesByCurrency = snapshot.topBalancesByCurrency;
+
+    // ── money strip (context). Every value is `number | null`: null when its source set is
+    // empty, so an empty org shows "—", never a fake "0" (CLAUDE.md:31,37). A measured 0 (there
+    // ARE rows this period, they just sum to 0) is legitimate and kept as a number.
+    /* THE ONE RULE FOR EVERY FIGURE THIS SCREEN COMPUTES ITSELF (0217, #277).
+       A month-over-month delta, a category mix, a savings percentage and a bar width are all
+       ratios, and a ratio across two currencies is not an approximation of anything. So every
+       aggregate below is taken inside ONE currency.
+
+       WHICH one is the reader's choice now, not a constant. `#277` had this screen render each
+       currency as its own line wherever a figure was glanced at, which meant a business holding
+       shekels and dollars read two figures everywhere and could compare neither with anything.
+       The owner's ruling (30.08.2026) is that the control centre shows ONE currency at a time and
+       the reader picks it. That is the only reading of "one currency" that neither converts (there
+       is no rate source, and CLAUDE.md forbids inventing one) nor hides (every currency the
+       business holds is one click away, and the picker names them all).
+
+       So this is a FUNCTION of the currency, called once per currency the business holds, over
+       rows that were fetched exactly once. Switching currency re-reads a computed view; it does
+       not re-query. Every figure inside is in `viewCurrency` or it is not here at all. */
+    const currencyView = (viewCurrency: string) => {
+    const inView = <T extends { currency: string }>(rows: readonly T[]) =>
+      rows.filter((row) => row.currency === viewCurrency);
+
+    const ordersThisMonth = inView(orders).filter((o) => {
+      const date = localDateKey(o.created_at);
+      return date >= monthStart && date <= todayISO;
+    });
+    const paymentsThisMonth = inView(payments).filter((p) => {
+      const date = localDateKey(p.paid_date);
+      return date >= monthStart && date <= todayISO;
+    });
+    const purchasedMonth = ordersThisMonth.length ? ordersThisMonth.reduce((s, o) => s + orderValue(o), 0) : null;
+    const paidMonth = paymentsThisMonth.length ? paymentsThisMonth.reduce((s, p) => s + p.amount, 0) : null;
+
     // ── estimated savings this month: chosen price vs the most expensive available offer.
     // The dearest AVAILABLE offer, inside the base currency: "we could have paid X and paid Y"
     // is a comparison, and a comparison needs one unit.
     const maxOffer = new Map<string, number>();
-    for (const o of inBase(offers)) maxOffer.set(o.product_id, Math.max(maxOffer.get(o.product_id) ?? 0, o.current_price));
-    const baseReqItems = reqItems.filter((it) => it.request.currency === baseCurrency);
-    const savings = baseReqItems.length ? baseReqItems.reduce((s, it) => {
+    for (const o of inView(offers)) maxOffer.set(o.product_id, Math.max(maxOffer.get(o.product_id) ?? 0, o.current_price));
+    const viewReqItems = reqItems.filter((it) => it.request.currency === viewCurrency);
+    const savings = viewReqItems.length ? viewReqItems.reduce((s, it) => {
       if (it.unit_price == null) return s;
       const max = maxOffer.get(it.product_id) ?? it.unit_price;
       return s + Math.max(0, (max - it.unit_price) * it.qty);
     }, 0) : null;
     // savings as a % of the worst-case (most-expensive-offer) basket, so the ₪ figure has a scale.
-    const savingsBaseline = baseReqItems.reduce((s, it) => {
+    const savingsBaseline = viewReqItems.reduce((s, it) => {
       if (it.unit_price == null) return s;
       return s + (maxOffer.get(it.product_id) ?? it.unit_price) * it.qty;
     }, 0);
     const savingsPct = savings != null && savingsBaseline > 0 ? (savings / savingsBaseline) * 100 : null;
 
     // ── price increases (from the 30-day set). The attention metric is SUPPLIERS, not products.
-    const priceIncreases = inBase(priceRows)
+    const priceIncreases = inView(priceRows)
       .filter((r) => r.previous_price != null && r.current_price > r.previous_price)
       .map((r) => ({ ...r, pct: ((r.current_price - r.previous_price!) / r.previous_price!) * 100 }))
       .sort((a, b) => b.pct - a.pct);
@@ -657,7 +697,7 @@ export default function Dashboard() {
     // ── monthly expense chart (invoices by calendar month) + MoM change. Calendar buckets stay
     // consecutive even when a month has no invoices; an entirely empty source stays empty.
     const byMonth = new Map<string, { total: number; count: number }>();
-    for (const inv of inBase(invoices)) {
+    for (const inv of inView(invoices)) {
       const m = inv.invoice_date.slice(0, 7);
       const bucket = byMonth.get(m) ?? { total: 0, count: 0 };
       bucket.total += inv.total_amount;
@@ -668,7 +708,7 @@ export default function Dashboard() {
       const key = shiftCalendarMonth(monthKey, -(3 - idx));
       const bucket = byMonth.get(key) ?? { total: 0, count: 0 };
       const total = bucket.total;
-      return { key, month: fmtMonth(`${key}-01`), total, count: bucket.count, label: bucket.count ? moneyFor(baseCurrency)(total) : '' };
+      return { key, month: fmtMonth(`${key}-01`), total, count: bucket.count, label: bucket.count ? moneyFor(viewCurrency)(total) : '' };
     });
     const monthly = invoices.length ? monthBuckets.map(({ month, total, count, label }) => ({ month, total, count, label })) : [];
     const curMonthBucket = byMonth.get(monthKey);
@@ -698,7 +738,7 @@ export default function Dashboard() {
         bucket.total += row.value;
         bucket.count += 1;
       }
-      return buckets.map(({ week, total, count }) => ({ week, total, count, label: count ? moneyShortFor(baseCurrency)(total) : '' }));
+      return buckets.map(({ week, total, count }) => ({ week, total, count, label: count ? moneyShortFor(viewCurrency)(total) : '' }));
     };
     const weekly = weeklySeries(orders.map((order) => ({ date: order.created_at, value: orderValue(order) })));
     const paidWeekly = weeklySeries(payments.map((payment) => ({ date: payment.paid_date, value: payment.amount })));
@@ -724,20 +764,36 @@ export default function Dashboard() {
     // ── by category (PO items, current month) — kept but demoted.
     const byCat = new Map<string, number>();
     for (const it of poItems) {
-      if (it.order.currency !== baseCurrency) continue;
+      if (it.order.currency !== viewCurrency) continue;
       const orderDate = localDateKey(it.order.created_at);
       if (orderDate < monthStart || orderDate > todayISO) continue;
       const cat = it.product?.category?.name ?? t('dashboard.text_19');
       byCat.set(cat, (byCat.get(cat) ?? 0) + it.qty * it.unit_price);
     }
     const categories = topCategoriesWithOther([...byCat.entries()].map(([name, total]) => ({ name, total })))
-      .map((category) => ({ ...category, label: moneyShortFor(baseCurrency)(category.total) }));
+      .map((category) => ({ ...category, label: moneyShortFor(viewCurrency)(category.total) }));
 
-    // supplier open balances — id is KEPT so each row can link to /suppliers/:id (was dropped).
-    // The organisation's own currency leads; a supplier owed in another appears in its own group.
-    const topBalancesByCurrency = snapshot.topBalancesByCurrency;
-    const topBalances = topBalancesByCurrency.find((group) => group.currency === baseCurrency)?.rows
-      ?? topBalancesByCurrency[0]?.rows ?? [];
+    /* Supplier open balances for the currency being read, and NOTHING when it holds none. The old
+       `?? topBalancesByCurrency[0]?.rows` fallback belonged to a screen with no picker: it quietly
+       served some other currency's suppliers under this currency's heading. With a picker that is
+       a lie the reader can now catch — an empty list under "USD" is the true answer. */
+    const topBalances = topBalancesByCurrency.find((group) => group.currency === viewCurrency)?.rows ?? [];
+    /* DISTINCT suppliers owed in this currency -- the count above the list, so the two agree. The
+       list itself is still the six largest; the count says how many there are. */
+    const openSupplierCount = new Set(
+      supplierBalanceRows.filter((row) => row.currency === viewCurrency).map((row) => row.supplier_id),
+    ).size;
+
+    /* The money an attention row carries, narrowed to the currency being read. `MoneyByCurrency`
+       still draws it, and still refuses to total anything — it is simply handed one entry now
+       instead of all of them, so the row shows one figure and the picker decides which. A row
+       whose currency holds nothing keeps its COUNT and drops its amount to `—`: there really are
+       that many open credits, and none of them are in this currency. */
+    const remainingInView = remainingByCurrency.find((entry) => entry.currency === viewCurrency) ?? null;
+    const amountsIn = (entries: MoneyAmount[] | null | undefined) => {
+      const entry = entries?.find((row) => row.currency === viewCurrency);
+      return entry ? [entry] : null;
+    };
 
     // ── "דורש טיפול היום", ordered by business importance.
     // Tones use section 6's semantic vocabulary: await=ממתין · alert=דחוף · info=מידע · idle=ניטרלי.
@@ -747,12 +803,81 @@ export default function Dashboard() {
       { key: 'pay-overdue', label: 'דרישות תשלום באיחור', count: paymentsOverdue, tone: 'alert', to: '/payment-requests?due=overdue', hint: paymentsOverdue == null ? 'אין מספיק תאריכי פירעון כדי למדוד איחורים' : undefined, clearLabel: 'אין תשלומים באיחור' },
       { key: 'pay-today', label: 'תשלומים לביצוע היום', count: paymentsDueToday, tone: 'await', to: '/payment-requests?due=today', hint: paymentsDueToday == null ? 'לא הוגדרו תאריכי יעד' : undefined, clearLabel: 'אין תשלומים להיום' },
       { key: 'exceptions', label: 'חריגים פתוחים', count: exceptions.length, tone: 'alert', to: '/exceptions?status=open', hint: highExceptions ? `${highExceptions} בחומרה גבוהה` : undefined, clearLabel: 'אין חריגים פתוחים' },
-      { key: 'credits', label: 'זיכויים פתוחים', count: snapshot.credits.count, amounts: openCreditsByCurrency, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
-      { key: 'commitments', label: 'התחייבויות רכש פתוחות', count: snapshot.openOrders.count, amounts: committedByCurrency, tone: 'idle', to: '/orders?status=open', hint: remainingByCurrency.some((entry) => entry.amount > 0) ? `נותר לקבלה ${remainingByCurrency.filter((entry) => entry.amount > 0).map((entry) => fmtMoneyRounded(entry.amount, entry.currency)).join(' · ')}` : undefined, clearLabel: 'אין התחייבויות פתוחות' },
+      { key: 'credits', label: 'זיכויים פתוחים', count: snapshot.credits.count, amounts: amountsIn(openCreditsByCurrency), tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
+      { key: 'commitments', label: 'התחייבויות רכש פתוחות', count: snapshot.openOrders.count, amounts: amountsIn(committedByCurrency), tone: 'idle', to: '/orders?status=open', hint: remainingInView != null && remainingInView.amount > 0 ? `נותר לקבלה ${fmtMoneyRounded(remainingInView.amount, remainingInView.currency)}` : undefined, clearLabel: 'אין התחייבויות פתוחות' },
       { key: 'late-delivery', label: 'הזמנות באיחור באספקה', count: lateDeliveries, tone: 'alert', to: '/receiving', clearLabel: 'אין הזמנות באיחור' },
       { key: 'awaiting-confirmation', label: 'הזמנות ממתינות לאישור ספק', count: awaitingConfirmation, tone: 'await', to: '/orders?status=sent', clearLabel: 'כל ההזמנות אושרו' },
       { key: 'price-increases', label: 'ספקים שהעלו מחירים (30 יום)', count: priceIncreaseSuppliers, tone: 'await', to: '/prices?increases=1', clearLabel: 'אין שינויי מחירים' },
     ];
+
+    /* The open balance is read out of the per-currency list rather than summed from it. ABSENT is
+       not ZERO: the RPC groups every invoice row by its currency, so a currency that holds
+       invoices appears here even when they are all settled (amount 0, a measured fact). A
+       currency missing from the list has no invoices at all, which is not a claim that nothing is
+       owed in it — that is `null`, and the tile draws "—" (CLAUDE.md:37). The per-currency
+       `invoiceCount` rides along, so the context line counts THIS currency's invoices and not the
+       organisation's whole ledger. */
+    const balanceEntry = openBalanceByCurrency?.find((entry) => entry.currency === viewCurrency) ?? null;
+
+    return {
+      attention,
+      money: {
+        openBalance: balanceEntry ? balanceEntry.amount : null,
+        openInvoiceCount: balanceEntry ? balanceEntry.invoiceCount : 0,
+        paidMonth, paidDelta, purchasedMonth, purchasedDelta, monthKey,
+      },
+      monthly, weekly, paidWeekly, momChange, headline, categories, savings, savingsPct,
+      priceIncreases: priceIncreases.slice(0, 6),
+      priceIncreaseCount: priceIncreases.length,
+      topBalances,
+      openSupplierCount,
+      // The week's obligations (0148). The RPC guards all four figures behind the same "at least
+      // one active request carries a due date" condition, so they are known together or unknown
+      // together — folding them into ONE nullable object says that in the type, instead of asking
+      // the tile to re-derive the same guard four times and risk printing ₪0 next to a "—".
+      dueWindow: (() => {
+        const pr = snapshot.paymentRequests;
+        if (pr.overdueAmountByCurrency == null || pr.dueWithin7AmountByCurrency == null
+          || pr.overdue == null || pr.dueWithin7Count == null) return null;
+        // The tile draws a SPLIT BAR from these two, so they have to be in one currency for the
+        // ratio to mean anything. It is the currency being read; the lists ride along so the tile
+        // can name what it did not include.
+        return {
+          overdueAmount: inBaseCurrency(pr.overdueAmountByCurrency, viewCurrency),
+          overdueAmountByCurrency: pr.overdueAmountByCurrency,
+          overdueCount: pr.overdue,
+          dueWithin7Amount: inBaseCurrency(pr.dueWithin7AmountByCurrency, viewCurrency),
+          dueWithin7AmountByCurrency: pr.dueWithin7AmountByCurrency,
+          dueWithin7Count: pr.dueWithin7Count,
+          otherCurrencies: [...new Set([
+            ...currenciesBeside(pr.overdueAmountByCurrency, viewCurrency),
+            ...currenciesBeside(pr.dueWithin7AmountByCurrency, viewCurrency),
+          ])].sort(),
+        };
+      })(),
+    };
+    };
+
+    /* Every currency this business actually holds, its own first and the rest by ISO code — the
+       picker's tabs, and the only currencies a view is built for.
+
+       Two sources, because neither alone is the business. The fetched rows are time-bounded (three
+       months of invoices, eight weeks of orders), so a currency whose last movement is older shows
+       up only in the snapshot's balances, credits and commitments — money still owed today. The
+       organisation's own currency is always a tab even when nothing has moved in it, because it is
+       the currency the books are kept in and an empty tab is a true statement about it. */
+    const currencies = [...new Set([
+      ...(baseCurrency ? [baseCurrency] : []),
+      ...[
+        ...orders.map((o) => o.currency),
+        ...invoices.map((i) => i.currency),
+        ...payments.map((p) => p.currency),
+        ...(openBalanceByCurrency ?? []).map((entry) => entry.currency),
+        ...(openCreditsByCurrency ?? []).map((entry) => entry.currency),
+        ...(committedByCurrency ?? []).map((entry) => entry.currency),
+        ...snapshot.topBalancesByCurrency.map((group) => group.currency),
+      ].filter((currency) => currency !== baseCurrency).sort(),
+    ])];
 
     return {
       fetchedAt: new Date(),   // query-completion time → drives the "עודכן ב-" stamp
@@ -764,18 +889,11 @@ export default function Dashboard() {
         tomorrow: deliveries.filter((d) => d.expected_date === tomorrowISO),
         noDateCount: snapshot.openOrders.noDate,
       },
-      attention,
-      money: { openBalanceByCurrency, openInvoiceCount, paidMonth, paidDelta, purchasedMonth, purchasedDelta, monthKey },
-      /* Named for what it is: money this screen's own arithmetic left out because it is in another
-         currency. Empty for every business today, and the moment it is not, the screen says which
-         currencies rather than quietly reporting a smaller number. */
-      otherCurrencies,
-      monthly, weekly, paidWeekly, momChange, headline, categories, savings, savingsPct,
-      priceIncreases: priceIncreases.slice(0, 6),
-      priceIncreaseCount: priceIncreases.length,
-      topBalances,
+      currencies,
+      /* One entry per currency, all of them built from the same fetch at the same instant, so the
+         picker switches between two readings of one moment rather than between two moments. */
+      byCurrency: Object.fromEntries(currencies.map((currency) => [currency, currencyView(currency)])),
       topBalancesByCurrency,
-      openSupplierCount: snapshot.openSupplierCount,
       exceptions: exceptions.slice(0, 6),
       exceptionCount: exceptions.length,
       meta: { suspectedDup, unmatchedBank, suggestedBank },
@@ -787,34 +905,23 @@ export default function Dashboard() {
         highExceptions,
         notSentToAccountant: snapshot.invoices.notSent,
       },
-      // The week's obligations (0148). The RPC guards all four figures behind the same "at least
-      // one active request carries a due date" condition, so they are known together or unknown
-      // together — folding them into ONE nullable object says that in the type, instead of asking
-      // the tile to re-derive the same guard four times and risk printing ₪0 next to a "—".
-      dueWindow: (() => {
-        const pr = snapshot.paymentRequests;
-        if (pr.overdueAmountByCurrency == null || pr.dueWithin7AmountByCurrency == null
-          || pr.overdue == null || pr.dueWithin7Count == null) return null;
-        // The tile draws a SPLIT BAR from these two, so they have to be in one currency for the
-        // ratio to mean anything. It is the organisation's own; the lists ride along so the tile
-        // can name what it did not include.
-        return {
-          overdueAmount: inBaseCurrency(pr.overdueAmountByCurrency, baseCurrency),
-          overdueAmountByCurrency: pr.overdueAmountByCurrency,
-          overdueCount: pr.overdue,
-          dueWithin7Amount: inBaseCurrency(pr.dueWithin7AmountByCurrency, baseCurrency),
-          dueWithin7AmountByCurrency: pr.dueWithin7AmountByCurrency,
-          dueWithin7Count: pr.dueWithin7Count,
-          otherCurrencies: [...new Set([
-            ...currenciesBeside(pr.overdueAmountByCurrency, baseCurrency),
-            ...currenciesBeside(pr.dueWithin7AmountByCurrency, baseCurrency),
-          ])].sort(),
-        };
-      })(),
     };
   });
 
   if (loading) return <DashboardSkeleton />;
+
+  /* Resolving the picker: the reader's choice if it is still one of the currencies this business
+     holds, otherwise the organisation's own, otherwise the first there is. The middle step is what
+     keeps a stale choice from emptying the screen — a currency can leave the list between two
+     reads (its last open invoice was paid), and a dashboard that answers "—" to everything because
+     it is reading a currency the business no longer holds is a worse answer than falling back. */
+  const currencies = data?.currencies ?? [];
+  const viewCurrency = pickedCurrency != null && currencies.includes(pickedCurrency) ? pickedCurrency
+    : baseCurrency != null && currencies.includes(baseCurrency) ? baseCurrency
+      : currencies[0] ?? null;
+  /* Every figure below that carries money comes from HERE, not from `data`. `data` keeps only what
+     has no currency — counts, deliveries, the role queue — so the two can never drift apart. */
+  const view = data != null && viewCurrency != null ? data.byCurrency[viewCurrency] ?? null : null;
 
   // T7.1 greeting-as-title (reference layout): time-of-day + first name. The screen NAME stays
   // "מרכז הבקרה" — in the meta line here and, via routePresentation, in navigation and the
@@ -826,50 +933,50 @@ export default function Dashboard() {
   const pageTitle = firstName ? t('dashboard.greetingWithName', { greeting: dayGreeting, name: firstName }) : t('dashboard.controlCentre');
   const taskTotal = data ? Object.values(data.queue).reduce((sum, count) => sum + count, 0) : 0;
   const weeklyComparison = (() => {
-    if (!data) return [];
-    const rows = mergeWeeklyComparison(data.weekly, data.paidWeekly);
+    if (!view) return [];
+    const rows = mergeWeeklyComparison(view.weekly, view.paidWeekly);
     // Trim the measured-zero TAIL to one week: a long flat run after the last activity is honest
     // but tells nothing — one trailing zero says "and then it stopped", the rest is dead ink.
     const lastActive = Math.max(
-      data.weekly.reduce((last, point, i) => (point.count > 0 ? i : last), -1),
-      data.paidWeekly.reduce((last, point, i) => (point.count > 0 ? i : last), -1),
+      view.weekly.reduce((last, point, i) => (point.count > 0 ? i : last), -1),
+      view.paidWeekly.reduce((last, point, i) => (point.count > 0 ? i : last), -1),
     );
     return lastActive >= 0 ? rows.slice(0, Math.min(rows.length, lastActive + 2)) : rows;
   })();
   // Zero-policy guard: continuous zero lines are real only when the window holds SOME activity.
-  const weeklyHasActivity = data
-    ? data.weekly.some((point) => point.count > 0) || data.paidWeekly.some((point) => point.count > 0)
+  const weeklyHasActivity = view
+    ? view.weekly.some((point) => point.count > 0) || view.paidWeekly.some((point) => point.count > 0)
     : false;
-  const categoryTotal = data?.categories.reduce((sum, category) => sum + category.total, 0) ?? 0;
+  const categoryTotal = view?.categories.reduce((sum, category) => sum + category.total, 0) ?? 0;
   // The due-window tile's split bar divides by this, so it is computed once here and guarded
   // once at the call site: a window that holds requests but no money is a real state (all-zero
   // amounts), and dividing by it would paint NaN% into two inline widths.
   // Both halves are the organisation's own currency, or the bar is not drawn at all: a width
   // computed from a shekel numerator over a shekel-plus-dollar denominator is a picture of nothing.
-  const dueSplitTotal = data?.dueWindow && data.dueWindow.overdueAmount != null && data.dueWindow.dueWithin7Amount != null
-    ? data.dueWindow.overdueAmount + data.dueWindow.dueWithin7Amount
+  const dueSplitTotal = view?.dueWindow && view.dueWindow.overdueAmount != null && view.dueWindow.dueWithin7Amount != null
+    ? view.dueWindow.overdueAmount + view.dueWindow.dueWithin7Amount
     : 0;
-  /* The open-balance list is ONE currency group (the organisation's own first). A supplier
-     owed in another currency appears in that group, never converted into this one. */
-  const topBalancesCurrency = data?.topBalancesByCurrency
-    .find((group) => group.rows === data.topBalances)?.currency ?? baseCurrency;
-  const monthlyAria = data ? t('dashboard.monthlyAria', {
-    points: data.monthly.length
-      ? data.monthly.map((point) => `${point.month} ${point.count ? fmtMoneyExact(point.total, baseCurrency) : t('dashboard.noInvoices')}`).join(', ')
+  /* The supplier rows in view are the ones filed under the currency being read, so that currency
+     IS their unit — no search for it. It used to be recovered by matching the row array back to
+     its group, which was the only way to name the unit while the screen picked the group itself. */
+  const topBalancesCurrency = viewCurrency;
+  const monthlyAria = view ? t('dashboard.monthlyAria', {
+    points: view.monthly.length
+      ? view.monthly.map((point) => `${point.month} ${point.count ? fmtMoneyExact(point.total, viewCurrency) : t('dashboard.noInvoices')}`).join(', ')
       : t('dashboard.noInvoiceDataForPeriod'),
   }) : '';
   const weeklyAria = t('dashboard.weeklyAria', {
     points: weeklyComparison.map((point) => t('dashboard.weeklyAriaPoint', {
       week: point.week,
-      purchases: point.purchases == null ? t('dashboard.noRecords') : fmtMoneyExact(point.purchases, baseCurrency),
-      payments: point.payments == null ? t('dashboard.noRecords') : fmtMoneyExact(point.payments, baseCurrency),
+      purchases: point.purchases == null ? t('dashboard.noRecords') : fmtMoneyExact(point.purchases, viewCurrency),
+      payments: point.payments == null ? t('dashboard.noRecords') : fmtMoneyExact(point.payments, viewCurrency),
     })).join('; '),
   });
-  const categoryEmptyMessage = data?.categories.length
-    ? `נמדד רכש בסכום ${fmtMoneyExact(categoryTotal, baseCurrency)}; אין תמהיל חיובי להצגה`
+  const categoryEmptyMessage = view?.categories.length
+    ? `נמדד רכש בסכום ${fmtMoneyExact(categoryTotal, viewCurrency)}; אין תמהיל חיובי להצגה`
     : 'אין רכש החודש';
-  const categoriesAria = data ? `הוצאות לפי קטגוריה: ${categoryTotal > 0
-    ? data.categories.map((category) => `${category.name} ${fmtMoneyExact(category.total, baseCurrency)}, ${Math.round((category.total / categoryTotal) * 100)} אחוז`).join(', ')
+  const categoriesAria = view ? `הוצאות לפי קטגוריה: ${categoryTotal > 0
+    ? view.categories.map((category) => `${category.name} ${fmtMoneyExact(category.total, viewCurrency)}, ${Math.round((category.total / categoryTotal) * 100)} אחוז`).join(', ')
     : categoryEmptyMessage}` : '';
 
   return (
@@ -967,11 +1074,11 @@ export default function Dashboard() {
           attention card beside the deliveries card beside the dark role-queue card, then the
           trend cards. DOM order is unchanged on purpose — the quality gate pins the heading
           order (attention h2 first, deliveries h2 second), so placement is CSS `order` only. */}
-      {data && (
+      {data && view && (
         <div className="dash-enter flex flex-col gap-5 lg:grid lg:grid-cols-12 lg:gap-6">
           <div data-tour-anchor="dashboard-attention"
             className="lg:order-2 lg:col-span-6 [--dash-step-mobile:1] [--dash-step:1]">
-            <AttentionZone items={data.attention} totalLabel="סה״כ בטיפול" baseCurrency={baseCurrency} />
+            <AttentionZone items={view.attention} totalLabel="סה״כ בטיפול" baseCurrency={viewCurrency} />
           </div>
 
           <DeliveriesZone today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount}
@@ -983,46 +1090,70 @@ export default function Dashboard() {
               tiles, on desktop they sit as the reference's stat-card row. Each BandStat is its
               own card now. */}
           <div className="order-first grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 lg:order-1 lg:col-span-12 [--dash-step-mobile:0] [--dash-step:0]">
-            {/* The open balance is the one strip figure that can genuinely be two numbers: a
-                supplier owed in shekels and another owed in dollars are two debts, not one
-                (#277). It renders as lines rather than as a tile with a single hero figure,
-                which is what `MoneyByCurrency` is for. */}
-            <Card as={Link} pad={false} to="/invoices?pay=unpaid" aria-label={`יתרת חשבוניות פתוחות: ${data.money.openInvoiceCount} חשבוניות`}
+            {/* The open balance used to be the one strip figure drawn as two lines — a supplier
+                owed in shekels and another owed in dollars are two debts, and `#277` had the tile
+                stack both. It is one figure again, in the currency the picker is on, because the
+                owner's ruling is that the reader chooses the unit instead of reading every unit at
+                once. Nothing is summed and nothing is converted: the other currency is a click
+                away in the picker, holding its own balance and its own invoice count. */}
+            {/* `/invoices` takes review/pay/export/month/attention/q/page/sort and no currency,
+                so the link does NOT carry one: a query parameter the target silently ignores
+                promises a filtered list and delivers every currency's invoices. The tile still
+                names its currency in the label; narrowing the list itself needs a currency
+                filter on that screen, which is its own change. */}
+            <Card as={Link} pad={false} to="/invoices?pay=unpaid"
+              aria-label={t('dashboard.openBalanceAria', { currency: viewCurrency ?? '', count: String(view.money.openInvoiceCount) })}
               className="card-link-hover block min-h-24 px-4 py-3.5 sm:px-5">
               <div className="flex items-center gap-2">
                 <ReceiptText size={ICON.md} className="shrink-0 text-ink-muted" aria-hidden="true" />
                 <span className="text-xs font-medium text-ink-muted">{t('dashboard.title_3')}</span>
               </div>
-              <div className="mt-2 kpi-hero text-await-fg" dir="ltr">
-                <MoneyByCurrency amounts={data.money.openBalanceByCurrency} baseCurrency={baseCurrency} shape="rounded" />
+              <div className="mt-2 kpi-hero num text-await-fg" dir="ltr">
+                {glanceMoney(view.money.openBalance, viewCurrency)}
               </div>
               <div className="mt-1 flex items-center justify-between gap-3 text-xs text-ink-muted">
                 <span>{t('dashboard.context')}</span>
-                <span>{data.money.openBalanceByCurrency == null ? t('dashboard.noDataAvailable') : `${data.money.openInvoiceCount} חשבוניות פתוחות`}</span>
+                <span>{view.money.openBalance == null ? t('dashboard.noDataAvailable') : t('dashboard.openInvoicesCount', { count: String(view.money.openInvoiceCount) })}</span>
               </div>
             </Card>
-            <BandStat title={t('dashboard.paidThisMonth')} value={data.money.paidMonth} tone="done" to={`/payments?month=${data.money.monthKey}`}
-              icon={Banknote} context={t('dashboard.context_2')} delta={data.money.paidDelta} currency={baseCurrency}
-              spark={data.paidWeekly} sparkLabel={t('dashboard.sparkLabel')} />
-            <BandStat title={t('dashboard.title_4')} value={data.money.purchasedMonth} to="/orders?status=all"
-              icon={ShoppingCart} context={t('dashboard.context_3')} delta={data.money.purchasedDelta} currency={baseCurrency}
-              aux={data.savings != null ? `חיסכון משוער ${fmtMoneyRounded(data.savings, baseCurrency)}${data.savingsPct != null ? ` · ${data.savingsPct.toFixed(0)}%` : ''}` : undefined}
-              spark={data.weekly} sparkLabel={t('dashboard.sparkLabel_2')} />
+            <BandStat title={t('dashboard.paidThisMonth')} value={view.money.paidMonth} tone="done" to={`/payments?month=${view.money.monthKey}`}
+              icon={Banknote} context={t('dashboard.context_2')} delta={view.money.paidDelta} currency={viewCurrency}
+              spark={view.paidWeekly} sparkLabel={t('dashboard.sparkLabel')} />
+            <BandStat title={t('dashboard.title_4')} value={view.money.purchasedMonth} to="/orders?status=all"
+              icon={ShoppingCart} context={t('dashboard.context_3')} delta={view.money.purchasedDelta} currency={viewCurrency}
+              aux={view.savings != null ? `חיסכון משוער ${fmtMoneyRounded(view.savings, viewCurrency)}${view.savingsPct != null ? ` · ${view.savingsPct.toFixed(0)}%` : ''}` : undefined}
+              spark={view.weekly} sparkLabel={t('dashboard.sparkLabel_2')} />
           </div>
-          {data.otherCurrencies.length > 0 && (
-            /* Said once, where the figures are, rather than repeated on every tile: the trend and
-               mix figures above are the organisation's own currency, and this business also holds
-               money in another. Nothing here is converted and nothing is hidden — the balances,
-               the credits and the commitments above list every currency they are in.
-               `order-1`, WITH the money band it annotates, and NOT `order-2`: this line spans all
+          {data.currencies.length > 1 && (
+            /* The picker, and it renders ONLY for a business that holds more than one currency —
+               a single-currency organisation has no choice to make and gets no control to read.
+
+               Said once, where the figures are, rather than repeated on every tile: the whole
+               screen above and below is in one currency, and this is where it is named and
+               changed. Nothing is converted and nothing is hidden — the currencies this business
+               holds are all here, each carrying its own balances, credits and commitments.
+
+               `order-1`, WITH the money band it governs, and NOT `order-2`: this row spans all
                twelve columns, so sharing an order group with the six-column attention card leaves
                it nowhere to sit on that row. It would open a row of its own between the attention
                card and the two cards that belong beside it, dropping the deliveries card and the
                role-queue card a full row down and stranding half a row of white space. Ordered
                with the band, it closes the money zone instead of splitting the attention zone. */
-            <p className="order-first text-xs text-ink-muted lg:order-1 lg:col-span-12">
-              המגמות והתמהיל מוצגים ב־{baseCurrency}. קיימת פעילות גם ב־{data.otherCurrencies.join(', ')}, והיא אינה מחוברת אליהם.
-            </p>
+            <div className="order-first flex flex-wrap items-center gap-x-3 gap-y-2 lg:order-1 lg:col-span-12">
+              <ToggleGroup
+                label={t('dashboard.currencyPickerLabel')}
+                value={viewCurrency ?? ''}
+                onChange={setPickedCurrency}
+                items={data.currencies.map((currency) => ({
+                  key: currency,
+                  label: <span className="num" dir="ltr">{currency}</span>,
+                  testId: `dashboard-currency-${currency}`,
+                }))}
+              />
+              <p className="text-xs text-ink-muted">
+                {t('dashboard.currencyPickerNote', { currency: viewCurrency ?? '' })}
+              </p>
+            </div>
           )}
 
           <RoleQueueCard queue={data.queue} total={taskTotal}
@@ -1046,27 +1177,27 @@ export default function Dashboard() {
                     <h3 id="monthly-trend-title" className="text-sm font-semibold text-ink-body">{t('dashboard.text_48')}</h3>
                     <p className="text-xs text-ink-muted">{t('dashboard.text_49')}</p>
                   </div>
-                  {data.headline.current != null && (
+                  {view.headline.current != null && (
                     <div className="flex items-start text-xs">
                       <div className="pe-3 text-end">
                         <div className="text-ink-muted">{t('dashboard.text_50')}</div>
                         <div className="flex items-baseline gap-1.5">
-                          <span className="num text-sm font-semibold text-ink">{glanceMoney(data.headline.current, baseCurrency)}</span>
+                          <span className="num text-sm font-semibold text-ink">{glanceMoney(view.headline.current, viewCurrency)}</span>
                           {/* Neutral ink, same reasoning as DeltaChip above: this is the month's
                               purchasing against last month's, and buying more is neither good nor
                               bad. It used to wear alert/done — a business verdict on a figure the
                               file itself already decided not to judge, 800 lines apart. */}
-                          {data.momChange != null && (
+                          {view.momChange != null && (
                             <span className="num text-xs font-medium text-ink-mid" dir="ltr">
-                              {data.momChange > 0 ? '+' : ''}{data.momChange.toFixed(0)}%
+                              {view.momChange > 0 ? '+' : ''}{view.momChange.toFixed(0)}%
                             </span>
                           )}
                         </div>
                       </div>
-                      {data.headline.previous != null && (
+                      {view.headline.previous != null && (
                         <div className="border-s border-line-soft ps-3 text-end">
                           <div className="text-ink-muted">{t('dashboard.text_51')}</div>
-                          <div className="num text-sm font-semibold text-ink-mid">{glanceMoney(data.headline.previous, baseCurrency)}</div>
+                          <div className="num text-sm font-semibold text-ink-mid">{glanceMoney(view.headline.previous, viewCurrency)}</div>
                         </div>
                       )}
                     </div>
@@ -1075,14 +1206,14 @@ export default function Dashboard() {
                 {/* teal-mid, not the deep brand hue — the ring beside this card is deep, and two
                     neighboring charts in one color read as one chart (owner, T7.3c). */}
                 <SpendBarChart
-                  points={data.monthly.map((point) => ({ key: point.month, label: point.label, total: point.total }))}
-                  ariaLabel={monthlyAria} emptyMessage="אין נתוני חשבוניות לתקופה" currency={baseCurrency} />
+                  points={view.monthly.map((point) => ({ key: point.month, label: point.label, total: point.total }))}
+                  ariaLabel={monthlyAria} emptyMessage="אין נתוני חשבוניות לתקופה" currency={viewCurrency} />
               </Card>
 
               <Card as="section" className="lg:col-span-4" aria-labelledby="category-trend-title">
                 <h3 id="category-trend-title" className="text-sm font-semibold text-ink-body">{t('dashboard.text_52')}</h3>
                 <p className="text-xs text-ink-muted">{t('dashboard.text_53')}</p>
-                <CategoryDonut slices={data.categories} total={categoryTotal} currency={baseCurrency} ariaLabel={categoriesAria} emptyMessage={categoryEmptyMessage} />
+                <CategoryDonut slices={view.categories} total={categoryTotal} currency={viewCurrency} ariaLabel={categoriesAria} emptyMessage={categoryEmptyMessage} />
               </Card>
 
               {/* Owner review, defect 11: this slot used to hold a radial ring over "כיסוי תאריכי
@@ -1100,25 +1231,25 @@ export default function Dashboard() {
               <Card as="section" className="lg:col-span-3" aria-labelledby="due-window-title">
                 <h3 id="due-window-title" className="text-sm font-semibold text-ink-body">{t('dashboard.text_54')}</h3>
                 <p className="text-xs text-ink-muted">{t('dashboard.text_55')}</p>
-                {data.dueWindow == null ? (
+                {view.dueWindow == null ? (
                   <p className="mt-4 flex min-h-24 items-center text-sm text-ink-muted sm:min-h-40">
                     {t('dashboard.text_56')}
                   </p>
-                ) : data.dueWindow.overdueAmount == null || data.dueWindow.dueWithin7Amount == null ? (
+                ) : view.dueWindow.overdueAmount == null || view.dueWindow.dueWithin7Amount == null ? (
                   /* Active dated requests exist, but none of them is in the organisation's own
                      currency — so this tile has no figure it may add, and says which currencies
                      the money IS in rather than showing one of them as though it were the total. */
                   <p className="mt-4 flex min-h-24 items-center text-sm text-ink-muted sm:min-h-40">
-                    דרישות התשלום הפעילות הן ב־{data.dueWindow.otherCurrencies.join(', ')} בלבד. ראו את מסך דרישות התשלום.
+                    דרישות התשלום הפעילות הן ב־{view.dueWindow.otherCurrencies.join(', ')} בלבד. ראו את מסך דרישות התשלום.
                   </p>
                 ) : (
                   <div className="mt-2 flex min-h-32 flex-col justify-center gap-4 sm:min-h-40">
                     <div className="kpi-hero num text-ink" dir="ltr">
-                      {glanceMoney(data.dueWindow.overdueAmount + (data.dueWindow.dueWithin7Amount ?? 0), baseCurrency)}
+                      {glanceMoney(view.dueWindow.overdueAmount + (view.dueWindow.dueWithin7Amount ?? 0), viewCurrency)}
                     </div>
-                    {data.dueWindow.otherCurrencies.length > 0 && (
+                    {view.dueWindow.otherCurrencies.length > 0 && (
                       <p className="text-xs text-ink-muted">
-                        בנוסף קיימות דרישות ב־{data.dueWindow.otherCurrencies.join(', ')}, שאינן מחוברות לסכום הזה.
+                        בנוסף קיימות דרישות ב־{view.dueWindow.otherCurrencies.join(', ')}, שאינן מחוברות לסכום הזה.
                       </p>
                     )}
                     {/* The one graphic this tile gets, and the reason it is allowed where the ring
@@ -1131,18 +1262,18 @@ export default function Dashboard() {
                         screen reader gains nothing from hearing the split a third time. */}
                     {dueSplitTotal > 0 && (
                       <div className="split-bar flex h-2 overflow-hidden rounded-full bg-line-soft" aria-hidden="true">
-                        <span className="bg-alert-solid" style={{ width: `${((data.dueWindow.overdueAmount ?? 0) / dueSplitTotal) * 100}%` }} />
-                        <span className="bg-bar-mid" style={{ width: `${((data.dueWindow.dueWithin7Amount ?? 0) / dueSplitTotal) * 100}%` }} />
+                        <span className="bg-alert-solid" style={{ width: `${((view.dueWindow.overdueAmount ?? 0) / dueSplitTotal) * 100}%` }} />
+                        <span className="bg-bar-mid" style={{ width: `${((view.dueWindow.dueWithin7Amount ?? 0) / dueSplitTotal) * 100}%` }} />
                       </div>
                     )}
                     <div className="flex flex-col gap-1.5 text-sm">
                       <p className="text-alert-fg">
-                        מתוכם באיחור <span className="num" dir="ltr">{glanceMoney(data.dueWindow.overdueAmount, baseCurrency)}</span>
-                        {' · '}<span className="num">{data.dueWindow.overdueCount}</span> דרישות
+                        מתוכם באיחור <span className="num" dir="ltr">{glanceMoney(view.dueWindow.overdueAmount, viewCurrency)}</span>
+                        {' · '}<span className="num">{view.dueWindow.overdueCount}</span> דרישות
                       </p>
                       <p className="text-ink-mid">
-                        לפירעון בשבעת הימים הקרובים <span className="num" dir="ltr">{glanceMoney(data.dueWindow.dueWithin7Amount, baseCurrency)}</span>
-                        {' · '}<span className="num">{data.dueWindow.dueWithin7Count}</span> דרישות
+                        לפירעון בשבעת הימים הקרובים <span className="num" dir="ltr">{glanceMoney(view.dueWindow.dueWithin7Amount, viewCurrency)}</span>
+                        {' · '}<span className="num">{view.dueWindow.dueWithin7Count}</span> דרישות
                       </p>
                     </div>
                     <Link className="link self-start text-sm" to="/payment-requests?due=soon">
@@ -1164,7 +1295,7 @@ export default function Dashboard() {
                     whole distinction. Owner decision 19.08.2026: spend both carriers. */}
                 <ComparisonLineChart points={weeklyHasActivity ? weeklyComparison : []} xKey="week"
                   series={comparisonSeries({ key: 'purchases', name: 'רכש' }, { key: 'payments', name: 'תשלומים' })}
-                  ariaLabel={weeklyAria} emptyMessage="אין רכש או תשלומים בשמונת השבועות האחרונים" currency={baseCurrency} />
+                  ariaLabel={weeklyAria} emptyMessage="אין רכש או תשלומים בשמונת השבועות האחרונים" currency={viewCurrency} />
               </Card>
             </div>
           </section>
@@ -1216,14 +1347,14 @@ export default function Dashboard() {
                 )}
               </OperationsDisclosure>
 
-              <OperationsDisclosure title={t('dashboard.title_6')} count={data.priceIncreaseCount}
-                summary={data.priceIncreases[0] ? t('dashboard.largestIncrease', { percent: data.priceIncreases[0].pct.toFixed(1) }) : undefined}
+              <OperationsDisclosure title={t('dashboard.title_6')} count={view.priceIncreaseCount}
+                summary={view.priceIncreases[0] ? t('dashboard.largestIncrease', { percent: view.priceIncreases[0].pct.toFixed(1) }) : undefined}
                 empty={t('dashboard.empty_2')}>
                 <div className="flex justify-end">
                   <Link to="/prices?increases=1" className="btn-ghost min-h-11 text-xs">{t('dashboard.text_62')} <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
                 </div>
                 <ul className="divide-y divide-line-soft">
-                  {data.priceIncreases.map((price, index) => (
+                  {view.priceIncreases.map((price, index) => (
                     <li key={index}>
                       <Link to={`/prices?product=${price.product.id}`} className="flex min-h-11 flex-col items-stretch gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface-hover active:bg-surface-selected sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <span className="min-w-0 break-words sm:truncate">
@@ -1245,14 +1376,14 @@ export default function Dashboard() {
                 </ul>
               </OperationsDisclosure>
 
-              <OperationsDisclosure title={t('dashboard.title_7')} count={data.openSupplierCount}
-                summary={data.topBalances[0] ? `${data.topBalances[0].name} · ${fmtMoneyExact(data.topBalances[0].balance, topBalancesCurrency)}` : undefined}
+              <OperationsDisclosure title={t('dashboard.title_7')} count={view.openSupplierCount}
+                summary={view.topBalances[0] ? `${view.topBalances[0].name} · ${fmtMoneyExact(view.topBalances[0].balance, topBalancesCurrency)}` : undefined}
                 empty={t('dashboard.empty_3')}>
                 <div className="flex justify-end">
                   <Link to="/suppliers?balance=open" className="btn-ghost min-h-11 text-xs">{t('dashboard.text_63')} <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
                 </div>
                 <ul className="divide-y divide-line-soft">
-                  {data.topBalances.map((balance) => (
+                  {view.topBalances.map((balance) => (
                     <li key={balance.id}>
                       <Link to={`/suppliers/${balance.id}`} className="flex min-h-11 items-center justify-between rounded-lg px-2 py-2 text-sm hover:bg-surface-hover active:bg-surface-selected">
                         <span className="text-ink-mid">{balance.name}</span>
