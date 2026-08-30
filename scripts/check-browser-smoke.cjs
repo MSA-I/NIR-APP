@@ -1756,8 +1756,19 @@ async function settingsFalseSuccess(browser) {
      * whenever the menu is open, and it is.
      *
      * What this scenario is actually about is unchanged and is asserted below: a failed mutation
-     * must not close the dialog, must not claim success, and must not repaint the row. Only the
-     * two clicks that reach the dialog moved.
+     * must not claim success and must not repaint the row. Only the two clicks that reach it moved.
+     *
+     * UPDATED 30.08.2026 (#290). The reason-collecting `ConfirmDialog` this scenario used to type
+     * into is gone: disabling a user is reversible in one click, so it acts and offers an Undo
+     * instead of interrogating first. The password step-up in front of the write is untouched, and
+     * it skips here because `login()` authenticated seconds ago — which is why the RPC is reached
+     * with no dialog at all.
+     *
+     * The "a failure must not close the dialog" assertion could not survive that, so it is replaced
+     * by the guarantee the new pattern actually needs: **a failed action must never offer to undo
+     * itself.** An Undo button on a write that never landed is a success claim wearing a different
+     * label, and it is the specific way this design could lie. That is strictly more relevant
+     * coverage than the dialog check it replaces, not a quiet reduction of it.
      */
     const userRow = page.getByRole('row').filter({ has: page.getByRole('button', { name: /^פעולות עבור / }) }).first();
     /*
@@ -1778,12 +1789,22 @@ async function settingsFalseSuccess(browser) {
     const deactivate = page.getByRole('menuitem', { name: 'השבתה' });
     await deactivate.waitFor({ timeout: 10_000 });
     await deactivate.click();
-    const dialog = page.getByRole('dialog', { name: 'השבתת משתמש' });
-    await dialog.getByRole('textbox', { name: /סיבה/ }).fill('בדיקת כשל רשת מקומי');
-    await dialog.getByRole('button', { name: 'השבתה' }).click();
+    /* The step-up is still the gate; it skips only because this session authenticated seconds ago.
+       If it ever stops skipping, this scenario should say so loudly rather than time out on a
+       control it never described — so the wait is explicit and named. */
+    const stepUp = page.getByRole('dialog', { name: 'אימות זהות לשינוי הרשאות' });
+    if (await stepUp.isVisible().catch(() => false)) {
+      const account = credentials('owner');
+      await stepUp.getByLabel(/סיסמה/).fill(account.password);
+      await stepUp.getByRole('button', { name: /אישור זהות/ }).click();
+    }
+
     await page.getByRole('alert').waitFor({ timeout: 10_000 });
-    assert(await dialog.isVisible(), 'failed mutation closed the confirmation dialog');
     assert.equal(await page.getByText('המשתמש הושבת', { exact: true }).count(), 0, 'failed mutation displayed success');
+    assert.equal(
+      await page.getByRole('button', { name: 'ביטול הפעולה' }).count(), 0,
+      'failed mutation offered an Undo — the write never landed, so there is nothing to undo',
+    );
     assert.equal(await userRow.getByText('פעיל', { exact: true }).count(), 1, 'failed mutation changed the rendered status');
   } finally {
     await closeContext(context);
