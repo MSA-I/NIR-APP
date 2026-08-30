@@ -252,12 +252,23 @@ async function capture(page, name, route, report) {
   //     update profiles set locale='en' where id in (
   //       select id from auth.users where email like '%@demo.supplyflow.local');
   // and let this refuse to produce a report rather than produce a confident wrong one.
+  if (await page.evaluate(() => document.documentElement.lang) !== 'en') {
+    // Switch through the product's own control rather than by pinning the fixture in SQL. The
+    // fixture does not hold still — the demo owner's row went back to 'he' between two runs on
+    // 30.08.2026 with no gate and no restore script running — and a measurement that depends on a
+    // value some other process may rewrite is a measurement that will one day be quietly wrong in
+    // the other direction. Driving `#settings-ui-locale` also exercises the real switch, so a
+    // broken language control fails the audit instead of silently changing what it measures.
+    await page.goto(BASE + '/settings', { waitUntil: 'domcontentloaded' });
+    await settle(page);
+    await page.selectOption('#settings-ui-locale', 'en');
+    await page.waitForFunction(() => document.documentElement.lang === 'en', null, { timeout: 15000 });
+    await settle(page);
+    console.log('switched to English through /settings');
+  }
   const signedInLocale = await page.evaluate(() => document.documentElement.lang);
   if (signedInLocale !== 'en') {
-    throw new Error(
-      'signed in but the screen is in "' + signedInLocale + '", not "en" — profiles.locale wins over '
-      + 'localStorage, so set it to en for the demo accounts before measuring',
-    );
+    throw new Error('signed in but the screen is in "' + signedInLocale + '", not "en" — refusing to measure');
   }
 
   for (const [name, route] of OWNER_ROUTES) await capture(page, 'owner-' + name, route, report);

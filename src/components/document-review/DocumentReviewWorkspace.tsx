@@ -45,7 +45,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
       if (cancelled) return;
       if (error || !data?.signedUrl) {
         console.error('[document-review-source]', error?.message ?? 'signed URL missing');
-        setSourceError('לא ניתן לטעון תצוגה מאובטחת של המקור. אפשר לנסות לרענן את המסך.');
+        setSourceError(t('docWorkspace.setSourceError'));
         return;
       }
       setSourceUrl(data.signedUrl);
@@ -65,8 +65,8 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
       return data.signedUrl;
     });
     setOpeningSource(false);
-    if (result === 'blocked') toast('הדפדפן חסם את פתיחת המסמך. יש לאפשר חלונות קופצים ולנסות שוב.', 'error');
-    if (result === 'error') toast('לא ניתן ליצור קישור מאובטח חדש למסמך. יש לנסות שוב.', 'error');
+    if (result === 'blocked') toast(t('docWorkspace.toast'), 'error');
+    if (result === 'error') toast(t('docWorkspace.toast_2'), 'error');
   }
 
   useEffect(() => {
@@ -75,7 +75,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
   }, [extraction]);
 
   if (!snapshot.document) {
-    return <Note tone="alert" role="alert">המסמך אינו זמין או שאין לך הרשאה לצפות בו.</Note>;
+    return <Note tone="alert" role="alert">{t('docWorkspace.text_2')}</Note>;
   }
 
   return (
@@ -86,7 +86,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
             this workspace does not mount at all — so the copy here was the second h1 and the
             second file name on the same screen. This card owns one thing: where the document is. */}
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="section-title">מצב המסמך</h2>
+          <h2 className="section-title">{t('docWorkspace.text_3')}</h2>
           {/* The strip below is the single place this screen says how far the document got. While
               a job is in flight the badge said it again, and `DocumentStatusBadge` carries the page
               counter for the surfaces that have no strip (the folder, the upload centre) — so
@@ -107,8 +107,8 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
             to report; its absence carries the same information without spending the space. */}
         {(snapshot.reviewCorrections.length > 0 || snapshot.annotations.length > 0) && (
           <div className="mt-4 rounded-lg bg-surface-sunken p-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-ink-soft"><FileCheck2 size={ICON.md} aria-hidden="true" /> שכבות בדיקה</div>
-            <p className="mt-1 text-sm text-ink-body"><span className="num">{snapshot.reviewCorrections.length}</span> תיקונים · <span className="num">{snapshot.annotations.length}</span> הערות</p>
+            <div className="flex items-center gap-2 text-sm font-medium text-ink-soft"><FileCheck2 size={ICON.md} aria-hidden="true" /> {t('docWorkspace.text_4')}</div>
+            <p className="mt-1 text-sm text-ink-body"><span className="num">{snapshot.reviewCorrections.length}</span> {t('docWorkspace.text_5')} <span className="num">{snapshot.annotations.length}</span> {t('docWorkspace.text_6')}</p>
           </div>
         )}
       </section>
@@ -116,13 +116,13 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
       {snapshot.stage === 'failed' && (
         <Note tone="alert" role="alert" className="flex-wrap">
           <span className="min-w-0 flex-1">
-            <strong>העיבוד נכשל.</strong>{' '}
+            <strong>{t('docWorkspace.text_29')}</strong>{' '}
             {t(documentProcessingFailureKey(snapshot.job?.last_error_code, snapshot.job?.last_error_message))}
           </span>
           {!readOnly && onReprocess && (
             <button type="button" className="btn-secondary" disabled={reprocessing} onClick={onReprocess}>
               <RefreshCw className={reprocessing ? 'animate-spin ' : ''} size={ICON.md} aria-hidden="true" />
-              {reprocessing ? 'שולח מחדש…' : 'עיבוד מחדש'}
+              {reprocessing ? t('docWorkspace.text_30') : t('docWorkspace.text_31')}
             </button>
           )}
         </Note>
@@ -130,10 +130,10 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
       {/* The old wording narrated the heuristic ("לפי הגיל ומספר הניסיונות שנשמרו בשרת").
           documentUiStatus already carries the reason; the alert only has to name the next move. */}
       {uiStatus.state === 'stuck' && (
-        <Note tone="alert" role="alert">העיבוד נעצר. אפשר לטפל בו במרכז תפעול המסמכים.</Note>
+        <Note tone="alert" role="alert">{t('docWorkspace.text_32')}</Note>
       )}
       {snapshot.extraction?.payload.document.partial && (
-        <Note tone="await" role="status">החילוץ חלקי. יש להשוות כל ערך למקור לפני מתן משוב.</Note>
+        <Note tone="await" role="status">{t('docWorkspace.text_33')}</Note>
       )}
 
       {/* Four notes stood here and none of them survived, because each one was the strip's sentence
@@ -178,7 +178,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
             {snapshot.packet ? (
               <DocumentPacketReview snapshot={snapshot} readOnly={readOnly} onRefetch={onRefetch} />
             ) : readOnly ? (
-              <Note tone="idle">המסמך ותוצאות העיבוד זמינים לצפייה. פעולות בדיקה ועדכון אינן זמינות במצב קריאה בלבד.</Note>
+              <Note tone="idle">{t('docWorkspace.text_34')}</Note>
             ) : isPriceList
               ? <PriceListReviewConfirmation snapshot={snapshot} actorId={actorId} onRefetch={onRefetch} />
               : snapshot.interpretation && (
