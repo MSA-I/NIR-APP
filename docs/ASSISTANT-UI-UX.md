@@ -4,8 +4,13 @@
 
 ## מצב והיקף
 
-סטטוס נוכחי: `OWNER_APPROVED_B` · `LOCAL_IMPLEMENTED` · `CI_PENDING` ·
-`NOT_ACTIVATED` · `NOT_DEPLOYED`.
+‏~~סטטוס נוכחי: `OWNER_APPROVED_B` · `LOCAL_IMPLEMENTED` · `CI_PENDING` ·
+`NOT_ACTIVATED` · `NOT_DEPLOYED`.~~
+
+**סטטוס נכון ל-30.08.2026: ‏`ACTIVATED` · `DEPLOYED`.** העוזר פרוס ופעיל בייצור; ממשל `#179`
+עומד על חמש שורות `VERIFIED` אחרי חתימת ה-DPA, וההיתר של `#271` נמחק (`DEBT §63`, סגור).
+**המסמך עצמו נשאר brief מ-20.08.2026 ואינו מתעדכן כמצב** — לסטטוס חי קוראים
+`docs/ASSISTANT.md` ו-`docs/PROGRESS.md`.
 
 מסמך זה הוא ה־brief וה־Decision Log המחייבים של משטח הבדיקה. הוא אינו אישור לשינוי UI ייצורי.
 שני ה־prototypes המבודדים נועדו להכריע modality, פתיחת מקור ונתיב חזרה. רק חלופה שבעל המוצר

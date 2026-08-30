@@ -5,6 +5,13 @@
 מסמך זה הוא מקור האמת ליוזמה: החוזים, ההכרעות, מפת היכולות, ממשל הספק ומטריצת השימור.
 הקוד הקנוני של החוזים הוא `src/lib/assistant/contracts.ts` — המסמך מתעד אותו, לא להפך.
 
+> **מצב נכון ל-30.08.2026:** ‏**פעיל בייצור.** פונקציית `assistant` פרוסה (`ACTIVE`,
+> ‏`verify_jwt=true`), חמש שורות הממשל של `#179` **‏`VERIFIED`**, ‏`AI_ASSISTANT_PRELAUNCH_EXCEPTION`
+> **הוסר** אחרי חתימת ה-DPA, וההפעלה אומתה חי. ‏`assistant.drafts` נשאר כבוי לפי `#182`.
+> ‏**קטעים במסמך שמתארים „כבוי", „חסם activation" או `dpa=MISSING` מסומנים במפורש כהיסטוריה** —
+> אם נתקלת באחד שאינו מסומן, הוא סחף ויש לתקנו. הראיה החיה: `ASSISTANT-ACTIVATION-EVIDENCE.md §5`;
+> החוב שנסגר: `DEBT-REGISTER §63`.
+
 ---
 
 ## 0. מה זה, ומה זה לא
@@ -109,12 +116,12 @@
 כלומר בדיוק ה-fallback הדטרמיניסטי, ולא ספק שני. הראיות עצמן, עם מקור מתוארך ושם מי שאימת,
 נרשמות ב-**`docs/ASSISTANT-ACTIVATION-EVIDENCE.md`**; המסמך הזה מתעד את הקוד, לא להפך.
 
-| שורת ממשל | מפתח בקוד | מצב 25.08.2026 | מה נדרש כדי לסגור |
+| שורת ממשל | מפתח בקוד | מצב 30.08.2026 | על מה היא עומדת |
 |---|---|---|---|
 | שימוש הנתונים לאימון | `training_use` | `VERIFIED` (24.08) | מקור רשמי מתוארך של הספק, ושם מי שקרא |
-| שימור אצל הספק | `retention` | `VERIFIED` (24.08) | ‏standard בגילוי נאות **או** חוזה שמוכיח zero-retention |
+| שימור אצל הספק | `retention` | `VERIFIED` (24.08) | ‏standard בגילוי נאות. ‏**zero-retention לא נטען ואינו קיים** — הוא דורש חוזה נפרד, וה-DPA אינו הוא |
 | לוגים אצל הספק | `provider_logs` | `VERIFIED` (24.08) | מקור רשמי מתוארך; אותו כלל חוזה חל על טענת אפס-לוגים |
-| הסכם עיבוד נתונים (DPA) | `dpa` | **`MISSING`** — אין ישות משפטית שתתקשר (בעלים, 25.08) | חתימה לפני דייר ראשון, עם הפניה לחוזה |
+| הסכם עיבוד נתונים (DPA) | `dpa` | **`VERIFIED`** (30.08) | ‏**חוזה חתום:** ‏`OpenAI Data Processing Addendum v.010126`, ‏`InPlace` ↔ `OpenAI OpCo, LLC`, ‏30.08.2026, עם הפניה למזהה החוזה |
 | אזור / ריבונות נתונים | `data_region` | `VERIFIED` (24.08) | מקור רשמי מתוארך |
 | הפרדת סביבות | — | קיים | מפתח נפרד לייצור ולפיתוח |
 | החלפת מפתחות | — | קיים | ידנית, מתועדת |
@@ -125,17 +132,37 @@
 
 **מה שהטבלה אומרת ומה שהיא לא.** העמודה „מצב" היא מצב **הראיה המתועדת**
 (`ASSISTANT-ACTIVATION-EVIDENCE.md §1`), לא מצב הסוד בפונקציה הפרוסה. ‏`VERIFIED` בטבלה פירושו
-שנמצא מקור רשמי מתוארך ושמישהו חתום עליו — לא שמשתנה הסביבה המתאים הוגדר בייצור. בייצור לא
-נפרס דבר.
+שנמצא מקור מתוארך ושמישהו חתום עליו. **ההבחנה הזו נשארת גם כשהשניים מסכימים:** נכון
+ל-30.08.2026 חמש השורות מוגדרות גם כסודות בייצור ואומתו שם — אבל מסמך שמצהיר על סוד אינו
+מודד אותו, ומי שרוצה לדעת מה מוגדר בייצור בודק את הייצור.
 
-**שורה אחת חסרה, והשער סגור — גם אחרי שהבעלים הורה להפעיל.** ‏`dpa` נשארת `MISSING` מסיבה
-שאינה בשליטת הפרויקט: ‏DPA נכרת בין ישות משפטית ל-`OpenAI OpCo, LLC`, וחברה טרם נרשמה
-(בעלים, 25.08.2026). החתימה נקבעה לזמן ההשקה, לפני הדייר הראשון. הבעלים הורה באותו יום להפעיל
-את העוזר בייצור; **ההוראה לא יושמה, ואין לממש אותה בכתיבת `VERIFIED` בשורה** — הסטטוס הוא טענה
-על חוזה קיים, והוא נגזר החוצה ל-`/privacy` ול-`/terms`. הדרך הכשרה היא משטח חריג מפורש שטרם
-נכתב: לפני-השקה בלבד, לארגון של הבעלים בלבד, נרשם ב-`audit_logs`, ונסגר עם הדייר הראשון.
-הפירוט ב-`DEBT-REGISTER §63` ו-`OPEN-DECISIONS #179`. **הזרימה עצמה אינה בספק:** היא הורצה
-מקצה לקצה מקומית ב-24.08.2026 (`NIR-APP-DOCS/release-evidence/20260824-assistant-local/`).
+**‏30.08.2026 — השער פתוח, ופתוח על חמש שורות ראיה.** ‏`OpenAI Data Processing Addendum v.010126`
+נחתם בין `InPlace` לבין `OpenAI OpCo, LLC` (הישות הנכונה: הלקוח אינו באזור הכלכלי האירופי ולא
+בשווייץ), שורת `dpa` עברה ל-`VERIFIED` **על החוזה ולא על היתר**, ו-`AI_ASSISTANT_PRELAUNCH_EXCEPTION`
+**נמחק מסודות הייצור** — לא פג, נמחק. האימות היה חי: הפונקציה נפרסה מחדש כדי להבטיח isolate קר,
+ושתי שאלות אמיתיות בייצור החזירו `HTTP 200` עם שתי ריצות `succeeded`. **בלי היתר בסביבה השער
+נפתח רק כשכל חמש `VERIFIED`**, ולכן תשובה חיה היא מדידה של השער. הפירוט ב-`DEBT-REGISTER §63`
+(סגור) וב-`ASSISTANT-ACTIVATION-EVIDENCE.md §5`.
+
+**ומה שהחתימה אינה משנה:** ה-DPA אינו הסכם אפס-שימור, אינו קובע 30 יום (סעיף 3.3 מטיל את
+הגדרות השימור על הלקוח) ואינו מגדיר אזור. שלוש השורות האחרות אומרות בדיוק מה שאמרו קודם,
+‏`/privacy` ו-`/terms` לא השתנו במילה, ו-`TERMS_VERSION` לא הועלה. **חוזה חתום אינו רישיון
+להבטיח יותר.**
+
+<details>
+<summary>המצב עד 30.08.2026 — היסטוריה, לא מצב נוכחי</summary>
+
+עד 24.08.2026 חמש השורות היו `MISSING` והעוזר היה כבוי. ב-24.08 נסגרו ארבע על מקורות רשמיים
+מתוארכים; ‏`dpa` נשארה `MISSING` מסיבה שלא הייתה בשליטת הפרויקט — ‏DPA נכרת בין **ישות משפטית**
+ל-`OpenAI OpCo, LLC`, וחברה טרם נרשמה (בעלים, 25.08.2026). הבעלים הורה להפעיל את העוזר בייצור,
+ו**ההוראה לא בוצעה בדרך הפסולה**: כתיבת `VERIFIED` בלי חוזה היא טענה על חוזה קיים, והיא נגזרת
+החוצה ל-`/privacy` ול-`/terms`. במקומה נכתב ב-25.08.2026 משטח חריג מפורש (`#271`) — ‏
+`AI_ASSISTANT_PRELAUNCH_EXCEPTION`, מוגבל לשורת `dpa` בלבד ולתאריך — והעוזר רץ תחתיו בייצור
+בין 25.08 ל-30.08. **ריצה מאותו חלון נשארת „פעלה תחת היתר טרום-השקה", לעולם לא „היה חוזה".**
+הזרימה עצמה הוכחה עוד קודם, מקצה לקצה מקומית ב-24.08.2026
+(`NIR-APP-DOCS/release-evidence/20260824-assistant-local/`).
+
+</details>
 
 ### תצורה — משתני סביבה של פונקציית ה-Edge
 
@@ -152,7 +179,7 @@
 | `AI_ASSISTANT_MAX_TOOL_CALLS_PER_TURN` | ‏4 | פגום = סירוב |
 | `AI_ASSISTANT_CONTEXT_MESSAGE_LIMIT` | ‏12 | פגום = סירוב |
 | `AI_ASSISTANT_GOVERNANCE_TRAINING_USE` · `_RETENTION` · `_PROVIDER_LOGS` · `_DPA` · `_DATA_REGION` | — | **חובה, חמישתן.** חסרה, אינה `VERIFIED`, או אינה מפוענחת = סירוב `assistant_governance_incomplete:<שורות>`. הפורמט ב-`ASSISTANT-ACTIVATION-EVIDENCE.md §3` |
-| `AI_ASSISTANT_PRELAUNCH_EXCEPTION` | — (אין) | **אופציונלי, ומוותר על שורת `dpa` בלבד** (`#271`). פורמט `until=YYYY-MM-DD;org=<uuid>;reason=<text>`. מוותר רק כאשר `dpa` חסרה או `MISSING`, רק לארגון הנקוב, ורק עד התאריך — אחרת `prelaunch_exception_covers_dpa_only` / `_not_for_this_cause` / `_wrong_organization` / `_expired`. ערך פגום = `assistant_prelaunch_exception_unparsable`, **לא** „אין היתר". **אינו הופך את `dpa` ל-`VERIFIED` ואינו משנה דבר ב-`/privacy`** |
+| `AI_ASSISTANT_PRELAUNCH_EXCEPTION` | — (אין) | **‏30.08.2026: אינו מוגדר בייצור, וזה מכוון.** ה-DPA נחתם, שורת `dpa` עומדת על ראיה, וההיתר נמחק (`DEBT §63`). המשטח נשאר בקוד; **החזרתו היא הכרעה ולא תיקון**. מכאן ולמטה — תיאור המנגנון: **אופציונלי, ומוותר על שורת `dpa` בלבד** (`#271`). פורמט `until=YYYY-MM-DD;org=<uuid>;reason=<text>`. מוותר רק כאשר `dpa` חסרה או `MISSING`, רק לארגון הנקוב, ורק עד התאריך — אחרת `prelaunch_exception_covers_dpa_only` / `_not_for_this_cause` / `_wrong_organization` / `_expired`. ערך פגום = `assistant_prelaunch_exception_unparsable`, **לא** „אין היתר". **אינו הופך את `dpa` ל-`VERIFIED` ואינו משנה דבר ב-`/privacy`** |
 | `AI_ASSISTANT_DAILY_USER_LIMIT` · `_DAILY_ORG_LIMIT` · `_MONTHLY_ORG_LIMIT` | לא מוגדר | לא מוגדר = **אין תקרה נוספת**; מוגדר אך בלתי-מדיד = סירוב |
 | `AI_ASSISTANT_SOFT_COST_CAP` · `_HARD_COST_CAP` | לא מוגדר | **אין מקור מחיר היום** (`#183`), ולכן עלות נרשמת `null`; הגדרת אחת התקרות מסרבת fail-closed עד שמקור מחיר מנוהל ימלא מדידה אמיתית |
 
@@ -166,7 +193,9 @@
 באותה מידה, ובדיוק ברגע שבו המערכת לחוצה. במקום זה, כשל ספק מחזיר את המשתמש למסלול הדטרמיניסטי
 (`/alerts` והמסכים) — שממשיך לעבוד בלי מודל בכלל.
 
-→ הכרעות פתוחות: `OPEN-DECISIONS #179` (ממשל ספק) ו-`#183` (מקור מחיר קנוני).
+→ ‏`OPEN-DECISIONS #179` (ממשל ספק) **הוכרע ומולא** — חמש השורות `VERIFIED` מ-30.08.2026, ‏DPA
+חתום. הכרעה שנענתה אינה נעלמת: השער עדיין רץ בכל בקשה, ושורה שתיסוג מחזירה אותו לסירוב.
+‏**הכרעה פתוחה שנשארה: `#183`** (מקור מחיר קנוני).
 
 ### 4.1 evaluation — corpus offline ושער live ידני
 
@@ -217,7 +246,10 @@ provider אלא כאשר קיימים יחד:
 שעלול להפוך שאלה או תשובה למשפט אחר שנראה סמכותי.
 
 **הגבול השיורי מפורש:** מסווג טקסט הוא שכבת refusal שמכסה תבניות מוכרות, לא הוכחה חוזית שהספק
-אינו שומר או מאמן על קלט שעבר. לכן `#179` נשאר חסם activation גם כשהקוד והבדיקות ירוקים. בדומה,
+אינו שומר או מאמן על קלט שעבר. ‏~~לכן `#179` נשאר חסם activation גם כשהקוד והבדיקות ירוקים.~~
+**עודכן 30.08.2026: ‏`#179` אינו חסם עוד — חמש שורותיו `VERIFIED`, וההפעלה בוצעה.** מה שלא
+השתנה הוא המשפט שלפניו: **המסווג עדיין אינו הוכחה חוזית**, ואף שורה בממשל אינה טוענת שהוא כן.
+הגבול השיורי נשאר גבול שיורי; מה שנסגר הוא השער, לא הפער. בדומה,
 `store:false` הוא בקשת API ולא הוכחת מחיקה אצל הספק. שינוי הרשאה מקבילי יכול להתרחש אחרי בדיקה
 אחרונה כמו בכל מערכת מבוזרת; כל נקודת שימוש נבדקת מחדש, כשל מאוחר אינו מציג תשובה, ואין ניסיון
 לבטל בדפדפן קריאה שהספק אולי כבר קיבל.
@@ -250,7 +282,11 @@ feedback והצעות שלא אושרו נמחקים מיד. אין compacted su
 
 **גיבויים וספק:** הטיהור מבטיח מחיקה מהמסד החי; גיבויי הפלטפורמה עלולים לשמור עותק עד סבב
 ה-rotation שלהם. הספק אינו מקבל transcript שמור דרך API של InPlace, אבל מחיקת שיחה במסד אינה
-הוכחת מחיקה אצל הספק. שימור/zero-retention/log deletion אצל OpenAI נשארים חסם activation ב-#179.
+הוכחת מחיקה אצל הספק. ‏~~שימור/zero-retention/log deletion אצל OpenAI נשארים חסם activation ב-#179.~~
+**עודכן 30.08.2026:** שלושתם **נענו ואינם חסם** — ‏`retention` ו-`provider_logs` `VERIFIED` בגילוי
+נאות (עד 30 יום, לוגי שימוש-לרעה שנקראים גם על ידי קבלני צד-שלישי), ו-`zero_retention`
+**לא נטען ואינו קיים**, בדיוק כפי ש-`#179` דורש. ‏**המשפט שלפני זה עומד בלי שינוי:** מחיקת שיחה
+אצלנו אינה מחיקה אצל הספק, וגם ה-DPA החתום אינו טוען זאת.
 
 **הערה על אמינות ההבטחה:** בריפו לא היה לפני `0164` שום job מתוזמן למחיקה — `0103` תכנן טיהור ולא מימש,
 ו-`0159` סירב לו במפורש. הטיהור כאן מיושם כפונקציה מתוזמנת דרך `pg_cron` (התקדים קיים ב-`0016`,
@@ -434,7 +470,12 @@ History אינה קוראת עוד `assistant_conversations` ישירות. ‏`0
 focus/return path, source side-by-side, history open וניגודיות מינימלית 6.64:1. ‏`p61` עבר מול
 המסד המקומי לאחר `0170`; flags הודלקו רק ל־QA והוחזרו ל־off דרך הפקודה המבוקרת.
 
-הסטטוס הוא `LOCAL_IMPLEMENTED / OWNER_APPROVED_B / CI_PENDING / NOT_ACTIVATED / NOT_DEPLOYED`.
+~~הסטטוס הוא `LOCAL_IMPLEMENTED / OWNER_APPROVED_B / CI_PENDING / NOT_ACTIVATED / NOT_DEPLOYED`.~~
+**עודכן 30.08.2026 — שני האחרונים אינם נכונים עוד.** פונקציית `assistant` **נפרסה** בייצור
+(‏`ACTIVE`, ‏`verify_jwt=true`) ו**הופעלה**: הדגלים `assistant.ui`/`assistant.history` דלוקים,
+חמש שורות הממשל `VERIFIED` בלי היתר, וריצות `succeeded` נרשמו ב-`assistant_runs`. הסטטוס הוא
+`LOCAL_IMPLEMENTED / OWNER_APPROVED_B / ACTIVATED / DEPLOYED`. ‏`assistant.drafts` נשאר כבוי
+לפי `#182`, וזה אינו חלק מהסטטוס הזה אלא הכרעה נפרדת.
 `CORE_READ_ONLY_UI_CLOSED` ו־`FULL_UI_CLOSED` ייטענו רק אחרי commit, PR ו־required checks ירוקים
 על SHA יחיד. ‏Action composer, draft/confirmed actions ו־external sending נשארים מחוץ ל־UI
 לקריאה בלבד ואינם מקבלים placeholder.
@@ -446,9 +487,9 @@ focus/return path, source side-by-side, history open וניגודיות מיני
 | workstream | בעלות וקבצים | חוזה שנמסר | בדיקות וראיות | תלות/חסם |
 |---|---|---|---|---|
 | 1. Contracts ו־client boundary | `contracts.ts`, ‏`client.ts`, ‏`errorCodes.ts` | Zod strict ל־ask/run/history; 2xx פגום נכשל סגור | `client.spec.ts`, ‏typecheck | שינוי wire דורש Edge+client באותו commit |
-| 2. Actor, flags ומכסה | `auth.ts`, ‏`flags.ts`, ‏`runSession.ts` | actor נפתר בכל שימוש; flags exposure בלבד; fingerprint מנקה זיכרון/cache | auth/flags/component negative tests | מכסה עסקית #180 חוסמת activation |
+| 2. Actor, flags ומכסה | `auth.ts`, ‏`flags.ts`, ‏`runSession.ts` | actor נפתר בכל שימוש; flags exposure בלבד; fingerprint מנקה זיכרון/cache | auth/flags/component negative tests | ‏~~מכסה עסקית #180 חוסמת activation~~ **ההפעלה בוצעה בפועל** (25.08, ובלי היתר מ-30.08); מצב `#180` לא נבדק בסבב הזה |
 | 3. Read tools ו־capability map | `tools/*`, ‏§7 | 17 כלים allowlisted, projection מפורש ו־server calculation owner | tools/reads/business/readmodels suites | #189–#192 מומשו ב-24.08.2026; ‏#193 נשאר: אין מתג כתיבה או שליחה, כי היכולת אינה קיימת |
-| 4. Provider ו־egress | `provider.ts`, ‏`egress.ts`, ‏`0166` | server-only provider, lease מסוג `assistant`, אין fallback ספק | provider/egress, ‏`p58` | ממשל #179 ומחיר #183 חוסמים activation |
+| 4. Provider ו־egress | `provider.ts`, ‏`egress.ts`, ‏`0166` | server-only provider, lease מסוג `assistant`, אין fallback ספק | provider/egress, ‏`p58` | ‏~~ממשל #179 ומחיר #183 חוסמים activation~~ **‏#179 נסגר 30.08.2026** (חמש שורות `VERIFIED`, ‏DPA חתום); ‏#183 לא נבדק בסבב הזה |
 | 5. Validation ו־evidence authorization | `validate.ts`, ‏`evidence-authorization.ts` | semantic claim + source/route/current actor reauthorization | deleted/hidden/tenant/role/scope negative tests | כשל מסיר תשובה שלמה, לא ממציא redaction |
 | 6. Persistence, deletion ו־retention | `0164`, ‏`history.ts`, ‏§6 | 90 יום history, ‏30 יום proposal לא־מבוצע, delete עצמי מבוקר | `p56`, history Deno tests | backup/provider deletion נשאר ממשל #179/#181 |
 | 7. Core/history UI | `AssistantPanel`, ‏`AssistantDialog`, ‏`AnswerView`, ‏`0170` | B docked/full-screen; source return; Edge-only authorized history | 15 browser cases, component/client tests, ‏`p61` | CI ו־review על SHA משולב טרם בוצעו |
