@@ -192,6 +192,21 @@ comment on function private.plan_capability_write_guard() is
   'Named per trigger through tg_argv[0]. A statement with no auth_org() -- migration, operator '
   'command, purge, background job -- passes: there is no plan to read and no customer to gate.';
 
+-- A5, AND THE SAME NARROW SHAPE 0092 ARGUED FOR `organization_row_write_guard()`. This trigger
+-- inspects only the NEW/OLD row the caller's own statement selected. It reads no table, returns
+-- no row it was not handed, and can leak nothing across tenants or units -- so `auth_scopes()`
+-- has nothing to filter here, and adding the marker would be exactly the "marker that changes no
+-- result" 0095 refuses to accept as proof. SECURITY DEFINER is required for the opposite reason
+-- it usually is: the capability gate must also bind service_role and definer writers, which an
+-- INVOKER trigger would let straight through.
+insert into private.scope_definer_exemptions (function_signature, reason, target_wave)
+values (
+  'private.plan_capability_write_guard()'::regprocedure::text,
+  'trigger-new-old-rows -- cannot be invoker: the plan gate must also govern service_role and '
+    || 'SECURITY DEFINER writers, and the function reads no row of its own to scope.',
+  'multi-unit enablement wave'
+);
+
 -- ----- bank.reconciliation -----
 -- `bank_allocations` is absent on purpose; see the header.
 drop policy if exists bank_tx_select on public.bank_transactions;
