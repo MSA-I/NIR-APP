@@ -117,7 +117,7 @@ export default function SupplierSplitStep({
           <div className="min-w-0 flex-1">
             <strong className="block text-ink">{t('supplierSplit.consolidateWith', { supplier: singleSupplier.name })}</strong>
             <span className="mt-0.5 block text-xs">
-              <ConsolidationCost savings={split.savings.savings} currency={split.savings.currency} /> · סה״כ <span className="num font-semibold">{fmtMoneyExact(split.savings.singleSupplierTotal, split.savings.currency)}</span>
+              <ConsolidationCost savings={split.savings.savings} currency={split.savings.currency} /> {t('supplierSplit.fmtMoneyExact')} <span className="num font-semibold">{fmtMoneyExact(split.savings.singleSupplierTotal, split.savings.currency)}</span>
             </span>
           </div>
           <button type="button" className="btn-secondary shrink-0" disabled={busy} onClick={() => onConsolidate(singleSupplierId)}>
@@ -128,10 +128,10 @@ export default function SupplierSplitStep({
 
       <section aria-labelledby="selected-products-title" className="border-y border-line-strong bg-surface">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft px-3 py-3 sm:px-4">
-          <h2 id="selected-products-title" className="section-title">פריטים שנבחרו</h2>
+          <h2 id="selected-products-title" className="section-title">{t('supplierSplit.text_2')}</h2>
           {/* One line per currency (0217): a basket split between a shekel supplier and a dollar one has
               two totals and no third. `totalsByCurrency` is why `split.total` no longer exists. */}
-          <span className="text-sm text-ink-muted">סה״כ משוער <b className="text-ink"><MoneyByCurrency amounts={split.totalsByCurrency} baseCurrency={baseCurrency} /></b></span>
+          <span className="text-sm text-ink-muted">{t('supplierSplit.fmtMoneyExact_2')} <b className="text-ink"><MoneyByCurrency amounts={split.totalsByCurrency} baseCurrency={baseCurrency} /></b></span>
         </div>
         <div className="divide-y divide-line-soft">
           {cart.map((item) => {
@@ -300,7 +300,7 @@ function SupplierComparison({ cart, offersByProduct, supplierById, split, baseCu
             <MoneyByCurrency amounts={savedByCurrency} baseCurrency={baseCurrency} />
           </strong>
           {extraByCurrency != null && (
-            <span className="mt-0.5 block text-xs text-await-fg">תוספת של <MoneyByCurrency amounts={extraByCurrency} baseCurrency={baseCurrency} /> מול הזול ביותר</span>
+            <span className="mt-0.5 block text-xs text-await-fg">{t('supplierSplit.fmtMoneyExact_3')} <MoneyByCurrency amounts={extraByCurrency} baseCurrency={baseCurrency} /> {t('supplierSplit.fmtMoneyExact_4')}</span>
           )}
         </div>
       </div>

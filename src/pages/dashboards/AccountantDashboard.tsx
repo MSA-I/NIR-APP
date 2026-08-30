@@ -73,12 +73,12 @@ export default function AccountantDashboard() {
       ? entries.map((entry) => fmtMoneyRounded(entry.amount, entry.currency)).join(' · ')
       : '—');
     const kpis: ScoreItem[] = [
-      { label: 'שולם החודש', value: asLines(paidMonth) },
-      { label: 'יתרת חשבוניות פתוחות', value: asLines(openInvoiceBalance), tone: openInvoiceBalance.length ? 'await' : 'idle' },
-      { label: 'תנועות בנק לא מותאמות', value: fmtNum(unmatchedBank), tone: unmatchedBank ? 'await' : 'idle' },
-      { label: 'התאמות שממתינות לאישור', value: fmtNum(suggestedBank), tone: suggestedBank ? 'await' : 'idle' },
-      { label: 'זיכויים פתוחים', value: fmtNum(openCreditRows.length), sub: openCreditsByCurrency.length ? asLines(openCreditsByCurrency) : undefined },
-      { label: 'ממתין להעברה לרו״ח', value: fmtNum(notSent), tone: notSent ? 'await' : 'idle' },
+      { label: t('accountantDashboard.fmtMoneyRounded'), value: asLines(paidMonth) },
+      { label: t('accountantDashboard.fmtMoneyRounded_2'), value: asLines(openInvoiceBalance), tone: openInvoiceBalance.length ? 'await' : 'idle' },
+      { label: t('accountantDashboard.fmtNum'), value: fmtNum(unmatchedBank), tone: unmatchedBank ? 'await' : 'idle' },
+      { label: t('accountantDashboard.fmtNum_2'), value: fmtNum(suggestedBank), tone: suggestedBank ? 'await' : 'idle' },
+      { label: t('accountantDashboard.fmtNum_3'), value: fmtNum(openCreditRows.length), sub: openCreditsByCurrency.length ? asLines(openCreditsByCurrency) : undefined },
+      { label: t('accountantDashboard.fmtNum_4'), value: fmtNum(notSent), tone: notSent ? 'await' : 'idle' },
     ];
 
     // ── attention. NOTE: "חשבוניות לבדיקה" (received/in_review) is structurally ~0 for the accountant —
@@ -86,11 +86,11 @@ export default function AccountantDashboard() {
     // prior dashboard; flagged for a follow-up (a review queue belongs on the office dashboard).
     const toReview = invoices.filter((i) => ['received', 'in_review'].includes(i.review_status)).length;
     const attention: AttentionItem[] = [
-      { key: 'review', label: 'חשבוניות לבדיקה', count: toReview, tone: 'await', to: '/invoices', clearLabel: 'אין חשבוניות לבדיקה' },
-      { key: 'not-sent', label: 'חשבוניות מאושרות שלא נשלחו לרו״ח', count: notSent, tone: 'await', to: '/invoices', clearLabel: 'הכול נשלח לרו״ח' },
-      { key: 'bank', label: 'תנועות בנק לא מותאמות', count: unmatchedBank, tone: 'await', to: '/bank', clearLabel: 'אין תנועות פתוחות' },
-      { key: 'bank-suggested', label: 'התאמות שממתינות לאישור', count: suggestedBank, tone: 'await', to: '/bank?status=suggested', clearLabel: 'אין הצעות שממתינות לאישור' },
-      { key: 'credits', label: 'זיכויים פתוחים', count: openCreditRows.length, amounts: openCreditsByCurrency, tone: 'info', to: '/credits?status=active', clearLabel: 'אין זיכויים פתוחים' },
+      { key: 'review', label: t('accountantDashboard.text'), count: toReview, tone: 'await', to: '/invoices', clearLabel: t('accountantDashboard.text_2') },
+      { key: 'not-sent', label: t('accountantDashboard.text_3'), count: notSent, tone: 'await', to: '/invoices', clearLabel: t('accountantDashboard.text_4') },
+      { key: 'bank', label: t('accountantDashboard.text_5'), count: unmatchedBank, tone: 'await', to: '/bank', clearLabel: t('accountantDashboard.text_6') },
+      { key: 'bank-suggested', label: t('accountantDashboard.text_7'), count: suggestedBank, tone: 'await', to: '/bank?status=suggested', clearLabel: t('accountantDashboard.text_8') },
+      { key: 'credits', label: t('accountantDashboard.text_9'), count: openCreditRows.length, amounts: openCreditsByCurrency, tone: 'info', to: '/credits?status=active', clearLabel: t('accountantDashboard.text_10') },
     ];
 
     // ── charts
@@ -184,9 +184,9 @@ export default function AccountantDashboard() {
             bank-debits bar, round caps, dot legend below. */}
         <ChartCard title={t('accountantDashboard.title_4')} subtitle={t('accountantDashboard.subtitle_3')} className="lg:col-span-2">
           <GroupedBarChart points={data.weeklyActive ? data.weekly : []} xKey="week"
-            series={comparisonSeries({ key: 'payments', name: 'תשלומים' }, { key: 'bank', name: 'חיובי בנק' })}
-            ariaLabel="השוואת תשלומים שבוצעו מול חיובי בנק, שמונה שבועות"
-            emptyMessage="אין תשלומים או תנועות בנק בשמונת השבועות האחרונים" currency={baseCurrency} />
+            series={comparisonSeries({ key: 'payments', name: t('accountantDashboard.comparisonSeries') }, { key: 'bank', name: t('accountantDashboard.comparisonSeries_2') })}
+            ariaLabel={t('accountantDashboard.ariaLabel')}
+            emptyMessage={t('accountantDashboard.emptyMessage_3')} currency={baseCurrency} />
         </ChartCard>
       </div>
     </DashboardFrame>

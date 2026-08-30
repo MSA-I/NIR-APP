@@ -383,7 +383,7 @@ export default function Reports() {
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
-      {fetching && data && <Note tone="idle">הדוח מתעדכן. הייצוא והסימון מושבתים עד להשלמת הרענון.</Note>}
+      {fetching && data && <Note tone="idle">{t('reports.text_6')}</Note>}
       <div data-tour-anchor="reports-overview">
       <PageHeader className="no-print"
         title={<span className="flex flex-wrap items-center gap-2">{t('reports.text_7')} <span className="badge-idle">{t('reports.text_8')}</span></span>}
@@ -570,15 +570,15 @@ export default function Reports() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">חשבוניות</div><div className="kpi-value-compact num">{data.invoices.length}</div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">סה״כ חשבוניות</div><div className="kpi-value-compact text-start"><MoneyByCurrency amounts={orderedTotals(totals.invoices)} baseCurrency={baseCurrency} /></div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">מע״מ</div><div className="kpi-value-compact text-start"><MoneyByCurrency amounts={orderedTotals(totals.vat)} baseCurrency={baseCurrency} /></div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">שולם החודש</div><div className={`kpi-value-compact text-start ${totals.paid.length ? 'text-done-fg' : 'text-idle-fg'}`}><MoneyByCurrency amounts={orderedTotals(totals.paid)} baseCurrency={baseCurrency} /></div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}&pay=open`}><div className="text-xs text-ink-muted">חשבוניות שטרם שולמו</div><div className={`kpi-value-compact num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/bank?month=${month}&status=unmatched`}><div className="text-xs text-ink-muted">תנועות בנק ללא התאמה</div><div className={`kpi-value-compact num ${totals.unmatchedBank ? 'text-alert-fg' : ''}`}>{totals.unmatchedBank}</div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/bank?month=${month}&status=suggested`}><div className="text-xs text-ink-muted">התאמות שממתינות לאישור</div><div className={`kpi-value-compact num ${totals.suggestedBank ? 'text-await-fg' : ''}`}>{totals.suggestedBank}</div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/credits?month=${month}&status=all`}><div className="text-xs text-ink-muted">זיכויים בחודש</div><div className="kpi-value-compact num">{data.credits.length}</div></Card>
-          <Card as={Link} className={metricLinkClass} to="/exceptions?status=open"><div className="text-xs text-ink-muted">חריגים פתוחים</div><div className={`kpi-value-compact num ${data.exceptions.length ? 'text-await-fg' : ''}`}>{data.exceptions.length}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">{t('reports.kpiInvoices')}</div><div className="kpi-value-compact num">{data.invoices.length}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">{t('reports.kpiInvoiceTotal')}</div><div className="kpi-value-compact text-start"><MoneyByCurrency amounts={orderedTotals(totals.invoices)} baseCurrency={baseCurrency} /></div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">{t('reports.kpiVat')}</div><div className="kpi-value-compact text-start"><MoneyByCurrency amounts={orderedTotals(totals.vat)} baseCurrency={baseCurrency} /></div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">{t('reports.kpiPaidThisMonth')}</div><div className={`kpi-value-compact text-start ${totals.paid.length ? 'text-done-fg' : 'text-idle-fg'}`}><MoneyByCurrency amounts={orderedTotals(totals.paid)} baseCurrency={baseCurrency} /></div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}&pay=open`}><div className="text-xs text-ink-muted">{t('reports.kpiUnpaid')}</div><div className={`kpi-value-compact num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/bank?month=${month}&status=unmatched`}><div className="text-xs text-ink-muted">{t('reports.kpiUnmatchedBank')}</div><div className={`kpi-value-compact num ${totals.unmatchedBank ? 'text-alert-fg' : ''}`}>{totals.unmatchedBank}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/bank?month=${month}&status=suggested`}><div className="text-xs text-ink-muted">{t('reports.kpiSuggested')}</div><div className={`kpi-value-compact num ${totals.suggestedBank ? 'text-await-fg' : ''}`}>{totals.suggestedBank}</div></Card>
+          <Card as={Link} className={metricLinkClass} to={`/credits?month=${month}&status=all`}><div className="text-xs text-ink-muted">{t('reports.kpiCredits')}</div><div className="kpi-value-compact num">{data.credits.length}</div></Card>
+          <Card as={Link} className={metricLinkClass} to="/exceptions?status=open"><div className="text-xs text-ink-muted">{t('reports.kpiOpenExceptions')}</div><div className={`kpi-value-compact num ${data.exceptions.length ? 'text-await-fg' : ''}`}>{data.exceptions.length}</div></Card>
         </div>
 
         {data.exceptions.length > 0 && (
@@ -624,7 +624,7 @@ export default function Reports() {
                 already said everything there is to say about this month. */}
             {totals.hasInvoices && (
               <li className="flex min-h-11 flex-wrap items-center justify-between gap-2 bg-surface-sunken px-4 py-3 font-semibold">
-                <span>סה״כ</span><MoneyByCurrency amounts={orderedTotals(totals.invoices)} baseCurrency={baseCurrency} />
+                <span>{t('reports.text_40')}</span><MoneyByCurrency amounts={orderedTotals(totals.invoices)} baseCurrency={baseCurrency} />
               </li>
             )}
           </ul>

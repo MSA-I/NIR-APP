@@ -244,6 +244,22 @@ async function capture(page, name, route, report) {
   await settle(page);
   console.log('signed in -> ' + page.url());
 
+  // The locale this run claims to measure has to be the locale on the screen, and after sign-in it
+  // is no longer this script's decision: `ProfileLocaleSync` adopts `profiles.locale`, and the
+  // profile beats the localStorage copy by design. A run of 30.08.2026 measured 44 signed-in screens
+  // in Hebrew because the demo owner's row said 'he' — every count was of the wrong language, and
+  // nothing said so. Pin the demo profiles with
+  //     update profiles set locale='en' where id in (
+  //       select id from auth.users where email like '%@demo.supplyflow.local');
+  // and let this refuse to produce a report rather than produce a confident wrong one.
+  const signedInLocale = await page.evaluate(() => document.documentElement.lang);
+  if (signedInLocale !== 'en') {
+    throw new Error(
+      'signed in but the screen is in "' + signedInLocale + '", not "en" — profiles.locale wins over '
+      + 'localStorage, so set it to en for the demo accounts before measuring',
+    );
+  }
+
   for (const [name, route] of OWNER_ROUTES) await capture(page, 'owner-' + name, route, report);
 
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 2), 'utf8');

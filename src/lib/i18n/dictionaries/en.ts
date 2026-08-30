@@ -1090,6 +1090,7 @@ export const en: Dictionary = {
     text_8: 'Oversight',
     toast: 'You cannot sign out before the order draft is saved. Please try again.',
     text_9: 'Purchasing and payments',
+    productGuide: 'Product guide',
     text_10: 'Account and system',
     text_11: 'Skip to content',
     aria_label: 'Main navigation',

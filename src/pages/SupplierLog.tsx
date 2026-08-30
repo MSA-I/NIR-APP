@@ -224,7 +224,7 @@ export default function SupplierLog() {
         const before = price(r.old_values);
         const after = price(r.new_values);
         const supplierCurrency = r.currency;
-        if (before == null && after == null) return <span className="text-ink-faint">אין נתוני מחיר</span>;
+        if (before == null && after == null) return <span className="text-ink-faint">{t('supplierLog.text_7')}</span>;
         if (after == null || before === after) {
           return (
             <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-ink-muted">
