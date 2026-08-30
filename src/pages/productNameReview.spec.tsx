@@ -295,7 +295,10 @@ describe('Products — the review mode', () => {
     const toggle = await screen.findByTestId('source-name-repair-toggle');
     await waitFor(() => expect(toggle).toHaveTextContent('תיקון ממקור (1)'));
     await user.click(toggle);
-    expect(await screen.findByText('1 שמות ממתינים לתיקון ממקור')).toBeInTheDocument();
+    // One name, and the sentence agrees with it now: the counted phrase reaches for its `_one`
+    // sibling (src/lib/i18n/t.ts). This assertion used to pin `1 שמות` — the plural read at a
+    // count of one — so it was holding the defect in place rather than catching it.
+    expect(await screen.findByText('שם אחד ממתין לתיקון ממקור')).toBeInTheDocument();
     expect(screen.queryByText(/תוצאות dry-run/)).toBeNull();
   });
 });

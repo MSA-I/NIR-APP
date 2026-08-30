@@ -349,7 +349,7 @@ describe('שורה שדורשת טיפול — פעולה אחת, לא שלוש'
     // The line whose SKU matched nothing, but whose price the document printed. Its select is live
     // before any tick: describing the line is the work, approving it is the conclusion.
     const row = LINE_COUNT - UNMATCHED_LINES;
-    const select = screen.getAllByRole('combobox')[row];
+    const select = screen.getAllByTestId('price-list-row-product')[row];
     expect(select).toBeEnabled();
     await userEvent.selectOptions(select, 'product-1');
 
@@ -368,13 +368,13 @@ describe('שורה שדורשת טיפול — פעולה אחת, לא שלוש'
 
     await waitFor(() => expect(screen.getByTestId('price-list-intake-confirm')).toBeEnabled());
     await userEvent.click(screen.getByTestId('price-list-show-unmatched'));
-    expect(screen.getAllByRole('combobox')).toHaveLength(UNMATCHED_LINES);
+    expect(screen.getAllByTestId('price-list-row-product')).toHaveLength(UNMATCHED_LINES);
 
     // Neither exception in this fixture carries a readable price, so linking one to a product
     // leaves it incomplete — and an incomplete line must not vanish out from under the reviewer
     // into a list they have been told is finished.
-    await userEvent.selectOptions(screen.getAllByRole('combobox')[0], 'product-1');
-    expect(screen.getAllByRole('combobox')).toHaveLength(UNMATCHED_LINES);
+    await userEvent.selectOptions(screen.getAllByTestId('price-list-row-product')[0], 'product-1');
+    expect(screen.getAllByTestId('price-list-row-product')).toHaveLength(UNMATCHED_LINES);
     expect(screen.getAllByRole('checkbox', { name: /אני מאשר שורה זו לקליטה/ })[0]).not.toBeChecked();
     expect(screen.getByTestId('price-list-intake-confirm'))
       .toHaveTextContent(`קליטת ${LINE_COUNT - UNMATCHED_LINES} המחירים שנבחרו`);

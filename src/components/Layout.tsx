@@ -24,7 +24,7 @@ import { isRouteFamilyActive, sectionOf } from '../lib/quickActions';
 import { useWithheldNavPaths } from '../lib/entitlements';
 import { routeBackPresentation, routePresentationTitle, staticRouteTitle, type StaticRoutePath } from '../lib/routePresentation';
 import { tourNavigationAnchor, type ProductTourStep } from '../lib/productTourRegistry';
-import { OwnerProductTour, useProductTourLocale, type OwnerProductTourHandle } from './product-tour/ProductTour';
+import { OwnerProductTour, type OwnerProductTourHandle } from './product-tour/ProductTour';
 
 /** Paper panel, floating pill, or the onyx drawer. See `linkCls`. */
 type NavSurface = 'pill' | 'panel' | 'shell';
@@ -248,7 +248,6 @@ export function pageTitleKeyFor(pathname: string): TKey | null {
 export default function Layout() {
   const { errorText, t } = useT();
   useGlowPointer();
-  const productTourLocale = useProductTourLocale();
   const { session, profile, org, roleLabels, organizationAccess = ACTIVE_ORGANIZATION_ACCESS, accessStatus = 'unknown', signOut } = useAuth();
   const assistantSession = useAssistantRunSession(assistantAuthorizationFingerprint({
     userId: session?.user.id,
@@ -374,8 +373,8 @@ export default function Layout() {
     const desktop = window.matchMedia('(min-width: 64rem)').matches;
     if (desktop) {
       setOpenGroup(
-        step.prepare === 'management' ? 'ניהול'
-          : step.prepare === 'control' ? 'בקרה'
+        step.prepare === 'management' ? 'nav.text_6'
+          : step.prepare === 'control' ? 'nav.text_8'
             : step.prepare === 'account' ? 'account'
               : null,
       );
@@ -658,7 +657,7 @@ export default function Layout() {
           ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
           : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
       }`}>
-      <CircleHelp size={ICON.md} aria-hidden="true" /> {productTourLocale === 'en' ? 'Product guide' : 'מדריך שימוש'}
+      <CircleHelp size={ICON.md} aria-hidden="true" /> {t('nav.productGuide')}
     </button>
   ) : null);
 
@@ -714,7 +713,7 @@ export default function Layout() {
           {brandMark('drawer')}
           <div className="min-w-0">
             <div className="text-base font-semibold text-shell-ink">{APP_NAME}</div>
-            <div className="truncate text-xs text-shell-ink-dim" title={orgName || undefined}>{orgName || 'ניהול רכש ותשלומים'}</div>
+            <div className="truncate text-xs text-shell-ink-dim" title={orgName || undefined}>{orgName || t('nav.text_9')}</div>
           </div>
         </Link>
         <PlanBadge compact />
@@ -891,7 +890,7 @@ export default function Layout() {
               hold it rather than evicting the brand. Nothing is hidden, nothing scrolls, and no
               destination was removed to make it fit. Measured after: one row from 1280 up. */}
           <div className="flex min-w-0 flex-1 justify-center">
-            <nav aria-label="ניווט ראשי" data-tour-anchor="primary-navigation"
+            <nav aria-label={t('nav.aria_label')} data-tour-anchor="primary-navigation"
               /* `rounded-[1.625rem]` IS `rounded-full` for the row this pill actually is, and it is
                  not a compromise: 26px is exactly half the one-row height (p-1.5 = 12 + a 40px
                  `min-h-10` item = 52), so at every width that fits on one line — 1152 and up,
@@ -1065,7 +1064,7 @@ export default function Layout() {
           {canSearch && (
             <button type="button" className="btn-ghost btn-icon rounded-full" onClick={() => setSearchOpen(true)}
               data-tour-anchor="global-search"
-              aria-label="חיפוש" aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={ICON.xl} aria-hidden="true" /></button>
+              aria-label={t('nav.aria_label_3')} aria-expanded={searchOpen} aria-controls="mobile-global-search"><Search size={ICON.xl} aria-hidden="true" /></button>
           )}
           <AssistantPanel session={assistantSession} />
           <NotificationBell />

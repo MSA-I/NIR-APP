@@ -939,9 +939,9 @@ function PriceDiffModal({ report, onClose }: { report: PriceDiffReport | null; o
             </div>
           ))}
         </div>
-      ) : report ? <div className="note-info">המחירים נבדקו מחדש ולא נמצא שינוי נוסף בשורות ההזמנה.</div> : null}
-      {report && <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-y border-line-strong py-3 text-sm"><span>סכום ההזמנה</span><strong className="num">{fmtMoneyExact(report.oldTotal, report.currency)} ← {fmtMoneyExact(report.newTotal, report.currency)}{totalDelta != null ? ` · ${signedMoney(totalDelta, report.currency)}` : ''}</strong></div>}
-      <div className="mt-5 flex justify-end"><button type="button" className="btn-primary" onClick={onClose}>חזרה לסיכום ולאישור מחדש</button></div>
+      ) : report ? <div className="note-info">{t('newOrder.text_20')}</div> : null}
+      {report && <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-y border-line-strong py-3 text-sm"><span>{t('newOrder.orderTotal')}</span><strong className="num">{fmtMoneyExact(report.oldTotal, report.currency)} ← {fmtMoneyExact(report.newTotal, report.currency)}{totalDelta != null ? ` · ${signedMoney(totalDelta, report.currency)}` : ''}</strong></div>}
+      <div className="mt-5 flex justify-end"><button type="button" className="btn-primary" onClick={onClose}>{t('newOrder.text_21')}</button></div>
     </Modal>
   );
 }

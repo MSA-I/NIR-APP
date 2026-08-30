@@ -147,13 +147,13 @@ export function OrdersList() {
     : null;
 
   const columns: Column<OrderRow>[] = [
-    { key: 'num', header: 'מס׳', priority: 3, className: 'num', sortValue: (r) => r.number, render: (r) => <span className="font-medium">#{r.number}</span> },
-    { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
-    { key: 'created', header: 'נוצרה', sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
-    { key: 'expected', header: 'אספקה', sortValue: (r) => r.expected_date ?? '', render: (r) => fmtDate(r.expected_date) },
-    { key: 'items', header: 'פריטים', priority: 3, className: 'num', render: (r) => r.items.length },
-    { key: 'total', header: 'סה״כ', className: 'num', mobileLabel: null, sortValue: orderTotal, render: (r) => fmtMoneyExact(orderTotal(r), r.currency) },
-    { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={PO_STATUS[r.status]} /> },
+    { key: 'num', header: t('orders.text'), priority: 3, className: 'num', sortValue: (r) => r.number, render: (r) => <span className="font-medium">#{r.number}</span> },
+    { key: 'supplier', header: t('orders.text_2'), priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
+    { key: 'created', header: t('orders.fmtDate'), sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
+    { key: 'expected', header: t('orders.fmtDate_2'), sortValue: (r) => r.expected_date ?? '', render: (r) => fmtDate(r.expected_date) },
+    { key: 'items', header: t('orders.text_3'), priority: 3, className: 'num', render: (r) => r.items.length },
+    { key: 'total', header: t('orders.fmtMoneyExact'), className: 'num', mobileLabel: null, sortValue: orderTotal, render: (r) => fmtMoneyExact(orderTotal(r), r.currency) },
+    { key: 'status', header: t('orders.text_4'), priority: 3, render: (r) => <StatusBadge meta={PO_STATUS[r.status]} /> },
   ];
 
   if (loading) return <SkeletonTable cols={6} />;
@@ -391,7 +391,7 @@ export function OrderDetail() {
         fileName: `purchase-order-${order.number}.pdf`,
         watermark: await exportWatermark(),
       });
-      toast('קובץ ה-PDF הורד');
+      toast(t('orders.toastPdf'));
     } catch (e) {
       toast(errorText(e), 'error');
     } finally {
@@ -475,10 +475,10 @@ export function OrderDetail() {
               <FileText size={ICON.sm} aria-hidden="true" /> {t('orders.uploadInvoiceReceived')}
             </button>
           )}
-          <button className="btn-secondary" disabled={exportingPdf} onClick={() => void exportPdf()} title="הורדת ההזמנה כקובץ PDF מעוצב עם הלוגו של הארגון">{exportingPdf ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileDown size={ICON.sm} aria-hidden="true" />} הורדת PDF</button>
+          <button className="btn-secondary" disabled={exportingPdf} onClick={() => void exportPdf()} title={t('orders.exportPdf')}>{exportingPdf ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileDown size={ICON.sm} aria-hidden="true" />} {t('orders.exportPdfLabel')}</button>
           {/* Print stays beside the generated file: the browser's own print produces SELECTABLE
               text, which the rasterised PDF cannot (src/lib/pdf.ts explains why). */}
-          <button className="btn-secondary" onClick={() => window.print()}><Printer size={ICON.sm} aria-hidden="true" /> הדפסה</button>
+          <button className="btn-secondary" onClick={() => window.print()}><Printer size={ICON.sm} aria-hidden="true" /> {t('orders.actionPrint')}</button>
           {canWrite && !['received', 'cancelled'].includes(order.status) && (
             <button type="button" className="btn-danger" onClick={() => setConfirm({ status: 'cancelled', label: t('orders.setConfirm') })}><XCircle size={ICON.sm} aria-hidden="true" /> {t('orders.setConfirm_2')}</button>
           )}
@@ -498,7 +498,7 @@ export function OrderDetail() {
       {underMin && (
         <Note tone="await" className="no-print">
           <span className="min-w-0 flex-1">
-            שים לב: סכום ההזמנה ({fmtMoneyExact(total, order.currency)}) נמוך ממינימום ההזמנה של הספק ({fmtMoneyExact(order.supplier.min_order_amount!, order.supplier.default_currency)}).
+            {t('orders.belowMinimumNote', { total: fmtMoneyExact(total, order.currency), minimum: fmtMoneyExact(order.supplier.min_order_amount!, order.supplier.default_currency) })}
           </span>
         </Note>
       )}
@@ -506,8 +506,11 @@ export function OrderDetail() {
       {minimumInOtherCurrency && (
         <Note tone="idle" className="no-print">
           <span className="min-w-0 flex-1">
-            ההזמנה במטבע {order.currency} ומינימום ההזמנה של הספק נקוב ב-{order.supplier.default_currency}
-            ({fmtMoneyExact(order.supplier.min_order_amount!, order.supplier.default_currency)}), ולכן אין כאן בדיקת מינימום.
+            {t('orders.minimumCurrencyMismatch', {
+              orderCurrency: order.currency,
+              supplierCurrency: order.supplier.default_currency,
+              minimum: fmtMoneyExact(order.supplier.min_order_amount!, order.supplier.default_currency),
+            })}
           </span>
         </Note>
       )}

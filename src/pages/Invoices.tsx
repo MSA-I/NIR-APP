@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, ErrorNote, SkeletonTable, Note, ConfirmDialog, PageHeader, useToast, ToggleGroup, ICON, type ServerColumn } from '../components/ui';
+import { ConfirmDialog, DataTable, ErrorNote, ICON, MonthPicker, Note, PageHeader, SkeletonTable, StatusBadge, ToggleGroup, useToast, type ServerColumn } from '../components/ui';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import { canShare, shareInvoice } from '../lib/share';
@@ -258,12 +258,12 @@ export function InvoicesList() {
   }
 
   const columns: ServerColumn<InvoiceRow>[] = [
-    { key: 'number', header: 'מס׳ חשבונית', priority: 3, className: 'num', render: (r) => <span className="font-medium text-ink" dir="ltr">{r.invoice_number}</span> },
-    { key: 'supplier', header: 'ספק', priority: 3, render: (r) => r.supplier.name },
-    { key: 'date', header: 'תאריך', render: (r) => fmtDate(r.invoice_date) },
-    { key: 'total', header: 'סה״כ', className: 'num', render: (r) => fmtMoneyExact(r.total_amount, r.currency) },
-    { key: 'review', header: 'בדיקה', mobileLabel: null, render: (r) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
-    { key: 'payment', header: 'תשלום', priority: 3, render: (r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
+    { key: 'number', header: t('invoiceList.text_2'), priority: 3, className: 'num', render: (r) => <span className="font-medium text-ink" dir="ltr">{r.invoice_number}</span> },
+    { key: 'supplier', header: t('invoiceList.text_3'), priority: 3, render: (r) => r.supplier.name },
+    { key: 'date', header: t('invoiceList.fmtDate'), render: (r) => fmtDate(r.invoice_date) },
+    { key: 'total', header: t('invoiceList.fmtMoneyExact'), className: 'num', render: (r) => fmtMoneyExact(r.total_amount, r.currency) },
+    { key: 'review', header: t('invoiceList.text_4'), mobileLabel: null, render: (r) => <StatusBadge meta={INVOICE_REVIEW_STATUS[r.review_status]} /> },
+    { key: 'payment', header: t('invoiceList.text_5'), priority: 3, render: (r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
   ];
   if (!isProcurementManager) {
     columns.splice(4, 0, { key: 'balance', header: t('invoiceList.splice'), className: 'num', render: (r) => (r.balance != null && r.balance > 0 ? <span className="text-await-fg">{fmtMoneyExact(r.balance, r.currency)}</span> : <span className="text-done-fg">—</span>) });
@@ -368,7 +368,8 @@ export function InvoicesList() {
               <option value="open">{t('invoiceList.text_13')}</option>
               {Object.entries(INVOICE_PAYMENT_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
             </select>
-            <input type="month" className="input w-auto!" aria-label={t('invoiceList.aria_label_4')} value={monthFilter} onChange={(e) => patchParams({ month: e.target.value, page: '' })} />
+            <MonthPicker label={t('invoiceList.aria_label_4')} value={monthFilter} allowEmpty
+              onChange={(next) => patchParams({ month: next, page: '' })} />
             {canViewExport && (
               <select className="input w-auto!" aria-label={t('invoiceList.aria_label_5')} value={exportFilter} onChange={(e) => patchParams({ export: e.target.value, page: '' })}>
                 <option value="">{t('invoiceList.text_14')}</option>

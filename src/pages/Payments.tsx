@@ -138,13 +138,13 @@ export default function Payments() {
   }, [data, toast, patchParams]);
 
   const columns: ServerColumn<Row>[] = [
-    { key: 'num', header: 'מס׳', render: (r) => `#${r.number}` },
-    { key: 'supplier', header: 'ספק', render: (r) => <span className="font-medium">{r.supplier.name}</span> },
-    { key: 'date', header: 'תאריך', render: (r) => fmtDate(r.paid_date) },
-    { key: 'amount', header: 'סכום', className: 'num', render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount, r.currency)}</span> },
-    { key: 'method', header: 'אמצעי', render: (r) => r.method ?? '—' },
-    { key: 'ref', header: 'אסמכתא', render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
-    { key: 'executor', header: 'בוצע על ידי', priority: 3, render: (r) => r.executor?.full_name ?? '—' },
+    { key: 'num', header: t('payments.numberHeader'), render: (r) => `#${r.number}` },
+    { key: 'supplier', header: t('payments.text'), render: (r) => <span className="font-medium">{r.supplier.name}</span> },
+    { key: 'date', header: t('payments.fmtDate'), render: (r) => fmtDate(r.paid_date) },
+    { key: 'amount', header: t('payments.fmtMoneyExact'), className: 'num', render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount, r.currency)}</span> },
+    { key: 'method', header: t('payments.text_2'), render: (r) => r.method ?? '—' },
+    { key: 'ref', header: t('payments.text_3'), render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
+    { key: 'executor', header: t('payments.text_4'), priority: 3, render: (r) => r.executor?.full_name ?? '—' },
     {
       // Every allocation is listed, hidden invoices included: filtering them away turned a
       // payment whose invoices are all unreadable into '—', which reads as "covered nothing".
@@ -222,12 +222,12 @@ function PaymentDetail({ payment, onClose }: { payment: Row; onClose: () => void
     <Modal open onClose={onClose} title={t('payments.modalTitle', { number: payment.number, supplier: payment.supplier.name })}>
       <div className="space-y-4">
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
-          <div><dt className="text-ink-muted">ספק</dt><dd className="font-medium">{payment.supplier.name}</dd></div>
-          <div><dt className="text-ink-muted">סכום</dt><dd className="font-semibold num">{fmtMoneyExact(payment.amount, payment.currency)}</dd></div>
-          <div><dt className="text-ink-muted">תאריך תשלום</dt><dd className="num">{fmtDate(payment.paid_date)}</dd></div>
-          <div><dt className="text-ink-muted">אמצעי תשלום</dt><dd>{payment.method ?? '—'}</dd></div>
-          <div><dt className="text-ink-muted">אסמכתא</dt><dd dir="ltr">{payment.reference ?? '—'}</dd></div>
-          <div><dt className="text-ink-muted">בוצע על ידי</dt><dd>{payment.executor?.full_name ?? '—'}</dd></div>
+          <div><dt className="text-ink-muted">{t('payments.text_8')}</dt><dd className="font-medium">{payment.supplier.name}</dd></div>
+          <div><dt className="text-ink-muted">{t('payments.fmtMoneyExact_2')}</dt><dd className="font-semibold num">{fmtMoneyExact(payment.amount, payment.currency)}</dd></div>
+          <div><dt className="text-ink-muted">{t('payments.fmtDate_2')}</dt><dd className="num">{fmtDate(payment.paid_date)}</dd></div>
+          <div><dt className="text-ink-muted">{t('payments.text_9')}</dt><dd>{payment.method ?? '—'}</dd></div>
+          <div><dt className="text-ink-muted">{t('payments.text_10')}</dt><dd dir="ltr">{payment.reference ?? '—'}</dd></div>
+          <div><dt className="text-ink-muted">{t('payments.text_11')}</dt><dd>{payment.executor?.full_name ?? '—'}</dd></div>
         </dl>
 
         {/* OPEN-DECISIONS #286. A dollar debt may be settled from a shekel account, and when it
@@ -236,14 +236,14 @@ function PaymentDetail({ payment, onClose }: { payment: Row; onClose: () => void
             — there is no rate source in this product, and the two amounts are the whole record. */}
         {payment.settlement_currency && payment.settlement_amount != null && (
           <dl className="grid gap-3 rounded-lg bg-surface-sunken px-3 py-2 text-sm sm:grid-cols-2">
-            <div><dt className="text-ink-muted">ירד מהחשבון בפועל</dt>
+            <div><dt className="text-ink-muted">{t('payments.settlementActual')}</dt>
               <dd className="font-semibold num">{fmtMoneyExact(payment.settlement_amount, payment.settlement_currency)}</dd></div>
-            <div><dt className="text-ink-muted">שער שנגזר מהתשלום</dt>
+            <div><dt className="text-ink-muted">{t('payments.settlementRate')}</dt>
               <dd className="num" dir="ltr">
                 {payment.amount === 0 ? '—' : `1 ${payment.currency} = ${(payment.settlement_amount / payment.amount).toFixed(4)} ${payment.settlement_currency}`}
               </dd></div>
             <div className="sm:col-span-2 text-xs text-ink-muted">
-              החוב נסגר ב-{payment.currency}. השער מחושב מתוך שני הסכומים שנרשמו בתשלום הזה ואינו נשמר במערכת.
+              {t('payments.settlementNote', { currency: payment.currency })}
             </div>
           </dl>
         )}

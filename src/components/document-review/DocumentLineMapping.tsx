@@ -47,7 +47,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Loader2, Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../auth/AuthContext';
-import { ok, toHebrewError } from '../../lib/errors';
+import { ok } from '../../lib/errors';
 import { unwrap } from '../../lib/useQuery';
 import { fetchAll } from '../../lib/supabasePaging';
 import { nameKey } from '../../lib/nameKey';
@@ -57,6 +57,8 @@ import { ConfirmDialog, ICON, Note, useToast } from '../ui';
 import { quickProductRow } from '../QuickCreateProduct';
 import type { AssessmentLine } from './assessment';
 import type { Product } from '../../lib/types';
+import { useT } from '../../lib/i18n/LocaleProvider';
+import type { TKey } from '../../lib/i18n/t';
 
 interface CatalogueProduct {
   id: string;
@@ -65,8 +67,8 @@ interface CatalogueProduct {
 }
 
 /** What the document printed on this line, as one readable string. */
-export function lineTitle(line: AssessmentLine): string {
-  return line.description || line.sku || line.barcode || `שורה ${line.line_index + 1}`;
+export function lineTitle(line: AssessmentLine, t: (key: TKey, vars?: Record<string, string | number>) => string): string {
+  return line.description || line.sku || line.barcode || t('lineMapping.lineFallback', { index: line.line_index + 1 });
 }
 
 /**
@@ -77,10 +79,10 @@ export function lineTitle(line: AssessmentLine): string {
  * currency beside it is the thing the campaign removed everywhere else, so when intake could not
  * read one the price is omitted rather than shown in an assumed unit.
  */
-export function lineFacts(line: AssessmentLine, currency: string | null): string {
+export function lineFacts(line: AssessmentLine, currency: string | null, t: (key: TKey, vars?: Record<string, string | number>) => string): string {
   const parts: string[] = [];
   if (line.quantity != null) parts.push(`${fmtNum(line.quantity)}${line.unit ? ` ${line.unit}` : ''}`);
-  if (line.unit_price != null && currency) parts.push(`${fmtMoneyExact(line.unit_price, currency)} ליחידה`);
+  if (line.unit_price != null && currency) parts.push(t('lineMapping.perUnit', { price: fmtMoneyExact(line.unit_price, currency) }));
   return parts.join(' · ');
 }
 
@@ -142,6 +144,7 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
   disabled?: boolean;
 }) {
   const { profile } = useAuth();
+  const { t, errorText } = useT();
   const toast = useToast();
   const [catalogue, setCatalogue] = useState<CatalogueProduct[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -158,7 +161,7 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
       setCatalogue(rows);
       setLoadError(null);
     } catch (failure) {
-      setLoadError(toHebrewError(failure));
+      setLoadError(errorText(failure));
     }
   }, []);
 
@@ -233,7 +236,7 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
             p_reason: reasonOr('', 'יצירת מוצרים ומחירים מתוך מסמך שהתקבל'),
           }));
         } catch (failure) {
-          priceFailure = toHebrewError(failure);
+          priceFailure = errorText(failure);
         }
       }
 
@@ -249,14 +252,14 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
       setSelected(new Set());
 
       toast(priceFailure
-        ? `נוצרו ${created.length} מוצרים, אך קביעת המחירים נכשלה: ${priceFailure}. אפשר להשלים במסך המחירונים.`
+        ? t('lineMapping.createdWithPriceFailure', { count: created.length, error: priceFailure })
         : [
-          created.length > 0 ? `נוצרו ${created.length} מוצרים` : null,
-          plan.matched.length > 0 ? `${plan.matched.length} שורות שויכו למוצר קיים` : null,
-        ].filter(Boolean).join(' · ') || 'לא היה מה ליצור',
+          created.length > 0 ? t('lineMapping.createdProducts', { count: created.length }) : null,
+          plan.matched.length > 0 ? t('lineMapping.matchedLines', { count: plan.matched.length }) : null,
+        ].filter(Boolean).join(' · ') || t('lineMapping.nothingToCreate'),
         priceFailure ? 'error' : 'success');
     } catch (failure) {
-      toast(toHebrewError(failure), 'error');
+      toast(errorText(failure), 'error');
     } finally {
       setBusy(false);
     }
@@ -266,21 +269,20 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
 
   return (
     <div className="card p-4" data-testid="document-line-mapping">
-      <h3 className="text-sm font-medium text-ink-soft">שורות שאין להן מוצר בקטלוג</h3>
+      <h3 className="text-sm font-medium text-ink-soft">{t('lineMapping.heading')}</h3>
       {/* Says what the state IS and what closes it, in that order. "0 מתוך 5" would be a counter;
           this is the work list. */}
       <p className="mt-1 text-sm text-ink-body">
         {remaining === 0
-          ? 'כל השורות שויכו למוצר. אפשר לאשר את המסמך.'
-          : <>סמנו שורות וצרו מהן מוצרים, או פתחו שורה כדי לבחור לה מוצר קיים. נותרו <span className="num">{remaining}</span> מתוך <span className="num">{lines.length}</span>.</>}
+          ? t('lineMapping.allMatched')
+          : <>{t('lineMapping.remainingLead')} <span className="num">{remaining}</span> {t('lineMapping.remainingOf')} <span className="num">{lines.length}</span>.</>}
       </p>
 
       {loadError && <Note tone="alert" role="alert" className="mt-3">{loadError}</Note>}
 
       {!supplierId && (
         <Note tone="await" role="status" className="mt-3">
-          כל עוד הספק לא זוהה אי אפשר ליצור מוצרים — מוצר חדש נוצר עם מחיר אצל ספק מסוים.
-          אפשר לשייך לשורות מוצרים קיימים, ולזהות את הספק למעלה.
+          {t('lineMapping.supplierUnknown')}
         </Note>
       )}
 
@@ -295,9 +297,9 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
             disabled={working}
             onChange={toggleAll}
           />
-          בחירת הכל
+          {t('lineMapping.selectAll')}
         </label>
-        <span className="text-sm text-ink-muted">נבחרו <span className="num">{selected.size}</span></span>
+        <span className="text-sm text-ink-muted">{t('lineMapping.selectedCount')} <span className="num">{selected.size}</span></span>
         <button
           type="button"
           className="btn-primary ms-auto min-h-11"
@@ -307,7 +309,7 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
           {busy
             ? <Loader2 size={ICON.sm} aria-hidden="true" className="animate-spin" />
             : <Plus size={ICON.sm} aria-hidden="true" />}
-          יצירת מוצרים מהשורות שנבחרו
+          {t('lineMapping.createFromSelected')}
         </button>
       </div>
 
@@ -326,7 +328,7 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
                   checked={selected.has(line.line_index)}
                   disabled={working}
                   onChange={() => toggle(line.line_index)}
-                  aria-label={`סימון ${lineTitle(line)}`}
+                  aria-label={t('lineMapping.selectLineAria', { line: lineTitle(line, t) })}
                 />
                 {/* One quiet line per row. The details are behind the press, which is the whole
                     difference between a list a person can scan and a wall they scroll. */}
@@ -342,11 +344,11 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
                     aria-hidden="true"
                     className={`shrink-0 text-ink-muted transition-transform ${open ? 'rotate-180' : ''}`}
                   />
-                  <span className="min-w-0 flex-1 truncate text-sm text-ink"><bdi>{lineTitle(line)}</bdi></span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-ink"><bdi>{lineTitle(line, t)}</bdi></span>
                   <span className="shrink-0 text-xs text-ink-muted">
                     {chosen
-                      ? <span className="text-done-fg">{chosenProduct ? <bdi>{chosenProduct.name}</bdi> : 'שויך'}</span>
-                      : 'לא שויך'}
+                      ? <span className="text-done-fg">{chosenProduct ? <bdi>{chosenProduct.name}</bdi> : t('lineMapping.matched')}</span>
+                      : t('lineMapping.notMatched')}
                   </span>
                 </button>
               </div>
@@ -354,13 +356,13 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
               {open && (
                 <div id={`${rowId}-details`} className="pb-3 pe-2 ps-8">
                   <dl className="grid gap-x-4 gap-y-1 text-xs sm:grid-cols-2">
-                    <Fact label="תיאור במסמך" value={line.description} />
-                    <Fact label="מק״ט" value={line.sku} />
-                    <Fact label="ברקוד" value={line.barcode} />
-                    <Fact label="כמות ומחיר" value={lineFacts(line, currency) || null} />
-                    <Fact label="סה״כ שורה" value={line.line_total == null || !currency ? null : fmtMoneyExact(line.line_total, currency)} />
+                    <Fact label={t('lineMapping.factDescription')} value={line.description} />
+                    <Fact label={t('lineMapping.factSku')} value={line.sku} />
+                    <Fact label={t('lineMapping.factBarcode')} value={line.barcode} />
+                    <Fact label={t('lineMapping.factQuantityPrice')} value={lineFacts(line, currency, t) || null} />
+                    <Fact label={t('lineMapping.factLineTotal')} value={line.line_total == null || !currency ? null : fmtMoneyExact(line.line_total, currency)} />
                   </dl>
-                  <label className="label mt-3 block" htmlFor={rowId}>שיוך למוצר קיים</label>
+                  <label className="label mt-3 block" htmlFor={rowId}>{t('lineMapping.matchToExisting')}</label>
                   <select
                     id={rowId}
                     className="input mt-1"
@@ -369,7 +371,7 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
                     onChange={(event) => onMap(line.line_index, event.target.value || null)}
                   >
                     <option value="">
-                      {catalogue === null ? 'טוען מוצרים…' : catalogue.length === 0 ? 'אין עדיין מוצרים בקטלוג' : 'בחר מוצר קיים'}
+                      {catalogue === null ? t('lineMapping.catalogueLoading') : catalogue.length === 0 ? t('lineMapping.catalogueEmpty') : t('lineMapping.cataloguePlaceholder')}
                     </option>
                     {(catalogue ?? []).map((product) => (
                       <option key={product.id} value={product.id}>
@@ -391,12 +393,12 @@ export function DocumentLineMapping({ lines, supplierId, currency, mapped, onMap
         busy={busy}
         onClose={() => setConfirming(false)}
         onConfirm={() => void createSelected()}
-        title="יצירת מוצרים מהשורות שנבחרו"
-        confirmLabel="יצירה"
+        title={t('lineMapping.createFromSelected')}
+        confirmLabel={t('lineMapping.confirmCreate')}
         message={[
-          plan.create.length > 0 ? `${plan.create.length} מוצרים חדשים ייווצרו ויקבלו את המחיר שבמסמך אצל הספק.` : null,
-          plan.matched.length > 0 ? `${plan.matched.length} שורות ישויכו למוצר שכבר קיים בקטלוג באותו שם — לא ייווצר מוצר כפול.` : null,
-          plan.unnamed.length > 0 ? `${plan.unnamed.length} שורות יידלגו: אין להן שם מוצר במסמך. אפשר לשייך אותן ידנית.` : null,
+          plan.create.length > 0 ? t('lineMapping.planCreate', { count: plan.create.length }) : null,
+          plan.matched.length > 0 ? t('lineMapping.planMatched', { count: plan.matched.length }) : null,
+          plan.unnamed.length > 0 ? t('lineMapping.planUnnamed', { count: plan.unnamed.length }) : null,
         ].filter(Boolean).join(' ')}
       />
     </div>

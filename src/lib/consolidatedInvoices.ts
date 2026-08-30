@@ -1,4 +1,5 @@
 import type { TKey } from './i18n/t.ts';
+import { BASE_LOCALE, INTL_LOCALE, type Locale } from './i18n/locale.ts';
 import { supabase } from './supabase';
 import { tusUploadToDocuments } from './tusUpload';
 import { unwrap } from './useQuery';
@@ -209,7 +210,7 @@ export interface PreviousMonth {
   label: string;
 }
 
-export function previousJerusalemMonth(now: Date = new Date()): PreviousMonth {
+export function previousJerusalemMonth(now: Date = new Date(), locale: Locale = BASE_LOCALE): PreviousMonth {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Jerusalem',
     year: 'numeric',
@@ -226,7 +227,7 @@ export function previousJerusalemMonth(now: Date = new Date()): PreviousMonth {
     value,
     start: `${value}-01`,
     end: `${value}-${String(endDay).padStart(2, '0')}`,
-    label: new Intl.DateTimeFormat('he-IL', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(previous),
+    label: new Intl.DateTimeFormat(INTL_LOCALE[locale], { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(previous),
   };
 }
 

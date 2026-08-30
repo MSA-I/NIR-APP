@@ -156,8 +156,8 @@ export function SupplierCommunicationCard({ supplierId, supplierEmail, supplierP
               onChange={(e) => setReason(e.target.value)} />
           </div>
           <div className="flex justify-end gap-2">
-            <button type="button" className="btn-secondary" disabled={busy} onClick={() => setEditing(false)}>ביטול</button>
-            <button type="button" className="btn-primary" disabled={busy} onClick={() => void save()}>שמירה</button>
+            <button type="button" className="btn-secondary" disabled={busy} onClick={() => setEditing(false)}>{t('supplierComms.cancel')}</button>
+            <button type="button" className="btn-primary" disabled={busy} onClick={() => void save()}>{t('supplierComms.save')}</button>
           </div>
         </div>
       </Modal>

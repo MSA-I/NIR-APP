@@ -304,5 +304,19 @@ works. The answer was that it could, and that nothing but a decision was stoppin
 
 ---
 
-No gate is abandoned. A gate dropped later is recorded with `ABANDON:` and its reason — never
-deleted quietly.
+ABANDON: P2-G4 — the internal operator console is not translated.
+
+Owner decision, 27.08.2026. `src/operator/**` is used by the InPlace team and is not sold to a
+tenant, so translating it serves no end user; the sixteen files there keep their Hebrew and their
+pinned counts stay where they are rather than dropping to zero. Recorded in three places on
+purpose — here, in `docs/DEBT-REGISTER.md`, and as `__reason` entries in
+`scripts/i18n-baseline.json` — because a skip written down once is a skip somebody later reads as
+an oversight. `node scripts/gate-i18n.mjs abandon` checks all three.
+
+This line was missing until 30.08.2026: the decision was live in the baseline and the register
+while this file still said no gate had been abandoned, and the `abandon` oracle had been failing
+on exactly that for three days without anyone seeing it, because it is not part of
+`npm run verify`.
+
+Otherwise no gate is abandoned. A gate dropped later is recorded with `ABANDON:` and its reason —
+never deleted quietly.

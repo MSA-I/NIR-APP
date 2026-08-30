@@ -224,7 +224,7 @@ export default function Inventory() {
         /* 0223: quoted in two currencies, so there is no cheapest offer — sorting 12 below 40
            when one is dollars and the other shekels would recommend a supplier on the strength of
            a smaller number rather than a lower price. */
-        <span className="text-xs text-ink-muted">מחירים בכמה מטבעות</span>
+        <span className="text-xs text-ink-muted">{t('inventory.pricesInSeveralCurrencies')}</span>
       ) : row.cheapest_unit_price == null ? <span className="num">—</span> : (
         <span>
           <span className="block font-medium">{row.cheapest_supplier_name} · <span className="num">{fmtMoneyRounded(row.cheapest_unit_price, row.cheapest_currency)}</span></span>

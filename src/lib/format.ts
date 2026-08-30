@@ -1,4 +1,4 @@
-import type { Locale } from './i18n/locale.ts';
+import { BASE_LOCALE, INTL_LOCALE, type Locale } from './i18n/locale.ts';
 
 export const BUSINESS_TIME_ZONE = 'Asia/Jerusalem';
 
@@ -92,7 +92,29 @@ export function currencyMinorUnits(currency: string): number | null {
 const num = new Intl.NumberFormat('he-IL', { maximumFractionDigits: 2 });
 const dateFmt = new Intl.DateTimeFormat('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: BUSINESS_TIME_ZONE });
 const dateTimeFmt = new Intl.DateTimeFormat('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TIME_ZONE });
-const monthFmt = new Intl.DateTimeFormat('he-IL', { month: 'long', year: 'numeric', timeZone: BUSINESS_TIME_ZONE });
+/**
+ * A month NAME, and the one date format on this screen whose words change with the reader.
+ *
+ * The numeric formatters above stay pinned: 28.08.2026 is the Israeli convention and an English
+ * reader of an Israeli business's books is better served by it than by 08/28/2026 (recorded in
+ * OPEN-DECISIONS as a decision, not left as an accident). `month: 'long'` is different in kind —
+ * it produces WORDS, and `אוגוסט 2026` on an English chart axis is not a convention, it is the
+ * wrong language. It reached the printed heading of the accountant's monthly report that way.
+ *
+ * Cached per locale for the same reason `localeExact` is: building a DateTimeFormat is not free
+ * and these run per chart point.
+ */
+const monthFormatters = new Map<Locale, Intl.DateTimeFormat>();
+function monthFormatter(locale: Locale): Intl.DateTimeFormat {
+  let formatter = monthFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+      month: 'long', year: 'numeric', timeZone: BUSINESS_TIME_ZONE,
+    });
+    monthFormatters.set(locale, formatter);
+  }
+  return formatter;
+}
 
 /**
  * The one money formatter that does NOT pin `he-IL`, and the only reason it exists.
@@ -286,7 +308,7 @@ export function formatQuantity(quantity: number | null | undefined, unit: string
 }
 export const fmtDate = (v: string | Date | null | undefined) => (v ? dateFmt.format(new Date(v)) : '—');
 export const fmtDateTime = (v: string | Date | null | undefined) => (v ? dateTimeFmt.format(new Date(v)) : '—');
-export const fmtMonth = (v: string | Date) => monthFmt.format(new Date(v));
+export const fmtMonth = (v: string | Date, locale: Locale = BASE_LOCALE) => monthFormatter(locale).format(new Date(v));
 
 // Runtime-local calendar day. Keep this for user-selected Date objects; business "today" uses
 // toTimeZoneISO() below so results stay on Israel time even if a server/browser runs elsewhere.

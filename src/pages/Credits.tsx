@@ -6,7 +6,7 @@ import { useParamState } from '../lib/useParamState';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, ICON, type Column } from '../components/ui';
+import { DataTable, ErrorNote, ICON, Modal, MonthPicker, PageHeader, SkeletonTable, StatusBadge, useToast, type Column } from '../components/ui';
 import { CREDIT_REASON, CREDIT_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import { MoneyByCurrency, totalsByCurrency } from '../components/Money';
@@ -62,13 +62,13 @@ export default function Credits() {
     .map((r) => ({ currency: r.currency, amount: r.amount })));
 
   const columns: Column<Row>[] = [
-    { key: 'num', header: 'מס׳', sortValue: (r) => r.number, render: (r) => `#${r.number}` },
-    { key: 'supplier', header: 'ספק', sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
-    { key: 'reason', header: 'סיבה', render: (r) => CREDIT_REASON[r.reason] },
-    { key: 'amount', header: 'סכום', className: 'num', sortValue: (r) => r.amount, render: (r) => fmtMoneyExact(r.amount, r.currency) },
-    { key: 'invoice', header: 'חשבונית', render: (r) => r.invoice ? <span dir="ltr">{r.invoice.invoice_number}</span> : '—' },
-    { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
-    { key: 'created', header: 'נפתח', sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
+    { key: 'num', header: t('credits.numberHeader'), sortValue: (r) => r.number, render: (r) => `#${r.number}` },
+    { key: 'supplier', header: t('credits.text'), sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
+    { key: 'reason', header: t('credits.statusLabel'), render: (r) => CREDIT_REASON[r.reason] },
+    { key: 'amount', header: t('credits.fmtMoneyExact'), className: 'num', sortValue: (r) => r.amount, render: (r) => fmtMoneyExact(r.amount, r.currency) },
+    { key: 'invoice', header: t('credits.text_2'), render: (r) => r.invoice ? <span dir="ltr">{r.invoice.invoice_number}</span> : '—' },
+    { key: 'status', header: t('credits.text_3'), render: (r) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
+    { key: 'created', header: t('credits.fmtDate'), sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
   ];
 
   if (loading) return <SkeletonTable cols={6} />;
@@ -77,9 +77,9 @@ export default function Credits() {
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
-      {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
-      <PageHeader title={<span className="flex items-center gap-2"><RotateCcw size={ICON.xl} aria-hidden="true" /> זיכויים</span>}
-        meta={<>סה״כ זיכויים פתוחים: <b className="text-await-fg"><MoneyByCurrency amounts={openTotals} baseCurrency={org?.base_currency} /></b></>} />
+      {fetching && data && <div className="text-xs text-ink-muted" role="status">{t('credits.text_4')}</div>}
+      <PageHeader title={<span className="flex items-center gap-2"><RotateCcw size={ICON.xl} aria-hidden="true" /> {t('credits.text_5')}</span>}
+        meta={<>{t('credits.fmtMoneyExact_2')} <b className="text-await-fg"><MoneyByCurrency amounts={openTotals} baseCurrency={org?.base_currency} /></b></>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.notes ?? '').toLowerCase().includes(q)}
         searchLabel={t('credits.searchLabel')}
@@ -94,7 +94,7 @@ export default function Credits() {
               <option value="active">{t('credits.text_6')}</option>
               <option value="all">{t('credits.text_7')}</option>
             </select>
-            <input type="month" className="input w-auto!" aria-label={t('credits.aria_label_2')} value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} />
+            <MonthPicker label={t('credits.aria_label_2')} value={monthFilter} allowEmpty onChange={setMonthFilter} />
           </>
         }
         /* #49, decided 09.08.2026 (package 2): damaged and returned lines joined the receipt
@@ -151,9 +151,9 @@ function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
   return (
     <Modal open onClose={onClose} title={t('credits.modalTitle', { number: credit.number, supplier: credit.supplier.name })} busy={busy} statusMessage={busy ? t('credits.updatingStatus') : undefined}>
       <dl className="text-sm space-y-2 mb-4">
-        <div className="flex justify-between"><dt className="text-ink-muted">סיבה</dt><dd>{CREDIT_REASON[credit.reason]}</dd></div>
-        <div className="flex justify-between"><dt className="text-ink-muted">סכום</dt><dd className="num font-semibold">{fmtMoneyExact(credit.amount, credit.currency)}</dd></div>
-        <div className="flex justify-between"><dt className="text-ink-muted">סטטוס</dt><dd><StatusBadge meta={CREDIT_STATUS[credit.status]} /></dd></div>
+        <div className="flex justify-between"><dt className="text-ink-muted">{t('credits.statusLabel_2')}</dt><dd>{CREDIT_REASON[credit.reason]}</dd></div>
+        <div className="flex justify-between"><dt className="text-ink-muted">{t('credits.fmtMoneyExact_3')}</dt><dd className="num font-semibold">{fmtMoneyExact(credit.amount, credit.currency)}</dd></div>
+        <div className="flex justify-between"><dt className="text-ink-muted">{t('credits.text_13')}</dt><dd><StatusBadge meta={CREDIT_STATUS[credit.status]} /></dd></div>
         {credit.invoice && (
           <div className="flex justify-between"><dt className="text-ink-muted">{t('credits.text_14')}</dt>
             <dd><button className="link num" onClick={() => onOpenInvoice(credit.invoice!.id)}>{credit.invoice.invoice_number}</button></dd></div>

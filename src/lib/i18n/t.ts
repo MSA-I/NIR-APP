@@ -1,4 +1,4 @@
-import { INTL_LOCALE, type Locale } from './locale.ts';
+import { BASE_LOCALE, INTL_LOCALE, type Locale } from './locale.ts';
 import type { Dictionary } from './dictionaries/he.ts';
 
 /**
@@ -32,10 +32,41 @@ export function translate(
   dict: Dictionary,
   key: TKey,
   vars?: Record<string, string | number>,
+  locale: Locale = BASE_LOCALE,
 ): string {
-  const raw = lookup(dict, key);
+  const raw = lookup(dict, pluralKey(dict, key, vars, locale));
   if (raw == null) return key; // the key itself, never an empty cell — a miss must be loud
   return vars ? raw.replace(PLACEHOLDER, (match, name) => String(vars[name] ?? match)) : raw;
+}
+
+/**
+ * The singular sibling, when there is one and the count asks for it.
+ *
+ * `{count} suppliers` reads `1 suppliers` at one, and 72 keys in this dictionary were written that
+ * way. The fix is NOT ICU — the note above rejects it, and for a reason that still holds: an ICU
+ * plural puts a language rule inside a translation file. It is a second key, `<key>_one`, which the
+ * `Dictionary` type then forces English to carry too, exactly like every other key.
+ *
+ * A key with no `_one` sibling is untouched, so this is additive: nothing changes for the 40 keys
+ * whose count is a bare number in brackets, or for a sentence that reads correctly at one anyway.
+ *
+ * BINARY, and deliberately so. Hebrew has one/two/many/other and this handles only `one`, which
+ * matches what the codebase already does at its three hand-rolled call sites
+ * (`supplierGroupCard.itemOne`, `uiTail.recordOne`, `Invoices.countKey`). Hebrew's `two` falling to
+ * the plural form is the behaviour those three already ship; making it four forms is a separate
+ * decision about copy, not a mechanism this can settle on its own.
+ */
+function pluralKey(
+  dict: Dictionary,
+  key: TKey,
+  vars: Record<string, string | number> | undefined,
+  locale: Locale,
+): TKey {
+  const count = vars?.count;
+  if (typeof count !== 'number') return key;
+  if (pluralCategory(locale, count) !== 'one') return key;
+  const singular = `${key}_one` as TKey;
+  return lookup(dict, singular) == null ? key : singular;
 }
 
 /**
@@ -51,8 +82,9 @@ export function tryTranslate(
   dict: Dictionary,
   key: string,
   vars?: Record<string, string | number>,
+  locale: Locale = BASE_LOCALE,
 ): string | null {
-  const raw = lookup(dict, key);
+  const raw = lookup(dict, pluralKey(dict, key as TKey, vars, locale));
   if (raw == null) return null;
   // Interpolation follows the same rule as `translate`: a variable with no value keeps its
   // placeholder. A runtime key is no less likely to carry one — the business summary's window

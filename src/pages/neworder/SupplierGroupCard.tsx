@@ -37,10 +37,10 @@ export default function SupplierGroupCard({ group, products, onOpenFix, onOpenGr
       </div>
 
       <dl className="grid grid-cols-2 gap-px border-y border-line-soft bg-line-soft text-xs sm:grid-cols-4">
-        <LedgerMetric label="מינימום ספק" value={fmtMoneyExact(supplier.minOrderAmount, supplier.currency)} numeric />
-        <LedgerMetric label="חסר למינימום" value={supplier.minOrderAmount == null ? '—' : belowMinimum ? fmtMoneyExact(shortfall, currency) : fmtMoneyExact(0, currency)} tone={supplier.minOrderAmount == null ? undefined : belowMinimum ? 'await' : 'done'} numeric={supplier.minOrderAmount != null} />
-        <LedgerMetric label="תרומת חיסכון" value={savingsContribution == null ? '—' : signedMoney(savingsContribution, currency)} numeric={savingsContribution != null} />
-        <LedgerMetric label="סטטוס" value={belowMinimum ? 'דורש השלמה' : 'מוכן'} tone={belowMinimum ? 'await' : 'done'} />
+        <LedgerMetric label={t('supplierGroupCard.supplierMinimum')} value={fmtMoneyExact(supplier.minOrderAmount, supplier.currency)} numeric />
+        <LedgerMetric label={t('supplierGroupCard.minimumShortfall')} value={supplier.minOrderAmount == null ? '—' : belowMinimum ? fmtMoneyExact(shortfall, currency) : fmtMoneyExact(0, currency)} tone={supplier.minOrderAmount == null ? undefined : belowMinimum ? 'await' : 'done'} numeric={supplier.minOrderAmount != null} />
+        <LedgerMetric label={t('supplierGroupCard.savingsContribution')} value={savingsContribution == null ? '—' : signedMoney(savingsContribution, currency)} numeric={savingsContribution != null} />
+        <LedgerMetric label={t('supplierGroupCard.status')} value={belowMinimum ? t('supplierGroupCard.needsTopUp') : t('supplierGroupCard.ready')} tone={belowMinimum ? 'await' : 'done'} />
       </dl>
 
       <div className="divide-y divide-line-soft">

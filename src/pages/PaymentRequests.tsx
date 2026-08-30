@@ -117,12 +117,12 @@ export default function PaymentRequests() {
   }
 
   const columns: Column<Row>[] = [
-    { key: 'num', header: 'מס׳', priority: 3, className: 'num', sortValue: (r) => r.number, render: (r) => `#${r.number}` },
-    { key: 'supplier', header: 'ספק', priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
-    { key: 'amount', header: 'סכום', mobileLabel: null, className: 'num', sortValue: (r) => r.amount, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount, r.currency)}</span> },
-    { key: 'due', header: 'יעד', sortValue: (r) => r.due_date ?? '', render: (r) => fmtDate(r.due_date) },
-    { key: 'status', header: 'סטטוס', priority: 3, render: (r) => <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} /> },
-    { key: 'created', header: 'נוצרה', priority: 3, sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
+    { key: 'num', header: t('paymentRequests.numHeader'), priority: 3, className: 'num', sortValue: (r) => r.number, render: (r) => `#${r.number}` },
+    { key: 'supplier', header: t('paymentRequests.text'), priority: 3, sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
+    { key: 'amount', header: t('paymentRequests.fmtMoneyExact'), mobileLabel: null, className: 'num', sortValue: (r) => r.amount, render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount, r.currency)}</span> },
+    { key: 'due', header: t('paymentRequests.fmtDate'), sortValue: (r) => r.due_date ?? '', render: (r) => fmtDate(r.due_date) },
+    { key: 'status', header: t('paymentRequests.text_2'), priority: 3, render: (r) => <StatusBadge meta={PAYMENT_REQUEST_STATUS[r.status]} /> },
+    { key: 'created', header: t('paymentRequests.fmtDate_2'), priority: 3, sortValue: (r) => r.created_at, render: (r) => fmtDate(r.created_at) },
   ];
 
   if (loading) return <SkeletonTable cols={6} />;
@@ -131,9 +131,9 @@ export default function PaymentRequests() {
   return (
     <div className="space-y-4">
       {error && <ErrorNote message={error} />}
-      {fetching && data && <div className="text-xs text-ink-muted" role="status">מתעדכן…</div>}
+      {fetching && data && <div className="text-xs text-ink-muted" role="status">{t('paymentRequests.text_3')}</div>}
       <div data-tour-anchor="payment-requests-overview">
-      <PageHeader title="דרישות תשלום" meta={`${rows.length} דרישות בתצוגה`}
+      <PageHeader title={t('paymentRequests.pageTitle')} meta={t('paymentRequests.pageMeta', { count: rows.length })}
         actions={<>
           {/* The owner's emergency execution route was removed (G4, 10.08.2026). An approved
               request is executed on /pay, with the same step-up, the same mandatory reason and
@@ -420,8 +420,13 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
                         <input type="checkbox" className="size-5 shrink-0 accent-action" checked={checked}
                           disabled={otherCurrency}
                           aria-label={otherCurrency
-                            ? `חשבונית ${inv.invoice_number} של ${supplierName} נקובה ב-${inv.currency} ואינה ניתנת לצירוף לדרישה ב-${requestCurrency}`
-                            : `בחירת חשבונית ${inv.invoice_number} של ${supplierName} להקצאה בדרישת התשלום`}
+                            ? t('paymentRequests.invoiceOtherCurrencyLabel', {
+                              invoice: inv.invoice_number,
+                              supplier: supplierName,
+                              invoiceCurrency: inv.currency,
+                              requestCurrency: requestCurrency ?? '',
+                            })
+                            : t('paymentRequests.invoicePickLabel', { invoice: inv.invoice_number, supplier: supplierName })}
                           onChange={(e) => setChosen((c) => {
                             const next = { ...c };
                             if (e.target.checked) next[inv.id] = inv.allocationAmount; else delete next[inv.id];
@@ -437,8 +442,10 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
                       </span>
                       {otherCurrency && (
                         <span className="basis-full text-xs text-ink-muted">
-                          החשבונית נקובה ב-{inv.currency} והדרישה נבנית ב-{requestCurrency}. דרישת תשלום אחת היא העברה אחת,
-                          ולכן היא כולה במטבע אחד — לחשבונית הזו נפתחת דרישה נפרדת.
+                          {t('paymentRequests.invoiceOtherCurrencyNote', {
+                            invoiceCurrency: inv.currency,
+                            requestCurrency: requestCurrency ?? '',
+                          })}
                         </span>
                       )}
                       {checked && (
@@ -474,8 +481,8 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
           <span className="kpi-value-compact num">{fmtMoneyExact(amount, requestCurrency ?? org?.base_currency)}</span>
         </SubPanel>
 
-        <div><label className="label" htmlFor="payment-request-notes">הערות</label><input id="payment-request-notes" className="input" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-        <div><label className="label" htmlFor="payment-request-reason">סיבת יצירת הדרישה (רשות)</label><input id="payment-request-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+        <div><label className="label" htmlFor="payment-request-notes">{t('paymentRequests.setNotes')}</label><input id="payment-request-notes" className="input" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+        <div><label className="label" htmlFor="payment-request-reason">{t('paymentRequests.reasonOptionalLabel')}</label><input id="payment-request-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
 
         {checking && <Note tone="idle">{t('paymentRequests.text_19')}</Note>}
         {checkError && <Note tone="alert">{checkError}</Note>}
@@ -820,21 +827,21 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
             <div className="space-y-3">
               <p className="font-semibold">{t('paymentRequests.text_34')}</p>
               <dl className="grid gap-2 text-sm sm:grid-cols-2">
-                <div><dt className="text-ink-muted">ספק</dt><dd className="font-medium">{pr.supplier.name}</dd></div>
-                <div><dt className="text-ink-muted">סך זיכויים פתוחים</dt>
+                <div><dt className="text-ink-muted">{t('paymentRequests.text_35')}</dt><dd className="font-medium">{pr.supplier.name}</dd></div>
+                <div><dt className="text-ink-muted">{t('paymentRequests.fmtMoneyExact_4')}</dt>
                   <dd className="font-semibold">
                     {openCreditFindings.map((credit) => (
                       <span key={credit.currency} className="num block">{fmtMoneyExact(credit.amount ?? null, credit.currency)}</span>
                     ))}
                   </dd></div>
-                <div><dt className="text-ink-muted">סכום דרישת התשלום</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount, pr.currency)}</dd></div>
+                <div><dt className="text-ink-muted">{t('paymentRequests.fmtMoneyExact_5')}</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount, pr.currency)}</dd></div>
                 {/* The net line exists only when the credits and the request are the same money.
                     Subtracting a dollar credit from a shekel request produces a number that is
                     not the net of anything — so the sentence takes its place. */}
                 {sameCurrencyCredit != null ? (
-                  <div><dt className="text-ink-muted">נטו אינפורמטיבי לאחר זיכויים</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount - sameCurrencyCredit, pr.currency)}</dd></div>
+                  <div><dt className="text-ink-muted">{t('paymentRequests.fmtMoneyExact_6')}</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount - sameCurrencyCredit, pr.currency)}</dd></div>
                 ) : (
-                  <div><dt className="text-ink-muted">נטו אינפורמטיבי לאחר זיכויים</dt><dd className="text-sm">אין — הזיכויים הפתוחים נקובים במטבע אחר מהדרישה, ואינם מקטינים אותה</dd></div>
+                  <div><dt className="text-ink-muted">{t('paymentRequests.fmtMoneyExact_6')}</dt><dd className="text-sm">{t('paymentRequests.creditsOtherCurrencyNet')}</dd></div>
                 )}
               </dl>
               <label className="flex min-h-11 items-start gap-2 text-sm font-medium">

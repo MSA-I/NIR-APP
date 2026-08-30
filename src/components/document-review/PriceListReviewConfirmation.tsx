@@ -7,7 +7,7 @@ import { Link } from 'react-router';
 import { supabase } from '../../lib/supabase';
 import type { PriceListPredictedLine } from '../../lib/useDocumentProcessing';
 import { useAuth } from '../../auth/AuthContext';
-import { ConfirmDialog, ICON, Note, SubPanel } from '../ui';
+import { ConfirmDialog, ICON, MonthPicker, Note, SubPanel } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
 import { PriceListAutomationReadiness } from './PriceListAutomationReadiness';
 import { FILING_REASON_KEYS, type ReviewSnapshot } from './model';
@@ -828,11 +828,11 @@ export function PriceListReviewConfirmation({
             </Note>
           )}
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label>
+            <div>
               <span className="label">{t('priceListReview.text_36')}</span>
-              <input type="month" className="input num" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} disabled={busy} />
+              <MonthPicker label={t('priceListReview.text_36')} value={targetMonth} onChange={setTargetMonth} disabled={busy} />
               <span className="mt-1 block text-xs text-ink-muted">{t('priceListReview.text_37')}</span>
-            </label>
+            </div>
             <label>
               <span className="label">{t('priceListReview.text_38')}</span>
               <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} />
@@ -957,7 +957,7 @@ export function PriceListReviewConfirmation({
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <label>
                       <span className="label">{t('priceListReview.text_54')}</span>
-                      <select className="input" value={draft.productId} disabled={busy || catalogLoading || !!catalogError}
+                      <select className="input" data-testid="price-list-row-product" value={draft.productId} disabled={busy || catalogLoading || !!catalogError}
                         onChange={(event) => {
                           const price = event.target.value ? predictedPriceText(index, draft) : null;
                           updateDraft(index, { productId: event.target.value, ...(price === null ? {} : { priceText: price }) });

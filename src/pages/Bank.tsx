@@ -8,11 +8,11 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, Note, EmptyState, SubPanel, ICON, type ServerColumn } from '../components/ui';
+import { DataTable, EmptyState, ErrorNote, ICON, Modal, MonthPicker, Note, PageHeader, SkeletonTable, StatusBadge, SubPanel, useToast, type ServerColumn } from '../components/ui';
 import { effectiveTolerance } from '../lib/tolerances';
 import { BANK_TX_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, addCalendarDays } from '../lib/format';
-import { toleranceRefusalMessage } from '../lib/errors';
+import { toleranceRefusalKey } from '../lib/errors';
 import type { BankTransaction, BankImport } from '../lib/types';
 import { useParamState } from '../lib/useParamState';
 import { SupplierSelectField, useQuickSupplier } from '../components/QuickSupplierPicker';
@@ -229,7 +229,8 @@ export default function Bank() {
               <option value="attention">{t('bank.text_9')}</option>
               {Object.entries(BANK_TX_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
             </select>
-            <input type="month" className="input w-auto!" aria-label={t('bank.aria_label_2')} value={monthFilter} onChange={(e) => patchParams({ month: e.target.value, page: '' })} />
+            <MonthPicker label={t('bank.aria_label_2')} value={monthFilter} allowEmpty
+              onChange={(next) => patchParams({ month: next, page: '' })} />
           </>
         }
         emptyTitle={t('bank.emptyTitle')} emptySubtitle={t('bank.emptySubtitle')} />
@@ -462,7 +463,7 @@ function MatchModal({ tx, tolerance, days, canChangeSettings, onClose, onChanged
   tx: TxRow; tolerance: number | null; days: number; canChangeSettings: boolean;
   onClose: () => void; onChanged: () => void;
 }) {
-  const { errorText, t } = useT();
+  const { errorText, t, tDynamic } = useT();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [supplierId, setSupplierId] = useState(tx.supplier_id ?? '');
@@ -711,8 +712,10 @@ function MatchModal({ tx, tolerance, days, canChangeSettings, onClose, onChanged
             {tolerance == null && (
               <Note tone="await">
                 <span>
-                  {`${tx.currency}: ${toleranceRefusalMessage(canChangeSettings)} `
-                    + 'הצעות לפי אסמכתא עדיין מוצגות, והתאמה ידנית פתוחה.'}
+                  {t('bank.toleranceRefusal', {
+                    currency: tx.currency,
+                    refusal: tDynamic(`errors.${toleranceRefusalKey(canChangeSettings)}`) ?? '',
+                  })}
                 </span>
               </Note>
             )}

@@ -247,7 +247,7 @@ export default function Pricing() {
             .map((row): PlanTicketFeature => ({
               key: row.entitlement_key,
               text: row.plan_key === 'free' && row.intro_included && !row.included
-                ? `${row.label} — פתוח ב־30 הימים הראשונים`
+                ? t('pricingTail.entitlementIntroOnly', { label: row.label })
                 : row.label,
               affirmative: row.included || (row.plan_key === 'free' && row.intro_included),
             }));
@@ -265,19 +265,19 @@ export default function Pricing() {
                 : headline.unlimited ? t('pricingTail.unlimited')
                   : fmtNum(headline.numeric_limit)}
               figureIsWords={!measured || headline.unlimited}
-              term={measured && !headline.unlimited ? 'בתקופת שימוש חודשית' : undefined}
+              term={measured && !headline.unlimited ? t('pricingTail.perUsagePeriod') : undefined}
               /* The badge, and ONLY from the shared presentation file. #202 forbids an emphasis
                  keyed to the reader, and a stranger holds no rung to be keyed to in the first
                  place; this is the one static mark, identical for everyone, and it is the same
                  mark the marketing site prints (owner ruling 27.08.2026: «תיישר לפי הדף נחיתה»). */
-              badgeLabel={plan.plan_key === RECOMMENDED_PLAN ? 'מומלץ' : undefined}
+              badgeLabel={plan.plan_key === RECOMMENDED_PLAN ? t('pricingTail.recommended') : undefined}
               /* No action on a card. A "בחרו מסלול" button would be a selection control for a
                  selection that does not exist (#217/#224) — the single CTA under the list opens an
                  account, which is the one thing a visitor can actually do. Every card lacks it
                  equally, so no card is left short of its neighbours. */
               /* Every remaining entitlement the catalogue returns — the comparison the table used
                  to hold, one plan at a time and with no sideways scroll to trap a keyboard. */
-              featuresLabel="כלול בכל מסלול"
+              featuresLabel={t('pricingTail.featuresLabel')}
               features={quotaKeys
                 .filter((key) => key !== HEADLINE_QUOTA_KEY)
                 .map((key) => featureRow(plan.plan_key, key))

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Building, Building2, Check, Landmark, Sprout, Store } from 'lucide-react';
 import { Skeleton } from './ui';
+import { useT } from '../lib/i18n/LocaleProvider';
 import presentation from '../data/plan-presentation.json';
 
 /**
@@ -285,11 +286,12 @@ export function PlanTicketSkeleton({
   heading?: boolean;
   testId?: string;
 }) {
+  const { t } = useT();
   return (
     <div role="status" aria-busy="true" className="space-y-4" data-testid={testId}>
-      {/* One accessible name for the whole region — a screen reader meets "טוען", not a wall of
-          empty boxes. Every `Skeleton` below is `aria-hidden`. */}
-      <span className="sr-only">טוען</span>
+      {/* One accessible name for the whole region — a screen reader meets the loading
+          announcement, not a wall of empty boxes. Every `Skeleton` below is `aria-hidden`. */}
+      <span className="sr-only">{t('planCard.loading')}</span>
       {heading && <Skeleton className="h-6 w-28" />}
       <ul className={PLAN_TRAY}>
         {Array.from({ length: rows }, (_, index) => (
