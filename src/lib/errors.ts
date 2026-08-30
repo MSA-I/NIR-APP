@@ -48,7 +48,38 @@ export const ALLOCATION_REFUSAL_MESSAGES: Record<string, string> = {
     'חייב להישאר סכום להעברה בפועל — לא ניתן לכסות את מלוא הדרישה בזיכויים',
 };
 
+/**
+ * The refusal a settings screen can resolve, worded for who is reading it (`#293`).
+ *
+ * `bank_match_tolerance_unconfigured` is the only currency refusal whose fix is a field. Sending
+ * everyone to that field would be wrong: an office user cannot change organisation settings, and
+ * a screen that tells them to would be handing them a door that is locked. So the destination is
+ * chosen by capability, not by hope.
+ */
+export function toleranceRefusalMessage(canChangeSettings: boolean): string {
+  return 'לא נקבעה סטיית סכום מותרת למטבע של התנועה, ולכן אי אפשר להשוות סכומים. '
+    + (canChangeSettings
+      ? 'אפשר לקבוע אותה במסך ההגדרות, בקטע "סטיות סכום מותרות".'
+      : 'יש לפנות לבעל העסק כדי שיקבע אותה בהגדרות.');
+}
+
 const PATTERNS: [RegExp, string][] = [
+  /* THE CURRENCY REFUSALS (0227, 0228, 0231, 0232 — #290 to #293).
+     Four distinct server refusals reached the user as one sentence: "הפעולה נכשלה. אם הבעיה
+     חוזרת — פנה לתמיכה." Support is the wrong destination for all four, and for one of them the
+     fix is a field the owner can fill in under a minute — but only if somebody says so.
+
+     The tolerance line here is the role-blind fallback for paths that do not know who is reading;
+     a screen that knows uses `toleranceRefusalMessage` above and names the right destination. */
+  [/bank_match_tolerance_unconfigured/i,
+    'לא נקבעה סטיית סכום מותרת למטבע של התנועה, ולכן אי אפשר להשוות סכומים. '
+    + 'יש לקבוע אותה בהגדרות לפני ההתאמה.'],
+  [/bank_match_currency_mismatch/i,
+    'התנועה והחשבונית אינן באותו מטבע. תנועה סוגרת חוב במטבע אחר רק דרך תשלום שרשם את שני הסכומים.'],
+  [/payment_request_currency_mixed/i,
+    'בקשת תשלום אחת יכולה לכלול חשבוניות במטבע אחד בלבד. יש לפצל לבקשה נפרדת לכל מטבע.'],
+  [/invoice_currency_precision_invalid/i,
+    'לסכום יש יותר ספרות אחרי הנקודה העשרונית ממה שהמטבע הזה מאפשר.'],
   // Assistant codes (contracts §8), generated from the canonical map so a failure reads
   // identically whether it surfaced from the Edge function or from a direct RPC — one wording,
   // not two. FIRST in the list on purpose: the generic /timeout|timed out/ pattern below would

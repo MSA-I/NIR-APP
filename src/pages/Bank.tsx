@@ -10,7 +10,7 @@ import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, Skeleto
 import { readTolerance } from '../lib/tolerances';
 import { BANK_TX_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, addCalendarDays } from '../lib/format';
-import { toHebrewError } from '../lib/errors';
+import { toleranceRefusalMessage, toHebrewError } from '../lib/errors';
 import type { BankTransaction, BankImport } from '../lib/types';
 import { useParamState } from '../lib/useParamState';
 import { SupplierSelectField, useQuickSupplier } from '../components/QuickSupplierPicker';
@@ -229,7 +229,7 @@ export default function Bank() {
              `?? 1` — a shekel-shaped 1 handed to a dollar statement line, which made the screen
              offer matches that `0232` then refused with `bank_match_tolerance_unconfigured`.
              #288 forbids inventing the number, so when it is missing the modal says so instead. */
-          : <MatchModal tx={selected} tolerance={readTolerance(org?.settings?.bank_match_amount_tolerance, selected.currency)} days={org?.settings?.bank_match_days ?? 7}
+          : <MatchModal tx={selected} tolerance={readTolerance(org?.settings?.bank_match_amount_tolerance, selected.currency)} days={org?.settings?.bank_match_days ?? 7} canChangeSettings={organizationAccess.canWrite && profile?.role === 'owner'}
               onClose={() => setSelected(null)} onChanged={() => { setSelected(null); void refetch(); }} />
       )}
     </div>
@@ -428,9 +428,10 @@ interface Candidate {
   invoiceIds: string[]; // invoices to mark paid when confirmed
 }
 
-function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
+function MatchModal({ tx, tolerance, days, canChangeSettings, onClose, onChanged }: {
   /** `null` when this business has never stated a tolerance for THIS line's currency (#288). */
-  tx: TxRow; tolerance: number | null; days: number; onClose: () => void; onChanged: () => void;
+  tx: TxRow; tolerance: number | null; days: number; canChangeSettings: boolean;
+  onClose: () => void; onChanged: () => void;
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -664,9 +665,8 @@ function MatchModal({ tx, tolerance, days, onClose, onChanged }: {
             {tolerance == null && (
               <Note tone="await">
                 <span>
-                  {`אין סטיית סכום מותרת שהוגדרה עבור ${tx.currency} — ולכן אי אפשר להשוות סכומים, `
-                    + 'והמערכת אינה ממציאה מספר. הצעות לפי אסמכתא עדיין מוצגות, והתאמה ידנית פתוחה. '
-                    + 'בעל העסק יכול לקבוע את הערך במסך ההגדרות.'}
+                  {`${tx.currency}: ${toleranceRefusalMessage(canChangeSettings)} `
+                    + 'הצעות לפי אסמכתא עדיין מוצגות, והתאמה ידנית פתוחה.'}
                 </span>
               </Note>
             )}
