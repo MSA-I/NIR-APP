@@ -74,10 +74,19 @@ describe('the tolerance panel says which currencies still need a decision', () =
     expect(screen.getByLabelText('סה״כ החשבונית (USD)')).toBeInTheDocument();
     expect(screen.getByLabelText('בקשת תשלום (ILS)')).toBeInTheDocument();
 
-    // The legacy scalar answers for shekels and for nothing else, so seven fields are undecided.
+    // The legacy scalar answers for shekels and for nothing else, so only that box holds a value.
     expect(screen.getByLabelText('התאמת תנועת בנק (ILS)')).toHaveValue(1);
     expect(screen.getByLabelText('התאמת תנועת בנק (USD)')).toHaveValue(null);
-    expect(screen.getByText(/7 ערכים עדיין דורשים קביעה/)).toBeInTheDocument();
+
+    /* AND NOTHING DEMANDS TO BE FILLED IN (#294). An empty box is not a gap: the placeholder
+       carries the threshold actually in force, derived from the currency's own units. Before this,
+       the panel counted every empty field as "needs a decision" — so a brand-new shekel business
+       was told three values were missing while the server was answering all three. */
+    expect(screen.queryByText(/דורשים קביעה/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('התאמת תנועת בנק (USD)'))
+      .toHaveAttribute('placeholder', expect.stringContaining('1.00'));
+    expect(screen.getByLabelText('שורה בחשבונית (USD)'))
+      .toHaveAttribute('placeholder', expect.stringContaining('0.05'));
   });
 
   it('never renders a currency belonging to nobody — an empty history still lists the books', async () => {

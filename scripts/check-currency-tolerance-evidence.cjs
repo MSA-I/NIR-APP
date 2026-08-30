@@ -119,16 +119,24 @@ const TABLES = {
   export_templates: [],
 };
 
+/* A BRAND-NEW BUSINESS, exactly as 0001 creates it: shekel books, and the only tolerance in
+   settings is the legacy bank scalar. The server carries built-in ILS answers for the other
+   three, so nothing about this business needs configuring — which is precisely what the
+   settings panel has to agree with. `--fresh-org` renders this case. */
+const FRESH_ORG = process.argv.includes('--fresh-org');
+
 const RPCS = {
   organization_access_state: [{ access_mode: 'active' }],
   /* #292: history, not open balance. The dollar came in through an invoice and the euro through a
      supplier default that has not produced a document yet — the case that lets an owner state a
      value BEFORE meeting the refusal. */
-  currencies_in_use: [
-    { currency: 'ILS', sources: ['base_currency', 'invoice'] },
-    { currency: 'USD', sources: ['invoice', 'bank_import'] },
-    { currency: 'EUR', sources: ['supplier_default'] },
-  ],
+  currencies_in_use: FRESH_ORG
+    ? [{ currency: 'ILS', sources: ['base_currency'] }]
+    : [
+      { currency: 'ILS', sources: ['base_currency', 'invoice'] },
+      { currency: 'USD', sources: ['invoice', 'bank_import'] },
+      { currency: 'EUR', sources: ['supplier_default'] },
+    ],
   organization_offboarding_state: [],
   resolve_feature_flags: {},
   financial_supplier_directory: [],
@@ -328,24 +336,32 @@ async function main() {
     // ---- P3-G1: four keys per currency, and the unstated ones say so ----
     const settings = await openScreen(`${BASE}/settings`);
     await settings.waitForSelector('text=סטיות סכום מותרות', { timeout: 30_000 });
-    await settings.waitForSelector('#tolerance-bank_match_amount_tolerance-USD');
+    await settings.waitForSelector(FRESH_ORG
+      ? '#tolerance-invoice_line_amount_tolerance-ILS'
+      : '#tolerance-bank_match_amount_tolerance-USD');
     await settings.locator('text=סטיות סכום מותרות').scrollIntoViewIfNeeded();
     await settings.waitForTimeout(600);
     // Card renders a div, not a section (ui.tsx) — anchor on the class it actually carries.
     await settings.locator('.card', { hasText: 'סטיות סכום מותרות' }).first()
-      .screenshot({ path: path.join(OUT, 'p3-g1-tolerances-panel.png') });
-    shots.push('p3-g1-tolerances-panel.png');
+      .screenshot({ path: path.join(OUT, FRESH_ORG ? 'fresh-org-tolerances-panel.png' : 'p3-g1-tolerances-panel.png') });
+    shots.push(FRESH_ORG ? 'fresh-org-tolerances-panel.png' : 'p3-g1-tolerances-panel.png');
     await settings.closeAll();
 
-    // ---- P1-G2: a dollar line with no dollar tolerance offers nothing, and says why ----
+    // ---- P1-G2 / #294: a dollar statement line is handled exactly like a shekel one ----
     /* `?id=` opens the match modal on its own for a role that may operate the bank, which avoids
        clicking a row that renders twice — once for the table and once for the mobile card — where
        only one of the two is visible at this viewport. */
     const bank = await openScreen(`${BASE}/bank?id=${USD_TRANSACTION.id}`);
-    await bank.waitForSelector('text=לא נקבעה סטיית סכום מותרת', { timeout: 30_000 });
+    await bank.waitForSelector('text=התאמת תנועת בנק', { timeout: 30_000 });
+    /* THE NOTE IS ABSENT, AND THAT IS THE POINT (#294). Before 0245 this screen carried
+       "no amount tolerance has been set for USD" and offered nothing, because a business abroad
+       had to configure the product before it could match its own bank line. */
+    if (await bank.locator('text=לא נקבעה סטיית סכום מותרת').count()) {
+      throw new Error('the bank screen still demands a dollar tolerance');
+    }
     await bank.waitForTimeout(800);
-    await bank.screenshot({ path: path.join(OUT, 'p1-g2-bank-no-tolerance.png') });
-    shots.push('p1-g2-bank-no-tolerance.png');
+    await bank.screenshot({ path: path.join(OUT, 'p1-g2-bank-usd-line.png') });
+    shots.push('p1-g2-bank-usd-line.png');
     await bank.closeAll();
 
 

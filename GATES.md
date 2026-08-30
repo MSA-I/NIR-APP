@@ -4,9 +4,12 @@ Execution branch: `plan/currency-tolerances-20260830`, cut from `origin/main`
 (`0486995e91ea2fb6d35ea3c9d518f75c5b27ec70`). The previous campaign's gates — "money carries its
 currency", 43/43 — are closed, recorded in `DEBT §69`, and preserved in git history.
 
-Plan: `docs/PLAN-currency-tolerances-20260830.md`. Decisions: `#290`–`#293` (owner, 30.08.2026).
+Plan: `docs/PLAN-currency-tolerances-20260830.md`. Decisions: `#290`–`#294` (owner, 30.08.2026).
+`#294` arrived after phases 0–5 were built, when the owner asked why a business abroad could not
+simply work the way a business here works. Phase 7 is that answer, and it supersedes part of two
+earlier gates rather than pretending they always said this.
 
-Migration numbers: **`0243` and `0244`**, verified free against every local and remote branch at the
+Migration numbers: **`0243`, `0244` and `0245`**, each verified free against every local and remote branch at the
 moment they were written. The previous campaign found **seven** files claiming `0213`–`0216` across
 branches, which is why this is checked rather than assumed.
 
@@ -46,15 +49,17 @@ scalar, any per-currency value written by a later phase would be deleted by one 
 
 - [x] P1-G2: the client stops inventing the number `#288` forbids
   CHECK: read `Bank.tsx` for the tolerance it hands `MatchModal`
-  EXPECT: the tolerance is read in the LINE's currency and may be null; no `?? 1`; with null, no
-  amount-based candidate is offered and the screen says why
-  EVIDENCE: `readTolerance(org?.settings?.bank_match_amount_tolerance, selected.currency)`, typed
-  `number | null`. Both amount comparisons are guarded on `tolerance != null`; reference-equality
-  candidates survive, because an exact reference match needs no tolerance. A `Note` names the
-  currency and the destination by capability.
-  SCREENSHOT: `artifacts/currency-tolerances/p1-g2-bank-no-tolerance.png` — a USD 3,100 statement
-  line, the note naming USD and sending the owner to the settings section by name, and "no
-  automatic match suggestions" instead of a silently empty list.
+  EXPECT: the tolerance is read in the LINE's own currency and may be null; no `?? 1`
+  EVIDENCE: `effectiveTolerance(org?.settings?.bank_match_amount_tolerance, selected.currency,
+  'bank_match_amount_tolerance')`, typed `number | null`. Both amount comparisons are guarded on
+  `tolerance != null`; reference-equality candidates survive, because an exact reference match
+  needs no tolerance.
+  SUPERSEDED IN PART BY PHASE 7. When this gate closed, a dollar line had no threshold and the
+  modal said so. Since `#294` it has one, derived from the dollar, so the sentence is now reached
+  only by a currency this database cannot answer for. What this gate asserts — that the client
+  never substitutes a shekel figure for another currency's — is unchanged and still enforced.
+  SCREENSHOT: `artifacts/currency-tolerances/p1-g2-bank-usd-line.png` — a USD 3,100 statement line
+  opening the match modal with no demand for setup and no invented threshold.
 
 ---
 
@@ -89,11 +94,14 @@ scalar, any per-currency value written by a later phase would be deleted by one 
   CHECK: render the panel for a two-currency business holding the legacy scalar
   EXPECT: eight fields; the shekel one carrying 1; the seven others empty and counted as needing
   a decision
-  EVIDENCE: `currencyTolerancesPanel.spec.tsx` asserts the labels, the values and the sentence
-  `7 ערכים עדיין דורשים קביעה`. Six tests, stable across three consecutive runs.
+  EVIDENCE: `currencyTolerancesPanel.spec.tsx` asserts the four labels per currency and that the
+  stored shekel value is the only one carrying a figure. Six tests, stable across repeated runs.
+  SUPERSEDED IN PART BY PHASE 7: the count of fields "needing a decision" was the defect `#294`
+  removed, and the spec now asserts that no such demand appears. The gate's actual claim — a field
+  per key per currency, and a stored value shown where there is one — still holds.
   SCREENSHOT: `artifacts/currency-tolerances/p3-g1-tolerances-panel.png` — ILS, EUR and USD, four
-  fields each, the shekel bank field carrying the legacy `1` and the other eleven reading
-  `דורש קביעה`, above a banner that says an empty field is not a zero and names what stops.
+  fields each, the shekel bank field carrying the legacy `1`, every other box showing the
+  threshold in force as its placeholder.
 
 - [x] P3-G2: stating one currency's value does not touch another's
   CHECK: type a USD value and save
@@ -173,9 +181,11 @@ scalar, any per-currency value written by a later phase would be deleted by one 
   `payment_request_currency_mixed` and `invoice_currency_precision_invalid`, all of which fell
   through to "the action failed, contact support". `toleranceRefusalMessage(canChangeSettings)`
   picks the destination by capability rather than by hope.
-  SCREENSHOT: `artifacts/currency-tolerances/p1-g2-bank-no-tolerance.png` — the same picture as
-  P1-G2, because it is the same sentence: the owner reading it is sent to the settings section by
-  name. The other three codes are one-line mappings with no screen of their own.
+  NO SCREENSHOT, deliberately. Since `#294` the tolerance refusal is unreachable for any currency
+  this database recognises, so there is no honest way to photograph it without deactivating a
+  currency first — which `p83` does, in SQL, where the assertion belongs. The other three codes
+  are one-line mappings with no screen of their own. A picture staged to show a state the product
+  no longer produces would be worse than no picture.
 
 - [x] P5-G5: the pins that failed the last campaign twice are asserted inside the migration
   CHECK: `document_automation_negative_guard_violations()` and `scope_definer_marker_violations()`
@@ -216,6 +226,50 @@ the bundled chromium will not launch on this machine, vite binds to `localhost` 
 most — an orphaned dev server from an earlier run held the port, so `--strictPort` made every later
 `preview` exit silently under `stdio: 'ignore'` and the browser talked to the orphan. Every fix
 measured after that point was measured against the wrong server.
+
+---
+
+## Phase 7 — every currency answers for itself (`0245`, `#294`)
+
+Added after the owner asked why a business abroad could not simply work the way a business here
+works. The answer was that it could, and that nothing but a decision was stopping it.
+
+- [x] P7-G1: the shekel cannot tell that this happened
+  CHECK: `private.money_tolerance` for ILS on all four keys, before and after
+  EXPECT: 1, 1, 1 and 0.05 — the figures `0227`/`0232` hard-coded
+  EVIDENCE: `0245`'s own proof block raises on any other answer, so an existing Israeli business
+  cannot be affected by a migration it did not ask for. `p83` asserts the same from the outside.
+
+- [x] P7-G2: a dollar document is checked without anybody configuring anything
+  CHECK: the same wrong line (2 x 100 billed as 250) in a USD document, in an organisation that
+  has stated no dollar value
+  EXPECT: `line_arithmetic_discrepancy`, and NO `amount_check_skipped_no_tolerance`
+  EVIDENCE: `p83`. Before `0245` this document produced the opposite of both.
+
+- [x] P7-G3: the rule reads the currency, not a scale somebody assumed
+  CHECK: JPY (no minor unit) and KWD (three)
+  EXPECT: JPY 100 and 5; KWD 0.100 and 0.005
+  EVIDENCE: `p83` and `0245`'s proof. The numbers come from `currencies.minor_units`, seeded for
+  all 157 codes in `0217`, so no list is maintained twice.
+
+- [x] P7-G4: nothing was converted, and "cannot compare" survived
+  CHECK: a deactivated currency; and a grep for anything rate-shaped
+  EXPECT: `null`, `0232` still refusing and `0244` still finding; no rate stored anywhere
+  EVIDENCE: `p83` deactivates EUR and proves both. A dollar threshold of 1.00 is a hundred cents,
+  derived from the dollar — no amount here is computed from another currency (`#287`, `#290`).
+
+- [x] P7-G5: a stated value still wins, and only for the currency it names
+  EVIDENCE: `p83` states USD 60, proves it beats the derived 0.05, proves EUR still derives 0.05,
+  and proves the wider window actually silences the discrepancy it is wide enough to cover.
+
+- [x] P7-G6: the settings screen stops demanding work that does not exist
+  CHECK: render the panel for a brand-new shekel-only business
+  EXPECT: no banner, and every empty field showing the threshold in force as its placeholder
+  EVIDENCE: `currencyTolerancesPanel.spec.tsx` asserts the banner is absent and that the USD
+  placeholders read 1.00 and 0.05.
+  SCREENSHOT: `artifacts/currency-tolerances/fresh-org-tolerances-panel.png` — the same screen that
+  previously told a new business "3 values still need a decision" while the server was answering
+  all three. Reproduce with `node scripts/check-currency-tolerance-evidence.cjs --fresh-org`.
 
 ---
 

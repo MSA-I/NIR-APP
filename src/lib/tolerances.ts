@@ -11,17 +11,30 @@
  *                              It answers for ILS and for nothing else.
  *   { ILS: 1, USD: 0.3, … }    the per-currency map (#288, #290).
  *
- * `readTolerance` mirrors `private.money_tolerance` (0219) EXACTLY, including the part that looks
- * like a bug and is not: the legacy scalar answers for `ILS` and no other code, even in a business
- * whose base currency is something else. The server decides; a client that "improves" on the rule
- * would show a number the server will not honour.
+ * These mirror `private.money_tolerance` EXACTLY, including the part that looks like a bug and is
+ * not: the legacy scalar answers for `ILS` and no other code, even in a business whose base
+ * currency is something else. The server decides; a client that "improves" on the rule would show
+ * a number the server will not honour.
  *
- * NULL IS AN ANSWER, and it is the whole point. It means "this organisation has never stated a
- * tolerance for this currency", and it must never be replaced by a default — not 1, not 0, not one
- * derived from the currency's minor units. `#290` is explicit that the per-currency number is typed
- * by the owner and is NOT an exchange rate: nothing here converts, derives an amount from another
- * currency, or stores a ratio.
+ * THREE QUESTIONS, THREE FUNCTIONS, and confusing them is how the screen came to lie:
+ *
+ *   storedTolerance     what did this organisation actually say? Empty is a real answer, and it
+ *                       is what belongs in a settings input box.
+ *   derivedTolerance    what is this currency worth checking to, from its own units? (`#294`)
+ *   effectiveTolerance  what is actually in force — the first, or else the second.
+ *
+ * `#294` (owner, 30.08.2026) replaced the half of `#288` that made a non-shekel currency unusable
+ * until somebody typed a number. The reason it could be replaced: the shekel's `1` and `0.05` were
+ * never shekel figures. They are a hundred minor units and five, and that rule reads in any
+ * currency. **Nothing here is a conversion** — a dollar threshold of 1.00 is a hundred cents, not
+ * "one shekel in dollars" — so `#287` and `#290` are untouched: no rate, no amount computed from
+ * another currency, no external source.
+ *
+ * NULL SURVIVES, for a currency this platform cannot describe, and still means "cannot compare"
+ * rather than some number.
  */
+
+import { currencyMinorUnits } from './format';
 
 /** The two shapes `organizations.settings[<key>]` is allowed to hold. */
 export type ToleranceSetting = number | Record<string, number>;
@@ -29,12 +42,43 @@ export type ToleranceSetting = number | Record<string, number>;
 /** The one currency the legacy scalar shape answers for. Mirrors 0219; do not widen it here. */
 const LEGACY_SCALAR_CURRENCY = 'ILS';
 
+/** The key whose threshold is small change rather than an ordinary unit. */
+const LINE_KEY = 'invoice_line_amount_tolerance';
+
 /**
- * The configured tolerance for one currency, or `null` when none was ever stated.
+ * The currency's own threshold, in minor units. Mirrors `0245`; keep the two in step.
  *
- * `null` means "cannot compare". Callers must say so rather than substituting a number.
+ * `100` and `5` are not new numbers — they are what the shekel's `1` and `0.05` always were. The
+ * shekel has two decimals, so a hundred agorot is 1.00 and five agorot is 0.05.
  */
-export function readTolerance(
+const MINOR_UNITS_PER_TOLERANCE = { line: 5, ordinary: 100 } as const;
+
+/**
+ * What a currency is worth checking to, derived from ITS OWN units (`#294`).
+ *
+ * ILS 1.00 and 0.05 · USD 1.00 and 0.05 · JPY 100 and 5 · KWD 0.100 and 0.005.
+ *
+ * NOTHING HERE IS A CONVERSION. A dollar threshold of 1.00 is a hundred cents, not "one shekel in
+ * dollars", and no amount is computed from another currency (`#287`, `#290`). A code this platform
+ * cannot describe answers `null`, which keeps "cannot compare" reachable exactly as the server
+ * keeps it for a currency it does not recognise.
+ */
+export function derivedTolerance(key: string, currency: string | null | undefined): number | null {
+  if (!currency) return null;
+  const minorUnits = currencyMinorUnits(currency);
+  if (minorUnits == null) return null;
+  const units = key === LINE_KEY ? MINOR_UNITS_PER_TOLERANCE.line : MINOR_UNITS_PER_TOLERANCE.ordinary;
+  // Rounded to the currency's own scale so a three-decimal currency does not pick up float dust.
+  return Number((units * 10 ** -minorUnits).toFixed(minorUnits));
+}
+
+/**
+ * ONLY what this organisation actually stated, or `null`.
+ *
+ * This is what the settings screen puts in the input box: an empty field means "you have not
+ * overridden anything", which is a different fact from "there is no threshold".
+ */
+export function storedTolerance(
   setting: ToleranceSetting | null | undefined,
   currency: string | null | undefined,
 ): number | null {
@@ -44,6 +88,20 @@ export function readTolerance(
   }
   const value = setting[currency];
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * The threshold actually in force: what the organisation said, or else the currency's own.
+ *
+ * Mirrors `private.money_tolerance` after `0245`. `null` still happens — for a currency this
+ * platform cannot describe — and still means "cannot compare", never some number.
+ */
+export function effectiveTolerance(
+  setting: ToleranceSetting | null | undefined,
+  currency: string | null | undefined,
+  key: string,
+): number | null {
+  return storedTolerance(setting, currency) ?? derivedTolerance(key, currency);
 }
 
 /**
@@ -86,7 +144,7 @@ export function writeTolerance(
 }
 
 /** Every currency this setting states a value for, base currency first, then ISO ascending. */
-export function currenciesWithTolerance(
+export function currenciesWithStatedTolerance(
   setting: ToleranceSetting | null | undefined,
   baseCurrency: string | null | undefined,
 ): string[] {

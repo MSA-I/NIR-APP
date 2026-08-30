@@ -10,34 +10,39 @@
       "surface": "settings",
       "ilsBaseline": 1,
       "unconfigured": "refuse",
-      "why": "matching a statement line to a payment moves money, so a comparison that cannot be made must stop rather than proceed (0232 raises bank_match_tolerance_unconfigured)"
+      "why": "matching a statement line to a payment moves money, so a comparison that cannot be made must stop rather than proceed (0232 raises bank_match_tolerance_unconfigured)",
+      "derivedMinorUnits": 100
     },
     "payment_request_amount_tolerance": {
       "surface": "settings",
       "ilsBaseline": 1,
       "unconfigured": "skip",
-      "why": "0219 compares a request against the invoices behind it"
+      "why": "0219 compares a request against the invoices behind it",
+      "derivedMinorUnits": 100
     },
     "invoice_line_amount_tolerance": {
       "surface": "settings",
       "ilsBaseline": 0.05,
       "unconfigured": "skip",
-      "why": "quantity x price minus discount, checked on the page itself. Five agorot, NOT one shekel: this is the small-change tolerance and #291 keeps it that way in every currency"
+      "why": "quantity x price minus discount, checked on the page itself. Five agorot, NOT one shekel: this is the small-change tolerance and #291 keeps it that way in every currency",
+      "derivedMinorUnits": 5
     },
     "invoice_document_amount_tolerance": {
       "surface": "settings",
       "ilsBaseline": 1,
       "unconfigured": "skip",
-      "why": "the header total against the sum of the lines"
+      "why": "the header total against the sum of the lines",
+      "derivedMinorUnits": 100
     }
   },
   "probes": {
     "nope": "0219's own self-check calls money_tolerance with a key no organisation has, and asserts the answer is null. It proves the 'never invent a default' half of #288 and is not a product tolerance."
   },
-  "__ilsBaselineNote": "The ILS numbers above are recorded so the guard can prove they have not drifted, and because #291 turns on them: three of the four are 'about one unit' and invoice_line is 'small change'. Collapsing them to one number per currency would loosen the line check twentyfold — a behaviour change wearing the costume of a simplification.",
+  "__ilsBaselineNote": "The ILS numbers above are recorded so the guard can prove they have not drifted, and because #291 turns on them: three of the four are 'about one unit' and invoice_line is 'small change'. Since #294 they are no longer written down anywhere in the schema — they are what `derivedMinorUnits` produces for a two-decimal currency, and the migration asserts that equality so the shekel cannot move by accident. Collapsing the four into one number per currency would still loosen the line check twentyfold.",
   "mountedIn": {
     "file": "src/pages/Settings.tsx",
     "component": "CurrencyTolerancesPanel",
     "why": "The keys living in a component proves nothing if no screen renders it. A panel nobody mounts is the same silence this guard exists to end."
-  }
+  },
+  "__unconfiguredNote": "Since 0245 (#294) an unconfigured key is NOT unanswered: every currency the `currencies` table knows derives its own threshold from `minor_units` — 100 for the ordinary keys, 5 for the invoice line, which is exactly what the shekel's 1 and 0.05 always were. The `unconfigured` field below therefore describes the remaining null case only: a currency this database does not recognise or has deactivated. Both behaviours below are still reachable and still correct there."
 }

@@ -42,7 +42,12 @@ const EXIT = { keys: 2, surfaces: 3 };
  * first argument, so counting commas across `[^,]` would have missed it.
  */
 function callSites() {
-  const re = /money_tolerance\s*\(\s*[\s\S]{0,160}?,\s*'([a-z_]+)'\s*\)/gi;
+  /* `[^()]` rather than `[\s\S]`, and the reason is a false positive this guard produced against
+     its own repository: `has_function_privilege('private.money_tolerance(uuid,text,text)',
+     'execute')` names the function inside a STRING, and a permissive pattern read `execute` as a
+     fifth tolerance key. A real call's arguments are identifiers, casts and literals — none of
+     them contain a parenthesis — so refusing to cross one separates the call from the mention. */
+  const re = /money_tolerance\s*\(\s*[^()]{0,160}?,\s*'([a-z_]+)'\s*\)/gi;
   const found = new Map();
   for (const file of readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort()) {
     const text = readFileSync(join(migrationsDir, file), 'utf8');

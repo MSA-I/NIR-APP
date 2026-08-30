@@ -26,8 +26,8 @@ import { useMemo, useState } from 'react';
 import { Coins, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
-import { currencyMinorUnits } from '../lib/format';
-import { readTolerance, writeTolerance, type ToleranceSetting } from '../lib/tolerances';
+import { currencyMinorUnits, fmtMoneyExact } from '../lib/format';
+import { derivedTolerance, storedTolerance, writeTolerance, type ToleranceSetting } from '../lib/tolerances';
 import { sortByBaseCurrency } from './Money';
 import { Card, SubPanel, Note, ErrorNote, Skeleton, ICON, useToast } from './ui';
 import type { Organization } from '../lib/types';
@@ -125,7 +125,7 @@ export function CurrencyTolerancesPanel({ org, canWrite }: {
   const shown = (key: ToleranceKey, currency: string): string => {
     const typed = draft[fieldId(key, currency)];
     if (typed !== undefined) return typed;
-    return readTolerance(settings?.[key] as ToleranceSetting | undefined, currency)?.toString() ?? '';
+    return storedTolerance(settings?.[key] as ToleranceSetting | undefined, currency)?.toString() ?? '';
   };
 
   async function save() {
@@ -154,8 +154,15 @@ export function CurrencyTolerancesPanel({ org, canWrite }: {
     toast('הסטיות נשמרו');
   }
 
-  const undecided = currencies.reduce((count, { currency }) => count + TOLERANCE_KEYS
-    .filter(({ key }) => shown(key, currency).trim() === '').length, 0);
+  /* Currencies this platform cannot describe, which are the only ones with nothing to compare
+     against. Before #294 this counted every empty FIELD, so a brand-new shekel business was told
+     three values "needed a decision" while the server was answering all three perfectly well —
+     a demand for manual work that did not exist. */
+  const active = new Set((data?.catalogue ?? []).map((row) => row.code));
+  const unanswerable = currencies
+    .filter(({ currency }) => !active.has(currency)
+      || derivedTolerance('bank_match_amount_tolerance', currency) == null)
+    .map(({ currency }) => currency);
 
   const addable = (data?.catalogue ?? [])
     .map((row) => row.code)
@@ -168,8 +175,9 @@ export function CurrencyTolerancesPanel({ org, canWrite }: {
           <Coins size={ICON.md} aria-hidden="true" /> סטיות סכום מותרות
         </h2>
         <p className="text-sm text-ink-muted mt-1">
-          לכל מטבע נקבעים ארבעה הפרשים מותרים בנפרד. הערכים הם סכומים באותו מטבע — אין כאן שער
-          המרה, והמערכת אינה גוזרת מספר של מטבע אחד ממטבע אחר.
+          כל מטבע מקבל אוטומטית הפרשים מותרים שנגזרים ממנו עצמו, ולכן אין מה להגדיר כדי להתחיל
+          לעבוד. השדות כאן הם לעקיפה בלבד — למלא רק אם ההפרש שהמערכת בחרה אינו מתאים לעסק.
+          הערכים הם סכומים באותו מטבע: אין שער המרה, ואף מספר אינו נגזר ממטבע אחר.
         </p>
       </div>
 
@@ -186,12 +194,11 @@ export function CurrencyTolerancesPanel({ org, canWrite }: {
 
       {!loading && !error && (
         <>
-          {undecided > 0 && (
+          {unanswerable.length > 0 && (
             <Note tone="await">
               <span>
-                {`${undecided} ערכים עדיין דורשים קביעה. שדה ריק אינו אפס — הוא אומר שאין הפרש `
-                  + 'מוסכם, ולכן ההשוואה לא מתבצעת: התאמת בנק במטבע כזה נעצרת, ובדיקת סכום על '
-                  + 'מסמך מסומנת כלא בוצעה.'}
+                {`${unanswerable.join(', ')}: המערכת אינה מזהה את המטבע ולכן אין לו הפרש מותר. `
+                  + 'התאמת בנק במטבע כזה נעצרת, ובדיקת סכום על מסמך מסומנת כלא בוצעה — עד שייקבע כאן ערך.'}
               </span>
             </Note>
           )}
@@ -213,6 +220,10 @@ export function CurrencyTolerancesPanel({ org, canWrite }: {
                   {TOLERANCE_KEYS.map(({ key, label, hint }) => {
                     const id = `tolerance-${key}-${currency}`;
                     const empty = shown(key, currency).trim() === '';
+                    /* The placeholder carries the value ACTUALLY IN FORCE, so an empty box reads as
+                       "the automatic answer applies" rather than "nobody has decided". That
+                       distinction is the whole of #294 on this screen. */
+                    const automatic = derivedTolerance(key, currency);
                     return (
                       <div key={key}>
                         <label className="label" htmlFor={id}>{`${label} (${currency})`}</label>
@@ -224,13 +235,15 @@ export function CurrencyTolerancesPanel({ org, canWrite }: {
                           // has no meaning in a currency with no minor unit at all.
                           step={minor == null ? '0.01' : (10 ** -minor).toFixed(Math.max(minor, 0))}
                           className="input num"
-                          placeholder="דורש קביעה"
+                          placeholder={automatic == null ? 'דורש קביעה' : fmtMoneyExact(automatic, currency)}
                           disabled={!canWrite}
                           value={shown(key, currency)}
                           onChange={(e) => setDraft((d) => ({ ...d, [fieldId(key, currency)]: e.target.value }))}
                         />
                         <p className="text-xs text-ink-muted mt-1">
-                          {empty ? `${hint} כרגע לא נקבע.` : hint}
+                          {!empty ? `${hint} ערך שנקבע ידנית.`
+                            : automatic == null ? `${hint} אין ערך אוטומטי למטבע הזה — יש לקבוע.`
+                            : `${hint} פועל אוטומטית.`}
                         </p>
                       </div>
                     );

@@ -56,70 +56,82 @@ insert into public.supplier_products(id,org_id,supplier_id,product_id,current_pr
 ('70830000-0000-4000-8000-000000000002','10830000-0000-4000-8000-000000000001',
  '40830000-0000-4000-8000-000000000002','30830000-0000-4000-8000-000000000001',100,'P83-SKU','ILS');
 
--- ===== P5-G1: a dollar document with no dollar tolerance enters, and says it was not checked =====
-select pg_temp.p83_assert(
-  pg_temp.p83_finding(private.document_reconciliation_assessment(
-    '10830000-0000-4000-8000-000000000001','invoice',
-    '40830000-0000-4000-8000-000000000001',null,pg_temp.p83_payload('USD'),current_date),
-    'amount_check_skipped_no_tolerance') is not null,
-  'a dollar document with no dollar tolerance produced no finding — the skip is still silent');
-
-select pg_temp.p83_assert(
-  pg_temp.p83_finding(private.document_reconciliation_assessment(
-    '10830000-0000-4000-8000-000000000001','invoice',
-    '40830000-0000-4000-8000-000000000001',null,pg_temp.p83_payload('USD'),current_date),
-    'amount_check_skipped_no_tolerance') ->> 'severity' = 'warning',
-  'the skipped-check finding is not a warning');
-
--- #293: the document ENTERS. Blocking would mean a business cannot see its own invoice until
--- somebody visits a settings screen.
-select pg_temp.p83_assert(
-  (private.document_reconciliation_assessment(
-    '10830000-0000-4000-8000-000000000001','invoice',
-    '40830000-0000-4000-8000-000000000001',null,pg_temp.p83_payload('USD'),current_date)
-   ->> 'approval_blocked')::boolean is false,
-  'a missing tolerance blocked approval; #293 says the document enters and warns');
-
--- The arithmetic itself is genuinely NOT reported, which is the honest half: the product does not
--- claim a comparison it could not make.
-select pg_temp.p83_assert(
-  pg_temp.p83_finding(private.document_reconciliation_assessment(
-    '10830000-0000-4000-8000-000000000001','invoice',
-    '40830000-0000-4000-8000-000000000001',null,pg_temp.p83_payload('USD'),current_date),
-    'line_arithmetic_discrepancy') is null,
-  'the line arithmetic was reported without a tolerance to compare against');
-
--- ===== P5-G2: state the tolerance, and the check runs =====
-update public.organizations
-set settings = settings
-  || jsonb_build_object('invoice_line_amount_tolerance', jsonb_build_object('USD', 0.05))
-  || jsonb_build_object('invoice_document_amount_tolerance', jsonb_build_object('USD', 1))
-where id = '10830000-0000-4000-8000-000000000001';
-
+-- ===== #294: a dollar document is checked automatically, exactly like a shekel one =====
+-- Before 0245 this produced `amount_check_skipped_no_tolerance` and NO arithmetic finding, because
+-- nobody had typed a dollar number. A business abroad had to configure the product before it would
+-- read its own invoice — which is the friction #294 removes.
 select pg_temp.p83_assert(
   pg_temp.p83_finding(private.document_reconciliation_assessment(
     '10830000-0000-4000-8000-000000000001','invoice',
     '40830000-0000-4000-8000-000000000001',null,pg_temp.p83_payload('USD'),current_date),
     'amount_check_skipped_no_tolerance') is null,
-  'the skipped-check finding survived a tolerance being stated');
+  'a dollar document still demands configuration before it can be checked');
 
 select pg_temp.p83_assert(
   pg_temp.p83_finding(private.document_reconciliation_assessment(
     '10830000-0000-4000-8000-000000000001','invoice',
     '40830000-0000-4000-8000-000000000001',null,pg_temp.p83_payload('USD'),current_date),
     'line_arithmetic_discrepancy') is not null,
-  '2 x 100 billed as 250 went unreported once a dollar tolerance existed');
+  '2 x 100 billed as 250 went unreported in dollars');
 
--- A stated tolerance answers for ONE currency. The euro is still unconfigured and still says so.
+/* The derived thresholds ARE the shekel thresholds, read in each currency's own minor units:
+   100 minor units for the bank, the request and the document total; 5 for a line. Nothing is
+   converted — 100 cents is not "one shekel in dollars", it is a hundred cents (#294, #290). */
+select pg_temp.p83_assert(
+  private.money_tolerance('10830000-0000-4000-8000-000000000001','USD','invoice_line_amount_tolerance') = 0.05
+  and private.money_tolerance('10830000-0000-4000-8000-000000000001','USD','bank_match_amount_tolerance') = 1,
+  'the dollar thresholds are not 5 and 100 minor units');
+
+-- The two shapes that would break an assumption of two decimals, which is why this reads the
+-- `currencies` table rather than hard-coding a scale.
+select pg_temp.p83_assert(
+  private.money_tolerance('10830000-0000-4000-8000-000000000001','JPY','invoice_line_amount_tolerance') = 5
+  and private.money_tolerance('10830000-0000-4000-8000-000000000001','JPY','invoice_document_amount_tolerance') = 100,
+  'a zero-decimal currency did not derive whole yen');
+select pg_temp.p83_assert(
+  private.money_tolerance('10830000-0000-4000-8000-000000000001','KWD','invoice_document_amount_tolerance') = 0.100,
+  'a three-decimal currency did not derive 100 minor units');
+
+-- ===== A stated value still wins, and only for the currency it names =====
+update public.organizations
+set settings = settings
+  || jsonb_build_object('invoice_line_amount_tolerance', jsonb_build_object('USD', 60))
+where id = '10830000-0000-4000-8000-000000000001';
+
+select pg_temp.p83_assert(
+  private.money_tolerance('10830000-0000-4000-8000-000000000001','USD','invoice_line_amount_tolerance') = 60,
+  'a stated dollar value lost to the derived default');
+select pg_temp.p83_assert(
+  private.money_tolerance('10830000-0000-4000-8000-000000000001','EUR','invoice_line_amount_tolerance') = 0.05,
+  'stating a dollar value changed what another currency derives');
+
+-- The line is out by 50 (2 x 100 is 200, the page says 250). Sixty dollars covers that, so the
+-- finding goes away — the owner's number beating the product's, which is why the field stays.
+select pg_temp.p83_assert(
+  pg_temp.p83_finding(private.document_reconciliation_assessment(
+    '10830000-0000-4000-8000-000000000001','invoice',
+    '40830000-0000-4000-8000-000000000001',null,pg_temp.p83_payload('USD'),current_date),
+    'line_arithmetic_discrepancy') is null,
+  'a stated tolerance wide enough to cover the discrepancy did not silence it');
+
+/* ===== "Cannot compare" survives for a currency the database cannot answer for =====
+   #294 gives every KNOWN currency an answer; it does not replace the null path with a number.
+   0232's refusal and 0244's finding have to stay reachable, or the honesty they carry is gone. */
+update public.currencies set active = false where code = 'EUR';
+select pg_temp.p83_assert(
+  private.money_tolerance('10830000-0000-4000-8000-000000000001','EUR','invoice_line_amount_tolerance') is null,
+  'a deactivated currency was still handed a derived tolerance');
 select pg_temp.p83_assert(
   pg_temp.p83_finding(private.document_reconciliation_assessment(
     '10830000-0000-4000-8000-000000000001','invoice',
     '40830000-0000-4000-8000-000000000001',null,pg_temp.p83_payload('EUR'),current_date),
     'amount_check_skipped_no_tolerance') is not null,
-  'a dollar tolerance silenced the warning for euros as well');
+  'a currency with no possible answer stopped saying so');
+update public.currencies set active = true where code = 'EUR';
 
--- ===== P5-G3: the shekel business feels nothing =====
--- 0227's ILS fallbacks (0.05 and 1) are still in force, so nothing about this document changes.
+-- ===== The shekel business feels nothing, before or after #294 =====
+-- The shekel derives exactly what 0227 hard-coded for it: 0.05 and 1. An existing Israeli
+-- business must not be able to tell that 0245 ran.
 select pg_temp.p83_assert(
   pg_temp.p83_finding(private.document_reconciliation_assessment(
     '10830000-0000-4000-8000-000000000001','invoice',

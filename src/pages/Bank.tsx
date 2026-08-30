@@ -7,7 +7,7 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, Note, EmptyState, SubPanel, ICON, type ServerColumn } from '../components/ui';
-import { readTolerance } from '../lib/tolerances';
+import { effectiveTolerance } from '../lib/tolerances';
 import { BANK_TX_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, addCalendarDays } from '../lib/format';
 import { toleranceRefusalMessage, toHebrewError } from '../lib/errors';
@@ -229,7 +229,7 @@ export default function Bank() {
              `?? 1` — a shekel-shaped 1 handed to a dollar statement line, which made the screen
              offer matches that `0232` then refused with `bank_match_tolerance_unconfigured`.
              #288 forbids inventing the number, so when it is missing the modal says so instead. */
-          : <MatchModal tx={selected} tolerance={readTolerance(org?.settings?.bank_match_amount_tolerance, selected.currency)} days={org?.settings?.bank_match_days ?? 7} canChangeSettings={organizationAccess.canWrite && profile?.role === 'owner'}
+          : <MatchModal tx={selected} tolerance={effectiveTolerance(org?.settings?.bank_match_amount_tolerance, selected.currency, 'bank_match_amount_tolerance')} days={org?.settings?.bank_match_days ?? 7} canChangeSettings={organizationAccess.canWrite && profile?.role === 'owner'}
               onClose={() => setSelected(null)} onChanged={() => { setSelected(null); void refetch(); }} />
       )}
     </div>
