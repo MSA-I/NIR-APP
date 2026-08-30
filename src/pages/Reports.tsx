@@ -5,7 +5,7 @@ import { FileSpreadsheet, Printer, Send, CheckCircle2, LockKeyhole, Download, Lo
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { StatusBadge, useToast, ConfirmDialog, ErrorNote, PageHeader, SkeletonCards, Note, Modal, Card, EmptyState, ICON } from '../components/ui';
+import { Card, ConfirmDialog, EmptyState, ErrorNote, ICON, Modal, MonthPicker, Note, PageHeader, SkeletonCards, StatusBadge, useToast } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS, CREDIT_STATUS, CREDIT_REASON, EXCEPTION_TYPE } from '../lib/status';
 import { addCalendarDays, fmtMoneyExact, fmtDate, fmtDateTime, fmtMonth, monthInstantRange, monthRange, safeMonthISO } from '../lib/format';
@@ -389,9 +389,10 @@ export default function Reports() {
         title={<span className="flex flex-wrap items-center gap-2">{t('reports.text_7')} <span className="badge-idle">{t('reports.text_8')}</span></span>}
         meta={t('reports.liveMeta', { at: fmtDateTime(data.generatedAt) })}
         actions={<div className="flex flex-wrap items-center gap-2">
-          <label className="sr-only" htmlFor="monthly-report-month">{t('reports.text_9')}</label>
-          {/* The native clear affordance emits '' — keep the previous month instead of a broken query. */}
-          <input id="monthly-report-month" type="month" className="input w-auto!" value={month} onChange={(e) => { if (e.target.value) setMonth(e.target.value); }} />
+          {/* Was `<input type="month">`, which renders its month NAME in Chrome's UI language
+              whatever the reader chose (DATE-PICKER.md). This one renders it in theirs — and it
+              cannot emit '' at all, which is what the native clear affordance used to do here. */}
+          <MonthPicker id="monthly-report-month" label={t('reports.text_9')} value={month} onChange={setMonth} />
           <button className="btn-secondary" disabled={busy || fetching || !!error} title={exportBlockedReason ?? t('reports.exportExcel')} onClick={() => void exportExcel()}>{busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={ICON.sm} aria-hidden="true" />} {t('reports.exportExcelLabel')}</button>
           <button className="btn-secondary" disabled={fetching || !!error} title={exportBlockedReason ?? t('reports.print')} onClick={() => window.print()}><Printer size={ICON.sm} aria-hidden="true" /> {t('reports.text_10')}</button>
         </div>} />

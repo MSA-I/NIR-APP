@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, ErrorNote, SkeletonTable, Note, ConfirmDialog, PageHeader, useToast, ToggleGroup, ICON, type ServerColumn } from '../components/ui';
+import { ConfirmDialog, DataTable, ErrorNote, ICON, MonthPicker, Note, PageHeader, SkeletonTable, StatusBadge, ToggleGroup, useToast, type ServerColumn } from '../components/ui';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import { canShare, shareInvoice } from '../lib/share';
@@ -368,7 +368,8 @@ export function InvoicesList() {
               <option value="open">{t('invoiceList.text_13')}</option>
               {Object.entries(INVOICE_PAYMENT_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
             </select>
-            <input type="month" className="input w-auto!" aria-label={t('invoiceList.aria_label_4')} value={monthFilter} onChange={(e) => patchParams({ month: e.target.value, page: '' })} />
+            <MonthPicker label={t('invoiceList.aria_label_4')} value={monthFilter} allowEmpty
+              onChange={(next) => patchParams({ month: next, page: '' })} />
             {canViewExport && (
               <select className="input w-auto!" aria-label={t('invoiceList.aria_label_5')} value={exportFilter} onChange={(e) => patchParams({ export: e.target.value, page: '' })}>
                 <option value="">{t('invoiceList.text_14')}</option>

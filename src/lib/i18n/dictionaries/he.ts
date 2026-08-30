@@ -17,6 +17,10 @@
  */
 export const he = {
   common: {
+    anyMonth: 'כל החודשים',
+    anyYear: 'כל השנים',
+    monthOf: 'חודש — {label}',
+    yearOf: 'שנה — {label}',
     save: 'שמירה',
     cancel: 'ביטול',
     close: 'סגירה',

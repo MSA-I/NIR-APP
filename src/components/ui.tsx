@@ -14,6 +14,7 @@ import type { MoneyAmount } from '../lib/types';
 import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';
 import { routePresentationDescription } from '../lib/routePresentation';
 import { pluralCategory } from '../lib/i18n/t';
+import { INTL_LOCALE } from '../lib/i18n/locale';
 import { ActionMenu, type ActionMenuItem } from './ActionMenu';
 
 /* ---------- StatusBadge ---------- */
@@ -658,6 +659,91 @@ export function ToggleGroup<T extends string>({ items, value, onChange, label, c
     </div>
   );
 }
+
+/* ---------- MonthPicker ---------- */
+/**
+ * A month chosen in the reader's language, because `<input type="month">` is not.
+ *
+ * WHY THIS EXISTS AND THE NATIVE CONTROL DOES NOT DO. `<input type="month">` renders a month NAME,
+ * and Chrome draws it in CHROME's UI language — not the page's `lang`, not `navigator.language`.
+ * Measured across three browser locales on a `lang="en"` page and it printed `אוגוסט 2026` in all
+ * three (`artifacts/i18n-audit-20260830/DATE-PICKER.md`). Its sibling `<input type="date">` is
+ * fine — it renders digits — which is exactly why the first audit looked past this one.
+ *
+ * So the month name has to come from us. `Intl.DateTimeFormat(INTL_LOCALE[locale])` is the same
+ * door `fmtMonth` walks through after Stage 6, and for the same reason.
+ *
+ * THE VALUE IS UNCHANGED: `YYYY-MM`, or `''` where a filter means "every month". Every caller
+ * keeps its query, its `safeMonthISO`, its `monthRange` and its URL parameter untouched — this
+ * replaces a control, not a contract.
+ *
+ * WHY TWO SELECTS AND NOT A CALENDAR. A month is two independent choices and a calendar is a grid
+ * of days; the native control's own popup is a month grid for exactly that reason. Two selects are
+ * also the one shape that needs no new keyboard contract: a `<select>` already opens on Alt+Down,
+ * types-to-select, and announces itself.
+ */
+export function MonthPicker({
+  value, onChange, label, id, disabled = false, allowEmpty = false, className = '',
+}: {
+  /** `YYYY-MM`, or `''` when `allowEmpty` and no month is chosen. */
+  value: string;
+  onChange: (value: string) => void;
+  /** The accessible name of the pair. Each select gets its own name derived from it. */
+  label: string;
+  id?: string;
+  disabled?: boolean;
+  /** Filters allow "no month"; a report that must have one does not. */
+  allowEmpty?: boolean;
+  className?: string;
+}) {
+  const { t, locale } = useT();
+  const generatedId = useId();
+  const base = id ?? generatedId;
+
+  const months = useMemo(() => {
+    const format = new Intl.DateTimeFormat(INTL_LOCALE[locale], { month: 'long', timeZone: 'UTC' });
+    return Array.from({ length: 12 }, (_, index) => ({
+      value: String(index + 1).padStart(2, '0'),
+      label: format.format(new Date(Date.UTC(2000, index, 1))),
+    }));
+  }, [locale]);
+
+  const [chosenYear, chosenMonth] = value ? value.split('-') : ['', ''];
+
+  /**
+   * Six years back and one forward, and ALWAYS the year already chosen. Without that last clause a
+   * stored filter older than the window would silently vanish from its own control — the reader
+   * would see a blank where their choice was, and changing the month would move the year too.
+   */
+  const years = useMemo(() => {
+    const current = new Date().getUTCFullYear();
+    const span = new Set<string>();
+    for (let year = current - 6; year <= current + 1; year += 1) span.add(String(year));
+    if (chosenYear) span.add(chosenYear);
+    return [...span].sort((a, b) => Number(b) - Number(a));
+  }, [chosenYear]);
+
+  // One half emptied means no month at all: a year without a month is not a filter this app has.
+  const emit = (year: string, month: string) => onChange(year && month ? `${year}-${month}` : '');
+
+  return (
+    <div role="group" aria-label={label} className={`flex items-center gap-2 ${className}`}>
+      <select id={`${base}-month`} className="input w-auto!" disabled={disabled}
+        aria-label={t('common.monthOf', { label })}
+        value={chosenMonth} onChange={(event) => emit(chosenYear || String(new Date().getUTCFullYear()), event.target.value)}>
+        {allowEmpty && <option value="">{t('common.anyMonth')}</option>}
+        {months.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}
+      </select>
+      <select id={`${base}-year`} className="input w-auto! num" disabled={disabled}
+        aria-label={t('common.yearOf', { label })}
+        value={chosenYear} onChange={(event) => emit(event.target.value, chosenMonth || '01')}>
+        {allowEmpty && <option value="">{t('common.anyYear')}</option>}
+        {years.map((year) => <option key={year} value={year}>{year}</option>)}
+      </select>
+    </div>
+  );
+}
+
 
 /* ---------- Stepper ---------- */
 /**

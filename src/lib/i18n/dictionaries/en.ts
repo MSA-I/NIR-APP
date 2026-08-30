@@ -11,6 +11,10 @@ import type { Dictionary } from './he.ts';
 
 export const en: Dictionary = {
   common: {
+    anyMonth: 'Any month',
+    anyYear: 'Any year',
+    monthOf: 'Month — {label}',
+    yearOf: 'Year — {label}',
     save: 'Save',
     cancel: 'Cancel',
     close: 'Close',

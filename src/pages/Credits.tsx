@@ -6,7 +6,7 @@ import { useParamState } from '../lib/useParamState';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { DataTable, StatusBadge, useToast, Modal, ErrorNote, PageHeader, SkeletonTable, ICON, type Column } from '../components/ui';
+import { DataTable, ErrorNote, ICON, Modal, MonthPicker, PageHeader, SkeletonTable, StatusBadge, useToast, type Column } from '../components/ui';
 import { CREDIT_REASON, CREDIT_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate } from '../lib/format';
 import { MoneyByCurrency, totalsByCurrency } from '../components/Money';
@@ -94,7 +94,7 @@ export default function Credits() {
               <option value="active">{t('credits.text_6')}</option>
               <option value="all">{t('credits.text_7')}</option>
             </select>
-            <input type="month" className="input w-auto!" aria-label={t('credits.aria_label_2')} value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} />
+            <MonthPicker label={t('credits.aria_label_2')} value={monthFilter} allowEmpty onChange={setMonthFilter} />
           </>
         }
         /* #49, decided 09.08.2026 (package 2): damaged and returned lines joined the receipt

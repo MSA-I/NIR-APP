@@ -103,3 +103,16 @@ The only fix is to stop using the native control on those five screens. Two shap
 
 Neither is in the plan, because the plan was written from a measurement that had already looked
 past this control. It is the owner's call whether the first is worth doing.
+
+---
+
+## Resolved, 30.08.2026 — the month control is now the app's
+
+The owner chose to build it. `MonthPicker` replaced `<input type="month">` on all five screens; the
+month name follows the interface language, the value is still `YYYY-MM`, and nothing behind it
+changed. Evidence and the screenshots in both languages: `stage10/RESULT.md`.
+
+**What stays true from everything above:** `<input type="date">` is untouched and its calendar popup
+is still Chrome's, in Chrome's UI language. That control never showed the reader Hebrew *words* —
+which is exactly the distinction this document missed the first time, and the reason the correction
+above had to be written.
