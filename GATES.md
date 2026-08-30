@@ -52,7 +52,9 @@ scalar, any per-currency value written by a later phase would be deleted by one 
   `number | null`. Both amount comparisons are guarded on `tolerance != null`; reference-equality
   candidates survive, because an exact reference match needs no tolerance. A `Note` names the
   currency and the destination by capability.
-  PENDING: the screenshot. See "Visual evidence" below.
+  SCREENSHOT: `artifacts/currency-tolerances/p1-g2-bank-no-tolerance.png` — a USD 3,100 statement
+  line, the note naming USD and sending the owner to the settings section by name, and "no
+  automatic match suggestions" instead of a silently empty list.
 
 ---
 
@@ -89,7 +91,9 @@ scalar, any per-currency value written by a later phase would be deleted by one 
   a decision
   EVIDENCE: `currencyTolerancesPanel.spec.tsx` asserts the labels, the values and the sentence
   `7 ערכים עדיין דורשים קביעה`. Six tests, stable across three consecutive runs.
-  PENDING: the screenshot. See "Visual evidence" below.
+  SCREENSHOT: `artifacts/currency-tolerances/p3-g1-tolerances-panel.png` — ILS, EUR and USD, four
+  fields each, the shekel bank field carrying the legacy `1` and the other eleven reading
+  `דורש קביעה`, above a banner that says an empty field is not a zero and names what stops.
 
 - [x] P3-G2: stating one currency's value does not touch another's
   CHECK: type a USD value and save
@@ -127,7 +131,8 @@ scalar, any per-currency value written by a later phase would be deleted by one 
   from `invoice.currency`. Price list from `row.currency`. The import price cap now names NO
   currency, because `0023:2330` is a bare `> 1000000` and calling it a shekel ceiling described a
   rule the server never had.
-  PENDING: the screenshot. See "Visual evidence" below.
+  SCREENSHOT: `artifacts/currency-tolerances/p4-g2-supplier-minimum-usd.png` — the edit dialog
+  reading `מינימום הזמנה (USD)` where it used to read `(₪)`.
 
 - [x] P4-G3: a live defect found in passing, on the same field
   CHECK: does `/suppliers` fetch the column its minimum-order cell formats with?
@@ -139,6 +144,8 @@ scalar, any per-currency value written by a later phase would be deleted by one 
   minimum as an em dash for every supplier that had one — **in production, on a value that was in
   the database the whole time**. `check:supplier-columns` forbids `select('*')` on this table; it
   does not require the canonical list, so nothing caught the drift.
+  SCREENSHOT: `artifacts/currency-tolerances/p4-g3-supplier-minimum-column.png` — the list column
+  reading `$ 500.00`, on the same fixture that produced an em dash before this change.
 
 ---
 
@@ -166,7 +173,9 @@ scalar, any per-currency value written by a later phase would be deleted by one 
   `payment_request_currency_mixed` and `invoice_currency_precision_invalid`, all of which fell
   through to "the action failed, contact support". `toleranceRefusalMessage(canChangeSettings)`
   picks the destination by capability rather than by hope.
-  PENDING: the screenshot. See "Visual evidence" below.
+  SCREENSHOT: `artifacts/currency-tolerances/p1-g2-bank-no-tolerance.png` — the same picture as
+  P1-G2, because it is the same sentence: the owner reading it is sent to the settings section by
+  name. The other three codes are one-line mappings with no screen of their own.
 
 - [x] P5-G5: the pins that failed the last campaign twice are asserted inside the migration
   CHECK: `document_automation_negative_guard_violations()` and `scope_definer_marker_violations()`
@@ -186,12 +195,27 @@ scalar, any per-currency value written by a later phase would be deleted by one 
 
 ---
 
-## Visual evidence — outstanding
+## Visual evidence — how the pictures were taken, and what they are worth
 
-Four gates above are complete in behaviour and proven by tests, and are marked PENDING for their
-screenshots: **P1-G2, P3-G1, P4-G2, P5-G4**. The screenshots are not taken yet because the shared
-local stack sits at `0241` and taking them means moving it. That is a deliberate hold, not an
-omission, and no gate above claims a picture it does not have.
+`node scripts/check-currency-tolerance-evidence.cjs`, after `npm run build`. Four screenshots and
+`evidence.json` land in `artifacts/currency-tolerances/`. The last run reported zero console errors.
+
+**No database was touched, and that is enforced rather than promised.** The app is built against
+`http://127.0.0.1:59999`, where nothing listens, and Playwright answers every request to that
+origin from fixtures. A request this harness fails to stub cannot quietly reach the shared local
+stack — it fails with a connection refusal. `supplyflow-p0` stayed at `0241/235` throughout, which
+is why these gates could be photographed while the stack belongs to everyone.
+
+**What a screenshot here proves is the SCREEN, not the server.** These are the real components,
+router and stylesheet rendering the state the server would produce. That the server produces it is
+what `p82`, `p83` and the two migrations' proof blocks are for.
+
+Four environment traps are recorded in the script itself so the next person pays for them once:
+the bundled chromium will not launch on this machine, vite binds to `localhost` rather than
+`127.0.0.1`, `.single()` needs an object rather than an array of one, and — the one that cost the
+most — an orphaned dev server from an earlier run held the port, so `--strictPort` made every later
+`preview` exit silently under `stdio: 'ignore'` and the browser talked to the orphan. Every fix
+measured after that point was measured against the wrong server.
 
 ---
 
