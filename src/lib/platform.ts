@@ -26,6 +26,7 @@ export type PlatformCapability =
   | 'entitlement.override'
   | 'org.lifecycle'
   | 'offboarding.handle'
+  | 'offboarding.legal_hold'
   | 'platform.export'
   | 'user.view'
   | 'user.access'
