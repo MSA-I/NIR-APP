@@ -6,10 +6,11 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import type { ActorContext } from "../../../src/lib/assistant/contracts.ts";
 import {
-  ASSISTANT_DRAFT_LABEL,
+  ASSISTANT_DRAFT_LABEL_KEY,
   ASSISTANT_DRAFT_ROLES,
 } from "../../../src/lib/assistant/contracts.ts";
 import { AssistantEdgeError } from "./errors.ts";
+import { readerText } from "./reader-locale.ts";
 import {
   ANSWER_JSON_SCHEMA,
   type AssistantProviderPort,
@@ -586,20 +587,33 @@ Deno.test("the answer language follows the reader, and nothing else in the promp
   assert.ok(hebrew.includes("Answer in Hebrew"));
   assert.ok(english.includes("Answer in English"));
   assert.ok(!english.includes("Answer in Hebrew"));
-  // Exactly ONE line differs. Every rule below it — the injection stance, the claim rules, the
-  // no-send rule — is the same instruction in both languages, so a reader cannot be handed a
-  // weaker assistant by choosing English.
+  // THREE lines differ, and the test names each one rather than counting them. Every RULE — the
+  // injection stance, the claim rules, the draft rules, the no-send rule — is identical in both
+  // languages, so a reader still cannot be handed a weaker assistant by choosing English. What
+  // differs is only what MUST: the answer language, the label the product itself prints beside the
+  // draft, and the worked examples of phrasing a scope in words. The last two were Hebrew for
+  // every reader until now, and a worked example is the most imitated line in a prompt — so an
+  // English run was being shown Hebrew as the model of what to write.
   const hebrewLines = hebrew.split("\n");
   const englishLines = english.split("\n");
   assert.equal(hebrewLines.length, englishLines.length);
   const differing = hebrewLines.filter((line, index) => line !== englishLines[index]);
-  assert.equal(differing.length, 1);
+  assert.equal(differing.length, 3);
   assert.ok(differing[0].includes("Answer in Hebrew"));
+  assert.ok(differing[1].includes("describe windows and scopes in words"));
+  assert.ok(differing[2].includes("The product prints the label"));
+  // No Hebrew survives anywhere in the English prompt. This is the assertion the two defects
+  // above would have failed, and it needs no list of lines to keep working.
+  assert.equal(/[֐-׿]/.test(english), false);
+  assert.equal(/[֐-׿]/.test(hebrew), true);
 });
 
 Deno.test("the system prompt teaches the draft rules and never offers to send", () => {
   const instructions = buildInstructions("he");
-  assert.ok(instructions.includes(ASSISTANT_DRAFT_LABEL));
+  assert.ok(instructions.includes(readerText("he", ASSISTANT_DRAFT_LABEL_KEY)));
+  // The same rule, in the other language, against the label that language actually prints.
+  const englishInstructions = buildInstructions("en");
+  assert.ok(englishInstructions.includes(readerText("en", ASSISTANT_DRAFT_LABEL_KEY)));
   assert.ok(instructions.includes("copies and sends himself"));
   assert.ok(instructions.includes("never write a label"));
   assert.ok(instructions.includes("Every numeral inside a draft"));

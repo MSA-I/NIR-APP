@@ -58,3 +58,20 @@ export const ANSWER_LANGUAGE: Record<ReaderLocale, string> = {
   he: "Hebrew",
   en: "English",
 };
+
+/**
+ * The prompt's worked examples of describing a scope in words instead of digits.
+ *
+ * They were Hebrew for every reader, inside an instruction that also says "answer in English".
+ * A worked example is the strongest instruction in a prompt, so an English run was being shown two
+ * Hebrew phrases as the model of what to write - which is not a weaker answer but a Hebrew one, on
+ * the exact screen the owner said must not contain a single Hebrew word. They live here, beside
+ * `ANSWER_LANGUAGE`, for the same reason it does: the answer language and everything that steers
+ * the answer's wording resolve from one module, from one value, in one run.
+ *
+ * Prompt guidance, deliberately NOT dictionary copy. Nobody reads these; the model does.
+ */
+export const SCOPE_PHRASE_EXAMPLES: Record<ReaderLocale, string> = {
+  he: '"בשבוע האחרון", "בחודש האחרון"',
+  en: '"in the last week", "in the last month"',
+};

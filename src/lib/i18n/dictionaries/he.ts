@@ -5643,6 +5643,14 @@ export const he = {
     adjustmentDescription: 'יתרה נוכחית: {quantity}. הפעולה תירשם ביומן הביקורת.',
   },
 
+  assistantContracts: {
+    draftLabel: 'טיוטה',
+    timeWindowLast7Days: '7 הימים האחרונים',
+    timeWindowLast30Days: '30 הימים האחרונים',
+    timeWindowLast90Days: '90 הימים האחרונים',
+    calendarPeriodThisMonth: 'החודש הקלנדרי הנוכחי, מה-1 בחודש',
+  },
+
   quickSupplierPicker: {
     fieldHint: 'אין ספק מתאים ברשימה? הכפתור ״ספק חדש״ שליד יוצר ספק ובוחר אותו כאן.',
     buttonHint: 'הספק החדש ייווצר וייבחר מיד בשדה זה',

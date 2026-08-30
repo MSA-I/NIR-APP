@@ -5639,6 +5639,14 @@ export const en: Dictionary = {
     adjustmentDescription: 'Current balance: {quantity}. The action will be recorded in the audit log.',
   },
 
+  assistantContracts: {
+    draftLabel: 'Draft',
+    timeWindowLast7Days: 'the last 7 days',
+    timeWindowLast30Days: 'the last 30 days',
+    timeWindowLast90Days: 'the last 90 days',
+    calendarPeriodThisMonth: 'the current calendar month, from the 1st',
+  },
+
   quickSupplierPicker: {
     fieldHint: 'No suitable supplier in the list? The nearby “New supplier” button creates one and selects it here.',
     buttonHint: 'The new supplier will be created and selected in this field immediately',

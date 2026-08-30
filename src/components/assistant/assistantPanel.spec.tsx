@@ -5,10 +5,12 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AssistantPanel from '../AssistantPanel';
-import {
-  ASSISTANT_DRAFT_LABEL,
-  type AssistantRunResult,
-} from '../../lib/assistant/contracts';
+import { type AssistantRunResult } from '../../lib/assistant/contracts';
+
+/* The screen renders a KEY now, so the assertion moves to the sentence the dictionary holds.
+   The test environment is Hebrew by default and stays that way; `contracts.spec.ts` is what
+   pins the same key to its English wording. */
+const ASSISTANT_DRAFT_LABEL = he.assistantContracts.draftLabel;
 import { fmtMoneyExact } from '../../lib/format';
 
 /* הפאנל נבחן מול שכבת לקוח מדומה: החוזה של המעטפה הוא של השרת, והבדיקות כאן מוכיחות

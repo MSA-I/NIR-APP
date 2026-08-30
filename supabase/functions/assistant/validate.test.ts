@@ -610,6 +610,50 @@ Deno.test("a draft may never claim it was sent", () => {
   if (!result.ok) assert.ok(result.errors.includes("block:0:draft_claims_sent"));
 });
 
+/**
+ * The same refusal, in the language the product gained.
+ *
+ * The check was `text.includes('נשלח')` for as long as there was one language. `OPEN-DECISIONS
+ * #283` gave the assistant a second one, and the one claim this product must never make about
+ * itself became makeable by asking the question in English. The hole was in the guard, not in the
+ * model, and no existing test could see it because every existing draft fixture was Hebrew.
+ */
+Deno.test("a draft may never claim it was sent, in English either", () => {
+  const result = validateAnswer(
+    answer([{
+      type: "draft",
+      text: "Hello, the message was sent to the supplier and we await a reply.",
+      fact_ids: ["f1"],
+      source_ids: [],
+    }]),
+    [fact()],
+    [],
+    "owner",
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.ok(result.errors.includes("block:0:draft_claims_sent"));
+});
+
+/**
+ * The other half, without which the rule above would be obeyed by deleting it: an ordinary English
+ * word that merely CONTAINS `sent` is not a claim about sending. A guard that refused "consent"
+ * would be switched off by the first person it inconvenienced.
+ */
+Deno.test("an English draft is not refused for a word that merely contains sent", () => {
+  const result = validateAnswer(
+    answer([{
+      type: "draft",
+      text: "Hello, please confirm the delivery date presented in your last note.",
+      fact_ids: ["f1"],
+      source_ids: [],
+    }]),
+    [fact()],
+    [],
+    "owner",
+  );
+  assert.equal(result.ok, true);
+});
+
 Deno.test("accountant is offered no supplier draft at all", () => {
   const result = validateAnswer(
     answer([{

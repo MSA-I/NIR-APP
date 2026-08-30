@@ -1,4 +1,8 @@
 import { z } from 'zod';
+// A TYPE import, and the only thing this file takes from the app. It is erased at build time, so
+// the "zod and types only" rule above still holds in both runtimes; the `.ts` extension is what
+// lets Deno resolve it, and `allowImportingTsExtensions` is what lets Vite ignore it.
+import type { TKey } from '../i18n/t.ts';
 
 /**
  * InPlace Assistant — canonical contracts.
@@ -363,11 +367,19 @@ export const TIME_WINDOW_DAYS: Record<TimeWindow, number> = {
   last_90_days: 90,
 };
 
-/** Hebrew label for a window, so every tool describes its own scope identically. */
-export const TIME_WINDOW_LABELS: Record<TimeWindow, string> = {
-  last_7_days: '7 הימים האחרונים',
-  last_30_days: '30 הימים האחרונים',
-  last_90_days: '90 הימים האחרונים',
+/**
+ * The KEY of a window's label, so every tool describes its own scope identically in whichever
+ * language the run is being read in.
+ *
+ * A key rather than a sentence because this label is printed to a PERSON, on a fact the Edge
+ * function builds — and the Edge function now knows the reader's locale (`OPEN-DECISIONS #283`).
+ * The name carries `_KEYS` for the reason iron rule 7 exists: a `TKey` is a string, so a tool that
+ * printed one directly would have type-checked while showing somebody `assistant.timeWindow_...`.
+ */
+export const TIME_WINDOW_LABEL_KEYS: Record<TimeWindow, TKey> = {
+  last_7_days: 'assistantContracts.timeWindowLast7Days',
+  last_30_days: 'assistantContracts.timeWindowLast30Days',
+  last_90_days: 'assistantContracts.timeWindowLast90Days',
 };
 
 /**
@@ -381,8 +393,8 @@ export const TIME_WINDOW_LABELS: Record<TimeWindow, string> = {
 export const CALENDAR_PERIODS = ['this_calendar_month'] as const;
 export type CalendarPeriod = (typeof CALENDAR_PERIODS)[number];
 
-export const CALENDAR_PERIOD_LABELS: Record<CalendarPeriod, string> = {
-  this_calendar_month: 'החודש הקלנדרי הנוכחי, מה-1 בחודש',
+export const CALENDAR_PERIOD_LABEL_KEYS: Record<CalendarPeriod, TKey> = {
+  this_calendar_month: 'assistantContracts.calendarPeriodThisMonth',
 };
 
 /* ============================================================================
@@ -438,7 +450,7 @@ export const ClaimBlockSchema = z.object({
  * be a rendering of a cited fact's VALUE, checked by validateAnswer(). `fact_ids` is therefore
  * required rather than optional — a draft with nothing behind it is prose with a label.
  */
-export const ASSISTANT_DRAFT_LABEL = 'טיוטה';
+export const ASSISTANT_DRAFT_LABEL_KEY: TKey = 'assistantContracts.draftLabel';
 
 /**
  * The claim the product must never make about itself, held as a constant so it exists in exactly
@@ -449,6 +461,26 @@ export const ASSISTANT_DRAFT_LABEL = 'טיוטה';
  * reviewed line instead of a per-file exception list.
  */
 export const ASSISTANT_SENT_CLAIM_MARKER = 'נשלח';
+
+/**
+ * The same refusal, once per language the product can answer in.
+ *
+ * The marker above was the whole check while the product had one language. `OPEN-DECISIONS #283`
+ * gave the assistant a second one, and a substring test for a Hebrew word does not see an English
+ * draft saying it was sent — so the one claim the product must never make became makeable simply
+ * by asking in English. The gap was in the guard, not in the model.
+ *
+ * The Hebrew entry is BUILT from the constant rather than repeating the word: `check-assistant-no-
+ * send.mjs` allows that banned literal on exactly one anchored line, and a second copy here would
+ * be a second place to forget. The English entry is deliberately as narrow as the Hebrew one —
+ * one verb, nothing inferred about delivery or scheduling — so this stays a translation of an
+ * existing rule rather than a new business judgement made by an agent. The word boundary matters: without it
+ * `sent` would fire inside `consent`, `presented` and `sentence`.
+ */
+export const ASSISTANT_SENT_CLAIM_PATTERNS: Record<ProductHelpLocale, RegExp> = {
+  he: new RegExp(ASSISTANT_SENT_CLAIM_MARKER),
+  en: /\bsent\b/i,
+};
 
 /** #191: owner and office compose supplier drafts. `accountant` deliberately does not. */
 export const ASSISTANT_DRAFT_ROLES: readonly AssistantRole[] = ['owner', 'office'];

@@ -11,7 +11,7 @@ import type {
   SourceReference,
 } from '../../lib/assistant/contracts';
 import {
-  ASSISTANT_DRAFT_LABEL,
+  ASSISTANT_DRAFT_LABEL_KEY,
   ASSISTANT_DRAFT_ROLES,
 } from '../../lib/assistant/contracts';
 import { assistantSourceRouteDecision } from '../../lib/assistant/routeAccess';
@@ -172,12 +172,12 @@ function DraftBlock({ text, facts, sources, sourceIsCurrent, onNavigate }: {
 
   return (
     <section
-      aria-label={ASSISTANT_DRAFT_LABEL}
+      aria-label={t(ASSISTANT_DRAFT_LABEL_KEY)}
       className="rounded-2xl border-s-2 border-action-line bg-action-wash p-3"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-xs font-medium text-ink-soft">
-          <NotepadText size={ICON.sm} aria-hidden="true" /> {ASSISTANT_DRAFT_LABEL}
+          <NotepadText size={ICON.sm} aria-hidden="true" /> {t(ASSISTANT_DRAFT_LABEL_KEY)}
         </h3>
         <button
           type="button"

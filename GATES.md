@@ -445,6 +445,58 @@ Plan: `docs/PLAN-english-language-20260827.md`.
   `abandon`, `currency-untouched`, `help-registry-paired` and `legacy-errors` all passed. `zero`
   still exits 1 on 60/25, so this gate remains open.
 
+  **PROGRESS, 30.08.2026 - the shared assistant contract in this commit.** The pinned count is now
+  632 Hebrew line(s) across 64 files. The protected set is now 578 lines in 40 files:
+  `assistant/contracts.ts` keeps exactly one, `ASSISTANT_SENT_CLAIM_MARKER`. The real remainder is
+  **54 lines in 24 files**.
+
+  This file is imported by BOTH runtimes - the browser as `./contracts`, the Edge function as
+  `../../../src/lib/assistant/contracts.ts` - so nothing here could resolve a sentence locally. The
+  four reader-facing labels became `TKey` tables (`TIME_WINDOW_LABEL_KEYS`,
+  `CALENDAR_PERIOD_LABEL_KEYS`, `ASSISTANT_DRAFT_LABEL_KEY`), resolved by `readerText()` inside the
+  Edge function and by `t()` in `AnswerView`. The only thing this file now takes from the app is
+  the `TKey` TYPE, which is erased - the "zod and types only" rule at the top of it still holds.
+
+  **A safety hole that P2-G8 opened, found by classifying this file rather than by looking for
+  it.** `validate.ts` refuses a draft block that claims the product sent something - the one lie no
+  citation could support - and the whole refusal was `text.includes('נשלח')`. That was complete
+  while the product had one language. Once the assistant answers in English, an English draft
+  saying it was sent contains no Hebrew and passes: the claim the product must never make became
+  makeable by asking the question in English. `ASSISTANT_SENT_CLAIM_PATTERNS` now carries the
+  refusal per locale, and `validate.ts` tests EVERY locale rather than the run's own - a Hebrew
+  reader can ask for an English body, so gating on the run locale would leave one language
+  unguarded per run. The Hebrew entry is built from the existing constant rather than repeating the
+  banned word, which keeps `check-assistant-no-send.mjs` down to its one anchored allowance. The
+  English pattern is deliberately as narrow as the Hebrew one and word-bounded: refusing a draft
+  for saying "consent" would get the guard deleted rather than obeyed. Positive control: reverting
+  the check to Hebrew-only failed the new English case alone (1 failed, 30 passed) and passed again
+  restored.
+
+  **Two Hebrew lines were reaching an English reader through the system prompt.** The draft label
+  the product prints was interpolated into the instructions as a Hebrew constant, and the worked
+  examples of describing a scope in words were the Hebrew phrases "בשבוע האחרון"/"בחודש האחרון" -
+  in an instruction whose first line says "Answer in English". A worked example is the most imitated
+  line in a prompt, so this was not a weaker answer but a Hebrew one, on the screen the owner said
+  must not carry a single Hebrew word. `SCOPE_PHRASE_EXAMPLES` joins `ANSWER_LANGUAGE` in
+  `reader-locale.ts` - prompt guidance, deliberately not dictionary copy, since nobody reads it but
+  the model. The parity test no longer counts differing lines: it names all three, asserts every
+  RULE line is identical so nobody is handed a weaker assistant by choosing English, and adds the
+  assertion that would have caught both defects on its own - no Hebrew character survives anywhere
+  in the English prompt.
+
+  Evidence: the stale-baseline negative control named `contracts.ts` 6 -> 1 alone; Deno contracts
+  passed **232/232**, up from 230 (the English refusal and its false-positive control); the full
+  Vitest suite passed 1,765/1,765; `npx tsc --noEmit` exit 0; `check:jsx-space` passed on 126 TSX
+  files; `check-assistant-no-send.mjs` passed. Dictionary parity passed at 5,296 keys per locale.
+  `zero` still exits 1 on 54/24, so this gate remains open.
+
+  One tooling hazard hit again while writing this batch and worth the line: a `\b` written through
+  a shell heredoc arrives in the file as a real backspace character (0x08), silently turning
+  `/\bsent\b/i` into a regex that matches nothing intended. This is the same corruption that
+  disabled `extract.mjs` and two guards earlier on this branch. It was caught by reading the bytes
+  with `cat -A`, not by any test - the file compiled and the suite was green. Anything containing a
+  regex or an escape goes through the Write tool, never a heredoc.
+
   One thing this oracle cannot see, recorded so a later reader does not over-trust it: a file listed in `__reason` is exempted **entirely**, whatever its count. What closes that door is not this gate but `ratchet`, which pins every exempt file at the exact number it was exempted at, so an exemption cannot quietly grow. The pair is the guarantee; neither half is.
 
 - [ ] P2-G9: the consent documents read in the reader's language — BUILT 28.08.2026, AWAITING A LAWYER
