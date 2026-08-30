@@ -418,9 +418,8 @@ export function OrgSubscriptionPanel() {
                 {availability === 'available'
                   && t('orgSubscription.text_11')}
                 {availability === 'indeterminate'
-                  && 'לא ניתן לקבוע כרגע אם רכישת מסלול זמינה. זה אינו אומר שהיא חסומה — רענון או ניסיון מאוחר יותר יראה את המצב העדכני.'}
-                {' '}המחירים למטה מוצגים לפי שפת הממשק: עברית בשקלים ואנגלית בדולרים. זו תצוגה
-                בלבד; החיוב בפועל והמס נקבעים לפי מדינת החיוב המאומתת אצל ספק הסליקה.
+                  && t('orgSubscription.availabilityIndeterminate')}
+                {' '}{t('orgSubscription.displayCurrencyNote')}
               </span>
             </Note>
 
@@ -476,10 +475,12 @@ export function OrgSubscriptionPanel() {
             </div>
 
             <p className="text-sm text-ink-muted" data-testid="display-currency-note">
-              מוצג קטלוג {displayCurrency === 'ILS' ? 'ישראל בשקלים' : 'גלובלי בדולרים'}, לפני מס.
+              {t('orgSubscription.catalogueShown', {
+                catalogue: displayCurrency === 'ILS' ? t('orgSubscription.catalogueIsrael') : t('orgSubscription.catalogueGlobal'),
+              })}
               {billingCurrency
-                ? ` מטבע החיוב המאומת כרגע הוא ${billingCurrency}.`
-                : ' מטבע החיוב טרם אומת ואינו נגזר ממטבע התצוגה.'}
+                ? t('orgSubscription.billingCurrencyVerified', { currency: billingCurrency })
+                : t('orgSubscription.billingCurrencyUnverified')}
             </p>
 
             {/* THE LIFECYCLE CONTROLS BELONG TO A SUBSCRIPTION, AND A GRANT IS NOT ONE.
@@ -574,7 +575,7 @@ export function OrgSubscriptionPanel() {
                   .map((row) => ({
                     key: row.entitlement_key,
                     text: row.unlimited
-                      ? `${row.label} ללא הגבלה`
+                      ? t('orgSubscription.entitlementUnlimited', { label: row.label })
                       : <><span className="num font-medium">{fmtNum(row.numeric_limit)}</span> {row.label}</>,
                     affirmative: true,
                   }));
@@ -584,7 +585,7 @@ export function OrgSubscriptionPanel() {
                 .map((row) => ({
                   key: row.entitlement_key,
                   text: row.plan_key === 'free' && row.intro_included && !row.included
-                    ? `${row.label} — פתוח ב־30 הימים הראשונים`
+                    ? t('orgSubscription.entitlementIntroOnly', { label: row.label })
                     : row.label,
                   affirmative: row.included || (row.plan_key === 'free' && row.intro_included),
                 }));
@@ -604,8 +605,8 @@ export function OrgSubscriptionPanel() {
                      what is this rung" on a screen where no amount shown is a guess. */
                   who={[
                     ...(currentTier === null ? []
-                      : [current ? 'המסלול הנוכחי' : isUpgrade ? 'מדרגה מעל' : 'מדרגה מתחת']),
-                    option.paid ? 'מסלול בתשלום' : 'לא נדרש אמצעי תשלום',
+                      : [current ? t('orgSubscription.tierCurrent') : isUpgrade ? t('orgSubscription.tierAbove') : t('orgSubscription.tierBelow')]),
+                    option.paid ? t('orgSubscription.paidPlan') : t('orgSubscription.noPaymentMethod'),
                   ].join(' · ')}
                   /* The rung this organization stands on, as an outline on the ticket. A REPORT and
                      not a selection — nothing on this screen can be chosen (#217/#224). */
@@ -614,8 +615,8 @@ export function OrgSubscriptionPanel() {
                      surfaces cannot point a reader at two different plans. #202 still binds the
                      part that matters: the emphasis is STATIC and identical for every reader, never
                      keyed to the tenant's own data. */
-                  badgeLabel={option.plan_key === RECOMMENDED_PLAN ? 'מומלץ' : undefined}
-                  priceLabel="מחיר"
+                  badgeLabel={option.plan_key === RECOMMENDED_PLAN ? t('orgSubscription.recommended') : undefined}
+                  priceLabel={t('orgSubscription.priceLabel')}
                   /* THE PRICE SLOT, AND THE SENTENCE THAT REPLACED FIVE DASHES (owner ruling
                      26.08.2026: «משפט קצר במקום מקף»). Stacked in a list, five «—» in the column
                      the eye reads as the price read as a broken screen rather than as a withheld
@@ -689,10 +690,10 @@ export function OrgSubscriptionPanel() {
                      reads as the amount. An unmeasured quota (DEBT §56) must not be dressed as `0`,
                      and it must not be dressed as a promise either. */
                   quotaLabel={option.contact_sales
-                    ? 'מכסה' : (quota?.label ?? 'מסמכים')}
-                  quota={option.contact_sales ? 'חוזית'
+                    ? t('orgSubscription.quotaLabelContract') : (quota?.label ?? t('orgSubscription.quotaLabelDocuments'))}
+                  quota={option.contact_sales ? t('orgSubscription.quotaContract')
                     : !quota || !quota.measured ? '—'
-                      : quota.unlimited ? 'ללא הגבלה'
+                      : quota.unlimited ? t('orgSubscription.quotaUnlimitedWord')
                         : fmtNum(quota.numeric_limit)}
                   /* The remaining quotas and the capability ladder, in the server's own wording:
                      `/pricing` prints the same string from the same function, and a card that

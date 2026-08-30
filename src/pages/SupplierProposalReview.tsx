@@ -283,8 +283,7 @@ export default function SupplierProposalReview() {
             <p className="text-sm text-ink-muted">{t('supplierProposal.text_12')}</p>
           )}
           <p className="text-sm text-ink-muted">
-            הסיבה אינה חובה. מה שייכתב כאן יוצג חזרה במסך הזה לצד ההחלטה, ולא רק ביומן הביקורת —
-            זה המקום להסביר לספק, ולמי שיקרא את ההזמנה אחר כך, מה נדחה ולמה.
+            {t('supplierProposal.reasonHint')}
           </p>
           <p className="text-xs text-ink-faint">
             {t('supplierProposal.decisionRecordNote')}

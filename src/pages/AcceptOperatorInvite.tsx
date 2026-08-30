@@ -72,7 +72,7 @@ export default function AcceptOperatorInvite() {
       if (error) {
         setFormError(
           /Invalid login credentials/i.test(error.message)
-            ? 'קיים כבר חשבון לכתובת הזו, והסיסמה שהוזנה אינה נכונה.'
+            ? t('operatorInvite.accountExistsWrongPassword')
             : toHebrewError(error),
         );
         return;
@@ -96,7 +96,7 @@ export default function AcceptOperatorInvite() {
     return (
       <Shell>
         <Card className="flex justify-center py-10 text-ink-faint">
-          <Loader2 size={ICON.xl} className="animate-spin" aria-label="טוען" />
+          <Loader2 size={ICON.xl} className="animate-spin" aria-label={t('operatorInvite.loading')} />
         </Card>
       </Shell>
     );
@@ -104,10 +104,10 @@ export default function AcceptOperatorInvite() {
 
   if (lookup?.status !== 'valid') {
     const message = {
-      expired: 'תוקף ההזמנה פג. ההזמנות לצוות תקפות לחמש עשרה דקות בלבד — יש לבקש קישור חדש.',
-      revoked: 'ההזמנה בוטלה.',
-      accepted: 'ההזמנה כבר נוצלה. אפשר להיכנס עם החשבון שנפתח.',
-      unknown: 'הקישור אינו תקין.',
+      expired: t('operatorInvite.expired'),
+      revoked: t('operatorInvite.revoked'),
+      accepted: t('operatorInvite.accepted'),
+      unknown: t('operatorInvite.unknown'),
       valid: '',
     }[lookup?.status ?? 'unknown'];
     return (
@@ -115,7 +115,7 @@ export default function AcceptOperatorInvite() {
         <Card className="space-y-4 text-center">
           <AlertCircle size={ICON.hero} className="mx-auto text-alert-fg" aria-hidden="true" />
           <p className="text-ink">{message}</p>
-          <Link to="/login" className="btn-secondary">למסך הכניסה</Link>
+          <Link to="/login" className="btn-secondary">{t('operatorInvite.toLogin')}</Link>
         </Card>
       </Shell>
     );
@@ -127,8 +127,7 @@ export default function AcceptOperatorInvite() {
         <Card className="space-y-4 text-center">
           <MailCheck size={ICON.hero} className="mx-auto text-info-fg" aria-hidden="true" />
           <p className="text-ink">
-            נשלח מייל אימות לכתובת. יש לאשר אותו ולפתוח שוב את הקישור — ואם חלפו חמש עשרה דקות,
-            לבקש קישור חדש.
+            {t('operatorInvite.confirmEmailSent')}
           </p>
         </Card>
       </Shell>
@@ -140,7 +139,7 @@ export default function AcceptOperatorInvite() {
       <Card className="space-y-4">
         <div className="space-y-1">
           <p className="text-sm text-ink-soft">
-            הוזמנת להצטרף לצוות התפעול של {APP_NAME} בתפקיד
+            {t('operatorInvite.invitedAs', { app: APP_NAME })}
             {' '}<span className="font-medium text-ink">{lookup.role_label}</span>.
           </p>
           <p dir="ltr" className="text-sm text-ink-muted">{lookup.email}</p>
@@ -148,13 +147,13 @@ export default function AcceptOperatorInvite() {
 
         <form onSubmit={submit} className="space-y-3">
           <div>
-            <label className="label" htmlFor="operator-invite-password">סיסמה</label>
+            <label className="label" htmlFor="operator-invite-password">{t('operatorInvite.passwordLabel')}</label>
             <input id="operator-invite-password" className="input" type="password" autoComplete="new-password"
               value={password} onChange={(event) => setPassword(event.target.value)} />
-            <p className="mt-1 text-xs text-ink-muted">לפחות {MIN_PASSWORD_LENGTH} תווים</p>
+            <p className="mt-1 text-xs text-ink-muted">{t('operatorInvite.passwordHint', { min: MIN_PASSWORD_LENGTH })}</p>
           </div>
           <div>
-            <label className="label" htmlFor="operator-invite-confirm">אימות סיסמה</label>
+            <label className="label" htmlFor="operator-invite-confirm">{t('operatorInvite.confirmLabel')}</label>
             <input id="operator-invite-confirm" className="input" type="password" autoComplete="new-password"
               value={confirm} onChange={(event) => setConfirm(event.target.value)} />
           </div>
@@ -162,12 +161,12 @@ export default function AcceptOperatorInvite() {
             <p role="alert" className="note-alert text-sm">{formError}</p>
           )}
           <button type="submit" className="btn-primary w-full" disabled={busy}>
-            {busy ? 'מצטרף…' : 'הצטרפות לצוות'}
+            {busy ? t('operatorInvite.joining') : t('operatorInvite.joinAction')}
           </button>
         </form>
 
         <p className="text-xs text-ink-muted">
-          ההצטרפות פותחת חשבון לניהול הפלטפורמה בלבד. היא אינה פותחת עסק ואינה מצרפת אותך לאף ארגון.
+          {t('operatorInvite.scopeNote')}
         </p>
       </Card>
     </Shell>
@@ -175,6 +174,7 @@ export default function AcceptOperatorInvite() {
 }
 
 function Shell({ children }: { children: ReactNode }) {
+  const { t } = useT();
   return (
     <div className="min-h-dvh flex items-center justify-center bg-action px-4 py-6 sm:py-10">
       <div className="w-full max-w-sm sm:max-w-md">
@@ -182,9 +182,9 @@ function Shell({ children }: { children: ReactNode }) {
           <img src="/brand/inplace-lockup-paper.svg" alt={APP_NAME} width="184" height="40"
             className="mx-auto h-auto w-44" />
           <h1 className="page-title mt-2 flex items-center justify-center gap-2 text-shell-ink">
-            <ShieldCheck size={ICON.xl} aria-hidden="true" /> הצטרפות לצוות
+            <ShieldCheck size={ICON.xl} aria-hidden="true" /> {t('operatorInvite.heading')}
           </h1>
-          <p className="text-shell-ink-soft mt-1 text-sm">ניהול הפלטפורמה, לא ניהול עסק</p>
+          <p className="text-shell-ink-soft mt-1 text-sm">{t('operatorInvite.subheading')}</p>
         </div>
         {children}
       </div>

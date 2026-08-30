@@ -676,7 +676,7 @@ export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDi
       onClose={onDismiss}
       title={serverOnly ? t('fileUpload.weakCaptureTitle') : t(weakCaptureTitleKey(pick.weak))}
       description={serverOnly
-        ? 'הדפדפן אינו יכול לקרוא את פורמט התמונה. המקור יישמר ללא שינוי, ולאחר ההעלאה תופק בשרת נגזרת מוגבלת ובת־מעקב לצורך בדיקה וקריאת המסמך.'
+        ? t('fileUpload.formatUnreadable')
         : t(weakCaptureHintKey(pick.weak, source))}
     >
       {pick.files.length > 1 && (

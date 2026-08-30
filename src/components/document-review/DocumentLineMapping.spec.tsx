@@ -19,6 +19,10 @@ import { server } from '../../test/msw/server';
 import { SUPABASE_URL } from '../../test/msw/handlers';
 import { ToastProvider } from '../ui';
 import type { AssessmentLine } from './assessment';
+import { he } from '../../lib/i18n/dictionaries/he';
+import type { Dictionary } from '../../lib/i18n/dictionaries/he';
+import { translate } from '../../lib/i18n/t';
+import type { TKey } from '../../lib/i18n/t';
 
 vi.mock('../../lib/supabase', async () => {
   const { createClient } = await import('@supabase/supabase-js');
@@ -199,22 +203,31 @@ describe('what a bulk create would do, before it does it', () => {
   });
 });
 
+/**
+ * `lineTitle` and `lineFacts` take the translator now, because the module is pure and cannot hold a
+ * hook. The HEBREW one is injected deliberately: every assertion below still names the literal
+ * sentence, so a wrong dictionary entry fails here. Comparing `t(key)` against `t(key)` would pass
+ * whatever the dictionary said. Same shape, and the same reason, as `model.spec.ts`.
+ */
+const t = ((key, vars) => translate(he as unknown as Dictionary, key, vars)) as
+  (key: TKey, vars?: Record<string, string | number>) => string;
+
 describe('what a line says about itself', () => {
   it('falls back through description, sku, barcode and finally the line number', () => {
-    expect(lineTitle(line(0))).toBe('עגבניות שרי 1');
-    expect(lineTitle(line(0, { description: null, sku: 'SKU-9' }))).toBe('SKU-9');
-    expect(lineTitle(line(0, { description: null, sku: null, barcode: '729' }))).toBe('729');
-    expect(lineTitle(line(4, { description: null, sku: null, barcode: null }))).toBe('שורה 5');
+    expect(lineTitle(line(0), t)).toBe('עגבניות שרי 1');
+    expect(lineTitle(line(0, { description: null, sku: 'SKU-9' }), t)).toBe('SKU-9');
+    expect(lineTitle(line(0, { description: null, sku: null, barcode: '729' }), t)).toBe('729');
+    expect(lineTitle(line(4, { description: null, sku: null, barcode: null }), t)).toBe('שורה 5');
   });
 
   it('prints only the facts the document carried — an absent quantity is not a zero', () => {
-    expect(lineFacts(line(0), 'ILS')).toMatch(/4/);
+    expect(lineFacts(line(0), 'ILS', t)).toMatch(/4/);
     // An absent quantity drops the whole segment, unit included, rather than printing "0 ק"ג".
-    expect(lineFacts(line(0, { quantity: null }), 'ILS')).not.toMatch(/ק"ג/);
-    expect(lineFacts(line(0, { quantity: null, unit_price: null }), 'ILS')).toBe('');
+    expect(lineFacts(line(0, { quantity: null }), 'ILS', t)).not.toMatch(/ק"ג/);
+    expect(lineFacts(line(0, { quantity: null, unit_price: null }), 'ILS', t)).toBe('');
     // A document whose currency intake could not read prints the quantity and withholds the price,
     // rather than showing a number in a unit nobody established (0227/#293).
-    expect(lineFacts(line(0), null)).toMatch(/4/);
-    expect(lineFacts(line(0), null)).not.toMatch(/\d+(\.\d+)? ליחידה/);
+    expect(lineFacts(line(0), null, t)).toMatch(/4/);
+    expect(lineFacts(line(0), null, t)).not.toMatch(/\d+(\.\d+)? ליחידה/);
   });
 });

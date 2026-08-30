@@ -210,10 +210,10 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
     setBusy(false);
 
     toast(seedFailure
-      ? `המסמך אושר ונרשם, אך עדכון המחירון נכשל: ${seedFailure}. אפשר להשלים את המחירים במסך המחירונים.`
+      ? t('docAssessment.approvedSeedFailed', { error: seedFailure })
       : seedRows.length > 0 && seedPrices
-        ? `המסמך אושר ונרשם, ונקבעו ${seedRows.length} מחירים חדשים אצל הספק`
-        : 'המסמך אושר ונרשם', seedFailure ? 'error' : 'success');
+        ? t('docAssessment.approvedWithSeed', { count: seedRows.length })
+        : t('docAssessment.approved'), seedFailure ? 'error' : 'success');
     setReason('');
     await load();
     onApplied?.();
@@ -409,10 +409,10 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
                 onChange={(event) => setSeedPrices(event.target.checked)}
               />
               <span>
-                לקבוע את המחירים שבמסמך כמחיר המוסכם אצל הספק — ל־<span className="num">{seedRows.length}</span>{' '}
-                {seedRows.length === 1 ? 'מוצר שאין לו' : 'מוצרים שאין להם'} מחיר מוסכם.
+                {t('docAssessment.seedLead')} <span className="num">{seedRows.length}</span>{' '}
+                {seedRows.length === 1 ? t('docAssessment.seedProductOne') : t('docAssessment.seedProductOther')} {t('docAssessment.seedTail')}
                 <span className="block text-xs text-ink-muted">
-                  מחיר מוסכם קיים לא ישתנה מהמסמך — הוא נשאר נקודת ההשוואה שמזהה חריגה במחיר.
+                  {t('docAssessment.seedKeepsExisting')}
                 </span>
               </span>
             </label>
