@@ -1,0 +1,50 @@
+[
+  {
+    "plan_key": "basic",
+    "billing_interval": "monthly",
+    "product_id": "pro_01m1c3ftscgby5feen91dvadt3",
+    "price_id": "pri_01m1c3fv4a08jwdvhhj9btmg6j",
+    "usd": 20,
+    "ils": 69
+  },
+  {
+    "plan_key": "basic",
+    "billing_interval": "yearly",
+    "product_id": "pro_01m1c3ftscgby5feen91dvadt3",
+    "price_id": "pri_01m1c3fvakrj413e0varprm82j",
+    "usd": 200,
+    "ils": 690
+  },
+  {
+    "plan_key": "pro",
+    "billing_interval": "monthly",
+    "product_id": "pro_01m1c3fvj210yf031vqc7v4m49",
+    "price_id": "pri_01m1c3fvr5wm54pw5rkdw09tyd",
+    "usd": 79,
+    "ils": 249
+  },
+  {
+    "plan_key": "pro",
+    "billing_interval": "yearly",
+    "product_id": "pro_01m1c3fvj210yf031vqc7v4m49",
+    "price_id": "pri_01m1c3fvy7pcje537tyqvcf62q",
+    "usd": 790,
+    "ils": 2490
+  },
+  {
+    "plan_key": "premium",
+    "billing_interval": "monthly",
+    "product_id": "pro_01m1c3fw5nsk8n8j11xytw3sz5",
+    "price_id": "pri_01m1c3fwbrcb19f18hqh8jpfvn",
+    "usd": 149,
+    "ils": 449
+  },
+  {
+    "plan_key": "premium",
+    "billing_interval": "yearly",
+    "product_id": "pro_01m1c3fw5nsk8n8j11xytw3sz5",
+    "price_id": "pri_01m1c3fwht8yngektv59d4ys9k",
+    "usd": 1490,
+    "ils": 4490
+  }
+]
