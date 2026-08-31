@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_SECTIONS, barSectionsForRole, drawerSectionsForRole, footerItemsForRole, pageTitleKeyFor, sectionsForRole, withheldNavPathsAfterSetup } from './Layout';
+import { NAV_SECTIONS, barSectionsForRole, drawerSectionsForRole, footerItemsForRole, pageTitleKeyFor, sectionsForRole, tourGroupForDestination, withheldNavPathsAfterSetup } from './Layout';
+import { OWNER_FIRST_RUN_TOUR } from '../lib/productTourRegistry';
 import { he } from '../lib/i18n/dictionaries/he';
 
 /** The words a key stands for, so a claim about COLLIDING LABELS stays a claim about words. */
@@ -242,5 +243,54 @@ describe('התאמת משפחת מסלול', () => {
     expect(isRouteFamilyActive('/documents/archive', '/documents')).toBe(false);
     expect(isRouteFamilyActive('/documents/archive', '/documents/archive')).toBe(true);
     expect(isRouteFamilyActive('/payment-requests', '/pay')).toBe(false);
+  });
+});
+
+/**
+ * The tour's disclosure is derived from the menu, not named beside it.
+ *
+ * `prepare` marks a step whose anchor lives INSIDE the navigation. Until 31.08.2026 the step also
+ * named which group to open — `'management'`, `'control'` — and `Layout.tsx` mapped those words to
+ * `'nav.text_6'` / `'nav.text_8'`, the keys of the frequency grouping. The subject regrouping of
+ * 28.08.2026 retired those groups and the map went on naming them, so `setOpenGroup` set a value
+ * no rendered group compares equal to: nothing opened, and the first-run tour spotlit a link
+ * sealed inside a closed dropdown. The browser scenario caught it as a 30s timeout on
+ * `[data-tour-anchor="nav-suppliers"]:visible`; nothing at this level could, because nothing at
+ * this level connected the two lists.
+ *
+ * This is that connection. It fails the moment a path moves between groups without the tour
+ * following it — which is the only way this bug can come back.
+ */
+describe('הכנת הסיור פותחת את הקבוצה שבה היעד יושב באמת', () => {
+  const preparing = OWNER_FIRST_RUN_TOUR.filter((step) => step.prepare);
+
+  it('כל שלב שמכריז prepare נושא יעד', () => {
+    expect(preparing.map((step) => step.id).sort()).toEqual(['open-prices', 'open-suppliers', 'start-onboarding']);
+    expect(preparing.filter((step) => !step.destination)).toEqual([]);
+  });
+
+  it('כל יעד כזה נפתר לקבוצה קיימת — לא לשם מת', () => {
+    const opened = Object.fromEntries(
+      preparing.map((step) => [step.destination, tourGroupForDestination(step.destination)]));
+    expect(opened).toEqual({
+      '/suppliers': 'nav.groupPurchasing',
+      '/prices': 'nav.groupPurchasing',
+      // The account group is the avatar menu on desktop, keyed by its own literal rather than by a
+      // section — `barSectionsForRole` drops it from the bar entirely.
+      '/onboarding': 'account',
+    });
+    // Every non-account answer must be a section the owner's bar actually renders, or the value
+    // is a string that opens nothing — exactly the shape of the bug this replaces.
+    const barSections = new Set(barSectionsForRole('owner').map((section) => section.section));
+    for (const group of Object.values(opened)) {
+      if (group !== 'account') expect(barSections.has(group as never)).toBe(true);
+    }
+  });
+
+  it('יעד שיושב על הסרגל עצמו אינו פותח דבר', () => {
+    expect(tourGroupForDestination('/dashboard')).toBeNull();
+    expect(tourGroupForDestination('/orders/new')).toBeNull();
+    expect(tourGroupForDestination(undefined)).toBeNull();
+    expect(tourGroupForDestination('/not-a-route')).toBeNull();
   });
 });
