@@ -2,7 +2,7 @@ import { useT } from '../lib/i18n/LocaleProvider';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, createContext, useContext, type ElementType, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { Link, useLocation } from 'react-router';
-import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Search, X, Loader2, Inbox, Bell, Check, Columns3, SlidersHorizontal, AlertTriangle, Minus, Plus } from 'lucide-react';
+import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Search, X, Loader2, Inbox, Bell, Check, Columns3, SlidersHorizontal, AlertTriangle, Minus, Plus, TrendingUp, TrendingDown } from 'lucide-react';
 import {
   useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel,
   type ColumnDef, type SortingState,
@@ -1458,6 +1458,80 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
         </button>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * What a figure is being compared against — the half a percentage never says on its own.
+ *
+ * THE FAILURE THIS REPLACES. The dashboard carried three hand-carved comparisons: month-to-date
+ * against the same days last month (twice, once for money paid and once for money purchased) and
+ * month-over-month on invoices. Each re-derived the same rule, each spelled its own null handling,
+ * and each said "against the same days last month" — a sentence that names a RELATIONSHIP but not
+ * the two periods, so a reader on the 17th cannot tell whether the baseline is a full month (it is
+ * not) or the same seventeen days (it is). Three copies of a rule are three chances to drift, and
+ * the wording was already the weakest part of all three.
+ *
+ * NO BASIS IS SAID OUT LOUD. When the previous period is null, zero or negative there is no
+ * percentage to compute, and the old code simply omitted the chip — which reads as "no change".
+ * This says "no basis for comparison" instead. A missing baseline is a fact about the DATA, and
+ * hiding it is the same class of error as printing `0`: both let the reader draw a conclusion the
+ * figures do not support.
+ *
+ * DIRECTION IS NEUTRAL INK, ALWAYS. Buying more is not good and not bad, and `DESIGN.md:421-423`
+ * settles it: a change without a business verdict wears `ink-mid`, never the trend hues. The
+ * arrow is the carrier, not the colour — which is also what keeps it readable under deuteranopia.
+ *
+ * ONE UNIT ONLY. `basis.currency` names the single currency both figures are in; the caller does
+ * not get to hand in two. Comparing across currencies would require a rate, and the constitution
+ * forbids one.
+ */
+export interface ComparisonBasis {
+  /** The period the figure covers, in words a reader can check: "1–17.8". */
+  currentLabel: string;
+  /** What it is measured against, in the same shape: "1–17.7". */
+  previousLabel: string;
+  /** True when the current period is still running, so the baseline was cut to match it. */
+  partial: boolean;
+  /** Where the figure comes from — "orders that were sent", not "the orders table". */
+  sourceLabel: string;
+  unit: 'count' | 'money' | 'percent';
+  /** The one currency both figures are in. Null for a count. */
+  currency?: string | null;
+}
+
+export function PeriodComparison({ current, previous, basis }: {
+  current: number | null;
+  previous: number | null;
+  basis: ComparisonBasis;
+}) {
+  const { t } = useT();
+  /* A figure that was not measured has nothing to compare, and the tile above it already says so
+     with a dash. A second sentence here would be the same absence stated twice. */
+  if (current == null) return null;
+
+  const comparable = previous != null && previous > 0;
+  const percent = comparable ? Math.round(((current - previous) / previous) * 100) : null;
+
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-muted">
+      {percent == null ? (
+        <span>{t('comparison.noBasis')}</span>
+      ) : (
+        <span className="inline-flex items-center gap-1 font-medium text-ink-mid">
+          {percent > 0 && <TrendingUp size={ICON.xs} aria-hidden="true" />}
+          {percent < 0 && <TrendingDown size={ICON.xs} aria-hidden="true" />}
+          <span className="num" dir="ltr">{percent > 0 ? '+' : ''}{percent}%</span>
+        </span>
+      )}
+      <span>
+        {basis.partial
+          ? t('comparison.againstPartial', { current: basis.currentLabel, previous: basis.previousLabel })
+          : t('comparison.against', { current: basis.currentLabel, previous: basis.previousLabel })}
+      </span>
+      <span className="text-ink-ghost">·</span>
+      <span>{basis.sourceLabel}</span>
+    </span>
   );
 }
 

@@ -1,10 +1,10 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import { Link } from 'react-router';
 import { useState, type ReactNode } from 'react';
-import { ArrowUpLeft, Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RefreshCw, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
+import { ArrowUpLeft, Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RefreshCw, ShoppingCart, TrendingUp, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { unwrap, useQuery } from '../lib/useQuery';
-import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, Card, ICON, ToggleGroup, type AttentionItem } from '../components/ui';
+import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, Card, ICON, ToggleGroup, PeriodComparison, type AttentionItem, type ComparisonBasis } from '../components/ui';
 import { EXCEPTION_TYPE, PO_STATUS, SEVERITY } from '../lib/status';
 import {
   addCalendarDays, BUSINESS_TIME_ZONE, dateStartInstant, daysInCalendarMonth,
@@ -99,24 +99,12 @@ const inBaseCurrency = (entries: MoneyAmount[] | null | undefined, base: string 
 const currenciesBeside = (entries: MoneyAmount[] | null | undefined, base: string | null | undefined) =>
   [...new Set((entries ?? []).filter((entry) => entry.currency !== base).map((entry) => entry.currency))].sort();
 
-// T7.3 — the reference's delta idiom: bare arrow + figure in ink, no gray pill box. The color
-// stays neutral on purpose: more purchasing is not "good" or "bad", so the trend hues (which are
-// business claims) do not apply here.
-function DeltaChip({ value }: { value: number }) {
-  const { t } = useT();
-  const rounded = Math.round(value);
-  const Icon = rounded > 0 ? TrendingUp : rounded < 0 ? TrendingDown : null;
-  return (
-    <span
-      className="ms-auto inline-flex items-center gap-1 text-xs font-medium text-ink-mid"
-      title={t('dashboard.title')}
-    >
-      {Icon && <Icon size={ICON.xs} aria-hidden="true" />}
-      <span className="num" dir="ltr">{rounded > 0 ? '+' : ''}{rounded}%</span>
-      <span className="sr-only">{t('dashboard.text')}</span>
-    </span>
-  );
-}
+// DeltaChip lived here until 31.08.2026. It rendered the arrow and the percent, and its
+// accessible sentence named a FIXED baseline — "against the same days last month" — which was
+// true for both of its callers and would have been false for the third comparison on this
+// screen. `PeriodComparison` (ui.tsx) replaces it and takes the baseline as an argument, so the
+// sentence is a fact about the caller rather than a constant. The neutral ink it insisted on
+// survives verbatim: a change without a business verdict is never green or red.
 
 /* CoveragePills (the reference's capsule row) lived here for one round (T7.3) and was removed by
    owner decision — "לא רלוונטי". Deleted rather than left dormant. */
@@ -125,7 +113,7 @@ function DeltaChip({ value }: { value: number }) {
 // borders — the three figures sit straight on the wheat canvas, Crextio-style, and separate by
 // spacing alone. Each stat keeps its full anatomy: icon chip · label · hero figure · delta ·
 // sparkline · context line.
-function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, delta, spark, sparkLabel, currency }: {
+function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, comparison, spark, sparkLabel, currency }: {
   title: string;
   value: number | null;
   tone?: 'done' | 'await' | 'idle';
@@ -133,7 +121,8 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
   context: string;
   icon: LucideIcon;
   aux?: string;
-  delta?: number | null;
+  /** The baseline and what it is, or nothing where the tile has no comparison to make. */
+  comparison?: { previous: number | null; basis: ComparisonBasis } | null;
   spark?: WeeklyPoint[];
   sparkLabel?: string;
   /** The one currency this tile's figure is in. A tile shows one number, so it shows one unit. */
@@ -144,12 +133,21 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
   // the figure alone.
   const toneCls = { done: 'text-done-fg', await: 'text-await-fg', idle: 'text-ink' }[tone];
   const hasSpark = value != null && spark != null && spark.filter((point) => point.count > 0).length >= 2;
+  /* The accessible name carries the same two facts the line below carries — the change and what
+     it is measured against — rather than a percentage floating free of its baseline. */
+  const comparablePrevious = comparison && comparison.previous != null && comparison.previous > 0
+    ? comparison.previous : null;
+  const spokenDelta = value != null && comparablePrevious != null
+    ? Math.round(((value - comparablePrevious) / comparablePrevious) * 100) : null;
   const linkLabel = [
     `${title}: ${glanceMoney(value, currency)}`,
-    delta != null
-      ? t('dashboard.deltaVsPreviousMonth', { delta: `${Math.round(delta) > 0 ? '+' : ''}${Math.round(delta)}` })
-      : null,
-    context,
+    comparison == null || value == null ? null
+      : spokenDelta == null
+        ? t('comparison.noBasis')
+        : `${spokenDelta > 0 ? '+' : ''}${spokenDelta}% ${comparison.basis.partial
+          ? t('comparison.againstPartial', { current: comparison.basis.currentLabel, previous: comparison.basis.previousLabel })
+          : t('comparison.against', { previous: comparison.basis.previousLabel })}`,
+    comparison ? comparison.basis.sourceLabel : context,
     aux,
   ].filter(Boolean).join('. ');
   return (
@@ -163,16 +161,23 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, d
       <div className="flex items-center gap-2">
         <Icon size={ICON.md} className="shrink-0 text-ink-muted" aria-hidden="true" />
         <span className="text-xs font-medium text-ink-muted">{title}</span>
-        {delta != null && <DeltaChip value={delta} />}
       </div>
       <div className="mt-2 flex items-center gap-3">
         <div className={`shrink-0 kpi-hero num ${toneCls}`} dir="ltr">{glanceMoney(value, currency)}</div>
         {hasSpark && spark && sparkLabel && <TrendSparkline points={spark} label={sparkLabel} currency={currency} />}
       </div>
-      {/* One context line, never the same sentence twice: the start slot names the period (or the
-          delta's baseline), the end slot exists only when it adds a DIFFERENT fact. */}
+      {/* One context line, never the same sentence twice. Where a comparison exists it IS the
+          line — the change, the two periods by name, and where the figure came from — so the tile
+          does not grow a row: what used to be a chip in the header and a vague "against the same
+          days last month" underneath is now one sentence a reader can actually check. */}
       <div className="mt-1 flex items-center justify-between gap-3 text-xs text-ink-muted">
-        <span>{delta != null ? t('dashboard.text_2') : context}</span>
+        {/* A figure that was not measured has nothing to compare, so the tile keeps its plain
+            context line rather than going blank: `PeriodComparison` renders nothing on a null
+            current, and an empty row would drop "מתחילת החודש" from a tile that still needs to
+            say which period it is about. */}
+        {comparison && value != null
+          ? <PeriodComparison current={value} previous={comparison.previous} basis={comparison.basis} />
+          : <span>{context}</span>}
         {(aux ?? (hasSpark ? t('dashboard.text_3') : null)) && (
           <span className="min-w-0 text-end leading-snug">{aux ?? t('dashboard.text_4')}</span>
         )}
@@ -718,9 +723,19 @@ export default function Dashboard() {
     const monthly = invoices.length ? monthBuckets.map(({ month, total, count, label }) => ({ month, total, count, label })) : [];
     const curMonthBucket = byMonth.get(monthKey);
     const prevMonthBucket = byMonth.get(prevMonthKey);
-    const momChange = curMonthBucket && prevMonthBucket && prevMonthBucket.total > 0
-      ? ((curMonthBucket.total - prevMonthBucket.total) / prevMonthBucket.total) * 100
-      : null;
+    /* The third copy of the same arithmetic, now the third caller of the same primitive. Two
+       whole months here, so `partial` is false and the labels are month names. */
+    const monthComparison = {
+      previous: prevMonthBucket ? prevMonthBucket.total : null,
+      basis: {
+        currentLabel: fmtMonth(`${monthKey}-01`, locale),
+        previousLabel: fmtMonth(`${prevMonthKey}-01`, locale),
+        partial: false,
+        sourceLabel: t('comparison.sourceInvoices'),
+        unit: 'money' as const,
+        currency: viewCurrency,
+      },
+    };
     // The bar card's two header cells (reference anatomy). null = the month has no invoices — the
     // cell simply doesn't render; no fake 0.
     const headline = {
@@ -760,11 +775,23 @@ export default function Dashboard() {
       .reduce((sum, order) => sum + orderValue(order), 0);
     const paidPreviousMTD = payments.filter((payment) => inPreviousMTD(payment.paid_date))
       .reduce((sum, payment) => sum + payment.amount, 0);
-    const percentDelta = (current: number | null, previous: number) => (
-      current == null || previous <= 0 ? null : ((current - previous) / previous) * 100
-    );
-    const purchasedDelta = percentDelta(purchasedMonth, purchasedPreviousMTD);
-    const paidDelta = percentDelta(paidMonth, paidPreviousMTD);
+    /* The two periods, named rather than described. "Against the same days last month" states a
+       relationship; a reader on the 17th cannot tell from it whether the baseline is a whole month
+       or the same seventeen days. `1–17.8` and `1–17.7` can be checked. */
+    const dayRangeLabel = (fromISO: string, toISO: string) =>
+      `${Number(fromISO.slice(8, 10))}–${Number(toISO.slice(8, 10))}.${Number(toISO.slice(5, 7))}`;
+    const currentMtdLabel = dayRangeLabel(monthStart, todayISO);
+    const previousMtdLabel = dayRangeLabel(prevMonthStartISO, previousCutoffISO);
+    /* Partial by construction: the month is still running, which is exactly why the baseline was
+       cut to the same day count. A finished month would compare whole to whole. */
+    const mtdBasis = (sourceLabel: string) => ({
+      currentLabel: currentMtdLabel,
+      previousLabel: previousMtdLabel,
+      partial: true,
+      sourceLabel,
+      unit: 'money' as const,
+      currency: viewCurrency,
+    });
 
     // ── by category (PO items, current month) — kept but demoted.
     const byCat = new Map<string, number>();
@@ -829,9 +856,11 @@ export default function Dashboard() {
       money: {
         openBalance: balanceEntry ? balanceEntry.amount : null,
         openInvoiceCount: balanceEntry ? balanceEntry.invoiceCount : 0,
-        paidMonth, paidDelta, purchasedMonth, purchasedDelta, monthKey,
+        paidMonth, purchasedMonth, monthKey,
+        paidComparison: { previous: paidPreviousMTD, basis: mtdBasis(t('comparison.sourcePayments')) },
+        purchasedComparison: { previous: purchasedPreviousMTD, basis: mtdBasis(t('comparison.sourceOrdersSent')) },
       },
-      monthly, weekly, paidWeekly, momChange, headline, categories, savings, savingsPct,
+      monthly, weekly, paidWeekly, monthComparison, headline, categories, savings, savingsPct,
       priceIncreases: priceIncreases.slice(0, 6),
       priceIncreaseCount: priceIncreases.length,
       topBalances,
@@ -1129,10 +1158,10 @@ export default function Dashboard() {
               </div>
             </Card>
             <BandStat title={t('dashboard.paidThisMonth')} value={view.money.paidMonth} tone="done" to={`/payments?month=${view.money.monthKey}`}
-              icon={Banknote} context={t('dashboard.context_2')} delta={view.money.paidDelta} currency={viewCurrency}
+              icon={Banknote} context={t('dashboard.context_2')} comparison={view.money.paidComparison} currency={viewCurrency}
               spark={view.paidWeekly} sparkLabel={t('dashboard.sparkLabel')} />
             <BandStat title={t('dashboard.title_4')} value={view.money.purchasedMonth} to="/orders?status=all"
-              icon={ShoppingCart} context={t('dashboard.context_3')} delta={view.money.purchasedDelta} currency={viewCurrency}
+              icon={ShoppingCart} context={t('dashboard.context_3')} comparison={view.money.purchasedComparison} currency={viewCurrency}
               aux={view.savings != null
                 ? (view.savingsPct != null
                   ? t('dashboard.estimatedSavingWithPct', { amount: fmtMoneyRounded(view.savings, viewCurrency), percent: view.savingsPct.toFixed(0) })
@@ -1185,9 +1214,11 @@ export default function Dashboard() {
             <div className="mt-3 grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
               <Card as="section" className="lg:col-span-5" aria-labelledby="monthly-trend-title">
                 {/* Reference header anatomy (image 3): title at the start, two summary CELLS at the
-                    end — this month beside last month, separated by a logical hairline; the MoM
-                    percent rides the current-month cell. Both figures come from byMonth, so the
-                    monthly claim survives the on-bar labels' removal. */}
+                    end — this month beside last month, separated by a logical hairline. Both
+                    figures come from byMonth, so the monthly claim survives the on-bar labels'
+                    removal. The MoM percent used to ride the current-month cell as a bare number;
+                    it now sits under the header inside the sentence that names both months, which
+                    is the same fact with its baseline attached. */}
                 <div className="flex min-h-8 flex-wrap items-start justify-between gap-x-4 gap-y-2">
                   <div>
                     <h3 id="monthly-trend-title" className="text-sm font-semibold text-ink-body">{t('dashboard.text_48')}</h3>
@@ -1199,15 +1230,6 @@ export default function Dashboard() {
                         <div className="text-ink-muted">{t('dashboard.text_50')}</div>
                         <div className="flex items-baseline gap-1.5">
                           <span className="num text-sm font-semibold text-ink">{glanceMoney(view.headline.current, viewCurrency)}</span>
-                          {/* Neutral ink, same reasoning as DeltaChip above: this is the month's
-                              purchasing against last month's, and buying more is neither good nor
-                              bad. It used to wear alert/done — a business verdict on a figure the
-                              file itself already decided not to judge, 800 lines apart. */}
-                          {view.momChange != null && (
-                            <span className="num text-xs font-medium text-ink-mid" dir="ltr">
-                              {view.momChange > 0 ? '+' : ''}{view.momChange.toFixed(0)}%
-                            </span>
-                          )}
                         </div>
                       </div>
                       {view.headline.previous != null && (
@@ -1218,6 +1240,10 @@ export default function Dashboard() {
                       )}
                     </div>
                   )}
+                </div>
+                <div className="mt-1">
+                  <PeriodComparison current={view.headline.current} previous={view.monthComparison.previous}
+                    basis={view.monthComparison.basis} />
                 </div>
                 {/* teal-mid, not the deep brand hue — the ring beside this card is deep, and two
                     neighboring charts in one color read as one chart (owner, T7.3c). */}

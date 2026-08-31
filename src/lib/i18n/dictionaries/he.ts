@@ -812,9 +812,6 @@ export const he = {
   },
 
   dashboard: {
-    title: 'מול אותם ימים בחודש הקודם',
-    text: 'מול אותם ימים בחודש הקודם',
-    text_2: 'מול אותם ימים בחודש הקודם',
     text_3: 'מגמת 8 שבועות',
     text_4: 'מגמת 8 שבועות',
     text_5: 'הזמנות ממתינות לקבלת סחורה (ניר)',
@@ -904,7 +901,6 @@ export const he = {
     title_7: 'ספקים עם יתרה פתוחה',
     empty_3: 'אין יתרות פתוחות',
     text_63: 'לכל הספקים',
-    deltaVsPreviousMonth: '{delta}% מול אותם ימים בחודש הקודם',
     openOrdersNoDate: 'הזמנות פתוחות ללא תאריך אספקה',
     openExceptions: 'חריגים פתוחים',
     highSeverity: '{count} בחומרה גבוהה',
@@ -1409,6 +1405,18 @@ export const he = {
     withholding: 'ניכוי מס במקור',
     actuallyReceived: 'התקבל בפועל',
     payableNote: 'הבלוק הזה אינו משפיע על הפער שלמעלה — שתי הרגות אינן מחולצות.',
+  },
+
+  /* What a figure is measured against. `PeriodComparison` owns these; the three hand-carved
+     copies on the dashboard used to say only "against the same days last month", which names a
+     relationship without naming either period. */
+  comparison: {
+    noBasis: 'אין בסיס להשוואה',
+    against: 'מול {previous}',
+    againstPartial: '{current} מול {previous}',
+    sourceOrdersSent: 'הזמנות שנשלחו',
+    sourcePayments: 'תשלומים שבוצעו',
+    sourceInvoices: 'חשבוניות שנרשמו',
   },
 
   alertsPage: {
