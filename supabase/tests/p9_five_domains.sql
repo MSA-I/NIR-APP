@@ -132,18 +132,25 @@ select pg_temp.p9_assert(
 
 -- The seeded vocabularies.
 --
--- Four codes since 0142. The count is pinned rather than open-ended for the same reason the definer
--- exemption registry is: every entry here becomes a row users can be notified about and a toggle in
--- push settings, so adding one has to be a deliberate act that updates this line in the same commit
--- instead of a catalog that grows unnoticed. `document_processing_stalled` is the operational one --
--- it fires when the OCR queue stops moving (DEBT-REGISTER §43).
+-- Four codes since 0142, five since 0274. The count is pinned rather than open-ended for the same
+-- reason the definer exemption registry is: every entry here becomes a row users can be notified
+-- about and a toggle in push settings, so adding one has to be a deliberate act that updates this
+-- line in the same commit instead of a catalog that grows unnoticed. `document_processing_stalled`
+-- is the operational one -- it fires when the OCR queue stops moving (DEBT-REGISTER §43).
+--
+-- `expected_document_missing` (0274) is the fifth, and it is the first code that fires about
+-- something that did NOT happen. The waiting window and the grace period of a standing expectation
+-- both passed with no document recorded, which is a finding rather than the absence of one -- a
+-- supplier invoice that never arrived is a month about to close on an expense nobody booked. It is
+-- deduplicated per occurrence, so a tenant is told once per period however many times the nightly
+-- scan runs, and the scan opens the exception it points at in the same transaction.
 select pg_temp.p9_assert(
-  (select count(*) from private.notification_event_definitions) = 4
+  (select count(*) from private.notification_event_definitions) = 5
     and (select count(*) from private.notification_event_definitions
          where event_code in (
            'price_increase', 'duplicate_invoice', 'payment_due',
-           'document_processing_stalled')) = 4,
-  'the notification catalog must hold exactly the four live event codes');
+           'document_processing_stalled', 'expected_document_missing')) = 5,
+  'the notification catalog must hold exactly the five live event codes');
 
 select pg_temp.p9_assert(
   (select count(*) from private.approval_policy_definitions
