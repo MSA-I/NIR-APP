@@ -10,6 +10,7 @@ import { render, screen } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { EntityMonogram, monogramIndex, monogramInitials } from './EntityMonogram';
+import { THEMES } from '../lib/theme-choice';
 
 const src = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 const css = src('src/index.css');
@@ -47,7 +48,8 @@ function oklchToLinearRgb(lightness: number, chroma: number, hue: number) {
 const DARK_START = css.indexOf("[data-theme='dark']");
 const LIGHT_CSS = DARK_START === -1 ? css : css.slice(0, DARK_START);
 const DARK_CSS = DARK_START === -1 ? '' : css.slice(DARK_START);
-export const THEMES = ['light', 'dark'] as const;
+/* Imported, not redeclared: a test that keeps its own copy of the theme list would keep passing on
+   the day a third theme is added and stop being a statement about the product. */
 type Theme = (typeof THEMES)[number];
 
 function tokenValue(name: string, theme: Theme): string {

@@ -25,21 +25,31 @@
  */
 
 import { useEffect, useState } from 'react';
+/**
+ * The VALUES live in `theme-choice.ts`, which touches nothing; only the side effects live here.
+ *
+ * That split is not tidiness. `types.ts` needs `Theme` (since `0268`, `profiles.theme` is a column),
+ * the assistant's Deno contract tests import `../types`, and Deno type-checks the graph with no
+ * `lib: dom` — so when this file owned the type it was pulled into a DOM-free checker and failed on
+ * `document`, `HTMLMetaElement` and `requestAnimationFrame`, globals it is entitled to use.
+ * `npm run typecheck` passed throughout, because the app's tsconfig includes `lib: dom`.
+ * Re-exported here so every existing `from './appearance'` import keeps working.
+ */
+import { DEFAULT_THEME, THEMES, isTheme, type Theme } from './theme-choice';
 
-export type Theme = 'dark' | 'light';
+export { DEFAULT_THEME, THEMES, isTheme, type Theme };
 
 /** Same shape as the locale key beside it, so the two preferences read alike in devtools. */
 export const THEME_STORAGE_KEY = 'inplace.theme';
 
 /**
- * The product's home state.
+ * The product's home state is LIGHT — declared in `theme-choice.ts`, reasoned about here.
  *
- * LIGHT, unlike the marketing page, and the difference is not an oversight: this is a working
- * surface that people sit in front of for whole shifts under office lighting, and `DESIGN.md`'s
- * north star is warm paper. Dark is a choice here, not the default — which also means the entire
- * existing product keeps rendering exactly as it did for anyone who never touches the switch.
+ * Unlike the marketing page, and the difference is not an oversight: this is a working surface that
+ * people sit in front of for whole shifts under office lighting, and `DESIGN.md`'s north star is
+ * warm paper. Dark is a choice here, not the default — which also means the entire existing product
+ * keeps rendering exactly as it did for anyone who never touches the switch.
  */
-export const DEFAULT_THEME: Theme = 'light';
 
 /**
  * The browser chrome above the page follows `--color-canvas`, READ FROM THE STYLESHEET rather than
@@ -81,7 +91,9 @@ export function readTheme(): Theme {
 export function readStoredTheme(): Theme | null {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === 'dark' || stored === 'light' ? stored : null;
+    // `isTheme` rather than an inline comparison: the list of themes has one home, and a third
+    // theme would otherwise be accepted by the type and silently rejected by this line.
+    return isTheme(stored) ? stored : null;
   } catch {
     return null;
   }

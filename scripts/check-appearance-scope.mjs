@@ -67,7 +67,9 @@ const WRITES_ATTRIBUTE = /dataset\.theme\s*=|setAttribute\(\s*['"]data-theme['"]
 const READS_KEY = /['"]inplace\.theme['"]|THEME_STORAGE_KEY/;
 for (const file of sources(join(root, 'src'))) {
   if (file === OWNER) continue;
-  const text = readFileSync(file, 'utf8');
+  // Comments blanked, like every other scan in this file: the rule is about USAGE, and prose that
+  // names the key in order to explain the rule is not a second reader of it.
+  const text = blankComments(readFileSync(file, 'utf8'));
   const where = relative(root, file);
   // A spec may set the attribute to arrange a dark render; it may not read the storage key, which is
   // the part that decides the theme for a real person.
@@ -98,10 +100,20 @@ if (!css.includes("[data-theme='dark']")) {
 // whose only mention of the path is a comment explaining why not to use it — including this rule's
 // own reason, written next to the fix. Comments are blanked (the same discipline
 // `check-design-tokens.ts` follows) and only an actual `src=`/`href=` attribute counts.
-const NEWLINES = /[^\r\n]/g;
-const blankComments = (source) => source
-  .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(NEWLINES, ' '))
-  .replace(/\/\/.*/g, (m) => ' '.repeat(m.length));
+/**
+ * A FUNCTION DECLARATION, not a `const` arrow, and that is load-bearing: declarations hoist, so
+ * check 3 — which runs above this line — can call it. Check 3 was the one scan in this file still
+ * reading raw text, and on 01.09.2026 it failed the gate on `theme-choice.ts` for a doc comment
+ * NAMING the storage key while explaining that only `appearance.ts` may read it. A check that fails
+ * on the sentence describing its own rule punishes documentation. The regex is local for the same
+ * reason: a `const` at this position would be in its temporal dead zone when check 3 calls in.
+ */
+function blankComments(source) {
+  const newlines = /[^\r\n]/g;
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(newlines, ' '))
+    .replace(/\/\/.*/g, (m) => ' '.repeat(m.length));
+}
 
 const IN_PAGE_FAVICON = /(?:src|href)\s*=\s*(?:["'{]\s*)?["'`]?[^"'`]*\/favicon\.svg/;
 for (const file of sources(join(root, 'src'))) {

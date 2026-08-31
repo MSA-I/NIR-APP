@@ -1,6 +1,6 @@
 // Row types matching supabase/migrations/0001_init.sql (hand-maintained, pragmatic subset)
 import type { Locale } from './i18n/locale.ts';
-import type { Theme } from './appearance.ts';
+import type { Theme } from './theme-choice.ts';
 // The extension is not optional: `supabase/functions/assistant` type-checks this module under
 // Deno, which resolves a bare specifier as a bare module and fails.
 import type { ToleranceSetting } from './tolerances.ts';
