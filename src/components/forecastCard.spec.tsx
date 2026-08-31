@@ -41,7 +41,7 @@ function show(value: ScheduledPaymentsOutlook | null, props: Partial<Parameters<
 
 describe('the threshold is coverage by amount, and only by amount', () => {
   /**
-   * OWNER RULING #306, and the case that produced it: half the requests dated, ninety-four per
+   * OWNER RULING #308, and the case that produced it: half the requests dated, ninety-four per
    * cent of the money. A gate on row count would have hidden an almost-exact figure.
    */
   it('shows the amount when the MONEY is covered, even though half the rows are not', () => {

@@ -13,7 +13,7 @@ import { Card, Note, Skeleton } from './ui';
  * payments". The flag key behind it is `insights.forecast`, an internal identifier that never
  * reaches a screen.
  *
- * THE THRESHOLD IS COVERAGE BY AMOUNT, AND ONLY BY AMOUNT (owner ruling 31.08.2026, #306). Not
+ * THE THRESHOLD IS COVERAGE BY AMOUNT, AND ONLY BY AMOUNT (owner ruling 31.08.2026, #308). Not
  * because rows do not matter but because the two numbers can be far apart: half the requests dated
  * can be ninety-four per cent of the money, and a gate on row count would hide an almost-exact
  * figure. Both numbers are always DISPLAYED; only the money one decides whether an amount is shown
@@ -29,7 +29,7 @@ import { Card, Note, Skeleton } from './ui';
  * boundary they simply cannot cross — which is `DEBT §59` exactly.
  */
 
-/** Owner ruling #306: seventy per cent of the MONEY. Rows are reported, never gating. */
+/** Owner ruling #308: seventy per cent of the MONEY. Rows are reported, never gating. */
 const COVERAGE_THRESHOLD = 0.7;
 
 export interface OutlookCurrencyRow {
