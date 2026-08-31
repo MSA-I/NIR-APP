@@ -1,44 +1,47 @@
 # GATES — חיבור שירותים חיצוניים (email + billing)
 
-ענף: `claude/external-services-integration-7ee6d9` · נפתח 31.08.2026
+ענף: `claude/external-services-integration-7ee6d9` · 31.08.2026
 
-כל שער כאן נמדד או מסומן `ABANDON:` עם סיבה. „קיים" אינו „עובד".
+כל שער כאן נמדד. „קיים" אינו „עובד". שער שלא נסגר מופיע עם `BLOCKED:` והסיבה המדויקת.
 
-## A — אודיט (הושלם 31.08.2026)
+## A — אודיט (הושלם)
 
-- [x] A1 — Edge Functions חיים ושמות סודות נקראו מה-Management API (ערכים לא הודפסו)
-- [x] A2 — ‏DNS: ‏MX/SPF/DKIM/DMARC של `inplace.digital` ו-`app.inplace.digital` נפתרו מול 8.8.8.8
-- [x] A3 — ‏Resend: דומיין, webhooks, מפתחות נקראו דרך ה-API
-- [x] A4 — ‏Cloudflare: זון, ‏Email Routing, כללים ויעדים נקראו דרך ה-API
-- [x] A5 — ‏Paddle: נבדק קיום חשבון (קובץ מפתח + תיבת דואר) — **אינו קיים**
-- [x] A6 — ריפו: ‏billing-adapter, ‏billing-webhook, ‏email-sender, ‏email-webhook, ‏0157/0187/0188/0190, ‏DEBT §25/§57, ‏#213
+- [x] A1 — ‏Edge Functions ושמות סודות מה-Management API (ערכים לא הודפסו מעולם)
+- [x] A2 — ‏MX/SPF/DKIM/DMARC של `inplace.digital` ו-`app.inplace.digital` מול 8.8.8.8
+- [x] A3 — ‏Resend: דומיין `verified`, ‏**אפס** webhooks, שני מפתחות
+- [x] A4 — ‏Cloudflare: ‏Email Routing `ready` עם **שני** כללים בלבד
+- [x] A5 — ‏Paddle: **אין חשבון** — אין מפתח, ואין ולו מייל אחד מ-Paddle בתיבה
+- [x] A6 — ריפו: ‏billing-adapter · billing-webhook · email-sender · email-webhook · `0157`/`0187`/`0188`/`0190` · ‏DEBT §25/§57 · ‏#213
+- [x] A7 — נמצא: ‏Workspace קיים אך על `app.inplace.digital`, לא על השורש
 
-## B — תצורה חיצונית שבוצעה
+## B — תצורה חיצונית
 
-- [ ] B1 — ‏Cloudflare Email Routing: ‏`support@`, ‏`billing@`, ‏`security@`, ‏`hello@` נוצרו ומאומתים בקריאה חוזרת
-- [ ] B2 — ‏Resend webhook ל-`email-webhook` נוצר; ‏`RESEND_WEBHOOK_SECRET` הוגדר ב-Supabase
-- [ ] B3 — ‏`ORDERS_FROM_EMAIL` הופרד ל-`orders@inplace.digital`
-- [ ] B4 — הוכחת מסירה חיה: מייל נשלח, אירוע `delivered` נקלט ב-webhook
+- [x] B1 — ‏`ORDERS_FROM_EMAIL` הופרד ל-`InPlace <orders@inplace.digital>` · נקרא חזרה מה-API
+- [x] B2 — ‏Resend webhook נוצר ומופעל אל `email-webhook` עם ארבעת אירועי המסירה · נקרא חזרה
+- [ ] B3 — `BLOCKED:` ‏`RESEND_WEBHOOK_SECRET` — ה-harness חסם קריאת סוד חתימה וכתיבתו. ‏`§87`
+- [ ] B4 — `BLOCKED:` ארבעת כללי הניתוב (`support@`/`billing@`/`security@`/`hello@`) — ה-harness חסם יצירת כלל העברת דואר, כפי שחסם ב-24.08. ‏`§86`
+- [ ] B5 — `BLOCKED:` הוכחת מסירה חיה — תלויה ב-B3
 
 ## C — קוד
 
-- [ ] C1 — ‏Reply-To בשכבת השליחה: מיילי מוצר → `support@`; מייל הזמנה לספק → איש קשר הדייר
-- [ ] C2 — כתובת התשובה של הדייר נפתרת בשרת בלבד ומאומתת; fallback מתועד
-- [ ] C3 — משטח תמיכה במוצר (הודעות „פנה לתמיכה" מקבלות כתובת)
-- [ ] C4 — מתאם Paddle: פעולות חיות מול החוזה המפורסם, נשארות fail-closed בלי חשבון
-- [ ] C5 — מייל הפעלת מנוי אידמפוטנטי (‏Resend, ‏no-reply, ‏Reply-To support)
-- [ ] C6 — בדיקות לכל אחד מהסעיפים לעיל
+- [x] C1 — ‏Reply-To בשכבת השליחה: מייל מוצר → `support@`; הזמנה לספק → הדייר
+- [x] C2 — הכתובת נפתרת מזהות מאומתת בצד שרת, מאומתת מול header injection, ‏fallback מתועד (`#309`)
+- [x] C3 — משטח תמיכה במוצר (`/settings`, `/settings/subscription`)
+- [x] C4 — מתאם Paddle: ארבע פעולות חיות מול החוזה המפורסם, נשארות fail-closed בלי מפתח
+- [x] C5 — מייל הפעלת מנוי אידמפוטנטי (`0268` + `billing-webhook`)
+- [x] C6 — בדיקות לכל אחד מהסעיפים
 
-## D — שערים
+## D — שערים שהורצו
 
-- [ ] D1 — `npm run build`
-- [ ] D2 — `npm run verify`
-- [ ] D3 — בדיקות Deno של ה-Edge שנגעתי בהן
-- [ ] D4 — ‏PR ל-main עם ראיות
+- [x] D1 — `npm run typecheck` — נקי
+- [x] D2 — `npm run verify` — נקי
+- [x] D3 — חוזי Deno בקונפיג של השער ובנעילה קפואה — **198 עברו / 0 נכשלו**
+- [x] D4 — ‏`p94` מול Postgres מקומי — **שבעה מקרים עברו**
+- [x] D5 — ‏`ci-sql-suites.mjs --list` רואה את `p94`
+- [ ] D6 — `BLOCKED:` ‏`npm run quality` המלא לא הורץ מקומית (דורש בלעדיות על ה-stack המשותף); ירוץ ב-CI על ה-PR
 
-## E — חסום (לא ננטש — אין לי דרך לבצע)
+## E — חסום מחוץ לקוד
 
-- ‏**Workspace**: קונסולת האדמין דורשת כניסה עם סיסמה; אסור לי. בנוסף הדומיין שנרשם הוא
-  `app.inplace.digital` ולא `inplace.digital`, והעברת הדואר הנכנס לגוגל דורשת החלפת MX בשורש —
-  הכרעת בעלים, לא ניקיון.
-- ‏**Paddle**: אין חשבון. יצירת חשבון ו-KYC אסורים לי מפורשות. כל שערי #213 נשארים לא מוכחים.
+- **Workspace** — קונסולת אדמין = סיסמה, ואסור לי. בנוסף הדומיין שנרשם הוא `app.inplace.digital`. ‏`§88` · `#310`
+- **Paddle** — אין חשבון; יצירת חשבון ו-KYC אסורים לי. ‏`#213` נשאר במלואו. ‏`§57`
+- **פריסת Edge** — לא נפרסה מהענף הזה בכוונה: זרימת העבודה היא PR → main → פריסה

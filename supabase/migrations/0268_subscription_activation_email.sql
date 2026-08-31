@@ -311,6 +311,8 @@ grant execute on function public.service_settle_subscription_activation_email(uu
 
 -- ===== 5. Assertions -- the invariants, checked at apply time rather than believed =====
 do $assert$
+declare
+  v_violations text;
 begin
   -- The once-ness is structural, not a convention somebody has to remember.
   if not exists (
@@ -359,6 +361,14 @@ begin
   -- Merging this file is not billing activation. If it ever is, this assertion is the alarm.
   if private.billing_provider_enabled('paddle') then
     raise exception '0268: paddle is enabled; this migration must not be the thing that did it';
+  end if;
+
+  -- The 0057 gate, re-run as every migration after it must. This file adds a table and three
+  -- SECURITY DEFINER functions, which is exactly the surface A1/A3/A5 exist to catch.
+  select string_agg(detail, chr(10) order by detail)
+    into v_violations from private.scope_enforcement_violations();
+  if v_violations is not null then
+    raise exception '0268 scope assertions failed: %', v_violations;
   end if;
 end
 $assert$;

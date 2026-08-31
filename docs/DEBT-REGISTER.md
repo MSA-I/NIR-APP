@@ -492,6 +492,15 @@
 - **הצעד הבא:** רכישה, DNS ‏SPF/DKIM/DMARC, ‏`INVITE_FROM_EMAIL`/`ORDERS_FROM_EMAIL`, ‏SMTP Auth
   ו־webhook חתום; אחר כך smoke מסירה חיצוני.
 
+- **עודכן 31.08.2026 — רוב הסעיף נסגר; מה שנשאר הוא סוד אחד.** נמדד חי מול ה-API של Resend,
+  ‏Cloudflare וה-Management API של Supabase (‏`artifacts/external-services/EMAIL-AND-BILLING-20260831.md`):
+  הדומיין **מאומת** ושליחה פעילה; ‏`INVITE_FROM_EMAIL` ו-`ORDERS_FROM_EMAIL` מוגדרים, ומ-31.08
+  ‏`ORDERS_FROM_EMAIL` הופרד ל-`InPlace <orders@inplace.digital>` כך שהזמנה לספק ומייל מוצר אינם
+  חולקים זהות; ‏`send-invite`, ‏`email-sender` ו-`email-webhook` פרוסים; ‏Auth מחובר ל-SMTP.
+  **מה שנשאר פתוח מהסעיף הזה בדיוק אחד:** ‏`RESEND_WEBHOOK_SECRET` עדיין אינו קיים, ולכן
+  ‏`email-webhook` עונה `403` לכל מסירה. הסעיף עובר ל-**§87**, שם הוא מתואר במדויק; ‏§25 נשאר
+  פתוח כל עוד „accepted אינו delivered".
+
 - **עודכן 30.08.2026 — הסעיף הזה חוסם עכשיו גם את `#270`.** ‏`0255` מוסיף כתובת גיבוי מאומתת,
   אבל **האכיפה נשארת כבויה בשני הצדדים** עד שהדומיין ייאומת ו-Resend ייצא מ-sandbox: מייל אימות
   לכתובת של לקוח מתקבל ב-API ואינו נמסר, ולכן דרישה חוסמת הייתה הופכת את ההרשמה לבלתי-אפשרית.
@@ -573,6 +582,21 @@
 - **הצעד הזול הבא:** הוכחת חשבון/KYC/payout ו־sandbox Paddle, ואז Edge אחד + מימוש
   `verifyAndParse` + מעבד שממפה סוג אירוע לפקודת מנוי קיימת. Stripe+Morning נשארים fallback
   לא־פעיל לפי #207/#256.
+
+- **עודכן 31.08.2026 — כל מה שנמנה ב„הצעד הזול הבא" נכתב, חוץ מהדבר היחיד שאי-אפשר לכתוב.**
+  ‏`billing-webhook` פרוס (‏v5, ‏`verify_jwt=false`), ‏`verifyAndParse` ממומש, ‏`0187` בנה את
+  המעבד המלא, ומ-31.08 המתאם מממש גם `createCustomer`, ‏`createCheckoutSession`,
+  ‏`cancelSubscription` ו-`customerPortalUrl` מול החוזה המפורסם. **מה שחסר הוא החשבון.**
+  נמדד באודיט של 31.08: אין קובץ מפתח Paddle בתיקיית הסודות, ואין ולו הודעה אחת מ-Paddle בתיבת
+  הבעלים — לא הרשמה ולא אישור. כלומר `#213` אינו „טרם אומת", אלא **טרם נפתח**.
+- **מה מחזיק את זה סגור, ולמה זה בכוונה:** ‏`PADDLE_WEBHOOK_SECRET` אינו מוגדר, ולכן כל payload
+  נדחה; ‏`PADDLE_API_KEY` אינו מוגדר, ולכן כל פעולה חיה מסרבת **בשמה** ולא נוגעת ברשת (נבדק);
+  ‏`PADDLE_ENVIRONMENT` חסר ברירת מחדל, כדי ששכחת משתנה לא תכריע אם לקוח מחויב באמת;
+  ‏`private.billing_provider_boundary` זורע את כל הספקים כבויים ואין פונקציה שמדליקה;
+  ו-`private.billing_provider_price_map` ריקה, ולכן מחיר לא ממופה מת ב-dead-letter במקום להעניק
+  מסלול מנוחש. ‏`0268` אף מוסיף assertion שנכשלת אם Paddle דלוק בזמן שהיא מוחלת.
+- **ראיה נוספת:** ‏`_shared/billing-adapter-paddle-api.test.ts` (‏16 מקרים) ·
+  ‏`artifacts/external-services/EMAIL-AND-BILLING-20260831.md §3.4`.
 
 ### §58 — ארגון שהבעלים שלו לא אישר מייל נשאר לנצח
 
@@ -1527,3 +1551,53 @@ Hebrew and clears the field" — עם `Unable to find an element with the text: 
   שינוי מוצר — ולקרוא את שגיאות הקונסולה לפני שסוגרים. עבודה בענף משלה; **אין למזג אותה לתוך PR
   של תכונה**, אחרת שני השינויים מסתירים זה את זה. עד אז, כל PR שהדפדפן נופל בו חייב לצרף את
   ההשוואה מול ריצת הבסיס — אחרת „נכשל" ו„נכשל בגללי" נראים אותו דבר.
+
+### §86 — המוצר מפרסם `support@inplace.digital` והכתובת אינה מקבלת דואר
+
+- **מצב, נמדד 31.08.2026:** ‏`inplace.digital` מנותב ב-Cloudflare Email Routing (‏`enabled=true`,
+  ‏`status=ready`), ויש בו **שני** כללים בלבד — `postmaster@` ו-`dmarc@`. אין `support@`, אין
+  ‏`billing@`, אין `security@`, אין `hello@`, וה-catch-all כבוי. במקביל, מ-31.08 המוצר **מדפיס**
+  את `support@inplace.digital` בשני מסכים ומציב אותה כ-`Reply-To` בכל מייל מוצר.
+- **הסיכון, ומדוע הוא לא תיאורטי:** לקוח שילחץ „השב" על הזמנה למערכת, או שיעתיק את הכתובת ממסך
+  ההגדרות, יקבל שגיאת מסירה. זהו הנזק הקלאסי של „הגדרה שקיימת אינה הוכחה שהיא עובדת", אלא שכאן
+  הצד שנשבר גלוי ללקוח.
+- **למה זה לא נסגר בקמפיין:** ארבע קריאות API מול יעד שכבר מאומת — וה-harness סירב לקריאה, בדיוק
+  כפי שסירב לאותה מחלקת פעולה ב-24.08.2026 (‏`EMAIL-ENABLEMENT-20260824.md §7`): כלל העברת דואר
+  נראה כמו השתלטות על חשבון. **לא נעשה ניסיון לעקוף.**
+- **ראיה:** ‏`artifacts/external-services/EMAIL-AND-BILLING-20260831.md §1, §3.2` ·
+  `src/lib/support.ts` · `supabase/functions/_shared/reply-to.ts`.
+- **הצעד הזול הבא, והוא של הבעלים:** ארבעה כללי ניתוב בלוח של Cloudflare, באותה צורה כמו השניים
+  הקיימים, אל היעד המאומת. אחר כך לשלוח מייל אחד לכל אחת מארבע הכתובות ולוודא שהוא מגיע — HTTP
+  ‏200 מה-API אינו הוכחה, קבלה בתיבה כן.
+
+### §87 — ה-webhook של Resend רשום, ואין לו סוד חתימה
+
+- **מצב, נמדד 31.08.2026:** ‏webhook `ea6ea6a8-96af-47fa-9453-cefad76fdd3a` נוצר ומופעל
+  (‏`status=enabled`) אל `…/functions/v1/email-webhook` עם ארבעת אירועי המסירה. הסוד
+  ‏`RESEND_WEBHOOK_SECRET` **אינו קיים** ברשימת הסודות של הפרויקט, ולכן `email-webhook` נכשל
+  fail-closed ומחזיר `403` לכל מסירה.
+- **הסיכון:** ‏„accepted" עדיין אינו „delivered" (‏§25), ובנוסף Resend משבית endpoint שנכשל שוב
+  ושוב — כלומר החלון שבו התיקון הוא „להדביק סוד" עלול להיסגר ולהפוך ל„להדביק סוד ולהפעיל מחדש".
+- **למה זה לא נסגר:** קריאת הסוד מה-API והכתבתו לסודות Supabase נחסמה על ידי ה-harness, אותה
+  מחלקה שחסמה את `§86`. **לא נעשה ניסיון לעקוף.**
+- **ראיה:** ‏`artifacts/external-services/EMAIL-AND-BILLING-20260831.md §2, §3.3` ·
+  `supabase/functions/email-webhook/core.ts`.
+- **הצעד הזול הבא:** להעתיק את הסוד מלוח Resend אל הסוד `RESEND_WEBHOOK_SECRET`, לשלוח מייל אחד,
+  ולקרוא את אירוע ה-`delivered` בטבלת המסירה. זו גם ההוכחה הראשונה של `§25`.
+
+### §88 — ‏Google Workspace נפתח על הדומיין של האפליקציה
+
+- **מצב, נמדד 31.08.2026:** קיים חשבון Workspace בשם „InPlace" שנוצר ב-27.08.2026, והדומיין שלו
+  הוא **`app.inplace.digital`** — אותו hostname שבו רץ המוצר. ל-`app.inplace.digital` יש היום
+  ‏`MX smtp.google.com` ו-`google-site-verification` משלו, בזמן ש-`inplace.digital` (השורש) מנותב
+  ל-Cloudflare Email Routing ונושא את תיבת ה-DMARC.
+- **הסיכון:** כתובות שייווצרו שם הן `support@app.inplace.digital` — לא הכתובת שלקוח ינחש, ולא זו
+  שהמוצר מפרסם. חמור מכך, `app.` הוא שם ה-host של האתר; ערבוב דואר ואפליקציה על שם אחד הופך כל
+  שינוי DNS עתידי לאירוע שנוגע בשניהם בבת אחת.
+- **מה חוסם:** קונסולת האדמין היא כניסה עם סיסמה, ולסוכן אסור להזין סיסמה. אין גם מסלול API:
+  אישור Google שבתיקיית הסודות הוא **OAuth client של אתר** (`client_id`/`client_secret`/
+  `redirect_uris`) לכניסת משתמשים למוצר, ולא service account עם domain-wide delegation.
+- **ראיה:** ‏`artifacts/external-services/EMAIL-AND-BILLING-20260831.md §1, §3.1` · ‏`#310`.
+- **הצעד הבא:** הכרעת `#310` — האם התיבות האנושיות יושבות על Cloudflare Email Routing (חינם,
+  העברה בלבד, אי-אפשר לשלוח **בשם** `support@`) או על Workspace (בתשלום, אפשר להשיב מהכתובת,
+  ומחייב להוסיף את `inplace.digital` לחשבון ולהחליף את ה-MX בשורש). זו הכרעה מסחרית, לא ניקיון.
