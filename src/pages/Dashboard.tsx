@@ -1057,8 +1057,15 @@ export default function Dashboard() {
           owner used to land on an empty control centre with nothing telling them why it is empty
           or what to do next. Owner only: /onboarding is Guard roles={['owner']}, so office must
           not see a link it cannot open. It sits OUTSIDE the .dash-enter grid on purpose — the
-          quality gate pins the heading order inside it. */}
-      {data?.firstRun && profile?.role === 'owner' && (
+          quality gate pins the heading order inside it.
+
+          `onboarding_completed_at` (0258) is the second condition, and it is not decoration. The
+          supplier count alone answers "is the system empty", never "does this owner still want to
+          be shown the wizard" — so an owner who finished deliberately with the supplier step
+          skipped got the banner back on every single login. That is the report this fixes, and
+          leaving it here would have contradicted the menu, which now retires the same entry on the
+          same signal. */}
+      {data?.firstRun && !org?.onboarding_completed_at && profile?.role === 'owner' && (
         <div data-tour-first-run="true">
         <Note tone="info" className="flex flex-wrap items-center justify-between gap-3">
           <span className="min-w-0 flex-1">

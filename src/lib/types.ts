@@ -45,6 +45,15 @@ export interface Organization {
     status: OrgStatus;
     logo_path: string | null;
     logo_updated_at: string | null;
+  /**
+   * When the owner said the setup wizard was finished (0258). `null` means they never said so,
+   * and `/onboarding` is still offered in the navigation.
+   *
+   * A statement, not a measurement. Per-STEP completion in the wizard stays derived from live row
+   * counts — that is what makes a checkmark honest on a second device — but whether the errand is
+   * over is the owner's own call, and an owner may finish deliberately with steps still skipped.
+   */
+  onboarding_completed_at: string | null;
   settings: {
     bank_match_days: number;
     /**

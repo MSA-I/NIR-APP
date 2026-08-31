@@ -67,6 +67,15 @@ interface AuthState {
   signOut: () => Promise<SignOutResult>;
   retryBootstrap: () => void;
   refreshOrganizationAccess: () => Promise<void>;
+  /**
+   * Re-read the organisation row after a screen has written to it.
+   *
+   * The bootstrap reads `organizations` once per session, which is right for a record the tenant
+   * changes rarely — but the navigation is now drawn from one of its columns
+   * (`onboarding_completed_at`, 0258), and that column is written mid-session by the owner. Without
+   * this the sidebar would keep offering a wizard the owner had just closed, until the next reload.
+   */
+  refreshOrg: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState>(null as unknown as AuthState);
@@ -242,6 +251,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const roleLabels = useMemo(() => resolveRoleLabels(org?.settings, statusLabel), [org?.settings, statusLabel]);
 
+  async function refreshOrg() {
+    if (!session || !profile || offlineBootstrap) return;
+    const next = unwrap(
+      await supabase.from('organizations').select('*').eq('id', profile.org_id).maybeSingle(),
+    ) as Organization | null;
+    // A miss leaves the organisation we already hold. Blanking it here would strand the shell on
+    // "account unavailable" over a momentary read, which is a worse answer than a stale row.
+    if (next) setOrg(next);
+  }
+
   async function refreshOrganizationAccess() {
     if (!session || !profile || !org || offlineBootstrap) return;
     const result = await supabase.rpc('organization_access_state');
@@ -313,7 +332,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, profile, org, loading, bootstrapError, offlineBootstrap, organizationAccess: access, accessStatus, isPlatformAdmin, roleLabels, signIn, signOut, retryBootstrap, refreshOrganizationAccess }}>
+    <AuthContext.Provider value={{ session, profile, org, loading, bootstrapError, offlineBootstrap, organizationAccess: access, accessStatus, isPlatformAdmin, roleLabels, signIn, signOut, retryBootstrap, refreshOrganizationAccess, refreshOrg }}>
       {/* Every cache key opens with this value. It is deliberately `org?.id ?? null` and not the
           profile's org_id: a suspended organisation makes auth_org() return null server-side, and
           the cache root must move with it so rows read under the live tenant are not served after
