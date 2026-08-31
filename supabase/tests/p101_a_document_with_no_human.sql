@@ -1,4 +1,4 @@
--- P99 — a document nobody uploaded, and every way it must not be allowed to become one.
+-- P101 — a document nobody uploaded, and every way it must not be allowed to become one.
 --
 -- Two inbound channels are about to put documents into this product with no person behind them.
 -- The pipeline was built on the opposite assumption in four separate places, and relaxing those
@@ -37,18 +37,18 @@
 
 begin;
 
-create function pg_temp.p99_assert(p_condition boolean, p_message text)
+create function pg_temp.p101_assert(p_condition boolean, p_message text)
 returns void language plpgsql as $$
 begin
   if not coalesce(p_condition, false) then
-    raise exception 'P99 machine-actor assertion failed: %', p_message;
+    raise exception 'P101 machine-actor assertion failed: %', p_message;
   end if;
 end
 $$;
 
 -- Runs a statement and returns the SQLSTATE+message it refused with, or 'ACCEPTED' if it did
 -- not refuse at all. A test that only asserts "it raised" passes when the wrong thing raises.
-create function pg_temp.p99_refusal(p_sql text)
+create function pg_temp.p101_refusal(p_sql text)
 returns text language plpgsql as $$
 begin
   execute p_sql;
@@ -60,13 +60,13 @@ $$;
 
 -- ---- fixture -----------------------------------------------------------------------------
 insert into public.organizations(id, name, status, vat_rate, base_currency, country_code) values
-  ('a0980000-0000-4000-8000-000000000001', 'P99 org',        'active', 18, 'ILS', 'IL'),
-  ('a0980000-0000-4000-8000-000000000002', 'P99 other org',  'active', 18, 'ILS', 'IL');
+  ('a0980000-0000-4000-8000-000000000001', 'P101 org',        'active', 18, 'ILS', 'IL'),
+  ('a0980000-0000-4000-8000-000000000002', 'P101 other org',  'active', 18, 'ILS', 'IL');
 
 -- Creating an organisation already creates its root unit, so the root is READ rather than
 -- written -- inserting one raises org_units_one_root_per_org, which is the schema saying the
 -- fixture was about to describe a shape the product cannot have.
-create temporary table p99_roots as
+create temporary table p101_roots as
   select org_id, id as root_id from public.org_units
    where unit_type = 'root'
      and org_id in ('a0980000-0000-4000-8000-000000000001',
@@ -74,23 +74,23 @@ create temporary table p99_roots as
 
 -- Two siblings under that root. Everything about cross-entity leakage is measured between them.
 insert into public.org_units(id, org_id, parent_id, unit_type, name)
-select 'e0980000-0000-4000-8000-000000000001'::uuid, org_id, root_id, 'legal_entity'::org_unit_type, 'P99 entity A'
-  from p99_roots where org_id = 'a0980000-0000-4000-8000-000000000001'
+select 'e0980000-0000-4000-8000-000000000001'::uuid, org_id, root_id, 'legal_entity'::org_unit_type, 'P101 entity A'
+  from p101_roots where org_id = 'a0980000-0000-4000-8000-000000000001'
 union all
-select 'e0980000-0000-4000-8000-000000000002'::uuid, org_id, root_id, 'legal_entity'::org_unit_type, 'P99 entity B'
-  from p99_roots where org_id = 'a0980000-0000-4000-8000-000000000001'
+select 'e0980000-0000-4000-8000-000000000002'::uuid, org_id, root_id, 'legal_entity'::org_unit_type, 'P101 entity B'
+  from p101_roots where org_id = 'a0980000-0000-4000-8000-000000000001'
 union all
-select 'e0980000-0000-4000-8000-000000000009'::uuid, org_id, root_id, 'legal_entity'::org_unit_type, 'P99 other entity'
-  from p99_roots where org_id = 'a0980000-0000-4000-8000-000000000002';
+select 'e0980000-0000-4000-8000-000000000009'::uuid, org_id, root_id, 'legal_entity'::org_unit_type, 'P101 other entity'
+  from p101_roots where org_id = 'a0980000-0000-4000-8000-000000000002';
 
 insert into auth.users (id, email) values
-  ('b0980000-0000-4000-8000-000000000001', 'p99-owner@example.test'),
-  ('b0980000-0000-4000-8000-000000000002', 'p99-entity-b-only@example.test'),
-  ('b0980000-0000-4000-8000-000000000009', 'p99-other-owner@example.test');
+  ('b0980000-0000-4000-8000-000000000001', 'p101-owner@example.test'),
+  ('b0980000-0000-4000-8000-000000000002', 'p101-entity-b-only@example.test'),
+  ('b0980000-0000-4000-8000-000000000009', 'p101-other-owner@example.test');
 insert into public.profiles(id, org_id, full_name, role, active) values
-  ('b0980000-0000-4000-8000-000000000001', 'a0980000-0000-4000-8000-000000000001', 'P99 owner', 'owner', true),
-  ('b0980000-0000-4000-8000-000000000002', 'a0980000-0000-4000-8000-000000000001', 'P99 entity B officer', 'office', true),
-  ('b0980000-0000-4000-8000-000000000009', 'a0980000-0000-4000-8000-000000000002', 'P99 other owner', 'owner', true);
+  ('b0980000-0000-4000-8000-000000000001', 'a0980000-0000-4000-8000-000000000001', 'P101 owner', 'owner', true),
+  ('b0980000-0000-4000-8000-000000000002', 'a0980000-0000-4000-8000-000000000001', 'P101 entity B officer', 'office', true),
+  ('b0980000-0000-4000-8000-000000000009', 'a0980000-0000-4000-8000-000000000002', 'P101 other owner', 'owner', true);
 
 -- The officer is narrowed to ONE sibling. That narrowing is what makes assertion 4 meaningful:
 -- without it the reader would see everything for a reason unrelated to scope.
@@ -110,8 +110,8 @@ insert into public.user_scope_grants(org_id, user_id, unit_id) values
 
 -- ---- 1. THE ACTOR RULE, IN BOTH DIRECTIONS, ON ALL THREE TABLES ------------------------------
 -- A browser document with no uploader: the upload nobody made.
-select pg_temp.p99_assert(
-  pg_temp.p99_refusal($$
+select pg_temp.p101_assert(
+  pg_temp.p101_refusal($$
     insert into public.documents(org_id, entity_type, entity_id, storage_path, file_name,
                                  mime_type, uploaded_by, source)
     values ('a0980000-0000-4000-8000-000000000001', 'inbox', null,
@@ -123,8 +123,8 @@ select pg_temp.p99_assert(
 -- A channel document that names a person: either a mislabelled upload, or an attribution nobody
 -- made. Both are refusals, and it matters that this direction is checked too -- it is the one a
 -- "just make the actor optional" change would have left open.
-select pg_temp.p99_assert(
-  pg_temp.p99_refusal($$
+select pg_temp.p101_assert(
+  pg_temp.p101_refusal($$
     insert into public.documents(org_id, entity_type, entity_id, storage_path, file_name,
                                  mime_type, uploaded_by, unit_id, source)
     values ('a0980000-0000-4000-8000-000000000001', 'inbox', null,
@@ -142,8 +142,8 @@ values ('d0980000-0000-4000-8000-000000000001', 'a0980000-0000-4000-8000-0000000
         'application/pdf', null, 'e0980000-0000-4000-8000-000000000001', 'email');
 
 -- source is immutable. A document cannot be relabelled later to acquire or shed an actor.
-select pg_temp.p99_assert(
-  pg_temp.p99_refusal($$
+select pg_temp.p101_assert(
+  pg_temp.p101_refusal($$
     update public.documents set source = 'browser'
      where id = 'd0980000-0000-4000-8000-000000000001'
   $$) like '42501:document_source_immutable%',
@@ -164,7 +164,7 @@ insert into public.document_processing_jobs
 values ('f0980000-0000-4000-8000-0000000000aa', 'a0980000-0000-4000-8000-000000000001',
         'd0980000-0000-4000-8000-000000000001', null, 'queued',
         'etag:0000000000000000000000000000000a', '1', 0, 0, now(), now(), 'whatsapp');
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   (select source = 'email' from public.document_processing_jobs
     where id = 'f0980000-0000-4000-8000-0000000000aa'),
   'a job that claimed whatsapp over an email document kept the claim');
@@ -175,8 +175,8 @@ delete from public.document_processing_jobs where id = 'f0980000-0000-4000-8000-
 -- standing between a job and a document it does not belong to, and a future writer that bypasses
 -- the trigger would silently succeed.
 alter table public.document_processing_jobs disable trigger document_processing_jobs_inherit_source;
-select pg_temp.p99_assert(
-  pg_temp.p99_refusal($$
+select pg_temp.p101_assert(
+  pg_temp.p101_refusal($$
     insert into public.document_processing_jobs
       (id, org_id, document_id, requested_by, status, input_checksum, contract_version,
        priority, attempt_count, created_at, updated_at, source)
@@ -196,8 +196,8 @@ values ('f0980000-0000-4000-8000-000000000001', 'a0980000-0000-4000-8000-0000000
         'etag:00000000000000000000000000000001', '1', 0, 0, now(), now(), 'email');
 
 -- A machine job that names a person is refused on the same rule as the document.
-select pg_temp.p99_assert(
-  pg_temp.p99_refusal($$
+select pg_temp.p101_assert(
+  pg_temp.p101_refusal($$
     insert into public.document_processing_jobs
       (id, org_id, document_id, requested_by, status, input_checksum, contract_version,
        priority, attempt_count, created_at, updated_at, source)
@@ -227,7 +227,7 @@ insert into public.document_scan_jobs
 values ('f0980000-0000-4000-8000-000000000003', 'a0980000-0000-4000-8000-000000000001',
         'd0980000-0000-4000-8000-000000000002', 'f0980000-0000-4000-8000-000000000002',
         null, 'queued', 'etag:00000000000000000000000000000003', 'whatsapp');
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   exists (select 1 from public.document_scan_jobs
            where id = 'f0980000-0000-4000-8000-000000000003'
              and requested_by is null and source = 'whatsapp'),
@@ -241,8 +241,8 @@ insert into private.inbound_routes(route_id, org_id, intake_unit_id, source, cre
    'e0980000-0000-4000-8000-000000000009', 'email', 'b0980000-0000-4000-8000-000000000009');
 
 -- A route cannot point at a unit of another organisation: composite FK, not a check anyone runs.
-select pg_temp.p99_assert(
-  pg_temp.p99_refusal($$
+select pg_temp.p101_assert(
+  pg_temp.p101_refusal($$
     insert into private.inbound_routes(org_id, intake_unit_id, source)
     values ('a0980000-0000-4000-8000-000000000001',
             'e0980000-0000-4000-8000-000000000009', 'email')
@@ -269,8 +269,8 @@ values
    'a0980000-0000-4000-8000-000000000001/inbound/mine.pdf', 'application/pdf', 1024);
 
 -- One message, one attachment, one claim. A provider that redelivers cannot open a second.
-select pg_temp.p99_assert(
-  pg_temp.p99_refusal($$
+select pg_temp.p101_assert(
+  pg_temp.p101_refusal($$
     insert into private.inbound_intake_claims
       (route_id, org_id, intake_unit_id, source, provider, provider_message_id, attachment_id,
        lease_until)
@@ -281,8 +281,8 @@ select pg_temp.p99_assert(
   'a redelivered message opened a second claim for the same attachment');
 
 -- A claim cannot be re-pointed at another tenant after it exists.
-select pg_temp.p99_assert(
-  pg_temp.p99_refusal($$
+select pg_temp.p101_assert(
+  pg_temp.p101_refusal($$
     update private.inbound_intake_claims
        set org_id = 'a0980000-0000-4000-8000-000000000002'
      where claim_id = '50980000-0000-4000-8000-000000000001'
@@ -294,7 +294,7 @@ select pg_temp.p99_assert(
 -- own argument list fails with "permission denied for schema private" -- and a refusal assertion
 -- that only checks "it refused" then passes on the TEST's failure rather than the product's.
 -- That is exactly what happened here before this line existed.
-select set_config('app.p99_lease',
+select set_config('app.p101_lease',
   (select lease_token::text from private.inbound_intake_claims
     where claim_id = '50980000-0000-4000-8000-000000000001'), true);
 
@@ -308,11 +308,11 @@ set local role service_role;
 
 -- THE CHANNEL IS CLOSED. Everything below this line would otherwise succeed, and the platform
 -- stop has to come first -- before the object checks, before the tenant checks.
-select pg_temp.p99_assert(
-  pg_temp.p99_refusal($$
+select pg_temp.p101_assert(
+  pg_temp.p101_refusal($$
     select public.service_ingest_inbound_document(
       '50980000-0000-4000-8000-000000000001',
-      current_setting('app.p99_lease')::uuid,
+      current_setting('app.p101_lease')::uuid,
       '40980000-0000-4000-8000-000000000001', 'v1')
   $$) like '42501:inbound_channel_closed%',
   'a document was ingested while the platform had the channel closed');
@@ -325,26 +325,26 @@ select set_config('request.jwt.claim.role', '', true);
 update private.inbound_channel_boundary
    set enabled = true, enabled_at = now(),
        enabled_by = 'b0980000-0000-4000-8000-000000000001',
-       enable_reason = 'P99 fixture'
+       enable_reason = 'P101 fixture'
  where channel = 'email';
 select set_config('request.jwt.claim.role', 'service_role', true);
 set local role service_role;
 
 -- THE STOLEN OBJECT. The caller is service_role and may read every tenant, so this is the shape
 -- that matters most: a claim of tenant A completed with an object living under tenant B's prefix.
-select pg_temp.p99_assert(
-  pg_temp.p99_refusal($$
+select pg_temp.p101_assert(
+  pg_temp.p101_refusal($$
     select public.service_ingest_inbound_document(
       '50980000-0000-4000-8000-000000000001',
-      current_setting('app.p99_lease')::uuid,
+      current_setting('app.p101_lease')::uuid,
       '40980000-0000-4000-8000-000000000009', 'v1')
   $$) like '42501:inbound_object_outside_tenant_prefix%',
   'one tenant''s claim was completed with another tenant''s object');
 
 -- THE STALE LEASE. A worker from an earlier attempt is still alive and still finishing. Its
 -- token is not the current one, and `lease_until` alone could never have told us that.
-select pg_temp.p99_assert(
-  pg_temp.p99_refusal($$
+select pg_temp.p101_assert(
+  pg_temp.p101_refusal($$
     select public.service_ingest_inbound_document(
       '50980000-0000-4000-8000-000000000001',
       '00000000-0000-4000-8000-0000000000ff',
@@ -355,26 +355,26 @@ select pg_temp.p99_assert(
 -- TOCTOU. The object was replaced between the download and this call, so the bytes we checked
 -- are not the bytes now stored. Recording the row anyway is how one tenant's file ends up
 -- described as another's.
-select pg_temp.p99_assert(
-  pg_temp.p99_refusal($$
+select pg_temp.p101_assert(
+  pg_temp.p101_refusal($$
     select public.service_ingest_inbound_document(
       '50980000-0000-4000-8000-000000000001',
-      current_setting('app.p99_lease')::uuid,
+      current_setting('app.p101_lease')::uuid,
       '40980000-0000-4000-8000-000000000001', 'v2')
   $$) like '40001:inbound_object_version_changed%',
   'an object that changed under us was ingested on the version we no longer had');
 
 -- The happy path, and the only one in this suite.
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   (select public.service_ingest_inbound_document(
      '50980000-0000-4000-8000-000000000001',
-     current_setting('app.p99_lease')::uuid,
+     current_setting('app.p101_lease')::uuid,
      '40980000-0000-4000-8000-000000000001', 'v1')) is not null,
   'a valid inbound claim did not produce a document');
 
 -- The document it produced has NO uploader, carries its channel, and inherited the route's unit
 -- rather than being organisation-wide.
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   (select uploaded_by is null and source = 'email'
           and unit_id = 'e0980000-0000-4000-8000-000000000001'
           and entity_type = 'inbox'
@@ -384,12 +384,12 @@ select pg_temp.p99_assert(
 
 -- REPLAY. The provider redelivers, the worker runs again, and the answer is the SAME document --
 -- not a second one, and not an error either.
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   (select count(*) from public.documents
     where storage_path = 'a0980000-0000-4000-8000-000000000001/inbound/mine.pdf') = 1
   and (select public.service_ingest_inbound_document(
          '50980000-0000-4000-8000-000000000001',
-         current_setting('app.p99_lease')::uuid,
+         current_setting('app.p101_lease')::uuid,
          '40980000-0000-4000-8000-000000000001', 'v1'))
       = (select id from public.documents
           where storage_path = 'a0980000-0000-4000-8000-000000000001/inbound/mine.pdf')
@@ -405,11 +405,11 @@ select set_config('request.jwt.claim.role', '', true);
 -- has taken this backend down, and it would also pass here for the wrong reason -- which is
 -- exactly what happened before the grant below existed. Every refusal above was returning
 -- "permission denied for function" and every assertion that only checked "it refused" was green.
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   has_function_privilege('service_role',
     'public.service_ingest_inbound_document(uuid,uuid,uuid,text)', 'execute'),
   'service_role cannot execute the command it is the only caller of');
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   not has_function_privilege('authenticated',
     'public.service_ingest_inbound_document(uuid,uuid,uuid,text)', 'execute')
   and not has_function_privilege('anon',
@@ -419,12 +419,12 @@ select pg_temp.p99_assert(
 -- ---- 4. A SIBLING LEGAL ENTITY CANNOT SEE THE OTHER'S POST -----------------------------------
 -- The owner is granted the root and therefore both entities; the officer is granted entity B
 -- only. The document that arrived belongs to entity A.
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   (select array['e0980000-0000-4000-8000-000000000001'::uuid] <@
           private.scopes_for_user('b0980000-0000-4000-8000-000000000001',
                                   'a0980000-0000-4000-8000-000000000001')),
   'the owner is not scoped to entity A, so the sibling test would prove nothing');
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   not (select array['e0980000-0000-4000-8000-000000000001'::uuid] <@
        private.scopes_for_user('b0980000-0000-4000-8000-000000000002',
                                'a0980000-0000-4000-8000-000000000001')),
@@ -433,7 +433,7 @@ select pg_temp.p99_assert(
 -- The scope function takes its subject as an ARGUMENT. `auth_scopes()` could not be used here:
 -- it reads auth.uid(), returns '{}' with no JWT, and `assert_unit_in_scope` then early-exits
 -- treating the caller as trusted service work -- a check that passes without checking.
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   private.scopes_for_user('b0980000-0000-4000-8000-000000000002',
                           'a0980000-0000-4000-8000-000000000001')
     is distinct from
@@ -449,38 +449,38 @@ select pg_temp.p99_assert(
 -- to A; the officer is scoped to B alone.
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', 'b0980000-0000-4000-8000-000000000001', true);
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   (select count(*) from public.inbound_provenance_for_org()) = 1,
   'the owner, scoped to the entity that received the document, cannot see that it arrived');
 
 select set_config('request.jwt.claim.sub', 'b0980000-0000-4000-8000-000000000002', true);
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   (select count(*) from public.inbound_provenance_for_org()) = 0,
   'a reader scoped to the sibling legal entity can see the other one''s inbound document');
 
 -- The other ORGANISATION is a different question from the sibling entity, and both have to hold:
 -- one is the scope axis, the other is the tenant axis.
 select set_config('request.jwt.claim.sub', 'b0980000-0000-4000-8000-000000000009', true);
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   (select count(*) from public.inbound_provenance_for_org()) = 0,
   'another tenant can see this organisation''s inbound document');
 select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claim.role', '', true);
 
 -- ---- 5. THE PLATFORM CAN STOP THIS AND THE TENANT CANNOT START IT ----------------------------
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   not has_table_privilege('authenticated', 'private.inbound_channel_boundary', 'update')
   and not has_table_privilege('service_role', 'private.inbound_channel_boundary', 'update')
   and not has_table_privilege('anon', 'private.inbound_channel_boundary', 'select'),
   'a product role can write or read the platform intake boundary');
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   not has_table_privilege('authenticated', 'private.inbound_intake_claims', 'select')
   and not has_table_privilege('authenticated', 'private.inbound_routes', 'select'),
   'the browser can read the private intake ledgers directly');
 
 -- Enabling is not a boolean flip: it must carry who, when and why, or it is not storable.
-select pg_temp.p99_assert(
-  pg_temp.p99_refusal($$
+select pg_temp.p101_assert(
+  pg_temp.p101_refusal($$
     update private.inbound_channel_boundary
        set enabled = true, enabled_at = null, enabled_by = null, enable_reason = null
      where channel = 'whatsapp'
@@ -490,7 +490,7 @@ select pg_temp.p99_assert(
 -- ---- 6. THE CLAIMER STOPPED REQUIRING A HUMAN ------------------------------------------------
 -- Read from the LIVE body rather than from the migration text, because the migration patched
 -- what was running rather than redeclaring it from a file.
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   position('left join public.profiles p' in
            replace(pg_get_functiondef(to_regprocedure(
              'private.claim_document_interpretation_jobs(integer,integer)')), e'\r', '')) > 0
@@ -505,7 +505,7 @@ select pg_temp.p99_assert(
 -- And it did not lose the browser-side requirement while gaining the machine one. An inner join
 -- turned into a left join with no compensating predicate would let a browser document whose
 -- uploader is inactive, or the wrong role, through the door the join was closing.
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   position('d.source = ''browser'' and j.requested_by = d.uploaded_by and p.id is not null' in
            replace(pg_get_functiondef(to_regprocedure(
              'private.claim_document_interpretation_jobs(integer,integer)')), e'\r', '')) > 0,
@@ -516,7 +516,7 @@ select pg_temp.p99_assert(
 -- insert time. Without this, an emailed PDF holding three invoices splits into three children
 -- that inherit a NULL uploader beside a defaulted 'browser' source and the split fails on the
 -- CHECK -- a document arriving and then vanishing at the step whose job is to rescue it.
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   position('v_parent.document_date,v_parent.unit_id,v_parent.source' in
            replace(pg_get_functiondef(to_regprocedure(
              'public.service_materialize_document_packet(uuid, text, uuid)')), e'\r', '')) > 0,
@@ -525,7 +525,7 @@ select pg_temp.p99_assert(
 -- ---- 7. THE INGEST SIGNATURE CANNOT NAME A TENANT --------------------------------------------
 -- The shape of the signature IS the security property: an org_id parameter would make this a
 -- function that believes whichever tenant a globally privileged caller names.
-select pg_temp.p99_assert(
+select pg_temp.p101_assert(
   (select pg_get_function_identity_arguments(p.oid)
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname = 'service_ingest_inbound_document')
@@ -534,4 +534,4 @@ select pg_temp.p99_assert(
 
 rollback;
 
-select 'P99_a_document_with_no_human_passed' as result;
+select 'P101_a_document_with_no_human_passed' as result;
