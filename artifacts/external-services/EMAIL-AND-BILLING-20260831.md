@@ -48,7 +48,7 @@ the DMARC mailbox. That is an owner decision, recorded as `#310`.
 | `PADDLE_WEBHOOK_SECRET`, `PADDLE_API_KEY`, `PADDLE_ENVIRONMENT=sandbox`, `BILLING_PROVIDER=paddle` | Supabase | **behaviour change measured** — §2.1 |
 | Reply-To across every product email | code | `_shared/reply-to.test.ts`, 14 cases |
 | Support addresses reachable in the product | code | `supportContact.spec.tsx`, 6 cases |
-| Activation email owed exactly once | `0268` + code | `p94`, seven cases locally **and in CI** |
+| Activation email owed exactly once | `0280` + code | `p103`, seven cases locally **and in CI** |
 | Five test suites joined the quality gate, three of which no gate had ever run | `check-quality-gates.ps1` | 182 passed under the frozen lock |
 
 ### 2.1 The secrets were verified by behaviour, not by a listing
@@ -188,7 +188,7 @@ migration, not a toggle.
 ## 6. What this document does not claim
 
 No email was sent through the new Reply-To path in production, because the functions that carry it
-are not deployed. No Paddle event has yet reached the endpoint. `0268` was applied to the local
+are not deployed. No Paddle event has yet reached the endpoint. `0280` was applied to the local
 stack and its suite passed there and in CI; it has **not** been applied to production.
 
 ## 7. Two branches, and why

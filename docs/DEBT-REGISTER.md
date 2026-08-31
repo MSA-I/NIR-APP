@@ -624,7 +624,7 @@
   ‏`PADDLE_ENVIRONMENT` חסר ברירת מחדל, כדי ששכחת משתנה לא תכריע אם לקוח מחויב באמת;
   ‏`private.billing_provider_boundary` זורע את כל הספקים כבויים ואין פונקציה שמדליקה;
   ו-`private.billing_provider_price_map` ריקה, ולכן מחיר לא ממופה מת ב-dead-letter במקום להעניק
-  מסלול מנוחש. ‏`0268` אף מוסיף assertion שנכשלת אם Paddle דלוק בזמן שהיא מוחלת.
+  מסלול מנוחש. ‏`0280` אף מוסיף assertion שנכשלת אם Paddle דלוק בזמן שהיא מוחלת.
 - **נמדד חי 31.08.2026:** ‏`POST` לא-חתום ל-`billing-webhook` בייצור מקבל **`503 refused`**,
   ו-`GET` מקבל `405`. זו הדחייה של `billingAdapterFor` בהיעדר `PADDLE_WEBHOOK_SECRET` — כלומר
   נקודת הקצה חיה, מסרבת, ואינה יכולה לשנות שום entitlement.
