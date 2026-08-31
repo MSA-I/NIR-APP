@@ -35,12 +35,43 @@ import { formatLineRanges } from './assessment';
  * in words instead of printing a number derived from an absence.
  */
 
-/** Why the numbers disagree, as far as the server's own finding codes can say. */
+/**
+ * Why the numbers disagree, as far as the server's own finding codes can say.
+ *
+ * BOTH VOCABULARIES, ONE MAP. The document assessment and the invoice's three-way match name the
+ * same four failures with different codes, because they were written years apart. Translating one
+ * set into the other in an adapter would put a rename between a server's finding and the sentence
+ * a reader acts on; listing both here keeps every code that can classify a gap in one place a
+ * person can read.
+ */
 const GAP_CLASSIFICATION: Readonly<Record<string, TKey>> = {
+  // The document assessment (0108 → 0260).
   header_arithmetic_discrepancy: 'reconciliation.classArithmetic',
   header_total_differs_from_lines: 'reconciliation.classCommercial',
   line_arithmetic_discrepancy: 'reconciliation.classArithmetic',
   credit_required: 'reconciliation.classEvidence',
+  // The invoice's three-way match (0099 → 0261). `invoice_header_arithmetic_discrepancy` is the
+  // header failing its own identity; the other two are the lines disagreeing with the header,
+  // which is the commercial gap a missing discount or an extra charge produces.
+  invoice_header_arithmetic_discrepancy: 'reconciliation.classArithmetic',
+  invoice_net_total_discrepancy: 'reconciliation.classCommercial',
+  invoice_grand_total_discrepancy: 'reconciliation.classCommercial',
+  invoice_vat_total_discrepancy: 'reconciliation.classArithmetic',
+};
+
+/**
+ * What the strip needs, and nothing else.
+ *
+ * It used to take a `DocumentAssessment`, which made it look like a document component. It is not:
+ * the invoice's three-way match publishes the same ladder since `0261`, and the strip draws both.
+ * Narrowing the prop to the three fields it reads is what lets a second caller pass its own shape
+ * without either screen pretending to be the other.
+ */
+export type LadderFinding = { code: string; line_index?: number | null };
+export type LadderSource = {
+  totals: DocumentAssessment['totals'];
+  currency: string | null;
+  findings: readonly LadderFinding[];
 };
 
 function Rung({ label, value, currency, missing, strong = false, negative = false }: {
@@ -73,16 +104,22 @@ function Rung({ label, value, currency, missing, strong = false, negative = fals
   );
 }
 
-export function ReconciliationStrip({ assessment, onGoToLines }: {
-  assessment: DocumentAssessment | null;
+export function ReconciliationStrip({ ladder, title, onGoToLines }: {
+  ladder: LadderSource | null;
+  /**
+   * What the record is called on THIS screen. A document's account and an invoice's account are
+   * the same arithmetic about two different objects, and a strip that called both "the document"
+   * would be telling half its readers about a record they are not looking at.
+   */
+  title?: string;
   /** Takes the reader to the lines the gap points at. Absent where there is nowhere to go. */
   onGoToLines?: (lines: number[]) => void;
 }) {
   const { t } = useT();
-  if (!assessment) return null;
+  if (!ladder) return null;
 
-  const totals = assessment.totals;
-  const currency = totals.currency ?? assessment.currency;
+  const totals = ladder.totals;
+  const currency = totals.currency ?? ladder.currency;
   const missing = new Set(totals.missing_rungs ?? []);
 
   /* Nothing to draw a ladder from: no header figures and no lines. An empty ladder is a frame
@@ -96,12 +133,12 @@ export function ReconciliationStrip({ assessment, onGoToLines }: {
   /* The classification is the SERVER'S, read off the finding it raised. An OCR gap is the one
      case the codes cannot name, because a rung nobody extracted produces no finding at all — so
      it is derived from `missing_rungs`, which is the same evidence stated the other way. */
-  const money = assessment.findings.find((finding) => finding.code in GAP_CLASSIFICATION);
+  const money = ladder.findings.find((finding) => finding.code in GAP_CLASSIFICATION);
   const classification = missing.size > 0 && !money
     ? t('reconciliation.classExtraction')
     : money ? t(GAP_CLASSIFICATION[money.code]) : null;
 
-  const suspectLines = assessment.findings
+  const suspectLines = ladder.findings
     .filter((finding) => finding.code in GAP_CLASSIFICATION && finding.line_index != null)
     .map((finding) => (finding.line_index as number) + 1);
 
@@ -110,7 +147,7 @@ export function ReconciliationStrip({ assessment, onGoToLines }: {
       <section className="card p-4" aria-labelledby="reconciliation-account">
         <div className="mb-2 flex items-baseline justify-between gap-3">
           <h3 id="reconciliation-account" className="text-sm font-semibold text-ink-body">
-            {t('reconciliation.accountTitle')}
+            {title ?? t('reconciliation.accountTitle')}
           </h3>
           {currency && (
             <span className="text-xs text-ink-muted">

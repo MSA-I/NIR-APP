@@ -1362,13 +1362,14 @@ export const he = {
      reviewer is the one who has to tell them apart. */
   reconciliation: {
     accountTitle: 'חשבון המסמך',
-    documentCurrency: 'מטבע המסמך:',
+    accountTitleInvoice: 'חשבון החשבונית',
+    documentCurrency: 'מטבע:',
     linesNet: 'סכום שורות',
     discounts: 'הנחות',
     headerNet: 'סה״כ לפני מע״מ',
     vat: 'מע״מ',
     computed: 'מחושב',
-    statedTotal: 'סה״כ במסמך',
+    statedTotal: 'סה״כ מוצהר',
     gap: 'פער בלתי מוסבר',
     notExtracted: 'לא חולץ',
     cannotCalculate: 'לא ניתן לחשב',
@@ -1383,7 +1384,7 @@ export const he = {
     payableTitle: 'מה ישולם בפועל',
     withholding: 'ניכוי מס במקור',
     actuallyReceived: 'התקבל בפועל',
-    payableNote: 'הבלוק הזה אינו משפיע על הפער שלמעלה — שתי הרגות אינן מחולצות מהמסמך.',
+    payableNote: 'הבלוק הזה אינו משפיע על הפער שלמעלה — שתי הרגות אינן מחולצות.',
   },
 
   alertsPage: {
@@ -2296,6 +2297,12 @@ export const he = {
     kpiBalance: 'יתרה לתשלום',
     detailSupplier: 'ספק',
     paymentNo: 'תשלום #',
+    openAmountMismatch: 'פתיחת חריג „פער בסכום"',
+    amountMismatchTitle: 'פתיחת חריג על פער בסכום',
+    amountMismatchMessage: 'ייפתח חריג „פער בסכום" על החשבונית, בסכום {amount}. הוא יופיע במסך החריגים לטיפול.',
+    amountMismatchReason: 'מה צריך לברר? (חובה — יוצג למי שיטפל בחריג)',
+    amountMismatchOpened: 'נפתח חריג „פער בסכום".',
+    amountMismatchAlreadyOpen: 'כבר קיים חריג „פער בסכום" פתוח על החשבונית — לא נפתח חריג נוסף.',
     lineReview: 'בדיקת שורות והתאמות',
     threeWayLoadFailed: 'לא ניתן לטעון את בדיקת ההתאמה: {message}',
     showInvoiceLines: 'הצגת {count} שורות החשבונית',

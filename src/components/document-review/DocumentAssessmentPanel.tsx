@@ -474,7 +474,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
           by how much, which is the difference between a rounding artefact and a discount line the
           extractor never saw. Above the table on purpose: the table is the working, this is the
           question the reviewer is actually answering. */}
-      <ReconciliationStrip assessment={assessment} onGoToLines={goToLines} />
+      <ReconciliationStrip ladder={assessment} onGoToLines={goToLines} />
 
       {/* Below the decision: what the machine checked and settled. Folded, counted, one click
           away — never deleted, and never a finding. */}

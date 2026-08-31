@@ -18,6 +18,7 @@ import { reasonDemandFor } from '../lib/transitionIntent';
 import { INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, INVOICE_EXPORT_STATUS, CREDIT_REASON } from '../lib/status';
 import { fmtMoneyExact, fmtDate, formatQuantity, formatUnit, todayISO } from '../lib/format';
 import { creditDraftFromInterpretation, type CreditDraft } from '../components/document-review/model';
+import { ReconciliationStrip, type LadderSource } from '../components/document-review/ReconciliationStrip';
 import type { InterpretationContract } from '../lib/useDocumentProcessing';
 import type { Invoice, InvoiceReviewStatus, CreditReason } from '../lib/types';
 import { financialSupplierMap } from '../lib/financialSuppliers';
@@ -27,6 +28,8 @@ import {
   type InvoiceReviewCandidate,
   type InvoiceReviewLine,
 } from '../components/InvoiceLineReviewModal';
+
+const INVOICE_LINES_FOLD_ID = 'invoice-lines-fold';
 
 type FullInvoice = Omit<Invoice, 'supplier'> & {
   supplier: { id: string; name: string };
@@ -57,7 +60,7 @@ type ThreeWayReason = {
   actual_vat_rate?: number;
 };
 
-type ThreeWayAssessment = {
+export type ThreeWayAssessment = {
   status: 'review_required' | 'not_comparable' | 'matched_with_warnings' | 'matched';
   approval_blocked: boolean;
   approval_allowed: boolean;
@@ -69,7 +72,77 @@ type ThreeWayAssessment = {
   evidence_batch_id?: string | null;
   lines: (InvoiceReviewLine & { reasons: ThreeWayReason[] })[];
   candidate_context?: InvoiceReviewCandidate[];
+  /**
+   * The ladder, from `0261`. Every field is optional in the TYPE and none of them is optional in
+   * the SERVER: a deployment where the migration has not run yet must render no strip rather than
+   * a strip full of undefined, which is exactly what the guard in `invoiceLadder` enforces.
+   */
+  totals?: {
+    line_net?: number | null;
+    invoice_net?: number | null;
+    invoice_vat?: number | null;
+    invoice_grand?: number | null;
+    line_tolerance?: number | null;
+    invoice_tolerance?: number | null;
+    currency?: string | null;
+    lines_discount?: number | null;
+    computed_total?: number | null;
+    unexplained_gap?: number | null;
+    lines_vs_header_gap?: number | null;
+    missing_rungs?: string[] | null;
+  } | null;
 };
+
+/**
+ * The invoice's totals in the shape the ladder draws, and NOT ONE ARITHMETIC OPERATION.
+ *
+ * The two read models were written years apart and name the same rungs differently — `invoice_net`
+ * here, `header_net` on a document. This renames them and stops. Every figure, including the
+ * computed total and the gap, comes from `0261`, rounded by the currency's minor units on the
+ * server that decided whether to block.
+ *
+ * IT RETURNS NULL RATHER THAN A PARTIAL LADDER. Without a tolerance there is nothing to compare
+ * the gap against, and a strip that printed "checked against 1" beside an invoice the server
+ * judged by something else would be stating a rule the product does not enforce — the failure the
+ * whole per-currency campaign exists to end. A currency this database does not carry produces a
+ * null tolerance and a warning of its own (`amount_check_skipped_no_tolerance`, 0259), which the
+ * reasons list above already shows.
+ */
+export function invoiceLadder(threeWay: ThreeWayAssessment | null): LadderSource | null {
+  const totals = threeWay?.totals;
+  if (!totals || totals.invoice_tolerance == null || totals.currency == null) return null;
+  if (totals.computed_total == null || totals.unexplained_gap == null) return null;
+  // The four rungs the strip can name. A rung a later server invents is dropped rather than
+  // widening the type: an unlabelled row would be worse than one fewer honest label.
+  const known = ['lines_net', 'header_net', 'header_vat', 'header_total'] as const;
+  const missing = (totals.missing_rungs ?? [])
+    .filter((rung): rung is (typeof known)[number] => (known as readonly string[]).includes(rung));
+  return {
+    currency: totals.currency,
+    totals: {
+      lines_net: totals.line_net ?? null,
+      lines_discount: totals.lines_discount ?? null,
+      header_net: totals.invoice_net ?? null,
+      header_vat: totals.invoice_vat ?? null,
+      header_total: totals.invoice_grand ?? null,
+      computed_total: totals.computed_total,
+      unexplained_gap: totals.unexplained_gap,
+      lines_vs_header_gap: totals.lines_vs_header_gap ?? null,
+      overcharge_total: null,
+      line_tolerance: totals.line_tolerance ?? null,
+      document_tolerance: totals.invoice_tolerance,
+      currency: totals.currency,
+      missing_rungs: missing,
+    },
+    // `line_number` is what an invoice reason carries, and it counts from one. The strip speaks
+    // zero-based indexes because the document assessment does, so the conversion happens here
+    // rather than inside a component that would then have to know which screen it is on.
+    findings: threeWay.reasons.map((reason) => ({
+      code: reason.code,
+      line_index: reason.line_number == null ? null : reason.line_number - 1,
+    })),
+  };
+}
 
 const THREE_WAY_REASON_KEYS: Record<string, TKey> = {
   definite_duplicate_invoice: 'invoices.reason_definite_duplicate_invoice',
@@ -252,6 +325,19 @@ export default function InvoiceDetail() {
   const [overrideReason, setOverrideReason] = useState('');
   const [overrideIdempotencyKey, setOverrideIdempotencyKey] = useState(() => crypto.randomUUID());
   const [lineReviewOpen, setLineReviewOpen] = useState(false);
+  const [mismatchOpen, setMismatchOpen] = useState(false);
+  const [mismatchBusy, setMismatchBusy] = useState(false);
+  const [linesFoldTarget, setLinesFoldTarget] = useState<number | null>(null);
+  useEffect(() => {
+    if (linesFoldTarget == null) return;
+    const fold = document.getElementById(INVOICE_LINES_FOLD_ID);
+    if (fold instanceof HTMLDetailsElement && !fold.open) { fold.open = true; return; }
+    // The strip counts from zero because the document assessment does; the list is numbered the
+    // way a person reads an invoice.
+    document.getElementById(`invoice-line-${linesFoldTarget + 1}`)
+      ?.scrollIntoView({ block: 'center' });
+    setLinesFoldTarget(null);
+  }, [linesFoldTarget]);
   const isProcurementManager = profile?.role === 'office';
   const canOpenProcurement = profile?.role !== 'accountant';
 
@@ -294,6 +380,23 @@ export default function InvoiceDetail() {
 
   const inv = data?.invoice;
   const canEdit = organizationAccess.canWrite && profile && ['owner', 'office'].includes(profile.role);
+
+  /* The ladder and whether it is over its tolerance — both read off the server's own figures.
+     `document_tolerance` is the number `0259` derived for THIS currency and enforced; comparing
+     against anything else here would put a second rule on the screen. */
+  const ladder = invoiceLadder(data?.threeWay ?? null);
+  const ladderOverTolerance = ladder != null
+    && ladder.totals.unexplained_gap != null && ladder.totals.document_tolerance != null
+    && Math.abs(ladder.totals.unexplained_gap) > ladder.totals.document_tolerance;
+
+  /**
+   * "Go to line 3" goes to line 3. The list is a native `<details>`, so it is opened through the
+   * element and the row is reached on the render after it — the same two-pass shape the document
+   * review panel uses, for the same reason: there is no row to scroll to on the first pass.
+   */
+  function goToInvoiceLines(lines: number[]) {
+    if (lines.length > 0) setLinesFoldTarget(lines[0]);
+  }
   const isOffice = profile && ['owner', 'office'].includes(profile.role);
 
   // ?print=1 (Invoices list "הדפסה" action): print once when the data is on screen, then strip
@@ -421,6 +524,28 @@ export default function InvoiceDetail() {
     if (!inv) return;
     if (reasonDemandFor('invoice_review', inv.review_status, to)) { setReviewTarget(to); return; }
     void setReviewStatus(to);
+  }
+
+  /**
+   * The gap, handed to the person whose job it is. `open_manual_exception` (0087) is idempotent
+   * while an exception of the same type is still open, so a second press does not create a second
+   * one — it says so, which is a truer report than a silent success and than a duplicate row.
+   */
+  async function openAmountMismatch(reason: string) {
+    if (!inv) return;
+    setMismatchBusy(true);
+    const res = await supabase.rpc('open_manual_exception', {
+      p_entity_type: 'invoices',
+      p_entity_id: inv.id,
+      p_type: 'amount_mismatch',
+      p_reason: reason,
+    });
+    setMismatchBusy(false);
+    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
+    setMismatchOpen(false);
+    toast((res.data as { idempotent?: boolean } | null)?.idempotent
+      ? t('invoices.amountMismatchAlreadyOpen')
+      : t('invoices.amountMismatchOpened'));
   }
 
   async function overrideThreeWayMatch() {
@@ -622,6 +747,27 @@ export default function InvoiceDetail() {
         {data.threeWayError && <ErrorNote message={t('invoices.threeWayLoadFailed', { message: data.threeWayError })} />}
         {data.threeWay && (
           <div className="mt-4 space-y-3">
+            {/* The numbers first, the reasons after them. The reasons are the working; the ladder
+                is the question a person came to this screen to answer, and until 0261 the server
+                published every rung of it and the screen showed none. Absent — no tolerance, no
+                currency, or a deployment where 0261 has not run — it renders nothing at all
+                rather than a tolerance the server does not enforce. */}
+            <ReconciliationStrip ladder={ladder} title={t('reconciliation.accountTitleInvoice')}
+              onGoToLines={goToInvoiceLines} />
+
+            {/* The gap has a name in this product: `amount_mismatch`. Offering it HERE, beside the
+                number, is the difference between a screen that reports a problem and one that
+                hands the reader the next move. Owner/office only, matching what
+                `open_manual_exception` enforces on the server rather than guessing at it. */}
+            {ladderOverTolerance && canEdit && (
+              <div>
+                <button type="button" className="btn-secondary min-h-11"
+                  onClick={() => setMismatchOpen(true)}>
+                  <SearchCheck size={ICON.sm} aria-hidden="true" /> {t('invoices.openAmountMismatch')}
+                </button>
+              </div>
+            )}
+
             {data.threeWay.reasons.length > 0 ? (
               <ul className="divide-y divide-line-soft border border-line-soft rounded-lg">
                 {data.threeWay.reasons.map((reason, index) => {
@@ -647,11 +793,12 @@ export default function InvoiceDetail() {
             )}
 
             {data.threeWay.lines.length > 0 && (
-              <details>
+              <details id={INVOICE_LINES_FOLD_ID}>
                 <summary className="text-sm font-medium cursor-pointer">{t('invoices.showInvoiceLines', { count: data.threeWay.lines.length })}</summary>
                 <ul className="mt-2 divide-y divide-line-soft border border-line-soft rounded-lg">
                   {data.threeWay.lines.map((line) => (
-                    <li key={line.id} className="px-3 py-2 text-sm flex flex-wrap justify-between gap-2">
+                    <li key={line.id} id={`invoice-line-${line.line_number}`}
+                      className="px-3 py-2 text-sm flex flex-wrap justify-between gap-2">
                       <span><span className="num text-ink-muted">{line.line_number}.</span> <bdi>{line.description}</bdi></span>
                       <span className="num text-ink-muted">{formatQuantity(line.quantity, line.unit, locale)} × {fmtMoneyExact(line.unit_price, inv.currency)} = {fmtMoneyExact(line.line_total, inv.currency)}</span>
                     </li>
@@ -700,6 +847,20 @@ export default function InvoiceDetail() {
           onClose={() => { setCreditOpen(false); setCreditDraft(null); }}
           onSaved={() => { setCreditOpen(false); setCreditDraft(null); toast(t('invoices.setCreditOpen_2')); void refetch(); }} />
       )}
+      {/* THE REASON IS REQUIRED, AND IT IS THE EXCEPTION'S CONTENT. `open_manual_exception` copies
+          it into `details.reason` and writes the audit row itself; a blank one is refused server
+          side with `reason_required`. The dialog names the amount so the person justifying the
+          exception is looking at the figure they are justifying. */}
+      <ConfirmDialog open={mismatchOpen} onClose={() => setMismatchOpen(false)}
+        title={t('invoices.amountMismatchTitle')}
+        message={t('invoices.amountMismatchMessage', {
+          amount: fmtMoneyExact(ladder?.totals.unexplained_gap ?? null, inv.currency),
+        })}
+        reasonLabel={t('invoices.amountMismatchReason')}
+        confirmLabel={t('invoices.openAmountMismatch')}
+        requireReason busy={mismatchBusy}
+        onConfirm={(reason) => void openAmountMismatch(reason ?? '')} />
+
       {lineReviewOpen && profile && data.threeWay && (
         <InvoiceLineReviewModal
           invoiceId={inv.id}

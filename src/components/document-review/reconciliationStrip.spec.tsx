@@ -35,7 +35,7 @@ function assessment(totals: Partial<Totals> = {}, findings: DocumentAssessment['
 function show(a: DocumentAssessment | null, onGoToLines?: (lines: number[]) => void) {
   return render(
     <LocaleProvider>
-      <ReconciliationStrip assessment={a} onGoToLines={onGoToLines} />
+      <ReconciliationStrip ladder={a} onGoToLines={onGoToLines} />
     </LocaleProvider>,
   );
 }
@@ -45,7 +45,7 @@ describe('the ladder', () => {
     show(assessment());
     expect(screen.getByText('Sum of lines')).toBeInTheDocument();
     expect(screen.getByText('Computed')).toBeInTheDocument();
-    expect(screen.getByText('Total on the document')).toBeInTheDocument();
+    expect(screen.getByText('Stated total')).toBeInTheDocument();
     expect(screen.getByText('ILS')).toBeInTheDocument();
   });
 
@@ -82,7 +82,7 @@ describe('the ladder', () => {
 
     rerender(
       <LocaleProvider>
-        <ReconciliationStrip assessment={assessment({ lines_discount: 0 })} />
+        <ReconciliationStrip ladder={assessment({ lines_discount: 0 })} />
       </LocaleProvider>,
     );
     expect(seen()).toContain('0.00');

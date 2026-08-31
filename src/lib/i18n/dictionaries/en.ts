@@ -1358,13 +1358,14 @@ export const en: Dictionary = {
      reviewer is the one who has to tell them apart. */
   reconciliation: {
     accountTitle: 'The document\u2019s account',
-    documentCurrency: 'Document currency:',
+    accountTitleInvoice: 'The invoice\u2019s account',
+    documentCurrency: 'Currency:',
     linesNet: 'Sum of lines',
     discounts: 'Discounts',
     headerNet: 'Total before VAT',
     vat: 'VAT',
     computed: 'Computed',
-    statedTotal: 'Total on the document',
+    statedTotal: 'Stated total',
     gap: 'Unexplained gap',
     notExtracted: 'not extracted',
     cannotCalculate: 'cannot be calculated',
@@ -1379,7 +1380,7 @@ export const en: Dictionary = {
     payableTitle: 'What will actually be paid',
     withholding: 'Withholding at source',
     actuallyReceived: 'Actually received',
-    payableNote: 'This block does not affect the gap above \u2014 neither rung is extracted from the document.',
+    payableNote: 'This block does not affect the gap above \u2014 neither rung is extracted.',
   },
 
   alertsPage: {
@@ -2292,6 +2293,12 @@ export const en: Dictionary = {
     kpiBalance: 'Balance to pay',
     detailSupplier: 'Supplier',
     paymentNo: 'Payment #',
+    openAmountMismatch: 'Open an amount-mismatch exception',
+    amountMismatchTitle: 'Open an exception for the amount gap',
+    amountMismatchMessage: 'An "amount mismatch" exception will be opened on this invoice, for {amount}. It appears on the exceptions screen for handling.',
+    amountMismatchReason: 'What needs checking? (required — shown to whoever handles the exception)',
+    amountMismatchOpened: 'An amount-mismatch exception was opened.',
+    amountMismatchAlreadyOpen: 'An amount-mismatch exception is already open on this invoice — no second one was created.',
     lineReview: 'Review lines and matches',
     threeWayLoadFailed: 'The match check could not be loaded: {message}',
     showInvoiceLines: 'Show the {count} invoice lines',
