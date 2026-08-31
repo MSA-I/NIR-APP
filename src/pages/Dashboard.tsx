@@ -1,10 +1,12 @@
 import { useT } from '../lib/i18n/LocaleProvider';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useState, type ReactNode } from 'react';
 import { ArrowUpLeft, Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RefreshCw, ShoppingCart, TrendingUp, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { unwrap, useQuery } from '../lib/useQuery';
 import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, Card, ICON, ToggleGroup, PeriodComparison, type AttentionItem, type ComparisonBasis } from '../components/ui';
+import { ForecastCard, type ScheduledPaymentsOutlook } from '../components/ForecastCard';
+import { useFeatureFlags } from '../lib/flags';
 import { EXCEPTION_TYPE, PO_STATUS, SEVERITY } from '../lib/status';
 import {
   addCalendarDays, BUSINESS_TIME_ZONE, dateStartInstant, daysInCalendarMonth,
@@ -535,6 +537,12 @@ export default function Dashboard() {
      holds it must not exist at all for them — a truthy `meta` node that renders nothing still
      draws an empty band under the heading. */
   const isOwner = profile?.role === 'owner';
+  /* The card is behind `insights.forecast`, off for every tenant until an operator turns it on.
+     The flag hides a SCREEN and nothing else: the monthly snapshot writer keeps running, because
+     no server routine reads `resolve_feature_flags` (§8) and `forecast_snapshots` is the evidence
+     of what was predicted. What stops the writer is `cron.unschedule`. */
+  const { isEnabled } = useFeatureFlags();
+  const navigate = useNavigate();
 
   /* WHICH currency the control centre is reading, and `null` for "whatever the organisation keeps
      its books in". Null rather than `baseCurrency` on purpose: the organisation row can still be
@@ -560,7 +568,8 @@ export default function Dashboard() {
 
     const [
       ordersRes, invoicesRes, paymentsRes, exceptionsRes, poItemsRes, priceUpRes,
-      reqItemsRes, offersRes, deliveriesRes, snapshotRes, supplierCountRes, supplierBalanceRes,
+      reqItemsRes, offersRes, deliveriesRes, snapshotRes, outlookRes, supplierCountRes,
+      supplierBalanceRes,
     ] = await Promise.all([
       // recent orders (8 weeks) — purchased today/week/month + the weekly series. created_at is the
       // time axis, non-draft/cancelled the filter, at snapshot prices (OPEN-DECISIONS #4, locked).
@@ -581,6 +590,10 @@ export default function Dashboard() {
       // expected_date rows are excluded by the gte and surfaced as a count from openPos instead.
       fetchAll((from, to) => supabase.from('purchase_orders').select('id, number, status, expected_date, supplier_id, supplier:suppliers(name), items:purchase_order_items(qty, product:products(name, display_name))').in('status', ['sent', 'confirmed', 'partial']).gte('expected_date', todayISO).lte('expected_date', tomorrowISO).order('expected_date').order('id').range(from, to)),
       supabase.rpc('management_dashboard_snapshot', { p_today: todayISO }),
+      // 0265: what is scheduled to leave inside thirty days, with the coverage that figure has.
+      // Rides the same Promise.all as the snapshot; `office` gets a refusal object rather than an
+      // error, so a role that may not read it costs nothing and breaks nothing.
+      supabase.rpc('scheduled_payments_outlook', { p_horizon_days: 30 }),
       // First run or a working business? Zero suppliers is the honest test: no order, invoice,
       // price or receipt can exist without one, and the setup wizard itself puts suppliers before
       // products. Deriving emptiness from "all KPIs are zero" would also flag a real business in
@@ -609,6 +622,10 @@ export default function Dashboard() {
     const supplierBalanceRows = supplierBalanceRes as unknown as { supplier_id: string; currency: string }[];
     const snapshot = unwrap(snapshotRes) as ManagementDashboardSnapshot | null;
     if (!snapshot) throw new Error('dashboard_snapshot_unavailable');
+    /* A refusal is a MEASUREMENT, not a failure: `scheduled_payments_outlook` answers office with
+       `not_permitted` rather than an error, and the card renders that sentence. An actual
+       transport error leaves it null and the card does not render at all. */
+    const outlook = (outlookRes.error ? null : outlookRes.data) as ScheduledPaymentsOutlook | null;
 
     const orderValue = (o: { items: { qty: number; unit_price: number }[] }) => o.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
 
@@ -925,6 +942,11 @@ export default function Dashboard() {
         noDateCount: snapshot.openOrders.noDate,
       },
       currencies,
+      /* Deliberately NOT inside `byCurrency`: the outlook already carries a row per currency and
+         the card picks the one the reader chose. Folding it into the per-currency view would have
+         meant slicing a server figure in the browser, which is how the three period comparisons
+         became three implementations. */
+      outlook,
       /* One entry per currency, all of them built from the same fetch at the same instant, so the
          picker switches between two readings of one moment rather than between two moments. */
       byCurrency: Object.fromEntries(currencies.map((currency) => [currency, currencyView(currency)])),
@@ -1339,6 +1361,17 @@ export default function Dashboard() {
                   </div>
                 )}
               </Card>
+
+              {/* Beside the week's obligations, not inside them: that tile answers "how much has
+                  to move in seven days" from requests we already hold, and this one answers "how
+                  much is SCHEDULED in thirty" while saying how much of the debt it can see. Behind
+                  `insights.forecast`, off until an operator turns it on for a tenant. */}
+              {isEnabled('insights.forecast') && (
+                <div className="lg:col-span-3">
+                  <ForecastCard outlook={data.outlook} currency={viewCurrency} locale={locale}
+                    onOpenRecords={() => navigate('/payments')} />
+                </div>
+              )}
 
               <Card as="section" className="lg:col-span-12" aria-labelledby="weekly-trend-title">
                 <h3 id="weekly-trend-title" className="text-sm font-semibold text-ink-body">{t('dashboard.text_58')}</h3>

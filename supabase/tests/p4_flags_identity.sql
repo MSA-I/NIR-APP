@@ -167,7 +167,7 @@ reset role;
 --
 -- WHAT THAT DID NOT CHANGE, and what this assertion now pins instead, because it is the half that
 -- was actually load-bearing: NO FLAG SHIPPED ON GLOBALLY. `default_state` is still false for all
--- six, so the surface is off by definition and every ON state is a ROW against one organisation
+-- seven, so the surface is off by definition and every ON state is a ROW against one organisation
 -- that names why it exists -- a reason and an audit entry for platform_set_org_flag, a
 -- `targeting.ends_at` that expires by itself for the pre-launch grant. Raising `default_state`
 -- would still defeat the whole law, and that is now said in the assertion rather than only in the
@@ -175,7 +175,7 @@ reset role;
 select count(*) filter (where default_state)::text as global_on
 from private.flag_definitions \gset flags_
 select pg_temp.p4_assert(
-  :'flags_base_total'::int = 6
+  :'flags_base_total'::int = 7
   and :'flags_global_on'::int = 0
   and :'flags_base_enabled'::int
       = case when clock_timestamp() < private.prelaunch_window_end() then 2 else 0 end,
@@ -191,9 +191,9 @@ select pg_temp.p4_claims('27000000-0000-0000-0000-000000000003', interval '0');
 set local role authenticated;
 select count(*)::text as total from resolve_feature_flags() \gset flags_rogue_
 reset role;
--- Six, matching the definition count above: the rogue config row must not add a seventh.
+-- Seven, matching the definition count above: the rogue config row must not add an eighth.
 select pg_temp.p4_assert(
-  :'flags_rogue_total'::int = 6,
+  :'flags_rogue_total'::int = 7,
   'resolve must never return a key outside private.flag_definitions -- no expansion');
 select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claims', '', true);

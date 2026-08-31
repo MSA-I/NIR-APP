@@ -41,6 +41,10 @@
     "supplier_order_proposal_lines.line_delta": "inherits:purchase_orders",
     "plan_prices.amount": "inherits:plan_price_catalogues",
     "organization_billing_periods.amount": "own",
+    "forecast_snapshots.forecast_amount": "own",
+    "forecast_snapshots.covered_amount": "own",
+    "forecast_snapshots.uncovered_amount": "own",
+    "forecast_snapshot_requests.amount": "own",
 
     "price_list_interpretation_lines.unit_price": "evidence",
     "price_list_shadow_lines.current_unit_price": "evidence",
