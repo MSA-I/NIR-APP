@@ -1353,6 +1353,27 @@ export const en: Dictionary = {
     checkedAt: 'Checked {at}',
   },
 
+  /* The impact dialog. `impact.notMeasured` is a dash and not "0": an extent nobody counted is
+     not an extent of zero, and the confirm is locked until it is counted. */
+  impact: {
+    loading: 'Checking what this will do',
+    scope: 'Scope:',
+    affected: 'Affected:',
+    notMeasured: '—',
+    amount: 'Amount:',
+    whatChanges: 'What changes',
+    willHappen: 'Will happen:',
+    willNotHappen: 'Will not happen:',
+    reversible: 'This action can be undone',
+    irreversible: 'This action cannot be undone',
+    evidence: 'The evidence',
+    serverChecksAgain: 'The server checks again before running and will explain any refusal.',
+    unknownExtent: 'The extent could not be measured, so this cannot be approved. Refresh and try again.',
+    cancel: 'Cancel',
+    confirm: 'Confirm',
+    working: 'Working…',
+  },
+
   alertsPage: {
     partialScan: 'The scan is partial: {scans}. What did load is shown, but nothing here can claim everything is fine.',
   },

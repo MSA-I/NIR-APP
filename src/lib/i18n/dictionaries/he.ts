@@ -1357,6 +1357,27 @@ export const he = {
     checkedAt: 'נבדק {at}',
   },
 
+  /* The impact dialog. `impact.notMeasured` is a dash and not "0": an extent nobody counted is
+     not an extent of zero, and the confirm is locked until it is counted. */
+  impact: {
+    loading: 'בודק מה הפעולה תעשה',
+    scope: 'ההיקף:',
+    affected: 'יושפעו:',
+    notMeasured: '—',
+    amount: 'סכום:',
+    whatChanges: 'מה משתנה',
+    willHappen: 'יקרה:',
+    willNotHappen: 'לא יקרה:',
+    reversible: 'הפעולה הפיכה',
+    irreversible: 'הפעולה אינה הפיכה',
+    evidence: 'הראיות',
+    serverChecksAgain: 'השרת יבדוק שוב לפני הביצוע ויסביר אם יסרב.',
+    unknownExtent: 'לא ניתן למדוד את ההיקף, ולכן אי אפשר לאשר. רענן ונסה שוב.',
+    cancel: 'ביטול',
+    confirm: 'אישור',
+    working: 'מבצע…',
+  },
+
   alertsPage: {
     partialScan: 'הסריקה חלקית: {scans}. הממצאים שכן נטענו מוצגים, אך אי אפשר לקבוע שהכול תקין.',
   },
