@@ -94,6 +94,10 @@ const THREE_WAY_REASON_KEYS: Record<string, TKey> = {
   invoice_grand_total_discrepancy: 'invoices.reason_invoice_grand_total_discrepancy',
   vat_rate_mismatch: 'invoices.reason_vat_rate_mismatch',
   expected_vat_rate_missing: 'invoices.reason_expected_vat_rate_missing',
+  // 0259: the server could not resolve a tolerance for this invoice's currency, so it did
+  // not run the amount comparisons and says so. Without this line the screen would render
+  // its generic "unknown reason", which is the silence the finding exists to break.
+  amount_check_skipped_no_tolerance: 'invoices.reason_amount_check_skipped_no_tolerance',
 };
 
 /**

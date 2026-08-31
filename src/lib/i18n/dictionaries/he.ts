@@ -2240,6 +2240,7 @@ export const he = {
     reason_invoice_grand_total_discrepancy: 'סך השורות אינו תואם לסך החשבונית מעבר ל־₪1.',
     reason_vat_rate_mismatch: 'שיעור המע״מ בשורה שונה משיעור המע״מ המצופה.',
     reason_expected_vat_rate_missing: 'אין שיעור מע״מ ארגוני מאושר להשוואה, ולכן לא ניתן לאשר את השורה.',
+    reason_amount_check_skipped_no_tolerance: 'לא נקבעה סטיית סכום מותרת למטבע של החשבונית, ולכן בדיקת הסכומים לא בוצעה — אפשר לקבוע אותה בהגדרות',
     detailPrice: 'מחיר בהזמנה {ordered}, בחשבונית {invoiced}, הפרש {difference}',
     detailOrdered: 'הוזמן {qty}',
     detailReceived: 'התקבל {qty}',

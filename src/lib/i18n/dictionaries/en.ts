@@ -2236,6 +2236,7 @@ export const en: Dictionary = {
     reason_invoice_grand_total_discrepancy: 'The line total does not match the invoice total, by more than ₪1.',
     reason_vat_rate_mismatch: 'The VAT rate on the line differs from the expected rate.',
     reason_expected_vat_rate_missing: 'There is no approved organisation VAT rate to compare against, so the line cannot be approved.',
+    reason_amount_check_skipped_no_tolerance: 'No amount tolerance is set for this invoice’s currency, so the amount checks were not run — you can set one in settings',
     detailPrice: 'Order price {ordered}, invoice price {invoiced}, difference {difference}',
     detailOrdered: 'ordered {qty}',
     detailReceived: 'received {qty}',
