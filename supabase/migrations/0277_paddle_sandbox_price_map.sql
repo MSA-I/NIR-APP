@@ -75,6 +75,23 @@ values
   ('paddle', 'pri_01m1c3fwbrcb19f18hqh8jpfvn', 'premium', 'pro_01m1c3fw5nsk8n8j11xytw3sz5', 'monthly', 'sandbox', '#195 launch-row 149 USD / launch-il 449 ILS'),
   ('paddle', 'pri_01m1c3fwht8yngektv59d4ys9k', 'premium', 'pro_01m1c3fw5nsk8n8j11xytw3sz5', 'yearly',  'sandbox', '#195 launch-row 1490 USD / launch-il 4490 ILS');
 
+-- ===== 2b. The readiness string catches up with what is now true =====
+-- `readiness` on this table is documentation held where a person reading the boundary will meet it,
+-- and 0187 required it to be "the readiness string exactly as recorded in that decision". #213 was
+-- amended on 31.08.2026, so leaving the old string here would recreate exactly the drift that
+-- column exists to prevent -- a table and a decision document disagreeing about the same fact.
+--
+-- READ WHAT IT SAYS AND WHAT IT POINTEDLY DOES NOT. `SANDBOX_PROVEN` is a claim about plumbing:
+-- catalogue, checkout, signed webhook, entitlement, cancellation, past-due, idempotency and tenant
+-- isolation, proven against a real sandbox account. ACCOUNT, KYC and ISRAEL_PAYOUT are still
+-- NOT_PROVEN and LIVE is still NOT_INTEGRATED, because none of those was touched. A row that read
+-- simply "PROVEN" would be the sentence somebody quotes later as authorization to go live.
+update private.billing_provider_boundary
+   set readiness = 'SELECTED / SANDBOX_PROVEN / ACCOUNT_NOT_PROVEN / KYC_NOT_PROVEN / '
+                   || 'ISRAEL_PAYOUT_NOT_PROVEN / LIVE_NOT_INTEGRATED',
+       updated_at = now()
+ where provider = 'paddle';
+
 -- ===== 3. Structural re-assertion (required of every post-0057 file) =====
 do $assert_0277$
 declare

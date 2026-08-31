@@ -396,6 +396,60 @@ try {
     console.error('  !! a provider is still enabled — fix before leaving this stack');
     exitCode = 1;
   }
+
+  /*
+   * AND THE ROWS GO TOO, because `supplyflow-p0` is a shared stack.
+   *
+   * This is not tidiness. Everything above writes to tables OTHER suites read, outside any
+   * transaction, and the first run of this harness broke p71: it asserted an absolute
+   * `count(*) = 1` on private.billing_ingress_rejections, and real refused deliveries from here
+   * made it 5. p71's assertion is now a delta — which it should always have been — but that fixes
+   * one suite, not the general problem of a harness that drives a live endpoint and walks away
+   * having changed a database another agent is mid-gate on.
+   *
+   * Deletions are scoped to what this file created: its own two organizations, and the events and
+   * dead letters attributable to them or minted by its own `evt_e2e_` prefix. The ingress
+   * rejections cannot be scoped that way — they deliberately carry no caller-supplied identifier
+   * (that is the whole point of 0187's counter) — so they are cleared by recency instead, which is
+   * the closest honest approximation and is stated rather than hidden.
+   */
+  sql(`delete from private.billing_event_dead_letters
+       where billing_event_id in (select id from private.billing_events
+                                  where provider_event_id like 'evt_e2e_%'
+                                     or org_id in ('${ORG_A}', '${ORG_B}'))`);
+  sql(`delete from private.billing_events
+       where provider_event_id like 'evt_e2e_%' or org_id in ('${ORG_A}', '${ORG_B}')`);
+  sql(`delete from private.billing_ingress_rejections
+       where occurred_at > now() - interval '1 hour'`);
+  sql(`delete from private.subscription_scheduled_changes where org_id in ('${ORG_A}', '${ORG_B}')`);
+
+  /*
+   * THE TWO ORGANIZATIONS STAY, AND SO DO THEIR AUDIT ROWS. An earlier version of this teardown
+   * tried to delete both and was refused by private.audit_log_immutable_guard() with
+   * `audit_log_immutable` — audit rows cannot be deleted without a declared purge, by design and
+   * correctly. Since audit_logs references the organization, the organization cannot go either.
+   *
+   * That refusal is worth more than a clean row count, so it is honoured rather than worked
+   * around: the two tenants are named "Paddle sandbox tenant A/B", they are inert (Free, manual
+   * provider, no provider link), and they cost a shared dev database nothing. What is actually
+   * cleaned is what actually broke something — the event ledger and the rejection counter.
+   */
+  sql(`update organization_subscriptions
+          set plan_key = 'free', status = 'active', provider = 'manual',
+              provider_customer_id = null, provider_subscription_id = null,
+              current_period_start = null, current_period_end = null,
+              renews_at = null, canceled_at = null
+        where org_id in ('${ORG_A}', '${ORG_B}')`);
+
+  const leftovers = sqlOne(
+    `select (select count(*) from private.billing_events
+             where provider_event_id like 'evt_e2e_%' or org_id in ('${ORG_A}', '${ORG_B}'))::text`);
+  console.log(`  harness billing rows removed (events remaining: ${leftovers});`
+    + ' the two inert tenants and their immutable audit rows remain, by design');
+  if (leftovers !== '0') {
+    console.error('  !! this harness left billing rows behind in a SHARED stack — clean before handoff');
+    exitCode = 1;
+  }
 }
 
 console.log('\n=== summary ===');

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "check:supplier-columns": "node scripts/check-supplier-columns.ts",
+    "check:paddle-secrets": "node scripts/check-paddle-secrets.mjs",
     "check:assistant-no-send": "node scripts/check-assistant-no-send.mjs",
     "check:assistant-tool-schemas": "node scripts/check-assistant-tool-schemas.mjs",
     "check:anchored-replacements": "node scripts/check-anchored-replacements.mjs",
@@ -24,7 +25,7 @@
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && vite build",
     "build:almoni": "node scripts/build-almoni.mjs",
-    "verify": "npm run check:dead-code && npm run check:tokens && npm run check:typography && npm run check:i18n && npm run check:plurals && npm run check:orphan-keys && npm run check:plan-labels && npm run check:jsx-space && npm run check:money && npm run check:exemptions && npm run check:supplier-columns && npm run check:assistant-no-send && npm run check:assistant-tool-schemas && npm run check:anchored-replacements && npm run check:currency && npm run check:tolerance-surfaces && npm run test",
+    "verify": "npm run check:dead-code && npm run check:tokens && npm run check:typography && npm run check:i18n && npm run check:plurals && npm run check:orphan-keys && npm run check:plan-labels && npm run check:jsx-space && npm run check:money && npm run check:exemptions && npm run check:supplier-columns && npm run check:assistant-no-send && npm run check:assistant-tool-schemas && npm run check:anchored-replacements && npm run check:currency && npm run check:tolerance-surfaces && npm run check:paddle-secrets && npm run test",
     "check": "npm run build && npm run verify",
     "quality": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-quality-gates.ps1",
     "demo:restore": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restore-demo-local.ps1",
