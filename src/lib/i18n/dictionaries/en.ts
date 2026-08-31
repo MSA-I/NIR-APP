@@ -805,9 +805,6 @@ export const en: Dictionary = {
   },
 
   dashboard: {
-    title: 'against the same days last month',
-    text: 'against the same days last month',
-    text_2: 'against the same days last month',
     text_3: '8-week trend',
     text_4: '8-week trend',
     text_5: 'Orders waiting for goods to arrive (receiving)',
@@ -897,7 +894,6 @@ export const en: Dictionary = {
     title_7: 'Suppliers with an open balance',
     empty_3: 'No open balances',
     text_63: 'To all suppliers',
-    deltaVsPreviousMonth: '{delta}% against the same days last month',
     openOrdersNoDate: 'open orders with no delivery date',
     openExceptions: 'Open exceptions',
     highSeverity: '{count} at high severity',
@@ -1351,6 +1347,18 @@ export const en: Dictionary = {
     feedLimitNote: 'Up to the last {limit} messages for this account, grouped by subject',
     sentTimes: 'Sent {times} times · the latest {latest}',
     checkedAt: 'Checked {at}',
+  },
+
+  /* What a figure is measured against. `PeriodComparison` owns these; the three hand-carved
+     copies on the dashboard used to say only "against the same days last month", which names a
+     relationship without naming either period. */
+  comparison: {
+    noBasis: 'No basis for comparison',
+    against: 'against {previous}',
+    againstPartial: '{current} against {previous}',
+    sourceOrdersSent: 'orders that were sent',
+    sourcePayments: 'payments that were made',
+    sourceInvoices: 'invoices on record',
   },
 
   alertsPage: {
