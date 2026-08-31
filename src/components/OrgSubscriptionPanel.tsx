@@ -618,7 +618,9 @@ export function OrgSubscriptionPanel() {
                      part that matters: the emphasis is STATIC and identical for every reader, never
                      keyed to the tenant's own data. */
                   badgeLabel={option.plan_key === RECOMMENDED_PLAN ? t('orgSubscription.recommended') : undefined}
-                  priceLabel={t('orgSubscription.priceLabel')}
+                  /* No label above the figure since the 31.08.2026 re-transcription: the marketing
+                     site's card has none, and what this panel needs to say about the figure is
+                     already in `who`, the quiet line under it. */
                   /* THE PRICE SLOT, AND THE SENTENCE THAT REPLACED FIVE DASHES (owner ruling
                      26.08.2026: «משפט קצר במקום מקף»). Stacked in a list, five «—» in the column
                      the eye reads as the price read as a broken screen rather than as a withheld
