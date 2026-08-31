@@ -1,4 +1,4 @@
--- 0276 — a document carries the actor that made it, and a machine is an actor.
+-- 0281 — a document carries the actor that made it, and a machine is an actor.
 --
 -- WHY THIS IS NOT "RELEASING TWO LOCKS". The plan for inbound intake described the pipeline as
 -- human-only in two places and proposed relaxing both. Measured against the tree, that is not
@@ -51,7 +51,7 @@
 -- what those documents' origin actually is: a separate 'legacy' source, or an exclusion of
 -- pre-migration rows from the CHECK. Both are decisions. Guessing one is not available, and
 -- attributing an old document to a person who did not upload it is not available either.
-do $preflight_0276$
+do $preflight_0281$
 declare
   v_orphans bigint;
 begin
@@ -59,7 +59,7 @@ begin
   if v_orphans > 0 then
     raise exception using
       errcode = '23514',
-      message = format('0276 preflight: %s document(s) have no uploader', v_orphans),
+      message = format('0281 preflight: %s document(s) have no uploader', v_orphans),
       detail  = 'documents.uploaded_by has been nullable since 0001 and these rows predate any '
              || 'actor requirement. Backfilling them to source=browser would violate the '
              || 'browser-implies-actor CHECK this migration adds.',
@@ -68,7 +68,7 @@ begin
              || 'from the CHECK. Do not attribute these documents to a person.';
   end if;
 end
-$preflight_0276$;
+$preflight_0281$;
 
 -- ===================================================================================
 -- 1. SOURCE — three tables, one closed vocabulary, immutable after insert
@@ -84,7 +84,7 @@ alter table public.document_processing_jobs
 alter table public.document_scan_jobs
   add column if not exists source text not null default 'browser';
 
-do $source_checks_0276$
+do $source_checks_0281$
 begin
   if not exists (select 1 from pg_constraint where conname = 'documents_source_check') then
     alter table public.documents add constraint documents_source_check
@@ -100,7 +100,7 @@ begin
       check (source in ('browser', 'email', 'whatsapp'));
   end if;
 end
-$source_checks_0276$;
+$source_checks_0281$;
 
 -- Immutable after insert. A document that arrived by email cannot be re-labelled a browser
 -- upload later to acquire an actor, and a browser upload cannot be relabelled to shed one.
@@ -141,7 +141,7 @@ create trigger document_scan_jobs_source_immutable
 -- a composite foreign key, not a convention: the existing (org_id, document_id) references are
 -- WIDENED to carry source, which keeps every guarantee they already gave and adds this one.
 
-do $source_fk_0276$
+do $source_fk_0281$
 begin
   if not exists (select 1 from pg_constraint where conname = 'documents_org_id_source_key') then
     alter table public.documents
@@ -174,7 +174,7 @@ begin
       references public.documents (org_id, id, source) on delete restrict;
   end if;
 end
-$source_fk_0276$;
+$source_fk_0281$;
 
 -- ===================================================================================
 -- 2b. A JOB'S SOURCE IS DERIVED, NEVER TYPED BY ITS WRITER
@@ -236,7 +236,7 @@ create trigger document_scan_jobs_inherit_source
 -- that inherit the parent's NULL uploader beside a defaulted 'browser' source, and the split
 -- fails on the CHECK -- a document arriving and then disappearing at the one step whose whole
 -- job is to rescue it.
-do $packet_0276$
+do $packet_0281$
 declare
   v_source text;
   v_patched text;
@@ -247,7 +247,7 @@ begin
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname = 'service_materialize_document_packet';
   if v_source is null then
-    raise exception '0276: public.service_materialize_document_packet is not defined';
+    raise exception '0281: public.service_materialize_document_packet is not defined';
   end if;
 
   if position('v_parent.document_date,v_parent.unit_id,v_parent.source' in v_source) > 0 then
@@ -258,7 +258,7 @@ begin
          / length('document_kind,supplier_id,document_date,unit_id')
     into v_hits;
   if v_hits <> 1 then
-    raise exception '0276: expected exactly one packet child-document column list, found %', v_hits;
+    raise exception '0281: expected exactly one packet child-document column list, found %', v_hits;
   end if;
 
   v_patched := replace(v_source,
@@ -268,11 +268,11 @@ begin
     'v_parent.uploaded_by,v_kind,v_parent.supplier_id,v_parent.document_date,v_parent.unit_id',
     'v_parent.uploaded_by,v_kind,v_parent.supplier_id,v_parent.document_date,v_parent.unit_id,v_parent.source');
   if v_patched = v_source then
-    raise exception '0276: the packet child-document patch produced no change';
+    raise exception '0281: the packet child-document patch produced no change';
   end if;
   execute v_patched;
 end
-$packet_0276$;
+$packet_0281$;
 
 -- ===================================================================================
 -- 3. THE ACTOR RULE — bidirectional, so neither direction can be forgotten
@@ -285,7 +285,7 @@ $packet_0276$;
 alter table public.document_processing_jobs alter column requested_by drop not null;
 alter table public.document_scan_jobs       alter column requested_by drop not null;
 
-do $actor_checks_0276$
+do $actor_checks_0281$
 begin
   if not exists (select 1 from pg_constraint
                  where conname = 'document_processing_jobs_actor_matches_source') then
@@ -312,7 +312,7 @@ begin
         or (source <> 'browser' and uploaded_by is null));
   end if;
 end
-$actor_checks_0276$;
+$actor_checks_0281$;
 
 -- ===================================================================================
 -- 4. THE PLATFORM BOUNDARY — what actually stops intake
@@ -343,8 +343,8 @@ revoke all on table private.inbound_channel_boundary
   from public, anon, authenticated, service_role;
 
 insert into private.inbound_channel_boundary (channel, decision_reference, readiness) values
-  ('whatsapp', '#311', 'NOT_ENABLED: media intake decided, no verified Twilio account proven'),
-  ('email',    '#309', 'NOT_ENABLED: no MX on in.inplace.digital, received_for unverified')
+  ('whatsapp', '#321', 'NOT_ENABLED: media intake decided, no verified Twilio account proven'),
+  ('email',    '#319', 'NOT_ENABLED: no MX on in.inplace.digital, received_for unverified')
 on conflict (channel) do nothing;
 
 create or replace function private.inbound_channel_open(p_channel text) returns boolean
@@ -732,7 +732,7 @@ grant execute on function private.inbound_release_quota(uuid, text) to service_r
 --     entirely would have removed the active-owner/office requirement from browser uploads too.
 --   * `j.requested_by = d.uploaded_by` becomes an equality that only browser rows must satisfy,
 --     with channel rows required to carry no actor on either side.
-do $claimer_0276$
+do $claimer_0281$
 declare
   v_source text;
   v_patched text;
@@ -744,7 +744,7 @@ begin
     join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'private' and p.proname = 'claim_document_interpretation_jobs';
   if v_source is null then
-    raise exception '0276: private.claim_document_interpretation_jobs is not defined';
+    raise exception '0281: private.claim_document_interpretation_jobs is not defined';
   end if;
 
   -- Already patched? A replayed migration -- `supabase db reset` replays every one of them --
@@ -762,15 +762,15 @@ begin
   select (length(v_source) - length(replace(v_source, 'join public.profiles p', ''))) / length('join public.profiles p')
     into v_hits;
   if v_hits <> 1 then
-    raise exception '0276: expected exactly one profiles join in the live claimer, found %', v_hits;
+    raise exception '0281: expected exactly one profiles join in the live claimer, found %', v_hits;
   end if;
   if position('left join public.profiles p' in v_source) > 0 then
-    raise exception '0276: the live claimer already left-joins profiles; the anchor is not what this migration read';
+    raise exception '0281: the live claimer already left-joins profiles; the anchor is not what this migration read';
   end if;
   select (length(v_source) - length(replace(v_source, 'j.requested_by = d.uploaded_by', ''))) / length('j.requested_by = d.uploaded_by')
     into v_hits;
   if v_hits <> 1 then
-    raise exception '0276: expected exactly one requested_by pin in the live claimer, found %', v_hits;
+    raise exception '0281: expected exactly one requested_by pin in the live claimer, found %', v_hits;
   end if;
 
   v_patched := replace(v_source,
@@ -783,11 +783,11 @@ begin
     || ' and j.source = d.source');
 
   if v_patched = v_source then
-    raise exception '0276: the claimer patch produced no change';
+    raise exception '0281: the claimer patch produced no change';
   end if;
   execute v_patched;
 end
-$claimer_0276$;
+$claimer_0281$;
 
 -- ===================================================================================
 -- 11. WHAT THE TENANT SEES — a projection, because private is not readable from a browser
@@ -797,7 +797,7 @@ $claimer_0276$;
 -- projection in `public` that carries org_id and an RLS policy over it.
 --
 -- What crosses: the channel, the provider, a correlation id and a timestamp. What does not
--- cross: any raw provider payload, the inbound address itself (it is a secret -- see #309), and
+-- cross: any raw provider payload, the inbound address itself (it is a secret -- see #319), and
 -- `ProfileName`, which is a person's name and is never stored in the first place.
 --
 -- These are FUNCTIONS rather than views on purpose. A security_invoker view over a private table
@@ -902,7 +902,7 @@ where registry.table_name in ('documents', 'document_processing_jobs', 'document
 -- ===================================================================================
 -- 13. VERIFY — the assertions this migration is willing to be judged on
 -- ===================================================================================
-do $verify_0276$
+do $verify_0281$
 declare
   v_violations text;
   v_bad bigint;
@@ -911,7 +911,7 @@ begin
   if (select count(*) from information_schema.columns
        where table_schema = 'public' and column_name = 'source'
          and table_name in ('documents', 'document_processing_jobs', 'document_scan_jobs')) <> 3 then
-    raise exception '0276: source is missing from one of the three tables';
+    raise exception '0281: source is missing from one of the three tables';
   end if;
 
   -- The actor rule is bidirectional on all three.
@@ -919,14 +919,14 @@ begin
        where conname in ('documents_actor_matches_source',
                          'document_processing_jobs_actor_matches_source',
                          'document_scan_jobs_actor_matches_source')) <> 3 then
-    raise exception '0276: an actor/source CHECK is missing';
+    raise exception '0281: an actor/source CHECK is missing';
   end if;
 
   -- The job cannot disagree with its document about where it came from.
   if (select count(*) from pg_constraint
        where conname in ('document_processing_jobs_document_source_fk',
                          'document_scan_jobs_document_source_fk')) <> 2 then
-    raise exception '0276: a job/document source FK is missing';
+    raise exception '0281: a job/document source FK is missing';
   end if;
 
   -- Neither work table still demands a human.
@@ -934,7 +934,7 @@ begin
    where table_schema = 'public' and column_name = 'requested_by' and is_nullable = 'NO'
      and table_name in ('document_processing_jobs', 'document_scan_jobs');
   if v_bad > 0 then
-    raise exception '0276: requested_by is still NOT NULL on % work table(s)', v_bad;
+    raise exception '0281: requested_by is still NOT NULL on % work table(s)', v_bad;
   end if;
 
   -- A work row cannot be created with a source its document does not have.
@@ -942,13 +942,13 @@ begin
        where tgname in ('document_processing_jobs_inherit_source',
                         'document_scan_jobs_inherit_source')
          and not tgisinternal) <> 2 then
-    raise exception '0276: a work row can be written with a source of its writer''s choosing';
+    raise exception '0281: a work row can be written with a source of its writer''s choosing';
   end if;
   -- And the packet split hands its children the parent's source rather than the default.
   if position('v_parent.document_date,v_parent.unit_id,v_parent.source' in
               replace(pg_get_functiondef(to_regprocedure(
                 'public.service_materialize_document_packet(uuid, text, uuid)')), e'\r', '')) = 0 then
-    raise exception '0276: a packet split still gives its children the default source';
+    raise exception '0281: a packet split still gives its children the default source';
   end if;
 
   -- The quota pair is reachable by the worker that has to call it, and by nobody else.
@@ -956,27 +956,27 @@ begin
         'private.inbound_reserve_quota(uuid,text,numeric)', 'execute')
      or not has_function_privilege('service_role',
         'private.inbound_release_quota(uuid,text)', 'execute') then
-    raise exception '0276: the intake worker cannot reserve or release quota';
+    raise exception '0281: the intake worker cannot reserve or release quota';
   end if;
   if has_function_privilege('authenticated',
         'private.inbound_reserve_quota(uuid,text,numeric)', 'execute') then
-    raise exception '0276: a browser role can reserve intake quota';
+    raise exception '0281: a browser role can reserve intake quota';
   end if;
 
   -- The claimer no longer drops a document that has no uploader.
   if (select position('d.source <> ''browser'' and j.requested_by is null' in
                       replace(pg_get_functiondef(to_regprocedure(
                         'private.claim_document_interpretation_jobs(integer, integer)')), e'\r', ''))) = 0 then
-    raise exception '0276: the interpretation claimer still requires a human actor';
+    raise exception '0281: the interpretation claimer still requires a human actor';
   end if;
 
   -- Both channels start closed, and no role can open them from the product.
   if (select count(*) from private.inbound_channel_boundary where enabled) > 0 then
-    raise exception '0276: an intake channel is enabled at migration time';
+    raise exception '0281: an intake channel is enabled at migration time';
   end if;
   if has_table_privilege('service_role', 'private.inbound_channel_boundary', 'UPDATE')
      or has_table_privilege('authenticated', 'private.inbound_channel_boundary', 'UPDATE') then
-    raise exception '0276: a product role can write the platform intake boundary';
+    raise exception '0281: a product role can write the platform intake boundary';
   end if;
 
   -- The one caller can reach it and the browser cannot. Asserted with has_function_privilege
@@ -984,26 +984,26 @@ begin
   -- insufficient_privilege is the pattern that has crashed this backend before.
   if not has_function_privilege('service_role',
         'public.service_ingest_inbound_document(uuid,uuid,uuid,text)', 'execute') then
-    raise exception '0276: service_role cannot execute the ingest command it is the only caller of';
+    raise exception '0281: service_role cannot execute the ingest command it is the only caller of';
   end if;
   if has_function_privilege('authenticated',
         'public.service_ingest_inbound_document(uuid,uuid,uuid,text)', 'execute')
      or has_function_privilege('anon',
         'public.service_ingest_inbound_document(uuid,uuid,uuid,text)', 'execute') then
-    raise exception '0276: a browser role can execute the ingest command';
+    raise exception '0281: a browser role can execute the ingest command';
   end if;
 
   -- The RPC does not accept a tenant from its caller.
   if (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'public' and p.proname = 'service_ingest_inbound_document'
          and pg_get_function_identity_arguments(p.oid) = 'p_claim_id uuid, p_lease_token uuid, p_object_id uuid, p_object_version text') <> 1 then
-    raise exception '0276: the ingest RPC does not have the four-argument signature';
+    raise exception '0281: the ingest RPC does not have the four-argument signature';
   end if;
 
   select string_agg(detail, chr(10) order by detail)
     into v_violations from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception '0276 scope assertions failed: %', v_violations;
+    raise exception '0281 scope assertions failed: %', v_violations;
   end if;
 end
-$verify_0276$;
+$verify_0281$;

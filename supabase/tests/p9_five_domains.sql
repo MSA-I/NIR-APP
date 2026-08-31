@@ -396,7 +396,7 @@ select pg_temp.p9_assert(
   || 'snapshot tables are deliberately read-only to authenticated, so an invoker version would '
   || 'have to be granted the writes that make the frozen cohort forgeable. Its tenancy is '
   || 'structural instead: it iterates organisations explicitly and every read and write inside '
-  || 'the loop is filtered by that organisation id; plus the one 0276 inbound ingest command, '
+  || 'the loop is filtered by that organisation id; plus the one 0281 inbound ingest command, '
   || 'service_ingest_inbound_document, which is the same empty-auth_scopes constraint as 0077, '
   || '0168 and 0265 with one addition worth stating: it runs as service_role with no JWT, so '
   || 'auth_scopes() returns empty AND assert_unit_in_scope early-exits treating it as trusted '
