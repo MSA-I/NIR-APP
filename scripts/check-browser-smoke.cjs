@@ -3792,12 +3792,12 @@ async function supplierPortalLocales(browser) {
   };
   const locales = {
     he: {
-      browser: 'he-IL', dir: 'rtl', title: 'אישור הזמנת רכש', heading: /הזמנה #238/,
+      browser: 'he-IL', dir: 'rtl', title: 'אישור הזמנת רכש', heading: /הזמנת רכש #238/,
       quantity: 'כמות מוצעת', submit: 'אישור ההזמנה כפי שנשלחה',
       switchName: 'מעבר לאנגלית', submitted: 'כבר נשלחה תשובה להזמנה זו', invalid: 'הקישור אינו פעיל',
     },
     en: {
-      browser: 'en-US', dir: 'ltr', title: 'Purchase order response', heading: /Order #238/,
+      browser: 'en-US', dir: 'ltr', title: 'Purchase order response', heading: /Purchase order #238/,
       quantity: 'Proposed quantity', submit: 'Approve the order as sent',
       switchName: 'Switch to Hebrew', submitted: 'A response has already been sent for this order',
       invalid: 'This link is not active',
