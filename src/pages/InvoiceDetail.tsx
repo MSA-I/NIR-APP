@@ -34,6 +34,8 @@ const INVOICE_LINES_FOLD_ID = 'invoice-lines-fold';
 
 type FullInvoice = Omit<Invoice, 'supplier'> & {
   supplier: { id: string; name: string };
+  /** From 0264. Null is a real answer — "nobody knows" — and never a date derived from terms. */
+  due_date: string | null;
   orders: { order_id: string; purchase_orders: { id: string; number: number; status: string } }[];
   receipts: { receipt_id: string; goods_receipts: { id: string; number: number; received_at: string } }[];
 };
@@ -343,6 +345,8 @@ export default function InvoiceDetail() {
       ?.scrollIntoView({ block: 'center' });
     setLinesFoldTarget(null);
   }, [linesFoldTarget]);
+  const [dueDate, setDueDate] = useState('');
+  const [dueDateBusy, setDueDateBusy] = useState(false);
   const isProcurementManager = profile?.role === 'office';
   const canOpenProcurement = profile?.role !== 'accountant';
 
@@ -402,6 +406,10 @@ export default function InvoiceDetail() {
   function goToInvoiceLines(lines: number[]) {
     if (lines.length > 0) setLinesFoldTarget(lines[0]);
   }
+  /* The field shows what the RECORD holds. Seeding it from state alone would let a stale value
+     survive a refetch and read as saved. */
+  const invoiceDueDate = data?.invoice?.due_date ?? '';
+  useEffect(() => { setDueDate(invoiceDueDate); }, [invoiceDueDate]);
   const isOffice = profile && ['owner', 'office'].includes(profile.role);
 
   // ?print=1 (Invoices list "הדפסה" action): print once when the data is on screen, then strip
@@ -529,6 +537,35 @@ export default function InvoiceDetail() {
     if (!inv) return;
     if (reasonDemandFor('invoice_review', inv.review_status, to)) { setReviewTarget(to); return; }
     void setReviewStatus(to);
+  }
+
+  /**
+   * The field writes through a command, because it has to. `p1_financial_command_guard` (0023)
+   * refuses every invoice UPDATE that does not arrive through an RPC holding the writer token, so
+   * there is no version of this that is a plain update. `set_invoice_due_date` audits the change
+   * with the old and new value and is idempotent, so a re-render that resends the same date
+   * writes nothing.
+   */
+  async function saveDueDate(next: string) {
+    if (!inv) return;
+    setDueDate(next);
+    setDueDateBusy(true);
+    const res = await supabase.rpc('set_invoice_due_date', {
+      p_invoice_id: inv.id,
+      p_due_date: next === '' ? null : next,
+    });
+    setDueDateBusy(false);
+    if (res.error) {
+      // Put the field back to what the server still holds, rather than leaving a value on screen
+      // that nothing stored.
+      setDueDate(inv.due_date ?? '');
+      toast(errorText(res.error.message), 'error');
+      return;
+    }
+    if ((res.data as { changed?: boolean } | null)?.changed) {
+      toast(next === '' ? t('invoices.dueDateCleared') : t('invoices.dueDateSaved'));
+      void refetch();
+    }
   }
 
   /**
@@ -770,6 +807,23 @@ export default function InvoiceDetail() {
           <dl className="text-sm space-y-2">
             <div className="flex justify-between"><dt className="text-ink-muted">{t('invoices.fmtDate')}</dt><dd>{fmtDate(inv.invoice_date)}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">{t('invoices.fmtDate_2')}</dt><dd>{fmtDate(inv.received_date)}</dd></div>
+            {/* THE DATE NOBODY HAD. Payment requests have carried one since 0001; invoices never
+                did, so "what leaves the business in the next thirty days" could only be answered
+                from requests somebody had already scheduled. Optional on purpose: an empty field
+                means NOT KNOWN, and nothing derives a date from payment terms — that column is
+                free text nobody parses, and parsing it would invent a debt with a date on it. */}
+            <div className="flex items-center justify-between gap-2">
+              <dt className="text-ink-muted">{t('invoices.dueDate')}</dt>
+              <dd>
+                {canEdit ? (
+                  <input type="date" className="input h-9 w-40 text-sm" value={dueDate}
+                    aria-label={t('invoices.dueDate')} disabled={dueDateBusy}
+                    onChange={(event) => void saveDueDate(event.target.value)} />
+                ) : (
+                  fmtDate(inv.due_date)
+                )}
+              </dd>
+            </div>
             <div className="flex justify-between"><dt className="text-ink-muted">{t('invoices.detailSupplier')}</dt><dd>{canOpenProcurement ? <Link className="link" to={`/suppliers/${inv.supplier.id}`}>{inv.supplier.name}</Link> : inv.supplier.name}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">{t('invoices.text_7')}</dt>
               <dd className="flex gap-2">{inv.orders.length ? inv.orders.map((o) => (
