@@ -137,6 +137,19 @@ insert into private.scope_registry (table_name, scope_class, enforced) values
 on conflict (table_name) do update
   set scope_class = excluded.scope_class, enforced = excluded.enforced;
 
+-- NOT EVIDENCE THAT ANYBODY USED THE PRODUCT. A row appears in either table because a monthly
+-- cron job ran, not because a person did something — so counting one as activity would keep an
+-- abandoned tenant looking alive forever. `profiles` and `org_units` are classified the same way
+-- for the same reason: created by machinery at signup, proving nothing about use.
+insert into private.org_activity_evidence_registry (table_name, disposition, rationale) values
+  ('forecast_snapshots', 'not_evidence',
+   'Written by the monthly cron job, never by a person; its existence proves nothing was used.'),
+  ('forecast_snapshot_requests', 'not_evidence',
+   'The frozen cohort behind a cron-written snapshot; same machinery, same absence of a person.')
+on conflict (table_name) do update set
+  disposition = excluded.disposition,
+  rationale = excluded.rationale;
+
 insert into private.tenant_export_registry (table_name, disposition, excluded_columns, rationale)
 values
   ('forecast_snapshots', 'include', '{}',
@@ -423,6 +436,17 @@ begin
   if (select count(*) from private.tenant_export_registry
       where table_name in ('forecast_snapshots', 'forecast_snapshot_requests')) <> 2 then
     raise exception '0265: the export registry does not carry both tables';
+  end if;
+  -- AND IN THE ACTIVITY-EVIDENCE REGISTRY. A public table carrying `org_id` and no classification
+  -- blocks tenant deletion, which is how this was found: the local dry-run ran this migration's
+  -- own assertions and CI ran `p75`, which is the suite that actually knows the rule.
+  if (select count(*) from private.org_activity_evidence_registry
+      where table_name in ('forecast_snapshots', 'forecast_snapshot_requests')
+        and disposition = 'not_evidence') <> 2 then
+    raise exception '0265: the activity-evidence registry does not classify both tables';
+  end if;
+  if exists (select 1 from private.org_activity_registry_violations()) then
+    raise exception '0265: a public org table is unclassified for activity evidence';
   end if;
 
   -- And the clock exists rather than being described in a comment.
