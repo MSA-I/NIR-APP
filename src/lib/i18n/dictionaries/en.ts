@@ -5970,6 +5970,8 @@ export const en: Dictionary = {
     priceIncreaseDetail: 'Based on the price list — not on what was charged on an invoice',
     documentStalled: 'Document processing stopped',
     documentStalledDetail: 'Documents are waiting in queue and no one is reading them — checked every five minutes',
+    expectedDocumentMissing: 'A document you expected never arrived',
+    expectedDocumentMissingDetail: 'Only once both the waiting window and the grace period you set have passed — checked once a day',
   },
 
   whatsappConnection: {

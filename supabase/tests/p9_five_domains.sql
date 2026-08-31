@@ -681,11 +681,12 @@ end
 $$;
 
 -- (b6) The reader: complete, defaulted, tenant-and-caller pinned.
--- Four rows since 0142 added `document_processing_stalled`. The count is derived from the catalog
--- on purpose -- "complete" is the property under test, so this number has to move whenever the
--- catalog does, and a stale 3 here would mean the reader had silently stopped being complete.
+-- Four rows since 0142 added `document_processing_stalled`, five since 0274 added
+-- `expected_document_missing`. The count is derived from the catalog on purpose -- "complete" is
+-- the property under test, so this number has to move whenever the catalog does, and a stale 4
+-- here would mean the reader had silently stopped being complete.
 select pg_temp.p9_assert(
-  (select count(*) from read_notification_preferences()) = 4
+  (select count(*) from read_notification_preferences()) = 5
     and (select count(*) from read_notification_preferences() where configured) = 1
     and (select push_enabled = false and inapp_enabled = true
          from read_notification_preferences() where event_code = 'payment_due')

@@ -5978,6 +5978,8 @@ export const he = {
     priceIncreaseDetail: 'לפי המחירון — לא לפי מה שנגבה בחשבונית',
     documentStalled: 'עיבוד המסמכים נעצר',
     documentStalledDetail: 'מסמכים ממתינים בתור ואיש אינו קורא אותם — נבדק כל חמש דקות',
+    expectedDocumentMissing: 'מסמך שציפית לו לא הגיע',
+    expectedDocumentMissingDetail: 'רק אחרי שחלון ההמתנה ותקופת החסד שהגדרת שניהם עברו — נבדק פעם ביום',
   },
 
   whatsappConnection: {
