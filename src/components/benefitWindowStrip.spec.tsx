@@ -194,6 +194,59 @@ describe('what the strip refuses to be', () => {
   });
 });
 
+describe('the three events, and the two that are not events', () => {
+  it('reports the impression once, no matter how often it re-renders', () => {
+    const onImpression = vi.fn();
+    const { rerender } = show(response(), { onImpression });
+    rerender(
+      <LocaleProvider>
+        <BenefitWindowStrip data={response()} enabled isOwner onImpression={onImpression} />
+      </LocaleProvider>,
+    );
+    expect(onImpression).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not report an impression it never made', () => {
+    const onImpression = vi.fn();
+    show(response({ has_paid: true }), { onImpression });
+    expect(onImpression).not.toHaveBeenCalled();
+  });
+
+  /** Minimising is the same decision as closing, at a different depth — not a fourth name. */
+  it('reports minimising and closing as one event with two modes', async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    const { unmount } = show(response(), { onDismiss });
+    await user.click(screen.getByRole('button', { name: 'Minimise the strip' }));
+    expect(onDismiss).toHaveBeenCalledWith('minimized');
+    unmount();
+
+    show(response(), { onDismiss });
+    await user.click(screen.getByRole('button', { name: 'Close the strip' }));
+    expect(onDismiss).toHaveBeenCalledWith('closed');
+  });
+
+  it('reports the press before it records the intention', async () => {
+    const user = userEvent.setup();
+    const onCta = vi.fn();
+    show(response(), { onCta });
+    await user.click(screen.getByRole('button', { name: 'Talk to me about continuing' }));
+    expect(onCta).toHaveBeenCalled();
+
+    const mount = readFileSync(resolve(process.cwd(), 'src/components/BenefitWindowMount.tsx'), 'utf8');
+    expect(mount).toContain("report('countdown.cta_clicked'); void recordIntent();");
+    // Three names and no more: the two server-observed facts are not reported from a browser.
+    const code = mount.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
+    expect(code).not.toMatch(/offer_redeemed|offer_expired/);
+  });
+
+  /** Telemetry that can break a screen is worse than telemetry that is missing. */
+  it('never lets a rejected report reach the reader', () => {
+    const mount = readFileSync(resolve(process.cwd(), 'src/components/BenefitWindowMount.tsx'), 'utf8');
+    expect(mount).toContain('.then(() => undefined, () => undefined)');
+  });
+});
+
 describe('minimising and closing', () => {
   it('minimises to a single line that still names the benefit', async () => {
     const user = userEvent.setup();

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Minus, Info } from 'lucide-react';
 import { useT } from '../lib/i18n/LocaleProvider';
 import { fmtDate, fmtDateTime } from '../lib/format';
@@ -62,13 +62,18 @@ export function remaining(endsAt: string, now: Date): { days: number; hours: num
   return { days: Math.floor(totalHours / 24), hours: totalHours % 24 };
 }
 
-export function BenefitWindowStrip({ data, enabled, isOwner, onResync, onCta }: {
+export function BenefitWindowStrip({ data, enabled, isOwner, onResync, onCta,
+                                     onImpression, onDismiss }: {
   data: BenefitWindowResponse | null;
   /** `commerce.benefit_countdown`. Off is the default for every tenant. */
   enabled: boolean;
   isOwner: boolean;
   onResync?: () => void;
   onCta?: () => void;
+  /** Reported once per mount. The server caps it at once per organisation per day. */
+  onImpression?: () => void;
+  /** Minimising is NOT a fourth event — it is this one with `mode: 'minimized'`. */
+  onDismiss?: (mode: 'closed' | 'minimized') => void;
 }) {
   const { t } = useT();
   /* The same resolver the plan badge uses: the RPC returns a plan KEY and the dictionary turns it
@@ -78,8 +83,23 @@ export function BenefitWindowStrip({ data, enabled, isOwner, onResync, onCta }: 
   const [minimized, setMinimized] = useState(false);
   const clock = useServerClock(data?.server_now, onResync);
 
-  const minimize = useCallback(() => setMinimized(true), []);
-  const dismiss = useCallback(() => setDismissed(true), []);
+  const minimize = useCallback(() => { setMinimized(true); onDismiss?.('minimized'); }, [onDismiss]);
+  const dismiss = useCallback(() => { setDismissed(true); onDismiss?.('closed'); }, [onDismiss]);
+
+  /* The impression, reported once. Hooks cannot sit after the early returns below, so the
+     condition lives inside the effect rather than around it — and a ref rather than state,
+     because reporting that the strip was seen must not itself cause a render. `impression` is
+     self-reported by nature: a blocker or a background tab prevents it, which is why the event's
+     own definition says any rate measured against it is a lower bound. */
+  const reported = useRef(false);
+  const visible = enabled && isOwner && !dismissed && data != null
+    && data.status !== 'not_permitted' && !data.has_paid && !data.intent_recorded
+    && data.window != null;
+  useEffect(() => {
+    if (!visible || reported.current) return;
+    reported.current = true;
+    onImpression?.();
+  }, [visible, onImpression]);
 
   // Every reason not to render, in the order they can be known. A skeleton of a commercial strip
   // is noise, so there is no loading state: nothing renders until there is an answer.

@@ -62,8 +62,26 @@ export function BenefitWindowMount() {
     navigate('/settings/subscription');
   }, [navigate, query]);
 
+  /**
+   * The three things worth counting, and nothing else. `offer_redeemed` is a row in
+   * `launch_offer_intents` and `offer_expired` is written by the grant sweep — neither is a thing
+   * a browser can witness, so neither is reported from here.
+   *
+   * FAILURES ARE SWALLOWED ON PURPOSE. Telemetry that can break a screen is worse than telemetry
+   * that is missing: the server caps these at one per day and refuses anything it does not
+   * recognise, so a rejection here is either the ceiling working or a caller that should not have
+   * asked. Neither is the reader's problem.
+   */
+  const report = useCallback((event: string, properties?: Record<string, string>) => {
+    void supabase.rpc('record_my_countdown_event', {
+      p_event_name: event, p_properties: properties ?? {},
+    }).then(() => undefined, () => undefined);
+  }, []);
+
   return (
     <BenefitWindowStrip data={data} enabled={enabled} isOwner={isOwner} onResync={resync}
-      onCta={() => void recordIntent()} />
+      onImpression={() => report('countdown.impression')}
+      onDismiss={(mode) => report('countdown.dismissed', { mode })}
+      onCta={() => { report('countdown.cta_clicked'); void recordIntent(); }} />
   );
 }
