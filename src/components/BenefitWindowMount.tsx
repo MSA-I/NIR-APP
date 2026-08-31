@@ -45,8 +45,25 @@ export function BenefitWindowMount() {
   // open, and a commercial strip is the last thing that should render on stale belief.
   const data = query.error ? null : query.data ?? null;
 
+  /**
+   * The call to action RECORDS AN INTENTION and then goes on to the subscription screen, where
+   * the same four facts live. It changes no plan, opens no billing period and charges nothing —
+   * `record_launch_offer_intent` refuses to do any of those — so there is no confirmation step
+   * and no step-up between the press and the row.
+   *
+   * A SECOND PRESS IS NOT AN ERROR. The command is idempotent per window: it reports
+   * `already_recorded` and writes nothing at all, not even a log line. And a failure is not worth
+   * blocking the navigation over: the person asked to talk to somebody, and taking them to the
+   * screen where they can is the useful half.
+   */
+  const recordIntent = useCallback(async () => {
+    await supabase.rpc('record_launch_offer_intent', { p_reason: null });
+    void query.refetch();
+    navigate('/settings/subscription');
+  }, [navigate, query]);
+
   return (
     <BenefitWindowStrip data={data} enabled={enabled} isOwner={isOwner} onResync={resync}
-      onCta={() => navigate('/settings/subscription')} />
+      onCta={() => void recordIntent()} />
   );
 }

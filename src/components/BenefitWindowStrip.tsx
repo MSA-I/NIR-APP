@@ -47,7 +47,11 @@ export interface BenefitWindowResponse {
   server_now: string;
   has_paid: boolean;
   eligible: boolean;
+  /** From `0269`. Whether THIS window was already answered — a later window is offered again. */
+  intent_recorded?: boolean;
   window: BenefitWindow | null;
+  /** A role that may not read this gets a refusal, never an empty object. */
+  status?: 'not_permitted';
 }
 
 /** Whole days and whole hours, or null once the boundary has passed. Never negative, never zero. */
@@ -80,7 +84,11 @@ export function BenefitWindowStrip({ data, enabled, isOwner, onResync, onCta }: 
   // Every reason not to render, in the order they can be known. A skeleton of a commercial strip
   // is noise, so there is no loading state: nothing renders until there is an answer.
   if (!enabled || !isOwner || dismissed) return null;
-  if (!data || data.has_paid || !data.window) return null;
+  if (!data || data.status === 'not_permitted') return null;
+  // Answered already: the strip stops asking for THIS window. A window that later moves is a
+  // different window and is offered again, which is why the server keys the intent on the
+  // boundary rather than on the organisation.
+  if (data.has_paid || data.intent_recorded || !data.window) return null;
 
   const now = clock.now();
   if (!now) return null;

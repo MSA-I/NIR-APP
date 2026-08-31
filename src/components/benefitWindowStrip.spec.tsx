@@ -51,9 +51,19 @@ describe('the strip renders only when every condition holds', () => {
   it.each([
     ['the tenant has paid', { has_paid: true }],
     ['there is no window', { window: null }],
+    // 0269: this window was already answered. A LATER window is a different window and is
+    // offered again, which is why the server keys the intent on the boundary.
+    ['the window was already answered', { intent_recorded: true }],
+    ['the reader is refused by the server', { status: 'not_permitted' as const }],
   ])('renders nothing when %s', (_label, over) => {
     const { container } = show(response(over));
     expect(container).toBeEmptyDOMElement();
+  });
+
+  /** And an intent against a DIFFERENT window does not silence this one. */
+  it('keeps offering a window that has not been answered', () => {
+    show(response({ intent_recorded: false }));
+    expect(screen.getByRole('region')).toBeInTheDocument();
   });
 
   /** No skeleton. A placeholder for a commercial strip is noise on every screen in the product. */
@@ -192,6 +202,18 @@ describe('minimising and closing', () => {
     expect(screen.queryByRole('button', { name: /Talk to me/ })).toBeNull();
     expect(screen.getByRole('region')).toHaveAccessibleName(/01\.02\.2027/);
     expect(screen.getByRole('button', { name: 'Show the benefit details' })).toBeInTheDocument();
+  });
+
+  /** The press records an intention and nothing else: no plan change, no charge, no step-up. */
+  it('records the intention through the command, then goes where the facts are', () => {
+    const mount = readFileSync(resolve(process.cwd(), 'src/components/BenefitWindowMount.tsx'), 'utf8');
+    expect(mount).toContain("supabase.rpc('record_launch_offer_intent'");
+    expect(mount).toContain("navigate('/settings/subscription')");
+    // Nothing here confirms, charges or asks for a password. Matched against CODE, not prose: the
+    // comment explaining that it opens no billing period contains the word it forbids, and it
+    // failed on this assertion's first run.
+    const code = mount.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
+    expect(code).not.toMatch(/ConfirmDialog|Reauth|checkout|billing/i);
   });
 
   it('closes to nothing, and the offer survives elsewhere', async () => {
