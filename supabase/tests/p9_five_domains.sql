@@ -347,8 +347,8 @@ select pg_temp.p9_assert(
 -- always at the end of a twenty-minute gate rather than in seconds. See the check:* script that
 -- asserts a migration touching scope_definer_exemptions also touches this file.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 94,
-  'the definer exemption registry must stay at 94 rows -- 59 minus the three 0073 drained, '
+  (select count(*) from private.scope_definer_exemptions) = 95,
+  'the definer exemption registry must stay at 95 rows -- 59 minus the three 0073 drained, '
   || 'plus the one 0075:464 added for rescue_document_from_archive (not drainable: invoker '
   || 'would require granting UPDATE on document_filings to the browser), plus the one 0077 '
   || 'added for apply_document_interpretation (not drainable: it runs with no user JWT, so '
@@ -396,7 +396,18 @@ select pg_temp.p9_assert(
   || 'snapshot tables are deliberately read-only to authenticated, so an invoker version would '
   || 'have to be granted the writes that make the frozen cohort forgeable. Its tenancy is '
   || 'structural instead: it iterates organisations explicitly and every read and write inside '
-  || 'the loop is filtered by that organisation id; zero silent additions');
+  || 'the loop is filtered by that organisation id; plus the one 0276 inbound ingest command, '
+  || 'service_ingest_inbound_document, which is the same empty-auth_scopes constraint as 0077, '
+  || '0168 and 0265 with one addition worth stating: it runs as service_role with no JWT, so '
+  || 'auth_scopes() returns empty AND assert_unit_in_scope early-exits treating it as trusted '
+  || 'service work -- a scope predicate inside it would not merely fail to protect, it would '
+  || 'PASS, which is worse than none because it reads like a check. It cannot be an invoker '
+  || 'either: no client role holds EXECUTE, and the claim and route ledgers it derives the '
+  || 'tenant from are private with no authenticated grant. Its tenancy is structural: org_id, '
+  || 'unit and source come from the claim route, whose identity is a composite foreign key into '
+  || 'private.inbound_routes and whose routing columns a trigger freezes after insert, so the '
+  || 'caller cannot name a tenant at all -- the signature takes a claim id, a lease token, an '
+  || 'object id and an object version, and nothing else; zero silent additions');
 
 select pg_temp.p9_assert(
   (select count(*) from private.scope_enforcement_violations()) = 0,
