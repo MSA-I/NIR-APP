@@ -152,7 +152,7 @@ Deno.test('an inbound message is classified inbound and never as a handled event
 });
 
 // This test used to assert that inbound MEDIA was refused as `inbound`, which is what #241
-// decided on 22.08.2026. #311 reversed that half on 31.08.2026: media is ingested, text is not.
+// decided on 22.08.2026. #321 reversed that half on 31.08.2026: media is ingested, text is not.
 // The assertion changed because the DECISION changed, and the registry says so -- not because
 // the code stopped agreeing with it.
 Deno.test('inbound media is classified as media, keyed on To, with the sender masked', () => {
@@ -219,7 +219,7 @@ Deno.test('a declared media count with a missing URL is refused, never partially
 });
 
 Deno.test('the forwarding flags survive classification, because a forward is weaker evidence', () => {
-  // #312: an invoice a supplier FORWARDED is not the same claim as one they sent directly, and
+  // #322: an invoice a supplier FORWARDED is not the same claim as one they sent directly, and
   // the two must not look identical on screen.
   const forwarded = classifyTwilioWebhook({
     MessageSid: 'SM1', AccountSid: 'AC1',
@@ -284,7 +284,7 @@ Deno.test('media parsing is bounded, because a count is a claim by the caller', 
   assertEquals(ok.media[1].declaredContentType, 'image/png');
 });
 
-Deno.test('inbound TEXT is still refused, and #311 did not change that half', () => {
+Deno.test('inbound TEXT is still refused, and #321 did not change that half', () => {
   const text = classifyTwilioWebhook({
     MessageSid: 'SM1', AccountSid: 'AC1',
     From: 'whatsapp:+972501234567', To: 'whatsapp:+972500000001',

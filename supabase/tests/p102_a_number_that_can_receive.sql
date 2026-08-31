@@ -1,6 +1,6 @@
 -- P102 — a WhatsApp number that can receive a document, and the four ways it must not.
 --
--- #311 opened media intake on WhatsApp. The number that receives it is the same row that already
+-- #321 opened media intake on WhatsApp. The number that receives it is the same row that already
 -- SENDS orders, so every rule here is about a door being opened on a table that already had a
 -- job, without widening anything else it does.
 --
@@ -25,7 +25,7 @@
 --      that route names.
 --
 -- Plus: the size limit is the bucket's own, not a copy of it; and the provider-side deletion
--- #317(b) promises is a durable row rather than a hope.
+-- #327(b) promises is a durable row rather than a hope.
 \set ON_ERROR_STOP on
 
 begin;
@@ -213,7 +213,7 @@ select pg_temp.p102_assert(
   'a number nobody registered was treated as open');
 
 -- ---- 5. THE SIZE LIMIT IS THE BUCKET'S OWN ---------------------------------------------------
--- #311 refused the silent alternative: raising the bucket to Twilio's 16MB would move every
+-- #321 refused the silent alternative: raising the bucket to Twilio's 16MB would move every
 -- other document path at the same time. So the intake limit is READ from the bucket, and a copy
 -- of the number cannot drift from it.
 select pg_temp.p102_assert(
@@ -241,7 +241,7 @@ select pg_temp.p102_assert(
   'a dead letter could carry a sentence somebody typed instead of a reason from the list');
 
 -- ---- 7. THE PROVIDER-SIDE DELETION IS A ROW, NOT A HOPE --------------------------------------
--- #317(b) says the media is deleted at Twilio with evidence. A delete that is fired and
+-- #327(b) says the media is deleted at Twilio with evidence. A delete that is fired and
 -- forgotten leaves a customer's invoice in a third party's storage indefinitely and nobody
 -- learns of it, so it is queued, retried, and cannot claim success without proof.
 insert into private.inbound_media_deletions
@@ -264,7 +264,7 @@ select pg_temp.p102_assert(
        set state = 'deleted', deleted_at = null, provider_status = null
      where provider_media_id = 'ME102'
   $$) like '23514:%',
-  'a deletion could be marked done without the evidence #317 asks for');
+  'a deletion could be marked done without the evidence #327 asks for');
 
 update private.inbound_media_deletions
    set state = 'deleted', deleted_at = now(), provider_status = 204

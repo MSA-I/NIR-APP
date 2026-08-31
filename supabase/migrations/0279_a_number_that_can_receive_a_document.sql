@@ -1,8 +1,8 @@
 -- 0279 — a WhatsApp number that can receive a document, and the four ways it must not.
 --
--- #311 (owner, 31.08.2026) reversed half of #241: an image or PDF sent to a tenant's WhatsApp
+-- #321 (owner, 31.08.2026) reversed half of #241: an image or PDF sent to a tenant's WhatsApp
 -- number becomes an inbox document. Text stays exactly where #241 left it -- no automation, no
--- reply. This migration is the database half of that; 0276 already built the contract that lets
+-- reply. This migration is the database half of that; 0281 already built the contract that lets
 -- a document exist with no human behind it.
 --
 -- WHAT THIS IS NOT: it is not an activation. `private.inbound_channel_boundary` still says
@@ -17,7 +17,7 @@
 --      misses a tenant that exists. The canonical form is bare E.164 and a CHECK says so.
 --
 --   2. A CONNECTION WITHOUT A ROUTE CANNOT RECEIVE. An inbound document has no uploader and so
---      no scope of its own; 0276 puts that scope on the route. A connection that has no route
+--      no scope of its own; 0281 puts that scope on the route. A connection that has no route
 --      would produce a document with a null unit -- organisation-wide, visible across sibling
 --      legal entities. So receiving is gated on the route existing, structurally.
 --
@@ -27,7 +27,7 @@
 --      one the customer holds.
 --
 --   4. A FILE THAT IS TOO BIG IS A REFUSAL WITH A NAME. Twilio accepts 16MB; the documents
---      bucket accepts 10MB (0045). #311 decided the gap explicitly: over the limit is refused
+--      bucket accepts 10MB (0045). #321 decided the gap explicitly: over the limit is refused
 --      with a message the tenant can read, and NOT a silent raise of the bucket limit, which
 --      would move every other document path at the same time. The limit is READ from the bucket
 --      rather than typed here, so the two can never disagree.
@@ -167,7 +167,7 @@ grant execute on function private.inbound_max_bytes() to service_role;
 -- ===================================================================================
 -- 5. A REFUSAL HAS A NAME, FROM A CLOSED LIST
 -- ===================================================================================
--- 0276 left `reason_code` free text so the channels could name their own failures. They can now,
+-- 0281 left `reason_code` free text so the channels could name their own failures. They can now,
 -- so the list closes: a dead letter whose reason is a sentence somebody typed is not a ledger,
 -- and the tenant-facing message is chosen from this vocabulary rather than echoed from a
 -- provider.
@@ -201,7 +201,7 @@ $reason_vocab_0279$;
 -- ===================================================================================
 -- 6. THE MEDIA IS DELETED AT THE PROVIDER, AND THE DELETION IS NOT A HOPE
 -- ===================================================================================
--- #317(b): media is deleted at Twilio immediately after a successful intake, WITH EVIDENCE. A
+-- #327(b): media is deleted at Twilio immediately after a successful intake, WITH EVIDENCE. A
 -- fire-and-forget delete that fails leaves a customer's invoice sitting in a third party's
 -- storage indefinitely, and the decision quietly becomes a promise nobody kept. So it is an
 -- outbox: durable, retried with backoff, and it dead-letters LOUDLY rather than going quiet.
@@ -219,7 +219,7 @@ create table if not exists private.inbound_media_deletions (
   attempt         integer not null default 0 check (attempt >= 0),
   next_attempt_at timestamptz not null default now(),
   last_error      text,
-  -- The evidence #317 asks for: what the provider answered, and when.
+  -- The evidence #327 asks for: what the provider answered, and when.
   deleted_at      timestamptz,
   provider_status integer,
   created_at      timestamptz not null default now(),

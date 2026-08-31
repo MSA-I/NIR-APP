@@ -32,7 +32,7 @@
 //     The outbound status vocabulary: queued, accepted, scheduled, sending, sent, delivered,
 //     undelivered, failed, canceled, read. receiving/received are INBOUND states.
 //
-// #241 (owner, 22.08.2026) said inbound text and media are not ingested at launch. #311 (owner,
+// #241 (owner, 22.08.2026) said inbound text and media are not ingested at launch. #321 (owner,
 // 31.08.2026) REVERSED HALF OF THAT, and the halves are not symmetric:
 //
 //   MEDIA is ingested. An image or PDF sent to a tenant's number becomes an inbox document.
@@ -48,7 +48,7 @@
 //   THE ROUTING KEY COMES FROM `To`, NEVER FROM `From`. On an outbound status callback `From`
 //   is our number; on an INBOUND message it is the supplier's, and `To` is ours. Reusing the
 //   outbound rule here would look up a connection by the phone of whoever sent the message --
-//   which is to say, a stranger could select which tenant their file lands in. #309 makes the
+//   which is to say, a stranger could select which tenant their file lands in. #319 makes the
 //   same point for email: association is derived only from the address WE issued.
 //
 //   NOTHING HERE HAS A SIDE EFFECT. Twilio's HMAC is computed over PARSED parameters and the
@@ -80,7 +80,7 @@ export type WebhookClassification =
     /** The sender, already masked. The full number never leaves this function. */
     maskedSender: string;
     media: InboundMedia[];
-    /** #312: a forwarded invoice is weaker evidence and must not look identical to a direct one. */
+    /** #322: a forwarded invoice is weaker evidence and must not look identical to a direct one. */
     forwarded: boolean;
     frequentlyForwarded: boolean;
   }
@@ -264,7 +264,7 @@ export function normalizeWhatsAppAddress(raw: string | null | undefined): string
  * A sender's number is personal data about a person, so what is STORED is masked: the country
  * code, then a fixed run of dots, then the final two digits. Enough for a human to recognise
  * their own supplier, not enough to be a phone directory of a tenant's contacts if the row
- * leaks. #312 keeps `WaId` under the same rule, and `ProfileName` -- a person's chosen display
+ * leaks. #322 keeps `WaId` under the same rule, and `ProfileName` -- a person's chosen display
  * name -- is not carried out of this function at all.
  */
 export function maskWhatsAppNumber(e164: string | null | undefined): string {
@@ -347,7 +347,7 @@ export function classifyTwilioWebhook(params: Record<string, string>): WebhookCl
     };
   }
   if (typeof params.Body === 'string' && params.Body.length > 0) {
-    // #311 left this half of #241 exactly where it was: text triggers nothing and is answered by
+    // #321 left this half of #241 exactly where it was: text triggers nothing and is answered by
     // nobody. It is a verdict, not a parse -- no field of it survives this line.
     return { kind: 'inbound', reason: 'inbound_message' };
   }
