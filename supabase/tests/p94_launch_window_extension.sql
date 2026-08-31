@@ -1,7 +1,7 @@
 -- P94 — the launch window moved, and it moved in every place that held a copy of it.
 --
 -- `0267` extends the pre-launch window by one month (owner ruling 31.08.2026, `OPEN-DECISIONS
--- #309`). The interesting half is not the function: it is that the old value had already been
+-- #311`). The interesting half is not the function: it is that the old value had already been
 -- COPIED INTO ROWS in three tables, so redefining the function alone would have moved not one
 -- existing customer while looking like a complete change.
 --
@@ -164,7 +164,7 @@ select pg_temp.p94_assert(
   not exists (
     select 1 from audit_logs
     where action = 'prelaunch_window_extended'
-      and (reason is null or length(trim(reason)) = 0 or position('#309' in reason) = 0)),
+      and (reason is null or length(trim(reason)) = 0 or position('#311' in reason) = 0)),
   'a window extension was logged without the ruling behind it');
 -- The old and the new value are both on the row, so a reader can see what actually changed.
 select pg_temp.p94_assert(

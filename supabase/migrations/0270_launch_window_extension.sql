@@ -1,6 +1,6 @@
--- 0267 — the launch window moves to 01.02.2027, and the three copies of the old date move with it.
+-- 0270 — the launch window moves to 01.02.2027, and the three copies of the old date move with it.
 --
--- OWNER RULING, 31.08.2026: one more month. `OPEN-DECISIONS #309`.
+-- OWNER RULING, 31.08.2026: one more month. `OPEN-DECISIONS #311`.
 --
 -- ⚠ THIS IS NOT "CHANGE A LITERAL". `private.prelaunch_window_end()` (`0210:26-29`) really is the
 -- only place the date is READ from — but its value was COPIED INTO ROWS the moment the migrations
@@ -37,21 +37,21 @@
 -- rollback of this file.
 
 -- ===== 1. The guard, before anything moves =====
-do $guard_0267$
+do $guard_0270$
 declare
   v_current timestamptz := private.prelaunch_window_end();
 begin
   if v_current = '2027-02-01T00:00:00+00'::timestamptz then
-    raise notice '0267: the window is already extended; the backfills below will match no rows';
+    raise notice '0270: the window is already extended; the backfills below will match no rows';
   elsif v_current <> '2027-01-01T00:00:00+00'::timestamptz then
     -- Refusing is the point. If the window is somewhere this file did not expect, the backfills
     -- below would be keyed on a date that means nothing here, and they would move nothing while
     -- reporting success.
-    raise exception '0267: the launch window is at %, not the 2027-01-01 this migration extends',
+    raise exception '0270: the launch window is at %, not the 2027-01-01 this migration extends',
       v_current;
   end if;
 end
-$guard_0267$;
+$guard_0270$;
 
 -- ===== 2. The one literal moves. It stays the only one. =====
 create or replace function private.prelaunch_window_end()
@@ -64,13 +64,13 @@ as $$
 $$;
 
 comment on function private.prelaunch_window_end() is
-  'When the pre-launch window ends. Extended from 2027-01-01 to 2027-02-01 by 0267 (owner ruling '
-  '31.08.2026, OPEN-DECISIONS #309). The ONLY literal: everything else reads this function, and '
+  'When the pre-launch window ends. Extended from 2027-01-01 to 2027-02-01 by 0270 (owner ruling '
+  '31.08.2026, OPEN-DECISIONS #311). The ONLY literal: everything else reads this function, and '
   'the three tables that copied its old value into rows were backfilled in the same migration. '
   'The fourth copy, AI_ASSISTANT_PRELAUNCH_EXCEPTION, is an Edge secret rotated by hand.';
 
 -- ===== 3. The three backfills =====
-do $backfill_0267$
+do $backfill_0270$
 declare
   -- The historical value, named once. It cannot be read from the function any more — that is the
   -- point of the guard above, which proved it was there a moment ago.
@@ -81,7 +81,7 @@ declare
     to_char(private.prelaunch_window_end() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"+00"');
   v_reason constant text :=
     'the pre-launch window was extended by one month, from 2027-01-01 to 2027-02-01, by owner '
-    'ruling of 31.08.2026 (OPEN-DECISIONS #309). This row carried a copy of the old date and was '
+    'ruling of 31.08.2026 (OPEN-DECISIONS #311). This row carried a copy of the old date and was '
     'moved with it; no entitlement was reduced and nothing was charged.';
   v_subs int;
   v_flags int;
@@ -148,19 +148,19 @@ begin
   from moved;
   get diagnostics v_policies = row_count;
 
-  raise notice '0267: moved % subscription(s), % flag row(s), % autonomy policy row(s)',
+  raise notice '0270: moved % subscription(s), % flag row(s), % autonomy policy row(s)',
     v_subs, v_flags, v_policies;
 end
-$backfill_0267$;
+$backfill_0270$;
 
 -- ===== Proof =====
-do $verify_0267$
+do $verify_0270$
 declare
   v_violations text;
   v_stragglers int;
 begin
   if private.prelaunch_window_end() <> '2027-02-01T00:00:00+00'::timestamptz then
-    raise exception '0267: the window did not move';
+    raise exception '0270: the window did not move';
   end if;
 
   -- THE ONLY LITERAL. A second copy of the date in a function body is how the two halves split.
@@ -169,14 +169,14 @@ begin
     where n.nspname in ('public', 'private')
       and p.proname <> 'prelaunch_window_end'
       and replace(p.prosrc, chr(13), '') like '%2027-01-01T00:00:00%') then
-    raise exception '0267: another routine carries a copy of the old window';
+    raise exception '0270: another routine carries a copy of the old window';
   end if;
   if exists (
     select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname in ('public', 'private')
       and p.proname <> 'prelaunch_window_end'
       and replace(p.prosrc, chr(13), '') like '%2027-02-01T00:00:00%') then
-    raise exception '0267: another routine carries a copy of the new window';
+    raise exception '0270: another routine carries a copy of the new window';
   end if;
 
   -- NOTHING CARRYING THE OLD DATE IS LEFT BEHIND in the three places this file owns.
@@ -194,7 +194,7 @@ begin
         and expires_at = '2027-01-01T00:00:00+00'::timestamptz)
   into v_stragglers;
   if v_stragglers <> 0 then
-    raise exception '0267: % row(s) still carry the old window', v_stragglers;
+    raise exception '0270: % row(s) still carry the old window', v_stragglers;
   end if;
 
   -- The JSONB survived being edited. `jsonb_set` on a missing path is a silent no-op, so this
@@ -204,21 +204,21 @@ begin
     where flag_key in ('assistant.ui', 'assistant.history')
       and targeting is not null
       and (jsonb_typeof(targeting) <> 'object' or targeting ->> 'ends_at' is null)) then
-    raise exception '0267: a targeting row lost its shape or its end date';
+    raise exception '0270: a targeting row lost its shape or its end date';
   end if;
 
   -- Every moved row is in the ledger with a reason. An extension is a financial change.
   if exists (
     select 1 from audit_logs
     where action = 'prelaunch_window_extended'
-      and (reason is null or length(trim(reason)) = 0 or position('#309' in reason) = 0)) then
-    raise exception '0267: a window extension was logged without the ruling behind it';
+      and (reason is null or length(trim(reason)) = 0 or position('#311' in reason) = 0)) then
+    raise exception '0270: a window extension was logged without the ruling behind it';
   end if;
 
   select string_agg(detail, e'\n' order by detail)
     into v_violations from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0267 scope assertions failed:\n%', v_violations;
+    raise exception e'0270 scope assertions failed:\n%', v_violations;
   end if;
 end
-$verify_0267$;
+$verify_0270$;
