@@ -8,6 +8,7 @@ import {
   type PlanTicketFeature,
 } from '../components/PlanTicket';
 import { fmtNum } from '../lib/format';
+import { usePlanCatalogue } from '../lib/planLabels';
 import type { PlanFeatureRowData } from '../lib/planEntitlements';
 
 /**
@@ -93,6 +94,7 @@ const PAGE_WRAPPER = 'mx-auto max-w-6xl space-y-6 px-4 py-12';
 
 export default function Pricing() {
   const { t } = useT();
+  const { planName, quotaName, featureName } = usePlanCatalogue();
   const [state, setState] = useState<{
     catalogue: PlanRow[];
     quotas: QuotaRow[];
@@ -149,7 +151,7 @@ export default function Pricing() {
   const quotaOf = (planKey: string, key: string) =>
     state.quotas.find((entry) => entry.plan_key === planKey && entry.entitlement_key === key);
   const quotaLabel = (key: string) =>
-    state.quotas.find((row) => row.entitlement_key === key)?.label ?? key;
+    quotaName(key, state.quotas.find((row) => row.entitlement_key === key)?.label ?? key);
 
   /**
    * A quota as one feature row. Unmeasured is the honest state of `users.max` and `suppliers.max`
@@ -247,15 +249,15 @@ export default function Pricing() {
             .map((row): PlanTicketFeature => ({
               key: row.entitlement_key,
               text: row.plan_key === 'free' && row.intro_included && !row.included
-                ? t('pricingTail.entitlementIntroOnly', { label: row.label })
-                : row.label,
+                ? t('pricingTail.entitlementIntroOnly', { label: featureName(row.entitlement_key, row.label) })
+                : featureName(row.entitlement_key, row.label),
               affirmative: row.included || (row.plan_key === 'free' && row.intro_included),
             }));
           return (
             <PlanTicket
               key={plan.plan_key}
               planKey={plan.plan_key}
-              label={plan.label}
+              label={planName(plan.plan_key, plan.label)}
               /* THE FIGURE SLOT HOLDS THE QUOTA, NOT A PRICE, and its label says so. This page
                  publishes no amount (owner decision 25.08.2026 / #267), so the largest true number
                  it owns takes the slot the ticket reserves for its biggest figure. A price-shaped

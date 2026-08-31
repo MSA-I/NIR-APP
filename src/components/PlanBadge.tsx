@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useOrgScope } from '../lib/query/orgScope';
+import { usePlanCatalogue } from '../lib/planLabels';
 
 /**
  * Which plan this business is on, worn in the phone top bar (owner report 25.08.2026).
@@ -15,8 +16,16 @@ import { useOrgScope } from '../lib/query/orgScope';
  * IT READS `my_subscription()`, NOT THE ORGANIZATION. `Organization` deliberately carries no plan
  * field: the subscription is a read model assembled from `organization_subscriptions`, the plan
  * catalogue and the billing boundary, and copying its key onto the org object would create a
- * second answer that drifts. One RPC, one truth. `plan_label` comes from the server too, so the
- * Hebrew rung names live in `subscription_plans` and not in this file.
+ * second answer that drifts. One RPC, one truth.
+ *
+ * THE RUNG'S NAME NOW COMES FROM THE DICTIONARY, NOT FROM THE RPC — changed 31.08.2026. This line
+ * used to say "`plan_label` comes from the server too, so the Hebrew rung names live in
+ * `subscription_plans` and not in this file", and that was right until the interface learned
+ * English: the server spells the label in Hebrew, so the chip read «פרימיום» inside an English
+ * header (OPEN-DECISIONS #303). `usePlanCatalogue()` resolves `plan_key` — the machine key, which
+ * this component already holds for `TIER_CLASS` — and falls back to `plan_label` for a rung the
+ * dictionary does not know, so a plan seeded by a future migration still appears. What keeps the
+ * two copies honest is `npm run check:plan-labels`, which reads the seeding migrations.
  *
  * IT WAITS FOR THE TENANT SCOPE, NOT FOR A ROLE, and that distinction cost a browser-gate run.
  * The first version fired as soon as `profile.role === 'owner'`, which is true before the Supabase
@@ -119,6 +128,7 @@ export function PlanBadge({ compact = false }: {
   compact?: boolean;
 } = {}) {
   const { t } = useT();
+  const { planName } = usePlanCatalogue();
   const { profile } = useAuth();
   const org = useOrgScope();
   const isOwner = profile?.role === 'owner';
@@ -138,6 +148,9 @@ export function PlanBadge({ compact = false }: {
   if (!isOwner || !plan) return null;
   const tierClass = planTierClass(plan.plan_key);
   if (!tierClass) return null;
+  // The rung's name in the reader's language. `plan_label` arrives from the server spelled in
+  // Hebrew, so the chip used to read «פרימיום» inside an English header (#303, owner 31.08.2026).
+  const label = planName(plan.plan_key, plan.plan_label);
 
   return (
     // The TAP TARGET is the link, the CHIP is the span inside it. The audit measured the mark at
@@ -155,12 +168,12 @@ export function PlanBadge({ compact = false }: {
       // `@layer components` rule and these are utilities, which Tailwind v4 emits after it. No
       // `!`, and no arbitrary-variant reach-in from outside.
       className={`plan-badge-trigger${compact ? ' min-h-0 min-w-0' : ''}`}
-      aria-label={t('planBadge.ariaLabel', { plan: plan.plan_label })}>
+      aria-label={t('planBadge.ariaLabel', { plan: label })}>
       <span data-testid="plan-badge-chip"
         // `justify-center` so a label narrower than 24px sits in the middle of its floor rather
         // than against the start edge; `badge` already centres vertically.
         className={`plan-badge ${tierClass}${compact ? ' min-h-6 min-w-6 justify-center' : ''}`}>
-        {plan.plan_label}
+        {label}
       </span>
     </Link>
   );

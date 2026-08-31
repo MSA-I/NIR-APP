@@ -8,9 +8,18 @@ import { PlanBadge, planTierClass } from './PlanBadge';
  * The tier mark in the phone top bar (owner report 25.08.2026).
  *
  * Three things this file exists to keep true, each of which the obvious implementation gets wrong:
- *   1. It asks the SERVER which plan and what to call it. A local map of rung names would be a
- *      second catalogue, and the day a label changes in `subscription_plans` the chrome would
- *      quietly keep the old word.
+ *   1. It asks the SERVER which plan it is on. It no longer takes the server's WORD for it, and
+ *      that changed on 31.08.2026: `plan_label` arrives spelled in Hebrew, so an English header
+ *      wore «פרימיום» (OPEN-DECISIONS #303). `usePlanCatalogue()` resolves `plan_key` against the
+ *      dictionary instead.
+ *
+ *      The objection this line used to make is the right one and is now ANSWERED rather than
+ *      ignored. "A local map of rung names would be a second catalogue, and the day a label
+ *      changes in `subscription_plans` the chrome would quietly keep the old word" — so
+ *      `npm run check:plan-labels` parses the seeding migrations and FAILS on that day, and an
+ *      unmapped key still renders the label the server sent. The map is second wording; it is not
+ *      an unchecked one. (It caught a real drift on its first run: 0251 renamed the page quota
+ *      away from the word OCR and this copy had the pre-rename text.)
  *   2. It is silent, not «—», when there is no answer. The dash rule is for a measurement someone
  *      asked for; a permanent dash in the top bar is just an unexplained mark.
  *   3. It is owner-only, matching the screen it opens.

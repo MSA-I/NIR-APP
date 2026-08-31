@@ -6,6 +6,7 @@ import { CreditCard, Undo2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fmtDate, fmtNum, fmtMoneyRounded } from '../lib/format';
 import { SUBSCRIPTION_STATUS } from '../lib/status';
+import { usePlanCatalogue } from '../lib/planLabels';
 import { DOMAIN, key } from '../lib/query/keys';
 import { useOrgScope } from '../lib/query/orgScope';
 import {
@@ -201,6 +202,7 @@ const rows = async <T,>(name: string): Promise<T[]> => {
 
 export function OrgSubscriptionPanel() {
   const { t } = useT();
+  const { planName, quotaName, featureName } = usePlanCatalogue();
   const org = useOrgScope();
   /**
    * THE GATE THAT A BROWSER-GATE RUN ALREADY PAID FOR ONCE. `my_subscription` is one of the two
@@ -353,7 +355,7 @@ export function OrgSubscriptionPanel() {
           <>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <span data-testid="current-plan" className="text-lg font-medium text-ink">
-                {subscription.plan_label}
+                {planName(subscription.plan_key, subscription.plan_label)}
               </span>
               <StatusBadge meta={SUBSCRIPTION_STATUS[subscription.status]} />
               {/* `hasPaid`, not `is_paid_plan`. Without it, `0210`'s grant shows every organization
@@ -379,12 +381,12 @@ export function OrgSubscriptionPanel() {
               <Note tone="info">
                 <span className="min-w-0 flex-1" data-testid="plan-grant-window">
                   {t('orgSubscription.grantWindow', {
-                    plan: subscription.plan_label,
+                    plan: planName(subscription.plan_key, subscription.plan_label),
                     date: fmtDate(grant.ends_at),
                   })}
                   {' '}
                   {grant.reverts_to_label
-                    ? t('orgSubscription.grantRevertsTo', { plan: grant.reverts_to_label })
+                    ? t('orgSubscription.grantRevertsTo', { plan: planName(grant.reverts_to_plan_key, grant.reverts_to_label) })
                     : t('orgSubscription.grantRevertsDefault')}
                   {' '}{t('orgSubscription.grantNothingLost')}
                 </span>
@@ -428,11 +430,11 @@ export function OrgSubscriptionPanel() {
                 <span className="min-w-0 flex-1">
                   {subscription.scheduled_effective_at
                     ? t('orgSubscription.scheduledWithDate', {
-                      plan: subscription.scheduled_plan_label ?? '',
+                      plan: planName(subscription.scheduled_plan_key, subscription.scheduled_plan_label),
                       date: fmtDate(subscription.scheduled_effective_at),
                     })
                     : t('orgSubscription.scheduledWithoutDate', {
-                      plan: subscription.scheduled_plan_label ?? '',
+                      plan: planName(subscription.scheduled_plan_key, subscription.scheduled_plan_label),
                     })}
                 </span>
               </Note>
@@ -575,8 +577,8 @@ export function OrgSubscriptionPanel() {
                   .map((row) => ({
                     key: row.entitlement_key,
                     text: row.unlimited
-                      ? t('orgSubscription.entitlementUnlimited', { label: row.label })
-                      : <><span className="num font-medium">{fmtNum(row.numeric_limit)}</span> {row.label}</>,
+                      ? t('orgSubscription.entitlementUnlimited', { label: quotaName(row.entitlement_key, row.label) })
+                      : <><span className="num font-medium">{fmtNum(row.numeric_limit)}</span> {quotaName(row.entitlement_key, row.label)}</>,
                     affirmative: true,
                   }));
               const capabilityRows = planFeatures
@@ -585,8 +587,8 @@ export function OrgSubscriptionPanel() {
                 .map((row) => ({
                   key: row.entitlement_key,
                   text: row.plan_key === 'free' && row.intro_included && !row.included
-                    ? t('orgSubscription.entitlementIntroOnly', { label: row.label })
-                    : row.label,
+                    ? t('orgSubscription.entitlementIntroOnly', { label: featureName(row.entitlement_key, row.label) })
+                    : featureName(row.entitlement_key, row.label),
                   affirmative: row.included || (row.plan_key === 'free' && row.intro_included),
                 }));
 
@@ -594,7 +596,7 @@ export function OrgSubscriptionPanel() {
                 <PlanTicket
                   key={option.plan_key}
                   planKey={option.plan_key}
-                  label={option.label}
+                  label={planName(option.plan_key, option.label)}
                   /* Origin UI's per-item badge slot is gone with the old card, and what it carried
                      moves into the ticket's own description line: which rung this is RELATIVE TO
                      YOURS, then whether it costs money. Both used to be `badge-idle` / `badge-info`
@@ -676,7 +678,7 @@ export function OrgSubscriptionPanel() {
                         className="plan-card__cta">
                         {option.contact_sales
                           ? t('orgSubscription.text_32')
-                          : t(isUpgrade ? 'orgSubscription.upgradeTo' : 'orgSubscription.switchTo', { plan: option.label })}
+                          : t(isUpgrade ? 'orgSubscription.upgradeTo' : 'orgSubscription.switchTo', { plan: planName(option.plan_key, option.label) })}
                       </button>
                     )}
                   /* THE HEADLINE QUOTA IN THE TICKET'S OWN QUOTA SLOT — the one number #266 lets a
@@ -690,7 +692,8 @@ export function OrgSubscriptionPanel() {
                      reads as the amount. An unmeasured quota (DEBT §56) must not be dressed as `0`,
                      and it must not be dressed as a promise either. */
                   quotaLabel={option.contact_sales
-                    ? t('orgSubscription.quotaLabelContract') : (quota?.label ?? t('orgSubscription.quotaLabelDocuments'))}
+                    ? t('orgSubscription.quotaLabelContract')
+                    : (quota ? quotaName(quota.entitlement_key, quota.label) : t('orgSubscription.quotaLabelDocuments'))}
                   quota={option.contact_sales ? t('orgSubscription.quotaContract')
                     : !quota || !quota.measured ? '—'
                       : quota.unlimited ? t('orgSubscription.quotaUnlimitedWord')
