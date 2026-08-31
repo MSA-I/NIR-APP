@@ -18,6 +18,7 @@ import { SUPPLIER_COLUMNS } from '../lib/supplierColumns';
 import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';
 import { SupplierCommunicationCard } from '../components/SupplierCommunicationCard';
 import { readFinancialSupplierBankAccount, readSupplierBankMigrationItem } from '../lib/financialSuppliers';
+import { EntityMonogram } from '../components/EntityMonogram';
 
 // suppliers.rating* are added in migration 0011. The hand-written Supplier type (types.ts) is
 // read-only this wave and does not carry them yet, so extend it locally.
@@ -194,7 +195,14 @@ export function SuppliersList() {
   }
 
   const columns: Column<SupplierWithBalance>[] = [
-    { key: 'name', header: t('suppliers.text_6'), priority: 3, sortValue: (r) => r.name, render: (r) => <span className="font-medium text-ink">{r.name}</span> },
+    { key: 'name', header: t('suppliers.text_6'), priority: 3, sortValue: (r) => r.name, render: (r) => (
+      <span className="inline-flex min-w-0 items-center gap-2.5">
+        {/* Seeded from the id, not the name: renaming a supplier must not move its mark, or the
+            mark stops being an identity and becomes a second spelling of the name. */}
+        <EntityMonogram name={r.name} seed={r.id} size="sm" />
+        <span className="min-w-0 truncate font-medium text-ink">{r.name}</span>
+      </span>
+    ) },
     { key: 'rating', header: t('suppliers.text_7'), priority: 3, className: 'num', sortValue: (r) => r.rating ?? 0, render: (r) => r.rating != null
         ? <span className="inline-flex items-center gap-1"><Star size={ICON.xs} className="fill-star text-star" aria-hidden="true" />{r.rating}</span>
         : <span className="text-ink-ghost">—</span> },
@@ -236,7 +244,16 @@ export function SuppliersList() {
         rowLabel={(r) => t('suppliers.rowLabel', { name: r.name })}
         onRowClick={(r) => navigate(`/suppliers/${r.id}`)}
         mobile="cards"
-        mobileTitle={(r) => r.name}
+        mobileTitle={(r) => (
+          /* The mark belongs on the phone MORE than on the table — that is the viewport where a
+             scan replaces reading. `mobileTitle` OVERRIDES the first column's render, so without
+             this the disc existed only in the hidden desktop branch: the DOM had it, the phone
+             did not, and only a screenshot showed the difference. */
+          <span className="inline-flex min-w-0 items-center gap-2.5">
+            <EntityMonogram name={r.name} seed={r.id} size="sm" />
+            <span className="min-w-0 truncate">{r.name}</span>
+          </span>
+        )}
         mobileTrailing={(r) => <StatusBadge meta={SUPPLIER_STATUS[r.status]} />}
         rowActions={canWrite ? (r) => [
           { key: 'edit', label: t('suppliers.setEditing_2'), icon: Pencil, onSelect: () => setEditing(r) },

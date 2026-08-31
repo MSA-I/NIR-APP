@@ -9,6 +9,7 @@ import { useAuth } from '../auth/AuthContext';
 import { ICON, useToast } from '../components/ui';
 import { APP_NAME } from '../lib/branding';
 import { useGlowPointer } from '../lib/glowPointer';
+import { EntityMonogram } from '../components/EntityMonogram';
 
 /**
  * The operator console's own chrome — deliberately NOT the tenant `Layout`. Layout is a tenant
@@ -143,7 +144,6 @@ export default function OperatorShell() {
   }
 
   const email = session?.user.email ?? '';
-  const initials = email.slice(0, 2).toUpperCase();
 
   return (
     <div className="min-h-dvh">
@@ -182,9 +182,8 @@ export default function OperatorShell() {
             </button>
             {/* The account disc of T7.2: initials on the oceanic, and the address itself as its
                 accessible name — an operator signs in as themselves and needs to see which. */}
-            <span title={email} aria-label={email}
-              className="grid size-10 place-items-center rounded-full bg-action text-sm font-medium text-on-solid shadow-card">
-              <span aria-hidden="true" dir="ltr">{initials}</span>
+            <span title={email} aria-label={email} className="rounded-full shadow-card">
+              <EntityMonogram name={email} tone="action" size="lg" />
             </span>
           </div>
         </div>
