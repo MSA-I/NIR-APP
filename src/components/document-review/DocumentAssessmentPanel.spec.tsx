@@ -70,7 +70,14 @@ function reviewRead(over: Partial<DocumentReviewRead> = {}): DocumentReviewRead 
       document_type: 'invoice', currency: 'ILS', document_number: 'INV-9', document_date: '2026-08-01',
       supplier_id: 'supplier-1', order_id: 'order-1',
       sources: { document: true, ordered: true, received: true, baseline: true },
-      totals: { lines_net: 108, header_net: 108, header_vat: 18.36, header_total: 126.36, overcharge_total: 9 },
+      // The full ladder 0260 publishes. 108 + 18.36 = 126.36, so this document reconciles and
+      // its gap is a measured ZERO — which is a different fact from an unmeasured one.
+      totals: {
+        lines_net: 108, lines_discount: 0, header_net: 108, header_vat: 18.36,
+        header_total: 126.36, computed_total: 126.36, unexplained_gap: 0,
+        lines_vs_header_gap: 0, overcharge_total: 9,
+        line_tolerance: 0.05, document_tolerance: 1, currency: 'ILS', missing_rungs: [],
+      },
       severity: 'warning', approval_blocked: false,
       lines: [line(0), line(1), line(2)],
       order_items: [],
