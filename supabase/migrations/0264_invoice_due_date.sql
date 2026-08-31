@@ -208,7 +208,7 @@ insert into private.scope_definer_enforcements (
   function_signature, body_hash, enforcement_kind, scope_proof
 )
 select 'set_invoice_due_date(uuid,date,text)',
-       md5(replace(p.prosrc, e'', '')), 'filtered_read',
+       md5(replace(p.prosrc, e'\r', '')), 'filtered_read',
        '0264 locks the exact tenant invoice through the org filter and a null-or-auth_scopes unit '
        'predicate before it writes, so an actor cannot date an invoice outside their scope.'
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -230,7 +230,8 @@ begin
   end if;
   -- The audit row can never be reasonless, which is the rule the constitution states in words.
   if position('coalesce(nullif(trim(p_reason)' in
-      pg_get_functiondef('public.set_invoice_due_date(uuid, date, text)'::regprocedure)) = 0 then
+      replace(pg_get_functiondef('public.set_invoice_due_date(uuid, date, text)'::regprocedure),
+              e'\r', '')) = 0 then
     raise exception '0264: the command can write an audit row without a reason';
   end if;
 
