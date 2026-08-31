@@ -1357,6 +1357,35 @@ export const he = {
     checkedAt: 'נבדק {at}',
   },
 
+  /* The reconciliation ladder on the document review screen. "notExtracted" is a SENTENCE and not
+     a dash: a rung nobody could read is a different fact from a rung that reads zero, and the
+     reviewer is the one who has to tell them apart. */
+  reconciliation: {
+    accountTitle: 'חשבון המסמך',
+    documentCurrency: 'מטבע המסמך:',
+    linesNet: 'סכום שורות',
+    discounts: 'הנחות',
+    headerNet: 'סה״כ לפני מע״מ',
+    vat: 'מע״מ',
+    computed: 'מחושב',
+    statedTotal: 'סה״כ במסמך',
+    gap: 'פער בלתי מוסבר',
+    notExtracted: 'לא חולץ',
+    cannotCalculate: 'לא ניתן לחשב',
+    withinTolerance: 'המספרים מסתדרים בתוך הסטייה המותרת.',
+    overTolerance: 'סה״כ שבכותרת אינו מסתדר עם שאר המספרים.',
+    toleranceUsed: 'הסטייה שנבדקה מולה:',
+    goToLines: 'מעבר לשורות {lines}',
+    classArithmetic: 'פער חשבוני — המספרים במסמך אינם מסתדרים זה עם זה.',
+    classCommercial: 'פער מסחרי — ייתכן שהנחה או חיוב נוסף לא חולצו.',
+    classExtraction: 'פער בקריאת המסמך — רגה אחת לא חולצה, ולכן החשבון אינו שלם.',
+    classEvidence: 'אי-התאמה לראיות — המסמך אינו מסתדר מול ההזמנה או הקבלה.',
+    payableTitle: 'מה ישולם בפועל',
+    withholding: 'ניכוי מס במקור',
+    actuallyReceived: 'התקבל בפועל',
+    payableNote: 'הבלוק הזה אינו משפיע על הפער שלמעלה — שתי הרגות אינן מחולצות מהמסמך.',
+  },
+
   alertsPage: {
     partialScan: 'הסריקה חלקית: {scans}. הממצאים שכן נטענו מוצגים, אך אי אפשר לקבוע שהכול תקין.',
   },

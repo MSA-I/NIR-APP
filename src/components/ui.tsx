@@ -504,8 +504,10 @@ export function EmptyState({ title, subtitle, action, icon, compact = false, cla
  * DESIGN.md, חוק החשיפה המדורגת: this folds secondary detail. It never folds an error, an amount,
  * a value the machine changed, or an irreversible action.
  */
-export function Disclosure({ title, count, tone = 'idle', summary, name, className = '', onToggle, children }: {
+export function Disclosure({ title, count, tone = 'idle', summary, name, id, className = '', onToggle, children }: {
   title: string;
+  /** Stable handle for a screen that has to open the fold on the reader's behalf. */
+  id?: string;
   /** Rendered as a badge on the summary row. Omit when there is nothing honest to count. */
   count?: number;
   /** Tone of the count badge — `done|await|alert|info|idle` only, never a palette name. */
@@ -520,7 +522,7 @@ export function Disclosure({ title, count, tone = 'idle', summary, name, classNa
   children: ReactNode;
 }) {
   return (
-    <details name={name} className={`group ${className}`} onToggle={(event) => onToggle?.(event.currentTarget.open)}>
+    <details name={name} id={id} className={`group ${className}`} onToggle={(event) => onToggle?.(event.currentTarget.open)}>
       <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-sm hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden sm:px-4">
         <span className="font-medium text-ink-body">{title}</span>
         {count != null && <span className={`badge-${tone} num`}>{count}</span>}

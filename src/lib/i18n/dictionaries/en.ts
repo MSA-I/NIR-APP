@@ -1353,6 +1353,35 @@ export const en: Dictionary = {
     checkedAt: 'Checked {at}',
   },
 
+  /* The reconciliation ladder on the document review screen. "notExtracted" is a SENTENCE and not
+     a dash: a rung nobody could read is a different fact from a rung that reads zero, and the
+     reviewer is the one who has to tell them apart. */
+  reconciliation: {
+    accountTitle: 'The document\u2019s account',
+    documentCurrency: 'Document currency:',
+    linesNet: 'Sum of lines',
+    discounts: 'Discounts',
+    headerNet: 'Total before VAT',
+    vat: 'VAT',
+    computed: 'Computed',
+    statedTotal: 'Total on the document',
+    gap: 'Unexplained gap',
+    notExtracted: 'not extracted',
+    cannotCalculate: 'cannot be calculated',
+    withinTolerance: 'The numbers reconcile within the allowed difference.',
+    overTolerance: 'The total on the header does not reconcile with the rest of the numbers.',
+    toleranceUsed: 'Checked against a tolerance of:',
+    goToLines: 'Go to lines {lines}',
+    classArithmetic: 'An arithmetic gap \u2014 the numbers on the document do not agree with each other.',
+    classCommercial: 'A commercial gap \u2014 a discount or an extra charge may not have been extracted.',
+    classExtraction: 'A reading gap \u2014 one rung was not extracted, so the account is incomplete.',
+    classEvidence: 'Evidence does not match \u2014 the document disagrees with the order or the receipt.',
+    payableTitle: 'What will actually be paid',
+    withholding: 'Withholding at source',
+    actuallyReceived: 'Actually received',
+    payableNote: 'This block does not affect the gap above \u2014 neither rung is extracted from the document.',
+  },
+
   alertsPage: {
     partialScan: 'The scan is partial: {scans}. What did load is shown, but nothing here can claim everything is fine.',
   },

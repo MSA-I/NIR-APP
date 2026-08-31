@@ -7,7 +7,7 @@
 // to buy the quiet.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AssessmentLine, DocumentReviewRead } from './assessment';
 
@@ -322,5 +322,37 @@ describe('בטלפון — הפעולה נשארת במקומה בזרימה, ו
 
     expect(screen.queryByRole('button', { name: 'אישור המסמך' })).toBeNull();
     expect(screen.queryByTestId('primary-decision')).toBeNull();
+  });
+});
+
+describe('הסולם מוביל אל השורה, לא רק פותח את הקיפול', () => {
+  /**
+   * הכפתור אומר „מעבר לשורות 3". פתיחת הקיפול ועצירה שם היא הבטחה שהמסך אינו מקיים — בדיוק
+   * הסוג שכלל 2 של המסך הזה קיים כדי למנוע. הקיפול הוא `<details>` מקורי, ולכן פותחים אותו
+   * דרך האלמנט; המצב ב-React רק מדווח מה שהאלמנט כבר עשה.
+   */
+  it('פותח את שורות המסמך וגולל לשורה שהממצא מצביע עליה', async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView',
+      { value: scrollIntoView, writable: true, configurable: true });
+
+    const base = reviewRead();
+    await renderPanel({
+      ...base,
+      assessment: {
+        ...base.assessment!,
+        totals: { ...base.assessment!.totals, header_total: 140, unexplained_gap: 13.64 },
+        findings: [{ code: 'header_total_differs_from_lines', severity: 'error',
+          message: 'סה״כ אינו מסתדר', line_index: 2 }],
+      },
+    });
+
+    expect(linesFold().open).toBe(false);
+    await userEvent.click(screen.getByRole('button', { name: /מעבר לשורות/ }));
+
+    await waitFor(() => expect(linesFold().open).toBe(true));
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    // ולא לשורה כלשהי: לשורה שהממצא מצביע עליה.
+    expect(scrollIntoView.mock.instances[0]).toBe(document.getElementById('assessment-line-2'));
   });
 });
