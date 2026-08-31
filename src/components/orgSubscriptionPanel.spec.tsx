@@ -76,7 +76,7 @@ const grant = (over: Record<string, unknown> = {}) => ({
 /** The state `0210` creates for every organization: on premium, granted, never paid. */
 const GRANTED_PREMIUM = {
   subscription: subscription({ plan_key: 'premium', plan_label: 'פרימיום', is_paid_plan: true }),
-  grant: grant({ granted: true, ends_at: '2027-01-01T00:00:00.000Z' }),
+  grant: grant({ granted: true, ends_at: '2027-02-01T00:00:00.000Z' }),
 };
 
 interface OptionFixture {
@@ -521,7 +521,9 @@ describe('מסלול שניתן ולא נרכש — מצב חלון ההרצה �
     const window = await screen.findByTestId('plan-grant-window');
     // #276: what closes, when, and which plan it reopens on — said BEFORE the boundary.
     expect(window).toHaveTextContent(/פרימיום/);
-    expect(window).toHaveTextContent(/01\.01\.2027/);
+    // 0267 moved the window by one month (owner ruling 31.08.2026, #309). The DATE moves with
+    // the ruling; the line below it does not — a countdown stays forbidden whatever the date is.
+    expect(window).toHaveTextContent(/01\.02\.2027/);
     expect(window).toHaveTextContent(/עובר למסלול חינם/);
     expect(window).toHaveTextContent(/לא בוצע חיוב/);
     // #204 forbids a manufactured countdown; the date is a fact, "נותרו X ימים" is pressure.
