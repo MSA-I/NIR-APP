@@ -5176,6 +5176,12 @@ export const he = {
     onlyNameTheBusiness: 'נשאר רק לתת שם לעסק.',
     passwordRule: 'לפחות {min} תווים.',
     alreadyHaveAccount: 'כבר יש חשבון?',
+    backupEmailLabel: 'כתובת דואר חלופית',
+    backupEmailWhy: 'הכתובת שקיבלנו היא כתובת העברה שאפשר לכבות. הכתובת החלופית היא הדרך להגיע אליך אם היא תיסגר.',
+    backupEmailMalformed: 'כתובת האימייל החלופית אינה תקינה.',
+    backupEmailTooLong: 'כתובת האימייל החלופית ארוכה מדי.',
+    backupEmailSameAsPrimary: 'זו אותה כתובת. הגיבוי חייב להיות כתובת אחרת.',
+    backupEmailStillRelay: 'גם זו כתובת העברה שאפשר לכבות, ולכן אינה גיבוי.',
   },
 
   docRemoval: {

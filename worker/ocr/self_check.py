@@ -1410,6 +1410,134 @@ def _hebrew_order_check() -> dict[str, Any]:
     return {"detect": "passed", "repair": "passed", "word_order": "not_repaired_by_design"}
 
 
+def _normalization_evidence_check(fixtures: Path, adapter: SyntheticOcrAdapter) -> dict[str, Any]:
+    """#20: the correction above must be PROVABLE from a stored extraction, not merely correct.
+
+    Before this, the repair overwrote the text in place. The pre-repair string existed nowhere
+    afterwards and nothing recorded that the repair had run, so a stored extraction could not
+    distinguish a document that printed Hebrew logically from one this worker turned around.
+
+    Four properties, each of which used to be false or unrepresentable:
+
+      1. THE RECORD SURVIVES THE CONTRACT. `validate_extraction` carries it key for key, and the
+         gateway validator on the other side of the wire refuses a payload without it.
+      2. WHEN IT FIRES, THE ORIGINAL IS PRESERVED -- verbatim, as the detector saw it.
+      3. THE PAIRING IS EXACT. Re-applying the named transform to the preserved original must
+         reproduce the stored text. The claim "this is the normalized form of that" is checked
+         here rather than asserted in a comment.
+      4. WHEN IT DOES NOT FIRE, THE DECISION IS STILL RECORDED, with `applied: false` and no
+         second copy of the text. Silence and "we looked and left it alone" are different facts.
+    """
+    from src.contract import HEBREW_VISUAL_ORDER
+    from src.parsers import (
+        _hebrew_is_reversed,
+        _normalize_pdf_text_layer,
+        _reverse_hebrew_runs,
+    )
+
+    visual_pages = {
+        1: 'הלבק רוקמ ךמסמ בשחוממ סומאג םיעוריא מ"עב 516660602',
+        2: 'ריחמ 1,392.00 ILS',
+    }
+    corrected, record = _normalize_pdf_text_layer(dict(visual_pages))
+    assert record["id"] == HEBREW_VISUAL_ORDER, record["id"]
+    assert record["applied"] is True, "the visual-order fixture did not trigger the correction"
+    assert record["original_text"] == "\n".join(visual_pages.values()), "original not preserved"
+    assert _reverse_hebrew_runs(record["original_text"]) == "\n".join(corrected.values()), (
+        "the preserved original does not reproduce the stored text under the named transform"
+    )
+    measured = {item["name"]: item["value"] for item in record["measurements"]}
+    assert measured["final_letter_first"] > measured["final_letter_last"], measured
+    assert measured["hebrew_words"] >= measured["final_letter_first"], measured
+
+    logical_pages = {1: 'קבלה מקור מסמך ממוחשב', 2: 'סה"כ 10'}
+    untouched, quiet = _normalize_pdf_text_layer(dict(logical_pages))
+    assert untouched == logical_pages, "a document in logical order must not be rewritten"
+    assert quiet["applied"] is False and quiet["original_text"] is None, quiet
+    assert quiet["measurements"], "an unapplied decision must still say what it measured"
+
+    # ONE RULE, NOT TWO. `_normalize_pdf_text_layer` compares the counts it records rather than
+    # calling `_hebrew_is_reversed` a second time over the same regex, so this pins the two
+    # against each other. Without it the recorded evidence could drift away from the decision it
+    # claims to explain -- a record that says "13 versus 0" beside a correction that did not fire.
+    for pages, decision in ((visual_pages, record), (logical_pages, quiet)):
+        assert decision["applied"] == _hebrew_is_reversed("\n".join(pages.values())), (
+            "the recorded decision disagrees with the detector it reports the evidence for"
+        )
+
+    # End to end, through the real parser and the real validator: every PDF carries the decision,
+    # including one with no Hebrew at all. An empty array here would mean "no corrector ran",
+    # which for a PDF text layer is never true.
+    payload = extract_file(
+        fixtures / "text.pdf", "application/pdf", adapter=adapter, limits=DEFAULT_LIMITS
+    )
+    entries = payload["normalizations"]
+    assert len(entries) == 1 and entries[0]["id"] == HEBREW_VISUAL_ORDER, entries
+    assert entries[0]["applied"] is False and entries[0]["original_text"] is None, entries
+
+    # ...and a parser with no text layer to lay out backwards says so by staying empty, rather
+    # than claiming a decision it never made.
+    spreadsheet = extract_file(
+        fixtures / "prices.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        limits=DEFAULT_LIMITS,
+    )
+    assert spreadsheet["normalizations"] == [], spreadsheet["normalizations"]
+
+    # The two halves of the pairing are unrepresentable apart. Both used to be accepted.
+    _expect_processing_error(
+        lambda: validate_extraction(
+            {
+                **_contract(1, "x"),
+                "normalizations": [
+                    {
+                        "id": HEBREW_VISUAL_ORDER,
+                        "applied": True,
+                        "original_text": None,
+                        "measurements": [],
+                    }
+                ],
+            },
+            DEFAULT_LIMITS,
+        ),
+        "invalid_extraction",
+    )
+    _expect_processing_error(
+        lambda: validate_extraction(
+            {
+                **_contract(1, "x"),
+                "normalizations": [
+                    {
+                        "id": HEBREW_VISUAL_ORDER,
+                        "applied": False,
+                        "original_text": "x",
+                        "measurements": [],
+                    }
+                ],
+            },
+            DEFAULT_LIMITS,
+        ),
+        "invalid_extraction",
+    )
+    _expect_processing_error(
+        lambda: validate_extraction(
+            {**_contract(1, "x"), "normalizations": [
+                {"id": "transliterate", "applied": False, "original_text": None,
+                 "measurements": []}
+            ]},
+            DEFAULT_LIMITS,
+        ),
+        "invalid_extraction",
+    )
+    return {
+        "applied": "original_preserved",
+        "pairing": "transform_reproduces_stored_text",
+        "unapplied": "decision_recorded",
+        "pdf_always_records": True,
+        "spreadsheet_records_nothing": True,
+    }
+
+
 def _retry_and_cleanup_check(scratch: Path) -> None:
     delays: list[float] = []
     attempts = 0
@@ -1876,6 +2004,7 @@ def main() -> int:
         _retry_and_cleanup_check(scratch)
         second_pass = _second_pass_check(fixtures)
         hebrew_order = _hebrew_order_check()
+        normalization_evidence = _normalization_evidence_check(fixtures, adapter)
         mistral_adapter = _mistral_adapter_check(fixtures)
         mistral_page_progress = _mistral_page_progress_check(fixtures)
         mistral_worker_wiring = _mistral_worker_wiring_check()
@@ -1899,6 +2028,7 @@ def main() -> int:
                     "retry_cleanup": "passed",
                     "second_pass": second_pass,
                     "hebrew_order": hebrew_order,
+                    "normalization_evidence": normalization_evidence,
                     "mistral_adapter": mistral_adapter,
                     "mistral_page_progress": mistral_page_progress,
                     "mistral_worker_wiring": mistral_worker_wiring,

@@ -457,6 +457,19 @@ export type ExtractionContract = {
     plain_text: string;
     partial: boolean;
   };
+  /**
+   * מה שהעובד תיקן בטקסט, ומה שהמסמך אמר לפני התיקון (‏DEBT §20).
+   *
+   * אופציונלי כאן ומחייב בשער: הטיפוס הזה קורא שורות שכבר נשמרו, כולל כל חילוץ שנכתב לפני
+   * שהרישום הזה היה קיים. חסר = „החילוץ קודם לרישום"; מערך ריק = „אף מתקן לא רץ במסלול הזה";
+   * ‏`applied: false` = „מתקן רץ והשאיר את הטקסט כמות שהוא". שלוש עובדות שונות.
+   */
+  normalizations?: Array<{
+    id: string;
+    applied: boolean;
+    original_text: string | null;
+    measurements: Array<{ name: string; value: number }>;
+  }>;
   blocks: Array<{
     id: string;
     page: number;

@@ -867,6 +867,31 @@ function Invoke-InterpretDocumentContractTests {
   npx.cmd --yes deno check --allow-import --node-modules-dir=auto `
     (Join-Path $repoRoot "supabase\functions\submit-price-list\index.ts")
   if ($LASTEXITCODE -ne 0) { throw "Submit-price-list Edge Function failed Deno typecheck." }
+  $storagePurgeRoot = Join-Path $repoRoot "supabase\functions\organization-storage-purge"
+  try {
+    $ErrorActionPreference = "Continue"
+    $storagePurgeTestOutput = @(& npx.cmd --yes deno test `
+      --config (Join-Path $storagePurgeRoot "deno.json") `
+      --allow-read=$storagePurgeRoot `
+      (Join-Path $storagePurgeRoot "core.test.ts") 2>&1)
+    $storagePurgeTestExit = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  $storagePurgeTestOutput | ForEach-Object { Write-Output $_ }
+  Assert-ExitCode "Organization storage purge contract tests" $storagePurgeTestOutput -ExitCode $storagePurgeTestExit
+  $storagePurgeTestText = $storagePurgeTestOutput -join "`n"
+  if ($storagePurgeTestText -notmatch '(?i)\b[1-9][0-9]*\s+passed\b') {
+    throw "Organization storage purge tests did not report any completed test."
+  }
+  if ($storagePurgeTestText -match '(?i)\b[1-9][0-9]*\s+(?:ignored|skipped)\b') {
+    throw "Organization storage purge tests reported ignored or skipped cases."
+  }
+  npx.cmd --yes deno check `
+    --config (Join-Path $storagePurgeRoot "deno.json") `
+    (Join-Path $storagePurgeRoot "index.ts")
+  if ($LASTEXITCODE -ne 0) { throw "Organization storage purge Edge Function failed Deno typecheck." }
 }
 
 function Invoke-OutboxWorkerContractTests {
@@ -1362,6 +1387,7 @@ try {
     Invoke-SqlTest "supabase\tests\p76_owner_webhook_verification.sql" "P76 owner webhook registration, verification handshake, SSRF corpus and the offboarding claim fence"
     Invoke-SqlTest "supabase\tests\p77_assistant_quota_and_read_models.sql" "P77 the assistant quota stops refusing everybody: 50 runs inside an immutable 30-day introduction anchored to the owner's first email verification, the plan figures #198 decided after it, a contract-priced rung that still refuses until an override exists, no reset from a tier change or the Legacy cutover, and two concurrent runs at limit-minus-one serialising to exactly one; plus the two read models the assistant explains but never computes -- calendar-month supplier price rises carrying baseline, source and as-of where an unmeasurable row is excluded rather than zeroed, and a purchase comparison that returns supplier-minimum breaches instead of raising a quantity" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p85_platform_user_administration.sql" "P85 cross-tenant user administration and the operator roster's write path: the directory is readable only under user.view and is no oracle for platform authority, a change demands the capability, a reason and a fresh password, the supplier role and the last active owner are both refused, both audit trails are written and a no-op writes neither, the profiles guard still refuses a direct write once the command's handshake closes, and nobody may change their own authority"
+    Invoke-SqlTest "supabase\tests\p86_full_tenant_purge.sql" "P86 the controlled purge on a tenant that actually used the product: the declared teardown window opens for every BEFORE DELETE guard on a tenant table except the purge ledger which is meant to outlive it, three-way evidence and external egress evidence no longer halt the shared teardown, UPDATE stays refused inside the same declared purge, the residue tables that carry no org_id are swept before the staged delete, and a tenant is not recorded as purged while objects survive under its storage prefix"
     Invoke-SqlTest "supabase\tests\payment_credit_override.sql" "Payment approval with legal-entity scoped open-credit override"
     Invoke-SqlTest "supabase\tests\monthly_report_snapshots.sql" "Immutable legal-entity monthly accountant snapshots"
     Invoke-Preflight

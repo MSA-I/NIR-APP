@@ -17,6 +17,13 @@ const resend = vi.fn();
 const federated = vi.hoisted(() => ({
   providers: [] as ('google' | 'apple')[],
   start: vi.fn(async () => ({ error: null })),
+  /**
+   * Owner decision #270's enforcement switch, which lives beside the provider switches for the
+   * same build-time reason. Off by default here because it is off in the product: `DEBT §25`
+   * means a verification mail to a customer is accepted and never delivered, so the requirement
+   * is switched on in the same change that switches Apple on and not before.
+   */
+  backupEmailEnforced: false,
 }));
 
 vi.mock('../lib/authProviders', () => ({
@@ -24,6 +31,7 @@ vi.mock('../lib/authProviders', () => ({
   FEDERATED_PROVIDER_LABEL: { google: 'Google', apple: 'Apple' },
   enabledFederatedProviders: () => federated.providers,
   startFederatedSignup: federated.start,
+  backupEmailRequirementEnforced: () => federated.backupEmailEnforced,
 }));
 
 /** The tenant bootstrap as `AuthContext` reports it — null profile means "no organization yet". */
@@ -88,6 +96,7 @@ beforeEach(() => {
   resend.mockResolvedValue({ data: {}, error: null });
   federated.providers = [];
   federated.start.mockClear();
+  federated.backupEmailEnforced = false;
   auth.state = { session: null, profile: null, loading: false };
 });
 
@@ -285,5 +294,111 @@ describe('פתיחת חשבון', () => {
     await waitFor(() => expect(getSession).toHaveBeenCalled());
     expect(screen.queryByText(/מחובר כ/)).toBeNull();
     expect(screen.getByLabelText('סיסמה')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Owner decision #270 — `require-backup-email`, and the two rulings attached to it:
+ *   1. the requirement follows the ADDRESS (a Private Relay forwarder), never the provider;
+ *   2. it is built now and enforced only when Apple is switched on.
+ */
+describe('כתובת דואר חלופית', () => {
+  const RELAY = 'owner@privaterelay.appleid.com';
+  const BACKUP = 'owner@example.co.il';
+
+  it('אינו מבקש כתובת חלופית כשהאכיפה כבויה — גם מכתובת העברה של Apple', async () => {
+    // Ruling 2, and the property DEBT §25 makes non-negotiable: the domain is not verified and
+    // Resend is in sandbox, so a verification mail to a customer is accepted and never delivered.
+    // A requirement that shipped ON would make signup unreachable for every real customer.
+    getSession.mockResolvedValue(federatedSession('apple', RELAY));
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByText(/מחובר כ/);
+    expect(screen.queryByLabelText('כתובת דואר חלופית')).toBeNull();
+
+    await user.type(screen.getByLabelText('שם העסק'), 'מסעדת הגפן');
+    await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalled());
+    const body = invoke.mock.calls[0]![1].body as Record<string, unknown>;
+    expect(body).not.toHaveProperty('backup_email');
+  });
+
+  it('מבקש כתובת חלופית מכתובת העברה של Apple אחרי שהאכיפה נדלקת, ושולח אותה', async () => {
+    federated.backupEmailEnforced = true;
+    getSession.mockResolvedValue(federatedSession('apple', RELAY));
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByText(/מחובר כ/);
+
+    await user.type(screen.getByLabelText('שם העסק'), 'מסעדת הגפן');
+    // Named but not backed up yet: the business name alone is no longer enough.
+    expect(screen.getByRole('button', { name: 'פתיחת חשבון' })).toBeDisabled();
+
+    await user.type(screen.getByLabelText('כתובת דואר חלופית'), BACKUP);
+    await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalled());
+    const body = invoke.mock.calls[0]![1].body as Record<string, unknown>;
+    expect(body.backup_email).toBe(BACKUP);
+    expect(body.identity).toBe('apple');
+  });
+
+  it('אינו מבקש דבר מזהות פדרטיבית שמסרה כתובת אמיתית', async () => {
+    // Ruling 1: the rule is about the address. A Google signup, and an Apple signup by somebody
+    // who chose to share their real address, are asked for nothing even with enforcement on.
+    federated.backupEmailEnforced = true;
+    getSession.mockResolvedValue(federatedSession('google', 'owner@gmail.test'));
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByText(/מחובר כ/);
+    expect(screen.queryByLabelText('כתובת דואר חלופית')).toBeNull();
+
+    await user.type(screen.getByLabelText('שם העסק'), 'מסעדת הגפן');
+    expect(screen.getByRole('button', { name: 'פתיחת חשבון' })).toBeEnabled();
+  });
+
+  it('אינו מקבל את אותה כתובת בתור גיבוי של עצמה', async () => {
+    federated.backupEmailEnforced = true;
+    getSession.mockResolvedValue(federatedSession('apple', RELAY));
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByText(/מחובר כ/);
+
+    await user.type(screen.getByLabelText('שם העסק'), 'מסעדת הגפן');
+    await user.type(screen.getByLabelText('כתובת דואר חלופית'), RELAY);
+
+    expect(await screen.findByText(/הגיבוי חייב להיות כתובת אחרת/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'פתיחת חשבון' })).toBeDisabled();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('פותח את השדה כשהשרת ביקש כתובת חלופית והחבילה לא ידעה על כך', async () => {
+    // The two switches are read at build time on both sides, so one deploy can be ahead of the
+    // other. Without this the refusal is a dead end: the visitor is blocked over a field the form
+    // never drew. DEBT §79's rule, pointed at the other side of the same request.
+    invoke.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: 'non-2xx',
+        context: {
+          json: async () => ({
+            error: { code: 'backup_email_required', message: 'יש להוסיף כתובת דואר חלופית.' },
+          }),
+        },
+      },
+    });
+    const user = await fill();
+    await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
+
+    expect(await screen.findByText(/יש להוסיף כתובת דואר חלופית/)).toBeInTheDocument();
+    const field = await screen.findByLabelText('כתובת דואר חלופית');
+    await user.type(field, BACKUP);
+    await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
+    const body = invoke.mock.calls[1]![1].body as Record<string, unknown>;
+    expect(body.backup_email).toBe(BACKUP);
+    expect(body.email).toBe('owner@example.test');
   });
 });

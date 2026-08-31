@@ -37,7 +37,7 @@ const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-d
 type WeeklyPoint = { week: string; total: number; count: number; label: string };
 /**
  * 0218 split every money figure on this snapshot into one entry per currency, and renamed each key
- * with it. What this screen DOES with those entries is `OPEN-DECISIONS #301` (owner, 30.08.2026):
+ * with it. What this screen DOES with those entries is `OPEN-DECISIONS #305` (owner, 30.08.2026):
  *
  *   ONE CURRENCY AT A TIME, AND THE READER PICKS IT. Every figure that carries money — the KPI
  *     strip, the attention rows, the due-window bar, the deltas, the charts, the supplier list —
@@ -651,7 +651,7 @@ export default function Dashboard() {
        WHICH one is the reader's choice now, not a constant. `#277` had this screen render each
        currency as its own line wherever a figure was glanced at, which meant a business holding
        shekels and dollars read two figures everywhere and could compare neither with anything.
-       The owner's ruling (`#301`, 30.08.2026) is that the control centre shows ONE currency at a time and
+       The owner's ruling (`#305`, 30.08.2026) is that the control centre shows ONE currency at a time and
        the reader picks it. That is the only reading of "one currency" that neither converts (there
        is no rate source, and CLAUDE.md forbids inventing one) nor hides (every currency the
        business holds is one click away, and the picker names them all).

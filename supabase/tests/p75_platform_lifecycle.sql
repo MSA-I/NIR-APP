@@ -873,7 +873,17 @@ select pg_temp.p75_assert(
 
 insert into auth.users (id, email) values
   ('76000000-0000-4000-8000-000000000031', 'p75-purge-owner-a@example.test'),
-  ('76000000-0000-4000-8000-000000000032', 'p75-purge-owner-b@example.test');
+  ('76000000-0000-4000-8000-000000000032', 'p75-purge-owner-b@example.test'),
+  ('76000000-0000-4000-8000-000000000006', 'p75-customer-ops@example.test');
+
+-- A SECOND operator, deliberately not a super_admin. customer_ops holds `offboarding.handle` and
+-- `org.lifecycle` (0151:143-144), so it can approve an offboarding and run the executor -- which
+-- is exactly why E10 below needs it: it is the strongest available proof that the legal hold got
+-- its own capability rather than riding along on the one the offboarding work already carries.
+insert into public.platform_admins (user_id, note) values
+  ('76000000-0000-4000-8000-000000000006', 'P75 customer operations');
+insert into public.platform_admin_roles (user_id, role_key) values
+  ('76000000-0000-4000-8000-000000000006', 'customer_ops');
 
 -- Created active on purpose. 0103 does not change organizations.status when a tenant offboards;
 -- the read-only overlay comes from private.organization_access_mode reading the open request, so
@@ -888,12 +898,13 @@ insert into public.organizations (id, name, status) values
   ('75000000-0000-4000-8000-000000000035', 'P75 export not ready',   'active'),
   ('75000000-0000-4000-8000-000000000036', 'P75 backup unverified',  'active'),
   ('75000000-0000-4000-8000-000000000037', 'P75 no request at all',  'active'),
-  ('75000000-0000-4000-8000-000000000038', 'P75 late candidate',     'active');
+  ('75000000-0000-4000-8000-000000000038', 'P75 late candidate',     'active'),
+  ('75000000-0000-4000-8000-000000000039', 'P75 hold to be lifted',  'active');
 
 insert into pg_temp.p75_fixture_orgs (org_id)
 select id from public.organizations
 where id between '75000000-0000-4000-8000-000000000031'
-              and '75000000-0000-4000-8000-000000000038';
+              and '75000000-0000-4000-8000-000000000039';
 
 -- Real tenant rows, so the staged delete has something to stage.
 insert into public.profiles (id, org_id, full_name, role) values
@@ -969,6 +980,14 @@ select pg_temp.p75_offboarding_request(
 select pg_temp.p75_offboarding_request(
   '77000000-0000-4000-8000-000000000038', '75000000-0000-4000-8000-000000000038',
   now() - interval '8 years', 'export_ready', false, true);
+-- #306 (0257): the one request in this file that keeps the hold 0103:58 puts on EVERY request and
+-- is never written by a fixture. Every other gate passes, so gate 2 is the only thing between it
+-- and the executor -- which makes whatever E10 changes attributable to the hold and to nothing
+-- else. Note the contrast with its five siblings above: they pass `false` straight into the
+-- column because until 0257 there was no other way for this suite to reach that value.
+select pg_temp.p75_offboarding_request(
+  '77000000-0000-4000-8000-000000000039', '75000000-0000-4000-8000-000000000039',
+  now() - interval '8 years', 'export_ready', true, true);
 
 -- Backup and restore evidence, through the real command.
 select pg_temp.p75_as('76000000-0000-4000-8000-000000000003', true);
@@ -994,6 +1013,9 @@ select public.record_organization_purge_backup_evidence(
 select public.record_organization_purge_backup_evidence(
   '75000000-0000-4000-8000-000000000038', 'backup://p75/h', now() - interval '2 days',
   now() - interval '1 day', 'P75 restore rehearsal H');
+select public.record_organization_purge_backup_evidence(
+  '75000000-0000-4000-8000-000000000039', 'backup://p75/i', now() - interval '2 days',
+  now() - interval '1 day', 'P75 restore rehearsal I');
 select pg_temp.p75_as(null);
 
 -- ===== E1 -- four gates, four independent negatives =====
@@ -1044,6 +1066,158 @@ select pg_temp.p75_assert(
   and not pg_temp.p75_gate('75000000-0000-4000-8000-000000000037', 'eligible'),
   'E2: an organization with no readable hold state was treated as having no hold -- 0103:58 '
   || 'makes legal_hold not null default true precisely so unknown fails closed');
+
+-- ===== E10 -- the hold has a lift, and lifting it is what opens the gate (#306, 0257) =====
+--
+-- E2 above proves the hold fails closed. This proves it can be opened -- which until 0257 nothing
+-- in the product could do, so the controlled-purge route DEBT §66 and 0254 finished could not
+-- open for any tenant in production, ever. Everything below goes through
+-- public.release_organization_legal_hold; no statement here writes legal_hold directly.
+create function pg_temp.p75_refused(p_sql text, p_expected text)
+returns void language plpgsql as $$
+begin
+  begin
+    execute p_sql;
+  exception when others then
+    if sqlerrm not like '%' || p_expected || '%' then
+      raise exception 'P75 expected refusal %, got: %', p_expected, sqlerrm;
+    end if;
+    return;
+  end;
+  raise exception 'P75 expected refusal % but the statement succeeded: %', p_expected, p_sql;
+end
+$$;
+
+select pg_temp.p75_assert(
+  exists (select 1 from private.platform_capability_definitions
+           where capability = 'offboarding.legal_hold'
+             and sensitivity = 'high' and requires_step_up),
+  'E10: offboarding.legal_hold is not declared a high-sensitivity step-up capability');
+
+-- One role, counted rather than assumed: "does super_admin hold it" is a different and much
+-- weaker question than "who holds it".
+select pg_temp.p75_assert(
+  (select array_agg(role_key order by role_key) from platform_role_capabilities
+    where capability = 'offboarding.legal_hold') = array['super_admin'],
+  'E10: offboarding.legal_hold is held by a role other than super_admin -- #306 named one');
+
+-- Reachability from the catalogue, never by calling as a role that lacks EXECUTE.
+select pg_temp.p75_assert(
+  has_function_privilege('anon',
+    'public.release_organization_legal_hold(uuid,text)', 'execute') = false
+  and has_function_privilege('service_role',
+    'public.release_organization_legal_hold(uuid,text)', 'execute') = false
+  and has_function_privilege('authenticated',
+    'public.release_organization_legal_hold(uuid,text)', 'execute'),
+  'E10: the release command is reachable by a role a scheduler can hold, or is unreachable by '
+  || 'the browser role that is supposed to call it');
+
+-- Gate 2 is the ONLY gate this tenant fails.
+select pg_temp.p75_assert(
+  pg_temp.p75_gate('75000000-0000-4000-8000-000000000039', 'retention_eligible')
+  and not pg_temp.p75_gate('75000000-0000-4000-8000-000000000039', 'legal_hold_clear')
+  and pg_temp.p75_gate('75000000-0000-4000-8000-000000000039', 'export_ready')
+  and pg_temp.p75_gate('75000000-0000-4000-8000-000000000039', 'backup_present')
+  and not pg_temp.p75_gate('75000000-0000-4000-8000-000000000039', 'eligible'),
+  'E10: the hold is not the only gate the release fixture fails, so nothing below is '
+  || 'attributable to lifting it');
+
+-- customer_ops may approve this very offboarding and may run the executor. It may not lift the
+-- hold. This is the assertion that would fail if the command had reused offboarding.handle.
+select pg_temp.p75_as('76000000-0000-4000-8000-000000000006', true);
+select pg_temp.p75_assert(
+  public.platform_has_capability('offboarding.handle')
+  and not public.platform_has_capability('offboarding.legal_hold'),
+  'E10: the customer_ops fixture does not hold offboarding.handle without the hold capability, '
+  || 'so refusing it below would prove nothing');
+select pg_temp.p75_refused(
+  $$select public.release_organization_legal_hold(
+      '75000000-0000-4000-8000-000000000039', 'P75 customer_ops attempt')$$,
+  'not_platform_capability');
+
+-- The step-up is not decorative: right operator, right capability, stale authentication.
+select pg_temp.p75_as('76000000-0000-4000-8000-000000000003', false);
+select pg_temp.p75_refused(
+  $$select public.release_organization_legal_hold(
+      '75000000-0000-4000-8000-000000000039', 'P75 stale authentication')$$,
+  'fresh_authentication_required');
+
+-- A reason is mandatory, and blank is not a reason.
+select pg_temp.p75_as('76000000-0000-4000-8000-000000000003', true);
+select pg_temp.p75_refused(
+  $$select public.release_organization_legal_hold(
+      '75000000-0000-4000-8000-000000000039', '   ')$$,
+  'reason_required');
+
+-- An organization with no offboarding request is refused by name, not silently accepted.
+select pg_temp.p75_refused(
+  $$select public.release_organization_legal_hold(
+      '75000000-0000-4000-8000-000000000037', 'P75 nothing here to release')$$,
+  'offboarding_request_unknown');
+
+select pg_temp.p75_assert(
+  not pg_temp.p75_gate('75000000-0000-4000-8000-000000000039', 'legal_hold_clear'),
+  'E10: one of the refusals above lifted the hold anyway');
+
+-- The lift itself.
+select public.release_organization_legal_hold(
+  '75000000-0000-4000-8000-000000000039',
+  'P75 hold lifted: the matter it was taken for closed') as hold_release \gset p75_
+select pg_temp.p75_as(null);
+
+select pg_temp.p75_assert(
+  (:'p75_hold_release'::jsonb ->> 'changed')::boolean
+  and (:'p75_hold_release'::jsonb ->> 'request_id') = '77000000-0000-4000-8000-000000000039'
+  and (:'p75_hold_release'::jsonb ->> 'purge_gate_legal_hold_clear')::boolean,
+  'E10: the release did not report a change on the organization''s live request');
+
+-- THIS IS THE DECISION. #261 built four gates; #306 is the only thing that can open the second.
+select pg_temp.p75_assert(
+  pg_temp.p75_gate('75000000-0000-4000-8000-000000000039', 'legal_hold_clear')
+  and pg_temp.p75_gate('75000000-0000-4000-8000-000000000039', 'eligible'),
+  'E10: lifting the hold did not clear the purge gate -- #306 exists for exactly this');
+
+-- Both trails, both carrying the reason (CLAUDE.md: every sensitive action, with its reason).
+select pg_temp.p75_assert(
+  exists (select 1 from public.audit_logs
+           where org_id = '75000000-0000-4000-8000-000000000039'
+             and action = 'organization_offboarding_legal_hold_released'
+             and entity_type = 'organization_offboarding_requests'
+             and entity_id = '77000000-0000-4000-8000-000000000039'
+             and reason like 'P75 hold lifted%'
+             and old_values = jsonb_build_object('legal_hold', true)
+             and new_values = jsonb_build_object('legal_hold', false)),
+  'E10: the lift is missing from the tenant''s own audit trail, or lost its reason');
+select pg_temp.p75_assert(
+  exists (select 1 from platform_lifecycle_events
+           where org_id = '75000000-0000-4000-8000-000000000039'
+             and action = 'organization_offboarding_legal_hold_released'
+             and entity_id = '77000000-0000-4000-8000-000000000039'
+             and reason like 'P75 hold lifted%'),
+  'E10: the lift is missing from the platform timeline the console reads back');
+
+-- Idempotence is reported, not re-written: a no-op writes NEITHER trail, so "how many times was
+-- this hold lifted" stays answerable from the logs.
+select pg_temp.p75_as('76000000-0000-4000-8000-000000000003', true);
+select public.release_organization_legal_hold(
+  '75000000-0000-4000-8000-000000000039', 'P75 repeat') as hold_release_again \gset p75_
+select pg_temp.p75_as(null);
+select pg_temp.p75_assert(
+  (:'p75_hold_release_again'::jsonb ->> 'changed')::boolean = false
+  and (:'p75_hold_release_again'::jsonb ->> 'purge_gate_legal_hold_clear')::boolean,
+  'E10: a repeat lift reported a change it did not make');
+select pg_temp.p75_assert(
+  (select count(*) from public.audit_logs
+    where org_id = '75000000-0000-4000-8000-000000000039'
+      and action = 'organization_offboarding_legal_hold_released') = 1
+  and (select count(*) from platform_lifecycle_events
+    where org_id = '75000000-0000-4000-8000-000000000039'
+      and action = 'organization_offboarding_legal_hold_released') = 1,
+  'E10: a no-op lift wrote a second row to one of the two trails');
+
+select pg_temp.p75_assert(
+  to_regprocedure('public.release_organization_legal_hold(uuid,text)') is not null,
+  'contract: the legal-hold release does not exist under that exact signature');
 
 -- Every negative is also refused by the approval command, not only by the report.
 create function pg_temp.p75_approval_refused(p_org_id uuid)
@@ -1191,12 +1365,14 @@ select pg_temp.p75_assert(
 
 -- E4 -- a legal hold arrives AFTER approval, on one tenant of the two.
 --
--- GAP, REPORTED NOT INVENTED: there is no command in the product that places or lifts a legal
--- hold. organization_offboarding_requests.legal_hold is `not null default true` (0103:58) and
--- nothing can set it either way, so this suite has to emulate the missing command through the
--- documented platform lever the write guard already honours for this exact table
+-- WHAT IS STILL EMULATED HERE, AND WHY -- narrowed by 0257, not resolved. LIFTING a hold is now
+-- a real command and E10 above exercises it. PLACING one is not, and deliberately so: #306 ruled
+-- on the exit, and `not null default true` (0103:58) already places a hold on every request 0103
+-- creates, so no tenant reaches the executor unheld. This arm needs a hold to ARRIVE after
+-- approval on a request that had none, which no product command does, so it still writes the
+-- column through the documented platform lever the write guard honours for this exact table
 -- (private.organization_row_write_guard, v_offboarding_write). The gate this exercises is real;
--- the way a human would reach it is not built.
+-- the placement is the half of the pair the owner did not ask for.
 select set_config('app.organization_offboarding_writer_org',
                   '75000000-0000-4000-8000-000000000032', true);
 select pg_temp.p75_as('76000000-0000-4000-8000-000000000003');

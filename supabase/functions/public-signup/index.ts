@@ -22,9 +22,11 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import {
   adoptExistingUserAsOwner,
+  backupEmailRefusal,
   provisionTenant,
   validateProvisionInput,
 } from '../_shared/provision.ts';
+import { backupEmailRequired, normaliseEmail } from '../../../src/lib/backupEmail.ts';
 import { sendSignupConfirmation } from './confirmation.ts';
 
 const CORS_HEADERS: Record<string, string> = {
@@ -42,6 +44,35 @@ const CORS_HEADERS: Record<string, string> = {
 const NEUTRAL_ANSWER =
   'אם הכתובת אינה רשומה עדיין — נשלח אליה מייל אישור, ויש להשלים ממנו את ההרשמה. ' +
   'אם היא כבר רשומה — יש להיכנס עם הסיסמה הקיימת או לאפס אותה.';
+
+/**
+ * Owner decision #270, the server half. Two things are separate here and must stay separate:
+ *
+ *   * A supplied backup address is ALWAYS validated, from the day this ships. `backupEmailRefusal`
+ *     inside `validateProvisionInput` does that, on every path, switch or no switch.
+ *   * A backup address is only ever REQUIRED when enforcement is on AND the primary address is a
+ *     Private Relay forwarder. Both halves are read below, and neither of them defaults to yes.
+ *
+ * `REQUIRE_BACKUP_EMAIL` unset reads as "not switched on yet", NEVER as a refusal — the same rule
+ * `private.auth_org_allows` and `src/lib/entitlements.ts` state on the two sides of the
+ * entitlement question (`DEBT §79`). Turning a missing environment variable into a refusal would
+ * make signup unreachable the first time a deploy forgot to carry it, and the visitor would have
+ * no way to tell that from the product being broken. It is switched on in the same change that
+ * switches Apple on, beside `VITE_REQUIRE_BACKUP_EMAIL` in the bundle.
+ *
+ * Read at module scope, like every other switch this function has: an Edge Function cold-starts
+ * constantly, so this is re-read far more often than it is changed.
+ */
+const BACKUP_EMAIL_ENFORCED = Deno.env.get('REQUIRE_BACKUP_EMAIL') === 'true';
+
+/**
+ * The one sentence a relay signup is refused with while enforcement is on. It names the reason,
+ * because unlike the address-shaped answers above there is nothing to hide: the caller already
+ * knows which address they signed in with.
+ */
+const BACKUP_EMAIL_REQUIRED_MESSAGE =
+  'הכתובת שהתקבלה מ-Apple היא כתובת העברה שאפשר לכבות. ' +
+  'כדי שלא נאבד את הקשר איתך, יש להוסיף כתובת דואר חלופית.';
 
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -147,6 +178,31 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }, 403);
     }
 
+    /**
+     * The backup address (owner decision #270). This branch is where the requirement actually
+     * bites: a relay forwarder can only reach the product through a federated identity.
+     *
+     * Note what is NOT asked. A Google signup arrives here with a real mailbox and is asked for
+     * nothing, and so is an Apple signup by somebody who chose to share their real address — the
+     * ruling is about the ADDRESS, and `backupEmailRequired` reads nothing but the address and
+     * the switch. `email` here is the provider's, never the body's, so this cannot be talked out
+     * of by a caller who would rather not answer.
+     */
+    const federatedBackup = typeof body.backup_email === 'string'
+      ? normaliseEmail(body.backup_email)
+      : '';
+    const federatedBackupProblem = backupEmailRefusal(federatedBackup, email);
+    if (federatedBackupProblem) {
+      return json({
+        error: { code: 'backup_email_invalid', message: federatedBackupProblem },
+      }, 400);
+    }
+    if (!federatedBackup && backupEmailRequired(email, { enforced: BACKUP_EMAIL_ENFORCED })) {
+      return json({
+        error: { code: 'backup_email_required', message: BACKUP_EMAIL_REQUIRED_MESSAGE },
+      }, 400);
+    }
+
     const standing = await admin0.rpc('service_identity_has_profile', { p_user_id: user.id });
     if (standing.error) {
       return json({ error: { code: 'signup_unavailable', message: 'ההרשמה אינה זמינה כרגע' } }, 503);
@@ -194,6 +250,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       name: organizationName,
       ownerUserId: user.id,
       ownerName,
+      backupEmail: federatedBackup || undefined,
     });
     if (!adopted.ok) {
       await admin0.rpc('service_mark_signup_rejected', { p_email_hash: await sha256Hex(email) });
@@ -222,6 +279,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     ownerEmail: typeof body.email === 'string' ? body.email : '',
     ownerName: typeof body.full_name === 'string' ? body.full_name : '',
     ownerPassword: typeof body.password === 'string' ? body.password : '',
+    // The fifth field, and the only one added since 0159 (owner decision #270). It is read on this
+    // branch too even though a password signup can almost never need it, because the requirement
+    // follows the ADDRESS: somebody who types a relay forwarder into this form has exactly the
+    // problem the decision is about, and a rule that only looked at the provider would miss them.
+    backupEmail: typeof body.backup_email === 'string' ? body.backup_email : undefined,
     // Nothing else is read from the request. Plan, status, VAT rate and categories are the
     // database's to decide, and a form that could set them would be a free upgrade.
     emailConfirmed: false,
@@ -229,6 +291,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const problem = validateProvisionInput(input);
   if (problem) return json({ error: { code: 'invalid_request', message: problem } }, 400);
+
+  if (!normaliseEmail(input.backupEmail)
+      && backupEmailRequired(input.ownerEmail, { enforced: BACKUP_EMAIL_ENFORCED })) {
+    return json({
+      error: { code: 'backup_email_required', message: BACKUP_EMAIL_REQUIRED_MESSAGE },
+    }, 400);
+  }
 
   const admin = admin0;
 

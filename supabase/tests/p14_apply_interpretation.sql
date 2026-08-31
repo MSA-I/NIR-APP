@@ -2826,6 +2826,270 @@ select pg_temp.p14_assert(
   ) = 'reason_required',
   'P14 C5 mutation proof: with the sanitizer restored, the same call is refused by name again');
 
+-- ----- (8) #20 -- WHAT THE DOCUMENT SAID, BESIDE WHAT THIS SYSTEM STORED -----
+--
+-- The owner's ruling of 30.08.2026: text read from a document may be normalized PROVIDED the
+-- original survives, so it can always be proven what came from the document and what came from a
+-- system correction. `0256` makes that pairing declarable, storable and checkable; this section
+-- proves it holds rather than that it compiles.
+--
+-- Every row here is written inside a savepoint and taken back at the end, so the tenant-B
+-- isolation witness below still measures what it was written to measure.
+savepoint p14_text_evidence;
+
+-- One document and one job per extraction below, INCLUDING the ones that must be refused.
+-- `document_extractions_job_key` is unique per job, so sharing a job would make a refused insert
+-- fail on the wrong constraint -- and the mutation proof further down, which removes the check
+-- deliberately, would then be measuring uniqueness instead of the pairing.
+do $p14_text_evidence_slots$
+declare
+  v_n integer;
+begin
+  foreach v_n in array array[920, 921, 922, 930, 931, 932, 940, 941] loop
+    insert into public.documents (id, org_id, entity_type, entity_id, storage_path, file_name,
+                                  mime_type, uploaded_by)
+    values (('44000000-0000-4000-8000-' || lpad(v_n::text, 12, '0'))::uuid,
+            '14000000-0000-4000-8000-000000000001', 'inbox', null,
+            '14000000-0000-4000-8000-000000000001/p14/' || v_n || '.pdf',
+            'p14-' || v_n || '.pdf', 'application/pdf',
+            '24000000-0000-4000-8000-000000000001');
+
+    insert into public.document_processing_jobs (id, org_id, document_id, requested_by, status,
+                                                 input_checksum)
+    values (('54000000-0000-4000-8000-' || lpad(v_n::text, 12, '0'))::uuid,
+            '14000000-0000-4000-8000-000000000001',
+            ('44000000-0000-4000-8000-' || lpad(v_n::text, 12, '0'))::uuid,
+            '24000000-0000-4000-8000-000000000001', 'review',
+            'etag:' || lpad(to_hex(v_n), 32, 'a'));
+  end loop;
+end
+$p14_text_evidence_slots$;
+
+-- The extraction payload as the corrected worker now produces it. `original_text` is the string
+-- the detector judged -- the Hebrew laid out backwards, exactly as the generator wrote it -- while
+-- `document.plain_text` carries the repaired form the rest of the system reads.
+create function pg_temp.p14_normalized_payload(
+  p_stored text,
+  p_normalizations jsonb
+)
+returns jsonb
+language sql
+immutable
+as $$
+  select jsonb_build_object(
+    'schema_version', '1',
+    'document', jsonb_build_object(
+      'page_count', 1,
+      'detected_languages', jsonb_build_array('he'),
+      'plain_text', p_stored,
+      'partial', false),
+    'blocks', jsonb_build_array(
+      jsonb_build_object('id', 'block-1', 'page', 1, 'type', 'text',
+        'bbox', jsonb_build_array(0, 0, 1, 1), 'text', p_stored, 'confidence', 0.9)),
+    'tables', jsonb_build_array(),
+    'marks', jsonb_build_array())
+  || case when p_normalizations is null then '{}'::jsonb
+          else jsonb_build_object('normalizations', p_normalizations) end
+$$;
+
+create function pg_temp.p14_normalization(
+  p_applied boolean,
+  p_original text,
+  p_id text default 'hebrew_visual_order'
+)
+returns jsonb
+language sql
+immutable
+as $$
+  select jsonb_build_array(jsonb_build_object(
+    'id', p_id,
+    'applied', p_applied,
+    'original_text', to_jsonb(p_original),
+    'measurements', jsonb_build_array(
+      jsonb_build_object('name', 'hebrew_words', 'value', 8),
+      jsonb_build_object('name', 'final_letter_first', 'value', 2),
+      jsonb_build_object('name', 'final_letter_last', 'value', 0))))
+$$;
+
+insert into public.document_extractions (id, org_id, job_id, document_id, engine, model,
+                                         model_version, input_checksum, contract_version, payload)
+values
+  -- (a) the correction fired, and the document's own words survived it.
+  ('64000000-0000-4000-8000-000000000920', '14000000-0000-4000-8000-000000000001',
+   '54000000-0000-4000-8000-000000000920', '44000000-0000-4000-8000-000000000920',
+   'fixture', 'fixture-ocr', '1.0.0', 'etag:' || lpad(to_hex(920), 32, 'a'), '1',
+   pg_temp.p14_normalized_payload(
+     'קבלה מקור מסמך ממוחשב',
+     pg_temp.p14_normalization(true, 'הלבק רוקמ ךמסמ בשחוממ'))),
+  -- (b) the correction ran and changed nothing. The stored text IS the original, and saying so
+  -- out loud is a different fact from saying nothing.
+  ('64000000-0000-4000-8000-000000000921', '14000000-0000-4000-8000-000000000001',
+   '54000000-0000-4000-8000-000000000921', '44000000-0000-4000-8000-000000000921',
+   'fixture', 'fixture-ocr', '1.0.0', 'etag:' || lpad(to_hex(921), 32, 'a'), '1',
+   pg_temp.p14_normalized_payload('קבלה מקור מסמך ממוחשב',
+                                  pg_temp.p14_normalization(false, null))),
+  -- (c) an extraction written before the record existed. It must stay valid: retro-fitting a
+  -- decision onto it would be this system inventing evidence about its own past.
+  ('64000000-0000-4000-8000-000000000922', '14000000-0000-4000-8000-000000000001',
+   '54000000-0000-4000-8000-000000000922', '44000000-0000-4000-8000-000000000922',
+   'fixture', 'fixture-ocr', '1.0.0', 'etag:' || lpad(to_hex(922), 32, 'a'), '1',
+   pg_temp.p14_normalized_payload('חשבונית ישנה', null));
+
+select pg_temp.p14_assert(
+  (select count(*) = 1 from public.document_extraction_text_evidence(
+     '64000000-0000-4000-8000-000000000920')),
+  'P14 #20: a corrected extraction reports exactly one correction');
+
+select pg_temp.p14_assert(
+  (select applied
+      and original_text = 'הלבק רוקמ ךמסמ בשחוממ'
+      and stored_plain_text = 'קבלה מקור מסמך ממוחשב'
+      and original_text <> stored_plain_text
+   from public.document_extraction_text_evidence('64000000-0000-4000-8000-000000000920')),
+  'P14 #20: BOTH halves come back and they differ -- what the document said and what this system '
+  || 'stored are two readable values, which before 0256 they were not');
+
+select pg_temp.p14_assert(
+  (select measurements @> jsonb_build_array(
+            jsonb_build_object('name', 'final_letter_first', 'value', 2))
+   from public.document_extraction_text_evidence('64000000-0000-4000-8000-000000000920')),
+  'P14 #20: and the numbers the decision was made on come back with it -- a correction whose '
+  || 'reason cannot be read is still an assertion nobody can check');
+
+select pg_temp.p14_assert(
+  (select not applied and original_text is null
+   from public.document_extraction_text_evidence('64000000-0000-4000-8000-000000000921')),
+  'P14 #20: a corrector that ran and changed nothing is recorded as such, with no second copy '
+  || 'of the text it left alone');
+
+select pg_temp.p14_assert(
+  (select count(*) = 0 from public.document_extraction_text_evidence(
+     '64000000-0000-4000-8000-000000000922')),
+  'P14 #20: an extraction that predates the record reports NO correction rows -- absent, empty '
+  || 'and "applied: false" stay three distinct facts');
+
+-- The pairing as a CONSTRAINT. Each refusal below is a shape that was representable before 0256.
+select pg_temp.p14_assert(
+  pg_temp.p14_capture_error(format($q$
+    insert into public.document_extractions (id, org_id, job_id, document_id, engine, model,
+                                             model_version, input_checksum, contract_version,
+                                             payload)
+    values ('64000000-0000-4000-8000-000000000930',
+            '14000000-0000-4000-8000-000000000001',
+            '54000000-0000-4000-8000-000000000930',
+            '44000000-0000-4000-8000-000000000930',
+            'fixture', 'fixture-ocr', '1.0.0', %L, '1', %L::jsonb)$q$,
+    'etag:' || lpad(to_hex(930), 32, 'a'),
+    pg_temp.p14_normalized_payload('x', pg_temp.p14_normalization(true, null))
+  )) like '%document_extractions_normalizations_check%',
+  'P14 #20: a correction that says it changed the text and kept no original is refused by the '
+  || 'constraint -- that shape IS the defect §20 names, and it must be unrepresentable');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_capture_error(format($q$
+    insert into public.document_extractions (id, org_id, job_id, document_id, engine, model,
+                                             model_version, input_checksum, contract_version,
+                                             payload)
+    values ('64000000-0000-4000-8000-000000000931',
+            '14000000-0000-4000-8000-000000000001',
+            '54000000-0000-4000-8000-000000000931',
+            '44000000-0000-4000-8000-000000000931',
+            'fixture', 'fixture-ocr', '1.0.0', %L, '1', %L::jsonb)$q$,
+    'etag:' || lpad(to_hex(931), 32, 'a'),
+    pg_temp.p14_normalized_payload('x', pg_temp.p14_normalization(false, 'x'))
+  )) like '%document_extractions_normalizations_check%',
+  'P14 #20: and the mirror image -- nothing changed, yet a second copy of the text is carried '
+  || 'anyway -- is refused too, because it would read as a correction nobody made');
+
+select pg_temp.p14_assert(
+  pg_temp.p14_capture_error(format($q$
+    insert into public.document_extractions (id, org_id, job_id, document_id, engine, model,
+                                             model_version, input_checksum, contract_version,
+                                             payload)
+    values ('64000000-0000-4000-8000-000000000932',
+            '14000000-0000-4000-8000-000000000001',
+            '54000000-0000-4000-8000-000000000932',
+            '44000000-0000-4000-8000-000000000932',
+            'fixture', 'fixture-ocr', '1.0.0', %L, '1', %L::jsonb)$q$,
+    'etag:' || lpad(to_hex(932), 32, 'a'),
+    pg_temp.p14_normalized_payload(
+      'x', pg_temp.p14_normalization(true, 'y', 'transliterate'))
+  )) like '%document_extractions_normalizations_check%',
+  'P14 #20: an undeclared corrector cannot start rewriting stored text -- the id set is closed on '
+  || 'both sides of the gateway wire and in the database');
+
+-- The declaration itself: the registry names the pairing, and every surface it names resolves.
+select pg_temp.p14_assert(
+  (select count(*) >= 4 from private.document_text_normalization_registry),
+  'P14 #20: the normalization registry declares the pairings 0256 seeded');
+
+select pg_temp.p14_assert(
+  (select count(distinct preservation) = 3
+     from private.document_text_normalization_registry),
+  'P14 #20: all three preservation shapes are declared -- carried in the payload, paired in the '
+  || 'row, and never stored at all. Losing one would leave a whole class of normalization '
+  || 'undescribed');
+
+select pg_temp.p14_assert(
+  (select count(*) = 0 from private.document_text_evidence_violations()),
+  'P14 #20: with well-formed rows in place the evidence report is silent');
+
+-- ...and the report is not silent because it is dead. The constraint is the first line of
+-- defence, so the only way to reach the report's data arm is to remove it -- which is exactly
+-- what a future migration dropping the constraint would do.
+savepoint p14_text_evidence_mutation;
+
+alter table public.document_extractions
+  drop constraint document_extractions_normalizations_check;
+
+insert into public.document_extractions (id, org_id, job_id, document_id, engine, model,
+                                         model_version, input_checksum, contract_version, payload)
+values ('64000000-0000-4000-8000-000000000940', '14000000-0000-4000-8000-000000000001',
+        '54000000-0000-4000-8000-000000000940', '44000000-0000-4000-8000-000000000940',
+        'fixture', 'fixture-ocr', '1.0.0', 'etag:' || lpad(to_hex(940), 32, 'a'), '1',
+        pg_temp.p14_normalized_payload('x', pg_temp.p14_normalization(true, null)));
+
+select pg_temp.p14_assert(
+  (select count(*) = 1 from private.document_text_evidence_violations()
+     where assertion = 'stored_correction_without_original'
+       and detail like '64000000-0000-4000-8000-000000000940%'),
+  'P14 #20 mutation proof: with the constraint gone, a correction stored without its original is '
+  || 'NAMED by the evidence report -- so a green report means the arm ran and found nothing, not '
+  || 'that it matched nothing');
+
+insert into public.document_extractions (id, org_id, job_id, document_id, engine, model,
+                                         model_version, input_checksum, contract_version, payload)
+values ('64000000-0000-4000-8000-000000000941', '14000000-0000-4000-8000-000000000001',
+        '54000000-0000-4000-8000-000000000941', '44000000-0000-4000-8000-000000000941',
+        'fixture', 'fixture-ocr', '1.0.0', 'etag:' || lpad(to_hex(941), 32, 'a'), '1',
+        pg_temp.p14_normalized_payload(
+          'x', pg_temp.p14_normalization(false, null, 'undeclared_corrector')));
+
+select pg_temp.p14_assert(
+  (select count(*) = 1 from private.document_text_evidence_violations()
+     where assertion = 'payload_normalizer_undeclared'
+       and detail = 'undeclared_corrector'),
+  'P14 #20 mutation proof: a corrector nobody declared is named too -- the registry is compared '
+  || 'against what is actually stored, not merely against itself');
+
+rollback to savepoint p14_text_evidence_mutation;
+
+select pg_temp.p14_assert(
+  (select count(*) = 0 from private.document_text_evidence_violations()),
+  'P14 #20: and with the constraint restored the report is silent again');
+
+-- THE OTHER HALF OF THE RULING: normalizing with evidence must not have moved the sanitizer.
+-- 0182 pins its body by hash, refuses any evidence writer that routes through it, and refuses the
+-- allowlist inversion migrating into it. 0256 argued it changed none of that; this measures it in
+-- the same suite that measures the new pairing.
+select pg_temp.p14_assert(
+  (select count(*) = 0 from private.document_automation_negative_guard_violations()),
+  'P14 #20: the storage denylist, the separate comparison key and the evidence-write path are all '
+  || 'exactly where 0182 left them -- normalizing WITH evidence added a pairing, it did not '
+  || 'relax faithfulness');
+
+rollback to savepoint p14_text_evidence;
+
 -- ----- Tenant B, one last time -----
 -- Six applications and a reversal later, the isolation witness must still be byte-identical.
 select pg_temp.p14_assert(

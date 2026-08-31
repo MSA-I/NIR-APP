@@ -386,6 +386,25 @@ jobs:
         if: needs.changes.outputs.render == 'true'
         run: docker build -t inplace-render:acceptance worker/render
 
+      # The same rule as the render pair above, for the wire that actually stopped: a3603c0 moved
+      # GATEWAY_CONTRACT_VERSION on the Edge alone, the pool kept reporting `Up`, and five days of
+      # documents sat in "waiting in queue" while every poll failed gateway_contract_mismatch.
+      # Until now only the render pair was compared, so the pair with the incident had no guard.
+      - name: OCR gateway contract versions agree across the wire
+        if: needs.changes.outputs.edge == 'true' || needs.changes.outputs.ocr == 'true'
+        run: |
+          set -euo pipefail
+          edge=$(grep -oE 'GATEWAY_CONTRACT_VERSION = "[^"]+"' supabase/functions/document-processing/contract.ts | grep -oE '"[^"]+"' | tr -d '"')
+          worker=$(grep -oE 'GATEWAY_CONTRACT_VERSION = "[^"]+"' worker/ocr/src/gateway.py | grep -oE '"[^"]+"' | tr -d '"')
+          echo "document-processing edge=$edge worker=$worker"
+          test -n "$edge" && test "$edge" = "$worker" \
+            || { echo 'OCR gateway contract version skew between the Edge function and worker/ocr'; exit 1; }
+          scan_edge=$(grep -oE 'SCAN_GATEWAY_CONTRACT_VERSION = "[^"]+"' supabase/functions/document-preprocessing/contract.ts | grep -oE '"[^"]+"' | tr -d '"')
+          scan_worker=$(grep -oE 'SCAN_GATEWAY_CONTRACT_VERSION = "[^"]+"' worker/ocr/src/scan_gateway.py | grep -oE '"[^"]+"' | tr -d '"')
+          echo "document-preprocessing edge=$scan_edge worker=$scan_worker"
+          test -n "$scan_edge" && test "$scan_edge" = "$scan_worker" \
+            || { echo 'scan gateway contract version skew between the Edge function and worker/ocr'; exit 1; }
+
       - name: OCR worker Compose validation
         if: needs.changes.outputs.ocr == 'true'
         run: docker compose -f docker-compose.ocr.yml config --quiet

@@ -20,6 +20,8 @@
  * security-relevant half, since it bounds what an anonymous caller may send — is unit-testable
  * without a network client or a resolved node_modules tree.
  */
+import { backupEmailProblem, normaliseEmail } from '../../../src/lib/backupEmail.ts';
+
 type Failure = { message: string } | null;
 type Row = { id?: string };
 
@@ -59,6 +61,17 @@ export interface ProvisionInput {
   ownerPassword: string;
   vatRate?: number;
   categories?: string[];
+  /**
+   * A second address the owner can be reached at (owner decision #270). Optional here, and
+   * optional on purpose: nominating one is only ever REQUIRED when the primary address is a
+   * Private Relay forwarder AND enforcement has been switched on, and that decision belongs to
+   * the caller — `public-signup` — not to the shape of a tenant.
+   *
+   * Recording it is NOT verifying it. The profile carries the nominated address; only a redeemed
+   * challenge (0255, `verify_backup_email`) makes it count, and nothing sends that challenge yet
+   * because `inplace.digital` is not DNS-verified (`DEBT §25`).
+   */
+  backupEmail?: string;
   /**
    * Operator-created tenants start confirmed: the operator hands the credentials over in person
    * and there is nobody to send a confirmation to. A self-signup starts UNCONFIRMED, so an
@@ -115,7 +128,49 @@ export function validateProvisionInput(input: Partial<ProvisionInput>): string |
     }
   }
 
-  return null;
+  return backupEmailRefusal(input.backupEmail, email);
+}
+
+/**
+ * Why a nominated backup address is refused, or null when there is nothing to refuse.
+ *
+ * An ABSENT address is not a refusal here, and that split is the whole point: whether one is
+ * REQUIRED is `public-signup`'s decision (it is the side that knows whether enforcement is on and
+ * whether the primary is a relay), while whether a supplied one is USABLE is this function's,
+ * because a bad address must be refused whoever asked for it and whether or not the requirement
+ * is live. So a backup address is validated on every path from the day this ships, and required
+ * on none of them.
+ */
+export function backupEmailRefusal(
+  backupEmail: string | undefined,
+  primaryEmail: string,
+): string | null {
+  if (backupEmail === undefined || normaliseEmail(backupEmail) === '') return null;
+  switch (backupEmailProblem(backupEmail, primaryEmail)) {
+    case 'malformed':
+      return 'כתובת האימייל החלופית אינה תקינה';
+    case 'too_long':
+      return 'כתובת האימייל החלופית ארוכה מדי';
+    case 'same_as_primary':
+      return 'כתובת האימייל החלופית זהה לכתובת הראשית';
+    case 'still_a_relay':
+      return 'כתובת האימייל החלופית היא גם כתובת העברה של Apple, ולכן אינה גיבוי';
+    default:
+      return null;
+  }
+}
+
+/**
+ * The profile column, present only when an address was actually nominated.
+ *
+ * Spread rather than assigned so an omitted nomination leaves the key OFF the insert entirely.
+ * Sending `backup_email: null` would say the same thing to Postgres and something different to
+ * the next reader of this code, and it is exactly the shape that turns "the visitor did not
+ * answer" into "the visitor answered nothing" the first time somebody adds a partial update here.
+ */
+function backupEmailColumn(backupEmail: string | undefined): { backup_email?: string } {
+  const address = normaliseEmail(backupEmail);
+  return address ? { backup_email: address } : {};
 }
 
 export async function rollbackTenant(
@@ -198,6 +253,7 @@ export async function provisionTenant(
       full_name: ownerName,
       role: 'owner',
       active: true,
+      ...backupEmailColumn(input.backupEmail),
     });
     if (profileInsert.error) {
       throw new Error(`יצירת פרופיל הבעלים נכשלה: ${profileInsert.error.message}`);
@@ -242,7 +298,14 @@ export async function provisionTenant(
  */
 export async function adoptExistingUserAsOwner(
   admin: ProvisionAdminClient,
-  input: { name: string; ownerUserId: string; ownerName: string; categories?: string[] },
+  input: {
+    name: string;
+    ownerUserId: string;
+    ownerName: string;
+    categories?: string[];
+    /** As on `ProvisionInput`: nominated here, proved only by 0255's challenge. */
+    backupEmail?: string;
+  },
 ): Promise<ProvisionOutcome> {
   const name = input.name.trim();
   const ownerName = input.ownerName.trim();
@@ -269,6 +332,7 @@ export async function adoptExistingUserAsOwner(
       full_name: ownerName,
       role: 'owner',
       active: true,
+      ...backupEmailColumn(input.backupEmail),
     });
     if (profileInsert.error) {
       throw new Error(`יצירת פרופיל הבעלים נכשלה: ${profileInsert.error.message}`);
