@@ -113,7 +113,15 @@ async function login(page, role = 'owner') {
   await page.goto(`${baseURL}/login`);
   await page.locator('#email').fill(account.email);
   await page.locator('#password').fill(account.password);
-  await page.getByRole('button', { name: 'התחברות' }).click();
+  // BOTH languages. The login screen is the one surface reached before a profile exists, so its
+  // words follow the CONTEXT locale rather than `profiles.locale` — `login.text_17` reads
+  // 'התחברות' in a `he-IL` context and 'Sign in' in an `en-US` one.
+  //
+  // A Hebrew-only literal survived here because the single caller that opens an English context —
+  // the product tour's LocaleProvider compatibility pass — was unreachable: the tour died several
+  // steps earlier on a nav group that never opened, so this line had never once run against an
+  // English login. Fixing the tour is what first let it get here.
+  await page.getByRole('button', { name: /^(התחברות|Sign in)$/ }).click();
   await page.waitForFunction((expected) => location.pathname === expected, homes[role], { timeout: 25_000 });
   await page.locator('#main').waitFor({ state: 'visible', timeout: 25_000 });
 }
