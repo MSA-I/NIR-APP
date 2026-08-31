@@ -498,7 +498,7 @@
   ‏`ORDERS_FROM_EMAIL` הופרד ל-`InPlace <orders@inplace.digital>` כך שהזמנה לספק ומייל מוצר אינם
   חולקים זהות; ‏`send-invite`, ‏`email-sender` ו-`email-webhook` פרוסים; ‏Auth מחובר ל-SMTP.
   **מה שנשאר פתוח מהסעיף הזה בדיוק אחד:** ‏`RESEND_WEBHOOK_SECRET` עדיין אינו קיים, ולכן
-  ‏`email-webhook` עונה `403` לכל מסירה. הסעיף עובר ל-**§87**, שם הוא מתואר במדויק; ‏§25 נשאר
+  ‏`email-webhook` מסרב לכל מסירה (‏`500 misconfigured`, נמדד). הסעיף עובר ל-**§87**, שם הוא מתואר במדויק; ‏§25 נשאר
   פתוח כל עוד „accepted אינו delivered".
 
 - **עודכן 30.08.2026 — הסעיף הזה חוסם עכשיו גם את `#270`.** ‏`0255` מוסיף כתובת גיבוי מאומתת,
@@ -595,6 +595,9 @@
   ‏`private.billing_provider_boundary` זורע את כל הספקים כבויים ואין פונקציה שמדליקה;
   ו-`private.billing_provider_price_map` ריקה, ולכן מחיר לא ממופה מת ב-dead-letter במקום להעניק
   מסלול מנוחש. ‏`0268` אף מוסיף assertion שנכשלת אם Paddle דלוק בזמן שהיא מוחלת.
+- **נמדד חי 31.08.2026:** ‏`POST` לא-חתום ל-`billing-webhook` בייצור מקבל **`503 refused`**,
+  ו-`GET` מקבל `405`. זו הדחייה של `billingAdapterFor` בהיעדר `PADDLE_WEBHOOK_SECRET` — כלומר
+  נקודת הקצה חיה, מסרבת, ואינה יכולה לשנות שום entitlement.
 - **ראיה נוספת:** ‏`_shared/billing-adapter-paddle-api.test.ts` (‏16 מקרים) ·
   ‏`artifacts/external-services/EMAIL-AND-BILLING-20260831.md §3.4`.
 
@@ -1574,8 +1577,10 @@ Hebrew and clears the field" — עם `Unable to find an element with the text: 
 
 - **מצב, נמדד 31.08.2026:** ‏webhook `ea6ea6a8-96af-47fa-9453-cefad76fdd3a` נוצר ומופעל
   (‏`status=enabled`) אל `…/functions/v1/email-webhook` עם ארבעת אירועי המסירה. הסוד
-  ‏`RESEND_WEBHOOK_SECRET` **אינו קיים** ברשימת הסודות של הפרויקט, ולכן `email-webhook` נכשל
-  fail-closed ומחזיר `403` לכל מסירה.
+  ‏`RESEND_WEBHOOK_SECRET` **אינו קיים** ברשימת הסודות של הפרויקט. **נמדד חי באותו יום**
+  בקריאה ישירה לנקודת הקצה: ‏`POST` לא-חתום מקבל **`500 misconfigured`** („the delivery webhook is not configured"),
+  ו-`GET` מקבל `405`. הפונקציה נכשלת fail-closed בדיוק כמתוכנן — אבל `5xx` הוא **קוד שמזמין
+  ניסיון חוזר**, ולכן Resend תמשיך לנסות ובסופו של דבר תשבית את היעד.
 - **הסיכון:** ‏„accepted" עדיין אינו „delivered" (‏§25), ובנוסף Resend משבית endpoint שנכשל שוב
   ושוב — כלומר החלון שבו התיקון הוא „להדביק סוד" עלול להיסגר ולהפוך ל„להדביק סוד ולהפעיל מחדש".
 - **למה זה לא נסגר:** קריאת הסוד מה-API והכתבתו לסודות Supabase נחסמה על ידי ה-harness, אותה

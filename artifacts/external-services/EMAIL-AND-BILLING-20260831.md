@@ -74,11 +74,12 @@ item in this document.
 ### 3.3 The Resend signing secret — blocked by the harness
 
 The webhook was created; reading its signing secret back and writing it into Supabase was refused
-under the same rule. So the endpoint is registered and enabled, and `email-webhook` will answer
-`403` to every delivery until `RESEND_WEBHOOK_SECRET` is set. That refusal is the designed
-behaviour — an endpoint that accepted unsigned events would be a hole — but it means delivery
-events are not being recorded yet, and Resend will eventually disable an endpoint that keeps
-failing.
+under the same rule. So the endpoint is registered and enabled, and `email-webhook` refuses every
+delivery until `RESEND_WEBHOOK_SECRET` is set — measured live on 31.08.2026 by posting an
+unsigned body to it: **`500 misconfigured`**, and `405` on `GET`. A 5xx is a RETRYABLE code, so
+Resend keeps trying and will eventually disable the endpoint. The refusal itself is the designed
+behaviour — an endpoint that accepted unsigned events would be a hole — but no delivery event is
+being recorded until the secret is in place.
 
 ### 3.4 Paddle — blocked on an account that does not exist
 
@@ -115,3 +116,22 @@ No email was sent through the new Reply-To path in production, because the funct
 are not deployed. No delivery event has been received. No Paddle call has ever been made from this
 repository. `0268` was applied to the local stack and its suite passed there; it has **not** been
 applied to production.
+
+## 6. One real delivery, measured
+
+A single test message was sent through Resend on 31.08.2026 from
+`InPlace <no-reply@inplace.digital>` to the owner Gmail address, carrying
+`Reply-To: support@inplace.digital`.
+
+| Fact | Value |
+|---|---|
+| Provider outcome | **`delivered`** |
+| From | `InPlace <no-reply@inplace.digital>` |
+| Reply-To carried by the provider | `support@inplace.digital` |
+
+So the sending path — verified domain, DKIM, the recipient accepting it — works end to end today,
+and Resend does carry the Reply-To this campaign introduced. What this does NOT prove: the
+`email-sender` and `send-invite` code that SETS Reply-To is not deployed, so a real invitation or
+purchase order still goes out without one until those functions are redeployed. And because
+`RESEND_WEBHOOK_SECRET` is absent, the `delivered` event this send produced was refused at our own
+endpoint rather than recorded.
