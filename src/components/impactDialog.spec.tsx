@@ -7,7 +7,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ImpactDialog, type ActionImpact } from './ImpactDialog';
 import { LocaleProvider } from '../lib/i18n/LocaleProvider';
@@ -209,16 +209,31 @@ describe('the shape of the thing', () => {
     expect(source).not.toContain('ConfirmDialog');
   });
 
-  it('has no consumers yet, so reverting it is a clean revert', () => {
-    const consumers = ['src/pages', 'src/components', 'src/operator', 'src/portal']
-      .flatMap((dir) => {
-        const { execSync } = require('node:child_process') as typeof import('node:child_process');
-        try {
-          return execSync(`git grep -l "from './ImpactDialog'\\|/ImpactDialog'" -- ${dir}`, { encoding: 'utf8' })
-            .split('\n').filter(Boolean);
-        } catch { return []; }
-      })
-      .filter((f) => !f.endsWith('impactDialog.spec.tsx'));
-    expect(consumers).toEqual([]);
+  /**
+   * PR-2 asserted ZERO consumers, because that is what made it a clean revert. PR-3 adopts it on
+   * the invoice three-way override — a live money screen — and the assertion changes SHAPE rather
+   * than being deleted: the dialog is adopted one screen at a time, deliberately, so a second
+   * adoption arriving without its own review fails here.
+   *
+   * The plan is explicit that the 46 `ConfirmDialog` call sites are NOT to be converted.
+   *
+   * Read off disk rather than shelled out to `git grep`: a newline inside a shell string is one
+   * escaping mistake away from an unterminated literal, and this needs no shell at all.
+   */
+  it('is adopted on exactly one screen, and that screen is the three-way override', () => {
+    const roots = ['src/pages', 'src/components', 'src/operator', 'src/portal'];
+    const consumers: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(join(process.cwd(), dir), { withFileTypes: true })) {
+        const rel = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) { walk(rel); continue; }
+        if (!/\.tsx?$/.test(entry.name) || entry.name === 'impactDialog.spec.tsx') continue;
+        if (/from '[^']*\/ImpactDialog'/.test(readFileSync(join(process.cwd(), rel), 'utf8'))) {
+          consumers.push(rel);
+        }
+      }
+    };
+    roots.forEach(walk);
+    expect(consumers.sort()).toEqual(['src/pages/InvoiceDetail.tsx']);
   });
 });

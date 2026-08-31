@@ -22,6 +22,7 @@ import type { InterpretationContract } from '../lib/useDocumentProcessing';
 import type { Invoice, InvoiceReviewStatus, CreditReason } from '../lib/types';
 import { financialSupplierMap } from '../lib/financialSuppliers';
 import { ReauthModal } from '../components/ReauthModal';
+import { ImpactDialog, type ActionImpact } from '../components/ImpactDialog';
 import {
   InvoiceLineReviewModal,
   type InvoiceReviewCandidate,
@@ -243,10 +244,14 @@ export default function InvoiceDetail() {
   const [creditOpen, setCreditOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reviewTarget, setReviewTarget] = useState<InvoiceReviewStatus | null>(null);
-  const [overrideConfirmOpen, setOverrideConfirmOpen] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideReauthOpen, setOverrideReauthOpen] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
   const [overrideIdempotencyKey, setOverrideIdempotencyKey] = useState(() => crypto.randomUUID());
+  /* A refusal shown INSIDE the dialog rather than as a toast that closes it. The staleness case
+     is the reason this exists: the reader has to see what changed, in the same window, with the
+     reason they already typed still in it. */
+  const [overrideError, setOverrideError] = useState<string | null>(null);
   const [lineReviewOpen, setLineReviewOpen] = useState(false);
   const isProcurementManager = profile?.role === 'office';
   const canOpenProcurement = profile?.role !== 'accountant';
@@ -419,18 +424,46 @@ export default function InvoiceDetail() {
     void setReviewStatus(to);
   }
 
-  async function overrideThreeWayMatch() {
-    if (!inv || !data.threeWay || !overrideReason.trim()) return;
+  /**
+   * Override the three-way match, and survive the state moving underneath.
+   *
+   * WHAT THIS USED TO DO WITH A REFUSAL, AND WHY IT WAS WRONG. It closed the step-up dialog, threw
+   * the server's message into a toast, and stopped. For every refusal that was merely unhelpful.
+   * For ONE of them it was actively misleading: `invoice_three_way_assessment_stale` (`0099:1972`)
+   * means the assessment CHANGED between the moment the reader read it and the moment they
+   * approved it — the invoice may now match, or fail for a different reason entirely — and the
+   * old path answered that by closing the window over it, keeping the stale hash, and leaving a
+   * generic "the action failed" behind. Approving again would have failed identically, forever,
+   * because nothing reloaded.
+   *
+   * Now: the dialog STAYS OPEN, the assessment is refetched, the sentence says the state changed,
+   * and a NEW idempotency key is minted — the next approval is a new decision about a new state,
+   * which is what it actually is. Every other refusal is shown in place too, for the same reason:
+   * a toast that closes the window takes the reader's typed reason with it.
+   */
+  async function overrideThreeWayMatch(reason: string) {
+    if (!inv || !data.threeWay) return;
     setBusy(true);
+    setOverrideError(null);
     const res = await supabase.rpc('override_invoice_three_way_match', {
       p_invoice_id: inv.id,
       p_assessment_hash: data.threeWay.assessment_hash,
       p_idempotency_key: overrideIdempotencyKey,
-      p_reason: overrideReason.trim(),
+      p_reason: reason,
     });
     setBusy(false);
     setOverrideReauthOpen(false);
-    if (res.error) { toast(errorText(res.error.message), 'error'); return; }
+    if (res.error) {
+      setOverrideError(errorText(res.error.message));
+      /* A stale hash is the one refusal that a retry alone can never clear: the key is part of
+         the decision, so a new state gets a new key, and the impact is read again. */
+      if (/invoice_three_way_assessment_stale/i.test(res.error.message)) {
+        setOverrideIdempotencyKey(crypto.randomUUID());
+        void refetch();
+      }
+      return;
+    }
+    setOverrideOpen(false);
     setOverrideReason('');
     setOverrideIdempotencyKey(crypto.randomUUID());
     toast(t('invoices.toast_2'));
@@ -440,6 +473,57 @@ export default function InvoiceDetail() {
   if (loading) return <RecordSkeleton />;
   if (error && !data) return <ErrorNote message={error} />;
   if (!inv || !data) return <ErrorNote message={t('invoices.message')} />;
+
+  /**
+   * What overriding the three-way match actually does, read from the server's own assessment.
+   *
+   * NOTHING HERE IS GUESSED. The count is one invoice because that is what the command takes; the
+   * blocking reasons are the server's list, rendered as warnings rather than blockers because the
+   * whole point of an override is to proceed past them and the server checks them again anyway;
+   * and the one genuine hard blocker is the duplicate, which `0099:1975` refuses outright — the
+   * button is hidden in that case today, and the dialog would still refuse if it ever were not.
+   *
+   * `null` while the assessment has not loaded, which is what locks the confirm and draws the
+   * skeleton instead of a wall of consequences that arrives late.
+   */
+  const overrideImpact: ActionImpact | null = data.threeWay == null ? null : {
+    actionLabel: t('invoices.confirmLabel_2'),
+    scopeLabel: t('invoices.overrideScope', { number: inv.invoice_number, supplier: inv.supplier.name }),
+    affectedCount: 1,
+    entityKinds: [{ label: t('invoices.overrideEntityInvoice'), count: 1 }],
+    changes: [{
+      label: t('invoices.overrideChangeLabel'),
+      before: t('invoices.overrideChangeBefore'),
+      after: t('invoices.overrideChangeAfter'),
+    }],
+    amounts: [{ currency: inv.currency, amount: inv.total_amount }],
+    /* An override is a standing record with no command to lift it — `0099` has one writer and no
+       eraser — so this says so instead of offering a way back that does not exist. */
+    reversible: false,
+    effects: [
+      { kind: 'approval', happens: true, description: t('invoices.overrideEffectApproval') },
+      { kind: 'ledger', happens: true, description: t('invoices.overrideEffectLedger') },
+      { kind: 'amounts', happens: false, description: t('invoices.overrideEffectNoAmounts') },
+      { kind: 'lines', happens: false, description: t('invoices.overrideEffectNoLines') },
+    ],
+    /* The server's own list, worded exactly as the panel below words it — same key, same detail
+       line — so the dialog cannot describe the blockage differently from the screen it opened on. */
+    warnings: data.threeWay.reasons.map((reason, index) => {
+      const label = reason.code in THREE_WAY_REASON_KEYS
+        ? t(THREE_WAY_REASON_KEYS[reason.code]) : t('invoices.text_18');
+      const line = reason.line_number != null ? `${t('invoices.text_17')} ${reason.line_number}: ` : '';
+      const details = threeWayReasonDetails(reason, t, locale, inv.currency);
+      return {
+        kind: `${reason.code}-${reason.line_number ?? 'invoice'}-${index}`,
+        description: `${line}${label}${details ? ` · ${details}` : ''}`,
+      };
+    }),
+    hardBlockers: data.threeWay.definite_duplicate_invoice
+      ? [{ kind: 'definite_duplicate', description: t('invoices.overrideBlockedDuplicate') }]
+      : [],
+    requiresStepUp: true,
+    assessmentHash: data.threeWay.assessment_hash,
+  };
 
   // null = the graph could not be read. The controls are then rendered DISABLED rather than
   // filtered by a guess: offering a transition the server may reject, or hiding one it would
@@ -497,20 +581,28 @@ export default function InvoiceDetail() {
         message={t('invoices.message_2')}
         confirmLabel={t('invoices.confirmLabel')} requireReason busy={busy} />
 
-      <ConfirmDialog open={overrideConfirmOpen} onClose={() => setOverrideConfirmOpen(false)}
-        onConfirm={(reason) => {
-          setOverrideReason(reason ?? '');
-          setOverrideConfirmOpen(false);
-          setOverrideReauthOpen(true);
-        }}
-        title={t('invoices.title_2')}
-        message={t('invoices.message_3')}
-        confirmLabel={t('invoices.confirmLabel_2')} requireReason busy={busy} />
+      {/* THREE LAYERS BECAME TWO, AND ONE OF THEM ONLY WHEN IT IS NEEDED. This used to be a
+          `ConfirmDialog` that collected a reason, closed, and opened `ReauthModal` — two windows
+          for one decision, the first of which could not say what the override would actually do.
+          `ImpactDialog` states the extent and hands the reason straight to the step-up, which was
+          built to REPLACE a reason-only dialog rather than to stack after one. */}
+      <ImpactDialog open={overrideOpen}
+        onClose={() => { setOverrideOpen(false); setOverrideReason(''); setOverrideError(null); }}
+        onConfirm={(reason) => { setOverrideReason(reason); setOverrideReauthOpen(true); }}
+        impact={overrideImpact}
+        busy={busy}
+        error={overrideError}
+        baseCurrency={inv.currency}
+        danger
+        reasonLabel={t('invoices.overrideReasonLabel')} />
 
+      {/* The reason is already collected; this asks for the password and nothing else. On cancel
+          the impact dialog is still open behind it, with what was typed still in it. */}
       <ReauthModal open={overrideReauthOpen}
         title={t('invoices.title_3')}
-        onConfirm={() => void overrideThreeWayMatch()}
-        onCancel={() => { setOverrideReauthOpen(false); setOverrideReason(''); }} />
+        details={t('invoices.message_3')}
+        onConfirm={() => void overrideThreeWayMatch(overrideReason)}
+        onCancel={() => setOverrideReauthOpen(false)} />
 
       {/* The document heading, on paper AND in the generated PDF. `print-only` rather than
           `hidden print:block` because html2canvas renders the live DOM. */}
@@ -669,7 +761,7 @@ export default function InvoiceDetail() {
               && !data.threeWay.definite_duplicate_invoice && (
                 <div className="flex justify-end">
                   <button className="btn-danger-quiet" disabled={busy}
-                    onClick={() => setOverrideConfirmOpen(true)}>
+                    onClick={() => { setOverrideError(null); setOverrideOpen(true); }}>
                     {t('invoices.text_21')}
                   </button>
                 </div>
