@@ -206,6 +206,16 @@ const PATTERNS: [RegExp, string][] = [
   // being pointed at a different one, which the server refuses here rather than by its own name.
   [/allocation_target_invalid|allocation_invalid/i,
     'allocation_target_invalid'],
+  // The three-way assessment moved between the moment the dialog computed the impact and the
+  // moment the command ran (`0099:1969-1973`). Not a failure of the action and not a permission
+  // problem: the state changed, so the sentence says so and the dialog reloads rather than
+  // closing over it.
+  [/invoice_three_way_assessment_stale/i,
+    'invoice_three_way_assessment_stale'],
+  [/approved_invoice_override_immutable/i,
+    'approved_invoice_override_immutable'],
+  [/definite_duplicate_invoice_cannot_be_overridden/i,
+    'definite_duplicate_invoice_cannot_be_overridden'],
   [/payment_request_checks_failed/i,
     'payment_request_checks_failed'],
   [/payment_request_checks_mismatch/i,

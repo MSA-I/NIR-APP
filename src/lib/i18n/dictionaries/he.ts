@@ -37,6 +37,9 @@ export const he = {
    * pattern in src/lib/errors.ts matches, not numbered, so a call site says which failure it means.
    */
   errors: {
+    invoice_three_way_assessment_stale: 'המצב השתנה מאז שנפתח החלון — ההתאמה נבדקה מחדש. עברו על מה שהשתנה ואשרו שוב.',
+    approved_invoice_override_immutable: 'החשבונית כבר אושרה, ולכן אי אפשר לעקוף את ההתאמה שלה.',
+    definite_duplicate_invoice_cannot_be_overridden: 'החשבונית זוהתה ככפילות ודאית. עקיפה אינה אפשרית — יש לבטל את הכפילות תחילה.',
     bank_match_tolerance_unconfigured: 'לא נקבעה סטיית סכום מותרת למטבע של התנועה, ולכן אי אפשר להשוות סכומים. יש לקבוע אותה בהגדרות לפני ההתאמה.',
     bank_match_tolerance_unconfigured_owner: 'לא נקבעה סטיית סכום מותרת למטבע של התנועה, ולכן אי אפשר להשוות סכומים. אפשר לקבוע אותה במסך ההגדרות, בקטע "סטיות סכום מותרות".',
     bank_match_tolerance_unconfigured_staff: 'לא נקבעה סטיית סכום מותרת למטבע של התנועה, ולכן אי אפשר להשוות סכומים. יש לפנות לבעל העסק כדי שיקבע אותה בהגדרות.',
@@ -1357,6 +1360,27 @@ export const he = {
     checkedAt: 'נבדק {at}',
   },
 
+  /* The impact dialog. `impact.notMeasured` is a dash and not "0": an extent nobody counted is
+     not an extent of zero, and the confirm is locked until it is counted. */
+  impact: {
+    loading: 'בודק מה הפעולה תעשה',
+    scope: 'ההיקף:',
+    affected: 'יושפעו:',
+    notMeasured: '—',
+    amount: 'סכום:',
+    whatChanges: 'מה משתנה',
+    willHappen: 'יקרה:',
+    willNotHappen: 'לא יקרה:',
+    reversible: 'הפעולה הפיכה',
+    irreversible: 'הפעולה אינה הפיכה',
+    evidence: 'הראיות',
+    serverChecksAgain: 'השרת יבדוק שוב לפני הביצוע ויסביר אם יסרב.',
+    unknownExtent: 'לא ניתן למדוד את ההיקף, ולכן אי אפשר לאשר. רענן ונסה שוב.',
+    cancel: 'ביטול',
+    confirm: 'אישור',
+    working: 'מבצע…',
+  },
+
   alertsPage: {
     partialScan: 'הסריקה חלקית: {scans}. הממצאים שכן נטענו מוצגים, אך אי אפשר לקבוע שהכול תקין.',
   },
@@ -2172,6 +2196,17 @@ export const he = {
   },
 
   invoices: {
+    overrideReasonLabel: 'סיבת העקיפה (רשות — נרשמת ביומן הביקורת)',
+    overrideScope: 'חשבונית {number} · {supplier}',
+    overrideEntityInvoice: 'חשבונית',
+    overrideChangeLabel: 'אישור החשבונית',
+    overrideChangeBefore: 'חסום עד להתאמה',
+    overrideChangeAfter: 'מותר, עם עקיפה רשומה',
+    overrideEffectApproval: 'החשבונית תוכל להיות מאושרת למרות פערי ההתאמה',
+    overrideEffectLedger: 'העקיפה והסיבה יירשמו ביומן הביקורת ויוצגו בכרטיס החשבונית',
+    overrideEffectNoAmounts: 'לא ישתנו סכומים, מע״מ או יתרות',
+    overrideEffectNoLines: 'לא ישתנו שורות החשבונית ולא השיוך להזמנה',
+    overrideBlockedDuplicate: 'החשבונית זוהתה ככפילות ודאית — השרת מסרב לעקיפה. יש לטפל בכפילות תחילה.',
     setCheckError: 'הרצת הבדיקות נכשלה. לא ניתן להסיק שאין כפילות או תשלום קודם.',
     toast: 'הסטטוס עודכן',
     toast_2: 'עקיפת חסימת ההתאמה נרשמה ביומן הביקורת',
@@ -2185,7 +2220,6 @@ export const he = {
     title: 'עדכון סטטוס בדיקת חשבונית',
     message_2: 'המעבר והסיבה יישמרו יחד ביומן הביקורת.',
     confirmLabel: 'עדכון סטטוס',
-    title_2: 'עקיפת חסימת 3-way match',
     message_3: 'רק בעלים רשאי לעקוף חסימה. הסיבה, זהות המבצע וגרסת ההתאמה יישמרו ביומן הביקורת. כפילות חשבונית ודאית אינה ניתנת לעקיפה.',
     confirmLabel_2: 'המשך לאימות זהות',
     title_3: 'אימות זהות לעקיפת חסימת 3-way match',

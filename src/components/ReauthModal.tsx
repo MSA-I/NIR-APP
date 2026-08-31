@@ -4,7 +4,7 @@ import { Loader2, ShieldCheck } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
-import { Modal, ErrorNote, ICON } from './ui';
+import { Modal, ErrorNote, ICON, ReasonField } from './ui';
 import type { TKey } from '../lib/i18n/t';
 
 const REAUTH_ERROR_KEY: Readonly<Record<string, TKey>> = {
@@ -137,7 +137,6 @@ export function ReauthModal({
   const { session } = useAuth();
   const passwordId = useId();
   const errorId = useId();
-  const reasonId = useId();
   const [password, setPassword] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -205,16 +204,10 @@ export function ReauthModal({
       statusMessage={busy ? t('reauthModal.verifying') : undefined}
     >
       <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); void confirm(); }}>
-        {reasonLabel && (
-          <div>
-            <label className="label" htmlFor={reasonId}>{reasonLabel}</label>
-            {/* Same 1000-character bound `ConfirmDialog` puts on its reason box, so a flow that
-                moved from there to here cannot start accepting a longer string than the reason
-                columns are checked against. */}
-            <textarea id={reasonId} className="input" rows={2} maxLength={1000}
-              value={reason} onChange={(e) => setReason(e.target.value)} />
-          </div>
-        )}
+        {/* The same box `ConfirmDialog` shows, because it is literally the same component now: a
+            flow that moves from there to here must not start accepting a longer string than the
+            one it accepted a screen earlier. That used to be two copies agreeing by hand. */}
+        {reasonLabel && <ReasonField label={reasonLabel} value={reason} onChange={setReason} />}
         <div>
           <label className="label" htmlFor={passwordId}>{t('reauthModal.passwordLabel')}</label>
           <input

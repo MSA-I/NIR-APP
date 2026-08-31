@@ -8,7 +8,7 @@ import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { Card, PageHeader, SkeletonCards, useToast, ErrorNote, ICON, Note, DataTable, Disclosure, StatusBadge, SubPanel, ConfirmDialog, Modal, type Column } from '../components/ui';
+import { Card, PageHeader, SkeletonCards, useToast, ErrorNote, ICON, Note, DataTable, Disclosure, StatusBadge, SubPanel, ConfirmDialog, Modal, ReasonField, type Column } from '../components/ui';
 import { ActionMenu, type ActionMenuItem } from '../components/ActionMenu';
 import { ExportTemplatesPanel } from '../components/ExportTemplatesPanel';
 import { ReauthModal } from '../components/ReauthModal';
@@ -825,11 +825,12 @@ export default function Settings() {
               {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{roleLabels[r] ?? r}</option>)}
             </select>
           </div>
-          <div>
-            <label className="label" htmlFor="role-change-reason">{t(OPTIONAL_REASON_LABEL_KEY)}</label>
-            <input id="role-change-reason" className="input" value={roleReason}
-              onChange={(e) => setRoleReason(e.target.value)} placeholder={t('settings.placeholder')} />
-          </div>
+          {/* This was the outlier: a single-line `<input>` with no `maxLength`, so the one reason
+              in the product that could take an essay was the one attached to changing a person's
+              role. A reason is prose and lands in `audit_logs`, so it gets the same box as the
+              other four — and the same bound. */}
+          <ReasonField id="role-change-reason" label={t(OPTIONAL_REASON_LABEL_KEY)}
+            value={roleReason} onChange={setRoleReason} placeholder={t('settings.placeholder')} />
           <div className="flex justify-end gap-2">
             <button className="btn-secondary" disabled={dialogBusy} onClick={() => setRoleTarget(null)}>{t('settings.setRoleTarget')}</button>
             <button className="btn-primary"

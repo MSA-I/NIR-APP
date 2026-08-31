@@ -33,6 +33,9 @@ export const en: Dictionary = {
    * it into something vaguer: the rule did not change with the language.
    */
   errors: {
+    invoice_three_way_assessment_stale: 'The state changed while this dialog was open — the match was re-checked. Read what changed and approve again.',
+    approved_invoice_override_immutable: 'This invoice is already approved, so its match cannot be overridden.',
+    definite_duplicate_invoice_cannot_be_overridden: 'This invoice is a confirmed duplicate. It cannot be overridden — resolve the duplicate first.',
     bank_match_tolerance_unconfigured: 'No permitted amount difference has been set for this transaction\'s currency, so the amounts cannot be compared. One has to be set in settings before matching.',
     bank_match_tolerance_unconfigured_owner: 'No permitted amount difference has been set for this transaction\'s currency, so the amounts cannot be compared. You can set one on the settings screen, under "Permitted amount differences".',
     bank_match_tolerance_unconfigured_staff: 'No permitted amount difference has been set for this transaction\'s currency, so the amounts cannot be compared. Ask the business owner to set one in settings.',
@@ -1353,6 +1356,27 @@ export const en: Dictionary = {
     checkedAt: 'Checked {at}',
   },
 
+  /* The impact dialog. `impact.notMeasured` is a dash and not "0": an extent nobody counted is
+     not an extent of zero, and the confirm is locked until it is counted. */
+  impact: {
+    loading: 'Checking what this will do',
+    scope: 'Scope:',
+    affected: 'Affected:',
+    notMeasured: '—',
+    amount: 'Amount:',
+    whatChanges: 'What changes',
+    willHappen: 'Will happen:',
+    willNotHappen: 'Will not happen:',
+    reversible: 'This action can be undone',
+    irreversible: 'This action cannot be undone',
+    evidence: 'The evidence',
+    serverChecksAgain: 'The server checks again before running and will explain any refusal.',
+    unknownExtent: 'The extent could not be measured, so this cannot be approved. Refresh and try again.',
+    cancel: 'Cancel',
+    confirm: 'Confirm',
+    working: 'Working…',
+  },
+
   alertsPage: {
     partialScan: 'The scan is partial: {scans}. What did load is shown, but nothing here can claim everything is fine.',
   },
@@ -2168,6 +2192,17 @@ export const en: Dictionary = {
   },
 
   invoices: {
+    overrideReasonLabel: 'Reason for the override (optional — recorded in the audit log)',
+    overrideScope: 'Invoice {number} · {supplier}',
+    overrideEntityInvoice: 'invoice',
+    overrideChangeLabel: 'Invoice approval',
+    overrideChangeBefore: 'blocked until it matches',
+    overrideChangeAfter: 'allowed, with a recorded override',
+    overrideEffectApproval: 'The invoice becomes approvable despite the match differences',
+    overrideEffectLedger: 'The override and its reason are written to the audit log and shown on the invoice',
+    overrideEffectNoAmounts: 'No amount, VAT or balance changes',
+    overrideEffectNoLines: 'No invoice line and no order link changes',
+    overrideBlockedDuplicate: 'This invoice is a confirmed duplicate — the server refuses an override. Resolve the duplicate first.',
     setCheckError: 'Running the checks failed. Nothing can be concluded about a duplicate or an earlier payment.',
     toast: 'The status was updated',
     toast_2: 'The match override was recorded in the audit log',
@@ -2181,7 +2216,6 @@ export const en: Dictionary = {
     title: 'Update the invoice review status',
     message_2: 'The transition and the reason will be recorded together in the audit log.',
     confirmLabel: 'Update status',
-    title_2: 'Override the 3-way match block',
     message_3: 'Only an owner may override a block. The reason, the identity of whoever did it and the version of the match will be recorded in the audit log. A certain duplicate invoice cannot be overridden.',
     confirmLabel_2: 'Continue to the identity check',
     title_3: 'Identity check for overriding the 3-way match block',
