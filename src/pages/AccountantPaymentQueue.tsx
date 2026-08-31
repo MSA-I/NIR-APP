@@ -431,12 +431,12 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
       return;
     }
     if (currenciesLoading || currenciesError || settlementMinorUnits == null) {
-      toast(currenciesError ?? 'רשימת המטבעות עדיין אינה זמינה', 'error');
+      toast(currenciesError ?? t('payQueue.currenciesUnavailable'), 'error');
       return;
     }
     if (crossCurrencySettlement
         && (!Number.isFinite(Number(f.settlement_amount)) || Number(f.settlement_amount) <= 0)) {
-      toast('יש להזין את הסכום שיצא מחשבון הבנק', 'error');
+      toast(t('payQueue.settlementAmountRequired'), 'error');
       return;
     }
     setReauthOpen(true);
@@ -505,17 +505,17 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
               them and the payment that results are all money of the same kind — settlement from
               an account in another currency is recorded on the payment (#286) and does not change
               any figure here. */}
-          <div className="flex justify-between"><dt className="text-ink-muted">סכום מאושר</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount, pr.currency)}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.fmtMoneyExact')}</dt><dd className="font-semibold num">{fmtMoneyExact(pr.amount, pr.currency)}</dd></div>
           {/* `—`, never `0`: while the credits load, or while the selection is invalid, the offset
               is unknown — and an unknown offset printed as ₪0.00 is a claim that none was taken. */}
-          <div className="flex justify-between"><dt className="text-ink-muted">קיזוז זיכויים</dt><dd className="num">{fmtMoneyExact(allocationPreview?.creditAmount ?? null, pr.currency)}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.fmtMoneyExact_2')}</dt><dd className="num">{fmtMoneyExact(allocationPreview?.creditAmount ?? null, pr.currency)}</dd></div>
           <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.text_36')}</dt><dd className="font-semibold num">{fmtMoneyExact(allocationPreview?.cashAmount ?? null, pr.currency)}</dd></div>
-          {pr.due_date && <div className="flex justify-between"><dt className="text-ink-muted">תאריך יעד</dt><dd>{fmtDate(pr.due_date)}</dd></div>}
-          <div className="flex justify-between"><dt className="text-ink-muted">חשבוניות</dt>
-            <dd dir="ltr">{pr.invoices.map((i) => i.invoice?.invoice_number).filter(Boolean).join(', ') || 'לא זמינות'}</dd></div>
-          <div className="flex justify-between"><dt className="text-ink-muted">אושר על ידי</dt><dd>{pr.approver?.full_name ?? 'לא זמין'}</dd></div>
-          <div className="flex justify-between"><dt className="text-ink-muted">מבוצע על ידי</dt><dd>{profile?.full_name ?? 'המשתמש המחובר'}</dd></div>
-          <div className="flex justify-between gap-4"><dt className="text-ink-muted">רישום ביומן</dt><dd className="text-start">{'ביצוע תשלום והסיבה'}</dd></div>
+          {pr.due_date && <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.fmtDate')}</dt><dd>{fmtDate(pr.due_date)}</dd></div>}
+          <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.text_10')}</dt>
+            <dd dir="ltr">{pr.invoices.map((i) => i.invoice?.invoice_number).filter(Boolean).join(', ') || t('payQueue.map')}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.text_12')}</dt><dd>{pr.approver?.full_name ?? t('payQueue.text_11')}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.text_14')}</dt><dd>{profile?.full_name ?? t('payQueue.text_13')}</dd></div>
+          <div className="flex justify-between gap-4"><dt className="text-ink-muted">{t('payQueue.text_16')}</dt><dd className="text-start">{t('payQueue.text_15')}</dd></div>
           {pr.notes && <Note tone="await">{pr.notes}</Note>}
           {pr.open_credit_override_total != null && (
             <Note tone="alert">
@@ -546,9 +546,7 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           {otherCurrencyCredits.length > 0 && (
             <Note tone="info" className="mt-3">
               <span>
-                <span className="num">{otherCurrencyCredits.length}</span> מהזיכויים הפתוחים של הספק נקובים
-                במטבע אחר מההעברה הזו ({pr.currency}), ולכן אינם ניתנים לקיזוז מולה. זיכוי מקזז חוב
-                באותו מטבע בלבד — אין כאן המרה.
+                <span className="num">{otherCurrencyCredits.length}</span>{t('payQueue.otherCurrencyCreditsAre', { currency: pr.currency })}
               </span>
             </Note>
           )}
@@ -691,10 +689,10 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
         <hr className="border-line-soft" />
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div><label className="label" htmlFor="payment-execution-date">תאריך ביצוע</label><input id="payment-execution-date" type="date" className="input" value={f.paid_date} onChange={(e) => setF((s) => ({ ...s, paid_date: e.target.value }))} /></div>
-          <div><label className="label" htmlFor="payment-execution-amount">סכום החוב שנפרע ({pr.currency})</label><input id="payment-execution-amount" type="number" className="input num" value={allocationPreview?.cashAmount ?? ''} readOnly /></div>
+          <div><label className="label" htmlFor="payment-execution-date">{t('payQueue.setF')}</label><input id="payment-execution-date" type="date" className="input" value={f.paid_date} onChange={(e) => setF((s) => ({ ...s, paid_date: e.target.value }))} /></div>
+          <div><label className="label" htmlFor="payment-execution-amount">{t('payQueue.settledDebtAmount', { currency: pr.currency })}</label><input id="payment-execution-amount" type="number" className="input num" value={allocationPreview?.cashAmount ?? ''} readOnly /></div>
           <div>
-            <label className="label" htmlFor="payment-settlement-currency">מטבע חשבון הבנק</label>
+            <label className="label" htmlFor="payment-settlement-currency">{t('payQueue.settlementCurrency')}</label>
             <select id="payment-settlement-currency" className="input num" dir="ltr"
               value={f.settlement_currency}
               onChange={(event) => setF((current) => ({
@@ -708,20 +706,20 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           {crossCurrencySettlement && (
             <div>
               <label className="label" htmlFor="payment-settlement-amount">
-                סכום שיצא מהחשבון ({f.settlement_currency}) *
+                {t('payQueue.settlementAmount', { currency: f.settlement_currency })}
               </label>
               <input id="payment-settlement-amount" type="number" min="0" step={settlementStep}
                 className="input num" value={f.settlement_amount}
                 onChange={(event) => setF((current) => ({ ...current, settlement_amount: event.target.value }))} />
               <p className="mt-1 text-xs text-ink-muted">
-                שער ההמרה נגזר משני הסכומים לצפייה בלבד ואינו נשמר.
+                {t('payQueue.settlementRateNote')}
               </p>
             </div>
           )}
         </div>
-        <div><label className="label" htmlFor="payment-execution-reference">אסמכתת העברה *</label><input id="payment-execution-reference" className="input num" dir="ltr" value={f.reference} onChange={(e) => setF((s) => ({ ...s, reference: e.target.value }))} /></div>
-        <div><label className="label" htmlFor="payment-execution-notes">הערות</label><input id="payment-execution-notes" className="input" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></div>
-        <div><label className="label" htmlFor="payment-execution-reason">סיבת ביצוע / אישור הפעולה (רשות)</label><input id="payment-execution-reason" className="input" value={f.reason} onChange={(e) => setF((s) => ({ ...s, reason: e.target.value }))} /></div>
+        <div><label className="label" htmlFor="payment-execution-reference">{t('payQueue.setF_2')}</label><input id="payment-execution-reference" className="input num" dir="ltr" value={f.reference} onChange={(e) => setF((s) => ({ ...s, reference: e.target.value }))} /></div>
+        <div><label className="label" htmlFor="payment-execution-notes">{t('payQueue.setF_3')}</label><input id="payment-execution-notes" className="input" value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></div>
+        <div><label className="label" htmlFor="payment-execution-reason">{t('payQueue.setF_4')}</label><input id="payment-execution-reason" className="input" value={f.reason} onChange={(e) => setF((s) => ({ ...s, reason: e.target.value }))} /></div>
 
         {/* The button below is disabled while the split cannot be computed; the reason is stated
             here instead of leaving the accountant to guess which figure is wrong, and the button
