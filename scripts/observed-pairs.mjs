@@ -43,16 +43,36 @@ const defined = new Set([
 
 /** Quoted runs that look like they hold utilities. */
 const STRINGS = /'([^'\n]{2,600})'|"([^"\n]{2,600})"|`([^`]{2,600})`/g;
+
 /**
- * The trailing `(?![/\w-])` drops any utility carrying an ALPHA MODIFIER.
+ * A utility is TOKENISED, not pattern-matched out of the middle of a string — because the variant
+ * in front of it decides WHICH ELEMENT it lands on, and that turned out to be the whole problem.
  *
- * `hover:bg-inverse-ink/10` is a 10% wash of that token over whatever is behind it, not the solid
- * token — and the real ground is the ancestor. Reading it as solid invented four pairs that nothing
- * renders, one of which "failed" at 1.33:1 and cost a diagnosis.
+ * `[&>option]:bg-surface` sits in the same class string as `text-inverse-ink`, and a regex that
+ * only looked for `bg-` read the first as the select's own ground. It is not: it paints the
+ * `<option>` children. CI reported six failures from one file on that basis — `inverse-ink` on
+ * `surface` at 1.05, `ink` on `inverse` at 1.00 — none of which any element wears.
+ *
+ * So each token is split into VARIANT PREFIX and base, and two utilities may be paired only when
+ * `variantsShareAnElement` says they land on the same box:
+ *   · no variant + `hover:` / `focus-visible:` / `md:` — same element in a different state, pairs;
+ *   · `[&>option]:` + `[&>option]:` — same OTHER element, pairs (and this now correctly measures
+ *     the dropdown's own option colours, which the old model never looked at);
+ *   · `[&>option]:` + anything unbracketed — two different elements, never pairs.
+ *
+ * An ALPHA MODIFIER (`bg-inverse-ink/10`) is dropped: that is a wash over whatever is behind it,
+ * not the solid token, and the real ground is the ancestor.
  */
-const FG = /(?:^|[\s:[])text-([a-z][a-z0-9-]*)(?![/\w-])/g;
-const BG = /(?:^|[\s:[])bg-([a-z][a-z0-9-]*)(?![/\w-])/g;
-const BD = /(?:^|[\s:[])(?:border|ring|divide)-([a-z][a-z0-9-]*)(?![/\w-])/g;
+const UTILITY = /^(?<prefix>.*:)?(?<property>text|bg|border|ring|divide)-(?<name>[a-z][a-z0-9-]*)$/;
+/** An arbitrary variant that reaches past the element it is written on. */
+const TARGETS_ANOTHER_ELEMENT = /\[[^\]]*&\s*[>+~_\s]/;
+
+const variantsShareAnElement = (a, b) => {
+  const aOther = TARGETS_ANOTHER_ELEMENT.test(a);
+  const bOther = TARGETS_ANOTHER_ELEMENT.test(b);
+  if (aOther || bOther) return a === b;
+  return true;
+};
 
 /** Utility suffixes that are sizes/alignments/keywords, not colours. */
 const NOT_A_COLOUR = new Set([
@@ -72,15 +92,12 @@ const add = (fg, bg, kind, site) => {
   pairs.get(key).sites.add(site);
 };
 
-const grab = (re, s) => {
-  const out = [];
-  re.lastIndex = 0;
-  let m;
-  while ((m = re.exec(s)) !== null) {
-    if (!NOT_A_COLOUR.has(m[1])) out.push(m[1]);
-  }
-  return out;
-};
+/** Every colour utility in a class set, as {prefix, property, name}. */
+const utilities = (classSet) => classSet
+  .split(/\s+/)
+  .map((token) => UTILITY.exec(token.trim())?.groups)
+  .filter((u) => u && !NOT_A_COLOUR.has(u.name))
+  .map((u) => ({ prefix: u.prefix ?? '', property: u.property, name: u.name }));
 
 /**
  * One literal becomes one class set PER BRANCH — base text plus that branch, never two branches.
@@ -108,17 +125,24 @@ for (const file of files) {
   while ((m = STRINGS.exec(src)) !== null) {
     const whole = m[1] ?? m[2] ?? m[3];
     for (const s of classSets(whole)) {
-      if (!/(?:^|[\s:[])(?:text|bg|border|ring|divide)-/.test(s)) continue;
-      const bgs = grab(BG, s);
-      if (bgs.length === 0) continue;
+      const found = utilities(s);
+      const grounds = found.filter((u) => u.property === 'bg');
+      if (grounds.length === 0) continue;
+      const inks = found.filter((u) => u.property === 'text');
+      const edges = found.filter((u) => u.property !== 'bg' && u.property !== 'text');
       /* A ring only sits on the element's OWN ground when it is INSET. Otherwise it is drawn
          outside, over the parent — which is why `focus` on `action` looked like a failure at the
          skip link, where the ring is outside a filled pill on the page ground. */
       const ringIsInset = /(?:^|[\s:[])ring-inset\b/.test(s);
-      for (const bg of bgs) {
-        for (const fg of grab(FG, s)) add(fg, bg, 'text', file);
-        if (!ringIsInset && !/(?:^|[\s:[])(?:border|divide)-/.test(s)) continue;
-        for (const bd of grab(BD, s)) add(bd, bg, 'non-text', file);
+      const hasBorder = found.some((u) => u.property === 'border' || u.property === 'divide');
+      for (const bg of grounds) {
+        for (const fg of inks) {
+          if (variantsShareAnElement(fg.prefix, bg.prefix)) add(fg.name, bg.name, 'text', file);
+        }
+        if (!ringIsInset && !hasBorder) continue;
+        for (const edge of edges) {
+          if (variantsShareAnElement(edge.prefix, bg.prefix)) add(edge.name, bg.name, 'non-text', file);
+        }
       }
     }
   }
