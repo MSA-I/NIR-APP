@@ -789,8 +789,8 @@ function Invoke-InterpretDocumentContractTests {
   # email-webhook/core.test.ts (the signed Resend delivery webhook), billing-webhook/core.test.ts
   # (the signed billing webhook) and email-sender/templates.test.ts. A green CI run was never a
   # claim about any of them, which is the same class of quiet gap DEBT §34 records for the five
-  # PowerShell checkers. Two new suites joined at the same time: the Paddle API operations and the
-  # Reply-To boundary.
+  # PowerShell checkers. Two new suites joined at the same time: the Reply-To boundary and the
+  # activation-email template.
   Write-Gate "Document automation and branding upload security contracts"
   $previousPreference = $ErrorActionPreference
   try {
@@ -805,7 +805,6 @@ function Invoke-InterpretDocumentContractTests {
       (Join-Path $repoRoot "supabase\functions\_shared\organization-egress.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\reserved-egress.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\billing-adapter.test.ts") `
-      (Join-Path $repoRoot "supabase\functions\_shared\billing-adapter-paddle-api.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\reply-to.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\activation-email.test.ts") `
       (Join-Path $repoRoot "supabase\functions\email-webhook\core.test.ts") `

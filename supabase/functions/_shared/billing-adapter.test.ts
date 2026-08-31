@@ -62,8 +62,6 @@ Deno.test("the manual adapter refuses what it cannot do, by name", async () => {
     orgId: "51000000-0000-4000-8000-000000000001",
     planKey: "pro",
     interval: "monthly",
-    customerId: "ctm_01hv6y1jedq4p1n0yqn5ba3ky4",
-    priceId: "pri_01hv6y1jedq4p1n0yqn5ba3ky4",
   });
   if (checkout.ok) throw new Error("a checkout session was produced with no provider configured");
   if (checkout.code !== "not_configured") throw new Error(`wrong refusal code: ${checkout.code}`);
@@ -333,8 +331,6 @@ Deno.test("no adapter offers hosted checkout or cancellation while no provider i
     orgId: "51000000-0000-4000-8000-000000000001",
     planKey: "pro",
     interval: "monthly",
-    customerId: "ctm_01hv6y1jedq4p1n0yqn5ba3ky4",
-    priceId: "pri_01hv6y1jedq4p1n0yqn5ba3ky4",
   });
   if (checkout.ok) throw new Error("a hosted checkout was produced against an unproven account");
   if (checkout.code !== "not_configured") throw new Error(`wrong refusal code: ${checkout.code}`);

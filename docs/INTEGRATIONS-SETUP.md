@@ -60,8 +60,8 @@ fail-closed, claim/lease, חמש ניסיונות, קפיאת `unknown`, תבנ�
 | `ORDERS_FROM_EMAIL` | **הופרד 31.08.2026** ל־`InPlace <orders@inplace.digital>`. נוצר 24.08 עם אותו ערך כמו `INVITE_FROM_EMAIL`, וזהות אחת לשני קהלים היא בדיוק מה שהופך מייל של דייר לספק שלו למייל של InPlace. נמדד בקריאה חוזרת של שם הסוד |
 | `APP_BASE_URL` | בסיס לקישורי הפורטל בגוף המייל; מאז 24.08 `https://app.inplace.digital` |
 | `ALLOWED_ORIGINS` | allowlist ל־CORS |
-| `PADDLE_WEBHOOK_SECRET` · `PADDLE_API_KEY` · `PADDLE_ENVIRONMENT` | **נמדד 31.08.2026: שלושתם אינם קיימים, וזה המצב הנכון** — אין חשבון Paddle כלל (`§57`). בלעדיהם `billing-webhook` דוחה כל payload והמתאם מסרב לכל פעולה חיה בשמה. ל-`PADDLE_ENVIRONMENT` **אין ברירת מחדל** בכוונה: שכחת משתנה לא תכריע אם לקוח מחויב באמת |
-| `RESEND_WEBHOOK_SECRET` | סוד Svix לאירועי delivered/bounced. **נמדד 31.08.2026: אינו קיים.** ה-webhook עצמו כן נוצר באותו יום ומופעל אל `email-webhook` עם ארבעת אירועי המסירה, ולכן המצב הוא נקודת קצה רשומה שמסרבת לכל מסירה ב-`403` — ראו `§87` |
+| `PADDLE_WEBHOOK_SECRET` · `PADDLE_API_KEY` · `PADDLE_ENVIRONMENT` · `BILLING_PROVIDER` | **הוגדרו 31.08.2026** אחרי שהבעלים פתח חשבון **sandbox**. ‏`PADDLE_ENVIRONMENT=sandbox`, ואין לו ברירת מחדל בכוונה: שכחת משתנה לא תכריע אם לקוח מחויב באמת. **אומת בהתנהגות:** ‏`POST` לא-חתום ל-`billing-webhook` עבר מ-`503` ל-`403`. **ואף על פי כן אי-אפשר להעניק מסלול:** גבול הספקים כבוי, מיפוי המחירים בייצור ריק, ואירוע sandbox מת ב-dead-letter. ‏`§57` |
+| `RESEND_WEBHOOK_SECRET` | סוד Svix לאירועי delivered/bounced. **הותקן 31.08.2026.** ה-webhook נוצר באותו יום ומופעל אל `email-webhook` עם ארבעת אירועי המסירה. **אומת בהתנהגות:** ‏`POST` לא-חתום עבר מ-`500 misconfigured` ל-`403` „missing signature headers" — כלומר הסוד נקרא והאימות אמיתי. ‏`§87` נסגר |
 
 ### 2.א ‏ תשתית הדואר — חיה ומדודה מ־24.08.2026
 

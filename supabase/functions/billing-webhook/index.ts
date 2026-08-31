@@ -27,8 +27,6 @@
 // Optional, and only for the activation email (0268). Absent, events are still processed and the
 // owed email simply waits in the ledger:
 //   RESEND_API_KEY / INVITE_FROM_EMAIL / APP_BASE_URL
-// Optional, for OUTBOUND Paddle calls this function does not make today:
-//   PADDLE_API_KEY / PADDLE_ENVIRONMENT ('sandbox' | 'production', no default)
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.91.1';
 import { billingAdapterFor } from '../_shared/billing-adapter.ts';
 import { renderActivationEmail, type ActivationLocale } from '../_shared/activation-email.ts';
