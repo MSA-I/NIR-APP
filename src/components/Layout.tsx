@@ -405,11 +405,35 @@ export default function Layout() {
     if (!step.prepare) return;
     const desktop = window.matchMedia('(min-width: 64rem)').matches;
     if (desktop) {
+      /* WHICH GROUP TO OPEN IS DERIVED, NOT LISTED — and that is the whole fix.
+       *
+       * This read `step.prepare === 'management' ? 'nav.text_6' : step.prepare === 'control' ?
+       * 'nav.text_8' : ...`, three hand-written strings naming groups that no longer exist. Two of
+       * them stopped naming a group at all: the i18n pass renumbered the `nav.text_*` keys, so
+       * `nav.text_6` became «אימייל» and `nav.text_8` became «סטטוס», and `'account'` was never a
+       * section key in the first place. `setOpenGroup` was therefore asked for a group that is not
+       * in `NAV_GROUPS`, nothing opened, and the owner's first-run tour sat waiting for a link
+       * inside a closed dropdown until it timed out. The browser gate caught it; no unit test
+       * could, because every part in isolation was fine.
+       *
+       * A step already knows where it is going. The group that HOLDS that destination is a fact of
+       * `NAV_GROUPS`, so it is read from there — one source, and a regrouping moves the tour with
+       * it instead of stranding it. There is no string here left to drift. */
+      const destination = step.destination;
+      const holding = destination
+        ? NAV_GROUPS.find((group) => group.section !== '' && group.paths.includes(destination))
+        : undefined;
+      /* AND THE ONE GROUP THAT IS NOT ON THE BAR. `nav.groupAccount` is `DESKTOP_HIDDEN_SECTION`:
+       * on a wide viewport the contract screens live in the avatar menu instead, so opening the
+       * GROUP there opens nothing and the tour's last step — the one that hands the owner to
+       * `/onboarding` — would wait for an anchor inside a closed menu. That menu is a disclosure
+       * on the same `openGroup` state under the literal key `'account'`, which is what the three
+       * replaced strings got right about this case and nothing else. Derived here too, from
+       * whether the holding group is the hidden one, rather than from a fourth hand-written name. */
       setOpenGroup(
-        step.prepare === 'management' ? 'nav.text_6'
-          : step.prepare === 'control' ? 'nav.text_8'
-            : step.prepare === 'account' ? 'account'
-              : null,
+        !holding ? null
+          : holding.section === DESKTOP_HIDDEN_SECTION ? 'account'
+            : holding.section,
       );
       return;
     }

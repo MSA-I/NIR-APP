@@ -2357,7 +2357,21 @@ async function documentOcrAcceptance(browser) {
     await exportPreview.getByRole('heading', { name: 'תוצאת התצוגה המקדימה' }).waitFor({ timeout: 10_000 });
     assert.equal(await exportPreview.locator('thead th').count(), 3, 'OCR export preview did not render three fixture columns');
     assert.equal(await exportPreview.locator('tbody tr').count(), 2, 'OCR export preview did not render two fixture rows');
-    assert.equal(await exportPreview.getByText(/טביעת מקור:/).count(), 1, 'OCR export preview did not expose a checksum');
+    /* THE CHECKSUM IS GONE ON PURPOSE, so the assertion is inverted rather than deleted.
+     *
+     * Owner report 28.08.2026, on a sweep for technical language leaking onto tenant screens: "יש
+     * אזור שמראה פרטים טכניים - להסיר את זה, משתמש לא אמור לראות את זה". «טביעת מקור» went with the
+     * job id, the processing version and the contract version. Nothing was deleted from the
+     * database — `document_jobs`, `document_extractions` and `document_interpretations` still carry
+     * every id, checksum and confidence, and the operator console still reads them. They stopped
+     * being PRINTED at a tenant, and `DocumentReviewWorkspace.spec.tsx` asserts the same absence at
+     * the unit level.
+     *
+     * This line asked for it back, and only did not fail because the browser job is path-filtered
+     * and had not run since 28.08. Asserting the absence is the stronger claim of the two: it is
+     * the one that catches the technical block coming back. */
+    assert.equal(await exportPreview.getByText(/טביעת מקור/).count(), 0,
+      'the OCR export preview prints a source checksum at a tenant again');
     await review.screenshot({ path: path.join(outDir, 'ocr-export-preview-1440.png'), fullPage: true });
     report.screenshots.push('ocr-export-preview-1440.png');
 
@@ -2799,36 +2813,57 @@ async function navigationOrderAndActiveState(browser) {
       `the first navigation link is not the control centre: ${JSON.stringify(daily.slice(0, 2))}`,
     );
 
-    // Daily work stays visible at top level. Management and control remain available behind
-    // dropdowns without making all of their modules compete with the daily routes.
+    /* ONE GROUPING, BY SUBJECT — owner report 28.08.2026 on the drawer ("יש בלאגן, לא מבינים את
+     * הניווט כמו שצריך, וגם סידור מחדש הגיוני של הקטגוריות"), structure approved the same day and
+     * shipped as `NAV_GROUPS`.
+     *
+     * These assertions used to describe the grouping that replaced: six flat daily links with
+     * 'ניהול' and 'בקרה' behind them. That was a grouping by FREQUENCY laid over a catalogue
+     * grouped by SUBJECT, which is the mess the owner named — 'ניהול' held the product catalogue
+     * and the bank together. There is one list now and it is by subject.
+     *
+     * They were not updated with it because this scenario had not RUN since: the browser job is
+     * path-filtered and skipped 266 commits, so the drift sat here unmeasured from 28.08 until the
+     * gate ran again on 31.08. The nav is the approved one; these lines were the stale half. */
     assert.deepEqual(daily.map((item) => item.path),
-      ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
+      ['/dashboard', '/orders/new'],
       `wrong owner daily navigation: ${JSON.stringify(nav.bar)}`);
-    // Two dropdowns, and only two. 'המנוי' is NOT among them and must not become one: it holds a
-    // single destination, and a disclosure over one item is a door with a lid.
-    assert.deepEqual(nav.groups, ['ניהול', 'בקרה'],
+    // Four subjects, in the approved order. 'החשבון' is NOT among them on this surface: it is the
+    // contract the business runs under rather than a fifth subject, and on desktop it lives in the
+    // avatar menu (`DESKTOP_HIDDEN_SECTION`), so a fifth dropdown here would be it showing twice.
+    assert.deepEqual(nav.groups, ['רכש', 'מסמכים', 'כספים', 'בקרה ודוחות'],
       `wrong navigation dropdown groups or order: ${JSON.stringify(nav.groups)}`);
-    // 'המנוי' joined the catalogue on 25.08.2026 as its own group — last, after the two work
-    // groups, because the three groups above it are the business the tenant runs and this is the
-    // contract they run it under. On a bar with no group headers, "its own group, last, not
-    // collapsible" is exactly this: a plain link, after both dropdowns, carrying the group's word.
-    // Both halves are load-bearing. Behind a disclosure it is a door with a lid; ahead of the
-    // dropdowns it has silently rejoined the daily row.
-    assert.deepEqual(nav.bar[nav.bar.length - 1], { kind: 'link', label: 'המנוי', path: '/settings/subscription', current: null },
-      `'המנוי' is not the last entry on the bar as its own non-collapsible group: ${JSON.stringify(nav.bar)}`);
-    assert.equal(nav.all.some((item) => item.path === '/documents/archive'), false,
-      'the low-frequency archive still competes in the main navigation');
-    assert.equal(nav.all.filter((item) => item.current === 'page').length, 0,
-      'the archive incorrectly marked a different navigation destination as current');
+    assert.equal(nav.all.some((item) => item.path === '/settings/subscription'), false,
+      `'המנוי' is on the desktop bar as well as in the avatar menu: ${JSON.stringify(nav.bar)}`);
+    /* THE ARCHIVE HAS A PLACE NOW, and the assertion flipped with the decision rather than being
+     * dropped. It was deliberately absent while the menu was a flat wall of nineteen rows, where
+     * a low-frequency destination would have competed with daily work; inside a subject dropdown
+     * it competes with nothing, and the same commit that grouped the menu put it back. What must
+     * still be true is the half that carried the meaning: it is not at TOP level. */
+    assert.equal(nav.all.some((item) => item.path === '/documents/archive'), true,
+      'the archive is no longer reachable from the main navigation at all');
+    assert.equal(daily.some((item) => item.path === '/documents/archive'), false,
+      'the low-frequency archive still competes with daily work at top level');
+    /* EXACTLY ONE, AND IT IS THE ARCHIVE ITSELF. This asserted ZERO while the archive had no
+       entry in the menu -- with nothing to mark, anything marked was a mis-match. Now that the
+       28.08.2026 grouping gave it a place, the real question is the one the header of this helper
+       already names: whether React Router marks ONE item or TWO on `/documents/archive`, because
+       `/documents` is a prefix of it and a naive match would light both. So the count is pinned to
+       one and the identity of that one is pinned too -- which is the assertion that actually
+       catches the prefix bug, and it could not be written while the answer was zero. */
+    const current = nav.all.filter((item) => item.current === 'page');
+    assert.deepEqual(current.map((item) => item.path), ['/documents/archive'],
+      `the archive is not the one navigation destination marked current: ${JSON.stringify(current)}`);
 
-    // Dropdown behaviour, measured: opening ניהול reveals its destinations; Escape closes it.
+    // Dropdown behaviour, measured: opening רכש reveals its destinations; Escape closes it.
+    // (ניהול until 28.08.2026, when the grouping became one by subject.)
     const visibleLinkCount = () => topNav.locator('a:visible').count();
     const closedCount = await visibleLinkCount();
-    await page.getByRole('button', { name: /^ניהול/ }).click();
+    await page.getByRole('button', { name: /^רכש/ }).click();
     await page.waitForFunction((base) =>
       document.querySelectorAll('header nav[aria-label="ניווט ראשי"] a:not([hidden])').length >= base,
     closedCount, { timeout: 5_000 });
-    assert((await visibleLinkCount()) > closedCount, 'opening the ניהול dropdown revealed no destinations');
+    assert((await visibleLinkCount()) > closedCount, 'opening the רכש dropdown revealed no destinations');
     await page.keyboard.press('Escape');
     await page.waitForTimeout(150);
     assert.equal(await visibleLinkCount(), closedCount, 'Escape did not close the navigation dropdown');
@@ -2851,13 +2886,27 @@ async function navigationOrderAndActiveState(browser) {
     // over the menu while it scrolled. They moved into the drawer's own flow. The daily
     // destinations below are still asserted to match the sidebar exactly — what changed is where
     // the account surface lives, not which destinations a role has.
-    assert.deepEqual(drawerGroups.map((group) => group.section).slice(0, 3), ['עבודה שוטפת', 'ניהול', 'בקרה'],
-      'the drawer renders different progressive-disclosure groups than the desktop sidebar');
+    /* THE DRAWER PRINTS NO GROUP HEADINGS, and that is the assertion rather than a list of them.
+       Owner, 28.08.2026: "אין צורך בפסי הפרדה לשים עוד טקסט - הפסי הפרדה מספיקים". A heading
+       repeated the list under it in a smaller, greyer font and cost a line per group on the
+       surface with the least room; the rule alone answers the only question it was answering.
+       So every group reports an empty section name, and a heading coming back shows up here as a
+       word. The group NAMES still exist -- they name the desktop dropdowns, asserted above, where
+       a collapsed trigger genuinely has nothing else to say. */
+    assert.deepEqual([...new Set(drawerGroups.map((group) => group.section))], [''],
+      `the drawer printed a group heading: ${JSON.stringify(drawerGroups.map((g) => g.section))}`);
     assert.deepEqual(drawerGroups[0].items.map((item) => item.path),
-      ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
+      ['/dashboard', '/orders/new'],
       `the drawer omitted an authorised daily destination: ${JSON.stringify(drawerLinks)}`);
-    assert.equal(await drawer.locator('[aria-current="page"]').count(), 0,
-      'the archive incorrectly marked a different drawer destination as current');
+    /* The contract the business runs under is reachable on a phone. On desktop it is hidden from
+       the bar because the avatar menu holds it (`DESKTOP_HIDDEN_SECTION`); a phone has no avatar
+       menu, so if it were hidden here too it would be hidden everywhere. */
+    assert.equal(drawerLinks.some((item) => item.path === '/settings/subscription'), true,
+      `'המנוי' is not reachable from the drawer: ${JSON.stringify(drawerLinks)}`);
+    // The same claim on the drawer, and for the same reason.
+    const drawerCurrent = drawerLinks.filter((item) => item.current === 'page');
+    assert.deepEqual(drawerCurrent.map((item) => item.path), ['/documents/archive'],
+      `the archive is not the one drawer destination marked current: ${JSON.stringify(drawerCurrent)}`);
     await page.waitForFunction(() => {
       const active = document.activeElement;
       return !!active && active.getAttribute('aria-label') === 'סגירת תפריט';
