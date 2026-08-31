@@ -35,15 +35,31 @@ function oklchToLinearRgb(lightness: number, chroma: number, hue: number) {
   ] as const;
 }
 
-function tokenValue(name: string): string {
-  const raw = css.match(new RegExp(`--${name}:\\s*([^;]+);`))?.[1].trim();
+/**
+ * The two palettes, sliced apart so a pair can be recomputed in either.
+ *
+ * `@theme` is the light palette; `:root[data-theme='dark']` REDEFINES a subset of it. A token the
+ * dark block leaves alone keeps its light value — which is not an oversight but a decision the
+ * palette makes about itself (`fixed-onyx`, `shell`, the aurora washes), so the dark lookup falls
+ * back rather than throwing. Reading only the first match in the file, which is what this spec did
+ * until 31.08.2026, silently measures the light theme and calls it the product.
+ */
+const DARK_START = css.indexOf("[data-theme='dark']");
+const LIGHT_CSS = DARK_START === -1 ? css : css.slice(0, DARK_START);
+const DARK_CSS = DARK_START === -1 ? '' : css.slice(DARK_START);
+export const THEMES = ['light', 'dark'] as const;
+type Theme = (typeof THEMES)[number];
+
+function tokenValue(name: string, theme: Theme): string {
+  const find = (source: string) => source.match(new RegExp(`--${name}:\\s*([^;]+);`))?.[1].trim();
+  const raw = (theme === 'dark' ? find(DARK_CSS) : undefined) ?? find(LIGHT_CSS);
   if (!raw) throw new Error(`token --${name} is not declared in index.css`);
   const alias = raw.match(/^var\(--([\w-]+)\)$/);
-  return alias ? tokenValue(alias[1]) : raw;
+  return alias ? tokenValue(alias[1], theme) : raw;
 }
 
-function luminance(name: string): number {
-  const value = tokenValue(name);
+function luminance(name: string, theme: Theme): number {
+  const value = tokenValue(name, theme);
   const hex = value.match(/^#([0-9a-f]{6})$/i);
   let rgb: readonly [number, number, number];
   if (hex) {
@@ -58,8 +74,8 @@ function luminance(name: string): number {
   return 0.2126 * clamp(rgb[0]) + 0.7152 * clamp(rgb[1]) + 0.0722 * clamp(rgb[2]);
 }
 
-function contrast(a: string, b: string): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+function contrast(a: string, b: string, theme: Theme): number {
+  const [hi, lo] = [luminance(a, theme), luminance(b, theme)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
 }
 
@@ -114,36 +130,65 @@ describe('the colour', () => {
   });
 
   /**
-   * THE MEASUREMENT, NOT THE INTENTION. Every pairing the component can paint is recomputed from
-   * `index.css` and held to WCAG AA for normal text. `series-2` and `series-4` sit at 73%
-   * lightness, so white on them is roughly 2:1 — the reason the ink is a per-step decision at all.
+   * THE MEASUREMENT, NOT THE INTENTION — AND NOW IN BOTH THEMES.
+   *
+   * Every pairing the component can paint is recomputed from `index.css` and held to WCAG AA for
+   * normal text. This ran against `@theme` alone until 31.08.2026, which is exactly how a dark-theme
+   * regression passed a green test: `series-2` and `series-4` wore `text-ink`, and `ink` flips to
+   * near-white under `data-theme="dark"` while those two discs stay LIGHT (73% → 80%, 73% → 78%).
+   * The letters measured 1.64:1 and 1.70:1 in the dark theme and nothing here noticed. A test that
+   * reads one of two palettes is a test that certifies half the product.
    */
   it.each([
-    ['series-2', 'ink'],
+    ['series-2', 'fixed-onyx'],
     ['series-3', 'on-solid'],
-    ['series-4', 'ink'],
+    ['series-4', 'fixed-onyx'],
     ['series-5', 'on-solid'],
     ['action', 'on-solid'],
-  ])('%s carries %s at AA or better', (background, ink) => {
-    expect(contrast(`color-${background}`, `color-${ink}`)).toBeGreaterThanOrEqual(4.5);
+  ])('%s carries %s at AA or better in both themes', (background, ink) => {
+    for (const theme of THEMES) {
+      expect(contrast(`color-${background}`, `color-${ink}`, theme)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
-  /** The negative control: every pairing the component deliberately does NOT use would fail. */
-  it('confirms the light steps would fail with white, which is why the ink varies', () => {
-    expect(contrast('color-series-2', 'color-on-solid')).toBeLessThan(4.5);
-    expect(contrast('color-series-4', 'color-on-solid')).toBeLessThan(4.5);
-    expect(contrast('color-series-3', 'color-ink')).toBeLessThan(4.5);
-    expect(contrast('color-series-5', 'color-ink')).toBeLessThan(4.5);
+  /**
+   * THE BINDING, which was the hole this table left open.
+   *
+   * Measuring the RIGHT pair proves nothing about what the component paints. Until 31.08.2026 the
+   * table above asserted the ratios while the component wore a different ink entirely, and swapping
+   * `text-fixed-onyx` back to `text-ink` would have failed no test in this file — the only class
+   * assertion checked the prefix `bg-series-N text-` and stopped there. So the ink is named here.
+   */
+  it.each([[2, 'fixed-onyx'], [3, 'on-solid'], [4, 'fixed-onyx'], [5, 'on-solid']] as const)(
+    'paints step %i with text-%s, the ink the table above measured',
+    (step, ink) => {
+      expect(component).toContain(`${bgSeries(step)} text-${ink}`);
+    },
+  );
+
+  /**
+   * The negative control — the reason the ink is a per-step decision rather than one colour.
+   *
+   * The two halves fail in OPPOSITE themes, which is the whole point: `fixed-onyx` is too dark for
+   * the discs that are themselves dark on paper, and `ink` is too light for the discs that stay
+   * light once the palette inverts. Neither ink can take all four steps.
+   */
+  it('confirms each half of the split would fail with the other half’s ink', () => {
+    expect(contrast('color-series-3', 'color-fixed-onyx', 'light')).toBeLessThan(4.5);
+    expect(contrast('color-series-5', 'color-fixed-onyx', 'light')).toBeLessThan(4.5);
+    expect(contrast('color-series-2', 'color-ink', 'dark')).toBeLessThan(4.5);
+    expect(contrast('color-series-4', 'color-ink', 'dark')).toBeLessThan(4.5);
   });
 
   /**
    * THE STEP THAT COST A COLOUR. `series-1` sits at 58% lightness — too dark for dark ink, too
-   * light for light ink — and clears AA with NEITHER. That is why the monogram uses four steps
+   * light for light ink — and clears AA with NEITHER on paper. A disc colour has to work in both
+   * themes, so failing in one is enough to disqualify it: that is why the monogram uses four steps
    * and not five, and this is the assertion that keeps someone from "restoring" the fifth.
    */
-  it('excludes series-1, which reaches AA with neither ink', () => {
-    expect(contrast('color-series-1', 'color-on-solid')).toBeLessThan(4.5);
-    expect(contrast('color-series-1', 'color-ink')).toBeLessThan(4.5);
+  it('excludes series-1, which reaches AA with neither ink on paper', () => {
+    expect(contrast('color-series-1', 'color-on-solid', 'light')).toBeLessThan(4.5);
+    expect(contrast('color-series-1', 'color-fixed-onyx', 'light')).toBeLessThan(4.5);
     expect(component).not.toContain(bgSeries(1));
   });
 

@@ -176,7 +176,10 @@ describe('the provider is actually mounted in the app', () => {
     // under jsdom `import.meta.url` is an http URL and `readFileSync` refuses it.
     const main = readFileSync(join(process.cwd(), 'src', 'main.tsx'), 'utf8');
     expect(main).toContain('<LocaleProvider>');
-    expect(main).toContain('<ProfileLocaleSync />');
+    /* `<ProfileLocaleSync />` until 31.08.2026, when the appearance switch arrived and the same
+       adopt-then-persist wiring had to carry a second preference. One component now owns both, so
+       the name moved — the assertion is unchanged in substance: the sync is MOUNTED. */
+    expect(main).toContain('<ProfilePreferencesSync />');
     expect(main.indexOf('<LocaleProvider>')).toBeLessThan(main.indexOf('<AuthProvider>'));
   });
 });
