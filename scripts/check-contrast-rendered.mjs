@@ -112,7 +112,17 @@ const measureInPage = ([pairs, theme]) => {
     }
     const bg = over(rawBg, pageGround);
     const fg = over(rawFg, bg);
-    return { ...pair, theme, resolved: true, ratio: Number(ratio(fg, bg).toFixed(2)) };
+    /**
+     * THE RAW RATIO IS THE VERDICT; the rounded one is only for reading.
+     *
+     * This returned `Number(ratio.toFixed(2))` and the gate compared THAT — so a pair measuring
+     * 2.998155 became 3.00 and passed a 3:1 threshold it does not meet. It happened on the very ring
+     * this package added (`nav-current-edge` on `nav-current`), it reported green locally, and CI
+     * resolved the same colour one 8-bit step differently, got 2.99 and went red. A gate that rounds
+     * before it compares is a gate that certifies its own near-misses.
+     */
+    const exact = ratio(fg, bg);
+    return { ...pair, theme, resolved: true, ratio: exact, shown: Number(exact.toFixed(2)) };
   });
 };
 
@@ -142,11 +152,11 @@ try {
   if (!controlRow.resolved || controlRow.ratio >= 4.5) {
     throw new Error(
       'the positive control did not fail: measured '
-      + `${controlRow.resolved ? controlRow.ratio : 'unresolved'} for two adjacent ink rungs. `
+      + `${controlRow.resolved ? controlRow.shown : 'unresolved'} for two adjacent ink rungs. `
       + 'The measurement is broken, so every "pass" below would be meaningless.',
     );
   }
-  console.log(`positive control ok — two adjacent ink rungs measured ${controlRow.ratio}:1, below 4.5 as required`);
+  console.log(`positive control ok — two adjacent ink rungs measured ${controlRow.shown}:1, below 4.5 as required`);
 
   for (const theme of ['light', 'dark']) {
     // The DIRECTION contracts first. A relationship that inverted once is cheaper to check than to
@@ -199,7 +209,7 @@ try {
         failures.push(`[${theme}] ${row.fg} on ${row.bg} — one of the tokens resolved to nothing (${row.where})`);
       } else if (row.ratio < row.threshold) {
         failures.push(
-          `[${theme}] ${row.fg} on ${row.bg} = ${row.ratio}:1, needs ${row.threshold}:1 — ${row.where}`,
+          `[${theme}] ${row.fg} on ${row.bg} = ${row.shown}:1 (exact ${row.ratio}), needs ${row.threshold}:1 — ${row.where}`,
         );
       }
     }
@@ -220,7 +230,7 @@ const worst = rows
   .filter((row) => row.resolved)
   .sort((a, b) => a.ratio / a.threshold - b.ratio / b.threshold)
   .slice(0, 5)
-  .map((row) => `${row.theme}:${row.fg}/${row.bg}=${row.ratio}`)
+  .map((row) => `${row.theme}:${row.fg}/${row.bg}=${row.shown}`)
   .join('  ');
 
 if (failures.length > 0) {

@@ -111,7 +111,7 @@
      and fails the 4.5:1 text rule. */
   --color-nav-current: oklch(60.9% 0.075 202);
   --color-nav-current-ink: oklch(19.6% 0.022 229);
-  --color-nav-current-edge: oklch(35% 0.050 202);
+  --color-nav-current-edge: oklch(33.5% 0.050 202);
 
   /* ---- The appearance switch's own two grounds ----
      They used to borrow `--color-surface-selected` for the track and `--color-surface` for the knob,
