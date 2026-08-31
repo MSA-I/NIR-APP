@@ -101,12 +101,51 @@ production database after all configuration was in place:
 
 - `private.billing_provider_boundary` — `paddle`, `stripe` and `morning` all `enabled = false`
 - `private.billing_provider_price_map` — **0 rows**
-- `private.billing_events` — **0 rows**
+- `private.billing_events` — **0 rows at that moment**; §3.1 records what landed in it afterwards
 
-So a sandbox event arriving at the production endpoint verifies, is stored, and dead-letters with
-`provider_not_enabled`. That is the designed state, and it is what makes pointing a sandbox
-destination at production a test rather than a hole: a sandbox subscription bought with a test card
-cannot become a real tenant's paid plan.
+So a sandbox event arriving at the production endpoint verifies, is stored, and changes nothing —
+§3.1 is that happening for real. It is what makes pointing a sandbox destination at production a
+test rather than a hole: a sandbox subscription bought with a test card cannot become a real
+tenant's paid plan.
+
+### 3.1 A real Paddle event reached the endpoint, and did exactly nothing
+
+Run from the Paddle dashboard on 31.08.2026 — a `subscription.activated` simulation aimed at the
+production `billing-webhook`. Read back from the production database:
+
+```
+provider  event_type              status       org_id  received
+paddle    subscription.activated  dead_letter  null    16:52:31
+paddle    subscription.activated  dead_letter  null    16:54:23
+paddle    subscription.activated  dead_letter  null    16:54:29
+```
+
+Every step of the chain is in that table:
+
+1. **Paddle reached us** over the public internet — the row exists.
+2. **The signature verified.** A failed signature is counted in
+   `private.billing_ingress_rejections` and never stored; that counter still holds exactly the
+   two probe rows from §2.1 and gained nothing. Three deliveries, zero rejections.
+3. **The event was stored** under the provider event id it arrived with.
+4. **Attribution refused.** `org_id` is null and the status is `dead_letter`: the simulated
+   customer id belongs to no organization we have ever written, so 0157 filed it rather than
+   guessing. This is the attack the whole boundary is shaped against, arriving by accident and
+   being handled correctly.
+5. **Nothing was granted.** `billing_provider_enabled('paddle')` is still false.
+
+**One thing this did NOT prove, and the distinction matters.** Paddle's "Replay event" mints a
+NEW event id each time (`ntfsimevt_…`), so the three rows above are three distinct events, not
+one event delivered three times. The replay key was therefore never exercised over the network.
+Idempotency remains proven where it is enforced — the unique on (provider, provider_event_id)
+and `p54_billing_boundary_and_funnel.sql` — and a genuine duplicate delivery only happens when
+our endpoint answers non-2xx, which it does not.
+
+**A configuration fact worth keeping.** The destination was created through the API with
+Paddle's default usage type, `Platform`, which accepts production traffic only — the dashboard
+refused to aim a simulation at it and said so. It was changed to `Platform, Simulation`. Anyone
+creating a destination for testing hits this, and the other agent worked around it by creating a
+second, simulation-only destination and later deleting it, which is why eighteen orphaned
+simulations in the account point at a `ntfset_` id that no longer exists.
 
 ## 4. What is blocked, and on what
 
