@@ -1631,6 +1631,25 @@ html { transition: --glow-x 0.12s ease-out, --glow-y 0.12s ease-out; }
 }
 .doc-sub { font-size: 0.875rem; line-height: 1.55; margin-block-start: 0.75rem; }
 
+/* THE PLATE ON A PHONE, and `screen` is doing real work in that query.
+   The supplier portal is the one place this block is a live screen rather than a printed heading,
+   and most suppliers open that link on a phone. At 390px the name wrapped to three lines and the
+   plate grew tall enough to push the order itself below the fold — measured, not feared. Print is
+   deliberately excluded: a PDF page is a fixed 794px canvas and must keep the full display size. */
+@media screen and (max-width: 40rem) {
+  .doc-plate { padding: 1.5rem 1.25rem 1.375rem; }
+  .doc-name { font-size: 2rem; }
+  .doc-eyebrow { font-size: 0.6875rem; }
+  /* The registration corners are inset 18px, which is inside the padding once the padding shrinks
+     — the marks then sit ON the org name and the validity line. Pulled to the corner instead. */
+  .doc-plate::before, .doc-plate::after,
+  .doc-plate > .doc-crop::before, .doc-plate > .doc-crop::after { inline-size: 10px; block-size: 10px; }
+  .doc-plate::before { inset-block-start: 9px; inset-inline-start: 9px; }
+  .doc-plate::after { inset-block-start: 9px; inset-inline-end: 9px; }
+  .doc-plate > .doc-crop::before { inset-block-end: 9px; inset-inline-start: 9px; }
+  .doc-plate > .doc-crop::after { inset-block-end: 9px; inset-inline-end: 9px; }
+}
+
 /* Numbers that identify rather than measure: document numbers, references, folios, timestamps.
    Money never comes here — it stays in the reading face with tabular figures, as everywhere. */
 .doc-mono { font-family: var(--font-doc-mono); font-variant-numeric: tabular-nums lining-nums; }

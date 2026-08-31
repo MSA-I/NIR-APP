@@ -5,6 +5,10 @@ export type PortalLocale = 'he' | 'en';
 export const PORTAL_COPY = {
   he: {
     pageTitle: 'אישור הזמנת רכש',
+    // The document system's two identity strings (#309). The eyebrow keeps its latin half
+    // because Roboto Mono carries no Hebrew — see the @font-face note in src/index.css.
+    docEyebrow: 'רכש · PURCHASE',
+    docName: 'הזמנת רכש',
     switchLanguage: 'English',
     switchLanguageLabel: 'מעבר לאנגלית',
     loading: 'טוען את פרטי ההזמנה…',
@@ -31,7 +35,6 @@ export const PORTAL_COPY = {
     sendChanges: 'שליחת השינויים המוצעים',
     approveAsSent: 'אישור ההזמנה כפי שנשלחה',
     oneResponse: 'ניתן לשלוח תשובה אחת בלבד. לאחר השליחה העסק יבחן את התשובה ויחליט.',
-    order: 'הזמנה',
     revision: 'גרסה',
     validUntil: 'בתוקף עד',
     addressee: 'לכבוד:',
@@ -49,6 +52,8 @@ export const PORTAL_COPY = {
   },
   en: {
     pageTitle: 'Purchase order response',
+    docEyebrow: 'PURCHASE',
+    docName: 'Purchase order',
     switchLanguage: 'עברית',
     switchLanguageLabel: 'Switch to Hebrew',
     loading: 'Loading the purchase order…',
@@ -75,7 +80,6 @@ export const PORTAL_COPY = {
     sendChanges: 'Send proposed changes',
     approveAsSent: 'Approve the order as sent',
     oneResponse: 'Only one response can be sent. The business will review it after submission.',
-    order: 'Order',
     revision: 'Revision',
     validUntil: 'Valid until',
     addressee: 'For:',

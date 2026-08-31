@@ -84,13 +84,33 @@ export interface DocumentPlateProps {
   meta?: ReactNode;
   /** `compact` for the landscape report, where the page is wide and the grid is the point. */
   size?: 'default' | 'compact';
+  /**
+   * The eyebrow's words, when the caller owns its own vocabulary.
+   *
+   * The supplier portal does: it ships its own `PORTAL_COPY` and its own language toggle, and is
+   * deliberately not wrapped in `LocaleProvider` — one order, one token, no session. `useT()`
+   * falls back to the Hebrew dictionary outside a provider rather than throwing, so without this
+   * the portal's eyebrow would silently stay Hebrew after a supplier switched to English. Every
+   * other caller leaves it out and gets the family's own key.
+   */
+  eyebrow?: string;
+  /**
+   * The heading element the name is rendered as. `h2` by default, because in the four printed
+   * headings the whole plate is `aria-hidden` and sits under a screen that already owns its `h1`.
+   *
+   * The supplier portal is the exception and needs `h1`: the plate is not decoration there, it is
+   * the page's only heading, and a page whose sole purpose is "approve THIS order" must announce
+   * which order in that heading. Fold the number into `name` when you pass `h1`.
+   */
+  as?: 'h1' | 'h2';
 }
 
 export function DocumentPlate({
-  family, name, number, subtitle, orgLogoUrl, meta, size = 'default',
+  family, name, number, subtitle, orgLogoUrl, meta, size = 'default', eyebrow, as = 'h2',
 }: DocumentPlateProps) {
   const { t } = useT();
   const compact = size === 'compact';
+  const Heading = as;
 
   return (
     <div className={`doc-plate ${PLATE_CLASS[family]}`}>
@@ -99,7 +119,7 @@ export function DocumentPlate({
       <span className="doc-crop" aria-hidden="true" />
 
       <div className="flex items-center justify-between gap-6">
-        <p className="doc-eyebrow">{t(EYEBROW_KEY[family])}</p>
+        <p className="doc-eyebrow">{eyebrow ?? t(EYEBROW_KEY[family])}</p>
         <span className="doc-mark">
           {orgLogoUrl
             ? <img data-testid="document-org-logo" src={orgLogoUrl} alt="" className="doc-org-logo h-8 w-auto max-w-40 object-contain" />
@@ -109,7 +129,7 @@ export function DocumentPlate({
 
       <div className={`flex items-end justify-between gap-6 ${compact ? 'mt-4' : 'mt-7'}`}>
         <div className="min-w-0">
-          <h2 className={`doc-name ${compact ? 'text-[2.5rem]' : ''}`}>{name}</h2>
+          <Heading className={`doc-name ${compact ? 'text-[2.5rem]' : ''}`}>{name}</Heading>
           {subtitle && <div className="doc-sub">{subtitle}</div>}
         </div>
         {(number || meta) && (
