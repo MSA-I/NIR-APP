@@ -142,6 +142,27 @@ update private.scope_definer_enforcements
          || 'no tenant, role, document or unit fence.'
  where function_signature = 'apply_reviewed_document(uuid,uuid,jsonb,uuid,text)';
 
+-- AND THE SECOND REGISTRY, WHICH IS NOT THE SAME ONE. This schema pins definer bodies in TWO
+-- places and they answer different questions:
+--
+--   `scope_definer_enforcements`                     -- does this body still enforce tenancy?
+--   `document_automation_authoritative_functions`    -- is this body still the machine-writing
+--                                                       path §245/§251/§252 reviewed?
+--
+-- Re-pinning only the first leaves `document_automation_negative_guard_violations()` reporting
+-- `authoritative_body_drift`, which is how `p14` and `p68` caught this. Both are deliberate acts
+-- and both belong in the migration that rewrote the body.
+--
+-- `expected_callees` is NOT touched. The guard asserts each registered callee is still present, so
+-- adding a call cannot satisfy it falsely; the sanitizer, the evidence writer and the comparison
+-- key this command must keep calling are all still named there and still checked.
+update private.document_automation_authoritative_functions
+   set body_hash = (
+         select md5(replace(p.prosrc, chr(13), ''))
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+         where n.nspname = 'public' and p.proname = 'apply_reviewed_document')
+ where function_signature = 'apply_reviewed_document(uuid,uuid,jsonb,uuid,text)';
+
 -- ===== Proof =====
 do $verify_0276$
 declare
@@ -199,6 +220,15 @@ begin
   if has_function_privilege('authenticated', 'private.interpretation_due_date(jsonb)', 'execute')
      or has_function_privilege('anon', 'private.interpretation_due_date(jsonb)', 'execute') then
     raise exception '0276: a client role can execute the due-date reader';
+  end if;
+
+  -- BOTH registries, asserted here rather than left to a suite. Re-pinning one and forgetting the
+  -- other is exactly the mistake this file made on its first run, and CI found it in `p14` and
+  -- `p68` -- two suites away from the migration that caused it.
+  select string_agg(assertion || ' -- ' || detail, chr(10) order by assertion, detail)
+    into v_violations from private.document_automation_negative_guard_violations();
+  if v_violations is not null then
+    raise exception '0276 document-automation guards failed:%', chr(10) || v_violations;
   end if;
 
   select string_agg(detail, chr(10) order by detail)
