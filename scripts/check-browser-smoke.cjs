@@ -2882,10 +2882,23 @@ async function navigationOrderAndActiveState(browser) {
       [...node.querySelectorAll('[aria-current="page"]')].map((link) => new URL(link.href).pathname));
     assert.deepEqual(drawerCurrent, ['/documents/archive'],
       `the archive is not the only current drawer destination: ${JSON.stringify(drawerCurrent)}`);
+    // Opening focus lands on the CURRENT destination when the drawer holds one, and falls to the
+    // close control only when it does not (`Layout.tsx:462`).
+    //
+    // This asserted the close control until 31.08.2026, and passed for a reason that has since
+    // stopped being true: /documents/archive was absent from the menu entirely, so there was
+    // never a current item and the fallback was the only branch reachable. The archive sits in
+    // 'מסמכים' now, which makes the FIRST branch reachable for the first time — and it is the one
+    // worth asserting, because it is what tells somebody opening the menu with a screen reader
+    // where they already are.
     await page.waitForFunction(() => {
       const active = document.activeElement;
-      return !!active && active.getAttribute('aria-label') === 'סגירת תפריט';
-    }, null, { timeout: 5_000 }).catch(() => { throw new Error('the drawer did not open on its safe close action'); });
+      return !!active && active.getAttribute('aria-current') === 'page'
+        && active instanceof HTMLAnchorElement
+        && new URL(active.href).pathname === '/documents/archive';
+    }, null, { timeout: 5_000 }).catch(() => {
+      throw new Error('the drawer did not open on the destination the reader is already viewing');
+    });
     await page.screenshot({ path: path.join(outDir, 'navigation-drawer-390.png') });
     report.screenshots.push('navigation-drawer-390.png');
   } finally {
