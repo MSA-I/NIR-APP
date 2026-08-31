@@ -1415,6 +1415,14 @@ export const en: Dictionary = {
     sourceInvoices: 'invoices on record',
   },
 
+  /* The control-centre block. NOT "since your last visit": `read_at` is a receipt on a
+     notification, not on a screen, so that heading would be a claim the data cannot carry in
+     either direction (ש-14 stays open). */
+  unreadAlerts: {
+    title: 'Unread alerts',
+    sentTimes: 'Sent {times} times · the latest {latest}',
+  },
+
   alertsPage: {
     partialScan: 'The scan is partial: {scans}. What did load is shown, but nothing here can claim everything is fine.',
   },

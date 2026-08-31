@@ -1419,6 +1419,14 @@ export const he = {
     sourceInvoices: 'חשבוניות שנרשמו',
   },
 
+  /* The control-centre block. NOT "since your last visit": `read_at` is a receipt on a
+     notification, not on a screen, so that heading would be a claim the data cannot carry in
+     either direction (ש-14 stays open). */
+  unreadAlerts: {
+    title: 'התראות שלא נקראו',
+    sentTimes: 'נשלחה {times} פעמים · האחרונה {latest}',
+  },
+
   alertsPage: {
     partialScan: 'הסריקה חלקית: {scans}. הממצאים שכן נטענו מוצגים, אך אי אפשר לקבוע שהכול תקין.',
   },

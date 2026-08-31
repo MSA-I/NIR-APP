@@ -106,6 +106,29 @@ const SNAPSHOT = {
 // Every table read answers empty: none of them is under test, and the zones must render their
 // honest empty/all-clear faces rather than depend on a fixture written for some other assertion.
 const traffic = [
+  // The delivered feed the unread block reads. Two rows of ONE condition plus a second condition,
+  // because the block counts grouped conditions rather than rows — 23 repeats of "processing is
+  // stuck" is one thing to look at, not twenty-three.
+  http.get(`${SUPABASE_URL}/rest/v1/notifications`, () => HttpResponse.json([
+    {
+      id: 'n-1', org_id: 'org-1', user_id: 'u-1', event_code: 'invoice_duplicate',
+      entity_key: 'inv-1', severity: 'warning', title: 'חשבונית כפולה · מאפיית לחם הארץ',
+      body: 'אותו מספר חשבונית הופיע פעמיים', target_url: '/invoices/inv-1',
+      created_at: '2026-08-30T09:00:00Z', read_at: null,
+    },
+    {
+      id: 'n-2', org_id: 'org-1', user_id: 'u-1', event_code: 'invoice_duplicate',
+      entity_key: 'inv-1', severity: 'warning', title: 'חשבונית כפולה · מאפיית לחם הארץ',
+      body: 'אותו מספר חשבונית הופיע פעמיים', target_url: '/invoices/inv-1',
+      created_at: '2026-08-30T08:00:00Z', read_at: null,
+    },
+    {
+      id: 'n-3', org_id: 'org-1', user_id: 'u-1', event_code: 'price_increase',
+      entity_key: 'sup-2', severity: 'warning', title: 'התייקרות · ירקות טרי',
+      body: 'מחיר מעל המחיר המוסכם', target_url: '/suppliers/sup-2',
+      created_at: '2026-08-29T07:00:00Z', read_at: '2026-08-29T08:00:00Z',
+    },
+  ])),
   http.get(`${SUPABASE_URL}/rest/v1/:table`, () => HttpResponse.json([])),
   http.post(`${SUPABASE_URL}/rest/v1/rpc/management_dashboard_snapshot`, () => HttpResponse.json(SNAPSHOT)),
   // The first-run probe is a HEAD count — the total rides Content-Range, no rows come back.
@@ -139,6 +162,33 @@ describe('מרכז הבקרה — מה עדיין כרטיס ומה כבר לא'
     const headings = Array.from(container.querySelectorAll('.dash-enter h2')).map((node) => node.textContent ?? '');
     expect(headings[0]).toContain('דורש טיפול');
     expect(headings[1]).toContain('אספקות היום ומחר');
+  });
+
+  /**
+   * The unread-alerts block sits one place higher on a phone than it does in the DOM, and this is
+   * the assertion that keeps the two facts from being confused for each other.
+   *
+   * `check-browser-smoke.cjs:601-602` reads `.dash-enter h2` positionally on the live tenant. A
+   * block placed between attention and deliveries would have failed that gate for a purely visual
+   * reason, so it is appended AFTER deliveries and moved with `order`. If a later refactor ever
+   * "tidies" the JSX by moving it up to match what the eye sees, this fails here in seconds
+   * instead of in an 11-minute browser job.
+   */
+  it('התראות שלא נקראו נכנסות אחרי האספקות ב-DOM, ומעליהן רק ב-order', async () => {
+    server.use(...traffic);
+    const { container } = renderDashboard();
+    await screen.findByText('התראות שלא נקראו');
+
+    const headings = Array.from(container.querySelectorAll('.dash-enter h2')).map((node) => node.textContent ?? '');
+    expect(headings[0]).toContain('דורש טיפול');
+    expect(headings[1]).toContain('אספקות היום ומחר');
+    expect(headings[2]).toContain('התראות שלא נקראו');
+
+    // Below lg: money band first, then attention, then this block — the fold the plan asks for.
+    const block = container.querySelector('[aria-labelledby="unread-alerts-title"]');
+    expect(block?.className).toContain('order-2');
+    const attention = container.querySelector('[data-tour-anchor="dashboard-attention"]');
+    expect(attention?.className).toContain('order-1');
   });
 
   it('פס הכסף הוא שלושה כרטיסים נפרדים — אחד לכל מדד (T7.3c)', async () => {

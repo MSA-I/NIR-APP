@@ -19,6 +19,7 @@ import type { MoneyAmount } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
 import { useAuth } from '../auth/AuthContext';
 import { PlanBadge } from '../components/PlanBadge';
+import { UnreadAlerts } from '../components/UnreadAlerts';
 
 // audit round 2: glance values are whole-shekel by convention — the three money-strip tiles round to
 // whole ₪ so they read consistently at a glance (₪8,131 not ₪14,842.6). Tables elsewhere keep exact
@@ -1118,12 +1119,26 @@ export default function Dashboard() {
       {data && view && (
         <div className="dash-enter flex flex-col gap-5 lg:grid lg:grid-cols-12 lg:gap-6">
           <div data-tour-anchor="dashboard-attention"
-            className="lg:order-2 lg:col-span-6 [--dash-step-mobile:1] [--dash-step:1]">
+            className="order-1 lg:order-2 lg:col-span-6 [--dash-step-mobile:1] [--dash-step:1]">
             <AttentionZone items={view.attention} totalLabel={t('dashboard.totalLabel')} baseCurrency={viewCurrency} />
           </div>
 
           <DeliveriesZone today={data.deliveries.today} tomorrow={data.deliveries.tomorrow} noDateCount={data.deliveries.noDateCount}
-            className="lg:order-3 lg:col-span-3 [--dash-step-mobile:2] [--dash-step:2]" />
+            className="order-3 lg:order-3 lg:col-span-3 [--dash-step-mobile:3] [--dash-step:2]" />
+
+          {/* UNREAD ALERTS SIT HERE IN THE DOM AND ONE PLACE HIGHER ON SCREEN, AND THE SPLIT IS
+              DELIBERATE. The browser gate and `dashboardDensity.spec` both pin `.dash-enter h2` —
+              "דורש טיפול" first, "אספקות היום ומחר" second — so a block carrying an h2 BETWEEN
+              them would fail a passing gate for a purely visual reason. Appending after deliveries
+              keeps both indices, and `order-2` puts it under the attention zone on a phone, which
+              is where the fold needs it. This is exactly what the plan means by "DOM order is
+              unchanged; the move is `order` only".
+
+              Below lg the whole first fold is now explicit rather than implicit: the money band
+              stays `order-first`, and 1..6 follow it. Leaving the others at the flex default of 0
+              while this one asked for 2 would have put it BEHIND everything, not between. */}
+          <UnreadAlerts userId={profile?.id ?? null}
+            className="order-2 lg:order-5 lg:col-span-12 [--dash-step-mobile:2] [--dash-step:4]" />
 
           {/* Section 12 on a phone: the manager opens the app and sees a figure. The strip is
               FIRST on screen below lg; from lg it is the full-width hero row of the grid.
@@ -1202,13 +1217,13 @@ export default function Dashboard() {
           )}
 
           <RoleQueueCard queue={data.queue} total={taskTotal}
-            className="lg:order-4 lg:col-span-3 [--dash-step-mobile:3] [--dash-step:3]" />
+            className="order-4 lg:order-4 lg:col-span-3 [--dash-step-mobile:4] [--dash-step:3]" />
 
           {/* The trends board keeps its three views visible together (DESIGN.md: no tabs), and
               under T7 each view is its own borderless card — the reference's chart tiles. The
               board heading still names the region; separation inside it is card + spacing, not
               hairlines. */}
-          <section className="lg:order-5 lg:col-span-12 [--dash-step-mobile:4] [--dash-step:4]" aria-labelledby="trends-title">
+          <section className="order-5 lg:order-6 lg:col-span-12 [--dash-step-mobile:5] [--dash-step:5]" aria-labelledby="trends-title">
             <h2 id="trends-title" className="section-title">{t('dashboard.text_47')}</h2>
 
             <div className="mt-3 grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
@@ -1346,7 +1361,7 @@ export default function Dashboard() {
               "תמונת מצב תפעולית", not separate cards). T7 gives the zone one borderless card so it
               reads as a tile of the reference grid; the role queues left this fold for the dark
               card above, so nothing here is said twice. */}
-          <section className="lg:order-6 lg:col-span-12 [--dash-step-mobile:5] [--dash-step:5]" aria-labelledby="operations-title">
+          <section className="order-6 lg:order-7 lg:col-span-12 [--dash-step-mobile:6] [--dash-step:6]" aria-labelledby="operations-title">
             <h2 id="operations-title" className="section-title">{t('dashboard.text_60')}</h2>
             <Card className="mt-3">
               <OperationsDisclosure title={t('dashboard.title_5')} count={data.exceptionCount}
