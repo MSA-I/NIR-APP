@@ -25,6 +25,7 @@ import { useWithheldNavPaths } from '../lib/entitlements';
 import { routeBackPresentation, routePresentationTitle, staticRouteTitle, type StaticRoutePath } from '../lib/routePresentation';
 import { tourNavigationAnchor, type ProductTourStep } from '../lib/productTourRegistry';
 import { OwnerProductTour, type OwnerProductTourHandle } from './product-tour/ProductTour';
+import { EntityMonogram } from './EntityMonogram';
 
 /** Paper panel, floating pill, or the onyx drawer. See `linkCls`. */
 type NavSurface = 'pill' | 'panel' | 'shell';
@@ -797,14 +798,15 @@ export default function Layout() {
   const accountOpen = openGroup === 'account';
   // The reference's account affordance: an avatar circle on the background. Initials on an
   // OCEANIC disc (T7.3 — the blue leads); the menu is the same deep-oceanic panel.
-  const initials = (profile?.full_name ?? '').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('') || '·';
   const topAccountMenu = (
     <div className="relative">
       <button type="button" id="top-nav-group-account" aria-expanded={accountOpen}
         aria-label={t('layoutTail.accountMenu', { name: profile?.full_name || t('layoutTail.user') })}
-        className={`grid size-10 place-items-center rounded-full bg-action text-sm font-medium text-on-solid shadow-card transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${accountOpen ? 'scale-95' : 'hover:scale-105'}`}
+        className={`rounded-full shadow-card transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${accountOpen ? 'scale-95' : 'hover:scale-105'}`}
         onClick={() => setOpenGroup(accountOpen ? null : 'account')}>
-        <span aria-hidden="true">{initials}</span>
+        {/* `tone="action"` and not a seed: there is one signed-in person on the screen, so the
+            disc identifies a ROLE rather than a member, and T7.3 fixed that in the oceanic. */}
+        <EntityMonogram name={profile?.full_name ?? ''} tone="action" size="lg" />
       </button>
       {/* Mounted always, hidden when closed — same reasoning as the nav groups: the settings
           link must exist for the active-state contract even while the menu is shut.
