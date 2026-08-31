@@ -1361,6 +1361,36 @@ export const en: Dictionary = {
     sourceInvoices: 'invoices on record',
   },
 
+  /* The scheduled-payments card. NOT ONE STRING HERE SAYS "forecast", and that is a rule with a
+     reason: coverage is partial and a partial figure presented as cash flow is a claim about
+     reality the product does not get to make. The flag key behind the card is `insights.forecast`,
+     an internal identifier that never reaches a screen. */
+  scheduled: {
+    title: 'Scheduled payments',
+    horizon: 'through {date}',
+    recordCount: '{count} requests with a due date',
+    recordCount_one: 'one request with a due date',
+    notEnough: 'Not enough data yet',
+    noData: 'No open requests to measure',
+    whatWouldChangeIt: 'To see an amount, add a due date to the open requests.',
+    coverageAmountLabel: 'Coverage by amount',
+    coverageCountLabel: 'Coverage by count',
+    coverageCount: '{covered} of {total}',
+    confidenceLabel: 'Confidence',
+    confidenceHigh: 'High \u2014 most of the money carries a date',
+    confidenceMedium: 'Medium \u2014 some of the money has no date',
+    confidenceLow: 'Low \u2014 most of the money has no date',
+    notMeasurable: 'cannot be measured',
+    knownLabel: 'Known vs estimated',
+    knownValue: '{count} known \u00b7 estimated: none',
+    knownValue_one: 'one known \u00b7 estimated: none',
+    undatedCommitments: 'Open commitments with no date (outside the horizon):',
+    source: 'Source: open payment requests',
+    asOf: 'updated {date}',
+    openRecords: 'Go to requests',
+    notPermitted: 'Your role does not have access to this data. That is not a claim that nothing is due.',
+  },
+
   alertsPage: {
     partialScan: 'The scan is partial: {scans}. What did load is shown, but nothing here can claim everything is fine.',
   },

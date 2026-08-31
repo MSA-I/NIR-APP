@@ -208,7 +208,7 @@ insert into private.scope_definer_enforcements (
   function_signature, body_hash, enforcement_kind, scope_proof
 )
 select 'set_invoice_due_date(uuid,date,text)',
-       md5(replace(p.prosrc, e'', '')), 'filtered_read',
+       md5(replace(p.prosrc, chr(13), '')), 'filtered_read',
        '0264 locks the exact tenant invoice through the org filter and a null-or-auth_scopes unit '
        'predicate before it writes, so an actor cannot date an invoice outside their scope.'
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -229,8 +229,10 @@ begin
     raise exception '0264: the command is executable by anon';
   end if;
   -- The audit row can never be reasonless, which is the rule the constitution states in words.
-  if position('coalesce(nullif(trim(p_reason)' in
-      pg_get_functiondef('public.set_invoice_due_date(uuid, date, text)'::regprocedure)) = 0 then
+  -- Read with carriage returns stripped. A body applied from Windows stores CRLF and one applied
+  -- on CI stores LF, and a check that only ever runs on CI would not notice until production did.
+  if position('coalesce(nullif(trim(p_reason)' in replace(pg_get_functiondef(
+      'public.set_invoice_due_date(uuid, date, text)'::regprocedure), e'', '')) = 0 then
     raise exception '0264: the command can write an audit row without a reason';
   end if;
 

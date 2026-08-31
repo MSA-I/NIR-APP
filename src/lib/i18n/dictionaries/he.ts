@@ -1365,6 +1365,36 @@ export const he = {
     sourceInvoices: 'חשבוניות שנרשמו',
   },
 
+  /* The scheduled-payments card. NOT ONE STRING HERE SAYS "תחזית", and that is a rule with a
+     reason: coverage is partial and a partial figure presented as cash flow is a claim about
+     reality the product does not get to make. The flag key behind the card is `insights.forecast`,
+     an internal identifier that never reaches a screen. */
+  scheduled: {
+    title: 'תשלומים מתוזמנים',
+    horizon: 'עד {date}',
+    recordCount: '{count} דרישות עם תאריך יעד',
+    recordCount_one: 'דרישה אחת עם תאריך יעד',
+    notEnough: 'אין עדיין מספיק נתונים',
+    noData: 'אין דרישות פתוחות למדוד',
+    whatWouldChangeIt: 'כדי שיוצג סכום, הוסף תאריך יעד לדרישות הפתוחות.',
+    coverageAmountLabel: 'כיסוי בסכום',
+    coverageCountLabel: 'כיסוי בספירה',
+    coverageCount: '{covered} מתוך {total}',
+    confidenceLabel: 'ביטחון',
+    confidenceHigh: 'גבוה — רוב הכסף נשא תאריך',
+    confidenceMedium: 'בינוני — חלק מהכסף ללא תאריך',
+    confidenceLow: 'נמוך — רוב הכסף ללא תאריך',
+    notMeasurable: 'לא ניתן למדוד',
+    knownLabel: 'ידוע מול משוער',
+    knownValue: '{count} ידועות · משוער: אין',
+    knownValue_one: 'דרישה אחת ידועה · משוער: אין',
+    undatedCommitments: 'התחייבויות פתוחות ללא תאריך (מחוץ לטווח):',
+    source: 'מקור: דרישות תשלום פתוחות',
+    asOf: 'עודכן {date}',
+    openRecords: 'מעבר לדרישות',
+    notPermitted: 'לתפקיד שלך אין גישה לנתונים האלה. זו אינה טענה שאין מה לשלם.',
+  },
+
   alertsPage: {
     partialScan: 'הסריקה חלקית: {scans}. הממצאים שכן נטענו מוצגים, אך אי אפשר לקבוע שהכול תקין.',
   },
