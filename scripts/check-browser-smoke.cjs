@@ -2844,17 +2844,25 @@ async function navigationOrderAndActiveState(browser) {
     await drawer.waitFor();
     const drawerPaths = await drawer.evaluate((node) =>
       [...node.querySelectorAll('a')].map((link) => new URL(link.href).pathname));
-    // NO HEADINGS, and that is an owner decision rather than an oversight (28.08.2026: "אין צורך
-    // בפסי הפרדה לשים עוד טקסט - הפסי הפרדה מספיקים"). The previous assertion here named three
-    // headings — 'עבודה שוטפת', 'ניהול', 'בקרה' — from the frequency grouping that the subject
-    // grouping replaced; both the words and the surface that printed them are gone.
+    // NO GROUP HEADINGS, and that is an owner decision rather than an oversight (28.08.2026:
+    // "אין צורך בפסי הפרדה לשים עוד טקסט - הפסי הפרדה מספיקים"). The previous assertion here named
+    // three — 'עבודה שוטפת', 'ניהול', 'בקרה' — from the frequency grouping that the subject
+    // grouping replaced; both those words and the surface that printed them are gone.
+    //
+    // Compared against the KNOWN GROUP WORDS rather than against "any text", because the reader
+    // below calls a block's first child a heading whenever it holds no link, and the drawer's
+    // feedback control answers that description without being a group at all. Asserting "no text"
+    // reads as the stronger claim and is merely the wrong one: it fails on 'שליחת הערה', which is
+    // not navigation and was never grouped.
+    const GROUP_WORDS = ['עבודה שוטפת', 'ניהול', 'בקרה', 'רכש', 'מסמכים', 'כספים', 'בקרה ודוחות', 'החשבון'];
     const drawerHeadings = await drawer.locator('nav').first().evaluate((node) =>
       [...node.children].map((group) => {
         const first = group.firstElementChild;
         return first && !first.querySelector('a') ? (first.textContent || '').trim() : '';
       }).filter(Boolean));
-    assert.deepEqual(drawerHeadings, [],
-      `the drawer printed a group heading: ${JSON.stringify(drawerHeadings)}`);
+    const printedGroupWords = drawerHeadings.filter((heading) => GROUP_WORDS.includes(heading));
+    assert.deepEqual(printedGroupWords, [],
+      `the drawer printed a navigation group heading: ${JSON.stringify(drawerHeadings)}`);
 
     // COMPLETENESS is the drawer's contract, and the reason it is asserted against the bar rather
     // than against a list written here: the phone has no avatar menu and no second surface, so
