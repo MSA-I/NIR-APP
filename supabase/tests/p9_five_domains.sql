@@ -347,8 +347,8 @@ select pg_temp.p9_assert(
 -- always at the end of a twenty-minute gate rather than in seconds. See the check:* script that
 -- asserts a migration touching scope_definer_exemptions also touches this file.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 93,
-  'the definer exemption registry must stay at 93 rows -- 59 minus the three 0073 drained, '
+  (select count(*) from private.scope_definer_exemptions) = 94,
+  'the definer exemption registry must stay at 94 rows -- 59 minus the three 0073 drained, '
   || 'plus the one 0075:464 added for rescue_document_from_archive (not drainable: invoker '
   || 'would require granting UPDATE on document_filings to the browser), plus the one 0077 '
   || 'added for apply_document_interpretation (not drainable: it runs with no user JWT, so '
@@ -388,7 +388,15 @@ select pg_temp.p9_assert(
   || 'write guard, which is the same shape as 0092 above: a BEFORE trigger that inspects only the '
   || 'NEW/OLD row its own statement selected, reads no table and returns no row it was not handed, '
   || 'so auth_scopes() has nothing to filter -- and it cannot be an invoker, because the plan gate '
-  || 'must bind service_role and definer writers too; zero silent additions');
+  || 'must bind service_role and definer writers too; plus the one 0265 monthly forecast writer, '
+  || 'record_forecast_snapshots, which is the same empty-auth_scopes constraint as 0077 and 0168: '
+  || 'it runs from cron.schedule with no user JWT at all, so a scope predicate inside it would '
+  || 'silently measure zero rows for every tenant and the backtesting cohort would be empty '
+  || 'forever. It cannot be an invoker either -- no client role holds EXECUTE on it, and the two '
+  || 'snapshot tables are deliberately read-only to authenticated, so an invoker version would '
+  || 'have to be granted the writes that make the frozen cohort forgeable. Its tenancy is '
+  || 'structural instead: it iterates organisations explicitly and every read and write inside '
+  || 'the loop is filtered by that organisation id; zero silent additions');
 
 select pg_temp.p9_assert(
   (select count(*) from private.scope_enforcement_violations()) = 0,
