@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 import { fmtMoneyExact, fmtNum } from '../../lib/format';
 import { Disclosure, ICON, Note, ReasonField, useToast } from '../ui';
 import { DocumentLineMapping } from './DocumentLineMapping';
+import { ReconciliationStrip } from './ReconciliationStrip';
 import { PrimaryDecision } from './PrimaryDecision';
 import {
   advisoryFindings,
@@ -73,6 +74,8 @@ function FindingRow({ group }: { group: FindingGroup }) {
   );
 }
 
+const LINES_FOLD_ID = 'assessment-lines-fold';
+
 export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAssessmentPanelProps) {
   const { errorText, t } = useT();
   const [read, setRead] = useState<DocumentReviewRead | null>(null);
@@ -90,6 +93,28 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
    * on the surface. This is the working, not the verdict.
    */
   const [linesOpen, setLinesOpen] = useState(false);
+  /**
+   * "Go to lines 2, 5" has to actually go there. Opening the fold and stopping would be a promise
+   * the screen does not keep, which the rest of this panel is built to avoid. The scroll waits for
+   * a render rather than a frame: the row does not exist until `linesOpen` has committed, and an
+   * effect that depends on both is correct by construction where a `requestAnimationFrame` is a
+   * guess about React's timing.
+   */
+  const [pendingLine, setPendingLine] = useState<number | null>(null);
+  const goToLines = useCallback((lines: number[]) => {
+    if (lines.length > 0) setPendingLine(lines[0]);
+  }, []);
+  useEffect(() => {
+    if (pendingLine == null) return;
+    const fold = document.getElementById(LINES_FOLD_ID);
+    // `Disclosure` is a native `<details>`, so the fold is opened by opening it — not by the
+    // mirror state, which only reports what the element already did. Opening it fires `toggle`,
+    // `onToggle` sets `linesOpen`, the rows render, and this effect runs again with a row to
+    // scroll to. Two passes on purpose: there is no row to reach on the first one.
+    if (fold instanceof HTMLDetailsElement && !fold.open) { fold.open = true; return; }
+    document.getElementById(`assessment-line-${pendingLine}`)?.scrollIntoView({ block: 'center' });
+    setPendingLine(null);
+  }, [pendingLine, linesOpen]);
   /**
    * Write the document's prices into the supplier's price list — but only where there is no agreed
    * price yet (owner, 28.08.2026: "המחירים והמוצרים יתעדכנו בהעלאת חשבונית של הספק, כי לא תמיד יש
@@ -438,6 +463,14 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
         </div>
       )}
 
+      {/* The numbers, above the folded working. The server has computed this ladder since 0108
+          and compared it against a tolerance since 0227; until 0260 it published five rungs of it
+          and the screen printed none. A reviewer could read that something did not add up and not
+          by how much, which is the difference between a rounding artefact and a discount line the
+          extractor never saw. Above the table on purpose: the table is the working, this is the
+          question the reviewer is actually answering. */}
+      <ReconciliationStrip ladder={assessment} onGoToLines={goToLines} />
+
       {/* Below the decision: what the machine checked and settled. Folded, counted, one click
           away — never deleted, and never a finding. */}
       {(advisory.length > 0 || (assessment && assessment.lines.length > 0)) && (
@@ -457,6 +490,7 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
           {assessment && assessment.lines.length > 0 && (
             <Disclosure
               className={advisory.length > 0 ? 'border-t border-line-soft' : ''}
+              id={LINES_FOLD_ID}
               title={t('docAssessment.title_2')}
               count={assessment.lines.length}
               onToggle={setLinesOpen}
@@ -491,7 +525,8 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
                           ? line.normalized_unit_price - line.baseline_price
                           : null;
                         return (
-                          <tr key={line.line_index} className="border-b border-line last:border-b-0">
+                          <tr key={line.line_index} id={`assessment-line-${line.line_index}`}
+                            className="border-b border-line last:border-b-0">
                             <td className="td">
                               {line.description || line.sku || line.barcode || '—'}
                               {line.product_id === null && (

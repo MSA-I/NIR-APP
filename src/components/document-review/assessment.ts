@@ -65,12 +65,36 @@ export interface DocumentAssessment {
   supplier_id: string | null;
   order_id: string | null;
   sources: { document: boolean; ordered: boolean; received: boolean; baseline: boolean };
+  /**
+   * The ladder the server judged this document by.
+   *
+   * Every figure here is the SERVER'S arithmetic, rounded by the currency's own minor units — the
+   * same rounding that decided whether to block. A screen that recomputed `header_net + header_vat`
+   * would be a second source of truth for money that rounds by its own rules.
+   *
+   * `unexplained_gap` is `null`, never `0`, when a rung was not extracted: "these agree" and "one
+   * of them is missing" must not reach a reader as the same number. `missing_rungs` names which.
+   *
+   * The two tolerances were returned by `0227` and were missing from this type until `0260` — the
+   * server was already answering a question nothing here could ask.
+   */
   totals: {
     lines_net: number | null;
+    lines_discount: number | null;
     header_net: number | null;
     header_vat: number | null;
     header_total: number | null;
+    /** What the header IMPLIES: net + VAT, as the server computed it. */
+    computed_total: number | null;
+    /** What it CLAIMS minus what it implies. Keeps its sign; null where a rung is missing. */
+    unexplained_gap: number | null;
+    lines_vs_header_gap: number | null;
     overcharge_total: number | null;
+    line_tolerance: number | null;
+    document_tolerance: number | null;
+    currency: string | null;
+    /** Named absences, so a row can say "not extracted" rather than showing a bare dash. */
+    missing_rungs: readonly ('lines_net' | 'header_net' | 'header_vat' | 'header_total')[];
   };
   severity: FindingSeverity;
   approval_blocked: boolean;
