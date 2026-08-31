@@ -1,4 +1,4 @@
--- 0266 — the frozen forecast cohort joins the declared organization-teardown window.
+-- 0267 — the frozen forecast cohort joins the declared organization-teardown window.
 --
 -- WHY THIS FILE EXISTS, AND WHY IT IS A MERGE ARTEFACT RATHER THAN A MISTAKE IN EITHER BRANCH.
 -- 0254 gave every DELETE guard standing on an org-scoped table one narrow window: inside a
@@ -42,12 +42,12 @@ begin
   v_def := replace(pg_get_functiondef(v_sig::regprocedure), chr(13), '');
 
   if position('organization_teardown' in v_def) > 0 then
-    raise exception '0266: % already declares a purge window -- refusing to patch it twice', v_sig;
+    raise exception '0267: % already declares a purge window -- refusing to patch it twice', v_sig;
   end if;
 
   v_count := (length(v_def) - length(replace(v_def, v_anchor, ''))) / length(v_anchor);
   if v_count <> 1 then
-    raise exception '0266: the body of % carries % candidate anchors, not one -- refusing to '
+    raise exception '0267: the body of % carries % candidate anchors, not one -- refusing to '
                     'patch blindly', v_sig, v_count;
   end if;
 
@@ -58,7 +58,7 @@ $forecast_teardown_window$;
 -- =====================================================================================
 -- The window landed, in the DELETE-only shape, and nothing stopped refusing
 -- =====================================================================================
-do $verify_0266$
+do $verify_0267$
 declare
   v_def        text;
   v_violations text;
@@ -69,18 +69,18 @@ begin
   -- Present, and exactly once. Twice would mean the patch ran on an already-patched body.
   if (length(v_def) - length(replace(v_def, 'organization_teardown', '')))
      / length('organization_teardown') <> 1 then
-    raise exception '0266: the teardown window is not declared exactly once';
+    raise exception '0267: the teardown window is not declared exactly once';
   end if;
 
   -- DELETE only. A window that also opened UPDATE would let a repair rewrite a frozen cohort,
   -- which is the whole thing 0265 built these triggers to make impossible.
   if position('tg_op = ''DELETE''' in v_def) = 0 then
-    raise exception '0266: the window is not restricted to DELETE';
+    raise exception '0267: the window is not restricted to DELETE';
   end if;
 
   -- And the guard still refuses outside it, by the same name the callers already match on.
   if position('raise exception ''forecast_snapshot_rows_are_frozen''' in v_def) = 0 then
-    raise exception '0266: the guard stopped refusing';
+    raise exception '0267: the guard stopped refusing';
   end if;
 
   -- Both triggers 0265 declared are still attached. A window on a function nothing calls would
@@ -89,13 +89,13 @@ begin
                  where tgname = 'forecast_snapshot_requests_frozen' and not tgisinternal)
      or not exists (select 1 from pg_catalog.pg_trigger
                     where tgname = 'forecast_snapshots_frozen' and not tgisinternal) then
-    raise exception '0266: a frozen-row trigger went missing';
+    raise exception '0267: a frozen-row trigger went missing';
   end if;
 
   select string_agg(detail, chr(10) order by detail)
     into v_violations from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception '0266 scope assertions failed: %', v_violations;
+    raise exception '0267 scope assertions failed: %', v_violations;
   end if;
 end
-$verify_0266$;
+$verify_0267$;
