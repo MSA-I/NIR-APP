@@ -5075,7 +5075,9 @@ export const en: Dictionary = {
     noAccountYet: 'No account yet?',
     signInAsAria: 'Sign in as {role}',
     inviteWaitingTitle: 'You have an invitation waiting',
-    inviteWaitingBody: '{email} was invited to join {organization}, so no new business was created. Joining is done from the invitation link sent to you, with a password you choose. If the link is lost, ask the business owner to send it again.',
+    inviteWaitingBody: '{email} was invited to join {organization}, so no new business was created. Confirm your details below and join — no link and no password needed.',
+    inviteJoinAction: 'Join the business',
+    inviteJoining: 'Joining…',
   },
 
   accountantDashboard: {

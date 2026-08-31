@@ -107,8 +107,14 @@ export async function lookupInvitation(token: string): Promise<InvitationLookup>
 
 /** `termsVersion` is not decoration: 0089 closed the consent-free signature, and the server
  *  stamps the consented version into audit_logs in the same transaction that creates the
- *  profile. */
-export async function acceptInvitation(token: string, fullName: string, phone: string, termsVersion: string) {
+ *  profile.
+ *
+ *  `token` may be null (`0282`). An employee who signs in with a provider never receives one —
+ *  the token lives in an email this deployment cannot yet deliver (`DEBT §25`) — so the server
+ *  resolves the invitation from the caller's own CONFIRMED address instead. That is the same
+ *  binding the token always stood for: an invitation belongs to an address, and the link was only
+ *  ever evidence of delivery to it. Everything after the lookup is the same code on both paths. */
+export async function acceptInvitation(token: string | null, fullName: string, phone: string, termsVersion: string) {
   const { data, error } = await supabase.rpc('accept_invitation', {
     p_token: token,
     p_full_name: fullName,
