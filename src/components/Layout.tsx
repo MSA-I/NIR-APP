@@ -14,6 +14,7 @@ import { assistantAuthorizationFingerprint, useAssistantRunSession } from '../li
 import NotificationBell from './NotificationBell';
 import FeedbackButton from './FeedbackButton';
 import { PlanBadge } from './PlanBadge';
+import { BenefitWindowMount } from './BenefitWindowMount';
 import { ConfirmDialog, ICON, useDialogLayer, useToast } from './ui';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
 import { pendingOfflineWork } from '../lib/offlineQueue';
@@ -1149,6 +1150,12 @@ export default function Layout() {
           {t('nav.text_13')}
         </div>
       )}
+      {/* The launch-benefit strip, ABOVE the content and BELOW the access banners. Order is the
+          decision: a banner saying "you cannot write right now" outranks a benefit that ends in a
+          fortnight, and burying the benefit under the fold would make it a surface nobody sees.
+          It renders nothing at all for a non-owner, a paying tenant, a closed window or a flag
+          that is off — see BenefitWindowStrip. */}
+      <BenefitWindowMount />
       {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring.
           `data-section` is the paper half of the section identity and the ONLY place the accent
           enters the working area: it resolves `--section-accent` for everything below it, which

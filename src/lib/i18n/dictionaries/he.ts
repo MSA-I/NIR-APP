@@ -1500,6 +1500,22 @@ export const he = {
     notPermitted: 'לתפקיד שלך אין גישה לנתונים האלה. זו אינה טענה שאין מה לשלם.',
   },
 
+  /* The launch-benefit strip. NOT ONE STRING HERE PRESSURES: no "hurry", no "last chance", no
+     seconds. Owner ruling 31.08.2026 on #204 — a clock over an INVENTED date is forbidden, a
+     window the server enforces is not — so these strings state a fact and stop. */
+  countdown: {
+    headline: 'הטבת ההשקה שלך: {plan} ללא תשלום',
+    remainingDaysHours: '{days} ימים ו-{hours} שעות',
+    remainingDaysHours_one: 'יום אחד ו-{hours} שעות',
+    endsAt: 'מסתיים ב-{at}',
+    reverts: 'ב-{date} החשבון עובר למסלול {plan}.',
+    cta: 'דברו איתי על המשך המסלול',
+    minimize: 'מזעור הרצועה',
+    expand: 'הצגת פרטי ההטבה',
+    dismiss: 'סגירת הרצועה',
+    accessibleName: 'הטבת ההשקה: {plan} ללא תשלום עד {date}, ואז המסלול עובר ל{reverts}.',
+  },
+
   alertsPage: {
     partialScan: 'הסריקה חלקית: {scans}. הממצאים שכן נטענו מוצגים, אך אי אפשר לקבוע שהכול תקין.',
   },

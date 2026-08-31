@@ -1055,7 +1055,11 @@ body {
      A banner that says "you cannot write right now" is the last thing that may be obscured by a
      panel, and the assistant is read-only itself, so the two are on screen together by design. */
   body:has(.assistant-surface[data-assistant-mode="docked"]) #main,
-  body:has(.assistant-surface[data-assistant-mode="docked"]) > #root [role="alert"].no-print {
+  body:has(.assistant-surface[data-assistant-mode="docked"]) > #root [role="alert"].no-print,
+  /* The benefit strip needs the same inset and is deliberately NOT an alert: a benefit that ends
+     is not an emergency. Taking `role="alert"` purely to inherit this rule would be a semantic lie
+     to a screen reader, so the class is named here instead. */
+  body:has(.assistant-surface[data-assistant-mode="docked"]) > #root .benefit-strip.no-print {
     padding-inline-end: 29rem;
   }
 }
