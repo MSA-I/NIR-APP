@@ -34,7 +34,11 @@ const repoRoot = path.resolve(here, '..');
 const migrationsDir = path.join(repoRoot, 'supabase', 'migrations');
 const mapPath = process.env.RENUMBER_MAP_PATH || path.join(repoRoot, 'scripts', 'renumber-map.json');
 const inject = process.env.RENUMBER_CLOSURE_INJECT;
+// This guard names the allowlist it enforces, and the control file names invented migrations in
+// order to test the map. Neither is a real pointer; a check that trips over the fixtures
+// written to exercise it is reading its own comment as evidence.
 const SELF = 'scripts/check-renumber-closure.mjs';
+const FIXTURES = ['scripts/check-gate-controls.mjs'];
 
 const violations = [];
 // The one measured cross-reference in the tree: 0187 wraps a block verifying constraints that
@@ -162,15 +166,23 @@ const HISTORICAL_DANGLING_REFS = new Set([
 const EXECUTABLE = /^(supabase\/(tests|functions)|scripts|src|tools|worker|\.github|\.claude)\//;
 
 const existing = new Set(files);
+const pardonsUsed = new Map();
 for (const hit of referenceHits) {
   const parts = hit.split(':');
   const name = parts.at(-1);
   const lineNo = parts.at(-2);
   const where = parts.slice(0, -2).join(':');
   if (where.startsWith('supabase/migrations/')) continue;
-  if (where === SELF) continue; // this file names the allowlist it enforces
+  if (where === SELF || FIXTURES.includes(where)) continue;
   if (existing.has(name)) continue;
-  if (HISTORICAL_DANGLING_REFS.has(`${where}|${name}`)) continue;
+  // Counted, not just named. Without the count a SECOND occurrence of the same stale filename in
+  // the same document is excused by the entry that pardons the first.
+  const pardon = `${where}|${name}`;
+  if (HISTORICAL_DANGLING_REFS.has(pardon)) {
+    const used = (pardonsUsed.get(pardon) ?? 0) + 1;
+    pardonsUsed.set(pardon, used);
+    if (used <= 1) continue;
+  }
   violations.push({ file: where, lineNo, kind: 'dangling filename reference', found: name, text: name });
 }
 
@@ -215,7 +227,8 @@ if (existsSync(mapPath)) {
 
     // Anything that cited the file by name.
     const byName = grepRepo(fromFile.replace(/\./g, '\\.'), SCAN_PATHS)
-      .filter((h) => !h.startsWith(`${SELF}:`) && !h.startsWith('scripts/renumber-map.json:'));
+      .filter((h) => !h.startsWith(`${SELF}:`) && !h.startsWith('scripts/renumber-map.json:')
+      && !FIXTURES.some((f) => h.startsWith(`${f}:`)));
     if (byName.length) {
       violations.push({ file: `renumber ${fromFile} -> ${toFile}`, lineNo: '-', kind: 'incomplete renumber',
         found: `${byName.length} reference(s) still name the old file`,

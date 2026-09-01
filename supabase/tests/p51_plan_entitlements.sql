@@ -201,21 +201,29 @@ update plan_entitlements set boolean_value = false
 -- shape, which taught `plan_quota_decisions` to hold a yes/no; the merge of 30.08.2026 kept ONE
 -- ledger for that fact -- `private.plan_capability_decisions`, which `0246` had already built --
 -- so the probe records its decision where the resolver actually reads it.
--- UPSERT, not a plain insert. `0246` seeds this ledger for every (plan, capability) pair in the
--- same migration that creates it, so the row for ('premium', 'bank.reconciliation') is already
--- there and an insert can never succeed -- it dies on `plan_capability_decisions_pkey`. The
--- retarget described above moved the probe onto this table without adopting the table's
--- requirement; `0248` writes to the same ledger and has always used `on conflict do update` for
--- exactly this reason. The probe's intent is unchanged: state a decision that would take a
--- capability away on upgrade, and require the resolver to refuse it.
-insert into private.plan_capability_decisions
-  (plan_key, entitlement_key, decided_value, previous_value, decision_ref, note)
-values ('premium', 'bank.reconciliation', false, true, 'OPEN-DECISIONS #274', 'p51 probe')
-on conflict (plan_key, entitlement_key) do update
-  set decided_value = excluded.decided_value,
-      previous_value = excluded.previous_value,
-      decision_ref = excluded.decision_ref,
-      note = excluded.note;
+-- ASSERT THEN UPDATE, not insert and not upsert. `0246` seeds this ledger for every
+-- (plan, capability) pair in the same migration that creates it, so the row for
+-- ('premium', 'bank.reconciliation') is already there and a plain insert can never succeed --
+-- it dies on `plan_capability_decisions_pkey`, which is what this probe had been doing. The
+-- retarget recorded above moved the probe onto this table without bringing the table's
+-- requirement with it.
+--
+-- An upsert would fix the crash and cost an invariant: if `0246` ever stopped seeding the pair,
+-- the probe would quietly create the row and carry on, and nothing would report that the ladder
+-- had a hole in it. `0248` may use `on conflict do update` on the same ledger because the pair it
+-- writes (`free`, `exports.unbranded_pdf`) is only created by `0247` -- there was no row to find.
+-- Here there must be one, so its existence is asserted first and the decision is an UPDATE. The
+-- savepoint puts the seeded value back.
+select pg_temp.p51_assert(
+  exists (select 1 from private.plan_capability_decisions
+           where plan_key = 'premium' and entitlement_key = 'bank.reconciliation'),
+  '0246 must have seeded the capability ledger for premium/bank.reconciliation');
+update private.plan_capability_decisions
+   set decided_value = false,
+       previous_value = true,
+       decision_ref = 'OPEN-DECISIONS #274',
+       note = 'p51 probe'
+ where plan_key = 'premium' and entitlement_key = 'bank.reconciliation';
 select pg_temp.p51_assert(
   not exists (select 1 from private.plan_capability_violations()
               where assertion = 'capability_closed_without_decision')

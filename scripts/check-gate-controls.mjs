@@ -185,7 +185,44 @@ console.log('\ncheck:key-manifest');
     env: { KEY_MANIFEST_INJECT: 'offset' },
     expect: 'LOST their last production call site',
   });
+  // Not deleted — COMMENTED OUT. A guard that greps the whole file sees no change at all.
+  mustFail('a call site that is commented out rather than deleted is caught', 'check-key-manifest.mjs', {
+    env: { KEY_MANIFEST_INJECT: 'commented' },
+    expect: 'LOST their last production call site',
+  });
   mustPass('the real dictionary still passes', 'check-key-manifest.mjs', {});
+}
+
+// ============================================================ renumber map mode
+// Wave 4's renumber is a CYCLE (0281->0279, 0279->0280, 0280->0281), so every `from` number is
+// somebody else's legitimate `to`. These two controls are the difference between a map that
+// guards the cycle and one that condemns it.
+console.log('\ncheck:renumber-closure (map mode)');
+{
+  const target = '0267_forecast_cohort_joins_the_teardown_window.sql';
+  const okMap = path.join(scratch, 'map-complete.json');
+  writeFileSync(okMap, JSON.stringify([{
+    fromFile: '9998_a_name_it_used_to_have.sql', toFile: target, fromNumber: '9998',
+    references: [], why: 'control: a finished move',
+  }], null, 2), 'utf8');
+  mustPass('a completed move passes, and the number it moved TO is not banned elsewhere',
+    'check-renumber-closure.mjs', { env: { RENUMBER_MAP_PATH: okMap } });
+
+  const badMap = path.join(scratch, 'map-incomplete.json');
+  writeFileSync(badMap, JSON.stringify([{
+    fromFile: '9997_a_name_it_used_to_have.sql', toFile: target, fromNumber: '0267',
+    references: [], why: 'control: renamed, innards left behind',
+  }], null, 2), 'utf8');
+  mustFail('a move whose innards still carry the old number is caught',
+    'check-renumber-closure.mjs', { env: { RENUMBER_MAP_PATH: badMap }, expect: 'survive inside the moved file' });
+
+  const missingRef = path.join(scratch, 'map-missing-ref.json');
+  writeFileSync(missingRef, JSON.stringify([{
+    fromFile: '9996_a_name_it_used_to_have.sql', toFile: target, fromNumber: '9996',
+    references: ['supabase/tests/p1_preflight.sql'], why: 'control: a declared reference that still says nothing',
+  }], null, 2), 'utf8');
+  mustPass('a declared reference that no longer carries the old number passes',
+    'check-renumber-closure.mjs', { env: { RENUMBER_MAP_PATH: missingRef } });
 }
 
 // ============================================================ baseline drift
@@ -202,7 +239,7 @@ console.log('\ncheck:baseline-drift');
     writeFileSync(suiteBaseline, `${JSON.stringify(withoutOne, null, 2)}\n`, 'utf8');
     mustFail('deleting a suite and re-pinning the baseline is caught', 'check-baseline-drift.mjs', {
       env: { BASELINE_DRIFT_BASE: 'HEAD' },
-      expect: 'removed from the baseline',
+      expect: 'removed from or moved within the baseline',
     });
   } finally {
     writeFileSync(suiteBaseline, original, 'utf8');

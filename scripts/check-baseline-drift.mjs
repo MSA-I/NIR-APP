@@ -46,8 +46,12 @@ if (!base) {
   base = (git(['merge-base', 'origin/main', 'HEAD'], true) ?? '').trim();
 }
 if (!base) {
-  console.log('check:baseline-drift skipped: no merge base with origin/main to compare against.');
-  process.exit(0);
+  // FAILS CLOSED. "I could not find a base to compare against" is not "the baselines are fine".
+  // A shallow clone or a failed fetch would otherwise turn this guard off silently, which is the
+  // same class of bug as the guards it exists to police.
+  console.error('check:baseline-drift FAILED — no merge base with origin/main to compare against.\n'
+    + '  The workflow needs fetch-depth: 0. Set BASELINE_DRIFT_BASE explicitly to override.');
+  process.exit(1);
 }
 
 const problems = [];
@@ -65,7 +69,14 @@ function current(relPath) {
 function compare(relPath, extract, { mayLose, mayGain, loseLabel, gainLabel, why }) {
   const before = previous(relPath);
   const after = current(relPath);
-  if (!before || !after) return; // new baseline in this branch — nothing to drift from
+  if (!before && !after) return;      // never existed — nothing to say
+  if (!before) return;                 // new baseline in this branch — nothing to drift from
+  if (!after) {                        // it existed at the base and is gone now
+    problems.push(`${relPath}\n    the baseline file was DELETED.\n`
+      + '    Every guard that reads it skips when it is missing, so removing the file turns the'
+      + '\n    guard off and this is the only check that would notice.');
+    return;
+  }
   const b = new Set(extract(before));
   const a = new Set(extract(after));
   const lost = [...b].filter((x) => !a.has(x));
@@ -85,11 +96,13 @@ function compare(relPath, extract, { mayLose, mayGain, loseLabel, gainLabel, why
   }
 }
 
+// Full identity AND position. Comparing paths alone would let a re-baseline change a role, a
+// label, or where a reset sits — each of which changes what the suites actually observe.
 compare('scripts/suite-manifest.baseline.json',
-  (j) => j.filter((e) => e.kind === 'suite').map((e) => e.path), {
+  (j) => j.map((e, i) => `${i}|${e.kind}|${e.path ?? ''}|${e.label}|${e.role ?? ''}`), {
     mayLose: false,
     mayGain: true,
-    loseLabel: 'SQL suite(s) were removed from the baseline',
+    loseLabel: 'gate step(s) were removed from or moved within the baseline',
     why: 'A suite leaving the baseline is a suite leaving CI. If it is genuinely retired, say so in\n'
       + '    the pull request description — this guard exists so that removal cannot be silent.',
   });
