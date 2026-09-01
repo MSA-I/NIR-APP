@@ -38,7 +38,15 @@ const inject = process.env.RENUMBER_CLOSURE_INJECT;
 // order to test the map. Neither is a real pointer; a check that trips over the fixtures
 // written to exercise it is reading its own comment as evidence.
 const SELF = 'scripts/check-renumber-closure.mjs';
-const FIXTURES = ['scripts/check-gate-controls.mjs'];
+// Exempting the WHOLE control file would hide a genuine stale pointer that appeared in it later,
+// and it is an executable surface like any other. Only the invented names it uses as fixtures are
+// pardoned, by exact name.
+const FIXTURE_FILE = 'scripts/check-gate-controls.mjs';
+const FIXTURE_NAMES = new Set([
+  '9994_a_name_it_used_to_have.sql', '9995_a_name_it_used_to_have.sql',
+  '9996_a_name_it_used_to_have.sql', '9997_a_name_it_used_to_have.sql',
+  '9998_a_name_it_used_to_have.sql',
+]);
 
 const violations = [];
 // The one measured cross-reference in the tree: 0187 wraps a block verifying constraints that
@@ -173,7 +181,8 @@ for (const hit of referenceHits) {
   const lineNo = parts.at(-2);
   const where = parts.slice(0, -2).join(':');
   if (where.startsWith('supabase/migrations/')) continue;
-  if (where === SELF || FIXTURES.includes(where)) continue;
+  if (where === SELF) continue;
+  if (where === FIXTURE_FILE && FIXTURE_NAMES.has(name)) continue;
   if (existing.has(name)) continue;
   // Counted, not just named. Without the count a SECOND occurrence of the same stale filename in
   // the same document is excused by the entry that pardons the first.
@@ -243,7 +252,7 @@ if (existsSync(mapPath)) {
     // Anything that cited the file by name.
     const byName = grepRepo(fromFile.replace(/\./g, '\\.'), SCAN_PATHS)
       .filter((h) => !h.startsWith(`${SELF}:`) && !h.startsWith('scripts/renumber-map.json:')
-      && !FIXTURES.some((f) => h.startsWith(`${f}:`)));
+      && !(h.startsWith(`${FIXTURE_FILE}:`) && [...FIXTURE_NAMES].some((n) => h.endsWith(n))));
     if (byName.length) {
       violations.push({ file: `renumber ${fromFile} -> ${toFile}`, lineNo: '-', kind: 'incomplete renumber',
         found: `${byName.length} reference(s) still name the old file`,

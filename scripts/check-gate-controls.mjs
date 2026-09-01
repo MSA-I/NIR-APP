@@ -124,11 +124,27 @@ console.log('\ncheck:suite-manifest');
     // two-wave hole: wave N adds a suite without re-baselining, wave N+1 deletes it, the tree
     // matches the stale baseline again, and the suite is gone with every check green.
     const withAdd = path.join(scratch, 'gate-added.ps1');
-    writeFileSync(withAdd, head + body + '\nInvoke-SqlTest "supabase\\tests\\p999_injected.sql" "Injected by the control"\n', 'utf8');
+    // Inserted INSIDE the registry, at the same brace depth and indentation as a real call.
+    // Appending it at the end of the file would trip the block-depth rule instead and the
+    // control would pass for the wrong reason.
+    const indent = dropped.match(/^[ \t]*/)[0];
+    const addedLine = indent + 'Invoke-SqlTest "supabase\\\\tests\\\\p999_injected.sql" "Injected by the control"';
+    writeFileSync(withAdd, head + body.replace(dropped, dropped + String.fromCharCode(10) + addedLine), 'utf8');
     mustFail('an added suite is caught', 'check-suite-manifest.mjs', {
       env: { SUITE_MANIFEST_GATE_PATH: withAdd, SUITE_MANIFEST_BASELINE_PATH: copyBaseline },
       expect: 'not in the baseline',
     });
+
+    // control 5b — the subtler shape: the call STARTS its line, so the token count matches, both
+    // parsers claim it, and the baseline stays valid. Only the block it sits in gives it away.
+    const withBlock = path.join(scratch, 'gate-blocked.ps1');
+    writeFileSync(withBlock, head + body.replace(dropped,
+      '    if ($true) {' + String.fromCharCode(10) + dropped + String.fromCharCode(10) + '    }'), 'utf8');
+    mustFail('a canonical-looking call nested inside a conditional block is caught',
+      'check-suite-manifest.mjs', {
+        env: { SUITE_MANIFEST_GATE_PATH: withBlock, SUITE_MANIFEST_BASELINE_PATH: copyBaseline },
+        expect: 'nested inside a block',
+      });
 
     // control 5 — a call the PowerShell gate runs but neither parser can see. This is the
     // shape that would enter no baseline and run in no CI job while everything exits 0.

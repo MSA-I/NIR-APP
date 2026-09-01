@@ -96,6 +96,39 @@ for (const line of uncommented.split(/\r?\n/)) {
   unexplained.push(trimmed.slice(0, 96));
 }
 
+// AND THE BLOCK IT SITS IN, not only the shape of the line. A call can start its line, satisfy
+// both parsers and the token count, and still be conditional:
+//
+//     if ($condition) {
+//       Invoke-SqlTest "supabase\tests\p94.sql" "P94"
+//     }
+//
+// PowerShell would then run it or skip it depending on $condition while ci-sql-suites.mjs runs it
+// unconditionally — a real divergence between the manual gate and CI, with every check green.
+// Measured across the whole registry: all 113 calls sit at exactly brace depth 2, so the region is
+// flat and declarative. The depth is pinned rather than merely required to be uniform, because
+// wrapping ALL of them would keep uniformity while changing what runs.
+const REGISTRY_DEPTH = 2;
+const misnested = [];
+{
+  let depth = 0;
+  for (const line of uncommented.split(/\r?\n/)) {
+    if (/^\s*(Invoke-SqlTest|Invoke-Preflight|Reset-LocalDatabase)\b/.test(line) && depth !== REGISTRY_DEPTH) {
+      misnested.push({ depth, text: line.trim().slice(0, 88) });
+    }
+    depth += (line.split('{').length - 1) - (line.split('}').length - 1);
+  }
+}
+if (misnested.length) {
+  fail(`check:suite-manifest FAILED — ${misnested.length} gate step(s) are nested inside a block\n`
+    + `  rather than sitting in the flat registry at depth ${REGISTRY_DEPTH}:\n\n`
+    + misnested.map((m) => `    depth ${m.depth}: ${m.text}`).join('\n')
+    + '\n\n  A call inside a conditional runs, or does not, depending on a variable — while the\n'
+    + '  CI runner parses it and runs it every time. Both parsers would report it identically and\n'
+    + '  the two would still disagree about what actually executed. The registry has to stay\n'
+    + '  declarative: one call per line, no if, no loop, no function around them.');
+}
+
 if (unexplained.length) {
   fail('check:suite-manifest FAILED — the gate contains gate-step calls this guard cannot see:\n\n'
     + unexplained.map((l) => `    ${l}`).join('\n')
