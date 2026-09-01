@@ -64,6 +64,52 @@ for (const match of body.matchAll(lineRe)) {
   });
 }
 
+// EVERY invocation must be a plain standalone line, because that is the only shape both parsers
+// can see. `if ($x) { Invoke-SqlTest "..." "..." }` runs perfectly well in the PowerShell gate and
+// is invisible to this guard AND to ci-sql-suites.mjs — it would never enter the baseline, never
+// run in CI, and everything would exit 0. Two parsers sharing one blind spot agree with each other
+// and are both wrong, so the grammar itself is pinned: count the tokens, and refuse any the
+// line-shaped pattern did not claim.
+//
+// Comments are stripped first — the gate discusses `Reset-LocalDatabase` in prose twice — and one
+// wrapped call is pinned: the final cleanup reset, which lives inside a `try` on purpose and which
+// CI deliberately does not run, because no SQL consumer follows it. Pinning it by exact text keeps
+// the rule strict while recording the one place it is knowingly bent.
+const NON_CANONICAL_ALLOWED = new Map([
+  ['try { Reset-LocalDatabase }', 1],
+]);
+
+const uncommented = body
+  .split(/\r?\n/)
+  .map((line) => line.replace(/(^|\s)#.*$/, '$1'))
+  .join('\n');
+
+const tokenCount = (uncommented.match(/\b(Invoke-SqlTest|Invoke-Preflight|Reset-LocalDatabase)\b/g) ?? []).length;
+let allowedCount = 0;
+const unexplained = [];
+for (const line of uncommented.split(/\r?\n/)) {
+  const trimmed = line.trim();
+  if (!/\b(Invoke-SqlTest|Invoke-Preflight|Reset-LocalDatabase)\b/.test(trimmed)) continue;
+  if (/^(Invoke-SqlTest|Invoke-Preflight|Reset-LocalDatabase)\b/.test(trimmed)) continue; // canonical
+  const budget = NON_CANONICAL_ALLOWED.get(trimmed);
+  if (budget && allowedCount < budget) { allowedCount += 1; continue; }
+  unexplained.push(trimmed.slice(0, 96));
+}
+
+if (unexplained.length) {
+  fail('check:suite-manifest FAILED — the gate contains gate-step calls this guard cannot see:\n\n'
+    + unexplained.map((l) => `    ${l}`).join('\n')
+    + '\n\n  A call wrapped in a conditional or written inline runs in the PowerShell gate and is\n'
+    + '  invisible to both this guard and scripts/ci-sql-suites.mjs — so it would never enter the\n'
+    + '  baseline and never run in CI, with every check green. Put each call on its own line, or\n'
+    + '  pin it in NON_CANONICAL_ALLOWED with the reason it must be wrapped.');
+}
+if (tokenCount !== sequence.length + allowedCount) {
+  fail('check:suite-manifest FAILED — counted ' + tokenCount + ' gate-step token(s) but claimed\n'
+    + `  ${sequence.length} as steps and ${allowedCount} as pinned exceptions. The grammar and the\n`
+    + '  parser have drifted apart; neither number can be trusted until they agree.');
+}
+
 // The runner drops trailing resets (no SQL consumer after them); mirror that so the two agree.
 while (sequence.at(-1)?.kind === 'reset') sequence.pop();
 

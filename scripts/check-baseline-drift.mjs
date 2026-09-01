@@ -96,16 +96,47 @@ function compare(relPath, extract, { mayLose, mayGain, loseLabel, gainLabel, why
   }
 }
 
-// Full identity AND position. Comparing paths alone would let a re-baseline change a role, a
-// label, or where a reset sits — each of which changes what the suites actually observe.
-compare('scripts/suite-manifest.baseline.json',
-  (j) => j.map((e, i) => `${i}|${e.kind}|${e.path ?? ''}|${e.label}|${e.role ?? ''}`), {
-    mayLose: false,
-    mayGain: true,
-    loseLabel: 'gate step(s) were removed from or moved within the baseline',
-    why: 'A suite leaving the baseline is a suite leaving CI. If it is genuinely retired, say so in\n'
-      + '    the pull request description — this guard exists so that removal cannot be silent.',
-  });
+// Full identity, and RELATIVE order — not absolute position. Keying on the index would report
+// every entry after an insertion as "moved", which makes adding a suite in the middle look like a
+// mass deletion and trains people to ignore the guard. The real rule is that the old baseline must
+// still be a SUBSEQUENCE of the new one: additions anywhere are fine, survivors may not reorder.
+{
+  const relPath = 'scripts/suite-manifest.baseline.json';
+  const before = previous(relPath);
+  const after = current(relPath);
+  if (before && after) {
+    const id = (e) => `${e.kind}|${e.path ?? ''}|${e.label}|${e.role ?? ''}`;
+    const oldIds = before.map(id);
+    const newIds = after.map(id);
+
+    // Walk the new list looking for the old one in order.
+    let cursor = 0;
+    const missing = [];
+    for (const want of oldIds) {
+      const at = newIds.indexOf(want, cursor);
+      if (at === -1) missing.push(want);
+      else cursor = at + 1;
+    }
+    if (missing.length) {
+      problems.push(`${relPath}\n    ${missing.length} gate step(s) were removed, or survived but changed order:\n`
+        + missing.slice(0, 20).map((x) => `      - ${x}`).join('\n')
+        + (missing.length > 20 ? `\n      … and ${missing.length - 20} more` : '')
+        + '\n    A suite leaving the baseline is a suite leaving CI, and the suites share one\n'
+        + '    database, so reordering the survivors changes what the later ones observe.');
+    }
+
+    // A new reset or preflight is not an ordinary addition: it changes the database state every
+    // following suite sees, so it has to be argued for rather than absorbed.
+    const structuralBefore = before.filter((e) => e.kind !== 'suite').length;
+    const structuralAfter = after.filter((e) => e.kind !== 'suite').length;
+    if (structuralAfter > structuralBefore) {
+      problems.push(`${relPath}\n    ${structuralAfter - structuralBefore} new reset/preflight step(s) were added.\n`
+        + '    These change what every suite after them observes. Say why in the pull request.');
+    }
+  } else if (before && !after) {
+    problems.push(`${relPath}\n    the baseline file was DELETED — every guard that reads it then skips.`);
+  }
+}
 
 compare('scripts/migration-set.baseline.json',
   (j) => j, {

@@ -13,7 +13,7 @@
  *
  * Every mutation happens on a COPY in a scratch directory. Nothing here writes to the tree.
  */
-import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -130,6 +130,16 @@ console.log('\ncheck:suite-manifest');
       expect: 'not in the baseline',
     });
 
+    // control 5 — a call the PowerShell gate runs but neither parser can see. This is the
+    // shape that would enter no baseline and run in no CI job while everything exits 0.
+    const withWrapped = path.join(scratch, 'gate-wrapped.ps1');
+    writeFileSync(withWrapped, head + body.replace(dropped,
+      'if ($true) { ' + dropped.trim() + ' }'), 'utf8');
+    mustFail('a call wrapped in a conditional is caught', 'check-suite-manifest.mjs', {
+      env: { SUITE_MANIFEST_GATE_PATH: withWrapped, SUITE_MANIFEST_BASELINE_PATH: copyBaseline },
+      expect: 'this guard cannot see',
+    });
+
     // control 5 — the untouched registry must still pass, or the four above prove nothing
     mustPass('the real registry still passes', 'check-suite-manifest.mjs', {});
   }
@@ -199,7 +209,8 @@ console.log('\ncheck:key-manifest');
 // guards the cycle and one that condemns it.
 console.log('\ncheck:renumber-closure (map mode)');
 {
-  const target = '0267_forecast_cohort_joins_the_teardown_window.sql';
+  // eslint-disable-next-line no-var
+  var target = '0267_forecast_cohort_joins_the_teardown_window.sql';
   const okMap = path.join(scratch, 'map-complete.json');
   writeFileSync(okMap, JSON.stringify([{
     fromFile: '9998_a_name_it_used_to_have.sql', toFile: target, fromNumber: '9998',
@@ -223,6 +234,38 @@ console.log('\ncheck:renumber-closure (map mode)');
   }], null, 2), 'utf8');
   mustPass('a declared reference that no longer carries the old number passes',
     'check-renumber-closure.mjs', { env: { RENUMBER_MAP_PATH: missingRef } });
+
+  // A REAL cycle case. `9998` proves little: no other migration legitimately owns it, so even a
+  // wrong global-ban implementation would pass. This picks a number that IS a live migration
+  // elsewhere while being absent from the moved file — exactly the wave 4 shape, where 0279 is
+  // #191's new identity and #192's old one at the same time.
+  {
+    // A DISCRIMINATING cycle case. 0267 is a live migration that carries its own number eight
+    // times, so a wrong global-ban implementation would find those and fail. The correct per-file
+    // implementation passes, because the file being MOVED (0001_init.sql) does not contain 0267.
+    // That is the wave 4 shape: 0279 is #191's new identity and #192's old one at once.
+    const cycleMap = path.join(scratch, 'map-real-cycle.json');
+    writeFileSync(cycleMap, JSON.stringify([{
+      fromFile: '9994_a_name_it_used_to_have.sql', toFile: '0001_init.sql', fromNumber: '0267',
+      references: [],
+      why: 'control: 0267 lives on in its own migration and must not be banned repo-wide',
+    }], null, 2), 'utf8');
+    mustPass('a completed move passes while its old number stays live in another migration',
+      'check-renumber-closure.mjs', { env: { RENUMBER_MAP_PATH: cycleMap } });
+
+    // A declared reference that has NOT been updated must fail. Previously only the passing
+    // direction was covered, so the reference check itself was never observed to work.
+    const staleRefMap = path.join(scratch, 'map-stale-ref.json');
+    writeFileSync(staleRefMap, JSON.stringify([{
+      // toFile is a file whose body does NOT carry 0267, so the only thing that can fail is
+      // the declared reference — which does carry it. That isolates the reference check.
+      fromFile: '9995_a_name_it_used_to_have.sql', toFile: '0001_init.sql', fromNumber: '0267',
+      references: [`supabase/migrations/${target}`],
+      why: 'control: the declared reference still carries the old number',
+    }], null, 2), 'utf8');
+    mustFail('a declared reference still carrying the old number is caught',
+      'check-renumber-closure.mjs', { env: { RENUMBER_MAP_PATH: staleRefMap }, expect: 'now names a DIFFERENT migration' });
+  }
 }
 
 // ============================================================ baseline drift
@@ -239,12 +282,37 @@ console.log('\ncheck:baseline-drift');
     writeFileSync(suiteBaseline, `${JSON.stringify(withoutOne, null, 2)}\n`, 'utf8');
     mustFail('deleting a suite and re-pinning the baseline is caught', 'check-baseline-drift.mjs', {
       env: { BASELINE_DRIFT_BASE: 'HEAD' },
-      expect: 'removed from or moved within the baseline',
+      expect: 'were removed, or survived but changed order',
     });
   } finally {
     writeFileSync(suiteBaseline, original, 'utf8');
   }
   mustPass('the real baselines still pass', 'check-baseline-drift.mjs', { env: { BASELINE_DRIFT_BASE: 'HEAD' } });
+}
+
+// ============================================================ wiring proof
+// Every guard above is only real if something runs it. Deleting `check:migration-numbers` from
+// package.json, or its step from build.yml, would leave every control passing while the guard
+// never executed again — the same failure as a guard that cannot fail, one level up.
+console.log('\nwiring');
+{
+  const pkg = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+  const workflow = readFileSync(path.join(repoRoot, '.github', 'workflows', 'build.yml'), 'utf8');
+  const required = ['check:suite-manifest', 'check:migration-numbers', 'check:renumber-closure',
+    'check:key-manifest', 'check:baseline-drift', 'check:gate-controls'];
+  const missingScript = required.filter((c) => !pkg.scripts?.[c]);
+  const missingVerify = required.filter((c) => !String(pkg.scripts?.verify ?? '').includes(c));
+  const missingStep = required.filter((c) => !workflow.includes(`npm run ${c}`));
+  ran += 1;
+  if (missingScript.length || missingVerify.length || missingStep.length) {
+    failures += 1;
+    console.error('  ✗ every guard is reachable from package.json AND build.yml');
+    if (missingScript.length) console.error(`      no npm script: ${missingScript.join(', ')}`);
+    if (missingVerify.length) console.error(`      not in \`verify\`: ${missingVerify.join(', ')}`);
+    if (missingStep.length) console.error(`      no build.yml step: ${missingStep.join(', ')}`);
+  } else {
+    console.log(`  ✓ all ${required.length} guards reachable from package.json and build.yml`);
+  }
 }
 
 rmSync(scratch, { recursive: true, force: true });

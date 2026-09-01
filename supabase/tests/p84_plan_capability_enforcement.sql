@@ -24,19 +24,39 @@ begin
 end
 $$;
 
-/** Runs one statement as the given member and reports the SQLSTATE/message, or 'ok'. */
+/** Runs one statement as the given member and reports the SQLSTATE/message, or 'ok'.
+ *
+ * IT ALSO CLAIMS THE FINANCIAL-WRITER SEAT, AND THAT IS NOT INCIDENTAL. Two BEFORE-row triggers
+ * sit on these tables, and PostgreSQL fires them in NAME order:
+ *
+ *     p1_bank_imports_guard            (0023) — every P1 financial write must come through its RPC
+ *     zz_plan_capability_bank_imports  (0252) — the plan must include the capability
+ *
+ * `p1_` sorts before `zz_`, so without `app.p1_financial_writer` the first guard refuses with
+ * `financial_command_rpc_required` and the plan guard is never reached at all. The suite would
+ * then report "a write on free must be refused by name" as a failure while the write was in fact
+ * refused — by the wrong guard, for the wrong reason.
+ *
+ * Setting it here is what an RPC does on the caller's behalf (0023 sets exactly this before each
+ * financial command), so this reproduces the shape of a real command and leaves the PLAN guard as
+ * the thing under test. It is transaction-local and cleared on both exits, so no statement outside
+ * an attempt is silently authorised.
+ */
 create function pg_temp.p84_attempt(p_actor uuid, p_role text, p_sql text)
 returns text language plpgsql as $$
 begin
   perform set_config('request.jwt.claim.sub', p_actor::text, true);
   perform set_config('request.jwt.claim.role', 'authenticated', true);
+  perform set_config('app.p1_financial_writer', p_actor::text, true);
   execute format('set local role %I', p_role);
   begin
     execute p_sql;
     execute 'set local role postgres';
+    perform set_config('app.p1_financial_writer', '', true);
     return 'ok';
   exception when others then
     execute 'set local role postgres';
+    perform set_config('app.p1_financial_writer', '', true);
     return sqlerrm;
   end;
 end

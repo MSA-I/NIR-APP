@@ -186,6 +186,21 @@ for (const hit of referenceHits) {
   violations.push({ file: where, lineNo, kind: 'dangling filename reference', found: name, text: name });
 }
 
+// A pardon that nothing uses is a pardon waiting to excuse something new. If the historical
+// reference it was written for has since been cleaned up, the entry must go, or it sits in the
+// allowlist ready to absolve a fresh stale pointer at the same path.
+for (const pardon of HISTORICAL_DANGLING_REFS) {
+  if (!pardonsUsed.has(pardon)) {
+    violations.push({
+      file: 'scripts/check-renumber-closure.mjs',
+      lineNo: '-',
+      kind: 'dangling filename reference',
+      found: `an unused pardon: ${pardon}`,
+      text: 'the reference it excused is gone; delete the allowlist entry',
+    });
+  }
+}
+
 // ---------------------------------------------------------------- 3. declared renumbers must be complete
 // scripts/renumber-map.json declares each move as a FILE move, not a number ban. That distinction
 // is the whole design, because wave 4's renumber is a CYCLE:
