@@ -56,10 +56,11 @@ describe('תג דרגת המנוי', () => {
       ['basic', 'בסיס', 'plan-badge-basic'],
       ['pro', 'פרו', 'plan-badge-pro'],
       ['premium', 'פרימיום', 'plan-badge-premium'],
-      // Above premium on the ladder, so it wears the ONYX rather than a quieter sixth treatment
-      // that would read as a demotion. (Gold left the ladder in the owner's second ruling of
-      // 26.08.2026: the metals are silver → oceanic → onyx, and the sheen moved up with them.)
-      ['business', 'ביזנס', 'plan-badge-premium'],
+      // Its OWN face since 31.08.2026. It wore premium's while the chips were three metals and
+      // there was no fourth for it to wear — reuse was the only way for the top rung not to read
+      // as a demotion. The card's five faces gave it a violet of its own, and the owner asked for
+      // the chips to follow the cards, so the borrowing ended with the reason for it.
+      ['business', 'ביזנס', 'plan-badge-business'],
     ] as const) {
       rpc.mockResolvedValue(plan(key, label));
       const { unmount } = renderBadge();
@@ -183,12 +184,23 @@ describe('תג דרגת המנוי', () => {
  * plan. The export is what makes a second copy impossible; this is what pins the fallback.
  */
 describe('מפת המדרגות המשותפת', () => {
-  it('נותנת חזות לכל מדרגה בסולם, ו-`business` חוזר על העליונה', () => {
+  /*
+   * `business` USED to reuse premium's mark, and this test asserted it. It stopped on 31.08.2026:
+   * the three metals became the card's five faces and business gained a colour of its own, so the
+   * reuse would now show two different plans wearing one mark. The assertion is inverted rather
+   * than deleted — that the two are DISTINCT is the fact worth pinning, and a silent re-borrow is
+   * exactly the regression this file exists to catch.
+   */
+  it('נותנת חזות לכל מדרגה בסולם, ולכל אחת חזות משלה', () => {
     expect(planTierClass('free')).toBe('plan-badge-free');
     expect(planTierClass('basic')).toBe('plan-badge-basic');
     expect(planTierClass('pro')).toBe('plan-badge-pro');
     expect(planTierClass('premium')).toBe('plan-badge-premium');
-    expect(planTierClass('business')).toBe(planTierClass('premium'));
+    expect(planTierClass('business')).toBe('plan-badge-business');
+    expect(planTierClass('business')).not.toBe(planTierClass('premium'));
+    // Five rungs, five distinct faces — no two of them share one.
+    const faces = ['free', 'basic', 'pro', 'premium', 'business'].map((k) => planTierClass(k));
+    expect(new Set(faces).size).toBe(5);
   });
 
   it('מדרגה שאין לה חזות אינה לובשת חזות מושאלת', () => {

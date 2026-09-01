@@ -237,7 +237,7 @@ describe('דף המסלולים הציבורי', () => {
     await settle();
     for (const planKey of ['free', 'basic', 'pro', 'premium']) {
       const promoted = planKey === RECOMMENDED_PLAN;
-      expect(card(planKey).className.includes('plan-card--paper')).toBe(promoted);
+      expect(card(planKey).className.includes('plan-card--pointed')).toBe(promoted);
       expect(within(card(planKey)).queryByText('מומלץ') !== null).toBe(promoted);
     }
   });
@@ -309,7 +309,10 @@ describe('דף המסלולים הציבורי', () => {
     expect(within(loadingMain).getByRole('heading', { name: 'מסלולים' })).toBeInTheDocument();
     // Four rungs (#194 keeps `ביזנס` off this page) and NO action bar — these cards carry no
     // action, so a placeholder for one would promise a control the loaded page never shows.
-    expect(within(loadingMain).getByTestId('pricing-skeleton').querySelectorAll('li'))
+    /* `.plan-card` and not `li`: the skeleton draws the card's own parts, and since 31.08.2026
+       those include the entitlement list — which is a `ul` of `li` inside each card. Counting every
+       `li` counted the rows as rungs. The class is what "a rung" means here. */
+    expect(within(loadingMain).getByTestId('pricing-skeleton').querySelectorAll('.plan-card'))
       .toHaveLength(4);
     expect(within(loadingMain).queryByRole('button')).toBeNull();
     // The availability notice is fixed prose, not data — #208's currency rule is as true before

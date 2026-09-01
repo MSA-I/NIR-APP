@@ -293,11 +293,15 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     expect(cards.querySelector('[data-plan="basic"]')?.textContent).toMatch(/קריאה אוטומטית/);
     expect(cards.querySelector('[data-plan="pro"]')?.textContent).toMatch(/התאמות בנק/);
     /* Business is a conversation and carries a contractual quota, never a published number
-       (#194/#201). The ticket splits the old sentence into the label and the figure it sits above
-       — «מכסה» / «חוזית» — so the claim is checked where it now lives, and checked HARDER: the
-       quota slot must contain no digit at all, which is the part that would actually leak the
-       internal minimum. */
-    const businessQuota = cards.querySelector('[data-plan="business"] .plan-card__quota');
+       (#194/#201). The claim is checked where it now lives, and checked HARDER than the prose it
+       replaced: the quota slot must contain no digit at all, which is the part that would actually
+       leak the internal minimum.
+
+       Addressed by `[data-plan-docs]` since the 31.08.2026 re-transcription. The quota had a block
+       of its own on the ticket; on the card it is the first ROW of the list, with its figure at the
+       far edge. The attribute rode both, which is why it is the one the assertion holds — a
+       selector naming the block would have been a test of the layout rather than of the claim. */
+    const businessQuota = cards.querySelector('[data-plan="business"] [data-plan-docs]');
     expect(businessQuota?.textContent).toMatch(/חוזית/);
     expect(businessQuota?.textContent).not.toMatch(/\d/);
     expect(cards.querySelector('[data-plan="business"]')?.textContent).toMatch(/מכסה/);
@@ -329,7 +333,7 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     for (const planKey of ['free', 'basic', 'pro', 'premium', 'business']) {
       const card = cards.querySelector(`[data-plan="${planKey}"]`);
       const promoted = planKey === RECOMMENDED_PLAN;
-      expect(card?.className.includes('plan-card--paper')).toBe(promoted);
+      expect(card?.className.includes('plan-card--pointed')).toBe(promoted);
       expect(/מומלץ/.test(card?.textContent ?? '')).toBe(promoted);
     }
     // The reader is on `free`. A reader-keyed emphasis would have promoted the rung above it.

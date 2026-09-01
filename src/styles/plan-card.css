@@ -2,94 +2,107 @@
  *
  * Owner ruling 27.08.2026: «הנחיתה מבחינת העיצוב היא המקור». The direction is one-way and it is
  * NOT the direction the product's other shared assets run in — `LANDING-PAGE-NIR` pulls the palette
- * FROM here via its `scripts/extract-tokens.mjs`, and this file goes the other way. The card was
- * designed there against the owner's reference image of 26.08.2026, approved there, and this is a
- * VERBATIM TRANSCRIPTION of `src/styles.css:1875-2230` in that repository. Every rule below is that
- * file's; the only edits are mechanical, and they are listed at the bottom of this comment.
+ * FROM here via its `scripts/extract-tokens.mjs`, and this file goes the other way.
  *
  * SO WHEN THE TWO DISAGREE, THAT ONE IS RIGHT AND THIS ONE IS STALE. Do not "improve" a rule here.
- * A change to how the card looks belongs on the marketing site first and arrives here by being
- * copied again — otherwise the product grows a second opinion about a design it does not own, which
- * is exactly the drift that produced two different-looking ladders on the two sides of the login
- * screen in the first place.
  *
- * WHY A PLAIN CSS FILE AND NOT A COMPONENT. The two surfaces do not share a stack: the product is
- * Vite + React + Tailwind v4, the marketing site is Astro + React islands with hand-written CSS
- * and no Tailwind at all. A shared component would need a shared build; a shared stylesheet needs
- * nothing. What drifted between the two was never the markup — it was the LOOK, and the look is
- * what this file pins.
+ * --- RE-TRANSCRIBED 31.08.2026, AND WHY ------------------------------------------------------
+ * That header sentence came true. The first transcription (27.08.2026) copied the marketing site's
+ * card as it stood on the 26th: a TICKET — scalloped perforations, two side notches, a printed
+ * serial and a drawn barcode. On the 28th the marketing site replaced it, against the owner's
+ * second reference, with a rectangular card on a step of colour. The product kept transcribing the
+ * ticket for three days, so the two sides of the login screen showed two different-looking ladders
+ * again — the exact fault this file exists to end. It was carried as `DEBT §30` in that repository.
  *
- * THE FOUR MECHANICAL EDITS, and there are no others:
- *   1. `--color-*` host tokens became a `--pc-*` namespace with the marketing site's own values.
- *      See the next section: the two repositories give the same names opposite meanings.
- *   2. The two face variables it read — the display one and the monospaced one, which that file
- *      declares one after the other on the same property so the second always wins — collapsed
- *      into `--pc-font-display`, defaulting to `inherit`. (Named in prose rather than spelled out,
- *      because `check:typography` reads this file and the retired utility's name is a literal it
- *      refuses on sight — correctly: a comment must never be the reason a rule looks alive.)
- *   3. `.plan-tray` gained the LAYOUT — grid columns and the two breakpoints — replacing the
- *      Tailwind classes that were on the tray element there and the mobile snap-scroll carousel
- *      that overrode them. Owner ruling, same day: «באפליקציה באתר הרגיל זה כשורה ובמובייל זה
- *      רשימה». The marketing site keeps its carousel; nothing here touches that repository.
- *   4. `.plan-card__cta` and `.plan-card[data-current]` are ADDITIONS, not transcriptions — the
- *      button that surface builds from its own `Cta` component, and a state only the authenticated
- *      ladder has. Both are marked where they appear.
+ * Owner, 31.08.2026, asked which card wins and answering with the instruction rather than a
+ * preference: «הכרטיס של דף הנחיתה — תעביר אותו לאפליקציה». Asked whether the two moving parts
+ * came with it, the answer was «1» — everything, 1:1, the gloss and the shader field included.
+ *
+ * This file is therefore a VERBATIM TRANSCRIPTION of `src/styles.css:2686-3040` in
+ * `LANDING-PAGE-NIR`. Every rule below is that file's; the edits are mechanical and listed here.
+ *
+ * THE FIVE MECHANICAL EDITS, and there are no others:
+ *   1. `--color-*` host tokens became a `--pc-*` namespace with absolute values. See below: the
+ *      two repositories give the same names opposite meanings.
+ *   2. THE VALUES ARE THE MARKETING SITE'S **LIGHT VIEW**, not its default dark one. This is the
+ *      one substitution that is a judgement, so it is argued rather than asserted: two of the five
+ *      faces are not colours at all. `--plain` IS the page's ground and `--lift` is that ground
+ *      raised a step — the marketing site's own comment says so — and they follow the view through
+ *      the token swap at `:root[data-theme='light']`. The product has exactly one view and it is
+ *      cream (`grep -c data-theme src/index.css` → 0), so the light view's values are the ones
+ *      that put those two faces on the ground they are supposed to be. The other three faces are
+ *      objects, keep their colour in both views, and are transcribed unchanged.
+ *   3. The display face collapsed into `--pc-font-display`, defaulting to `inherit`.
+ *   4. `.plan-tray` carries the LAYOUT — grid columns and the two breakpoints — replacing the
+ *      Tailwind classes on the tray element there. Owner, 27.08.2026: «באפליקציה באתר הרגיל זה
+ *      כשורה ובמובייל זה רשימה». The marketing site keeps its own tray; nothing here touches it.
+ *   5. `.plan-card__cta` and `.plan-card[data-current]` are ADDITIONS, not transcriptions — the
+ *      button this surface builds from its own `Cta` component, and a state only the authenticated
+ *      ladder has. The button's rules are the marketing site's `.flow--ghost` / `.flow--primary`
+ *      AS THEY ARE OVERRIDDEN INSIDE A CARD there, which is the same look under another name.
+ *      Both are marked where they appear.
+ *
+ * WHAT LEFT WITH THE TICKET, so nobody looks for it: the perforations, the two side notches, the
+ * printed serial and the barcode. The new card has no slot for any of them. `plan-presentation.json`
+ * lost its `code` field in the same move.
  *
  * --- WHY IT CARRIES ITS OWN COLOURS ---------------------------------------------------------
- * Owner ruling, 27.08.2026: "צבע הנייר נשאר. המנויים זה הדבר היחיד שיכול לחרוג ממסגרת הצבעים של
- * האפליקציה" — the plan card is the ONE surface in the product allowed to leave the palette.
+ * Owner ruling, 27.08.2026: «צבע הנייר נשאר. המנויים זה הדבר היחיד שיכול לחרוג ממסגרת הצבעים של
+ * האפליקציה» — the plan card is the ONE surface in the product allowed to leave the palette.
  * That ruling is what makes this file possible at all, because the two repositories use the same
- * token NAMES for opposite things: on the marketing site `--color-ink` is #fbf6ee, a LIGHT ink for
- * a dark page; in the product it is #0A171D, the darkest ink there is. A file reading
- * `var(--color-ink)` would render white-on-white on one of the two, and no ordering of the imports
- * fixes that.
- *
- * So the card owns a `--pc-*` namespace with absolute values, set on `.plan-tray`. Nothing here
- * reads a host token, and therefore nothing here can be broken by a host repainting its own
- * palette. The values are the marketing site's `:root`, transcribed: `--pc-ink` is its
- * `--color-ink`, `--pc-oceanic` its `--color-oceanic`, and so on down the list.
+ * token NAMES for opposite things: on the marketing site's dark view `--color-ink` is #fbf6ee, a
+ * LIGHT ink; in the product it is #0A171D, the darkest ink there is. A file reading
+ * `var(--color-ink)` would render white-on-white on one of the two.
  *
  * `check:tokens` allows the literals in THIS FILE and refuses any other stylesheet under `src/`,
  * which is what keeps "the only surface that may leave the palette" true rather than merely said.
  *
  * THE ONE THING A HOST MAY SET is `--pc-font-display`: the two sites load different display faces
- * (LT Superior on the marketing site, Noto Sans Hebrew in the product) and a font a host has not
- * loaded is not a look, it is a fallback. It inherits by default.
- *
- * --- THE LAYOUT IS THE OWNER'S, 27.08.2026 --------------------------------------------------
- * "באפליקציה באתר הרגיל זה כשורה ובמובייל זה רשימה" — a ROW of cards on the wide viewport, a
- * VERTICAL LIST on the phone. Both surfaces, one rule. This deliberately replaces two different
- * previous answers: the product's grid of flat cards, and the marketing site's horizontal
- * snap-scroll carousel on mobile, which was a row the phone had to be dragged through rather than
- * a list it could scroll.
+ * and a font a host has not loaded is not a look, it is a fallback. It inherits by default.
  */
 
-.plan-tray {
-  /* ---- the card's own palette (see the header: deliberately absolute) ---- */
-  --pc-ink: #fbf6ee;              /* ink ON a card — the cards are dark, so this is light */
-  --pc-ink-on-light: #0a171d;     /* ink on the one card that is cream */
-  --pc-oceanic: #5d9096;          /* the brand, at the lightness a dark card needs */
-  --pc-oceanic-deep: #003f47;     /* the brand, on the cream card */
-  --pc-action-solid: #0d4e56;     /* the badge that rides the recommended card's edge */
-  --pc-onyx-lift: #12242c;        /* top of the default card's gradient */
-  --pc-onyx-base: #0b1820;        /* bottom of it */
-  --pc-wheat: #fffcf8;            /* the cream paper — KEPT, by the 27.08.2026 ruling */
-  --pc-wheat-sink: #f4efe7;
-  --pc-violet-face: #1d1239;
-  --pc-violet-lift: #241645;
-  --pc-violet-sink: #170e2e;
-  --pc-violet-ink: #b9a3ff;
-  --pc-gloss-face: #08080c;
-  --pc-gloss-lift: #101014;
-  --pc-gloss-mid: #050508;
-  --pc-gloss-sink: #0d0d12;
+/* ---- the card's own palette (see the header: deliberately absolute) ----
+   Transcribed from `LANDING-PAGE-NIR` `:root[data-theme='light']`, which is the view whose ground
+   matches this product's. `--pc-ground` is its `--color-onyx`, `--pc-ink` its `--color-ink`, and
+   so on down the list.
+
+   ON `:root` AND NOT ON `.plan-tray`, since 31.08.2026. It sat on the tray while the card was the
+   only thing wearing these colours. Owner, same day: «שים לב שגם התגים שיש בפרופיל של כל מנוי
+   מתעדכנים לפי הצבעים של המנויים» — the plan chip is the plan's mark and belongs to the same five
+   faces, and chips are drawn in the header and in a member's profile, nowhere near a tray. Two
+   copies of one violet is exactly the drift this file exists to end, so the palette moved up and
+   the tray kept the layout. */
+:root {
+  --pc-ground: #fffcf8;       /* the ground the free card IS */
+  --pc-ground-lift: #f4efe7;  /* one step up: the basic card */
+  --pc-ink: #0a171d;          /* ink on the two cards that are the ground */
+  --pc-ink-soft: #46545b;
+  --pc-ink-dim: #63737a;
+  --pc-oceanic: #003f47;      /* the brand, at the depth a cream card needs */
+  --pc-action-solid: #0d4e56;
+  --pc-wheat: #fffcf8;        /* the light ink the three coloured cards carry */
   --pc-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  /* ---- the layout: list on a phone, row on a desktop ---- */
+  /* The three object faces, named once. The cards spell them inline below because that is how the
+     marketing site spells them and this file is a transcription; the CHIPS read them from here, so
+     a face and its mark cannot drift apart. */
+  --pc-pointed: #06222b;
+  --pc-pointed-edge: #5d9096;
+  --pc-azure: #113a7a;
+  --pc-azure-edge: #93c5fd;
+  --pc-deep: #2e1065;
+  --pc-deep-edge: #c4b5fd;
+}
+
+.plan-tray {
+  /* ---- the layout: list on a phone, row on a desktop (mechanical edit 4) ---- */
   display: grid;
-  align-items: stretch;
   gap: 1rem;
   grid-template-columns: 1fr;
+  align-items: stretch;       /* `.plans-tray { align-items: stretch }` there */
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 /* Two abreast is the tablet's own answer — five tracks at 64rem are ~11rem each and everything
@@ -102,129 +115,131 @@
 }
 
 .plan-card {
-  --perf: 7px;          /* the radius of one scallop */
-  --notch: 13px;        /* the radius of the two side notches */
-  --notch-at: 46%;      /* how far down the card they sit */
-
   position: relative;
   display: flex;
   flex-direction: column;
   isolation: isolate;
   overflow: hidden;
-  padding-block: 1.9rem 1.35rem;
-  padding-inline: 1.35rem;
-  text-align: center;
+  padding: 1.6rem 1.4rem;
+  text-align: start;
   color: var(--pc-ink);
-  background-color: var(--pc-onyx-base);
-  background-image: linear-gradient(180deg, var(--pc-onyx-lift) 0%, var(--pc-onyx-base) 100%);
-  border-radius: 7px;
+  border-radius: 18px;
+  background-color: var(--pc-ground);
+  /* Colour and gradient declared separately, here and on every face below. The shorthand leaves
+     `background-color` transparent, and anything that asks an element what ground it is on reads
+     the COLOUR: graded that way a card's own type gets measured against the page's ground four
+     ancestors up. */
+  background-image: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc-ink) 12%, transparent);
   /* The lift is on `translate`, not on `transform`. A card may be a Motion element and Motion
      writes `transform` inline for the entrance; an inline transform beats a `:hover` rule, so the
-     two were arguing over the same property and the loser changed between frames. `translate` is
-     its own property, so the entrance and the lift compose instead of overwriting each other. */
-  transition: translate 0.45s var(--pc-ease);
-
-  /* The ticket silhouette: four masks intersected.
-     Standard `mask-*` only, no `-webkit-` twins. The prefixed property takes `source-in` where the
-     standard one takes `intersect`, and when both are declared the prefixed pair wins in Chrome
-     and composites the four layers the wrong way — a card with ordinary rounded corners and no
-     perforation at all. Every browser either site supports has the unprefixed property. */
-  mask-image:
-    radial-gradient(var(--perf) at 50% 0, transparent 97%, #000 100%),
-    radial-gradient(var(--perf) at 50% 100%, transparent 97%, #000 100%),
-    radial-gradient(var(--notch) at 0 var(--notch-at), transparent 97%, #000 100%),
-    radial-gradient(var(--notch) at 100% var(--notch-at), transparent 97%, #000 100%);
-  mask-size:
-    calc(var(--perf) * 2) 100%,
-    calc(var(--perf) * 2) 100%,
-    100% 100%,
-    100% 100%;
-  mask-repeat: repeat-x, repeat-x, no-repeat, no-repeat;
-  mask-position: 0 0, 0 100%, 0 0, 0 0;
-  mask-composite: intersect;
+     two were arguing over the same property and the loser changed between frames. */
+  transition: translate 0.45s var(--pc-ease), box-shadow 0.45s var(--pc-ease);
 }
 .plan-card:hover { translate: 0 -5px; }
 
-/* The edge. A `border` would be clipped away by the mask on three sides, so the ring is drawn
-   inside and masked with the card. */
-.plan-card::before {
-  content: "";
+/* ---- the five faces -------------------------------------------------------
+   Named one by one by the owner, 28.08.2026. The first two follow the view, because they ARE the
+   view: the free plan is the ground beside it and the basic plan is that ground lifted a little.
+   The other three keep a colour of their own in both views, because they are objects rather than
+   surfaces, and keeping the ground means pinning the type, token by token rather than property by
+   property, so every rule inside the card follows.
+   ========================================================================= */
+
+/* The free plan. The page's own ground, so only the edge says it is a card. */
+.plan-card--plain {
+  background-color: var(--pc-ground);
+  background-image: none;
+}
+
+/* The basic plan: "a little more colour", and no more. One step of lift and a breath of the accent
+   through it, which is the smallest difference that still reads as a difference at arm's length. */
+.plan-card--lift {
+  background-color: color-mix(in srgb, var(--pc-ground-lift) 62%, var(--pc-ground));
+  background-image: linear-gradient(
+    170deg,
+    color-mix(in srgb, var(--pc-oceanic) 7%, var(--pc-ground-lift)) 0%,
+    color-mix(in srgb, var(--pc-ground-lift) 55%, var(--pc-ground)) 100%
+  );
+}
+
+.plan-card--pointed,
+.plan-card--azure,
+.plan-card--deep {
+  --pc-ink: #fbf6ee;
+  --pc-ink-soft: #c3d2d6;
+  --pc-ink-dim: #9fb2b8;
+  color: var(--pc-ink);
+}
+
+/* The plan the vendor points at. THE RING AND NOTHING ELSE: it carried an outer glow and the owner
+   had it removed, so the whole of its emphasis is one and a half pixels of the page's accent
+   around a ground that is otherwise quiet. */
+.plan-card--pointed {
+  background-color: #06222b;
+  background-image: linear-gradient(170deg, #0a3540 0%, #06222b 70%, #072830 100%);
+  box-shadow: inset 0 0 0 1.6px color-mix(in srgb, #5d9096 85%, transparent);
+}
+
+/* The premium plan. BLUE, and blue all the way down: it used to end in violet and the card beside
+   it is violet, so the two read as one colour twice. */
+.plan-card--azure {
+  background-color: #113a7a;
+  background-image: linear-gradient(160deg, #1d4ed8 0%, #163a92 56%, #0e2456 100%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #93c5fd 34%, transparent);
+}
+
+/* The gloss. A wide diagonal highlight crossing the card and starting again. It is the one CSS
+   animation on this tray, so it is slow: eight seconds across, then a long rest before it comes
+   round. */
+.plan-card__gloss {
   position: absolute;
   inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  border-radius: inherit;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc-ink) 11%, transparent);
-}
-
-/* ---- the four faces ------------------------------------------------------ */
-
-/* Cream paper, for the plan the vendor points at. */
-.plan-card--paper {
-  background-color: var(--pc-wheat);
-  background-image: linear-gradient(180deg, var(--pc-wheat) 0%, var(--pc-wheat-sink) 100%);
-  color: var(--pc-ink-on-light);
-  /* The badge sits where the head row would start, so this card starts lower. */
-  padding-block-start: 2.6rem;
-}
-.plan-card--paper::before {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc-ink-on-light) 14%, transparent);
-}
-
-/* Deep violet, from the reference. */
-.plan-card--violet {
-  background-color: var(--pc-violet-face);
-  background-image: linear-gradient(180deg, var(--pc-violet-lift) 0%, var(--pc-violet-sink) 100%);
-}
-.plan-card--violet::before {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc-violet-ink) 26%, transparent);
-}
-.plan-card--violet .plan-card__icon,
-.plan-card--violet .plan-card__tick {
-  border-color: color-mix(in srgb, var(--pc-violet-ink) 34%, transparent);
-  background: color-mix(in srgb, var(--pc-violet-ink) 12%, transparent);
-  color: var(--pc-violet-ink);
-}
-.plan-card--violet .plan-card__code {
-  color: color-mix(in srgb, var(--pc-violet-ink) 72%, transparent);
-}
-
-/* Glossy near-black, with the light travelling across it. */
-.plan-card--gloss {
-  background-color: var(--pc-gloss-face);
-  background-image: linear-gradient(
-    155deg,
-    var(--pc-gloss-lift) 0%,
-    var(--pc-gloss-mid) 46%,
-    var(--pc-gloss-sink) 100%
-  );
-}
-.plan-card--gloss::before {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc-ink) 16%, transparent);
-}
-/* The sweep. A wide diagonal highlight crossing the card and starting again, which is what the
-   reference's glossy card is a still frame of. It is the one animation on this tray, so it is
-   slow: eight seconds across, then a long rest before it comes round again. */
-.plan-card__sweep {
-  position: absolute;
-  inset: -40%;
   z-index: 0;
   pointer-events: none;
-  background: linear-gradient(
+  background-image: linear-gradient(
     115deg,
     transparent 38%,
-    color-mix(in srgb, var(--pc-ink) 5%, transparent) 46%,
-    color-mix(in srgb, var(--pc-ink) 13%, transparent) 50%,
-    color-mix(in srgb, var(--pc-ink) 5%, transparent) 54%,
+    color-mix(in srgb, var(--pc-ink) 8%, transparent) 44%,
+    color-mix(in srgb, var(--pc-ink) 44%, transparent) 50%,
+    color-mix(in srgb, var(--pc-ink) 8%, transparent) 56%,
     transparent 62%
   );
-  translate: -60% 0;
-  animation: plan-sweep 8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  background-position: 130% 0;
+  animation: plan-gloss 7s cubic-bezier(0.45, 0, 0.4, 1) infinite;
 }
-@keyframes plan-sweep {
-  0%   { translate: -75% 0; }
-  55%  { translate: 75% 0; }
-  100% { translate: 75% 0; }
+@keyframes plan-gloss {
+  0%   { background-position: 130% 0; }
+  55%  { background-position: -30% 0; }
+  100% { background-position: -30% 0; }
+}
+/* The product holds to the reduced-motion contract the rest of its surfaces do. The marketing
+   site's gloss is governed by the same preference through its own motion layer; here the rule has
+   to be written, because this file is the whole of the card's behaviour. */
+@media (prefers-reduced-motion: reduce) {
+  .plan-card__gloss { animation: none; }
+  .plan-card:hover { translate: none; }
+}
+
+/* The business plan. Its ground is a shader of its own; the gradient below is what the card is
+   before the field arrives and what it falls back to where there is no GL context at all, so the
+   two are the same violet. */
+.plan-card--deep {
+  background-color: #2e1065;
+  background-image: linear-gradient(160deg, #4c1d95 0%, #2e1065 66%, #1e0b45 100%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #c4b5fd 30%, transparent);
+}
+.plan-card__field {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  pointer-events: none;
+  /* The field is a bright object and the card carries six lines of type. Held under half, it reads
+     as movement in the ground rather than as a picture behind the words. */
+  opacity: 0.72;
 }
 
 /* ---- the anatomy --------------------------------------------------------- */
@@ -236,33 +251,29 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-block-end: 1.15rem;
-}
-.plan-card__code {
-  font-family: var(--pc-font-display, inherit);
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  color: color-mix(in srgb, var(--pc-ink) 46%, transparent);
-}
-.plan-card--paper .plan-card__code {
-  color: color-mix(in srgb, var(--pc-ink-on-light) 48%, transparent);
+  margin-block-end: 1.1rem;
 }
 .plan-card__icon {
   display: grid;
   place-content: center;
-  inline-size: 2.5rem;
-  block-size: 2.5rem;
+  inline-size: 2.6rem;
+  block-size: 2.6rem;
   flex: none;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--pc-oceanic) 32%, transparent);
-  background: color-mix(in srgb, var(--pc-oceanic) 10%, transparent);
-  color: var(--pc-oceanic);
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--pc-ink) 16%, transparent);
+  background: color-mix(in srgb, var(--pc-ink) 9%, transparent);
+  color: var(--pc-ink);
 }
-.plan-card--paper .plan-card__icon {
-  border-color: color-mix(in srgb, var(--pc-oceanic-deep) 28%, transparent);
-  background: color-mix(in srgb, var(--pc-oceanic-deep) 8%, transparent);
-  color: var(--pc-oceanic-deep);
+.plan-card__badge {
+  white-space: nowrap;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--pc-ink) 24%, transparent);
+  background: color-mix(in srgb, var(--pc-ink) 12%, transparent);
+  padding: 0.22rem 0.66rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--pc-ink);
 }
 
 .plan-card__name {
@@ -270,115 +281,135 @@
   z-index: 2;
   margin: 0;
   font-family: var(--pc-font-display, inherit);
-  font-size: 1.45rem;
+  font-size: 1.6rem;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.1;
   letter-spacing: -0.02em;
 }
-.plan-card__who {
+
+/* One height on every card. The amounts are set at the display size and the two plans priced in
+   WORDS («ללא עלות», «בשיחה») are set smaller, so a row of baselines put the rule, the list and
+   every line under it four pixels higher on those two cards than on the other three. The block is
+   given the display size as a floor and its contents sit on the bottom of it, so the words and the
+   figures share one edge and everything below starts level. */
+.plan-card__pricing {
   position: relative;
   z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.4rem;
   margin: 0;
-  margin-block-start: 0.5rem;
-  min-block-size: 3.1em;
-  font-size: 0.82rem;
-  line-height: 1.5;
-  color: color-mix(in srgb, var(--pc-ink) 62%, transparent);
+  margin-block-start: 0.7rem;
+  min-block-size: clamp(1.95rem, 2.8vw, 2.4rem);
 }
-.plan-card--paper .plan-card__who {
-  color: color-mix(in srgb, var(--pc-ink-on-light) 66%, transparent);
-}
-
-/* The dotted rules. The reference has three and they are the same rule. */
-.plan-card__perf {
-  position: relative;
-  z-index: 2;
-  display: block;
-  block-size: 1px;
-  margin-block: 1.15rem;
-  background-image: linear-gradient(
-    to right,
-    color-mix(in srgb, var(--pc-ink) 24%, transparent) 0 4px,
-    transparent 4px 8px
-  );
-  background-size: 8px 1px;
-}
-.plan-card--paper .plan-card__perf {
-  background-image: linear-gradient(
-    to right,
-    color-mix(in srgb, var(--pc-ink-on-light) 26%, transparent) 0 4px,
-    transparent 4px 8px
-  );
-}
-.plan-card__perf--last { margin-block-end: 0.9rem; }
-
-.plan-card__label {
-  position: relative;
-  z-index: 2;
-  margin: 0;
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
-  color: color-mix(in srgb, var(--pc-ink) 52%, transparent);
-}
-.plan-card--paper .plan-card__label {
-  color: color-mix(in srgb, var(--pc-ink-on-light) 58%, transparent);
-}
-.plan-card__label--gap { margin-block-start: 1.15rem; }
-
 .plan-card__price {
-  position: relative;
-  z-index: 2;
-  margin: 0;
-  margin-block-start: 0.3rem;
   font-family: var(--pc-font-display, inherit);
-  font-size: clamp(1.9rem, 2.7vw, 2.3rem);
+  font-size: clamp(1.95rem, 2.8vw, 2.4rem);
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
   white-space: nowrap;
 }
-/* WORDS IN THE FIGURE SLOT MUST WRAP, and the figure itself must not.
- *
- * `white-space: nowrap` above is right for the thing this slot was built for — "2,490 ₪" broken
- * across two lines is not a price — and it is wrong for everything else that legitimately lands
- * here. Measured at 1440 with five tickets: «המחיר נמסר במעבר למסלול בתשלום» rendered as ONE
- * 640px line inside a 209px card and painted straight across its neighbour. The mask does not clip
- * it, because a mask clips the element's own paint and this overflow is the text box itself.
- *
- * So the wrap is a property of the CONTENT, not of the slot: the modifier that already means "this
- * is words, not a number" releases the nowrap and lets the line break where a sentence should.
- * `text-wrap: balance` keeps a three-line sentence from ending in one orphaned word; browsers
- * without it simply wrap normally. */
-.plan-card__price--words {
-  font-size: clamp(1.25rem, 1.9vw, 1.55rem);
-  white-space: normal;
-  text-wrap: balance;
-  line-height: 1.25;
+.plan-card__price--words { font-size: clamp(1.3rem, 2vw, 1.6rem); }
+.plan-card__per {
+  font-size: 0.86rem;
+  color: color-mix(in srgb, var(--pc-ink) 62%, transparent);
 }
-.plan-card__term {
+.plan-card__billed {
   position: relative;
   z-index: 2;
   margin: 0;
-  margin-block-start: 0.4rem;
+  margin-block-start: 0.45rem;
   min-block-size: 1.1em;
-  font-size: 0.74rem;
-  color: color-mix(in srgb, var(--pc-ink) 52%, transparent);
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--pc-ink) 56%, transparent);
 }
-.plan-card--paper .plan-card__term { color: var(--pc-oceanic-deep); }
 
-.plan-card__action { position: relative; z-index: 2; margin-block-start: 1.15rem; }
+.plan-card__rule {
+  position: relative;
+  z-index: 2;
+  display: block;
+  block-size: 1px;
+  margin-block: 1.1rem;
+  background: color-mix(in srgb, var(--pc-ink) 16%, transparent);
+}
 
-/* THE ACTION ITSELF, and it has to live here rather than in either host's button layer.
+/* Every card prints every row, so the list is a spec sheet rather than a sales list: mark, label,
+   and the figure at the far edge where the eye can run down a column of them. A row the plan does
+   not carry keeps its line and loses its emphasis, which is what makes an absence visible at all. */
+.plan-card__list {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: start;
+}
+.plan-card__list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.83rem;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--pc-ink) 82%, transparent);
+}
+.plan-card__row { flex: 1 1 auto; }
+/* NO QUANTITIES ON A CARD. Owner, 28.08.2026: the figures belong in the table under the cards and
+   nowhere else, so the card keeps the row and drops the number at the end of it. The rows
+   themselves stay, because the same owner asked for one list on every card; a card says WHICH
+   capabilities a plan carries and the table says HOW MANY. */
+.plan-card__list li.is-absent {
+  color: color-mix(in srgb, var(--pc-ink) 40%, transparent);
+}
+.plan-card__list li.is-absent .plan-card__row { text-decoration: line-through; }
+
+.plan-card__tick {
+  display: grid;
+  place-content: center;
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  flex: none;
+  margin-block-start: 0.1rem;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--pc-oceanic) 45%, transparent);
+  background: color-mix(in srgb, var(--pc-oceanic) 14%, transparent);
+  color: var(--pc-oceanic);
+}
+.plan-card--pointed .plan-card__tick,
+.plan-card--azure .plan-card__tick,
+.plan-card--deep .plan-card__tick {
+  border-color: color-mix(in srgb, var(--pc-ink) 36%, transparent);
+  background: color-mix(in srgb, var(--pc-ink) 15%, transparent);
+  color: var(--pc-ink);
+}
+/* The absent mark is the same ring with nothing in it but a rule. */
+.plan-card__list li.is-absent .plan-card__tick {
+  border-color: color-mix(in srgb, var(--pc-ink) 18%, transparent);
+  background: transparent;
+  color: color-mix(in srgb, var(--pc-ink) 42%, transparent);
+}
+
+/* The action sits on the card's floor, so five cards of different lengths still put their buttons
+   on one line. */
+.plan-card__action {
+  position: relative;
+  z-index: 2;
+  margin-block-start: auto;
+  padding-block-start: 1.4rem;
+}
+
+/* ---- THE BUTTON (mechanical edit 5) ---------------------------------------
+ * The marketing site builds this from its own `Cta` component and overrides it inside a card:
+ * «the reference's buttons are solid pills rather than hairlines, so inside a card the ghost button
+ * carries a ground. It still opens the same fill on hover; only its resting state changes.» Those
+ * two rules are transcribed onto this class, which is what the product's `Cta` emits.
  *
- * The product's `.btn-primary` is oceanic-on-white, measured against the CARD SURFACE — a near
- * white. Three of the four ticket faces are near black, and the fourth is cream, so a host button
- * dropped in here is either invisible or the only bright rectangle on a dark card. The ticket is
- * off-palette by ruling (#296); its button is off-palette for the same reason and by the same
- * ruling.
- *
- * Full width of the card's inner column, from the reference image. `min-block-size: 2.75rem` is the
- * 44px touch target the rest of the product holds to — the exemption is about colour, not about
- * ergonomics, and a decorative pill nobody's thumb can hit is not a design decision. */
+ * `min-block-size: 2.75rem` is the 44px touch target the rest of the product holds to — the
+ * exemption is about colour, not about ergonomics, and a decorative pill nobody's thumb can hit is
+ * not a design decision. */
 .plan-card__cta {
   display: flex;
   align-items: center;
@@ -388,7 +419,7 @@
   padding-inline: 1rem;
   border-radius: 9999px;
   border: 1px solid color-mix(in srgb, var(--pc-ink) 22%, transparent);
-  background: color-mix(in srgb, var(--pc-ink) 7%, transparent);
+  background: color-mix(in srgb, var(--pc-ink) 10%, transparent);
   color: var(--pc-ink);
   font-size: 0.85rem;
   font-weight: 600;
@@ -396,7 +427,7 @@
   transition: background-color 0.2s var(--pc-ease), border-color 0.2s var(--pc-ease);
 }
 .plan-card__cta:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--pc-ink) 14%, transparent);
+  background: color-mix(in srgb, var(--pc-ink) 18%, transparent);
   border-color: color-mix(in srgb, var(--pc-ink) 34%, transparent);
 }
 /* Disabled says "shut", not "gone" (#204 forbids hiding the control instead). It keeps its ring so
@@ -412,139 +443,81 @@
   outline: 2px solid var(--pc-oceanic);
   outline-offset: 2px;
 }
-.plan-card--paper .plan-card__cta {
-  border-color: color-mix(in srgb, var(--pc-oceanic-deep) 34%, transparent);
-  background: var(--pc-oceanic-deep);
+/* `.plan-card--pointed .flow--primary` there: the pointed card's action is the solid one. */
+.plan-card--pointed .plan-card__cta {
+  background: var(--pc-action-solid);
+  border-color: var(--pc-action-solid);
   color: var(--pc-wheat);
 }
-.plan-card--paper .plan-card__cta:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--pc-oceanic-deep) 88%, #000);
-  border-color: var(--pc-oceanic-deep);
+.plan-card--pointed .plan-card__cta:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--pc-action-solid) 88%, #000);
+  border-color: var(--pc-action-solid);
 }
-.plan-card--paper .plan-card__cta:disabled {
+.plan-card--pointed .plan-card__cta:disabled {
   background: transparent;
-  color: color-mix(in srgb, var(--pc-ink-on-light) 62%, transparent);
-  border-color: color-mix(in srgb, var(--pc-ink-on-light) 30%, transparent);
+  color: color-mix(in srgb, var(--pc-ink) 66%, transparent);
 }
-.plan-card--paper .plan-card__cta:focus-visible { outline-color: var(--pc-oceanic-deep); }
 
-/* THE RUNG THIS ORGANIZATION STANDS ON — the authenticated panel's one addition to the ticket.
+/* ---- THE RUNG THIS ORGANIZATION STANDS ON (mechanical edit 5) --------------
+ * A state only the authenticated ladder has; the marketing site has no such card because a
+ * stranger holds no rung. A ring rather than a fill, so the face underneath is still the face. */
+.plan-card[data-current='true'] {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--pc-ink) 12%, transparent),
+    0 0 0 2px var(--pc-oceanic);
+}
+
+/* ---- THE PLAN'S MARK, WEARING THE PLAN'S FACE -----------------------------
+ * Owner, 31.08.2026, on finishing the card: «שים לב שגם התגים שיש בפרופיל של כל מנוי מתעדכנים לפי
+ * הצבעים של המנויים». The chip in the header, in a member's profile and beside a plan name is the
+ * same rung as the card, so it is the same five faces — not a parallel palette that has to be
+ * remembered every time one of them moves.
  *
- * It is a REPORT, not a selection: nothing on that screen can be chosen (#217/#224).
+ * WHAT THIS REPLACES, AND WHY THE OLD ONE COULD NOT STAY. The chips were three METALS: basic
+ * silver, pro gold, premium onyx, with `business` REUSING premium's so that it never read as a
+ * downgrade. That reuse was correct while business had no colour of its own. It has one now — the
+ * violet the deep card wears — so business gets its own class and stops borrowing.
  *
- * IT REUSES `::before`, THE EDGE THE CARD ALREADY DRAWS, and that is a correction rather than a
- * preference. The first attempt was `outline: 2px solid` with a negative offset — reasoning that
- * an outline is its own property and so cannot collide with the sweep or the lift. It computed
- * correctly and was INVISIBLE on screen: `mask-composite` applies to everything the element paints,
- * outline included, and the ticket's four intersected masks clip it away at every edge. The
- * screenshot is what caught it; the computed style said `2px rgb(93,144,150)` and looked right.
+ * These rules are unlayered and the ones they override live in `@layer components`, so they win on
+ * layer order alone. That is the same mechanism `.plan-card__cta` already relies on.
  *
- * The edge ring is already drawn INSIDE the box as an inset shadow, precisely so the mask keeps it
- * (see `.plan-card::before` above, which says so about a border). Thickening and colouring that
- * same ring is therefore the one treatment the silhouette cannot swallow. */
-.plan-card[data-current="true"]::before {
-  box-shadow: inset 0 0 0 2px var(--pc-oceanic);
-}
-.plan-card--paper[data-current="true"]::before {
-  box-shadow: inset 0 0 0 2px var(--pc-oceanic-deep);
-}
-
-.plan-card__quota {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  margin: 0;
-  margin-block-start: 0.5rem;
-  font-family: var(--pc-font-display, inherit);
-  font-size: 1.25rem;
-  font-weight: 800;
-}
-
-.plan-card__list {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  gap: 0.6rem;
-  margin: 0;
-  margin-block-start: 0.7rem;
-  padding: 0;
-  list-style: none;
-  text-align: start;
-}
-.plan-card__list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  font-size: 0.8rem;
-  line-height: 1.45;
-  color: color-mix(in srgb, var(--pc-ink) 68%, transparent);
-}
-.plan-card--paper .plan-card__list li {
-  color: color-mix(in srgb, var(--pc-ink-on-light) 72%, transparent);
-}
-
-.plan-card__tick {
-  display: grid;
-  place-content: center;
-  inline-size: 1.5rem;
-  block-size: 1.5rem;
-  flex: none;
-  border-radius: 9999px;
-  border: 1px solid color-mix(in srgb, var(--pc-oceanic) 40%, transparent);
-  background: color-mix(in srgb, var(--pc-oceanic) 12%, transparent);
-  color: var(--pc-oceanic);
-}
-.plan-card__tick--sm { inline-size: 1.2rem; block-size: 1.2rem; margin-block-start: 0.1rem; }
-.plan-card--paper .plan-card__tick {
-  border-color: color-mix(in srgb, var(--pc-oceanic-deep) 38%, transparent);
-  background: color-mix(in srgb, var(--pc-oceanic-deep) 10%, transparent);
-  color: var(--pc-oceanic-deep);
-}
-
-.plan-card__barcode {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 2px;
-  block-size: 2.2rem;
-  margin-block-start: auto;
-  padding-block-start: 0.6rem;
-}
-.plan-card__barcode span {
-  display: block;
-  block-size: 100%;
-  background: color-mix(in srgb, var(--pc-ink) 62%, transparent);
-}
-.plan-card--paper .plan-card__barcode span {
-  background: color-mix(in srgb, var(--pc-ink-on-light) 72%, transparent);
-}
-
-/* The badge rides the top edge, clear of the scallop. */
-.plan-card__badge {
-  position: absolute;
-  z-index: 4;
-  inset-block-start: 0.55rem;
-  inset-inline-start: 50%;
-  translate: -50% 0;
-  white-space: nowrap;
-  border-radius: 9999px;
-  background: var(--pc-action-solid);
-  padding: 0.18rem 0.7rem;
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+ * The geometry is NOT restated: `.plan-badge` in `index.css` still owns the pill, its padding and
+ * its focus ring. Only the face arrives from here. */
+.plan-badge-free {
+  background-image: none;
+  background-color: var(--pc-ground);
+  border: 1px solid color-mix(in srgb, var(--pc-ink) 16%, transparent);
   color: var(--pc-ink);
 }
-
-/* The sweep and the lift are decoration, and decoration is the first thing a reduced-motion
-   preference switches off. The card keeps its gloss; only the travelling light stops. */
-@media (prefers-reduced-motion: reduce) {
-  .plan-card { transition: none; }
-  .plan-card:hover { translate: 0 0; }
-  .plan-card__sweep { animation: none; }
+.plan-badge-basic {
+  background-color: color-mix(in srgb, var(--pc-ground-lift) 62%, var(--pc-ground));
+  background-image: linear-gradient(
+    170deg,
+    color-mix(in srgb, var(--pc-oceanic) 7%, var(--pc-ground-lift)) 0%,
+    color-mix(in srgb, var(--pc-ground-lift) 55%, var(--pc-ground)) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--pc-ink) 18%, transparent);
+  color: var(--pc-ink);
 }
+.plan-badge-pro {
+  background-color: var(--pc-pointed);
+  background-image: linear-gradient(170deg, #0a3540 0%, var(--pc-pointed) 70%, #072830 100%);
+  border: 1px solid color-mix(in srgb, var(--pc-pointed-edge) 85%, transparent);
+  color: var(--pc-wheat);
+}
+.plan-badge-premium {
+  background-color: var(--pc-azure);
+  background-image: linear-gradient(160deg, #1d4ed8 0%, #163a92 56%, #0e2456 100%);
+  border: 1px solid color-mix(in srgb, var(--pc-azure-edge) 34%, transparent);
+  color: var(--pc-wheat);
+}
+.plan-badge-business {
+  background-color: var(--pc-deep);
+  background-image: linear-gradient(160deg, #4c1d95 0%, var(--pc-deep) 66%, #1e0b45 100%);
+  border: 1px solid color-mix(in srgb, var(--pc-deep-edge) 30%, transparent);
+  color: var(--pc-wheat);
+}
+/* The travelling sheen belonged to the gold metal, and the metals are gone. A chip the size of a
+   word does not carry a highlight that reads as anything but a rendering artefact, and the card it
+   now matches puts its one moving part on `azure` and `deep` at card size. */
+.plan-badge-premium::after { content: none; }
