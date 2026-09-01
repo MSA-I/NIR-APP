@@ -505,6 +505,12 @@ jobs:
       - name: Sanity — the gate's container is the one we will talk to
         run: docker ps --format '{{.Names}}' | grep -qx "supabase_db_${SUPABASE_PROJECT_ID}"
 
+      # The suites below reset the database from a snapshot rather than by replaying 272
+      # migrations three times. That is only sound if the snapshot restores the same database,
+      # so it is proved here, on this stack, before the suites trust it -- and BEFORE the
+      # snapshot is taken for real, so a divergence fails the job rather than the suites.
+      - name: A restored snapshot is the same database a reset produces
+        run: node scripts/check-fast-reset-equivalence.mjs
       - name: The suites, in the order check-quality-gates.ps1 declares them
         run: node scripts/ci-sql-suites.mjs
 

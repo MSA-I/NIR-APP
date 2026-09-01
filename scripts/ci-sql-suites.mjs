@@ -111,7 +111,62 @@ function psql(relPath, user) {
   return { containerPath, user };
 }
 
+
+// ---------------------------------------------------------------- the mid-run resets
+// MEASURED 01.09.2026: `supabase db reset` takes 323s and the job performs it three times, on
+// top of the 380s `supabase start` already spent applying the same migrations. That is ~22 of
+// the job's ~28 minutes replaying 272 migrations four times. The suites themselves total about
+// a minute -- the slowest is 21s and most are under three.
+//
+// The resets are NOT gratuitous: each follows a concurrency suite that must COMMIT to prove
+// anything, so it cannot roll back its fixtures. What is gratuitous is rebuilding the schema
+// from scratch to delete a handful of committed rows.
+//
+// So the schema is built once and copied. `CREATE DATABASE ... TEMPLATE` is a file copy inside
+// one Postgres instance; the migrations do not run again. The fallback is the real reset, so a
+// snapshot that cannot be taken costs time and never correctness.
+const TEMPLATE_DB = 'ci_pristine';
+
+function sql(database, statement) {
+  return run('docker', ['exec', '-e', 'PGPASSWORD=postgres', container,
+    'psql', '-qAt', '-U', 'postgres', '-d', database, '-v', 'ON_ERROR_STOP=1', '-c', statement],
+    { capture: true });
+}
+
+// Nothing may hold a connection to a database being used as a template or being dropped.
+// Supabase's own services (PostgREST, auth, realtime) hold pooled connections and reconnect on
+// their own; the SQL job talks to Postgres through `docker exec psql` and needs none of them.
+function disconnectOthers(database) {
+  return sql('template1', `select pg_terminate_backend(pid) from pg_stat_activity`
+    + ` where datname = '${database}' and pid <> pg_backend_pid()`);
+}
+
+function takeSnapshot() {
+  const started = Date.now();
+  disconnectOthers('postgres');
+  const dropped = sql('template1', `drop database if exists ${TEMPLATE_DB}`);
+  if (dropped.status !== 0) return false;
+  const created = sql('template1', `create database ${TEMPLATE_DB} template postgres`);
+  if (created.status !== 0) {
+    console.log(`  snapshot unavailable, every reset will rebuild from migrations:`
+      + ` ${(created.stderr ?? '').trim().split('\n')[0]}`);
+    return false;
+  }
+  console.log(`  pristine snapshot taken in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  return true;
+}
+
+function restoreSnapshot() {
+  disconnectOthers('postgres');
+  const dropped = sql('template1', 'drop database if exists postgres');
+  if (dropped.status !== 0) return false;
+  const created = sql('template1', `create database postgres template ${TEMPLATE_DB}`);
+  return created.status === 0;
+}
+
 let failures = 0;
+const snapshotOptOut = process.env.CI_SQL_NO_SNAPSHOT === '1';
+let snapshotReady = snapshotOptOut ? false : takeSnapshot();
 const timings = [];
 
 for (const step of sequence) {
@@ -120,8 +175,16 @@ for (const step of sequence) {
 
   if (step.kind === 'reset') {
     console.log(`\n== ${step.label}`);
-    const reset = run('supabase', ['db', 'reset']);
-    ok = reset.status === 0;
+    if (snapshotReady && restoreSnapshot()) {
+      ok = true;
+    } else {
+      // The snapshot is an optimisation, never an authority. Anything unexpected falls back to
+      // the reset this runner has always performed, and says so.
+      if (snapshotReady) console.log('  snapshot restore failed — falling back to supabase db reset');
+      const reset = run('supabase', ['db', 'reset']);
+      ok = reset.status === 0;
+      if (ok) snapshotReady = takeSnapshot();
+    }
   } else if (step.kind === 'preflight') {
     console.log(`\n== ${step.label}`);
     const { containerPath } = psql(step.relPath, 'postgres');
