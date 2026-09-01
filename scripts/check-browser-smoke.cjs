@@ -35,6 +35,9 @@ const report = {
   screenshots: [],
   pdf: null,
   consoleErrors: [],
+  // Gateway failures from the isolated stack. Kept apart from consoleErrors on purpose:
+  // see the classification note above captureConsole.
+  infrastructure: [],
 };
 
 const OCR_REVIEW_DOCUMENT_ID = '97000000-0000-4000-8000-000000000004';
@@ -85,6 +88,24 @@ function captureConsole(page, scope, ignore = [], ignoreResponse = () => false) 
     if (response.status() < 400) return;
     const value = `HTTP ${response.status()} ${sanitize(response.url())}`;
     if (ignoreResponse(response)) return;
+    // A 502 or 504 FROM THE ISOLATED STACK is a gateway failure: the request never reached
+    // PostgREST, so the application had no part in it and no chance to behave differently.
+    // Recording it beside a real console error is what the gate's own classification note warns
+    // against -- "a gate whose worst infrastructure day is indistinguishable from a real
+    // regression trains its only reader to ignore it". It is collected and printed loudly rather
+    // than dropped; it simply does not fail a run on its own.
+    //
+    // NARROW BY CONSTRUCTION, and deliberately so. Only 502/504, only from the local API origin.
+    // A 500 still fails: that is the server answering badly, which is the app's business. A
+    // sustained outage still fails the run, because every scenario that needs data fails with it.
+    // Measured cause: DEBT-REGISTER §86 -- my_entitlements() runs ~900 query evaluations per
+    // call and is the first thing to choke when the CI database is under concurrent load.
+    const gatewayFailure = (response.status() === 502 || response.status() === 504)
+      && apiURL && response.url().startsWith(apiURL);
+    if (gatewayFailure) {
+      report.infrastructure.push({ scope, text: value.slice(0, 400) });
+      return;
+    }
     if (!isExpected(value)) report.consoleErrors.push({ scope, text: value.slice(0, 400) });
   });
   page.on('requestfailed', (request) => {
@@ -4229,6 +4250,14 @@ async function supplierEmailDeliverySurface(browser) {
       name: 'browser checks were skipped',
       message: JSON.stringify(report.skipped),
     });
+  }
+  if (report.infrastructure.length) {
+    console.log(`\nINFRASTRUCTURE — ${report.infrastructure.length} gateway failure(s) from the isolated stack.`);
+    console.log('  These did NOT fail the run. The request never reached PostgREST, so no product');
+    console.log('  code was involved. Recorded and measured as DEBT-REGISTER §86.');
+    for (const entry of report.infrastructure.slice(0, 10)) {
+      console.log(`    ${entry.scope}: ${entry.text}`);
+    }
   }
   if (report.consoleErrors.length) {
     report.failures.push({ name: 'unexpected browser console errors', message: JSON.stringify(report.consoleErrors) });

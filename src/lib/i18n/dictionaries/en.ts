@@ -1492,6 +1492,22 @@ export const en: Dictionary = {
     notPermitted: 'Your role does not have access to this data. That is not a claim that nothing is due.',
   },
 
+  /* The launch-benefit strip. NOT ONE STRING HERE PRESSURES: no "hurry", no "last chance", no
+     seconds. Owner ruling 31.08.2026 on #204 — a clock over an INVENTED date is forbidden, a
+     window the server enforces is not — so these strings state a fact and stop. */
+  countdown: {
+    headline: 'Your launch benefit: {plan} at no charge',
+    remainingDaysHours: '{days} days and {hours} hours',
+    remainingDaysHours_one: 'one day and {hours} hours',
+    endsAt: 'ends {at}',
+    reverts: 'On {date} the account moves to the {plan} plan.',
+    cta: 'Talk to me about continuing',
+    minimize: 'Minimise the strip',
+    expand: 'Show the benefit details',
+    dismiss: 'Close the strip',
+    accessibleName: 'Launch benefit: {plan} at no charge until {date}, after which the plan becomes {reverts}.',
+  },
+
   alertsPage: {
     partialScan: 'The scan is partial: {scans}. What did load is shown, but nothing here can claim everything is fine.',
   },
