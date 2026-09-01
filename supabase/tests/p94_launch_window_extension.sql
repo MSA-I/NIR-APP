@@ -189,11 +189,36 @@ select pg_temp.p94_assert(
     where action = 'prelaunch_window_extended'
       and (old_values is null or new_values is null or old_values = new_values)),
   'a window extension was logged without both sides of the change');
--- All three tables are represented; a backfill that silently skipped one would show up here.
+-- ALL THREE TABLES, BUT NOT ALL THREE THE SAME WAY -- and that asymmetry is the whole reason
+-- this assertion kept failing. `org_flag_configurations` and `org_autonomy_policies` are
+-- populated by earlier MIGRATIONS, so rows are always present for 0270 to move and the ledger
+-- must carry both. `organization_subscriptions` is not: a subscription belongs to a tenant,
+-- and on a freshly reset database no tenant exists when 0270 runs. The backfill correctly
+-- moves nothing there, correctly logs nothing, and `count(distinct entity_type) = 3` was
+-- therefore asserting that the database had CUSTOMERS -- not that the code logs what it moves.
 select pg_temp.p94_assert(
   (select count(distinct entity_type) from audit_logs
-   where action = 'prelaunch_window_extended') = 3,
-  'the ledger does not carry all three tables the window was copied into');
+    where action = 'prelaunch_window_extended'
+      and entity_type in ('org_flag_configurations', 'org_autonomy_policies')) = 2,
+  'the ledger is missing one of the two tables that always have rows for the backfill to move');
+
+-- And the third, stated as the implication it actually is: if a subscription ended up carrying
+-- the new date through 0270's own predicate, the ledger must say so. The two fixtures above are
+-- excluded by id because this suite inserted them AFTER the migration ran, so no ledger row
+-- could exist for them and none should.
+select pg_temp.p94_assert(
+  not exists (
+    select 1 from public.organization_subscriptions subscription
+     where subscription.provider = 'manual'
+       and subscription.granted_until = '2027-02-01T00:00:00+00'::timestamptz
+       and not exists (select 1 from public.organization_billing_periods period
+                        where period.org_id = subscription.org_id)
+       and subscription.org_id not in ('a0940000-0000-4000-8000-000000000001',
+                                       'a0940000-0000-4000-8000-000000000002'))
+  or exists (select 1 from audit_logs
+              where action = 'prelaunch_window_extended'
+                and entity_type = 'organization_subscriptions'),
+  'a subscription carries the new date but no ledger row says the backfill moved it');
 
 rollback;
 
