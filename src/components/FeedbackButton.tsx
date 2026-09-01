@@ -182,10 +182,10 @@ export default function FeedbackButton({ variant = 'icon', tone = 'panel' }: {
       {variant === 'menu' ? (
         <button type="button" onClick={() => void openWithCapture()} disabled={cooling || capturing}
           title={label}
-          className={`flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset disabled:opacity-50 ${
+          className={`flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset disabled:opacity-50 ${
             tone === 'shell'
-              ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
-              : 'text-ink-body hover:bg-surface-hover hover:text-ink'
+              ? 'text-inverse-ink-soft hover:bg-inverse-ink/10 hover:text-inverse-ink focus-visible:ring-inverse-ink'
+              : 'text-ink-body hover:bg-surface-hover hover:text-ink focus-visible:ring-focus'
           }`}>
           <MessageSquarePlus size={ICON.md} aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate text-start">{cooling ? label : t('feedbackButton.text_3')}</span>

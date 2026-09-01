@@ -13,7 +13,7 @@ import { PriceListUploadModal } from '../components/PriceListUpload';
 import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
 import { bidiIsolate, fmtDate, fmtMoneyExact, fmtMoneyRounded, formatUnit, productLabel, todayISO, fmtNum } from '../lib/format';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { chartTheme } from '../lib/theme';
+import { useChartTheme } from '../lib/theme';
 import { PRODUCT_AVAILABILITY } from '../lib/status';
 import type { SupplierProduct, Supplier, PriceHistory, SupplierPriceSubmission } from '../lib/types';
 
@@ -299,6 +299,9 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
      carries its own (0217); the row this modal opened on names the one the axis is drawn in. */
   const currency = row.currency;
   const { t } = useT();
+  // Hoisted out of the IIFE below (31.08.2026): a hook cannot live inside a JSX callback, and the
+  // chart has to re-render on a theme swap or recharts keeps painting the previous palette.
+  const theme = useChartTheme();
   const { data } = useQuery<PriceHistory[]>(async () =>
     unwrap(await supabase.from('price_history').select('*').eq('supplier_product_id', row.id).order('effective_date', { ascending: false })), [row.id]);
   return (
@@ -307,7 +310,6 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
       supplier: bidiIsolate(row.supplier.name),
     })}>
       {data && data.length >= 2 && (() => {
-        const theme = chartTheme();
         const asc = [...data].reverse();
         const first = asc[0].price;
         const last = asc[asc.length - 1].price;

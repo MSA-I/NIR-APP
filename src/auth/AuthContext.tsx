@@ -222,8 +222,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               supplier_id: null,
               // Offline bootstrap carries scope, not preferences. `null` is the honest answer:
               // it means "this cache does not know what they chose", so the browser keeps
-              // deciding — the same thing NULL means in the column (0213).
+              // deciding — the same thing NULL means in the column (0213/0283).
               locale: null,
+              theme: null,
             });
             setOrg(null);
             setIsPlatformAdmin(false);

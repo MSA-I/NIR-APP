@@ -99,17 +99,27 @@ describe('סרגל פעולות מהירות תחתון', () => {
    * "You are here" and "you are pressing this" were the same pixel — every item carried
    * `active:bg-surface-selected` and the current page carried `bg-surface-selected` — and the bar
    * marked the current page in a dialect neither the desktop pill nor the drawer speaks.
+   *
+   * UPDATED 31.08.2026, and the update is the point. The mark became `bg-action`, which is the
+   * RAISED CAMERA PUCK's own colour — owner report: "הצבע של הכפתור שלחוץ ... זה אותו הצבע של כפתור
+   * המצלמה וזה מבלבל". So the assertion is now the inverse of what it was: the current page must
+   * NOT wear `bg-action`, and it must wear the dedicated `nav-current` family whose values were
+   * solved against the bar and the puck rather than chosen. See `--color-nav-current` in index.css.
    */
-  it('המסך הנוכחי לובש את הסימון האוקיאני, והלחיצה סימון חלש משלה', () => {
+  it('המסך הנוכחי מסומן בצבע משלו — לא בצבע של פוק המצלמה — והלחיצה סימון חלש משלה', () => {
     state.role = 'office';
     renderAt('/receiving');
     const current = screen.getByRole('link', { name: 'קבלת סחורה' });
     expect(current).toHaveAttribute('aria-current', 'page');
-    expect(current.className).toContain('bg-action');
+    expect(current.className).toContain('bg-nav-current');
+    // The whole defect, as a test: the pill and the camera puck may never share a fill again.
+    expect(current.className).not.toContain('bg-action');
+    // The ring is what separates the pill from the puck in the dark theme, where no fill can.
+    expect(current.className).toContain('ring-nav-current-edge');
     expect(current.className).not.toContain('active:bg-surface-selected');
     const other = screen.getByRole('link', { name: 'מרכז הבקרה' });
     expect(other.className).toContain('active:bg-surface-selected');
-    expect(other.className).not.toContain('bg-action ');
+    expect(other.className).not.toContain('bg-nav-current');
   });
 
   /**

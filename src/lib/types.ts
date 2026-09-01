@@ -1,5 +1,6 @@
 // Row types matching supabase/migrations/0001_init.sql (hand-maintained, pragmatic subset)
 import type { Locale } from './i18n/locale.ts';
+import type { Theme } from './theme-choice.ts';
 // The extension is not optional: `supabase/functions/assistant` type-checks this module under
 // Deno, which resolves a bare specifier as a bare module and fails.
 import type { ToleranceSetting } from './tolerances.ts';
@@ -30,6 +31,10 @@ export interface Profile {
   // Interface language this person chose (0213). `null` is a third state, not Hebrew: it means
   // they never chose, so the browser keeps deciding. See src/lib/i18n/locale.ts.
   locale: Locale | null;
+  // Light/dark appearance this person chose (0283, owner ruling #8 of 31.08.2026). `null` is the
+  // same third state as `locale`'s: never chose, so the product's own default applies and stays
+  // free to change. See src/lib/appearance.ts.
+  theme: Theme | null;
 }
 
 export type OrgStatus = 'active' | 'suspended';
