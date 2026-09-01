@@ -21,6 +21,8 @@ import {
   backupEmailRequired,
   type BackupEmailProblem,
 } from '../lib/backupEmail';
+import { acceptErrorCondition, acceptInvitation } from '../lib/invitations';
+import { TERMS_VERSION } from './Legal';
 
 /**
  * The one door — sign in and open a business on a single card (owner decision 31.08.2026).
@@ -111,6 +113,10 @@ export default function Entrance({ initialMode }: { initialMode: EntranceMode })
   const [organization, setOrganization] = useState('');
   const [fullName, setFullName] = useState('');
   const [backupEmail, setBackupEmail] = useState('');
+  /** Only the invitation branch asks for these two. */
+  const [phone, setPhone] = useState('');
+  const [consent, setConsent] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -294,6 +300,27 @@ export default function Entrance({ initialMode }: { initialMode: EntranceMode })
     setSent(data?.message ?? null);
   }
 
+  /**
+   * Redeem the invitation the server recognised, with no token in hand.
+   *
+   * `0282` lets the command resolve the invitation from the caller's confirmed address, which is
+   * what the token always stood for. `homeFor(role)` and the full reload are `AcceptInvite`'s, and
+   * for its reason: `AuthContext` loads the profile once per session change, and this session was
+   * established before the profile existed.
+   */
+  async function joinInvitedOrganization() {
+    setBusy(true);
+    setJoinError(null);
+    try {
+      const { role } = await acceptInvitation(null, fullName.trim(), phone.trim(), TERMS_VERSION);
+      window.location.replace(homeFor(role));
+    } catch (e) {
+      setJoinError(errorText(acceptErrorCondition(e instanceof Error ? e.message : String(e))));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function resendConfirmation() {
     setResending(true);
     setResendResult(null);
@@ -378,6 +405,46 @@ export default function Entrance({ initialMode }: { initialMode: EntranceMode })
               })}
             </span>
           </Note>
+
+          {/* The same three things `AcceptInvite` asks for, because the server command is the same
+              one and `0089` still refuses without a consented version. What is NOT asked for is a
+              password: the provider already proved the address, which is the whole binding. */}
+          <div>
+            <label className="label" htmlFor="entrance-invite-name">{t('acceptInvite.text_3')}</label>
+            <input id="entrance-invite-name" className="input" value={fullName} autoComplete="name"
+              aria-describedby={joinError ? 'entrance-invite-problem' : undefined}
+              onChange={(event) => setFullName(event.target.value)} />
+          </div>
+          <div>
+            <label className="label" htmlFor="entrance-invite-phone">{t('acceptInvite.text_4')}</label>
+            <input id="entrance-invite-phone" className="input" dir="ltr" value={phone}
+              autoComplete="tel"
+              onChange={(event) => setPhone(event.target.value)} />
+          </div>
+
+          {/* `min-h-11` is not decoration: this is the control that decides whether a legal
+              agreement was given, and it is the smallest tap target on the screen. */}
+          <label className="flex min-h-11 cursor-pointer items-start gap-2 py-1 text-sm text-ink-mid">
+            <input type="checkbox" className="mt-1 size-4 shrink-0 rounded accent-action"
+              checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+            <span>
+              {t('acceptInvite.consentLead')}{' '}
+              <Link className="link" to="/terms" target="_blank">{t('acceptInvite.text_6')}</Link>{' '}
+              {t('acceptInvite.consentAnd')}{' '}
+              <Link className="link" to="/privacy" target="_blank">{t('acceptInvite.text_7')}</Link>{' '}
+              {t('acceptInvite.consentVersion', { version: TERMS_VERSION })}
+            </span>
+          </label>
+
+          {joinError && (
+            <div id="entrance-invite-problem"><ErrorNote message={joinError} /></div>
+          )}
+
+          <button type="button" className="btn-primary w-full"
+            disabled={busy || !consent || fullName.trim().length === 0}
+            onClick={() => void joinInvitedOrganization()}>
+            {busy ? t('login.inviteJoining') : t('login.inviteJoinAction')}
+          </button>
         </div>
       );
     }

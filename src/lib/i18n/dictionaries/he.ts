@@ -5114,7 +5114,9 @@ export const he = {
     noAccountYet: 'אין לכם חשבון?',
     signInAsAria: 'כניסה כ{role}',
     inviteWaitingTitle: 'יש לכם הזמנה ממתינה',
-    inviteWaitingBody: 'הכתובת {email} הוזמנה להצטרף אל {organization}, ולכן לא נפתח עסק חדש. ההצטרפות נעשית מקישור ההזמנה שנשלח אליכם ובבחירת סיסמה. אם הקישור אבד, בקשו מבעל העסק לשלוח אותו שוב.',
+    inviteWaitingBody: 'הכתובת {email} הוזמנה להצטרף אל {organization}, ולכן לא נפתח עסק חדש. אשרו את הפרטים והצטרפו — אין צורך בקישור ואין צורך בסיסמה.',
+    inviteJoinAction: 'הצטרפות לעסק',
+    inviteJoining: 'מצטרף…',
   },
 
   accountantDashboard: {
