@@ -24,9 +24,101 @@
 //   BILLING_PROVIDER          -- which provider this deployment serves; 'paddle'
 //   PADDLE_WEBHOOK_SECRET     -- the notification destination's endpoint secret (pdl_ntfset_...)
 //   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY -- injected by the platform
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.91.1';
+// Optional, and only for the activation email (0281). Absent, events are still processed and the
+// owed email simply waits in the ledger:
+//   RESEND_API_KEY / INVITE_FROM_EMAIL / APP_BASE_URL
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.91.1';
 import { billingAdapterFor } from '../_shared/billing-adapter.ts';
+import { renderActivationEmail, type ActivationLocale } from '../_shared/activation-email.ts';
+import { SUPPORT_REPLY_TO } from '../_shared/reply-to.ts';
 import { handleWebhook, type WebhookPorts } from './core.ts';
+
+const EMAIL_PROVIDER_TIMEOUT_MS = 15_000;
+
+/**
+ * Sends at most ONE owed activation email, then returns.
+ *
+ * WHY THIS IS SAFE TO CALL FROM A WEBHOOK. It never throws and never changes the response: the
+ * provider is told whether its EVENT was held, and an email that failed to send is a separate
+ * fact with its own row and its own retry. A webhook that answered 500 because a mail server was
+ * slow would make Paddle redeliver an event it has already applied.
+ *
+ * WHY IT CANNOT SEND TWICE. The claim takes a lease inside the database (0281), and the ledger is
+ * keyed on the organization, so the debt exists at most once in the first place. Resend's
+ * Idempotency-Key is a second belt covering a retry inside twenty-four hours; the primary key is
+ * what covers the three days Paddle keeps redelivering for.
+ *
+ * WHY IT DOES NOTHING TODAY. 0187 seeds Paddle disabled, so no activation transition runs, so no
+ * row is ever owed and `service_claim_subscription_activation_email` always answers `idle`.
+ */
+async function sendOwedActivationEmail(admin: SupabaseClient): Promise<void> {
+  const resendKey = Deno.env.get('RESEND_API_KEY');
+  const fromEmail = Deno.env.get('INVITE_FROM_EMAIL');
+  const appBaseUrl = Deno.env.get('APP_BASE_URL');
+  // Not an error: a deployment that only receives events and sends no mail is a real state, and
+  // the debt simply waits in the ledger for one that can.
+  if (!resendKey || !fromEmail || !appBaseUrl) return;
+
+  const claim = await admin.rpc('service_claim_subscription_activation_email');
+  if (claim.error) {
+    console.error('activation email claim failed', claim.error.code);
+    return;
+  }
+  const claimed = claim.data as {
+    state?: string; org_id?: string; to_email?: string;
+    plan_label?: string; locale?: string; attempt?: number;
+  } | null;
+  if (!claimed || claimed.state !== 'claimed') return;
+  if (!claimed.org_id || !claimed.to_email || !claimed.plan_label) {
+    console.error('activation email claim was incomplete');
+    return;
+  }
+
+  const rendered = renderActivationEmail(
+    (claimed.locale === 'en' ? 'en' : 'he') as ActivationLocale,
+    { planLabel: claimed.plan_label, appUrl: appBaseUrl.replace(/\/+$/, '') },
+  );
+
+  let providerMessageId: string | null = null;
+  let errorCode: string | null = null;
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': `inplace-activation/${claimed.org_id}/${claimed.attempt ?? 1}`,
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [claimed.to_email],
+        // InPlace speaking on its own behalf, so a reply reaches a human here (_shared/reply-to.ts).
+        reply_to: SUPPORT_REPLY_TO,
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+      }),
+      signal: AbortSignal.timeout(EMAIL_PROVIDER_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      console.error('resend rejected the activation email, status', response.status);
+      errorCode = `provider_${response.status}`;
+    } else {
+      const payload = await response.json().catch(() => null) as { id?: string } | null;
+      providerMessageId = payload?.id ?? null;
+    }
+  } catch {
+    errorCode = 'provider_unreachable';
+  }
+
+  const settled = await admin.rpc('service_settle_subscription_activation_email', {
+    p_org_id: claimed.org_id,
+    p_outcome: errorCode === null ? 'sent' : 'failed',
+    p_provider_message_id: providerMessageId,
+    p_error_code: errorCode,
+  });
+  if (settled.error) console.error('activation email settlement failed', settled.error.code);
+}
 
 Deno.serve((incoming) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -99,5 +191,13 @@ Deno.serve((incoming) => {
     },
   };
 
-  return handleWebhook(incoming, ports);
+  // The email runs AFTER the decision, never inside it. core.ts owns what the provider is told,
+  // and core.test.ts pins that this file adds no logic to that answer; sending mail is a separate
+  // consequence with its own ledger, and it must not be able to change a status code.
+  return handleWebhook(incoming, ports).then(async (response) => {
+    if (response.status === 200) {
+      await sendOwedActivationEmail(admin).catch(() => {});
+    }
+    return response;
+  });
 });

@@ -108,6 +108,77 @@ if (dangling.length) {
     + '  written. Both leave a reader following a pointer into nothing.');
 }
 
+
+// ---------------------------------------------------------------- citations INSIDE the code
+// The rulings are not only cited in prose. Measured across src, supabase and scripts: 1,653 bare
+// `#NNN` citations, and they are how the code actually points at a decision — a migration saying
+// which ruling it implements, a component saying why it renders what it does. A wrong one here is
+// worse than a broken link: the number still names a REAL ruling, so the comment reads as
+// authoritative and describes the wrong decision. #174's move from #311 to #314 left exactly that
+// behind in four places, including a reason string a migration greps for at run time.
+//
+// TWO EXCLUSIONS, BOTH MEASURED, NEITHER AN ALLOWLIST OF NUMBERS:
+//   * stylesheets — `#000` is the colour black, not ruling zero. No decision is cited from CSS.
+//   * this file — it names historical numbers in order to explain them, which is the same trap
+//     that has now caught three guards in this repo.
+// A token longer than three digits is not a citation either: `#4338ca` is a colour and `#7702` is
+// an order number, and matching their first three digits was what made an earlier pass of this
+// measurement look impossible.
+const CODE_PATHS = ['src', 'supabase', 'scripts'];
+const SELF_FILE = 'scripts/check-decision-numbers.mjs';
+let codeCitations = [];
+try {
+  // Whole lines, not just the token: deciding whether `#666` is a ruling or the colour grey
+  // needs what sits immediately to its left, and `-o` throws exactly that away.
+  const out = execFileSync('git', ['grep', '--untracked', '-nIE', '#[0-9]{3}', '--', ...CODE_PATHS],
+    { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  // A CSS colour is not a citation even when it is written inside a .ts file. The exclusion
+  // above was by file EXTENSION, which is why `color:#666` in an inline HTML email template
+  // read as a ruling: activation-email.ts is TypeScript that emits styles. Match the property
+  // instead of the filename -- that is what the comment above already claims to be doing.
+  // Two shapes, because a colour is written two ways. `color:#666` is the CSS declaration; the
+  // canvas API assigns instead -- `ctx.fillStyle = '#000'` -- and check-contrast-rendered.mjs is
+  // full of exactly that, being a contrast checker. Neither is a citation. The quote before the
+  // `#` is what makes the second safe: a real citation is never written `= '#331'`.
+  const CSS_COLOUR = /(?:color|background|background-color|fill|stroke|border|border-color|outline|box-shadow|text-shadow|stop-color|caret-color)\s*:\s*$/i;
+  const COLOUR_ASSIGNED = /(?:fillStyle|strokeStyle|shadowColor|backgroundColor|borderColor|Color)\s*=\s*['"`]$/i;
+  codeCitations = out.split(String.fromCharCode(10)).filter(Boolean).flatMap((hit) => {
+    const parts = hit.split(':');
+    const lineNo = parts.at(1);
+    const file = parts.at(0);
+    const text = parts.slice(2).join(':');
+    const found = [];
+    for (const m of text.matchAll(/#([0-9]{3})([0-9a-fA-F]*)/g)) {
+      if (m[2].length) continue;                                   // #4338ca is a colour, #7702 an order
+      const before = text.slice(Math.max(0, m.index - 24), m.index);
+      if (CSS_COLOUR.test(before) || COLOUR_ASSIGNED.test(before)) continue;
+      found.push({ file, lineNo, token: m[1] });
+    }
+    return found;
+  }).filter((c) => !c.file.endsWith('.css')
+    && c.file !== SELF_FILE
+    && c.file !== 'scripts/renumber-map.json');
+} catch (error) {
+  if (error.status !== 1) {
+    fail(`check:decision-numbers FAILED — the code citation scan could not run: ${String(error.stderr ?? '').slice(0, 160)}`);
+  }
+}
+if (inject === 'code') {
+  codeCitations.push({ file: 'src/pages/Dashboard.tsx', lineNo: '1', token: '996' });
+}
+
+const badCode = codeCitations.filter((c) => !known.has(c.token));
+if (badCode.length) {
+  const shown = badCode.slice(0, 20);
+  fail(`check:decision-numbers FAILED — ${badCode.length} citation(s) in the CODE name a ruling that`
+    + ` is not in the table:\n\n`
+    + shown.map((c) => `    ${c.file}:${c.lineNo} -> #${c.token}`).join(String.fromCharCode(10))
+    + (badCode.length > 20 ? `${String.fromCharCode(10)}    … and ${badCode.length - 20} more` : '')
+    + '\n\n  Either the ruling was renumbered and this citation stayed behind, or it was never'
+    + '\n  written. A stale number is the dangerous case: it still names a real ruling, so the'
+    + '\n  comment reads as authoritative while describing a different decision entirely.');
+}
+
 const numbers = [...known].map(Number).sort((a, b) => a - b);
 console.log(`check:decision-numbers passed: ${rows.size} rulings, #${numbers[0]}–#${numbers.at(-1)},`
-  + ` none duplicated, ${citations.length} citation(s) all resolve.`);
+  + ` none duplicated, ${citations.length} prose citation(s) and ${codeCitations.length} in code all resolve.`);

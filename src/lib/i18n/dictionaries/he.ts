@@ -525,6 +525,7 @@ export const he = {
     languageHint: 'השפה נבחרת אוטומטית לפי הדפדפן. בחירה כאן גוברת עליה ונשמרת לחשבון שלך.',
     languageOptionHe: 'עברית',
     languageOptionEn: 'English',
+    themeSaveFailed: 'המראה הוחלף במסך אך לא נשמר לחשבון. נסה שוב מאוחר יותר.',
     languageSaveFailed: 'השפה הוחלפה במסך אך לא נשמרה לחשבון. נסה שוב מאוחר יותר.',
     toast: 'בקשת סיום השירות התקבלה. המערכת עברה למצב קריאה בלבד.',
     toast_2: 'בקשת סיום השירות בוטלה והגישה המלאה שוחזרה.',
@@ -984,6 +985,15 @@ export const he = {
     largestIncrease: 'עלייה מרבית {percent}%',
   },
 
+  docPlate: {
+    /* The latin half is load-bearing on the Hebrew edition: Roboto Mono carries no Hebrew, so a
+       Hebrew-only eyebrow would fall back to the reading face and the mono would never be drawn
+       on a Hebrew document at all. See the @font-face note in src/index.css. */
+    eyebrowPurchase: 'רכש · PURCHASE',
+    eyebrowPayment: 'קבלה · PAYMENT',
+    eyebrowLedger: 'כספים · LEDGER',
+    eyebrowReport: 'דיווח · REPORT',
+  },
   orders: {
     toastPdf: 'קובץ ה-PDF הורד',
     exportPdf: 'הורדת ההזמנה כקובץ PDF מעוצב עם הלוגו של הארגון',
@@ -1094,11 +1104,10 @@ export const he = {
     toOriginalOrder: '— להזמנה המקורית',
     uploadInvoiceReceived: 'העלאת החשבונית שהתקבלה',
     belowMinimum: 'שים לב: סכום ההזמנה ({total}) נמוך ממינימום ההזמנה של הספק ({minimum}).',
-    printTitle: 'הזמנת רכש #{number}',
-    printTitleWithOrg: 'הזמנת רכש #{number} — {org}',
+    printName: 'הזמנת רכש',
     printSupplier: 'ספק: {supplier}',
     printDate: 'תאריך: {date}',
-    printExpected: '· אספקה מבוקשת: {date}',
+    printExpected: 'אספקה מבוקשת: {date}',
     receivedLabel: 'התקבל:',
     outOfWord: 'מתוך',
     notesLabel: 'הערות:',
@@ -1219,6 +1228,11 @@ export const he = {
     text_8: 'בקרה',
     toast: 'לא ניתן להתנתק לפני שמירת טיוטת ההזמנה. יש לנסות שוב.',
     text_9: 'ניהול רכש ותשלומים',
+    language: 'שפה',
+    appearance: 'מראה',
+    themeDark: 'מצב כהה',
+    themeToDark: 'מעבר למצב כהה',
+    themeToLight: 'מעבר למצב בהיר',
     productGuide: 'מדריך שימוש',
     text_10: 'החשבון והמערכת',
     text_11: 'דלג לתוכן',
@@ -2429,6 +2443,8 @@ export const he = {
     lifecycleInReview: 'בבדיקה',
     lifecyclePendingApproval: 'ממתינה לאישור',
     lifecycleApproved: 'מאושרת',
+    printName: 'חשבונית ספק',
+    printSubtitle: '{supplier} · תאריך החשבונית {date}',
     beforeVat: 'לפני מע״מ',
     plusVat: ' + מע״מ',
     kpiPaid: 'שולם',
@@ -2811,6 +2827,7 @@ export const he = {
     deliveredToAccountant: 'הועבר לרו״ח',
     markDelivered: 'סימון כהועבר לרו״ח',
     downloadVersion: 'הורדת גרסה',
+    printName: 'דוח חודשי לרו״ח',
     printHeading: 'דוח חודשי {month}',
     kpiInvoices: 'חשבוניות',
     kpiInvoiceTotal: 'סה״כ חשבוניות',
@@ -3415,6 +3432,11 @@ export const he = {
   },
 
   orgSubscription: {
+    checkoutOpening: 'פותח תשלום…',
+    purchaseAvailable: 'אפשר לעבור למסלול בתשלום מהמסך הזה. התשלום מתבצע אצל ספק הסליקה, והמסלול מתעדכן כאן אחרי אישור מהספק.',
+    checkoutAwaitingProvider: 'התשלום נשלח לאישור אצל ספק הסליקה. המסלול יתעדכן כאן ברגע שהאישור החתום יתקבל — זה בדרך כלל מיידי. אין צורך לשלם שוב.',
+    checkoutFailed: 'לא הצלחנו לפתוח את מסך התשלום. לא בוצע חיוב. אפשר לנסות שוב, ואם זה חוזר — לפנות לתמיכה.',
+    manageBilling: 'ניהול תשלום וחשבוניות',
     availabilityIndeterminate: 'לא ניתן לקבוע כרגע אם רכישת מסלול זמינה. זה אינו אומר שהיא חסומה — רענון או ניסיון מאוחר יותר יראה את המצב העדכני.',
     displayCurrencyNote: 'המחירים למטה מוצגים לפי שפת הממשק: עברית בשקלים ואנגלית בדולרים. זו תצוגה בלבד; החיוב בפועל והמס נקבעים לפי מדינת החיוב המאומתת אצל ספק הסליקה.',
     catalogueShown: 'מוצג קטלוג {catalogue}, לפני מס.',
@@ -3430,7 +3452,6 @@ export const he = {
     paidPlan: 'מסלול בתשלום',
     noPaymentMethod: 'לא נדרש אמצעי תשלום',
     recommended: 'מומלץ',
-    priceLabel: 'מחיר',
     quotaLabelContract: 'מכסה',
     quotaLabelDocuments: 'מסמכים',
     quotaContract: 'חוזית',
@@ -3747,7 +3768,7 @@ export const he = {
     presetPrevMonth: 'חודש קודם',
     presetQuarter: '3 חודשים',
     presetYear: 'שנה',
-    heading: 'ריכוז הוצאות {from} – {to}',
+    printName: 'ריכוז הוצאות',
     invoicesWord: 'חשבוניות',
     rowLabel: 'הוצאות עבור {supplier} ב-{currency}',
     linkedInvoicesLead: 'חשבוניות מקושרות בסך',
@@ -5102,7 +5123,9 @@ export const he = {
     noAccountYet: 'אין לכם חשבון?',
     signInAsAria: 'כניסה כ{role}',
     inviteWaitingTitle: 'יש לכם הזמנה ממתינה',
-    inviteWaitingBody: 'הכתובת {email} הוזמנה להצטרף אל {organization}, ולכן לא נפתח עסק חדש. ההצטרפות נעשית מקישור ההזמנה שנשלח אליכם ובבחירת סיסמה. אם הקישור אבד, בקשו מבעל העסק לשלוח אותו שוב.',
+    inviteWaitingBody: 'הכתובת {email} הוזמנה להצטרף אל {organization}, ולכן לא נפתח עסק חדש. אשרו את הפרטים והצטרפו — אין צורך בקישור ואין צורך בסיסמה.',
+    inviteJoinAction: 'הצטרפות לעסק',
+    inviteJoining: 'מצטרף…',
   },
 
   accountantDashboard: {
@@ -5834,7 +5857,6 @@ export const he = {
     entitlementIntroOnly: '{label} — פתוח ב־30 הימים הראשונים',
     perUsagePeriod: 'בתקופת שימוש חודשית',
     recommended: 'מומלץ',
-    featuresLabel: 'כלול בכל מסלול',
     loadFailed: 'לא ניתן לטעון את המסלולים כרגע.',
     title: 'מסלולים',
     subtitle: 'אותה שליטה. קצב שמתאים לעסק שלך.',
@@ -5991,6 +6013,8 @@ export const he = {
     priceIncreaseDetail: 'לפי המחירון — לא לפי מה שנגבה בחשבונית',
     documentStalled: 'עיבוד המסמכים נעצר',
     documentStalledDetail: 'מסמכים ממתינים בתור ואיש אינו קורא אותם — נבדק כל חמש דקות',
+    expectedDocumentMissing: 'מסמך שציפית לו לא הגיע',
+    expectedDocumentMissingDetail: 'רק אחרי שחלון ההמתנה ותקופת החסד שהגדרת שניהם עברו — נבדק פעם ביום',
   },
 
   whatsappConnection: {
@@ -6112,6 +6136,13 @@ export const he = {
 
   subscriptionPage: {
     title: 'המנוי שלי',
+  },
+
+  support: {
+    productLead: 'צריכים עזרה?',
+    productSubject: 'פנייה לתמיכה — InPlace',
+    billingLead: 'שאלה על חיוב, חשבונית או מסלול:',
+    billingSubject: 'פנייה בנושא חיוב — InPlace',
   },
 
   charts: {

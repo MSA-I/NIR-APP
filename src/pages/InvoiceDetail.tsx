@@ -24,6 +24,7 @@ import type { Invoice, InvoiceReviewStatus, CreditReason } from '../lib/types';
 import { financialSupplierMap } from '../lib/financialSuppliers';
 import { ReauthModal } from '../components/ReauthModal';
 import { ImpactDialog, type ActionImpact } from '../components/ImpactDialog';
+import { DocumentPlate } from '../components/DocumentPlate';
 import {
   InvoiceLineReviewModal,
   type InvoiceReviewCandidate,
@@ -773,9 +774,15 @@ export default function InvoiceDetail() {
       {/* The document heading, on paper AND in the generated PDF. `print-only` rather than
           `hidden print:block` because html2canvas renders the live DOM. */}
       <div ref={headerRef} aria-hidden="true" className="print-only">
-        {orgLogoUrl && <img src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
-        <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}חשבונית ${inv.invoice_number} — ${inv.supplier.name}`}</h2>
-        <p className="text-xs">תאריך חשבונית: {fmtDate(inv.invoice_date)}</p>
+        <DocumentPlate
+          family="ledger"
+          name={t('invoices.printName')}
+          number={inv.invoice_number}
+          orgLogoUrl={orgLogoUrl}
+          subtitle={[
+            org?.name,
+            t('invoices.printSubtitle', { supplier: inv.supplier.name, date: fmtDate(inv.invoice_date) }),
+          ].filter(Boolean).join(' · ')} />
       </div>
 
       {/* print-area on the money + details cards: shadows/borders drop in print so the sheet

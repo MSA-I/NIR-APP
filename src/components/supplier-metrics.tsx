@@ -20,7 +20,7 @@ import { LineChart, Line } from 'recharts';
 import { Star } from 'lucide-react';
 import type { SupplierMetrics } from '../lib/types';
 import type { Tone } from '../lib/status';
-import { chartTheme } from '../lib/theme';
+import { useChartTheme } from '../lib/theme';
 import { ICON } from './ui';
 import { useId } from 'react';
 import { translateIn, useT } from '../lib/i18n/LocaleProvider';
@@ -160,7 +160,7 @@ export function PriceSparkline({ points }: { points: number[] }) {
   if (!points || points.length < 2) return null;
   const first = points[0];
   const last = points[points.length - 1];
-  const theme = chartTheme();
+  const theme = useChartTheme();
   const stroke = last > first ? theme.trendUp : last < first ? theme.trendDown : theme.flat;
   const data = points.map((price, i) => ({ i, price }));
   // The stroke hue was the ONLY carrier of "this went up": 96×28 with no axes, no dots, no

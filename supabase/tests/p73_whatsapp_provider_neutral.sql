@@ -193,34 +193,34 @@ insert into public.purchase_order_items (id, org_id, order_id, product_id, qty, 
 -- ==========================================================================================
 select pg_temp.p73_actor('27300000-0000-4000-8000-000000000002', true);
 select pg_temp.p73_expect_error(
-  $$select configure_whatsapp_provider_connection('twilio', 'ACp73', 'whatsapp:+972500000001',
+  $$select configure_whatsapp_provider_connection('twilio', 'ACp73', '+972500000001',
     '+972500000001', 'p73-credential-value', 'p73_order', 'p73_reminder', 'he', 'office tries')$$,
   'whatsapp_not_authorized');
 
 -- The owner alone is not enough: a stale session cannot connect an outbound channel.
 select pg_temp.p73_actor('27300000-0000-4000-8000-000000000001', false);
 select pg_temp.p73_expect_error(
-  $$select configure_whatsapp_provider_connection('twilio', 'ACp73', 'whatsapp:+972500000001',
+  $$select configure_whatsapp_provider_connection('twilio', 'ACp73', '+972500000001',
     '+972500000001', 'p73-credential-value', 'p73_order', 'p73_reminder', 'he', 'stale session')$$,
   'fresh_authentication_required');
 
 select pg_temp.p73_actor('27300000-0000-4000-8000-000000000001', true);
 select pg_temp.p73_expect_error(
-  $$select configure_whatsapp_provider_connection('twilio', 'ACp73', 'whatsapp:+972500000001',
+  $$select configure_whatsapp_provider_connection('twilio', 'ACp73', '+972500000001',
     '+972500000001', 'p73-credential-value', 'p73_order', 'p73_reminder', 'he', '   ')$$,
   'reason_required');
 select pg_temp.p73_expect_error(
   $$select configure_whatsapp_provider_connection('carrier-pigeon', 'ACp73',
-    'whatsapp:+972500000001', '+972500000001', 'p73-credential-value',
+    '+972500000001', '+972500000001', 'p73-credential-value',
     'p73_order', 'p73_reminder', 'he', 'unknown provider')$$,
   'whatsapp_connection_invalid');
 select pg_temp.p73_expect_error(
-  $$select configure_whatsapp_provider_connection('twilio', 'ACp73', 'whatsapp:+972500000001',
+  $$select configure_whatsapp_provider_connection('twilio', 'ACp73', '+972500000001',
     '+972500000001', 'short', 'p73_order', 'p73_reminder', 'he', 'credential too short')$$,
   'whatsapp_credential_invalid');
 
 select configure_whatsapp_provider_connection(
-  'twilio', 'ACp73', 'whatsapp:+972500000001', '+972500000001', 'p73-credential-value',
+  'twilio', 'ACp73', '+972500000001', '+972500000001', 'p73-credential-value',
   'p73_order', 'p73_reminder', 'he', 'P73 owner connects the tenant sender') as config_a \gset
 
 -- The reply names the provider and a masked sender, and nothing else about the identity.
@@ -238,7 +238,7 @@ reset role;
 select set_config('request.jwt.claims', '', true);
 select pg_temp.p73_assert(
   (select provider = 'twilio' and phone_number_id is null and waba_id is null
-       and provider_sender_id = 'whatsapp:+972500000001' and provider_account_id = 'ACp73'
+       and provider_sender_id = '+972500000001' and provider_account_id = 'ACp73'
        and status = 'pending'
    from whatsapp_connections where org_id = '17300000-0000-4000-8000-000000000001'),
   'the stored connection did not take the provider-neutral identity, or kept a Meta identity '
@@ -281,7 +281,7 @@ select pg_temp.p73_assert(
 select pg_temp.p73_expect_error(
   $$update whatsapp_connections
     set provider = 'twilio', phone_number_id = null, waba_id = null,
-        provider_account_id = 'ACp73', provider_sender_id = 'whatsapp:+972500000001'
+        provider_account_id = 'ACp73', provider_sender_id = '+972500000001'
     where org_id = '17300000-0000-4000-8000-000000000002'$$,
   'whatsapp_connections_provider_sender_idx');
 
@@ -324,7 +324,7 @@ select pg_temp.p73_assert(
 -- The worker must be able to route without knowing which vendor it is talking to.
 select pg_temp.p73_assert(
   (:'claim_a'::jsonb -> 'connection' ->> 'provider') = 'twilio'
-  and (:'claim_a'::jsonb -> 'connection' ->> 'provider_sender_id') = 'whatsapp:+972500000001'
+  and (:'claim_a'::jsonb -> 'connection' ->> 'provider_sender_id') = '+972500000001'
   and (:'claim_a'::jsonb -> 'connection' ->> 'provider_account_id') = 'ACp73'
   and (:'claim_a'::jsonb -> 'connection' ->> 'phone_number_id') is null,
   'the claim handed the worker a Meta-only connection block');
@@ -376,7 +376,7 @@ select pg_temp.p73_expect_error(
 -- ==========================================================================================
 select pg_temp.p73_actor('27300000-0000-4000-8000-000000000001', true);
 select pg_temp.p73_expect_error(
-  $$select service_process_whatsapp_provider_event('twilio', 'whatsapp:+972500000001',
+  $$select service_process_whatsapp_provider_event('twilio', '+972500000001',
     'EVp73-1', 'delivery_status', 'SMp73aaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'sent', null, null, now())$$,
   'service_role_required');
 reset role;
@@ -385,7 +385,7 @@ select pg_temp.p73_service();
 -- #241: inbound text and media are not ingested, not filed and not answered as handled. The
 -- refusal happens before any row exists, so nothing can render as processed.
 select pg_temp.p73_expect_error(
-  $$select service_process_whatsapp_provider_event('twilio', 'whatsapp:+972500000001',
+  $$select service_process_whatsapp_provider_event('twilio', '+972500000001',
     'EVp73-inbound', 'inbound_message', 'SMp73inbound', null, null, null, now())$$,
   'whatsapp_inbound_unsupported');
 select pg_temp.p73_assert(
@@ -395,7 +395,7 @@ select pg_temp.p73_assert(
 -- An identifier we never issued settles nothing and creates nothing.
 -- Every call below is its own statement: AND does not order its operands, so a mutation and an
 -- observation inside one expression would prove nothing about which ran first.
-select service_process_whatsapp_provider_event('twilio', 'whatsapp:+972500000001',
+select service_process_whatsapp_provider_event('twilio', '+972500000001',
   'EVp73-ghost', 'delivery_status', 'SMp73-never-issued', 'delivered', null, null, now())
   as ghost \gset
 select pg_temp.p73_assert(
@@ -407,7 +407,7 @@ select pg_temp.p73_assert(
                     '17300000-0000-4000-8000-000000000002')),
   'an unknown provider message id created a phantom row');
 
-select service_process_whatsapp_provider_event('twilio', 'whatsapp:+972500000001',
+select service_process_whatsapp_provider_event('twilio', '+972500000001',
   'EVp73-delivered', 'delivery_status', 'SMp73aaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   'delivered', null, null, now()) as delivered_first \gset
 select pg_temp.p73_assert(
@@ -421,7 +421,7 @@ select pg_temp.p73_assert(
   'a delivered callback did not advance the message');
 
 -- Replay of the same provider event identifier is a no-op, answered from the ledger.
-select service_process_whatsapp_provider_event('twilio', 'whatsapp:+972500000001',
+select service_process_whatsapp_provider_event('twilio', '+972500000001',
   'EVp73-delivered', 'delivery_status', 'SMp73aaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   'delivered', null, null, now()) as delivered_replay \gset
 select pg_temp.p73_assert(
@@ -434,7 +434,7 @@ select pg_temp.p73_assert(
 
 -- Monotonicity lives in SQL, not only in the Edge function: a late, out-of-order callback
 -- cannot walk the ladder backwards.
-select service_process_whatsapp_provider_event('twilio', 'whatsapp:+972500000001',
+select service_process_whatsapp_provider_event('twilio', '+972500000001',
   'EVp73-late-sent', 'delivery_status', 'SMp73aaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   'sent', null, null, now() - interval '5 minutes');
 select pg_temp.p73_assert(
@@ -442,7 +442,7 @@ select pg_temp.p73_assert(
    where provider = 'twilio' and provider_message_id = 'SMp73aaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
   'a late sent callback regressed a delivered message');
 
-select service_process_whatsapp_provider_event('twilio', 'whatsapp:+972500000001',
+select service_process_whatsapp_provider_event('twilio', '+972500000001',
   'EVp73-read', 'delivery_status', 'SMp73aaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   'read', null, null, now());
 select pg_temp.p73_assert(

@@ -3,6 +3,7 @@ import { CreditCard } from 'lucide-react';
 import { ICON, PageHeader } from '../components/ui';
 import { OrgSubscriptionPanel } from '../components/OrgSubscriptionPanel';
 import { PlanLimitNote } from '../components/PlanLimitNote';
+import { SupportContact } from '../components/SupportContact';
 
 /**
  * The subscription its own screen (owner report 25.08.2026: "צריך ליצור קטגוריה בפני עצמה בתפריט
@@ -39,6 +40,11 @@ export default function Subscription() {
       <PageHeader title={<span className="flex items-center gap-2"><CreditCard size={ICON.xl} /> {t('subscriptionPage.title')}</span>} />
       <PlanLimitNote metricKey="documents.monthly" />
       <OrgSubscriptionPanel />
+      {/* Last, and muted. A customer reaches this screen to see what they are on and what else
+          exists; the address they need if something looks wrong belongs after that answer, not
+          competing with it. `billing` because this is the one screen where "who do I ask about a
+          charge" is the likelier question. */}
+      <SupportContact variant="billing" />
     </div>
   );
 }

@@ -28,6 +28,7 @@ import {
   type ServiceRpcResult,
 } from '../_shared/organization-egress.ts';
 import { runReservedEgress } from '../_shared/reserved-egress.ts';
+import { SUPPORT_REPLY_TO } from '../_shared/reply-to.ts';
 
 /** Echo the caller's Origin only when it is on the allowlist -- never a blanket '*'. */
 function corsFor(req: Request): Record<string, string> {
@@ -319,6 +320,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
           body: JSON.stringify({
             from: fromEmail,
             to: [issued.email],
+            // An invitation is InPlace speaking on its own behalf, so a confused recipient who
+            // presses Reply reaches a human at InPlace rather than an unread no-reply mailbox.
+            // A constant, never anything derived from the request (_shared/reply-to.ts).
+            reply_to: SUPPORT_REPLY_TO,
             subject: `הוזמנת להצטרף ל-${issued.org_name} ב-InPlace`,
             html: emailHtml(issued.org_name, roleLabel, link, issued.expires_at),
             text: emailText(issued.org_name, roleLabel, link),

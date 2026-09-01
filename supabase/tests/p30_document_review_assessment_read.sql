@@ -88,20 +88,19 @@ insert into public.purchase_order_items (org_id, order_id, product_id, qty, unit
    '30300000-0000-4000-8000-000000000001', 10, 10);
 
 insert into public.documents (
-  id, org_id, entity_type, storage_path, file_name, mime_type, document_kind, unit_id
-) values
+  id, org_id, entity_type, storage_path, file_name, mime_type, document_kind, unit_id, uploaded_by) values
   -- Readable by both: no unit at all.
   ('60300000-0000-4000-8000-000000000001', '10300000-0000-4000-8000-000000000001',
    'inbox', '10300000-0000-4000-8000-000000000001/p30-open.pdf', 'p30-open.pdf',
-   'application/pdf', 'invoice', null),
+   'application/pdf', 'invoice', null, '20300000-0000-4000-8000-000000000001'),
   -- Filed to the branch the office user cannot see.
   ('60300000-0000-4000-8000-000000000002', '10300000-0000-4000-8000-000000000001',
    'inbox', '10300000-0000-4000-8000-000000000001/p30-scoped.pdf', 'p30-scoped.pdf',
-   'application/pdf', 'invoice', 'b0300000-0000-4000-8000-000000000002'),
+   'application/pdf', 'invoice', 'b0300000-0000-4000-8000-000000000002', '20300000-0000-4000-8000-000000000001'),
   -- Stored, never interpreted: the "file is safe, nothing has been read" case.
   ('60300000-0000-4000-8000-000000000003', '10300000-0000-4000-8000-000000000001',
    'inbox', '10300000-0000-4000-8000-000000000001/p30-raw.pdf', 'p30-raw.pdf',
-   'application/pdf', 'invoice', null);
+   'application/pdf', 'invoice', null, '20300000-0000-4000-8000-000000000001');
 
 insert into public.document_processing_jobs (
   id, org_id, document_id, requested_by, status, input_checksum,

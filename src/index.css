@@ -31,6 +31,50 @@
     U+2215, U+FEFF, U+FFFD;
 }
 
+/* ---- The document faces (0309 / #330, the document design system) --------------------------
+   Two families that the APP's screens never use and the DOCUMENTS always do. They are the
+   marketing site's own faces, copied from LANDING-PAGE-NIR/public/assets/fonts byte for byte
+   rather than re-subset, so a document and the site it was sold from are set in one system.
+
+   Both are self-hosted for the same reason Noto is: typography never depends on a third-party
+   request at runtime, and a purchase order that renders in a fallback face at the supplier's
+   end is a document the business did not send.
+
+   ROBOTO MONO HAS NO HEBREW AT ALL, and the range below says so instead of leaving it to the
+   file's internal tables. The landing site learned this the expensive way with a different mono
+   whose Hebrew glyphs were mapped and EMPTY — every eyebrow laid out, measured and painted as
+   nothing. Here the range is latin-only on purpose, so Hebrew falls back to the reading face. */
+@font-face {
+  font-family: "Heebo";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("/fonts/Heebo-hebrew.woff2") format("woff2");
+  unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F;
+}
+
+@font-face {
+  font-family: "Heebo";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("/fonts/Heebo-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+                 U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+                 U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Roboto Mono";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/RobotoMono-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+                 U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+                 U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 @theme {
   /* One family carries Hebrew, Latin and ordinary figures. Alignment comes from OpenType tnum. */
   --font-sans: "Noto Sans Hebrew", Arial, ui-sans-serif, system-ui, sans-serif;
@@ -94,6 +138,57 @@
   --color-action-on-soft: oklch(32% 0.05 209);
   --color-action-wash: oklch(96.6% 0.011 195);
   --color-action-line: oklch(62% 0.055 205);
+
+  /* ---- The phone action bar's CURRENT page, and why it is not `action` (owner, 31.08.2026) ----
+     The bar's active pill and the raised camera puck both wore `--color-action`. Identical token,
+     identical pixel, two unrelated controls — the owner's report was "הצבע של הכפתור שלחוץ ... זה
+     אותו הצבע של כפתור המצלמה וזה מבלבל", and he asked for the pill to be LIGHTER.
+
+     A fill alone cannot carry this, and that is arithmetic rather than taste. The pill has to clear
+     BOTH the bar it sits in and the puck beside it at 3:1 (WCAG 1.4.11), which is only possible
+     while the bar and the puck are at least ~9:1 apart. Measured: the light theme has a window
+     (bar:puck ~10:1) and the DARK theme does not (~6.6:1, because `action` itself becomes light
+     there). So the pill carries a fill AND a ring: the fill clears the bar, the ring clears the
+     fill, and the ring is what the puck does not have in either theme.
+
+     `-ink` is onyx and not `action-on-soft`: that token reaches only ~3.2-3.6:1 against this fill
+     and fails the 4.5:1 text rule. */
+  --color-nav-current: oklch(60.9% 0.075 202);
+  --color-nav-current-ink: oklch(19.6% 0.022 229);
+  --color-nav-current-edge: oklch(33.5% 0.050 202);
+
+  /* ---- The appearance switch's own two grounds ----
+     They used to borrow `--color-surface-selected` for the track and `--color-surface` for the knob,
+     which inverted between themes: the light palette has `surface` ABOVE `selected` (99.2 vs 91.5)
+     and the dark palette has it BELOW (18 vs 28). The control's whole affordance is a filled circle
+     raised above its pill, so in the dark theme it read as a hole punched into one. Named tokens fix
+     it in both directions: the knob is always lighter than the track. */
+  --color-toggle-track: oklch(91.5% 0.006 80);
+  --color-toggle-knob: oklch(99.2% 0.006 80);
+  --color-toggle-knob-ink: oklch(19.6% 0.022 229);
+
+  /* ---- The raised capture puck (owner, 31.08.2026) ----
+     It used to be `--color-action` directly, which was right while the brand ink was a deep teal on
+     paper. The dark palette had to lighten `action` to keep it visible, and the lightened brand read
+     to the owner as a colour from outside the system: "שהאזור עם כפתור המצלמה יהיה בהיר ולא צבעוני
+     שלא קשור למערכת הצבעים".
+
+     So the puck stops following the brand and gets its own three tokens. In the LIGHT theme it keeps
+     exactly the pixels it has always had — the deep oceanic disc the owner has been using for weeks
+     — and in the DARK theme it becomes a light NEUTRAL disc. That asymmetry is deliberate: the puck's
+     job is "raised above the bar", and on paper the loudest way to be raised is the brand ink, while
+     on a dark bar it is light paper. Neither of those is a hue competing for attention. */
+  --color-fab-puck: oklch(33.66% 0.058 209);
+  --color-fab-puck-ink: #ffffff;
+  --color-fab-puck-line: oklch(62% 0.055 205);
+  --color-fab-puck-hover: oklch(29.5% 0.048 210);
+  --color-fab-puck-pressed: oklch(39% 0.062 208);
+  /* NO pressed COLOUR token, and that is a measured decision rather than an omission. The viable
+     fill window here is only 0.2203-0.2541 in relative luminance, so two fills inside it are
+     indistinguishable and one outside it breaks a 3:1 rule. A pressed RING colour was tried and
+     measured worse: at near-white it reached 1.08:1 against this bar — the boundary vanished at the
+     exact moment of the press. The pressed state is therefore a ring WIDTH change (`active:ring-2`),
+     which is unmistakable, identical in both themes, and owes contrast nothing. */
   --color-focus: oklch(50% 0.085 207);
   /* Lettering on a FILLED brand or status control — .btn-primary, .btn-danger, the active
      filter chip, the toast, the Receiving state buttons, the capture puck. It was the bare
@@ -107,10 +202,50 @@
      Onyx-hued at high lightness, used at /75 with backdrop-blur. */
   --color-topbar: oklch(94.5% 0.008 229);
 
+  /* `--color-shell*` NARROWED (31.08.2026, ADR-0010, decision #331). It used to mean six unrelated
+     things at once, and four of them break if the pair is simply flipped for a dark theme. What is
+     left under this name is ONE job: **a dark ground that stays dark in both themes** — the auth
+     panels and their aurora, the dark chart tooltip, and the table head. Those surfaces are dark by
+     design and not by theme, so they do not appear in the dark block below at all.
+     The other five jobs moved out, each to a name that says what it is:
+       · `--color-inverse*`   the drawer and the role-queue card — deliberately the inverse of the
+                              page, so they FLIP (dark on light paper, light on a dark page)
+       · `--color-scrim`      dimming sheets, dark in both themes, alpha carried by the token
+       · `--color-fixed-onyx` onyx as a fill/ink on a LIGHT surface (btn-rainbow, plan badge)
+       · `--color-chart-4`    the ramp's dark anchor, now an explicit value
+       · the seven `--shadow-*` bases, now an explicit elevation ink
+     The desktop chrome needed no family: it is `surface` over `canvas`, and the dark palette makes
+     `surface` the lighter of the two, which is decision #331(א) — the nav lighter than the page —
+     without a single new token. */
   --color-shell: oklch(19.57% 0.022 229);          /* Onyx #0A171D */
   --color-shell-ink: oklch(97.5% 0.012 80);
   --color-shell-ink-soft: oklch(88% 0.014 80);
   --color-shell-ink-dim: oklch(73% 0.016 80);
+
+  /* The inverse surface. In the light theme it is the onyx the drawer and the role-queue card have
+     always been; in the dark theme it inverts, because its whole job is to be the opposite of the
+     page it sits on (owner rulings #331(א) and #331(ב) — intent, not appearance). */
+  --color-inverse: oklch(19.57% 0.022 229);
+  --color-inverse-ink: oklch(97.5% 0.012 80);
+  --color-inverse-ink-soft: oklch(88% 0.014 80);
+  --color-inverse-ink-dim: oklch(73% 0.016 80);
+
+  /* Dimming sheets. The alpha rides the TOKEN and not the utility, because a dark page needs a
+     heavier sheet than light paper does to read as "the thing behind is out of reach", and an
+     alpha spelled in the class name cannot change with the theme. */
+  --color-scrim: oklch(19.57% 0.022 229 / 0.5);
+  /* The product tour's shield covers the whole viewport and has to read as "everything
+     behind this is out of reach", which is why it is heavier than the drawer's sheet. */
+  --color-scrim-strong: oklch(19.57% 0.022 229 / 0.76);
+
+  /* Onyx used as a fill or as lettering ON A LIGHT SURFACE — the rainbow button's body and the
+     plan badge's words. Neither is chrome and neither is a dark ground, so both stay onyx in both
+     themes: inverting them would turn a premium badge's lettering pale on a pale gradient. */
+  --color-fixed-onyx: oklch(19.57% 0.022 229);
+
+  /* The ink every elevation is mixed from. It was `--color-shell` by alias, so the shell's
+     narrowing would have quietly repainted all seven shadows. */
+  --color-elevation: oklch(19.57% 0.022 229);
 
   /* ---- The assistant card — one DARK surface inside a light product ----
      Owner ruling 01.09.2026. The reference the owner chose (21st.dev `ai-chat`) is a dark glass
@@ -142,8 +277,8 @@
   /* The card floats over the working canvas rather than docking beside it, so it needs the
      product's top elevation rung. Derived from the shell like every other shadow here. */
   --shadow-assistant:
-    0 4px 12px color-mix(in oklab, var(--color-shell) 22%, transparent),
-    0 28px 56px -14px color-mix(in oklab, var(--color-shell) 34%, transparent);
+    0 4px 12px color-mix(in oklab, var(--color-elevation) 22%, transparent),
+    0 28px 56px -14px color-mix(in oklab, var(--color-elevation) 34%, transparent);
 
   /* ---- Chart ramp — the SYSTEM COLORS themselves (T7.3g, owner: "לפי צבעי המערכת") ----
      No derived teals, no bronze: OCEANIC #003F47 and its solid mixes over the card surface
@@ -153,8 +288,26 @@
   --color-chart-1: var(--color-action);
   --color-chart-2: oklch(52.84% 0.0501 205);
   --color-chart-3: oklch(68.84% 0.0313 202);
-  --color-chart-4: var(--color-shell);
+  /* Was `var(--color-shell)`. Pinned: this is the ramp's DARK ANCHOR (loginAurora
+     documents index [3] as "onyx anchor (darkest)"), and the shell no longer promises
+     to be the darkest thing in the palette. */
+  --color-chart-4: oklch(19.57% 0.022 229);
   --color-chart-5: oklch(83.11% 0.0153 192);
+
+  /* ---- The auth aurora's own ramp (31.08.2026, ADR-0010) ----
+     It used to read `--color-chart-1..5`, and that broke the moment the chart ramp gained a dark
+     theme: `chart-4` is the ramp's CONTRAST anchor, so on dark it inverts to near-white — and
+     `loginAurora.ts` documents index [3] as "onyx anchor (darkest)". The login panel is dark in
+     BOTH themes (it is `--color-shell`, the on-dark family), so a ramp that lightens under it turns
+     a readable panel into a bright wash with light type on top.
+     These five are therefore the chart ramp's LIGHT values, frozen, and they are on the dark
+     exemption list in `check-design-tokens.ts` for the same reason the rest of the on-dark family
+     is: the surface is dark by design, not by theme. */
+  --color-aurora-1: oklch(33.66% 0.058 209);
+  --color-aurora-2: oklch(52.84% 0.0501 205);
+  --color-aurora-3: oklch(68.84% 0.0313 202);
+  --color-aurora-4: oklch(19.57% 0.022 229);
+  --color-aurora-5: oklch(83.11% 0.0153 192);
 
   /* ---- Categorical series — IDENTITY, which the ramp above cannot carry (24.08.2026) ----
      The ramp is sequential and it is good at that: bars over time, a sparkline, one series
@@ -238,22 +391,22 @@
      retheme runbook promises "@theme and the doc", and a hand-copied rgb() quietly broke that
      promise — the shadows would have stayed Onyx after a repaint. Values are unchanged. */
   --shadow-card:
-    0 2px 4px color-mix(in oklab, var(--color-shell) 7%, transparent),
-    0 12px 28px color-mix(in oklab, var(--color-shell) 13%, transparent);
+    0 2px 4px color-mix(in oklab, var(--color-elevation) 7%, transparent),
+    0 12px 28px color-mix(in oklab, var(--color-elevation) 13%, transparent);
   --shadow-card-hover:
-    0 3px 6px color-mix(in oklab, var(--color-shell) 9%, transparent),
-    0 16px 34px color-mix(in oklab, var(--color-shell) 17%, transparent);
+    0 3px 6px color-mix(in oklab, var(--color-elevation) 9%, transparent),
+    0 16px 34px color-mix(in oklab, var(--color-elevation) 17%, transparent);
   --shadow-dashboard:
-    0 2px 4px color-mix(in oklab, var(--color-shell) 7%, transparent),
-    0 14px 32px color-mix(in oklab, var(--color-shell) 14%, transparent);
+    0 2px 4px color-mix(in oklab, var(--color-elevation) 7%, transparent),
+    0 14px 32px color-mix(in oklab, var(--color-elevation) 14%, transparent);
   /* Floating row-action menu (ActionMenu): between card-hover and the toast/modal tier. */
   --shadow-menu:
-    0 2px 6px color-mix(in oklab, var(--color-shell) 8%, transparent),
+    0 2px 6px color-mix(in oklab, var(--color-elevation) 8%, transparent),
     0 16px 32px -12px color-mix(in oklab, var(--color-action) 20%, transparent);
   /* The raised capture puck in the mobile action bar: one step past shadow-menu — the strongest
      oceanic tint in the set. It was the desktop FAB's shadow too, until that surface was removed. */
   --shadow-fab:
-    0 3px 8px color-mix(in oklab, var(--color-shell) 10%, transparent),
+    0 3px 8px color-mix(in oklab, var(--color-elevation) 10%, transparent),
     0 20px 40px -12px color-mix(in oklab, var(--color-action) 30%, transparent);
   /* The top of the ladder, and the two rungs that were missing from it. A light UI cannot raise
      a surface by LIGHTNESS — the card already sits at 99.2%, so an "elevated" step above it would
@@ -262,13 +415,13 @@
      which are neutral black and would have survived a brand repaint unchanged — the one thing
      every other shadow in this block was rewritten to prevent. */
   --shadow-toast:
-    0 2px 6px color-mix(in oklab, var(--color-shell) 12%, transparent),
-    0 12px 24px -8px color-mix(in oklab, var(--color-shell) 24%, transparent);
+    0 2px 6px color-mix(in oklab, var(--color-elevation) 12%, transparent),
+    0 12px 24px -8px color-mix(in oklab, var(--color-elevation) 24%, transparent);
   /* The modal panel — the highest surface in the product, and the one a payment is approved on.
      Deeper spread than the toast because it is a held state, not a passing message. */
   --shadow-dialog:
-    0 4px 10px color-mix(in oklab, var(--color-shell) 10%, transparent),
-    0 24px 48px -12px color-mix(in oklab, var(--color-shell) 22%, transparent);
+    0 4px 10px color-mix(in oklab, var(--color-elevation) 10%, transparent),
+    0 24px 48px -12px color-mix(in oklab, var(--color-elevation) 22%, transparent);
 
   --color-star: var(--color-amber-400);            /* rating stars: decoration, not status */
   --color-star-hover: var(--color-amber-300);
@@ -364,7 +517,7 @@
   --color-alert-solid: var(--color-rose-700);
 
   --color-info-wash: var(--color-sky-50);
-  --color-info-line: var(--color-sky-200);
+  --color-info-line: var(--color-sky-600);
   --color-info-soft: var(--color-sky-100);
   --color-info-on-soft: var(--color-sky-800);
   --color-info-fg: var(--color-sky-700);
@@ -381,7 +534,302 @@
      remain paired with an arrow so meaning is never communicated by hue alone. */
   --color-trend-up-fg: var(--color-rose-700);
   --color-trend-down-fg: var(--color-emerald-700);
+
+  /* ---- The document system (#330) ------------------------------------------------------------
+     Everything InPlace generates as a FILE — the order that reaches a supplier, the invoice card,
+     the monthly report, the subscription receipt, the accountant's workbook — is set from these
+     tokens and never from the screen's.
+
+     NINE OF THE FOURTEEN ARE ALIASES, and that is the finding rather than a shortcut: the
+     marketing site and the product were both drawn from Onyx / Wheat / Oceanic, so `#0a171d`,
+     `#fffcf8`, `#f4efe7`, `#e5dbcd`, `#fbf6ee`, `#003f47`, `#5d9096`, `#46545b` and `#c70036`
+     already existed here under a screen name. Restating a literal would have given one colour two
+     spellings and let a repaint move the app while the documents stayed behind. What the alias
+     buys is the NAME: `--color-doc-plate` says what the value does on paper, and the day the
+     brand moves, it moves in one place.
+
+     Six values are genuinely new — the marketing site's dark steps, its two inks on dark, its
+     muted ink on light, and its filled action. Each was converted from the site's hex by painting
+     the oklch into a canvas and reading the pixel back; all six round-trip exactly.
+
+     WHAT THESE DO NOT DO: they never reach a screen. `check:typography` and the print stylesheet
+     keep the two vocabularies apart, and a component that wants a document colour is a component
+     that belongs inside a `.print-only` block. */
+  --color-doc-plate: var(--color-shell);            /* #0a171d — the outbound plate, table heads */
+  --color-doc-plate-lift: oklch(24.86% 0.0282 228.2);  /* #12242c — a band inside a dark plate */
+  --color-doc-plate-line: oklch(31.50% 0.0350 230.0);  /* #1e3540 — a border ON a dark plate */
+  --color-doc-plate-action: oklch(38.97% 0.0620 207.6); /* #0d4e56 — the receipt plate */
+
+  --color-doc-paper: var(--color-surface);          /* #fffcf8 — the sheet itself */
+  --color-doc-paper-sink: var(--color-surface-sunken); /* #f4efe7 — the quiet plate, note boxes */
+  --color-doc-line: var(--color-line);              /* #e5dbcd — every rule on paper */
+
+  --color-doc-ink: var(--color-shell-ink);          /* #fbf6ee — lettering on a dark plate */
+  --color-doc-ink-soft: oklch(75.52% 0.0202 217.3); /* #a2b3b8 — secondary on dark; receipt plate */
+  --color-doc-ink-dim: oklch(63.77% 0.0226 219.8);  /* #7d8f95 — the faintest on dark */
+  --color-doc-ink-body: var(--color-ink-soft);      /* #46545b — body copy on paper */
+  --color-doc-ink-muted: oklch(54.48% 0.0220 226.0); /* #63737a — labels and folios on paper */
+
+  --color-doc-accent: var(--color-action);          /* #003f47 — eyebrow on paper, positive money */
+  --color-doc-accent-lift: var(--color-action-line); /* #5d9096 — eyebrow on a dark plate */
+  --color-doc-alert: var(--color-alert-fg);         /* #c70036 — an exception, on paper */
+
+  /* Display and technical annotation. The reading face stays `--font-sans` in every document. */
+  --font-doc-display: "Heebo", "Noto Sans Hebrew", Arial, sans-serif;
+  --font-doc-mono: "Roboto Mono", "Noto Sans Hebrew", ui-monospace, monospace;
+
+  /* The plate's corner and the printer's registration marks, both from the marketing site. */
+  --radius-doc-plate: 12px;
 }
+
+/* ==============================================================================================
+ * THE DARK PALETTE — ADR-0010, owner decision #331 (31.08.2026).
+ *
+ * One selector, and `scripts/check-design-tokens.ts` enforces that every `@theme` token either
+ * appears here or is on a named exemption list. That parity check is not ceremony: a token nobody
+ * remembered keeps its LIGHT value on a dark page and renders happily — near-white body text on a
+ * near-white card — with no build error and no console warning. The guard is the only thing that
+ * turns "forgot one" from a screen-sized bug into a failed gate.
+ *
+ * `@theme` (unprefixed) emits its variables into `:root`, so this attribute selector outranks them
+ * and every Tailwind utility follows without a single `dark:` variant anywhere in the product.
+ *
+ * THREE OWNER RULINGS ARE VISIBLE IN THE VALUES BELOW:
+ *   #331(a) the navigation is LIGHTER than the page. It needed no new token: the desktop chrome is
+ *           `surface` over `canvas`, so making `surface` the lighter of the two IS the ruling.
+ *   #331(b) the role-queue card inverts with the drawer — `--color-inverse*` flips, because the
+ *           job of both surfaces is to be the opposite of the page rather than to be dark.
+ *   #331(c) `plan-card.css` is untouched and therefore absent here.
+ *
+ * WHAT IS NOT HERE, AND WHY: the `shell` family and `fixed-onyx`. Those surfaces are dark BY DESIGN
+ * — the auth aurora, the chart tooltip, the table head, the plan badge's lettering on light metal —
+ * and a theme has no opinion about them.
+ * ============================================================================================ */
+:root[data-theme='dark'] {
+  /* ---- Grounds — OCEANIC-TINTED, owner choice "ג" of 31.08.2026 ----
+       The first attempt used a near-neutral blue-black at chroma 0.012, and the owner's verdict was
+       that dark mode "נראה מוזר ממש ולא נראה שייך בכלל לאפליקציה". The diagnosis held up: at
+       chroma 0.012 the ground was LESS chromatic than the product's own onyx (#0A171D is 0.022), so
+       the dark theme was a generic dark scale rather than this product's dark. It was shown three
+       candidates side by side and picked the one built on the oceanic hue: the ground is now a deep
+       TEAL-black rather than a blue-black, which is the brand's own hue carried all the way down.
+
+       The step order is still the elevation model — canvas < sunken < surface < hover < selected —
+       and `surface` above `canvas` is what delivers decision #331(א), the nav lighter than the page,
+       without a single extra token. ---- */
+  --color-canvas: oklch(13% 0.028 209);
+  --color-surface: oklch(18% 0.030 209);
+  --color-surface-sunken: oklch(15.5% 0.028 209);
+  --color-surface-hover: oklch(23% 0.030 209);
+  --color-surface-selected: oklch(28% 0.032 209);
+  /* The bar rides over the page at /75 with a blur, so it is a ground and not a wash. */
+  --color-topbar: oklch(20% 0.026 209);
+
+  --color-line: oklch(31% 0.024 209);
+  --color-line-soft: oklch(25% 0.024 209);
+  /* WCAG 1.4.11 wants 3:1 for an input's boundary. On dark the danger is the opposite of the light
+     theme's: a border that disappears into the card rather than into the page. */
+  --color-line-strong: oklch(57% 0.026 209);
+
+  /* ---- Ink. Same warm hue the light theme gives its inverse ink, so type never reads blue. ---- */
+  --color-ink: oklch(96% 0.008 80);
+  --color-ink-body: oklch(91% 0.008 80);
+  --color-ink-mid: oklch(84% 0.009 80);
+  --color-ink-soft: oklch(76% 0.010 80);
+  --color-ink-muted: oklch(68% 0.010 80);
+  --color-ink-faint: oklch(58% 0.010 80);
+  --color-ink-ghost: oklch(44% 0.010 80);
+
+  /* ---- Action — LIGHT PAPER, NOT A LIGHTENED TEAL (owner, 31.08.2026) ----
+       The first attempt raised the brand up the lightness axis and kept its hue, which produced a
+       pale cyan. The owner rejected it in those terms — "אני לא אוהב את התכלת הזה בכלל אני רוצה
+       שהוא יהיה בהיר" — and he is right about the cause: at 74% lightness the oceanic stops reading
+       as the product's deep teal and becomes an unrelated pastel. A brand ink does not survive being
+       dragged 40 lightness points; it becomes a different colour wearing the same token name.
+
+       So on a dark ground the primary action is PAPER. That is not an absence of brand — it is the
+       same move the light theme makes, inverted: there, the loudest thing you can be on warm paper
+       is deep oceanic ink; here, the loudest thing you can be on a teal-black ground is paper.
+
+       `on-solid` INVERTS to a dark ink, and it is the single most consequential line in this block:
+       every primary button in the product is `bg-action text-on-solid`, so leaving it light would
+       have printed white type on a white fill.
+
+       WHAT THIS COSTS, AND WHERE IT IS PAID BACK. `.link` is `text-action`, so links lose their
+       colour affordance here — a near-white link among near-white body text. They get a PERMANENT
+       underline in this theme instead (see the rule after this block), which is the stronger
+       affordance anyway and the one WCAG 1.4.1 actually asks for. Charts do NOT follow: colour there
+       carries data rather than chrome, so `--color-chart-1` is pinned below instead of aliasing
+       `action` into a white first series. ---- */
+  --color-action: oklch(95% 0.006 80);
+  --color-action-hover: oklch(99% 0.004 80);
+  --color-action-solid: oklch(90% 0.008 80);
+  --color-action-soft: oklch(27% 0.012 209);
+  --color-action-on-soft: oklch(92% 0.008 80);
+  --color-action-wash: oklch(21% 0.010 209);
+  --color-action-line: oklch(62% 0.012 80);
+  --color-focus: oklch(88% 0.010 80);
+  /* The pill keeps a mid fill so it clears the dark bar, and the RING does the work the fill
+     cannot: `action` is light here, so no single fill can be 3:1 from both the bar and the puck.
+     The ink stays dark on the mid fill. */
+  /* SOLVED, and the solution is different in kind from the light theme's. Measured here: the bar
+     composites to 0.0072 relative luminance and the puck to 0.4193 — 8.2:1 apart, which is BELOW
+     the ~9:1 a two-sided 3:1 fill needs, so no fill exists that clears both. That is not a defeat:
+     it is why the pill carries a ring at all. The fill clears the bar (3.1:1), the ring clears the
+     fill, and the ring is what the puck has never had. */
+  /* Re-seated when the brand stopped being teal here. The puck beside it is light paper and so is
+     `action`, so a light fill would now collide with both; the pill takes a MID neutral in the
+     ground's own hue and keeps its light ring. The separation the owner originally reported is
+     therefore carried by lightness in both directions: mid pill, light puck, dark bar. */
+  --color-nav-current: oklch(44% 0.030 209);
+  --color-nav-current-ink: oklch(97% 0.008 80);
+  --color-nav-current-edge: oklch(80% 0.014 80);
+
+  /* Knob still lighter than track — see the light-theme note. */
+  --color-toggle-track: oklch(26% 0.026 209);
+  --color-toggle-knob: oklch(75% 0.010 80);
+  --color-toggle-knob-ink: oklch(13% 0.028 209);
+
+  /* LIGHT AND NEUTRAL, not the lightened brand. Warm paper at hue 80 — the same family the ink uses
+     — so the one raised control on a dark bar reads as elevation rather than as a colour. */
+  --color-fab-puck: oklch(93% 0.008 80);
+  --color-fab-puck-ink: oklch(19.6% 0.022 229);
+  --color-fab-puck-line: oklch(78% 0.010 80);
+  --color-fab-puck-hover: oklch(97% 0.006 80);
+  --color-fab-puck-pressed: oklch(86% 0.010 80);
+  --color-on-solid: oklch(14% 0.012 229);
+
+  /* ---- The inverse surface: light panel, dark words. Decisions #331(a) and #331(b). ---- */
+  --color-inverse: oklch(94% 0.008 80);
+  --color-inverse-ink: oklch(19.5% 0.015 229);
+  --color-inverse-ink-soft: oklch(33% 0.014 229);
+  --color-inverse-ink-dim: oklch(47% 0.012 229);
+
+  /* ---- Sheets and elevation. A dark page needs a HEAVIER scrim than light paper to read as "out
+       of reach", which is exactly why the alpha rides the token. A shadow on a dark ground needs a
+       blacker ink for the same reason. ---- */
+  --color-scrim: oklch(8% 0.008 229 / 0.62);
+  --color-scrim-strong: oklch(6% 0.006 229 / 0.84);
+  --color-elevation: oklch(4% 0.004 229);
+
+  /* ---- Charts. Hues are preserved token by token; lightness is re-seated for a dark ground.
+       `chart-4` is the ramp's CONTRAST anchor, so it inverts: the darkest colour in a light ramp is
+       the lightest in a dark one. `chart-1` and `bar-mid` are aliases to `action`/`series-1` and
+       follow for free — the guard knows, and restating them here would be a second source. ---- */
+  /* PINNED, not inherited. In `@theme` this is `var(--color-action)`, which was the brand ink and
+     the right first series. Now that `action` is paper here, following it would draw a white first
+     bar sitting next to `chart-4`'s light anchor and collapse the ramp. Colour in a chart is data,
+     not chrome, so the ramp stays oceanic even though the chrome does not. */
+  --color-chart-1: oklch(62% 0.075 205);
+  --color-chart-2: oklch(70% 0.050 205);
+  --color-chart-3: oklch(76% 0.035 202);
+  --color-chart-4: oklch(93% 0.010 80);
+  --color-chart-5: oklch(48% 0.020 192);
+  --color-chart-grid: oklch(28% 0.008 229);
+  --color-chart-tick: oklch(68% 0.010 80);
+  --color-chart-label: oklch(80% 0.010 80);
+  --color-bar-high: oklch(82% 0.070 222);
+  --color-bar-low: oklch(42% 0.050 222);
+
+  /* Identity, not magnitude: five hues that stay five hues. Lightness rises so each still separates
+     from the card, and the ORDER of separation is kept so a legend read on one theme reads on both. */
+  --color-series-1: oklch(72% 0.105 222);
+  --color-series-2: oklch(80% 0.145 108);
+  --color-series-3: oklch(70% 0.125 48);
+  --color-series-4: oklch(78% 0.110 192);
+  --color-series-5: oklch(66% 0.145 270);
+
+  /* Decoration rather than data — a short rule under a page title — so it follows the chrome away
+     from teal instead of staying the one coloured mark on the screen. */
+  --color-section-accent: oklch(78% 0.012 80);
+
+  /* ---- Subscription tiers. Metal reads by lightness, and on a dark ground the silver/oceanic
+       plates have to stop being pale washes or they glow. ---- */
+  --color-tier-oceanic: oklch(70% 0.075 209);
+  --color-tier-oceanic-soft: oklch(30% 0.040 209);
+  --color-tier-oceanic-deep: oklch(82% 0.060 209);
+  --color-tier-silver: oklch(70% 0.045 271);
+  --color-tier-silver-soft: oklch(30% 0.025 271);
+  --color-tier-silver-deep: oklch(82% 0.035 271);
+  --color-tier-onyx: oklch(80% 0.024 278);
+  --color-tier-onyx-soft: oklch(34% 0.023 272);
+  --color-tier-onyx-deep: oklch(90% 0.018 293);
+
+  /* ---- The semantic status family: 30 tokens, and the real design work of this package.
+   *
+   * In the light theme every one of these is an alias to TAILWIND'S STOCK RAMP
+   * (`var(--color-emerald-50)` and friends) — rungs chosen for a light ground. They do not follow a
+   * theme, which is why the guard demands them here, and they are written as explicit `oklch()`
+   * rather than as aliases to the stock `-900`/`-950` rungs for two reasons: the stock variables are
+   * only emitted for rungs a utility actually uses, and these are OUR measured values, not
+   * Tailwind's.
+   *
+   * REMAPPED BY ROLE, NOT BY NUMBER. The naive move is "emerald-50 becomes emerald-950", which
+   * breaks on `solid`. Verified in the source: `*-solid` is always paired with `text-on-solid`
+   * (`.badge-alert` is literally `badge bg-alert-solid text-on-solid`), and `on-solid` inverts to a
+   * DARK ink above — so on dark, `solid` has to become LIGHT, not darker. `fg` and `solid` both move
+   * up the lightness axis and stay distinct by chroma.
+   *
+   *   wash    22%  the quietest tint that still says "this row is a status"
+   *   soft    27%  a filled chip's ground
+   *   line    38%  a border that survives both the card and the page
+   *   on-soft 88%  ink ON `soft`
+   *   fg      80%  ink on the PAGE
+   *   solid   72%  a filled mark carrying `on-solid` (dark) ink
+   *
+   * Hues are the stock families': emerald ~ 158, amber ~ 78, rose ~ 18, sky ~ 236, slate ~ 255. */
+  --color-done-wash: oklch(22% 0.025 158);
+  --color-done-line: oklch(38% 0.055 158);
+  --color-done-soft: oklch(27% 0.040 158);
+  --color-done-on-soft: oklch(88% 0.060 158);
+  --color-done-fg: oklch(80% 0.100 158);
+  --color-done-solid: oklch(72% 0.130 158);
+
+  --color-await-wash: oklch(22% 0.025 78);
+  --color-await-line: oklch(38% 0.055 78);
+  --color-await-soft: oklch(27% 0.040 78);
+  --color-await-on-soft: oklch(88% 0.060 78);
+  --color-await-fg: oklch(82% 0.100 78);
+  --color-await-solid: oklch(74% 0.130 78);
+
+  --color-alert-wash: oklch(22% 0.030 18);
+  --color-alert-line: oklch(38% 0.070 18);
+  --color-alert-soft: oklch(27% 0.050 18);
+  --color-alert-on-soft: oklch(89% 0.055 18);
+  --color-alert-fg: oklch(78% 0.110 18);
+  --color-alert-solid: oklch(68% 0.160 18);
+
+  --color-info-wash: oklch(22% 0.028 236);
+  --color-info-line: oklch(55% 0.060 236);
+  --color-info-soft: oklch(27% 0.045 236);
+  --color-info-on-soft: oklch(89% 0.050 236);
+  --color-info-fg: oklch(80% 0.095 236);
+  --color-info-solid: oklch(72% 0.130 236);
+
+  --color-idle-wash: oklch(22% 0.008 255);
+  --color-idle-line: oklch(38% 0.014 255);
+  --color-idle-soft: oklch(27% 0.010 255);
+  --color-idle-on-soft: oklch(88% 0.012 255);
+  --color-idle-fg: oklch(78% 0.018 255);
+  --color-idle-solid: oklch(70% 0.030 255);
+
+  /* Rating stars are decoration, not status, and the trend arrows read on the page like `fg` does.
+     `trend-up` is the ROSE one: in this product a rising cost is bad news (see the light theme). */
+  --color-star: oklch(84% 0.140 78);
+  --color-star-hover: oklch(90% 0.115 78);
+  --color-trend-up-fg: oklch(78% 0.110 18);
+  --color-trend-down-fg: oklch(80% 0.100 158);
+
+  /* The rainbow border keeps its five vivid stops: every one is already above 60% lightness, so it
+     reads on either ground, and re-tuning it would change a deliberate accent for no gain. Declared
+     rather than exempted so the parity check stays exact. */
+  --color-rainbow-1: oklch(66.2% 0.225 25.9);
+  --color-rainbow-2: oklch(64% 0.260 302);
+  --color-rainbow-3: oklch(72% 0.165 251);
+  --color-rainbow-4: oklch(82% 0.134 225);
+  --color-rainbow-5: oklch(90.7% 0.231 133);
+}
+
 
 html {
   font-family: var(--font-sans);
@@ -525,7 +973,7 @@ body {
     @apply btn relative text-on-solid;
     border: 2px solid transparent;
     background-image:
-      linear-gradient(var(--color-shell), var(--color-shell)),
+      linear-gradient(var(--color-fixed-onyx), var(--color-fixed-onyx)),
       linear-gradient(90deg, var(--color-rainbow-1), var(--color-rainbow-5), var(--color-rainbow-3), var(--color-rainbow-4), var(--color-rainbow-2));
     background-size: 200%;
     background-clip: padding-box, border-box;
@@ -625,7 +1073,7 @@ body {
      dark fill with on-solid lettering, which is what makes it read as ABOVE them rather than as
      a third metal beside them. */
   .plan-badge-basic {
-    @apply text-shell;
+    @apply text-fixed-onyx;
     border: 1px solid var(--color-tier-silver-deep);
     background-image: linear-gradient(135deg,
       var(--color-tier-silver-soft) 0%,
@@ -633,7 +1081,7 @@ body {
       var(--color-tier-silver-deep) 100%);
   }
   .plan-badge-pro {
-    @apply text-shell;
+    @apply text-fixed-onyx;
     border: 1px solid var(--color-tier-oceanic-deep);
     background-image: linear-gradient(135deg,
       var(--color-tier-oceanic-soft) 0%,
@@ -1065,18 +1513,20 @@ body {
   inline-size: 3.5rem;
   block-size: 3.5rem;
   border-radius: 9999px;
-  border: 1px solid var(--color-action-line);
-  background: var(--color-action);
-  color: var(--color-on-solid);
+  border: 1px solid var(--color-fab-puck-line);
+  background: var(--color-fab-puck);
+  color: var(--color-fab-puck-ink);
   box-shadow: var(--shadow-fab);
 }
 
 .mobile-action-raised:hover .mobile-action-puck {
-  background: var(--color-action-hover);
+  background: var(--color-fab-puck-hover);
 }
 
 .mobile-action-raised:active .mobile-action-puck {
-  background: var(--color-action-solid);
+  /* Was `--color-action-solid`: the same brand-coupling as the rest state, one rule further down,
+     which would have flashed the lightened brand teal on every press in the dark theme. */
+  background: var(--color-fab-puck-pressed);
 }
 
 /* THE LABEL ALIGNMENT FIX (owner report 25.08.2026: "הטקסט שלהם לא מיושר").
@@ -1318,6 +1768,147 @@ html { transition: --glow-x 0.12s ease-out, --glow-y 0.12s ease-out; }
    quiet deep-wheat counter-wash drifts opposite — the reference's "changing colors" feel
    without leaving the palette. Ink-muted was deepened to 47% so the darkest overlap spot
    keeps secondary text ≥ 4.5:1 (measured). */
+/* ---------------------------------------------------------------- the appearance switch --------
+ * 21st.dev's theme-toggle (@ayushmxxn, catalogue id 1216), the same control the marketing site
+ * uses, ported from `LANDING-PAGE-NIR@5ace2cc` (`src/styles.css:2411-2485`). Every number is the
+ * catalogue's: a 64x32 pill, 4px of padding, two 24px circles, a 32px slide, 300ms.
+ *
+ * FOUR THINGS CHANGED IN THE PORT, each because this is the product and not that page:
+ *   1. Its tokens are not ours. `--color-onyx*` became the surface stack, so the pill reads as a
+ *      raised control on paper in the light theme and on the dark canvas in the dark one, instead
+ *      of being pinned to one ink.
+ *   2. The slide runs on `translate`, its own property, and NOT on `transform`. A transform is not
+ *      mirrored by `dir`, and this product is RTL by default.
+ *   3. `--knob` carries the direction. The two circles are laid out by `space-between`, which is
+ *      already logical, so under `dir="rtl"` the filled circle starts at the other end and has to
+ *      travel the other way; the catalogue's physical `translate-x-8` would push it out of the pill.
+ *   4. `[data-theme-swap]` is not decoration. Nearly every control in this shell transitions its own
+ *      `color` and `border-color` while the ground behind it does not, so for a third of a second
+ *      after a press the page has turned and the lettering has not. `applyTheme` raises the flag for
+ *      two frames; this is the rule that reads it.
+ */
+:root { --knob: 1; }
+html[dir='rtl'] { --knob: -1; }
+
+/* Native form controls, scrollbars and the caret are drawn by the browser, not by this stylesheet.
+   Without this the dark theme keeps white scrollbars and a white `<select>` popup. */
+:root { color-scheme: light; }
+:root[data-theme='dark'] { color-scheme: dark; }
+
+:root[data-theme-swap] *,
+:root[data-theme-swap] *::before,
+:root[data-theme-swap] *::after {
+  transition: none !important;
+}
+
+.theme-toggle {
+  /* One circle plus the gap `space-between` leaves beside it. Named rather than written into the
+     two translate rules below, so the three numbers can never drift apart. */
+  --toggle-travel: 2rem;
+  display: flex;
+  flex: none;
+  inline-size: 4rem;
+  block-size: 2rem;
+  padding: 0.25rem;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--color-surface-selected);
+  cursor: pointer;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
+}
+
+.theme-toggle:hover { border-color: var(--color-line-strong); }
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.theme-toggle__track {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  inline-size: 100%;
+}
+
+.theme-toggle__knob,
+.theme-toggle__ghost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: 999px;
+  transition:
+    translate 0.3s ease,
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+/* The filled circle always carries the icon of the theme you are IN, which is why the two icons
+   swap when it travels. */
+.theme-toggle__knob {
+  background: var(--color-toggle-knob);
+  color: var(--color-toggle-knob-ink);
+}
+
+.theme-toggle__ghost {
+  background: transparent;
+  color: var(--color-ink-faint);
+}
+
+/* Dark: the pair swap places, by exactly one circle plus the gap. The catalogue keys this off its
+   light state; ours is keyed off dark, because light is this product's default. */
+.theme-toggle[data-theme-state='dark'] .theme-toggle__knob {
+  translate: calc(var(--knob) * var(--toggle-travel)) 0;
+}
+.theme-toggle[data-theme-state='dark'] .theme-toggle__ghost {
+  translate: calc(var(--knob) * -1 * var(--toggle-travel)) 0;
+}
+
+/* A 64px pill is a lot of bar on a phone, and the switch lives in the drawer there rather than in
+   the header (the header cannot take a fourth target — measured at 390px). Inside the drawer it sits
+   on the inverse surface, so it borrows that family's ink. */
+.theme-toggle[data-surface='inverse'] {
+  border-color: color-mix(in oklab, var(--color-inverse-ink) 30%, transparent);
+  background: color-mix(in oklab, var(--color-inverse-ink) 10%, transparent);
+}
+.theme-toggle[data-surface='inverse'] .theme-toggle__knob {
+  background: var(--color-inverse);
+  color: var(--color-inverse-ink);
+}
+.theme-toggle[data-surface='inverse'] .theme-toggle__ghost {
+  color: var(--color-inverse-ink-dim);
+}
+/* THE FOCUS OUTLINE FOLLOWS THE GROUND, not the control (31.08.2026, both-themes sweep).
+   `--color-focus` is authored for paper and cannot also serve the inverted drawer: measured across
+   every ground that hosts a ring, the forbidden luminance bands run contiguously from the page
+   surfaces through `inverse` in EITHER theme, so no single value exists. On the drawer this outline
+   fell to 1.21:1 in the dark theme -- a keyboard user lost the control. `inverse-ink` is the panel's
+   own ink and is measured against `inverse` at text strength. */
+.theme-toggle[data-surface='inverse']:focus-visible {
+  outline-color: var(--color-inverse-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle,
+  .theme-toggle__knob,
+  .theme-toggle__ghost { transition: none; }
+}
+
+/* THE LINK AFFORDANCE, in the theme where colour cannot carry it.
+   `.link` is `text-action font-medium hover:underline`, and in the dark theme `action` is paper —
+   the same value as body ink for practical purposes — so a link among sentences would be identified
+   by weight alone until hovered. An always-on underline is what WCAG 1.4.1 asks for and is the
+   affordance every reader already knows. Unlayered on purpose: `.link` lives in `@layer components`,
+   and an unlayered rule outranks a layered one without needing `!important`. */
+:root[data-theme='dark'] .link {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
 .app-glow {
   position: fixed;
   inset: 0;
@@ -1419,7 +2010,7 @@ html { transition: --glow-x 0.12s ease-out, --glow-y 0.12s ease-out; }
   position: fixed;
   z-index: 70;
   pointer-events: auto;
-  background: color-mix(in oklab, var(--color-shell) 76%, transparent);
+  background: var(--color-scrim-strong);
 }
 
 .product-tour-spotlight {
@@ -1637,6 +2228,139 @@ html { transition: --glow-x 0.12s ease-out, --glow-y 0.12s ease-out; }
    the print media query and nothing else can turn it on. So the rule that says "this belongs on
    paper" is written once, here, and answers to both consumers. */
 .print-only { display: none; }
+
+/* ---- The document plate (#330) --------------------------------------------------------------
+   The one block of markup every generated file opens with. It lives only inside `.print-only`,
+   so it never reaches a screen: on paper and in a captured PDF it is the whole identity of the
+   document, and in the browser it does not exist.
+
+   THE PLATE'S COLOUR SAYS WHICH FAMILY, and the ink is chosen by the plate rather than by the
+   caller — `--doc-on-plate` is set once per variant and everything inside reads it. A component
+   that had to pass both would eventually pass a light ink onto a light plate.
+
+   `print-color-adjust: exact` is not optional here. Without it every browser drops the fill when
+   it prints, and the document arrives as an outline of itself with white-on-white lettering —
+   the plate IS the design, so losing it loses the family signal and the heading together. */
+.doc-plate {
+  position: relative;
+  border-radius: var(--radius-doc-plate);
+  overflow: clip;
+  padding: 2rem 2.25rem 1.75rem;
+  background: var(--color-doc-plate);
+  --doc-on-plate: var(--color-doc-ink);
+  --doc-eyebrow-ink: var(--color-doc-accent-lift);
+  color: var(--doc-on-plate);
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+/* The receipt: the money that came IN, in the brand's filled teal. */
+.doc-plate-action { background: var(--color-doc-plate-action); --doc-eyebrow-ink: var(--color-doc-ink-soft); }
+/* Stays with you: a sheet on a sheet, told apart by a hairline. */
+.doc-plate-paper {
+  background: var(--color-doc-paper);
+  border: 1px solid var(--color-doc-line);
+  --doc-on-plate: var(--color-doc-plate);
+  --doc-eyebrow-ink: var(--color-doc-accent);
+}
+/* A periodic report: the same sheet, one step down, so a folder of them reads as a series. */
+.doc-plate-sink {
+  background: var(--color-doc-paper-sink);
+  --doc-on-plate: var(--color-doc-plate);
+  --doc-eyebrow-ink: var(--color-doc-accent);
+}
+
+/* The printer's registration corners, carried over from the marketing site. `currentColor` at
+   34% means they belong to whichever plate they are drawn on and need no variant of their own. */
+.doc-plate::before,
+.doc-plate::after,
+.doc-plate > .doc-crop::before,
+.doc-plate > .doc-crop::after {
+  content: "";
+  position: absolute;
+  inline-size: 14px;
+  block-size: 14px;
+  border-style: solid;
+  border-color: currentColor;
+  border-width: 0;
+  opacity: 0.34;
+  pointer-events: none;
+}
+.doc-plate::before { inset-block-start: 18px; inset-inline-start: 18px; border-block-start-width: 1px; border-inline-start-width: 1px; }
+.doc-plate::after { inset-block-start: 18px; inset-inline-end: 18px; border-block-start-width: 1px; border-inline-end-width: 1px; }
+.doc-plate > .doc-crop::before { inset-block-end: 18px; inset-inline-start: 18px; border-block-end-width: 1px; border-inline-start-width: 1px; }
+.doc-plate > .doc-crop::after { inset-block-end: 18px; inset-inline-end: 18px; border-block-end-width: 1px; border-inline-end-width: 1px; }
+
+/* The family, written in words rather than coded in a colour somebody has to remember. Hebrew
+   falls back to the reading face by design — the mono has no Hebrew (see the @font-face note). */
+.doc-eyebrow {
+  font-family: var(--font-doc-mono);
+  font-size: 0.775rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  line-height: 1.4;
+  margin: 0;
+  color: var(--doc-eyebrow-ink);
+}
+
+/* The document's name. The SIZE does the shouting, and 800 is the marketing site's own display
+   weight — the screens' "no 700" rule is a screen rule and stops at the print boundary. */
+.doc-name {
+  font-family: var(--font-doc-display);
+  font-weight: 800;
+  font-size: 3.375rem;
+  letter-spacing: -0.032em;
+  line-height: 1;
+  margin: 0;
+  color: var(--doc-on-plate);
+}
+.doc-sub { font-size: 0.875rem; line-height: 1.55; margin-block-start: 0.75rem; }
+
+/* THE PLATE ON A PHONE, and `screen` is doing real work in that query.
+   The supplier portal is the one place this block is a live screen rather than a printed heading,
+   and most suppliers open that link on a phone. At 390px the name wrapped to three lines and the
+   plate grew tall enough to push the order itself below the fold — measured, not feared. Print is
+   deliberately excluded: a PDF page is a fixed 794px canvas and must keep the full display size. */
+@media screen and (max-width: 40rem) {
+  .doc-plate { padding: 1.5rem 1.25rem 1.375rem; }
+  .doc-name { font-size: 2rem; }
+  .doc-eyebrow { font-size: 0.6875rem; }
+  /* The registration corners are inset 18px, which is inside the padding once the padding shrinks
+     — the marks then sit ON the org name and the validity line. Pulled to the corner instead. */
+  .doc-plate::before, .doc-plate::after,
+  .doc-plate > .doc-crop::before, .doc-plate > .doc-crop::after { inline-size: 10px; block-size: 10px; }
+  .doc-plate::before { inset-block-start: 9px; inset-inline-start: 9px; }
+  .doc-plate::after { inset-block-start: 9px; inset-inline-end: 9px; }
+  .doc-plate > .doc-crop::before { inset-block-end: 9px; inset-inline-start: 9px; }
+  .doc-plate > .doc-crop::after { inset-block-end: 9px; inset-inline-end: 9px; }
+}
+
+/* Numbers that identify rather than measure: document numbers, references, folios, timestamps.
+   Money never comes here — it stays in the reading face with tabular figures, as everywhere. */
+.doc-mono { font-family: var(--font-doc-mono); font-variant-numeric: tabular-nums lining-nums; }
+
+.doc-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  color: var(--color-doc-ink-muted);
+}
+
+/* The mark, in ONE flat colour taken from whatever it sits on. There is no coloured lockup in a
+   document: the file carries a single-ink mark so it can never land light-on-light. */
+/* Two files, one ink each, and the plate picks. An <img> cannot inherit `currentColor`, so
+   the choice is made where the plate is known rather than left to CSS that cannot reach
+   inside the asset. */
+.doc-mark img { display: block; }
+/* The tenant's own logo is NOT recoloured — it is theirs. On a dark plate it gets paper behind it
+   instead, which is the only way to show an unknown logo on an unknown ground. */
+.doc-plate:not(.doc-plate-paper):not(.doc-plate-sink) .doc-org-logo {
+  background: var(--color-doc-paper);
+  border-radius: 4px;
+  padding: 6px;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
 @media print { .print-only { display: block; } }
 .pdf-capture .print-only { display: block; }
 .pdf-capture .no-print { display: none !important; }
@@ -1693,6 +2417,12 @@ html { transition: --glow-x 0.12s ease-out, --glow-y 0.12s ease-out; }
   /* Every printable area, not just the report: a table that runs past the page break loses its
      column headings on page two unless the browser is told to repeat them, and a row split down
      the middle is unreadable in a document somebody files. */
+
+  /* #330 — a DOCUMENT's table head is filled; a screen printed for reference stays plain. The
+     rule above turns every head white, so this restores the fill for the four print areas only,
+     and `print-color-adjust` keeps it from being dropped at the printer. */
+  .print-area .table-head { background: var(--color-doc-plate) !important; print-color-adjust: exact; }
+  .print-area .table-head .th { color: var(--color-doc-ink) !important; }
   .print-area thead { display: table-header-group; }
   .print-area tr, .print-area .card { break-inside: avoid; }
 }

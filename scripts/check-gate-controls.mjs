@@ -319,6 +319,12 @@ console.log('\ncheck:decision-numbers');
     env: { DECISION_NUMBERS_INJECT: 'dangling' },
     expect: 'point at a ruling that is not in the table',
   });
+  // The rulings are cited from the code itself — 1,612 times. A stale one there still names a
+  // REAL ruling, so it reads as authoritative while describing a different decision.
+  mustFail('a code citation of a ruling that does not exist is caught', 'check-decision-numbers.mjs', {
+    env: { DECISION_NUMBERS_INJECT: 'code' },
+    expect: 'in the CODE name a ruling',
+  });
   mustPass('the real decision table still passes', 'check-decision-numbers.mjs', {});
 }
 

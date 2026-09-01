@@ -295,6 +295,43 @@ if (existsSync(mapPath)) {
   }
 }
 
+
+// ---------------------------------------------------------------- 4. declared DECISION renumbers
+// A migration renumber leaves a dangling filename, which is loud. A DECISION renumber does not:
+// the old number still names a real ruling -- somebody else's -- so every stale citation now
+// points confidently at the wrong decision, and check-decision-numbers sees nothing to report
+// because the row exists. That happened here: #174's ruling moved 311 -> 314 and six citations
+// stayed behind, four of them inside 0270 including the reason string its own self-check greps
+// for. The migration would have written a reason naming the entrance card and then rejected its
+// own write.
+//
+// So the move is declared, and every file that carries the ruling must have stopped saying the
+// old number. `done: false` entries are inert until their wave performs them.
+let decisionMoves = [];
+if (existsSync(mapPath)) {
+  const doc = JSON.parse(readFileSync(mapPath, 'utf8'));
+  decisionMoves = (doc.decisions ?? []).filter((d) => d.done);
+  for (const move of decisionMoves) {
+    for (const carrier of move.carriers ?? []) {
+      const full = path.join(repoRoot, carrier);
+      if (!existsSync(full)) continue;
+      const body = readFileSync(full, 'utf8');
+      const hits = body.split(/\r?\n/)
+        .map((line, i) => ({ line, no: i + 1 }))
+        .filter((l) => l.line.includes(`#${move.from}`));
+      if (hits.length) {
+        violations.push({
+          file: carrier,
+          lineNo: hits[0].no,
+          kind: 'incomplete renumber',
+          found: `still cites #${move.from}, which now names a DIFFERENT ruling (${move.pr} moved to #${move.to})`,
+          text: hits.slice(0, 3).map((l) => `${l.no}: ${l.line.trim().slice(0, 70)}`).join(' | '),
+        });
+      }
+    }
+  }
+}
+
 // ---------------------------------------------------------------- report
 if (violations.length) {
   const selfRefs = violations.filter((v) => v.kind !== 'dangling filename reference' && v.kind !== 'incomplete renumber');
@@ -325,4 +362,4 @@ const tagCount = files.reduce((n, f) => n + (readFileSync(path.join(migrationsDi
   .match(/\$[a-z_]*?\d{4}[a-z_]*?\$/gi)?.length ?? 0), 0);
 console.log(`check:renumber-closure passed: ${files.length} migrations, ${tagCount} numbered dollar tag(s) and every`
   + ` raise-exception prefix match their own file, ${referenceHits.length} filename reference(s) resolve`
-  + `${mapEntries.length ? `, ${mapEntries.length - pending} of ${mapEntries.length} declared renumber(s) done` + (pending ? ` and ${pending} awaiting their wave` : '') : ''}.`);
+  + `${mapEntries.length ? `, ${mapEntries.length - pending} of ${mapEntries.length} declared renumber(s) done` + (pending ? ` and ${pending} awaiting their wave` : '') : ''}` + `${decisionMoves.length ? `, ${decisionMoves.length} decision move(s) carried through` : ''}.`);

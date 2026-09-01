@@ -113,5 +113,43 @@
         }
       ]
     }
+  ],
+  "decisionsNote": "Owner rulings that had to move because a number was claimed twice. A stale citation here is NOT a dangling one -- the old number still names a REAL ruling, a different one -- so check-decision-numbers cannot see it and this map is what makes it checkable. Declared before the work, like the migration moves above.",
+  "decisions": [
+    {
+      "pr": "#174",
+      "from": "311",
+      "to": "314",
+      "why": "#195 landed first in wave 1 and keeps #311; the launch-window ruling moved",
+      "carriers": [
+        "supabase/migrations/0270_launch_window_extension.sql",
+        "supabase/tests/p94_launch_window_extension.sql"
+      ],
+      "done": true
+    },
+    {
+      "pr": "#180",
+      "from": "309",
+      "to": "315",
+      "why": "#176 keeps #309 by landing order; the supplier-reply ruling moves",
+      "carriers": [],
+      "done": false
+    },
+    {
+      "pr": "#180",
+      "from": "310",
+      "to": "316",
+      "why": "#175 keeps #310 by landing order; the mailbox-domain ruling moves",
+      "carriers": [],
+      "done": false
+    },
+    {
+      "pr": "#197",
+      "from": "309",
+      "to": "317",
+      "why": "#176 keeps #309; the dark-theme ruling moves",
+      "carriers": [],
+      "done": false
+    }
   ]
 }

@@ -517,6 +517,7 @@ export const en: Dictionary = {
     languageHint: 'The language follows your browser. A choice here overrides it and is saved to your account.',
     languageOptionHe: 'עברית',
     languageOptionEn: 'English',
+    themeSaveFailed: 'The appearance changed on screen but was not saved to your account. Try again later.',
     languageSaveFailed: 'The language changed on screen but was not saved to your account. Please try again later.',
     toast: 'The service-closure request was received. The system is now read-only.',
     toast_2: 'The service-closure request was cancelled and full access was restored.',
@@ -976,6 +977,13 @@ export const en: Dictionary = {
     largestIncrease: 'Largest increase {percent}%',
   },
 
+  docPlate: {
+    /* No pairing needed here — the mono draws latin, which is what this edition is set in. */
+    eyebrowPurchase: 'PURCHASE',
+    eyebrowPayment: 'PAYMENT',
+    eyebrowLedger: 'LEDGER',
+    eyebrowReport: 'REPORT',
+  },
   orders: {
     toastPdf: 'The PDF file was downloaded',
     exportPdf: 'Download the order as a PDF laid out with the organisation logo',
@@ -1086,11 +1094,10 @@ export const en: Dictionary = {
     toOriginalOrder: '— to the original order',
     uploadInvoiceReceived: 'Upload the invoice received',
     belowMinimum: 'Note: the order amount ({total}) is below the supplier minimum order ({minimum}).',
-    printTitle: 'Purchase order #{number}',
-    printTitleWithOrg: 'Purchase order #{number} — {org}',
+    printName: 'Purchase order',
     printSupplier: 'Supplier: {supplier}',
     printDate: 'Date: {date}',
-    printExpected: '· delivery requested: {date}',
+    printExpected: 'delivery requested: {date}',
     receivedLabel: 'Received:',
     outOfWord: 'out of',
     notesLabel: 'Notes:',
@@ -1211,6 +1218,11 @@ export const en: Dictionary = {
     text_8: 'Oversight',
     toast: 'You cannot sign out before the order draft is saved. Please try again.',
     text_9: 'Purchasing and payments',
+    language: 'Language',
+    appearance: 'Appearance',
+    themeDark: 'Dark mode',
+    themeToDark: 'Switch to dark mode',
+    themeToLight: 'Switch to light mode',
     productGuide: 'Product guide',
     text_10: 'Account and system',
     text_11: 'Skip to content',
@@ -2421,6 +2433,8 @@ export const en: Dictionary = {
     lifecycleInReview: 'In review',
     lifecyclePendingApproval: 'Awaiting approval',
     lifecycleApproved: 'Approved',
+    printName: 'Supplier invoice',
+    printSubtitle: '{supplier} · invoice date {date}',
     beforeVat: 'Before VAT',
     plusVat: ' + VAT',
     kpiPaid: 'Paid',
@@ -2803,6 +2817,7 @@ export const en: Dictionary = {
     deliveredToAccountant: 'Delivered to the accountant',
     markDelivered: 'Mark as delivered to the accountant',
     downloadVersion: 'Download version',
+    printName: 'Monthly report',
     printHeading: 'Monthly report {month}',
     kpiInvoices: 'Invoices',
     kpiInvoiceTotal: 'Invoice total',
@@ -3407,6 +3422,11 @@ export const en: Dictionary = {
   },
 
   orgSubscription: {
+    checkoutOpening: 'Opening checkout…',
+    purchaseAvailable: 'You can move to a paid plan from this screen. Payment is taken by the billing provider, and the plan here updates once they confirm it.',
+    checkoutAwaitingProvider: 'Your payment has been sent to the billing provider for confirmation. The plan will update here as soon as their signed confirmation arrives — usually immediately. There is no need to pay again.',
+    checkoutFailed: 'We could not open the checkout. Nothing was charged. You can try again, and contact support if it keeps happening.',
+    manageBilling: 'Manage payment and invoices',
     availabilityIndeterminate: 'Whether buying a plan is available cannot be determined right now. That does not mean it is blocked — a refresh, or trying again later, will show the current state.',
     displayCurrencyNote: 'The prices below are shown according to the interface language: Hebrew in shekels and English in dollars. This is display only; the actual charge and the tax are set by the billing country verified with the payment provider.',
     catalogueShown: 'Showing the {catalogue} catalogue, before tax.',
@@ -3422,7 +3442,6 @@ export const en: Dictionary = {
     paidPlan: 'A paid plan',
     noPaymentMethod: 'No payment method needed',
     recommended: 'Recommended',
-    priceLabel: 'Price',
     quotaLabelContract: 'Quota',
     quotaLabelDocuments: 'Documents',
     quotaContract: 'By contract',
@@ -3739,7 +3758,7 @@ export const en: Dictionary = {
     presetPrevMonth: 'Previous month',
     presetQuarter: '3 months',
     presetYear: 'Year',
-    heading: 'Expense summary {from} – {to}',
+    printName: 'Expense summary',
     invoicesWord: 'invoices',
     rowLabel: 'Expenses for {supplier} in {currency}',
     linkedInvoicesLead: 'Linked invoices totalling',
@@ -5094,7 +5113,9 @@ export const en: Dictionary = {
     noAccountYet: 'No account yet?',
     signInAsAria: 'Sign in as {role}',
     inviteWaitingTitle: 'You have an invitation waiting',
-    inviteWaitingBody: '{email} was invited to join {organization}, so no new business was created. Joining is done from the invitation link sent to you, with a password you choose. If the link is lost, ask the business owner to send it again.',
+    inviteWaitingBody: '{email} was invited to join {organization}, so no new business was created. Confirm your details below and join — no link and no password needed.',
+    inviteJoinAction: 'Join the business',
+    inviteJoining: 'Joining…',
   },
 
   accountantDashboard: {
@@ -5826,7 +5847,6 @@ export const en: Dictionary = {
     entitlementIntroOnly: '{label} — open for the first 30 days',
     perUsagePeriod: 'per monthly usage period',
     recommended: 'Recommended',
-    featuresLabel: 'Included in every plan',
     loadFailed: 'The plans cannot be loaded right now.',
     title: 'Plans',
     subtitle: 'The same control. A pace that fits your business.',
@@ -5983,6 +6003,8 @@ export const en: Dictionary = {
     priceIncreaseDetail: 'Based on the price list — not on what was charged on an invoice',
     documentStalled: 'Document processing stopped',
     documentStalledDetail: 'Documents are waiting in queue and no one is reading them — checked every five minutes',
+    expectedDocumentMissing: 'A document you expected never arrived',
+    expectedDocumentMissingDetail: 'Only once both the waiting window and the grace period you set have passed — checked once a day',
   },
 
   whatsappConnection: {
@@ -6104,6 +6126,13 @@ export const en: Dictionary = {
 
   subscriptionPage: {
     title: 'My subscription',
+  },
+
+  support: {
+    productLead: 'Need help?',
+    productSubject: 'Support request — InPlace',
+    billingLead: 'A question about a charge, an invoice or a plan:',
+    billingSubject: 'Billing question — InPlace',
   },
 
   charts: {

@@ -324,474 +324,530 @@
   {
     "ordinal": 46,
     "kind": "suite",
+    "path": "supabase/tests/p100_billing_checkout_authorization.sql",
+    "label": "Who may START a payment, and what the server chooses for them: a checkout is refused while no merchant of record is enabled so nobody can pay for an entitlement the platform would refuse to grant, only an owner may buy, free and business and a misspelled rung all refuse identically so the catalogue cannot be enumerated from the differences, the price sold is the same mapped row that grants the rung on the way back, the provider-customer link is idempotent and can be neither re-pointed nor claimed by a second organization, and authorizing a purchase moves no plan",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 47,
+    "kind": "suite",
     "path": "supabase/tests/p72_email_delivery_events.sql",
     "label": "The signed Resend delivery ledger de-duplicates events in the database rather than in the handler, keeps the channel monotonic so a late callback cannot regress it, records delivery_failed without touching the order's own status, bounds the reason code in the schema itself, and mints a new portal link on retry while killing the previous one immediately",
     "role": "postgres"
   },
   {
-    "ordinal": 47,
+    "ordinal": 48,
     "kind": "suite",
     "path": "supabase/tests/p73_whatsapp_provider_neutral.sql",
     "label": "The WhatsApp ledger stops assuming one vendor: identity is checked per provider, message uniqueness is provider-scoped, webhook de-duplication is enforced by the database, status stays monotonic against a late callback, and inbound is refused by name",
     "role": "postgres"
   },
   {
-    "ordinal": 48,
+    "ordinal": 49,
     "kind": "suite",
     "path": "supabase/tests/p24_inventory_intelligence.sql",
     "label": "Inventory consumption evidence, incoming supply, suggestions, price context and tenant isolation",
     "role": "postgres"
   },
   {
-    "ordinal": 49,
+    "ordinal": 50,
     "kind": "suite",
     "path": "supabase/tests/p25_tenant_offboarding_export.sql",
     "label": "Tenant offboarding, durable export parts, revocable delivery, egress fencing and lifecycle recovery",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 50,
+    "ordinal": 51,
     "kind": "suite",
     "path": "supabase/tests/p26_price_baseline.sql",
     "label": "Contractual price baseline as of the document date, reversal ordering, undisclosed fallbacks and read-only guarantee",
     "role": "postgres"
   },
   {
-    "ordinal": 51,
+    "ordinal": 52,
     "kind": "suite",
     "path": "supabase/tests/p78_price_newest_effective_date.sql",
     "label": "Newest effective date wins the present: a backdated price records history and answers the as-of baseline for its own period, but never moves current_price -- on both the single write and the bulk import",
     "role": "postgres"
   },
   {
-    "ordinal": 52,
+    "ordinal": 53,
     "kind": "suite",
     "path": "supabase/tests/p79_plan_capability_ladder.sql",
     "label": "The plan ladder is monotonic and enforced: Free gets the Basic capability set for the existing 30-day clock then falls back, automatic interpretation spends its own quota once, user and branch limits refuse at the write, protected Data API paths fail closed, and both display catalogues remain separate from the verified billing currency",
     "role": "postgres"
   },
   {
-    "ordinal": 53,
+    "ordinal": 54,
     "kind": "suite",
     "path": "supabase/tests/p84_plan_capability_enforcement.sql",
     "label": "The plan refuses on the server: an owner on free cannot read or write the bank tables their tenant holds, the same owner on pro can, an unmeasured plan refuses nothing, a live override reopens and an expired one does not, and users.max counts an outstanding invitation as a seat already spent",
     "role": "postgres"
   },
   {
-    "ordinal": 54,
+    "ordinal": 55,
     "kind": "suite",
     "path": "supabase/tests/p27_document_supplier_resolution.sql",
     "label": "Deterministic supplier resolution from document evidence: rung order, ambiguity, tenancy and the model's guess as advisory only",
     "role": "postgres"
   },
   {
-    "ordinal": 55,
+    "ordinal": 56,
     "kind": "suite",
     "path": "supabase/tests/p28_document_order_resolution.sql",
     "label": "Per-subtype order resolution: an invoice is never matched by the single open order, a delivery note may be, and no tier ever chooses among candidates",
     "role": "postgres"
   },
   {
-    "ordinal": 56,
+    "ordinal": 57,
     "kind": "suite",
     "path": "supabase/tests/p29_document_reconciliation_assessment.sql",
     "label": "Four-source document assessment: baseline as of the document date, draft receipts are not arrivals, absence from a partial document is not a shortage, and assessing writes nothing",
     "role": "postgres"
   },
   {
-    "ordinal": 57,
+    "ordinal": 58,
     "kind": "suite",
     "path": "supabase/tests/p30_document_review_assessment_read.sql",
     "label": "The review screen's single door to the private resolvers: role boundary, unit scope inside a definer body, and file-stored versus data-approved kept apart",
     "role": "postgres"
   },
   {
-    "ordinal": 58,
+    "ordinal": 59,
     "kind": "suite",
     "path": "supabase/tests/p31_apply_reviewed_document.sql",
     "label": "Applying an approved document: the server recomputes the assessment rather than trusting the proposal, an invoice never receives goods, a delivery note only drafts, and a tax receipt creates no payable",
     "role": "postgres"
   },
   {
-    "ordinal": 59,
+    "ordinal": 60,
     "kind": "suite",
     "path": "supabase/tests/p80_multi_currency_intake.sql",
     "label": "Multi-currency intake: ISO currency is evidence, manual invoices require it, minor units are enforced, and duplicate/order checks stay inside one currency",
     "role": "postgres"
   },
   {
-    "ordinal": 60,
+    "ordinal": 61,
     "kind": "suite",
     "path": "supabase/tests/p81_multi_currency_payments_and_bank.sql",
     "label": "Multi-currency payments: requests and credits stay in one currency, bank rows match settlement money, direct cross-currency matching is refused, and no FX rate is stored",
     "role": "postgres"
   },
   {
-    "ordinal": 61,
+    "ordinal": 62,
     "kind": "suite",
     "path": "supabase/tests/p82_currencies_in_use.sql",
     "label": "currencies_in_use() answers the history of currencies rather than the open balance, stays inside one tenant through RLS rather than through a definer, and returns nothing to a retired role",
     "role": "postgres"
   },
   {
-    "ordinal": 62,
+    "ordinal": 63,
     "kind": "suite",
     "path": "supabase/tests/p83_intake_says_when_it_could_not_check.sql",
     "label": "Intake reports an amount check it could not run instead of skipping it in silence, keeps the document unblocked while it warns, and leaves a shekel business with exactly the findings it had before",
     "role": "postgres"
   },
   {
-    "ordinal": 63,
+    "ordinal": 64,
     "kind": "suite",
     "path": "supabase/tests/p93_invoice_tolerance_per_currency.sql",
     "label": "The invoice stops judging every currency by a shekel: a yen discrepancy inside 100 is not reported and one outside it is, half a dinar is five times the dinar tolerance and no longer slips through, a shekel business sees exactly what it saw before, a stated per-currency tolerance beats the derived one, an unresolvable tolerance warns without blocking, and the vat-rate tolerance is not money and did not move",
     "role": "postgres"
   },
   {
-    "ordinal": 64,
+    "ordinal": 65,
     "kind": "suite",
     "path": "supabase/tests/p94_launch_window_extension.sql",
     "label": "The launch window moved and every copy of the old date moved with it: the function is still the only literal, no subscription flag row or autonomy policy is left on the old date, the targeting JSONB survived being edited, a hand-dated grant and a paying organisation are both excluded by the same predicate that moved the rest, and every moved row is in the ledger with the ruling behind it and both sides of the change",
     "role": "postgres"
   },
   {
-    "ordinal": 65,
+    "ordinal": 66,
+    "kind": "suite",
+    "path": "supabase/tests/p97_document_expectations.sql",
+    "label": "A document that never arrived can finally be expected: one active series per supplier and type is enforced for organisation-wide rows too where an ordinary unique would have enforced nothing, an occurrence keeps both what happened and what was done so a late arrival does not erase having been missed, an expectation is born proposed and stated and the command cannot ask for otherwise, every cross-table reference is scoped so a row cannot reach another tenant, and the exception vocabulary can name the finding",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 67,
+    "kind": "suite",
+    "path": "supabase/tests/p98_document_expectation_scanner.sql",
+    "label": "A document that never arrived is finally noticed: a proposal nobody approved and an expectation switched on today are not made responsible for a month that already ended, a period still inside its window and grace is not reported, the exception is opened once and audited with a reason and no operator, running the scan again changes nothing, not-this-month closes one month without touching the next, and a document that turns up late does not erase having been late",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 68,
+    "kind": "suite",
+    "path": "supabase/tests/p98b_expectation_scanner_concurrency.sql",
+    "label": "Two overlapping scans do not queue: the second returns in milliseconds instead of waiting out the first, which is what keeps a nightly run inside its window -- and the ledger still agrees with itself on exceptions, audit rows and the occurrence they belong to",
+    "role": "supabase_admin"
+  },
+  {
+    "ordinal": 69,
+    "kind": "suite",
+    "path": "supabase/tests/p99_supplier_logo_path.sql",
+    "label": "A supplier logo path is a security boundary and is tried rather than described: another tenants folder, another suppliers folder inside the same tenant, a bare filename, a traversal and an svg are all refused, a path and its timestamp cannot exist without each other, the browser may read the columns but never write them, and the setter is reachable by no client role",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 70,
     "kind": "suite",
     "path": "supabase/tests/p87_document_ladder.sql",
     "label": "The document assessment says BY HOW MUCH it does not add up and which rung it never read: the gap is real arithmetic rounded by the assessment own minor units, it keeps its sign, it is null rather than zero where a rung is missing, the missing rungs are named, discounts are summed, and nothing that decides anything moved",
     "role": "postgres"
   },
   {
-    "ordinal": 66,
+    "ordinal": 71,
     "kind": "suite",
     "path": "supabase/tests/p88_invoice_ladder.sql",
     "label": "The invoice publishes the same ladder the document does and it agrees with the decision: the gap is the number the block was made on and keeps the document sign while the existing difference_amount keeps its opposite one, an invoice nobody itemised names the missing rung instead of reporting a zero discount, the yen ladder carries no decimals, and the three line totals two Edge tools read did not move",
     "role": "postgres"
   },
   {
-    "ordinal": 67,
+    "ordinal": 72,
     "kind": "suite",
     "path": "supabase/tests/p89_benefit_window.sql",
     "label": "One definition of the thirty-day introduction and one server clock: the extracted window agrees with the entitlement ladder about who is in an introduction, a granted premium tenant has no introduction to lose so its boundary is the grant, an expired window is null rather than zero, a paying customer is not eligible, the payload carries plan keys and never a Hebrew label, and the private helper is unreachable by a client role",
     "role": "postgres"
   },
   {
-    "ordinal": 68,
+    "ordinal": 73,
     "kind": "suite",
     "path": "supabase/tests/p33_canonical_purchase_metrics.sql",
     "label": "One definition per money question: the business day rather than the UTC day, snapshot prices, approved invoices only, and only credits that actually reduced a balance",
     "role": "postgres"
   },
   {
-    "ordinal": 69,
+    "ordinal": 74,
     "kind": "suite",
     "path": "supabase/tests/p34_product_purchase_summary.sql",
     "label": "One delivery counted once: the order item is the de-duplication grain, a completed receipt beats a supplier bill, and products are never merged by name",
     "role": "postgres"
   },
   {
-    "ordinal": 70,
+    "ordinal": 75,
     "kind": "suite",
     "path": "supabase/tests/p35_preferred_supplier_tiebreak.sql",
     "label": "A supplier preference breaks a tie and never wins one: price orders first, both recommendation sites carry the rule, and setting it takes a reason",
     "role": "postgres"
   },
   {
-    "ordinal": 71,
+    "ordinal": 76,
     "kind": "suite",
     "path": "supabase/tests/p36_document_removal_impact.sql",
     "label": "Document removal states what it destroys before it destroys it: an approved, paid or reported record blocks the destructive option, and every refusal names itself",
     "role": "postgres"
   },
   {
-    "ordinal": 72,
+    "ordinal": 77,
     "kind": "suite",
     "path": "supabase/tests/p37_document_overcharge_credit.sql",
     "label": "One overcharge, one draft credit request: a retry drafts nothing, being undercharged drafts nothing, and the price list is never touched",
     "role": "postgres"
   },
   {
-    "ordinal": 73,
+    "ordinal": 78,
     "kind": "suite",
     "path": "supabase/tests/p38_export_report_templates.sql",
     "label": "The accountants own workbook becomes the export: the document contract validator is untouched, an approved report template has a file, and an approved file is never swapped",
     "role": "postgres"
   },
   {
-    "ordinal": 74,
+    "ordinal": 79,
     "kind": "suite",
     "path": "supabase/tests/p39_retired_personas.sql",
     "label": "Retired kitchen, payer and supplier identities preserve history but cannot be invited, activated or restored as product accounts",
     "role": "postgres"
   },
   {
-    "ordinal": 75,
+    "ordinal": 80,
     "kind": "suite",
     "path": "supabase/tests/p40_storage_browser_upload.sql",
     "label": "Browser Storage inserts work with service-populated fields absent while tenant paths and the three active product roles remain enforced",
     "role": "postgres"
   },
   {
-    "ordinal": 76,
+    "ordinal": 81,
     "kind": "suite",
     "path": "supabase/tests/p41_document_upload_registration.sql",
     "label": "Idempotent document registration survives response loss without duplicate rows, object deletion, tenant crossing or export drift",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 77,
+    "ordinal": 82,
     "kind": "suite",
     "path": "supabase/tests/p42_document_processing_recovery.sql",
     "label": "Owner recovery consumes settled provider evidence first, fences live work and creates at most one successor",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 78,
+    "ordinal": 83,
     "kind": "suite",
     "path": "supabase/tests/p43_active_persona_surface.sql",
     "label": "Retired personas cannot authenticate or return; owner and office keep procurement while accountant keeps finance and payment-proof upload",
     "role": "postgres"
   },
   {
-    "ordinal": 79,
+    "ordinal": 84,
     "kind": "suite",
     "path": "supabase/tests/p45_document_scan_preprocessing.sql",
     "label": "Images require a human-approved perspective-corrected scan derivative before OCR",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 80,
+    "ordinal": 85,
     "kind": "suite",
     "path": "supabase/tests/p4_purchase_order_status.sql",
     "label": "P4 reasoned purchase-order status boundary",
     "role": "postgres"
   },
   {
-    "ordinal": 81,
+    "ordinal": 86,
     "kind": "suite",
     "path": "supabase/tests/live_schema_alignment.sql",
     "label": "Production/remediation schema alignment",
     "role": "postgres"
   },
   {
-    "ordinal": 82,
+    "ordinal": 87,
     "kind": "suite",
     "path": "supabase/tests/p3_org_scope.sql",
     "label": "Org scope riders, closure sync and completeness assertions",
     "role": "postgres"
   },
   {
-    "ordinal": 83,
+    "ordinal": 88,
     "kind": "suite",
     "path": "supabase/tests/p4_flags_identity.sql",
     "label": "P4 feature flags, identity tables and the step-up boundary",
     "role": "postgres"
   },
   {
-    "ordinal": 84,
+    "ordinal": 89,
     "kind": "suite",
     "path": "supabase/tests/p4b_correlation.sql",
     "label": "P4b correlation id header/GUC route and fail-to-NULL contract",
     "role": "postgres"
   },
   {
-    "ordinal": 85,
+    "ordinal": 90,
     "kind": "suite",
     "path": "supabase/tests/p5_domain_events.sql",
     "label": "P5 domain-event fan-out, outbox lifecycle and map mutation proof",
     "role": "postgres"
   },
   {
-    "ordinal": 86,
+    "ordinal": 91,
     "kind": "suite",
     "path": "supabase/tests/p6b_upload_reservations.sql",
     "label": "P6b upload-reservation renewal, sweep grace and column guard",
     "role": "postgres"
   },
   {
-    "ordinal": 87,
+    "ordinal": 92,
     "kind": "suite",
     "path": "supabase/tests/p7_integration_adapters.sql",
     "label": "P7 webhook subscriptions, enqueue trigger, signed claim and failure ledger",
     "role": "postgres"
   },
   {
-    "ordinal": 88,
+    "ordinal": 93,
     "kind": "suite",
     "path": "supabase/tests/p9_five_domains.sql",
     "label": "P9 notification preferences, search type gate, approval policy and the transition mirror",
     "role": "postgres"
   },
   {
-    "ordinal": 89,
+    "ordinal": 94,
     "kind": "suite",
     "path": "supabase/tests/p74_mfa_assurance.sql",
     "label": "P74 role-based MFA assurance in the step-up primitive, fail-closed aal parsing and the no-bypass proof",
     "role": "postgres"
   },
   {
-    "ordinal": 90,
+    "ordinal": 95,
     "kind": "suite",
     "path": "supabase/tests/p75_platform_lifecycle.sql",
     "label": "P75 platform lifecycle: the suspension reason splits, an unclassified table blocks deletion instead of being missed, a reminder cannot claim a send with no provider, and a purge replays an approved manifest under a per-tenant re-check",
     "role": "postgres"
   },
   {
-    "ordinal": 91,
+    "ordinal": 96,
     "kind": "suite",
     "path": "supabase/tests/p76_owner_webhook_verification.sql",
     "label": "P76 owner webhook registration, verification handshake, SSRF corpus and the offboarding claim fence",
     "role": "postgres"
   },
   {
-    "ordinal": 92,
+    "ordinal": 97,
     "kind": "suite",
     "path": "supabase/tests/p77_assistant_quota_and_read_models.sql",
     "label": "P77 the assistant quota stops refusing everybody: 50 runs inside an immutable 30-day introduction anchored to the owner's first email verification, the plan figures #198 decided after it, a contract-priced rung that still refuses until an override exists, no reset from a tier change or the Legacy cutover, and two concurrent runs at limit-minus-one serialising to exactly one; plus the two read models the assistant explains but never computes -- calendar-month supplier price rises carrying baseline, source and as-of where an unmeasurable row is excluded rather than zeroed, and a purchase comparison that returns supplier-minimum breaches instead of raising a quantity",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 93,
+    "ordinal": 98,
     "kind": "suite",
     "path": "supabase/tests/p85_platform_user_administration.sql",
     "label": "P85 cross-tenant user administration and the operator roster's write path: the directory is readable only under user.view and is no oracle for platform authority, a change demands the capability, a reason and a fresh password, the supplier role and the last active owner are both refused, both audit trails are written and a no-op writes neither, the profiles guard still refuses a direct write once the command's handshake closes, and nobody may change their own authority",
     "role": "postgres"
   },
   {
-    "ordinal": 94,
+    "ordinal": 99,
     "kind": "suite",
     "path": "supabase/tests/p86_full_tenant_purge.sql",
     "label": "P86 the controlled purge on a tenant that actually used the product: the declared teardown window opens for every BEFORE DELETE guard on a tenant table except the purge ledger which is meant to outlive it, three-way evidence and external egress evidence no longer halt the shared teardown, UPDATE stays refused inside the same declared purge, the residue tables that carry no org_id are swept before the staged delete, and a tenant is not recorded as purged while objects survive under its storage prefix",
     "role": "postgres"
   },
   {
-    "ordinal": 95,
+    "ordinal": 100,
     "kind": "suite",
     "path": "supabase/tests/p90_dashboard_period_comparison.sql",
     "label": "The control centre compares periods in one place: the month-to-date baseline ends on the same day number and is clamped to the length of the previous month so July 31 meets June 30 and March 31 meets February 28, the invoiced comparison stays whole month against whole month, each currency carries its own pair with a measured zero where it did not trade and no row where it never traded, drafts and soft-deleted invoices stay out, and a role that may not read the dashboard gets nothing",
     "role": "postgres"
   },
   {
-    "ordinal": 96,
+    "ordinal": 101,
     "kind": "suite",
     "path": "supabase/tests/p91_invoice_due_date.sql",
     "label": "An invoice can carry the date it is due and nothing invents one: a supplier stating net-60 terms still leaves the invoice undated because nobody parses that free text, a direct update is refused so the audited command is the only door, the command is owner and office only and idempotent and never writes a reasonless audit row, clearing the date is an answer rather than a deletion, a date ten years from its invoice is refused, and the definer function is pinned to the scope ledger",
     "role": "postgres"
   },
   {
-    "ordinal": 97,
+    "ordinal": 102,
     "kind": "suite",
     "path": "supabase/tests/p92_scheduled_payments_outlook.sql",
     "label": "Scheduled payments are reported with the coverage they have and never as a forecast: the horizon figure is dated active in-window money only, coverage comes back in rows AND in money on a fixture where the two ratios disagree, each currency keeps its own row, undated order commitments sit beside the horizon and never inside it, office is refused in words instead of with zeros while the accountant is answered, and the monthly writer freezes a cohort that refuses every later update and delete",
     "role": "postgres"
   },
   {
-    "ordinal": 98,
+    "ordinal": 103,
     "kind": "suite",
     "path": "supabase/tests/p95_launch_offer_intent.sql",
     "label": "Saying yes to a conversation is recorded once per window and logged once per recording: two presses leave one row and one ledger entry, the window is derived on the server and matches my_plan_grant so the grant is not defined twice, an organisation that has paid and a caller who is not the owner are both refused by name, the plan and the billing periods are untouched, and my_benefit_window refuses a non-owner in words instead of answering with an empty object",
     "role": "postgres"
   },
   {
-    "ordinal": 99,
+    "ordinal": 104,
     "kind": "suite",
     "path": "supabase/tests/p96_countdown_events.sql",
     "label": "The benefit strip can report three things and no more, and cannot widen its own ceiling: a thousand repeats leave one row because the idempotency key is derived from tenant event window and day, an unknown event name and an unknown property key are both refused by name rather than dropped, a long or non-string property value is refused, the organisation comes from auth_org and never the payload, an office user and an owner with no window are both refused, and the two server-observed facts are not defined as client events",
     "role": "postgres"
   },
   {
-    "ordinal": 100,
+    "ordinal": 105,
+    "kind": "suite",
+    "path": "supabase/tests/p101_a_document_with_no_human.sql",
+    "label": "A document nobody uploaded, and every way it must not become one: the actor rule holds in BOTH directions on all three tables so a browser upload with no uploader is refused alongside an email document that names one, a job cannot claim a different source than its document because the composite key makes the mismatch unstorable, an image with no human finally reaches the scan queue that 0136 closed to it, and the ingest command -- called by service_role, which reads every tenant -- refuses another tenant's object, a stale lease token, an object whose version moved under it and a closed channel, while a replay returns the same document rather than a second one; plus a sibling legal entity that cannot see the other's post, a platform boundary no product role including service_role can write, and a claimer that stopped requiring a human without losing the active owner/office requirement it had for browser uploads",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 106,
+    "kind": "suite",
+    "path": "supabase/tests/p102_a_number_that_can_receive.sql",
+    "label": "A WhatsApp number that can receive a document, and the four ways it must not: the prefixed spelling of a number that already has a row is refused by shape so one number cannot become two identities and a lookup cannot miss a tenant that exists, while a meta_cloud connection keeps using an id rather than a phone number; receiving is refused without a route because an inbound document has no uploader and would otherwise be org-wide across sibling legal entities; a whatsapp connection cannot borrow an email route and inherit its legal entity; and with the tenant's connection active, its route live and its flag on, the door STAYS SHUT until the platform boundary opens it -- each tenant-side condition then closing it again one at a time. Plus the intake size limit reading the bucket rather than copying it, a dead-letter reason drawn from a closed list instead of a typed sentence, and the provider-side media deletion #317 promises proved to be a retried row that cannot claim success without evidence",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 107,
+    "kind": "suite",
+    "path": "supabase/tests/p103_subscription_activation_email.sql",
+    "label": "The welcome email a paid activation owes is owed exactly once: the first verified activation records a debt addressed to the owner resolved from our own tables while a payload that names its own recipient changes nothing, a redelivered or resumed activation records no second row across a window longer than any provider idempotency header, a claim leases the row so a concurrent sender finds nothing, a replayed settlement is a no-op rather than a second send, an organization whose welcome already went out never becomes claimable again, an organization with no active owner records no debt and still receives the plan it paid for, and no tenant role can run either command",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 108,
     "kind": "suite",
     "path": "supabase/tests/payment_credit_override.sql",
     "label": "Payment approval with legal-entity scoped open-credit override",
     "role": "postgres"
   },
   {
-    "ordinal": 101,
+    "ordinal": 109,
     "kind": "suite",
     "path": "supabase/tests/monthly_report_snapshots.sql",
     "label": "Immutable legal-entity monthly accountant snapshots",
     "role": "postgres"
   },
   {
-    "ordinal": 102,
+    "ordinal": 110,
     "kind": "preflight",
     "path": "supabase/tests/p1_preflight.sql",
     "label": "P1 preflight",
     "role": null
   },
   {
-    "ordinal": 103,
+    "ordinal": 111,
     "kind": "suite",
     "path": "supabase/tests/p1_financial_commands.sql",
     "label": "P1 financial commands, rollback and idempotency",
     "role": "postgres"
   },
   {
-    "ordinal": 104,
+    "ordinal": 112,
     "kind": "suite",
     "path": "supabase/tests/p1_price_submissions.sql",
     "label": "Owner and office price-list reservation, registration, intake, review and evidence",
     "role": "postgres"
   },
   {
-    "ordinal": 105,
+    "ordinal": 113,
     "kind": "suite",
     "path": "supabase/tests/p1_price_submissions_concurrency.sql",
     "label": "Concurrent owner and office price-list submission and idempotency",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 106,
+    "ordinal": 114,
     "kind": "reset",
     "path": null,
     "label": "supabase db reset",
     "role": null
   },
   {
-    "ordinal": 107,
+    "ordinal": 115,
     "kind": "suite",
     "path": "supabase/tests/p2_data_reliability.sql",
     "label": "P2 retry, alerts, pagination and reliability",
     "role": "postgres"
   },
   {
-    "ordinal": 108,
+    "ordinal": 116,
     "kind": "suite",
     "path": "supabase/tests/server_list_contracts.sql",
     "label": "Server list predicates, duplicate key across pages and tenant scope",
     "role": "postgres"
   },
   {
-    "ordinal": 109,
+    "ordinal": 117,
     "kind": "suite",
     "path": "supabase/tests/roadmap_db_contracts.sql",
     "label": "Roadmap supplier, inventory, savings and WhatsApp contracts",
     "role": "postgres"
   },
   {
-    "ordinal": 110,
+    "ordinal": 118,
     "kind": "suite",
     "path": "supabase/tests/p1_concurrency.sql",
     "label": "P1 real concurrent sessions",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 111,
+    "ordinal": 119,
     "kind": "suite",
     "path": "supabase/tests/payment_credit_override_concurrency.sql",
     "label": "Concurrent payment replay, approval, execution and credit creation",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 112,
+    "ordinal": 120,
     "kind": "suite",
     "path": "supabase/tests/monthly_report_snapshots_concurrency.sql",
     "label": "Concurrent immutable monthly snapshot version allocation",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 113,
+    "ordinal": 121,
     "kind": "suite",
     "path": "supabase/tests/p63_financial_credit_concurrency.sql",
     "label": "Two accountants racing for one credit remainder: one payment, one named refusal, no double allocation",
