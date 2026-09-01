@@ -4,7 +4,7 @@ import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList,
   Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
-import { chartTheme } from '../lib/theme';
+import { useChartTheme } from '../lib/theme';
 import { useT } from '../lib/i18n/LocaleProvider';
 import { fmtMoneyCompact, fmtMoneyExact, fmtMoneyRounded } from '../lib/format';
 import type { DashboardWeeklyPoint } from '../lib/dashboardSeries';
@@ -63,12 +63,18 @@ export function DarkTooltip({ active, payload, label, formatter, colorFor }: {
   if (!active || !payload?.length) return null;
   const rows = payload.filter((entry) => entry.value != null);
   if (!rows.length) return null;
+  /* THE GROUND IS `shell`, NOT `action` (found by the both-themes contrast sweep, 31.08.2026).
+     All four inks in this tooltip come from the `shell-*` family, which is deliberately on-dark in
+     BOTH themes — but the ground was `action`, which is dark oceanic on paper and LIGHT paper in the
+     dark theme. So the tooltip read at 10.83:1 in the light theme and 1.08:1 in the dark one: white
+     lettering on a white pill. `shell` is the ground those inks were written for, and it holds at
+     16.93:1 in both themes because neither token follows the palette. */
   return (
-    <div className="rounded-xl bg-action px-3 py-1.5 text-xs text-shell-ink shadow-menu">
+    <div className="rounded-xl bg-shell px-3 py-1.5 text-xs text-shell-ink shadow-menu">
       {label != null && label !== '' && <div className="mb-0.5 text-shell-ink-dim">{label}</div>}
       {rows.map((entry, index) => (
         <div key={index} className="flex items-center gap-1.5">
-          {/* Thin light ring so an oceanic dot stays visible on the tooltip's own oceanic pill
+          {/* Thin light ring so an oceanic dot stays visible on the tooltip's own dark pill
               (found in the closing audit: blue-on-blue vanished). */}
           <span className="size-2 shrink-0 rounded-full ring-1 ring-shell-ink/45" style={{ backgroundColor: colorFor?.(entry) ?? entry.color ?? entry.fill }} aria-hidden="true" />
           {entry.name && <span className="text-shell-ink-soft">{entry.name}</span>}
@@ -139,7 +145,7 @@ export function TrendSparkline({ points, label, currency }: {
 }) {
   const { t } = useT();
   const gradientId = `dashboardSpark${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
-  const theme = chartTheme();
+  const theme = useChartTheme();
   // T7.2 zero policy: the window is fetched in full, so a rowless week is a measured ₪0 — the
   // sparkline stays continuous. Callers already gate rendering on ≥2 active weeks (hasSpark).
   const plotted = points.map((point) => ({ ...point, total: point.count > 0 ? point.total : 0 }));
@@ -190,7 +196,7 @@ export function SpendBarChart({
 }) {
   const format = valueFormatter ?? ((v: number) => fmtMoneyExact(v, currency));
   const { t } = useT();
-  const theme = chartTheme();
+  const theme = useChartTheme();
   /* One bucket, one colour, taken from the SAME categorical palette the donut beside it uses
      (owner report 26.08.2026: "שהצבע בדאשבורד באזור של המגמות בהוצאות רכש שיהיה כמו הצבעים של
      תמהיל הרכש החודש"). The colour is keyed to the bucket's POSITION, so a month keeps its
@@ -297,7 +303,7 @@ export function CategoryDonut({ slices, total, currency, ariaLabel, emptyMessage
   hrefLabel?: (slice: CategorySlice) => string;
 }) {
   const { t } = useT();
-  const theme = chartTheme();
+  const theme = useChartTheme();
   /** The word for the product's own bucket, resolved once, where the reader's language is known. */
   const sliceLabel = (slice: CategorySlice) => (slice.aggregate ? t('charts.otherSlice') : slice.name);
   if (total <= 0) {
@@ -443,7 +449,7 @@ export function ComparisonLineChart({
   legend?: boolean;
 }) {
   const format = valueFormatter ?? ((v: number) => fmtMoneyExact(v, currency));
-  const theme = chartTheme();
+  const theme = useChartTheme();
   const gradientBase = `cmpArea${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const hasData = points.length > 0 && points.some((point) => series.some((s) => point[s.key] != null));
   const lastIndex = points.length - 1;
@@ -552,7 +558,7 @@ export function GroupedBarChart({
   valueFormatter?: (v: number) => string;
 }) {
   const format = valueFormatter ?? ((v: number) => fmtMoneyExact(v, currency));
-  const theme = chartTheme();
+  const theme = useChartTheme();
   const hasData = points.length > 0 && points.some((point) => series.some((s) => point[s.key] != null));
   return (
     <>

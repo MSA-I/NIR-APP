@@ -192,6 +192,15 @@ verify_jwt = false
 [functions.billing-webhook]
 verify_jwt = false
 
+# billing-checkout is the OPPOSITE case and is listed to say so out loud rather than by omission.
+# It is invoked by a signed-in owner, every authorization decision inside it is made by the database
+# while running as that person, and there is no anonymous path into it. verify_jwt stays true (the
+# platform default); writing it down keeps the two billing functions' opposite answers legible side
+# by side, because "verify_jwt = false" next to a function that takes money would otherwise be the
+# easiest line in this file to copy by mistake.
+[functions.billing-checkout]
+verify_jwt = true
+
 [analytics]
 enabled = false
 port = 55437

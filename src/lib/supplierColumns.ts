@@ -19,4 +19,4 @@
 // A single literal, not a joined array: supabase-js parses the select string at the TYPE
 // level, and a runtime-built string collapses the row type to GenericStringError[].
 export const SUPPLIER_COLUMNS =
-  'id, org_id, name, tax_id, contact_name, phone, whatsapp, email, address, delivery_days, cutoff_time, min_order_amount, payment_terms, notes, status, deleted_at, created_at, updated_at, rating, rating_updated_at, rating_note, preferred, default_currency, country_code' as const;
+  'id, org_id, name, tax_id, contact_name, phone, whatsapp, email, address, delivery_days, cutoff_time, min_order_amount, payment_terms, notes, status, deleted_at, created_at, updated_at, rating, rating_updated_at, rating_note, preferred, default_currency, country_code, logo_path, logo_updated_at' as const;

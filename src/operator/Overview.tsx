@@ -95,21 +95,21 @@ function TeamCard({ operators, roles, className = '' }: {
 
   return (
     <section aria-labelledby="operator-roster-title"
-      className={`relative rounded-3xl bg-shell p-4 text-shell-ink shadow-dashboard sm:p-5 ${className}`}>
+      className={`relative rounded-3xl bg-inverse p-4 text-inverse-ink shadow-dashboard sm:p-5 ${className}`}>
       <Link to="/admin/team" aria-label="לניהול צוות הפלטפורמה"
         className="group absolute end-3 top-3 grid size-11 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-        <span className="grid size-9 place-items-center rounded-full bg-shell-ink/10 text-shell-ink transition-colors group-hover:bg-shell-ink/20">
+        <span className="grid size-9 place-items-center rounded-full bg-inverse-ink/10 text-inverse-ink transition-colors group-hover:bg-inverse-ink/20">
           <ArrowUpLeft size={ICON.sm} aria-hidden="true" />
         </span>
       </Link>
-      <h2 id="operator-roster-title" className="section-title pe-16 text-shell-ink">צוות הפלטפורמה</h2>
+      <h2 id="operator-roster-title" className="section-title pe-16 text-inverse-ink">צוות הפלטפורמה</h2>
       <div className="mt-1.5 flex items-baseline gap-2">
-        <span className="kpi-hero num text-shell-ink">{operators.length}</span>
-        <span className="text-xs text-shell-ink-dim">מפעילים בעלי גישה לקונסולה</span>
+        <span className="kpi-hero num text-inverse-ink">{operators.length}</span>
+        <span className="text-xs text-inverse-ink-dim">מפעילים בעלי גישה לקונסולה</span>
       </div>
       <ul className="mt-3 space-y-0.5 text-sm">
         {rows.map((row) => (
-          <li key={row.key} className="flex min-h-11 items-center gap-3 px-0 py-1.5 text-shell-ink-soft">
+          <li key={row.key} className="flex min-h-11 items-center gap-3 px-0 py-1.5 text-inverse-ink-soft">
             <span className="min-w-0 flex-1 leading-snug">{row.label}</span>
             <span className="badge num min-w-8 shrink-0 justify-center bg-action-soft text-action-on-soft">
               {row.count}
@@ -117,7 +117,7 @@ function TeamCard({ operators, roles, className = '' }: {
           </li>
         ))}
         {unassigned > 0 && (
-          <li className="flex min-h-11 items-center gap-3 py-1.5 text-shell-ink-soft">
+          <li className="flex min-h-11 items-center gap-3 py-1.5 text-inverse-ink-soft">
             <span className="min-w-0 flex-1 leading-snug">ללא תפקיד</span>
             <span className="badge num min-w-8 shrink-0 justify-center bg-action-soft text-action-on-soft">
               {unassigned}

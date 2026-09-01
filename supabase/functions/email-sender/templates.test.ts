@@ -28,6 +28,19 @@ Deno.test('hebrew order email: RTL, subject, items, portal link, no ask-for-repl
   assert(rendered.html.includes(input.portalUrl), 'portal link in html');
   assert(rendered.text.includes(input.portalUrl), 'portal link in text twin');
   assert(rendered.templateVersion === TEMPLATE_VERSION, 'version stamped');
+  // #330 — the document system reached the email. The plate, the eyebrow and the filled item
+  // head are what make this message and the same order's PDF read as one business, so they are
+  // pinned rather than left to whoever edits the markup next.
+  assert(rendered.html.includes('#0a171d'), 'the plate is drawn');
+  assert(rendered.html.includes('PURCHASE'), 'the eyebrow names the family in the mono');
+  assert(rendered.html.includes('הזמנת רכש חדשה'), 'the document names itself');
+  assert(!rendered.html.includes('#003f47;padding'), 'the old oceanic button is gone');
+});
+
+Deno.test('the version moves when the markup does', () => {
+  // The ledger stamps this on every delivered message; a redress that kept version 1 would make
+  // two different emails indistinguishable in `email_order_messages`.
+  assert(TEMPLATE_VERSION === 2, 'document-system markup is version 2');
 });
 
 Deno.test('english locale renders LTR with english copy', () => {

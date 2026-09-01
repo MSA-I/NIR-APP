@@ -1,7 +1,18 @@
 // Chart colors resolved from the @theme tokens in index.css. recharts writes fill/stroke as
 // SVG presentation *attributes*, where var() resolution is not guaranteed — so we read the
-// computed values once and hand recharts real color strings. Module-level cache: the theme is
-// static per page load; a future runtime theme switch must invalidate `cache`.
+// computed values once and hand recharts real color strings.
+//
+// THE CACHE IS KEYED BY THEME, NOT CLEARED (31.08.2026, ADR-0010). The comment that stood here
+// said a runtime theme switch "must invalidate `cache`", and invalidating would have been the
+// wrong shape: a person who flips back and forth would re-read ~20 computed properties on every
+// press, and a cleared cache has no way to tell a stale entry from a missing one. Keyed by the
+// active `data-theme`, each palette is resolved once and both stay resolved.
+//
+// CLEARING THE CACHE IS ONLY HALF OF IT. recharts writes the colours as attributes at render time,
+// so a swap that does not RE-RENDER leaves the old palette painted no matter what the cache says.
+// That is what `useChartTheme` is for, and it is the hook every consumer must use.
+import { useThemeValue } from './appearance';
+
 type ChartTheme = {
   bar: string;
   barHigh: string;
@@ -19,14 +30,17 @@ type ChartTheme = {
   flat: string;
 };
 
-let cache: ChartTheme | null = null;
+const cache = new Map<string, ChartTheme>();
 
-export function chartTheme() {
-  if (!cache) {
+export function chartTheme(): ChartTheme {
+  const key = document.documentElement.dataset.theme ?? 'light';
+  const hit = cache.get(key);
+  if (hit) return hit;
+  {
     const s = getComputedStyle(document.documentElement);
     const v = (name: string) => s.getPropertyValue(name).trim();
     const bar = v('--color-bar-mid');
-    cache = {
+    const resolved: ChartTheme = {
       bar,
       barHigh: v('--color-bar-high'),
       barLow: v('--color-bar-low'),
@@ -53,8 +67,9 @@ export function chartTheme() {
       // retuning the hint colour would have moved a price line, and vice versa.
       flat: v('--color-chart-3'),
     };
+    cache.set(key, resolved);
+    return resolved;
   }
-  return cache;
 }
 
 /**
@@ -90,4 +105,19 @@ export function comparisonSeries(
     { ...primary, color: t.categorical[0] },
     { ...counterpart, color: t.categorical[1], dash: true },
   ];
+}
+
+/**
+ * The hook every chart consumer reads instead of calling `chartTheme()` directly.
+ *
+ * Subscribing to the theme is the entire point: recharts writes `fill`/`stroke` as SVG presentation
+ * attributes at render time, so a palette swap with no re-render leaves the previous colours on
+ * screen — a dark dashboard with light-theme bars, which reads as a broken chart rather than as a
+ * missed subscription. Keeping this as a hook means a new chart cannot forget: calling the plain
+ * function still works and still returns the right colours, it just never updates, and that is the
+ * failure this wrapper exists to make impossible to reach by accident.
+ */
+export function useChartTheme(): ChartTheme {
+  useThemeValue();
+  return chartTheme();
 }

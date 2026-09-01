@@ -70,7 +70,7 @@ import {
   type MinimalReadClient,
 } from "./tools/reads.ts";
 import { buildRegistry, RunEvidence } from "./tools/registry.ts";
-import { type ReaderLocale } from "./reader-locale.ts";
+import { type ReaderLocale, resolveAnswerLocale } from "./reader-locale.ts";
 import { PRODUCT_HELP_BASE_LOCALE } from "../../../src/lib/assistant/productHelpRegistry.ts";
 
 const REGISTRY = buildRegistry([
@@ -383,7 +383,14 @@ export async function handler(req: Request): Promise<Response> {
     // One value, read once, used by both halves of the run: the language the tools resolve
     // their sentences in and the language the model is told to answer in. Splitting it would
     // let an English answer arrive over Hebrew help steps.
-    const locale: ReaderLocale = request.locale ?? PRODUCT_HELP_BASE_LOCALE;
+    //
+    // Since 01.09.2026 the QUESTION decides it and the interface is only the fallback (owner
+    // ruling). The interface-only rule was measured live and did not work: five runs, every
+    // answer Hebrew, including two that asked in English with `locale: "en"`.
+    const locale: ReaderLocale = resolveAnswerLocale(
+      request.question,
+      request.locale ?? PRODUCT_HELP_BASE_LOCALE,
+    );
     const toolContext = {
       // The caller-bound client satisfies MinimalReadClient structurally; every tool read runs
       // under the caller's JWT with explicit column projections (reads.ts), so RLS applies and

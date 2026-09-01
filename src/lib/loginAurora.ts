@@ -16,12 +16,23 @@ const noop: Cleanup = () => {};
  * (darkest), [4] near-white sheen — [2] and [4] are amplitude-capped in the shader because white
  * copy sits over this panel.
  */
+/**
+ * ITS OWN RAMP SINCE 31.08.2026, and not `--color-chart-1..5` any more.
+ *
+ * The panel this shader paints is dark in BOTH themes — it is the on-dark family — while the chart
+ * ramp now has a dark palette in which index [3], documented below as the "onyx anchor (darkest)",
+ * inverts to near-white. Reading the chart ramp would therefore have turned the login panel into a
+ * bright wash with light type over it, in the one place a person meets the product first.
+ *
+ * `--color-aurora-*` holds the chart ramp's light values, frozen, and is exempt from the dark
+ * parity check for exactly that reason.
+ */
 const TOKENS = [
-  '--color-chart-1',
-  '--color-chart-2',
-  '--color-chart-3',
-  '--color-chart-4',
-  '--color-chart-5',
+  '--color-aurora-1',
+  '--color-aurora-2',
+  '--color-aurora-3',
+  '--color-aurora-4',
+  '--color-aurora-5',
 ] as const;
 
 function srgbToLinear(channel: number): number {

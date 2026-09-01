@@ -31,6 +31,7 @@ import {
   summarizeComparison,
 } from "../../../../src/lib/orderComparison.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
+import { readerText } from "../reader-locale.ts";
 import {
   failure,
   list,
@@ -244,15 +245,15 @@ export const getPurchaseComparison: AssistantTool = {
     if (result.error) {
       const message = result.error.message ?? "";
       if (message.includes("purchase_comparison_draft_unknown")) {
-        return failure(ctx, "draft_unknown", "טיוטת ההזמנה לא נמצאה", filters);
+        return failure(ctx, "draft_unknown", readerText(ctx.locale, "assistantTools.comparisonDraftUnknown"), filters);
       }
       if (message.includes("purchase_comparison_input")) {
-        return failure(ctx, "invalid_tool_input", "קלט ההשוואה אינו תקין", filters);
+        return failure(ctx, "invalid_tool_input", readerText(ctx.locale, "assistantTools.comparisonInvalidInput"), filters);
       }
       if (message.includes("not_authorized") || message.includes("permission")) {
-        return failure(ctx, "not_permitted", "אין הרשאה להשוואת הרכש", filters);
+        return failure(ctx, "not_permitted", readerText(ctx.locale, "assistantTools.comparisonNotPermitted"), filters);
       }
-      return failure(ctx, "purchase_comparison_failed", "שליפת ההשוואה נכשלה", filters);
+      return failure(ctx, "purchase_comparison_failed", readerText(ctx.locale, "assistantTools.comparisonFetchFailed"), filters);
     }
 
     const payload = record(result.data);
@@ -260,7 +261,7 @@ export const getPurchaseComparison: AssistantTool = {
       return failure(
         ctx,
         "purchase_comparison_malformed",
-        "ההשוואה לא התקבלה במבנה תקין",
+        readerText(ctx.locale, "assistantTools.comparisonBadShape"),
         filters,
       );
     }
@@ -306,7 +307,8 @@ export const getPurchaseComparison: AssistantTool = {
         : compareLine(line.qty, toQuotes(line), line.chosen_supplier_id);
       comparisons.push(comparison);
 
-      const productLabel = line.product_name || `מוצר ${line.product_id.slice(0, 8)}`;
+      const productLabel = line.product_name ||
+        `${readerText(ctx.locale, "assistantTools.productFallbackName")} ${line.product_id.slice(0, 8)}`;
       rows.push({
         product_id: line.product_id,
         product_name: line.product_name,
@@ -327,7 +329,7 @@ export const getPurchaseComparison: AssistantTool = {
         facts.push(ctx.evidence.fact({
           kind: "metric.money",
           subject: { entity: "product", id: line.product_id },
-          label: `סכום השורה במחירי הרגע — ${productLabel} (${line.chosen_currency})` +
+          label: `${readerText(ctx.locale, "assistantTools.comparisonLineAmount")} — ${productLabel} (${line.chosen_currency})` +
             (line.qty === null ? "" : ` (כמות ${line.qty})`),
           value: line.line_total,
           unit: currencyUnit(line.chosen_currency),
@@ -364,7 +366,7 @@ export const getPurchaseComparison: AssistantTool = {
       facts.push(ctx.evidence.fact({
         kind: "comparison.saved_vs_next",
         subject: null,
-        label: `סך החיסכון מול האפשרות הזולה הבאה בכל הסל (${saved.currency})`,
+        label: `${readerText(ctx.locale, "assistantTools.comparisonBasketSaved")} (${saved.currency})`,
         value: saved.amount,
         unit: currencyUnit(saved.currency),
         tool: getPurchaseComparison.name,
@@ -376,7 +378,7 @@ export const getPurchaseComparison: AssistantTool = {
       facts.push(ctx.evidence.fact({
         kind: "comparison.extra_vs_cheapest",
         subject: null,
-        label: `סך התשלום העודף מול האפשרות הזולה ביותר בכל הסל (${extra.currency})`,
+        label: `${readerText(ctx.locale, "assistantTools.comparisonBasketExtra")} (${extra.currency})`,
         value: extra.amount,
         unit: currencyUnit(extra.currency),
         tool: getPurchaseComparison.name,
@@ -392,7 +394,7 @@ export const getPurchaseComparison: AssistantTool = {
     facts.push(ctx.evidence.fact({
       kind: "metric.count",
       subject: null,
-      label: "ספקים שהסל אינו מגיע אצלם למינימום ההזמנה",
+      label: readerText(ctx.locale, "assistantTools.comparisonBelowMinimum"),
       value: breaches.length,
       unit: "count",
       tool: getPurchaseComparison.name,
@@ -406,7 +408,7 @@ export const getPurchaseComparison: AssistantTool = {
         facts.push(ctx.evidence.fact({
           kind: "metric.money",
           subject: { entity: "supplier", id: supplier.supplier_id },
-          label: `סכום הסל אצל ${supplierLabel} (${supplier.currency})`,
+          label: `${readerText(ctx.locale, "assistantTools.comparisonBasketAtSupplier")} — ${supplierLabel} (${supplier.currency})`,
           value: supplier.subtotal,
           unit: currencyUnit(supplier.currency),
           tool: getPurchaseComparison.name,
@@ -421,7 +423,7 @@ export const getPurchaseComparison: AssistantTool = {
           // order than the customer has.
           kind: "comparison.minimum_breach",
           subject: { entity: "supplier", id: supplier.supplier_id },
-          label: `חסר כדי להגיע למינימום ההזמנה של ${supplierLabel}` +
+          label: `${readerText(ctx.locale, "assistantTools.comparisonMissingToMinimum")} — ${supplierLabel}` +
             ` (מינימום ${supplier.min_order_amount ?? "—"} ${supplier.min_order_currency ?? supplier.currency})`,
           value: supplier.shortfall,
           unit: currencyUnit(supplier.currency),
@@ -442,7 +444,7 @@ export const getPurchaseComparison: AssistantTool = {
     sources.push(ctx.evidence.source({
       entity: "organization",
       entity_id: ctx.actor.orgId,
-      label: "מסך המחירים — ההצעות שההשוואה מבוססת עליהן",
+      label: readerText(ctx.locale, "assistantTools.comparisonPricesScreen"),
       route: "/prices",
       classification: "financial_sensitive",
     }));
@@ -453,7 +455,7 @@ export const getPurchaseComparison: AssistantTool = {
       sources.push(ctx.evidence.source({
         entity: "organization",
         entity_id: ctx.actor.orgId,
-        label: `טיוטת ההזמנה הקיימת ${parsed.request_id}`,
+        label: `${readerText(ctx.locale, "assistantTools.comparisonExistingDraft")} ${parsed.request_id}`,
         route: null,
         classification: "tenant_standard",
       }));
@@ -473,7 +475,7 @@ export const getPurchaseComparison: AssistantTool = {
       complete,
       failures: complete ? [] : [{
         code: "purchase_comparison_incomplete",
-        label: "חלק מהשורות שהתבקשו לא ניתנות להשוואה ולא נכללו בסיכום",
+        label: readerText(ctx.locale, "assistantTools.comparisonSomeLinesSkipped"),
       }],
       filters,
       as_of: asOf,

@@ -8,6 +8,7 @@ import type {
   SourceReference,
 } from "../../../../src/lib/assistant/contracts.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
+import { readerText } from "../reader-locale.ts";
 import {
   failure,
   limitSchema,
@@ -41,7 +42,7 @@ export const getOrdersAwaitingConfirmation: AssistantTool = {
     const filters = { status: "sent", limit };
     const reads = readsOrNull(ctx);
     if (!reads) {
-      return failure(ctx, READS_UNAVAILABLE.code, READS_UNAVAILABLE.label, filters);
+      return failure(ctx, READS_UNAVAILABLE.code, READS_UNAVAILABLE.label(ctx), filters);
     }
 
     const result = await reads.listSentOrders(limit);
@@ -49,7 +50,7 @@ export const getOrdersAwaitingConfirmation: AssistantTool = {
       return failure(
         ctx,
         "orders_awaiting_confirmation_failed",
-        "שליפת ההזמנות הממתינות לאישור ספק נכשלה",
+        readerText(ctx.locale, "assistantTools.ordersAwaitingFetchFailed"),
         filters,
       );
     }
@@ -60,8 +61,8 @@ export const getOrdersAwaitingConfirmation: AssistantTool = {
       kind: "metric.count",
       subject: null,
       label: result.hasMore
-        ? "הזמנות ממתינות לאישור ספק שהוחזרו בעמוד זה (קיימות נוספות)"
-        : "הזמנות ממתינות לאישור ספק",
+        ? readerText(ctx.locale, "assistantTools.ordersAwaitingPaged")
+        : readerText(ctx.locale, "assistantTools.ordersAwaiting"),
       value: result.rows.length,
       unit: "count",
       tool: getOrdersAwaitingConfirmation.name,
@@ -82,7 +83,7 @@ export const getOrdersAwaitingConfirmation: AssistantTool = {
       facts.push(ctx.evidence.fact({
         kind: "order.total",
         subject: { entity: "purchase_order", id: row.id },
-        label: `סכום ההזמנה במחירי ההזמנה — ${title}`,
+        label: `${readerText(ctx.locale, "assistantTools.orderAmountAtOrderPrices")} — ${title}`,
         value: total,
         unit: "ils",
         tool: getOrdersAwaitingConfirmation.name,
@@ -92,7 +93,7 @@ export const getOrdersAwaitingConfirmation: AssistantTool = {
       facts.push(ctx.evidence.fact({
         kind: "order.status",
         subject: { entity: "purchase_order", id: row.id },
-        label: `סטטוס ההזמנה — ${title}`,
+        label: `${readerText(ctx.locale, "assistantTools.orderStatus")} — ${title}`,
         value: "sent",
         unit: "text",
         tool: getOrdersAwaitingConfirmation.name,
@@ -103,7 +104,7 @@ export const getOrdersAwaitingConfirmation: AssistantTool = {
         facts.push(ctx.evidence.fact({
           kind: "order.status",
           subject: { entity: "purchase_order", id: row.id },
-          label: `מועד השליחה לספק — ${title}`,
+          label: `${readerText(ctx.locale, "assistantTools.orderSentAt")} — ${title}`,
           value: row.sent_at,
           unit: "date",
           tool: getOrdersAwaitingConfirmation.name,

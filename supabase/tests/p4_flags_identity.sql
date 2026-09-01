@@ -149,8 +149,27 @@ select count(*)::text as total,
        count(*) filter (where state)::text as enabled
 from resolve_feature_flags() \gset flags_base_
 reset role;
--- Six since 0164 added the three assistant exposure switches (`assistant.ui`, `.history`,
--- `.drafts`) on top of the three that stood since 0091. The number is pinned rather than derived
+-- NINE. Six stood after 0164 added the three assistant exposure switches (`assistant.ui`,
+-- `.history`, `.drafts`) on top of the three from 0091; 0266 added a seventh; 0268 seeded the last
+-- two together.
+--
+-- THE ARGUMENT THIS LINE DEMANDS, for each one added since six:
+--   `insights.forecast` (0266) — the scheduled-payments card. Its figure is partial for a long
+--     time, and if it ever reads as cash flow to somebody deciding, it has to be removable from a
+--     tenant without a deploy.
+--   `commerce.benefit_countdown` (0268) — the launch-benefit strip. Owner ruling of 31.08.2026 on
+--     `#204`: a clock over an INVENTED date is forbidden, a window the server enforces is not. The
+--     switch removes a commercial surface from one tenant.
+--   `documents.recurring_expectations` (0268) — seeded ahead of its consumer. A flag with
+--     `default_state = false` and nothing reading it turns nothing on and costs one row; what it
+--     buys is that the item building that surface does not move this pin a third time. That is
+--     also why the last two arrived in ONE migration: seeding them separately would have meant
+--     7 to 8 to 9, and each intermediate branch would fail the suite of the one after it.
+--
+-- (This paragraph was lost in the merge that landed 0266 — the header still said six while the
+-- assertion below said seven and its message said six. A pin nobody can read is not a pin.)
+--
+-- The number is pinned rather than derived
 -- on purpose, in the spirit of the exemption-registry pin: a flag is a new switch on the product,
 -- so adding one must edit THIS line and argue for it, not slip in and watch the suite stay green.
 -- The three exist because the assistant's exposure is not one thing: a read-only panel, stored
@@ -167,7 +186,7 @@ reset role;
 --
 -- WHAT THAT DID NOT CHANGE, and what this assertion now pins instead, because it is the half that
 -- was actually load-bearing: NO FLAG SHIPPED ON GLOBALLY. `default_state` is still false for all
--- seven, so the surface is off by definition and every ON state is a ROW against one organisation
+-- nine, so the surface is off by definition and every ON state is a ROW against one organisation
 -- that names why it exists -- a reason and an audit entry for platform_set_org_flag, a
 -- `targeting.ends_at` that expires by itself for the pre-launch grant. Raising `default_state`
 -- would still defeat the whole law, and that is now said in the assertion rather than only in the
@@ -175,11 +194,11 @@ reset role;
 select count(*) filter (where default_state)::text as global_on
 from private.flag_definitions \gset flags_
 select pg_temp.p4_assert(
-  :'flags_base_total'::int = 7
+  :'flags_base_total'::int = 9
   and :'flags_global_on'::int = 0
   and :'flags_base_enabled'::int
       = case when clock_timestamp() < private.prelaunch_window_end() then 2 else 0 end,
-  'the defined surface is exactly six flags, none on by definition, and only the pre-launch pair resolved on');
+  'the defined surface is exactly nine flags, none on by definition, and only the pre-launch pair resolved on');
 
 -- An orphan config row (no definition) must NOT expand the resolved surface.
 reset role;
@@ -191,9 +210,9 @@ select pg_temp.p4_claims('27000000-0000-0000-0000-000000000003', interval '0');
 set local role authenticated;
 select count(*)::text as total from resolve_feature_flags() \gset flags_rogue_
 reset role;
--- Seven, matching the definition count above: the rogue config row must not add an eighth.
+-- Nine, matching the definition count above: the rogue config row must not add a tenth.
 select pg_temp.p4_assert(
-  :'flags_rogue_total'::int = 7,
+  :'flags_rogue_total'::int = 9,
   'resolve must never return a key outside private.flag_definitions -- no expansion');
 select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claims', '', true);

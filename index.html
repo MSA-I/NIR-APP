@@ -9,7 +9,27 @@
          somewhere that does not read Cloudflare Pages headers. portal.html has carried this
          tag since it shipped; the tenant shell and the operator console had nothing. -->
     <meta name="robots" content="noindex, nofollow" />
-    <meta name="theme-color" content="#003F47" />
+    <!-- The LIGHT ground. `appearance.ts` rewrites this at runtime by READING `--color-canvas`,
+         precisely so the browser chrome cannot drift from the palette — and this line is the one
+         place that still has to state the colour, because it is needed before any stylesheet has
+         loaded. It is therefore written in the token's own notation and asserted against it by
+         `scripts/check-appearance-scope.mjs`, rather than transcribed into a hex nobody would
+         re-derive after a repaint. -->
+    <meta name="theme-color" content="oklch(96.88% 0.0028 128)" />
+    <!-- PRE-PAINT THEME, and it has to be inline and here.
+         `data-theme` decides which palette `src/index.css` resolves. Setting it from a React effect
+         works, but the effect runs after the first paint: a person who chose dark would watch a
+         white page flash past on every cold start, on every navigation that reloads. Eleven lines
+         of blocking script buys the absence of that flash.
+         Wrapped in try/catch because a private window can throw on `localStorage` access alone, and
+         a thrown bootstrap here would take the whole document with it. No storage, no attribute,
+         light theme - which is the documented default anyway. -->
+    <script>
+      try {
+        var t = localStorage.getItem('inplace.theme');
+        if (t === 'dark') document.documentElement.dataset.theme = 'dark';
+      } catch (e) { /* storage denied: the light default is already correct */ }
+    </script>
     <link rel="manifest" href="/manifest.webmanifest" />
     <!-- Icon order is the fallback chain: a browser that understands SVG stops at the first
          line and gets a vector mark at any density; older ones fall through to favicon.ico.

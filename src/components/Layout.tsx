@@ -1,4 +1,7 @@
 import { useT } from '../lib/i18n/LocaleProvider';
+import { LanguageMenuRow } from '../lib/i18n/LanguageMenuRow';
+import { ThemeToggle } from './ThemeToggle';
+import { BrandMark } from './BrandMark';
 import type { TKey } from '../lib/i18n/t';
 import { Link, Outlet, useNavigate, useLocation, useSearchParams } from 'react-router';
 import { LayoutDashboard, Truck, Package, Tags, ClipboardList, ShoppingCart, PackageCheck, FileText, FileCheck2, RotateCcw, Send, CreditCard, Landmark, AlertTriangle, BarChart3, Activity, PieChart, Settings, LogOut, X, Bell, Search, FolderOpen, Archive, ChevronDown, ListChecks, Warehouse, ArrowRight, ScrollText, CircleHelp } from 'lucide-react';
@@ -14,6 +17,7 @@ import { assistantAuthorizationFingerprint, useAssistantRunSession } from '../li
 import NotificationBell from './NotificationBell';
 import FeedbackButton from './FeedbackButton';
 import { PlanBadge } from './PlanBadge';
+import { BenefitWindowMount } from './BenefitWindowMount';
 import { ConfirmDialog, ICON, useDialogLayer, useToast } from './ui';
 import { ORDER_DRAFT_FLUSH_EVENT, type OrderDraftFlushDetail } from '../lib/orderDrafts';
 import { pendingOfflineWork } from '../lib/offlineQueue';
@@ -389,8 +393,12 @@ export default function Layout() {
     return orgLogoUrl
       ? <img src={orgLogoUrl} alt="" width={px} height={px}
         className={`${box} shrink-0 rounded-lg bg-white object-contain p-0.5 ring-1 ring-line-soft`} />
-      : <img src="/favicon.svg" alt="" width={px} height={px}
-        className={`${box} shrink-0 object-contain`} />;
+      /* INLINE since 31.08.2026, not `<img src="/favicon.svg">`. An external SVG is a separate
+         document: it cannot inherit `currentColor`, so the owner's rule that the mark follows the
+         GROUND it sits on was unreachable through an `<img>` at all. See `BrandMark`.
+         The TENANT branch above stays an `<img>` and stays unthemed — it is an uploaded PNG whose
+         colours belong to somebody else's business. */
+      : <BrandMark px={px} className={`${box} shrink-0`} />;
   };
 
   /**
@@ -611,7 +619,7 @@ export default function Layout() {
   }
 
   /* TWO navigation surfaces, one vocabulary — not three. A `'shell'` variant (dark Onyx rows,
-     `bg-shell-ink` active state) survived here until 26.08.2026 with no caller left: T7.3k turned
+     `bg-inverse-ink` active state) survived here until 26.08.2026 with no caller left: T7.3k turned
      the phone drawer into paper (`bg-topbar`) and it renders `'panel'` like every dropdown, while
      the desktop sidebar it was written for became the floating pill in T7.2. Its `.section-glyph`
      accent on the active icon went with it — on the two remaining surfaces the accent equals the
@@ -635,20 +643,30 @@ export default function Layout() {
    * whatever contrasts hardest with the ground it sits on, and oceanic against onyx is two dark
    * colours a few points apart.
    */
+  /* THE FOCUS RING BELONGS TO THE GROUND, NOT TO THE COMPONENT (31.08.2026, from the both-themes
+     contrast sweep). `--color-focus` is authored for paper, and no single value can also serve a
+     solid or inverted ground: measured across every ground that actually hosts an inset ring, the
+     forbidden luminance bands are CONTIGUOUS from the page surfaces through `inverse` — in EITHER
+     theme, so this is arithmetic and not a palette preference. A ring on a solid ground therefore
+     uses that ground's own ink, which is a pair the manifest already measures. Before this, the
+     drawer's rings measured 1.21:1 in the dark theme and the active pill's 2.00:1 in the light. */
+  const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset';
   const linkCls = (isActive: boolean, surface: NavSurface = 'panel') => {
     if (surface === 'pill') {
-      return `relative flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
-        isActive ? 'bg-action text-on-solid font-medium' : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
+      return `relative flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors ${FOCUS_RING} ${
+        isActive
+          ? 'bg-action text-on-solid font-medium focus-visible:ring-on-solid'
+          : 'text-ink-soft hover:bg-surface-hover hover:text-ink focus-visible:ring-focus'
       }`;
     }
     const state = surface === 'shell'
       ? (isActive
-        ? 'bg-shell-ink text-shell font-medium'
-        : 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink')
+        ? 'bg-inverse-ink text-inverse font-medium focus-visible:ring-inverse'
+        : 'text-inverse-ink-soft hover:bg-inverse-ink/10 hover:text-inverse-ink focus-visible:ring-inverse-ink')
       : (isActive
-        ? 'bg-action text-on-solid font-medium'
-        : 'text-ink-body hover:bg-surface-hover hover:text-ink');
-    return `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${state}`;
+        ? 'bg-action text-on-solid font-medium focus-visible:ring-on-solid'
+        : 'text-ink-body hover:bg-surface-hover hover:text-ink focus-visible:ring-focus');
+    return `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${FOCUS_RING} ${state}`;
   };
 
   /* Section identity in navigation (T7.2) is DATA here, not decoration: `data-section` rides every
@@ -687,10 +705,10 @@ export default function Layout() {
    */
   const signOutRow = (surface: NavSurface = 'panel') => (
     <button type="button" onClick={() => void handleSignOut()}
-      className={`flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
+      className={`flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-sm transition-colors ${FOCUS_RING} ${
         surface === 'shell'
-          ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
-          : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
+          ? 'text-inverse-ink-soft hover:bg-inverse-ink/10 hover:text-inverse-ink focus-visible:ring-inverse-ink'
+          : 'text-ink-soft hover:bg-surface-hover hover:text-ink focus-visible:ring-focus'
       }`}>
       <LogOut size={ICON.md} aria-hidden="true" /> {t('layoutTail.signOut')}
     </button>
@@ -708,10 +726,10 @@ export default function Layout() {
 
   const tourLauncherRow = (surface: NavSurface = 'panel') => (role === 'owner' ? (
     <button type="button" onClick={startOwnerTour}
-      className={`flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
+      className={`flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-sm transition-colors ${FOCUS_RING} ${
         surface === 'shell'
-          ? 'text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink'
-          : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
+          ? 'text-inverse-ink-soft hover:bg-inverse-ink/10 hover:text-inverse-ink focus-visible:ring-inverse-ink'
+          : 'text-ink-soft hover:bg-surface-hover hover:text-ink focus-visible:ring-focus'
       }`}>
       <CircleHelp size={ICON.md} aria-hidden="true" /> {t('nav.productGuide')}
     </button>
@@ -724,8 +742,20 @@ export default function Layout() {
      column under the brand pill — both places where the ORGANISATION is what is being named. */
   const accountBlock = (
     <div className="pt-3">
-      <div className="px-3 text-sm font-medium text-shell-ink">{profile?.full_name}</div>
-      <div className="mb-2 px-3 text-xs text-shell-ink-dim">{role ? roleLabels[role] : ''}</div>
+      <div className="px-3 text-sm font-medium text-inverse-ink">{profile?.full_name}</div>
+      <div className="mb-2 px-3 text-xs text-inverse-ink-dim">{role ? roleLabels[role] : ''}</div>
+      {/* The reading language, beside the person it belongs to (owner placement ruling 31.08.2026).
+          It is HERE and not in the phone header for a measured reason recorded further down this
+          file: a fourth target in that header left a 76px word 30px and rendered "מר…" at 390px. */}
+      <LanguageMenuRow surface="shell" />
+      {/* The switch is a control and not a row, so it keeps its pill and gets a label beside it —
+          the drawer's other entries are all full-width rows and a bare 64px pill among them would
+          read as an orphan. Same reason it is here and not in the phone header: a fourth target
+          there rendered the page title as "מר…" at 390px. */}
+      <div className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-sm text-inverse-ink-soft">
+        <span className="min-w-0 flex-1 truncate">{t('nav.appearance')}</span>
+        <ThemeToggle surface="inverse" />
+      </div>
       {tourLauncherRow('shell')}
       {signOutRow('shell')}
     </div>
@@ -758,18 +788,18 @@ export default function Layout() {
           own text. So the header is a flex row, the home link wraps only the mark and the names,
           and the chip is its sibling. `pe-12` still clears the absolutely-positioned close button,
           which is why the chip lands inside that reserve rather than under the X. */}
-      <div className="flex items-center gap-3 border-b border-shell-ink/15 px-4 py-4 pe-12 lg:pe-4">
+      <div className="flex items-center gap-3 border-b border-inverse-ink/15 px-4 py-4 pe-12 lg:pe-4">
         {/* The mark is a door. Every product trains people that the logo goes home, and here it went
             nowhere — a 40px target in the corner of every screen that silently did nothing. It is a
             Link rather than a decorated div so it lands in the tab order, announces itself and
             honours a middle click; the image stays alt="" because the accessible name belongs to
             the link, and repeating it would make a screen reader say the brand twice. */}
         <Link to="/dashboard" aria-label={t('layoutTail.homeAria', { app: APP_NAME })}
-          className="-m-2 flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 hover:bg-shell-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset">
+          className="-m-2 flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 hover:bg-inverse-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inverse-ink focus-visible:ring-inset">
           {brandMark('drawer')}
           <div className="min-w-0">
-            <div className="text-base font-semibold text-shell-ink">{APP_NAME}</div>
-            <div className="truncate text-xs text-shell-ink-dim" title={orgName || undefined}>{orgName || t('nav.text_9')}</div>
+            <div className="text-base font-semibold text-inverse-ink">{APP_NAME}</div>
+            <div className="truncate text-xs text-inverse-ink-dim" title={orgName || undefined}>{orgName || t('nav.text_9')}</div>
           </div>
         </Link>
         <PlanBadge compact />
@@ -788,7 +818,7 @@ export default function Layout() {
              The group NAMES are not deleted; they still name the desktop dropdowns, where a
              collapsed trigger genuinely has nothing else to say. */
           <div key={s.section || i}
-            className={i > 0 ? 'mt-2 border-t border-shell-ink/15 pt-2' : ''}>
+            className={i > 0 ? 'mt-2 border-t border-inverse-ink/15 pt-2' : ''}>
             <div className="space-y-0.5">{navLinks(s.items, { surface: 'shell' })}</div>
           </div>
         ))}
@@ -799,7 +829,7 @@ export default function Layout() {
             is not one more work destination — and it is drawn here rather than by a pinned strip.
             The note trigger sits with the account because the phone top bar gave its slot to the
             tier mark (owner report 25.08.2026): it goes nowhere, it opens a dialog. */}
-        <div className="mt-2 border-t border-shell-ink/15 pt-3">
+        <div className="mt-2 border-t border-inverse-ink/15 pt-3">
           <FeedbackButton variant="menu" tone="shell" />
           {accountBlock}
         </div>
@@ -820,8 +850,10 @@ export default function Layout() {
      OCEANIC pill as an active item. T7.3i (owner, image #21): an OPEN group wears the deep
      oceanic pill too — the trigger of the opened panel is the blue marker. */
   const groupTriggerCls = (active: boolean, open: boolean) =>
-    `relative flex min-h-10 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
-      active || open ? 'bg-action text-on-solid font-medium' : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
+    `relative flex min-h-10 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors ${FOCUS_RING} ${
+      active || open
+        ? 'bg-action text-on-solid font-medium focus-visible:ring-on-solid'
+        : 'text-ink-soft hover:bg-surface-hover hover:text-ink focus-visible:ring-focus'
     }`;
   /* `holdsInboxLink` stood here until 26.08.2026, mirroring the unfiled-documents count onto a
      group trigger when the group contained `/documents`. No group ever can: `/documents` is daily
@@ -883,6 +915,12 @@ export default function Layout() {
         {footerItems.length > 0 && <div className="mt-2 space-y-0.5">{navLinks(footerItems, { surface: 'panel' })}</div>}
         {/* The same row the drawer shows, in the surface that IS the drawer on this width. */}
         <div className="mt-2"><FeedbackButton variant="menu" /></div>
+        {/* AFTER 'שליחת הערה' and BEFORE 'מדריך שימוש', which is where the phone drawer puts it —
+            measured, not guessed: the drawer renders 'שליחת הערה' in its own footer section and the
+            account block after it, so any other position here would put the two surfaces in
+            different orders. This bar's own rule (26.08.2026, owner: "הסדר צריך להיות תואם
+            למובייל") is what makes that a defect rather than a detail. */}
+        <div className="mt-2"><LanguageMenuRow /></div>
         {role === 'owner' && <div className="mt-2">{tourLauncherRow()}</div>}
         <div className="mt-2">{signOutRow()}</div>
       </div>
@@ -994,6 +1032,23 @@ export default function Layout() {
             {/* Self-gated on assistant.ui (fail-closed); renders nothing while the flag is off. */}
             <AssistantPanel session={assistantSession} />
             <NotificationBell />
+            {/* VISIBLE, and last before the account disc (owner placement ruling 31.08.2026,
+                option א). The reasoning he was given: a theme is flipped by time of day, so it
+                earns a target; a language is set once and belongs in the menu. It sits beside the
+                avatar because both are "this person's own screen" rather than tenant state.
+                It costs this cluster ~64px, and the cluster is `shrink-0` — see the width note
+                above the search trigger for what that spends.
+
+                MEASURED, 31.08.2026, owner account, dashboard, live render (the first version of
+                this comment asserted the result before anyone had looked, which is the thing
+                `CLAUDE.md` forbids):
+                  1024px -> nav on 2 rows, sticky header 110px
+                  1280px -> nav on 1 row,  sticky header  68px
+                  1440px -> nav on 1 row,  sticky header  68px
+                Those are the same numbers the file already records for the state BEFORE this
+                control existed — two rows at 1024-1279, one from 1280 up — so the switch is
+                absorbed by slack that was already there and evicts nothing. */}
+            <ThemeToggle />
             {topAccountMenu}
           </div>
         </div>
@@ -1142,19 +1197,19 @@ export default function Layout() {
           subtree on close, so there is no exit to animate, and adding a presence library to buy
           one is not worth a frame of drawer. */}
       {mobileOpen && (
-        <div data-no-capture className="drawer-scrim lg:hidden fixed inset-0 z-50 bg-shell/50 no-print" onClick={() => closeMobileMenu()}>
+        <div data-no-capture className="drawer-scrim lg:hidden fixed inset-0 z-50 bg-scrim no-print" onClick={() => closeMobileMenu()}>
           {/* ONYX, with light words (owner, 28.08.2026: "לעשות שהתפריט יהיה בצבע השחור של
               האפליקציה והמילים בהירות"). The drawer was light paper from T7.3j and is the app's
               own dark again — opaque, never translucent: T7.3k already recorded that translucency
               here blends with the scrim and the page behind it and reads as a murky blue tint. */}
           <aside id="mobile-navigation" ref={drawerRef} role="dialog" aria-modal="true" aria-label={t('nav.aria_label_4')}
-            tabIndex={-1} className="drawer-enter phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-shell text-shell-ink focus:outline-none" onClick={(e) => e.stopPropagation()}>
+            tabIndex={-1} className="drawer-enter phone-safe-drawer absolute inset-y-0 start-0 w-72 bg-inverse text-inverse-ink focus:outline-none" onClick={(e) => e.stopPropagation()}>
             {/* Positioned INSIDE the safe-area padding, not on top of it. `absolute top-2 end-2`
                 measured from the panel's border box, so on a notched device the drawer's
                 `padding-block-start: env(safe-area-inset-top)` slid the list down and left the
                 close button sitting under the notch. The phone header solves the same problem with
                 `max(0.75rem, env(safe-area-inset-top))`; this does it with the same expression. */}
-            <button type="button" className="btn-ghost btn-icon absolute end-2 rounded-full text-shell-ink-soft hover:bg-shell-ink/10 hover:text-shell-ink" style={{ insetBlockStart: 'max(0.5rem, env(safe-area-inset-top))' }}
+            <button type="button" className="btn-ghost btn-icon absolute end-2 rounded-full text-inverse-ink-soft hover:bg-inverse-ink/10 hover:text-inverse-ink" style={{ insetBlockStart: 'max(0.5rem, env(safe-area-inset-top))' }}
               onClick={() => closeMobileMenu()} aria-label={t('nav.aria_label_5')}><X size={ICON.lg} aria-hidden="true" /></button>
             {sidebar(drawerSections, t('nav.sidebar'))}
           </aside>
@@ -1172,6 +1227,12 @@ export default function Layout() {
           {t('nav.text_13')}
         </div>
       )}
+      {/* The launch-benefit strip, ABOVE the content and BELOW the access banners. Order is the
+          decision: a banner saying "you cannot write right now" outranks a benefit that ends in a
+          fortnight, and burying the benefit under the fold would make it a surface nobody sees.
+          It renders nothing at all for a non-owner, a paying tenant, a closed window or a flag
+          that is off — see BenefitWindowStrip. */}
+      <BenefitWindowMount />
       {/* Content — id/tabIndex are the skip-link target; focus lands here without a ring.
           `data-section` is the paper half of the section identity and the ONLY place the accent
           enters the working area: it resolves `--section-accent` for everything below it, which

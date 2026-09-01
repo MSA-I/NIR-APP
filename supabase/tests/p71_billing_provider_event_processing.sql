@@ -160,9 +160,34 @@ select pg_temp.p71_assert(
   and (select readiness from private.billing_provider_boundary where provider = 'morning')
     like '%NOT_INTEGRATED%',
   'the recorded fallback readiness no longer matches #207/#256');
+-- THIS ASSERTION CHANGED ON 31.08.2026, AND THE OLD ONE IS WORTH READING FIRST. It was
+-- `not exists (select 1 from private.billing_provider_price_map)` — the map must be EMPTY — and it
+-- was right for a build in which nobody had derived a mapping: a seeded row could only have been a
+-- guess, and a guess here silently sells one rung and grants another.
+--
+-- `0277` filled the map from a real Paddle Sandbox catalogue whose amounts are checked against
+-- this database's own plan_prices from both sides. So "empty" has stopped being the property worth
+-- pinning, and deleting the assertion outright would drop the guarantee with it. What survives is
+-- the thing the emptiness was standing in for: no mapping may exist that this repository cannot
+-- account for.
 select pg_temp.p71_assert(
-  not exists (select 1 from private.billing_provider_price_map),
-  'the provider price map carries a guessed plan mapping');
+  not exists (
+    select 1 from private.billing_provider_price_map map
+    -- A rung nobody sells. #201 makes business a conversation and #165 makes free the state an
+    -- organization is already in; a provider price for either is a mapping to something that has
+    -- no price to charge.
+    where map.plan_key in ('free', 'business')
+       -- A rung this repository has no catalogue price for at all. A row here would mean the
+       -- provider can bill for something plan_prices cannot state a figure for.
+       or not exists (select 1 from plan_prices price where price.plan_key = map.plan_key)),
+  'the provider price map carries a mapping this repository cannot account for');
+-- And it stays single-valued: two prices for one rung and cycle would make "which price is Pro
+-- monthly" ambiguous, which is the same defect as an unmapped price pointed the other way.
+select pg_temp.p71_assert(
+  not exists (
+    select 1 from private.billing_provider_price_map
+    group by provider, plan_key, billing_interval having count(*) > 1),
+  'a provider, rung and interval maps to more than one price');
 select pg_temp.p71_assert(
   not exists (
     select 1 from information_schema.role_table_grants
@@ -531,11 +556,26 @@ select pg_temp.p71_assert(
   'an event queued a second complaint about itself');
 
 -- ===== Rejected at the door, counted without an identifier the caller supplied =====
-select public.service_record_billing_ingress_rejection('paddle', 'signature_invalid');
-select pg_temp.p71_assert(
-  (select count(*) from private.billing_ingress_rejections
-    where provider = 'paddle' and reason_code = 'signature_invalid') = 1,
-  'an unverifiable request was not counted');
+-- A DELTA, NOT AN ABSOLUTE COUNT, since 31.08.2026. This asserted `= 1` and broke the first time
+-- something other than this suite wrote the table: `scripts/paddle/sandbox-e2e.mjs` drives real
+-- refused deliveries through a locally served billing-webhook, and those rows persist outside any
+-- transaction this file can roll back. The assertion was measuring "am I alone in this database",
+-- which was never the property worth pinning — what matters is that a refusal ADDS a row.
+do $$
+declare
+  v_before bigint;
+begin
+  select count(*) into v_before from private.billing_ingress_rejections
+  where provider = 'paddle' and reason_code = 'signature_invalid';
+
+  perform public.service_record_billing_ingress_rejection('paddle', 'signature_invalid');
+
+  perform pg_temp.p71_assert(
+    (select count(*) from private.billing_ingress_rejections
+      where provider = 'paddle' and reason_code = 'signature_invalid') = v_before + 1,
+    'an unverifiable request was not counted');
+end
+$$;
 -- The reason it is counted rather than stored: private.billing_events uniques on the event id the
 -- request CLAIMS, so writing an unverified one would let an attacker pre-register an identifier
 -- and make the genuine delivery look like a replay.

@@ -27,7 +27,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-const PINNED = 129;
+const PINNED = 113;
 
 const root = process.cwd();
 const DYNAMIC_NAMESPACES = new Set(['status', 'errors']);
@@ -69,7 +69,18 @@ function sourceText(dir, chunks = []) {
 }
 
 const keys = leafKeys(path.join(root, 'src/lib/i18n/dictionaries/he.ts'));
-const blob = sourceText(path.join(root, 'src')).join('\n');
+/**
+ * `src` is no longer the only reader (01.09.2026). The assistant's Edge function imports both
+ * dictionaries whole through `supabase/functions/assistant/reader-locale.ts`, and since the tool
+ * labels moved out of Hebrew literals it names 173 keys that no screen names. Scanning `src`
+ * alone would have called every one of them an orphan — the guard would have been reporting that
+ * a key nothing reads had just been written, about keys a live Edge function resolves on every
+ * run. A call site is a call site wherever it lives; the pin stays where it was.
+ */
+const blob = [
+  ...sourceText(path.join(root, 'src')),
+  ...sourceText(path.join(root, 'supabase/functions')),
+].join('\n');
 const named = (key) => blob.includes(`'${key}'`) || blob.includes(`"${key}"`) || blob.includes(`\`${key}\``);
 
 const orphans = keys.filter((key) => !DYNAMIC_NAMESPACES.has(key.split('.')[0])

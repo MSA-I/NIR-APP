@@ -4,6 +4,8 @@
 import { z } from "zod";
 import type { Fact } from "../../../../src/lib/assistant/contracts.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
+import { readerText } from "../reader-locale.ts";
+import type { TKey } from "../../../../src/lib/i18n/t.ts";
 import { list, num, record, str } from "./shared.ts";
 import { fetchThreeWayAssessment } from "./threeWay.ts";
 
@@ -11,11 +13,12 @@ const inputSchema = z
   .object({ invoice_id: z.string().uuid() })
   .strict();
 
-const REASON_SEVERITY_HE: Record<string, string> = {
-  critical: "קריטית",
-  error: "שגיאה",
-  warning: "אזהרה",
-  info: "מידע",
+/** The server's severity codes, as words the reader of THIS run can read. */
+const REASON_SEVERITY_KEYS: Record<string, TKey> = {
+  critical: "assistantTools.severityCritical",
+  error: "assistantTools.severityError",
+  warning: "assistantTools.severityWarning",
+  info: "assistantTools.severityInfo",
 };
 
 export const explainInvoiceBlock: AssistantTool = {
@@ -55,7 +58,7 @@ export const explainInvoiceBlock: AssistantTool = {
     facts.push(ctx.evidence.fact({
       kind: "invoice.status",
       subject: { entity: "invoice", id: invoice_id },
-      label: "סטטוס בדיקת ההצלבה המשולשת של החשבונית",
+      label: readerText(ctx.locale, "assistantTools.invoiceThreeWayStatus"),
       value: status,
       unit: "text",
       tool: explainInvoiceBlock.name,
@@ -65,7 +68,7 @@ export const explainInvoiceBlock: AssistantTool = {
     facts.push(ctx.evidence.fact({
       kind: "invoice.total",
       subject: { entity: "invoice", id: invoice_id },
-      label: "סכום החשבונית כולל מע\"מ",
+      label: readerText(ctx.locale, "assistantTools.invoiceAmountWithVat"),
       value: num(totals.invoice_grand),
       unit: "ils",
       tool: explainInvoiceBlock.name,
@@ -75,7 +78,7 @@ export const explainInvoiceBlock: AssistantTool = {
     facts.push(ctx.evidence.fact({
       kind: "metric.count",
       subject: { entity: "invoice", id: invoice_id },
-      label: "מספר הסיבות שבדיקת ההצלבה מצאה",
+      label: readerText(ctx.locale, "assistantTools.invoiceReasonCount"),
       value: reasons.length,
       unit: "count",
       tool: explainInvoiceBlock.name,
@@ -84,12 +87,15 @@ export const explainInvoiceBlock: AssistantTool = {
     }));
     for (const reason of reasons) {
       const code = str(reason.code) ?? "unknown_reason";
-      const severity = REASON_SEVERITY_HE[str(reason.severity) ?? ""] ??
-        "לא ידועה";
+      const severityKey = REASON_SEVERITY_KEYS[str(reason.severity) ?? ""];
+      const severity = readerText(
+        ctx.locale,
+        severityKey ?? "assistantTools.severityUnknown",
+      );
       facts.push(ctx.evidence.fact({
         kind: "invoice.block_reason",
         subject: { entity: "invoice", id: invoice_id },
-        label: `סיבה בבדיקת ההצלבה (חומרה: ${severity})`,
+        label: `${readerText(ctx.locale, "assistantTools.invoiceThreeWayReason")} (${severity})`,
         value: code,
         unit: "text",
         tool: explainInvoiceBlock.name,
@@ -101,7 +107,7 @@ export const explainInvoiceBlock: AssistantTool = {
     const source = ctx.evidence.source({
       entity: "invoice",
       entity_id: invoice_id,
-      label: "החשבונית הנבדקת",
+      label: readerText(ctx.locale, "assistantTools.invoiceUnderReview"),
       route: `/invoices/${invoice_id}`,
       classification: "financial_sensitive",
     });

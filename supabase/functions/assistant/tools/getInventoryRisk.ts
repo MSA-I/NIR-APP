@@ -9,6 +9,7 @@ import type {
   SourceReference,
 } from "../../../../src/lib/assistant/contracts.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
+import { readerText } from "../reader-locale.ts";
 import {
   failure,
   limitSchema,
@@ -45,7 +46,7 @@ export const getInventoryRisk: AssistantTool = {
     const filters = { limit, consumption_window_days: 30 };
     const reads = readsOrNull(ctx);
     if (!reads) {
-      return failure(ctx, READS_UNAVAILABLE.code, READS_UNAVAILABLE.label, filters);
+      return failure(ctx, READS_UNAVAILABLE.code, READS_UNAVAILABLE.label(ctx), filters);
     }
 
     const result = await reads.listInventoryRisk(limit);
@@ -53,7 +54,7 @@ export const getInventoryRisk: AssistantTool = {
       return failure(
         ctx,
         "inventory_risk_failed",
-        "שליפת מודיעין המלאי נכשלה",
+        readerText(ctx.locale, "assistantTools.inventoryFetchFailed"),
         filters,
       );
     }
@@ -61,7 +62,7 @@ export const getInventoryRisk: AssistantTool = {
     const facts: Fact[] = [];
     const sources: SourceReference[] = [];
     for (const row of result.rows) {
-      const name = sanitizeText(row.product_name, 60) || "מוצר ללא שם";
+      const name = sanitizeText(row.product_name, 60) || readerText(ctx.locale, "assistantTools.productUnnamed");
       const unit = sanitizeText(row.unit, 20);
       const suffix = unit ? `${name} (${unit})` : name;
       const subject = { entity: "product" as const, id: row.product_id };
@@ -75,38 +76,38 @@ export const getInventoryRisk: AssistantTool = {
       facts.push(ctx.evidence.fact({
         ...shared,
         kind: "metric.count",
-        label: `כמות במלאי לפי הספירה האחרונה — ${suffix}`,
+        label: `${readerText(ctx.locale, "assistantTools.inventoryOnHand")} — ${suffix}`,
         value: row.is_counted ? row.quantity_on_hand : null,
       }));
       facts.push(ctx.evidence.fact({
         ...shared,
         kind: "metric.count",
-        label: `צריכה יומית ממוצעת מאז הספירה האחרונה — ${suffix}`,
+        label: `${readerText(ctx.locale, "assistantTools.inventoryDailyUse")} — ${suffix}`,
         value: row.average_daily_consumption,
       }));
       facts.push(ctx.evidence.fact({
         ...shared,
         kind: "metric.count",
-        label: `ימים חזויים עד אזילה (ללא זיכוי הזמנות בדרך) — ${suffix}`,
+        label: `${readerText(ctx.locale, "assistantTools.inventoryDaysToStockout")} — ${suffix}`,
         value: row.projected_stockout_days,
       }));
       facts.push(ctx.evidence.fact({
         ...shared,
         kind: "metric.count",
-        label: `השלמה עד מלאי מינימום, נוסחה ולא המלצה — ${suffix}`,
+        label: `${readerText(ctx.locale, "assistantTools.inventoryTopUpFormula")} — ${suffix}`,
         value: row.suggested_reorder_quantity,
       }));
       facts.push(ctx.evidence.fact({
         ...shared,
         kind: "metric.count",
-        label: `כמות צפויה בהזמנות רכש פתוחות — ${suffix}`,
+        label: `${readerText(ctx.locale, "assistantTools.inventoryIncomingQuantity")} — ${suffix}`,
         value: row.expected_incoming_quantity,
       }));
       if (row.next_expected_incoming_date) {
         facts.push(ctx.evidence.fact({
           ...shared,
           kind: "metric.count",
-          label: `מועד האספקה הצפוי הקרוב — ${suffix}`,
+          label: `${readerText(ctx.locale, "assistantTools.inventoryNextDelivery")} — ${suffix}`,
           value: row.next_expected_incoming_date,
           unit: "date",
         }));

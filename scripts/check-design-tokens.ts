@@ -191,6 +191,153 @@ if (definedTokens.size === 0) {
   process.exit(1);
 }
 const colourFamilies = new Set([...definedTokens].map((name) => name.split('-')[0]));
+
+/* ============================================================================================
+ * The dark theme, and why this is a PARITY check rather than a literal ban (ADR-0010, #331).
+ *
+ * A second palette cannot live inside `@theme` — it needs a selector — so the rule "every colour
+ * literal outside @theme is a leak" had to grow exactly one hole, and a hole with no shape is how
+ * the token layer would rot. So: ONE canonical selector, and every token accounted for.
+ *
+ * `missing` is the failure that matters. A token nobody remembered to give a dark value does not
+ * error at build time and does not error in the browser: it keeps its LIGHT value and renders, for
+ * example, near-white body text on a near-white card. That is a silent, screen-sized bug, and it is
+ * the reason this check exists at all rather than a comment asking people to be careful.
+ *
+ * AN ALIAS IS EXEMPT ONLY IF IT POINTS INSIDE THE PALETTE. `--color-chart-1: var(--color-action)`
+ * follows `action` into the dark block for free and must not be restated. But the whole semantic
+ * status family is `var(--color-emerald-50)` and friends — aliases to TAILWIND'S STOCK RAMP, which
+ * has no idea this product has a dark theme. Those 34 tokens do NOT follow anything and are exactly
+ * the ones a "skip the aliases" rule would have hidden. The distinction is mechanical: is the
+ * target a token this `@theme` defines?
+ * ========================================================================================== */
+const DARK_SELECTOR = ":root[data-theme='dark']";
+
+/** Tokens that legitimately have no dark value, each with the reason it does not need one. */
+const DARK_EXEMPT = new Map<string, string>([
+  ['shell', 'the on-dark family is dark BY DESIGN, not by theme — auth panels, aurora, tooltip, table head'],
+  ['shell-ink', 'ink on the on-dark ground; same reason'],
+  ['shell-ink-soft', 'ink on the on-dark ground; same reason'],
+  ['shell-ink-dim', 'ink on the on-dark ground; same reason'],
+  ['fixed-onyx', 'onyx as fill/ink on a LIGHT surface (btn-rainbow body, plan badge words) in both themes'],
+  ['aurora-1', 'the auth aurora paints an on-dark panel in both themes; its ramp is the frozen light values of the chart ramp'],
+  ['aurora-2', 'the auth aurora paints an on-dark panel in both themes; its ramp is the frozen light values of the chart ramp'],
+  ['aurora-3', 'the auth aurora paints an on-dark panel in both themes; its ramp is the frozen light values of the chart ramp'],
+  ['aurora-4', 'the auth aurora paints an on-dark panel in both themes; its ramp is the frozen light values of the chart ramp'],
+  // The mirror of the `shell` family: those surfaces are dark by design, these are LIGHT by
+  // design. The document plate is the sheet the product's generated files are drawn on — PDFs,
+  // the order image, the workbook, the supplier portal's rendering of them. Paper is white in
+  // both themes, and a document that inverted with the reader's app theme would print wrong.
+  // Six tokens, added when wave 7's dark theme met wave 6's document plate: neither pull request
+  // knew about the other, and the guard is what noticed.
+  ['doc-plate-lift', 'the generated-document sheet is paper, and paper is white in both themes'],
+  ['doc-plate-line', 'rules on that sheet; same reason'],
+  ['doc-plate-action', 'the action colour printed on that sheet; same reason'],
+  ['doc-ink-soft', 'ink on the paper sheet; same reason'],
+  ['doc-ink-muted', 'ink on the paper sheet; same reason'],
+  ['doc-ink-dim', 'ink on the paper sheet; same reason'],
+  ['aurora-5', 'the auth aurora paints an on-dark panel in both themes; its ramp is the frozen light values of the chart ramp'],
+  // The assistant card, the third family on this list and the same reason as the first: it is a
+  // DARK surface inside a light product, by owner ruling 01.09.2026, not a light surface that a
+  // dark page flips. Every step is Onyx — the shell's own hue — so on a dark page the card is
+  // already the right dark and a second value would only make it drift from the chrome it
+  // belongs to. Ten tokens, added when wave 7's dark theme met the assistant card: the same
+  // collision the document plate had, and the same guard that noticed.
+  ['assistant-card', 'the assistant card is dark BY DESIGN, not by theme — the owner chose a dark card in a light product'],
+  ['assistant-card-lift', "the card gradient's lit corner; same reason"],
+  ['assistant-card-deep', "the card gradient's far corner; same reason"],
+  ['assistant-rim', 'the card frame; same reason'],
+  ['assistant-edge', 'inner hairlines on the card; same reason'],
+  ['assistant-well', "the composer's field on the card; same reason"],
+  ['assistant-bubble', 'a soft surface ON the dark card; same reason'],
+  ['assistant-bubble-hover', 'its hover step; same reason'],
+  ['assistant-mote', 'the rising motes over the card; same reason'],
+  ['assistant-focus', 'the focus ring lightened for the dark card specifically; same reason'],
+]);
+
+const aliasTarget = (declaration: string) => /var\(\s*--color-([a-z0-9-]+)\s*\)/.exec(declaration)?.[1];
+
+/** name -> whether its @theme value is an alias to another token IN this palette. */
+const followsPalette = new Map<string, boolean>();
+for (const found of themeBody.matchAll(/--color-([a-z0-9]+(?:-[a-z0-9]+)*)\s*:([^;]*);/g)) {
+  const target = aliasTarget(found[2]);
+  followsPalette.set(found[1], target !== undefined && definedTokens.has(target));
+}
+
+const darkStart = css.indexOf(DARK_SELECTOR);
+let darkEnd = -1;
+if (darkStart !== -1) {
+  let depth = 0;
+  for (let i = css.indexOf('{', darkStart); i < css.length; i += 1) {
+    if (css[i] === '{') depth += 1;
+    else if (css[i] === '}') {
+      depth -= 1;
+      if (depth === 0) { darkEnd = i + 1; break; }
+    }
+  }
+  if (darkEnd === -1) {
+    console.error(`check:tokens FAILED — the ${DARK_SELECTOR} block in src/index.css is unbalanced.`);
+    process.exit(1);
+  }
+
+  const darkBody = css.slice(darkStart, darkEnd);
+  const darkDeclared: string[] = [...darkBody.matchAll(/--color-([a-z0-9]+(?:-[a-z0-9]+)*)\s*:/g)].map((m) => m[1]);
+  const darkSet = new Set(darkDeclared);
+
+  if (darkDeclared.length !== darkSet.size) {
+    const seen = new Set<string>();
+    for (const name of darkDeclared) {
+      if (seen.has(name)) {
+        violations.push({
+          file: 'index.css',
+          line: cssLineOf(darkStart),
+          match: `--color-${name}`,
+          why: 'declared twice inside the dark selector — the second wins silently, so one of them is a lie',
+        });
+      }
+      seen.add(name);
+    }
+  }
+
+  for (const name of darkSet) {
+    if (definedTokens.has(name)) continue;
+    violations.push({
+      file: 'index.css',
+      line: cssLineOf(darkStart),
+      match: `--color-${name}`,
+      why: 'given a dark value but never defined in @theme — a dark-only token cannot be used by any utility',
+    });
+  }
+
+  const missing = [...definedTokens]
+    .filter((name) => !darkSet.has(name))
+    .filter((name) => !DARK_EXEMPT.has(name))
+    .filter((name) => followsPalette.get(name) !== true)
+    .sort();
+
+  if (missing.length > 0) {
+    for (const name of missing) {
+      violations.push({
+        file: 'index.css',
+        line: cssLineOf(darkStart),
+        match: `--color-${name}`,
+        why: 'no dark value — it would keep its LIGHT value on a dark page, which renders but is wrong',
+      });
+    }
+  }
+
+  for (const [name, reason] of DARK_EXEMPT) {
+    if (!definedTokens.has(name)) {
+      violations.push({
+        file: 'index.css',
+        line: cssLineOf(darkStart),
+        match: `--color-${name}`,
+        why: `on the dark-exemption list ("${reason}") but no longer defined in @theme — delete the exemption`,
+      });
+    }
+  }
+}
+
 const SEMANTIC_CLASS =
   /\b(?:bg|text|border|ring|fill|stroke|divide|outline|decoration|placeholder|accent|caret)-([a-z][a-z0-9]*(?:-[a-z0-9]+)*)\b/g;
 
@@ -222,7 +369,11 @@ for (const found of css.matchAll(LEGACY_NOTATION)) {
   });
 }
 
-const outsideTheme = blank(css, themeStart, themeEnd);
+const outsideTheme = darkStart === -1
+  ? blank(css, themeStart, themeEnd)
+  // The dark selector is the ONE declared hole in "no literals outside @theme"; the parity
+  // check above is what keeps it a hole and not an exit.
+  : blank(blank(css, themeStart, themeEnd), darkStart, darkEnd);
 CSS_COLOUR_LITERAL.lastIndex = 0;
 for (const found of outsideTheme.matchAll(CSS_COLOUR_LITERAL)) {
   violations.push({

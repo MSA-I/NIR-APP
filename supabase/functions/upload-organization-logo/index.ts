@@ -8,7 +8,12 @@ import {
   type ServiceRpcResult,
 } from "../_shared/organization-egress.ts";
 import { runReservedEgress } from "../_shared/reserved-egress.ts";
-import { organizationCanManageBranding, validatedLogoType } from "./core.ts";
+import {
+  organizationCanManageBranding,
+  supplierCanManageBranding,
+  supplierLogoObjectPath,
+  validatedLogoType,
+} from "./core.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -107,14 +112,11 @@ Deno.serve(async (req) => {
     return json({ error: "authorization_failed" }, 500);
   }
   if (accessModeError) return json({ error: "authorization_failed" }, 500);
-  if (
-    !profile || !organizationCanManageBranding(
-      profile,
-      accessMode ? { access_mode: String(accessMode) } : null,
-    )
-  ) {
-    return json({ error: "forbidden" }, 403);
-  }
+  // THE CAPABILITY CHECK MOVED BELOW THE FORM, and only because it now depends on the form. Which
+  // role may write depends on WHICH logo is being written -- owner alone for the organisation's
+  // own identity, owner or office for a supplier -- and `supplier_id` arrives in the body. The
+  // `!profile` guard stays here so nothing below dereferences a caller with no tenant.
+  if (!profile) return json({ error: "forbidden" }, 403);
 
   let form: FormData;
   try {
@@ -133,6 +135,52 @@ Deno.serve(async (req) => {
     uploadType = validatedLogoType(uploadBytes, value.type, value.size);
     if (!uploadType) return json({ error: "invalid_logo" }, 400);
   }
+
+  // ===== Which logo, and may this caller write it =====
+  // `supplier_id` absent means the organisation's own logo, which is exactly what every existing
+  // caller sends. Adding a field rather than a new endpoint keeps ONE implementation of the
+  // reservation, the magic-byte check, the compare-and-swap and the orphan cleanup -- four things
+  // that are only correct because they were got right once, and that a sibling function would
+  // duplicate and then drift from.
+  const rawSupplierId = form.get("supplier_id");
+  const supplierId = typeof rawSupplierId === "string" && rawSupplierId.length > 0
+    ? rawSupplierId
+    : null;
+  if (supplierId !== null && !UUID.test(supplierId)) {
+    return json({ error: "invalid_supplier_id" }, 400);
+  }
+
+  const accessRow = accessMode ? { access_mode: String(accessMode) } : null;
+  if (
+    !(supplierId === null
+      ? organizationCanManageBranding(profile, accessRow)
+      : supplierCanManageBranding(profile, accessRow))
+  ) {
+    return json({ error: "forbidden" }, 403);
+  }
+
+  // THE SUPPLIER IS RESOLVED INSIDE THE CALLER'S OWN TENANT, and its current path is read here so
+  // the compare-and-swap below has something to compare against. A supplier id belonging to
+  // another organisation simply does not match, which is a 404 rather than a leak: answering
+  // "forbidden" would confirm the row exists somewhere.
+  let supplierCurrentPath: string | null = null;
+  if (supplierId !== null) {
+    const { data: supplier, error: supplierError } = await admin.from("suppliers")
+      .select("id, logo_path")
+      .eq("id", supplierId)
+      .eq("org_id", profile.org_id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (supplierError) return json({ error: "authorization_failed" }, 500);
+    if (!supplier) return json({ error: "supplier_not_found" }, 404);
+    supplierCurrentPath = supplier.logo_path ?? null;
+  }
+
+  // One name for "the path this target is currently pointing at", so the reservation evidence, the
+  // compare-and-swap and the cleanup below cannot disagree about which one they mean.
+  const currentPath = supplierId === null
+    ? (organization?.logo_path ?? null)
+    : supplierCurrentPath;
 
   const rpc = serviceRpc(admin);
   const presentedCorrelation = req.headers.get("x-correlation-id") ?? "";
@@ -200,8 +248,13 @@ Deno.serve(async (req) => {
   const storageLease = reservation.lease;
   const operationEvidence: Record<string, unknown> = {
     action,
+    // WHICH LOGO, in the evidence itself. This row is the only recovery pointer if storage
+    // committed and the HTTP response was lost, and "a logo was written for this tenant" is not
+    // enough to find the orphan or to know which row to re-read.
+    target: supplierId === null ? "organization" : "supplier",
+    supplier_id: supplierId,
     path: null,
-    previous_path: organization?.logo_path ?? null,
+    previous_path: currentPath,
     upload_started: false,
     uploaded: null,
     reference_started: false,
@@ -216,16 +269,22 @@ Deno.serve(async (req) => {
       perform: async (): Promise<LogoMutationResult> => {
         if (action === "remove") {
           operationEvidence.reference_started = true;
-          const removedReference = await admin.rpc(
-            "set_organization_branding_reference",
-            {
+          const removedReference = supplierId === null
+            ? await admin.rpc("set_organization_branding_reference", {
               p_actor_id: userData.user.id,
-              p_expected_logo_path: organization?.logo_path ?? null,
+              p_expected_logo_path: currentPath,
               p_new_logo_path: null,
               p_new_logo_updated_at: null,
               p_reason: "owner_removed_organization_logo",
-            },
-          );
+            })
+            : await admin.rpc("set_supplier_branding_reference", {
+              p_actor_id: userData.user.id,
+              p_supplier_id: supplierId,
+              p_expected_logo_path: currentPath,
+              p_new_logo_path: null,
+              p_new_logo_updated_at: null,
+              p_reason: "removed_supplier_logo",
+            });
           if (removedReference.error || !removedReference.data) {
             if (
               removedReference.error &&
@@ -250,11 +309,9 @@ Deno.serve(async (req) => {
             };
           }
           operationEvidence.reference_committed = true;
-          operationEvidence.cleanup_started = Boolean(organization?.logo_path);
-          const cleanup = organization?.logo_path
-            ? await admin.storage.from("organization-branding").remove([
-              organization.logo_path,
-            ])
+          operationEvidence.cleanup_started = Boolean(currentPath);
+          const cleanup = currentPath
+            ? await admin.storage.from("organization-branding").remove([currentPath])
             : { error: null };
           const cleanupFailed = Boolean(cleanup.error);
           operationEvidence.cleanup_failed = cleanupFailed;
@@ -276,8 +333,18 @@ Deno.serve(async (req) => {
         if (!uploadBytes || !uploadType) {
           throw new Error("validated_upload_missing");
         }
-        const path =
-          `${profile.org_id}/${crypto.randomUUID()}.${uploadType.extension}`;
+        // BUILT HERE FROM VERIFIED VALUES, NEVER TAKEN FROM THE REQUEST. The organisation id comes
+        // off the caller's own profile and the supplier id was just resolved inside that tenant,
+        // so neither can be pointed at somebody else's folder. `0275` re-states the supplier shape
+        // as a CHECK constraint, which is the second line rather than the first.
+        const path = supplierId === null
+          ? `${profile.org_id}/${crypto.randomUUID()}.${uploadType.extension}`
+          : supplierLogoObjectPath(
+            profile.org_id,
+            supplierId,
+            crypto.randomUUID(),
+            uploadType.extension,
+          );
         operationEvidence.path = path;
         operationEvidence.upload_started = true;
         const upload = await admin.storage.from("organization-branding").upload(
@@ -315,16 +382,22 @@ Deno.serve(async (req) => {
 
         const updatedAt = new Date().toISOString();
         operationEvidence.reference_started = true;
-        const organizationUpdate = await admin.rpc(
-          "set_organization_branding_reference",
-          {
+        const organizationUpdate = supplierId === null
+          ? await admin.rpc("set_organization_branding_reference", {
             p_actor_id: userData.user.id,
-            p_expected_logo_path: organization?.logo_path ?? null,
+            p_expected_logo_path: currentPath,
             p_new_logo_path: path,
             p_new_logo_updated_at: updatedAt,
             p_reason: "owner_uploaded_organization_logo",
-          },
-        );
+          })
+          : await admin.rpc("set_supplier_branding_reference", {
+            p_actor_id: userData.user.id,
+            p_supplier_id: supplierId,
+            p_expected_logo_path: currentPath,
+            p_new_logo_path: path,
+            p_new_logo_updated_at: updatedAt,
+            p_reason: "uploaded_supplier_logo",
+          });
         if (organizationUpdate.error || !organizationUpdate.data) {
           if (
             organizationUpdate.error &&
@@ -360,14 +433,11 @@ Deno.serve(async (req) => {
         operationEvidence.reference_committed = true;
 
         operationEvidence.cleanup_started = Boolean(
-          organization?.logo_path && organization.logo_path !== path,
+          currentPath && currentPath !== path,
         );
-        const cleanup =
-          organization?.logo_path && organization.logo_path !== path
-            ? await admin.storage.from("organization-branding").remove([
-              organization.logo_path,
-            ])
-            : { error: null };
+        const cleanup = currentPath && currentPath !== path
+          ? await admin.storage.from("organization-branding").remove([currentPath])
+          : { error: null };
         const cleanupFailed = Boolean(cleanup.error);
         operationEvidence.cleanup_failed = cleanupFailed;
         return {

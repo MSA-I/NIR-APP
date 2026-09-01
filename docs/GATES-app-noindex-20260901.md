@@ -78,7 +78,7 @@ lower than the brief assumed, which is an argument FOR the owner's decision to l
 the `0243`–`0267` rollout rather than shortcut it through Cloudflare.
 
 The marketing site's absence from the index is a larger problem than this one and is explicitly
-out of scope. Recorded in `DEBT §89` with the one-minute check that would tell the two possible
+out of scope. Recorded in `DEBT §93` with the one-minute check that would tell the two possible
 causes apart, and left for the owner.
 
 ---

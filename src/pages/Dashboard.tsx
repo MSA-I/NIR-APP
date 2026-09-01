@@ -252,31 +252,31 @@ function RoleQueueCard({ queue, total, className = '' }: {
   // capped at 12 (the number beside carries the exact count; the dots are aria-hidden texture).
   const DOT_CAP = 12;
   return (
-    <section className={`relative rounded-3xl bg-shell p-4 text-shell-ink shadow-dashboard sm:p-5 ${className}`} aria-labelledby="role-queues-title">
+    <section className={`relative rounded-3xl bg-inverse p-4 text-inverse-ink shadow-dashboard sm:p-5 ${className}`} aria-labelledby="role-queues-title">
       {/* The reference's corner circle-chip: a round paper-on-dark arrow to the full queue. */}
       <Link to="/alerts" aria-label={t('dashboard.aria_label')}
         className="group absolute end-3 top-3 grid size-11 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-        <span className="grid size-9 place-items-center rounded-full bg-shell-ink/10 text-shell-ink transition-colors group-hover:bg-shell-ink/20">
+        <span className="grid size-9 place-items-center rounded-full bg-inverse-ink/10 text-inverse-ink transition-colors group-hover:bg-inverse-ink/20">
           <ArrowUpLeft size={ICON.sm} aria-hidden="true" />
         </span>
       </Link>
-      <h2 id="role-queues-title" className="section-title pe-16 text-shell-ink">{t('dashboard.text_11')}</h2>
+      <h2 id="role-queues-title" className="section-title pe-16 text-inverse-ink">{t('dashboard.text_11')}</h2>
       <div className="mt-1.5 flex items-baseline gap-2">
-        <span className="kpi-hero num text-shell-ink">{total}</span>
-        <span className="text-xs text-shell-ink-dim">{t('dashboard.text_12')}</span>
+        <span className="kpi-hero num text-inverse-ink">{total}</span>
+        <span className="text-xs text-inverse-ink-dim">{t('dashboard.text_12')}</span>
       </div>
       <ul className="mt-3 space-y-0.5 text-sm">
         {rows.map((row) => (
           <li key={row.label}>
             <Link to={row.to}
-              className="-mx-2 flex min-h-11 items-center gap-3 rounded-lg px-2 py-1.5 text-shell-ink-soft transition-colors hover:bg-shell-ink/10 hover:text-shell-ink active:bg-shell-ink/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+              className="-mx-2 flex min-h-11 items-center gap-3 rounded-lg px-2 py-1.5 text-inverse-ink-soft transition-colors hover:bg-inverse-ink/10 hover:text-inverse-ink active:bg-inverse-ink/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
               <span className="min-w-0 flex-1 leading-snug">{row.label}</span>
               {row.count > 0 && (
                 <span className="flex max-w-24 flex-wrap items-center justify-end gap-1" aria-hidden="true">
                   {Array.from({ length: Math.min(row.count, DOT_CAP) }, (_, i) => (
-                    <span key={i} className="size-1.5 rounded-full bg-shell-ink/80" />
+                    <span key={i} className="size-1.5 rounded-full bg-inverse-ink/80" />
                   ))}
-                  {row.count > DOT_CAP && <span className="text-xs text-shell-ink-dim">+</span>}
+                  {row.count > DOT_CAP && <span className="text-xs text-inverse-ink-dim">+</span>}
                 </span>
               )}
               <span className="badge num min-w-8 shrink-0 justify-center bg-action-soft text-action-on-soft">{row.count}</span>
