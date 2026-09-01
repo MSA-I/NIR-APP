@@ -14,6 +14,7 @@
     "check:money": "node scripts/check-money.ts",
     "check:currency": "node scripts/check-currency.mjs",
     "check:tolerance-surfaces": "node scripts/check-tolerance-surfaces.mjs",
+    "next-number": "node scripts/next-free-number.mjs",
     "check:tokens": "node scripts/check-design-tokens.ts",
     "check:appearance-scope": "node scripts/check-appearance-scope.mjs",
     "check:contrast": "node scripts/check-contrast-manifest.mjs",
