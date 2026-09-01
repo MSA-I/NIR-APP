@@ -3407,6 +3407,11 @@ export const en: Dictionary = {
   },
 
   orgSubscription: {
+    checkoutOpening: 'Opening checkout…',
+    purchaseAvailable: 'You can move to a paid plan from this screen. Payment is taken by the billing provider, and the plan here updates once they confirm it.',
+    checkoutAwaitingProvider: 'Your payment has been sent to the billing provider for confirmation. The plan will update here as soon as their signed confirmation arrives — usually immediately. There is no need to pay again.',
+    checkoutFailed: 'We could not open the checkout. Nothing was charged. You can try again, and contact support if it keeps happening.',
+    manageBilling: 'Manage payment and invoices',
     availabilityIndeterminate: 'Whether buying a plan is available cannot be determined right now. That does not mean it is blocked — a refresh, or trying again later, will show the current state.',
     displayCurrencyNote: 'The prices below are shown according to the interface language: Hebrew in shekels and English in dollars. This is display only; the actual charge and the tax are set by the billing country verified with the payment provider.',
     catalogueShown: 'Showing the {catalogue} catalogue, before tax.',
@@ -6103,6 +6108,13 @@ export const en: Dictionary = {
 
   subscriptionPage: {
     title: 'My subscription',
+  },
+
+  support: {
+    productLead: 'Need help?',
+    productSubject: 'Support request — InPlace',
+    billingLead: 'A question about a charge, an invoice or a plan:',
+    billingSubject: 'Billing question — InPlace',
   },
 
   charts: {

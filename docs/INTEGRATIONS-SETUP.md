@@ -58,10 +58,11 @@ fail-closed, claim/lease, חמש ניסיונות, קפיאת `unknown`, תבנ�
 |---|---|
 | `RESEND_API_KEY` | משמש את `send-invite`; עצם קיומו אינו הוכחת דומיין, SMTP או מסירה חיצונית |
 | `INVITE_FROM_EMAIL` | **מוגדר 24.08.2026** ל־`InPlace <no-reply@inplace.digital>` |
-| `ORDERS_FROM_EMAIL` | **נוצר 24.08.2026** עם אותו ערך. קודם לא היה קיים כלל, ו־`email-sender` נפל חזרה ל־`INVITE_FROM_EMAIL` |
+| `ORDERS_FROM_EMAIL` | **הופרד 31.08.2026** ל־`InPlace <orders@inplace.digital>`. נוצר 24.08 עם אותו ערך כמו `INVITE_FROM_EMAIL`, וזהות אחת לשני קהלים היא בדיוק מה שהופך מייל של דייר לספק שלו למייל של InPlace. נמדד בקריאה חוזרת של שם הסוד |
 | `APP_BASE_URL` | בסיס לקישורי הפורטל בגוף המייל; מאז 24.08 `https://app.inplace.digital` |
 | `ALLOWED_ORIGINS` | allowlist ל־CORS |
-| `RESEND_WEBHOOK_SECRET` | סוד Svix לאירועי delivered/bounced; טרם הוכח כמוגדר |
+| `PADDLE_WEBHOOK_SECRET` · `PADDLE_API_KEY` · `PADDLE_ENVIRONMENT` · `BILLING_PROVIDER` | **הוגדרו 31.08.2026** אחרי שהבעלים פתח חשבון **sandbox**. ‏`PADDLE_ENVIRONMENT=sandbox`, ואין לו ברירת מחדל בכוונה: שכחת משתנה לא תכריע אם לקוח מחויב באמת. **אומת בהתנהגות:** ‏`POST` לא-חתום ל-`billing-webhook` עבר מ-`503` ל-`403`. **ואף על פי כן אי-אפשר להעניק מסלול:** גבול הספקים כבוי, מיפוי המחירים בייצור ריק, ואירוע sandbox מת ב-dead-letter. ‏`§57` |
+| `RESEND_WEBHOOK_SECRET` | סוד Svix לאירועי delivered/bounced. **הותקן 31.08.2026.** ה-webhook נוצר באותו יום ומופעל אל `email-webhook` עם ארבעת אירועי המסירה. **אומת בהתנהגות:** ‏`POST` לא-חתום עבר מ-`500 misconfigured` ל-`403` „missing signature headers" — כלומר הסוד נקרא והאימות אמיתי. ‏`§87` נסגר |
 
 ### 2.א ‏ תשתית הדואר — חיה ומדודה מ־24.08.2026
 
@@ -87,8 +88,11 @@ fail-closed, claim/lease, חמש ניסיונות, קפיאת `unknown`, תבנ�
 **מה שעדיין לא הוכח, ואסור לטעון:** ‏**מייל Auth אמיתי לא נשלח.** חשבונות הבדיקה הם `@gamos.demo`
 — דומיין מזויף שיחזור — ו־`recover` לכתובת שאינה קיימת מחזיר `200` בלי לשלוח, מטעמי אי־מנייה.
 ‏Supabase אימת את חיבור ה־SMTP בשמירה, וזו הראיה שיש; ההוכחה הסופית היא המייל האמיתי הראשון.
-כמו כן `RESEND_WEBHOOK_SECRET` ו־`email-webhook` עדיין אינם, ולכן accepted עדיין אינו delivered
-במסלול המוצר.
+כמו כן `RESEND_WEBHOOK_SECRET` עדיין אינו מוגדר, ולכן accepted עדיין אינו delivered במסלול
+המוצר. **עודכן 31.08.2026:** `email-webhook` כן קיים ופרוס (`v5`), וה-webhook בצד Resend נוצר
+ב-31.08 ומופעל אל אותה נקודת קצה עם `delivered`/`bounced`/`delivery_delayed`/`complained`.
+מה שנשאר הוא הסוד בלבד — ובלעדיו הפונקציה עונה `403` לכל מסירה, וזו ההתנהגות המתוכננת ולא
+תקלה. ראו `§87`.
 
 **חוב שנפתח כאן:** תבניות מיילי ה־Auth הן ברירות המחדל **באנגלית** (`"Reset your password"`,
 `"You've been invited"`) במוצר עברי RTL. לא חוסם, אך יש לסגור לפני לקוח ראשון.

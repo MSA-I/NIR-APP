@@ -116,14 +116,13 @@ insert into public.invoices (
 -- Two credit-note readings: one has one exact invoice, one has two. Supplier provenance is the
 -- document's tenant-bound supplier_id, not a client-supplied guess.
 insert into public.documents (
-  id, org_id, entity_type, storage_path, file_name, mime_type, document_kind, supplier_id
-) values
+  id, org_id, entity_type, storage_path, file_name, mime_type, document_kind, supplier_id, uploaded_by) values
   ('f6300000-0000-4000-8000-000000000031', 'f6300000-0000-4000-8000-000000000001',
    'inbox', 'f6300000-0000-4000-8000-000000000001/p63-credit.pdf',
-   'p63-credit.pdf', 'application/pdf', 'credit', 'f6300000-0000-4000-8000-000000000011'),
+   'p63-credit.pdf', 'application/pdf', 'credit', 'f6300000-0000-4000-8000-000000000011', 'f6300000-0000-4000-8000-000000000002'),
   ('f6300000-0000-4000-8000-000000000032', 'f6300000-0000-4000-8000-000000000001',
    'inbox', 'f6300000-0000-4000-8000-000000000001/p63-ambiguous.pdf',
-   'p63-ambiguous.pdf', 'application/pdf', 'credit', 'f6300000-0000-4000-8000-000000000011');
+   'p63-ambiguous.pdf', 'application/pdf', 'credit', 'f6300000-0000-4000-8000-000000000011', 'f6300000-0000-4000-8000-000000000002');
 
 insert into public.document_processing_jobs (
   id, org_id, document_id, requested_by, status, input_checksum,
