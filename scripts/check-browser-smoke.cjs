@@ -98,7 +98,7 @@ function captureConsole(page, scope, ignore = [], ignoreResponse = () => false) 
     // NARROW BY CONSTRUCTION, and deliberately so. Only 502/504, only from the local API origin.
     // A 500 still fails: that is the server answering badly, which is the app's business. A
     // sustained outage still fails the run, because every scenario that needs data fails with it.
-    // Measured cause: DEBT-REGISTER §86 -- my_entitlements() runs ~900 query evaluations per
+    // Measured cause: DEBT-REGISTER §97 -- my_entitlements() runs ~900 query evaluations per
     // call and is the first thing to choke when the CI database is under concurrent load.
     const gatewayFailure = (response.status() === 502 || response.status() === 504)
       && apiURL && response.url().startsWith(apiURL);
@@ -4260,7 +4260,7 @@ async function supplierEmailDeliverySurface(browser) {
   if (report.infrastructure.length) {
     console.log(`\nINFRASTRUCTURE — ${report.infrastructure.length} gateway failure(s) from the isolated stack.`);
     console.log('  These did NOT fail the run. The request never reached PostgREST, so no product');
-    console.log('  code was involved. Recorded and measured as DEBT-REGISTER §86.');
+    console.log('  code was involved. Recorded and measured as DEBT-REGISTER §97.');
     for (const entry of report.infrastructure.slice(0, 10)) {
       console.log(`    ${entry.scope}: ${entry.text}`);
     }

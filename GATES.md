@@ -81,7 +81,7 @@ and delivered by Paddle over the internet to the deployed `billing-webhook` sour
 - [x] D2 — חוזי Deno בקונפיג של השער ובנעילה קפואה — **182 עברו / 0 נכשלו**
 - [x] D3 — ‏`p103` מול Postgres מקומי — **שבעה מקרים**; עבר גם ב-CI
 - [x] D4 — ‏CI על ‏PR #180: ‏`build`, ‏`verify`, ‏`Deno contracts` עברו
-- [x] D5 — השוואה מול הבסיס (‏`§85`): כשלי SQL והדפדפן **זהים** לאלה של `main`
+- [x] D5 — השוואה מול הבסיס (‏`§96`): כשלי SQL והדפדפן **זהים** לאלה של `main`
 - [ ] D6 — `BLOCKED:` ‏`npm run quality` המלא לא רץ מקומית (בלעדיות על stack משותף); רץ ב-CI
 
 ## E — חסום מחוץ לקוד
