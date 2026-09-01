@@ -79,15 +79,36 @@ function fingerprint(label) {
 }
 // Nothing may hold a connection to a database being used as a template or being dropped, and
 // TERMINATING is not enough: Supabase's own services reconnect between the terminate and the
-// CREATE, and Postgres refuses with "source database is being accessed by other users" -- which
-// is exactly how the first attempt at this failed. So connections are DISALLOWED first, which no
-// reconnect can defeat, and allowed again in a finally: a database left with datallowconn=false
-// is a bricked stack. The SQL job needs none of those services; it uses `docker exec psql`.
+// CREATE, and Postgres refuses with "source database is being accessed by other users". So
+// connections are DISALLOWED first, which no reconnect can defeat, and allowed again in a
+// finally: a database left with datallowconn=false is a bricked stack. The SQL job needs none of
+// those services; it uses `docker exec psql`.
+//
+// AND THEN IT WAITS, which the first version did not. `datallowconn = false` stops NEW
+// connections; it does not hang up the ones already open. `pg_terminate_backend` only SIGNALS a
+// backend — it returns before the process is gone. `CREATE DATABASE ... TEMPLATE` ran into that
+// gap and Postgres refused with "There are 2 other sessions using the database", which is how
+// this failed on PR #213's first CI run. Signalling is not the same as being alone, so the
+// count is read back until it is zero.
+//
+// The `alter` is checked too. It was assumed to succeed, and a silent failure there would have
+// left every later error pointing at the wrong thing.
 function withConnectionsBlocked(database, body) {
-  sql('template1', `alter database ${database} with allow_connections false`);
-  sql('template1', `select pg_terminate_backend(pid) from pg_stat_activity`
-    + ` where datname = '${database}' and pid <> pg_backend_pid()`);
+  const blocked = sql('template1', `alter database ${database} with allow_connections false`);
+  if (blocked.status !== 0) {
+    throw new Error(`could not disallow connections to ${database}: `
+      + `${(blocked.stderr ?? '').trim().split('\n')[0]}`);
+  }
   try {
+    sql('template1', `select pg_terminate_backend(pid) from pg_stat_activity`
+      + ` where datname = '${database}' and pid <> pg_backend_pid()`);
+    // Up to ~10s. A backend that will not die in that long is not a race, it is a stuck session,
+    // and the caller's own error is a better report than a longer wait would be.
+    const others = () => Number(
+      (sql('template1', `select count(*) from pg_stat_activity`
+        + ` where datname = '${database}' and pid <> pg_backend_pid()`).stdout ?? '').trim() || '0');
+    const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    for (let i = 0; i < 100 && others() > 0; i += 1) pause(100);
     return body();
   } finally {
     sql('template1', `alter database ${database} with allow_connections true`);
