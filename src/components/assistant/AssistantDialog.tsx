@@ -1,6 +1,6 @@
 import { useT } from '../../lib/i18n/LocaleProvider';
 import type { TKey } from '../../lib/i18n/t.ts';
-import { useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router';
 import { Loader2, RotateCcw, Send, Sparkles, Trash2, X } from 'lucide-react';
@@ -23,6 +23,7 @@ import { isActiveRole } from '../../lib/types';
 import { APP_ROUTE_POLICY, appRouteAllowsRole } from '../../lib/routePolicy';
 import { ConfirmDialog, ErrorNote, ICON, Note, Skeleton, useDialogLayer } from '../ui';
 import AnswerView from './AnswerView';
+import CollapsibleAnswer from './CollapsibleAnswer';
 
 /**
  * Refusals with a working deterministic alternative. For these the panel does not stop at the
@@ -45,6 +46,29 @@ const FALLBACK_CODES = [
 ] as const;
 
 const ASSISTANT_DESKTOP_QUERY = '(min-width: 64rem)';
+
+/**
+ * The motes that rise through the card, as a FIXED table rather than `Math.random()` per render.
+ *
+ * The reference scatters them randomly, and copying that literally would re-roll every position on
+ * every keystroke in the composer — the whole field would twitch while a person types. A constant
+ * looks identical, costs nothing, and is the difference between atmosphere and a rendering bug.
+ * They are decoration and carry no information: `aria-hidden`, gone under reduced motion, gone on
+ * phones (`index.css`).
+ */
+const ASSISTANT_MOTES = [
+  { left: '8%', delay: '0s', duration: '17s' },
+  { left: '19%', delay: '4s', duration: '21s' },
+  { left: '27%', delay: '9s', duration: '15s' },
+  { left: '35%', delay: '2s', duration: '23s' },
+  { left: '44%', delay: '12s', duration: '18s' },
+  { left: '52%', delay: '6s', duration: '20s' },
+  { left: '61%', delay: '15s', duration: '16s' },
+  { left: '69%', delay: '3s', duration: '22s' },
+  { left: '77%', delay: '10s', duration: '19s' },
+  { left: '86%', delay: '7s', duration: '24s' },
+  { left: '93%', delay: '13s', duration: '17s' },
+] as const;
 
 function useAssistantDesktopMode(): boolean {
   const [desktop, setDesktop] = useState(() =>
@@ -166,7 +190,7 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
 
   return (
     <div>
-      <h3 className="mb-1 text-xs font-medium text-ink-muted">{t('assistantDialog.text')}</h3>
+      <h3 className="mb-1 text-xs font-medium text-shell-ink-dim">{t('assistantDialog.text')}</h3>
       {loading && (
         <div role="status" aria-busy="true" className="space-y-2 py-1">
           <span className="sr-only">{t('assistantDialog.text_2')}</span>
@@ -176,12 +200,12 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
       )}
       {openError && <ErrorNote message={openError} />}
       {deleteError && <ErrorNote message={deleteError} />}
-      <ul className="divide-y divide-line-soft">
+      <ul>
         {(data ?? []).map((conversation) => (
-          <li key={conversation.id} className="flex min-h-11 items-center gap-2 py-1">
+          <li key={conversation.id} className="assistant-divider flex min-h-11 items-center gap-2 border-t py-1 first:border-t-0">
             <button
               type="button"
-              className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-start transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+              className="assistant-focus flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-start transition-colors hover:bg-assistant-bubble focus-visible:outline-none"
               disabled={openingId !== null}
               aria-label={t('assistantDialog.openCheckLabel', { title: conversation.title })}
               onClick={() => {
@@ -199,13 +223,13 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
                   });
               }}
             >
-              <span className="min-w-0 flex-1 truncate text-sm text-ink-body">{conversation.title}</span>
-              <span className="num shrink-0 text-xs text-ink-muted">{fmtDateTime(conversation.updated_at)}</span>
+              <span className="min-w-0 flex-1 truncate text-sm text-shell-ink-soft">{conversation.title}</span>
+              <span className="num shrink-0 text-xs text-shell-ink-dim">{fmtDateTime(conversation.updated_at)}</span>
                 {openingId === conversation.id && <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" />}
             </button>
             <button
               type="button"
-              className="btn-ghost btn-icon rounded-full"
+              className="assistant-focus grid size-11 shrink-0 place-items-center rounded-full text-shell-ink-dim transition-colors hover:bg-assistant-bubble hover:text-shell-ink focus-visible:outline-none"
               aria-label={t('assistantDialog.deleteCheckLabel', { title: conversation.title })}
               onClick={() => setPendingDelete(conversation.id)}
             >
@@ -274,6 +298,59 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
     initialFocus: (panel) => panel.querySelector<HTMLElement>('textarea'),
   });
 
+  /**
+   * The thread follows the conversation (measured defect, 01.09.2026: after three questions the
+   * scroller was still at `scrollTop: 0` with 2,426px of content in a 656px port — the answer a
+   * person had just asked for was below the fold, and nothing on screen said so).
+   *
+   * Why this is a FOLLOW and not a single scroll call. The first attempt scrolled once per turn,
+   * in a frame after the commit, and still finished 36px short: `CollapsibleAnswer` measures after
+   * paint and only then renders its „הצג עוד" control, so the content grew after the scroll had
+   * already run. Chasing that with a second frame would be a guess about one layout. Instead the
+   * content is observed, and the thread keeps its bottom edge while the reader is at the bottom.
+   *
+   * `followRef` is what keeps that from being hostile: scroll up to re-read an earlier answer and
+   * the thread stops chasing, because a surface that yanks you back to the newest message is worse
+   * than one that never scrolled at all. Asking a new question opts back in — that is the one
+   * moment a person has said what they want to see.
+   */
+  const threadRef = useRef<HTMLDivElement>(null);
+  const threadContentRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const followRef = useRef(true);
+
+  const scrollThreadToEnd = useCallback((smooth: boolean) => {
+    const thread = threadRef.current;
+    if (!thread) return;
+    // `scrollTo` carries the motion preference; the assignment is the floor that always works,
+    // including in jsdom, where the smooth API does not exist at all.
+    if (typeof thread.scrollTo === 'function') {
+      thread.scrollTo({ top: thread.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+    } else {
+      thread.scrollTop = thread.scrollHeight;
+    }
+  }, []);
+
+  useEffect(() => {
+    followRef.current = true;
+    const smooth = typeof window.matchMedia === 'function'
+      && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const frame = requestAnimationFrame(() => scrollThreadToEnd(smooth));
+    return () => cancelAnimationFrame(frame);
+  }, [turns.length, pending, scrollThreadToEnd]);
+
+  useEffect(() => {
+    const content = threadContentRef.current;
+    if (!content || typeof ResizeObserver !== 'function') return;
+    // Not smooth: this fires for content settling — a control appearing, a font arriving — and
+    // animating those would read as the panel drifting on its own.
+    const observer = new ResizeObserver(() => {
+      if (followRef.current) scrollThreadToEnd(false);
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [scrollThreadToEnd]);
+
   const showFallback = rawError !== null && needsFallback(rawError);
   const role = profile && isActiveRole(profile.role) ? profile.role : null;
   const canOpenAlerts = role !== null && appRouteAllowsRole('alerts', role);
@@ -303,35 +380,55 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
       aria-describedby={descriptionId}
       data-assistant-mode={desktop ? 'docked' : 'fullscreen'}
       tabIndex={-1}
-      className="assistant-surface page-fade phone-safe-dialog z-50 flex flex-col bg-surface focus:outline-none no-print"
+      className="assistant-surface assistant-frame page-fade phone-safe-dialog z-50 overflow-hidden focus:outline-none no-print"
     >
+      {/* The lit background and the motes, beneath everything and reachable by nobody. Owner
+          ruling 01.09.2026 — the reference's dark card, kept in the product's own Onyx. */}
+      <div className="assistant-gradient pointer-events-none absolute inset-0" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        {ASSISTANT_MOTES.map((mote) => (
+          <span
+            key={mote.left}
+            className="assistant-mote"
+            style={{
+              insetInlineStart: mote.left,
+              ['--assistant-mote-delay' as string]: mote.delay,
+              ['--assistant-mote-duration' as string]: mote.duration,
+            }}
+          />
+        ))}
+      </div>
+
+      <div className="assistant-inner relative z-10 flex h-full flex-col overflow-hidden rounded-xl">
         {/* Band 1 of 3 — the titled header. A plain <div> and not <header>: the panel root is a
             `div` carrying an ARIA role rather than a sectioning element, so a nested <header>
             would map to a second `banner` landmark on the page. */}
-        <div className="shrink-0 border-b border-line-soft bg-surface px-4 py-3">
+        <div className="assistant-divider shrink-0 border-b px-4 py-3">
           <div className="flex items-center gap-2">
-            {/* SOLID oceanic, not the pale wash it wore before (owner report 26.08.2026: the
-                assistant "carries colours from the old palette"). The wash is a cool
-                near-white — `action-wash` is oklch(96.6% .011 195) — and this panel is painted
-                on warm cream paper (`surface-sunken`, hue 80). Two near-whites from opposite
-                sides of neutral in one 40px square is what read as a leftover from another
-                palette: too little chroma to be a brand mark, enough to fight the paper. The
-                brand keeps its one place in the header by being the brand, at full strength. */}
+            {/* Oceanic at full strength, which on this card is now also the contrast step: the
+                mark used to be brand-on-paper and is brand-on-dark since the card ruling. The
+                reference puts an emoji here; it does not travel (owner: „רק תוריד אימוג'ים").
+                The sparkle is the product's own mark and stays. */}
             <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-action text-on-solid" aria-hidden="true">
               <Sparkles size={ICON.lg} />
             </span>
-            <h2 id={titleId} className="min-w-0 flex-1 truncate font-semibold text-ink">{t('assistantDialog.heading', { app: APP_NAME })}</h2>
+            <h2 id={titleId} className="min-w-0 flex-1 truncate font-semibold text-shell-ink">{t('assistantDialog.heading', { app: APP_NAME })}</h2>
             {(result || conversationId) && (
               <button
                 type="button"
-                className="btn-ghost btn-sm"
+                className="assistant-focus btn-sm inline-flex items-center gap-1.5 rounded-lg px-2 font-medium text-shell-ink-soft transition-colors hover:bg-assistant-bubble hover:text-shell-ink focus-visible:outline-none disabled:opacity-50"
                 disabled={pending}
                 onClick={resetConversation}
               >
                 <RotateCcw size={ICON.xs} aria-hidden="true" /> {t('assistantDialog.newCheck')}
               </button>
             )}
-            <button type="button" className="btn-ghost btn-icon rounded-full" onClick={() => requestClose()} aria-label={t('assistantDialog.aria_label')}>
+            <button
+              type="button"
+              className="assistant-focus grid size-11 shrink-0 place-items-center rounded-full text-shell-ink-soft transition-colors hover:bg-assistant-bubble hover:text-shell-ink focus-visible:outline-none"
+              onClick={() => requestClose()}
+              aria-label={t('assistantDialog.aria_label')}
+            >
               <X size={ICON.lg} aria-hidden="true" />
             </button>
           </div>
@@ -341,7 +438,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
               subtitle read „בדיקה תפעולית מבוססת ר…”, which drops exactly the two words the header
               is required to keep. A promise about what the surface may do cannot be the part that
               ellipsis eats. */}
-          <p className="mt-0.5 text-xs leading-snug text-ink-muted ps-12">{t('assistantDialog.text_4')}</p>
+          <p className="mt-0.5 text-xs leading-snug text-shell-ink-dim ps-12">{t('assistantDialog.text_4')}</p>
         </div>
 
         {/* Band 2 of 3 — the scrolling conversation, one tonal step below the header and the
@@ -354,8 +451,20 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
             unreachable. `safe` falls back to start-alignment the moment the content is taller
             than the panel, and a browser that does not know the keyword drops the declaration
             and lands on the same top-aligned layout. */}
-        <div className={`flex-1 space-y-4 overflow-y-auto bg-surface-sunken p-4 ${
-          nothingAskedYet ? 'flex flex-col [justify-content:safe_center]' : ''}`}>
+        <div
+          ref={threadRef}
+          data-assistant-thread
+          onScroll={(event) => {
+            const thread = event.currentTarget;
+            // 96px of slack: "at the bottom" has to survive a rubber-band and a rounding error,
+            // or the follow switches itself off the first time the panel settles.
+            followRef.current =
+              thread.scrollHeight - thread.scrollTop - thread.clientHeight < 96;
+          }}
+          className={`flex-1 overflow-y-auto p-4 ${
+            nothingAskedYet ? 'flex flex-col [justify-content:safe_center]' : ''}`}
+        >
+          <div ref={threadContentRef} className="space-y-4">
           {!nothingAskedYet && <p id={descriptionId} className="sr-only">{description}</p>}
 
           {/*
@@ -369,16 +478,24 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
               {turns.map((turn) => (
                 <li key={turn.result.run_id} className="space-y-2">
                   <UserTurn question={turn.question} />
+                  {/* The answer stays a LIGHT evidence card, now floating on a dark thread rather
+                      than on cream. That is the same tonal relationship DESIGN.md settled on
+                      26.08.2026 — the thread is the well, the answer is paper laid on it — read at
+                      a bigger interval. It is also why the dark card cost nothing in legibility:
+                      every token inside `AnswerView` still paints on `surface`, so a claim, its
+                      facts and its sources keep the contrast they were measured at. */}
                   <div className="card page-fade rounded-ss-sm p-3">
                     <p className="mb-2 text-xs text-ink-muted">
                       {t('assistantDialog.updatedTo')}<span className="num">{fmtDateTime(turn.result.as_of)}</span>
                     </p>
                     {role && (
-                      <AnswerView
-                        result={turn.result}
-                        role={role}
-                        onNavigate={closeForProductNavigation}
-                      />
+                      <CollapsibleAnswer>
+                        <AnswerView
+                          result={turn.result}
+                          role={role}
+                          onNavigate={closeForProductNavigation}
+                        />
+                      </CollapsibleAnswer>
                     )}
                   </div>
                 </li>
@@ -399,10 +516,10 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
           {pending && (
             <div role="status" aria-busy="true" className="page-fade flex justify-start">
               <span className="sr-only">{t('assistantDialog.text_5')}</span>
-              <span data-assistant-typing className="card flex items-center gap-1.5 rounded-ss-sm px-4 py-4" aria-hidden="true">
-                <span className="size-2 animate-pulse rounded-full bg-action [animation-delay:0ms]" />
-                <span className="size-2 animate-pulse rounded-full bg-action [animation-delay:200ms]" />
-                <span className="size-2 animate-pulse rounded-full bg-action [animation-delay:400ms]" />
+              <span data-assistant-typing className="flex items-center gap-1.5 rounded-2xl rounded-ss-sm bg-assistant-bubble px-4 py-4" aria-hidden="true">
+                <span className="size-2 animate-pulse rounded-full bg-shell-ink-soft [animation-delay:0ms]" />
+                <span className="size-2 animate-pulse rounded-full bg-shell-ink-soft [animation-delay:200ms]" />
+                <span className="size-2 animate-pulse rounded-full bg-shell-ink-soft [animation-delay:400ms]" />
               </span>
             </div>
           )}
@@ -444,23 +561,36 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
                 <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-action text-on-solid" aria-hidden="true">
                   <Sparkles size={ICON.xl} />
                 </span>
-                <h3 id={`${titleId}-start`} className="section-title mt-3">{t('assistantDialog.whatToCheck')}</h3>
-                <p id={descriptionId} className="mt-1 text-sm leading-relaxed text-ink-muted">{description}</p>
+                <h3 id={`${titleId}-start`} className="mt-3 text-base font-semibold text-shell-ink">{t('assistantDialog.whatToCheck')}</h3>
+                <p id={descriptionId} className="mt-1 text-sm leading-relaxed text-shell-ink-dim">{description}</p>
               </div>
               {examples.length > 0 && (
                 <>
-                  <p className="mt-6 text-xs font-medium text-ink-muted">{t('assistantDialog.text_10')}</p>
-                  {/* Paper on paper, not a wash. Six of these stacked in the old cool tint turned
-                      the empty state into a block of colour that belonged to no other screen; as
-                      cards on the sunken band they read the way every other list of choices in
-                      the product reads, and the hover is the app's one neutral pointer step. */}
+                  <p className="mt-6 text-xs font-medium text-shell-ink-dim">{t('assistantDialog.text_10')}</p>
+                  {/* A soft step ON the card, which is what the reference's `white/10` bubbles are
+                      in a palette that has an Onyx. They used to be paper on paper; on a dark card
+                      paper would be six white slabs in a column, which is the "block of colour
+                      belonging to no other screen" the 26.08.2026 report was about, inverted.
+                      ONE CLICK SENDS (measured defect, 01.09.2026): filling the box and waiting
+                      for a second press contradicted this file's own note on the list above, and
+                      cost a person two actions for a question the product wrote for them. */}
                   <div className="mt-2 flex flex-col gap-2">
                     {examples.map((exampleKey) => (
                       <button
                         key={exampleKey}
                         type="button"
-                        className="row-hover min-h-11 rounded-2xl border border-line-soft bg-surface px-4 text-start text-sm font-medium text-ink-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                        onClick={() => setQuestion(t(exampleKey))}
+                        className="assistant-focus min-h-11 rounded-2xl bg-assistant-bubble px-4 text-start text-sm font-medium text-shell-ink transition-colors hover:bg-assistant-bubble-hover focus-visible:outline-none disabled:opacity-60"
+                        disabled={pending}
+                        onClick={() => {
+                          /* Focus moves to the composer BEFORE the run starts, because sending
+                             unmounts this whole empty state and takes the focused button with it
+                             — the same defect as a disabled composer, arriving by a different
+                             road (measured 01.09.2026: `activeElement` was `<body>` right after
+                             a suggestion was clicked). The composer is where the next question
+                             is typed, so this is also where focus wanted to be. */
+                          composerRef.current?.focus();
+                          void submit(location.pathname, t(exampleKey));
+                        }}
                       >
                         {t(exampleKey)}
                       </button>
@@ -478,51 +608,48 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
               )}
             </section>
           )}
+          </div>
         </div>
 
-        {/* Band 3 of 3 — the composer, pinned. The send control sits INSIDE the field's trailing
-            edge, so the pill IS the field: `.input` keeps the 3:1 boundary and owns the focus
-            ring (focus belongs to the control that receives it, not to a wrapper), `rounded-3xl`
-            is the house 24px, and `pe-14` is the lane the button stands in. Empty and in-flight
-            are the button's two disabled states, which `btn` already paints. */}
+        {/* Band 3 of 3 — the composer, pinned. The reference puts the field and the send button
+            side by side rather than nesting the button inside the field, and that shape is what
+            removed the overhang this comment used to describe: a 44px disc can no longer cross a
+            corner it does not sit in. */}
         <form
-          className="shrink-0 border-t border-line-soft bg-surface p-3"
+          className="assistant-divider shrink-0 border-t p-3"
           onSubmit={(event) => {
             event.preventDefault();
             void submit(location.pathname);
           }}
         >
-          <div className="relative">
+          <div className="flex items-end gap-2">
             <textarea
-              /* `rounded-2xl`, not `3xl`: measured, not tasted. The field is 58px tall and the
-                 send disc is the 44px touch minimum, which leaves 7px of margin — and a 24px
-                 corner eats 24px of the edge, so the disc crossed the curve by 2.4px at the
-                 bottom-start corner and appeared to hang outside the pill. 16px leaves the disc
-                 4.8px of clear straight edge at its widest point. */
-              className="input resize-none rounded-2xl pe-14"
+              ref={composerRef}
+              /* `readOnly`, NOT `disabled`, while a run is in flight (measured defect,
+                 01.09.2026: `document.activeElement` was `<body>` 200ms after submit). A disabled
+                 control cannot hold focus, so the browser moved focus out of the panel — and on
+                 mobile the panel is `aria-modal`, so the focus trap it depends on was broken by
+                 its own composer. `readOnly` refuses the edit and keeps the caret; the submit
+                 paths are guarded below and in `submit()` itself, which returns the in-flight
+                 promise rather than starting a second run. */
+              className="assistant-field max-h-32 min-w-0 flex-1 resize-none"
               rows={2}
               maxLength={ASSISTANT_QUESTION_MAX_CHARS}
-              placeholder={examples[0] ?? t('assistantDialog.text_11')}
+              placeholder={examples[0] ? t(examples[0]) : t('assistantDialog.text_11')}
               aria-label={t('assistantDialog.aria_label_3')}
               value={question}
-              disabled={pending}
+              readOnly={pending}
               onChange={(event) => setQuestion(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault();
-                  void submit(location.pathname);
+                  if (!pending) void submit(location.pathname);
                 }
               }}
             />
-            {/* CENTRED in the field, not pinned to its bottom corner (owner report 26.08.2026).
-                `bottom-1.5 end-1.5` put a 44px disc 6px from a corner whose radius is 24px, so
-                the disc crossed the curve and hung outside the pill — the composer looked broken
-                rather than styled. Centring keeps it inside the straight part of the edge at any
-                field height, which is the property that matters here: the textarea is two rows
-                today and a taller composer must not reintroduce the overhang. */}
             <button
               type="submit"
-              className="btn-primary btn-icon absolute end-2.5 top-1/2 -translate-y-1/2 rounded-full"
+              className="assistant-focus grid size-11 shrink-0 place-items-center rounded-xl bg-action text-on-solid transition-colors hover:bg-action-solid focus-visible:outline-none disabled:opacity-45"
               aria-label={pending ? t('assistantDialog.text_12') : t('assistantDialog.text_13')}
               disabled={pending || !question.trim()}
             >
@@ -534,6 +661,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
         </form>
 
         <div aria-live="polite" className="sr-only">{announcement}</div>
+      </div>
     </div>,
     document.body,
   );

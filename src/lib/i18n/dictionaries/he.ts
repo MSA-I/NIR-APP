@@ -4298,6 +4298,9 @@ export const he = {
     updatedTo: 'עודכן ל־',
     screensStillWork: 'המסכים ממשיכים לעבוד גם בלי העוזר:',
     whatToCheck: 'מה תרצה לבדוק?',
+    showMoreAnswer: 'הצג את התשובה המלאה',
+    showLessAnswer: 'הצג פחות',
+    answerTruncated: 'התשובה מקוצרת',
   },
 
   documentStatus: {

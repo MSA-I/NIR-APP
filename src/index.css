@@ -112,6 +112,39 @@
   --color-shell-ink-soft: oklch(88% 0.014 80);
   --color-shell-ink-dim: oklch(73% 0.016 80);
 
+  /* ---- The assistant card — one DARK surface inside a light product ----
+     Owner ruling 01.09.2026. The reference the owner chose (21st.dev `ai-chat`) is a dark glass
+     card with a drifting gradient and rising motes; `CLAUDE.md` bans glassmorphism and heavy
+     animation, and `DESIGN.md:700` bans a gradient on this surface by name. Both were quoted back
+     to the owner with the light palette named, and the faithful copy was chosen anyway. The
+     exception is written down — in `DESIGN.md` beside the assistant section and in
+     `docs/GATES-assistant-chat-20260901.md` — because an unrecorded exception gets re-litigated
+     by every agent that touches the surface.
+
+     What is NOT an exception: the hue. Every step below is Onyx (hue ~226, the shell's own), so
+     the card reads as the product's dark and not as a widget from another palette — the same
+     complaint the owner made on 26.08.2026 about `action-wash` on this exact surface. A separate
+     family rather than reusing `--color-shell` directly, because a card needs rungs the top bar
+     never needed: a rim, an inner edge, a bubble and an input well, and each has to move together
+     when the dark is retuned. */
+  --color-assistant-card: oklch(21.5% 0.023 226);       /* the card body */
+  --color-assistant-card-lift: oklch(27% 0.026 219);    /* the gradient's lit corner */
+  --color-assistant-card-deep: oklch(15.5% 0.02 233);   /* the gradient's far corner */
+  --color-assistant-rim: oklch(43% 0.022 226);          /* the outer frame */
+  --color-assistant-edge: oklch(32% 0.021 226);         /* inner hairlines and dividers */
+  --color-assistant-well: oklch(15.5% 0.02 231);        /* the composer's field */
+  --color-assistant-bubble: oklch(30% 0.022 226);       /* a soft surface ON the card */
+  --color-assistant-bubble-hover: oklch(35% 0.023 226);
+  --color-assistant-mote: oklch(62% 0.02 226);          /* the rising motes: atmosphere only */
+  /* `--color-focus` is a 50%-lightness oceanic chosen against paper; on a 21.5% card it is nearly
+     invisible, and a focus ring that cannot be seen is not a focus ring. */
+  --color-assistant-focus: oklch(80% 0.075 205);
+  /* The card floats over the working canvas rather than docking beside it, so it needs the
+     product's top elevation rung. Derived from the shell like every other shadow here. */
+  --shadow-assistant:
+    0 4px 12px color-mix(in oklab, var(--color-shell) 22%, transparent),
+    0 28px 56px -14px color-mix(in oklab, var(--color-shell) 34%, transparent);
+
   /* ---- Chart ramp — the SYSTEM COLORS themselves (T7.3g, owner: "לפי צבעי המערכת") ----
      No derived teals, no bronze: OCEANIC #003F47 and its solid mixes over the card surface
      (72% / 48% / 26% — measured hexes #477479 #85A1A3 #BDCBCA) plus ONYX as the contrast
@@ -807,6 +840,127 @@ body {
   block-size: 100dvh;
 }
 
+/* ---- The assistant card (owner ruling 01.09.2026 — see the token block and DESIGN.md) ----
+   The frame is two rings, exactly as the reference draws it: a 2px rim that catches light and a
+   hairline inner edge, with the whole card clipping its own contents so the gradient and the
+   motes can run edge to edge without escaping the corner radius. */
+/* The one place `backdrop-filter` is allowed in this product, and it is allowed by name: owner
+   ruling 01.09.2026 chose the reference's glass card with the ban read back to them. It is bought
+   at 8% — the card is 92% opaque, which is the reference's own `bg-black/90` rounded to where the
+   contrast measurement still clears AA with room (7.2:1 for the dimmest text on the card, read
+   back from the composited pixels, not from a token). A browser without `backdrop-filter` simply
+   gets the same colour without the blur; nothing about the card depends on it. */
+.assistant-frame {
+  border: 2px solid color-mix(in oklab, var(--color-assistant-rim) 60%, transparent);
+  background-color: transparent;
+  backdrop-filter: blur(20px);
+}
+
+.assistant-inner {
+  border: 1px solid color-mix(in oklab, var(--color-assistant-edge) 85%, transparent);
+}
+
+.assistant-divider {
+  border-color: color-mix(in oklab, var(--color-assistant-edge) 90%, transparent);
+}
+
+/* The drift is 18s and 45% of a hue step wide: at that speed the card looks lit rather than
+   animated, which is the only way a moving background belongs on a financial control room. */
+.assistant-gradient {
+  /* Each stop carries the card's 92%, because this layer IS the card's paint — an opaque gradient
+     over a translucent frame would put the glass behind a wall and undo it. */
+  background-image: linear-gradient(
+    140deg,
+    color-mix(in oklab, var(--color-assistant-card-lift) 92%, transparent) 0%,
+    color-mix(in oklab, var(--color-assistant-card) 92%, transparent) 48%,
+    color-mix(in oklab, var(--color-assistant-card-deep) 92%, transparent) 100%);
+  background-size: 200% 200%;
+  animation: assistant-drift 18s ease-in-out infinite;
+}
+
+@keyframes assistant-drift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Motes: atmosphere, never information. `translate` rather than an inset, so the whole rise runs
+   on the compositor and cannot cost a layout pass per frame on a panel that is also scrolling. */
+.assistant-mote {
+  position: absolute;
+  inset-block-end: -1rem;
+  inline-size: 0.25rem;
+  block-size: 0.25rem;
+  border-radius: 9999px;
+  background-color: color-mix(in oklab, var(--color-assistant-mote) 24%, transparent);
+  animation: assistant-rise var(--assistant-mote-duration, 16s) linear infinite;
+  animation-delay: var(--assistant-mote-delay, 0s);
+}
+
+@keyframes assistant-rise {
+  0% { translate: 0 0; opacity: 0; }
+  12% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { translate: 0 -52rem; opacity: 0; }
+}
+
+.assistant-field {
+  inline-size: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid color-mix(in oklab, var(--color-assistant-edge) 85%, transparent);
+  background-color: var(--color-assistant-well);
+  color: var(--color-shell-ink);
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.assistant-field::placeholder {
+  color: color-mix(in oklab, var(--color-shell-ink-dim) 82%, transparent);
+}
+
+.assistant-field:focus-visible {
+  outline: 2px solid var(--color-assistant-focus);
+  outline-offset: 1px;
+}
+
+/* One focus treatment for every control that sits ON the dark card. `--color-focus` was chosen
+   against paper at 50% lightness and disappears here. */
+.assistant-focus:focus-visible {
+  outline: 2px solid var(--color-assistant-focus);
+  outline-offset: 2px;
+}
+
+/* A long answer is CLAMPED, not scrolled inside its own bubble: a nested scrollport inside a
+   scrolling thread is the pattern that steals a wheel gesture and strands a person mid-answer.
+   The height is the clamp AND the measurement — the component compares `scrollHeight` against
+   the clamped `clientHeight`, so this number is never duplicated in TypeScript. */
+.assistant-clamped {
+  position: relative;
+  max-block-size: 16.25rem;
+  overflow: hidden;
+}
+
+/* The fade over a clamped answer. It is painted from the bubble's own colour so the text appears
+   to run under the edge of the card rather than behind a grey plate. */
+.assistant-clamp-fade {
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in oklab, var(--color-surface) 92%, transparent) 65%,
+    var(--color-surface) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-gradient { animation: none; }
+  .assistant-mote { display: none; }
+}
+
+/* Phones get no motes, for the same reason they get no pointer glow: atmosphere on a short
+   viewport is a smudge, and the device is the one most likely to be metering its battery. */
+@media (max-width: 63.999rem) {
+  .assistant-mote { display: none; }
+}
+
 .dialog-backdrop-safe {
   padding-inline-start: env(safe-area-inset-right);
   padding-inline-end: env(safe-area-inset-left);
@@ -1035,33 +1189,26 @@ body {
   .phone-safe-main { padding-block-end: 2rem; }
   .mobile-overlay-stack { inset-block-end: 1.5rem; }
 
+  /* A FLOATING CARD, not the full-height column it was until 01.09.2026 (owner ruling, with the
+     reference on screen). What changed with it: the panel no longer reserves a lane, so the two
+     banner rules below are gone — a 24rem card parked at the bottom corner cannot cover a
+     full-width `role="alert"` band at the top of the page, which is the hazard those rules were
+     written for on 26.08.2026.
+     The height is bounded twice: 40rem is the card's own proportion, and the viewport expression
+     keeps it clear of the top bar on a short laptop screen rather than growing under it. */
   .assistant-surface[data-assistant-mode="docked"] {
-    inset-block-start: 4.25rem;
-    inset-block-end: 0;
+    inset-block-start: auto;
+    inset-block-end: 1.5rem;
     inset-inline-start: auto;
-    inset-inline-end: 0;
-    inline-size: 27.5rem;
-    block-size: auto;
+    inset-inline-end: 1.5rem;
+    inline-size: 24rem;
+    block-size: min(40rem, calc(100dvh - 7rem));
     padding-block-start: 0;
     padding-block-end: 0;
-    border-inline-start: 1px solid var(--color-line-soft);
-    box-shadow: var(--shadow-menu);
+    border-radius: 1rem;
+    box-shadow: var(--shadow-assistant);
   }
 
-  /* The docked panel is `fixed`, so anything it overlaps has to reserve room for itself. `#main`
-     did; the read-only and offboarding banners did not, because they are SIBLINGS of `#main`
-     rather than children of it — and the panel covered them edge to edge for its full 27.5rem.
-     Measured 440×45 of a `role="alert"` band hidden behind it (26.08.2026).
-     A banner that says "you cannot write right now" is the last thing that may be obscured by a
-     panel, and the assistant is read-only itself, so the two are on screen together by design. */
-  body:has(.assistant-surface[data-assistant-mode="docked"]) #main,
-  body:has(.assistant-surface[data-assistant-mode="docked"]) > #root [role="alert"].no-print,
-  /* The benefit strip needs the same inset and is deliberately NOT an alert: a benefit that ends
-     is not an emergency. Taking `role="alert"` purely to inherit this rule would be a semantic lie
-     to a screen reader, so the class is named here instead. */
-  body:has(.assistant-surface[data-assistant-mode="docked"]) > #root .benefit-strip.no-print {
-    padding-inline-end: 29rem;
-  }
 }
 
 @media (max-width: 47.999rem) {

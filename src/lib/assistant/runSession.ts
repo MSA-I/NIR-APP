@@ -26,8 +26,17 @@ export interface AssistantRunSession {
   rawError: string | null;
   errorText: string | null;
   announcement: string;
-  /** Starts one run, or returns the already-running promise. */
-  submit: (route: string | null) => Promise<boolean>;
+  /**
+   * Starts one run, or returns the already-running promise.
+   *
+   * `askDirectly` exists for the suggested questions. Before 01.09.2026 a suggestion only filled
+   * the box and the person had to press send — while the code that owns the list said, in as many
+   * words, "Clicking one SENDS it". State could not carry the text: `setQuestion` schedules a
+   * render, and `submit` in the same handler would still read the previous value and refuse an
+   * empty question. Passing the text is the whole fix, and it keeps the trimming, the in-flight
+   * guard and the authorization epoch in one place instead of duplicating them at the call site.
+   */
+  submit: (route: string | null, askDirectly?: string) => Promise<boolean>;
   restoreHistory: (
     turns: readonly AssistantHistoryView[],
     expectedAuthorizationFingerprint: string,
@@ -110,10 +119,10 @@ export function useAssistantRunSession(
     setAnnouncement('');
   }, [authorizationFingerprint]);
 
-  const submit = useCallback((route: string | null): Promise<boolean> => {
+  const submit = useCallback((route: string | null, askDirectly?: string): Promise<boolean> => {
     if (authorizationRef.current !== authorizationFingerprint) return Promise.resolve(false);
     if (inFlightRef.current) return inFlightRef.current;
-    const trimmed = question.trim();
+    const trimmed = (askDirectly ?? question).trim();
     if (!trimmed) return Promise.resolve(false);
     const authorizationEpoch = authorizationEpochRef.current;
     setSubmittedQuestion(trimmed);

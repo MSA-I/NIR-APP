@@ -4290,6 +4290,9 @@ export const en: Dictionary = {
     updatedTo: 'Updated to ',
     screensStillWork: 'The screens keep working without the assistant:',
     whatToCheck: 'What would you like to check?',
+    showMoreAnswer: 'Show the full answer',
+    showLessAnswer: 'Show less',
+    answerTruncated: 'The answer is shortened',
   },
 
   documentStatus: {

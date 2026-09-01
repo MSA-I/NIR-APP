@@ -206,6 +206,31 @@ describe('העוזר של InPlace — הפאנל', () => {
     await waitFor(() => expect(trigger()).toHaveFocus());
   });
 
+  /* שלושת המקרים הבאים נולדו ממדידה באפליקציה החיה, 01.09.2026, ולא מקריאת קוד. */
+
+  it('ה-placeholder הוא השאלה עצמה, לעולם לא מפתח התרגום שלה', async () => {
+    // נמדד: התיבה הדפיסה „assistantDialog.exampleWhatNeedsAttention" כטקסט נראה, מפני
+    // ש-`examples` מחזיק מפתחות ולא משפטים והראשון הוגש כמות שהוא. במסך של 390 פיקסל זה גם
+    // נשבר לשתי שורות והתנגש בכפתור השליחה.
+    renderPanel();
+    await openDialog();
+    const placeholder = screen.getByLabelText('שאלה לבדיקה').getAttribute('placeholder') ?? '';
+    expect(placeholder).not.toContain('assistantDialog.');
+    expect(placeholder).toBe(he.assistantDialog.exampleWhatNeedsAttention);
+  });
+
+  it('לחיצה אחת על שאלה מוצעת שולחת אותה', async () => {
+    // נמדד: askCount נשאר 0 אחרי לחיצה — ההצעה מילאה את התיבה בלבד, בניגוד למה שההערה מעל
+    // `ROLE_EXAMPLE_KEYS` אומרת במפורש („Clicking one SENDS it").
+    ask.mockResolvedValue(makeResult());
+    renderPanel();
+    await openDialog();
+    const suggestion = he.assistantDialog.exampleCreditsPending;
+    await userEvent.click(screen.getByRole('button', { name: suggestion }));
+    await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
+    expect((ask.mock.calls[0]![0] as { question: string }).question).toBe(suggestion);
+  });
+
   it('הטריגר הוא הנצנוץ בלבד, והשם נשאר נגיש בלי טקסט נראה', () => {
     // Rewritten 25.08.2026 by owner ruling: the assistant was never named „בדיקה", and the word
     // beside the icon read like an environment tag on a live product. The case that used to pin
@@ -282,7 +307,11 @@ describe('העוזר של InPlace — הפאנל', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await openDialog();
     expect(screen.getByText('בודק את הנתונים המורשים')).toBeInTheDocument();
-    expect(screen.getByLabelText('שאלה לבדיקה')).toBeDisabled();
+    /* התיבה חסומה לעריכה בזמן ריצה, אבל **אינה** disabled: פקד מושבת אינו יכול להחזיק מיקוד,
+       ולכן הדפדפן העיף את המיקוד אל <body> — כלומר אל מחוץ לפאנל שבמובייל הוא aria-modal
+       ותלוי במלכודת מיקוד. נמדד 01.09.2026. readOnly מסרב לעריכה ומשאיר את הסמן. */
+    expect(screen.getByLabelText('שאלה לבדיקה')).toHaveAttribute('readonly');
+    expect(screen.getByLabelText('שאלה לבדיקה')).not.toBeDisabled();
     expect(ask).toHaveBeenCalledTimes(1);
 
     await act(async () => {
