@@ -143,7 +143,7 @@ describe('PortalApp', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(view()));
     render(<PortalApp />);
 
-    // #309 — the portal opens on the document plate now, so the page's h1 is the document's own
+    // #330 — the portal opens on the document plate now, so the page's h1 is the document's own
     // name plus its number, the same words the supplier saw in the email subject. Asserted as
     // a heading ON PURPOSE: the plate must not quietly become a decorative div, because this
     // is the only heading on a page whose whole job is "approve THIS order".

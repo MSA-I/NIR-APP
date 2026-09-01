@@ -5,7 +5,7 @@ export type PortalLocale = 'he' | 'en';
 export const PORTAL_COPY = {
   he: {
     pageTitle: 'אישור הזמנת רכש',
-    // The document system's two identity strings (#309). The eyebrow keeps its latin half
+    // The document system's two identity strings (#330). The eyebrow keeps its latin half
     // because Roboto Mono carries no Hebrew — see the @font-face note in src/index.css.
     docEyebrow: 'רכש · PURCHASE',
     docName: 'הזמנת רכש',

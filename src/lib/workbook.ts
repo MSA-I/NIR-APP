@@ -136,7 +136,7 @@ function readPalette(tokens: readonly string[]): Record<string, string> | null {
 }
 
 /**
- * #309 — the workbook is a DOCUMENT, so it reads the document tokens and not the screens'.
+ * #330 — the workbook is a DOCUMENT, so it reads the document tokens and not the screens'.
  *
  * The header row was oceanic because that is the app's action colour, which is the wrong claim on
  * paper: a spreadsheet head is not an action, it is the top of a table, and the document family it

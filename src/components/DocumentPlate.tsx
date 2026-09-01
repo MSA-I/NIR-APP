@@ -3,7 +3,7 @@ import { useT } from '../lib/i18n/LocaleProvider';
 import type { TKey } from '../lib/i18n/t';
 
 /**
- * The block every generated document opens with (#309).
+ * The block every generated document opens with (#330).
  *
  * ONE COMPONENT FOR FOUR SURFACES. The order sheet, the invoice card, the expense summary and the
  * monthly report each grew their own `print-only` heading, and the four had drifted: three sizes
@@ -41,7 +41,7 @@ import type { TKey } from '../lib/i18n/t';
  * coloured lockup inside a document, so the mark can never land light-on-light.
  *
  * NOT IMPLEMENTED HERE, ON PURPOSE: whether the tenant is ENTITLED to replace the mark. Today the
- * logo shows whenever one is uploaded, which is the behaviour that already shipped. `#309` states
+ * logo shows whenever one is uploaded, which is the behaviour that already shipped. `#330` states
  * the intended end state — replacement belongs to `exports.unbranded_pdf` — and reaching it needs
  * the entitlement at render time, where today it is only asked for at download time
  * (`exportWatermark()`). That is a behaviour change and does not belong in a design change.

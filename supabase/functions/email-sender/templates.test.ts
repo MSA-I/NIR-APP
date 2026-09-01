@@ -28,7 +28,7 @@ Deno.test('hebrew order email: RTL, subject, items, portal link, no ask-for-repl
   assert(rendered.html.includes(input.portalUrl), 'portal link in html');
   assert(rendered.text.includes(input.portalUrl), 'portal link in text twin');
   assert(rendered.templateVersion === TEMPLATE_VERSION, 'version stamped');
-  // #309 — the document system reached the email. The plate, the eyebrow and the filled item
+  // #330 — the document system reached the email. The plate, the eyebrow and the filled item
   // head are what make this message and the same order's PDF read as one business, so they are
   // pinned rather than left to whoever edits the markup next.
   assert(rendered.html.includes('#0a171d'), 'the plate is drawn');

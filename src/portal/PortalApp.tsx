@@ -280,7 +280,7 @@ function Shell({ children, orgName, locale, onSwitchLocale }: {
   return (
     <div className="min-h-dvh bg-canvas" dir={locale === 'he' ? 'rtl' : 'ltr'}>
       <main className="mx-auto max-w-3xl px-4 py-6">
-        {/* #309 — the identity moved into the document plate below, where the supplier reads the
+        {/* #330 — the identity moved into the document plate below, where the supplier reads the
             same heading they saw in the email and will see on the PDF. What stays here is the one
             thing that is not part of the document: the language toggle. The states with no order
             (invalid, locked, error) have no document to head, so they keep their own card. */}
@@ -307,7 +307,7 @@ function OrderHeader({ view, locale }: { view: PortalView; locale: PortalLocale 
   const copy = PORTAL_COPY[locale];
   return (
     <div>
-      {/* The same plate the order's PDF and email open with (#309). The supplier is looking at one
+      {/* The same plate the order's PDF and email open with (#330). The supplier is looking at one
           document in a third frame, so it carries the family's own colour, eyebrow and mark rather
           than a screen heading. The eyebrow is passed in: the portal owns its vocabulary and its
           language toggle, and is not inside LocaleProvider. */}

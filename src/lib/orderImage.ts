@@ -57,7 +57,7 @@ export function orderImageFileName(order: WhatsAppOrder): string {
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /**
- * The order as one picture, in the document system (#309).
+ * The order as one picture, in the document system (#330).
  *
  * SAME FAMILY AS THE PDF AND THE EMAIL. This image and the order sheet are the same document in
  * three frames, so it opens on the same onyx plate with the same eyebrow and the same filled table

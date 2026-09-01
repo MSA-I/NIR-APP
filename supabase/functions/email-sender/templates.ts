@@ -9,7 +9,7 @@
 // The supplier sees RAW product wording (the 0149 rule) -- the snapshot already carries it.
 
 /**
- * 2 — the document system (#309). The wording did not move; the dressing did, so an order that
+ * 2 — the document system (#330). The wording did not move; the dressing did, so an order that
  * arrives by email and the same order as a PDF now read as one business. Bumped because this file
  * says a change here bumps it, and because `email_order_messages.template_version` is what lets a
  * delivered message be traced back to the markup that produced it.
@@ -59,7 +59,7 @@ function fmtDate(value: string | null, locale: TemplateLocale): string {
 
 interface Copy {
   subject: (n: number, org: string, revised: boolean) => string;
-  /** The family, in words, in the plate's corner — the document system's eyebrow (#309). */
+  /** The family, in words, in the plate's corner — the document system's eyebrow (#330). */
   eyebrow: string;
   /** The document's own name. The subject still carries the number and the org; this does not. */
   heading: (revised: boolean) => string;

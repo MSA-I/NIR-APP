@@ -81,7 +81,7 @@ export async function closeBrowser() {
  * embedded as PNG because pdf-lib draws raster or vector paths, not SVG documents; at 8% opacity
  * across a page it never competes with a figure the reader has to trust.
  *
- * ─── IT SITS ON THE PAPER, NOT ACROSS THE PLATE (#309) ───────────────────────────────────────
+ * ─── IT SITS ON THE PAPER, NOT ACROSS THE PLATE (#330) ───────────────────────────────────────
  * Until the document system landed, every page was white end to end and centring the mark on the
  * page was the same thing as centring it on paper. It is not any more: each document now opens on
  * a plate that can be near-black, and a mark in the paper's own dark ink laid over that plate is

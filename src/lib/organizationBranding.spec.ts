@@ -70,7 +70,7 @@ describe('organization branding wiring', () => {
 
   it('uses the tenant logo in the authenticated shell and in every generated document', () => {
     expect(read('src/components/Layout.tsx')).toContain("from('organization-branding').getPublicUrl");
-    // #309 moved the four printed headings onto one plate, so the logo has one render site and
+    // #330 moved the four printed headings onto one plate, so the logo has one render site and
     // the contract widened with it: the report is no longer the only document that carries it.
     expect(read('src/components/DocumentPlate.tsx')).toContain('data-testid="document-org-logo"');
     for (const page of ['Reports.tsx', 'Orders.tsx', 'Expenses.tsx', 'InvoiceDetail.tsx']) {
