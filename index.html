@@ -3,6 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Belt and braces behind public/_headers, which carries X-Robots-Tag: noindex on /*.
+         The header is the one that matters for a single-page application; this tag is what a
+         reader of the source sees, and what survives if the document is ever served from
+         somewhere that does not read Cloudflare Pages headers. portal.html has carried this
+         tag since it shipped; the tenant shell and the operator console had nothing. -->
+    <meta name="robots" content="noindex, nofollow" />
     <!-- The LIGHT ground. `appearance.ts` rewrites this at runtime by READING `--color-canvas`,
          precisely so the browser chrome cannot drift from the palette — and this line is the one
          place that still has to state the colour, because it is needed before any stylesheet has

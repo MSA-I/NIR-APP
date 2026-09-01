@@ -1,0 +1,63 @@
+# Asks the LIVE host whether it is still refusing to be a search surface.
+#
+# WHY THIS IS A SCHEDULED JOB AND NOT A STEP IN build.yml. The claim being made here is about
+# production, not about a pull request. A PR cannot change what app.inplace.digital is serving,
+# and running this on every PR would only mean that the day production drifts is the day an
+# unrelated branch turns red. Its repository-side twin, `check:noindex-posture`, does run on
+# every PR and proves the tree still says the right thing — which is a different claim, and the
+# weaker one. The marketing repository already paid for that distinction: its build gate asserted
+# a property of a file in the repository while the host served something else for days.
+#
+# WHY IT MAY BE RED WHEN YOU FIRST SEE IT. On 01.09.2026 the host had no X-Robots-Tag, no meta
+# tag and no real robots.txt, and the repository fix cannot reach it without a frontend
+# deployment. Red here means "not deployed yet", and it goes green on the deploy — that is the
+# job doing exactly what it is for, not a broken workflow.
+#
+# Read-only: eight GETs per origin, no credentials, nothing submitted. It needs no npm install,
+# because the script uses only Node built-ins.
+name: live-seo-posture
+
+on:
+  schedule:
+    # Daily. Slow drift is the failure mode here — a deploy from an older tree, a Cloudflare
+    # setting changed by hand — and none of it announces itself.
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+    inputs:
+      origins:
+        description: 'Comma-separated origins to probe (default: the app host and its pages.dev alias)'
+        required: false
+        type: string
+
+concurrency:
+  group: live-seo-posture
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Probe the live host for noindex posture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # public/robots.txt is the expectation the served bytes are compared against, so the
+      # checkout above is not decoration: this must run against the tree, not against a string
+      # pinned inside the script. When the owner flips the file to `Disallow: /` after Search
+      # Console reports the URLs gone, this job needs no edit at all.
+      - name: Ask app.inplace.digital
+        run: node scripts/check-live-seo-posture.mjs --origins "${ORIGINS:-https://app.inplace.digital,https://supplyflow-baq.pages.dev}"
+        env:
+          ORIGINS: ${{ inputs.origins }}
+
+      - name: Upload the observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-seo-posture
+          path: artifacts/seo-noindex/live-seo-posture.json
+          if-no-files-found: warn

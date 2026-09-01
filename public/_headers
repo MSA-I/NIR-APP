@@ -1,0 +1,24 @@
+# app.inplace.digital is an application behind a login. It is not a search surface, and it was
+# competing with the marketing site at inplace.digital for the company's own brand name: the
+# served <title> is "InPlace", every route answered 200 text/html to anyone, and Cloudflare's AI
+# Crawl Control recorded crawlers hitting the host (measured on the live host, 01.09.2026).
+#
+# THE HEADER IS THE PRIMARY INSTRUCTION, not the <meta name="robots"> tag in the three HTML
+# entries. Two reasons, both structural:
+#   1. This is a single-page application. A crawler that fetches the document and never executes
+#      the bundle still reads a response header; a meta tag only helps once something rendered.
+#   2. `_redirects` ends with `/* /index.html 200`, so paths that were never pages -- /sitemap.xml
+#      is the live example, requested 15 times in 24 hours -- are answered with an HTML document.
+#      A header on `/*` covers those; a tag in index.html covers them only by accident.
+# The meta tags stay as belt and braces. They do not conflict.
+#
+# ORDERING, and it is easy to get backwards: public/robots.txt deliberately ALLOWS crawling. A
+# `Disallow: /` would stop the crawler fetching these pages at all, so it would never see this
+# header, and URLs already in the index would persist as bare links. Allow first, noindex, and
+# only disallow once the index is empty. That reasoning is written into robots.txt itself.
+#
+# Cloudflare Pages reads this file from the root of the published output. Vite copies public/
+# there verbatim, so it ships with every build and covers all three HTML entries -- the tenant
+# shell, /operator and /portal -- plus every asset and every SPA-fallback path.
+/*
+  X-Robots-Tag: noindex, nofollow
