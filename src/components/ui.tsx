@@ -1361,7 +1361,7 @@ export function Modal({ open, onClose, title, children, wide, busy = false, allo
   // z-50 *inside* a z-40 context and the mobile action bar (also z-40, later in the DOM) sat on
   // top of the send button. The browser gate caught it: the tap landed on 'פעולות מהירות'.
   return createPortal(
-    <div className="dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-shell/50 p-0 sm:p-4" onClick={() => requestClose()}>
+    <div className="dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-scrim p-0 sm:p-4" onClick={() => requestClose()}>
       <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined} aria-busy={busy || undefined} tabIndex={-1}
         className={`dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'} flex flex-col focus:outline-none`}

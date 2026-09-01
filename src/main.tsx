@@ -6,7 +6,7 @@ import App from './App';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './auth/AuthContext';
 import { LocaleProvider, useT } from './lib/i18n/LocaleProvider';
-import { ProfileLocaleSync } from './lib/i18n/profileLocale';
+import { ProfilePreferencesSync } from './lib/profilePreferences';
 import { ToastProvider } from './components/ui';
 import { initObservability } from './lib/observability';
 import { createAppQueryClient } from './lib/query/client';
@@ -70,8 +70,14 @@ createRoot(document.getElementById('root')!).render(
             person's saved choice arrives afterwards through ProfileLocaleSync. */}
         <LocaleProvider>
           <AuthProvider>
-            <ProfileLocaleSync />
+            {/* INSIDE ToastProvider, not beside it (31.08.2026). This component owns both halves of
+                BOTH preference bridges — language and appearance: adopting what the account holds,
+                and binding the write queues the controls share. The second half reports a failed save, so it
+                needs `useToast` — and a toast provider it is not a descendant of cannot be asked.
+                Nothing was lost by moving it: it renders null, and effects run child-first either
+                way. */}
             <ToastProvider bottomNotice={<ServiceWorkerUpdateNotice />}>
+              <ProfilePreferencesSync />
               <App />
             </ToastProvider>
           </AuthProvider>

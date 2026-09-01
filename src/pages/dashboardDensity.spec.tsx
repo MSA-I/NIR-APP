@@ -231,7 +231,12 @@ describe('מרכז הבקרה — מה עדיין כרטיס ומה כבר לא'
     const heading = await screen.findByText('משימות לפי תפקיד');
     const darkCard = heading.closest('section');
     expect(darkCard).not.toBeNull();
-    expect(darkCard!.className).toContain('bg-shell');
+    // `bg-inverse`, not `bg-shell`, since 31.08.2026. The token was renamed when `--color-shell*`
+    // was split into the six jobs it had been serving at once: this card is the INVERSE-SURFACE
+    // family — a surface whose job is to be the opposite of the page — which is what lets it flip
+    // to a LIGHT card in the dark theme (owner ruling #331(ב): intent over appearance). The test's
+    // subject is unchanged: the queues render once, inside this one card.
+    expect(darkCard!.className).toContain('bg-inverse');
     // The queues render once: their labels exist only inside the dark card.
     expect(screen.getAllByText('משימות לפי תפקיד')).toHaveLength(1);
     expect(screen.getByText('דרישות לאישור הנהלה').closest('section')).toBe(darkCard);

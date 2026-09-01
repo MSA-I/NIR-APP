@@ -212,16 +212,33 @@ describe('סימן המותג', () => {
    * In the header it produced a dark tile inside a white plate inside a pill. Owner:
    * "הלוגו צריך להיות ללא הריבוע הכהה הוא צריך להיות כמו ה FAVICON".
    */
-  it('הסימן שלנו הוא ה-favicon החשוף — בלי ריבוע כהה, בלי לוחית לבנה ובלי טבעת', () => {
+  /**
+   * The ASSERTION changed on 31.08.2026 and the RULING did not. The mark is no longer an
+   * `<img src="/favicon.svg">` but an inline `<svg>`, because an external SVG is a separate document
+   * and cannot inherit `currentColor` — which is what the owner's later ruling ("the logo follows the
+   * ground") requires. So this test keeps checking the thing he actually asked for — the bare mark,
+   * no plate, no ring — against the implementation that now delivers it, and adds the two properties
+   * the inline form has to have.
+   */
+  it('הסימן שלנו הוא הסמל החשוף — בלי ריבוע כהה, בלי לוחית לבנה ובלי טבעת', () => {
     renderAt();
-    const marks = [...document.querySelectorAll('header img, aside img')];
+    const marks = [...document.querySelectorAll('header svg[aria-hidden="true"], aside svg[aria-hidden="true"]')]
+      .filter((svg) => svg.querySelector('path[d^="M 1669.44"]') !== null);
     expect(marks.length).toBeGreaterThan(0);
     for (const mark of marks) {
-      expect(mark.getAttribute('src')).toBe('/favicon.svg');
-      expect(mark.className).not.toContain('bg-white');
-      expect(mark.className).not.toContain('ring-');
-      expect(mark.className).not.toContain('rounded');
+      // Follows its ground rather than carrying an ink of its own.
+      expect(mark.getAttribute('fill')).toBe('currentColor');
+      // Decorative: the desktop bar and the drawer are both mounted, so a <title> here would be a
+      // duplicated id and a name read twice. The name lives on the wrapping <Link>.
+      expect(mark.querySelector('title')).toBeNull();
+      expect(mark.getAttribute('class') ?? '').not.toContain('bg-white');
+      expect(mark.getAttribute('class') ?? '').not.toContain('ring-');
+      expect(mark.getAttribute('class') ?? '').not.toContain('rounded');
     }
+    // And OUR mark is never an <img> any more — a tenant's uploaded logo still is.
+    const ourImages = [...document.querySelectorAll('header img, aside img')]
+      .filter((img) => (img.getAttribute('src') ?? '').includes('favicon'));
+    expect(ourImages).toEqual([]);
   });
 
   /** Owner: "תקטין את הגודל של הלוגו". Both bars now run the identical 28px mark. */
@@ -232,10 +249,14 @@ describe('סימן המותג', () => {
    */
   it('הסימן נשאר בגלולת הדסקטופ ב-28, ואינו בסרגל הטלפון כלל', () => {
     renderAt();
-    const desktopMark = desktopHeader().querySelector('img') as HTMLImageElement;
-    expect(desktopMark.getAttribute('width')).toBe('28');
-    expect(desktopMark.className).toContain('size-7');
+    // `svg`, not `img`, since 31.08.2026 — the mark is inline so it can follow its ground. Both
+    // rulings this test guards are unchanged: 28px, and nothing on the phone bar.
+    const desktopMark = desktopHeader().querySelector('svg[aria-hidden="true"][fill="currentColor"]');
+    expect(desktopMark).not.toBeNull();
+    expect(desktopMark?.getAttribute('width')).toBe('28');
+    expect(desktopMark?.getAttribute('class') ?? '').toContain('size-7');
     expect(phoneHeader().querySelector('img')).toBeNull();
+    expect(phoneHeader().querySelector('svg[fill="currentColor"]')).toBeNull();
   });
 
   /**

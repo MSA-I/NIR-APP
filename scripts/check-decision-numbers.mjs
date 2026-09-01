@@ -136,7 +136,12 @@ try {
   // above was by file EXTENSION, which is why `color:#666` in an inline HTML email template
   // read as a ruling: activation-email.ts is TypeScript that emits styles. Match the property
   // instead of the filename -- that is what the comment above already claims to be doing.
+  // Two shapes, because a colour is written two ways. `color:#666` is the CSS declaration; the
+  // canvas API assigns instead -- `ctx.fillStyle = '#000'` -- and check-contrast-rendered.mjs is
+  // full of exactly that, being a contrast checker. Neither is a citation. The quote before the
+  // `#` is what makes the second safe: a real citation is never written `= '#331'`.
   const CSS_COLOUR = /(?:color|background|background-color|fill|stroke|border|border-color|outline|box-shadow|text-shadow|stop-color|caret-color)\s*:\s*$/i;
+  const COLOUR_ASSIGNED = /(?:fillStyle|strokeStyle|shadowColor|backgroundColor|borderColor|Color)\s*=\s*['"`]$/i;
   codeCitations = out.split(String.fromCharCode(10)).filter(Boolean).flatMap((hit) => {
     const parts = hit.split(':');
     const lineNo = parts.at(1);
@@ -145,7 +150,8 @@ try {
     const found = [];
     for (const m of text.matchAll(/#([0-9]{3})([0-9a-fA-F]*)/g)) {
       if (m[2].length) continue;                                   // #4338ca is a colour, #7702 an order
-      if (CSS_COLOUR.test(text.slice(Math.max(0, m.index - 24), m.index))) continue;
+      const before = text.slice(Math.max(0, m.index - 24), m.index);
+      if (CSS_COLOUR.test(before) || COLOUR_ASSIGNED.test(before)) continue;
       found.push({ file, lineNo, token: m[1] });
     }
     return found;

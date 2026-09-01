@@ -1,5 +1,11 @@
 <!doctype html>
-<html lang="he" dir="rtl">
+<!-- `data-theme="light"` is DECLARED, not merely absent (ADR-0010). This document is
+     the public, no-login supplier portal, it shares `src/index.css` with the tenant app, and it has
+     no theme switch. Relying on "the attribute is never set here" would be a negative
+     contract: one future shared import, or any code that writes the attribute from a
+     module both entries happen to load, and a public page turns dark with nobody having
+     touched this file. `scripts/check-appearance-scope.mjs` asserts this line. -->
+<html lang="he" dir="rtl" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />

@@ -271,5 +271,6 @@
   "0279_a_document_carries_the_actor_that_made_it.sql",
   "0280_a_number_that_can_receive_a_document.sql",
   "0281_subscription_activation_email.sql",
-  "0282_invitation_is_a_proven_address_not_a_password.sql"
+  "0282_invitation_is_a_proven_address_not_a_password.sql",
+  "0283_profile_theme.sql"
 ]
