@@ -1,4 +1,4 @@
--- 0280 -- the product email that follows a verified subscription activation, owed exactly once.
+-- 0281 -- the product email that follows a verified subscription activation, owed exactly once.
 --
 -- WHAT THIS IS FOR, AND WHAT PADDLE KEEPS. Paddle is the merchant of record (#207): it charged the
 -- customer, so it owes the receipt, the invoice and the tax document, and it sends them. InPlace
@@ -55,7 +55,7 @@ create index subscription_activation_emails_pending_idx
   where status in ('pending', 'sending');
 
 comment on table private.subscription_activation_emails is
-  'One row per organization, ever: the product email owed after a verified paid activation (0280). '
+  'One row per organization, ever: the product email owed after a verified paid activation (0281). '
   'Paddle keeps the receipt; this is the plan-is-live sentence. The primary key is what makes a '
   'redelivery, a resume and a later re-activation all send nothing.';
 
@@ -175,7 +175,7 @@ begin
          updated_at = now()
    where org_id = p_org_id;
 
-  -- THE ONLY NEW LINE IN THIS BODY (0280). Everything above is 0187 verbatim.
+  -- THE ONLY NEW LINE IN THIS BODY (0281). Everything above is 0187 verbatim.
   --
   -- An activation that reached this point is verified, attributed and applied. Recording that the
   -- organization is owed one activation email HERE, inside the same transaction as the entitlement
@@ -322,7 +322,7 @@ begin
     where n.nspname = 'private' and t.relname = 'subscription_activation_emails'
       and c.contype = 'p' and array_length(c.conkey, 1) = 1
   ) then
-    raise exception '0280: the activation ledger must be keyed on the organization alone';
+    raise exception '0281: the activation ledger must be keyed on the organization alone';
   end if;
 
   -- No tenant-reachable role may read or write the ledger or run its commands.
@@ -331,13 +331,13 @@ begin
     where table_schema = 'private' and table_name = 'subscription_activation_emails'
       and grantee in ('anon', 'authenticated', 'service_role', 'PUBLIC')
   ) then
-    raise exception '0280: the activation ledger is reachable by a role that must not see it';
+    raise exception '0281: the activation ledger is reachable by a role that must not see it';
   end if;
   if has_function_privilege('authenticated',
        'public.service_claim_subscription_activation_email()', 'EXECUTE')
      or has_function_privilege('anon',
        'public.service_claim_subscription_activation_email()', 'EXECUTE') then
-    raise exception '0280: the activation-email claim is executable by a tenant role';
+    raise exception '0281: the activation-email claim is executable by a tenant role';
   end if;
 
   -- The transition still resolves its plan from the price MAP, not from the payload. Rewriting a
@@ -345,7 +345,7 @@ begin
   if position('billing_provider_price_map' in
       replace(pg_get_functiondef('private.billing_apply_subscription_state(uuid,jsonb,uuid,text,boolean)'::regprocedure),
               chr(13), '')) = 0 then
-    raise exception '0280: the activation transition no longer resolves its plan from the price map';
+    raise exception '0281: the activation transition no longer resolves its plan from the price map';
   end if;
 
   -- And it is still SECURITY DEFINER with a pinned search_path. A create-or-replace that dropped
@@ -355,12 +355,12 @@ begin
     where n.nspname = 'private' and p.proname = 'billing_apply_subscription_state'
       and p.prosecdef and 'search_path=public, pg_temp' = any(p.proconfig)
   ) then
-    raise exception '0280: the activation transition lost SECURITY DEFINER or its search_path';
+    raise exception '0281: the activation transition lost SECURITY DEFINER or its search_path';
   end if;
 
   -- Merging this file is not billing activation. If it ever is, this assertion is the alarm.
   if private.billing_provider_enabled('paddle') then
-    raise exception '0280: paddle is enabled; this migration must not be the thing that did it';
+    raise exception '0281: paddle is enabled; this migration must not be the thing that did it';
   end if;
 
   -- The 0057 gate, re-run as every migration after it must. This file adds a table and three
@@ -368,7 +368,7 @@ begin
   select string_agg(detail, chr(10) order by detail)
     into v_violations from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception '0280 scope assertions failed: %', v_violations;
+    raise exception '0281 scope assertions failed: %', v_violations;
   end if;
 end
 $assert$;

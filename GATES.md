@@ -70,7 +70,7 @@ and delivered by Paddle over the internet to the deployed `billing-webhook` sour
 - [x] C1 — ‏Reply-To: מייל מוצר → `support@`; הזמנה לספק → הדייר
 - [x] C2 — הכתובת נפתרת מזהות מאומתת בשרת, מאומתת מול header injection, ‏fallback מתועד (`#309`)
 - [x] C3 — משטח תמיכה במוצר (`/settings`, `/settings/subscription`)
-- [x] C4 — מייל הפעלת מנוי אידמפוטנטי (`0280` + `billing-webhook`)
+- [x] C4 — מייל הפעלת מנוי אידמפוטנטי (`0281` + `billing-webhook`)
 - [x] C5 — בדיקות לכל אחד מהסעיפים
 - [~] **הוסר מהענף:** פעולות Paddle החיות ב-`billing-adapter.ts` ובדיקותיהן. הן קיימות בענף
       המקביל, ביחד עם מיפוי המחירים ו-`billing-checkout`.

@@ -24,7 +24,7 @@
 //   BILLING_PROVIDER          -- which provider this deployment serves; 'paddle'
 //   PADDLE_WEBHOOK_SECRET     -- the notification destination's endpoint secret (pdl_ntfset_...)
 //   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY -- injected by the platform
-// Optional, and only for the activation email (0280). Absent, events are still processed and the
+// Optional, and only for the activation email (0281). Absent, events are still processed and the
 // owed email simply waits in the ledger:
 //   RESEND_API_KEY / INVITE_FROM_EMAIL / APP_BASE_URL
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.91.1';
@@ -43,7 +43,7 @@ const EMAIL_PROVIDER_TIMEOUT_MS = 15_000;
  * fact with its own row and its own retry. A webhook that answered 500 because a mail server was
  * slow would make Paddle redeliver an event it has already applied.
  *
- * WHY IT CANNOT SEND TWICE. The claim takes a lease inside the database (0280), and the ledger is
+ * WHY IT CANNOT SEND TWICE. The claim takes a lease inside the database (0281), and the ledger is
  * keyed on the organization, so the debt exists at most once in the first place. Resend's
  * Idempotency-Key is a second belt covering a retry inside twenty-four hours; the primary key is
  * what covers the three days Paddle keeps redelivering for.
