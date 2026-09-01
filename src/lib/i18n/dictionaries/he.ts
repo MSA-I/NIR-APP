@@ -6118,6 +6118,13 @@ export const he = {
     title: 'המנוי שלי',
   },
 
+  support: {
+    productLead: 'צריכים עזרה?',
+    productSubject: 'פנייה לתמיכה — InPlace',
+    billingLead: 'שאלה על חיוב, חשבונית או מסלול:',
+    billingSubject: 'פנייה בנושא חיוב — InPlace',
+  },
+
   charts: {
     noRecords: 'אין רשומות',
     total: 'סה״כ',

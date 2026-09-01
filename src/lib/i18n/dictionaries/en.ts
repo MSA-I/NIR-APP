@@ -6110,6 +6110,13 @@ export const en: Dictionary = {
     title: 'My subscription',
   },
 
+  support: {
+    productLead: 'Need help?',
+    productSubject: 'Support request — InPlace',
+    billingLead: 'A question about a charge, an invoice or a plan:',
+    billingSubject: 'Billing question — InPlace',
+  },
+
   charts: {
     noRecords: 'no records',
     total: 'Total',

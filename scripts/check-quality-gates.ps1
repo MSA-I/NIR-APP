@@ -785,6 +785,12 @@ function Invoke-OcrEdgeSmoke {
 }
 
 function Invoke-InterpretDocumentContractTests {
+  # 31.08.2026 -- three suites joined this list that had existed for days and were run by NO gate:
+  # email-webhook/core.test.ts (the signed Resend delivery webhook), billing-webhook/core.test.ts
+  # (the signed billing webhook) and email-sender/templates.test.ts. A green CI run was never a
+  # claim about any of them, which is the same class of quiet gap DEBT §34 records for the five
+  # PowerShell checkers. Two new suites joined at the same time: the Reply-To boundary and the
+  # activation-email template.
   Write-Gate "Document automation and branding upload security contracts"
   $previousPreference = $ErrorActionPreference
   try {
@@ -799,6 +805,11 @@ function Invoke-InterpretDocumentContractTests {
       (Join-Path $repoRoot "supabase\functions\_shared\organization-egress.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\reserved-egress.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\billing-adapter.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\_shared\reply-to.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\_shared\activation-email.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\email-webhook\core.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\billing-webhook\core.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\email-sender\templates.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\provision.test.ts") `
       (Join-Path $repoRoot "supabase\functions\_shared\edge-organization-access-wiring.test.ts") `
       (Join-Path $repoRoot "supabase\functions\document-processing\contract_test.ts") `
@@ -1498,6 +1509,7 @@ try {
     Invoke-SqlTest "supabase\tests\p96_countdown_events.sql" "The benefit strip can report three things and no more, and cannot widen its own ceiling: a thousand repeats leave one row because the idempotency key is derived from tenant event window and day, an unknown event name and an unknown property key are both refused by name rather than dropped, a long or non-string property value is refused, the organisation comes from auth_org and never the payload, an office user and an owner with no window are both refused, and the two server-observed facts are not defined as client events"
     Invoke-SqlTest "supabase\tests\p101_a_document_with_no_human.sql" "A document nobody uploaded, and every way it must not become one: the actor rule holds in BOTH directions on all three tables so a browser upload with no uploader is refused alongside an email document that names one, a job cannot claim a different source than its document because the composite key makes the mismatch unstorable, an image with no human finally reaches the scan queue that 0136 closed to it, and the ingest command -- called by service_role, which reads every tenant -- refuses another tenant's object, a stale lease token, an object whose version moved under it and a closed channel, while a replay returns the same document rather than a second one; plus a sibling legal entity that cannot see the other's post, a platform boundary no product role including service_role can write, and a claimer that stopped requiring a human without losing the active owner/office requirement it had for browser uploads"
     Invoke-SqlTest "supabase\tests\p102_a_number_that_can_receive.sql" "A WhatsApp number that can receive a document, and the four ways it must not: the prefixed spelling of a number that already has a row is refused by shape so one number cannot become two identities and a lookup cannot miss a tenant that exists, while a meta_cloud connection keeps using an id rather than a phone number; receiving is refused without a route because an inbound document has no uploader and would otherwise be org-wide across sibling legal entities; a whatsapp connection cannot borrow an email route and inherit its legal entity; and with the tenant's connection active, its route live and its flag on, the door STAYS SHUT until the platform boundary opens it -- each tenant-side condition then closing it again one at a time. Plus the intake size limit reading the bucket rather than copying it, a dead-letter reason drawn from a closed list instead of a typed sentence, and the provider-side media deletion #317 promises proved to be a retried row that cannot claim success without evidence"
+    Invoke-SqlTest "supabase\tests\p103_subscription_activation_email.sql" "The welcome email a paid activation owes is owed exactly once: the first verified activation records a debt addressed to the owner resolved from our own tables while a payload that names its own recipient changes nothing, a redelivered or resumed activation records no second row across a window longer than any provider idempotency header, a claim leases the row so a concurrent sender finds nothing, a replayed settlement is a no-op rather than a second send, an organization whose welcome already went out never becomes claimable again, an organization with no active owner records no debt and still receives the plan it paid for, and no tenant role can run either command"
     Invoke-SqlTest "supabase\tests\payment_credit_override.sql" "Payment approval with legal-entity scoped open-credit override"
     Invoke-SqlTest "supabase\tests\monthly_report_snapshots.sql" "Immutable legal-entity monthly accountant snapshots"
     Invoke-Preflight
