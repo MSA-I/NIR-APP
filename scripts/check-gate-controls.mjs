@@ -172,6 +172,22 @@ console.log('\ncheck:renumber-closure');
   mustPass('the real tree still passes', 'check-renumber-closure.mjs', {});
 }
 
+// ============================================================ key manifest
+console.log('\ncheck:key-manifest');
+{
+  mustFail('a key that loses its last production call site is caught', 'check-key-manifest.mjs', {
+    env: { KEY_MANIFEST_INJECT: 'strand' },
+    expect: 'LOST their last production call site',
+  });
+  // The attack a count cannot see: wire one orphan and strand another in the same wave, and
+  // the total never moves. Names move, so this must still fail.
+  mustFail('stranding one key while wiring another is caught (total unchanged)', 'check-key-manifest.mjs', {
+    env: { KEY_MANIFEST_INJECT: 'offset' },
+    expect: 'LOST their last production call site',
+  });
+  mustPass('the real dictionary still passes', 'check-key-manifest.mjs', {});
+}
+
 rmSync(scratch, { recursive: true, force: true });
 
 console.log('');

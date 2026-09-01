@@ -40,6 +40,7 @@ jobs:
       mignumbers: ${{ steps.filter.outputs.mignumbers }}
       closure: ${{ steps.filter.outputs.closure }}
       gatecontrols: ${{ steps.filter.outputs.gatecontrols }}
+      keymanifest: ${{ steps.filter.outputs.keymanifest }}
       supplier: ${{ steps.filter.outputs.supplier }}
       nosend: ${{ steps.filter.outputs.nosend }}
       vitest: ${{ steps.filter.outputs.vitest }}
@@ -92,13 +93,16 @@ jobs:
           migration_number_inputs='^(supabase/migrations/|scripts/check-migration-numbers\.mjs$)'
           closure_inputs='^(supabase/migrations/|supabase/tests/|supabase/functions/|docs/|scripts/|src/)'
           gate_control_inputs='^scripts/check-(suite-manifest|migration-numbers|renumber-closure|gate-controls)\.mjs$'
+          # Any src change can strand a key, so the whole surface is an input, plus the
+          # dictionary itself and this guard's own baseline.
+          key_manifest_inputs='^(src/|scripts/check-key-manifest\.mjs$|scripts/key-manifest\.baseline\.json$)'
 
           if [ ! -s changed-files.txt ] || product_matches "$build_common|$build_inputs"; then
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
             echo "build=false" >> "$GITHUB_OUTPUT"
           fi
-          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$token_inputs|$money_inputs|$exemption_inputs|$supplier_inputs|$nosend_inputs|$vitest_inputs|$gate_registry|$migration_number_inputs|$closure_inputs|$gate_control_inputs"; then echo "verify=true" >> "$GITHUB_OUTPUT"; else echo "verify=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$token_inputs|$money_inputs|$exemption_inputs|$supplier_inputs|$nosend_inputs|$vitest_inputs|$gate_registry|$migration_number_inputs|$closure_inputs|$gate_control_inputs|$key_manifest_inputs"; then echo "verify=true" >> "$GITHUB_OUTPUT"; else echo "verify=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$vitest_inputs"; then echo "install=true" >> "$GITHUB_OUTPUT"; else echo "install=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$knip_inputs"; then echo "knip=true" >> "$GITHUB_OUTPUT"; else echo "knip=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-design-tokens\.ts$" || product_matches '^src/'; then echo "tokens=true" >> "$GITHUB_OUTPUT"; else echo "tokens=false" >> "$GITHUB_OUTPUT"; fi
@@ -108,6 +112,7 @@ jobs:
           if [ ! -s changed-files.txt ] || matches "$workflow|$migration_number_inputs"; then echo "mignumbers=true" >> "$GITHUB_OUTPUT"; else echo "mignumbers=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$closure_inputs"; then echo "closure=true" >> "$GITHUB_OUTPUT"; else echo "closure=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$gate_control_inputs"; then echo "gatecontrols=true" >> "$GITHUB_OUTPUT"; else echo "gatecontrols=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$key_manifest_inputs"; then echo "keymanifest=true" >> "$GITHUB_OUTPUT"; else echo "keymanifest=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-supplier-columns\.ts$" || product_matches '^src/'; then echo "supplier=true" >> "$GITHUB_OUTPUT"; else echo "supplier=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$nosend_inputs"; then echo "nosend=true" >> "$GITHUB_OUTPUT"; else echo "nosend=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$vitest_config|$vitest_inputs"; then echo "vitest=true" >> "$GITHUB_OUTPUT"; else echo "vitest=false" >> "$GITHUB_OUTPUT"; fi
@@ -183,6 +188,9 @@ jobs:
       - name: Renumber-closure guard (the number lives in the body, not the filename)
         if: needs.changes.outputs.closure == 'true'
         run: npm run check:renumber-closure
+      - name: Key-manifest guard (which key lost its reader, not how many)
+        if: needs.changes.outputs.keymanifest == 'true'
+        run: npm run check:key-manifest
       - name: Gate controls (each guard must fail on a broken input)
         # Runs whenever ANY guard it validates runs. Relying on a guard's verdict without
         # proof that the guard still fails correctly is how a guard becomes decoration —
@@ -192,7 +200,8 @@ jobs:
           needs.changes.outputs.gatecontrols == 'true' ||
           needs.changes.outputs.suitemanifest == 'true' ||
           needs.changes.outputs.mignumbers == 'true' ||
-          needs.changes.outputs.closure == 'true'
+          needs.changes.outputs.closure == 'true' ||
+          needs.changes.outputs.keymanifest == 'true'
         run: npm run check:gate-controls
       - name: Vitest
         if: needs.changes.outputs.vitest == 'true'
