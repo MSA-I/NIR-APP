@@ -1,8 +1,9 @@
--- 0279 — a WhatsApp number that can receive a document, and the four ways it must not.
+-- 0280 — a WhatsApp number that can receive a document, and the four ways it must not.
 --
 -- #321 (owner, 31.08.2026) reversed half of #241: an image or PDF sent to a tenant's WhatsApp
 -- number becomes an inbox document. Text stays exactly where #241 left it -- no automation, no
--- reply. This migration is the database half of that; 0281 already built the contract that lets
+-- reply. This migration is the database half of that; the actor-intake migration
+-- (0279_a_document_carries_the_actor_that_made_it.sql) already built the contract that lets
 -- a document exist with no human behind it.
 --
 -- WHAT THIS IS NOT: it is not an activation. `private.inbound_channel_boundary` still says
@@ -17,7 +18,8 @@
 --      misses a tenant that exists. The canonical form is bare E.164 and a CHECK says so.
 --
 --   2. A CONNECTION WITHOUT A ROUTE CANNOT RECEIVE. An inbound document has no uploader and so
---      no scope of its own; 0281 puts that scope on the route. A connection that has no route
+--      no scope of its own; the actor-intake migration puts that scope on the route. A
+--      connection that has no route
 --      would produce a document with a null unit -- organisation-wide, visible across sibling
 --      legal entities. So receiving is gated on the route existing, structurally.
 --
@@ -44,7 +46,7 @@ update public.whatsapp_connections
    and provider_sender_id is not null
    and provider_sender_id ~ '^[A-Za-z]+:';
 
-do $sender_shape_0279$
+do $sender_shape_0280$
 begin
   if not exists (select 1 from pg_constraint
                  where conname = 'whatsapp_connections_twilio_sender_is_e164') then
@@ -55,7 +57,7 @@ begin
         or provider_sender_id ~ '^\+[1-9][0-9]{6,14}$');
   end if;
 end
-$sender_shape_0279$;
+$sender_shape_0280$;
 
 comment on constraint whatsapp_connections_twilio_sender_is_e164
   on public.whatsapp_connections is
@@ -86,7 +88,7 @@ alter table public.whatsapp_connections
   add column if not exists inbound_source text
   generated always as ('whatsapp') stored;
 
-do $route_link_0279$
+do $route_link_0280$
 begin
   if not exists (select 1 from pg_constraint
                  where conname = 'whatsapp_connections_inbound_route_fk') then
@@ -96,11 +98,11 @@ begin
       references private.inbound_routes (route_id, org_id, source) on delete restrict;
   end if;
 end
-$route_link_0279$;
+$route_link_0280$;
 
 -- Receiving requires a route. Stated as an implication rather than a NOT NULL, because a
 -- connection that only SENDS is a legitimate shape and always was.
-do $receive_needs_route_0279$
+do $receive_needs_route_0280$
 begin
   if not exists (select 1 from pg_constraint
                  where conname = 'whatsapp_connections_inbound_needs_route') then
@@ -109,7 +111,7 @@ begin
         not inbound_media_enabled or route_id is not null);
   end if;
 end
-$receive_needs_route_0279$;
+$receive_needs_route_0280$;
 
 -- ===================================================================================
 -- 3. WHAT ACTUALLY OPENS THE DOOR — two switches, and the tenant holds the weaker one
@@ -167,11 +169,12 @@ grant execute on function private.inbound_max_bytes() to service_role;
 -- ===================================================================================
 -- 5. A REFUSAL HAS A NAME, FROM A CLOSED LIST
 -- ===================================================================================
--- 0281 left `reason_code` free text so the channels could name their own failures. They can now,
+-- The actor-intake migration left `reason_code` free text so the channels could name their own
+-- failures. They can now,
 -- so the list closes: a dead letter whose reason is a sentence somebody typed is not a ledger,
 -- and the tenant-facing message is chosen from this vocabulary rather than echoed from a
 -- provider.
-do $reason_vocab_0279$
+do $reason_vocab_0280$
 begin
   if not exists (select 1 from pg_constraint
                  where conname = 'inbound_intake_claims_reason_vocabulary') then
@@ -196,7 +199,7 @@ begin
           'abandoned_by_operator'));
   end if;
 end
-$reason_vocab_0279$;
+$reason_vocab_0280$;
 
 -- ===================================================================================
 -- 6. THE MEDIA IS DELETED AT THE PROVIDER, AND THE DELETION IS NOT A HOPE
@@ -273,14 +276,14 @@ where registry.table_name = 'whatsapp_connections';
 -- ===================================================================================
 -- 7. VERIFY
 -- ===================================================================================
-do $verify_0279$
+do $verify_0280$
 declare
   v_violations text;
 begin
   -- One number is one row, and the prefix cannot get in.
   if not exists (select 1 from pg_constraint
                  where conname = 'whatsapp_connections_twilio_sender_is_e164') then
-    raise exception '0279: a Twilio sender id can still carry a channel prefix';
+    raise exception '0280: a Twilio sender id can still carry a channel prefix';
   end if;
 
   -- Receiving is tied to a route of the SAME channel, structurally.
@@ -288,39 +291,39 @@ begin
     select 1 from pg_constraint
      where conname = 'whatsapp_connections_inbound_route_fk' and contype = 'f'
        and array_length(conkey, 1) = 3) then
-    raise exception '0279: the connection is not bound to a whatsapp route by composite key';
+    raise exception '0280: the connection is not bound to a whatsapp route by composite key';
   end if;
   if not exists (select 1 from pg_constraint
                  where conname = 'whatsapp_connections_inbound_needs_route') then
-    raise exception '0279: a connection can receive without a route to give it scope';
+    raise exception '0280: a connection can receive without a route to give it scope';
   end if;
 
   -- The platform switch is still the platform's.
   if has_table_privilege('authenticated', 'private.inbound_channel_boundary', 'update') then
-    raise exception '0279: the tenant can reach the platform boundary';
+    raise exception '0280: the tenant can reach the platform boundary';
   end if;
   if (select enabled from private.inbound_channel_boundary where channel = 'whatsapp') then
-    raise exception '0279: this migration enabled a channel';
+    raise exception '0280: this migration enabled a channel';
   end if;
 
   -- The size limit agrees with the bucket, because it IS the bucket.
   if private.inbound_max_bytes()
      is distinct from (select file_size_limit from storage.buckets where id = 'documents') then
-    raise exception '0279: the intake size limit and the bucket limit disagree';
+    raise exception '0280: the intake size limit and the bucket limit disagree';
   end if;
 
   -- The deletion outbox exists and no product role can write it.
   if to_regclass('private.inbound_media_deletions') is null then
-    raise exception '0279: provider media deletion has no durable record';
+    raise exception '0280: provider media deletion has no durable record';
   end if;
   if has_table_privilege('authenticated', 'private.inbound_media_deletions', 'select') then
-    raise exception '0279: the browser can read the provider deletion queue';
+    raise exception '0280: the browser can read the provider deletion queue';
   end if;
 
   select string_agg(detail, chr(10) order by detail)
     into v_violations from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception '0279 scope assertions failed: %', v_violations;
+    raise exception '0280 scope assertions failed: %', v_violations;
   end if;
 end
-$verify_0279$;
+$verify_0280$;
