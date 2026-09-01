@@ -77,8 +77,21 @@ function fingerprint(label) {
   if (text.split('\n').length < 500) fail(`the ${label} fingerprint has only ${text.split('\n').length} lines — the stack is not migrated, so this check would prove nothing`);
   return text;
 }
-function disconnect() {
-  sql('template1', `select pg_terminate_backend(pid) from pg_stat_activity where datname='postgres' and pid<>pg_backend_pid()`);
+// Nothing may hold a connection to a database being used as a template or being dropped, and
+// TERMINATING is not enough: Supabase's own services reconnect between the terminate and the
+// CREATE, and Postgres refuses with "source database is being accessed by other users" -- which
+// is exactly how the first attempt at this failed. So connections are DISALLOWED first, which no
+// reconnect can defeat, and allowed again in a finally: a database left with datallowconn=false
+// is a bricked stack. The SQL job needs none of those services; it uses `docker exec psql`.
+function withConnectionsBlocked(database, body) {
+  sql('template1', `alter database ${database} with allow_connections false`);
+  sql('template1', `select pg_terminate_backend(pid) from pg_stat_activity`
+    + ` where datname = '${database}' and pid <> pg_backend_pid()`);
+  try {
+    return body();
+  } finally {
+    sql('template1', `alter database ${database} with allow_connections true`);
+  }
 }
 
 console.log('1. fingerprinting the migrated stack');
@@ -86,9 +99,10 @@ const before = fingerprint('baseline');
 console.log(`   ${before.split('\n').length} catalog facts`);
 
 console.log('2. taking the snapshot');
-disconnect();
 sql('template1', `drop database if exists ${TEMPLATE_DB}`);
-const created = sql('template1', `create database ${TEMPLATE_DB} template postgres`);
+const created = withConnectionsBlocked('postgres', () =>
+  sql('template1', `create database ${TEMPLATE_DB} template postgres`));
+sql('template1', `alter database ${TEMPLATE_DB} with allow_connections true`);
 if (created.status !== 0) fail(`could not create the template: ${(created.stderr ?? '').trim().slice(0, 200)}`);
 
 console.log('3. committing a probe, the way a concurrency suite commits fixtures');
@@ -97,10 +111,12 @@ if (dirty.status !== 0) fail(`could not commit the probe: ${(dirty.stderr ?? '')
 if (!fingerprint('dirtied').includes('fast_reset_probe')) fail('the probe never reached the fingerprint — the check would prove nothing');
 
 console.log('4. restoring the snapshot');
-disconnect();
-const dropped = sql('template1', 'drop database if exists postgres');
-if (dropped.status !== 0) fail(`could not drop: ${(dropped.stderr ?? '').trim().slice(0, 200)}`);
-const restored = sql('template1', `create database postgres template ${TEMPLATE_DB}`);
+const restored = withConnectionsBlocked('postgres', () => {
+  const dropped = sql('template1', 'drop database if exists postgres');
+  if (dropped.status !== 0) fail(`could not drop: ${(dropped.stderr ?? '').trim().slice(0, 200)}`);
+  return sql('template1', `create database postgres template ${TEMPLATE_DB}`);
+});
+sql('template1', 'alter database postgres with allow_connections true');
 if (restored.status !== 0) fail(`could not restore: ${(restored.stderr ?? '').trim().slice(0, 200)}`);
 
 console.log('5. comparing');

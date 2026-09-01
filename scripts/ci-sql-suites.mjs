@@ -111,58 +111,74 @@ function psql(relPath, user) {
   return { containerPath, user };
 }
 
-
-// ---------------------------------------------------------------- the mid-run resets
-// MEASURED 01.09.2026: `supabase db reset` takes 323s and the job performs it three times, on
-// top of the 380s `supabase start` already spent applying the same migrations. That is ~22 of
-// the job's ~28 minutes replaying 272 migrations four times. The suites themselves total about
-// a minute -- the slowest is 21s and most are under three.
-//
-// The resets are NOT gratuitous: each follows a concurrency suite that must COMMIT to prove
-// anything, so it cannot roll back its fixtures. What is gratuitous is rebuilding the schema
-// from scratch to delete a handful of committed rows.
-//
-// So the schema is built once and copied. `CREATE DATABASE ... TEMPLATE` is a file copy inside
-// one Postgres instance; the migrations do not run again. The fallback is the real reset, so a
-// snapshot that cannot be taken costs time and never correctness.
-const TEMPLATE_DB = 'ci_pristine';
-
-function sql(database, statement) {
-  return run('docker', ['exec', '-e', 'PGPASSWORD=postgres', container,
-    'psql', '-qAt', '-U', 'postgres', '-d', database, '-v', 'ON_ERROR_STOP=1', '-c', statement],
-    { capture: true });
-}
-
-// Nothing may hold a connection to a database being used as a template or being dropped.
-// Supabase's own services (PostgREST, auth, realtime) hold pooled connections and reconnect on
-// their own; the SQL job talks to Postgres through `docker exec psql` and needs none of them.
-function disconnectOthers(database) {
-  return sql('template1', `select pg_terminate_backend(pid) from pg_stat_activity`
-    + ` where datname = '${database}' and pid <> pg_backend_pid()`);
-}
-
-function takeSnapshot() {
-  const started = Date.now();
-  disconnectOthers('postgres');
-  const dropped = sql('template1', `drop database if exists ${TEMPLATE_DB}`);
-  if (dropped.status !== 0) return false;
-  const created = sql('template1', `create database ${TEMPLATE_DB} template postgres`);
-  if (created.status !== 0) {
-    console.log(`  snapshot unavailable, every reset will rebuild from migrations:`
-      + ` ${(created.stderr ?? '').trim().split('\n')[0]}`);
-    return false;
-  }
-  console.log(`  pristine snapshot taken in ${((Date.now() - started) / 1000).toFixed(1)}s`);
-  return true;
-}
-
-function restoreSnapshot() {
-  disconnectOthers('postgres');
-  const dropped = sql('template1', 'drop database if exists postgres');
-  if (dropped.status !== 0) return false;
-  const created = sql('template1', `create database postgres template ${TEMPLATE_DB}`);
-  return created.status === 0;
-}
+
+// ---------------------------------------------------------------- the mid-run resets
+// MEASURED 01.09.2026: `supabase db reset` takes 323s and the job performs it three times, on
+// top of the 380s `supabase start` already spent applying the same migrations. That is ~22 of
+// the job's ~28 minutes replaying 272 migrations four times. The suites themselves total about
+// a minute -- the slowest is 21s and most are under three.
+//
+// The resets are NOT gratuitous: each follows a concurrency suite that must COMMIT to prove
+// anything, so it cannot roll back its fixtures. What is gratuitous is rebuilding the schema
+// from scratch to delete a handful of committed rows.
+//
+// So the schema is built once and copied. `CREATE DATABASE ... TEMPLATE` is a file copy inside
+// one Postgres instance; the migrations do not run again. The fallback is the real reset, so a
+// snapshot that cannot be taken costs time and never correctness.
+const TEMPLATE_DB = 'ci_pristine';
+
+function sql(database, statement) {
+  return run('docker', ['exec', '-e', 'PGPASSWORD=postgres', container,
+    'psql', '-qAt', '-U', 'postgres', '-d', database, '-v', 'ON_ERROR_STOP=1', '-c', statement],
+    { capture: true });
+}
+
+// Nothing may hold a connection to a database being used as a template or being dropped, and
+// TERMINATING is not enough: Supabase's own services reconnect between the terminate and the
+// CREATE, and Postgres refuses with "source database is being accessed by other users" -- which
+// is exactly how the first attempt at this failed. So connections are DISALLOWED first, which no
+// reconnect can defeat, and allowed again in a finally: a database left with datallowconn=false
+// is a bricked stack. The SQL job needs none of those services; it uses `docker exec psql`.
+function withConnectionsBlocked(database, body) {
+  sql('template1', `alter database ${database} with allow_connections false`);
+  sql('template1', `select pg_terminate_backend(pid) from pg_stat_activity`
+    + ` where datname = '${database}' and pid <> pg_backend_pid()`);
+  try {
+    return body();
+  } finally {
+    sql('template1', `alter database ${database} with allow_connections true`);
+  }
+}
+
+function takeSnapshot() {
+  const started = Date.now();
+  sql('template1', `drop database if exists ${TEMPLATE_DB}`);
+  const created = withConnectionsBlocked('postgres', () =>
+    sql('template1', `create database ${TEMPLATE_DB} template postgres`));
+  if (created.status !== 0) {
+    console.log(`  snapshot unavailable, every reset will rebuild from migrations:`
+      + ` ${(created.stderr ?? '').trim().split('\n')[0]}`);
+    return false;
+  }
+  // A database created with TEMPLATE inherits datallowconn from its source, and the source had
+  // connections disallowed a moment ago. Leaving that inherited would make every restore produce
+  // a database nothing can connect to, and the failure would surface as 114 broken suites.
+  sql('template1', `alter database ${TEMPLATE_DB} with allow_connections true`);
+  console.log(`  pristine snapshot taken in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  return true;
+}
+
+function restoreSnapshot() {
+  const done = withConnectionsBlocked('postgres', () => {
+    const dropped = sql('template1', 'drop database if exists postgres');
+    if (dropped.status !== 0) return false;
+    return sql('template1', `create database postgres template ${TEMPLATE_DB}`).status === 0;
+  });
+  // The finally above re-allowed connections on a database that no longer existed by then; the
+  // new `postgres` carries whatever the template had, so it is set explicitly.
+  sql('template1', 'alter database postgres with allow_connections true');
+  return done;
+}
 
 let failures = 0;
 const snapshotOptOut = process.env.CI_SQL_NO_SNAPSHOT === '1';
