@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -212,6 +212,89 @@ describe('פתיחת חשבון', () => {
     expect(body).not.toHaveProperty('password');
     // The address is the server's to read from the token, not the form's to assert.
     expect(body).not.toHaveProperty('email');
+  });
+
+  /**
+   * Owner decision 31.08.2026. The hole this closes: an invited employee has NO auth user until
+   * they open the invitation, so `service_identity_has_profile` says "no standing" and the
+   * federated branch used to hand them an organization of their own. `0205` then refuses them
+   * inside `accept_invitation` forever, so the invitation they came for becomes unredeemable.
+   */
+  it('זהות פדרטיבית שהוזמנה לעסק קיים אינה פותחת עסק חדש', async () => {
+    getSession.mockResolvedValue(federatedSession('google', 'clerk@gmail.test'));
+    invoke.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'non-2xx',
+        context: {
+          json: async () => ({
+            error: {
+              code: 'invitation_pending',
+              message: 'הכתובת הזו הוזמנה להצטרף לעסק קיים. ההצטרפות נעשית מקישור ההזמנה ובסיסמה.',
+              organization: 'מסעדת הגפן',
+            },
+          }),
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByText(/מחובר כ/);
+    await user.type(screen.getByLabelText('שם העסק'), 'עסק חדש כלשהו');
+    await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
+
+    // The card names the business that invited them, and stops. Naming it is safe: the provider
+    // proved the address, so this discloses nothing the caller did not already hold.
+    expect(await screen.findByText(/יש לכם הזמנה ממתינה/)).toBeInTheDocument();
+    expect(screen.getByText(/מסעדת הגפן/)).toBeInTheDocument();
+    // Not an error banner and not a form — there is nothing here for them to submit again.
+    expect(screen.queryByLabelText('שם העסק')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'פתיחת חשבון' })).toBeNull();
+  });
+
+
+  it('סירוב ההזמנה עומד גם כששם הארגון לא נמסר', async () => {
+    getSession.mockResolvedValue(federatedSession('google', 'clerk@gmail.test'));
+    invoke.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'non-2xx',
+        context: {
+          json: async () => ({ error: { code: 'invitation_pending', message: 'הוזמנת', organization: '' } }),
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByText(/מחובר כ/);
+    await user.type(screen.getByLabelText('שם העסק'), 'עסק חדש כלשהו');
+    await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
+
+    // The name is a courtesy; the refusal is the point. A failed lookup must not degrade into
+    // "here is a brand new business".
+    expect(await screen.findByText(/יש לכם הזמנה ממתינה/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('שם העסק')).toBeNull();
+  });
+
+  it('שליחת הטופס אחרי כניסה עם ספק הולכת למסלול הפדרטיבי, לא לכניסה בסיסמה', async () => {
+    // The federated branch draws no credential fields but DOES draw the business ones, inside the
+    // same <form>. Any path that submits that form — a browser's implicit submission today, a
+    // submit button someone adds tomorrow — used to reach the password sign-in with two empty
+    // strings. `fireEvent.submit` exercises the guard directly rather than relying on which
+    // markup happens to make Enter submit.
+    getSession.mockResolvedValue(googleSession());
+    const user = userEvent.setup();
+    const { container } = renderScreen();
+    await screen.findByText(/מחובר כ/);
+    await user.type(screen.getByLabelText('שם העסק'), 'מסעדת הגפן');
+
+    fireEvent.submit(container.querySelector('form')!);
+
+    await waitFor(() => expect(invoke).toHaveBeenCalled());
+    const body = invoke.mock.calls[0]![1].body as Record<string, unknown>;
+    expect(body.identity).toBe('google');
+    expect(body.organization_name).toBe('מסעדת הגפן');
+    expect(body).not.toHaveProperty('password');
   });
 
   it('כניסה חוזרת של זהות שכבר יש לה ארגון אינה מבקשת שם עסק שוב', async () => {
