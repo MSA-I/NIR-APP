@@ -1554,9 +1554,11 @@ Hebrew and clears the field" — עם `Unable to find an element with the text: 
   ‏`https://inplace.digital/sitemap.xml` הוגש 31.08.2026, נקרא באותו יום, סטטוס **„הצלחה",
   ‏18 דפים התגלו** — ו-„לא נוספו לאינדקס" הוא 0 בלי אף סיבה, כלומר גוגל לא ניסה ונדחה אלא
   פשוט עוד לא הגיע. אינדוקס ראשוני לוקח שבועות. **אין שם עבודה, ואין להמציא אחת.**
-  ‏(פגם קוסמטי יחיד: שורת sitemap שנייה שכתובתה הודבקה כפול —
-  ‏`https://inplace.digital/https://inplace.digital/sitemap.xml` — ולכן „לא ניתן היה לאחזר".
-  אינה מזיקה; מחיקתה היא ניקיון מסך בלבד, ובריפו אחר.)
+  ‏(**נוקה 01.09.2026 לבקשת הבעלים:** שורת sitemap שנייה שכתובתה הודבקה כפול —
+  ‏`https://inplace.digital/https://inplace.digital/sitemap.xml`, „לא ניתן היה לאחזר", 0 דפים —
+  הוסרה דרך דף הפרטים שלה עצמה ולא דרך תפריט השורה, כדי שהכתובת הנמחקת תיראה במסך לפני
+  האישור: שתי השורות ישבו 44 פיקסלים זו מזו, והשכנה היא מפת האתר האמיתית. אומת אחרי המחיקה:
+  ‏**נשארה שורה אחת, `https://inplace.digital/sitemap.xml`, „הצלחה", 18 דפים** — שלמה.)
 - **מה תוקן בעץ ואומת:** ‏`public/_headers` עם `X-Robots-Tag: noindex, nofollow` על `/*`,
   ‏`public/robots.txt` אמיתי ש**מרשה** סריקה בכוונה, ותג `robots` בשלושת מסמכי ה-HTML.
   ‏`npm run check:noindex-posture` שומר על כל אלה ורשום ב-`verify`, ב-`build.yml`
