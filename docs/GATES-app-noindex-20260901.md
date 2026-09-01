@@ -48,6 +48,39 @@ Pages serves a file that exists in the published output before it applies the `/
 Five root-level files, five real content types, none of them swallowed into the shell.
 `robots.txt` now occupies exactly that position in `dist/`.
 
+### What Search Console actually held — measured after the fix was written
+
+Read on 01.09.2026 from `sc-domain:inplace.digital` (a domain property, so it covers the
+subdomain), at the owner's request and with the owner's session. Read-only.
+
+| | |
+|---|---|
+| pages indexed, whole domain | **2** |
+| which | `https://app.inplace.digital/` and `http://app.inplace.digital/` — the home page, twice |
+| internal screens indexed | **none**; `/suppliers` and every other route: absent |
+| not-indexed with a reason | 0 |
+| impressions, 90 days | **2**, both on 29.08.2026 |
+| clicks | **0** |
+| average position | **42** |
+| removal requests on file | none in six months |
+
+**This corrects the premise the campaign was opened on, and the correction matters.** The brief
+said the application was "outranking the marketing site for the company's own brand name". The
+first half is true in the sense that matters — the application is the only thing Google shows
+for this domain — but not because it is strong: **`inplace.digital` is not in the index at all,
+zero pages and zero impressions.** It was a race with one runner. The application's own showing
+is two impressions at position 42 with no clicks.
+
+So the exposure this campaign closes is real but **potential rather than realised**: every route
+was open to indexing, and one page had been taken. Nothing internal leaked. The fix is still
+correct — an application behind a login has no business being crawlable — but its urgency is
+lower than the brief assumed, which is an argument FOR the owner's decision to let it ride with
+the `0243`–`0267` rollout rather than shortcut it through Cloudflare.
+
+The marketing site's absence from the index is a larger problem than this one and is explicitly
+out of scope. Recorded in `DEBT §89` with the one-minute check that would tell the two possible
+causes apart, and left for the owner.
+
 ---
 
 ## Phase 1 — the header, which is the primary instruction
