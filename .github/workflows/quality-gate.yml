@@ -240,6 +240,24 @@ jobs:
         working-directory: supabase/functions/document-processing
         run: npx --yes deno check --config deno.json --lock deno.lock --frozen index.ts
 
+      # webhook-verify is the outbound trust boundary -- the SSRF corpus behind #253, and since
+      # guardedDownload the only code here that reads a remote body. It ran in no gate at all,
+      # so its corpus and its two mutation proofs were green by assumption.
+      - name: Outbound trust boundary (SSRF corpus, guarded download, signature verification)
+        if: needs.changes.outputs.edge == 'true'
+        run: |
+          set -euo pipefail
+          VERIFY_ROOT=supabase/functions/webhook-verify
+          npx --yes deno test \
+            --config "$VERIFY_ROOT/deno.json" \
+            "$VERIFY_ROOT/ssrf.test.ts" \
+            "$VERIFY_ROOT/verify.test.ts" 2>&1 | tee deno-webhook-verify.log
+          grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-webhook-verify.log \
+            || { echo 'No outbound trust boundary test completed.'; exit 1; }
+          ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-webhook-verify.log \
+            || { echo 'Ignored or skipped trust-boundary cases are not acceptable.'; exit 1; }
+          npx --yes deno check --config "$VERIFY_ROOT/deno.json" "$VERIFY_ROOT/index.ts"
+
       - name: Supplier-portal token-door contracts
         if: needs.changes.outputs.edge == 'true'
         run: |

@@ -922,6 +922,40 @@ function Invoke-OutboxWorkerContractTests {
   }
 }
 
+function Invoke-OutboundTrustBoundaryTests {
+  # webhook-verify is the outbound trust boundary: the SSRF corpus for customer-registered
+  # endpoints (#253) and, since guardedDownload, the only code in the repo that reads a remote
+  # body. It ran in NO gate -- not here, not in CI -- so its corpus, its rebinding race and its
+  # two mutation proofs were green by assumption. Reading a provider's file is not a place to
+  # find that out later.
+  Write-Gate "Outbound trust boundary: SSRF corpus, guarded download and signature verification"
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $testOutput = @(& npx.cmd --yes deno test `
+      --config (Join-Path $repoRoot "supabase\functions\webhook-verify\deno.json") `
+      (Join-Path $repoRoot "supabase\functions\webhook-verify\ssrf.test.ts") `
+      (Join-Path $repoRoot "supabase\functions\webhook-verify\verify.test.ts") 2>&1)
+    $testExit = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  $testOutput | ForEach-Object { Write-Output $_ }
+  Assert-ExitCode "Outbound trust boundary tests" $testOutput -ExitCode $testExit
+  $testText = $testOutput -join "`n"
+  if ($testText -notmatch '(?i)\b[1-9][0-9]*\s+passed\b') {
+    throw "Outbound trust boundary tests did not report any completed test."
+  }
+  if ($testText -match '(?i)\b[1-9][0-9]*\s+(?:ignored|skipped)\b') {
+    throw "Outbound trust boundary tests reported ignored or skipped cases."
+  }
+  npx.cmd --yes deno check `
+    --config (Join-Path $repoRoot "supabase\functions\webhook-verify\deno.json") `
+    (Join-Path $repoRoot "supabase\functions\webhook-verify\index.ts")
+  if ($LASTEXITCODE -ne 0) { throw "webhook-verify Edge Function failed Deno typecheck." }
+}
+
 function Invoke-TenantExportContractTests {
   Write-Gate "Tenant export streaming and delivery contracts"
   $previousPreference = $ErrorActionPreference
@@ -1289,6 +1323,7 @@ try {
     Invoke-DependencyAudit
 
     Invoke-InterpretDocumentContractTests
+    Invoke-OutboundTrustBoundaryTests
     Invoke-OutboxWorkerContractTests
     Invoke-TenantExportContractTests
     Invoke-WebhookDoorContractTests
