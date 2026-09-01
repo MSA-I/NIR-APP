@@ -306,6 +306,22 @@ console.log('\ncheck:baseline-drift');
   mustPass('the real baselines still pass', 'check-baseline-drift.mjs', { env: { BASELINE_DRIFT_BASE: 'HEAD' } });
 }
 
+// ============================================================ decision numbers
+// Two owner rulings sharing a number is the one collision a merge does NOT report: both
+// pull requests append a row, git puts them side by side, and the merge is 'clean'.
+console.log('\ncheck:decision-numbers');
+{
+  mustFail('a duplicated ruling number is caught', 'check-decision-numbers.mjs', {
+    env: { DECISION_NUMBERS_INJECT: 'duplicate' },
+    expect: 'used more than once',
+  });
+  mustFail('a citation of a ruling that does not exist is caught', 'check-decision-numbers.mjs', {
+    env: { DECISION_NUMBERS_INJECT: 'dangling' },
+    expect: 'point at a ruling that is not in the table',
+  });
+  mustPass('the real decision table still passes', 'check-decision-numbers.mjs', {});
+}
+
 // ============================================================ wiring proof
 // Every guard above is only real if something runs it. Deleting `check:migration-numbers` from
 // package.json, or its step from build.yml, would leave every control passing while the guard
@@ -315,7 +331,7 @@ console.log('\nwiring');
   const pkg = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
   const workflow = readFileSync(path.join(repoRoot, '.github', 'workflows', 'build.yml'), 'utf8');
   const required = ['check:suite-manifest', 'check:migration-numbers', 'check:renumber-closure',
-    'check:key-manifest', 'check:baseline-drift', 'check:gate-controls'];
+    'check:key-manifest', 'check:baseline-drift', 'check:decision-numbers', 'check:gate-controls'];
   const missingScript = required.filter((c) => !pkg.scripts?.[c]);
   const missingVerify = required.filter((c) => !String(pkg.scripts?.verify ?? '').includes(c));
   const missingStep = required.filter((c) => !workflow.includes(`npm run ${c}`));

@@ -256,5 +256,9 @@
   "0264_invoice_due_date.sql",
   "0265_scheduled_payments_outlook.sql",
   "0266_scheduled_payments_flag.sql",
-  "0267_forecast_cohort_joins_the_teardown_window.sql"
+  "0267_forecast_cohort_joins_the_teardown_window.sql",
+  "0268_countdown_and_expectations_flags.sql",
+  "0269_launch_offer_intents.sql",
+  "0270_launch_window_extension.sql",
+  "0271_countdown_events.sql"
 ]
