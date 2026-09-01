@@ -217,6 +217,59 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }, 409);
     }
 
+    /**
+     * The third state this branch was blind to, and why being blind to it was one-way damage.
+     *
+     * `service_identity_has_profile` answers "does this identity already belong somewhere", and an
+     * employee who was invited but has not accepted yet answers NO -- they have no auth user at all
+     * until they open the invitation and choose a password (`AcceptInvite.tsx`). So everything
+     * below would have handed them an organization of their own and made them its OWNER, which is
+     * the exact opposite of what the invitation was for. And it could not be walked back by the
+     * person it happened to: `0205` refuses a federated caller inside `accept_invitation` by name,
+     * so once they arrive as a Google identity the invitation they came for can never be redeemed.
+     *
+     * Owner decision 31.08.2026. Naming the business is safe here for the same reason
+     * `identity_already_has_organization` is safe one block up: the provider proved the address,
+     * so this tells the caller nothing they did not already hold.
+     *
+     * Two details that are load-bearing:
+     *   * `invitations.email` is stored lowercased (`0020`: `v_email := lower(trim(p_email))`) and
+     *     `email` here is the provider's, lowercased above -- so this is an exact match. `ilike`
+     *     would have been a bug: `_` is legal in an address and is a LIKE wildcard.
+     *   * Only a LIVE invitation counts. An expired one is not actionable, and treating it as a
+     *     block would strand that address forever -- someone who was invited once and never joined
+     *     is entitled to open a business of their own.
+     */
+    const invited = await admin0
+      .from('invitations')
+      .select('org_id')
+      .eq('email', email)
+      .is('accepted_at', null)
+      .is('revoked_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .limit(1);
+    if (invited.error) {
+      return json({ error: { code: 'signup_unavailable', message: 'ההרשמה אינה זמינה כרגע' } }, 503);
+    }
+    const pendingInvite = (invited.data as { org_id?: string }[] | null)?.[0];
+    if (pendingInvite?.org_id) {
+      const inviter = await admin0
+        .from('organizations')
+        .select('name')
+        .eq('id', pendingInvite.org_id)
+        .maybeSingle();
+      // The name is a courtesy, not the refusal. A lookup that failed must not turn "you were
+      // invited" into "here is a brand new business", so the refusal stands either way.
+      const organization = (inviter.data as { name?: string } | null)?.name ?? '';
+      return json({
+        error: {
+          code: 'invitation_pending',
+          message: 'הכתובת הזו הוזמנה להצטרף לעסק קיים. ההצטרפות נעשית מקישור ההזמנה ובסיסמה.',
+          organization,
+        },
+      }, 409);
+    }
+
     const organizationName = typeof body.organization_name === 'string'
       ? body.organization_name.trim()
       : '';

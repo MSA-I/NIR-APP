@@ -1992,6 +1992,13 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
     ['/rest/v1/rpc/management_dashboard_snapshot', 'POST'],
     ['/rest/v1/suppliers', 'GET'],
     ['/rest/v1/purchase_order_items', 'GET'],
+    // The dashboard's per-currency supplier balances race the sign-out exactly as the nine above
+    // do; Dashboard.tsx, Suppliers.tsx, FinancialSupplier.tsx and AccountantDashboard.tsx all read
+    // it, on main no less than here. It was simply not observed in flight until this wave shifted
+    // the timing. Adding it cannot excuse an unauthenticated read: the guard below still demands
+    // that the exact Request object was seen carrying a Bearer header while tracking was open, and
+    // any read that starts after the transition closes still fails the gate.
+    ['/rest/v1/supplier_balances_by_currency', 'GET'],
   ]);
   const authenticatedTransitionReads = new WeakSet();
   let transitionReadTrackingOpen = true;
@@ -2130,10 +2137,15 @@ async function publicSignupSurface(browser) {
       assert(!body.includes(forbidden), `the signup form offers a plan choice (${forbidden})`);
     }
 
-    await page.locator('#signup-organization').fill('עסק בדיקה');
-    await page.locator('#signup-name').fill('בעלים בדיקה');
-    await page.locator('#signup-email').fill('p4-signup@example.invalid');
-    await page.locator('#signup-password').fill('a-long-enough-password');
+    // The four fields moved when #195 merged `/signup` and `/login` into one card: `Signup.tsx`
+    // is now a thin wrapper that renders `Entrance` on the "name a business" side, so the ids are
+    // `entrance-*`, and email and password are shared with the sign-in side and lost their prefix.
+    // The heading, the submit button and the post-submit text are unchanged, which is why this
+    // scenario failed at the first fill rather than earlier.
+    await page.locator('#entrance-organization').fill('עסק בדיקה');
+    await page.locator('#entrance-name').fill('בעלים בדיקה');
+    await page.locator('#email').fill('p4-signup@example.invalid');
+    await page.locator('#password').fill('a-long-enough-password');
     await page.getByRole('button', { name: 'פתיחת חשבון' }).click();
 
     await page.getByText('בדקו את תיבת הדואר').waitFor({ timeout: 20_000 });
