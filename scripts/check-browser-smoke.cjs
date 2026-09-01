@@ -1992,6 +1992,13 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
     ['/rest/v1/rpc/management_dashboard_snapshot', 'POST'],
     ['/rest/v1/suppliers', 'GET'],
     ['/rest/v1/purchase_order_items', 'GET'],
+    // The dashboard's per-currency supplier balances race the sign-out exactly as the nine above
+    // do; Dashboard.tsx, Suppliers.tsx, FinancialSupplier.tsx and AccountantDashboard.tsx all read
+    // it, on main no less than here. It was simply not observed in flight until this wave shifted
+    // the timing. Adding it cannot excuse an unauthenticated read: the guard below still demands
+    // that the exact Request object was seen carrying a Bearer header while tracking was open, and
+    // any read that starts after the transition closes still fails the gate.
+    ['/rest/v1/supplier_balances_by_currency', 'GET'],
   ]);
   const authenticatedTransitionReads = new WeakSet();
   let transitionReadTrackingOpen = true;
