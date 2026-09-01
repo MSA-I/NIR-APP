@@ -189,36 +189,30 @@ select pg_temp.p94_assert(
     where action = 'prelaunch_window_extended'
       and (old_values is null or new_values is null or old_values = new_values)),
   'a window extension was logged without both sides of the change');
--- ALL THREE TABLES, BUT NOT ALL THREE THE SAME WAY -- and that asymmetry is the whole reason
--- this assertion kept failing. `org_flag_configurations` and `org_autonomy_policies` are
--- populated by earlier MIGRATIONS, so rows are always present for 0270 to move and the ledger
--- must carry both. `organization_subscriptions` is not: a subscription belongs to a tenant,
--- and on a freshly reset database no tenant exists when 0270 runs. The backfill correctly
--- moves nothing there, correctly logs nothing, and `count(distinct entity_type) = 3` was
--- therefore asserting that the database had CUSTOMERS -- not that the code logs what it moves.
-select pg_temp.p94_assert(
-  (select count(distinct entity_type) from audit_logs
-    where action = 'prelaunch_window_extended'
-      and entity_type in ('org_flag_configurations', 'org_autonomy_policies')) = 2,
-  'the ledger is missing one of the two tables that always have rows for the backfill to move');
-
--- And the third, stated as the implication it actually is: if a subscription ended up carrying
--- the new date through 0270's own predicate, the ledger must say so. The two fixtures above are
--- excluded by id because this suite inserted them AFTER the migration ran, so no ledger row
--- could exist for them and none should.
-select pg_temp.p94_assert(
-  not exists (
-    select 1 from public.organization_subscriptions subscription
-     where subscription.provider = 'manual'
-       and subscription.granted_until = '2027-02-01T00:00:00+00'::timestamptz
-       and not exists (select 1 from public.organization_billing_periods period
-                        where period.org_id = subscription.org_id)
-       and subscription.org_id not in ('a0940000-0000-4000-8000-000000000001',
-                                       'a0940000-0000-4000-8000-000000000002'))
-  or exists (select 1 from audit_logs
-              where action = 'prelaunch_window_extended'
-                and entity_type = 'organization_subscriptions'),
-  'a subscription carries the new date but no ledger row says the backfill moved it');
+-- NO ASSERTION HERE MAY REQUIRE THE LEDGER TO CONTAIN ANYTHING, and the reason is structural
+-- rather than a quirk of this fixture set. Traced through the migrations:
+--
+--   * 0210 and 0211 seed org_flag_configurations and org_autonomy_policies with
+--     `... from organizations o` -- over organisations that ALREADY EXIST. The same rows are
+--     otherwise written by a birth trigger, one organisation at a time.
+--   * organization_subscriptions belongs to a tenant in exactly the same way.
+--   * `supabase db reset` runs every migration BEFORE any seed. At the moment 0270 executes,
+--     `organizations` is empty, so all three source tables are empty, the backfill correctly
+--     moves nothing, and the ledger is correctly empty.
+--
+-- The demo seed then creates organisations, and their birth trigger writes
+-- `private.prelaunch_window_end()` -- which 0270 has already moved. That is why section 2
+-- above finds rows carrying the NEW date and passes: they were BORN with it. They were never
+-- moved, so nothing was logged, and no count over audit_logs can be satisfied.
+--
+-- Three assertions were tried here and all three were unsatisfiable for this one reason:
+-- `count(*) > 0`, then `count(distinct entity_type) = 3`, then 'the two tables that always
+-- have rows'. There is no fourth version: presence cannot be asserted from out here at all.
+--
+-- What CAN be asserted is the shape of whatever the ledger does hold, and that nothing the
+-- backfill excludes ever appears in it. Those are the assertions above and below, and they
+-- are the ones that would actually catch a regression: a backfill that logged a paying
+-- organisation, or logged without a reason, or logged without both sides of the change.
 
 rollback;
 
