@@ -1,0 +1,11 @@
+# app.inplace.digital is an application behind a login and is not a search
+# surface. Crawling is deliberately ALLOWED so that the X-Robots-Tag: noindex
+# in public/_headers can be seen and acted on; a Disallow here would hide that
+# header from the crawler and leave already-indexed URLs in place.
+#
+# Once Search Console reports the URLs gone, this becomes Disallow: / -- and the
+# guard in scripts/check-noindex-posture.mjs will then require a line of the form
+#   # INDEX-CLEARED: <YYYY-MM-DD> <who confirmed it, and where>
+# in this file, so that the flip is a recorded observation rather than a guess.
+User-agent: *
+Allow: /

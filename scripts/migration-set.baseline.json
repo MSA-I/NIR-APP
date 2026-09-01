@@ -265,5 +265,12 @@
   "0273_expected_document_missing_exception_type.sql",
   "0274_document_expectation_scanner.sql",
   "0275_supplier_logo_path.sql",
-  "0276_invoice_due_date_from_interpretation.sql"
+  "0276_invoice_due_date_from_interpretation.sql",
+  "0277_paddle_sandbox_price_map.sql",
+  "0278_billing_checkout_authorization.sql",
+  "0279_a_document_carries_the_actor_that_made_it.sql",
+  "0280_a_number_that_can_receive_a_document.sql",
+  "0281_subscription_activation_email.sql",
+  "0282_invitation_is_a_proven_address_not_a_password.sql",
+  "0283_profile_theme.sql"
 ]

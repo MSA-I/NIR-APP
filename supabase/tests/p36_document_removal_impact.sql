@@ -61,12 +61,11 @@ insert into public.purchase_order_items (id, org_id, order_id, product_id, qty, 
    '50360000-0000-4000-8000-000000000001', '30360000-0000-4000-8000-000000000001', 5, 10);
 
 insert into public.documents (
-  id, org_id, entity_type, storage_path, file_name, mime_type, document_kind
-)
+  id, org_id, entity_type, storage_path, file_name, mime_type, document_kind, uploaded_by)
 select ('60360000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
        '10360000-0000-4000-8000-000000000001', 'inbox',
        '10360000-0000-4000-8000-000000000001/p36-' || n || '.pdf',
-       'p36-' || n || '.pdf', 'application/pdf', 'invoice'
+       'p36-' || n || '.pdf', 'application/pdf', 'invoice', '20360000-0000-4000-8000-000000000001'
 from generate_series(1, 5) as n;
 
 insert into public.document_processing_jobs (

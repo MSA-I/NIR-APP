@@ -4,6 +4,7 @@ import {
   manualBillingAdapter,
   PADDLE_REPLAY_TOLERANCE_SECONDS,
   PADDLE_SIGNATURE_HEADER,
+  paddleApiOptionsFrom,
 } from "./billing-adapter.ts";
 
 // ===== Fixtures =====
@@ -62,6 +63,8 @@ Deno.test("the manual adapter refuses what it cannot do, by name", async () => {
     orgId: "51000000-0000-4000-8000-000000000001",
     planKey: "pro",
     interval: "monthly",
+    providerPriceId: "pri_never_reached",
+    providerCustomerId: "ctm_never_reached",
   });
   if (checkout.ok) throw new Error("a checkout session was produced with no provider configured");
   if (checkout.code !== "not_configured") throw new Error(`wrong refusal code: ${checkout.code}`);
@@ -331,6 +334,8 @@ Deno.test("no adapter offers hosted checkout or cancellation while no provider i
     orgId: "51000000-0000-4000-8000-000000000001",
     planKey: "pro",
     interval: "monthly",
+    providerPriceId: "pri_never_reached",
+    providerCustomerId: "ctm_never_reached",
   });
   if (checkout.ok) throw new Error("a hosted checkout was produced against an unproven account");
   if (checkout.code !== "not_configured") throw new Error(`wrong refusal code: ${checkout.code}`);
@@ -340,4 +345,94 @@ Deno.test("no adapter offers hosted checkout or cancellation while no provider i
 
   const customer = await adapter.createCustomer("51000000-0000-4000-8000-000000000001", "o@example.test");
   if (customer.ok) throw new Error("a provider-side customer was created against an unproven account");
+});
+
+// ===== The API half is separately configured, and absent by default =====
+// These are the tests that keep "the adapter can transact" from quietly becoming "every
+// deployment can transact". The webhook function is given an endpoint secret and no API key, and
+// what follows is what that combination is guaranteed to do.
+
+Deno.test("an adapter holding only the endpoint secret refuses every outbound call by name", async () => {
+  const adapter = createPaddleAdapter(SECRET);
+
+  const changed = await adapter.changePlan("sub_1", "pri_1");
+  if (changed.ok) throw new Error("a plan change was attempted with no API key");
+  if (changed.code !== "not_configured") throw new Error(`wrong refusal code: ${changed.code}`);
+
+  const portal = await adapter.createPortalSession("ctm_1", "sub_1");
+  if (portal.ok) throw new Error("a portal session was opened with no API key");
+  if (portal.code !== "not_configured") throw new Error(`wrong refusal code: ${portal.code}`);
+
+  // And it can still do the one thing it exists for, so the refusals above are a boundary rather
+  // than a broken adapter.
+  const verified = await adapter.verifyAndParse(PAYLOAD, await signedHeaders(PAYLOAD));
+  if (!verified.ok) throw new Error("the webhook half stopped working");
+});
+
+Deno.test("billingAdapterFor gives the webhook deployment no API key", async () => {
+  // The exact environment `billing-webhook` runs in: BILLING_PROVIDER and PADDLE_WEBHOOK_SECRET
+  // are set, PADDLE_API_KEY is not. The function that RECEIVES money events must not be able to
+  // MAKE one, and this is that property stated as a test rather than as a deployment habit.
+  const resolved = billingAdapterFor("paddle", (name) =>
+    name === "PADDLE_WEBHOOK_SECRET" ? SECRET : undefined);
+  if (!resolved.ok) throw new Error(`paddle did not resolve: ${resolved.code}`);
+
+  const checkout = await resolved.value.createCheckoutSession({
+    orgId: "51000000-0000-4000-8000-000000000001",
+    planKey: "pro",
+    interval: "monthly",
+    providerPriceId: "pri_never_reached",
+    providerCustomerId: "ctm_never_reached",
+  });
+  if (checkout.ok) throw new Error("the webhook deployment could open a checkout");
+  if (checkout.code !== "not_configured") throw new Error(`wrong refusal code: ${checkout.code}`);
+});
+
+Deno.test("the Paddle environment must be spelled, and a typo is never defaulted", () => {
+  const key = "pdl_sdbx_apikey_01test";
+
+  if (paddleApiOptionsFrom(() => undefined) !== null) {
+    throw new Error("an unconfigured environment produced API options");
+  }
+  if (paddleApiOptionsFrom((name) => (name === "PADDLE_API_KEY" ? key : undefined)) !== null) {
+    throw new Error("a key with no named environment produced API options");
+  }
+  // The one that matters: a typo must not fall back to either host. Choosing sandbox silently
+  // would send real customers' payments nowhere; choosing live silently is worse.
+  for (const typo of ["Sandbox", "SANDBOX", "prod", "production", "test", ""]) {
+    const options = paddleApiOptionsFrom((name) =>
+      name === "PADDLE_API_KEY" ? key : name === "PADDLE_ENVIRONMENT" ? typo : undefined);
+    if (options !== null) throw new Error(`environment ${JSON.stringify(typo)} was accepted`);
+  }
+
+  const sandbox = paddleApiOptionsFrom((name) =>
+    name === "PADDLE_API_KEY" ? key : name === "PADDLE_ENVIRONMENT" ? "sandbox" : undefined);
+  if (sandbox?.environment !== "sandbox") throw new Error("a spelled sandbox environment was refused");
+});
+
+Deno.test("a configured adapter still never decides which plan a checkout sells", async () => {
+  // The price id and the customer id are INPUTS. There is no code path from a plan key to a price
+  // in this file, which is what stops a browser-chosen plan from becoming a browser-chosen price:
+  // the resolution happens server-side against the same table that decides what the price grants.
+  //
+  // COMMENTS ARE STRIPPED BEFORE COMPARING, and the first draft of this test is why. It read the
+  // source whole and failed on the sentence above -- the prose explaining the rule tripped the
+  // rule. An assertion that its own explanation can break is measuring the wrong bytes.
+  const source = await Deno.readTextFile(new URL("./billing-adapter.ts", import.meta.url));
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+  const paddleSection = code.slice(code.indexOf("export function createPaddleAdapter"));
+
+  if (/["'`]pri_[a-z0-9]/i.test(paddleSection)) {
+    throw new Error("the adapter hardcodes a provider price id");
+  }
+  if (/billing_provider_price_map|plan_prices/.test(paddleSection)) {
+    throw new Error("the adapter reached for the price catalogue; that resolution is the caller's");
+  }
+  // And the attribution rule, restated where a live call could most easily break it: nothing in
+  // the Paddle section may read an organization out of a provider-held field.
+  if (/custom_data\s*(\.|\[|->)/.test(paddleSection)) {
+    throw new Error("the adapter reads custom_data back; attribution must come from our own link");
+  }
 });

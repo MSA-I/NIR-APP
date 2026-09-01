@@ -143,7 +143,11 @@ describe('PortalApp', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(view()));
     render(<PortalApp />);
 
-    expect(await screen.findByRole('heading', { name: /Order #42/ })).toBeInTheDocument();
+    // #330 — the portal opens on the document plate now, so the page's h1 is the document's own
+    // name plus its number, the same words the supplier saw in the email subject. Asserted as
+    // a heading ON PURPOSE: the plate must not quietly become a decorative div, because this
+    // is the only heading on a page whose whole job is "approve THIS order".
+    expect(await screen.findByRole('heading', { level: 1, name: /Purchase order #42/ })).toBeInTheDocument();
     expect(document.documentElement).toHaveAttribute('lang', 'en');
     expect(document.documentElement).toHaveAttribute('dir', 'ltr');
     expect(document.title).toBe('Purchase order response');

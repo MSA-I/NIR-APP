@@ -13,7 +13,6 @@
     "and fr, the product publishes he, and a file that tried to hold all of it would be a translation",
     "system pretending to be a design token.",
     "",
-    "So this file holds the four facts that are neither price nor prose: the ticket's printed code,",
     "which of the four faces it wears, which lucide glyph sits in its head chip, and whether it is",
     "the rung the vendor points at. Every one of them is a drawing decision, and every one of them",
     "used to live in a component on one surface only.",
@@ -35,14 +34,50 @@
     "OPEN-DECISIONS #296 so the next reader meets the current answer rather than re-deriving the old",
     "one from a row that is no longer true. The rest of #202 is untouched and still binds: the",
     "emphasis is STATIC and identical for every reader, never keyed to the tenant's own data and",
-    "never a personal recommendation."
+    "never a personal recommendation.",
+    "",
+    "RE-TRANSCRIBED 31.08.2026. The `code` field is GONE. It held the ticket's printed serial",
+    "(FRE-2026, BSC-2026 ...) and the card that printed it was replaced on the marketing site on",
+    "28.08.2026 by a rectangular card on a step of colour, which has no serial and no barcode.",
+    "Owner, 31.08.2026: «הכרטיס של דף הנחיתה — תעביר אותו לאפליקציה». The faces were renamed in the",
+    "same move, to the five the owner named on 28.08.2026: `plain` and `lift` are the page's ground",
+    "and that ground raised a step, so they follow whatever surface the card sits on; `pointed`,",
+    "`azure` and `deep` are objects and keep their colour anywhere. Only `azure` carries the gloss",
+    "and only `deep` carries the shader field.",
+    "",
+    "THE SHADER RAMP IS HERE AND NOT IN THE COMPONENT, and the reason is a rule rather than a taste:",
+    "`check:tokens` allows colour literals in `src/styles/plan-card.css` and NOWHERE else under src,",
+    "product `.tsx` included. The ramp is four stops of the deep card's own violet, which is a drawing",
+    "decision — the same kind as the face and the glyph beside it — so it belongs in the half of the",
+    "shared card that is not CSS. `PlanShader.tsx` reads it from here and holds no colour of its own."
   ],
   "recommended": "pro",
   "plans": {
-    "free":     { "code": "FRE-2026", "face": "default", "icon": "Sprout" },
-    "basic":    { "code": "BSC-2026", "face": "default", "icon": "Store" },
-    "pro":      { "code": "PRO-2026", "face": "paper",   "icon": "Building2" },
-    "premium":  { "code": "PRN-2026", "face": "violet",  "icon": "Building" },
-    "business": { "code": "BZN-2026", "face": "gloss",   "icon": "Landmark" }
-  }
+    "free": {
+      "face": "plain",
+      "icon": "Sprout"
+    },
+    "basic": {
+      "face": "lift",
+      "icon": "Store"
+    },
+    "pro": {
+      "face": "pointed",
+      "icon": "Building2"
+    },
+    "premium": {
+      "face": "azure",
+      "icon": "Building"
+    },
+    "business": {
+      "face": "deep",
+      "icon": "Landmark"
+    }
+  },
+  "shaderRamp": [
+    "#1e0b45",
+    "#3b1080",
+    "#5b21b6",
+    "#7c3aed"
+  ]
 }

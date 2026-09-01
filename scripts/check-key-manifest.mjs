@@ -89,7 +89,14 @@ function sources(dir, out = []) {
 }
 
 const keys = leafKeys(dictionary);
-const files = sources(path.join(repoRoot, 'src'));
+// `supabase/functions` joined `src` as a reader on 01.09.2026: the assistant's Edge function
+// imports both dictionaries whole (`reader-locale.ts`) and resolves 173 tool-label keys that no
+// screen names. Same reasoning as `check-orphan-keys.mjs` — a call site counts wherever it lives,
+// and scanning only `src` would have listed every one of those keys as stranded.
+const files = [
+  ...sources(path.join(repoRoot, 'src')),
+  ...sources(path.join(repoRoot, 'supabase/functions')),
+];
 let production = files.filter((f) => !isSpec(f.rel));
 const specs = files.filter((f) => isSpec(f.rel));
 

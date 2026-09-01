@@ -68,16 +68,16 @@ export const getPurchaseMetrics: AssistantTool = {
     if (result.error) {
       const message = result.error.message ?? "";
       if (message.includes("not_authorized")) {
-        return failure(ctx, "not_permitted", "אין הרשאה למדדי הרכש", filters);
+        return failure(ctx, "not_permitted", readerText(ctx.locale, "assistantTools.purchaseMetricsNotPermitted"), filters);
       }
-      return failure(ctx, "purchase_metrics_failed", "שליפת מדדי הרכש נכשלה", filters);
+      return failure(ctx, "purchase_metrics_failed", readerText(ctx.locale, "assistantTools.purchaseMetricsFetchFailed"), filters);
     }
     const metrics = record(result.data);
     if (!metrics) {
       return failure(
         ctx,
         "purchase_metrics_malformed",
-        "מדדי הרכש לא התקבלו במבנה תקין",
+        readerText(ctx.locale, "assistantTools.purchaseMetricsBadShape"),
         filters,
       );
     }
@@ -113,13 +113,13 @@ export const getPurchaseMetrics: AssistantTool = {
         classification: "tenant_standard",
       }));
     };
-    money("committed", "התחייבות בהזמנות (במחירי הזמנה, לפי יום יצירה עסקי)");
-    count("committed_order_count", "מספר ההזמנות שנמדדו להתחייבות");
-    money("gross_expense", "הוצאה ברוטו (חשבוניות מאושרות, לפי תאריך החשבונית)");
-    count("gross_invoice_count", "מספר החשבוניות המאושרות שנמדדו");
-    money("credits_recognised", "זיכויים שהוכרו (offset/closed בלבד)");
-    money("credits_pending", "זיכויים שסוכמו וטרם קוזזו");
-    money("net_expense", "הוצאה נטו (ברוטו פחות זיכויים שהוכרו)");
+    money("committed", readerText(ctx.locale, "assistantTools.purchaseCommitted"));
+    count("committed_order_count", readerText(ctx.locale, "assistantTools.purchaseCommittedOrderCount"));
+    money("gross_expense", readerText(ctx.locale, "assistantTools.purchaseGrossExpense"));
+    count("gross_invoice_count", readerText(ctx.locale, "assistantTools.purchaseGrossInvoiceCount"));
+    money("credits_recognised", readerText(ctx.locale, "assistantTools.purchaseCreditsRecognised"));
+    money("credits_pending", readerText(ctx.locale, "assistantTools.purchaseCreditsPending"));
+    money("net_expense", readerText(ctx.locale, "assistantTools.purchaseNetExpense"));
 
     // /expenses is an owner+accountant route; office reads these same figures on the dashboard.
     // A source must point at a screen its reader can actually open.
@@ -127,7 +127,9 @@ export const getPurchaseMetrics: AssistantTool = {
     const source = ctx.evidence.source({
       entity: "organization",
       entity_id: ctx.actor.orgId,
-      label: officeActor ? "מרכז הבקרה" : "מסך ההוצאות",
+      label: officeActor
+        ? readerText(ctx.locale, "assistantTools.screenControlCentre")
+        : readerText(ctx.locale, "assistantTools.screenExpenses"),
       route: officeActor ? "/dashboard" : "/expenses",
       classification: "financial_sensitive",
     });
@@ -143,10 +145,10 @@ export const getPurchaseMetrics: AssistantTool = {
       facts,
       sources: [source],
       warnings: [
-        "התחייבות (הזמנות) והוצאה (חשבוניות) הם שני מובנים שונים של אותו חלון — אין לחבר או לקזז ביניהם.",
+        readerText(ctx.locale, "assistantTools.purchaseTwoMeaningsWarning"),
         netDefinition
-          ? `הגדרת הנטו של המוצר עצמו (יש לצטט אותה, לא לנסח מחדש): ${netDefinition}`
-          : "השרת לא החזיר את הגדרת הנטו (net_definition) — אין להמציא הגדרה במקומה.",
+          ? readerText(ctx.locale, "assistantTools.purchaseNetDefinition", { definition: netDefinition })
+          : readerText(ctx.locale, "assistantTools.purchaseNetDefinitionMissing"),
       ],
     };
   },

@@ -13,6 +13,24 @@
 | ‏OpenAI — פירוש מסמכים ו-OCR | `AI\API\NIR-API-OPENAI.txt` → הסוד `OPENAI_API_KEY` |
 | ‏Mistral — מנוע OCR חלופי | `AI\API\NIR-AP-MISTRAL.txt` → `MISTRAL_API_KEY` ב-`ocr.env` של ה-VPS |
 | ‏טוקן ה-worker (**אינו מפתח ספק**) | `AI\API\NIR-OCR-WORKER-TOKEN.txt` → `OCR_WORKER_TOKEN` |
+| ‏Paddle **Sandbox** — מפתח שרת | `AI\API\Sandbox API Key.txt` → הסוד `PADDLE_API_KEY` |
+| ‏Paddle **Sandbox** — טוקן לקוח | `AI\API\InPlace Sandbox Web.txt` → `VITE_PADDLE_CLIENT_TOKEN` |
+
+## שני מפתחות Paddle, ורק אחד מהם מותר בדפדפן (31.08.2026)
+
+ההבחנה הזו היא כל מנגנון ההגנה, ושני השמות דומים מספיק כדי להתבלבל בחיפזון:
+
+| קובץ | תחילית | מה הוא יכול | איפה מותר |
+|---|---|---|---|
+| `Sandbox API Key.txt` | `pdl_sdbx_apikey_…` | הכול: לקוחות, מנויים, **החזרים** | סוד של Edge Function בלבד |
+| `InPlace Sandbox Web.txt` | `test_…` | לפתוח checkout לעסקה שהשרת כבר יצר, ותו לא | ‏bundle של הדפדפן |
+
+‏**אסור ליצור משתנה `VITE_` שנושא את מפתח השרת.** ‏Vite מטמיע כל משתנה בתחילית `VITE_` ב-bundle,
+ולכן שורה אחת כזו מפרסמת לכל מבקר מפתח שיכול להחזיר כסף — ושום דבר בבנייה לא ייראה שונה.
+‏`scripts/check-paddle-secrets.mjs` מפיל את הבנייה על כך, והוא נבדק עם ניסוי שלילי ולא רק נכתב.
+
+שני הקבצים הם **Sandbox בלבד**. אין בתיקייה מפתחות Paddle Live ואין להוסיף אותם כאן.
+סוד ה-webhook (`pdl_ntfset_…`) נוצר מחדש בכל רישום יעד ואינו נשמר — ראו `docs/PADDLE-SANDBOX.md`.
 
 ## הפרדת עלויות בין העוזר לעיבוד המסמכים (26.08.2026)
 

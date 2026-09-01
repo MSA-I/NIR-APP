@@ -1,0 +1,166 @@
+{
+  "observedAt": "2026-09-01T09:18:10.684Z",
+  "origins": [
+    "https://app.inplace.digital",
+    "https://supplyflow-baq.pages.dev"
+  ],
+  "paths": [
+    "/",
+    "/login",
+    "/suppliers",
+    "/operator",
+    "/portal",
+    "/robots.txt",
+    "/sitemap.xml",
+    "/this-page-does-not-exist-xyz"
+  ],
+  "observations": [
+    {
+      "url": "https://app.inplace.digital/",
+      "status": 200,
+      "finalUrl": "https://app.inplace.digital/",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://app.inplace.digital/login",
+      "status": 200,
+      "finalUrl": "https://app.inplace.digital/login",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://app.inplace.digital/suppliers",
+      "status": 200,
+      "finalUrl": "https://app.inplace.digital/suppliers",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://app.inplace.digital/operator",
+      "status": 200,
+      "finalUrl": "https://app.inplace.digital/operator",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://app.inplace.digital/portal",
+      "status": 200,
+      "finalUrl": "https://app.inplace.digital/portal",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://app.inplace.digital/robots.txt",
+      "status": 200,
+      "finalUrl": "https://app.inplace.digital/robots.txt",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://app.inplace.digital/sitemap.xml",
+      "status": 200,
+      "finalUrl": "https://app.inplace.digital/sitemap.xml",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://app.inplace.digital/this-page-does-not-exist-xyz",
+      "status": 200,
+      "finalUrl": "https://app.inplace.digital/this-page-does-not-exist-xyz",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://supplyflow-baq.pages.dev/",
+      "status": 200,
+      "finalUrl": "https://supplyflow-baq.pages.dev/",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://supplyflow-baq.pages.dev/login",
+      "status": 200,
+      "finalUrl": "https://supplyflow-baq.pages.dev/login",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://supplyflow-baq.pages.dev/suppliers",
+      "status": 200,
+      "finalUrl": "https://supplyflow-baq.pages.dev/suppliers",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://supplyflow-baq.pages.dev/operator",
+      "status": 200,
+      "finalUrl": "https://supplyflow-baq.pages.dev/operator",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://supplyflow-baq.pages.dev/portal",
+      "status": 200,
+      "finalUrl": "https://supplyflow-baq.pages.dev/portal",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://supplyflow-baq.pages.dev/robots.txt",
+      "status": 200,
+      "finalUrl": "https://supplyflow-baq.pages.dev/robots.txt",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://supplyflow-baq.pages.dev/sitemap.xml",
+      "status": 200,
+      "finalUrl": "https://supplyflow-baq.pages.dev/sitemap.xml",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    },
+    {
+      "url": "https://supplyflow-baq.pages.dev/this-page-does-not-exist-xyz",
+      "status": 200,
+      "finalUrl": "https://supplyflow-baq.pages.dev/this-page-does-not-exist-xyz",
+      "contentType": "text/html; charset=utf-8",
+      "xRobotsTag": null
+    }
+  ],
+  "failures": [
+    "https://app.inplace.digital/\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://app.inplace.digital/\n      the served HTML carries no `<meta name=\"robots\" ... noindex>`.\n      All three HTML entries carry it in the tree, so the deployed build predates it.",
+    "https://app.inplace.digital/login\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://app.inplace.digital/login\n      the served HTML carries no `<meta name=\"robots\" ... noindex>`.\n      All three HTML entries carry it in the tree, so the deployed build predates it.",
+    "https://app.inplace.digital/suppliers\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://app.inplace.digital/suppliers\n      the served HTML carries no `<meta name=\"robots\" ... noindex>`.\n      All three HTML entries carry it in the tree, so the deployed build predates it.",
+    "https://app.inplace.digital/operator\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://app.inplace.digital/operator\n      the served HTML carries no `<meta name=\"robots\" ... noindex>`.\n      All three HTML entries carry it in the tree, so the deployed build predates it.",
+    "https://app.inplace.digital/portal\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://app.inplace.digital/robots.txt\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://app.inplace.digital/robots.txt\n      served as `text/html; charset=utf-8`, not text/plain.\n      text/html means the SPA catch-all in _redirects is still swallowing the request\n      and public/robots.txt is not in the published output.",
+    "https://app.inplace.digital/robots.txt\n      the served HTML carries no `<meta name=\"robots\" ... noindex>`.\n      All three HTML entries carry it in the tree, so the deployed build predates it.",
+    "https://app.inplace.digital/sitemap.xml\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://app.inplace.digital/sitemap.xml\n      the served HTML carries no `<meta name=\"robots\" ... noindex>`.\n      All three HTML entries carry it in the tree, so the deployed build predates it.",
+    "https://app.inplace.digital/this-page-does-not-exist-xyz\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://app.inplace.digital/this-page-does-not-exist-xyz\n      the served HTML carries no `<meta name=\"robots\" ... noindex>`.\n      All three HTML entries carry it in the tree, so the deployed build predates it.",
+    "https://supplyflow-baq.pages.dev/\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://supplyflow-baq.pages.dev/\n      the served HTML carries no `<meta name=\"robots\" ... noindex>`.\n      All three HTML entries carry it in the tree, so the deployed build predates it.",
+    "https://supplyflow-baq.pages.dev/login\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://supplyflow-baq.pages.dev/login\n      the served HTML carries no `<meta name=\"robots\" ... noindex>`.\n      All three HTML entries carry it in the tree, so the deployed build predates it.",
+    "https://supplyflow-baq.pages.dev/suppliers\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://supplyflow-baq.pages.dev/suppliers\n      the served HTML carries no `<meta name=\"robots\" ... noindex>`.\n      All three HTML entries carry it in the tree, so the deployed build predates it.",
+    "https://supplyflow-baq.pages.dev/operator\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://supplyflow-baq.pages.dev/operator\n      the served HTML carries no `<meta name=\"robots\" ... noindex>`.\n      All three HTML entries carry it in the tree, so the deployed build predates it.",
+    "https://supplyflow-baq.pages.dev/portal\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://supplyflow-baq.pages.dev/robots.txt\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://supplyflow-baq.pages.dev/robots.txt\n      served as `text/html; charset=utf-8`, not text/plain.\n      text/html means the SPA catch-all in _redirects is still swallowing the request\n      and public/robots.txt is not in the published output.",
+    "https://supplyflow-baq.pages.dev/robots.txt\n      the served HTML carries no `<meta name=\"robots\" ... noindex>`.\n      All three HTML entries carry it in the tree, so the deployed build predates it.",
+    "https://supplyflow-baq.pages.dev/sitemap.xml\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://supplyflow-baq.pages.dev/sitemap.xml\n      the served HTML carries no `<meta name=\"robots\" ... noindex>`.\n      All three HTML entries carry it in the tree, so the deployed build predates it.",
+    "https://supplyflow-baq.pages.dev/this-page-does-not-exist-xyz\n      no `X-Robots-Tag: noindex` on the response (got: the header is absent).\n      public/_headers declares it for `/*`; if the tree has it and the host does not,\n      this build has not been deployed yet.",
+    "https://supplyflow-baq.pages.dev/this-page-does-not-exist-xyz\n      the served HTML carries no `<meta name=\"robots\" ... noindex>`.\n      All three HTML entries carry it in the tree, so the deployed build predates it."
+  ],
+  "passed": false
+}

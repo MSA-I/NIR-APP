@@ -5,6 +5,7 @@
 import { z } from "zod";
 import type { Fact } from "../../../../src/lib/assistant/contracts.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
+import { readerText } from "../reader-locale.ts";
 import { list, num, record, sanitizeText, str, UNTRUSTED_TEXT_WARNING } from "./shared.ts";
 import { fetchThreeWayAssessment } from "./threeWay.ts";
 
@@ -55,7 +56,7 @@ export const compareOrderReceiptInvoice: AssistantTool = {
     facts.push(ctx.evidence.fact({
       kind: "invoice.total",
       subject: { entity: "invoice", id: invoice_id },
-      label: "סכום החשבונית כולל מע\"מ",
+      label: readerText(ctx.locale, "assistantTools.invoiceAmountWithVat"),
       value: num(totals.invoice_grand),
       unit: "ils",
       tool: compareOrderReceiptInvoice.name,
@@ -94,26 +95,26 @@ export const compareOrderReceiptInvoice: AssistantTool = {
       facts.push(ctx.evidence.fact({
         ...shared,
         kind: "metric.count",
-        label: `כמות שהוזמנה בפריט ההזמנה${suffix}`,
+        label: `${readerText(ctx.locale, "assistantTools.threeWayOrderedQty")}${suffix}`,
         value: num(item.ordered_quantity),
       }));
       facts.push(ctx.evidence.fact({
         ...shared,
         kind: "metric.count",
-        label: `כמות שהתקבלה בפועל בפריט ההזמנה${suffix}`,
+        label: `${readerText(ctx.locale, "assistantTools.threeWayReceivedQty")}${suffix}`,
         value: num(item.received_quantity),
       }));
       facts.push(ctx.evidence.fact({
         ...shared,
         kind: "metric.count",
-        label: `כמות שחויבה במצטבר (חשבוניות מאושרות קודמות + החשבונית הזו)${suffix}`,
+        label: `${readerText(ctx.locale, "assistantTools.threeWayBilledQty")}${suffix}`,
         value: num(item.invoiced_quantity),
       }));
     }
     if (orderItems.length > ORDER_ITEM_FACT_CAP) {
       cappedItems = orderItems.length - ORDER_ITEM_FACT_CAP;
       warnings.push(
-        "לא הונפקו עובדות לכל פריטי ההזמנה; חלקם מופיעים רק בנתונים הגולמיים.",
+        readerText(ctx.locale, "assistantTools.threeWayPartialFacts"),
       );
     }
 
@@ -123,8 +124,8 @@ export const compareOrderReceiptInvoice: AssistantTool = {
       const lineNumber = num(line.line_number);
       const description = sanitizeText(line.description, 60);
       const label = description !== ""
-        ? `שורה ${lineNumber ?? "?"} — ${description}`
-        : `שורה ${lineNumber ?? "?"}`;
+        ? `${readerText(ctx.locale, "assistantTools.lineWord")} ${lineNumber ?? "?"} — ${description}`
+        : `${readerText(ctx.locale, "assistantTools.lineWord")} ${lineNumber ?? "?"}`;
       for (const reasonEntry of list(line.reasons)) {
         const reason = record(reasonEntry);
         if (!reason) continue;
@@ -135,7 +136,7 @@ export const compareOrderReceiptInvoice: AssistantTool = {
           facts.push(ctx.evidence.fact({
             kind: "order_invoice.delta",
             subject: { entity: "invoice", id: invoice_id },
-            label: `הפרש מחיר יחידה מנורמל מול מחיר ההזמנה, בש"ח — ${label}`,
+            label: `${readerText(ctx.locale, "assistantTools.threeWayUnitPriceGapMoney")} — ${label}`,
             value: differenceAmount,
             unit: "ils",
             tool: compareOrderReceiptInvoice.name,
@@ -147,7 +148,7 @@ export const compareOrderReceiptInvoice: AssistantTool = {
           facts.push(ctx.evidence.fact({
             kind: "metric.percent",
             subject: { entity: "invoice", id: invoice_id },
-            label: `הפרש מחיר יחידה מנורמל מול מחיר ההזמנה, באחוזים — ${label}`,
+            label: `${readerText(ctx.locale, "assistantTools.threeWayUnitPriceGapPercent")} — ${label}`,
             value: differencePercent,
             unit: "percent",
             tool: compareOrderReceiptInvoice.name,
@@ -160,7 +161,7 @@ export const compareOrderReceiptInvoice: AssistantTool = {
 
     if (orderItems.length > 0) {
       warnings.push(
-        "הכמות שחויבה בעבר נספרת מצילומי אישור קבועים; מעבר של חשבונית קודמת לחקירה אינו משחרר את הכמות שנצרכה.",
+        readerText(ctx.locale, "assistantTools.threeWayBilledSnapshotWarning"),
       );
     }
     if (lines.some((line) => sanitizeText(line.description, 60) !== "")) {
@@ -168,14 +169,14 @@ export const compareOrderReceiptInvoice: AssistantTool = {
     }
     if (linkedOrderCount === 0) {
       warnings.push(
-        "אין הזמנה מקושרת לחשבונית, ולכן אין בסיס להשוואה — זו קביעה, לא תקינות.",
+        readerText(ctx.locale, "assistantTools.threeWayNoLinkedOrder"),
       );
     }
 
     const source = ctx.evidence.source({
       entity: "invoice",
       entity_id: invoice_id,
-      label: "החשבונית המושוות",
+      label: readerText(ctx.locale, "assistantTools.threeWayInvoiceCompared"),
       route: `/invoices/${invoice_id}`,
       classification: "financial_sensitive",
     });

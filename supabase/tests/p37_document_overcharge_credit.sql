@@ -54,12 +54,11 @@ insert into public.invoices
 alter table public.invoices enable trigger invoice_three_way_approval_guard_insert;
 
 insert into public.documents (
-  id, org_id, entity_type, storage_path, file_name, mime_type, document_kind
-)
+  id, org_id, entity_type, storage_path, file_name, mime_type, document_kind, uploaded_by)
 select ('60370000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
        '10370000-0000-4000-8000-000000000001', 'inbox',
        '10370000-0000-4000-8000-000000000001/p37-' || n || '.pdf',
-       'p37-' || n || '.pdf', 'application/pdf', 'invoice'
+       'p37-' || n || '.pdf', 'application/pdf', 'invoice', '20370000-0000-4000-8000-000000000001'
 from generate_series(1, 3) as n;
 insert into public.document_processing_jobs (
   id, org_id, document_id, requested_by, status, input_checksum,

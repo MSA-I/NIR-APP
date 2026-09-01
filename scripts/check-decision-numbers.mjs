@@ -128,16 +128,34 @@ const CODE_PATHS = ['src', 'supabase', 'scripts'];
 const SELF_FILE = 'scripts/check-decision-numbers.mjs';
 let codeCitations = [];
 try {
-  const out = execFileSync('git', ['grep', '--untracked', '-nIoE', '#[0-9]{3}[0-9a-fA-F]*', '--', ...CODE_PATHS],
+  // Whole lines, not just the token: deciding whether `#666` is a ruling or the colour grey
+  // needs what sits immediately to its left, and `-o` throws exactly that away.
+  const out = execFileSync('git', ['grep', '--untracked', '-nIE', '#[0-9]{3}', '--', ...CODE_PATHS],
     { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-  codeCitations = out.split(String.fromCharCode(10)).filter(Boolean).map((hit) => {
+  // A CSS colour is not a citation even when it is written inside a .ts file. The exclusion
+  // above was by file EXTENSION, which is why `color:#666` in an inline HTML email template
+  // read as a ruling: activation-email.ts is TypeScript that emits styles. Match the property
+  // instead of the filename -- that is what the comment above already claims to be doing.
+  // Two shapes, because a colour is written two ways. `color:#666` is the CSS declaration; the
+  // canvas API assigns instead -- `ctx.fillStyle = '#000'` -- and check-contrast-rendered.mjs is
+  // full of exactly that, being a contrast checker. Neither is a citation. The quote before the
+  // `#` is what makes the second safe: a real citation is never written `= '#331'`.
+  const CSS_COLOUR = /(?:color|background|background-color|fill|stroke|border|border-color|outline|box-shadow|text-shadow|stop-color|caret-color)\s*:\s*$/i;
+  const COLOUR_ASSIGNED = /(?:fillStyle|strokeStyle|shadowColor|backgroundColor|borderColor|Color)\s*=\s*['"`]$/i;
+  codeCitations = out.split(String.fromCharCode(10)).filter(Boolean).flatMap((hit) => {
     const parts = hit.split(':');
-    const token = parts.at(-1).replace('#', '');
-    const lineNo = parts.at(-2);
-    const file = parts.slice(0, -2).join(':');
-    return { file, lineNo, token };
-  }).filter((c) => c.token.length === 3
-    && !c.file.endsWith('.css')
+    const lineNo = parts.at(1);
+    const file = parts.at(0);
+    const text = parts.slice(2).join(':');
+    const found = [];
+    for (const m of text.matchAll(/#([0-9]{3})([0-9a-fA-F]*)/g)) {
+      if (m[2].length) continue;                                   // #4338ca is a colour, #7702 an order
+      const before = text.slice(Math.max(0, m.index - 24), m.index);
+      if (CSS_COLOUR.test(before) || COLOUR_ASSIGNED.test(before)) continue;
+      found.push({ file, lineNo, token: m[1] });
+    }
+    return found;
+  }).filter((c) => !c.file.endsWith('.css')
     && c.file !== SELF_FILE
     && c.file !== 'scripts/renumber-map.json');
 } catch (error) {
