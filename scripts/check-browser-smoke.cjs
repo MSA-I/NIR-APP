@@ -2365,7 +2365,18 @@ async function documentOcrAcceptance(browser) {
     await exportPreview.getByRole('heading', { name: 'תוצאת התצוגה המקדימה' }).waitFor({ timeout: 10_000 });
     assert.equal(await exportPreview.locator('thead th').count(), 3, 'OCR export preview did not render three fixture columns');
     assert.equal(await exportPreview.locator('tbody tr').count(), 2, 'OCR export preview did not render two fixture rows');
-    assert.equal(await exportPreview.getByText(/טביעת מקור:/).count(), 1, 'OCR export preview did not expose a checksum');
+    // THE CHECKSUM ASSERTION IS GONE ON PURPOSE, and it is not a coverage loss.
+    //
+    // Owner report of 28.08.2026: "יש אזור שמראה פרטים טכניים - להסיר את זה משתמש לא אמור לראות
+    // את זה". The technical-details box went, and `טביעת מקור:` went with it.
+    // `DocumentReviewWorkspace.spec.tsx` now asserts the OPPOSITE of what this line asserted —
+    // that the text is absent — so the two tests were demanding contradictory products and this
+    // one was the stale side of an owner decision. Measured: `documentExportPreview.text_9` has no
+    // production call site at all, so nothing renders it and nothing can.
+    //
+    // Nothing was deleted from the database. `document_jobs`, `document_extractions` and
+    // `document_interpretations` still carry every id, checksum and confidence, and the operator
+    // console still reads them. They simply stopped being printed at a tenant.
     await review.screenshot({ path: path.join(outDir, 'ocr-export-preview-1440.png'), fullPage: true });
     report.screenshots.push('ocr-export-preview-1440.png');
 
