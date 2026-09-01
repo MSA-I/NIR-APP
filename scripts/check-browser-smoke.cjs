@@ -846,7 +846,13 @@ async function receivingAccessibility(browser) {
     assert.equal(await page.getByText('סיבה (רשות — נרשמת ביומן הביקורת)').count(), 0,
       'routine receiving must not ask for a reason');
     await page.getByRole('button', { name: 'מלא עבור מוצר בדיקת נגישות' }).waitFor();
-    assert.equal(await page.locator('button[aria-pressed]').count(), 5, 'receiving status controls lost pressed state');
+    // SIX, not five, since the dark theme landed: the four receiving status controls, the row's
+    // own toggle, and the theme toggle in the shell header — which carries `aria-pressed` because
+    // pressed describes DARK, and which is present on every screen rather than this one. Counting
+    // every pressed control on the page rather than the ones inside the receiving row is what
+    // makes a shell-level control move this number at all; the count is left whole-page on purpose,
+    // because a status control that silently loses its pressed state is the thing worth catching.
+    assert.equal(await page.locator('button[aria-pressed]').count(), 6, 'receiving status controls lost pressed state');
     await page.screenshot({ path: path.join(outDir, 'receiving-390.png'), fullPage: true });
     report.screenshots.push('receiving-390.png');
     const audit = await auditAccessibility(page, 'receiving-detail');
