@@ -36,24 +36,39 @@ describe('owner product tour integration contract', () => {
     for (const [file, anchor] of anchors) expect(read(file)).toContain(`data-tour-anchor="${anchor}"`);
   });
 
-  // Regression, 30.08.2026. `prepare` opened the desktop nav group holding the step's target, and
-  // it named that group by its Hebrew WORDS — `'ניהול'`, `'בקרה'` — while `NavSection.section` is a
-  // `TKey`. So the comparison in `topNavGroup` could never be true, and two steps of the owner tour
-  // pointed at links inside a group that stayed shut. Nothing failed loudly, which is why it
-  // survived: the tour still advanced, it just spotlighted nothing. Asserting the mapping lands on
-  // a section this file actually declares is what makes the next rename fail here instead.
-  it('prepares a nav group the shell really has, by key and not by its words', () => {
+  /*
+   * Regression, 30.08.2026, and the SECOND half of it, 31.08.2026.
+   *
+   * The first half: `prepare` named the group to open by its Hebrew WORDS — `'ניהול'`, `'בקרה'` —
+   * while `NavSection.section` is a `TKey`, so the comparison in `topNavGroup` could never be
+   * true and two steps of the owner tour pointed into a group that stayed shut. Nothing failed
+   * loudly: the tour advanced and simply spotlighted nothing.
+   *
+   * The fix then was to swap the words for `'nav.text_6'` / `'nav.text_8'`, and the guard written
+   * beside it collected every `section: '…'` literal in `Layout.tsx` and required the mapping to
+   * land on one. **That guard passed on code that was already broken again**, because
+   * `Layout.tsx` declares `section:` in TWO lists: `NAV_SECTIONS`, the permission-aware route
+   * catalogue, and `NAV_GROUPS`, which is what the bar actually renders. `nav.text_6` and
+   * `nav.text_8` live in the FORMER. The subject regrouping of 28.08.2026 moved the bar to
+   * `nav.groupPurchasing` and friends, the map kept naming catalogue keys, and a guard that
+   * merged both lists could not see the difference.
+   *
+   * So the shape is gone rather than re-pointed: the group is DERIVED from the step's
+   * `destination` through `NAV_GROUPS` (`tourGroupForDestination`). This file asserts the wiring
+   * and forbids the literal map from returning; `src/components/layout.spec.ts` asserts the
+   * BEHAVIOUR, against `barSectionsForRole` — the list the bar really draws, and the one the old
+   * guard should have been reading.
+   */
+  it('derives the prepared nav group from the destination instead of naming it', () => {
     const layout = read('src/components/Layout.tsx');
-    const sections = new Set([...layout.matchAll(/section: '([^']+)'/g)].map((m) => m[1]));
-    expect(sections.size).toBeGreaterThan(0);
-
-    const prepared = [...layout.matchAll(/step\.prepare === '[a-z]+' \? '([^']+)'/g)].map((m) => m[1]);
-    expect(prepared.length).toBeGreaterThan(0);
-    for (const target of prepared) {
-      // 'account' is the one group that is not a nav section — it is the profile disclosure.
-      if (target === 'account') continue;
-      expect(sections).toContain(target);
-    }
+    expect(layout).toContain('setOpenGroup(tourGroupForDestination(step.destination))');
+    expect(layout).toContain('const group = NAV_GROUPS.find((candidate) => candidate.paths.includes(destination));');
+    // The old shape, forbidden by name: a literal that maps a `prepare` word to a group key is
+    // exactly what drifted twice, and it drifts silently because a dead key still READS right.
+    expect(layout).not.toMatch(/step\.prepare === '[a-z]+' \? '/);
+    // `prepare` is a flag now. A step that carries a group name again would mean the registry has
+    // taken back a decision it cannot keep correct.
+    expect(read('src/lib/productTourRegistry.ts')).not.toMatch(/prepare: '[a-z]+'/);
   });
 
   it('documents and styles the spotlight as a named quiet-control-room pattern', () => {
