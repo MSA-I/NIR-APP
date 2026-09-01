@@ -192,14 +192,33 @@ if (moved.length) {
     + moved.map((m) => `    - at position ${m.at}: expected "${m.was}"\n      but found  "${m.now}"`).join('\n'));
 }
 
+// An ADDITION is not free either. Letting additions pass silently opens a two-wave hole: wave N
+// adds p94 without re-baselining (the guard prints it and passes), wave N+1 deletes p94, the tree
+// matches the stale baseline again, and the suite is gone with every check green. So the manifest
+// must EQUAL the baseline — which forces every add and every removal to appear as a baseline diff
+// in the same pull request, where a person can see it.
+if (added.length) {
+  problems.push(`${added.length} entr${added.length === 1 ? 'y is' : 'ies are'} in the gate but not in the baseline:\n`
+    + added.map((e) => `    + ${e.kind.padEnd(9)} ${e.path ?? e.label}`).join('\n')
+    + '\n    Re-baseline in this same commit so the addition is reviewable in the diff.');
+}
+// A new reset or preflight changes the database state every LATER suite observes, so it is named
+// separately rather than folded in with an ordinary suite addition.
+const structural = added.filter((e) => e.kind !== 'suite');
+if (structural.length) {
+  problems.push(`${structural.length} new reset/preflight entr${structural.length === 1 ? 'y' : 'ies'} — these change\n`
+    + '    what every following suite sees. Argue for it explicitly:\n'
+    + structural.map((e) => `    + ${e.kind} at position ${e.ordinal}`).join('\n'));
+}
+
 if (problems.length) {
   fail('check:suite-manifest FAILED\n\n  ' + problems.join('\n\n  ') + '\n\n'
     + '  If every change above is intended, re-baseline in the SAME commit that makes it:\n'
     + '    node scripts/check-suite-manifest.mjs --write\n'
-    + '  Re-baselining alongside an unexplained removal is how a suite leaves CI unnoticed.');
+    + '  Re-baselining alongside an unexplained removal is how a suite leaves CI unnoticed —\n'
+    + '  so the baseline diff is the thing to read in review, not this message.');
 }
 
 const suiteCount = manifest.filter((e) => e.kind === 'suite').length;
-console.log(`check:suite-manifest passed: ${manifest.length} entries, ${suiteCount} suites, order and identity unchanged`
-  + (added.length ? `, ${added.length} added.` : '.'));
-if (added.length) for (const e of added) console.log(`  + ${describe(e)}`);
+console.log(`check:suite-manifest passed: ${manifest.length} entries, ${suiteCount} suites, identical to`
+  + ' the baseline in identity and order, and in agreement with what ci-sql-suites.mjs would run.');

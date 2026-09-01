@@ -120,7 +120,17 @@ console.log('\ncheck:suite-manifest');
       expect: 'order changed',
     });
 
-    // control 4 — the untouched registry must still pass, or the three above prove nothing
+    // control 4 — an ADDED suite must fail too. Tolerating additions silently opens a
+    // two-wave hole: wave N adds a suite without re-baselining, wave N+1 deletes it, the tree
+    // matches the stale baseline again, and the suite is gone with every check green.
+    const withAdd = path.join(scratch, 'gate-added.ps1');
+    writeFileSync(withAdd, head + body + '\nInvoke-SqlTest "supabase\\tests\\p999_injected.sql" "Injected by the control"\n', 'utf8');
+    mustFail('an added suite is caught', 'check-suite-manifest.mjs', {
+      env: { SUITE_MANIFEST_GATE_PATH: withAdd, SUITE_MANIFEST_BASELINE_PATH: copyBaseline },
+      expect: 'not in the baseline',
+    });
+
+    // control 5 — the untouched registry must still pass, or the four above prove nothing
     mustPass('the real registry still passes', 'check-suite-manifest.mjs', {});
   }
 }
@@ -137,11 +147,19 @@ console.log('\ncheck:migration-numbers');
     env: { MIGRATION_NUMBERS_INJECT: 'gap', MIGRATION_NUMBERS_DIR: migrations },
     expect: 'gap',
   });
+  mustFail('deleting the HIGHEST migration is caught (it makes no gap)', 'check-migration-numbers.mjs', {
+    env: { MIGRATION_NUMBERS_INJECT: 'delete-head', MIGRATION_NUMBERS_DIR: migrations },
+    expect: 'DISAPPEARED',
+  });
   mustPass('the real migration sequence still passes', 'check-migration-numbers.mjs', {});
 }
 
 // ============================================================ renumber closure
 console.log('\ncheck:renumber-closure');
+  mustFail('a stale dollar tag of ANY name is caught', 'check-renumber-closure.mjs', {
+    env: { RENUMBER_CLOSURE_INJECT: 'dollartag' },
+    expect: 'dollar tag',
+  });
 {
   mustFail('a stale raise-exception prefix is caught', 'check-renumber-closure.mjs', {
     env: { RENUMBER_CLOSURE_INJECT: 'prefix' },

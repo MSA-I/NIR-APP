@@ -36,6 +36,10 @@ jobs:
       tokens: ${{ steps.filter.outputs.tokens }}
       money: ${{ steps.filter.outputs.money }}
       exemptions: ${{ steps.filter.outputs.exemptions }}
+      suitemanifest: ${{ steps.filter.outputs.suitemanifest }}
+      mignumbers: ${{ steps.filter.outputs.mignumbers }}
+      closure: ${{ steps.filter.outputs.closure }}
+      gatecontrols: ${{ steps.filter.outputs.gatecontrols }}
       supplier: ${{ steps.filter.outputs.supplier }}
       nosend: ${{ steps.filter.outputs.nosend }}
       vitest: ${{ steps.filter.outputs.vitest }}
@@ -81,18 +85,29 @@ jobs:
           # egress kind or a foreign flag key counts wherever it is written).
           nosend_inputs='^(src/lib/assistant/|src/components/assistant/|src/components/AssistantPanel\.tsx$|supabase/functions/assistant/|scripts/check-assistant-no-send\.mjs$)'
           vitest_inputs='^(src/|.*\.(spec|test)\.[cm]?[jt]sx?$)'
+          # The merge guards. `migrations` covers number collisions and new gaps; `closure`
+          # additionally watches every surface that can cite a migration by filename, because a
+          # half-finished renumber leaves the pointer behind rather than the file.
+          gate_registry='^(scripts/check-quality-gates\.ps1|scripts/suite-manifest\.baseline\.json|scripts/check-suite-manifest\.mjs)$'
+          migration_number_inputs='^(supabase/migrations/|scripts/check-migration-numbers\.mjs$)'
+          closure_inputs='^(supabase/migrations/|supabase/tests/|supabase/functions/|docs/|scripts/|src/)'
+          gate_control_inputs='^scripts/check-(suite-manifest|migration-numbers|renumber-closure|gate-controls)\.mjs$'
 
           if [ ! -s changed-files.txt ] || product_matches "$build_common|$build_inputs"; then
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
             echo "build=false" >> "$GITHUB_OUTPUT"
           fi
-          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$token_inputs|$money_inputs|$exemption_inputs|$supplier_inputs|$nosend_inputs|$vitest_inputs"; then echo "verify=true" >> "$GITHUB_OUTPUT"; else echo "verify=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$token_inputs|$money_inputs|$exemption_inputs|$supplier_inputs|$nosend_inputs|$vitest_inputs|$gate_registry|$migration_number_inputs|$closure_inputs|$gate_control_inputs"; then echo "verify=true" >> "$GITHUB_OUTPUT"; else echo "verify=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$vitest_inputs"; then echo "install=true" >> "$GITHUB_OUTPUT"; else echo "install=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$knip_inputs"; then echo "knip=true" >> "$GITHUB_OUTPUT"; else echo "knip=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-design-tokens\.ts$" || product_matches '^src/'; then echo "tokens=true" >> "$GITHUB_OUTPUT"; else echo "tokens=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-money\.ts$" || product_matches '^src/'; then echo "money=true" >> "$GITHUB_OUTPUT"; else echo "money=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$exemption_inputs"; then echo "exemptions=true" >> "$GITHUB_OUTPUT"; else echo "exemptions=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$gate_registry"; then echo "suitemanifest=true" >> "$GITHUB_OUTPUT"; else echo "suitemanifest=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$migration_number_inputs"; then echo "mignumbers=true" >> "$GITHUB_OUTPUT"; else echo "mignumbers=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$closure_inputs"; then echo "closure=true" >> "$GITHUB_OUTPUT"; else echo "closure=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$gate_control_inputs"; then echo "gatecontrols=true" >> "$GITHUB_OUTPUT"; else echo "gatecontrols=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-supplier-columns\.ts$" || product_matches '^src/'; then echo "supplier=true" >> "$GITHUB_OUTPUT"; else echo "supplier=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$nosend_inputs"; then echo "nosend=true" >> "$GITHUB_OUTPUT"; else echo "nosend=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$vitest_config|$vitest_inputs"; then echo "vitest=true" >> "$GITHUB_OUTPUT"; else echo "vitest=false" >> "$GITHUB_OUTPUT"; fi
@@ -159,6 +174,26 @@ jobs:
       - name: Assistant no-send guard
         if: needs.changes.outputs.nosend == 'true'
         run: npm run check:assistant-no-send
+      - name: Suite-manifest guard (a dropped SQL suite leaves CI silently)
+        if: needs.changes.outputs.suitemanifest == 'true'
+        run: npm run check:suite-manifest
+      - name: Migration-number guard (no duplicate, no new gap)
+        if: needs.changes.outputs.mignumbers == 'true'
+        run: npm run check:migration-numbers
+      - name: Renumber-closure guard (the number lives in the body, not the filename)
+        if: needs.changes.outputs.closure == 'true'
+        run: npm run check:renumber-closure
+      - name: Gate controls (each guard must fail on a broken input)
+        # Runs whenever ANY guard it validates runs. Relying on a guard's verdict without
+        # proof that the guard still fails correctly is how a guard becomes decoration —
+        # and a baseline edit alone can defeat one, which is why this is not gated on the
+        # guard sources changing.
+        if: >-
+          needs.changes.outputs.gatecontrols == 'true' ||
+          needs.changes.outputs.suitemanifest == 'true' ||
+          needs.changes.outputs.mignumbers == 'true' ||
+          needs.changes.outputs.closure == 'true'
+        run: npm run check:gate-controls
       - name: Vitest
         if: needs.changes.outputs.vitest == 'true'
         run: npm run test

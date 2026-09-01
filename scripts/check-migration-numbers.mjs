@@ -14,7 +14,7 @@
  * different schemas from the same files, and no gate says a word. That is not hypothetical: it
  * is how `0279` came to take a foreign key on a table that `0281` had not created yet.
  */
-import { readdirSync, writeFileSync, mkdtempSync, cpSync, rmSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, existsSync, mkdtempSync, cpSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +36,8 @@ if (inject) {
   const lastNumber = Number(last.slice(0, 4));
   if (inject === 'duplicate') {
     writeFileSync(path.join(scratch, `${String(lastNumber).padStart(4, '0')}_a_second_claim.sql`), '-- injected\n');
+  } else if (inject === 'delete-head') {
+    rmSync(path.join(scratch, last));
   } else if (inject === 'gap') {
     writeFileSync(path.join(scratch, `${String(lastNumber + 2).padStart(4, '0')}_after_a_hole.sql`), '-- injected\n');
   }
@@ -100,6 +102,43 @@ if (gaps.length) {
     + '  If the number is genuinely abandoned, add the span to HISTORICAL_GAPS with a reason.');
 }
 
+
+// ---------------------------------------------------------------- no migration may disappear
+// A gap check alone cannot see the deletion of the HIGHEST migration: remove 0267 and the
+// sequence 0001-0266 is still perfectly contiguous. Deleting a migration adjacent to one of the
+// historical gaps hides the same way. So the set of filenames is pinned, and any disappearance
+// fails — the mirror of what check:suite-manifest does for the SQL suites.
+const setBaselinePath = process.env.MIGRATION_SET_BASELINE_PATH
+  || path.join(repoRoot, 'scripts', 'migration-set.baseline.json');
+
+if (process.argv.includes('--write')) {
+  writeFileSync(setBaselinePath, JSON.stringify(files.slice().sort(), null, 2) + '\n', 'utf8');
+  console.log(`check:migration-numbers — set baseline written: ${files.length} migrations.`);
+  process.exit(0);
+}
+
+if (existsSync(setBaselinePath)) {
+  const known = JSON.parse(readFileSync(setBaselinePath, 'utf8'));
+  const now = new Set(files);
+  const vanished = known.filter((f) => !now.has(f));
+  const fresh = files.filter((f) => !known.includes(f)).sort();
+  if (vanished.length) {
+    fail('check:migration-numbers FAILED — migration file(s) DISAPPEARED:\n\n'
+      + vanished.map((f) => `    - ${f}`).join('\n')
+      + '\n\n  A migration that has been applied anywhere cannot be withdrawn by deleting the file:'
+      + '\n  every database that already ran it stays changed while a fresh reset never runs it at all.'
+      + '\n  If the removal is deliberate, re-baseline in the SAME commit:'
+      + '\n    node scripts/check-migration-numbers.mjs --write');
+  }
+  if (fresh.length) {
+    fail(`check:migration-numbers FAILED — ${fresh.length} migration(s) are not in the set baseline:\n\n`
+      + fresh.map((f) => `    + ${f}`).join('\n')
+      + '\n\n  Expected for a wave that adds migrations. Re-baseline in the SAME commit so the'
+      + '\n  addition is reviewable in the diff:'
+      + '\n    node scripts/check-migration-numbers.mjs --write');
+  }
+}
+
 cleanup();
 console.log(`check:migration-numbers passed: ${files.length} migrations, `
-  + `${String(numbers[0]).padStart(4, '0')}–${String(numbers.at(-1)).padStart(4, '0')}, no duplicate and no gap.`);
+  + `${String(numbers[0]).padStart(4, '0')}–${String(numbers.at(-1)).padStart(4, '0')}, no duplicate, no new gap.`);
