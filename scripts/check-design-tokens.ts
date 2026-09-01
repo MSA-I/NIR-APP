@@ -237,6 +237,22 @@ const DARK_EXEMPT = new Map<string, string>([
   ['doc-ink-muted', 'ink on the paper sheet; same reason'],
   ['doc-ink-dim', 'ink on the paper sheet; same reason'],
   ['aurora-5', 'the auth aurora paints an on-dark panel in both themes; its ramp is the frozen light values of the chart ramp'],
+  // The assistant card, the third family on this list and the same reason as the first: it is a
+  // DARK surface inside a light product, by owner ruling 01.09.2026, not a light surface that a
+  // dark page flips. Every step is Onyx — the shell's own hue — so on a dark page the card is
+  // already the right dark and a second value would only make it drift from the chrome it
+  // belongs to. Ten tokens, added when wave 7's dark theme met the assistant card: the same
+  // collision the document plate had, and the same guard that noticed.
+  ['assistant-card', 'the assistant card is dark BY DESIGN, not by theme — the owner chose a dark card in a light product'],
+  ['assistant-card-lift', "the card gradient's lit corner; same reason"],
+  ['assistant-card-deep', "the card gradient's far corner; same reason"],
+  ['assistant-rim', 'the card frame; same reason'],
+  ['assistant-edge', 'inner hairlines on the card; same reason'],
+  ['assistant-well', "the composer's field on the card; same reason"],
+  ['assistant-bubble', 'a soft surface ON the dark card; same reason'],
+  ['assistant-bubble-hover', 'its hover step; same reason'],
+  ['assistant-mote', 'the rising motes over the card; same reason'],
+  ['assistant-focus', 'the focus ring lightened for the dark card specifically; same reason'],
 ]);
 
 const aliasTarget = (declaration: string) => /var\(\s*--color-([a-z0-9-]+)\s*\)/.exec(declaration)?.[1];

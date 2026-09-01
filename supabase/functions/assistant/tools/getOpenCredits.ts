@@ -10,6 +10,7 @@ import type {
 } from "../../../../src/lib/assistant/contracts.ts";
 import { fetchDashboardSnapshot } from "./dashboardSnapshot.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
+import { readerText } from "../reader-locale.ts";
 import {
   EMPTY_OBJECT_JSON_SCHEMA,
   failure,
@@ -40,7 +41,7 @@ export const getOpenCredits: AssistantTool = {
     const asOf = ctx.now().toISOString();
     const reads = readsOrNull(ctx);
     if (!reads) {
-      return failure(ctx, READS_UNAVAILABLE.code, READS_UNAVAILABLE.label);
+      return failure(ctx, READS_UNAVAILABLE.code, READS_UNAVAILABLE.label(ctx));
     }
 
     const fetched = await fetchDashboardSnapshot(ctx);
@@ -55,7 +56,7 @@ export const getOpenCredits: AssistantTool = {
     facts.push(ctx.evidence.fact({
       kind: "metric.count",
       subject: null,
-      label: "זיכויים פתוחים (open/requested/received) בכל הארגון",
+      label: readerText(ctx.locale, "assistantTools.creditsOpenCountOrg"),
       value: openCount,
       unit: "count",
       tool: getOpenCredits.name,
@@ -65,7 +66,7 @@ export const getOpenCredits: AssistantTool = {
     facts.push(ctx.evidence.fact({
       kind: "credit.open_amount",
       subject: null,
-      label: "סכום הזיכויים הפתוחים בכל הארגון",
+      label: readerText(ctx.locale, "assistantTools.creditsOpenSumOrg"),
       value: openSum,
       unit: "ils",
       tool: getOpenCredits.name,
@@ -75,7 +76,7 @@ export const getOpenCredits: AssistantTool = {
     sources.push(ctx.evidence.source({
       entity: "organization",
       entity_id: ctx.actor.orgId,
-      label: "מסך הזיכויים",
+      label: readerText(ctx.locale, "assistantTools.creditsScreen"),
       route: "/credits",
       classification: "financial_sensitive",
     }));
@@ -92,7 +93,7 @@ export const getOpenCredits: AssistantTool = {
     if (perSupplier.error || perSupplier.rows === null) {
       failures.push({
         code: "supplier_credit_breakdown_failed",
-        label: "פירוט הזיכויים פר ספק לא נשלף; הסכום הכולל לבדו נמדד",
+        label: readerText(ctx.locale, "assistantTools.creditsPerSupplierUnavailable"),
       });
     } else {
       hasMore = perSupplier.hasMore;
@@ -115,7 +116,7 @@ export const getOpenCredits: AssistantTool = {
         facts.push(ctx.evidence.fact({
           kind: "credit.open_amount",
           subject: { entity: "supplier", id: row.supplier_id },
-          label: `סכום זיכויים פתוחים — ${name}`,
+          label: `${readerText(ctx.locale, "assistantTools.creditsOpenAmount")} — ${name}`,
           value: row.open_credits_amount,
           unit: "ils",
           tool: getOpenCredits.name,
@@ -125,7 +126,7 @@ export const getOpenCredits: AssistantTool = {
         facts.push(ctx.evidence.fact({
           kind: "metric.count",
           subject: { entity: "supplier", id: row.supplier_id },
-          label: `מספר זיכויים פתוחים — ${name}`,
+          label: `${readerText(ctx.locale, "assistantTools.creditsOpenCount")} — ${name}`,
           value: row.open_credits,
           unit: "count",
           tool: getOpenCredits.name,
@@ -157,7 +158,7 @@ export const getOpenCredits: AssistantTool = {
       facts,
       sources,
       warnings: [
-        "נספרות רק רשומות זיכוי במערכת; מסמך זיכוי סרוק שלא נקלט כרשומה אינו נכלל בסכומים.",
+        readerText(ctx.locale, "assistantTools.creditsRecordsOnlyWarning"),
         UNTRUSTED_TEXT_WARNING,
       ],
     };
