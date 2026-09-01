@@ -20,7 +20,8 @@
 # Each migration is one request, and Postgres runs a multi-statement batch as one implicit
 # transaction, so a single file is all-or-nothing. A failure never leaves half a migration.
 #
-# Read `docs/ROLLOUT-0243-0267-20260831.md` before running this.
+# Read `docs/ROLLOUT-0243-0283-20260902.md` before running this. (The 0243-0267 document it
+# used to name is superseded; it still holds the per-migration detail for that first stretch.)
 #
 #   $env:SUPABASE_ACCESS_TOKEN = "sbp_..."
 #   .\scripts\rollout-apply.ps1 -From 0243 -To 0267 -ProjectRef rkftlbctohswhbbiaqin -AllowProduction
