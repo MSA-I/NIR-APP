@@ -168,6 +168,13 @@ const HISTORICAL_DANGLING_REFS = new Set([
   'docs/PLAN-multi-currency-20260828.md|0213_profile_locale.sql',
   'docs/PLAN-multi-currency-20260828.md|0214_money_carries_its_currency.sql',
   'docs/PLAN-tenant-operational-readiness-20260823.md|0179_alert_rules_engine.sql',
+  // The merge plan and its review log are the record of the renumbering they describe. Naming the
+  // FROM side is the whole point of a move table — "0280 -> 0281", "0268 -> 0283" — and those
+  // source files are now gone precisely because the plan was carried out. Pinned to exact paths,
+  // so a live citation of either name anywhere else still fails.
+  'docs/MERGE-PLAN-20260901.md|0280_subscription_activation_email.sql',
+  'docs/MERGE-PLAN-20260901.md|0268_profile_theme.sql',
+  'docs/MERGE-PLAN-REVIEW-LOG-20260901.md|0268_profile_theme.sql',
 ]);
 // Still used by the renumber-map mode below, where 'live code' vs 'prose about the move' is a
 // real distinction: a document may narrate 0281 → 0279; a test may not still call the old one.
@@ -268,6 +275,11 @@ if (existsSync(mapPath)) {
 
     const byName = grepRepo(fromFile.replace(/\./g, '\\.'), SCAN_PATHS)
       .filter((h) => !h.startsWith(`${SELF}:`) && !h.startsWith('scripts/renumber-map.json:')
+        // The same reason renumber-map.json is excluded: a document whose SUBJECT is the move
+        // must be able to name both sides of it. HISTORICAL_DANGLING_REFS already pardons these
+        // exact path|file pairs on the other path through this guard; this is the same list, so
+        // the two paths cannot disagree about what is prose and what is a live citation.
+        && !HISTORICAL_DANGLING_REFS.has(`${h.split(':')[0]}|${fromFile}`)
         && !(h.startsWith(`${FIXTURE_FILE}:`) && [...FIXTURE_NAMES].some((n) => h.endsWith(n))));
     if (byName.length) {
       violations.push({ file: label, lineNo: '-', kind: 'incomplete renumber',
