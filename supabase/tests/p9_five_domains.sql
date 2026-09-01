@@ -414,7 +414,7 @@ select pg_temp.p9_assert(
   || 'the org id carried on the expectation row it is iterating. Note that 0274 adds only ONE row '
   || 'here -- expectation_period_bounds is SECURITY INVOKER and reads no table, so it needs no '
   || 'exemption and was deliberately not given one; '
-  || 'plus the one 0281 inbound ingest command, '
+  || 'plus the one 0279 inbound ingest command, '
   || 'service_ingest_inbound_document, which is the same empty-auth_scopes constraint as 0077, '
   || '0168 and 0265 with one addition worth stating: it runs as service_role with no JWT, so '
   || 'auth_scopes() returns empty AND assert_unit_in_scope early-exits treating it as trusted '
