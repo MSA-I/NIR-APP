@@ -1,7 +1,7 @@
 -- P94 — the launch window moved, and it moved in every place that held a copy of it.
 --
 -- `0267` extends the pre-launch window by one month (owner ruling 31.08.2026, `OPEN-DECISIONS
--- #311`). The interesting half is not the function: it is that the old value had already been
+-- #314`). The interesting half is not the function: it is that the old value had already been
 -- COPIED INTO ROWS in three tables, so redefining the function alone would have moved not one
 -- existing customer while looking like a complete change.
 --
@@ -157,14 +157,30 @@ select pg_temp.p94_assert(
 
 -- ---- 6. Every move is in the ledger, with the ruling behind it. ------------------------------
 -- Extending entitlement is a financial change, and "the migration did it" is not a reason.
+-- NOT `count(*) > 0`. That asserted the DATABASE happened to hold rows worth moving, not that
+-- the code logs what it moves, so it passed or failed with the fixture set rather than with the
+-- migration -- and it did both on this branch before any merge reached it.
+--
+-- A silent move is not expressible here: `0270` writes the ledger in the SAME statement as the
+-- update (`with moved as (update ... returning) insert into audit_logs ... from moved`), so a
+-- row cannot be moved without the insert seeing it. And the migration already asserts, at
+-- migration time, that every row it wrote carries the ruling.
+--
+-- What is worth asserting from out here, and is true whatever the database held, is the other
+-- direction: nothing the backfill exists to EXCLUDE may appear in the ledger. The two fixtures
+-- above are exactly those cases -- a date an operator chose, and an organisation that has paid.
 select pg_temp.p94_assert(
-  (select count(*) from audit_logs where action = 'prelaunch_window_extended') > 0,
-  'the extension was not written to the ledger at all');
+  not exists (
+    select 1 from audit_logs ledger
+    where ledger.action = 'prelaunch_window_extended'
+      and ledger.org_id in ('a0940000-0000-4000-8000-000000000001',
+                            'a0940000-0000-4000-8000-000000000002')),
+  'a hand-dated or paying organisation was written to the extension ledger');
 select pg_temp.p94_assert(
   not exists (
     select 1 from audit_logs
     where action = 'prelaunch_window_extended'
-      and (reason is null or length(trim(reason)) = 0 or position('#311' in reason) = 0)),
+      and (reason is null or length(trim(reason)) = 0 or position('#314' in reason) = 0)),
   'a window extension was logged without the ruling behind it');
 -- The old and the new value are both on the row, so a reader can see what actually changed.
 select pg_temp.p94_assert(

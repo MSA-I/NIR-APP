@@ -1,6 +1,6 @@
 -- 0270 — the launch window moves to 01.02.2027, and the three copies of the old date move with it.
 --
--- OWNER RULING, 31.08.2026: one more month. `OPEN-DECISIONS #311`.
+-- OWNER RULING, 31.08.2026: one more month. `OPEN-DECISIONS #314`.
 --
 -- ⚠ THIS IS NOT "CHANGE A LITERAL". `private.prelaunch_window_end()` (`0210:26-29`) really is the
 -- only place the date is READ from — but its value was COPIED INTO ROWS the moment the migrations
@@ -65,7 +65,7 @@ $$;
 
 comment on function private.prelaunch_window_end() is
   'When the pre-launch window ends. Extended from 2027-01-01 to 2027-02-01 by 0270 (owner ruling '
-  '31.08.2026, OPEN-DECISIONS #311). The ONLY literal: everything else reads this function, and '
+  '31.08.2026, OPEN-DECISIONS #314). The ONLY literal: everything else reads this function, and '
   'the three tables that copied its old value into rows were backfilled in the same migration. '
   'The fourth copy, AI_ASSISTANT_PRELAUNCH_EXCEPTION, is an Edge secret rotated by hand.';
 
@@ -81,7 +81,7 @@ declare
     to_char(private.prelaunch_window_end() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"+00"');
   v_reason constant text :=
     'the pre-launch window was extended by one month, from 2027-01-01 to 2027-02-01, by owner '
-    'ruling of 31.08.2026 (OPEN-DECISIONS #311). This row carried a copy of the old date and was '
+    'ruling of 31.08.2026 (OPEN-DECISIONS #314). This row carried a copy of the old date and was '
     'moved with it; no entitlement was reduced and nothing was charged.';
   v_subs int;
   v_flags int;
@@ -211,7 +211,7 @@ begin
   if exists (
     select 1 from audit_logs
     where action = 'prelaunch_window_extended'
-      and (reason is null or length(trim(reason)) = 0 or position('#311' in reason) = 0)) then
+      and (reason is null or length(trim(reason)) = 0 or position('#314' in reason) = 0)) then
     raise exception '0270: a window extension was logged without the ruling behind it';
   end if;
 
