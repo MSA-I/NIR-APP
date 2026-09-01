@@ -388,13 +388,7 @@ select pg_temp.p9_assert(
   || 'the five 0137 consolidated-invoice service-only or firing-row-local commands; plus the '
   || 'one 0168 email-delivery settlement (same empty-auth_scopes constraint as 0077: the sender '
   || 'settles with the service key and no user JWT, and the sent-stamp must live in the same '
-  || 'transaction as the provider evidence
-  || 'plus the one 0279 added for service_ingest_inbound_document: it runs as service_role 
-  || 'with no JWT, so auth_scopes() is empty AND assert_unit_in_scope early-exits treating 
-  || 'it as trusted service work -- a scope predicate there would PASS rather than protect, 
-  || 'which is worse than none because it reads like a check. Its tenancy is structural 
-  || 'instead: unit_id comes from the claim route, whose identity is a composite foreign 
-  || 'key and whose routing columns a trigger freezes after insert.'); plus two 0246 catalogue resolvers: '
+  || 'transaction as the provider evidence); plus two 0246 catalogue resolvers: '
   || 'effective_entitlement is internal-only and must read private plan/referral state, while '
   || 'get_public_plan_quotas intentionally returns the same global catalogue to every tenant and '
   || 'therefore has no tenant scope an invoker could enforce; plus the one 0252 plan-capability '
@@ -431,7 +425,12 @@ select pg_temp.p9_assert(
   || 'unit and source come from the claim route, whose identity is a composite foreign key into '
   || 'private.inbound_routes and whose routing columns a trigger freezes after insert, so the '
   || 'caller cannot name a tenant at all -- the signature takes a claim id, a lease token, an '
-  || 'object id and an object version, and nothing else; zero silent additions');
+  || 'object id and an object version, and nothing else; plus the one 0279 added for service_ingest_inbound_document, which runs as '
+   || 'service_role with no JWT: auth_scopes() is empty AND assert_unit_in_scope early-exits '
+   || 'treating it as trusted service work, so a scope predicate there would PASS rather than '
+   || 'protect -- worse than none, because it reads like a check. Its tenancy is structural '
+   || 'instead: unit_id comes from the claim route, whose identity is a composite foreign key '
+   || 'and whose routing columns a trigger freezes after insert; zero silent additions');
 
 select pg_temp.p9_assert(
   (select count(*) from private.scope_enforcement_violations()) = 0,

@@ -1007,3 +1007,431 @@ begin
   end if;
 end
 $verify_0279$;
+
+-- ===================================================================================
+-- 6. THE COLUMN THIS MIGRATION ADDS SHADOWS A QUERY ALIAS, AND THE EXPORT BREAKS
+-- ===================================================================================
+-- `service_snapshot_organization_export_batch` (0103) builds its snapshot query with the FROM
+-- item aliased `source`, and expands each row with `to_jsonb(source)`. Adding a COLUMN named
+-- `source` to public.documents makes that reference ambiguous, and Postgres resolves the column
+-- ahead of the alias: the export then tries to expand a text value and raises
+-- `cannot call jsonb_each on a non-object`. Tenant export stops working the moment this
+-- migration lands, for any table that carries the new column.
+--
+-- The alias is incidental; the column is the contract. So the alias moves, here, in the
+-- migration that causes the collision -- not in a later one that would leave a window where
+-- offboarding is broken. Eleven alias sites become `export_row`; nothing else about the
+-- function changes, and 0103 remains its only other definition, so this replacement reverts
+-- no later security property.
+create or replace function public.service_snapshot_organization_export_batch(
+  p_request_id uuid,
+  p_generation uuid,
+  p_worker_token uuid,
+  p_max_rows integer default 50,
+  p_max_bytes integer default 1048576
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_request public.organization_offboarding_requests;
+  v_state private.organization_export_snapshot_table_states;
+  v_storage_state private.organization_export_snapshot_storage_states;
+  v_current_schema_hash text;
+  v_current_relfilenode oid;
+  v_batch_row_count integer := 0;
+  v_batch_bytes bigint := 0;
+  v_last_ctid tid;
+  v_after_ordinal bigint;
+  v_last_ordinal bigint;
+  v_batch_index integer;
+  v_has_more boolean := false;
+  v_oversized boolean := false;
+  v_completed boolean := false;
+  v_all_completed boolean := false;
+  v_json_part_id uuid;
+  v_csv_part_id uuid;
+  v_auth_part_id uuid;
+  v_source_part_ids jsonb := '[]'::jsonb;
+  v_batch_object_count integer := 0;
+  v_last_bucket_id text;
+  v_last_object_name text;
+  v_payload jsonb;
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'service_role_required' using errcode = '42501';
+  end if;
+  if p_max_rows not between 1 and 50 or p_max_bytes not between 1 and 1048576 then
+    raise exception 'offboarding_export_snapshot_budget_invalid' using errcode = '22023';
+  end if;
+
+  select * into v_request
+  from public.organization_offboarding_requests request
+  where request.id = p_request_id
+    and request.status = 'export_building'
+    and request.export_generation = p_generation
+    and request.export_worker_token = p_worker_token
+    and request.export_lease_until >= statement_timestamp()
+  for update;
+  if not found then
+    raise exception 'offboarding_export_lease_lost' using errcode = '40001';
+  end if;
+
+  select * into v_state
+  from private.organization_export_snapshot_table_states state
+  where state.request_id = p_request_id and state.generation = p_generation
+    and state.status <> 'completed'
+  order by case state.status when 'copying' then 0 else 1 end, state.table_name
+  for update
+  limit 1;
+
+  if not found then
+    if not exists (
+      select 1 from private.organization_export_snapshot_table_states state
+      where state.request_id = p_request_id and state.generation = p_generation
+    ) then
+      raise exception 'offboarding_export_snapshot_state_missing' using errcode = '55000';
+    end if;
+    select * into v_storage_state
+    from private.organization_export_snapshot_storage_states state
+    where state.request_id = p_request_id and state.generation = p_generation
+      and state.status <> 'completed'
+    for update;
+    if not found then
+      if not exists (
+        select 1 from private.organization_export_snapshot_storage_states state
+        where state.request_id = p_request_id and state.generation = p_generation
+      ) then
+        raise exception 'offboarding_export_storage_snapshot_state_missing' using errcode = '55000';
+      end if;
+      return jsonb_build_object(
+        'state_kind', 'completed', 'table_name', null, 'status', 'completed',
+        'batch_index', null, 'batch_row_count', 0, 'batch_object_count', 0,
+        'batch_bytes', 0, 'after_ordinal', null, 'last_ordinal', null,
+        'json_part_id', null, 'csv_part_id', null, 'auth_part_id', null,
+        'source_part_ids', '[]'::jsonb, 'oversized_single_record', false,
+        'all_snapshots_completed', true, 'idempotent', true
+      );
+    end if;
+
+    v_after_ordinal := v_storage_state.next_ordinal;
+    v_batch_index := v_storage_state.batch_count;
+    with raw as (
+      select object.bucket_id, object.name as object_name,
+             coalesce((object.metadata ->> 'size')::bigint, 0) as size_bytes,
+             object.metadata ->> 'mimetype' as mime_type, object.updated_at,
+             jsonb_build_object(
+               'bucket_id', object.bucket_id, 'object_name', object.name,
+               'size_bytes', coalesce((object.metadata ->> 'size')::bigint, 0),
+               'mime_type', object.metadata ->> 'mimetype', 'updated_at', object.updated_at
+             ) as row_data
+      from storage.objects object
+      where object.bucket_id in ('documents', 'price-submissions', 'organization-branding')
+        and object.name like v_request.org_id::text || '/%'
+        and (
+          v_storage_state.cursor_bucket_id is null
+          or (object.bucket_id, object.name) >
+             (v_storage_state.cursor_bucket_id, v_storage_state.cursor_object_name)
+        )
+      order by object.bucket_id, object.name
+      limit p_max_rows
+    ), measured as (
+      select raw.*, octet_length(raw.row_data::text)::bigint as row_bytes,
+             row_number() over (order by raw.bucket_id, raw.object_name) as batch_ordinal,
+             sum(octet_length(raw.row_data::text)::bigint)
+               over (order by raw.bucket_id, raw.object_name) as cumulative_bytes
+      from raw
+    ), chosen as (
+      select * from measured where cumulative_bytes <= p_max_bytes or batch_ordinal = 1
+    ), inserted_objects as (
+      insert into private.organization_export_snapshot_objects (
+        request_id, generation, org_id, bucket_id, object_name,
+        size_bytes, mime_type, updated_at
+      )
+      select p_request_id, p_generation, v_request.org_id, chosen.bucket_id,
+             chosen.object_name, chosen.size_bytes, chosen.mime_type, chosen.updated_at
+      from chosen order by chosen.bucket_id, chosen.object_name
+      returning bucket_id, object_name, size_bytes, mime_type, updated_at
+    ), inserted_parts as (
+      insert into private.organization_export_parts (
+        request_id, generation, part_id, org_id, kind, payload, mime_type
+      )
+      select p_request_id, p_generation, gen_random_uuid(), v_request.org_id, 'source_object',
+             jsonb_build_object(
+               'bucket_id', object.bucket_id, 'object_name', object.object_name,
+               'size_bytes', object.size_bytes, 'mime_type', object.mime_type,
+               'updated_at', object.updated_at, 'batch_index', v_batch_index
+             ), 'application/octet-stream'
+      from inserted_objects object
+      returning part_id
+    )
+    select (select count(*)::integer from chosen),
+           (select coalesce(sum(chosen.row_bytes), 0)::bigint from chosen),
+           (select chosen.bucket_id from chosen order by chosen.bucket_id desc,
+             chosen.object_name desc limit 1),
+           (select chosen.object_name from chosen order by chosen.bucket_id desc,
+             chosen.object_name desc limit 1),
+           (select coalesce(jsonb_agg(inserted_parts.part_id order by inserted_parts.part_id),
+             '[]'::jsonb) from inserted_parts)
+      into v_batch_object_count, v_batch_bytes, v_last_bucket_id,
+           v_last_object_name, v_source_part_ids;
+
+    if v_batch_object_count = 1 and v_batch_bytes > p_max_bytes then
+      if v_batch_bytes > 27262976 then
+        raise exception 'offboarding_export_row_too_large' using errcode = '54000';
+      end if;
+      v_oversized := true;
+    end if;
+    if v_batch_object_count > 0 then
+      select exists (
+        select 1 from storage.objects object
+        where object.bucket_id in ('documents', 'price-submissions', 'organization-branding')
+          and object.name like v_request.org_id::text || '/%'
+          and (object.bucket_id, object.name) > (v_last_bucket_id, v_last_object_name)
+      ) into v_has_more;
+      v_last_ordinal := v_after_ordinal + v_batch_object_count;
+    else
+      v_has_more := false;
+      v_last_ordinal := v_after_ordinal;
+    end if;
+    v_completed := not v_has_more;
+    update private.organization_export_snapshot_storage_states state
+    set cursor_bucket_id = coalesce(v_last_bucket_id, state.cursor_bucket_id),
+        cursor_object_name = coalesce(v_last_object_name, state.cursor_object_name),
+        next_ordinal = v_last_ordinal, batch_count = state.batch_count + 1,
+        status = case when v_completed then 'completed' else 'copying' end,
+        completed_at = case when v_completed then statement_timestamp() else null end,
+        updated_at = statement_timestamp()
+    where state.request_id = p_request_id and state.generation = p_generation;
+
+    if v_completed and (
+      exists (
+        select 1 from public.documents document
+        where document.org_id = v_request.org_id and document.storage_path is not null
+          and not exists (
+            select 1 from private.organization_export_snapshot_objects object
+            where object.request_id = p_request_id and object.generation = p_generation
+              and object.bucket_id = 'documents' and object.object_name = document.storage_path
+          )
+      ) or exists (
+        select 1 from public.supplier_price_submissions submission
+        where submission.org_id = v_request.org_id and submission.storage_path is not null
+          and not exists (
+            select 1 from private.organization_export_snapshot_objects object
+            where object.request_id = p_request_id and object.generation = p_generation
+              and object.bucket_id = 'price-submissions'
+              and object.object_name = submission.storage_path
+          )
+      ) or exists (
+        select 1 from public.organizations organization
+        where organization.id = v_request.org_id and organization.logo_path is not null
+          and not exists (
+            select 1 from private.organization_export_snapshot_objects object
+            where object.request_id = p_request_id and object.generation = p_generation
+              and object.bucket_id = 'organization-branding'
+              and object.object_name = organization.logo_path
+          )
+      )
+    ) then
+      raise exception 'offboarding_export_source_file_missing' using errcode = '55000';
+    end if;
+
+    return jsonb_build_object(
+      'state_kind', 'storage', 'table_name', null,
+      'status', case when v_completed then 'completed' else 'copying' end,
+      'batch_index', v_batch_index, 'batch_row_count', 0,
+      'batch_object_count', v_batch_object_count, 'batch_bytes', v_batch_bytes,
+      'after_ordinal', v_after_ordinal, 'last_ordinal', v_last_ordinal,
+      'json_part_id', null, 'csv_part_id', null, 'auth_part_id', null,
+      'source_part_ids', v_source_part_ids, 'oversized_single_record', v_oversized,
+      'all_snapshots_completed', v_completed, 'idempotent', false
+    );
+  end if;
+
+  select md5(string_agg(
+           column_info.column_name || ':' || column_info.data_type || ':' || column_info.is_nullable,
+           '|' order by column_info.ordinal_position
+         )),
+         pg_relation_filenode(to_regclass(format('public.%I', v_state.table_name)))::oid
+    into v_current_schema_hash, v_current_relfilenode
+  from information_schema.columns column_info
+  where column_info.table_schema = 'public' and column_info.table_name = v_state.table_name;
+  if v_current_schema_hash is distinct from v_state.schema_hash
+     or v_current_relfilenode is distinct from v_state.source_relfilenode then
+    raise exception 'offboarding_export_source_changed' using errcode = '40001';
+  end if;
+
+  if v_state.table_name <> 'organizations' and not exists (
+    select 1 from private.tenant_export_registry registry
+    where registry.table_name = v_state.table_name and registry.disposition = 'include'
+      and registry.schema_hash = v_state.schema_hash
+      and registry.exported_columns = v_state.exported_columns
+  ) then
+    raise exception 'offboarding_export_source_schema_invalid' using errcode = '55000';
+  end if;
+
+  v_after_ordinal := v_state.next_ordinal;
+  v_batch_index := v_state.batch_count;
+  execute format($snapshot$
+    with raw as (
+      select export_row.ctid as source_ctid, projected.row_data,
+             octet_length(projected.row_data::text)::bigint as row_bytes
+      from public.%I export_row
+      cross join lateral (
+        select coalesce(jsonb_object_agg(entry.key, entry.value), '{}'::jsonb) as row_data
+        from jsonb_each(to_jsonb(export_row)) entry
+        where entry.key = any($4)
+      ) projected
+      where export_row.%I = $3 and ($5::tid is null or export_row.ctid > $5::tid)
+        %s
+      order by export_row.ctid
+      limit $6
+    ), measured as (
+      select raw.*,
+             row_number() over (order by raw.source_ctid) as batch_ordinal,
+             sum(raw.row_bytes) over (order by raw.source_ctid) as cumulative_bytes
+      from raw
+    ), chosen as (
+      select * from measured
+      where cumulative_bytes <= $7 or batch_ordinal = 1
+    ), inserted as (
+      insert into private.organization_export_snapshot_rows (
+        request_id, generation, org_id, table_name, row_ordinal, row_data
+      )
+      select $1, $2, $3, %L, $8 + chosen.batch_ordinal, chosen.row_data
+      from chosen order by chosen.source_ctid
+      returning row_ordinal
+    )
+    select (select count(*)::integer from chosen),
+           (select coalesce(sum(chosen.row_bytes), 0)::bigint from chosen),
+           (select (array_agg(chosen.source_ctid order by chosen.source_ctid desc))[1]
+              from chosen),
+           (select coalesce(max(inserted.row_ordinal), $8) from inserted)
+  $snapshot$,
+    v_state.table_name,
+    case when v_state.table_name = 'organizations' then 'id' else 'org_id' end,
+    case when v_state.table_name = 'organization_offboarding_requests' then
+      'and not exists (select 1 from private.organization_export_snapshot_rows prior '
+        || 'where prior.request_id = $1 and prior.generation = $2 '
+        || 'and prior.table_name = ''organization_offboarding_requests'' '
+        || 'and prior.row_data ->> ''id'' = export_row.id::text)'
+    else '' end,
+    v_state.table_name
+  )
+  using p_request_id, p_generation, v_request.org_id, v_state.exported_columns,
+        v_state.cursor_ctid, p_max_rows, p_max_bytes, v_after_ordinal
+  into v_batch_row_count, v_batch_bytes, v_last_ctid, v_last_ordinal;
+
+  if v_batch_row_count = 1 and v_batch_bytes > p_max_bytes then
+    if v_batch_bytes > 27262976 then
+      raise exception 'offboarding_export_row_too_large' using errcode = '54000';
+    end if;
+    v_oversized := true;
+  end if;
+
+  if v_batch_row_count > 0 then
+    execute format(
+      'select exists (select 1 from public.%I export_row where export_row.%I = $1 '
+        || 'and export_row.ctid > $2::tid %s)',
+      v_state.table_name,
+      case when v_state.table_name = 'organizations' then 'id' else 'org_id' end,
+      case when v_state.table_name = 'organization_offboarding_requests' then
+        'and not exists (select 1 from private.organization_export_snapshot_rows prior '
+          || 'where prior.request_id = $3 and prior.generation = $4 '
+          || 'and prior.table_name = ''organization_offboarding_requests'' '
+          || 'and prior.row_data ->> ''id'' = export_row.id::text)'
+      else '' end
+    ) using v_request.org_id, v_last_ctid, p_request_id, p_generation into v_has_more;
+  else
+    v_last_ordinal := v_after_ordinal;
+    v_has_more := false;
+  end if;
+  v_completed := not v_has_more;
+
+  update private.organization_export_snapshot_table_states state
+  set cursor_ctid = coalesce(v_last_ctid, state.cursor_ctid),
+      next_ordinal = v_last_ordinal,
+      batch_count = state.batch_count + 1,
+      status = case when v_completed then 'completed' else 'copying' end,
+      completed_at = case when v_completed then statement_timestamp() else null end,
+      updated_at = statement_timestamp()
+  where state.request_id = v_state.request_id and state.generation = v_state.generation
+    and state.table_name = v_state.table_name;
+
+  v_payload := jsonb_build_object(
+    'table_name', v_state.table_name,
+    'batch_index', v_batch_index,
+    'after_ordinal', v_after_ordinal,
+    'limit', v_batch_row_count,
+    'first_ordinal', case when v_batch_row_count = 0 then null else v_after_ordinal + 1 end,
+    'last_ordinal', v_last_ordinal,
+    'row_count', v_last_ordinal,
+    'batch_row_count', v_batch_row_count,
+    'batch_bytes', v_batch_bytes,
+    'columns', to_jsonb(v_state.exported_columns),
+    'empty', v_batch_row_count = 0,
+    'oversized_single_row', v_oversized
+  );
+  insert into private.organization_export_parts (
+    request_id, generation, part_id, org_id, kind, payload, mime_type
+  ) values (
+    p_request_id, p_generation, gen_random_uuid(), v_request.org_id, 'table_json',
+    v_payload || jsonb_build_object('format', 'json'), 'application/json'
+  ) returning part_id into v_json_part_id;
+  insert into private.organization_export_parts (
+    request_id, generation, part_id, org_id, kind, payload, mime_type
+  ) values (
+    p_request_id, p_generation, gen_random_uuid(), v_request.org_id, 'table_csv',
+    v_payload || jsonb_build_object('format', 'csv'), 'text/csv'
+  ) returning part_id into v_csv_part_id;
+
+  if v_state.table_name = 'profiles' and v_batch_row_count > 0 then
+    insert into private.organization_export_parts (
+      request_id, generation, part_id, org_id, kind, payload, mime_type
+    )
+    select p_request_id, p_generation, gen_random_uuid(), v_request.org_id, 'auth_accounts',
+           jsonb_build_object(
+             'batch_index', v_batch_index,
+             'after_ordinal', v_after_ordinal,
+             'limit', v_batch_row_count,
+             'user_ids', coalesce(jsonb_agg(snapshot.row_data ->> 'id'
+               order by snapshot.row_ordinal), '[]'::jsonb)
+           ), 'application/json'
+    from private.organization_export_snapshot_rows snapshot
+    where snapshot.request_id = p_request_id and snapshot.generation = p_generation
+      and snapshot.table_name = 'profiles'
+      and snapshot.row_ordinal > v_after_ordinal
+      and snapshot.row_ordinal <= v_last_ordinal
+    returning part_id into v_auth_part_id;
+  end if;
+
+  select not exists (
+    select 1 from private.organization_export_snapshot_table_states state
+    where state.request_id = p_request_id and state.generation = p_generation
+      and state.status <> 'completed'
+  ) and exists (
+    select 1 from private.organization_export_snapshot_storage_states state
+    where state.request_id = p_request_id and state.generation = p_generation
+      and state.status = 'completed'
+  ) into v_all_completed;
+
+  return jsonb_build_object(
+    'state_kind', 'table', 'table_name', v_state.table_name,
+    'status', case when v_completed then 'completed' else 'copying' end,
+    'batch_index', v_batch_index,
+    'batch_row_count', v_batch_row_count,
+    'batch_object_count', 0,
+    'batch_bytes', v_batch_bytes,
+    'after_ordinal', v_after_ordinal,
+    'last_ordinal', v_last_ordinal,
+    'json_part_id', v_json_part_id,
+    'csv_part_id', v_csv_part_id,
+    'auth_part_id', v_auth_part_id,
+    'source_part_ids', '[]'::jsonb,
+    'oversized_single_record', v_oversized,
+    'all_snapshots_completed', v_all_completed,
+    'idempotent', false
+  );
+end
+$$;

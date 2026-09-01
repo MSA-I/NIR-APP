@@ -97,17 +97,16 @@ insert into public.supplier_products (org_id, supplier_id, product_id, current_p
    '3a270000-0000-4000-8000-000000000002', 12, 'SKU-SHARED');
 
 insert into public.documents (
-  id, org_id, entity_type, storage_path, file_name, document_kind, supplier_id
-) values
+  id, org_id, entity_type, storage_path, file_name, document_kind, supplier_id, source) values
   ('6a270000-0000-4000-8000-000000000001', '1a270000-0000-4000-8000-000000000001',
    'inbox', '1a270000-0000-4000-8000-000000000001/p27-linked.pdf', 'p27-linked.pdf',
-   'invoice', '4a270000-0000-4000-8000-000000000005'),
+   'invoice', '4a270000-0000-4000-8000-000000000005', 'email'),
   ('6a270000-0000-4000-8000-000000000002', '1a270000-0000-4000-8000-000000000001',
    'inbox', '1a270000-0000-4000-8000-000000000001/p27-unlinked.pdf', 'p27-unlinked.pdf',
-   'invoice', null),
+   'invoice', null, 'email'),
   ('6a270000-0000-4000-8000-000000000003', '1a270000-0000-4000-8000-000000000001',
    'inbox', '1a270000-0000-4000-8000-000000000001/p27-deleted.pdf', 'p27-deleted.pdf',
-   'invoice', '4a270000-0000-4000-8000-000000000005');
+   'invoice', '4a270000-0000-4000-8000-000000000005', 'email');
 update public.documents set deleted_at = now()
   where id = '6a270000-0000-4000-8000-000000000003';
 
