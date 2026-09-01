@@ -2130,10 +2130,15 @@ async function publicSignupSurface(browser) {
       assert(!body.includes(forbidden), `the signup form offers a plan choice (${forbidden})`);
     }
 
-    await page.locator('#signup-organization').fill('עסק בדיקה');
-    await page.locator('#signup-name').fill('בעלים בדיקה');
-    await page.locator('#signup-email').fill('p4-signup@example.invalid');
-    await page.locator('#signup-password').fill('a-long-enough-password');
+    // The four fields moved when #195 merged `/signup` and `/login` into one card: `Signup.tsx`
+    // is now a thin wrapper that renders `Entrance` on the "name a business" side, so the ids are
+    // `entrance-*`, and email and password are shared with the sign-in side and lost their prefix.
+    // The heading, the submit button and the post-submit text are unchanged, which is why this
+    // scenario failed at the first fill rather than earlier.
+    await page.locator('#entrance-organization').fill('עסק בדיקה');
+    await page.locator('#entrance-name').fill('בעלים בדיקה');
+    await page.locator('#email').fill('p4-signup@example.invalid');
+    await page.locator('#password').fill('a-long-enough-password');
     await page.getByRole('button', { name: 'פתיחת חשבון' }).click();
 
     await page.getByText('בדקו את תיבת הדואר').waitFor({ timeout: 20_000 });
