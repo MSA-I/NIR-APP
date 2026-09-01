@@ -952,6 +952,61 @@ function Invoke-TenantExportContractTests {
   if ($LASTEXITCODE -ne 0) { throw "Tenant export Edge Function failed Deno typecheck." }
 }
 
+function Invoke-WebhookDoorContractTests {
+  # The three signature doors of the product: Paddle (billing), Svix (email delivery events)
+  # and Twilio (WhatsApp). All three core.test.ts files existed and ran in NO gate -- 52 cases
+  # that could go red without anything turning red. A door whose signature check is untested
+  # is the one place where "it builds" is worth nothing.
+  #
+  # Each runs under its own config, because they do not share one: whatsapp-webhook and
+  # email-webhook carry deno.json; billing-webhook has none and asserts over its own source
+  # text (that index.ts never touches the body), which is why it alone needs --allow-read.
+  $doors = @(
+    @{
+      Name = "Billing webhook (Paddle) signature and replay contracts"
+      Args = @(
+        "--allow-read=$(Join-Path $repoRoot 'supabase\functions\billing-webhook')",
+        (Join-Path $repoRoot "supabase\functions\billing-webhook\core.test.ts")
+      )
+    },
+    @{
+      Name = "Email webhook (Svix) signature and delivery-event contracts"
+      Args = @(
+        "--config", (Join-Path $repoRoot "supabase\functions\email-webhook\deno.json"),
+        (Join-Path $repoRoot "supabase\functions\email-webhook\core.test.ts")
+      )
+    },
+    @{
+      Name = "WhatsApp webhook (Twilio) signature and status contracts"
+      Args = @(
+        "--config", (Join-Path $repoRoot "supabase\functions\whatsapp-webhook\deno.json"),
+        (Join-Path $repoRoot "supabase\functions\whatsapp-webhook\core.test.ts")
+      )
+    }
+  )
+  foreach ($door in $doors) {
+    Write-Gate $door.Name
+    $previousPreference = $ErrorActionPreference
+    try {
+      $ErrorActionPreference = "Continue"
+      $testOutput = @(& npx.cmd --yes deno test @($door.Args) 2>&1)
+      $testExit = $LASTEXITCODE
+    }
+    finally {
+      $ErrorActionPreference = $previousPreference
+    }
+    $testOutput | ForEach-Object { Write-Output $_ }
+    Assert-ExitCode $door.Name $testOutput -ExitCode $testExit
+    $testText = $testOutput -join "`n"
+    if ($testText -notmatch '(?i)\b[1-9][0-9]*\s+passed\b') {
+      throw "$($door.Name) did not report any completed test."
+    }
+    if ($testText -match '(?i)\b[1-9][0-9]*\s+(?:ignored|skipped)\b') {
+      throw "$($door.Name) reported ignored or skipped cases."
+    }
+  }
+}
+
 function Invoke-OcrWorkerSelfCheck {
   Write-Gate "OCR worker image and no-GPU/no-model self-check"
   # Compose validation reads a COMMITTED file, so its failure is a repo defect: left product.
@@ -1144,6 +1199,8 @@ function Assert-OcrPrerequisites([string]$Config) {
     "supplier-portal" = "false"
     "email-sender" = "true"
     "billing-webhook" = "false"
+    "email-webhook" = "false"
+    "whatsapp-webhook" = "false"
   }
   foreach ($functionName in $functionJwt.Keys) {
     $expectedJwt = $functionJwt[$functionName]
@@ -1234,6 +1291,7 @@ try {
     Invoke-InterpretDocumentContractTests
     Invoke-OutboxWorkerContractTests
     Invoke-TenantExportContractTests
+    Invoke-WebhookDoorContractTests
     Invoke-OcrWorkerSelfCheck
 
     Write-Gate "P0 tenant security, Storage and local Push"

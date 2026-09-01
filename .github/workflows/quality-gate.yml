@@ -251,6 +251,31 @@ jobs:
           ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-supplier-portal.log \
             || { echo 'Ignored or skipped supplier-portal cases are not acceptable.'; exit 1; }
 
+      # The three signature doors: Paddle (billing), Svix (email delivery events) and Twilio
+      # (WhatsApp). All three core.test.ts files existed and ran in NO gate -- 52 cases that
+      # could go red without anything turning red. billing-webhook has no deno.json and
+      # asserts over its own source text, so it alone needs --allow-read.
+      - name: Webhook signature-door contracts (Paddle, Svix, Twilio)
+        if: needs.changes.outputs.edge == 'true'
+        run: |
+          set -euo pipefail
+          npx --yes deno test \
+            --allow-read=supabase/functions/billing-webhook \
+            supabase/functions/billing-webhook/core.test.ts 2>&1 | tee deno-billing-webhook.log
+          npx --yes deno test \
+            --config supabase/functions/email-webhook/deno.json \
+            supabase/functions/email-webhook/core.test.ts 2>&1 | tee deno-email-webhook.log
+          npx --yes deno test \
+            --config supabase/functions/whatsapp-webhook/deno.json \
+            supabase/functions/whatsapp-webhook/core.test.ts 2>&1 | tee deno-whatsapp-webhook.log
+          for log in deno-billing-webhook.log deno-email-webhook.log deno-whatsapp-webhook.log; do
+            grep -Eq '\b[1-9][0-9]*\s+passed\b' "$log" \
+              || { echo "No completed test reported in $log."; exit 1; }
+          done
+          ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' \
+            deno-billing-webhook.log deno-email-webhook.log deno-whatsapp-webhook.log \
+            || { echo 'Ignored or skipped webhook-door cases are not acceptable.'; exit 1; }
+
       - name: Email order-delivery template contracts
         if: needs.changes.outputs.edge == 'true'
         run: |
