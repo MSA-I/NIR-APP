@@ -165,6 +165,49 @@ compare('scripts/key-manifest.baseline.json',
     why: 'A key only a test still names has no screen asking for it.',
   });
 
+
+// ---------------------------------------------------------------- the renumber map may not shrink
+// The map is pinned in wave 0, BEFORE the migrations it describes have landed, precisely so that
+// the wave doing the work cannot quietly drop an entry or a reference and then pass its own guard.
+// Wave 4 may complete targets. It may not remove a move, drop a reference, or lower a count.
+{
+  const relPath = 'scripts/renumber-map.json';
+  const before = previous(relPath);
+  const after = current(relPath);
+  if (before && after) {
+    const movesOf = (d) => (Array.isArray(d) ? d : (d.moves ?? []));
+    const keyOfMove = (m) => `${m.fromFile} -> ${m.toFile}`;
+    const beforeMoves = new Map(movesOf(before).map((m) => [keyOfMove(m), m]));
+    const afterMoves = new Map(movesOf(after).map((m) => [keyOfMove(m), m]));
+
+    for (const [key, was] of beforeMoves) {
+      const now = afterMoves.get(key);
+      if (!now) {
+        problems.push(`${relPath}\n    a declared renumber DISAPPEARED: ${key}\n`
+          + '    The map is pinned before the work so the wave cannot shrink what it is measured against.');
+        continue;
+      }
+      const wasRefs = new Map((was.references ?? [])
+        .map((r) => (typeof r === 'string' ? [r, 1] : [r.path, r.occurrences ?? 1])));
+      const nowRefs = new Map((now.references ?? [])
+        .map((r) => (typeof r === 'string' ? [r, 1] : [r.path, r.occurrences ?? 1])));
+      for (const [refPath, count] of wasRefs) {
+        if (!nowRefs.has(refPath)) {
+          problems.push(`${relPath}\n    ${key}: the reference ${refPath} was REMOVED from the map.\n`
+            + '    A reference dropped from the map is a file that will keep citing the old number.');
+        } else if (nowRefs.get(refPath) < count) {
+          problems.push(`${relPath}\n    ${key}: ${refPath} occurrence count fell from ${count} to `
+            + `${nowRefs.get(refPath)}.\n    Lowering the count shrinks the work the guard will check for.`);
+        }
+      }
+      if ((now.sourceOid ?? was.sourceOid) !== was.sourceOid) {
+        problems.push(`${relPath}\n    ${key}: sourceOid changed. The move is pinned to the exact blob it was`
+          + '\n    measured against; a different source is a different change.');
+      }
+    }
+  }
+}
+
 if (problems.length) {
   console.error(`check:baseline-drift FAILED — compared against ${base.slice(0, 8)}\n\n  `
     + problems.join('\n\n  ')

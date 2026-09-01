@@ -182,6 +182,9 @@ for (const hit of referenceHits) {
   const where = parts.slice(0, -2).join(':');
   if (where.startsWith('supabase/migrations/')) continue;
   if (where === SELF) continue;
+  // The renumber map DECLARES a move, so it necessarily names a file that does not exist yet --
+  // either the source (already renamed) or the target (not yet). It is intent, not a pointer.
+  if (where === 'scripts/renumber-map.json') continue;
   if (where === FIXTURE_FILE && FIXTURE_NAMES.has(name)) continue;
   if (existing.has(name)) continue;
   // Counted, not just named. Without the count a SECOND occurrence of the same stale filename in
@@ -222,23 +225,37 @@ for (const pardon of HISTORICAL_DANGLING_REFS) {
 // would condemn #191's correct new identity the moment the cycle closed. So each entry is checked
 // only against ITS OWN file and the references it declares.
 let mapEntries = [];
+let pending = 0;
 if (existsSync(mapPath)) {
-  mapEntries = JSON.parse(readFileSync(mapPath, 'utf8'));
+  const doc = JSON.parse(readFileSync(mapPath, 'utf8'));
+  mapEntries = Array.isArray(doc) ? doc : (doc.moves ?? []);
   for (const entry of mapEntries) {
-    const { fromFile, toFile, fromNumber, references = [], why } = entry;
+    const { fromFile, toFile, fromNumber, references = [], why, pr } = entry;
+    const label = `${pr ?? 'renumber'} ${fromFile} -> ${toFile}`;
+
+    // DECLARED BUT NOT YET PERFORMED. The map is pinned in wave 0, before the migrations it
+    // describes have even landed, so that the wave doing the work cannot quietly shrink the list
+    // it is measured against. Until the target arrives this entry is inert -- but it is still
+    // immutable, which check:baseline-drift enforces.
+    if (!existing.has(toFile) && !existing.has(fromFile)) {
+      pending += 1;
+      continue;
+    }
 
     if (!existing.has(toFile)) {
-      violations.push({ file: `renumber ${fromFile} -> ${toFile}`, lineNo: '-', kind: 'incomplete renumber',
-        found: 'the destination file does not exist', text: why ?? '' });
+      violations.push({ file: label, lineNo: '-', kind: 'incomplete renumber',
+        found: 'the original file is here and the destination is not -- the move has not been made',
+        text: why ?? '' });
       continue;
     }
     if (existing.has(fromFile)) {
-      violations.push({ file: `renumber ${fromFile} -> ${toFile}`, lineNo: '-', kind: 'incomplete renumber',
-        found: 'the ORIGINAL file is still there — both numbers now exist', text: why ?? '' });
+      violations.push({ file: label, lineNo: '-', kind: 'incomplete renumber',
+        found: 'BOTH files exist -- the move left a copy behind, so the number is used twice',
+        text: why ?? '' });
     }
 
-    // Inside the moved file, the old number must be gone. Scoped to this file, so the same digits
-    // living legitimately in another migration are untouched.
+    // Inside the moved file the old number must be gone. Scoped to this file, because the same
+    // digits are another entry's legitimate new identity: the renumber is a cycle.
     const body = readFileSync(path.join(migrationsDir, toFile), 'utf8');
     const stale = body.split(/\r?\n/)
       .map((line, i) => ({ line, no: i + 1 }))
@@ -246,37 +263,33 @@ if (existsSync(mapPath)) {
     if (stale.length) {
       violations.push({ file: `supabase/migrations/${toFile}`, lineNo: stale[0].no, kind: 'incomplete renumber',
         found: `${stale.length} occurrence(s) of the old number ${fromNumber} survive inside the moved file`,
-        text: stale.slice(0, 4).map((l) => `${l.no}: ${l.line.trim().slice(0, 78)}`).join(' | ') });
+        text: stale.slice(0, 4).map((l) => `${l.no}: ${l.line.trim().slice(0, 74)}`).join(' | ') });
     }
 
-    // Anything that cited the file by name.
     const byName = grepRepo(fromFile.replace(/\./g, '\\.'), SCAN_PATHS)
       .filter((h) => !h.startsWith(`${SELF}:`) && !h.startsWith('scripts/renumber-map.json:')
-      && !(h.startsWith(`${FIXTURE_FILE}:`) && [...FIXTURE_NAMES].some((n) => h.endsWith(n))));
+        && !(h.startsWith(`${FIXTURE_FILE}:`) && [...FIXTURE_NAMES].some((n) => h.endsWith(n))));
     if (byName.length) {
-      violations.push({ file: `renumber ${fromFile} -> ${toFile}`, lineNo: '-', kind: 'incomplete renumber',
+      violations.push({ file: label, lineNo: '-', kind: 'incomplete renumber',
         found: `${byName.length} reference(s) still name the old file`,
         text: byName.slice(0, 6).map((h) => h.split(':').slice(0, 2).join(':')).join(', ') });
     }
 
     // Files that cite the migration by BARE NUMBER cannot be found automatically once the cycle
-    // closes: after the move, "0281" is a real migration again — a different one. So the map names
-    // them, and each must have stopped saying the old number.
+    // closes -- after the move, the old number names a real migration again, a different one. So
+    // the map names them and each must have stopped saying it.
     for (const ref of references) {
-      const full = path.join(repoRoot, ref);
-      if (!existsSync(full)) {
-        violations.push({ file: ref, lineNo: '-', kind: 'incomplete renumber',
-          found: 'declared as referencing the renumbered migration, but the file is missing', text: '' });
-        continue;
-      }
+      const refPath = typeof ref === 'string' ? ref : ref.path;
+      const full = path.join(repoRoot, refPath);
+      if (!existsSync(full)) continue; // the reference lives on the source branch, not here yet
       const refBody = readFileSync(full, 'utf8');
       const hits = refBody.split(/\r?\n/)
         .map((line, i) => ({ line, no: i + 1 }))
         .filter((l) => new RegExp(`\\b${fromNumber}\\b`).test(l.line));
       if (hits.length) {
-        violations.push({ file: ref, lineNo: hits[0].no, kind: 'incomplete renumber',
+        violations.push({ file: refPath, lineNo: hits[0].no, kind: 'incomplete renumber',
           found: `still says ${fromNumber}, which now names a DIFFERENT migration`,
-          text: hits.slice(0, 3).map((l) => `${l.no}: ${l.line.trim().slice(0, 78)}`).join(' | ') });
+          text: hits.slice(0, 3).map((l) => `${l.no}: ${l.line.trim().slice(0, 74)}`).join(' | ') });
       }
     }
   }
@@ -312,4 +325,4 @@ const tagCount = files.reduce((n, f) => n + (readFileSync(path.join(migrationsDi
   .match(/\$[a-z_]*?\d{4}[a-z_]*?\$/gi)?.length ?? 0), 0);
 console.log(`check:renumber-closure passed: ${files.length} migrations, ${tagCount} numbered dollar tag(s) and every`
   + ` raise-exception prefix match their own file, ${referenceHits.length} filename reference(s) resolve`
-  + `${mapEntries.length ? `, ${mapEntries.length} declared renumber(s) complete` : ''}.`);
+  + `${mapEntries.length ? `, ${mapEntries.length - pending} of ${mapEntries.length} declared renumber(s) done` + (pending ? ` and ${pending} awaiting their wave` : '') : ''}.`);
