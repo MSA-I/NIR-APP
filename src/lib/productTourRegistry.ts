@@ -49,8 +49,6 @@ export type ProductTourStepId =
   | 'reports-screen'
   | 'start-onboarding';
 
-export type ProductTourPrepare = 'navigation' | 'management' | 'control' | 'account';
-
 export interface ProductTourStep {
   id: ProductTourStepId;
   route: string;
@@ -60,7 +58,18 @@ export interface ProductTourStep {
   advance: 'next' | 'click';
   /** Route reached by the highlighted link. Omitted for informational steps. */
   destination?: string;
-  prepare?: ProductTourPrepare;
+  /**
+   * This step's anchor is inside the navigation, so the navigation has to be opened before the
+   * spotlight can find it — the phone drawer, or the desktop disclosure holding `destination`.
+   *
+   * A FLAG, deliberately, and not the name of a group. It used to be
+   * `'navigation' | 'management' | 'control' | 'account'`, and `Layout.tsx` turned those words
+   * into group keys through a literal map. When the menu was regrouped by subject on 28.08.2026
+   * the map kept naming groups that no longer existed and the tour stalled on a closed dropdown.
+   * WHICH group to open is not a fact this registry knows — it is a fact `NAV_GROUPS` knows about
+   * `destination`, and `tourGroupForDestination` reads it there.
+   */
+  prepare?: true;
 }
 
 export const OWNER_FIRST_RUN_TOUR: readonly ProductTourStep[] = [
@@ -68,9 +77,9 @@ export const OWNER_FIRST_RUN_TOUR: readonly ProductTourStep[] = [
   { id: 'attention', route: '/dashboard', anchor: 'dashboard-attention', helpId: 'see_dashboard_attention', helpStep: 0, advance: 'next' },
   { id: 'search', route: '/dashboard', anchor: 'global-search', helpId: 'use_global_search', helpStep: 0, advance: 'next' },
   { id: 'navigation', route: '/dashboard', anchor: 'primary-navigation', helpId: 'navigate_product_workspace', helpStep: 0, advance: 'next' },
-  { id: 'open-suppliers', route: '/dashboard', destination: '/suppliers', anchor: 'nav-suppliers', helpId: 'add_supplier', helpStep: 0, advance: 'click', prepare: 'management' },
+  { id: 'open-suppliers', route: '/dashboard', destination: '/suppliers', anchor: 'nav-suppliers', helpId: 'add_supplier', helpStep: 0, advance: 'click', prepare: true },
   { id: 'supplier-screen', route: '/suppliers', anchor: 'suppliers-new', helpId: 'add_supplier', helpStep: 1, advance: 'next' },
-  { id: 'open-prices', route: '/suppliers', destination: '/prices', anchor: 'nav-prices', helpId: 'upload_price_list', helpStep: 0, advance: 'click', prepare: 'management' },
+  { id: 'open-prices', route: '/suppliers', destination: '/prices', anchor: 'nav-prices', helpId: 'upload_price_list', helpStep: 0, advance: 'click', prepare: true },
   { id: 'price-list-screen', route: '/prices', anchor: 'prices-upload', helpId: 'upload_price_list', helpStep: 1, advance: 'next' },
   { id: 'open-new-order', route: '/prices', destination: '/orders/new', anchor: 'primary-navigation', helpId: 'explain_purchase_order_flow', helpStep: 0, advance: 'next' },
   { id: 'new-order-screen', route: '/orders/new', anchor: 'new-order-flow', helpId: 'explain_purchase_order_flow', helpStep: 1, advance: 'next' },
@@ -79,7 +88,7 @@ export const OWNER_FIRST_RUN_TOUR: readonly ProductTourStep[] = [
   { id: 'invoices-screen', route: '/invoices', anchor: 'invoices-overview', helpId: 'check_invoice_status', helpStep: 3, advance: 'next' },
   { id: 'payment-requests-screen', route: '/payment-requests', anchor: 'payment-requests-overview', helpId: 'open_a_payment_request', helpStep: 0, advance: 'next' },
   { id: 'reports-screen', route: '/reports', anchor: 'reports-overview', helpId: 'prepare_monthly_report', helpStep: 0, advance: 'next' },
-  { id: 'start-onboarding', route: '/dashboard', destination: '/onboarding', anchor: 'onboarding-start', helpId: 'start_owner_onboarding', helpStep: 0, advance: 'click', prepare: 'account' },
+  { id: 'start-onboarding', route: '/dashboard', destination: '/onboarding', anchor: 'onboarding-start', helpId: 'start_owner_onboarding', helpStep: 0, advance: 'click', prepare: true },
 ] as const;
 
 export interface ProductTourProgress {

@@ -1,0 +1,117 @@
+{
+  "note": "The migration renumbers wave 4 and wave 7 must perform, pinned BEFORE the work so the wave cannot quietly shrink the list it is measured against. Wave 4 may complete targets; it may not remove an entry, drop a reference, or lower an occurrence count. Every number here is a CYCLE member -- each `fromNumber` is another entry's `toNumber` -- so the guard checks each move against its own file and declared references, never by banning a number repo-wide.",
+  "measuredAgainst": "417775b9dd9e3e138ee4fc3adc0889d70295dcff",
+  "moves": [
+    {
+      "pr": "#191",
+      "sourceBranch": "feat/machine-actor-intake-contract-20260831",
+      "sourceOid": "2d3f3fdc2b025b057518c44efd38c898bb5a5689",
+      "fromFile": "0281_a_document_carries_the_actor_that_made_it.sql",
+      "toFile": "0279_a_document_carries_the_actor_that_made_it.sql",
+      "fromNumber": "0281",
+      "toNumber": "0279",
+      "why": "creates private.inbound_intake_claims, which 0280 takes a foreign key on; it must apply first",
+      "occurrencesInsideFile": 25,
+      "references": [
+        {
+          "path": "supabase/tests/p9_five_domains.sql",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "pr": "#192",
+      "sourceBranch": "feat/whatsapp-inbound-media-20260831",
+      "sourceOid": "787bd6f29589614b316cb02bba00003b6d1cf67b",
+      "fromFile": "0279_a_number_that_can_receive_a_document.sql",
+      "toFile": "0280_a_number_that_can_receive_a_document.sql",
+      "fromNumber": "0279",
+      "toNumber": "0280",
+      "why": "consumes inbound_intake_claims and inbound_routes, so it must apply after their creator",
+      "occurrencesInsideFile": 10,
+      "references": []
+    },
+    {
+      "pr": "#180",
+      "sourceBranch": "claude/external-services-integration-7ee6d9",
+      "sourceOid": "723929efa939f783b1e75b942cbf565a2d817def",
+      "fromFile": "0280_subscription_activation_email.sql",
+      "toFile": "0281_subscription_activation_email.sql",
+      "fromNumber": "0280",
+      "toNumber": "0281",
+      "why": "independent of the intake chain; moved up to free 0280 for the consumer",
+      "occurrencesInsideFile": 10,
+      "references": [
+        {
+          "path": "GATES.md",
+          "occurrences": 1
+        },
+        {
+          "path": "artifacts/external-services/EMAIL-AND-BILLING-20260831.md",
+          "occurrences": 2
+        },
+        {
+          "path": "docs/DEBT-REGISTER.md",
+          "occurrences": 1
+        },
+        {
+          "path": "supabase/functions/billing-webhook/index.ts",
+          "occurrences": 2
+        }
+      ]
+    },
+    {
+      "pr": "#197",
+      "sourceBranch": "claude/language-dark-mode-buttons-c06e94",
+      "sourceOid": "2819d697031198ca6ab8e2159e3b4446879e7bd6",
+      "fromFile": "0268_profile_theme.sql",
+      "toFile": "0283_profile_theme.sql",
+      "fromNumber": "0268",
+      "toNumber": "0283",
+      "why": "0268 is claimed by #175's countdown flags, which land first as one numbered block",
+      "occurrencesInsideFile": 13,
+      "references": [
+        {
+          "path": "docs/DEBT-REGISTER.md",
+          "occurrences": 2
+        },
+        {
+          "path": "docs/PROGRESS.md",
+          "occurrences": 1
+        },
+        {
+          "path": "src/auth/AuthContext.tsx",
+          "occurrences": 1
+        },
+        {
+          "path": "src/components/ThemeToggle.tsx",
+          "occurrences": 1
+        },
+        {
+          "path": "src/lib/appearance.ts",
+          "occurrences": 1
+        },
+        {
+          "path": "src/lib/appearancePersistence.ts",
+          "occurrences": 1
+        },
+        {
+          "path": "src/lib/profilePreferences.tsx",
+          "occurrences": 2
+        },
+        {
+          "path": "src/lib/theme-choice.ts",
+          "occurrences": 1
+        },
+        {
+          "path": "src/lib/types.ts",
+          "occurrences": 1
+        },
+        {
+          "path": "src/lib/useThemeChoice.ts",
+          "occurrences": 1
+        }
+      ]
+    }
+  ]
+}

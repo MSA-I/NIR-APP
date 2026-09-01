@@ -1,5 +1,8 @@
 # DEBT-REGISTER — חוב פתוח ומגבלות ידועות
 
+עודכן: 31.08.2026 — §76: דלת הכתיבה של צוות הפלטפורמה **אינה פרוסה בייצור**; נמדד, והמסלול
+הידני הוא היחיד שם.
+
 עודכן: 30.08.2026 — §85, הצעד האחרון בסיור המוצר מצביע על פריט תפריט ש-`0258` מסיר בסיום ההקמה.
 עודכן: 30.08.2026 — ‏**§63 נסגר**: ‏DPA חתום מול `OpenAI OpCo, LLC`, שורת `dpa` עברה ל-`VERIFIED`
 על ראיה, ‏`AI_ASSISTANT_PRELAUNCH_EXCEPTION` נמחק מהייצור, וחמש שורות הממשל אומתו חי בלי היתר.
@@ -556,23 +559,58 @@
   כמעט מילה במילה. ‏`storage.bytes` דורשת סכימה על `storage.objects` פר-דייר ולכן היא היקרה
   מבין השתיים שנשארו.
 
-### §57 — גבול החיוב קיים; Paddle נבחר אך אין נקודת קצה או חיבור חי
+### §57 — מעבד החיוב בנוי וכבוי; חסרים לו ספק מאופשר, מפת מחירים, כותב לקישור וסוד
 
-- **מצב:** ‏`0157` בונה את מודל האירועים, השיוך, האידמפוטנטיות, ה-dead-letter וה-audit, ו-`billing-adapter.ts`
-  מגדיר את החוזה עם מימוש `manual` יחיד שמסרב ל-checkout, לביטול ולאימות חתימה **בשמם**.
-  ‏**אין endpoint HTTP.** Paddle נבחר כ־MoR ראשי, אך החשבון/KYC/payout והחוזה החי לא הוכחו,
-  ולכן אין עדיין סוד פעיל לאימות. endpoint שמקבל payload לא־חתום הוא חור ולא תשתית.
-- **מה עוד חסר, במפורש:** אין מעבד. אירוע נשמר כראיה ו**אינו משנה מנוי** — שינוי מסלול נשאר פקודת
-  מפעיל עם step-up וסיבה. הסטטוסים הם `stored` ו-`dead_letter` בלבד; אין `processed`/`failed`
-  כי אין מה שיגיע אליהם.
-- **הסיכון:** אפס היום (אין תנועת כסף אוטומטית). בחיבור Paddle זו נקודת הכניסה היחידה שצריך
-  לכתוב, והיא חייבת: אימות חתימה, ‏`verify_jwt = false`, קריאה ל-`service_record_billing_event`
-  בלבד, ואיסור מוחלט על קריאת `org_id` מתוך ה-payload.
-- **ראיה:** ‏`0157` · `supabase/functions/_shared/billing-adapter.ts` · `p54_billing_boundary_and_funnel.sql`
-  (מוכיחה שמזהה ארגון מזויף ב-payload אינו משייך).
-- **הצעד הזול הבא:** הוכחת חשבון/KYC/payout ו־sandbox Paddle, ואז Edge אחד + מימוש
-  `verifyAndParse` + מעבד שממפה סוג אירוע לפקודת מנוי קיימת. Stripe+Morning נשארים fallback
-  לא־פעיל לפי #207/#256.
+- **עודכן 31.08.2026 — שלוש טענות שהיו כאן הפסיקו להיות נכונות.** הניסוח הקודם אמר
+  „אין endpoint HTTP", „אין מעבד" ו„הסטטוסים הם `stored` ו-`dead_letter` בלבד". ‏`0187` ו-`billing-webhook`
+  הפכו את שלושתן, והסעיף נכתב מחדש למה שבאמת חסר.
+
+- **מצב — מה שקיים:** ‏`0157` בונה את מודל האירועים, השיוך, האידמפוטנטיות וה-audit.
+  ‏**ה-endpoint קיים** — `supabase/functions/billing-webhook/{index.ts,core.ts}`, ‏`verify_jwt = false`
+  מנומק (`supabase/config.toml:189-193`), והסדר נכון: raw bytes ← אימות חתימה ← parse ← store ← apply
+  (`core.ts:6-12,80-123`). ‏**אימות חתימת Paddle קיים ומלא** — ‏HMAC-SHA256 מעל `ts:body`, מספר `h1`
+  בסבב מפתח, חלון 5 שניות סימטרי, השוואה בזמן קבוע
+  (`supabase/functions/_shared/billing-adapter.ts:203-291`). ‏**המעבד קיים ומלא** — ‏allowlist של
+  22 סוגי אירוע (`0187:132-168`), שבע פונקציות מעבר (`0187:348-620`) ו-dispatcher עם replay,
+  ‏dead letters, ‏audit ו-timeline (`0187:622-758`). ‏**‏`processed` קיים** — `0187:307-313`.
+
+- **מה באמת חסר, במפורש — ארבעה דברים:**
+  1. **ספק מאופשר.** ‏`private.billing_provider_boundary` נזרעת `enabled=false` לשלושת הספקים
+     ו**אין פונקציית כתיבה שמדליקה** (`0187:60-101`). זה מכוון: הדלקה היא מיגרציה
+     forward-only שנסקרת כהחלטה מסחרית, ולא toggle בזמן ריצה.
+  2. **מפת מחיר←מסלול.** ‏`private.billing_provider_price_map` ריקה בכוונה (`0187:170-187`);
+     מחיר לא ממופה יורד ל-dead letter ואינו מעניק מסלול מנוחש.
+  3. **‏⚠ כותב ל-`organization_subscriptions.provider_customer_id` — וזה אינו מכוון.**
+     העמודה קיימת (`0154:159`), ה-unique קיים (`0154:173-175`), ו-`private.resolve_billing_org`
+     קורא **רק** ממנה (`0157:71-84`) — אבל **אף פקודה במוצר אינה כותבת אליה**.
+     ‏`platform_set_org_subscription` אינה נוגעת בה (`0154:432-485`), ו**בשתי סוויטות** הקישור נכתב
+     ב-`update` ישיר של הבדיקה עצמה — `p54_billing_boundary_and_funnel.sql:80-83`
+     ו-`p71_billing_provider_event_processing.sql:217`. **שתיהן בדיקות; אף אחת אינה מוצר.**
+     **בלי הכותב הזה, גם ביום שהסוד יגיע, כל אירוע חתום ייפול כ„בלתי-משויך".**
+  4. **סוד חי.** ‏`PADDLE_WEBHOOK_SECRET` אינו מוגדר; חשבון/KYC/payout לא הוכחו (#213).
+     ‏`createCheckoutSession` מסרב בשמו (`_shared/billing-adapter.ts:216`).
+
+- **‏⚠ וממצא חמישי שאיש לא רשם:** ‏`supabase/functions/billing-webhook/core.test.ts` — וכן של שני
+  ה-webhooks האחרים — **אינו רץ באף שער**, לא ב-`scripts/check-quality-gates.ps1` ולא ב-21 שלבי
+  ה-`contracts` של `.github/workflows/quality-gate.yml`. ‏`$functionJwt` (`check-quality-gates.ps1:1134-1147`)
+  כן מכילה את `billing-webhook` ובודקת לו `verify_jwt=false`, אבל אימות החתימה עצמו אינו נבדק.
+
+- **הסיכון:** אפס היום — אין תנועת כסף אוטומטית, ואירוע חתום מושלם יורד ל-dead letter
+  עם `provider_not_enabled` (`0187:663-666`). בחיבור Paddle הסיכון עובר לשני דברים בלבד:
+  קישור שגוי שמשנה זכאות לדייר הלא-נכון, ואימות חתימה שנשבר בלי ששער יראה. **האיסור על
+  קריאת `org_id` מתוך ה-payload נשאר בתוקף ומוכח.**
+
+- **ראיה:** ‏`0157` · `0187_billing_provider_event_processing.sql` · `0188` ·
+  `supabase/functions/billing-webhook/{index.ts,core.ts}` · `supabase/functions/_shared/billing-adapter.ts` ·
+  `supabase/config.toml:189-193` · `p54_billing_boundary_and_funnel.sql` (מוכיחה שמזהה ארגון
+  מזויף ב-payload אינו משייך; הקישור שלה נכתב ב-`update` שלה עצמה, `:80-83`) ·
+  `p71_billing_provider_event_processing.sql:217` (אתר הכתיבה השני, נמדד 31.08.2026).
+
+- **הצעד הזול הבא, והוא אינו דורש חשבון:** (א) להכניס את שלושת קובצי
+  `core.test.ts` לשער; (ב) לבנות כותב יחיד ל-`provider_customer_id` עם step-up, סיבה ו-audit,
+  בלי להדליק דבר. רק אחרי שהבעלים מוכיח חשבון/KYC/payout וסוד: מיגרציה forward-only
+  שמדליקה את הספק וזורעת את מפת המחירים. ‏Stripe+Morning נשארים fallback לא-פעיל לפי
+  #207/#256. תכנית הפירוק המלאה: `docs/plans/2026-08-31-inbound-intake-and-billing.md` סעיף D.
 
 ### §58 — ארגון שהבעלים שלו לא אישר מייל נשאר לנצח
 
@@ -1466,6 +1504,11 @@ Hebrew and clears the field" — עם `Unable to find an element with the text: 
   ואינן מבטלות אותו.
 - **ראיה:** ‏`private.assert_platform_staff_command` ב־`0249`, וזרועות ה־`self_authority_change_forbidden`
   וה־`not_platform_capability` ב־`p79`.
+- **המגבלה השנייה, שנמדדה 31.08.2026: הדלת אינה קיימת בייצור.** ‏`0249`/`0250` הן חלק מרולאאוט
+  `0243`–`0267` שטרם בוצע — הלדג'ר בייצור על `0242`, ‏`platform_invite_operator` ו־`platform_add_operator`
+  אינן שם, וה-bundle הפרוס של הקונסולה אינו מכיל את מסך „צוות הפלטפורמה". הקוד ב-`main` נראה
+  זמין ואינו — הוספת מפעיל בייצור היא היום **SQL ידני בלבד** (`docs/PLATFORM-ADMIN-BOOTSTRAP.md`).
+  מדידה, לא הנחה: הפונקציה במסד וה-bundle החי.
 - **הוכרע 30.08.2026 (בעלים) — `mfa-first-when-available`:** ‏`operator.manage` תהיה **היכולת
   הראשונה** שתחייב אימות בשני שלבים, ברגע ש־§62 ייסגר. אין עבודה עכשיו, ולכן הסעיף נשאר פתוח;
   ההכרעה רשומה כאן כדי שסגירת §62 לא תשאיר אותה מאחור. **תיקון הפניה באותה הכרעה:** עד 30.08.2026
