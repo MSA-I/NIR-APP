@@ -75,25 +75,36 @@ const manifest = sequence.map((entry, ordinal) => ({ ordinal, ...entry }));
 const keyOf = (e) => `${e.kind} ${e.path ?? ''} ${e.label} ${e.role ?? ''}`;
 
 // ---------------------------------------------------------------- agree with the real runner
-// If this file's parser and the runner's parser ever diverge, the manifest is measuring a
-// sequence CI does not run. That is worse than no guard, so it is a failure.
-try {
-  if (isControlRun) throw Object.assign(new Error('control run — cross-check skipped'), { skip: true });
-  const out = execFileSync(process.execPath, [path.join(repoRoot, 'scripts', 'ci-sql-suites.mjs'), '--list'], {
-    encoding: 'utf8',
-    cwd: repoRoot,
-  });
-  const runnerSuites = [...out.matchAll(/^suite\s+(\S+)/gm)].map((m) => m[1]);
-  const mySuites = manifest.filter((e) => e.kind === 'suite').map((e) => e.path);
-  if (runnerSuites.length && runnerSuites.join('\n') !== mySuites.join('\n')) {
-    fail('check:suite-manifest FAILED — this guard and scripts/ci-sql-suites.mjs parsed different\n'
-      + '  sequences from the same file. One of the two parsers is wrong; fix before trusting either.\n'
-      + `  guard: ${mySuites.length} suites · runner: ${runnerSuites.length} suites`);
+// If this file's parser and the runner's parser diverge, the manifest describes a sequence CI
+// does not run — worse than no guard, because it is believed. So this fails CLOSED in all three
+// ways it can go wrong: the runner refusing to run, the runner reporting nothing, and the two
+// disagreeing. And it compares identity, not just filenames: a changed role or label is a
+// different suite even when the path is the same.
+if (!isControlRun) {
+  let out;
+  try {
+    out = execFileSync(process.execPath, [path.join(repoRoot, 'scripts', 'ci-sql-suites.mjs'), '--list'],
+      { encoding: 'utf8', cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch (error) {
+    fail('check:suite-manifest FAILED — could not run scripts/ci-sql-suites.mjs --list to confirm this\n'
+      + '  guard and the real runner agree. "Could not check" must never read as "checked".\n'
+      + `  ${String(error.stderr ?? error.stdout ?? error.message).split('\n').slice(0, 3).join(' ')}`);
   }
-} catch (error) {
-  if (error?.skip) { /* positive control drives a mutated copy; the runner reads the real file */ }
-  else if (error?.status === 1 && /FAILED/.test(String(error.stdout ?? ''))) throw error;
-  else console.warn('check:suite-manifest — could not cross-check against ci-sql-suites.mjs --list; continuing on the local parse.');
+  // `suite  <path>  <label>  [role]` — role is omitted for the default.
+  const runner = [...out.matchAll(/^suite\s+(\S+)\s+(.*?)\s*(?:\[([^\]]+)\])?\s*$/gm)]
+    .map((m) => `${m[1]}|${(m[2] ?? '').trim()}|${m[3] ?? 'postgres'}`);
+  const mine = manifest.filter((e) => e.kind === 'suite').map((e) => `${e.path}|${e.label}|${e.role}`);
+  if (runner.length === 0) {
+    fail('check:suite-manifest FAILED — the runner reported zero suites. Either the gate is empty\n'
+      + '  or its output format changed; either way this guard is measuring nothing.');
+  }
+  if (runner.join('\n') !== mine.join('\n')) {
+    const at = mine.findIndex((x, i) => x !== runner[i]);
+    fail('check:suite-manifest FAILED — this guard and scripts/ci-sql-suites.mjs disagree about\n'
+      + '  what CI runs. One of the two parsers is wrong; fix that before trusting either.\n'
+      + `  guard: ${mine.length} suites · runner: ${runner.length} suites\n`
+      + (at >= 0 ? `  first difference at #${at}:\n    guard:  ${mine[at]}\n    runner: ${runner[at] ?? '(nothing)'}` : ''));
+  }
 }
 
 // ---------------------------------------------------------------- write mode

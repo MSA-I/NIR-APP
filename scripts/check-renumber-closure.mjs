@@ -32,14 +32,18 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..');
 const migrationsDir = path.join(repoRoot, 'supabase', 'migrations');
-const mapPath = path.join(repoRoot, 'scripts', 'renumber-map.json');
+const mapPath = process.env.RENUMBER_MAP_PATH || path.join(repoRoot, 'scripts', 'renumber-map.json');
 const inject = process.env.RENUMBER_CLOSURE_INJECT;
 const SELF = 'scripts/check-renumber-closure.mjs';
 
 const violations = [];
 // The one measured cross-reference in the tree: 0187 wraps a block verifying constraints that
 // 0157 created. Pinned by file AND number so a stale tag elsewhere still fails.
-const ALLOWED_CROSS_TAGS = new Set(['0187_billing_provider_event_processing.sql|0157']);
+const ALLOWED_CROSS_TAGS = new Set([
+  // file | the exact tag text. Pinning file|number alone would excuse ANY tag in 0187 that
+  // happened to carry 0157, which is more than was measured and more than is intended.
+  '0187_billing_provider_event_processing.sql|$verify_0157_constraints$',
+]);
 
 let scratchRepo = null;
 
@@ -74,7 +78,7 @@ for (const file of files) {
     // checks constraints 0157 created. That is a real cross-reference, not a stale identity, so
     // it is pinned by file and number rather than weakening the rule for everyone.
     for (const m of line.matchAll(/\$[a-z_]*?(\d{4})[a-z_]*?\$/gi)) {
-      if (m[1] !== own && !ALLOWED_CROSS_TAGS.has(`${file}|${m[1]}`)) {
+      if (m[1] !== own && !ALLOWED_CROSS_TAGS.has(`${file}|${m[0]}`)) {
         violations.push({ file, lineNo, own, found: m[1], kind: 'dollar tag', text: line.trim().slice(0, 96) });
       }
     }
@@ -171,26 +175,72 @@ for (const hit of referenceHits) {
 }
 
 // ---------------------------------------------------------------- 3. declared renumbers must be complete
-// scripts/renumber-map.json: [{ "from": "0281", "to": "0279", "why": "creates the table 0280 needs" }]
+// scripts/renumber-map.json declares each move as a FILE move, not a number ban. That distinction
+// is the whole design, because wave 4's renumber is a CYCLE:
+//
+//     0281 -> 0279   (#191, creates inbound_intake_claims)
+//     0279 -> 0280   (#192, takes a foreign key on it)
+//     0280 -> 0281   (#180, independent, moved to make room)
+//
+// Every `from` number is somebody else's legitimate `to`. A global "0279 must not appear" rule
+// would condemn #191's correct new identity the moment the cycle closed. So each entry is checked
+// only against ITS OWN file and the references it declares.
 let mapEntries = [];
 if (existsSync(mapPath)) {
   mapEntries = JSON.parse(readFileSync(mapPath, 'utf8'));
   for (const entry of mapEntries) {
-    const stale = grepRepo(`\\b${entry.from}\\b`, SCAN_PATHS)
-      .filter((hit) => !hit.startsWith(`${SELF}:`) && !hit.startsWith('scripts/renumber-map.json:'));
-    // A citation of the OLD number in prose about the move is legitimate; a live one is not.
-    const live = stale.filter((hit) => {
-      const where = hit.split(':')[0];
-      return EXECUTABLE.test(where) || where.startsWith('supabase/migrations/');
-    });
-    if (live.length) {
-      violations.push({
-        file: `renumber ${entry.from} → ${entry.to}`,
-        lineNo: '—',
-        kind: 'incomplete renumber',
-        found: `${live.length} live occurrence(s) of ${entry.from} remain`,
-        text: live.slice(0, 8).map((h) => h.split(':').slice(0, 2).join(':')).join(', '),
-      });
+    const { fromFile, toFile, fromNumber, references = [], why } = entry;
+
+    if (!existing.has(toFile)) {
+      violations.push({ file: `renumber ${fromFile} -> ${toFile}`, lineNo: '-', kind: 'incomplete renumber',
+        found: 'the destination file does not exist', text: why ?? '' });
+      continue;
+    }
+    if (existing.has(fromFile)) {
+      violations.push({ file: `renumber ${fromFile} -> ${toFile}`, lineNo: '-', kind: 'incomplete renumber',
+        found: 'the ORIGINAL file is still there — both numbers now exist', text: why ?? '' });
+    }
+
+    // Inside the moved file, the old number must be gone. Scoped to this file, so the same digits
+    // living legitimately in another migration are untouched.
+    const body = readFileSync(path.join(migrationsDir, toFile), 'utf8');
+    const stale = body.split(/\r?\n/)
+      .map((line, i) => ({ line, no: i + 1 }))
+      .filter((l) => new RegExp(`\\b${fromNumber}\\b`).test(l.line));
+    if (stale.length) {
+      violations.push({ file: `supabase/migrations/${toFile}`, lineNo: stale[0].no, kind: 'incomplete renumber',
+        found: `${stale.length} occurrence(s) of the old number ${fromNumber} survive inside the moved file`,
+        text: stale.slice(0, 4).map((l) => `${l.no}: ${l.line.trim().slice(0, 78)}`).join(' | ') });
+    }
+
+    // Anything that cited the file by name.
+    const byName = grepRepo(fromFile.replace(/\./g, '\\.'), SCAN_PATHS)
+      .filter((h) => !h.startsWith(`${SELF}:`) && !h.startsWith('scripts/renumber-map.json:'));
+    if (byName.length) {
+      violations.push({ file: `renumber ${fromFile} -> ${toFile}`, lineNo: '-', kind: 'incomplete renumber',
+        found: `${byName.length} reference(s) still name the old file`,
+        text: byName.slice(0, 6).map((h) => h.split(':').slice(0, 2).join(':')).join(', ') });
+    }
+
+    // Files that cite the migration by BARE NUMBER cannot be found automatically once the cycle
+    // closes: after the move, "0281" is a real migration again — a different one. So the map names
+    // them, and each must have stopped saying the old number.
+    for (const ref of references) {
+      const full = path.join(repoRoot, ref);
+      if (!existsSync(full)) {
+        violations.push({ file: ref, lineNo: '-', kind: 'incomplete renumber',
+          found: 'declared as referencing the renumbered migration, but the file is missing', text: '' });
+        continue;
+      }
+      const refBody = readFileSync(full, 'utf8');
+      const hits = refBody.split(/\r?\n/)
+        .map((line, i) => ({ line, no: i + 1 }))
+        .filter((l) => new RegExp(`\\b${fromNumber}\\b`).test(l.line));
+      if (hits.length) {
+        violations.push({ file: ref, lineNo: hits[0].no, kind: 'incomplete renumber',
+          found: `still says ${fromNumber}, which now names a DIFFERENT migration`,
+          text: hits.slice(0, 3).map((l) => `${l.no}: ${l.line.trim().slice(0, 78)}`).join(' | ') });
+      }
     }
   }
 }

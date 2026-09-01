@@ -41,6 +41,7 @@ jobs:
       closure: ${{ steps.filter.outputs.closure }}
       gatecontrols: ${{ steps.filter.outputs.gatecontrols }}
       keymanifest: ${{ steps.filter.outputs.keymanifest }}
+      baselinedrift: ${{ steps.filter.outputs.baselinedrift }}
       supplier: ${{ steps.filter.outputs.supplier }}
       nosend: ${{ steps.filter.outputs.nosend }}
       vitest: ${{ steps.filter.outputs.vitest }}
@@ -90,19 +91,23 @@ jobs:
           # additionally watches every surface that can cite a migration by filename, because a
           # half-finished renumber leaves the pointer behind rather than the file.
           gate_registry='^(scripts/check-quality-gates\.ps1|scripts/suite-manifest\.baseline\.json|scripts/check-suite-manifest\.mjs)$'
-          migration_number_inputs='^(supabase/migrations/|scripts/check-migration-numbers\.mjs$)'
-          closure_inputs='^(supabase/migrations/|supabase/tests/|supabase/functions/|docs/|scripts/|src/)'
-          gate_control_inputs='^scripts/check-(suite-manifest|migration-numbers|renumber-closure|gate-controls)\.mjs$'
+          migration_number_inputs='^(supabase/migrations/|scripts/check-migration-numbers\.mjs$|scripts/migration-set\.baseline\.json$)'
+          # Must match SCAN_PATHS in check-renumber-closure.mjs. A surface the guard reads but the
+          # filter omits is a surface where a stale pointer never triggers anything.
+          closure_inputs='^(supabase/|docs/|scripts/|src/|tools/|worker/|\.github/|\.claude/|[^/]+\.md$)'
+          gate_control_inputs='^(scripts/check-(suite-manifest|migration-numbers|renumber-closure|key-manifest|gate-controls)\.mjs$|package\.json$)'
           # Any src change can strand a key, so the whole surface is an input, plus the
           # dictionary itself and this guard's own baseline.
           key_manifest_inputs='^(src/|scripts/check-key-manifest\.mjs$|scripts/key-manifest\.baseline\.json$)'
+          # Any baseline edit at all, because this guard exists to judge baseline edits.
+          baseline_inputs='^scripts/(suite-manifest|migration-set|key-manifest)\.baseline\.json$'
 
           if [ ! -s changed-files.txt ] || product_matches "$build_common|$build_inputs"; then
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
             echo "build=false" >> "$GITHUB_OUTPUT"
           fi
-          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$token_inputs|$money_inputs|$exemption_inputs|$supplier_inputs|$nosend_inputs|$vitest_inputs|$gate_registry|$migration_number_inputs|$closure_inputs|$gate_control_inputs|$key_manifest_inputs"; then echo "verify=true" >> "$GITHUB_OUTPUT"; else echo "verify=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$token_inputs|$money_inputs|$exemption_inputs|$supplier_inputs|$nosend_inputs|$vitest_inputs|$gate_registry|$migration_number_inputs|$closure_inputs|$gate_control_inputs|$key_manifest_inputs|$baseline_inputs"; then echo "verify=true" >> "$GITHUB_OUTPUT"; else echo "verify=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$vitest_inputs"; then echo "install=true" >> "$GITHUB_OUTPUT"; else echo "install=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$knip_inputs"; then echo "knip=true" >> "$GITHUB_OUTPUT"; else echo "knip=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-design-tokens\.ts$" || product_matches '^src/'; then echo "tokens=true" >> "$GITHUB_OUTPUT"; else echo "tokens=false" >> "$GITHUB_OUTPUT"; fi
@@ -113,6 +118,7 @@ jobs:
           if [ ! -s changed-files.txt ] || matches "$workflow|$closure_inputs"; then echo "closure=true" >> "$GITHUB_OUTPUT"; else echo "closure=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$gate_control_inputs"; then echo "gatecontrols=true" >> "$GITHUB_OUTPUT"; else echo "gatecontrols=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$key_manifest_inputs"; then echo "keymanifest=true" >> "$GITHUB_OUTPUT"; else echo "keymanifest=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$baseline_inputs"; then echo "baselinedrift=true" >> "$GITHUB_OUTPUT"; else echo "baselinedrift=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-supplier-columns\.ts$" || product_matches '^src/'; then echo "supplier=true" >> "$GITHUB_OUTPUT"; else echo "supplier=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$nosend_inputs"; then echo "nosend=true" >> "$GITHUB_OUTPUT"; else echo "nosend=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$vitest_config|$vitest_inputs"; then echo "vitest=true" >> "$GITHUB_OUTPUT"; else echo "vitest=false" >> "$GITHUB_OUTPUT"; fi
@@ -149,6 +155,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # check:baseline-drift compares against the merge base
       - uses: actions/setup-node@v4
         if: needs.changes.outputs.install == 'true'
         with:
@@ -191,6 +199,9 @@ jobs:
       - name: Key-manifest guard (which key lost its reader, not how many)
         if: needs.changes.outputs.keymanifest == 'true'
         run: npm run check:key-manifest
+      - name: Baseline drift (a --write must not bless the breakage it hides)
+        if: needs.changes.outputs.baselinedrift == 'true'
+        run: npm run check:baseline-drift
       - name: Gate controls (each guard must fail on a broken input)
         # Runs whenever ANY guard it validates runs. Relying on a guard's verdict without
         # proof that the guard still fails correctly is how a guard becomes decoration —

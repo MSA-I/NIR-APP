@@ -1,5 +1,5 @@
 {
-  "note": "Keys with no PRODUCTION call site. Names, not a count: four pull requests in one wave can wire one key and strand another while the total stands still.",
+  "note": "Keys with no PRODUCTION call site. Names, not a count: four pull requests in one wave can wire one key and strand another while the total stands still. `specOnly` is the subset a test still names, which a count-based guard reads as healthy.",
   "considered": 5216,
   "orphans": [
     "answerView.text_6",
@@ -15,6 +15,7 @@
     "bank.transactionLabel",
     "common.cancel",
     "common.close",
+    "common.save",
     "common.search",
     "consolidated.fmtDate_2",
     "dashboard.emptyMessage",
@@ -132,5 +133,8 @@
     "suppliers.text",
     "suppliers.text_42",
     "suppliers.title_3"
+  ],
+  "specOnly": [
+    "common.save"
   ]
 }

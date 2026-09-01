@@ -66,6 +66,16 @@ function leafKeys(file) {
 
 const isSpec = (rel) => /\.(spec|test)\.[cm]?[jt]sx?$/.test(rel);
 
+// A COMMENT IS NOT A CALL SITE. Without this, deleting `t('x')` and leaving `// t('x')` behind
+// reads as healthy — and commenting a line out on the way through a merge conflict is exactly how
+// the 439 calls went missing in the first place. Block comments go first; line comments are
+// stripped only when the `//` does not follow a colon, so `https://…` in a string survives.
+function stripComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+
 function sources(dir, out = []) {
   for (const entry of readdirSync(dir)) {
     const full = path.join(dir, entry);
@@ -73,7 +83,7 @@ function sources(dir, out = []) {
     if (!/\.tsx?$/.test(entry)) continue;
     const rel = path.relative(repoRoot, full).split(path.sep).join('/');
     if (rel.includes('/i18n/dictionaries/')) continue;
-    out.push({ rel, text: readFileSync(full, 'utf8') });
+    out.push({ rel, text: stripComments(readFileSync(full, 'utf8')) });
   }
   return out;
 }
@@ -104,6 +114,24 @@ if (inject === 'strand' || inject === 'offset') {
     text: f.text.split(`'${wired}'`).join("'__stranded_by_control__'"),
   }));
 }
+if (inject === 'commented') {
+  // The subtler shape: the call is not deleted, it is commented out. A guard that greps for the
+  // literal anywhere in the file sees no change at all.
+  const baselineNames = new Set(existsSync(baselinePath)
+    ? JSON.parse(readFileSync(baselinePath, 'utf8')).orphans : []);
+  const wired = keys.find((k) => !DYNAMIC_NAMESPACES.has(k.split('.')[0])
+    && !k.endsWith('_one') && !baselineNames.has(k)
+    && production.some((f) => f.text.includes(`'${k}'`)));
+  if (!wired) {
+    console.error('check:key-manifest FAILED — the control could not find a wired key to comment out.');
+    process.exit(1);
+  }
+  injectedKey = wired;
+  production = production.map((f) => ({
+    rel: f.rel,
+    text: f.text.split(`'${wired}'`).join(`/* was */ '__commented_by_control__'`),
+  }));
+}
 
 // A drop of one call site is refactoring. Losing the LAST production call site is the defect, so
 // that is the transition this measures.
@@ -132,9 +160,11 @@ if (orphans.length > considered.length / 2) {
 if (process.argv.includes('--write')) {
   writeFileSync(baselinePath, `${JSON.stringify({
     note: 'Keys with no PRODUCTION call site. Names, not a count: four pull requests in one wave '
-      + 'can wire one key and strand another while the total stands still.',
+      + 'can wire one key and strand another while the total stands still. `specOnly` is the '
+      + 'subset a test still names, which a count-based guard reads as healthy.',
     considered: considered.length,
     orphans,
+    specOnly: specOnly.map((s) => s.key).sort(),
   }, null, 2)}\n`, 'utf8');
   console.log(`check:key-manifest — baseline written: ${orphans.length} orphan name(s) of ${considered.length} keys.`);
   process.exit(0);
@@ -169,11 +199,17 @@ if (stranded.length) {
     + '    This is the shape of merge 7278f787: the key is still translated, and the screen\n'
     + '    beside it has gone back to reading Hebrew.');
 }
-if (specOnly.length) {
-  problems.push(`${specOnly.length} key(s) are read ONLY by a spec:\n`
-    + specOnly.slice(0, 15).map((s) => `    - ${s.key}  (${s.spec[0]})`).join('\n')
+// Spec-only keys are pinned by name like the orphans. One predates this guard: `common.save` is
+// named by src/lib/i18n/t.spec.ts and, in production, only by a doc comment in t.ts that lists it
+// as an example key. Stripping comments is what revealed it — the old count-based guard read that
+// comment as a call site and saw nothing wrong.
+const knownSpecOnly = new Set(baseline.specOnly ?? []);
+const newSpecOnly = specOnly.filter((s) => !knownSpecOnly.has(s.key));
+if (newSpecOnly.length) {
+  problems.push(`${newSpecOnly.length} key(s) are now read ONLY by a spec:\n`
+    + newSpecOnly.slice(0, 15).map((s) => `    - ${s.key}  (${s.spec[0]})`).join('\n')
     + '\n\n    A test still names it, so a count-based guard sees nothing wrong, but no screen\n'
-    + '    asks for it any more.');
+    + '    asks for it any more. That is the 7278f787 shape exactly.');
 }
 if (rescued.length) {
   problems.push(`${rescued.length} key(s) gained a call site and are no longer orphaned:\n`

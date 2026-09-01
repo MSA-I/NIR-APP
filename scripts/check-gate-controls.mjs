@@ -188,6 +188,28 @@ console.log('\ncheck:key-manifest');
   mustPass('the real dictionary still passes', 'check-key-manifest.mjs', {});
 }
 
+// ============================================================ baseline drift
+// The attack every other guard is blind to: break the tree, run --write, and the pin agrees
+// with the breakage. Only a comparison against the PREVIOUS pin can see it. Mutating a tracked
+// file is unavoidable here, so it is saved and restored in a finally.
+console.log('\ncheck:baseline-drift');
+{
+  const suiteBaseline = path.join(repoRoot, 'scripts', 'suite-manifest.baseline.json');
+  const original = readFileSync(suiteBaseline, 'utf8');
+  try {
+    const pinned = JSON.parse(original);
+    const withoutOne = pinned.filter((e, idx) => !(e.kind === 'suite' && idx === pinned.findIndex((x) => x.kind === 'suite')));
+    writeFileSync(suiteBaseline, `${JSON.stringify(withoutOne, null, 2)}\n`, 'utf8');
+    mustFail('deleting a suite and re-pinning the baseline is caught', 'check-baseline-drift.mjs', {
+      env: { BASELINE_DRIFT_BASE: 'HEAD' },
+      expect: 'removed from the baseline',
+    });
+  } finally {
+    writeFileSync(suiteBaseline, original, 'utf8');
+  }
+  mustPass('the real baselines still pass', 'check-baseline-drift.mjs', { env: { BASELINE_DRIFT_BASE: 'HEAD' } });
+}
+
 rmSync(scratch, { recursive: true, force: true });
 
 console.log('');
