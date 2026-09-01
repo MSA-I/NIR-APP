@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,9 +17,26 @@ const federated = vi.hoisted(() => ({
 }));
 
 vi.mock('../lib/authProviders', () => ({
+  FEDERATED_PROVIDERS: ['google', 'apple'],
   FEDERATED_PROVIDER_LABEL: { google: 'Google', apple: 'Apple' },
   enabledFederatedProviders: () => federated.providers,
   startFederatedSignup: federated.start,
+  // Owner decision #270's switch lives beside the provider switches, so the one card that draws
+  // both paths reads it too. Off, because it is off in the product until Apple is switched on.
+  backupEmailRequirementEnforced: () => false,
+}));
+
+/** The card asks the auth server whether a provider already signed this browser in. On the
+ *  sign-in side the answer is always "no session" — the federated return is signup.spec's subject. */
+vi.mock('../lib/supabase', () => ({
+  supabase: {
+    functions: { invoke: vi.fn() },
+    auth: {
+      getSession: vi.fn(async () => ({ data: { session: null } })),
+      signInWithOAuth: vi.fn(async () => ({ error: null })),
+      resend: vi.fn(async () => ({ data: {}, error: null })),
+    },
+  },
 }));
 
 vi.mock('../auth/AuthContext', () => ({
@@ -81,7 +99,27 @@ describe('מסך הכניסה', () => {
     expect(split).toHaveAttribute('dir', 'ltr');
     expect(split?.children[0]).toBe(visualPanel);
     expect(split?.children[1]).toBe(formPanel);
-    expect(screen.getByRole('link', { name: 'להרשמה' })).toHaveAttribute('href', '/signup');
+  });
+
+  /**
+   * Owner report 31.08.2026: "two buttons that lead to two separate windows". Opening a business
+   * used to be a `<Link to="/signup">`, which is precisely the navigation being complained about.
+   * It is a button now, and this test is the one that would catch a regression back to a link.
+   */
+  it('פותח את פתיחת העסק באותו מסך, בלי לנווט ובלי לאבד את מה שהוקלד', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><Login /></MemoryRouter>);
+
+    await user.type(screen.getByLabelText('אימייל'), 'owner@example.test');
+    expect(screen.queryByLabelText('שם העסק')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'להרשמה' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'להרשמה' }));
+
+    // Same card, same field, same value — the switch revealed fields instead of replacing a page.
+    expect(screen.getByLabelText('שם העסק')).toBeInTheDocument();
+    expect(screen.getByLabelText('אימייל')).toHaveValue('owner@example.test');
+    expect(screen.getByRole('region', { name: 'זהות InPlace' })).toBeInTheDocument();
   });
 
   it('אינו מצייר דלת ספק שאינה מוגדרת, ולא מפריד "או" ריק', () => {
@@ -89,8 +127,9 @@ describe('מסך הכניסה', () => {
 
     expect(screen.queryByRole('button', { name: /המשך עם/ })).not.toBeInTheDocument();
     expect(screen.queryByText('או')).not.toBeInTheDocument();
-    // The screen still has a way to open an account — it is simply the password one.
-    expect(screen.getByRole('link', { name: 'להרשמה' })).toHaveAttribute('href', '/signup');
+    // The screen still has a way to open an account — it is simply the password one, and it is
+    // now a switch on this card rather than a door to another screen.
+    expect(screen.getByRole('button', { name: 'להרשמה' })).toBeInTheDocument();
   });
 
   it('מוסר את הדלת הפדרטיבית לספק המוגדר, ולא לכניסה בסיסמה', async () => {

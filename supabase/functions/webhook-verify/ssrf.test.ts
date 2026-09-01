@@ -17,15 +17,21 @@
 //   D4  scheme and authority: https only, no file:/gopher:/ftp:/data:, no credentials.
 //   D10 mutation proof: the corpus assertion is run against a deliberately weakened validator
 //       and observed to turn red, so a green D1 is evidence rather than decoration.
+//   D5-D9, D11 the download layer -- see its own header further down. They live in this file
+//       because they are the same three layers with a body attached, and splitting them would
+//       let one file's corpus drift from the other's.
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   addressClass,
   classifyWebhookUrl,
+  guardedDownload,
   guardedRequest,
+  sniffMediaType,
   type DialDeps,
   type GuardedConnection,
+  type SniffedMediaType,
   type UrlRejection,
 } from './ssrf.ts';
 
@@ -361,4 +367,543 @@ test('D10 — the corpus assertion turns red against a weakened validator', () =
 
   // And the real validator still passes it, in the same test, so the two halves cannot drift.
   assertCorpusRejected(classifyWebhookUrl);
+});
+
+/* ===================== the download layer ===================== */
+//
+// `guardedDownload` is the first code in the repo that reads a remote body, and it exists
+// because `guardedFetch` provably cannot: it answers `new Response(null, ...)`. Reading a body
+// adds two risks the probe never carried -- an unbounded stream, and a redirect that hands the
+// destination back to the remote side -- so the assertions below are about those two and about
+// the third thing a document store must never do, which is believe a Content-Type.
+//
+//   D5  the allowlist is EXACT: a subdomain of an allowed host is refused, and so is a name
+//       that merely ends with it.
+//   D6  a redirect is re-validated from scratch at every hop -- allowlist, string layer,
+//       address class -- and bounded in count.
+//   D7  the cap is a refusal, never a truncation, and an oversized DECLARED length is refused
+//       before the body is drained.
+//   D8  the media type comes from the bytes. A header that disagrees loses.
+//   D9  the declared length must match what arrived; chunked is decoded; a body with neither
+//       is refused by name rather than read on trust.
+//   D11 mutation proof: relax the allowlist from exact to suffix and D5 must turn red, so a
+//       green D5 is evidence rather than decoration.
+
+
+const PDF_BYTES = new Uint8Array([...ASCII_BYTES('%PDF-1.7'), 0x0a, 0x25, 0xe2, 0xe3, 0xcf, 0xd3]);
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
+const HTML_BYTES = new Uint8Array(ASCII_BYTES('<!doctype html><html><body>nope</body></html>'));
+
+function ASCII_BYTES(text: string): number[] {
+  return Array.from(text, (character) => character.charCodeAt(0));
+}
+
+/** A raw HTTP/1.1 response as bytes, so a binary body survives the harness intact. */
+function rawResponse(head: string, body?: Uint8Array): Uint8Array {
+  const headBytes = new TextEncoder().encode(`${head}\r\n\r\n`);
+  const bodyBytes = body ?? new Uint8Array(0);
+  const out = new Uint8Array(headBytes.length + bodyBytes.length);
+  out.set(headBytes, 0);
+  out.set(bodyBytes, headBytes.length);
+  return out;
+}
+
+function fileResponse(mime: string, body: Uint8Array): Uint8Array {
+  return rawResponse(`HTTP/1.1 200 OK\r\ncontent-type: ${mime}\r\ncontent-length: ${body.length}`, body);
+}
+
+function byteConnection(response: Uint8Array): GuardedConnection & { closed: boolean } {
+  let offset = 0;
+  const conn = {
+    closed: false,
+    write(chunk: Uint8Array): Promise<number> {
+      return Promise.resolve(chunk.length);
+    },
+    read(buffer: Uint8Array): Promise<number | null> {
+      if (offset >= response.length) return Promise.resolve(null);
+      const slice = response.subarray(offset, offset + buffer.length);
+      buffer.set(slice);
+      offset += slice.length;
+      return Promise.resolve(slice.length);
+    },
+    close(): void {
+      conn.closed = true;
+    },
+  };
+  return conn;
+}
+
+interface HopRecorder {
+  deps: DialDeps;
+  connectCalls: Array<{ hostname: string; port: number; serverName: string }>;
+  resolveCalls: Array<{ host: string; family: string }>;
+  connections: Array<ReturnType<typeof byteConnection>>;
+}
+
+/**
+ * One queued response per connect, so a redirect chain is expressed as the chain it is. A
+ * per-host answer map lets a hop resolve to a different address class than the one before it,
+ * which is the whole point of re-validating every hop.
+ */
+function hops(options: {
+  responses: Uint8Array[];
+  answers?: Record<string, string[]>;
+  defaultAnswer?: string[];
+}): HopRecorder {
+  const connectCalls: HopRecorder['connectCalls'] = [];
+  const resolveCalls: HopRecorder['resolveCalls'] = [];
+  const connections: HopRecorder['connections'] = [];
+  const queue = options.responses.slice();
+  return {
+    connectCalls,
+    resolveCalls,
+    connections,
+    deps: {
+      resolve(host, family) {
+        resolveCalls.push({ host, family });
+        if (family !== 'A') return Promise.resolve([]);
+        return Promise.resolve(options.answers?.[host] ?? options.defaultAnswer ?? [PUBLIC_ADDRESS]);
+      },
+      connect(opts) {
+        connectCalls.push(opts);
+        const conn = byteConnection(queue.shift() ?? rawResponse('HTTP/1.1 500 Internal Server Error\r\ncontent-length: 0'));
+        connections.push(conn);
+        return Promise.resolve(conn);
+      },
+    },
+  };
+}
+
+const PDF_ONLY: readonly SniffedMediaType[] = ['application/pdf'];
+const MEDIA: readonly SniffedMediaType[] = ['application/pdf', 'image/png', 'image/jpeg'];
+
+/* ---------- D5: the allowlist is exact ---------- */
+
+interface AllowlistCase {
+  url: string;
+  allowed: string[];
+  admitted: boolean;
+  why: string;
+}
+
+const ALLOWLIST_CORPUS: AllowlistCase[] = [
+  { url: 'https://api.twilio.com/Media/1', allowed: ['api.twilio.com'], admitted: true, why: 'the exact registered host' },
+  { url: 'https://API.Twilio.COM/Media/1', allowed: ['api.twilio.com'], admitted: true, why: 'the host is compared case-folded, as DNS is' },
+  { url: 'https://evil.api.twilio.com/Media/1', allowed: ['api.twilio.com'], admitted: false, why: 'a subdomain the provider may let anyone register is not the provider' },
+  { url: 'https://api.twilio.com.attacker-owned.com/Media/1', allowed: ['api.twilio.com'], admitted: false, why: 'the allowed name as a LABEL PREFIX of a hostile one' },
+  { url: 'https://notapi.twilio.com/Media/1', allowed: ['api.twilio.com'], admitted: false, why: 'a name that merely ends with the allowed suffix' },
+  { url: 'https://media.twiliocdn.com/x', allowed: ['api.twilio.com'], admitted: false, why: 'a real provider host that this call did not authorise' },
+];
+
+test('D5 — the download allowlist matches whole hosts, never suffixes', async () => {
+  for (const row of ALLOWLIST_CORPUS) {
+    const rec = hops({ responses: [fileResponse('application/pdf', PDF_BYTES)] });
+    const outcome = await guardedDownload(
+      row.url,
+      { allowedHosts: row.allowed, maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+      rec.deps,
+    );
+    if (row.admitted) {
+      assert.equal(outcome.ok, true, `${row.url} must be admitted (${row.why}), got ${JSON.stringify(outcome)}`);
+    } else {
+      assert.equal(outcome.ok, false, `${row.url} must be refused (${row.why})`);
+      assert.equal(!outcome.ok && outcome.code, 'download_host_not_allowed', row.why);
+      assert.equal(rec.connectCalls.length, 0, `no socket may be opened for ${row.url}`);
+      assert.equal(rec.resolveCalls.length, 0, `a refused host is never even resolved: ${row.url}`);
+    }
+  }
+});
+
+test('D11 — the exact-match rule is the ONLY thing keeping the hostile hosts off the socket', async () => {
+  // D10's discipline, applied to the allowlist. A corpus that passes for the wrong reason --
+  // because the string layer happened to catch the row, say -- is decoration. So each hostile
+  // row is run twice: once against the real allowlist, where it must never reach a connect, and
+  // once against an allowlist that has been WIDENED to contain that very host, where it must
+  // reach one. The second run is the mutation: it turns the refusal off, and if the row still
+  // refuses then the row was never testing the allowlist at all.
+  //
+  // Widening to the literal host is the honest mutation for `endsWith` too -- a suffix check on
+  // 'api.twilio.com' admits 'evil.api.twilio.com' and 'notapi.twilio.com', which is exactly the
+  // membership the widened list grants.
+  const hostile = ALLOWLIST_CORPUS.filter((row) => !row.admitted);
+  assert.ok(hostile.length >= 4, 'the corpus must carry the hostile shapes, not just the happy one');
+
+  let mutationsObserved = 0;
+  for (const row of hostile) {
+    const host = new URL(row.url).hostname.toLowerCase();
+
+    const strict = hops({ responses: [fileResponse('application/pdf', PDF_BYTES)] });
+    const refused = await guardedDownload(
+      row.url,
+      { allowedHosts: row.allowed, maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+      strict.deps,
+    );
+    assert.equal(refused.ok, false, `${host} must be refused under exact matching`);
+    assert.equal(strict.connectCalls.length, 0, `${host} must never reach a socket`);
+
+    const widened = hops({ responses: [fileResponse('application/pdf', PDF_BYTES)] });
+    const admitted = await guardedDownload(
+      row.url,
+      { allowedHosts: [...row.allowed, host], maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+      widened.deps,
+    );
+    if (widened.connectCalls.length > 0) {
+      // The mutation took: this row's refusal came from the allowlist and nowhere else.
+      assert.equal(admitted.ok, true, `${host} should download once it is on the list`);
+      assert.equal(widened.connectCalls[0].serverName, host);
+      mutationsObserved += 1;
+    } else {
+      // The row is refused even when allowlisted, which means an EARLIER layer owns it. That is
+      // a stronger guarantee, not a weaker one -- but it must be a deliberate, named one.
+      assert.equal(admitted.ok, false, `${host} is refused by an earlier layer, so it must stay refused`);
+      assert.match(
+        String(!admitted.ok && admitted.code),
+        /^webhook_url_/,
+        `${host} must be refused by a NAMED string- or address-layer code, not by accident`,
+      );
+    }
+  }
+  assert.ok(
+    mutationsObserved >= 3,
+    'at least three hostile rows must owe their refusal to the allowlist alone, or D5 is testing something else',
+  );
+});
+
+/* ---------- D6: every redirect hop is re-validated ---------- */
+
+test('D6 — a redirect is followed, and the second hop is a full fresh validation', async () => {
+  const rec = hops({
+    responses: [
+      rawResponse('HTTP/1.1 307 Temporary Redirect\r\nlocation: https://media.twiliocdn.com/a/b\r\ncontent-length: 0'),
+      fileResponse('application/octet-stream', PDF_BYTES),
+    ],
+    answers: { 'api.twilio.com': [PUBLIC_ADDRESS], 'media.twiliocdn.com': ['93.184.216.35'] },
+  });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com', 'media.twiliocdn.com'], maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.ok(outcome.ok && outcome.redirects === 1);
+  // The bytes came from the SECOND host, and the report says so rather than naming the first.
+  assert.equal(outcome.ok && outcome.hostDialled, 'media.twiliocdn.com');
+  assert.equal(outcome.ok && outcome.addressDialled, '93.184.216.35');
+  assert.equal(rec.connectCalls.length, 2);
+  assert.equal(rec.connectCalls[1].serverName, 'media.twiliocdn.com');
+  // Each hop resolves for itself: there is no cached verdict carried across a redirect.
+  assert.equal(rec.resolveCalls.filter((call) => call.family === 'A').length, 2);
+  assert.ok(rec.connections.every((conn) => conn.closed), 'every hop socket must be closed');
+});
+
+test('D6 — a redirect off the allowlist is refused, and never dialled', async () => {
+  const rec = hops({
+    responses: [rawResponse('HTTP/1.1 302 Found\r\nlocation: https://attacker-owned.com/steal\r\ncontent-length: 0')],
+  });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, false);
+  assert.equal(!outcome.ok && outcome.code, 'download_host_not_allowed');
+  assert.equal(rec.connectCalls.length, 1, 'the second hop must never be opened');
+});
+
+test('D6 — a redirect to an address literal is refused by the string layer, not followed', async () => {
+  const rec = hops({
+    responses: [rawResponse('HTTP/1.1 302 Found\r\nlocation: https://169.254.169.254/latest/meta-data/\r\ncontent-length: 0')],
+  });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com', '169.254.169.254'], maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  // Even with the metadata address deliberately ON the allowlist, the string layer refuses it
+  // first: an allowlist is not a way to opt back in to an IP literal.
+  assert.equal(outcome.ok, false);
+  assert.equal(!outcome.ok && outcome.code, 'download_redirect_invalid');
+  assert.equal(rec.connectCalls.length, 1);
+});
+
+test('D6 — an allowlisted hop that resolves privately is refused before its connect', async () => {
+  const rec = hops({
+    responses: [rawResponse('HTTP/1.1 302 Found\r\nlocation: https://media.twiliocdn.com/a\r\ncontent-length: 0')],
+    answers: { 'api.twilio.com': [PUBLIC_ADDRESS], 'media.twiliocdn.com': ['169.254.169.254'] },
+  });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com', 'media.twiliocdn.com'], maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, false);
+  assert.equal(!outcome.ok && outcome.code, 'webhook_url_private_address');
+  assert.equal(!outcome.ok && outcome.addressClass, 'link_local');
+  assert.equal(rec.connectCalls.length, 1, 'the private hop must not be dialled');
+});
+
+test('D6 — a relative Location resolves against the hop that sent it', async () => {
+  const rec = hops({
+    responses: [
+      rawResponse('HTTP/1.1 302 Found\r\nlocation: /redirected/file.pdf\r\ncontent-length: 0'),
+      fileResponse('application/pdf', PDF_BYTES),
+    ],
+  });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.equal(rec.connectCalls.length, 2);
+});
+
+test('D6 — a redirect loop stops at the configured hop count', async () => {
+  const selfRedirect = rawResponse('HTTP/1.1 302 Found\r\nlocation: https://api.twilio.com/again\r\ncontent-length: 0');
+  const rec = hops({ responses: [selfRedirect, selfRedirect, selfRedirect, selfRedirect, selfRedirect] });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 4096, allowedMediaTypes: PDF_ONLY, maxRedirects: 2 },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, false);
+  assert.equal(!outcome.ok && outcome.code, 'download_redirect_limit');
+  // maxRedirects: 2 means the original plus two hops -- three connects, not four.
+  assert.equal(rec.connectCalls.length, 3);
+});
+
+test('D6 — a 3xx with no Location is a refusal, not a silent success', async () => {
+  const rec = hops({ responses: [rawResponse('HTTP/1.1 302 Found\r\ncontent-length: 0')] });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, false);
+  assert.equal(!outcome.ok && outcome.code, 'download_redirect_invalid');
+});
+
+/* ---------- D7: the cap is a refusal, not a truncation ---------- */
+
+test('D7 — a body of exactly maxBytes is accepted', async () => {
+  const body = new Uint8Array(1024);
+  body.set(PDF_BYTES, 0);
+  const rec = hops({ responses: [fileResponse('application/pdf', body)] });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 1024, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.equal(outcome.ok && outcome.bytes.length, 1024);
+});
+
+test('D7 — one byte over the cap is refused, and no shorter file is returned', async () => {
+  const body = new Uint8Array(1025);
+  body.set(PDF_BYTES, 0);
+  const rec = hops({ responses: [fileResponse('application/pdf', body)] });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 1024, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, false, 'a file over the cap must not come back truncated');
+  assert.equal(!outcome.ok && outcome.code, 'download_length_declared_too_large');
+});
+
+test('D7 — an oversized declared length is refused without draining the body', async () => {
+  // The head promises 50MB; the connection would happily deliver it. The refusal must come off
+  // the DECLARATION, so the transfer is never paid for.
+  const rec = hops({
+    responses: [rawResponse('HTTP/1.1 200 OK\r\ncontent-type: application/pdf\r\ncontent-length: 52428800', PDF_BYTES)],
+  });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 10 * 1024 * 1024, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, false);
+  assert.equal(!outcome.ok && outcome.code, 'download_length_declared_too_large');
+});
+
+test('D7 — an undeclared stream that runs past the ceiling is abandoned, not buffered', async () => {
+  // No content-length, chunked frames that never terminate: the shape with nothing but our own
+  // ceiling between the provider and this process.
+  const frames: number[] = [];
+  const chunk = new Array(4096).fill(0x41);
+  for (let index = 0; index < 40; index += 1) {
+    frames.push(...ASCII_BYTES('1000\r\n'), ...chunk, 0x0d, 0x0a);
+  }
+  const rec = hops({
+    responses: [rawResponse('HTTP/1.1 200 OK\r\ntransfer-encoding: chunked', new Uint8Array(frames))],
+  });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 32 * 1024, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, false);
+  assert.equal(!outcome.ok && outcome.code, 'download_too_large');
+});
+
+/* ---------- D8: the bytes decide the media type ---------- */
+
+test('D8 — a Content-Type that disagrees with the bytes loses', async () => {
+  const rec = hops({ responses: [fileResponse('application/pdf', HTML_BYTES)] });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, false, 'HTML labelled as PDF must not be stored as a PDF');
+  assert.equal(!outcome.ok && outcome.code, 'download_media_type_unrecognized');
+});
+
+test('D8 — a real PDF served as octet-stream is accepted on its bytes', async () => {
+  const rec = hops({ responses: [fileResponse('application/octet-stream', PDF_BYTES)] });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.equal(outcome.ok && outcome.mediaType, 'application/pdf');
+});
+
+test('D8 — a recognised type outside the caller allowlist is refused BY NAME', async () => {
+  const rec = hops({ responses: [fileResponse('image/png', PNG_BYTES)] });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, false);
+  assert.equal(!outcome.ok && outcome.code, 'download_media_type_rejected');
+  // The caller has to be able to tell the tenant WHAT arrived, not just that something did.
+  assert.equal(!outcome.ok && outcome.mediaType, 'image/png');
+});
+
+test('D8 — the sniffer reads the signature table, including the container caveats', () => {
+  const rows: Array<[Uint8Array, SniffedMediaType | null, string]> = [
+    [PDF_BYTES, 'application/pdf', '%PDF-'],
+    [PNG_BYTES, 'image/png', 'the eight-byte PNG signature'],
+    [new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), 'image/jpeg', 'JFIF'],
+    [new Uint8Array(ASCII_BYTES('GIF89a....')), 'image/gif', 'GIF89a'],
+    [new Uint8Array([...ASCII_BYTES('RIFF'), 0, 0, 0, 0, ...ASCII_BYTES('WEBP')]), 'image/webp', 'RIFF....WEBP'],
+    [new Uint8Array([0, 0, 0, 0x18, ...ASCII_BYTES('ftypheic')]), 'image/heic', 'ISO-BMFF brand heic'],
+    [new Uint8Array([0, 0, 0, 0x18, ...ASCII_BYTES('ftypavif')]), 'image/avif', 'ISO-BMFF brand avif'],
+    [new Uint8Array([0, 0, 0, 0x18, ...ASCII_BYTES('ftypmif1')]), 'image/heif', 'ISO-BMFF brand mif1'],
+    [new Uint8Array([0x49, 0x49, 0x2a, 0x00]), 'image/tiff', 'little-endian TIFF'],
+    // A container signature is answered as the container, never as the member inside it.
+    [new Uint8Array([0x50, 0x4b, 0x03, 0x04]), 'application/zip', 'xlsx and docx are both this'],
+    [new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), 'application/x-ole-storage', 'legacy xls and doc'],
+    [HTML_BYTES, null, 'HTML has no signature we act on'],
+    [new Uint8Array(ASCII_BYTES('name,price\\n')), null, 'CSV has no signature at all'],
+    [new Uint8Array([0x50, 0x4b]), null, 'a bare PK prefix is too weak to act on'],
+    [new Uint8Array(0), null, 'no bytes is not a media type'],
+    [new Uint8Array([0, 0, 0, 0x18, ...ASCII_BYTES('ftypqt  ')]), null, 'an ISO-BMFF brand we do not store'],
+  ];
+  for (const [bytes, expected, why] of rows) {
+    assert.equal(sniffMediaType(bytes), expected, `${why} must sniff as ${expected}`);
+  }
+});
+
+/* ---------- D9: length integrity and transfer encoding ---------- */
+
+test('D9 — a content-length that disagrees with the bytes is refused', async () => {
+  const rec = hops({
+    responses: [rawResponse('HTTP/1.1 200 OK\r\ncontent-type: application/pdf\r\ncontent-length: 999', PDF_BYTES)],
+  });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, false);
+  assert.equal(!outcome.ok && outcome.code, 'download_length_mismatch');
+});
+
+test('D9 — a chunked body is decoded and accepted', async () => {
+  const frames = new Uint8Array([
+    ...ASCII_BYTES(`${PDF_BYTES.length.toString(16)}\r\n`),
+    ...PDF_BYTES,
+    ...ASCII_BYTES('\r\n0\r\n\r\n'),
+  ]);
+  const rec = hops({ responses: [rawResponse('HTTP/1.1 200 OK\r\ntransfer-encoding: chunked', frames)] });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.deepEqual(outcome.ok && Array.from(outcome.bytes), Array.from(PDF_BYTES));
+});
+
+test('D9 — a body with neither a length nor chunking is refused by name', async () => {
+  const rec = hops({ responses: [rawResponse('HTTP/1.1 200 OK\r\ncontent-type: application/pdf', PDF_BYTES)] });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, false, 'close-delimited is legal HTTP and is still not read on trust');
+  assert.equal(!outcome.ok && outcome.code, 'download_encoding_unsupported');
+});
+
+test('D9 — a provider error status is reported with its number, not as a download', async () => {
+  const rec = hops({ responses: [rawResponse('HTTP/1.1 404 Not Found\r\ncontent-length: 0')] });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    { allowedHosts: ['api.twilio.com'], maxBytes: 4096, allowedMediaTypes: MEDIA },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, false);
+  assert.equal(!outcome.ok && outcome.code, 'download_status_rejected');
+  assert.equal(!outcome.ok && outcome.status, 404);
+});
+
+/* ---------- the configuration mistakes that must not read as "allow all" ---------- */
+
+test('an empty allowlist is a refusal, never an open door', async () => {
+  const rec = hops({ responses: [fileResponse('application/pdf', PDF_BYTES)] });
+  for (const init of [
+    { allowedHosts: [], maxBytes: 4096, allowedMediaTypes: PDF_ONLY },
+    { allowedHosts: ['api.twilio.com'], maxBytes: 4096, allowedMediaTypes: [] as SniffedMediaType[] },
+  ]) {
+    const outcome = await guardedDownload('https://api.twilio.com/Media/1', init, rec.deps);
+    assert.equal(outcome.ok, false, `${JSON.stringify(init)} must refuse`);
+    assert.equal(!outcome.ok && outcome.code, 'download_host_not_allowed');
+  }
+  assert.equal(rec.connectCalls.length, 0);
+});
+
+test('a non-positive or absurd byte cap is refused rather than normalised', async () => {
+  const rec = hops({ responses: [fileResponse('application/pdf', PDF_BYTES)] });
+  for (const maxBytes of [0, -1, 1.5, 1024 * 1024 * 1024]) {
+    const outcome = await guardedDownload(
+      'https://api.twilio.com/Media/1',
+      { allowedHosts: ['api.twilio.com'], maxBytes, allowedMediaTypes: PDF_ONLY },
+      rec.deps,
+    );
+    assert.equal(outcome.ok, false, `maxBytes=${maxBytes} must refuse`);
+    assert.equal(!outcome.ok && outcome.code, 'download_too_large');
+  }
+  assert.equal(rec.connectCalls.length, 0);
+});
+
+test('a header carrying CR, LF or NUL is refused before any socket exists', async () => {
+  const rec = hops({ responses: [fileResponse('application/pdf', PDF_BYTES)] });
+  const outcome = await guardedDownload(
+    'https://api.twilio.com/Media/1',
+    {
+      allowedHosts: ['api.twilio.com'],
+      maxBytes: 4096,
+      allowedMediaTypes: PDF_ONLY,
+      headers: { authorization: 'Basic abc\r\nx-injected: 1' },
+    },
+    rec.deps,
+  );
+  assert.equal(outcome.ok, false);
+  assert.equal(!outcome.ok && outcome.code, 'webhook_header_invalid');
+  assert.equal(rec.connectCalls.length, 0);
 });
