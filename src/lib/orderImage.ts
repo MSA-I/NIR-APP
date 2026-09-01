@@ -56,39 +56,61 @@ export function orderImageFileName(order: WhatsAppOrder): string {
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-/** Quiet-control-room table: token colors, hairline separators, soft zebra — no decoration. */
+/**
+ * The order as one picture, in the document system (#309).
+ *
+ * SAME FAMILY AS THE PDF AND THE EMAIL. This image and the order sheet are the same document in
+ * three frames, so it opens on the same onyx plate with the same eyebrow and the same filled table
+ * head. What a supplier gets on WhatsApp and what they get as a PDF now read as one business.
+ *
+ * The eyebrow keeps its latin half for the reason the @font-face note gives: the mono carries no
+ * Hebrew, so a Hebrew-only line would never actually be drawn in it.
+ *
+ * STILL NO PRICES, and that is unchanged and deliberate (owner decision 18.08.2026). The image
+ * travels to the supplier; pricing stays out of the whole export.
+ */
 function templateMarkup(model: OrderImageModel): string {
+  const cell = 'padding:11px 14px;border-bottom:1px solid var(--color-doc-line)';
+  const num = 'font-variant-numeric:tabular-nums lining-nums;unicode-bidi:isolate';
+  const head = 'padding:11px 14px;text-align:start;font-weight:500;font-size:13px;'
+    + 'letter-spacing:0.06em;color:var(--color-doc-ink)';
   const meta = [
     `ספק: <bdi>${esc(model.supplierName)}</bdi>`,
     ...(model.expectedDate ? [`אספקה מבוקשת: ${esc(model.expectedDate)}`] : []),
     `הופק: ${esc(model.generatedAt)}`,
   ].join(' · ');
   const rows = model.rows.map((row, i) => `
-    <tr style="background:${i % 2 ? 'var(--color-surface-sunken)' : 'var(--color-surface)'}">
-      <td style="padding:8px 12px;border-bottom:1px solid var(--color-line-soft);font-variant-numeric:tabular-nums;unicode-bidi:isolate;color:var(--color-ink-muted)">${row.index}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid var(--color-line-soft);font-weight:500;color:var(--color-ink-body)"><bdi>${esc(row.name)}</bdi></td>
-      <td style="padding:8px 12px;border-bottom:1px solid var(--color-line-soft);font-variant-numeric:tabular-nums;unicode-bidi:isolate;white-space:nowrap">${esc(row.qty)}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid var(--color-line-soft);font-variant-numeric:tabular-nums;unicode-bidi:isolate;direction:ltr;text-align:end;color:var(--color-ink-muted)">${row.sku ? esc(row.sku) : '—'}</td>
+    <tr style="background:${i % 2 ? 'var(--color-doc-paper-sink)' : 'var(--color-doc-paper)'}">
+      <td style="${cell};${num};color:var(--color-doc-ink-muted)">${row.index}</td>
+      <td style="${cell};font-weight:500;color:var(--color-doc-ink-body)"><bdi>${esc(row.name)}</bdi></td>
+      <td style="${cell};${num};white-space:nowrap;font-weight:600;color:var(--color-doc-plate)">${esc(row.qty)}</td>
+      <td style="${cell};${num};direction:ltr;text-align:end;color:var(--color-doc-ink-muted);font-family:var(--font-doc-mono)">${row.sku ? esc(row.sku) : '—'}</td>
     </tr>`).join('');
   return `
-    <div style="background:var(--color-surface-sunken);border-inline-start:4px solid var(--color-action);border-radius:10px;padding:20px 24px;margin-bottom:20px">
-      <div style="font-size:15px;color:var(--color-ink-muted);margin-bottom:4px"><bdi>${esc(model.orgName)}</bdi></div>
-      <div style="font-size:24px;font-weight:700;color:var(--color-ink);font-variant-numeric:tabular-nums">${esc(model.title)}</div>
-      <div style="font-size:14px;color:var(--color-ink-muted);margin-top:8px">${meta}</div>
+    <div style="background:var(--color-doc-plate);color:var(--color-doc-ink);border-radius:var(--radius-doc-plate);padding:26px 30px 24px;margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:16px">
+        <span style="font-family:var(--font-doc-mono);font-size:12px;font-weight:600;letter-spacing:0.18em;color:var(--color-doc-accent-lift)">רכש · PURCHASE</span>
+        <span style="font-size:14px;color:var(--color-doc-ink-dim)"><bdi>${esc(model.orgName)}</bdi></span>
+      </div>
+      <div style="font-family:var(--font-doc-display);font-weight:800;font-size:40px;line-height:1;letter-spacing:-0.032em;margin-top:20px;${num}">${esc(model.title)}</div>
+      <div style="font-size:14px;color:var(--color-doc-ink-soft);margin-top:12px">${meta}</div>
     </div>
-    ${model.notes ? `<div style="font-size:14px;color:var(--color-ink-body);background:var(--color-surface-sunken);border-radius:8px;padding:12px 16px;margin-bottom:16px">הערות: <bdi>${esc(model.notes)}</bdi></div>` : ''}
-    <table style="width:100%;border-collapse:collapse;font-size:15px">
+    ${model.notes ? `<div style="font-size:15px;color:var(--color-doc-ink-body);background:var(--color-doc-paper-sink);border-radius:10px;padding:14px 18px;margin-bottom:18px">הערות: <bdi>${esc(model.notes)}</bdi></div>` : ''}
+    <table style="width:100%;border-collapse:collapse;font-size:16px">
       <thead>
-        <tr style="background:var(--color-surface-sunken)">
-          <th style="padding:8px 12px;text-align:start;color:var(--color-ink-muted);font-weight:600;border-bottom:1px solid var(--color-line-soft)">#</th>
-          <th style="padding:8px 12px;text-align:start;color:var(--color-ink-muted);font-weight:600;border-bottom:1px solid var(--color-line-soft)">פריט</th>
-          <th style="padding:8px 12px;text-align:start;color:var(--color-ink-muted);font-weight:600;border-bottom:1px solid var(--color-line-soft)">כמות</th>
-          <th style="padding:8px 12px;text-align:start;color:var(--color-ink-muted);font-weight:600;border-bottom:1px solid var(--color-line-soft)">מק״ט</th>
+        <tr style="background:var(--color-doc-plate)">
+          <th style="${head};width:40px">#</th>
+          <th style="${head}">פריט</th>
+          <th style="${head}">כמות</th>
+          <th style="${head}">מק״ט</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>
-    <div style="margin-top:16px;font-size:14px;color:var(--color-ink-muted)">סה״כ פריטים: <span style="font-variant-numeric:tabular-nums;unicode-bidi:isolate">${model.rows.length}</span></div>`;
+    <div style="margin-top:18px;display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--color-doc-ink-muted)">
+      <span>סה״כ פריטים: <span style="${num}">${model.rows.length}</span></span>
+      <span>התמונה אינה כוללת מחירים — במכוון.</span>
+    </div>`;
 }
 
 /** Renders the order image and resolves to a PNG blob. Throws a Hebrew error on failure. */
@@ -102,7 +124,7 @@ export async function renderOrderImage(order: WhatsAppOrder, orgName: string): P
   // rule is about inline (start/end) axes and this stays out of its way.
   host.style.cssText = [
     'position:fixed', 'top:-10000px', 'inset-inline-start:0', 'width:800px',
-    'background:var(--color-surface)', 'color:var(--color-ink)',
+    'background:var(--color-doc-paper)', 'color:var(--color-doc-plate)',
     "font-family:var(--font-sans, 'Noto Sans Hebrew', sans-serif)",
     'padding:32px', 'box-sizing:border-box',
   ].join(';');

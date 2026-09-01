@@ -984,6 +984,15 @@ export const he = {
     largestIncrease: 'עלייה מרבית {percent}%',
   },
 
+  docPlate: {
+    /* The latin half is load-bearing on the Hebrew edition: Roboto Mono carries no Hebrew, so a
+       Hebrew-only eyebrow would fall back to the reading face and the mono would never be drawn
+       on a Hebrew document at all. See the @font-face note in src/index.css. */
+    eyebrowPurchase: 'רכש · PURCHASE',
+    eyebrowPayment: 'קבלה · PAYMENT',
+    eyebrowLedger: 'כספים · LEDGER',
+    eyebrowReport: 'דיווח · REPORT',
+  },
   orders: {
     toastPdf: 'קובץ ה-PDF הורד',
     exportPdf: 'הורדת ההזמנה כקובץ PDF מעוצב עם הלוגו של הארגון',
@@ -1094,11 +1103,10 @@ export const he = {
     toOriginalOrder: '— להזמנה המקורית',
     uploadInvoiceReceived: 'העלאת החשבונית שהתקבלה',
     belowMinimum: 'שים לב: סכום ההזמנה ({total}) נמוך ממינימום ההזמנה של הספק ({minimum}).',
-    printTitle: 'הזמנת רכש #{number}',
-    printTitleWithOrg: 'הזמנת רכש #{number} — {org}',
+    printName: 'הזמנת רכש',
     printSupplier: 'ספק: {supplier}',
     printDate: 'תאריך: {date}',
-    printExpected: '· אספקה מבוקשת: {date}',
+    printExpected: 'אספקה מבוקשת: {date}',
     receivedLabel: 'התקבל:',
     outOfWord: 'מתוך',
     notesLabel: 'הערות:',
@@ -2429,6 +2437,8 @@ export const he = {
     lifecycleInReview: 'בבדיקה',
     lifecyclePendingApproval: 'ממתינה לאישור',
     lifecycleApproved: 'מאושרת',
+    printName: 'חשבונית ספק',
+    printSubtitle: '{supplier} · תאריך החשבונית {date}',
     beforeVat: 'לפני מע״מ',
     plusVat: ' + מע״מ',
     kpiPaid: 'שולם',
@@ -2811,6 +2821,7 @@ export const he = {
     deliveredToAccountant: 'הועבר לרו״ח',
     markDelivered: 'סימון כהועבר לרו״ח',
     downloadVersion: 'הורדת גרסה',
+    printName: 'דוח חודשי לרו״ח',
     printHeading: 'דוח חודשי {month}',
     kpiInvoices: 'חשבוניות',
     kpiInvoiceTotal: 'סה״כ חשבוניות',
@@ -3752,7 +3763,7 @@ export const he = {
     presetPrevMonth: 'חודש קודם',
     presetQuarter: '3 חודשים',
     presetYear: 'שנה',
-    heading: 'ריכוז הוצאות {from} – {to}',
+    printName: 'ריכוז הוצאות',
     invoicesWord: 'חשבוניות',
     rowLabel: 'הוצאות עבור {supplier} ב-{currency}',
     linkedInvoicesLead: 'חשבוניות מקושרות בסך',
