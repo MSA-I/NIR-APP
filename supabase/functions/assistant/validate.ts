@@ -25,6 +25,14 @@ export type ValidationResult =
 /** Maximal digit runs including grouping and decimal separators, Latin or Arabic-Indic. */
 const NUMERAL_RUN = /[0-9٠-٩۰-۹][0-9٠-٩۰-۹.,]*/g;
 
+/**
+ * Three letters in a claim's text — one short word — is the floor for "this sentence says
+ * something". Deliberately script-agnostic (`\p{L}`): the run's language is decided by the
+ * question now, and a rule that counted Hebrew letters would pass an English answer and fail a
+ * Hebrew one for no reason anybody could defend. A currency mark or a percent sign is not a word.
+ */
+const CLAIM_TEXT_HAS_WORDS = /\p{L}[\p{L}\s'’-]{2,}/u;
+
 function toLatinDigits(value: string): string {
   return value
     .replace(
@@ -168,6 +176,15 @@ export function validateAnswer(
         }
       }
       return;
+    }
+    // A claim's text must SAY something (measured live 01.09.2026: one question came back as
+    // four claim blocks whose entire text was "3", "500", "390" and "246.6" — the panel drew four
+    // cards each carrying a bare number and no sentence, which is the "strange answer" the owner
+    // reported). Every other rule here pins what a number may assert; none of them required the
+    // assertion to exist. `claim_value` already carries the number, so the text that has no
+    // letters at all is carrying nothing.
+    if (!CLAIM_TEXT_HAS_WORDS.test(block.text)) {
+      errors.push(`block:${index}:claim_text_is_not_a_sentence`);
     }
     const cited: Fact[] = [];
     for (const factId of block.fact_ids) {

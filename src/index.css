@@ -940,6 +940,38 @@ body {
   overflow: hidden;
 }
 
+/* The thread's own scrollbar (owner report 01.09.2026, with the screenshot).
+   The operating-system track is drawn in the OS's colours, not the product's: on a dark card it
+   arrived as a bright grey channel down the edge, wider than the card's own hairline and louder
+   than anything it sits beside. It is not hidden — this is the one surface where content really
+   does run past the bottom, and `.scrollbar-hidden` would take the only signal that says so.
+   It is made the card's own: a thin overlay thumb in the card's ink, no track, and a hover step
+   for the pointer. `scrollbar-gutter: stable` reserves the lane so the text does not reflow by a
+   few pixels the moment the thread becomes scrollable. */
+.assistant-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--color-shell-ink-dim) 34%, transparent) transparent;
+  scrollbar-gutter: stable;
+}
+
+.assistant-scroll::-webkit-scrollbar {
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+}
+
+.assistant-scroll::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.assistant-scroll::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background-color: color-mix(in oklab, var(--color-shell-ink-dim) 30%, transparent);
+}
+
+.assistant-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklab, var(--color-shell-ink-dim) 52%, transparent);
+}
+
 /* The fade over a clamped answer. It is painted from the bubble's own colour so the text appears
    to run under the edge of the card rather than behind a grey plate. */
 .assistant-clamp-fade {

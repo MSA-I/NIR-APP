@@ -21,6 +21,7 @@ import type {
 } from "../../../../src/lib/assistant/contracts.ts";
 import { toZoneISO } from "../time.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
+import { readerText } from "../reader-locale.ts";
 import {
   failure,
   limitSchema,
@@ -107,14 +108,14 @@ export const draftSupplierReminder: AssistantTool = {
       return failure(
         ctx,
         "drafts_not_enabled",
-        "ניסוח טיוטות אינו מופעל בארגון הזה",
+        readerText(ctx.locale, "assistantTools.draftsDisabled"),
         filters,
       );
     }
 
     const reads = readsOrNull(ctx);
     if (!reads) {
-      return failure(ctx, READS_UNAVAILABLE.code, READS_UNAVAILABLE.label, filters);
+      return failure(ctx, READS_UNAVAILABLE.code, READS_UNAVAILABLE.label(ctx), filters);
     }
 
     const result = await reads.listSentOrders(limit);
@@ -122,7 +123,7 @@ export const draftSupplierReminder: AssistantTool = {
       return failure(
         ctx,
         "sent_orders_read_failed",
-        "שליפת ההזמנות שנשלחו לספק נכשלה",
+        readerText(ctx.locale, "assistantTools.draftOrdersFetchFailed"),
         filters,
       );
     }
@@ -135,7 +136,7 @@ export const draftSupplierReminder: AssistantTool = {
       return failure(
         ctx,
         "order_not_awaiting_supplier",
-        "ההזמנה המבוקשת אינה בין ההזמנות שנשלחו וממתינות לספק בעמוד שנקרא",
+        readerText(ctx.locale, "assistantTools.draftOrderNotInPage"),
         filters,
       );
     }
@@ -146,7 +147,7 @@ export const draftSupplierReminder: AssistantTool = {
       failures.push({
         code: "expected_date_missing",
         label:
-          "להזמנות שנשלחו בלי תאריך אספקה צפוי אי אפשר לחשב איחור, והן אינן נכללות בתזכורת",
+          readerText(ctx.locale, "assistantTools.draftUndatedExcluded"),
       });
     }
 
@@ -167,8 +168,8 @@ export const draftSupplierReminder: AssistantTool = {
       if (daysLate === null || daysLate <= 0) continue;
 
       const supplierName = sanitizeText(row.suppliers?.name, 60) ||
-        `ספק ${row.supplier_id.slice(0, 8)}`;
-      const title = `הזמנה #${row.number} — ${supplierName}`;
+        `${readerText(ctx.locale, "assistantTools.supplierFallbackName")} ${row.supplier_id.slice(0, 8)}`;
+      const title = `${readerText(ctx.locale, "assistantTools.orderWord")} #${row.number} — ${supplierName}`;
       rows.push({
         id: row.id,
         number: row.number,
@@ -185,7 +186,7 @@ export const draftSupplierReminder: AssistantTool = {
       facts.push(ctx.evidence.fact({
         kind: "order.status",
         subject: { entity: "purchase_order", id: row.id },
-        label: `מספר ההזמנה — ${title}`,
+        label: `${readerText(ctx.locale, "assistantTools.orderNumber")} — ${title}`,
         value: String(row.number),
         unit: "text",
         tool: draftSupplierReminder.name,
@@ -195,7 +196,7 @@ export const draftSupplierReminder: AssistantTool = {
       facts.push(ctx.evidence.fact({
         kind: "order.status",
         subject: { entity: "purchase_order", id: row.id },
-        label: `תאריך האספקה הצפוי — ${title}`,
+        label: `${readerText(ctx.locale, "assistantTools.orderExpectedDelivery")} — ${title}`,
         value: row.expected_date,
         unit: "date",
         tool: draftSupplierReminder.name,
@@ -205,7 +206,7 @@ export const draftSupplierReminder: AssistantTool = {
       facts.push(ctx.evidence.fact({
         kind: "metric.count",
         subject: { entity: "purchase_order", id: row.id },
-        label: `ימי איחור מול תאריך האספקה הצפוי — ${title}`,
+        label: `${readerText(ctx.locale, "assistantTools.orderLateDays")} — ${title}`,
         value: daysLate,
         unit: "count",
         tool: draftSupplierReminder.name,

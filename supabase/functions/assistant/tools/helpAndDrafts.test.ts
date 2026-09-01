@@ -162,7 +162,12 @@ Deno.test("an English reader gets the English entry without the model having to 
   const [row] = envelope.data as { locale: string; label: string; steps: string[] }[];
   assert.equal(row.locale, "en");
   assert.equal(row.label, "Comparing supplier prices");
-  assert.equal(envelope.facts[0].label, "רשומת עזרה — Comparing supplier prices");
+  // The whole label, not only the half the registry supplied. Until 01.09.2026 this asserted
+  // `רשומת עזרה — Comparing supplier prices`: the English entry arrived under a Hebrew prefix the
+  // tool had hard-coded, and the test pinned that as correct. Measured live the same day, an
+  // English run came back with 8 Hebrew fact labels and 4 Hebrew screen names; this was one of
+  // the 178 strings that moved into the dictionaries.
+  assert.equal(envelope.facts[0].label, "Help entry — Comparing supplier prices");
 
   // The source label is the SCREEN’s name, and `routePresentationTitle` returns a dictionary
   // key since the interface was extracted. Unresolved it would put `nav.routeTitle_prices` in

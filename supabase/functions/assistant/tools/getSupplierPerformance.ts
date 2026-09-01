@@ -10,6 +10,7 @@ import type {
   SourceReference,
 } from "../../../../src/lib/assistant/contracts.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
+import { readerText } from "../reader-locale.ts";
 import { readsOrNull, READS_UNAVAILABLE } from "./shared.ts";
 import {
   failure,
@@ -21,7 +22,8 @@ import {
 
 const inputSchema = z.object({ limit: limitSchema }).strict();
 
-const WINDOW_LABEL = "180 הימים האחרונים (חלון קבוע במסד)";
+const windowLabel = (ctx: ToolContext) =>
+  readerText(ctx.locale, "assistantTools.supplierWindow180");
 
 export const getSupplierPerformance: AssistantTool = {
   name: "get_supplier_performance",
@@ -46,7 +48,7 @@ export const getSupplierPerformance: AssistantTool = {
     const filters = { window_days: 180, limit };
     const reads = readsOrNull(ctx);
     if (!reads) {
-      return failure(ctx, READS_UNAVAILABLE.code, READS_UNAVAILABLE.label, filters);
+      return failure(ctx, READS_UNAVAILABLE.code, READS_UNAVAILABLE.label(ctx), filters);
     }
 
     const metrics = await reads.listSupplierMetrics(limit);
@@ -54,7 +56,7 @@ export const getSupplierPerformance: AssistantTool = {
       return failure(
         ctx,
         "supplier_metrics_failed",
-        "שליפת מדדי הספקים נכשלה",
+        readerText(ctx.locale, "assistantTools.supplierMetricsFetchFailed"),
         filters,
       );
     }
@@ -67,7 +69,7 @@ export const getSupplierPerformance: AssistantTool = {
     if (names.error || names.rows === null) {
       failures.push({
         code: "supplier_names_unavailable",
-        label: "שמות הספקים לא נשלפו; הזיהוי לפי מזהה בלבד",
+        label: readerText(ctx.locale, "assistantTools.supplierNamesUnavailable"),
       });
     } else {
       for (const row of names.rows) {
@@ -79,7 +81,7 @@ export const getSupplierPerformance: AssistantTool = {
     const sources: SourceReference[] = [];
     for (const row of metrics.rows) {
       const name = nameOf.get(row.supplier_id) ||
-        `ספק ${row.supplier_id.slice(0, 8)}`;
+        `${readerText(ctx.locale, "assistantTools.supplierFallbackName")} ${row.supplier_id.slice(0, 8)}`;
       const subject = { entity: "supplier" as const, id: row.supplier_id };
       const shared = {
         subject,
@@ -89,7 +91,7 @@ export const getSupplierPerformance: AssistantTool = {
       facts.push(ctx.evidence.fact({
         ...shared,
         kind: "metric.percent",
-        label: `אחוז אספקה בזמן ב-${WINDOW_LABEL} — ${name}`,
+        label: `${readerText(ctx.locale, "assistantTools.supplierOnTimeRate", { window: windowLabel(ctx) })} — ${name}`,
         value: row.otd_samples > 0 ? row.on_time_pct : null,
         unit: "percent",
         classification: "tenant_standard",
@@ -97,7 +99,7 @@ export const getSupplierPerformance: AssistantTool = {
       facts.push(ctx.evidence.fact({
         ...shared,
         kind: "metric.count",
-        label: `מספר האספקות המתוארכות שנמדדו ב-${WINDOW_LABEL} — ${name}`,
+        label: `${readerText(ctx.locale, "assistantTools.supplierDatedDeliveries", { window: windowLabel(ctx) })} — ${name}`,
         value: row.otd_samples,
         unit: "count",
         classification: "tenant_standard",
@@ -105,7 +107,7 @@ export const getSupplierPerformance: AssistantTool = {
       facts.push(ctx.evidence.fact({
         ...shared,
         kind: "metric.count",
-        label: `ממוצע ימי אספקה מהשליחה ועד הקבלה ב-${WINDOW_LABEL} — ${name}`,
+        label: `${readerText(ctx.locale, "assistantTools.supplierAverageLeadDays", { window: windowLabel(ctx) })} — ${name}`,
         value: row.lead_samples > 0 ? row.avg_lead_days : null,
         unit: "count",
         classification: "tenant_standard",
@@ -113,7 +115,7 @@ export const getSupplierPerformance: AssistantTool = {
       facts.push(ctx.evidence.fact({
         ...shared,
         kind: "metric.count",
-        label: `הזמנות פתוחות שתאריך האספקה שלהן עבר — ${name}`,
+        label: `${readerText(ctx.locale, "assistantTools.supplierLateOpenOrders")} — ${name}`,
         value: row.late_open_orders,
         unit: "count",
         classification: "tenant_standard",
@@ -122,7 +124,7 @@ export const getSupplierPerformance: AssistantTool = {
         facts.push(ctx.evidence.fact({
           ...shared,
           kind: "credit.open_amount",
-          label: `סכום זיכויים פתוחים — ${name}`,
+          label: `${readerText(ctx.locale, "assistantTools.creditsOpenAmount")} — ${name}`,
           value: row.open_credits_amount,
           unit: "ils",
           classification: "financial_sensitive",
@@ -131,7 +133,7 @@ export const getSupplierPerformance: AssistantTool = {
       facts.push(ctx.evidence.fact({
         ...shared,
         kind: "supplier.price_change",
-        label: `מספר שינויי מחיר ב-${WINDOW_LABEL} — ${name}`,
+        label: `${readerText(ctx.locale, "assistantTools.supplierPriceChanges", { window: windowLabel(ctx) })} — ${name}`,
         value: row.price_changes_window,
         unit: "count",
         classification: "tenant_standard",
@@ -140,7 +142,7 @@ export const getSupplierPerformance: AssistantTool = {
         facts.push(ctx.evidence.fact({
           ...shared,
           kind: "supplier.price_change",
-          label: `מועד שינוי המחיר האחרון — ${name}`,
+          label: `${readerText(ctx.locale, "assistantTools.supplierLastPriceChange")} — ${name}`,
           value: row.last_price_change,
           unit: "date",
           classification: "tenant_standard",
@@ -169,7 +171,7 @@ export const getSupplierPerformance: AssistantTool = {
       facts,
       sources,
       warnings: [
-        `כל המדדים המחוּלנים נמדדים ב-${WINDOW_LABEL}; 'שינוי מחיר' כולל גם ירידות מחיר ואינו נושא גודל שינוי.`,
+        readerText(ctx.locale, "assistantTools.supplierWindowWarning", { window: windowLabel(ctx) }),
         UNTRUSTED_TEXT_WARNING,
       ],
     };

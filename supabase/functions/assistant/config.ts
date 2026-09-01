@@ -35,7 +35,7 @@ import {
 // (`OPEN-DECISIONS #283`). Any edit to `buildInstructions` is a bump here — the version is
 // stamped on every recorded run, so a stored answer can be traced to the instruction that
 // produced it.
-export const ASSISTANT_PROMPT_VERSION = "assistant-v3";
+export const ASSISTANT_PROMPT_VERSION = "assistant-v4";
 
 // The egress lease and the budget that must never outlive it -- interpret-document's arithmetic,
 // copied deliberately: total budget = lease TTL minus a settlement margin, and every provider

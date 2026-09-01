@@ -16,6 +16,7 @@ import type {
   SourceReference,
 } from "../../../../src/lib/assistant/contracts.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
+import { readerText } from "../reader-locale.ts";
 import {
   failure,
   LIMIT_JSON_SCHEMA,
@@ -117,12 +118,12 @@ export const getMonthlyPriceRises: AssistantTool = {
     if (result.error) {
       const message = result.error.message ?? "";
       if (message.includes("not_authorized") || message.includes("permission")) {
-        return failure(ctx, "not_permitted", "אין הרשאה לנתוני המחירים", filters);
+        return failure(ctx, "not_permitted", readerText(ctx.locale, "assistantTools.pricesNotPermitted"), filters);
       }
       return failure(
         ctx,
         "monthly_price_rises_failed",
-        "שליפת העלאות המחיר של החודש נכשלה",
+        readerText(ctx.locale, "assistantTools.priceRisesFetchFailed"),
         filters,
       );
     }
@@ -151,7 +152,7 @@ export const getMonthlyPriceRises: AssistantTool = {
     facts.push(ctx.evidence.fact({
       kind: "metric.count",
       subject: null,
-      label: "מוצרים שמחירם עלה נטו בחודש הקלנדרי הנוכחי",
+      label: readerText(ctx.locale, "assistantTools.priceRisenProducts"),
       value: measuredRows,
       unit: "count",
       tool: getMonthlyPriceRises.name,
@@ -163,7 +164,7 @@ export const getMonthlyPriceRises: AssistantTool = {
     facts.push(ctx.evidence.fact({
       kind: "metric.count",
       subject: null,
-      label: "מוצרים שלא ניתן למדוד — אין מחיר בסיס סמכותי בתחילת החודש (אינם נספרים כאפס)",
+      label: readerText(ctx.locale, "assistantTools.priceUnmeasurableProducts"),
       value: unmeasurableRows,
       unit: "count",
       tool: getMonthlyPriceRises.name,
@@ -173,15 +174,17 @@ export const getMonthlyPriceRises: AssistantTool = {
 
     const supplierSeen = new Set<string>();
     for (const row of page) {
-      const supplierLabel = row.supplier_name || `ספק ${row.supplier_id.slice(0, 8)}`;
-      const productLabel = row.product_name || `מוצר ${row.product_id.slice(0, 8)}`;
+      const supplierLabel = row.supplier_name ||
+        `${readerText(ctx.locale, "assistantTools.supplierFallbackName")} ${row.supplier_id.slice(0, 8)}`;
+      const productLabel = row.product_name ||
+        `${readerText(ctx.locale, "assistantTools.productFallbackName")} ${row.product_id.slice(0, 8)}`;
 
       if (!supplierSeen.has(row.supplier_id)) {
         supplierSeen.add(row.supplier_id);
         facts.push(ctx.evidence.fact({
           kind: "metric.money",
           subject: { entity: "supplier", id: row.supplier_id },
-          label: `סך ההתייקרות ליחידה החודש — ${supplierLabel}`,
+          label: `${readerText(ctx.locale, "assistantTools.priceTotalRisePerUnit")} — ${supplierLabel}`,
           value: row.supplier_rise_total,
           unit: "ils",
           tool: getMonthlyPriceRises.name,
@@ -191,7 +194,7 @@ export const getMonthlyPriceRises: AssistantTool = {
         facts.push(ctx.evidence.fact({
           kind: "metric.count",
           subject: { entity: "supplier", id: row.supplier_id },
-          label: `מוצרים שהתייקרו החודש — ${supplierLabel}`,
+          label: `${readerText(ctx.locale, "assistantTools.priceRisenProductsForSupplier")} — ${supplierLabel}`,
           value: row.supplier_rise_count,
           unit: "count",
           tool: getMonthlyPriceRises.name,
@@ -213,8 +216,7 @@ export const getMonthlyPriceRises: AssistantTool = {
         facts.push(ctx.evidence.fact({
           kind: "supplier.price_change",
           subject: { entity: "product", id: row.product_id },
-          label: `לא ניתן למדוד שינוי מחיר החודש — ${productLabel} אצל ${supplierLabel}` +
-            ` (אין מחיר בסיס סמכותי ב-1 בחודש)`,
+          label: `${readerText(ctx.locale, "assistantTools.priceUnmeasurableForProduct")} — ${productLabel} / ${supplierLabel}`,
           value: null,
           unit: "ils",
           tool: getMonthlyPriceRises.name,
@@ -227,7 +229,7 @@ export const getMonthlyPriceRises: AssistantTool = {
       facts.push(ctx.evidence.fact({
         kind: "supplier.price_change",
         subject: { entity: "product", id: row.product_id },
-        label: `עליית מחיר ליחידה — ${productLabel} אצל ${supplierLabel}` +
+        label: `${readerText(ctx.locale, "assistantTools.priceRisePerUnit")} — ${productLabel} / ${supplierLabel}` +
           ` (בסיס ${row.baseline_price ?? "—"} מ-${row.baseline_as_of ?? "—"}, ` +
           `מחיר נוכחי ${row.current_price ?? "—"})`,
         value: row.delta_amount,
@@ -244,7 +246,7 @@ export const getMonthlyPriceRises: AssistantTool = {
       facts.push(ctx.evidence.fact({
         kind: "supplier.price_baseline",
         subject: { entity: "product", id: row.product_id },
-        label: `מחיר הבסיס ב-1 בחודש — ${productLabel} אצל ${supplierLabel}` +
+        label: `${readerText(ctx.locale, "assistantTools.priceBaselineFirstOfMonth")} — ${productLabel} / ${supplierLabel}` +
           ` (מקור: ${row.baseline_source ?? "—"})`,
         value: row.baseline_price,
         unit: "ils",
@@ -255,7 +257,7 @@ export const getMonthlyPriceRises: AssistantTool = {
       facts.push(ctx.evidence.fact({
         kind: "metric.percent",
         subject: { entity: "product", id: row.product_id },
-        label: `שיעור עליית המחיר — ${productLabel} אצל ${supplierLabel}`,
+        label: `${readerText(ctx.locale, "assistantTools.priceRiseRate")} — ${productLabel} / ${supplierLabel}`,
         value: row.delta_percent,
         unit: "percent",
         tool: getMonthlyPriceRises.name,
@@ -267,7 +269,7 @@ export const getMonthlyPriceRises: AssistantTool = {
     sources.push(ctx.evidence.source({
       entity: "organization",
       entity_id: ctx.actor.orgId,
-      label: "מסך המחירים — התייקרויות",
+      label: readerText(ctx.locale, "assistantTools.priceScreenRises"),
       route: "/prices?increases=1",
       classification: "financial_sensitive",
     }));
@@ -278,7 +280,7 @@ export const getMonthlyPriceRises: AssistantTool = {
       failures: hasMore
         ? [{
           code: "monthly_price_rises_truncated",
-          label: "התוצאה נקטעה בגבול השורות; הסכומים הכוללים מתייחסים לכל החודש",
+          label: readerText(ctx.locale, "assistantTools.priceTruncatedRows"),
         }]
         : [],
       filters,
@@ -288,8 +290,8 @@ export const getMonthlyPriceRises: AssistantTool = {
       facts,
       sources,
       warnings: [
-        "התקופה היא חודש קלנדרי לפי שעון ישראל, מ-1 בחודש 00:00. אין לתאר אותה כ־30 הימים האחרונים.",
-        "מוצר המסומן `לא ניתן למדוד` אינו מוצר שמחירו לא השתנה — אין לספור אותו כאפס ואין להשמיטו מהתשובה בשקט.",
+        readerText(ctx.locale, "assistantTools.priceCalendarMonthWarning"),
+        readerText(ctx.locale, "assistantTools.priceUnmeasurableWarning"),
         UNTRUSTED_TEXT_WARNING,
       ],
     };

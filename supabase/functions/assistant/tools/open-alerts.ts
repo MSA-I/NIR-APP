@@ -92,44 +92,44 @@ export const getOpenAlertsTool: AssistantTool = {
     }[] = [
       {
         code: "duplicate_invoice",
-        label: "חשבוניות כפולות",
+        label: readerText(ctx.locale, "assistantTools.alertDuplicateInvoices"),
         run: async () => {
           const dupes = await rpcCount(
             ctx.db.rpc("p2_duplicate_invoice_group_count"),
           );
           return {
-            facts: [aggregate("מספרי חשבונית שמופיעים יותר מפעם אחת", dupes)],
+            facts: [aggregate(readerText(ctx.locale, "assistantTools.alertDuplicateInvoicesFact"), dupes)],
             sources: dupes
               ? [listSource(
-                "חשבוניות כפולות",
+                readerText(ctx.locale, "assistantTools.alertDuplicateInvoices"),
                 "/invoices?attention=duplicates",
               )]
               : [],
-            warnings: ["אותו ספק, אותו מספר חשבונית — חשד לחיוב כפול"],
+            warnings: [readerText(ctx.locale, "assistantTools.alertDuplicateInvoicesWarning")],
           };
         },
       },
       {
         code: "orders_awaiting_confirmation",
-        label: "הזמנות ללא אישור",
+        label: readerText(ctx.locale, "assistantTools.alertOrdersUnconfirmed"),
         run: async () => {
           const { count, error } = await ctx.db.countSentOrders();
           if (error) throw new Error(error.message);
           const total = count ?? 0;
           return {
-            facts: [aggregate("הזמנות שנשלחו וטרם אושרו על ידי הספק", total)],
+            facts: [aggregate(readerText(ctx.locale, "assistantTools.alertOrdersUnconfirmedFact"), total)],
             sources: total
-              ? [listSource("הזמנות ללא אישור", "/orders?status=sent")]
+              ? [listSource(readerText(ctx.locale, "assistantTools.alertOrdersUnconfirmed"), "/orders?status=sent")]
               : [],
             warnings: [
-              "ההזמנות נשלחו לספק אך טרם התקבל אישור קבלה — כדאי לוודא מולו.",
+              readerText(ctx.locale, "assistantTools.alertOrdersUnconfirmedWarning"),
             ],
           };
         },
       },
       {
         code: "price_increase",
-        label: "עליות מחיר",
+        label: readerText(ctx.locale, "assistantTools.alertPriceIncreases"),
         run: async () => {
           const raised = await rpcCount(
             ctx.db.rpc("p2_recent_price_increase_count", {
@@ -138,11 +138,11 @@ export const getOpenAlertsTool: AssistantTool = {
           );
           return {
             facts: [aggregate(
-              `מחירים שעלו ב-${PRICE_INCREASE_WINDOW_DAYS} הימים האחרונים`,
+              readerText(ctx.locale, "assistantTools.alertPriceIncreasesFact", { days: PRICE_INCREASE_WINDOW_DAYS }),
               raised,
             )],
             sources: raised
-              ? [listSource("עליות מחיר", "/prices?increases=1")]
+              ? [listSource(readerText(ctx.locale, "assistantTools.alertPriceIncreases"), "/prices?increases=1")]
               : [],
             warnings: [
               // The scope-limit sentence is still `alerts.ts`’s own, resolved rather than
@@ -155,7 +155,7 @@ export const getOpenAlertsTool: AssistantTool = {
       },
       {
         code: "above_average_price",
-        label: "מחירים מעל הממוצע",
+        label: readerText(ctx.locale, "assistantTools.alertAboveAveragePrices"),
         run: async () => {
           const over = await rpcCount(
             ctx.db.rpc("p2_above_average_offer_count", {
@@ -164,19 +164,17 @@ export const getOpenAlertsTool: AssistantTool = {
           );
           return {
             facts: [aggregate(
-              `הצעות מחיר גבוהות מהממוצע ביותר מ-${
-                Math.round(ABOVE_AVG_MARGIN * 100)
-              }%`,
+              readerText(ctx.locale, "assistantTools.alertAboveAveragePricesFact", { percent: Math.round(ABOVE_AVG_MARGIN * 100) }),
               over,
             )],
-            sources: over ? [listSource("מחירים מעל הממוצע", "/prices")] : [],
-            warnings: ["נמדד רק על מוצרים שיש להם שני ספקים ומעלה"],
+            sources: over ? [listSource(readerText(ctx.locale, "assistantTools.alertAboveAveragePrices"), "/prices")] : [],
+            warnings: [readerText(ctx.locale, "assistantTools.alertAboveAveragePricesWarning")],
           };
         },
       },
       {
         code: "invoice_without_order",
-        label: "חשבוניות ללא הזמנה",
+        label: readerText(ctx.locale, "assistantTools.alertInvoiceWithoutOrder"),
         run: async () => {
           // DEBT-REGISTER §10 (OPEN): p2_invoice_without_order_count() is SECURITY INVOKER with
           // an RLS-sensitive NOT EXISTS, and its owner/office role contract is NOT enforced in
@@ -190,22 +188,22 @@ export const getOpenAlertsTool: AssistantTool = {
             ctx.db.rpc("p2_invoice_without_order_count"),
           );
           return {
-            facts: [aggregate("חשבוניות ללא הזמנת רכש מקושרת", orphans)],
+            facts: [aggregate(readerText(ctx.locale, "assistantTools.alertInvoiceWithoutOrderFact"), orphans)],
             sources: orphans
               ? [listSource(
-                "חשבוניות ללא הזמנה",
+                readerText(ctx.locale, "assistantTools.alertInvoiceWithoutOrder"),
                 "/invoices?attention=without-order",
               )]
               : [],
             warnings: [
-              "רכישה ישירה יכולה להיות כזו כדין — שווה לוודא שלא נשמט קישור",
+              readerText(ctx.locale, "assistantTools.alertInvoiceWithoutOrderWarning"),
             ],
           };
         },
       },
       {
         code: "payment_due_soon",
-        label: "מועדי תשלום",
+        label: readerText(ctx.locale, "assistantTools.alertPaymentDue"),
         run: async () => {
           const { data, error } = await ctx.db.rpc("p2_payment_due_counts", {
             p_today: today,
@@ -224,19 +222,19 @@ export const getOpenAlertsTool: AssistantTool = {
           return {
             facts: [
               aggregate(
-                `דרישות תשלום לפירעון תוך ${DUE_SOON_DAYS} ימים`,
+                readerText(ctx.locale, "assistantTools.alertPaymentDueFact", { days: DUE_SOON_DAYS }),
                 total,
               ),
-              aggregate("דרישות תשלום שעברו את מועד הפירעון", late),
+              aggregate(readerText(ctx.locale, "assistantTools.alertPaymentOverdueFact"), late),
             ],
             sources: total
               ? [listSource(
-                "מועדי תשלום",
+                readerText(ctx.locale, "assistantTools.alertPaymentDue"),
                 "/payment-requests?status=active&due=soon",
               )]
               : [],
             warnings: [
-              "מכסה רק דרישות תשלום שהוזן להן תאריך. לחשבוניות אין מועד פירעון במערכת",
+              readerText(ctx.locale, "assistantTools.alertPaymentDueWarning"),
             ],
           };
         },

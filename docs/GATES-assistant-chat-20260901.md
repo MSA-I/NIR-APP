@@ -34,6 +34,36 @@ measurement is of the interface and not of a model. Screenshots in `.tmp/audit/s
 | B4 | the composer is `disabled` mid-run, so focus leaves the panel | `document.activeElement === BODY` 200ms after submit |
 | B5 | a suggested question only fills the box | `askCount === 0` after one click on a suggestion |
 
+## Round two — the assistant's own answers (owner report, same day)
+
+The first round fixed the panel. The owner then said the bugs he meant were inside the assistant:
+a strange answer when it does not know, and the wrong language in both directions. **He was right,
+and the interface was not where any of it lived.** Five live runs against production, one owner
+test account, three question/interface combinations — `.tmp/audit/language-probe.json`:
+
+| id | interface | asked in | answered in | shape |
+|---|---|---|---|---|
+| A | he | English | **Hebrew** | 1 sentence + 4 claim blocks |
+| B | en | English | **Hebrew** | 1 sentence + 4 claim blocks |
+| C | en | Hebrew | Hebrew | 1 sentence + 4 claim blocks |
+| D | he | Hebrew | Hebrew | named refusal |
+| E | en | English | **Hebrew** | named refusal |
+
+| id | defect | measurement |
+|---|---|---|
+| B6 | the answer is always Hebrew, whatever the interface asks for | 5/5 Hebrew; runs B and E asked for English explicitly and were ignored |
+| B7 | claim blocks arrive as bare numerals | one answer's four claim texts were `"3"`, `"500"`, `"390"`, `"246.6"` — the panel draws four cards each carrying a number and no sentence |
+| B8 | the same question is classified differently between runs | A returned `no_answer_reason: null`, B returned `not_measured`, for the same question |
+| B9 | the evidence stays Hebrew for an English reader | 8 Hebrew fact labels and 4 Hebrew source labels inside run B |
+
+**Owner rulings on round two.** The answer speaks **the language of the question**, not of the
+interface. Every reader-visible tool string moves to the dictionaries — all of them, now.
+
+**The causal claim, stated as a hypothesis and then measured.** B9 is the likeliest cause of B6:
+the instruction said "Answer in English" while every label, failure and warning the model read was
+Hebrew, and an instruction that contradicts its own context is a wish. Both were fixed together, so
+the live re-probe (G16) is what decides whether that reading was right.
+
 ## Gates
 
 Run: `.tmp/audit/gates.mjs` against `:5209`, Edge, 01.09.2026. Shots in `.tmp/audit/gate-shots/`.
@@ -62,5 +92,22 @@ green summary that quietly dropped four reds would be the exact failure this fil
 laid out there, so `scrollHeight` and `clientHeight` are both zero and every answer "fits". G3 is
 therefore a live-browser measurement and has no Vitest twin. B1 and B5 do have unit tests, added to
 `assistantPanel.spec.tsx` in this branch.
+
+## Round-two gates
+
+| gate | statement | measured result | status |
+|---|---|---|---|
+| G11 | the run's language comes from the question, and the interface is only the fallback | `answer-locale.test.ts`, 3 cases: a Hebrew question under `en`, an English question under `he`, and a Hebrew question carrying Latin supplier names and `ILS` | **PASS** |
+| G12 | a claim whose text is a bare numeral is refused | `validate.test.ts` rejects `"12"`, `"246.6"`, `"12%"`, `"₪12"`, `" 12 "` with `claim_text_is_not_a_sentence`, and accepts a sentence in either language | **PASS** |
+| G13 | no reader-visible Hebrew literal is left in any tool | `.tmp/audit/label-census.mjs`: **0** label lines, down from 100. 178 keys moved into both dictionaries, at parity | **PASS** |
+| G14 | the guards see an Edge call site as a call site | `check:orphan-keys` and `check:key-manifest` extended to scan `supabase/functions`; both pass **with their pins unmoved** (129 / 130) | **PASS** |
+| G15 | the Edge function's own suite stays green | `deno test` over `supabase/functions/assistant/**`: **72 passed, 0 failed** | **PASS** |
+| G16 | the live assistant answers an English question in English, in sentences | **NOT RUN — needs a production deploy of the `assistant` function** | `PENDING` |
+
+**G16 is the one that matters and it is not green yet.** Everything above is measured on this
+tree; the defects were measured in production. The fix is in an Edge function, and an Edge
+function does not deploy with a merge — `CLAUDE.md`'s rollout matrix says so, and `DEBT §OCR`
+records what silent version skew costs. Until `assistant` is redeployed and the five-case probe
+re-run, the claim "the language bug is fixed" rests on a hypothesis, not on a measurement.
 
 `ABANDON:` lines belong here, with the reason, if a gate is dropped.

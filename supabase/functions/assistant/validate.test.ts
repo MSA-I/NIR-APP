@@ -702,3 +702,38 @@ Deno.test("a fact-pinned draft satisfies the no-prose-only rule", () => {
   );
   assert.equal(result.ok, true);
 });
+
+/* ============================================================================
+ * A claim has to say something (measured live, 01.09.2026)
+ * ==========================================================================*/
+
+Deno.test("a claim whose text is a bare numeral is rejected", () => {
+  // The exact shape production returned: one question came back as four claim blocks whose whole
+  // text was "3", "500", "390" and "246.6", and the panel drew four cards each carrying a number
+  // and no sentence. Every other rule pins what a number may assert; none required the assertion.
+  for (const bare of ["12", "246.6", "12%", "₪12", " 12 "]) {
+    const result = validateAnswer(
+      answer([{ type: "claim", text: bare, fact_ids: ["f1"], source_ids: [] }]),
+      [fact()],
+      [],
+    );
+    assert.equal(result.ok, false, `expected rejection for ${JSON.stringify(bare)}`);
+    if (!result.ok) {
+      assert.ok(
+        result.errors.some((error) => error.includes("claim_text_is_not_a_sentence")),
+        `expected the sentence error for ${JSON.stringify(bare)}, got ${result.errors.join(",")}`,
+      );
+    }
+  }
+});
+
+Deno.test("a claim that says what its number means is accepted, in either language", () => {
+  for (const sentence of ["נקלטו 12 חשבוניות.", "12 invoices were received."]) {
+    const result = validateAnswer(
+      answer([{ type: "claim", text: sentence, fact_ids: ["f1"], source_ids: [] }]),
+      [fact()],
+      [],
+    );
+    assert.equal(result.ok, true, `${sentence}: ${result.ok ? "" : result.errors.join(",")}`);
+  }
+});

@@ -461,7 +461,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
             followRef.current =
               thread.scrollHeight - thread.scrollTop - thread.clientHeight < 96;
           }}
-          className={`flex-1 overflow-y-auto p-4 ${
+          className={`assistant-scroll flex-1 overflow-y-auto p-4 ${
             nothingAskedYet ? 'flex flex-col [justify-content:safe_center]' : ''}`}
         >
           <div ref={threadContentRef} className="space-y-4">
