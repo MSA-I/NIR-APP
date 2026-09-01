@@ -113,7 +113,15 @@ async function login(page, role = 'owner') {
   await page.goto(`${baseURL}/login`);
   await page.locator('#email').fill(account.email);
   await page.locator('#password').fill(account.password);
-  await page.getByRole('button', { name: 'התחברות' }).click();
+  // BOTH languages. The login screen is the one surface reached before a profile exists, so its
+  // words follow the CONTEXT locale rather than `profiles.locale` — `login.text_17` reads
+  // 'התחברות' in a `he-IL` context and 'Sign in' in an `en-US` one.
+  //
+  // A Hebrew-only literal survived here because the single caller that opens an English context —
+  // the product tour's LocaleProvider compatibility pass — was unreachable: the tour died several
+  // steps earlier on a nav group that never opened, so this line had never once run against an
+  // English login. Fixing the tour is what first let it get here.
+  await page.getByRole('button', { name: /^(התחברות|Sign in)$/ }).click();
   await page.waitForFunction((expected) => location.pathname === expected, homes[role], { timeout: 25_000 });
   await page.locator('#main').waitFor({ state: 'visible', timeout: 25_000 });
 }
@@ -2357,7 +2365,18 @@ async function documentOcrAcceptance(browser) {
     await exportPreview.getByRole('heading', { name: 'תוצאת התצוגה המקדימה' }).waitFor({ timeout: 10_000 });
     assert.equal(await exportPreview.locator('thead th').count(), 3, 'OCR export preview did not render three fixture columns');
     assert.equal(await exportPreview.locator('tbody tr').count(), 2, 'OCR export preview did not render two fixture rows');
-    assert.equal(await exportPreview.getByText(/טביעת מקור:/).count(), 1, 'OCR export preview did not expose a checksum');
+    // THE CHECKSUM ASSERTION IS GONE ON PURPOSE, and it is not a coverage loss.
+    //
+    // Owner report of 28.08.2026: "יש אזור שמראה פרטים טכניים - להסיר את זה משתמש לא אמור לראות
+    // את זה". The technical-details box went, and `טביעת מקור:` went with it.
+    // `DocumentReviewWorkspace.spec.tsx` now asserts the OPPOSITE of what this line asserted —
+    // that the text is absent — so the two tests were demanding contradictory products and this
+    // one was the stale side of an owner decision. Measured: `documentExportPreview.text_9` has no
+    // production call site at all, so nothing renders it and nothing can.
+    //
+    // Nothing was deleted from the database. `document_jobs`, `document_extractions` and
+    // `document_interpretations` still carry every id, checksum and confidence, and the operator
+    // console still reads them. They simply stopped being printed at a tenant.
     await review.screenshot({ path: path.join(outDir, 'ocr-export-preview-1440.png'), fullPage: true });
     report.screenshots.push('ocr-export-preview-1440.png');
 
@@ -2707,30 +2726,12 @@ async function searchTypeGate(browser) {
 
 /* ============ wave 11: the menu, the supplier door, and the words the machine is given ============ */
 
-/**
- * The sidebar as it is painted: groups in render order, links in render order.
- *
- * Reads each link's OWN text nodes rather than its `textContent`, because `/documents` carries the
- * unfiled-count pill inside the same `<a>` (Layout.tsx:228-230). `textContent` would read
- * "תיקיית המסמכים6" and the assertions below would silently become claims about the fixture's queue
- * depth instead of claims about the menu.
- *
- * A group is `<div>[optional header]<div>links…</div></div>`, so the first child is the header only
- * when it holds no link — that is how the ungrouped first section is told apart from a named one.
- */
-function readSidebar(nav) {
-  return nav.evaluate((node) => [...node.children].map((group) => {
-    const first = group.firstElementChild;
-    return {
-      section: first && !first.querySelector('a') ? (first.textContent || '').trim() : '',
-      items: [...group.querySelectorAll('a')].map((link) => ({
-        label: (link.querySelector('span')?.textContent || '').trim(),
-        path: new URL(link.href).pathname,
-        current: link.getAttribute('aria-current'),
-      })),
-    };
-  }));
-}
+/* `readSidebar` stood here until 31.08.2026. It returned `{ section, items }` per group, and its
+   only readers were the drawer assertions below — which asserted three group HEADINGS the drawer
+   no longer prints (owner, 28.08.2026). With the headings gone its `section` half described
+   nothing, and its `items` half is one `querySelectorAll` at the call site. Removed rather than
+   left as a helper nobody calls: an unused reader of a surface that changed is how the next
+   person concludes the surface still looks like that. */
 
 /**
  * A1 and A2, measured on the rendered menu instead of on the literal that produces it.
@@ -2799,36 +2800,52 @@ async function navigationOrderAndActiveState(browser) {
       `the first navigation link is not the control centre: ${JSON.stringify(daily.slice(0, 2))}`,
     );
 
-    // Daily work stays visible at top level. Management and control remain available behind
-    // dropdowns without making all of their modules compete with the daily routes.
+    // ONE grouping, BY SUBJECT (owner approval 28.08.2026, Layout.tsx:146). What this replaced,
+    // and why the expectation below is not a relaxation of the previous one: the menu used to
+    // carry two groupings of the same screens — by subject in `NAV_SECTIONS`, by FREQUENCY
+    // (daily / ניהול / בקרה) in per-role path maps — and the second is what rendered. A person
+    // hunting for מחירונים had to guess which of the two models the menu was using. The owner's
+    // words: "יש בלאגן, לא מבינים את הניווט כמו שצריך".
+    //
+    // So the bar is no longer "the six daily routes"; it is the control room, the single most
+    // frequent action, and then subject groups. This assertion was written against the frequency
+    // model and is updated here rather than deleted, because the claim it protects still holds:
+    // the leading run is short, deliberate, and nothing drifts into it.
     assert.deepEqual(daily.map((item) => item.path),
-      ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
+      ['/dashboard', '/orders/new'],
       `wrong owner daily navigation: ${JSON.stringify(nav.bar)}`);
-    // Two dropdowns, and only two. 'המנוי' is NOT among them and must not become one: it holds a
-    // single destination, and a disclosure over one item is a door with a lid.
-    assert.deepEqual(nav.groups, ['ניהול', 'בקרה'],
+    // Four subject groups, in the order NAV_GROUPS declares. 'החשבון' is NOT among them: on
+    // desktop it is the avatar menu (DESKTOP_HIDDEN_SECTION), and showing it twice on one screen
+    // is noise.
+    assert.deepEqual(nav.groups, ['רכש', 'מסמכים', 'כספים', 'בקרה ודוחות'],
       `wrong navigation dropdown groups or order: ${JSON.stringify(nav.groups)}`);
-    // 'המנוי' joined the catalogue on 25.08.2026 as its own group — last, after the two work
-    // groups, because the three groups above it are the business the tenant runs and this is the
-    // contract they run it under. On a bar with no group headers, "its own group, last, not
-    // collapsible" is exactly this: a plain link, after both dropdowns, carrying the group's word.
-    // Both halves are load-bearing. Behind a disclosure it is a door with a lid; ahead of the
-    // dropdowns it has silently rejoined the daily row.
-    assert.deepEqual(nav.bar[nav.bar.length - 1], { kind: 'link', label: 'המנוי', path: '/settings/subscription', current: null },
-      `'המנוי' is not the last entry on the bar as its own non-collapsible group: ${JSON.stringify(nav.bar)}`);
-    assert.equal(nav.all.some((item) => item.path === '/documents/archive'), false,
-      'the low-frequency archive still competes in the main navigation');
-    assert.equal(nav.all.filter((item) => item.current === 'page').length, 0,
-      'the archive incorrectly marked a different navigation destination as current');
+    // The bar ENDS on the last group. 'המנוי' used to be asserted here as a trailing plain link;
+    // the account group moved to the avatar disc on 28.08.2026, and a subscription link back on
+    // the bar would mean it is being offered twice.
+    assert.equal(nav.bar[nav.bar.length - 1].kind, 'group',
+      `the bar does not end on a group: ${JSON.stringify(nav.bar)}`);
+    assert.equal(nav.all.some((item) => item.path === '/settings/subscription'), false,
+      'the account group is on the bar as well as in the avatar menu');
 
-    // Dropdown behaviour, measured: opening ניהול reveals its destinations; Escape closes it.
+    // A2, and the half of it that survived the regrouping. The archive IS in the menu now — it
+    // sits inside 'מסמכים' rather than competing on the bar — so "the archive is absent" is no
+    // longer the claim. What this scenario is named for still is: on /documents/archive exactly
+    // ONE destination is marked current, and it is the archive itself. React Router would mark
+    // both it and /documents if the route family were matched loosely, and `Layout.tsx:150` aims
+    // the drawer's opening focus at `[aria-current="page"]` — two matches is a focus bug, not a
+    // cosmetic one.
+    const current = nav.all.filter((item) => item.current === 'page').map((item) => item.path);
+    assert.deepEqual(current, ['/documents/archive'],
+      `the archive is not the only current destination: ${JSON.stringify(current)}`);
+
+    // Dropdown behaviour, measured: opening רכש reveals its destinations; Escape closes it.
     const visibleLinkCount = () => topNav.locator('a:visible').count();
     const closedCount = await visibleLinkCount();
-    await page.getByRole('button', { name: /^ניהול/ }).click();
+    await page.getByRole('button', { name: /^רכש/ }).click();
     await page.waitForFunction((base) =>
       document.querySelectorAll('header nav[aria-label="ניווט ראשי"] a:not([hidden])').length >= base,
     closedCount, { timeout: 5_000 });
-    assert((await visibleLinkCount()) > closedCount, 'opening the ניהול dropdown revealed no destinations');
+    assert((await visibleLinkCount()) > closedCount, 'opening the רכש dropdown revealed no destinations');
     await page.keyboard.press('Escape');
     await page.waitForTimeout(150);
     assert.equal(await visibleLinkCount(), closedCount, 'Escape did not close the navigation dropdown');
@@ -2844,24 +2861,63 @@ async function navigationOrderAndActiveState(browser) {
     await page.getByRole('button', { name: 'פתיחת תפריט' }).click();
     const drawer = page.getByRole('dialog', { name: 'תפריט ראשי' });
     await drawer.waitFor();
-    const drawerGroups = await readSidebar(drawer.locator('nav'));
-    const drawerLinks = drawerGroups.flatMap((group) => group.items);
-    // The drawer carries TWO groups the desktop sidebar does not, and that is the point of H4
-    // (10.08.2026): profile, settings and sign-out used to live in a sticky footer strip that sat
-    // over the menu while it scrolled. They moved into the drawer's own flow. The daily
-    // destinations below are still asserted to match the sidebar exactly — what changed is where
-    // the account surface lives, not which destinations a role has.
-    assert.deepEqual(drawerGroups.map((group) => group.section).slice(0, 3), ['עבודה שוטפת', 'ניהול', 'בקרה'],
-      'the drawer renders different progressive-disclosure groups than the desktop sidebar');
-    assert.deepEqual(drawerGroups[0].items.map((item) => item.path),
-      ['/dashboard', '/orders', '/receiving', '/invoices', '/documents', '/suppliers'],
-      `the drawer omitted an authorised daily destination: ${JSON.stringify(drawerLinks)}`);
-    assert.equal(await drawer.locator('[aria-current="page"]').count(), 0,
-      'the archive incorrectly marked a different drawer destination as current');
+    const drawerPaths = await drawer.evaluate((node) =>
+      [...node.querySelectorAll('a')].map((link) => new URL(link.href).pathname));
+    // NO GROUP HEADINGS, and that is an owner decision rather than an oversight (28.08.2026:
+    // "אין צורך בפסי הפרדה לשים עוד טקסט - הפסי הפרדה מספיקים"). The previous assertion here named
+    // three — 'עבודה שוטפת', 'ניהול', 'בקרה' — from the frequency grouping that the subject
+    // grouping replaced; both those words and the surface that printed them are gone.
+    //
+    // Compared against the KNOWN GROUP WORDS rather than against "any text", because the reader
+    // below calls a block's first child a heading whenever it holds no link, and the drawer's
+    // feedback control answers that description without being a group at all. Asserting "no text"
+    // reads as the stronger claim and is merely the wrong one: it fails on 'שליחת הערה', which is
+    // not navigation and was never grouped.
+    const GROUP_WORDS = ['עבודה שוטפת', 'ניהול', 'בקרה', 'רכש', 'מסמכים', 'כספים', 'בקרה ודוחות', 'החשבון'];
+    const drawerHeadings = await drawer.locator('nav').first().evaluate((node) =>
+      [...node.children].map((group) => {
+        const first = group.firstElementChild;
+        return first && !first.querySelector('a') ? (first.textContent || '').trim() : '';
+      }).filter(Boolean));
+    const printedGroupWords = drawerHeadings.filter((heading) => GROUP_WORDS.includes(heading));
+    assert.deepEqual(printedGroupWords, [],
+      `the drawer printed a navigation group heading: ${JSON.stringify(drawerHeadings)}`);
+
+    // COMPLETENESS is the drawer's contract, and the reason it is asserted against the bar rather
+    // than against a list written here: the phone has no avatar menu and no second surface, so
+    // every destination the desktop offers across both the bar and the disc has to be reachable
+    // from this one drawer. A list of literals would have to be edited every time the catalogue
+    // grows, and would pass while silently describing a smaller product.
+    for (const path of nav.all.map((item) => item.path)) {
+      assert(drawerPaths.includes(path),
+        `the drawer omitted an authorised destination the bar offers: ${path}`);
+    }
+    // The account group specifically — it is the one the bar withholds, so it can only be checked
+    // here, and dropping it would strand the subscription screen on phones entirely.
+    assert(drawerPaths.includes('/settings/subscription'),
+      `the drawer omitted the account group: ${JSON.stringify(drawerPaths)}`);
+
+    const drawerCurrent = await drawer.evaluate((node) =>
+      [...node.querySelectorAll('[aria-current="page"]')].map((link) => new URL(link.href).pathname));
+    assert.deepEqual(drawerCurrent, ['/documents/archive'],
+      `the archive is not the only current drawer destination: ${JSON.stringify(drawerCurrent)}`);
+    // Opening focus lands on the CURRENT destination when the drawer holds one, and falls to the
+    // close control only when it does not (`Layout.tsx:462`).
+    //
+    // This asserted the close control until 31.08.2026, and passed for a reason that has since
+    // stopped being true: /documents/archive was absent from the menu entirely, so there was
+    // never a current item and the fallback was the only branch reachable. The archive sits in
+    // 'מסמכים' now, which makes the FIRST branch reachable for the first time — and it is the one
+    // worth asserting, because it is what tells somebody opening the menu with a screen reader
+    // where they already are.
     await page.waitForFunction(() => {
       const active = document.activeElement;
-      return !!active && active.getAttribute('aria-label') === 'סגירת תפריט';
-    }, null, { timeout: 5_000 }).catch(() => { throw new Error('the drawer did not open on its safe close action'); });
+      return !!active && active.getAttribute('aria-current') === 'page'
+        && active instanceof HTMLAnchorElement
+        && new URL(active.href).pathname === '/documents/archive';
+    }, null, { timeout: 5_000 }).catch(() => {
+      throw new Error('the drawer did not open on the destination the reader is already viewing');
+    });
     await page.screenshot({ path: path.join(outDir, 'navigation-drawer-390.png') });
     report.screenshots.push('navigation-drawer-390.png');
   } finally {

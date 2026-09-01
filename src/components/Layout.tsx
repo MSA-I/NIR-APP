@@ -178,6 +178,34 @@ const NAV_GROUPS: readonly { section: TKey | ''; paths: readonly string[] }[] = 
 /** The account group lives in the avatar menu on desktop; showing it twice on one screen is noise. */
 const DESKTOP_HIDDEN_SECTION: TKey = 'nav.groupAccount';
 
+/**
+ * Which disclosure a tour step has to open before its destination is on screen — READ OFF
+ * `NAV_GROUPS`, never named a second time.
+ *
+ * This used to be a literal map from `ProductTourPrepare` to a group key: `'management'` to
+ * `'nav.text_6'`, `'control'` to `'nav.text_8'`. Those were the keys of the FREQUENCY grouping
+ * (daily / ניהול / בקרה) that the subject grouping replaced on 28.08.2026. `NAV_GROUPS` moved;
+ * the map did not. `setOpenGroup('nav.text_6')` then set a value no rendered group compares equal
+ * to (`openGroup === s.section` below), so nothing opened, `/suppliers` stayed inside a closed
+ * 'רכש', and the first-run tour spotlit an element that was never made visible.
+ *
+ * It survived review because `nav.text_6` READS 'רכש' — the same word as `nav.groupPurchasing`.
+ * The label was right and the key was dead, which is exactly the shape a person re-reading the
+ * line cannot see. So the group is now DERIVED from the step's own destination: a step that sends
+ * someone to `/suppliers` opens whichever group currently holds `/suppliers`, and moving a path
+ * between groups can no longer leave the tour pointing at a closed door.
+ *
+ * `null` for a destination on the bar already (`/dashboard`, `/orders/new`) — there is nothing to
+ * open — and `'account'` for the account group, which is not a bar disclosure at all on desktop
+ * but the avatar menu, keyed by that literal at its own trigger.
+ */
+export function tourGroupForDestination(destination: string | undefined): string | null {
+  if (!destination) return null;
+  const group = NAV_GROUPS.find((candidate) => candidate.paths.includes(destination));
+  if (!group || !group.section) return null;
+  return group.section === DESKTOP_HIDDEN_SECTION ? 'account' : group.section;
+}
+
 function catalogItem(path: string, role: ActiveRole): NavItem | null {
   const item = NAV_SECTIONS.flatMap((section) => section.items).find((candidate) => candidate.to === path);
   return item?.roles.includes(role) ? item : null;
@@ -405,12 +433,7 @@ export default function Layout() {
     if (!step.prepare) return;
     const desktop = window.matchMedia('(min-width: 64rem)').matches;
     if (desktop) {
-      setOpenGroup(
-        step.prepare === 'management' ? 'nav.text_6'
-          : step.prepare === 'control' ? 'nav.text_8'
-            : step.prepare === 'account' ? 'account'
-              : null,
-      );
+      setOpenGroup(tourGroupForDestination(step.destination));
       return;
     }
     if (mobileOpenRef.current) return;
