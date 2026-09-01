@@ -2,6 +2,7 @@
 // coercion (a fact must be a number or null -- never NaN and never a silent 0), text hygiene for
 // strings that originated outside the product, and the bounded-limit input schema.
 import { z } from "zod";
+import { readerText, type ReaderLocale } from "../reader-locale.ts";
 import {
   TOOL_RESULT_LIMIT,
   TOOL_RESULT_LIMIT_MAX,
@@ -30,7 +31,9 @@ export function readsOrNull(ctx: ToolContext): ToolReads | null {
 
 export const READS_UNAVAILABLE = {
   code: "tool_reads_unavailable",
-  label: "מקור הנתונים של הכלי אינו זמין",
+  /** Resolved per run: this sentence is read by the person, so it speaks the run's language. */
+  label: (ctx: { locale: ReaderLocale }) =>
+    readerText(ctx.locale, "assistantTools.toolReadsUnavailable"),
 } as const;
 
 /** A finite number, or null. Guards against NaN, Infinity and numeric-as-string surprises. */

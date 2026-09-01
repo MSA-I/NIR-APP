@@ -43,7 +43,7 @@ const inputSchema = z
 
 export const NO_REGISTRY_MATCH = {
   code: "product_help_not_registered",
-  label: "אין רשומת עזרה מאושרת שעונה על השאלה הזו",
+  labelKey: "assistantTools.helpNoEntry" as const,
 } as const;
 
 /** The canonical screen name for a path, in the reader’s language, or null when unnamed. */
@@ -112,7 +112,12 @@ export const getProductHelp: AssistantTool = {
     });
     if (matches.length === 0) {
       return Promise.resolve(
-        failure(ctx, NO_REGISTRY_MATCH.code, NO_REGISTRY_MATCH.label, filters),
+        failure(
+          ctx,
+          NO_REGISTRY_MATCH.code,
+          readerText(ctx.locale, NO_REGISTRY_MATCH.labelKey),
+          filters,
+        ),
       );
     }
 
@@ -148,7 +153,7 @@ export const getProductHelp: AssistantTool = {
       facts.push(ctx.evidence.fact({
         kind: "product_help.entry",
         subject: null,
-        label: `רשומת עזרה — ${entry.label}`,
+        label: `${readerText(ctx.locale, "assistantTools.helpEntry")} — ${entry.label}`,
         value: path,
         unit: "text",
         tool: getProductHelp.name,
@@ -194,7 +199,7 @@ export const getProductHelp: AssistantTool = {
         sources.push(ctx.evidence.source(values));
       } else {
         warnings.push(
-          `למסך "${entry.label}" אין קישור ישיר בתשובות העוזר; פותחים אותו מתפריט הניווט.`,
+          readerText(ctx.locale, "assistantTools.helpNoDirectLink", { screen: entry.label }),
         );
       }
     }

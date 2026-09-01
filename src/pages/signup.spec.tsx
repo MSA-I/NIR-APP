@@ -1,10 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Signup from './Signup';
 
 const invoke = vi.fn();
+const rpc = vi.fn();
 const getSession = vi.fn();
 const signInWithOAuth = vi.fn();
 const resend = vi.fn();
@@ -47,6 +48,7 @@ vi.mock('../auth/AuthContext', () => ({
 vi.mock('../lib/supabase', () => ({
   supabase: {
     functions: { invoke: (...a: unknown[]) => invoke(...a) },
+    rpc: (...a: unknown[]) => rpc(...a),
     auth: {
       getSession: () => getSession(),
       signInWithOAuth: (...a: unknown[]) => signInWithOAuth(...a),
@@ -91,6 +93,7 @@ const federatedSession = (provider: 'google' | 'apple', email: string) => google
 
 beforeEach(() => {
   invoke.mockResolvedValue({ data: { status: 'pending_confirmation', message: NEUTRAL }, error: null });
+  rpc.mockResolvedValue({ data: { org_id: 'org-1', role: 'office' }, error: null });
   getSession.mockResolvedValue({ data: { session: null } });
   signInWithOAuth.mockResolvedValue({ error: null });
   resend.mockResolvedValue({ data: {}, error: null });
@@ -212,6 +215,131 @@ describe('פתיחת חשבון', () => {
     expect(body).not.toHaveProperty('password');
     // The address is the server's to read from the token, not the form's to assert.
     expect(body).not.toHaveProperty('email');
+  });
+
+  /**
+   * Owner decision 31.08.2026. The hole this closes: an invited employee has NO auth user until
+   * they open the invitation, so `service_identity_has_profile` says "no standing" and the
+   * federated branch used to hand them an organization of their own. `0205` then refuses them
+   * inside `accept_invitation` forever, so the invitation they came for becomes unredeemable.
+   */
+  it('זהות פדרטיבית שהוזמנה לעסק קיים אינה פותחת עסק חדש', async () => {
+    getSession.mockResolvedValue(federatedSession('google', 'clerk@gmail.test'));
+    invoke.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'non-2xx',
+        context: {
+          json: async () => ({
+            error: {
+              code: 'invitation_pending',
+              message: 'הכתובת הזו הוזמנה להצטרף לעסק קיים. ההצטרפות נעשית מקישור ההזמנה ובסיסמה.',
+              organization: 'מסעדת הגפן',
+            },
+          }),
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByText(/מחובר כ/);
+    await user.type(screen.getByLabelText('שם העסק'), 'עסק חדש כלשהו');
+    await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
+
+    // The card names the business that invited them, and stops. Naming it is safe: the provider
+    // proved the address, so this discloses nothing the caller did not already hold.
+    expect(await screen.findByText(/יש לכם הזמנה ממתינה/)).toBeInTheDocument();
+    expect(screen.getByText(/מסעדת הגפן/)).toBeInTheDocument();
+    // No business was created and none can be from here: the "open an account" form is gone and
+    // what replaced it is the way in to the business that invited them.
+    expect(screen.queryByLabelText('שם העסק')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'פתיחת חשבון' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'הצטרפות לעסק' })).toBeInTheDocument();
+  });
+
+  /**
+   * Owner decision 31.08.2026, amending `#265`: an invitation belongs to an ADDRESS, and a provider
+   * that proved the address may redeem it. `0282` removes `0205`'s password-identity guard and lets
+   * the command resolve the invitation from the caller's confirmed address, so no token is sent —
+   * the token lives in an email `DEBT §25` says this deployment cannot deliver.
+   */
+  it('מצטרף לעסק שהזמין אותו בלי טוקן ובלי סיסמה', async () => {
+    getSession.mockResolvedValue(federatedSession('google', 'clerk@gmail.test'));
+    invoke.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'non-2xx',
+        context: {
+          json: async () => ({
+            error: { code: 'invitation_pending', message: 'הוזמנת', organization: 'מסעדת הגפן' },
+          }),
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByText(/מחובר כ/);
+    await user.type(screen.getByLabelText('שם העסק'), 'עסק חדש כלשהו');
+    await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
+    await screen.findByRole('button', { name: 'הצטרפות לעסק' });
+
+    // Consent is its own gate: 0089 closed the consent-free signature, so the button stays shut
+    // until the box is ticked no matter what else is filled in.
+    expect(screen.getByRole('button', { name: 'הצטרפות לעסק' })).toBeDisabled();
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: 'הצטרפות לעסק' }));
+
+    await waitFor(() => expect(rpc).toHaveBeenCalled());
+    const [command, args] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+    expect(command).toBe('accept_invitation');
+    expect(args.p_token).toBeNull();
+    expect(args.p_terms_version).toBeTruthy();
+    // The name came from the provider's profile and was never retyped.
+    expect(args.p_full_name).toBe('משה כהן');
+  });
+
+  it('סירוב ההזמנה עומד גם כששם הארגון לא נמסר', async () => {
+    getSession.mockResolvedValue(federatedSession('google', 'clerk@gmail.test'));
+    invoke.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'non-2xx',
+        context: {
+          json: async () => ({ error: { code: 'invitation_pending', message: 'הוזמנת', organization: '' } }),
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByText(/מחובר כ/);
+    await user.type(screen.getByLabelText('שם העסק'), 'עסק חדש כלשהו');
+    await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
+
+    // The name is a courtesy; the refusal is the point. A failed lookup must not degrade into
+    // "here is a brand new business".
+    expect(await screen.findByText(/יש לכם הזמנה ממתינה/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('שם העסק')).toBeNull();
+  });
+
+  it('שליחת הטופס אחרי כניסה עם ספק הולכת למסלול הפדרטיבי, לא לכניסה בסיסמה', async () => {
+    // The federated branch draws no credential fields but DOES draw the business ones, inside the
+    // same <form>. Any path that submits that form — a browser's implicit submission today, a
+    // submit button someone adds tomorrow — used to reach the password sign-in with two empty
+    // strings. `fireEvent.submit` exercises the guard directly rather than relying on which
+    // markup happens to make Enter submit.
+    getSession.mockResolvedValue(googleSession());
+    const user = userEvent.setup();
+    const { container } = renderScreen();
+    await screen.findByText(/מחובר כ/);
+    await user.type(screen.getByLabelText('שם העסק'), 'מסעדת הגפן');
+
+    fireEvent.submit(container.querySelector('form')!);
+
+    await waitFor(() => expect(invoke).toHaveBeenCalled());
+    const body = invoke.mock.calls[0]![1].body as Record<string, unknown>;
+    expect(body.identity).toBe('google');
+    expect(body.organization_name).toBe('מסעדת הגפן');
+    expect(body).not.toHaveProperty('password');
   });
 
   it('כניסה חוזרת של זהות שכבר יש לה ארגון אינה מבקשת שם עסק שוב', async () => {

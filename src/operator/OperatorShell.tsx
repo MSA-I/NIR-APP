@@ -78,16 +78,24 @@ const NAV_FLAT = NAV_SECTIONS.flatMap((group) => group.items);
 
 /** T7.2/T7.3: not selected = quiet ink on the paper capsule; selected = the small oceanic pill.
     `min-h-11` because a navigation item is a touch target like any other. */
+/* THE FOCUS RING FOLLOWS THE GROUND (31.08.2026, both-themes sweep — the tenant shell carries the
+   same correction). `--color-focus` is authored for paper and measured 2.00:1 INSIDE the oceanic
+   pill, so a keyboard user on the selected item saw almost nothing. `on-solid` is the pill's own
+   lettering colour and is already measured against that fill at text strength. */
 const pillCls = ({ isActive }: { isActive: boolean }) =>
-  `relative flex min-h-11 items-center whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
-    isActive ? 'bg-action font-medium text-on-solid' : 'text-ink-soft hover:bg-surface-hover hover:text-ink'
+  `relative flex min-h-11 items-center whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${
+    isActive
+      ? 'bg-action font-medium text-on-solid focus-visible:ring-on-solid'
+      : 'text-ink-soft hover:bg-surface-hover hover:text-ink focus-visible:ring-focus'
   }`;
 
 /** The panel treatment, verbatim from the tenant drawer: a `rounded-lg` row with the icon at the
     start and body ink at rest, wearing the same oceanic pill when it is the screen you are on. */
 const drawerCls = ({ isActive }: { isActive: boolean }) =>
-  `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
-    isActive ? 'bg-action font-medium text-on-solid' : 'text-ink-body hover:bg-surface-hover hover:text-ink'
+  `flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${
+    isActive
+      ? 'bg-action font-medium text-on-solid focus-visible:ring-on-solid'
+      : 'text-ink-body hover:bg-surface-hover hover:text-ink focus-visible:ring-focus'
   }`;
 
 /** Three paths that rotate into an X rather than two swapped icons: what reads as a fold has to
@@ -156,7 +164,13 @@ export default function OperatorShell() {
       <header className="sticky top-0 z-40 hidden bg-canvas/70 backdrop-blur lg:block no-print">
         <div className="mx-auto flex min-h-[4.25rem] max-w-[1400px] items-center gap-3 px-4 py-2">
           <span className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-surface/85 px-3 shadow-card ring-1 ring-line-soft">
-            <img src="/favicon.svg" alt="" width={28} height={28} className="size-7 shrink-0 object-contain" />
+            {/* NOT `/favicon.svg`. That file follows the OPERATING SYSTEM colour scheme, because a
+                browser tab cannot see a page theme — and this console is pinned to the light theme
+                (`data-theme="light"` in operator.html). On a dark-OS machine the adaptive mark would
+                turn paper-white on a light pill, for no reason any reader could trace. The static
+                one-ink asset is the correct choice for an in-page mark on a surface that never
+                changes. `scripts/check-appearance-scope.mjs` forbids `/favicon.svg` in src/. */}
+            <img src="/brand/inplace-symbol.svg" alt="" width={28} height={28} className="size-7 shrink-0 object-contain" />
             <span className="text-sm font-semibold text-ink">{APP_NAME}</span>
             {/* The console is a different application of the same product, and the header is the
                 only place that can say so without a screen having to repeat it. */}
@@ -209,7 +223,7 @@ export default function OperatorShell() {
       </header>
 
       {menuOpen && (
-        <div className="drawer-scrim fixed inset-0 z-50 bg-shell/50 no-print lg:hidden"
+        <div className="drawer-scrim fixed inset-0 z-50 bg-scrim no-print lg:hidden"
           onClick={() => setMenuOpen(false)}>
           {/* Opaque, not translucent: over the dark scrim a see-through panel reads as a murky
               blue tint — the same finding that made the tenant drawer opaque (T7.3k). */}
@@ -223,7 +237,7 @@ export default function OperatorShell() {
               <X size={ICON.lg} aria-hidden="true" />
             </button>
             <div className="flex items-center gap-3 border-b border-line-soft px-4 py-4 pe-12">
-              <img src="/favicon.svg" alt="" width={32} height={32} className="size-8 shrink-0 object-contain" />
+              <img src="/brand/inplace-symbol.svg" alt="" width={32} height={32} className="size-8 shrink-0 object-contain" />
               <div className="min-w-0">
                 <div className="text-base font-semibold text-ink">{APP_NAME}</div>
                 <div className="truncate text-xs text-ink-muted">תפעול פלטפורמה</div>

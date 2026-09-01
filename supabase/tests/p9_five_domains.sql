@@ -132,18 +132,25 @@ select pg_temp.p9_assert(
 
 -- The seeded vocabularies.
 --
--- Four codes since 0142. The count is pinned rather than open-ended for the same reason the definer
--- exemption registry is: every entry here becomes a row users can be notified about and a toggle in
--- push settings, so adding one has to be a deliberate act that updates this line in the same commit
--- instead of a catalog that grows unnoticed. `document_processing_stalled` is the operational one --
--- it fires when the OCR queue stops moving (DEBT-REGISTER §43).
+-- Four codes since 0142, five since 0274. The count is pinned rather than open-ended for the same
+-- reason the definer exemption registry is: every entry here becomes a row users can be notified
+-- about and a toggle in push settings, so adding one has to be a deliberate act that updates this
+-- line in the same commit instead of a catalog that grows unnoticed. `document_processing_stalled`
+-- is the operational one -- it fires when the OCR queue stops moving (DEBT-REGISTER §43).
+--
+-- `expected_document_missing` (0274) is the fifth, and it is the first code that fires about
+-- something that did NOT happen. The waiting window and the grace period of a standing expectation
+-- both passed with no document recorded, which is a finding rather than the absence of one -- a
+-- supplier invoice that never arrived is a month about to close on an expense nobody booked. It is
+-- deduplicated per occurrence, so a tenant is told once per period however many times the nightly
+-- scan runs, and the scan opens the exception it points at in the same transaction.
 select pg_temp.p9_assert(
-  (select count(*) from private.notification_event_definitions) = 4
+  (select count(*) from private.notification_event_definitions) = 5
     and (select count(*) from private.notification_event_definitions
          where event_code in (
            'price_increase', 'duplicate_invoice', 'payment_due',
-           'document_processing_stalled')) = 4,
-  'the notification catalog must hold exactly the four live event codes');
+           'document_processing_stalled', 'expected_document_missing')) = 5,
+  'the notification catalog must hold exactly the five live event codes');
 
 select pg_temp.p9_assert(
   (select count(*) from private.approval_policy_definitions
@@ -347,8 +354,8 @@ select pg_temp.p9_assert(
 -- always at the end of a twenty-minute gate rather than in seconds. See the check:* script that
 -- asserts a migration touching scope_definer_exemptions also touches this file.
 select pg_temp.p9_assert(
-  (select count(*) from private.scope_definer_exemptions) = 94,
-  'the definer exemption registry must stay at 94 rows -- 59 minus the three 0073 drained, '
+  (select count(*) from private.scope_definer_exemptions) = 96,
+  'the definer exemption registry must stay at 95 rows -- 59 minus the three 0073 drained, '
   || 'plus the one 0075:464 added for rescue_document_from_archive (not drainable: invoker '
   || 'would require granting UPDATE on document_filings to the browser), plus the one 0077 '
   || 'added for apply_document_interpretation (not drainable: it runs with no user JWT, so '
@@ -396,7 +403,34 @@ select pg_temp.p9_assert(
   || 'snapshot tables are deliberately read-only to authenticated, so an invoker version would '
   || 'have to be granted the writes that make the frozen cohort forgeable. Its tenancy is '
   || 'structural instead: it iterates organisations explicitly and every read and write inside '
-  || 'the loop is filtered by that organisation id; zero silent additions');
+  || 'the loop is filtered by that organisation id; plus the one 0274 nightly document-expectation '
+  || 'scanner, dispatch_document_expectations, which is the same cron-with-no-JWT constraint as '
+  || '0265: auth_scopes() is empty, so a scope predicate would silently find nothing late for '
+  || 'every tenant and the product would simply stop noticing missing documents -- the failure a '
+  || 'customer cannot tell from there being nothing to notice. It cannot be an invoker either: no '
+  || 'client role holds EXECUTE on it, and an invoker version would need INSERT on exceptions and '
+  || 'UPDATE on expectation_occurrences granted to a browser role, which would let a tenant forge '
+  || 'or silence its own findings. Its tenancy is structural: every read and write is filtered by '
+  || 'the org id carried on the expectation row it is iterating. Note that 0274 adds only ONE row '
+  || 'here -- expectation_period_bounds is SECURITY INVOKER and reads no table, so it needs no '
+  || 'exemption and was deliberately not given one; '
+  || 'plus the one 0279 inbound ingest command, '
+  || 'service_ingest_inbound_document, which is the same empty-auth_scopes constraint as 0077, '
+  || '0168 and 0265 with one addition worth stating: it runs as service_role with no JWT, so '
+  || 'auth_scopes() returns empty AND assert_unit_in_scope early-exits treating it as trusted '
+  || 'service work -- a scope predicate inside it would not merely fail to protect, it would '
+  || 'PASS, which is worse than none because it reads like a check. It cannot be an invoker '
+  || 'either: no client role holds EXECUTE, and the claim and route ledgers it derives the '
+  || 'tenant from are private with no authenticated grant. Its tenancy is structural: org_id, '
+  || 'unit and source come from the claim route, whose identity is a composite foreign key into '
+  || 'private.inbound_routes and whose routing columns a trigger freezes after insert, so the '
+  || 'caller cannot name a tenant at all -- the signature takes a claim id, a lease token, an '
+  || 'object id and an object version, and nothing else; plus the one 0279 added for service_ingest_inbound_document, which runs as '
+   || 'service_role with no JWT: auth_scopes() is empty AND assert_unit_in_scope early-exits '
+   || 'treating it as trusted service work, so a scope predicate there would PASS rather than '
+   || 'protect -- worse than none, because it reads like a check. Its tenancy is structural '
+   || 'instead: unit_id comes from the claim route, whose identity is a composite foreign key '
+   || 'and whose routing columns a trigger freezes after insert; zero silent additions');
 
 select pg_temp.p9_assert(
   (select count(*) from private.scope_enforcement_violations()) = 0,
@@ -664,11 +698,12 @@ end
 $$;
 
 -- (b6) The reader: complete, defaulted, tenant-and-caller pinned.
--- Four rows since 0142 added `document_processing_stalled`. The count is derived from the catalog
--- on purpose -- "complete" is the property under test, so this number has to move whenever the
--- catalog does, and a stale 3 here would mean the reader had silently stopped being complete.
+-- Four rows since 0142 added `document_processing_stalled`, five since 0274 added
+-- `expected_document_missing`. The count is derived from the catalog on purpose -- "complete" is
+-- the property under test, so this number has to move whenever the catalog does, and a stale 4
+-- here would mean the reader had silently stopped being complete.
 select pg_temp.p9_assert(
-  (select count(*) from read_notification_preferences()) = 4
+  (select count(*) from read_notification_preferences()) = 5
     and (select count(*) from read_notification_preferences() where configured) = 1
     and (select push_enabled = false and inapp_enabled = true
          from read_notification_preferences() where event_code = 'payment_due')

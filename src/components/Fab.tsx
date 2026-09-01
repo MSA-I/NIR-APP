@@ -67,7 +67,17 @@ export default function Fab({ inboxCount = null }: {
     'mobile-action min-w-0 text-xs font-medium transition-colors disabled:opacity-60 '
     + 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus';
   const restClass = `${itemBase} text-ink-soft hover:bg-surface-hover active:bg-surface-selected`;
-  const currentClass = `${itemBase} bg-action text-on-solid active:bg-action-hover`;
+  /* The current page. It used to be `bg-action text-on-solid`, which is the camera puck's own
+     colour — see the `--color-nav-current` block in index.css for the owner's report and for
+     why a fill alone cannot fix it. The RING is not decoration: it is the part that separates
+     this pill from the puck in the dark theme, where no fill can. */
+  /* THE FOCUS RING IS OVERRIDDEN HERE because this is the one bar item with a solid fill, and
+     `--color-focus` measured 1.57:1 against `nav-current` in the LIGHT theme — the ring vanished
+     into the marker it was drawn on. `nav-current-ink` is the pill's own lettering colour, already
+     measured against that fill at text strength, so the keyboard ring is the loudest thing on the
+     pill. It is also a different COLOUR from the pressed state's `active:ring-2`, which is a width
+     change in `nav-current-edge`, so focus and press stay two distinguishable states. */
+  const currentClass = `${itemBase} bg-nav-current text-nav-current-ink ring-1 ring-inset ring-nav-current-edge active:ring-2 focus-visible:ring-nav-current-ink`;
 
   return (
     <>

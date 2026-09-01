@@ -10,6 +10,7 @@ import type {
   SourceReference,
 } from "../../../../src/lib/assistant/contracts.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
+import { readerText } from "../reader-locale.ts";
 import {
   failure,
   list,
@@ -127,7 +128,7 @@ export const findEntity: AssistantTool = {
       per_type: RESULT_LIMIT_PER_TYPE + 1,
     });
     if (result.error) {
-      return failure(ctx, "entity_search_failed", "החיפוש נכשל", filters);
+      return failure(ctx, "entity_search_failed", readerText(ctx.locale, "assistantTools.entitySearchFailed"), filters);
     }
 
     const hits = list(result.data)
@@ -181,7 +182,7 @@ export const findEntity: AssistantTool = {
     const facts: Fact[] = [ctx.evidence.fact({
       kind: "metric.count",
       subject: null,
-      label: "תוצאות שנמצאו לחיפוש",
+      label: readerText(ctx.locale, "assistantTools.entityResultsFound"),
       value: dataRows.length,
       unit: "count",
       tool: findEntity.name,
@@ -197,7 +198,7 @@ export const findEntity: AssistantTool = {
       facts.push(ctx.evidence.fact({
         kind: "invoice.total",
         subject: { entity: "invoice", id },
-        label: `סכום החשבונית — ${sanitizeText(hit.title, 40)}`,
+        label: `${readerText(ctx.locale, "assistantTools.invoiceAmount")} — ${sanitizeText(hit.title, 40)}`,
         value: amount,
         unit: "ils",
         tool: findEntity.name,

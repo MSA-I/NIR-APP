@@ -17,6 +17,7 @@ import { buildLockedMonthlyWorkbook, buildStyledMonthlyWorkbook, monthlyReportSc
 
 import { financialSupplierMap } from '../lib/financialSuppliers';
 import { downloadWorkbook, safeFileName } from '../lib/workbook';
+import { DocumentPlate } from '../components/DocumentPlate';
 import {
   downloadRenderedWorkbook,
   monthlyReportTemplateValues,
@@ -565,9 +566,16 @@ export default function Reports() {
               tenant's own logo and name. `print-only` rather than `hidden print:block` because
               html2canvas renders the live DOM: a display:none header is simply absent from the
               generated file (src/index.css states the rule). */}
-          {orgLogoUrl && <img data-testid="monthly-report-logo" src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
-          <h2 className="text-xl font-semibold">{`${org?.name ? `${org.name} — ` : ''}${t('reports.printHeading', { month: fmtMonth(`${month}-01`, locale) })}`}</h2>
-          <p className="text-xs">{t('reports.createdWord')} {fmtDateTime(data.generatedAt)}</p>
+          <DocumentPlate
+            family="report"
+            size="compact"
+            name={t('reports.printName')}
+            orgLogoUrl={orgLogoUrl}
+            subtitle={[
+              org?.name,
+              t('reports.printHeading', { month: fmtMonth(`${month}-01`, locale) }),
+              `${t('reports.createdWord')} ${fmtDateTime(data.generatedAt)}`,
+            ].filter(Boolean).join(' · ')} />
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

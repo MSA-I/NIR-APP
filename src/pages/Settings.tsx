@@ -21,6 +21,7 @@ import {
 } from '../lib/invitations';
 import { isActiveRole, type ActiveRole, type Profile } from '../lib/types';
 import { CurrencyTolerancesPanel } from '../components/CurrencyTolerancesPanel';
+import { SupportContact } from '../components/SupportContact';
 import {
   BRAND_LOGO_TYPES,
   brandFailureAllowsNewCorrelation,
@@ -882,6 +883,10 @@ export default function Settings() {
         }}
         onCancel={() => setOffboardingAction(null)}
       />
+      {/* The one place in the product that names a human address. Nineteen error messages tell a
+          user to contact support; settings is where an owner goes looking for how. Muted and last,
+          so it answers that question without becoming a panel. */}
+      <SupportContact />
     </div>
   );
 }

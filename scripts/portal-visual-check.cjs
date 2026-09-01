@@ -32,11 +32,11 @@ const view = {
 
 const locales = {
   he: {
-    browser: 'he-IL', dir: 'rtl', heading: /הזמנה #238/,
+    browser: 'he-IL', dir: 'rtl', heading: /הזמנת רכש #238/,
     quantity: 'כמות מוצעת', submitted: 'כבר נשלחה תשובה להזמנה זו', invalid: 'הקישור אינו פעיל',
   },
   en: {
-    browser: 'en-US', dir: 'ltr', heading: /Order #238/,
+    browser: 'en-US', dir: 'ltr', heading: /Purchase order #238/,
     quantity: 'Proposed quantity', submitted: 'A response has already been sent for this order',
     invalid: 'This link is not active',
   },

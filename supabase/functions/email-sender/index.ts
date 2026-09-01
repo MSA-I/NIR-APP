@@ -10,8 +10,12 @@
 //
 // Required environment (supabase secrets set ...):
 //   RESEND_API_KEY     -- Resend API key (already set for send-invite)
-//   ORDERS_FROM_EMAIL  -- verified sender for order mail, e.g. "InPlace <orders@example.co.il>"
-//                         (falls back to INVITE_FROM_EMAIL; sandbox senders set deliveryLimited)
+//   ORDERS_FROM_EMAIL  -- verified sender for order mail: "InPlace <orders@inplace.digital>"
+//                         (falls back to INVITE_FROM_EMAIL; sandbox senders set deliveryLimited).
+//                         It is a SEPARATE identity from the product sender on purpose: a supplier
+//                         order is a tenant's message, and Reply-To carries the tenant's address,
+//                         so it must not share an envelope with mail InPlace sends on its own
+//                         behalf. See _shared/reply-to.ts.
 //   APP_BASE_URL       -- portal links are built as {APP_BASE_URL}/portal#token=...
 //   ALLOWED_ORIGINS    -- optional CORS allowlist, the send-invite convention
 //   SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY -- injected by the platform
@@ -22,6 +26,7 @@ import {
   type ServiceRpc,
 } from '../_shared/organization-egress.ts';
 import { runReservedEgress } from '../_shared/reserved-egress.ts';
+import { replyToField, resolveTenantReplyAddress } from '../_shared/reply-to.ts';
 import {
   renderOrderEmail,
   TEMPLATE_VERSION,
@@ -134,6 +139,22 @@ Deno.serve(async (request) => {
     // Nothing was sent: the thread is already with the provider, in flight, or frozen.
     return json({ ok: true, state: claimed.state, status: claimed.status ?? null }, 200, cors);
   }
+
+  // WHO THE SUPPLIER REACHES BY PRESSING REPLY. Read from the caller's VERIFIED identity, after
+  // the claim above has already proved this user is owner/office of this order's organization --
+  // so the address belongs to somebody the tenant authorized to send this order. It is never read
+  // from the request body: a client-chosen Reply-To would let any tenant user aim a supplier's
+  // answer at an address they do not control, wearing our verified domain (_shared/reply-to.ts).
+  //
+  // A failure here is not a reason to abandon the send. The order is the thing the supplier needs;
+  // a missing reply path is a degradation, and `replyToSource` is what makes it visible instead of
+  // silent. It is NEVER filled in with InPlace support -- that would put a tenant's commercial
+  // conversation in our inbox and leave the supplier thinking they had answered their customer.
+  const actor = await caller.auth.getUser().catch(() => null);
+  const tenantReply = resolveTenantReplyAddress(actor?.data?.user?.email);
+  if (tenantReply.source === 'none') {
+    console.warn('email-sender: no tenant reply address resolved; sending without Reply-To');
+  }
   if (!claimed.portal_token || !claimed.order_snapshot || !claimed.to_email || !claimed.org_id) {
     return json({ error: 'claim_incomplete' }, 500, cors);
   }
@@ -191,6 +212,9 @@ Deno.serve(async (request) => {
           body: JSON.stringify({
             from: fromEmail,
             to: [claimed.to_email],
+            // undefined, not null: JSON.stringify drops the key entirely, so a send with no
+            // resolved tenant address carries no reply_to at all rather than an empty one.
+            reply_to: replyToField(tenantReply.address),
             subject: rendered.subject,
             html: rendered.html,
             text: rendered.text,
@@ -237,6 +261,9 @@ Deno.serve(async (request) => {
     state: sendOk ? 'accepted' : 'failed',
     attempt: claimed.attempt,
     templateVersion: TEMPLATE_VERSION,
+    // 'actor' or 'none' -- never the address itself. The caller may need to tell an operator that
+    // this order went out with no reply path; it does not need to be told whose address it was.
+    replyToSource: tenantReply.source,
     // Resend accepts sandbox sends it will only deliver to the account owner (DEBT §25).
     deliveryLimited: /@resend\.dev>?\s*$/i.test(fromEmail.trim()),
   }, sendOk ? 200 : 502, cors);

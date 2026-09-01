@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { Fact } from "../../../../src/lib/assistant/contracts.ts";
 import { fetchDashboardSnapshot } from "./dashboardSnapshot.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
+import { readerText } from "../reader-locale.ts";
 import { EMPTY_OBJECT_JSON_SCHEMA, num, record } from "./shared.ts";
 
 const inputSchema = z.object({}).strict();
@@ -57,35 +58,35 @@ export const getPaymentExposure: AssistantTool = {
         classification: unit === "ils" ? "financial_sensitive" : "tenant_standard",
       }));
     };
-    fact("דרישות תשלום פעילות", values.activeCount, "count");
+    fact(readerText(ctx.locale, "assistantTools.exposureActiveRequests"), values.activeCount, "count");
     fact(
-      "דרישות פעילות עם תאריך יעד (הכיסוי של כל מדדי החשיפה)",
+      readerText(ctx.locale, "assistantTools.exposureDatedCoverage"),
       values.dueDateCoverage,
       "count",
     );
     fact(
-      "סכום דרישות שמועדן עבר (רק דרישות מתוארכות)",
+      readerText(ctx.locale, "assistantTools.exposureOverdueAmount"),
       values.overdueAmount,
       "ils",
     );
-    fact("דרישות שמועדן עבר (רק מתוארכות)", values.overdue, "count");
-    fact("דרישות שמועדן היום (רק מתוארכות)", values.dueToday, "count");
+    fact(readerText(ctx.locale, "assistantTools.exposureOverdueCount"), values.overdue, "count");
+    fact(readerText(ctx.locale, "assistantTools.exposureDueToday"), values.dueToday, "count");
     fact(
-      "סכום דרישות שמועדן בשבעת הימים הקרובים (רק מתוארכות)",
+      readerText(ctx.locale, "assistantTools.exposureDueWithin7Amount"),
       values.dueWithin7Amount,
       "ils",
     );
     fact(
-      "דרישות שמועדן בשבעת הימים הקרובים (רק מתוארכות)",
+      readerText(ctx.locale, "assistantTools.exposureDueWithin7Count"),
       values.dueWithin7Count,
       "count",
     );
-    fact("דרישות תשלום הממתינות לאישור", values.pendingApproval, "count");
+    fact(readerText(ctx.locale, "assistantTools.exposurePendingApproval"), values.pendingApproval, "count");
 
     const source = ctx.evidence.source({
       entity: "organization",
       entity_id: ctx.actor.orgId,
-      label: "מסך דרישות התשלום",
+      label: readerText(ctx.locale, "assistantTools.exposureScreen"),
       route: "/payment-requests",
       classification: "financial_sensitive",
     });
@@ -94,7 +95,7 @@ export const getPaymentExposure: AssistantTool = {
       values.dueDateCoverage !== null;
     const warnings = [
       undatedKnown && values.activeCount! > values.dueDateCoverage!
-        ? "קיימות דרישות פעילות ללא תאריך יעד — הן אינן נכללות באף מדד חשיפה כאן."
+        ? readerText(ctx.locale, "assistantTools.exposureUndatedWarning")
         : "מדדי החשיפה נמדדים רק על דרישות עם תאריך יעד.",
     ];
 

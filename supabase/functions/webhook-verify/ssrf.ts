@@ -339,17 +339,22 @@ function parseResponseHead(head: string): { status: number; headers: Record<stri
  *   * the dial targets that address, so the TLS stack never performs its own lookup;
  *   * a 3xx is data. This function returns it and stops. Nothing here consumes the hop.
  */
-export async function guardedRequest(
-  rawUrl: string,
-  init: GuardedRequestInit,
+/**
+ * Resolve once, refuse the whole hostname on any non-public answer, dial the address that was
+ * validated. Shared by `guardedRequest` and `guardedDownload` because both need EXACTLY these
+ * properties and a second copy of them is how one of the two quietly loses a range.
+ *
+ * The caller passes a name that `classifyWebhookUrl` has already accepted; this function does
+ * not re-derive it, so it cannot disagree with the string layer about what host it is dialling.
+ */
+async function openGuardedSocket(
+  host: string,
+  port: number,
   deps: DialDeps,
-): Promise<GuardedOutcome> {
-  const classified = classifyWebhookUrl(rawUrl);
-  if (!classified.ok) return { ok: false, code: classified.code };
-  if (!headersAreSafe(init.headers)) return { ok: false, code: 'webhook_header_invalid' };
-
-  const { host, port, requestTarget } = classified.value;
-
+): Promise<
+  | { ok: true; connection: GuardedConnection; pinned: string }
+  | { ok: false; code: TransportRejection; addressClass?: AddressClass; addressDialled?: string }
+> {
   let answers: string[] = [];
   try {
     answers = await deps.resolve(host, 'A');
@@ -374,12 +379,27 @@ export async function guardedRequest(
     return { ok: false, code: 'webhook_url_private_address', addressClass: pinnedClass };
   }
 
-  let connection: GuardedConnection;
   try {
-    connection = await deps.connect({ hostname: pinned, port, serverName: host });
+    return { ok: true, connection: await deps.connect({ hostname: pinned, port, serverName: host }), pinned };
   } catch {
     return { ok: false, code: 'webhook_connect_failed', addressDialled: pinned };
   }
+}
+
+export async function guardedRequest(
+  rawUrl: string,
+  init: GuardedRequestInit,
+  deps: DialDeps,
+): Promise<GuardedOutcome> {
+  const classified = classifyWebhookUrl(rawUrl);
+  if (!classified.ok) return { ok: false, code: classified.code };
+  if (!headersAreSafe(init.headers)) return { ok: false, code: 'webhook_header_invalid' };
+
+  const { host, port, requestTarget } = classified.value;
+
+  const dialled = await openGuardedSocket(host, port, deps);
+  if (!dialled.ok) return dialled;
+  const { connection, pinned } = dialled;
 
   const encoder = new TextEncoder();
   const bodyBytes = encoder.encode(init.body);
@@ -502,4 +522,464 @@ export async function guardedFetch(
   );
   if (!outcome.ok) throw new Error(outcome.code);
   return new Response(null, { status: outcome.status, headers: outcome.headers });
+}
+
+/* ===================== 4. the download layer ===================== */
+
+// `guardedFetch` above deliberately discards the body, and that is correct for a webhook probe:
+// no caller of ours reads an endpoint's response. Inbound intake is the opposite job. A message
+// arrives naming a file we have never seen, hosted by the provider, and the file IS the payload.
+//
+// The temptation is to reach for `guardedFetch`. It cannot do this -- it returns
+// `new Response(null, ...)`. "Zero importers" was the tell. So this layer exists, and it is a
+// SEPARATE function rather than a flag on the old one, because reading a body is a different
+// risk and has to be argued for separately.
+//
+// What a downloader must survive that a probe need not:
+//
+//   * an unbounded body. A provider URL that answers with an endless stream is a memory kill
+//     with no attacker skill required, so every read path here is capped and the cap is checked
+//     BEFORE the bytes are kept, never after.
+//   * a redirect. A probe reports a 3xx and stops (D2). A download must follow one, because
+//     that is how both providers actually serve media -- and following it is precisely the
+//     step that hands the hop's host back to the remote side. Every hop is therefore
+//     re-validated from scratch: the string layer, the exact-host allowlist, a fresh single
+//     resolution and the address class. There is no "we already checked this host".
+//   * a lying Content-Type. The bytes decide. A provider header is a claim by the same party
+//     that chose the file, and storing on that claim is how a document store gets an executable.
+//
+// Nothing here weakens the three layers above; it reuses them per hop.
+
+export type DownloadRejection =
+  | TransportRejection
+  | 'download_host_not_allowed'
+  | 'download_redirect_limit'
+  | 'download_redirect_invalid'
+  | 'download_status_rejected'
+  | 'download_length_declared_too_large'
+  | 'download_too_large'
+  | 'download_length_mismatch'
+  | 'download_encoding_unsupported'
+  | 'download_body_invalid'
+  | 'download_media_type_unrecognized'
+  | 'download_media_type_rejected';
+
+/**
+ * What the BYTES say — never what a header claimed.
+ *
+ * Two entries are deliberately imprecise, and the imprecision is the honest answer rather than
+ * a gap: `application/zip` covers every OOXML file (.xlsx, .docx, .pptx) and
+ * `application/x-ole-storage` covers every legacy Office file (.xls, .doc), because the first
+ * bytes of those formats are a container signature and say nothing about which member sits
+ * inside. A caller that needs the distinction must open the container; this function will not
+ * guess it, and returning `application/vnd...sheet` from a `PK` prefix would be a lie with a
+ * long name.
+ */
+export type SniffedMediaType =
+  | 'application/pdf'
+  | 'image/jpeg'
+  | 'image/png'
+  | 'image/gif'
+  | 'image/webp'
+  | 'image/tiff'
+  | 'image/heic'
+  | 'image/heif'
+  | 'image/avif'
+  | 'application/zip'
+  | 'application/x-ole-storage';
+
+/** One row per format, so an unsupported type is a missing row rather than a missing branch. */
+interface Signature {
+  media: SniffedMediaType;
+  /** Byte offset the prefix starts at. */
+  offset: number;
+  prefix: readonly number[];
+  /** A second fixed run that must also match, for container formats that share a prefix. */
+  also?: { offset: number; prefix: readonly number[] };
+}
+
+const ASCII = (text: string): number[] => Array.from(text, (character) => character.charCodeAt(0));
+
+const SIGNATURES: readonly Signature[] = [
+  { media: 'application/pdf', offset: 0, prefix: ASCII('%PDF-') },
+  { media: 'image/jpeg', offset: 0, prefix: [0xff, 0xd8, 0xff] },
+  { media: 'image/png', offset: 0, prefix: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
+  { media: 'image/gif', offset: 0, prefix: ASCII('GIF87a') },
+  { media: 'image/gif', offset: 0, prefix: ASCII('GIF89a') },
+  { media: 'image/webp', offset: 0, prefix: ASCII('RIFF'), also: { offset: 8, prefix: ASCII('WEBP') } },
+  { media: 'image/tiff', offset: 0, prefix: [0x49, 0x49, 0x2a, 0x00] },
+  { media: 'image/tiff', offset: 0, prefix: [0x4d, 0x4d, 0x00, 0x2a] },
+  // ISO base media: 'ftyp' at 4, brand at 8. Every brand is spelled out rather than prefix-
+  // matched, because 'heif' as a prefix would also swallow brands that are not still images.
+  ...(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs'] as const).map(
+    (brand): Signature => ({
+      media: 'image/heic',
+      offset: 4,
+      prefix: ASCII('ftyp'),
+      also: { offset: 8, prefix: ASCII(brand) },
+    }),
+  ),
+  ...(['mif1', 'msf1'] as const).map(
+    (brand): Signature => ({
+      media: 'image/heif',
+      offset: 4,
+      prefix: ASCII('ftyp'),
+      also: { offset: 8, prefix: ASCII(brand) },
+    }),
+  ),
+  ...(['avif', 'avis'] as const).map(
+    (brand): Signature => ({
+      media: 'image/avif',
+      offset: 4,
+      prefix: ASCII('ftyp'),
+      also: { offset: 8, prefix: ASCII(brand) },
+    }),
+  ),
+  // 'PK' plus a local-file-header or empty-archive marker; a bare 'PK' is too weak to act on.
+  { media: 'application/zip', offset: 0, prefix: [0x50, 0x4b, 0x03, 0x04] },
+  { media: 'application/zip', offset: 0, prefix: [0x50, 0x4b, 0x05, 0x06] },
+  { media: 'application/x-ole-storage', offset: 0, prefix: [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1] },
+];
+
+function matchesAt(bytes: Uint8Array, offset: number, prefix: readonly number[]): boolean {
+  if (bytes.length < offset + prefix.length) return false;
+  for (let index = 0; index < prefix.length; index += 1) {
+    if (bytes[offset + index] !== prefix[index]) return false;
+  }
+  return true;
+}
+
+/** The bytes, and only the bytes. `null` means "these bytes are not a format we will store". */
+export function sniffMediaType(bytes: Uint8Array): SniffedMediaType | null {
+  for (const signature of SIGNATURES) {
+    if (!matchesAt(bytes, signature.offset, signature.prefix)) continue;
+    if (signature.also && !matchesAt(bytes, signature.also.offset, signature.also.prefix)) continue;
+    return signature.media;
+  }
+  return null;
+}
+
+export interface GuardedDownloadInit {
+  /**
+   * EXACT hostnames, lower-case. Not suffixes: `allowedHosts: ['twiliocdn.com']` must not admit
+   * `evil-twiliocdn.com` NOR `anything.twiliocdn.com`, because a provider that lets a customer
+   * choose a subdomain would otherwise choose our destination for us. Every hop is checked
+   * against this same list, so a redirect cannot walk off it.
+   */
+  allowedHosts: readonly string[];
+  /** Hard ceiling on the BODY. Reached mid-stream, the download is abandoned, not truncated. */
+  maxBytes: number;
+  /** Byte-level types the caller will accept. A sniffed type outside it is a named refusal. */
+  allowedMediaTypes: readonly SniffedMediaType[];
+  /** Request headers, e.g. provider authorization. Same CR/LF/NUL rules as `guardedRequest`. */
+  headers?: Record<string, string>;
+  /** Hops to follow. Default 3. Zero means a 3xx is itself the refusal. */
+  maxRedirects?: number;
+  /** A budget for the WHOLE download including every hop, not per hop. Default 20s. */
+  timeoutMs?: number;
+}
+
+export type GuardedDownloadOutcome =
+  | {
+      ok: true;
+      bytes: Uint8Array;
+      mediaType: SniffedMediaType;
+      /** The host the bytes actually came from — the last hop, which is often not the first. */
+      hostDialled: string;
+      addressDialled: string;
+      redirects: number;
+    }
+  | {
+      ok: false;
+      code: DownloadRejection;
+      addressClass?: AddressClass;
+      addressDialled?: string;
+      /** Carried for a refusal the caller must be able to explain, e.g. a 404 from a provider. */
+      status?: number;
+      /** What the bytes turned out to be, when they were readable but unwanted. */
+      mediaType?: SniffedMediaType;
+    };
+
+const MAX_ABSOLUTE_DOWNLOAD_BYTES = 64 * 1024 * 1024;
+const CRLF_CRLF = [0x0d, 0x0a, 0x0d, 0x0a];
+
+function findSequence(haystack: Uint8Array, needle: readonly number[], from = 0): number {
+  outer: for (let index = from; index + needle.length <= haystack.length; index += 1) {
+    for (let offset = 0; offset < needle.length; offset += 1) {
+      if (haystack[index + offset] !== needle[offset]) continue outer;
+    }
+    return index;
+  }
+  return -1;
+}
+
+/**
+ * Everything read from the socket, in one growable buffer with ONE ceiling.
+ *
+ * The ceiling covers head and body together, so a response that never sends `\r\n\r\n` cannot
+ * buy unbounded memory by simply never finishing its headers -- the case a body-only cap misses.
+ */
+class BoundedReader {
+  private buffer = new Uint8Array(0);
+  private exhausted = false;
+
+  constructor(private readonly connection: GuardedConnection, private readonly ceiling: number) {}
+
+  get bytes(): Uint8Array {
+    return this.buffer;
+  }
+
+  get done(): boolean {
+    return this.exhausted;
+  }
+
+  /** `false` means the ceiling was hit; the caller decides which refusal that is. */
+  async pull(): Promise<boolean> {
+    if (this.exhausted) return true;
+    const scratch = new Uint8Array(16 * 1024);
+    const read = await this.connection.read(scratch);
+    if (read === null || read === 0) {
+      this.exhausted = true;
+      return true;
+    }
+    if (this.buffer.length + read > this.ceiling) return false;
+    const grown = new Uint8Array(this.buffer.length + read);
+    grown.set(this.buffer, 0);
+    grown.set(scratch.subarray(0, read), this.buffer.length);
+    this.buffer = grown;
+    return true;
+  }
+}
+
+/** Chunked decoding, with the same ceiling applied to the DECODED size, not the wire size. */
+function decodeChunked(
+  body: Uint8Array,
+  maxBytes: number,
+): { ok: true; bytes: Uint8Array } | { ok: false; code: 'download_too_large' | 'download_body_invalid' } {
+  const out: Uint8Array[] = [];
+  let total = 0;
+  let cursor = 0;
+  for (;;) {
+    const lineEnd = findSequence(body, [0x0d, 0x0a], cursor);
+    if (lineEnd < 0) return { ok: false, code: 'download_body_invalid' };
+    // A chunk-extension after ';' is legal and carries no length information.
+    const header = new TextDecoder().decode(body.subarray(cursor, lineEnd)).split(';')[0].trim();
+    if (!/^[0-9a-fA-F]+$/.test(header)) return { ok: false, code: 'download_body_invalid' };
+    const size = Number.parseInt(header, 16);
+    if (!Number.isFinite(size)) return { ok: false, code: 'download_body_invalid' };
+    cursor = lineEnd + 2;
+    if (size === 0) break;
+    if (total + size > maxBytes) return { ok: false, code: 'download_too_large' };
+    if (cursor + size > body.length) return { ok: false, code: 'download_body_invalid' };
+    out.push(body.subarray(cursor, cursor + size));
+    total += size;
+    cursor += size;
+    if (body[cursor] !== 0x0d || body[cursor + 1] !== 0x0a) {
+      return { ok: false, code: 'download_body_invalid' };
+    }
+    cursor += 2;
+  }
+  const joined = new Uint8Array(total);
+  let at = 0;
+  for (const piece of out) {
+    joined.set(piece, at);
+    at += piece.length;
+  }
+  return { ok: true, bytes: joined };
+}
+
+/**
+ * Fetch one file from a provider, over the same three layers `guardedRequest` uses, with a body.
+ *
+ * The order is the point:
+ *   1. the string layer and the exact-host allowlist, BEFORE any resolution;
+ *   2. one resolution, whole-hostname refusal on any non-public answer, dial the pinned address;
+ *   3. the response head, under a ceiling that covers the head itself;
+ *   4. a 3xx re-enters step 1 as a brand-new URL -- it is never trusted for being a redirect;
+ *   5. the body, capped, with the declared length checked against what actually arrived;
+ *   6. the media type FROM THE BYTES, checked against what the caller said it would store.
+ *
+ * A failure at any step returns a named code and no bytes. There is no partial success: a file
+ * that hit the ceiling is not a shorter file, it is a refusal.
+ */
+export async function guardedDownload(
+  rawUrl: string,
+  init: GuardedDownloadInit,
+  deps: DialDeps,
+): Promise<GuardedDownloadOutcome> {
+  const headers = init.headers ?? {};
+  if (!headersAreSafe(headers)) return { ok: false, code: 'webhook_header_invalid' };
+  if (!Number.isInteger(init.maxBytes) || init.maxBytes <= 0 || init.maxBytes > MAX_ABSOLUTE_DOWNLOAD_BYTES) {
+    return { ok: false, code: 'download_too_large' };
+  }
+  if (init.allowedHosts.length === 0 || init.allowedMediaTypes.length === 0) {
+    // An empty allowlist is a configuration mistake that would otherwise read as "allow none"
+    // in one place and "allow all" in the next refactor. Refuse it out loud instead.
+    return { ok: false, code: 'download_host_not_allowed' };
+  }
+
+  const allowed = new Set(init.allowedHosts.map((host) => host.toLowerCase()));
+  const maxRedirects = init.maxRedirects ?? 3;
+  const deadline = Date.now() + (init.timeoutMs ?? 20_000);
+
+  let url = rawUrl;
+  for (let hop = 0; ; hop += 1) {
+    const classified = classifyWebhookUrl(url);
+    if (!classified.ok) {
+      return { ok: false, code: hop === 0 ? classified.code : 'download_redirect_invalid' };
+    }
+    const { host, port, requestTarget } = classified.value;
+    if (!allowed.has(host)) return { ok: false, code: 'download_host_not_allowed' };
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return { ok: false, code: 'webhook_response_timeout' };
+
+    const dialled = await openGuardedSocket(host, port, deps);
+    if (!dialled.ok) return dialled;
+    const { connection, pinned } = dialled;
+
+    let timedOut = false;
+    let closed = false;
+    const shut = () => {
+      if (closed) return;
+      closed = true;
+      try {
+        connection.close();
+      } catch {
+        // A socket that is already gone needs no further attention.
+      }
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      shut();
+    }, remaining);
+
+    let head: { status: number; headers: Record<string, string> } | null = null;
+    let body: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
+    let overflowed = false;
+    try {
+      const encoder = new TextEncoder();
+      const lines = [
+        `GET ${requestTarget || '/'} HTTP/1.1`,
+        `host: ${host}`,
+        ...Object.entries(headers).map(([name, value]) => `${name.toLowerCase()}: ${value}`),
+        'accept-encoding: identity',
+        'connection: close',
+      ];
+      await connection.write(encoder.encode(`${lines.join('\r\n')}\r\n\r\n`));
+
+      // The ceiling covers head AND body: `maxBytes` of payload plus the head allowance, and
+      // one extra byte so a body of exactly `maxBytes` is accepted while `maxBytes + 1` is not.
+      const reader = new BoundedReader(connection, MAX_RESPONSE_HEAD_BYTES + init.maxBytes + 1);
+      let boundary = -1;
+      while (boundary < 0) {
+        if (!(await reader.pull())) {
+          overflowed = true;
+          break;
+        }
+        boundary = findSequence(reader.bytes, CRLF_CRLF);
+        if (boundary < 0 && reader.done) break;
+        if (boundary < 0 && reader.bytes.length > MAX_RESPONSE_HEAD_BYTES) {
+          return { ok: false, code: 'webhook_response_invalid', addressDialled: pinned };
+        }
+      }
+      if (timedOut) return { ok: false, code: 'webhook_response_timeout', addressDialled: pinned };
+      if (overflowed) return { ok: false, code: 'download_too_large', addressDialled: pinned };
+      if (boundary < 0) return { ok: false, code: 'webhook_response_invalid', addressDialled: pinned };
+
+      head = parseResponseHead(new TextDecoder().decode(reader.bytes.subarray(0, boundary)));
+      if (!head) return { ok: false, code: 'webhook_response_invalid', addressDialled: pinned };
+
+      if (head.status >= 300 && head.status < 400) {
+        // Handled after the socket is shut, so a hop can never be opened while the previous
+        // one is still held.
+        body = new Uint8Array(0);
+      } else if (head.status !== 200) {
+        return { ok: false, code: 'download_status_rejected', status: head.status, addressDialled: pinned };
+      } else {
+        // Refused on the DECLARATION, before the body is drained: a provider that says it will
+        // send more than we accept is answered without paying for the transfer.
+        const promised = head.headers['content-length'];
+        if (promised !== undefined && /^[0-9]+$/.test(promised) && Number.parseInt(promised, 10) > init.maxBytes) {
+          return { ok: false, code: 'download_length_declared_too_large', addressDialled: pinned };
+        }
+        while (!reader.done) {
+          if (!(await reader.pull())) {
+            overflowed = true;
+            break;
+          }
+        }
+        if (timedOut) return { ok: false, code: 'webhook_response_timeout', addressDialled: pinned };
+        if (overflowed) return { ok: false, code: 'download_too_large', addressDialled: pinned };
+        body = reader.bytes.subarray(boundary + CRLF_CRLF.length);
+      }
+    } catch {
+      if (timedOut) return { ok: false, code: 'webhook_response_timeout', addressDialled: pinned };
+      return { ok: false, code: 'webhook_connect_failed', addressDialled: pinned };
+    } finally {
+      clearTimeout(timer);
+      shut();
+    }
+
+    if (head.status >= 300 && head.status < 400) {
+      if (hop >= maxRedirects) return { ok: false, code: 'download_redirect_limit', status: head.status };
+      const location = head.headers['location'];
+      if (!location) return { ok: false, code: 'download_redirect_invalid', status: head.status };
+      try {
+        // Resolved against the hop we just made, so a relative Location works; the result then
+        // goes through the FULL check at the top of the loop, allowlist included.
+        url = new URL(location, `https://${host}${requestTarget || '/'}`).toString();
+      } catch {
+        return { ok: false, code: 'download_redirect_invalid', status: head.status };
+      }
+      continue;
+    }
+
+    const encoding = (head.headers['transfer-encoding'] ?? '').toLowerCase();
+    const declared = head.headers['content-length'];
+    let payload: Uint8Array;
+    if (encoding.split(',').map((part) => part.trim()).includes('chunked')) {
+      const decoded = decodeChunked(body, init.maxBytes);
+      if (!decoded.ok) return { ok: false, code: decoded.code, addressDialled: pinned };
+      payload = decoded.bytes;
+    } else if (declared !== undefined) {
+      if (!/^\d+$/.test(declared)) return { ok: false, code: 'download_body_invalid', addressDialled: pinned };
+      const length = Number.parseInt(declared, 10);
+      if (length > init.maxBytes) {
+        return { ok: false, code: 'download_length_declared_too_large', addressDialled: pinned };
+      }
+      if (body.length !== length) {
+        return { ok: false, code: 'download_length_mismatch', addressDialled: pinned };
+      }
+      payload = body;
+    } else {
+      // Close-delimited. Legal HTTP, and exactly the shape where nothing bounds the transfer
+      // but our own ceiling. Both providers we speak to declare a length; a response that does
+      // not is refused by name rather than read on trust.
+      return { ok: false, code: 'download_encoding_unsupported', addressDialled: pinned };
+    }
+
+    if (payload.length > init.maxBytes) {
+      return { ok: false, code: 'download_too_large', addressDialled: pinned };
+    }
+
+    const mediaType = sniffMediaType(payload);
+    if (mediaType === null) {
+      return { ok: false, code: 'download_media_type_unrecognized', addressDialled: pinned };
+    }
+    if (!init.allowedMediaTypes.includes(mediaType)) {
+      return { ok: false, code: 'download_media_type_rejected', mediaType, addressDialled: pinned };
+    }
+
+    // A fresh copy, so the returned bytes do not keep the whole read buffer alive through a
+    // subarray view of it.
+    return {
+      ok: true,
+      bytes: new Uint8Array(payload),
+      mediaType,
+      hostDialled: host,
+      addressDialled: pinned,
+      redirects: hop,
+    };
+  }
 }

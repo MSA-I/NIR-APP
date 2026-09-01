@@ -100,13 +100,12 @@ insert into public.purchase_order_items (id, org_id, order_id, product_id, qty, 
    '50310000-0000-4000-8000-000000000001', '30310000-0000-4000-8000-000000000001', 10, 10);
 
 insert into public.documents (
-  id, org_id, entity_type, storage_path, file_name, mime_type, document_kind
-)
+  id, org_id, entity_type, storage_path, file_name, mime_type, document_kind, uploaded_by)
 select ('60310000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
        '10310000-0000-4000-8000-000000000001', 'inbox',
        '10310000-0000-4000-8000-000000000001/p31-' || n || '.pdf',
-       'p31-' || n || '.pdf', 'application/pdf', 'invoice'
-from generate_series(1, 10) as n;
+       'p31-' || n || '.pdf', 'application/pdf', 'invoice', '20310000-0000-4000-8000-000000000001'
+from generate_series(1, 13) as n;
 
 insert into public.document_processing_jobs (
   id, org_id, document_id, requested_by, status, input_checksum,
@@ -117,7 +116,7 @@ select ('90310000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
        ('60310000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
        '20310000-0000-4000-8000-000000000001', 'review',
        'etag:' || lpad(n::text, 16, '0'), '20310000-0000-4000-8000-000000000001', now()
-from generate_series(1, 10) as n;
+from generate_series(1, 13) as n;
 
 insert into public.document_extractions (
   id, org_id, job_id, document_id, engine, model, model_version,
@@ -136,7 +135,7 @@ select ('a0310000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
            'id', 'block-1', 'page', 1, 'type', 'text',
            'bbox', jsonb_build_array(0, 0, 1, 1), 'text', 'P31', 'confidence', 0.95)),
          'tables', '[]'::jsonb, 'marks', '[]'::jsonb)
-from generate_series(1, 10) as n;
+from generate_series(1, 13) as n;
 
 insert into public.document_interpretations (
   id, org_id, job_id, extraction_id, document_id, interpreted_for_user_id,
@@ -153,14 +152,26 @@ select ('b0310000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
          'schema_version', '1', 'document_type', 'invoice', 'document_type_confidence', 0.97,
          'supplier', jsonb_build_object('suggested_id', null, 'suggested_name', 'P31 ספק',
            'confidence', 0.9, 'evidence_block_ids', jsonb_build_array('block-1')),
-         'fields', case when n in (9, 10)
+         -- 11 and 12 carry the `due_date` review key the model has always been asked for: one a
+         -- real date, one the free text a supplier actually prints. 13 carries none at all, which
+         -- is the common case and must stay NULL rather than becoming a guess.
+         'fields', case
+           when n in (9, 10)
            then jsonb_build_array(jsonb_build_object(
              'key', 'currency', 'value', 'USD', 'confidence', 0.99,
+             'evidence_block_ids', jsonb_build_array('block-1')))
+           when n = 11
+           then jsonb_build_array(jsonb_build_object(
+             'key', 'due_date', 'value', '2026-07-31', 'confidence', 0.93,
+             'evidence_block_ids', jsonb_build_array('block-1')))
+           when n = 12
+           then jsonb_build_array(jsonb_build_object(
+             'key', 'due_date', 'value', 'שוטף + 30', 'confidence', 0.71,
              'evidence_block_ids', jsonb_build_array('block-1')))
            else '[]'::jsonb end,
          'line_items', '[]'::jsonb,
          'suggested_annotations', '[]'::jsonb)
-from generate_series(1, 10) as n;
+from generate_series(1, 13) as n;
 
 set local role authenticated;
 select pg_temp.p31_act('20310000-0000-4000-8000-000000000001');
@@ -516,5 +527,80 @@ select pg_temp.p31_assert(
   not has_table_privilege('authenticated', 'public.document_review_applications', 'insert')
   and has_table_privilege('authenticated', 'public.document_review_applications', 'select'),
   'a client can insert into the ledger directly, or can no longer read its own history');
+
+-- ===== The due date the document stated, and the three ways it must not be invented =====
+-- `0276`. The model has been emitting `due_date` as a review key all along; until now nothing
+-- consumed it, so it was shown to the reviewer and dropped. These three documents differ ONLY in
+-- what that field holds, so any difference in `invoices.due_date` is caused by the field and not
+-- by the fixture.
+--
+-- THE SUPPLIER CARRIES FREE-TEXT PAYMENT TERMS ON PURPOSE. If the command ever starts deriving a
+-- date from `payment_terms`, documents 12 and 13 stop being NULL and this section fails -- which
+-- is the whole point of setting it, because "net 30" parsed into a real date is a debt with a
+-- deadline the document never carried.
+update public.suppliers set payment_terms = 'שוטף + 30'
+ where id = '50310000-0000-4000-8000-000000000001';
+
+-- (a) A stated, readable date reaches the invoice.
+select pg_temp.p31_assert(
+  (select (r ->> 'applied')::boolean
+   from public.apply_reviewed_document(
+     '60310000-0000-4000-8000-000000000011', 'b0310000-0000-4000-8000-000000000011',
+     pg_temp.p31_reviewed('invoice',
+       jsonb_build_array(pg_temp.p31_line(
+         '30310000-0000-4000-8000-000000000001', '1', 'unit', '10', '10', 'SKU-31')),
+       '50310000-0000-4000-8000-000000000001', 'INV-DUE-1', '2026-06-15', '10', '1.8', '11.8'),
+     '00000000-0000-4000-8000-000000000011', 'P31 חשבונית עם תאריך לתשלום') r),
+  'the document carrying a due date was not applied at all');
+
+select pg_temp.p31_assert(
+  (select i.due_date = date '2026-07-31' from public.invoices i
+    where i.invoice_number = 'INV-DUE-1'
+      and i.org_id = '10310000-0000-4000-8000-000000000001'),
+  'the due date the document stated did not reach the invoice');
+
+-- (b) Free text is NOT a date. This is the assertion that keeps a payment horizon honest: a card
+-- that says "leaving in the next 30 days" must not count money against a day nobody agreed to.
+select pg_temp.p31_assert(
+  (select (r ->> 'applied')::boolean
+   from public.apply_reviewed_document(
+     '60310000-0000-4000-8000-000000000012', 'b0310000-0000-4000-8000-000000000012',
+     pg_temp.p31_reviewed('invoice',
+       jsonb_build_array(pg_temp.p31_line(
+         '30310000-0000-4000-8000-000000000001', '1', 'unit', '10', '10', 'SKU-31')),
+       '50310000-0000-4000-8000-000000000001', 'INV-DUE-2', '2026-06-15', '10', '1.8', '11.8'),
+     '00000000-0000-4000-8000-000000000012', 'P31 חשבונית עם טקסט חופשי') r),
+  'the document carrying unparseable terms was refused instead of applied');
+
+select pg_temp.p31_assert(
+  (select i.due_date is null from public.invoices i
+    where i.invoice_number = 'INV-DUE-2'
+      and i.org_id = '10310000-0000-4000-8000-000000000001'),
+  'free text was turned into a due date');
+
+-- (c) No field at all is NULL, and the supplier's payment terms did not fill it in.
+select pg_temp.p31_assert(
+  (select (r ->> 'applied')::boolean
+   from public.apply_reviewed_document(
+     '60310000-0000-4000-8000-000000000013', 'b0310000-0000-4000-8000-000000000013',
+     pg_temp.p31_reviewed('invoice',
+       jsonb_build_array(pg_temp.p31_line(
+         '30310000-0000-4000-8000-000000000001', '1', 'unit', '10', '10', 'SKU-31')),
+       '50310000-0000-4000-8000-000000000001', 'INV-DUE-3', '2026-06-15', '10', '1.8', '11.8'),
+     '00000000-0000-4000-8000-000000000013', 'P31 חשבונית בלי תאריך לתשלום') r),
+  'the document carrying no due date was not applied');
+
+select pg_temp.p31_assert(
+  (select i.due_date is null from public.invoices i
+    where i.invoice_number = 'INV-DUE-3'
+      and i.org_id = '10310000-0000-4000-8000-000000000001'),
+  'a due date appeared on an invoice whose document never stated one');
+
+-- And the three invoices exist, so the NULLs above are measurements rather than missing rows.
+select pg_temp.p31_assert(
+  (select count(*) = 3 from public.invoices
+    where org_id = '10310000-0000-4000-8000-000000000001'
+      and invoice_number in ('INV-DUE-1', 'INV-DUE-2', 'INV-DUE-3')),
+  'the due-date documents did not all produce invoices -- the NULL assertions proved nothing');
 
 rollback;

@@ -155,12 +155,18 @@ select smart_document_processing_test.assert(
   'RLS is not enabled on both processing tables'
 );
 
+-- The tenant tie is asserted by its GUARANTEE, not by one spelling of it. 0279 WIDENS this
+-- foreign key from (org_id, document_id) to (org_id, document_id, source): every guarantee the
+-- narrow one gave still holds, plus a document can no longer shed its source and escape the
+-- actor requirement. Pinning the exact old text failed on a change that strengthened the very
+-- thing being checked -- so the pattern now requires the two tenant columns and the documents
+-- reference, and tolerates further columns between them.
 select smart_document_processing_test.assert(
   exists (
     select 1 from pg_constraint
     where conrelid = 'public.document_processing_jobs'::regclass
       and contype = 'f'
-      and pg_get_constraintdef(oid) ilike '%foreign key (org_id, document_id)%references documents(org_id, id)%'
+      and pg_get_constraintdef(oid) ilike '%foreign key (org_id, document_id%references documents(org_id, id%'
   ),
   'jobs do not have a tenant document FK'
 );
@@ -175,7 +181,7 @@ select smart_document_processing_test.assert(
     select 1 from pg_constraint
     where conrelid = 'public.document_extractions'::regclass
       and contype = 'f'
-      and pg_get_constraintdef(oid) ilike '%foreign key (org_id, document_id)%references documents(org_id, id)%'
+      and pg_get_constraintdef(oid) ilike '%foreign key (org_id, document_id%references documents(org_id, id%'
   ),
   'extractions do not have both tenant FKs'
 );

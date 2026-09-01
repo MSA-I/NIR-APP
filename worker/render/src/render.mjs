@@ -45,6 +45,9 @@ const VIEWPORT = { width: 1440, height: 1200 };
 /** After the network goes quiet, the report still settles — measured on the live dashboard. */
 const SETTLE_MS = Number(process.env.RENDER_SETTLE_MS ?? 2500);
 
+/** The share of page height the document plate may claim. See `stamp()`. */
+const PLATE_BAND = 0.28;
+
 let browserPromise = null;
 
 /** One browser for the life of the process; a context per request. Launch is the expensive part. */
@@ -77,6 +80,19 @@ export async function closeBrowser() {
  * that is the whole difference between this and the browser-side generator. The lockup is
  * embedded as PNG because pdf-lib draws raster or vector paths, not SVG documents; at 8% opacity
  * across a page it never competes with a figure the reader has to trust.
+ *
+ * ─── IT SITS ON THE PAPER, NOT ACROSS THE PLATE (#330) ───────────────────────────────────────
+ * Until the document system landed, every page was white end to end and centring the mark on the
+ * page was the same thing as centring it on paper. It is not any more: each document now opens on
+ * a plate that can be near-black, and a mark in the paper's own dark ink laid over that plate is
+ * a mark nobody can see. Half a watermark is worse than none — it reads as a printing fault.
+ *
+ * So the mark is centred in the area BELOW the plate. `PLATE_BAND` is the share of page height
+ * the plate may claim, taken from the widest case: the portrait order sheet's plate measured
+ * 196pt inside a 1123pt page (17.5%) and the landscape report's 184 inside 794 (23.2%), both with
+ * their outer margin. 28% is that worst case with room for a document whose heading wraps to two
+ * lines — and because the mark is CENTRED in what remains rather than pinned to it, a few points
+ * either way move it slightly, never onto the plate.
  */
 async function stamp(pdfBytes, markPath) {
   const document = await PDFDocument.load(pdfBytes);
@@ -85,9 +101,12 @@ async function stamp(pdfBytes, markPath) {
     const { width, height } = page.getSize();
     const drawWidth = width * 0.55;
     const drawHeight = (mark.height / mark.width) * drawWidth;
+    // pdf-lib's origin is the BOTTOM-left, so the paper area is the part below `height * (1 -
+    // PLATE_BAND)` counted from the top — which is everything from 0 up to that line.
+    const paperTop = height * (1 - PLATE_BAND);
     page.drawImage(mark, {
       x: (width - drawWidth) / 2,
-      y: (height - drawHeight) / 2,
+      y: (paperTop - drawHeight) / 2,
       width: drawWidth,
       height: drawHeight,
       opacity: 0.08,

@@ -20,6 +20,7 @@ import { financialSupplierMap } from '../lib/financialSuppliers';
 import { downloadWorkbook } from '../lib/workbook';
 import { downloadDocumentPdf } from '../lib/pdf';
 import { exportWatermark } from '../lib/exportBranding';
+import { DocumentPlate } from '../components/DocumentPlate';
 import {
   downloadRenderedWorkbook,
   expenseSummaryTemplateValues,
@@ -452,8 +453,11 @@ export default function Expenses() {
         {/* `print-only`, not `hidden print:block`: html2canvas renders the live DOM, so a
             display:none heading is simply absent from the generated PDF (src/index.css). */}
         <div aria-hidden="true" className="print-only">
-          {orgLogoUrl && <img src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
-          <h2 className="text-xl font-semibold">{(org?.name ? `${org.name} — ` : '') + t('expenses.heading', { from: fmtDate(from), to: fmtDate(to) })}</h2>
+          <DocumentPlate
+            family="report"
+            name={t('expenses.printName')}
+            orgLogoUrl={orgLogoUrl}
+            subtitle={[org?.name, `${fmtDate(from)} – ${fmtDate(to)}`].filter(Boolean).join(' · ')} />
         </div>
 
         <div className="grid grid-cols-1 border-y border-line-strong bg-surface sm:grid-cols-3">

@@ -50,11 +50,20 @@
  * a composed background class produces no CSS at all and the disc renders transparent — a failure that looks
  * like a styling opinion rather than a missing rule. The pair is also what the spec reads: it
  * parses these literals and recomputes both contrast ratios from `index.css`.
+ *
+ * WHY `fixed-onyx` AND NOT `ink` ON STEPS 2 AND 4. Those two discs are LIGHT in both themes
+ * (73% → 80% and 73% → 78%), so the letter on them has to be dark in both themes — and `ink` is
+ * not: it flips to near-white when `data-theme="dark"`, which put light letters on a light disc
+ * at 1.64:1 and 1.70:1. `fixed-onyx` is the token that deliberately does not follow the palette,
+ * so it reads at 7.77:1 / 9.90:1 and 8.04:1 / 9.55:1. Steps 3 and 5 keep `on-solid`: they are the
+ * two discs whose own lightness flips WITH the theme (46% → 70%, 46% → 66%), so an ink that flips
+ * with it is exactly right there. The spec now recomputes all four pairs in BOTH blocks — it
+ * previously read only `@theme`, which is how a dark-theme regression passed a green test.
  */
 const MONOGRAM_PAINT = [
-  'bg-series-2 text-ink',
+  'bg-series-2 text-fixed-onyx',
   'bg-series-3 text-on-solid',
-  'bg-series-4 text-ink',
+  'bg-series-4 text-fixed-onyx',
   'bg-series-5 text-on-solid',
 ] as const;
 

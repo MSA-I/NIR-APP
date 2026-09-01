@@ -76,12 +76,26 @@ interface SubscriptionSummary {
  * surface as if it were the free plan. `planTierClass` returns `null` for a rung with no look, and
  * both surfaces treat that the same way: no tier mark at all, never a borrowed one.
  */
+/*
+ * BUSINESS STOPPED BORROWING PREMIUM'S MARK, 31.08.2026.
+ *
+ * It borrowed it for a good reason: the chips were three METALS — silver, gold, onyx — business
+ * sat above premium on the ladder, and there was no fourth metal, so reusing the top one was the
+ * only way for it not to read as a downgrade. That reasoning ended when the card did. The five
+ * faces the owner named on 28.08.2026 give business a colour OF ITS OWN (the violet the deep card
+ * wears), and the owner asked on 31.08.2026 for the chips to follow the cards: «שים לב שגם התגים
+ * שיש בפרופיל של כל מנוי מתעדכנים לפי הצבעים של המנויים». A borrowed mark would now be the one
+ * place in the product where two different plans look like the same plan.
+ *
+ * The faces themselves are in `src/styles/plan-card.css`, beside the cards they match, so a chip
+ * and a card cannot drift apart.
+ */
 export const TIER_CLASS: Record<string, string> = {
   free: 'plan-badge-free',
   basic: 'plan-badge-basic',
   pro: 'plan-badge-pro',
   premium: 'plan-badge-premium',
-  business: 'plan-badge-premium',
+  business: 'plan-badge-business',
 };
 
 /** The single fallback: a rung the ladder has no look for wears no mark. */

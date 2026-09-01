@@ -39,6 +39,42 @@ const DICTIONARIES: Record<ReaderLocale, Dictionary> = {
   en: en as unknown as Dictionary,
 };
 
+/**
+ * The language ONE RUN speaks — decided by the question, not by the interface (owner ruling
+ * 01.09.2026: „השפה שבה שאלת").
+ *
+ * Until this, the run's language was the interface's. Measured live on 01.09.2026, five runs over
+ * three question/interface combinations: **every one answered in Hebrew**, including two that
+ * asked in English with `locale: "en"` — the interface setting had no effect on the answer at all.
+ * The instruction said "Answer in English" while every tool label reaching the model was Hebrew,
+ * and the data won. Two things follow from that measurement, and both are done:
+ *   - the language is taken from the question, so the instruction and the person agree, and
+ *   - the tool labels move with it (`reader-locale` is now the run's locale everywhere), so the
+ *     instruction and the evidence agree too. An instruction that contradicts its own context is
+ *     a wish, not a rule.
+ *
+ * The rule is deliberately about SCRIPT and not about vocabulary. A Hebrew business question is
+ * full of Latin — supplier names, `ILS`, product codes — so "contains Latin" would answer half the
+ * Hebrew questions in English. Hebrew letters are the decisive mark: a question carrying any
+ * meaningful run of them is a Hebrew question. Latin-only decides English. Neither, or a bare
+ * numeral, falls back to the interface, which is the only other thing this run knows about the
+ * person.
+ */
+const HEBREW_LETTER = /\p{Script=Hebrew}/gu;
+const LATIN_LETTER = /\p{Script=Latin}/gu;
+
+export function resolveAnswerLocale(
+  question: string,
+  readerLocale: ReaderLocale,
+): ReaderLocale {
+  const hebrew = (question.match(HEBREW_LETTER) ?? []).length;
+  const latin = (question.match(LATIN_LETTER) ?? []).length;
+  // Three Hebrew letters is one short word — below that it is a stray character, not a language.
+  if (hebrew >= 3) return "he";
+  if (latin >= 3) return "en";
+  return readerLocale;
+}
+
 /** One sentence, in the reader's language. A miss returns the key, exactly as the browser does. */
 export function readerText(
   locale: ReaderLocale,

@@ -258,11 +258,17 @@ export default function Pricing() {
               key={plan.plan_key}
               planKey={plan.plan_key}
               label={planName(plan.plan_key, plan.label)}
-              /* THE FIGURE SLOT HOLDS THE QUOTA, NOT A PRICE, and its label says so. This page
-                 publishes no amount (owner decision 25.08.2026 / #267), so the largest true number
-                 it owns takes the slot the ticket reserves for its biggest figure. A price-shaped
-                 slot holding «—» would be a page about a price it refuses to give. */
-              priceLabel={quotaLabel(HEADLINE_QUOTA_KEY)}
+              /* THE FIGURE SLOT HOLDS THE QUOTA, NOT A PRICE, and the line under it says so. This
+                 page publishes no amount (owner decision 25.08.2026 / #267), so the largest true
+                 number it owns takes the slot the card reserves for its biggest figure. A
+                 price-shaped slot holding «—» would be a page about a price it refuses to give.
+
+                 The label moved from a slot of its own into `.plan-card__billed` when the card was
+                 re-transcribed on 31.08.2026: the marketing site's card has no label ABOVE its
+                 figure, and inventing one here would be the product growing a second opinion about
+                 a design it does not own. The quiet line under the figure is where that card puts
+                 the sentence about what the figure is, and «מסמכים בחודש» is exactly that. */
+              who={quotaLabel(HEADLINE_QUOTA_KEY)}
               figure={!measured ? '—'
                 : headline.unlimited ? t('pricingTail.unlimited')
                   : fmtNum(headline.numeric_limit)}
@@ -278,8 +284,10 @@ export default function Pricing() {
                  account, which is the one thing a visitor can actually do. Every card lacks it
                  equally, so no card is left short of its neighbours. */
               /* Every remaining entitlement the catalogue returns — the comparison the table used
-                 to hold, one plan at a time and with no sideways scroll to trap a keyboard. */
-              featuresLabel={t('pricingTail.featuresLabel')}
+                 to hold, one plan at a time and with no sideways scroll to trap a keyboard.
+                 The list carries no heading of its own since the 31.08.2026 re-transcription: the
+                 marketing site's card runs its rows straight off the rule under the figure, and a
+                 heading here would be a row the other surface does not have. */
               features={quotaKeys
                 .filter((key) => key !== HEADLINE_QUOTA_KEY)
                 .map((key) => featureRow(plan.plan_key, key))

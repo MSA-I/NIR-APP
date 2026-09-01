@@ -20,19 +20,38 @@ import {
 } from './PlanTicket';
 import { usageSnapshotQuery, type UsageRow } from './PlanLimitNote';
 import { ErrorNote, ICON, Modal, Note, Skeleton, StatusBadge } from './ui';
+import { openPaddleCheckout, paddleConfig } from '../lib/paddle';
 
 /**
  * The tenant's own subscription surface: what they are on, what else exists, and the three
  * lifecycle moves they are allowed to make. It is deliberately NOT a sales page.
  *
- * THE RULE THAT SHAPES EVERYTHING HERE: there is no purchase path, and that is deliberate.
- * OPEN-DECISIONS #217 and #224 say a paid entitlement opens on a SIGNED SERVER EVENT and on
- * nothing else. An earlier draft honoured that by sending the customer to a provider checkout and
- * then refusing to call the return a success. Paddle is ACCOUNT_NOT_PROVEN, no `billing-checkout`
- * function exists, and none is being built this wave — so the honest implementation is stronger
- * and simpler: THIS FILE INVOKES NO EDGE FUNCTION, renders no affordance that would start a
- * payment, and contains no wording that could be read as money having moved. A rule enforced by
- * the absence of a code path cannot be violated by a future edit to that path.
+ * THE RULE THAT SHAPES EVERYTHING HERE (rewritten 31.08.2026): there IS a purchase path now, and
+ * it still cannot grant anything.
+ *
+ * The previous version of this comment said the opposite, and was right at the time: with no
+ * `billing-checkout` function, the honest implementation was the absence of a code path, because
+ * "a rule enforced by the absence of a code path cannot be violated by a future edit to that path".
+ * That was the strongest available guarantee then. It is no longer the available one — the owner
+ * asked for a working Paddle Sandbox purchase — so the guarantee has to be carried by the shape of
+ * the path instead, and it is carried in three places rather than one:
+ *
+ *   * THE SERVER CHOOSES EVERYTHING. This component sends a plan key and an interval. It never
+ *     sends a price, an amount, a customer or an organization — `authorize_billing_checkout()`
+ *     resolves all four from auth_org() and the price map, so there is nothing here for a tampered
+ *     client to turn into a different purchase.
+ *   * THE OVERLAY RESOLVING IS NOT A PAYMENT. Paddle's `checkout.completed` fires in the customer's
+ *     browser the instant their card is accepted, and the obvious next line — mark the plan paid —
+ *     would be wrong every time, and forgeable besides. #217 and #224 put entitlement behind a
+ *     signed server event, so what this file does on completion is say "we are waiting for the
+ *     provider to confirm" and refetch. The plan changes when `subscription.activated` arrives
+ *     through billing-webhook, or it does not change at all.
+ *   * THE BUTTON IS STILL SHUT WHEN BILLING IS SHUT. `billing_provider_enabled` gates it, and the
+ *     server refuses independently of what this component believes (0278), so a stale `true` in a
+ *     cached read cannot produce a charge.
+ *
+ * WHAT IS DELIBERATELY ABSENT: any local state named `paid`, `active` or `success`, and any branch
+ * that sets a plan. The only writes this screen can cause are Paddle's own.
  *
  * THE OTHER FIVE RULES, each with the decision that forces it:
  *   * Currency is never guessed (#208). ILS or USD follows the billing country VERIFIED at the
@@ -311,6 +330,71 @@ export function OrgSubscriptionPanel() {
     typeof subscription?.billing_provider_enabled !== 'boolean' ? 'indeterminate'
       : subscription.billing_provider_enabled ? 'available' : 'unavailable';
 
+  /**
+   * BOTH HALVES, AND NEITHER IS SUFFICIENT ALONE. The server must say billing is live, and this
+   * build must actually carry a Paddle client token. A build without the token would draw a button
+   * that opens nothing; a server with the boundary shut would refuse a button that opened.
+   *
+   * Note what this is NOT: permission. `authorize_billing_checkout()` decides that, server-side,
+   * on every call. This only decides whether it is honest to draw the control.
+   */
+  const canPurchase = availability === 'available' && paddleConfig() !== null;
+
+  /**
+   * Where a started purchase is. `awaiting_provider` is the important one and it is not a success
+   * state — it is the truthful thing to say between the customer's card being accepted and a
+   * signed `subscription.activated` reaching billing-webhook. There is deliberately no member of
+   * this union that means "paid".
+   */
+  const [purchase, setPurchase] = useState<
+    { state: 'idle' } | { state: 'opening'; planKey: string }
+    | { state: 'awaiting_provider' } | { state: 'failed' }
+  >({ state: 'idle' });
+
+  const startPurchase = async (planKey: string) => {
+    setPurchase({ state: 'opening', planKey });
+    // The body carries a rung and a cycle and nothing else. Every fact that decides what is
+    // actually charged — price, amount, customer, organization — is resolved server-side.
+    const response = await supabase.functions.invoke<{
+      checkout?: { kind: string; transaction_id?: string; url?: string };
+    }>('billing-checkout', {
+      body: { action: 'checkout', plan_key: planKey, billing_interval: interval },
+    });
+    const handle = response.data?.checkout;
+    if (response.error || !handle) {
+      setPurchase({ state: 'failed' });
+      return;
+    }
+    if (handle.kind === 'hosted_url' && handle.url) {
+      window.location.assign(handle.url);
+      return;
+    }
+    if (handle.kind !== 'provider_transaction' || !handle.transaction_id) {
+      setPurchase({ state: 'failed' });
+      return;
+    }
+    const opened = await openPaddleCheckout(handle.transaction_id, (event) => {
+      // `checkout.completed` means the overlay finished, NOT that the money settled and NOT that
+      // anything was granted. It is treated as a cue to wait and refetch, which is the only claim
+      // the browser is entitled to make.
+      if (event.name === 'checkout.completed') {
+        setPurchase({ state: 'awaiting_provider' });
+        void subscriptionQuery.refetch();
+      }
+    });
+    if (!opened) setPurchase({ state: 'failed' });
+  };
+
+  const openBillingPortal = async () => {
+    const response = await supabase.functions.invoke<{ portal_url?: string }>('billing-checkout', {
+      body: { action: 'portal' },
+    });
+    // The provider's own portal is where a stored card lives. This product never receives, holds
+    // or renders one, so there is nothing to fall back to if the session cannot be opened.
+    if (response.data?.portal_url) window.open(response.data.portal_url, '_blank', 'noopener');
+    else setPurchase({ state: 'failed' });
+  };
+
   return (
     /**
      * TWO REGIONS, NOT ONE CARD WITH EVERYTHING IN IT — and this is the structural half of the
@@ -418,12 +502,48 @@ export function OrgSubscriptionPanel() {
                 {availability === 'unavailable'
                   && t('orgSubscription.text_10')}
                 {availability === 'available'
-                  && t('orgSubscription.text_11')}
+                  && t(canPurchase ? 'orgSubscription.purchaseAvailable' : 'orgSubscription.text_11')}
                 {availability === 'indeterminate'
                   && t('orgSubscription.availabilityIndeterminate')}
                 {' '}{t('orgSubscription.displayCurrencyNote')}
               </span>
             </Note>
+
+            {/* THE STATE BETWEEN A CARD BEING ACCEPTED AND A PLAN CHANGING, said plainly.
+                Paddle's overlay closes the moment the card clears, and the customer's next
+                question is why their plan still says Free. #217 puts entitlement behind a signed
+                server event, so the truthful answer is that we are waiting for one — not that
+                something failed, and not that anything was granted. There is deliberately no
+                success branch here: the plan changing IS the success, and it arrives by refetch. */}
+            {purchase.state === 'awaiting_provider' && (
+              <Note tone="info">
+                <span className="min-w-0 flex-1" data-testid="billing-awaiting-provider">
+                  {t('orgSubscription.checkoutAwaitingProvider')}
+                </span>
+              </Note>
+            )}
+            {purchase.state === 'failed' && (
+              <Note tone="alert">
+                <span className="min-w-0 flex-1" data-testid="billing-checkout-failed">
+                  {t('orgSubscription.checkoutFailed')}
+                </span>
+              </Note>
+            )}
+
+            {/* THE PROVIDER'S OWN PORTAL, and only for an organization that actually has a provider
+                customer. A stored card lives at the merchant of record and this product never
+                receives, holds or renders one — so "update payment method" is a link out, not a
+                form. It is also where a customer can cancel, which is why it is drawn whenever they
+                have paid rather than only while billing is open for new purchases: #204 names
+                hidden cancellation, and an outage must not trap a paying customer. */}
+            {hasPaid && canPurchase && (
+              <button type="button" className="btn btn-ghost"
+                onClick={() => { void openBillingPortal(); }}
+                data-testid="billing-portal-link">
+                <CreditCard aria-hidden size={ICON.sm} />
+                {t('orgSubscription.manageBilling')}
+              </button>
+            )}
 
             {subscription.scheduled_plan_key && (
               <Note tone="info">
@@ -618,7 +738,9 @@ export function OrgSubscriptionPanel() {
                      part that matters: the emphasis is STATIC and identical for every reader, never
                      keyed to the tenant's own data. */
                   badgeLabel={option.plan_key === RECOMMENDED_PLAN ? t('orgSubscription.recommended') : undefined}
-                  priceLabel={t('orgSubscription.priceLabel')}
+                  /* No label above the figure since the 31.08.2026 re-transcription: the marketing
+                     site's card has none, and what this panel needs to say about the figure is
+                     already in `who`, the quiet line under it. */
                   /* THE PRICE SLOT, AND THE SENTENCE THAT REPLACED FIVE DASHES (owner ruling
                      26.08.2026: «משפט קצר במקום מקף»). Stacked in a list, five «—» in the column
                      the eye reads as the price read as a broken screen rather than as a withheld
@@ -662,23 +784,36 @@ export function OrgSubscriptionPanel() {
                      card: it was a named exception granted for a button sitting on paper, and this
                      one sits on onyx, violet or gloss.
 
-                     Disabled, with the reason said out loud (owner ruling 25.08.2026). There is no
-                     `billing-checkout` function and no signed provider event to open a paid
-                     entitlement with (#217), so a live button would either lie or no-op — and #204
-                     forbids hiding the control instead, because a customer must be able to see that
-                     the path exists and why it is shut. THIS COMPONENT CALLS NO EDGE FUNCTION AT
-                     ALL; that absence is the guarantee, not this `disabled`.
+                     LIVE WHEN BILLING IS LIVE, DISABLED WITH THE REASON WHEN IT IS NOT. Until
+                     31.08.2026 this was disabled unconditionally, because no `billing-checkout`
+                     function existed and a live button would have lied or no-op'd. It exists now,
+                     so the button opens a real Paddle checkout — and the two halves of `canPurchase`
+                     are what keep the old guarantee: the SERVER must say billing is enabled, and
+                     this build must carry a Paddle client token. Missing either draws the same
+                     disabled control with the same explanation, because #204 forbids hiding it: a
+                     customer must be able to see that the path exists and why it is shut.
+
+                     `ביזנס` never gets a checkout whatever the state of billing — #201 makes its
+                     answer a conversation, and 0277 refuses to give it a provider price at all, so
+                     a live button here would open a checkout the server would refuse.
 
                      The current rung has no action and gets a SPACER of the button's own height, so
                      the tray keeps an even rhythm rather than one ticket sitting 44px shorter. */
                   action={current
                     ? <div className="min-h-11" aria-hidden />
                     : (
-                      <button type="button" disabled title={t('orgSubscription.title')}
+                      <button type="button"
+                        disabled={!canPurchase || option.contact_sales || purchase.state === 'opening'}
+                        title={canPurchase ? undefined : t('orgSubscription.title')}
+                        onClick={option.contact_sales || !canPurchase
+                          ? undefined
+                          : () => { void startPurchase(option.plan_key); }}
                         className="plan-card__cta">
                         {option.contact_sales
                           ? t('orgSubscription.text_32')
-                          : t(isUpgrade ? 'orgSubscription.upgradeTo' : 'orgSubscription.switchTo', { plan: planName(option.plan_key, option.label) })}
+                          : purchase.state === 'opening' && purchase.planKey === option.plan_key
+                            ? t('orgSubscription.checkoutOpening')
+                            : t(isUpgrade ? 'orgSubscription.upgradeTo' : 'orgSubscription.switchTo', { plan: planName(option.plan_key, option.label) })}
                       </button>
                     )}
                   /* THE HEADLINE QUOTA IN THE TICKET'S OWN QUOTA SLOT — the one number #266 lets a

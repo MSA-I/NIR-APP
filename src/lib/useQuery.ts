@@ -64,8 +64,44 @@ export function useQuery<T>(
   options: QueryOptions = {},
 ): QueryState<T> {
   const org = useOrgScope();
+  /**
+   * THE READING LANGUAGE IS PART OF A READ (31.08.2026).
+   *
+   * A query function is allowed to resolve translated text, and several do — `Dashboard.tsx:850-854`
+   * builds the whole attention strip as `{ label: t('dashboard.text_20'), … }` inside the fetch. So
+   * a cached result is a result *in a language*, and a locale change without this line leaves the
+   * old language on screen until something else happens to refetch.
+   *
+   * How it was found, because the symptom is nastier than the cause: switching to Hebrew on
+   * /dashboard turned the page Hebrew and left six attention rows in English. Reloading fixed them.
+   * That is the signature of text baked into cached data, and it was reachable before today (the
+   * `<select>` on /settings), just rarely — the language row in the account menu makes it one click
+   * from any screen, so it became this package's problem to fix rather than to inherit.
+   *
+   * IT REFETCHES WITHOUT BLANKING, which is the second half of getting this right. The first
+   * version appended the locale to `deps`, and the deps effect calls `run(true)` — the branch that
+   * sets `data` to `null` before fetching, because a new record id must not show the previous
+   * record's rows. A language is not a new record: nothing on screen became wrong, only its
+   * wording. Sending it down that path made every un-keyed screen collapse to a skeleton on a
+   * language change, and again immediately after sign-in whenever the saved locale differed from
+   * browser detection. The locale now drives its own effect through `run(false)` — the same path
+   * `refetch` uses after a mutation — so the words change under the reader instead of the page
+   * emptying and refilling.
+   *
+   * LEGACY MODE ONLY, and the boundary is deliberate. Every observed instance of the bug is in a
+   * call site with no `key` — the un-keyed mode re-runs on `deps`, so appending the locale there
+   * fixes them at the hook instead of once per screen. The CACHED mode was left alone: appending
+   * the locale to its query key would have made `key(org, DOMAIN.x)` from `./query/keys` stop
+   * describing a whole cache entry, which is a contract `src/lib/query/useQuery.spec.tsx` asserts
+   * on purpose (ADR-0007) — and it would have bought protection against a pattern that no keyed
+   * call site was measured to have. **If a KEYED query ever resolves `t()` inside its own fetch, it
+   * must put the locale in its own key.** That is the rule this comment exists to hand forward.
+   *
+   * The cost is one refetch per language change, which is a deliberate and rare act.
+   */
+  const { locale } = useT();
   const cached = useCachedQueryMode<T>(fn, key, org, options);
-  const legacy = useLegacyQueryMode<T>(fn, deps, key === undefined);
+  const legacy = useLegacyQueryMode<T>(fn, deps, key === undefined, locale);
   return key === undefined ? legacy : cached;
 }
 
@@ -114,7 +150,12 @@ function useCachedQueryMode<T>(
 }
 
 /** The original implementation, preserved byte-for-byte in behaviour. */
-function useLegacyQueryMode<T>(fn: () => Promise<T>, deps: unknown[], active: boolean): QueryState<T> {
+function useLegacyQueryMode<T>(
+  fn: () => Promise<T>,
+  deps: unknown[],
+  active: boolean,
+  locale: string,
+): QueryState<T> {
   const { errorText } = useT();
   const [data, setData] = useState<T | null>(null);
   const [fetching, setFetching] = useState(true);
@@ -154,6 +195,20 @@ function useLegacyQueryMode<T>(fn: () => Promise<T>, deps: unknown[], active: bo
     gate.mount();
     return () => gate.unmount();
   }, [gate]);
+
+  /**
+   * A language change refetches WITHOUT dropping what is on screen.
+   *
+   * `run(false)` and not `run(true)`: the rows are still the right rows, only their wording is
+   * stale, so blanking the page would be a downgrade the reader can see. Skipped on mount — the
+   * deps effect below is already fetching then, and firing both would double every first load.
+   */
+  const localeAtMount = useRef(locale);
+  useEffect(() => {
+    if (localeAtMount.current === locale) return;
+    localeAtMount.current = locale;
+    void run(false);
+  }, [locale, run]);
 
   // Dropping data on a deps change is what separates the two states below: a new key
   // (different :id, different month) invalidates what we hold, a manual refetch after a

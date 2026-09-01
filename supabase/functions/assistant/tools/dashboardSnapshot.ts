@@ -6,6 +6,7 @@
 import type { ToolEnvelope } from "../../../../src/lib/assistant/contracts.ts";
 import { toZoneISO } from "../time.ts";
 import type { ToolContext } from "./registry.ts";
+import { readerText } from "../reader-locale.ts";
 import { failure, record } from "./shared.ts";
 
 export interface SnapshotFetch {
@@ -29,7 +30,7 @@ export async function fetchDashboardSnapshot(
       failed: failure(
         ctx,
         "dashboard_snapshot_failed",
-        "שליפת תמונת המצב הניהולית נכשלה",
+        readerText(ctx.locale, "assistantTools.dashboardFetchFailed"),
         filters,
       ),
     };
@@ -44,7 +45,7 @@ export async function fetchDashboardSnapshot(
       failed: failure(
         ctx,
         "not_permitted",
-        "תמונת המצב הניהולית זמינה לתפקידי בעלים ומשרד בלבד",
+        readerText(ctx.locale, "assistantTools.dashboardOwnerOfficeOnly"),
         filters,
       ),
     };

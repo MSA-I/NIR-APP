@@ -581,7 +581,7 @@ Deno.test("the answer schema declares a draft arm that carries no label, recipie
   }
 });
 
-Deno.test("the answer language follows the reader, and nothing else in the prompt moves", () => {
+Deno.test("the answer language follows the run, and nothing else in the prompt moves", () => {
   const hebrew = buildInstructions("he");
   const english = buildInstructions("en");
   assert.ok(hebrew.includes("Answer in Hebrew"));
@@ -598,10 +598,15 @@ Deno.test("the answer language follows the reader, and nothing else in the promp
   const englishLines = english.split("\n");
   assert.equal(hebrewLines.length, englishLines.length);
   const differing = hebrewLines.filter((line, index) => line !== englishLines[index]);
-  assert.equal(differing.length, 3);
+  assert.equal(differing.length, 4);
   assert.ok(differing[0].includes("Answer in Hebrew"));
-  assert.ok(differing[1].includes("describe windows and scopes in words"));
-  assert.ok(differing[2].includes("The product prints the label"));
+  // The fourth line, added 01.09.2026. Naming the language once was measured to be worth nothing:
+  // five live runs, every answer Hebrew, two of them under `locale: "en"`. This line repeats the
+  // language per OUTPUT KIND and tells the model in as many words that the Hebrew it is about to
+  // read in the tool labels is data to translate, not a register to match.
+  assert.ok(differing[1].includes("Write every word you produce in"));
+  assert.ok(differing[2].includes("describe windows and scopes in words"));
+  assert.ok(differing[3].includes("The product prints the label"));
   // No Hebrew survives anywhere in the English prompt. This is the assertion the two defects
   // above would have failed, and it needs no list of lines to keep working.
   assert.equal(/[֐-׿]/.test(english), false);

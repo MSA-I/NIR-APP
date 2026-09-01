@@ -1,6 +1,7 @@
 # INTEGRATIONS-SETUP — הקמה, סודות ותפעול של משטחי האינטגרציה
 
-עודכן: 23.08.2026. המסמך הזה הוא מקום ההקמה היחיד לכל משטח אינטגרציה חיצוני: אילו משתני סביבה
+עודכן: 31.08.2026 (‏§5.א ו-§7.א — ‏Google OAuth עבר ל-`In production` עם מותג מאומת). המסמך הזה
+הוא מקום ההקמה היחיד לכל משטח אינטגרציה חיצוני: אילו משתני סביבה
 נדרשים, איך מסובבים סוד, איך מנתקים ספק בלי לשבור עבודה ידנית, ומה עדיין חסר כדי לחבר ספק אמיתי.
 עקרונות-העל: סודות רק ב-`supabase secrets` / ‏Vault, לעולם לא בריפו; אין fake-success כשתצורה
 חסרה — משטח לא מוגדר עונה `misconfigured`/נופל-סגור.
@@ -57,10 +58,11 @@ fail-closed, claim/lease, חמש ניסיונות, קפיאת `unknown`, תבנ�
 |---|---|
 | `RESEND_API_KEY` | משמש את `send-invite`; עצם קיומו אינו הוכחת דומיין, SMTP או מסירה חיצונית |
 | `INVITE_FROM_EMAIL` | **מוגדר 24.08.2026** ל־`InPlace <no-reply@inplace.digital>` |
-| `ORDERS_FROM_EMAIL` | **נוצר 24.08.2026** עם אותו ערך. קודם לא היה קיים כלל, ו־`email-sender` נפל חזרה ל־`INVITE_FROM_EMAIL` |
+| `ORDERS_FROM_EMAIL` | **הופרד 31.08.2026** ל־`InPlace <orders@inplace.digital>`. נוצר 24.08 עם אותו ערך כמו `INVITE_FROM_EMAIL`, וזהות אחת לשני קהלים היא בדיוק מה שהופך מייל של דייר לספק שלו למייל של InPlace. נמדד בקריאה חוזרת של שם הסוד |
 | `APP_BASE_URL` | בסיס לקישורי הפורטל בגוף המייל; מאז 24.08 `https://app.inplace.digital` |
 | `ALLOWED_ORIGINS` | allowlist ל־CORS |
-| `RESEND_WEBHOOK_SECRET` | סוד Svix לאירועי delivered/bounced; טרם הוכח כמוגדר |
+| `PADDLE_WEBHOOK_SECRET` · `PADDLE_API_KEY` · `PADDLE_ENVIRONMENT` · `BILLING_PROVIDER` | **הוגדרו 31.08.2026** אחרי שהבעלים פתח חשבון **sandbox**. ‏`PADDLE_ENVIRONMENT=sandbox`, ואין לו ברירת מחדל בכוונה: שכחת משתנה לא תכריע אם לקוח מחויב באמת. **אומת בהתנהגות:** ‏`POST` לא-חתום ל-`billing-webhook` עבר מ-`503` ל-`403`. **ואף על פי כן אי-אפשר להעניק מסלול:** גבול הספקים כבוי, מיפוי המחירים בייצור ריק, ואירוע sandbox מת ב-dead-letter. ‏`§57` |
+| `RESEND_WEBHOOK_SECRET` | סוד Svix לאירועי delivered/bounced. **הותקן 31.08.2026.** ה-webhook נוצר באותו יום ומופעל אל `email-webhook` עם ארבעת אירועי המסירה. **אומת בהתנהגות:** ‏`POST` לא-חתום עבר מ-`500 misconfigured` ל-`403` „missing signature headers" — כלומר הסוד נקרא והאימות אמיתי. ‏`§87` נסגר |
 
 ### 2.א ‏ תשתית הדואר — חיה ומדודה מ־24.08.2026
 
@@ -86,8 +88,11 @@ fail-closed, claim/lease, חמש ניסיונות, קפיאת `unknown`, תבנ�
 **מה שעדיין לא הוכח, ואסור לטעון:** ‏**מייל Auth אמיתי לא נשלח.** חשבונות הבדיקה הם `@gamos.demo`
 — דומיין מזויף שיחזור — ו־`recover` לכתובת שאינה קיימת מחזיר `200` בלי לשלוח, מטעמי אי־מנייה.
 ‏Supabase אימת את חיבור ה־SMTP בשמירה, וזו הראיה שיש; ההוכחה הסופית היא המייל האמיתי הראשון.
-כמו כן `RESEND_WEBHOOK_SECRET` ו־`email-webhook` עדיין אינם, ולכן accepted עדיין אינו delivered
-במסלול המוצר.
+כמו כן `RESEND_WEBHOOK_SECRET` עדיין אינו מוגדר, ולכן accepted עדיין אינו delivered במסלול
+המוצר. **עודכן 31.08.2026:** `email-webhook` כן קיים ופרוס (`v5`), וה-webhook בצד Resend נוצר
+ב-31.08 ומופעל אל אותה נקודת קצה עם `delivered`/`bounced`/`delivery_delayed`/`complained`.
+מה שנשאר הוא הסוד בלבד — ובלעדיו הפונקציה עונה `403` לכל מסירה, וזו ההתנהגות המתוכננת ולא
+תקלה. ראו `§87`.
 
 **חוב שנפתח כאן:** תבניות מיילי ה־Auth הן ברירות המחדל **באנגלית** (`"Reset your password"`,
 `"You've been invited"`) במוצר עברי RTL. לא חוסם, אך יש לסגור לפני לקוח ראשון.
@@ -191,9 +196,12 @@ Trust Services (‏`issued 2026-08-26`, ‏`expires 2026-11-24`).
 
 **‏Apple נהנה מאותו תיקון** בלי עבודה נוספת — הוא עובר באותו `redirect_uri`.
 
-**מה שנשאר פתוח:** גוגל מציג **דומיין**, לא „InPlace". שם ולוגו דורשים מילוי מסך ההסכמה
-(‏`console.cloud.google.com/auth/branding`, ‏project `inplace-506521`) ואחריו אימות מותג מול גוגל,
-שאורך ימים עד שבועות. עד האישור המסך ממשיך להציג `inplace.digital`, ולכן זו הכרעת בעלים ולא חסם.
+**~~מה שנשאר פתוח~~ — נסגר 31.08.2026: המותג אומת ופורסם.** הפער היה שגוגל הציג **דומיין**, לא
+„InPlace": שם ולוגו דורשים מילוי מסך ההסכמה (‏`console.cloud.google.com/auth/branding`, ‏project
+`inplace-506521`) ואחריו אימות מותג מול גוגל. **שלושת השלבים הושלמו** (בעלים, 31.08.2026):
+‏`inplace.digital` אומת ב-Google Search Console כדומיין בבעלותנו, ה-Branding של InPlace **עבר
+Verification**, והאפליקציה **פורסמה למשתמשים** — ‏`Publishing status: In production`. אין כאן
+עוד הכרעת בעלים ממתינה ואין חסם.
 
 **הזהות הנראית של המוצר היא סמל ה-favicon, לא אריח האפליקציה.** ‏`public/favicon.svg` ו-
 `public/brand/inplace-app-icon.svg` נושאים את אותו Place Bay ונראים דומה במבט חטוף, אבל האריח
@@ -203,7 +211,8 @@ Trust Services (‏`issued 2026-08-26`, ‏`expires 2026-11-24`).
 **‏Google consent screen — הקובץ בפועל הוא הווריאנט הלבן.** ‏`public/brand/inplace-symbol-paper.svg`
 הוא אותו סמל ב-Paper במקום Onyx. נבחר בהכרעת בעלים 26.08.2026 מפני ש-`favicon.svg` הוא Onyx על רקע
 שקוף, ומסך ההתחברות של גוגל — כפי שנצפה במכשיר הבעלים — מוגש על רקע כהה, שם הסמל הכהה כמעט נעלם.
-הייצוא הוא PNG ‏120×120 ברקע שקוף, מרונדר ב-Chromium; אומת ויזואלית מול `#131314`.
+הייצוא הוא PNG ‏120×120 ברקע שקוף, מרונדר ב-Chromium; אומת ויזואלית מול `#131314`. **זהו הקובץ
+שהוגש למסך ההסכמה ועבר את אימות המותג ב-31.08.2026** — הלוגו שמשתמש רואה היום כשהוא נרשם.
 
 > **הפשרה מתועדת ולא נפתרה:** גוגל אינו מאפשר שני לוגואים. סמל לבן על רקע שקוף נעלם על משטח
 > **בהיר**, בדיוק כפי שהכהה נעלם על כהה. נבחר הצד שנצפה בפועל. אם יתברר שגוגל מגיש למשתמשים גם
@@ -720,7 +729,7 @@ know your messages are delivering and fully passing DMARC"
 
 ---
 
-## 7. זהויות פדרטיביות — **Google חי בייצור (25.08.2026); Apple כבוי ומעולם לא הופעל**
+## 7. זהויות פדרטיביות — **Google חי, מאומת ומפורסם בייצור (25.08.2026 → 31.08.2026); Apple כבוי ומעולם לא הופעל**
 
 הקוד לשני המסלולים קיים ומאומת ביחידה. ל-Apple חסרים credentials, ובלעדיהם הכפתור אינו מצויר
 כלל — דלת שמובילה ל-„הספק אינו מופעל" גרועה מהיעדר דלת.
@@ -737,7 +746,13 @@ know your messages are delivering and fully passing DMARC"
 בשרת: ‏`accept_invitation` מסרב לכל קורא שאינו `email` (‏`0205`, ‏`invite_requires_password_identity`),
 והענף הפדרטיבי ב-`public-signup` מסרב לקורא שכבר יש לו פרופיל.
 
-### 7.א ‏ Google — `DECIDED / IMPLEMENTED / PROVIDER_CONFIGURED / LIVE`
+### 7.א ‏ Google — `DECIDED / IMPLEMENTED / PROVIDER_CONFIGURED / LIVE / IN_PRODUCTION / BRANDING_VERIFIED`
+
+**עודכן 31.08.2026 — המסלול נסגר במלואו.** ‏`inplace.digital` אומת ב-Google Search Console,
+האפליקציה עברה מ-`Testing` ל-**`In production`**, ה-Branding של InPlace עבר **Verification**
+ופורסם למשתמשים, וההרשמה עם Google **נבדקה בהצלחה בפרודקשן** דרך
+`https://app.inplace.digital/signup` (בעלים). זו כבר לא תצורה שממתינה לאישור — זו זרימה חיה
+שמשתמש אמיתי עובר.
 
 **עודכן 25.08.2026 — שני החצאים בוצעו, והכפתור חי באתר.** ‏`VITE_GOOGLE_SIGNUP_ENABLED=true`
 נוסף לסביבת הבנייה, נבנה מחדש ונפרס; מסך הכניסה מציג „פתיחת עסק עם Google" עם שורת ההסבר
@@ -752,6 +767,10 @@ know your messages are delivering and fully passing DMARC"
 | שומרי `0205` בייצור | **נמדדו לפני ההדלקה:** ‏`accept_invitation` מכילה `invite_requires_password_identity`; ‏`private.auth_identity_provider()` ו־`public.service_identity_has_profile(uuid)` קיימות |
 | חזית הייצור | **בוצע 25.08.2026.** ‏`VITE_GOOGLE_SIGNUP_ENABLED=true` בסביבת הבנייה, בנייה ופריסה מחדש, ‏hash parity בשלוש הכתובות ו-smoke נקי. **המשתנה אינו בריפו** — הוא חי ב-`.env` של סביבת הבנייה בלבד, ולכן כל סביבה חדשה חייבת להגדיר אותו מחדש או המוצר יאבד את הכפתור בשקט |
 | ‏`config.toml` בריפו | `enabled = false` **בכוונה** — שער האיכות מריץ `supabase start` בכל שינוי לקובץ, ו־`true` בלי הסודות ב־runner מפיל jobs שאינם קשורים ל־auth |
+| אימות בעלות על הדומיין | **בוצע 31.08.2026.** ‏`inplace.digital` אומת ב-**Google Search Console** — התנאי המקדים לאימות המותג, שבלעדיו גוגל אינו מאשר שם ולוגו על מסך ההסכמה |
+| ‏Publishing status | **`In production` מ-31.08.2026.** האפליקציה פורסמה למשתמשים ואינה עוד ב-`Testing`: אין רשימת `Test users`, אין תקרת 100 משתמשים, ואין תפוגת refresh token אחרי 7 ימים |
+| אימות המותג (‏Branding) | **בוצע 31.08.2026.** ה-Branding של InPlace עבר **Verification** אצל גוגל ופורסם; מסך ההסכמה מציג את שם המוצר ואת הלוגו במקום דומיין גולמי |
+| ‏E2E בפרודקשן | **בוצע 31.08.2026 (בעלים).** הרשמה עם Google דרך `https://app.inplace.digital/signup` הושלמה בהצלחה — לא צילום מסך של כפתור, אלא מעבר בפועל של הזרימה מקצה לקצה בסביבה החיה |
 
 **מה שההדלקה בייצור אומרת, ומה שהיא לא.** הפעלת הספק הופכת את
 `/auth/v1/authorize?provider=google` לנגיש לכל אחד באינטרנט — גם בלי כפתור. זר שיתחבר כך מקבל
@@ -771,20 +790,31 @@ know your messages are delivering and fully passing DMARC"
 | מה | ערך |
 |---|---|
 | ‏Google Cloud Console | ‏OAuth consent screen: `External`; scopes `userinfo.email` + `userinfo.profile` בלבד |
+| ‏Publishing status | **`In production`** (מ-31.08.2026). ‏`Testing` היה המצב עד אז ואינו רלוונטי יותר |
+| אימות דומיין | ‏`inplace.digital` מאומת ב-**Google Search Console** באותו חשבון שמחזיק את הפרויקט |
+| שם ולוגו על מסך ההסכמה | ‏`InPlace` + ‏`public/brand/inplace-symbol-paper.svg` (‏PNG ‏120×120) — עברו **Verification** ופורסמו |
 | ‏Authorized redirect URI — ייצור | `https://<project-ref>.supabase.co/auth/v1/callback` (המקור הקובע הוא דף הספק בדשבורד) |
 | ‏Authorized redirect URI — מקומי | `http://127.0.0.1:55431/auth/v1/callback` |
 | ‏Authorized JavaScript origins | **ריק בכוונה.** הזרימה היא authorization code בצד השרת; ‏GoTrue מבצע את ההחלפה, לא הדפדפן |
 | סודות | ‏`SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` · `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` |
 | דגל חזית | ‏`VITE_GOOGLE_SIGNUP_ENABLED=true` |
 
-שני ה-scopes אינם רגישים, ולכן **פרסום האפליקציה אינו דורש ביקורת אימות של Google**. כל עוד היא
-במצב `Testing` רק כתובות ב-`Test users` נכנסות, וה-refresh token פג אחרי 7 ימים.
+שני ה-scopes אינם רגישים, ולכן **פרסום האפליקציה לא דרש ביקורת אימות scopes של Google**.
+**האפליקציה כבר אינה ב-`Testing`** — מ-31.08.2026 היא ב-`In production`, ולכן מגבלות מצב הבדיקה
+(‏רק כתובות ב-`Test users` נכנסות, תקרת 100 משתמשים, ‏refresh token שפג אחרי 7 ימים) **אינן חלות
+יותר**. הן נשמרו כאן כהקשר היסטורי בלבד: מי שיפתח פרויקט Google חדש יפגוש אותן מחדש ביום הראשון.
+
+> **מה שאימות המותג כן היה, ומה שהוא לא.** ביקורת ה-scopes וביקורת המותג הן שתי בדיקות שונות
+> של גוגל. את הראשונה דילגנו מפני שהיקף ההרשאות שלנו אינו רגיש; את השנייה **עברנו** — היא זו
+> שמאשרת להציג „InPlace" ולוגו במקום מארח גולמי, ולכן היא זו שדרשה בעלות מוכחת על
+> `inplace.digital` ב-Search Console.
 
 ### 7.ב ‏ Apple — `DECIDED / IMPLEMENTED / NEVER_EXERCISED`
 
-**זה לא אותו מצב כמו Google, ואסור לקרוא לו כך.** לגוגל חסרים רק ערכים; לאפל חסר **תנאי מקדים
-שאינו בשליטת הפרויקט**: חברות ב-Apple Developer Program (‏$99 לשנה), שבלעדיה אי אפשר להנפיק
-Service ID או מפתח חתימה. הקוד לא רץ מעולם מקצה לקצה מול Apple — לא מקומית ולא בייצור.
+**זה לא אותו מצב כמו Google, ואסור לקרוא לו כך.** ל-Google לא חסר דבר — הוא מוגדר, מפורסם,
+מאומת-מותג ונבדק בפרודקשן (‏7.א). לאפל חסר **תנאי מקדים שאינו בשליטת הפרויקט**: חברות ב-Apple
+Developer Program (‏$99 לשנה), שבלעדיה אי אפשר להנפיק Service ID או מפתח חתימה. הקוד לא רץ
+מעולם מקצה לקצה מול Apple — לא מקומית ולא בייצור.
 
 | מה | ערך |
 |---|---|

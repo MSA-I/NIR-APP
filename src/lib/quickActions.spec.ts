@@ -111,11 +111,22 @@ describe('הקיר בין שתי שפות הצבע', () => {
     // literal keeps a re-theme from silently repainting navigation; pinning "no var() at all"
     // keeps any future alias out in one stroke; and pinning the COUNT is what stops the three
     // names from creeping back one at a time.
-    const OCEANIC = 'oklch(33.66% 0.058 209)';
+    // COUNTS NAMES, NOT DECLARATIONS (31.08.2026). The rule this test protects is "one NAME, and
+    // never an alias" — it exists to stop three per-domain accent tokens creeping back one at a
+    // time. Counting declarations was the same thing right up until the dark theme arrived, which
+    // legitimately declares the one name a second time under `:root[data-theme='dark']`. Asserting
+    // on the set of names keeps the original guarantee and adds the one the palette needs: EVERY
+    // declaration is still a frozen literal, and there is exactly one per theme, so a third would
+    // fail here just as a second name would.
+    const LIGHT_OCEANIC = 'oklch(33.66% 0.058 209)';
     const declared = [...rules.matchAll(/--color-section-([\w-]+):\s*([^;]+);/g)];
-    expect(declared.map((match) => match[1])).toEqual(['accent']);
-    expect(declared[0][2].trim()).toBe(OCEANIC);
-    expect(declared[0][2]).not.toContain('var(');
+    expect([...new Set(declared.map((match) => match[1]))]).toEqual(['accent']);
+    expect(declared).toHaveLength(2); // light + dark, and nothing else
+    // The light value is the one navigation was themed around and stays pinned to the literal.
+    expect(declared[0][2].trim()).toBe(LIGHT_OCEANIC);
+    for (const [, , value] of declared) {
+      expect(value).not.toContain('var(');
+    }
   });
 
   it('אף כלל מבטא אינו נוגע בטוקן סמנטי, ואף badge/note אינו נוגע במבטא', () => {

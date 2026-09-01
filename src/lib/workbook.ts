@@ -135,10 +135,21 @@ function readPalette(tokens: readonly string[]): Record<string, string> | null {
   return palette;
 }
 
-const HEADER_FILL = '--color-action';
-const HEADER_INK = '--color-on-solid';
-const TITLE_INK = '--color-ink';
-const RULE = '--color-line';
+/**
+ * #330 — the workbook is a DOCUMENT, so it reads the document tokens and not the screens'.
+ *
+ * The header row was oceanic because that is the app's action colour, which is the wrong claim on
+ * paper: a spreadsheet head is not an action, it is the top of a table, and the document family it
+ * belongs to is onyx. The four names below are the same four roles as before; only the family they
+ * resolve against moved. `--color-doc-*` aliases the app tokens where a value already existed, so
+ * this is a rename at the point of use rather than a second palette.
+ */
+const HEADER_FILL = '--color-doc-plate';
+const HEADER_INK = '--color-doc-ink';
+const TITLE_INK = '--color-doc-plate';
+const RULE = '--color-doc-line';
+/** Every other data row, so a wide grid keeps the reader on one line across eleven columns. */
+const BAND = '--color-doc-paper-sink';
 
 /**
  * A cell value in the type Excel should hold it as.
@@ -199,7 +210,7 @@ const NUMBER_FORMAT: Partial<Record<WorkbookCellType, string>> = {
 export async function buildWorkbook(spec: WorkbookSpec): Promise<Uint8Array> {
   const { Workbook } = await import('exceljs');
   const book = new Workbook();
-  const palette = readPalette([HEADER_FILL, HEADER_INK, TITLE_INK, RULE]);
+  const palette = readPalette([HEADER_FILL, HEADER_INK, TITLE_INK, RULE, BAND]);
 
   const paintHeader = (cell: { alignment?: unknown; font?: unknown; fill?: unknown }) => {
     cell.alignment = { horizontal: 'right', vertical: 'middle', wrapText: true };
@@ -263,7 +274,14 @@ export async function buildWorkbook(spec: WorkbookSpec): Promise<Uint8Array> {
         cell.value = cellValue(row[column.key], type);
         const format = type === 'money' ? sheet.moneyFormat ?? MONEY_FORMAT : NUMBER_FORMAT[type];
         if (format) cell.numFmt = format;
-        if (palette) cell.border = { bottom: { style: 'hair', color: { argb: palette[RULE] } } };
+        if (palette) {
+          cell.border = { bottom: { style: 'hair', color: { argb: palette[RULE] } } };
+          // Banding, not a status: it says "same row", never "look here". Every other row, so a
+          // reader tracking a figure across eleven columns does not change lines by accident.
+          if (rowIndex % 2 === 1) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: palette[BAND] } };
+          }
+        }
       });
     });
 
