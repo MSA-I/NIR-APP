@@ -44,6 +44,7 @@ jobs:
       baselinedrift: ${{ steps.filter.outputs.baselinedrift }}
       supplier: ${{ steps.filter.outputs.supplier }}
       nosend: ${{ steps.filter.outputs.nosend }}
+      noindex: ${{ steps.filter.outputs.noindex }}
       vitest: ${{ steps.filter.outputs.vitest }}
     steps:
       - uses: actions/checkout@v4
@@ -87,6 +88,11 @@ jobs:
           # egress kind or a foreign flag key counts wherever it is written).
           nosend_inputs='^(src/lib/assistant/|src/components/assistant/|src/components/AssistantPanel\.tsx$|supabase/functions/assistant/|scripts/check-assistant-no-send\.mjs$)'
           vitest_inputs='^(src/|.*\.(spec|test)\.[cm]?[jt]sx?$)'
+          # The search-indexing posture of the application host: the header file, the robots
+          # file, the SPA catch-all that must survive, and the three HTML entries that carry
+          # the meta tag. The live-host half of this (`check:live-seo`) is deliberately NOT
+          # here -- it asks production, so it belongs to live-seo-posture.yml, not to a PR.
+          noindex_inputs='^(public/(_headers|robots\.txt|_redirects)$|index\.html$|operator\.html$|portal\.html$|scripts/check-noindex-posture\.mjs$)'
           # The merge guards. `migrations` covers number collisions and new gaps; `closure`
           # additionally watches every surface that can cite a migration by filename, because a
           # half-finished renumber leaves the pointer behind rather than the file.
@@ -95,7 +101,7 @@ jobs:
           # Must match SCAN_PATHS in check-renumber-closure.mjs. A surface the guard reads but the
           # filter omits is a surface where a stale pointer never triggers anything.
           closure_inputs='^(supabase/|docs/|scripts/|src/|tools/|worker/|\.github/|\.claude/|[^/]+\.md$)'
-          gate_control_inputs='^(scripts/check-(suite-manifest|migration-numbers|renumber-closure|key-manifest|gate-controls)\.mjs$|package\.json$)'
+          gate_control_inputs='^(scripts/check-(suite-manifest|migration-numbers|renumber-closure|key-manifest|noindex-posture|gate-controls)\.mjs$|package\.json$)'
           # Any src change can strand a key, so the whole surface is an input, plus the
           # dictionary itself and this guard's own baseline.
           key_manifest_inputs='^(src/|scripts/check-key-manifest\.mjs$|scripts/key-manifest\.baseline\.json$)'
@@ -107,7 +113,7 @@ jobs:
           else
             echo "build=false" >> "$GITHUB_OUTPUT"
           fi
-          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$token_inputs|$money_inputs|$exemption_inputs|$supplier_inputs|$nosend_inputs|$vitest_inputs|$gate_registry|$migration_number_inputs|$closure_inputs|$gate_control_inputs|$key_manifest_inputs|$baseline_inputs"; then echo "verify=true" >> "$GITHUB_OUTPUT"; else echo "verify=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$token_inputs|$money_inputs|$exemption_inputs|$supplier_inputs|$nosend_inputs|$vitest_inputs|$gate_registry|$migration_number_inputs|$closure_inputs|$gate_control_inputs|$key_manifest_inputs|$baseline_inputs|$noindex_inputs"; then echo "verify=true" >> "$GITHUB_OUTPUT"; else echo "verify=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$vitest_inputs"; then echo "install=true" >> "$GITHUB_OUTPUT"; else echo "install=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$knip_inputs"; then echo "knip=true" >> "$GITHUB_OUTPUT"; else echo "knip=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-design-tokens\.ts$" || product_matches '^src/'; then echo "tokens=true" >> "$GITHUB_OUTPUT"; else echo "tokens=false" >> "$GITHUB_OUTPUT"; fi
@@ -121,6 +127,7 @@ jobs:
           if [ ! -s changed-files.txt ] || matches "$workflow|$baseline_inputs"; then echo "baselinedrift=true" >> "$GITHUB_OUTPUT"; else echo "baselinedrift=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-supplier-columns\.ts$" || product_matches '^src/'; then echo "supplier=true" >> "$GITHUB_OUTPUT"; else echo "supplier=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$nosend_inputs"; then echo "nosend=true" >> "$GITHUB_OUTPUT"; else echo "nosend=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$noindex_inputs"; then echo "noindex=true" >> "$GITHUB_OUTPUT"; else echo "noindex=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$vitest_config|$vitest_inputs"; then echo "vitest=true" >> "$GITHUB_OUTPUT"; else echo "vitest=false" >> "$GITHUB_OUTPUT"; fi
 
   build:
@@ -202,6 +209,11 @@ jobs:
       - name: Baseline drift (a --write must not bless the breakage it hides)
         if: needs.changes.outputs.baselinedrift == 'true'
         run: npm run check:baseline-drift
+      - name: Noindex posture (the app host must not be a search surface)
+        # Repository-side only. It proves the tree still says the right thing; whether the
+        # LIVE host says it is a different claim, and live-seo-posture.yml measures that.
+        if: needs.changes.outputs.noindex == 'true'
+        run: npm run check:noindex-posture
       - name: Gate controls (each guard must fail on a broken input)
         # Runs whenever ANY guard it validates runs. Relying on a guard's verdict without
         # proof that the guard still fails correctly is how a guard becomes decoration —
@@ -213,7 +225,8 @@ jobs:
           needs.changes.outputs.mignumbers == 'true' ||
           needs.changes.outputs.closure == 'true' ||
           needs.changes.outputs.keymanifest == 'true' ||
-          needs.changes.outputs.baselinedrift == 'true'
+          needs.changes.outputs.baselinedrift == 'true' ||
+          needs.changes.outputs.noindex == 'true'
         run: npm run check:gate-controls
       - name: Vitest
         if: needs.changes.outputs.vitest == 'true'

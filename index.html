@@ -3,6 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Belt and braces behind public/_headers, which carries X-Robots-Tag: noindex on /*.
+         The header is the one that matters for a single-page application; this tag is what a
+         reader of the source sees, and what survives if the document is ever served from
+         somewhere that does not read Cloudflare Pages headers. portal.html has carried this
+         tag since it shipped; the tenant shell and the operator console had nothing. -->
+    <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="#003F47" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <!-- Icon order is the fallback chain: a browser that understands SVG stops at the first

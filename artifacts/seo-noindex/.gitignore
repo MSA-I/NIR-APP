@@ -1,0 +1,3 @@
+# The working output of `npm run check:live-seo` is a measurement of the moment, not a record.
+# The dated snapshots next to it are the record: -before.json is the state the campaign found.
+live-seo-posture.json

@@ -82,7 +82,9 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
 - `npm run check` — build ו־verify יחד לשימוש מקומי לפני מסירה.
   ‏`check:money` שומר מקור אמת אחד לצורת כסף; `check:tokens` שומר על טוקני העיצוב;
   `check:exemptions` מונע הרחבה שקטה של `SECURITY DEFINER`; `check:supplier-columns` מונע
-  `select('*')` שנחסם בגלל `bank_details`. בדיקות עסקיות רגילות אינן סקריפטי gate עצמאיים.
+  `select('*')` שנחסם בגלל `bank_details`; ‏`check:noindex-posture` מונע מהאפליקציה לחזור
+  להיות משטח חיפוש — והוא שומר גם על **הסדר**: ‏`Disallow: /` לפני שהכתובות ירדו מהאינדקס
+  מסתיר את ה-`noindex` מהסורק ומשאיר אותן שם לנצח. בדיקות עסקיות רגילות אינן סקריפטי gate עצמאיים.
   **אין ESLint ואין Prettier** בריפו; TypeScript ו־Knip מכסים את השכבה הסטטית הנוכחית.
 - `npm run quality` — שער האינטגרציה הכבד: SQL ו־preflight מול Supabase מבודד, חוזי Deno,
   OCR worker ותרחישי דפדפן. השער רץ ב־CI; אין להריץ אותו מקומית כחלק מעבודה רגילה.
@@ -137,7 +139,7 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   | משטח שהשתנה | מה נדרש לפני merge | מה נדרש בייצור | מה לא מריצים |
   |---|---|---|---|
   | תיעוד / CI בלבד | classifier וה־checks של קובצי ה־workflow שנגעו בהם | אין deploy | אין build מוצר, DB, Edge או smoke חי |
-  | Frontend / נכס ציבורי | `build`; ‏`verify` כשקוד/בדיקות/guards השתנו; browser רק לשינוי מוצר | build עם env ייצור, סריקת סודות/localhost, Pages, התאמת hashes, smoke קנוני בנתיבים שהשתנו + `/`/`login` בדסקטופ ובמובייל; ב־URL הייחודי די ב־hash parity ובדיקת זמינות אחת | אין גיבוי/ledger/SQL/Edge ללא תלות מפורשת |
+  | Frontend / נכס ציבורי | `build`; ‏`verify` כשקוד/בדיקות/guards השתנו; browser רק לשינוי מוצר | build עם env ייצור, סריקת סודות/localhost, Pages, התאמת hashes, smoke קנוני בנתיבים שהשתנו + `/`/`login` בדסקטופ ובמובייל, ו־`npm run check:live-seo` ‏(שואל את המארח החי אם הוא עדיין `noindex`; ‏`.github/workflows/live-seo-posture.yml` מריץ אותו יומית ממילא); ב־URL הייחודי די ב־hash parity ובדיקת זמינות אחת | אין גיבוי/ledger/SQL/Edge ללא תלות מפורשת |
   | Migration / חוזה DB | `verify` guards + ‏SQL/preflight; browser רק אם חוזה נצרך בלקוח | גיבוי schema/data/roles, dry-run+ledger, apply forward-only, postflight וספירות רלוונטיות | אין Pages או asset parity אם ה־bundle לא השתנה |
   | Edge Function | חוזי Deno של Edge; OCR Docker רק בשינוי worker | deploy רק לפונקציה שהשתנתה, אימות secrets/JWT וקריאה חיה ממוקדת | אין Pages, גיבוי DB או OCR עבור Edge שאינו OCR |
   | Auth / תפקידים / RLS | האיחוד של DB/Edge/browser הנוגעים לחוזה | smoke מחובר וקריאה בלבד לתפקידים שנפגעו, בדיקת חסימה לתפקידים שפרשו והוכחת אפס כתיבות עסקיות | אין מטריצת כל התפקידים לשינוי שאינו הרשאה |

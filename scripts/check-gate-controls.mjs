@@ -306,6 +306,38 @@ console.log('\ncheck:baseline-drift');
   mustPass('the real baselines still pass', 'check-baseline-drift.mjs', { env: { BASELINE_DRIFT_BASE: 'HEAD' } });
 }
 
+
+// ============================================================ noindex posture
+// The application host was fully indexable and outranking the marketing site for the brand
+// name (measured live, 01.09.2026). The guard that fixed it is only worth its line in `verify`
+// if it still fails when the posture is undone — and the LAST control matters most: the
+// blanket `Disallow: /` is the correct END state, so a guard that forbade it unconditionally
+// would block the very step it exists to sequence, and nobody would find out until that day.
+console.log('\ncheck:noindex-posture');
+{
+  mustFail('removing X-Robots-Tag from public/_headers is caught', 'check-noindex-posture.mjs', {
+    env: { NOINDEX_POSTURE_INJECT: 'no-header' }, expect: 'no X-Robots-Tag',
+  });
+  mustFail('narrowing the header from /* to one path is caught', 'check-noindex-posture.mjs', {
+    env: { NOINDEX_POSTURE_INJECT: 'narrow-header' }, expect: 'declares no `/*` rule',
+  });
+  mustFail('deleting public/robots.txt is caught', 'check-noindex-posture.mjs', {
+    env: { NOINDEX_POSTURE_INJECT: 'no-robots' }, expect: 'public/robots.txt is missing',
+  });
+  mustFail('an HTML entry losing its meta robots tag is caught', 'check-noindex-posture.mjs', {
+    env: { NOINDEX_POSTURE_INJECT: 'no-meta' }, expect: 'index.html',
+  });
+  mustFail('a blanket Disallow with nobody recording the index empty is caught',
+    'check-noindex-posture.mjs', { env: { NOINDEX_POSTURE_INJECT: 'disallow' }, expect: 'INDEX-CLEARED' });
+  mustFail('deleting the SPA catch-all to manufacture a 404 is caught', 'check-noindex-posture.mjs', {
+    env: { NOINDEX_POSTURE_INJECT: 'no-catchall' }, expect: 'catch-all',
+  });
+  // The escape hatch must be OPEN, or the ordering rule becomes a permanent ban.
+  mustPass('a blanket Disallow WITH an INDEX-CLEARED observation passes', 'check-noindex-posture.mjs', {
+    env: { NOINDEX_POSTURE_INJECT: 'disallow-cleared' },
+  });
+  mustPass('the real tree still passes', 'check-noindex-posture.mjs', {});
+}
 // ============================================================ wiring proof
 // Every guard above is only real if something runs it. Deleting `check:migration-numbers` from
 // package.json, or its step from build.yml, would leave every control passing while the guard
@@ -315,7 +347,7 @@ console.log('\nwiring');
   const pkg = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
   const workflow = readFileSync(path.join(repoRoot, '.github', 'workflows', 'build.yml'), 'utf8');
   const required = ['check:suite-manifest', 'check:migration-numbers', 'check:renumber-closure',
-    'check:key-manifest', 'check:baseline-drift', 'check:gate-controls'];
+    'check:key-manifest', 'check:baseline-drift', 'check:noindex-posture', 'check:gate-controls'];
   const missingScript = required.filter((c) => !pkg.scripts?.[c]);
   const missingVerify = required.filter((c) => !String(pkg.scripts?.verify ?? '').includes(c));
   const missingStep = required.filter((c) => !workflow.includes(`npm run ${c}`));
