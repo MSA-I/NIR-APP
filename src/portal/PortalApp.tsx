@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { DocumentPlate } from '../components/DocumentPlate';
 import {
   PortalError,
   resolvePortalLink,
@@ -279,11 +280,12 @@ function Shell({ children, orgName, locale, onSwitchLocale }: {
   return (
     <div className="min-h-dvh bg-canvas" dir={locale === 'he' ? 'rtl' : 'ltr'}>
       <main className="mx-auto max-w-3xl px-4 py-6">
+        {/* #330 — the identity moved into the document plate below, where the supplier reads the
+            same heading they saw in the email and will see on the PDF. What stays here is the one
+            thing that is not part of the document: the language toggle. The states with no order
+            (invalid, locked, error) have no document to head, so they keep their own card. */}
         <header className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs text-ink-faint">{copy.pageTitle}</p>
-            {orgName && <p className="text-lg font-semibold text-ink"><bdi>{orgName}</bdi></p>}
-          </div>
+          <p className="text-xs text-ink-faint">{orgName ? '' : copy.pageTitle}</p>
           <button
             type="button"
             className="btn-secondary min-h-11 shrink-0 px-3 py-2 text-sm"
@@ -304,21 +306,32 @@ function OrderHeader({ view, locale }: { view: PortalView; locale: PortalLocale 
   const { snapshot } = view;
   const copy = PORTAL_COPY[locale];
   return (
-    <div className="card p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-lg font-semibold text-ink">
-          {copy.order} <span className="num">#{snapshot.order_number}</span>
-          {snapshot.revision_number > 1 && (
-            <span className="ms-2 badge bg-action-wash text-ink-mid">
-              {copy.revision} <span className="num">{snapshot.revision_number}</span>
+    <div>
+      {/* The same plate the order's PDF and email open with (#330). The supplier is looking at one
+          document in a third frame, so it carries the family's own colour, eyebrow and mark rather
+          than a screen heading. The eyebrow is passed in: the portal owns its vocabulary and its
+          language toggle, and is not inside LocaleProvider. */}
+      <DocumentPlate
+        family="purchase"
+        as="h1"
+        eyebrow={copy.docEyebrow}
+        /* The number belongs IN the heading here, not beside it: this is the page's only heading
+           and it has to say which order a supplier is being asked to approve. */
+        name={`${copy.docName} #${snapshot.order_number}`}
+        subtitle={snapshot.org_name}
+        meta={
+          <div className="flex flex-col items-end gap-1 text-xs" style={{ color: 'var(--color-doc-ink-soft)' }}>
+            {snapshot.revision_number > 1 && (
+              <span className="doc-mono">
+                {copy.revision} <span className="num">{snapshot.revision_number}</span>
+              </span>
+            )}
+            <span className="doc-mono">
+              {copy.validUntil} <span className="num">{formatPortalDate(locale, view.expires_at)}</span>
             </span>
-          )}
-        </h1>
-        <p className="text-sm text-ink-muted">
-          {copy.validUntil} <span className="num">{formatPortalDate(locale, view.expires_at)}</span>
-        </p>
-      </div>
-      <dl className="mt-2 grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
+          </div>
+        } />
+      <dl className="card mt-3 grid grid-cols-1 gap-1 p-4 text-sm sm:grid-cols-2">
         {snapshot.supplier_name && (
           <div className="flex gap-1">
             <dt className="text-ink-faint">{copy.addressee}</dt>

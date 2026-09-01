@@ -31,6 +31,50 @@
     U+2215, U+FEFF, U+FFFD;
 }
 
+/* ---- The document faces (0309 / #330, the document design system) --------------------------
+   Two families that the APP's screens never use and the DOCUMENTS always do. They are the
+   marketing site's own faces, copied from LANDING-PAGE-NIR/public/assets/fonts byte for byte
+   rather than re-subset, so a document and the site it was sold from are set in one system.
+
+   Both are self-hosted for the same reason Noto is: typography never depends on a third-party
+   request at runtime, and a purchase order that renders in a fallback face at the supplier's
+   end is a document the business did not send.
+
+   ROBOTO MONO HAS NO HEBREW AT ALL, and the range below says so instead of leaving it to the
+   file's internal tables. The landing site learned this the expensive way with a different mono
+   whose Hebrew glyphs were mapped and EMPTY — every eyebrow laid out, measured and painted as
+   nothing. Here the range is latin-only on purpose, so Hebrew falls back to the reading face. */
+@font-face {
+  font-family: "Heebo";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("/fonts/Heebo-hebrew.woff2") format("woff2");
+  unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F;
+}
+
+@font-face {
+  font-family: "Heebo";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("/fonts/Heebo-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+                 U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+                 U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Roboto Mono";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/RobotoMono-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+                 U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+                 U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 @theme {
   /* One family carries Hebrew, Latin and ordinary figures. Alignment comes from OpenType tnum. */
   --font-sans: "Noto Sans Hebrew", Arial, ui-sans-serif, system-ui, sans-serif;
@@ -348,6 +392,52 @@
      remain paired with an arrow so meaning is never communicated by hue alone. */
   --color-trend-up-fg: var(--color-rose-700);
   --color-trend-down-fg: var(--color-emerald-700);
+
+  /* ---- The document system (#330) ------------------------------------------------------------
+     Everything InPlace generates as a FILE — the order that reaches a supplier, the invoice card,
+     the monthly report, the subscription receipt, the accountant's workbook — is set from these
+     tokens and never from the screen's.
+
+     NINE OF THE FOURTEEN ARE ALIASES, and that is the finding rather than a shortcut: the
+     marketing site and the product were both drawn from Onyx / Wheat / Oceanic, so `#0a171d`,
+     `#fffcf8`, `#f4efe7`, `#e5dbcd`, `#fbf6ee`, `#003f47`, `#5d9096`, `#46545b` and `#c70036`
+     already existed here under a screen name. Restating a literal would have given one colour two
+     spellings and let a repaint move the app while the documents stayed behind. What the alias
+     buys is the NAME: `--color-doc-plate` says what the value does on paper, and the day the
+     brand moves, it moves in one place.
+
+     Six values are genuinely new — the marketing site's dark steps, its two inks on dark, its
+     muted ink on light, and its filled action. Each was converted from the site's hex by painting
+     the oklch into a canvas and reading the pixel back; all six round-trip exactly.
+
+     WHAT THESE DO NOT DO: they never reach a screen. `check:typography` and the print stylesheet
+     keep the two vocabularies apart, and a component that wants a document colour is a component
+     that belongs inside a `.print-only` block. */
+  --color-doc-plate: var(--color-shell);            /* #0a171d — the outbound plate, table heads */
+  --color-doc-plate-lift: oklch(24.86% 0.0282 228.2);  /* #12242c — a band inside a dark plate */
+  --color-doc-plate-line: oklch(31.50% 0.0350 230.0);  /* #1e3540 — a border ON a dark plate */
+  --color-doc-plate-action: oklch(38.97% 0.0620 207.6); /* #0d4e56 — the receipt plate */
+
+  --color-doc-paper: var(--color-surface);          /* #fffcf8 — the sheet itself */
+  --color-doc-paper-sink: var(--color-surface-sunken); /* #f4efe7 — the quiet plate, note boxes */
+  --color-doc-line: var(--color-line);              /* #e5dbcd — every rule on paper */
+
+  --color-doc-ink: var(--color-shell-ink);          /* #fbf6ee — lettering on a dark plate */
+  --color-doc-ink-soft: oklch(75.52% 0.0202 217.3); /* #a2b3b8 — secondary on dark; receipt plate */
+  --color-doc-ink-dim: oklch(63.77% 0.0226 219.8);  /* #7d8f95 — the faintest on dark */
+  --color-doc-ink-body: var(--color-ink-soft);      /* #46545b — body copy on paper */
+  --color-doc-ink-muted: oklch(54.48% 0.0220 226.0); /* #63737a — labels and folios on paper */
+
+  --color-doc-accent: var(--color-action);          /* #003f47 — eyebrow on paper, positive money */
+  --color-doc-accent-lift: var(--color-action-line); /* #5d9096 — eyebrow on a dark plate */
+  --color-doc-alert: var(--color-alert-fg);         /* #c70036 — an exception, on paper */
+
+  /* Display and technical annotation. The reading face stays `--font-sans` in every document. */
+  --font-doc-display: "Heebo", "Noto Sans Hebrew", Arial, sans-serif;
+  --font-doc-mono: "Roboto Mono", "Noto Sans Hebrew", ui-monospace, monospace;
+
+  /* The plate's corner and the printer's registration marks, both from the marketing site. */
+  --radius-doc-plate: 12px;
 }
 
 html {
@@ -1458,6 +1548,139 @@ html { transition: --glow-x 0.12s ease-out, --glow-y 0.12s ease-out; }
    the print media query and nothing else can turn it on. So the rule that says "this belongs on
    paper" is written once, here, and answers to both consumers. */
 .print-only { display: none; }
+
+/* ---- The document plate (#330) --------------------------------------------------------------
+   The one block of markup every generated file opens with. It lives only inside `.print-only`,
+   so it never reaches a screen: on paper and in a captured PDF it is the whole identity of the
+   document, and in the browser it does not exist.
+
+   THE PLATE'S COLOUR SAYS WHICH FAMILY, and the ink is chosen by the plate rather than by the
+   caller — `--doc-on-plate` is set once per variant and everything inside reads it. A component
+   that had to pass both would eventually pass a light ink onto a light plate.
+
+   `print-color-adjust: exact` is not optional here. Without it every browser drops the fill when
+   it prints, and the document arrives as an outline of itself with white-on-white lettering —
+   the plate IS the design, so losing it loses the family signal and the heading together. */
+.doc-plate {
+  position: relative;
+  border-radius: var(--radius-doc-plate);
+  overflow: clip;
+  padding: 2rem 2.25rem 1.75rem;
+  background: var(--color-doc-plate);
+  --doc-on-plate: var(--color-doc-ink);
+  --doc-eyebrow-ink: var(--color-doc-accent-lift);
+  color: var(--doc-on-plate);
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+/* The receipt: the money that came IN, in the brand's filled teal. */
+.doc-plate-action { background: var(--color-doc-plate-action); --doc-eyebrow-ink: var(--color-doc-ink-soft); }
+/* Stays with you: a sheet on a sheet, told apart by a hairline. */
+.doc-plate-paper {
+  background: var(--color-doc-paper);
+  border: 1px solid var(--color-doc-line);
+  --doc-on-plate: var(--color-doc-plate);
+  --doc-eyebrow-ink: var(--color-doc-accent);
+}
+/* A periodic report: the same sheet, one step down, so a folder of them reads as a series. */
+.doc-plate-sink {
+  background: var(--color-doc-paper-sink);
+  --doc-on-plate: var(--color-doc-plate);
+  --doc-eyebrow-ink: var(--color-doc-accent);
+}
+
+/* The printer's registration corners, carried over from the marketing site. `currentColor` at
+   34% means they belong to whichever plate they are drawn on and need no variant of their own. */
+.doc-plate::before,
+.doc-plate::after,
+.doc-plate > .doc-crop::before,
+.doc-plate > .doc-crop::after {
+  content: "";
+  position: absolute;
+  inline-size: 14px;
+  block-size: 14px;
+  border-style: solid;
+  border-color: currentColor;
+  border-width: 0;
+  opacity: 0.34;
+  pointer-events: none;
+}
+.doc-plate::before { inset-block-start: 18px; inset-inline-start: 18px; border-block-start-width: 1px; border-inline-start-width: 1px; }
+.doc-plate::after { inset-block-start: 18px; inset-inline-end: 18px; border-block-start-width: 1px; border-inline-end-width: 1px; }
+.doc-plate > .doc-crop::before { inset-block-end: 18px; inset-inline-start: 18px; border-block-end-width: 1px; border-inline-start-width: 1px; }
+.doc-plate > .doc-crop::after { inset-block-end: 18px; inset-inline-end: 18px; border-block-end-width: 1px; border-inline-end-width: 1px; }
+
+/* The family, written in words rather than coded in a colour somebody has to remember. Hebrew
+   falls back to the reading face by design — the mono has no Hebrew (see the @font-face note). */
+.doc-eyebrow {
+  font-family: var(--font-doc-mono);
+  font-size: 0.775rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  line-height: 1.4;
+  margin: 0;
+  color: var(--doc-eyebrow-ink);
+}
+
+/* The document's name. The SIZE does the shouting, and 800 is the marketing site's own display
+   weight — the screens' "no 700" rule is a screen rule and stops at the print boundary. */
+.doc-name {
+  font-family: var(--font-doc-display);
+  font-weight: 800;
+  font-size: 3.375rem;
+  letter-spacing: -0.032em;
+  line-height: 1;
+  margin: 0;
+  color: var(--doc-on-plate);
+}
+.doc-sub { font-size: 0.875rem; line-height: 1.55; margin-block-start: 0.75rem; }
+
+/* THE PLATE ON A PHONE, and `screen` is doing real work in that query.
+   The supplier portal is the one place this block is a live screen rather than a printed heading,
+   and most suppliers open that link on a phone. At 390px the name wrapped to three lines and the
+   plate grew tall enough to push the order itself below the fold — measured, not feared. Print is
+   deliberately excluded: a PDF page is a fixed 794px canvas and must keep the full display size. */
+@media screen and (max-width: 40rem) {
+  .doc-plate { padding: 1.5rem 1.25rem 1.375rem; }
+  .doc-name { font-size: 2rem; }
+  .doc-eyebrow { font-size: 0.6875rem; }
+  /* The registration corners are inset 18px, which is inside the padding once the padding shrinks
+     — the marks then sit ON the org name and the validity line. Pulled to the corner instead. */
+  .doc-plate::before, .doc-plate::after,
+  .doc-plate > .doc-crop::before, .doc-plate > .doc-crop::after { inline-size: 10px; block-size: 10px; }
+  .doc-plate::before { inset-block-start: 9px; inset-inline-start: 9px; }
+  .doc-plate::after { inset-block-start: 9px; inset-inline-end: 9px; }
+  .doc-plate > .doc-crop::before { inset-block-end: 9px; inset-inline-start: 9px; }
+  .doc-plate > .doc-crop::after { inset-block-end: 9px; inset-inline-end: 9px; }
+}
+
+/* Numbers that identify rather than measure: document numbers, references, folios, timestamps.
+   Money never comes here — it stays in the reading face with tabular figures, as everywhere. */
+.doc-mono { font-family: var(--font-doc-mono); font-variant-numeric: tabular-nums lining-nums; }
+
+.doc-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  color: var(--color-doc-ink-muted);
+}
+
+/* The mark, in ONE flat colour taken from whatever it sits on. There is no coloured lockup in a
+   document: the file carries a single-ink mark so it can never land light-on-light. */
+/* Two files, one ink each, and the plate picks. An <img> cannot inherit `currentColor`, so
+   the choice is made where the plate is known rather than left to CSS that cannot reach
+   inside the asset. */
+.doc-mark img { display: block; }
+/* The tenant's own logo is NOT recoloured — it is theirs. On a dark plate it gets paper behind it
+   instead, which is the only way to show an unknown logo on an unknown ground. */
+.doc-plate:not(.doc-plate-paper):not(.doc-plate-sink) .doc-org-logo {
+  background: var(--color-doc-paper);
+  border-radius: 4px;
+  padding: 6px;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
 @media print { .print-only { display: block; } }
 .pdf-capture .print-only { display: block; }
 .pdf-capture .no-print { display: none !important; }
@@ -1514,6 +1737,12 @@ html { transition: --glow-x 0.12s ease-out, --glow-y 0.12s ease-out; }
   /* Every printable area, not just the report: a table that runs past the page break loses its
      column headings on page two unless the browser is told to repeat them, and a row split down
      the middle is unreadable in a document somebody files. */
+
+  /* #330 — a DOCUMENT's table head is filled; a screen printed for reference stays plain. The
+     rule above turns every head white, so this restores the fill for the four print areas only,
+     and `print-color-adjust` keeps it from being dropped at the printer. */
+  .print-area .table-head { background: var(--color-doc-plate) !important; print-color-adjust: exact; }
+  .print-area .table-head .th { color: var(--color-doc-ink) !important; }
   .print-area thead { display: table-header-group; }
   .print-area tr, .print-area .card { break-inside: avoid; }
 }

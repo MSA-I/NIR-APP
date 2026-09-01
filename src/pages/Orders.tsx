@@ -18,6 +18,7 @@ import { SupplierPortalCard } from '../components/SupplierPortalCard';
 import { EmailOrderCard } from '../components/EmailOrderCard';
 import { cancelOrderDraft } from '../lib/orderDrafts';
 import type { PurchaseOrder, PurchaseOrderItem, PoStatus } from '../lib/types';
+import { DocumentPlate } from '../components/DocumentPlate';
 
 /**
  * The list row. Its items are never rendered here — they feed the line total and the WhatsApp
@@ -528,11 +529,17 @@ export function OrderDetail() {
         {/* `print-only`, not `hidden print:block`: html2canvas renders the live DOM, so a
             display:none heading is simply absent from the generated PDF (src/index.css). */}
         <div aria-hidden="true" className="print-only mb-4">
-          {orgLogoUrl && <img src={orgLogoUrl} alt="" className="mb-2 h-14 w-32 object-contain object-right" />}
-          <h2 className="text-xl font-semibold">{orgName
-            ? t('orders.printTitleWithOrg', { number: order.number, org: orgName })
-            : t('orders.printTitle', { number: order.number })}</h2>
-          <div className="text-sm mt-1">{t('orders.printSupplier', { supplier: order.supplier.name })} · {t('orders.printDate', { date: fmtDate(order.created_at) })} {order.expected_date && t('orders.printExpected', { date: fmtDate(order.expected_date) })}</div>
+          <DocumentPlate
+            family="purchase"
+            name={t('orders.printName')}
+            number={`#${order.number}`}
+            orgLogoUrl={orgLogoUrl}
+            subtitle={[
+              orgName,
+              t('orders.printSupplier', { supplier: order.supplier.name }),
+              t('orders.printDate', { date: fmtDate(order.created_at) }),
+              order.expected_date ? t('orders.printExpected', { date: fmtDate(order.expected_date) }) : null,
+            ].filter(Boolean).join(' · ')} />
         </div>
         <ul className="divide-y divide-line-soft lg:hidden print:hidden" aria-label={t('orders.aria_label_2')}>
           {order.items.map((item) => (
