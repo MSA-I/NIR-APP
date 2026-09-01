@@ -169,13 +169,14 @@ export interface NotificationPreference {
 }
 
 /**
- * Hebrew copy for the three live event codes.
+ * Hebrew copy for the five live event codes.
  *
  * The catalog is the server's (`private.notification_event_definitions`, 0068:48) — it ships
- * codes, not copy, exactly like every other vocabulary the client labels. A fourth code is a seed
- * row in a migration; the matrix below renders it under its raw code rather than dropping it,
- * because silently hiding a preference the server is honouring would be worse than an untranslated
- * label.
+ * codes, not copy, exactly like every other vocabulary the client labels. A code with no entry
+ * below renders under its raw code rather than being dropped, because silently hiding a preference
+ * the server is honouring would be worse than an untranslated label -- but that is the fallback,
+ * not the plan. `expected_document_missing` (0274) is labelled here in the same change that seeds
+ * it, so nobody meets it as `expected_document_missing` in their push settings.
  */
 export const NOTIFICATION_EVENT_LABELS: Record<string, { labelKey: TKey; detailKey: TKey }> = {
   duplicate_invoice: {
@@ -193,6 +194,10 @@ export const NOTIFICATION_EVENT_LABELS: Record<string, { labelKey: TKey; detailK
   document_processing_stalled: {
     labelKey: 'notificationEvents.documentStalled',
     detailKey: 'notificationEvents.documentStalledDetail',
+  },
+  expected_document_missing: {
+    labelKey: 'notificationEvents.expectedDocumentMissing',
+    detailKey: 'notificationEvents.expectedDocumentMissingDetail',
   },
 };
 

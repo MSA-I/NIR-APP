@@ -521,7 +521,7 @@ describe('מסלול שניתן ולא נרכש — מצב חלון ההרצה �
     const window = await screen.findByTestId('plan-grant-window');
     // #276: what closes, when, and which plan it reopens on — said BEFORE the boundary.
     expect(window).toHaveTextContent(/פרימיום/);
-    // 0267 moved the window by one month (owner ruling 31.08.2026, #309). The DATE moves with
+    // 0270 moved the window by one month (owner ruling 31.08.2026, #314). The DATE moves with
     // the ruling; the line below it does not — a countdown stays forbidden whatever the date is.
     expect(window).toHaveTextContent(/01\.02\.2027/);
     expect(window).toHaveTextContent(/עובר למסלול חינם/);

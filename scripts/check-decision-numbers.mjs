@@ -108,6 +108,59 @@ if (dangling.length) {
     + '  written. Both leave a reader following a pointer into nothing.');
 }
 
+
+// ---------------------------------------------------------------- citations INSIDE the code
+// The rulings are not only cited in prose. Measured across src, supabase and scripts: 1,653 bare
+// `#NNN` citations, and they are how the code actually points at a decision — a migration saying
+// which ruling it implements, a component saying why it renders what it does. A wrong one here is
+// worse than a broken link: the number still names a REAL ruling, so the comment reads as
+// authoritative and describes the wrong decision. #174's move from #311 to #314 left exactly that
+// behind in four places, including a reason string a migration greps for at run time.
+//
+// TWO EXCLUSIONS, BOTH MEASURED, NEITHER AN ALLOWLIST OF NUMBERS:
+//   * stylesheets — `#000` is the colour black, not ruling zero. No decision is cited from CSS.
+//   * this file — it names historical numbers in order to explain them, which is the same trap
+//     that has now caught three guards in this repo.
+// A token longer than three digits is not a citation either: `#4338ca` is a colour and `#7702` is
+// an order number, and matching their first three digits was what made an earlier pass of this
+// measurement look impossible.
+const CODE_PATHS = ['src', 'supabase', 'scripts'];
+const SELF_FILE = 'scripts/check-decision-numbers.mjs';
+let codeCitations = [];
+try {
+  const out = execFileSync('git', ['grep', '--untracked', '-nIoE', '#[0-9]{3}[0-9a-fA-F]*', '--', ...CODE_PATHS],
+    { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  codeCitations = out.split(String.fromCharCode(10)).filter(Boolean).map((hit) => {
+    const parts = hit.split(':');
+    const token = parts.at(-1).replace('#', '');
+    const lineNo = parts.at(-2);
+    const file = parts.slice(0, -2).join(':');
+    return { file, lineNo, token };
+  }).filter((c) => c.token.length === 3
+    && !c.file.endsWith('.css')
+    && c.file !== SELF_FILE
+    && c.file !== 'scripts/renumber-map.json');
+} catch (error) {
+  if (error.status !== 1) {
+    fail(`check:decision-numbers FAILED — the code citation scan could not run: ${String(error.stderr ?? '').slice(0, 160)}`);
+  }
+}
+if (inject === 'code') {
+  codeCitations.push({ file: 'src/pages/Dashboard.tsx', lineNo: '1', token: '996' });
+}
+
+const badCode = codeCitations.filter((c) => !known.has(c.token));
+if (badCode.length) {
+  const shown = badCode.slice(0, 20);
+  fail(`check:decision-numbers FAILED — ${badCode.length} citation(s) in the CODE name a ruling that`
+    + ` is not in the table:\n\n`
+    + shown.map((c) => `    ${c.file}:${c.lineNo} -> #${c.token}`).join(String.fromCharCode(10))
+    + (badCode.length > 20 ? `${String.fromCharCode(10)}    … and ${badCode.length - 20} more` : '')
+    + '\n\n  Either the ruling was renumbered and this citation stayed behind, or it was never'
+    + '\n  written. A stale number is the dangerous case: it still names a real ruling, so the'
+    + '\n  comment reads as authoritative while describing a different decision entirely.');
+}
+
 const numbers = [...known].map(Number).sort((a, b) => a - b);
 console.log(`check:decision-numbers passed: ${rows.size} rulings, #${numbers[0]}–#${numbers.at(-1)},`
-  + ` none duplicated, ${citations.length} citation(s) all resolve.`);
+  + ` none duplicated, ${citations.length} prose citation(s) and ${codeCitations.length} in code all resolve.`);

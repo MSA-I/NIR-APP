@@ -260,5 +260,10 @@
   "0268_countdown_and_expectations_flags.sql",
   "0269_launch_offer_intents.sql",
   "0270_launch_window_extension.sql",
-  "0271_countdown_events.sql"
+  "0271_countdown_events.sql",
+  "0272_supplier_document_expectations.sql",
+  "0273_expected_document_missing_exception_type.sql",
+  "0274_document_expectation_scanner.sql",
+  "0275_supplier_logo_path.sql",
+  "0276_invoice_due_date_from_interpretation.sql"
 ]
