@@ -413,7 +413,19 @@ select pg_temp.p9_assert(
   || 'or silence its own findings. Its tenancy is structural: every read and write is filtered by '
   || 'the org id carried on the expectation row it is iterating. Note that 0274 adds only ONE row '
   || 'here -- expectation_period_bounds is SECURITY INVOKER and reads no table, so it needs no '
-  || 'exemption and was deliberately not given one; zero silent additions');
+  || 'exemption and was deliberately not given one; '
+  || 'plus the one 0281 inbound ingest command, '
+  || 'service_ingest_inbound_document, which is the same empty-auth_scopes constraint as 0077, '
+  || '0168 and 0265 with one addition worth stating: it runs as service_role with no JWT, so '
+  || 'auth_scopes() returns empty AND assert_unit_in_scope early-exits treating it as trusted '
+  || 'service work -- a scope predicate inside it would not merely fail to protect, it would '
+  || 'PASS, which is worse than none because it reads like a check. It cannot be an invoker '
+  || 'either: no client role holds EXECUTE, and the claim and route ledgers it derives the '
+  || 'tenant from are private with no authenticated grant. Its tenancy is structural: org_id, '
+  || 'unit and source come from the claim route, whose identity is a composite foreign key into '
+  || 'private.inbound_routes and whose routing columns a trigger freezes after insert, so the '
+  || 'caller cannot name a tenant at all -- the signature takes a claim id, a lease token, an '
+  || 'object id and an object version, and nothing else; zero silent additions');
 
 select pg_temp.p9_assert(
   (select count(*) from private.scope_enforcement_violations()) = 0,
