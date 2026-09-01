@@ -484,7 +484,7 @@
   --color-alert-solid: var(--color-rose-700);
 
   --color-info-wash: var(--color-sky-50);
-  --color-info-line: var(--color-sky-200);
+  --color-info-line: var(--color-sky-600);
   --color-info-soft: var(--color-sky-100);
   --color-info-on-soft: var(--color-sky-800);
   --color-info-fg: var(--color-sky-700);
@@ -767,7 +767,7 @@
   --color-alert-solid: oklch(68% 0.160 18);
 
   --color-info-wash: oklch(22% 0.028 236);
-  --color-info-line: oklch(38% 0.060 236);
+  --color-info-line: oklch(55% 0.060 236);
   --color-info-soft: oklch(27% 0.045 236);
   --color-info-on-soft: oklch(89% 0.050 236);
   --color-info-fg: oklch(80% 0.095 236);

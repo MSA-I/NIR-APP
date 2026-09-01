@@ -224,6 +224,18 @@ const DARK_EXEMPT = new Map<string, string>([
   ['aurora-2', 'the auth aurora paints an on-dark panel in both themes; its ramp is the frozen light values of the chart ramp'],
   ['aurora-3', 'the auth aurora paints an on-dark panel in both themes; its ramp is the frozen light values of the chart ramp'],
   ['aurora-4', 'the auth aurora paints an on-dark panel in both themes; its ramp is the frozen light values of the chart ramp'],
+  // The mirror of the `shell` family: those surfaces are dark by design, these are LIGHT by
+  // design. The document plate is the sheet the product's generated files are drawn on — PDFs,
+  // the order image, the workbook, the supplier portal's rendering of them. Paper is white in
+  // both themes, and a document that inverted with the reader's app theme would print wrong.
+  // Six tokens, added when wave 7's dark theme met wave 6's document plate: neither pull request
+  // knew about the other, and the guard is what noticed.
+  ['doc-plate-lift', 'the generated-document sheet is paper, and paper is white in both themes'],
+  ['doc-plate-line', 'rules on that sheet; same reason'],
+  ['doc-plate-action', 'the action colour printed on that sheet; same reason'],
+  ['doc-ink-soft', 'ink on the paper sheet; same reason'],
+  ['doc-ink-muted', 'ink on the paper sheet; same reason'],
+  ['doc-ink-dim', 'ink on the paper sheet; same reason'],
   ['aurora-5', 'the auth aurora paints an on-dark panel in both themes; its ramp is the frozen light values of the chart ramp'],
 ]);
 
