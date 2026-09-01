@@ -590,58 +590,37 @@
   כמעט מילה במילה. ‏`storage.bytes` דורשת סכימה על `storage.objects` פר-דייר ולכן היא היקרה
   מבין השתיים שנשארו.
 
-### §57 — מעבד החיוב בנוי וכבוי; חסרים לו ספק מאופשר, מפת מחירים, כותב לקישור וסוד
+### §57 — Paddle Sandbox מוכח מקצה לקצה; Live לא נפתח, ובכוונה
 
-- **עודכן 31.08.2026 — שלוש טענות שהיו כאן הפסיקו להיות נכונות.** הניסוח הקודם אמר
-  „אין endpoint HTTP", „אין מעבד" ו„הסטטוסים הם `stored` ו-`dead_letter` בלבד". ‏`0187` ו-`billing-webhook`
-  הפכו את שלושתן, והסעיף נכתב מחדש למה שבאמת חסר.
-
-- **מצב — מה שקיים:** ‏`0157` בונה את מודל האירועים, השיוך, האידמפוטנטיות וה-audit.
-  ‏**ה-endpoint קיים** — `supabase/functions/billing-webhook/{index.ts,core.ts}`, ‏`verify_jwt = false`
-  מנומק (`supabase/config.toml:189-193`), והסדר נכון: raw bytes ← אימות חתימה ← parse ← store ← apply
-  (`core.ts:6-12,80-123`). ‏**אימות חתימת Paddle קיים ומלא** — ‏HMAC-SHA256 מעל `ts:body`, מספר `h1`
-  בסבב מפתח, חלון 5 שניות סימטרי, השוואה בזמן קבוע
-  (`supabase/functions/_shared/billing-adapter.ts:203-291`). ‏**המעבד קיים ומלא** — ‏allowlist של
-  22 סוגי אירוע (`0187:132-168`), שבע פונקציות מעבר (`0187:348-620`) ו-dispatcher עם replay,
-  ‏dead letters, ‏audit ו-timeline (`0187:622-758`). ‏**‏`processed` קיים** — `0187:307-313`.
-
-- **מה באמת חסר, במפורש — ארבעה דברים:**
-  1. **ספק מאופשר.** ‏`private.billing_provider_boundary` נזרעת `enabled=false` לשלושת הספקים
-     ו**אין פונקציית כתיבה שמדליקה** (`0187:60-101`). זה מכוון: הדלקה היא מיגרציה
-     forward-only שנסקרת כהחלטה מסחרית, ולא toggle בזמן ריצה.
-  2. **מפת מחיר←מסלול.** ‏`private.billing_provider_price_map` ריקה בכוונה (`0187:170-187`);
-     מחיר לא ממופה יורד ל-dead letter ואינו מעניק מסלול מנוחש.
-  3. **‏⚠ כותב ל-`organization_subscriptions.provider_customer_id` — וזה אינו מכוון.**
-     העמודה קיימת (`0154:159`), ה-unique קיים (`0154:173-175`), ו-`private.resolve_billing_org`
-     קורא **רק** ממנה (`0157:71-84`) — אבל **אף פקודה במוצר אינה כותבת אליה**.
-     ‏`platform_set_org_subscription` אינה נוגעת בה (`0154:432-485`), ו**בשתי סוויטות** הקישור נכתב
-     ב-`update` ישיר של הבדיקה עצמה — `p54_billing_boundary_and_funnel.sql:80-83`
-     ו-`p71_billing_provider_event_processing.sql:217`. **שתיהן בדיקות; אף אחת אינה מוצר.**
-     **בלי הכותב הזה, גם ביום שהסוד יגיע, כל אירוע חתום ייפול כ„בלתי-משויך".**
-  4. **סוד חי.** ‏`PADDLE_WEBHOOK_SECRET` אינו מוגדר; חשבון/KYC/payout לא הוכחו (#213).
-     ‏`createCheckoutSession` מסרב בשמו (`_shared/billing-adapter.ts:216`).
-
-- **‏⚠ וממצא חמישי שאיש לא רשם:** ‏`supabase/functions/billing-webhook/core.test.ts` — וכן של שני
-  ה-webhooks האחרים — **אינו רץ באף שער**, לא ב-`scripts/check-quality-gates.ps1` ולא ב-21 שלבי
-  ה-`contracts` של `.github/workflows/quality-gate.yml`. ‏`$functionJwt` (`check-quality-gates.ps1:1134-1147`)
-  כן מכילה את `billing-webhook` ובודקת לו `verify_jwt=false`, אבל אימות החתימה עצמו אינו נבדק.
-
-- **הסיכון:** אפס היום — אין תנועת כסף אוטומטית, ואירוע חתום מושלם יורד ל-dead letter
-  עם `provider_not_enabled` (`0187:663-666`). בחיבור Paddle הסיכון עובר לשני דברים בלבד:
-  קישור שגוי שמשנה זכאות לדייר הלא-נכון, ואימות חתימה שנשבר בלי ששער יראה. **האיסור על
-  קריאת `org_id` מתוך ה-payload נשאר בתוקף ומוכח.**
-
-- **ראיה:** ‏`0157` · `0187_billing_provider_event_processing.sql` · `0188` ·
-  `supabase/functions/billing-webhook/{index.ts,core.ts}` · `supabase/functions/_shared/billing-adapter.ts` ·
-  `supabase/config.toml:189-193` · `p54_billing_boundary_and_funnel.sql` (מוכיחה שמזהה ארגון
-  מזויף ב-payload אינו משייך; הקישור שלה נכתב ב-`update` שלה עצמה, `:80-83`) ·
-  `p71_billing_provider_event_processing.sql:217` (אתר הכתיבה השני, נמדד 31.08.2026).
-
-- **הצעד הזול הבא, והוא אינו דורש חשבון:** (א) להכניס את שלושת קובצי
-  `core.test.ts` לשער; (ב) לבנות כותב יחיד ל-`provider_customer_id` עם step-up, סיבה ו-audit,
-  בלי להדליק דבר. רק אחרי שהבעלים מוכיח חשבון/KYC/payout וסוד: מיגרציה forward-only
-  שמדליקה את הספק וזורעת את מפת המחירים. ‏Stripe+Morning נשארים fallback לא-פעיל לפי
-  #207/#256. תכנית הפירוק המלאה: `docs/plans/2026-08-31-inbound-intake-and-billing.md` סעיף D.
+- **עודכן 31.08.2026.** הניסוח הקודם כאן — «אין endpoint HTTP» ו«אין מעבד» — **כבר לא היה נכון
+  כשנקרא**: `0187` הוסיף את המעבד ואת הסטטוס `processed`, ו-`billing-webhook` נכתב ואף נפרס
+  לייצור (v6, פעיל). זו הייתה סטיית תיעוד, לא חוב.
+- **מה שקיים ומוכח עכשיו:** חשבון Paddle **Sandbox** אמיתי עם 3 מוצרים ו-6 מחירים, מיפוי
+  price→plan ב-`0277`, הרשאת רכישה וקישור לקוח ב-`0278`, ‏`billing-checkout`, ‏Paddle.js,
+  ושומר סודות עם ניסוי שלילי. `scripts/paddle/sandbox-e2e.mjs` מריץ 23 בדיקות שבהן **Paddle**
+  מייצר, חותם ושולח כל אירוע דרך האינטרנט: הפעלה, שדרוג, שנמוך, ביטול, כשל תשלום, משלוח חוזר,
+  לקוח לא מוכר, מחיר לא ממופה, חתימה שגויה, חותמת זמן ישנה ובידוד דיירים ארבע פעמים.
+- **מה שעדיין חוב, במפורש:**
+  1. **תשלום אמיתי בכרטיס לא נבדק.** ‏Paddle מסרב ל-`POST /transactions` עם
+     `transaction_default_checkout_url_not_set` עד שמוגדר default payment link בלוח הבקרה שלו —
+     הגדרת חשבון שאין לה API. חסם בעלים, לא חסם קוד.
+  2. **החזרים (`#224`/`#225`) לא נבדקו מול Paddle.** הקוד קיים ב-`0187` ומכוסה ב-p71 בלבד.
+  3. **Live לא נפתח כלל**, ואין להסיק שנפתח. ראו `docs/PADDLE-SANDBOX.md`.
+- **הסיכון היום:** אפס תנועת כסף בייצור, ושלוש הגנות עומדות בשורה: אין בייצור
+  `PADDLE_WEBHOOK_SECRET`, מתג ה-merchant of record כבוי ואין פונקציה שיכולה להדליק אותו
+  (`0187`), ו-`0278` מסרב לפתוח checkout כל עוד הוא כבוי — כך שאי אפשר לגבות כסף עבור
+  entitlement שהמערכת תסרב להעניק.
+- **ראיה:** ‏`0277` · `0278` · `p71` · `p100` · `supabase/functions/billing-checkout/core.test.ts`
+  · `supabase/functions/_shared/billing-adapter.test.ts` · `scripts/paddle/sandbox-e2e.mjs`
+  (‏23/23, ‏31.08.2026) · `docs/PADDLE-SANDBOX.md`.
+- **הצעד הזול הבא:** להגדיר default payment link ב-Sandbox ולהרחיב את ה-e2e לרכישה בכרטיס בדיקה.
+- **⚠ ממצא שנשאר פתוח מהניסוח הקודם, ואומת מחדש במיזוג הזה (01.09.2026):**
+  ‏`supabase/functions/billing-webhook/core.test.ts` **אינו רץ באף שער.** הקובץ קיים,
+  אבל אינו מופיע ברשימת ה-`deno test` של `scripts/check-quality-gates.ps1` ואינו נתפס
+  דרך גילוי כללי — הרשימה שם מונה קבצים בשמם. ‏`_shared/billing-adapter.test.ts` כן
+  ברשימה, וקל לקרוא את זה כאילו נתיב ה-webhook מכוסה. הוא אינו.
+  **נמדד:** אפס התאמות ל-`billing-webhook.*core.test` בסקריפט השער.
+  **הצעד הזול הבא:** להוסיף את הקובץ לאותה רשימה. אין לו תלות בחשבון או בסוד.
 
 ### §58 — ארגון שהבעלים שלו לא אישר מייל נשאר לנצח
 

@@ -14,13 +14,20 @@ import { RECOMMENDED_PLAN } from './PlanTicket';
  * The tenant's own subscription surface, held to OPEN-DECISIONS #194, #199–#204, #208, #216–#225,
  * #266 and #276.
  *
- * The load-bearing test in this file used to be "a checkout redirect is not proof". It is now
- * stronger and simpler: THERE IS NO CHECKOUT PATH AT ALL. Paddle is ACCOUNT_NOT_PROVEN, no
- * `billing-checkout` function exists, and none is being built this wave — so the panel must not
- * invoke one, must not render an affordance that would, and must not contain any wording that
- * could read as payment having happened. #224 and #217 say the entitlement moves on a signed
- * server event and nothing else; the safest implementation of that is to have no local path that
- * could ever claim otherwise, and this file pins exactly that.
+ * THE LOAD-BEARING RULE, AND HOW ITS TEST CHANGED TWICE. It began as "a checkout redirect is not
+ * proof". It became "THERE IS NO CHECKOUT PATH AT ALL", which was true and stronger while no
+ * `billing-checkout` function existed. As of 31.08.2026 one does, so the absence is gone and the
+ * rule has to be pinned by shape instead:
+ *
+ *   * A build with no Paddle client token draws NO purchase path — which is production today, and
+ *     is what the unconfigured fixtures below assert.
+ *   * A build WITH one still refuses unless the server says billing is enabled.
+ *   * And when it does open a checkout, the request carries a rung and a cycle and nothing else —
+ *     no price, no amount, no customer, no organization — so a tampered client cannot buy a
+ *     different thing.
+ *   * `checkout.completed` from Paddle's overlay is NOT a payment. #217 and #224 keep entitlement
+ *     behind a signed server event, so the panel says it is waiting and refetches; it never marks
+ *     a plan paid, and no wording here may read as money having settled.
  *
  * WHAT THIS FILE DID NOT COVER, AND WHY THAT MATTERED. Every fixture here described an organization
  * with `is_paid_plan: false`, because until `0210` that was every organization there was. `0210`
@@ -397,16 +404,16 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     expect(css).not.toMatch(/\.plan-card__cta:disabled\s*\{[^}]*opacity:/);
   });
 
-  it('אין שום נתיב רכישה — לא כפתור, לא קריאה לפונקציה, ולא מילה שנשמעת כמו תשלום שבוצע', async () => {
+  it('בלי טוקן Paddle בבנייה — אין נתיב רכישה, אין קריאה לפונקציה, ואין מילה שנשמעת כמו תשלום', async () => {
+    // This is PRODUCTION's shape: VITE_PADDLE_CLIENT_TOKEN is unset, so `paddleConfig()` is null
+    // and no purchase path is drawn whatever the server says. A deploy that omits the variable
+    // ships a product with no checkout rather than one that guesses an environment.
     renderPanel();
     await settle();
-    // No affordance that would start a checkout.
     expect(screen.queryByRole('button', { name: /מעבר לתשלום/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /רכישה|תשלום/ })).not.toBeInTheDocument();
-    // No Edge function is called, ever, from this panel.
     expect(invoke).not.toHaveBeenCalled();
-    // And nothing on screen could be read as money having moved.
-    expect(screen.queryByText(/התשלום בוצע|שולם|שודרג|ממתין לאישור/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/התשלום בוצע|שולם|שודרג/)).not.toBeInTheDocument();
     expect(screen.getByTestId('current-plan')).toHaveTextContent('חינם');
   });
 
@@ -416,13 +423,13 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     expect(await screen.findByTestId('billing-availability')).toHaveTextContent(/אינה זמינה עדיין/);
   });
 
-  it('ספק סליקה פעיל — אומר משהו אחר, ולא ממציא כפתור שאין מאחוריו נתיב', async () => {
+  it('ספק פעיל אך בלי טוקן בבנייה — עדיין אין כפתור, כי שני החצאים נדרשים', async () => {
+    // Server-enabled is NOT sufficient. Without a client token the overlay could not open, so a
+    // live-looking button would be a control that does nothing in front of a paying customer.
     mockServer(subscription({ billing_provider_enabled: true }));
     renderPanel();
-    await settle();
-    const note = await screen.findByTestId('billing-availability');
-    expect(note).not.toHaveTextContent(/אינה זמינה עדיין/);
-    expect(screen.queryByRole('button', { name: /מעבר לתשלום/ })).not.toBeInTheDocument();
+    const cards = await settle();
+    for (const button of [...cards.querySelectorAll('button')]) expect(button).toBeDisabled();
     expect(invoke).not.toHaveBeenCalled();
   });
 
