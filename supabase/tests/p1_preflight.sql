@@ -410,6 +410,29 @@ autonomy_policy_config_without_definition as (
   where not exists (
     select 1 from private.autonomy_policy_definitions d where d.policy_key = c.policy_key)
 ),
+-- DEBT §64. Automatic document interpretation works in production for one reason only: somebody
+-- typed a row into private.document_interpretation_automation_config by hand. No migration, seed
+-- or script in the repository writes it -- 0081 says so outright ("Config is intentionally empty
+-- after migration") -- because the row holds a vault secret id that differs per environment and
+-- cannot be portable.
+--
+-- The consequence is the dangerous kind of silence. Build a fresh environment from this repository
+-- and you get the cron job, the tables, the screens and the queue, all present and all correct,
+-- and not one document is ever interpreted. Nothing looks wrong. An agent reading the repository
+-- on 25.08.2026 concluded the feature had never run for anybody; production said the opposite.
+--
+-- This arm is the noise that was missing. A scheduled, active interpretation cron with an empty
+-- config is not a state anyone chose, and it is now a preflight anomaly like any other. Where
+-- there is no cron there is nothing to configure, so a fresh CI database reports zero and is
+-- right to.
+document_interpretation_cron_without_config as (
+  select j.jobid as id
+  from cron.job j
+  where to_regclass('cron.job') is not null
+    and j.jobname in ('supplyflow-document-interpretation', 'supplyflow-document-preprocessing')
+    and j.active
+    and not exists (select 1 from private.document_interpretation_automation_config)
+),
 checks(check_name, rows_found, sample_ids) as (
   select 'duplicate_payment_executions', count(*),
     coalesce((select jsonb_agg(id) from (select id from duplicate_payment_executions limit 20) s), '[]'::jsonb)
@@ -549,6 +572,9 @@ checks(check_name, rows_found, sample_ids) as (
   union all select 'autonomy_policy_config_without_definition', count(*),
     coalesce((select jsonb_agg(id) from (select id from autonomy_policy_config_without_definition limit 20) s), '[]'::jsonb)
   from autonomy_policy_config_without_definition
+  union all select 'document_interpretation_cron_without_config', count(*),
+    coalesce((select jsonb_agg(id) from (select id from document_interpretation_cron_without_config limit 20) s), '[]'::jsonb)
+  from document_interpretation_cron_without_config
 )
 select check_name, rows_found, sample_ids
 from checks

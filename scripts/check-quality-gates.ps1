@@ -472,17 +472,17 @@ function Invoke-SqlTest([string]$RelativePath, [string]$Label, [string]$Database
 function Invoke-Preflight {
   $containerPath = "/var/lib/postgresql/p4-p1_preflight.sql"
   Copy-SqlToDatabase "supabase\tests\p1_preflight.sql" $containerPath
-  Write-Gate "P1 preflight (46 anomaly checks)"
+  Write-Gate "P1 preflight (47 anomaly checks)"
   # Kept as a plain capture (the rows are parsed, not streamed), but the classification
   # material is now handed to Assert-ExitCode instead of falling to the catch-all.
   $output = @(& docker exec -e PGPASSWORD=postgres $dbContainer psql -qAt -F "|" -U postgres -d postgres -v ON_ERROR_STOP=1 -f $containerPath)
   Assert-ExitCode "P1 preflight" $output
   $rows = @($output | Where-Object { $_ -match '^([^|]+)\|([0-9]+)\|' })
-  if ($rows.Count -ne 46) { throw "P1 preflight returned $($rows.Count) result rows instead of 46." }
+  if ($rows.Count -ne 47) { throw "P1 preflight returned $($rows.Count) result rows instead of 47." }
   $bad = @($rows | Where-Object { [int](($_ -split '\|')[1]) -ne 0 })
   $rows | ForEach-Object { Write-Output $_ }
   if ($bad.Count) { throw "P1 preflight found local fixture anomalies: $($bad -join '; ')" }
-  Write-Output "P1 preflight passed: 46/46 checks returned rows_found=0."
+  Write-Output "P1 preflight passed: 47/47 checks returned rows_found=0."
 }
 
 function Assert-PowerShellSyntax {
