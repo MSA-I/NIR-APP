@@ -33,6 +33,8 @@ vi.mock('../lib/supabase', async () => {
     supabase: createClient(url, 'test-anon-key', {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     }),
+    // The real module captures the fragment once at import; the mock reads it live so a test may set it.
+    get authCallbackFragment() { return new URLSearchParams(window.location.hash.replace(/^#/, '')); },
   };
 });
 
