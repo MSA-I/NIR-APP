@@ -59,4 +59,13 @@ describe('renderOrderImage — the painted half, pinned by contract (jsdom canno
     expect(source).toMatch(/esc\(/);
     expect(source).toContain('<bdi>');
   });
+
+  it('escapes all five characters that can break out of the hand-built markup', () => {
+    // The markup is a template string handed straight to innerHTML, so `esc` is the whole
+    // boundary. A missing entity here is not a style question: a supplier product name is
+    // user-supplied text that reaches this file unfiltered by design (see orderImageModel).
+    for (const entity of ['&amp;', '&lt;', '&gt;', '&quot;', '&#39;']) {
+      expect(source, entity).toContain(entity);
+    }
+  });
 });

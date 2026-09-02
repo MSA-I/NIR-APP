@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FileCheck2, RefreshCw } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
 import { openReservedPopup } from '../../lib/popup';
+import { signedDocumentSourceUrl } from '../../lib/documentSource';
 import { useT } from '../../lib/i18n/LocaleProvider';
 import { documentProcessingFailureKey, documentUiStatus } from '../../lib/documentStatus';
 import { ICON, Note, useToast } from '../ui';
@@ -41,14 +41,17 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
     setSourceUrl(null);
     setSourceError(null);
     if (!snapshot.document?.storage_path) return;
-    void supabase.storage.from('documents').createSignedUrl(snapshot.document.storage_path, 600).then(({ data, error }) => {
+    void signedDocumentSourceUrl(
+      snapshot.document.storage_path,
+      600,
+      snapshot.document.mime_type,
+    ).then((signedUrl) => {
       if (cancelled) return;
-      if (error || !data?.signedUrl) {
-        console.error('[document-review-source]', error?.message ?? 'signed URL missing');
-        setSourceError(t('docWorkspace.setSourceError'));
-        return;
-      }
-      setSourceUrl(data.signedUrl);
+      setSourceUrl(signedUrl);
+    }).catch((error: unknown) => {
+      if (cancelled) return;
+      console.error('[document-review-source]', error instanceof Error ? error.message : 'signed URL missing');
+      setSourceError(t('docWorkspace.setSourceError'));
     });
     return () => { cancelled = true; };
   }, [snapshot.document?.storage_path]);
@@ -58,11 +61,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
     if (!storagePath) return;
     setOpeningSource(true);
     const result = await openReservedPopup(async () => {
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(storagePath, 300);
-      if (error || !data?.signedUrl) throw error ?? new Error('signed URL missing');
-      return data.signedUrl;
+      return signedDocumentSourceUrl(storagePath, 300, snapshot.document?.mime_type ?? null);
     });
     setOpeningSource(false);
     if (result === 'blocked') toast(t('docWorkspace.toast'), 'error');

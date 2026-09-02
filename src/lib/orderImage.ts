@@ -54,7 +54,12 @@ export function orderImageFileName(order: WhatsAppOrder): string {
   return `order-${order.number}.png`;
 }
 
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// Every value that reaches `templateMarkup` passes through here — the markup is assembled by
+// hand and handed to `innerHTML`, so this is the only thing between a supplier's product
+// name and the DOM. `'` is escaped too: no single-quoted attribute exists in the template
+// today, and this is what keeps adding one from being a silent hole.
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 /**
  * The order as one picture, in the document system (#330).

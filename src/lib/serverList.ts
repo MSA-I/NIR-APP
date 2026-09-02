@@ -264,7 +264,7 @@ export interface ServerListClient {
  * (see `validateLeaf`); this function only ever wraps a non-empty term.
  */
 const escapeLikeWildcards = (text: string) => text.replace(/[\\%_]/g, '\\$&');
-const containsPattern = (text: string) => `%${escapeLikeWildcards(text)}%`;
+export const containsPattern = (text: string) => `%${escapeLikeWildcards(text)}%`;
 
 /**
  * The runtime guards a leaf needs before it can travel. Both emission paths (`applyPredicate` and
