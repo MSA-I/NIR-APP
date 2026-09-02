@@ -280,6 +280,13 @@ insert into public.profiles (id, org_id, full_name, role) values
 insert into public.platform_admins (user_id, note)
 values ('2a250000-0000-4000-8000-000000000004', 'P25 platform operator');
 
+-- 0285 routes this command through private.assert_platform_command, so platform membership is
+-- no longer enough on its own: the operator must hold the capability too. super_admin is what this
+-- fixture always meant -- an operator with unrestricted authority -- and 0151:165 backfilled every
+-- operator that existed to exactly that. p104 is where the NARROWED operator is proved refused.
+insert into public.platform_admin_roles (user_id, role_key)
+values ('2a250000-0000-4000-8000-000000000004', 'super_admin');
+
 insert into public.suppliers (id, org_id, name) values
   ('3a250000-0000-4000-8000-000000000001', '1a250000-0000-4000-8000-000000000001', 'P25 supplier A'),
   ('3a250000-0000-4000-8000-000000000002', '1a250000-0000-4000-8000-000000000002', 'P25 supplier B');

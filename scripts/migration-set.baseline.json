@@ -274,5 +274,6 @@
   "0282_invitation_is_a_proven_address_not_a_password.sql",
   "0283_profile_theme.sql",
   "0284_document_measured_against_what_the_order_has_left.sql",
-  "0285_the_caller_is_resolved_once_not_once_per_entitlement.sql"
+  "0285_the_caller_is_resolved_once_not_once_per_entitlement.sql",
+  "0286_platform_writers_carry_their_capability.sql"
 ]

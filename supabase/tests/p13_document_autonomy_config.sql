@@ -267,6 +267,13 @@ insert into profiles (id, org_id, full_name, role) values
 insert into platform_admins (user_id, note) values
   ('23000000-0000-4000-8000-000000000010', 'P13 platform operator fixture');
 
+-- 0285 routes this command through private.assert_platform_command, so platform membership is
+-- no longer enough on its own: the operator must hold the capability too. super_admin is what this
+-- fixture always meant -- an operator with unrestricted authority -- and 0151:165 backfilled every
+-- operator that existed to exactly that. p104 is where the NARROWED operator is proved refused.
+insert into platform_admin_roles (user_id, role_key) values
+  ('23000000-0000-4000-8000-000000000010', 'super_admin');
+
 -- 0211 grants four policies to every organisation created inside the pre-launch window, so the
 -- fixtures above were born configured. That is the decision working, and it is asserted in
 -- section (a) -- but it leaves this suite with no unconfigured tenant, and "unconfigured resolves

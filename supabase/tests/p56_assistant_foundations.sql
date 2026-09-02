@@ -175,6 +175,13 @@ insert into public.suppliers (id, org_id, name) values
 insert into public.platform_admins (user_id, note) values
   ('66000000-0000-4000-8000-000000000005', 'P56 platform ops');
 
+-- 0285 routes this command through private.assert_platform_command, so platform membership is
+-- no longer enough on its own: the operator must hold the capability too. super_admin is what this
+-- fixture always meant -- an operator with unrestricted authority -- and 0151:165 backfilled every
+-- operator that existed to exactly that. p104 is where the NARROWED operator is proved refused.
+insert into public.platform_admin_roles (user_id, role_key) values
+  ('66000000-0000-4000-8000-000000000005', 'super_admin');
+
 -- ===== An unstated quota refuses, rather than being treated as infinite =====
 -- 0164 shipped assistant_runs.monthly in the explicit unknown state for EVERY plan, and this arm
 -- read that state off the default rung. 0202 gave the four self-service rungs the figures #198
