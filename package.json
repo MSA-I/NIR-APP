@@ -34,6 +34,7 @@
     "check:noindex-posture": "node scripts/check-noindex-posture.mjs",
     "check:live-seo": "node scripts/check-live-seo-posture.mjs",
     "check:dead-code": "knip --config knip.json",
+    "audit:debt": "node scripts/audit-debt-evidence.mjs",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && vite build",
     "build:almoni": "node scripts/build-almoni.mjs",
