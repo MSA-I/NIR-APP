@@ -3435,6 +3435,7 @@ export const he = {
     scopeNote: 'ההצטרפות פותחת חשבון לניהול הפלטפורמה בלבד. היא אינה פותחת עסק ואינה מצרפת אותך לאף ארגון.',
     heading: 'הצטרפות לצוות',
     subheading: 'ניהול הפלטפורמה, לא ניהול עסק',
+    alreadyConfirmed: 'הכתובת אושרה והסיסמה כבר נבחרה. אפשר להצטרף לצוות.',
   },
 
   orgSubscription: {
@@ -5331,6 +5332,7 @@ export const he = {
     consentLead: 'קראתי ואני מסכים/ה ל',
     consentAnd: 'ול',
     consentVersion: '(גרסה {version}).',
+    alreadyConfirmed: 'הכתובת אושרה והסיסמה כבר נבחרה. נשאר רק להשלים את הפרטים ולהצטרף.',
   },
 
   receiptDetail: {
@@ -5368,7 +5370,7 @@ export const he = {
     setError_2: 'ההרשמה נכשלה. יש לנסות שוב, ואם הבעיה חוזרת לפנות לתמיכה.',
     text: 'בדקו את תיבת הדואר',
     text_3: 'פתיחת חשבון',
-    text_4: 'החשבון נפתח מיד, וההתחברות אפשרית לאחר אישור כתובת האימייל.',
+    text_4: 'החשבון נפתח מיד. הסיסמה נבחרת מתוך מייל האישור, ורק אז אפשר להיכנס.',
     text_5: 'מחובר כ־',
     text_6: 'שם העסק',
     text_7: 'שם מלא',
@@ -5381,7 +5383,7 @@ export const he = {
     signedInWith: 'עם {provider}.',
     signedInWithNoEmail: 'מחובר עם {provider}.',
     onlyNameTheBusiness: 'נשאר רק לתת שם לעסק.',
-    passwordRule: 'לפחות {min} תווים.',
+    passwordAfterConfirmation: 'לא נבחרת סיסמה כאן. אחרי אישור הכתובת מהמייל שיישלח אליה, תבחרו סיסמה — כך אף אחד אחר לא יכול לקבוע סיסמה לכתובת שלכם.',
     alreadyHaveAccount: 'כבר יש חשבון?',
     backupEmailLabel: 'כתובת דואר חלופית',
     backupEmailWhy: 'הכתובת שקיבלנו היא כתובת העברה שאפשר לכבות. הכתובת החלופית היא הדרך להגיע אליך אם היא תיסגר.',
@@ -5950,6 +5952,26 @@ export const he = {
     confirmPassword: 'אימות סיסמה',
     changePassword: 'החלפת סיסמה',
     changedRedirecting: 'הסיסמה הוחלפה. מנתק את החיבורים הישנים ומעביר למסך הכניסה…',
+  },
+
+  /** `/auth/confirm` — the landing pad every Auth e-mail points at. */
+  authConfirm: {
+    title: 'אימות הקישור',
+    checking: 'בודק את הקישור…',
+    invalidLink: 'הקישור אינו תקין, כבר נוצל או שפג תוקפו. אפשר לבקש קישור חדש.',
+    sendNewLink: 'שליחת קישור חדש',
+    backToLogin: 'חזרה למסך הכניסה',
+  },
+
+  /** `/set-password` — the first password of an account opened without one (הכרעת בעלים #332). */
+  setPassword: {
+    title: 'בחירת סיסמה',
+    checking: 'בודק את החשבון…',
+    intro: 'הכתובת אושרה. עכשיו בוחרים סיסמה, וממנה מתחברים בכל פעם הבאה.',
+    action: 'שמירת הסיסמה',
+    needsConfirmedLink: 'כדי לבחור סיסמה צריך להגיע מקישור האישור שנשלח לכתובת. אפשר לבקש קישור חדש.',
+    sendNewLink: 'שליחת קישור חדש',
+    backToLogin: 'חזרה למסך הכניסה',
   },
 
   forgotPassword: {

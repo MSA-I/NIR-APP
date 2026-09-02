@@ -49,8 +49,6 @@ import { TERMS_VERSION } from './Legal';
  */
 type EntranceMode = 'signIn' | 'createBusiness';
 
-const MIN_PASSWORD_LENGTH = 10;
-
 /** The one shape check on the address, named once so the button state and the field's own
  *  validity cannot drift apart. */
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -276,6 +274,15 @@ export default function Entrance({ initialMode }: { initialMode: EntranceMode })
     window.location.replace('/');
   }
 
+  /**
+   * Owner ruling #332: this form no longer sends a password, and could not usefully send one.
+   *
+   * It used to. `public-signup` created the auth account with whatever was typed here, against an
+   * address nobody had proved — so a stranger could pre-register YOUR address with THEIR password,
+   * and the confirmation mail you clicked would bring the account to life under their credentials.
+   * The account is now created with no password at all; the first one is chosen on `/set-password`,
+   * after the confirmation link has proved the address belongs to whoever opened it.
+   */
   async function createBusiness() {
     setBusy(true);
     setError(null);
@@ -287,7 +294,6 @@ export default function Entrance({ initialMode }: { initialMode: EntranceMode })
           organization_name: organization.trim(),
           full_name: fullName.trim(),
           email: email.trim(),
-          password,
           ...(backup ? { backup_email: backup } : {}),
         },
       },
@@ -343,8 +349,6 @@ export default function Entrance({ initialMode }: { initialMode: EntranceMode })
   // Typed-but-wrong, not merely empty: an untouched field is not a mistake yet, and marking it
   // invalid before anyone has typed would announce a failure the visitor has not made.
   const emailProblem = email.trim().length > 0 && !EMAIL_SHAPE.test(email.trim());
-  const passwordProblem = mode === 'createBusiness'
-    && password.length > 0 && password.length < MIN_PASSWORD_LENGTH;
 
   /**
    * The address this signup will actually be keyed by — the provider's when one signed us in, and
@@ -360,10 +364,11 @@ export default function Entrance({ initialMode }: { initialMode: EntranceMode })
     : null;
   const backupSatisfied = !askBackupEmail || backupProblem === null;
 
+  // No password condition, because the form no longer has the field: three answers and a valid
+  // address are everything `public-signup` reads on this branch now.
   const readyToCreate = organization.trim().length > 0
     && fullName.trim().length > 0
     && EMAIL_SHAPE.test(email.trim())
-    && password.length >= MIN_PASSWORD_LENGTH
     && backupSatisfied;
 
   const creating = mode === 'createBusiness';
@@ -521,50 +526,50 @@ export default function Entrance({ initialMode }: { initialMode: EntranceMode })
             </div>
           )}
 
-          {/* Both credential fields point at the one banner. A federated session has proved its
-              address already, so it is shown in the note above and these disappear entirely. */}
+          {/* The address is asked for in both modes. A federated session has proved its address
+              already, so it is shown in the note above and this disappears entirely. */}
           {!federated && (
-            <>
-              <div>
-                <label className="label" htmlFor="email">{t('login.text_9')}</label>
-                <input id="email" type="email" className="input" dir="ltr"
-                  autoComplete={creating ? 'email' : 'username'}
-                  aria-invalid={error || emailProblem ? true : undefined}
+            <div>
+              <label className="label" htmlFor="email">{t('login.text_9')}</label>
+              <input id="email" type="email" className="input" dir="ltr"
+                autoComplete={creating ? 'email' : 'username'}
+                aria-invalid={error || emailProblem ? true : undefined}
+                aria-describedby={problemId}
+                value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </div>
+          )}
+
+          {/* THE PASSWORD BOX BELONGS TO SIGNING IN, AND ONLY TO IT (owner ruling #332). Opening a
+              business does not choose a password here any more: the account is created without
+              one, and the first one is chosen from the confirmation mail, on a screen that has
+              already proved who is holding the address. */}
+          {!federated && !creating && (
+            <div>
+              <label className="label" htmlFor="password">{t('login.text_10')}</label>
+              {/* dir="ltr" on the wrapper, not just the input: the value is typed left to right,
+                  so the reveal toggle belongs at the end of that text — the right-hand side —
+                  and `end` has to resolve in the same direction as the input's own `pe-12`. */}
+              <div className="relative" dir="ltr">
+                <input id="password" type={showPassword ? 'text' : 'password'} className="input pe-12"
+                  autoComplete="current-password"
+                  aria-invalid={error ? true : undefined}
                   aria-describedby={problemId}
-                  value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <button type="button" onClick={() => setShowPassword((current) => !current)}
+                  className="absolute inset-y-0 end-0 flex min-h-11 min-w-11 items-center justify-center rounded-lg text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                  aria-label={showPassword ? t('login.text_11') : t('login.text_12')} aria-pressed={showPassword}>
+                  {showPassword ? <EyeOff size={ICON.md} aria-hidden="true" /> : <Eye size={ICON.md} aria-hidden="true" />}
+                </button>
               </div>
-              <div>
-                <label className="label" htmlFor="password">{t('login.text_10')}</label>
-                {/* dir="ltr" on the wrapper, not just the input: the value is typed left to right,
-                    so the reveal toggle belongs at the end of that text — the right-hand side —
-                    and `end` has to resolve in the same direction as the input's own `pe-12`. */}
-                <div className="relative" dir="ltr">
-                  <input id="password" type={showPassword ? 'text' : 'password'} className="input pe-12"
-                    autoComplete={creating ? 'new-password' : 'current-password'}
-                    aria-invalid={error || passwordProblem ? true : undefined}
-                    aria-describedby={creating
-                      ? `entrance-password-rule${error ? ' entrance-problem' : ''}`
-                      : problemId}
-                    value={password} onChange={(e) => setPassword(e.target.value)} required />
-                  <button type="button" onClick={() => setShowPassword((current) => !current)}
-                    className="absolute inset-y-0 end-0 flex min-h-11 min-w-11 items-center justify-center rounded-lg text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                    aria-label={showPassword ? t('login.text_11') : t('login.text_12')} aria-pressed={showPassword}>
-                    {showPassword ? <EyeOff size={ICON.md} aria-hidden="true" /> : <Eye size={ICON.md} aria-hidden="true" />}
-                  </button>
-                </div>
-                {creating ? (
-                  <p id="entrance-password-rule"
-                    className={`mt-1 text-xs ${passwordProblem ? 'text-alert-fg' : 'text-ink-muted'}`}>
-                    {t('signup.passwordRule', { min: MIN_PASSWORD_LENGTH })}
-                  </p>
-                ) : (
-                  <Link to="/forgot-password"
-                    className="mt-2 inline-block text-sm text-action underline-offset-2 hover:underline">
-                    {t('login.text_13')}
-                  </Link>
-                )}
-              </div>
-            </>
+              <Link to="/forgot-password"
+                className="mt-2 inline-block text-sm text-action underline-offset-2 hover:underline">
+                {t('login.text_13')}
+              </Link>
+            </div>
+          )}
+
+          {creating && !federated && (
+            <p className="text-xs text-ink-muted">{t('signup.passwordAfterConfirmation')}</p>
           )}
 
           {/* Owner decision #270, drawn only for an address a third party can switch off — or when

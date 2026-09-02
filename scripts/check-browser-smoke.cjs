@@ -2239,7 +2239,7 @@ async function publicSignupSurface(browser) {
       headers: jsonHeaders,
       json: {
         status: 'pending_confirmation',
-        message: 'אם הכתובת אינה רשומה עדיין — נשלח אליה מייל אישור, ויש להשלים ממנו את ההרשמה. אם היא כבר רשומה — יש להיכנס עם הסיסמה הקיימת או לאפס אותה.',
+        message: 'אם הכתובת אינה רשומה עדיין — נשלח אליה מייל אישור, וממנו בוחרים סיסמה ומשלימים את ההרשמה. אם היא כבר רשומה — יש להיכנס עם הסיסמה הקיימת או לאפס אותה.',
       },
     });
   });
@@ -2258,20 +2258,26 @@ async function publicSignupSurface(browser) {
 
     // The four fields moved when #195 merged `/signup` and `/login` into one card: `Signup.tsx`
     // is now a thin wrapper that renders `Entrance` on the "name a business" side, so the ids are
-    // `entrance-*`, and email and password are shared with the sign-in side and lost their prefix.
-    // The heading, the submit button and the post-submit text are unchanged, which is why this
-    // scenario failed at the first fill rather than earlier.
+    // `entrance-*`, and email is shared with the sign-in side and lost its prefix.
+    //
+    // AND THEN THERE WERE THREE. Owner ruling #332 took the password field off this side of the
+    // card: the account is created without one, and the first password is chosen from the
+    // confirmation mail. Its ABSENCE is asserted below rather than merely not typed into -- a form
+    // that quietly grew the box back would otherwise pass this scenario unchanged.
     await page.locator('#entrance-organization').fill('עסק בדיקה');
     await page.locator('#entrance-name').fill('בעלים בדיקה');
     await page.locator('#email').fill('p4-signup@example.invalid');
-    await page.locator('#password').fill('a-long-enough-password');
+    assert.equal(
+      await page.locator('#password').count(), 0,
+      'the signup side still asks for a password, so a stranger can set one on an unproved address',
+    );
     await page.getByRole('button', { name: 'פתיחת חשבון' }).click();
 
     await page.getByText('בדקו את תיבת הדואר').waitFor({ timeout: 20_000 });
     assert(sent !== null, 'the signup form sent nothing');
     assert.deepEqual(
       Object.keys(sent).sort(),
-      ['email', 'full_name', 'organization_name', 'password'],
+      ['email', 'full_name', 'organization_name'],
       'the signup form sent a field the visitor does not get to choose',
     );
 

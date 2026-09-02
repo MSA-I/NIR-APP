@@ -15,7 +15,17 @@ import {
 } from '../lib/invitations';
 import { TERMS_VERSION } from './Legal';
 
-/** Public route — the invitee has no account and no session when they land here. */
+/**
+ * Public route — the invitee usually has no account and no session when they land here.
+ *
+ * USUALLY, AND NO LONGER ALWAYS. When the project requires e-mail confirmation, signing up here
+ * yields no session: the invitee has to confirm first. That confirmation link now lands on
+ * `/auth/confirm`, which spends the token hash and sends the browser BACK here with a session
+ * already established — the round trip the `next` parameter carries the invitation token through
+ * (`emailRedirectTo` below is what becomes `{{ .RedirectTo }}` in the template). So this screen has
+ * a second entrance, and on it the password question is already answered: it was chosen before the
+ * mail went out. Asking again would be theatre, and worse, a second answer that has to match.
+ */
 export default function AcceptInvite() {
   const { errorText, statusLabel, t } = useT();
   const [params] = useSearchParams();
@@ -24,6 +34,8 @@ export default function AcceptInvite() {
   const [lookup, setLookup] = useState<InvitationLookup | null>(null);
   const [loading, setLoading] = useState(true);
   const [lookupError, setLookupError] = useState<string | null>(null);
+  /** The address of a session that already exists — the confirmation round trip's return leg. */
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -41,8 +53,16 @@ export default function AcceptInvite() {
     (async () => {
       if (!token) { setLookup({ status: 'unknown' }); setLoading(false); return; }
       try {
-        const res = await lookupInvitation(token);
-        if (!cancelled) setLookup(res);
+        // The session is read alongside the invitation, never instead of it: a session proves an
+        // address, and only the invitation says what that address was invited to.
+        const [res, session] = await Promise.all([
+          lookupInvitation(token),
+          supabase.auth.getSession(),
+        ]);
+        if (!cancelled) {
+          setLookup(res);
+          setSessionEmail(session.data.session?.user?.email ?? null);
+        }
       } catch (e) {
         // Raw otherwise, on the screen where an invited employee first meets the product.
         if (!cancelled) setLookupError(errorText(e));
@@ -53,36 +73,64 @@ export default function AcceptInvite() {
     return () => { cancelled = true; };
   }, [token]);
 
+  /**
+   * The invitee is already signed in AS the invited address, so the sign-up half is done.
+   *
+   * The comparison is case-insensitive because `invitations.email` is stored lowercased (0020) and
+   * a session's address is whatever GoTrue holds. A session for a DIFFERENT address is deliberately
+   * not treated as an entrance: `accept_invitation` resolves the invitation from the caller's own
+   * confirmed address (0282), so letting somebody else's session through here would only produce a
+   * refusal one step later, after the form had claimed it would work.
+   */
+  const signedInAsInvitee = Boolean(
+    sessionEmail && lookup?.email
+    && sessionEmail.trim().toLowerCase() === lookup.email.trim().toLowerCase(),
+  );
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setFormError(null);
-    const problem = passwordProblemOf(password, confirm);
-    if (problem) { setFormError(t(problem.key, problem.vars)); return; }
+    if (!signedInAsInvitee) {
+      const problem = passwordProblemOf(password, confirm);
+      if (problem) { setFormError(t(problem.key, problem.vars)); return; }
+    }
 
     setBusy(true);
     try {
       const email = lookup!.email!;
 
-      // The auth user may already exist if a previous attempt got as far as sign-up but not
-      // as far as accepting (e.g. the project requires email confirmation).
-      let { data: auth, error } = await supabase.auth.signUp({ email, password });
-      if (error && /already registered|already exists/i.test(error.message)) {
-        const retry = await supabase.auth.signInWithPassword({ email, password });
-        auth = retry.data;
-        error = retry.error;
-      }
-      if (error) {
-        setFormError(
-          /Invalid login credentials/i.test(error.message)
-            ? t('acceptInvite.text')
-            : errorText(error),
-        );
-        return;
-      }
+      if (!signedInAsInvitee) {
+        // The auth user may already exist if a previous attempt got as far as sign-up but not
+        // as far as accepting (e.g. the project requires email confirmation).
+        //
+        // `emailRedirectTo` is the whole round trip: GoTrue puts it in `{{ .RedirectTo }}`, the
+        // template hands it to `/auth/confirm` as `next`, and that route brings the browser back
+        // here — with the invitation token still on the address, and a session in hand. It carries
+        // exactly ONE query parameter on purpose; the template interpolates it unencoded, so a
+        // second `&`-separated pair would be read as a parameter of the confirm route instead.
+        let { data: auth, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: `${window.location.origin}/accept-invite?token=${encodeURIComponent(token)}` },
+        });
+        if (error && /already registered|already exists/i.test(error.message)) {
+          const retry = await supabase.auth.signInWithPassword({ email, password });
+          auth = retry.data;
+          error = retry.error;
+        }
+        if (error) {
+          setFormError(
+            /Invalid login credentials/i.test(error.message)
+              ? t('acceptInvite.text')
+              : errorText(error),
+          );
+          return;
+        }
 
-      // No session means the project requires email confirmation. The invitation stays valid,
-      // so confirming and re-opening the same link completes the flow.
-      if (!auth?.session) { setConfirmEmailSent(true); return; }
+        // No session means the project requires email confirmation. The invitation stays valid,
+        // and the link in that mail returns to this screen with the session it needs.
+        if (!auth?.session) { setConfirmEmailSent(true); return; }
+      }
 
       const { role } = await acceptInvitation(token, fullName.trim(), phone.trim(), TERMS_VERSION);
 
@@ -156,24 +204,30 @@ export default function AcceptInvite() {
               value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="password">{t('acceptInvite.passwordLabel', { min: MIN_PASSWORD_LENGTH })}</label>
-            {/* Both boxes carry the mark: `passwordProblem` judges the pair, so naming one of
-                them would be a claim the check does not make. */}
-            <input id="password" type="password" className="input" dir="ltr" autoComplete="new-password" required
-              aria-invalid={formError ? true : undefined}
-              aria-describedby={formError ? 'accept-invite-problem' : undefined}
-              value={password} onChange={(e) => setPassword(e.target.value)} />
+        {signedInAsInvitee ? (
+          // The password was chosen before the confirmation mail went out, and the session on this
+          // browser proves the address it was chosen for. There is nothing left to ask.
+          <p className="text-sm text-ink-muted">{t('acceptInvite.alreadyConfirmed')}</p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label" htmlFor="password">{t('acceptInvite.passwordLabel', { min: MIN_PASSWORD_LENGTH })}</label>
+              {/* Both boxes carry the mark: `passwordProblem` judges the pair, so naming one of
+                  them would be a claim the check does not make. */}
+              <input id="password" type="password" className="input" dir="ltr" autoComplete="new-password" required
+                aria-invalid={formError ? true : undefined}
+                aria-describedby={formError ? 'accept-invite-problem' : undefined}
+                value={password} onChange={(e) => setPassword(e.target.value)} />
+            </div>
+            <div>
+              <label className="label" htmlFor="confirm">{t('acceptInvite.text_5')}</label>
+              <input id="confirm" type="password" className="input" dir="ltr" autoComplete="new-password" required
+                aria-invalid={formError ? true : undefined}
+                aria-describedby={formError ? 'accept-invite-problem' : undefined}
+                value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            </div>
           </div>
-          <div>
-            <label className="label" htmlFor="confirm">{t('acceptInvite.text_5')}</label>
-            <input id="confirm" type="password" className="input" dir="ltr" autoComplete="new-password" required
-              aria-invalid={formError ? true : undefined}
-              aria-describedby={formError ? 'accept-invite-problem' : undefined}
-              value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-          </div>
-        </div>
+        )}
 
         {/* The consent gate. `min-h-11` is not decoration here: this is the control that decides
             whether a legal agreement was given, and it was the smallest tap target on the screen

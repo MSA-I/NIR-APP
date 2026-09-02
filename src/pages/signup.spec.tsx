@@ -61,13 +61,16 @@ const NEUTRAL = 'אם הכתובת אינה רשומה עדיין — נשלח �
 
 const renderScreen = () => render(<MemoryRouter><Signup /></MemoryRouter>);
 
+/**
+ * THREE ANSWERS, NOT FOUR (owner ruling #332). The password box is gone from this side of the card:
+ * the account is created without one and the first password is chosen from the confirmation mail.
+ */
 const fill = async () => {
   const user = userEvent.setup();
   renderScreen();
   await user.type(screen.getByLabelText('שם העסק'), 'מסעדת הגפן');
   await user.type(screen.getByLabelText('שם מלא'), 'משה כהן');
   await user.type(screen.getByLabelText('אימייל'), 'owner@example.test');
-  await user.type(screen.getByLabelText('סיסמה'), 'a-long-enough-password');
   return user;
 };
 
@@ -104,15 +107,46 @@ beforeEach(() => {
 });
 
 describe('פתיחת חשבון', () => {
-  it('שולח ארבעה שדות בלבד — מסלול, סטטוס ומע״מ אינם של הנרשם', async () => {
+  it('שולח שלושה שדות בלבד — בלי סיסמה, ובלי מסלול, סטטוס ומע״מ', async () => {
     // A form that could ask for a plan would be a free upgrade. The edge function reads exactly
-    // these four keys, and sending more would change nothing — but offering them would mislead.
+    // these three keys, and sending more would change nothing — but offering them would mislead.
     const user = await fill();
     await user.click(screen.getByRole('button', { name: 'פתיחת חשבון' }));
 
     await waitFor(() => expect(invoke).toHaveBeenCalled());
     const body = invoke.mock.calls[0]![1].body as Record<string, unknown>;
-    expect(Object.keys(body).sort()).toEqual(['email', 'full_name', 'organization_name', 'password']);
+    expect(Object.keys(body).sort()).toEqual(['email', 'full_name', 'organization_name']);
+  });
+
+  /**
+   * Owner ruling #332, and the reason it is asserted on the FORM and not only on the request.
+   *
+   * The old shape let a stranger type your address with their password. The account started
+   * unconfirmed, so they could not sign in — but the confirmation mail went to YOU, and clicking it
+   * brought the account to life under their credentials, as the owner of an organization. A test
+   * that only checked the request body would keep passing if the box came back and was merely left
+   * unsent, and the box coming back is how the request would follow.
+   */
+  it('אינו מצייר שדה סיסמה בצד פתיחת החשבון, ומצייר אותו בצד הכניסה', async () => {
+    const user = userEvent.setup();
+    renderScreen();
+    await waitFor(() => expect(getSession).toHaveBeenCalled());
+
+    expect(screen.getByLabelText('שם העסק')).toBeInTheDocument();
+    expect(screen.queryByLabelText('סיסמה')).toBeNull();
+    expect(screen.getByText(/לא נבחרת סיסמה כאן/)).toBeInTheDocument();
+
+    // The same card, switched to "I already have an account": signing in still needs one.
+    await user.click(screen.getByRole('button', { name: 'התחברות' }));
+    expect(screen.getByLabelText('סיסמה')).toBeInTheDocument();
+    expect(screen.queryByText(/לא נבחרת סיסמה כאן/)).toBeNull();
+  });
+
+  it('פותח חשבון בשלושת השדות בלבד — אין סיסמה שתחסום את הכפתור', async () => {
+    // The button used to wait for ten characters of password. With no password to wait for, three
+    // answers and a valid address are the whole gate — and the screen must not invent a fourth.
+    await fill();
+    expect(screen.getByRole('button', { name: 'פתיחת חשבון' })).toBeEnabled();
   });
 
   it('מציג את אותה תשובה בדיוק גם כשהכתובת כבר רשומה', async () => {
@@ -156,13 +190,14 @@ describe('פתיחת חשבון', () => {
     expect(screen.getByRole('button', { name: 'שלחו שוב' })).toBeEnabled();
   });
 
-  it('אינו מאפשר שליחה עם סיסמה קצרה מדי', async () => {
+  it('אינו מאפשר שליחה עם כתובת שאינה תקינה', async () => {
+    // What replaced the password-length gate. The address is the only thing the server can key the
+    // account by, so a malformed one is the one refusal this side of the card still owes.
     const user = userEvent.setup();
     renderScreen();
     await user.type(screen.getByLabelText('שם העסק'), 'עסק');
     await user.type(screen.getByLabelText('שם מלא'), 'משה');
-    await user.type(screen.getByLabelText('אימייל'), 'owner@example.test');
-    await user.type(screen.getByLabelText('סיסמה'), 'short');
+    await user.type(screen.getByLabelText('אימייל'), 'not-an-address');
     expect(screen.getByRole('button', { name: 'פתיחת חשבון' })).toBeDisabled();
   });
 
@@ -421,7 +456,9 @@ describe('פתיחת חשבון', () => {
 
     await waitFor(() => expect(getSession).toHaveBeenCalled());
     expect(screen.queryByText(/מחובר כ/)).toBeNull();
-    expect(screen.getByLabelText('סיסמה')).toBeInTheDocument();
+    // The evidence used to be the password box. #332 took that off this side of the card, so the
+    // tell is the ADDRESS field: a real federated session has proved one and never draws it.
+    expect(screen.getByLabelText('אימייל')).toBeInTheDocument();
   });
 });
 
