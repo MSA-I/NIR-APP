@@ -264,6 +264,10 @@ export const EXCEPTION_TYPE: Record<string, string> = {
   // receipt_mismatch with details.code='item_not_ordered' — that injection is §17's
   // remaining step; the manual command (0087) uses the honest type from day one.
   item_not_ordered: 'exceptionType_item_not_ordered',
+  // 0273. A document that was expected and never came -- a finding, not the absence of one.
+  // It waited here unlabelled: the table rendered an empty cell and the filter on /exceptions
+  // is built from THIS map, so the type could not even be selected. check:exception-labels.
+  expected_document_missing: 'exceptionType_expected_document_missing',
 };
 
 export const EXCEPTION_STATUS: Record<string, StatusMeta> = {

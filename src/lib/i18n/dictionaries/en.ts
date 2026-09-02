@@ -389,6 +389,7 @@ export const en: Dictionary = {
     exceptionType_credit_not_deducted: 'Credit never offset',
     exceptionType_receipt_mismatch: 'Receipt and invoice disagree',
     exceptionType_item_not_ordered: 'Item that was not ordered',
+    exceptionType_expected_document_missing: 'An expected document never arrived',
     /* The commercial catalogue. The Hebrew side mirrors the database verbatim; this side is the
        reason the file exists (owner decision 31.08.2026, OPEN-DECISIONS #303). */
     plan_legacy: 'Legacy customer',
