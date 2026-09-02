@@ -410,6 +410,34 @@ autonomy_policy_config_without_definition as (
   where not exists (
     select 1 from private.autonomy_policy_definitions d where d.policy_key = c.policy_key)
 ),
+-- DEBT §64. Automatic document interpretation works in production for one reason only: somebody
+-- typed a row into private.document_interpretation_automation_config by hand. No migration, seed
+-- or script in the repository writes it -- 0081 says so outright ("Config is intentionally empty
+-- after migration") -- because the row holds a vault secret id that differs per environment and
+-- cannot be portable. `0081` DOES schedule the cron unconditionally, so every environment built
+-- from these migrations has an active dispatcher and an empty configuration.
+--
+-- That is why this arm cannot simply ask "cron active and config empty". That is true of a fresh
+-- CI database by construction, and an anomaly that is always non-zero is not an anomaly, it is
+-- noise that trains its reader to skip the report. Measured: the first version of this check
+-- fired on every branch.
+--
+-- The anomaly is the HARM, not the shape: documents that have been waiting for interpretation
+-- while the dispatcher cannot dispatch them. A database seeded seconds ago has nothing waiting
+-- thirty minutes, so CI reports zero and is right to. An environment where somebody uploaded a
+-- document and nothing happened reports the count and the job ids, which is the state that misled
+-- an agent on 25.08.2026 into concluding from the repository that the feature had never run.
+document_interpretation_cron_without_config as (
+  select job.id
+  from public.document_processing_jobs job
+  where job.status in ('queued', 'extracted')
+    and job.created_at < now() - interval '30 minutes'
+    and exists (
+      select 1 from cron.job cron_job
+      where cron_job.jobname = 'supplyflow-document-interpretation'
+        and cron_job.active)
+    and not exists (select 1 from private.document_interpretation_automation_config)
+),
 checks(check_name, rows_found, sample_ids) as (
   select 'duplicate_payment_executions', count(*),
     coalesce((select jsonb_agg(id) from (select id from duplicate_payment_executions limit 20) s), '[]'::jsonb)
@@ -549,6 +577,9 @@ checks(check_name, rows_found, sample_ids) as (
   union all select 'autonomy_policy_config_without_definition', count(*),
     coalesce((select jsonb_agg(id) from (select id from autonomy_policy_config_without_definition limit 20) s), '[]'::jsonb)
   from autonomy_policy_config_without_definition
+  union all select 'document_interpretation_cron_without_config', count(*),
+    coalesce((select jsonb_agg(id) from (select id from document_interpretation_cron_without_config limit 20) s), '[]'::jsonb)
+  from document_interpretation_cron_without_config
 )
 select check_name, rows_found, sample_ids
 from checks

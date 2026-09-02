@@ -1073,7 +1073,10 @@ select pg_temp.p14_assert(
   exists (
     select 1 from public.exceptions
     where org_id = '14000000-0000-4000-8000-000000000001'
-      and type = 'receipt_mismatch' and status = 'open'
+      -- 0290: the automatic path raises the exception under its own name now, exactly as a
+      -- person opening it by hand does. The evidence key stays, because three assertions in
+      -- this file read it and because it names the item as well as the kind.
+      and type = 'item_not_ordered' and status = 'open'
       and details ->> 'code' = 'item_not_ordered'
       and details -> 'items' @> jsonb_build_array(jsonb_build_object('sku', 'SKU-SURPRISE'))),
   'an exception must be OPEN against the order, naming the item that was not ordered');
