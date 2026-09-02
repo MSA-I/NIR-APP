@@ -370,7 +370,7 @@ console.log('\nwiring');
   const workflow = readFileSync(path.join(repoRoot, '.github', 'workflows', 'build.yml'), 'utf8');
   const required = ['check:suite-manifest', 'check:migration-numbers', 'check:renumber-closure',
     'check:key-manifest', 'check:baseline-drift', 'check:decision-numbers', 'check:noindex-posture',
-    'check:gate-controls'];
+    'check:gate-controls', 'check:env-files'];
   const missingScript = required.filter((c) => !pkg.scripts?.[c]);
   const missingVerify = required.filter((c) => !String(pkg.scripts?.verify ?? '').includes(c));
   const missingStep = required.filter((c) => !workflow.includes(`npm run ${c}`));
