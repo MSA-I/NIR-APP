@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { fmtDate, fmtDateTime } from '../lib/format';
 import { ok } from '../lib/errors';
 import { supabase } from '../lib/supabase';
+import { signedDocumentSourceUrl } from '../lib/documentSource';
 import type { DocumentRow } from '../lib/types';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { ActionMenu } from './ActionMenu';
@@ -137,9 +138,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
 
   async function open(doc: DocumentRow) {
     const result = await openReservedPopup(async () => {
-      const { data: url, error } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300);
-      if (error || !url) throw error ?? new Error('missing signed URL');
-      return url.signedUrl;
+      return signedDocumentSourceUrl(doc.storage_path, 300, doc.mime_type);
     });
     if (result === 'blocked') toast(t('attachments.toast'), 'error');
     if (result === 'error') toast(t('attachments.toast_2'), 'error');

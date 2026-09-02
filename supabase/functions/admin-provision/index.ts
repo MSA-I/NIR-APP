@@ -20,9 +20,13 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 import {
   provisionTenant, validateProvisionInput, type ProvisionResult,
 } from '../_shared/provision.ts';
+import { withAllowedOrigin } from '../_shared/cors.ts';
 
 const CORS_HEADERS: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
+  // Filled per request by withAllowedOrigin (../_shared/cors.ts): the caller's Origin when it
+  // is on ALLOWED_ORIGINS/APP_BASE_URL, and the first allowed origin otherwise. Never '*'.
+  'Access-Control-Allow-Origin': '',
+  Vary: 'Origin',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-correlation-id',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
@@ -57,7 +61,7 @@ function fail(code: ErrorCode, message: string, status: number, detail?: string)
   return json({ error: { code, message, detail } }, status);
 }
 
-Deno.serve(async (req: Request): Promise<Response> => {
+Deno.serve(withAllowedOrigin(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
   if (req.method !== 'POST') return fail('method_not_allowed', 'POST בלבד', 405);
 
@@ -128,4 +132,4 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const result: ProvisionResult = outcome.result;
   return json(result, 201);
-});
+}));

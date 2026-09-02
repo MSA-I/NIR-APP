@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Archive, ChevronDown, Eye, FileDown, FileInput, FolderOpen, FileSearch, FileText, Loader2, ReceiptText, RefreshCw, RotateCcw, Search, Trash2, Undo2, Upload, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { signedDocumentSourceUrl } from '../lib/documentSource';
 import { useAuth } from '../auth/AuthContext';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { INBOX_CHANGED_EVENT } from '../components/QuickCapture';
@@ -22,6 +23,7 @@ import {
   uploadDocument,
 } from '../components/FileUpload';
 import { openReservedPopup } from '../lib/popup';
+import { containsPattern } from '../lib/serverList';
 import { runUploadBatch, type UploadBatchSummary } from '../lib/uploadBatch';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { DocumentStatusBadge } from '../components/DocumentStatusBadge';
@@ -180,7 +182,10 @@ function RefileModal({ doc, target, onClose, onDone }: {
       let query = supabase.from('invoices')
         .select('id, invoice_number, invoice_date, supplier:suppliers(name)')
         .eq('financial_role', 'payable').is('deleted_at', null).order('invoice_date', { ascending: false }).limit(20);
-      if (dq) query = query.ilike('invoice_number', `%${dq}%`);
+      // `%`, `_` and `\` are literals in a search box. Interpolated raw they are ILIKE
+      // wildcards, so "50%" quietly listed every invoice starting with 50 — the same reason
+      // serverList wraps every contains-search. One escaper, both screens.
+      if (dq) query = query.ilike('invoice_number', containsPattern(dq));
       const rows = unwrap(await query) as InvoicePick[];
       result = rows.map((row) => ({
         id: row.id,
@@ -755,9 +760,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
 
   async function open(doc: DocumentRow) {
     const result = await openReservedPopup(async () => {
-      const { data: url, error: openError } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300);
-      if (openError || !url) throw openError ?? new Error('missing signed URL');
-      return url.signedUrl;
+      return signedDocumentSourceUrl(doc.storage_path, 300, doc.mime_type);
     });
     if (result === 'blocked') toast(t('documents.toast_7'), 'error');
     if (result === 'error') toast(t('documents.toast_8'), 'error');
