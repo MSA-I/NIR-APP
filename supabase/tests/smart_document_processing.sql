@@ -516,6 +516,33 @@ select smart_document_processing_test.assert(
   'smart_document_mime_allowed did not remove exactly text/html'
 );
 
+-- ...but a RETIRED row keeps the type, and stays writable. This is not a nicety: a CHECK is
+-- re-evaluated on every UPDATE, so without the `deleted_at is not null` escape a text/html row
+-- stored before 0288 could never be soft-deleted, re-filed or audited again -- and no permitted
+-- route could clear it, because hard delete is barred for these records and the guard trigger
+-- refuses to let mime_type be edited. The escape is what makes remove_document(id, reason) the
+-- answer instead of a dead end.
+select smart_document_processing_test.assert(
+  (select convalidated and pg_get_constraintdef(oid) like '%deleted_at IS NOT NULL%'
+   from pg_constraint
+   where conrelid = 'public.documents'::regclass and conname = 'p0_documents_mime_check'),
+  'p0_documents_mime_check lost the retired-row escape, freezing every stored HTML document'
+);
+
+-- The behaviour behind that definition, proved and then rolled back so no fixture row survives.
+begin;
+insert into public.documents (
+  org_id, entity_type, storage_path, file_name, mime_type, document_kind, uploaded_by,
+  deleted_at, deleted_by
+) values (
+  '15000000-0000-4000-8000-000000000001', 'inbox',
+  '15000000-0000-4000-8000-000000000001/smart-doc/retired-price-list.html',
+  'retired-price-list.html', 'text/html', 'price_list',
+  '25000000-0000-4000-8000-000000000001',
+  now(), '25000000-0000-4000-8000-000000000001'
+);
+rollback;
+
 -- DB-first Edge rollout bridge: the deployed legacy worker can finish a post-migration claim,
 -- and a job leased before the migration (therefore with no attempt id) can still settle failure.
 begin;
