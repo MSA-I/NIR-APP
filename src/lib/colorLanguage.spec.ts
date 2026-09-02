@@ -273,6 +273,21 @@ describe('comparison series', () => {
     expect(body.indexOf('dash: true')).toBeGreaterThan(body.indexOf(`t.categorical[${steps[0]}]`));
   });
 
+  it('הניצוץ נושא צורה ולא רק גוון — DEBT §53', () => {
+    // The price sparkline is 96×28 with no axes, no dots and no tooltip, so the stroke hue was
+    // the whole message: rose-700 rising against emerald-700 falling, the one pair that collapses
+    // under deuteranopia and protanopia. Its aria-label already says the direction in words, which
+    // serves a screen reader and nobody who is looking at it. The glyph is the carrier that
+    // survives greyscale, a compressed screenshot and colour-vision deficiency alike.
+    const sparkline = sources.find(([file]) => file === 'components/supplier-metrics.tsx')?.[1] ?? '';
+    expect(sparkline, 'supplier-metrics.tsx not found').not.toBe('');
+    expect(sparkline).toMatch(/DirectionGlyph = last > first \? ArrowUpRight : last < first \? ArrowDownRight : Minus/);
+    expect(sparkline).toContain('<DirectionGlyph');
+    // Neutral ink on purpose: a sixth hue would be a new claim in the colour language, and this
+    // glyph is meant to add information without adding meaning to a colour.
+    expect(sparkline).toMatch(/<DirectionGlyph[^>]*text-ink-mid/);
+  });
+
   it('אף מסך אינו בונה סדרות בעצמו — הזיווג חי במקום אחד', () => {
     // The whole point of the helper: two dashboards previously chose their own indices and
     // disagreed. A `series={[...]}` literal carrying a colour is that mistake coming back.
