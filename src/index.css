@@ -636,6 +636,15 @@
   --color-ink-body: oklch(91% 0.008 80);
   --color-ink-mid: oklch(84% 0.009 80);
   --color-ink-soft: oklch(76% 0.010 80);
+
+  /* The document sheet is NOT paper in this theme, and that is the correction. `doc-paper`
+     aliases `surface`, which flips to oklch(18%) here, so an ink pinned to a light value
+     ends up mid-grey on a dark ground. `doc-ink-body` never had the problem because it
+     aliases `ink-soft` and follows the theme; `doc-ink-muted` is a literal and did not.
+     The browser measured it at 3.80:1 where lettering needs 4.5. At 62% it is 5.17:1 --
+     the first step that clears the bar, so the sheet changes as little as it can.
+     Its light value is untouched. */
+  --color-doc-ink-muted: oklch(62% 0.0220 226.0);
   --color-ink-muted: oklch(68% 0.010 80);
   --color-ink-faint: oklch(58% 0.010 80);
   --color-ink-ghost: oklch(44% 0.010 80);

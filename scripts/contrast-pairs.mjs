@@ -83,6 +83,20 @@ export const TEXT_PAIRS = [
   { fg: 'chart-label', bg: 'surface', where: 'on-chart labels' },
   { fg: 'trend-up-fg', bg: 'surface', where: 'a rising cost — bad news in this product' },
   { fg: 'trend-down-fg', bg: 'surface', where: 'a falling cost' },
+
+  // The generated documents — PDFs, the order image, the workbook, the supplier portal's
+  // rendering of them. The family arrived with the document design system and the contrast
+  // gate arrived with the dark theme; nothing had connected the two, so five inks named like
+  // lettering sat in no pair at all and `check:contrast` refused the manifest as incomplete.
+  //
+  // There are TWO grounds here, not one, and the stylesheet says which is which: `doc-plate`
+  // is the DARK outbound plate (it aliases `shell`), `doc-paper` is the sheet. An ink is
+  // measured against the ground its own comment names.
+  { fg: 'doc-ink', bg: 'doc-plate', where: 'lettering on the dark outbound plate' },
+  { fg: 'doc-ink-soft', bg: 'doc-plate', where: 'secondary lettering on the dark plate' },
+  { fg: 'doc-ink-dim', bg: 'doc-plate', where: 'the faintest lettering on the dark plate' },
+  { fg: 'doc-ink-body', bg: 'doc-paper', where: 'body copy on the document sheet' },
+  { fg: 'doc-ink-muted', bg: 'doc-paper', where: 'labels and folios on the document sheet' },
 ];
 
 /**
