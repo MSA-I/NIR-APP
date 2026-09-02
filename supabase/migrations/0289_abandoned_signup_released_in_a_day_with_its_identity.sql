@@ -1,4 +1,4 @@
--- 0287 -- An abandoned signup is released in a day, and the identity goes with the organization.
+-- 0289 -- An abandoned signup is released in a day, and the identity goes with the organization.
 --
 -- WHY THIS MOVED. Owner ruling #332 (02.09.2026) reversed the order of a self-signup: the account
 -- is now created with NO password, and the first one is chosen only after the confirmation link has
@@ -140,16 +140,16 @@ begin$replacement1$, e'\r', '');
   perform set_config('app.audit_purge', '', true);$replacement4$, e'\r', '');
 begin
   if position(v_declare_anchor in v_definition) = 0 then
-    raise exception '0287: the cleanup declaration block is not where 0196 left it';
+    raise exception '0289: the cleanup declaration block is not where 0196 left it';
   end if;
   if position(v_due_anchor in v_definition) = 0 then
-    raise exception '0287: the thirty-day gate is not where 0196 left it';
+    raise exception '0289: the thirty-day gate is not where 0196 left it';
   end if;
   if position(v_capture_anchor in v_definition) = 0 then
-    raise exception '0287: the audit-purge window around delete_tenant_rows moved';
+    raise exception '0289: the audit-purge window around delete_tenant_rows moved';
   end if;
   if position(v_release_anchor in v_definition) = 0 then
-    raise exception '0287: the organization-row deletion is not where 0196 left it';
+    raise exception '0289: the organization-row deletion is not where 0196 left it';
   end if;
   -- 0196 put the lock and the two re-checks in this body, and they are the reason the report is
   -- not an authorization (p75 C3). Refusing to patch a body that lost them keeps the two from
@@ -157,7 +157,7 @@ begin
   if position('for update' in v_definition) = 0
      or position('abandoned_signup_owner_verified' in v_definition) = 0
      or position('abandoned_signup_has_activity' in v_definition) = 0 then
-    raise exception '0287: refusing to patch the cleanup without its 0196 lock-and-recheck ancestry';
+    raise exception '0289: refusing to patch the cleanup without its 0196 lock-and-recheck ancestry';
   end if;
 
   v_definition := replace(v_definition, v_declare_anchor, v_declare_replacement);
@@ -186,7 +186,7 @@ comment on function public.service_cleanup_abandoned_signup(uuid) is
 -- IF THIS FIRES, the fallback is the admin API rather than SQL: the identity release moves to the
 -- Edge caller (the `outbox-worker` cron shape, `auth.admin.deleteUser`), the anchor above drops its
 -- `delete from auth.users`, and the function returns `v_identities` for that caller to spend.
-do $assert_0287_identity_grant$
+do $assert_0289_identity_grant$
 declare
   v_owner name;
 begin
@@ -195,37 +195,37 @@ begin
   where p.oid = 'public.service_cleanup_abandoned_signup(uuid)'::regprocedure;
 
   if not has_table_privilege(v_owner, 'auth.users', 'delete') then
-    raise exception '0287: % cannot delete from auth.users, so the cleanup cannot release the '
+    raise exception '0289: % cannot delete from auth.users, so the cleanup cannot release the '
       'identity it removes the tenant for. Move the release to the Edge admin API (see the note '
       'above this assertion) rather than shipping a cleanup that refuses every night.', v_owner;
   end if;
 end
-$assert_0287_identity_grant$;
+$assert_0289_identity_grant$;
 
 -- =====================================================================================
 -- 4. Structural re-assertion (mandatory after 0057)
 -- =====================================================================================
-do $assert_0287$
+do $assert_0289$
 declare
   v_violations text;
 begin
   select string_agg(assertion || ' -- ' || detail, e'\n' order by assertion, detail)
     into v_violations from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0287 scope assertions failed:\n%', v_violations;
+    raise exception e'0289 scope assertions failed:\n%', v_violations;
   end if;
   select string_agg(detail, e'\n' order by detail)
     into v_violations from private.tenant_export_registry_violations();
   if v_violations is not null then
-    raise exception e'0287 tenant export assertions failed:\n%', v_violations;
+    raise exception e'0289 tenant export assertions failed:\n%', v_violations;
   end if;
 end
-$assert_0287$;
+$assert_0289$;
 
 -- =====================================================================================
 -- 5. Anchors
 -- =====================================================================================
-do $anchor_0287$
+do $anchor_0289$
 begin
   -- The window function is server-side only, like everything else 0196 put in `private`.
   if exists (
@@ -237,17 +237,17 @@ begin
         or has_function_privilege('authenticated', p.oid, 'execute')
         or has_function_privilege('service_role', p.oid, 'execute'))
   ) then
-    raise exception '0287: a browser or service role can read the cleanup window function';
+    raise exception '0289: a browser or service role can read the cleanup window function';
   end if;
 
   -- The cleanup stayed service-only. A grant that widened here would hand tenant deletion to a
   -- browser role, which is the one mistake this whole family of functions is shaped to prevent.
   if has_function_privilege('anon', 'public.service_cleanup_abandoned_signup(uuid)', 'execute')
      or has_function_privilege('authenticated', 'public.service_cleanup_abandoned_signup(uuid)', 'execute') then
-    raise exception '0287: a browser role can run the abandoned-signup cleanup';
+    raise exception '0289: a browser role can run the abandoned-signup cleanup';
   end if;
   if not has_function_privilege('service_role', 'public.service_cleanup_abandoned_signup(uuid)', 'execute') then
-    raise exception '0287: the anchored replacement dropped the service_role grant';
+    raise exception '0289: the anchored replacement dropped the service_role grant';
   end if;
 
   -- And it is still SECURITY DEFINER with a pinned search_path: `execute v_definition` replays
@@ -259,17 +259,17 @@ begin
       and p.prosecdef
       and array_to_string(p.proconfig, ',') like '%search_path=%'
   ) then
-    raise exception '0287: the cleanup lost SECURITY DEFINER or its pinned search_path';
+    raise exception '0289: the cleanup lost SECURITY DEFINER or its pinned search_path';
   end if;
 
   -- The behaviour this migration exists for, read off the body that is actually installed.
   if (select position('abandoned_signup_grace' in p.prosrc) from pg_catalog.pg_proc p
       where p.oid = 'public.service_cleanup_abandoned_signup(uuid)'::regprocedure) = 0 then
-    raise exception '0287: the cleanup still carries a hardcoded window';
+    raise exception '0289: the cleanup still carries a hardcoded window';
   end if;
   if (select position('delete from auth.users' in p.prosrc) from pg_catalog.pg_proc p
       where p.oid = 'public.service_cleanup_abandoned_signup(uuid)'::regprocedure) = 0 then
-    raise exception '0287: the cleanup does not release the identity it removes the tenant for';
+    raise exception '0289: the cleanup does not release the identity it removes the tenant for';
   end if;
   -- Captured BEFORE the profiles are deleted, or the array is always empty and the delete is a
   -- no-op that looks like it worked.
@@ -282,7 +282,7 @@ begin
              < position('private.delete_tenant_rows(' in p.prosrc)
       from pg_catalog.pg_proc p
       where p.oid = 'public.service_cleanup_abandoned_signup(uuid)'::regprocedure) is not true then
-    raise exception '0287: the identities are read after the profiles that name them are gone';
+    raise exception '0289: the identities are read after the profiles that name them are gone';
   end if;
 end
-$anchor_0287$;
+$anchor_0289$;

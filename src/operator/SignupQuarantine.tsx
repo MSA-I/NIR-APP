@@ -36,7 +36,7 @@ export default function SignupQuarantine() {
         return { capabilities, candidates: [] as AbandonedSignupCandidate[], queue: [] as QuarantineEntry[] };
       }
       const [candidates, queue] = await Promise.all([
-        // One DAY, not thirty. `private.abandoned_signup_grace()` (0287) is 24 hours since owner
+        // One DAY, not thirty. `private.abandoned_signup_grace()` (0289) is 24 hours since owner
         // ruling #332 removed the password from the moment of signup, and a report that still
         // listed only month-old tenants would never show what the cleanup is about to release.
         fetchAbandonedSignupCandidates(1),

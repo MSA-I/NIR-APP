@@ -444,7 +444,7 @@ insert into public.organizations (id, name, status, created_at) values
   ('75000000-0000-4000-8000-000000000011', 'P75 abandoned empty',     'active', now() - interval '40 days'),
   ('75000000-0000-4000-8000-000000000012', 'P75 abandoned active',    'active', now() - interval '40 days'),
   ('75000000-0000-4000-8000-000000000013', 'P75 verified owner',      'active', now() - interval '40 days'),
-  -- Younger than `private.abandoned_signup_grace()` (0287: 24 hours, a documented default
+  -- Younger than `private.abandoned_signup_grace()` (0289: 24 hours, a documented default
   -- pending an owner ruling). It was ten days while #175's window was thirty; #332 removed
   -- the password from the moment of signup, so an unconfirmed empty tenant is released in a
   -- day and ten days is now DUE rather than young.

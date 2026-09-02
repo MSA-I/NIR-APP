@@ -1,5 +1,8 @@
 -- p105 -- an abandoned signup is released in a day, and its identity is released with it.
 --
+-- The suite for `0289`, which shortened #175's thirty-day window and made the cleanup release
+-- the `auth.users` row along with the tenant.
+--
 -- WHAT THIS PROVES, and why each case is here rather than trusted:
 --   1. The window is a named function, not a literal, and it reads 24 hours -- the documented
 --      default #332 left pending an owner ruling. A suite that asserted "less than thirty days"

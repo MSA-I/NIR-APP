@@ -57,7 +57,7 @@
 - **‏`Site URL`** — מקור האפליקציה. הוא מה שנכנס ל-`{{ .SiteURL }}` בכל חמש התבניות.
 - **‏`Redirect URLs`** — חייבים לכלול את `{origin}/accept-invite`, ‏`{origin}/operator-invite`
   ו-`{origin}/reset-password`. יעד שאינו ברשימה נדחה על ידי GoTrue והמייל יוצא בלי `next`.
-- **‏`Mailer autoconfirm = false`.** ‏`0282` ו-`0287` שניהם נשענים על `email_confirmed_at`; עם
+- **‏`Mailer autoconfirm = false`.** ‏`0282` ו-`0289` שניהם נשענים על `email_confirmed_at`; עם
   autoconfirm דלוק הכתובת „מאושרת" בלי שאיש קרא מייל.
 
 ## מה לא נבדק כאן
