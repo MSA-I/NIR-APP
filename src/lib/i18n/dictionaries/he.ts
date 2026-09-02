@@ -64,7 +64,7 @@ export const he = {
     document_registration_failed: 'הקובץ נשמר, אך רישום המסמך לא הושלם. אין להעלות אותו שוב; נדרשת בדיקה.',
     document_upload_cancelled: 'ההעלאה בוטלה.',
     document_upload_too_large: 'הקובץ גדול מ־10MB. יש לבחור קובץ קטן יותר.',
-    document_upload_type_unsupported: 'סוג הקובץ אינו נתמך. ניתן להעלות PDF, תמונה, Excel, Word, RTF, TXT, HTML או ODT.',
+    document_upload_type_unsupported: 'סוג הקובץ אינו נתמך. ניתן להעלות PDF, תמונה, Excel, Word, RTF, TXT או ODT. קובץ HTML אינו מסמך — יש להמיר אותו ל-PDF או ל-Excel.',
     credit_allocation_exceeds_remaining: 'סכום הקיזוז חורג מיתרת הזיכוי הזמינה',
     credit_allocation_exceeds_invoice: 'סכום הקיזוז חורג מסכום החשבונית שהזיכוי מקוזז מולה',
     credit_allocation_invoice_required: 'יש לבחור לאיזו חשבונית נזקף כל זיכוי שאינו משויך לחשבונית. המערכת לא תבחר עבורך — החשבונית שתיבחר היא זו שתקוזז',

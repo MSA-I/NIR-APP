@@ -144,8 +144,12 @@ enum ‏`user_role` נשאר ללא שינוי; תוויות התצוגה נמצ
   tenant ו־old/new מן המוטציה האמיתית, וסיבת פעולת P0 רגישה נכתבת בתוך פקודת ה־RPC שלה.
 - אין DELETE קשיח דרך JWT לרשומות פיננסיות. ב־Storage קריאה ניתנת רק כאשר קיימת שורת
   `documents` מורשית לאותו path. מחיקה מותרת רק ל־orphan חדש
-  של אותו uploader שאין אליו שורת מסמך. bucket המסמכים פרטי; allowlist ‏`0045` חוסם
-  SVG וקובצי executable, אך מאפשר `text/html` כמסמך מקור לעיבוד מבוקר.
+  של אותו uploader שאין אליו שורת מסמך. bucket המסמכים פרטי; ה־allowlist חוסם
+  SVG וקובצי executable, ומ־`0288` חוסם גם `text/html` — **HTML אינו טיפוס מסמך**
+  (הכרעת בעלים 02.09.2026, ‏`OPEN-DECISIONS #346`): עמוד שהועלה רץ ב־origin של האחסון
+  כשעמית פותח את המקור, וספק עם מחירון HTML ממיר אותו ל-PDF או ל-XLSX. הרשימה נאכפת בשלוש
+  נקודות שחייבות להסכים — שני ה־allowlist בלקוח, ‏`public.smart_document_mime_allowed`
+  (‏`p0_documents_mime_check` ומדיניות ה־Storage), ו־`allowed_mime_types` של הדלי.
 - ה־cutover של P1 הושלם ב־`0023`: מדיניות הכתיבה הישירה הישנה לדרישה, תשלום והקצאה
   הוסרה, והפעולה עוברת רק דרך `execute_payment_request`; מ־`0133` רק `accountant` מבצע אותה.
 - `0031` הפרידה היסטורית את תפקידי `office` ו־`accountant`; `0111` ביטלה את מסלול החירום של

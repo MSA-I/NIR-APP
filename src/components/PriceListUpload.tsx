@@ -40,12 +40,15 @@ export const submissionMonthLabel = (value: string, locale: Locale = BASE_LOCALE
   month: 'long', year: 'numeric', timeZone: 'UTC',
 }).format(new Date(`${value.slice(0, 7)}-01T00:00:00Z`));
 
-export const PRICE_DOCUMENT_ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.gif,.avif,.doc,.docx,.rtf,.txt,.html,.htm,.odt';
+// No `.html`/`.htm` here either — OPEN-DECISIONS #346, and the same list as FileUpload.tsx minus
+// the one type the owner removed. A supplier whose price list arrives as an exported HTML table
+// converts it to PDF or XLSX; the DB refuses `text/html` from 0288 regardless of what is offered.
+export const PRICE_DOCUMENT_ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.gif,.avif,.doc,.docx,.rtf,.txt,.odt';
 const PRICE_DOCUMENT_MIME: Record<string, string> = {
   pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
   heic: 'image/heic', heif: 'image/heif', gif: 'image/gif', avif: 'image/avif', doc: 'application/msword',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', rtf: 'application/rtf',
-  txt: 'text/plain', html: 'text/html', htm: 'text/html', odt: 'application/vnd.oasis.opendocument.text',
+  txt: 'text/plain', odt: 'application/vnd.oasis.opendocument.text',
 };
 
 export class PriceDocumentError extends Error {}

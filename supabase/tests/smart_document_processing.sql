@@ -264,12 +264,22 @@ select smart_document_processing_test.assert(
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/rtf',
       'text/plain',
-      'text/html',
       'application/vnd.oasis.opendocument.text'
     ]::text[] <@ allowed_mime_types
     and not ('application/x-msdownload' = any(allowed_mime_types))
    from storage.buckets where id = 'documents'),
   'documents bucket MIME allowlist is incomplete or permits executables'
+);
+
+-- 0288, OPEN-DECISIONS #346: HTML is not a document type. The bucket allowlist is enforced by the
+-- storage service before any policy runs, so this is the layer that stops the bytes arriving at
+-- all. Asserted as a separate claim rather than folded into the line above: a missing type and a
+-- forbidden one fail for opposite reasons, and one message cannot say which happened.
+select smart_document_processing_test.assert(
+  (select not ('text/html' = any(allowed_mime_types))
+     and not ('application/xhtml+xml' = any(allowed_mime_types))
+   from storage.buckets where id = 'documents'),
+  'documents bucket still permits a MIME type the browser renders as a page'
 );
 
 insert into public.organizations (id, name, status) values
@@ -458,7 +468,6 @@ from unnest(array[
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/rtf',
   'text/plain',
-  'text/html',
   'application/vnd.oasis.opendocument.text'
 ]) with ordinality as allowed(mime_type, ordinality);
 
@@ -477,6 +486,35 @@ exception when check_violation then
   null;
 end
 $$;
+
+-- 0288, OPEN-DECISIONS #346: an HTML file is refused by the ROW contract too, not only by the
+-- bucket. The row is what an Edge Function or a service-role path writes, so a refusal that lived
+-- only in the bucket allowlist would leave the type reachable from every non-browser writer. The
+-- claim is the same shape as the executable one above, deliberately: both are types that execute.
+do $$
+begin
+  insert into public.documents (
+    org_id, entity_type, storage_path, file_name, mime_type, document_kind, uploaded_by
+  ) values (
+    '15000000-0000-4000-8000-000000000001', 'inbox',
+    '15000000-0000-4000-8000-000000000001/smart-doc/price-list.html',
+    'price-list.html', 'text/html', 'price_list',
+    '25000000-0000-4000-8000-000000000001'
+  );
+  raise exception 'expected text/html MIME rejection';
+exception when check_violation then
+  null;
+end
+$$;
+
+select smart_document_processing_test.assert(
+  not public.smart_document_mime_allowed('text/html')
+    and not public.smart_document_mime_allowed('TEXT/HTML')
+    and not public.smart_document_mime_allowed('application/xhtml+xml')
+    and public.smart_document_mime_allowed('application/pdf')
+    and public.smart_document_mime_allowed('text/plain'),
+  'smart_document_mime_allowed did not remove exactly text/html'
+);
 
 -- DB-first Edge rollout bridge: the deployed legacy worker can finish a post-migration claim,
 -- and a job leased before the migration (therefore with no attempt id) can still settle failure.

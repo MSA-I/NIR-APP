@@ -60,7 +60,7 @@ export const en: Dictionary = {
     document_registration_failed: 'The file was saved, but the document registration did not complete. Do not upload it again; it needs review.',
     document_upload_cancelled: 'The upload was cancelled.',
     document_upload_too_large: 'The file is larger than 10MB. Choose a smaller file.',
-    document_upload_type_unsupported: 'The file type is not supported. You can upload a PDF, an image, Excel, Word, RTF, TXT, HTML or ODT.',
+    document_upload_type_unsupported: 'The file type is not supported. You can upload a PDF, an image, Excel, Word, RTF, TXT or ODT. An HTML file is not a document — convert it to PDF or Excel.',
     credit_allocation_exceeds_remaining: 'The offset is larger than the credit\'s remaining balance',
     credit_allocation_exceeds_invoice: 'The offset is larger than the invoice it is being set against',
     credit_allocation_invoice_required: 'Choose which invoice each unlinked credit is applied to. The system will not choose for you — the invoice you pick is the one that gets offset',
