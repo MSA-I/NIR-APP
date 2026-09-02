@@ -38,10 +38,13 @@ vi.mock('./UploadCenter', () => ({
   subscribeUploadCenter: () => () => {},
 }));
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { he } from '../lib/i18n/dictionaries/he';
+import { en } from '../lib/i18n/dictionaries/en';
 import type { Dictionary } from '../lib/i18n/dictionaries/he';
 import { translate, type TKey } from '../lib/i18n/t';
-import { documentUploadFailure, uploadDocument } from './FileUpload';
+import { DOCUMENT_UPLOAD_ACCEPT, documentUploadFailure, documentUploadMimeType, uploadDocument } from './FileUpload';
 
 /**
  * The failure carries a CODE now, so each expectation below resolves it through the HEBREW
@@ -346,5 +349,71 @@ describe('uploadDocument registration recovery', () => {
       'begin_document_intake',
     ]);
     expect(mocks.remove).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * HTML IS NOT A DOCUMENT TYPE — owner ruling, OPEN-DECISIONS #346, 02.09.2026.
+ *
+ * The refusal has to be the same answer at three layers (both client pickers, the storage bucket
+ * allowlist, `public.smart_document_mime_allowed`), and only the first is reachable from a unit
+ * test. So this asserts the CLIENT halves against the real exported values, not against a copy of
+ * the list: an `accept` attribute that still offers `.html` invites the file the database will
+ * then refuse, which is the worst version of the bug — the user picks a file, waits for an
+ * upload, and is told no at the end. Migration 0288 and the SQL suite hold the other two layers.
+ */
+describe('the upload allowlists refuse HTML', () => {
+  const accepted = DOCUMENT_UPLOAD_ACCEPT.split(',');
+  const priceListSource = readFileSync(join(process.cwd(), 'src', 'components', 'PriceListUpload.tsx'), 'utf8');
+
+  it('offers neither the HTML extensions nor the HTML MIME type in the document picker', () => {
+    // Exact tokens, not `.includes('html')`: a substring test would also match a hypothetical
+    // `.xhtml` and would pass on a list that still carried `text/html` inside a longer type.
+    expect(accepted).not.toContain('.html');
+    expect(accepted).not.toContain('.htm');
+    expect(accepted).not.toContain('text/html');
+    expect(accepted).not.toContain('application/xhtml+xml');
+    // The removal is exactly one type wide. Without this, deleting the whole allowlist passes.
+    expect(accepted).toContain('application/pdf');
+    expect(accepted).toContain('.pdf');
+    expect(accepted).toContain('text/plain');
+    expect(accepted).toContain('.odt');
+  });
+
+  it('refuses an HTML file by its declared type and by its extension', () => {
+    // A declared `text/html` is no longer a type this returns. The name here is `.pdf`, so the
+    // extension fallback still resolves it — the point being that whatever comes back, it is
+    // never `text/html`, which is what would end up in `documents.mime_type` and in the
+    // `Content-Type` storage later serves the object with.
+    const byMime = new File(['<script>alert(1)</script>'], 'prices.pdf', { type: 'text/html' });
+    expect(documentUploadMimeType(byMime)).toBe('application/pdf');
+
+    for (const name of ['prices.html', 'prices.htm', 'PRICES.HTML']) {
+      expect(() => documentUploadMimeType(new File(['<html></html>'], name, { type: 'text/html' })))
+        .toThrowError();
+    }
+  });
+
+  it('offers no HTML in the price-list picker', () => {
+    const acceptLine = priceListSource.match(/export const PRICE_DOCUMENT_ACCEPT = '([^']*)'/)?.[1];
+    expect(acceptLine).toBeTruthy();
+    expect(acceptLine!.split(',')).not.toContain('.html');
+    expect(acceptLine!.split(',')).not.toContain('.htm');
+    expect(acceptLine!.split(',')).toContain('.pdf');
+
+    const mimeMap = priceListSource.match(/const PRICE_DOCUMENT_MIME[^{]*\{([\s\S]*?)\n\};/)?.[1];
+    expect(mimeMap).toBeTruthy();
+    expect(mimeMap).not.toContain('text/html');
+    expect(mimeMap).toContain("pdf: 'application/pdf'");
+  });
+
+  it('stops listing HTML as an accepted format and says what to do instead', () => {
+    // The refused type has to leave the sentence that enumerates what IS accepted, or the screen
+    // keeps inviting the file the upload now rejects. Both dictionaries, because either alone
+    // would leave one audience reading the old promise.
+    expect(he.errors.document_upload_type_unsupported).not.toContain('TXT, HTML');
+    expect(he.errors.document_upload_type_unsupported).toContain('להמיר');
+    expect(en.errors.document_upload_type_unsupported).not.toContain('TXT, HTML');
+    expect(en.errors.document_upload_type_unsupported).toContain('convert it to PDF');
   });
 });

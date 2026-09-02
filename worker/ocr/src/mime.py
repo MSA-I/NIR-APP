@@ -28,6 +28,10 @@ ALLOWED_MIME = {
     "application/rtf",
     "text/rtf",
     "text/plain",
+    # text/html is kept here on purpose and is UNREACHABLE FROM AN UPLOAD from migration 0288
+    # (OPEN-DECISIONS #346). The database and both client pickers refuse the type, so nothing the
+    # gateway leases declares it; this set is the worker's own contract with its callers, and
+    # narrowing it would only break the self-check that still parses HTML directly.
     "text/html",
     "application/vnd.oasis.opendocument.text",
 }
