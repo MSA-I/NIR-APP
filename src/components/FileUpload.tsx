@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Camera, FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { Link } from 'react-router';
 import { supabase } from '../lib/supabase';
+import { signedDocumentSourceUrl } from '../lib/documentSource';
 import { useAuth } from '../auth/AuthContext';
 import { useToast, Skeleton, ConfirmDialog, ErrorNote, ICON, Modal, Note } from './ui';
 import { ActionMenu } from './ActionMenu';
@@ -50,6 +51,14 @@ import {
 
 export const DOCUMENT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 
+/**
+ * HTML IS NOT A DOCUMENT TYPE (owner ruling, OPEN-DECISIONS #346, 02.09.2026).
+ * `.html`/`.htm` and `text/html` were accepted here until 0288. An uploaded page is a program:
+ * opened from the storage origin by a colleague it executes there, against that origin's session.
+ * A supplier who exports a price table from a mail client converts it to PDF or XLSX; the type is
+ * gone from the client, the storage bucket and `public.smart_document_mime_allowed`, so a rejection
+ * is now the same answer at every layer instead of only the innermost one.
+ */
 const DOCUMENT_MIME_BY_EXTENSION: Record<string, string> = {
   pdf: 'application/pdf',
   jpg: 'image/jpeg',
@@ -67,8 +76,6 @@ const DOCUMENT_MIME_BY_EXTENSION: Record<string, string> = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   rtf: 'application/rtf',
   txt: 'text/plain',
-  html: 'text/html',
-  htm: 'text/html',
   odt: 'application/vnd.oasis.opendocument.text',
 };
 
@@ -81,7 +88,7 @@ const DOCUMENT_MIME_TYPES = new Set([
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/rtf', 'text/rtf',
-  'text/plain', 'text/html',
+  'text/plain',
   'application/vnd.oasis.opendocument.text',
 ]);
 
@@ -909,9 +916,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
 
   async function open(doc: DocumentRow) {
     const result = await openReservedPopup(async () => {
-      const { data, error } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300);
-      if (error || !data) throw error ?? new Error('missing signed URL');
-      return data.signedUrl;
+      return signedDocumentSourceUrl(doc.storage_path, 300, doc.mime_type);
     });
     if (result === 'blocked') toast(t('fileUpload.toast'), 'error');
     if (result === 'error') toast(t('fileUpload.toast_2'), 'error');

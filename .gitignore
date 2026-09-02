@@ -42,6 +42,9 @@ deno.lock
 # Local screenshots from scripts/toast-undo-visual-check.cjs (manual visual verification)
 .toast-shots/
 
+# Local screenshots from scripts/sparkline-visual-check.cjs (manual visual verification)
+.sparkline-shots/
+
 # The reading taken before a production rollout, compared against after it.
 # A record of one run on one machine, not a repository fact.
 rollout-*.json

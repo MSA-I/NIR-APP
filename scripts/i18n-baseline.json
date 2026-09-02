@@ -111,7 +111,7 @@
     "src/operator/UserDetail.tsx": 43,
     "src/operator/Users.tsx": 24,
     "src/pages/AccountantPaymentQueue.tsx": 1,
-    "src/pages/Bank.tsx": 17,
+    "src/pages/Bank.tsx": 11,
     "src/pages/DocumentOperations.tsx": 2,
     "src/pages/DocumentReview.tsx": 1,
     "src/pages/InvoiceDetail.tsx": 9,

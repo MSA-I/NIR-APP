@@ -26,11 +26,18 @@ const scratch = mkdtempSync(path.join(tmpdir(), 'gate-controls-'));
 let failures = 0;
 let ran = 0;
 
+/** Which guard scripts the controls below actually exercised. The wiring proof reads THIS
+ *  rather than a list kept by hand: a hand-list is the same drift one level up -- add a guard,
+ *  forget the list, and the wiring proof reports every guard reachable while ignoring the new
+ *  one. Recorded as the controls run, so it cannot disagree with what ran. */
+const exercised = new Set();
+
 /**
  * Run a guard and assert it exits non-zero. `expect` is a fragment that must appear in the
  * output, so a guard that fails for an unrelated reason does not count as a pass.
  */
 function mustFail(name, script, { env = {}, expect }) {
+  exercised.add(script);
   ran += 1;
   let exitCode = 0;
   let output = '';
@@ -60,6 +67,7 @@ function mustFail(name, script, { env = {}, expect }) {
 }
 
 function mustPass(name, script, { env = {} }) {
+  exercised.add(script);
   ran += 1;
   try {
     execFileSync(process.execPath, [path.join(repoRoot, 'scripts', script)], {
@@ -329,6 +337,50 @@ console.log('\ncheck:decision-numbers');
 }
 
 
+// ============================================================ workflow triggers
+// The one that was invisible. `pull_request: branches: [main]` meant a PR stacked on another
+// branch matched no trigger, so GitHub reported "no checks" -- which looks like success and
+// satisfies branch protection vacuously. The filter is one tidy-looking line that anyone
+// trimming CI minutes would add back, and nothing would go red to argue with them.
+console.log('\ncheck:workflow-triggers');
+{
+  mustFail('a pull_request trigger filtered by base branch is caught', 'check-workflow-triggers.mjs', {
+    env: { WORKFLOW_TRIGGERS_INJECT: 'branches' },
+    expect: 'filtered by base branch',
+  });
+  mustPass('the real workflow triggers still pass', 'check-workflow-triggers.mjs', {});
+}
+
+
+// ============================================================ exception labels
+// 0273 added the eleventh exception_type and nothing named it. TypeScript was satisfied (the map
+// is Record<string, string>) and the i18n guards only check keys that ARE referenced, so a label
+// nobody wrote was a label nobody missed -- while /exceptions rendered a blank cell and the
+// filter dropdown, built from that same map, could not select the type at all.
+console.log('\ncheck:exception-labels');
+{
+  mustFail('an enum value with no label is caught', 'check-exception-labels.mjs', {
+    env: { EXCEPTION_LABELS_INJECT: 'drop-label' },
+    expect: 'not in EXCEPTION_TYPE',
+  });
+  mustPass('every real exception type is still labelled', 'check-exception-labels.mjs', {});
+}
+
+
+// ============================================================ debt section numbers
+// Two branches each append a section, each picking the next free number against the trunk they
+// branched from. Both are right when written; git merges them without a conflict; the register
+// now addresses two different things by one number. That is what the seven merge waves produced.
+console.log('\ncheck:debt-numbers');
+{
+  mustFail('a duplicated debt section number is caught', 'check-debt-numbers.mjs', {
+    env: { DEBT_NUMBERS_INJECT: 'duplicate' },
+    expect: 'used more than once',
+  });
+  mustPass('the real debt register still passes', 'check-debt-numbers.mjs', {});
+}
+
+
 // ============================================================ noindex posture
 // The application host was fully indexable and outranking the marketing site for the brand
 // name (measured live, 01.09.2026). The guard that fixed it is only worth its line in `verify`
@@ -368,9 +420,18 @@ console.log('\nwiring');
 {
   const pkg = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
   const workflow = readFileSync(path.join(repoRoot, '.github', 'workflows', 'build.yml'), 'utf8');
-  const required = ['check:suite-manifest', 'check:migration-numbers', 'check:renumber-closure',
-    'check:key-manifest', 'check:baseline-drift', 'check:decision-numbers', 'check:noindex-posture',
-    'check:exemptions', 'check:gate-controls', 'check:env-files'];
+  // Derived from the controls that actually ran, plus this runner itself -- which has no
+  // control of its own because it IS the thing that runs them.
+  const required = [...new Set([...[...exercised]
+    .map((script) => `check:${script.replace(/^check-/, '').replace(/.mjs$|.ts$/, '')}`),
+    'check:gate-controls',
+    // Seeded, not derived: `check:env-files` is wired into verify and build.yml but has no
+    // positive control yet, and dropping it here would quietly retire an assertion main makes.
+    'check:env-files'])].sort();
+  if (required.length < 10) {
+    failures += 1;
+    console.error(`  ✗ only ${required.length} guard(s) were exercised -- controls went missing`);
+  }
   const missingScript = required.filter((c) => !pkg.scripts?.[c]);
   const missingVerify = required.filter((c) => !String(pkg.scripts?.verify ?? '').includes(c));
   const missingStep = required.filter((c) => !workflow.includes(`npm run ${c}`));

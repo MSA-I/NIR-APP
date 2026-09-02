@@ -39,9 +39,13 @@ import {
 } from '../_shared/provision.ts';
 import { backupEmailRequired, normaliseEmail } from '../../../src/lib/backupEmail.ts';
 import { sendSignupConfirmation } from './confirmation.ts';
+import { withAllowedOrigin } from '../_shared/cors.ts';
 
 const CORS_HEADERS: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
+  // Filled per request by withAllowedOrigin (../_shared/cors.ts): the caller's Origin when it
+  // is on ALLOWED_ORIGINS/APP_BASE_URL, and the first allowed origin otherwise. Never '*'.
+  'Access-Control-Allow-Origin': '',
+  Vary: 'Origin',
   'Access-Control-Allow-Headers':
     'authorization, x-client-info, apikey, content-type, x-correlation-id',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -109,7 +113,7 @@ function clientAddress(req: Request): string | null {
   return req.headers.get('cf-connecting-ip') ?? req.headers.get('x-real-ip');
 }
 
-Deno.serve(async (req: Request): Promise<Response> => {
+Deno.serve(withAllowedOrigin(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
   if (req.method !== 'POST') {
     return json({ error: { code: 'method_not_allowed', message: 'POST בלבד' } }, 405);
@@ -454,4 +458,4 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // before confirming their email, and an anonymous endpoint that hands out tenant identifiers
   // is a needless one.
   return json({ status: 'pending_confirmation', message: NEUTRAL_ANSWER }, 202);
-});
+}));

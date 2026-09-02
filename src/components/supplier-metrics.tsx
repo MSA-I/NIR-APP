@@ -17,7 +17,7 @@
 // the sparkline states its direction in an aria-label (colour-system sweep, 19.08.2026).
 
 import { LineChart, Line } from 'recharts';
-import { Star } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Minus, Star } from 'lucide-react';
 import type { SupplierMetrics } from '../lib/types';
 import type { Tone } from '../lib/status';
 import { useChartTheme } from '../lib/theme';
@@ -172,12 +172,20 @@ export function PriceSparkline({ points }: { points: number[] }) {
   const magnitude = pct != null && Math.abs(pct) >= 0.05
     ? t('supplierMetrics.magnitude', { pct: Math.abs(pct).toFixed(1) })
     : '';
+  // ...and stated again in a SHAPE, which is the half the aria-label cannot do (DEBT §53). The
+  // words fix a screen reader; they do nothing for a sighted reader with deuteranopia, for whom
+  // rose-700 against emerald-700 is the one pair that collapses. The glyph carries `ink-mid`, a
+  // neutral: it adds no sixth hue to the colour language, and it reads the same in both themes.
+  // ICON.xs rather than the 10px the debt note suggested -- the icon scale is a token in DESIGN.md
+  // and an off-scale size would trade one small inconsistency for another.
+  const DirectionGlyph = last > first ? ArrowUpRight : last < first ? ArrowDownRight : Minus;
   return (
-    <span dir="ltr" className="inline-block align-middle" role="img"
+    <span dir="ltr" className="inline-flex items-center gap-0.5 align-middle" role="img"
       aria-label={t('supplierMetrics.trend', { direction, magnitude, count: points.length })}>
       <LineChart width={96} height={28} data={data} margin={{ top: 4, right: 2, bottom: 4, left: 2 }}>
         <Line type="stepAfter" dataKey="price" stroke={stroke} strokeWidth={1.5} dot={false} isAnimationActive={false} />
       </LineChart>
+      <DirectionGlyph size={ICON.xs} aria-hidden="true" className="shrink-0 text-ink-mid" />
     </span>
   );
 }

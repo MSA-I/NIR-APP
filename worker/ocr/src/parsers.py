@@ -864,6 +864,13 @@ def extract_file(
         text = _read_utf8(source, limits)
         payload = _contract(1, text, blocks=_text_blocks([text]))
     elif detected == "text/html":
+        # UNREACHABLE FROM AN UPLOAD since migration 0288 (owner ruling, OPEN-DECISIONS #346:
+        # HTML is not a document type). The two client allowlists, the `documents` bucket's
+        # allowed_mime_types and `public.smart_document_mime_allowed` all refuse text/html, so
+        # no job the gateway can lease will ever carry it. The parser stays because deleting a
+        # working extractor to enforce an intake policy is the wrong lever: if the ruling is ever
+        # revisited, the type comes back by adding it to those allowlists and nothing else. It is
+        # still exercised directly by self_check.py and test_scanning.py.
         payload = _parse_html(source, limits)
     elif detected == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         payload = _parse_docx(source, limits)

@@ -277,5 +277,6 @@
   "0285_the_caller_is_resolved_once_not_once_per_entitlement.sql",
   "0286_the_write_latch_covers_every_tenant_table.sql",
   "0287_platform_writers_carry_their_capability.sql",
+  "0288_html_is_not_a_document.sql",
   "0289_abandoned_signup_released_in_a_day_with_its_identity.sql"
 ]

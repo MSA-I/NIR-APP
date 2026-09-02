@@ -17,8 +17,10 @@ name: build-gate
 on:
   push:
     branches: [main]
+  # A pull request is checked because it is a pull request, not because of where it lands.
+  # `branches: [main]` here meant a PR stacked on another branch got ZERO checks and reported
+  # "no checks" -- which reads exactly like success. check:workflow-triggers keeps it out.
   pull_request:
-    branches: [main]
 
 concurrency:
   group: build-${{ github.ref }}
@@ -48,7 +50,7 @@ jobs:
       noindex: ${{ steps.filter.outputs.noindex }}
       vitest: ${{ steps.filter.outputs.vitest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - id: filter
@@ -102,7 +104,7 @@ jobs:
           # Must match SCAN_PATHS in check-renumber-closure.mjs. A surface the guard reads but the
           # filter omits is a surface where a stale pointer never triggers anything.
           closure_inputs='^(supabase/|docs/|scripts/|src/|tools/|worker/|\.github/|\.claude/|[^/]+\.md$)'
-          gate_control_inputs='^(scripts/check-(suite-manifest|migration-numbers|renumber-closure|key-manifest|noindex-posture|gate-controls)\.mjs$|package\.json$)'
+          gate_control_inputs='^(scripts/check-(suite-manifest|migration-numbers|renumber-closure|key-manifest|noindex-posture|gate-controls|workflow-triggers|exception-labels|debt-numbers)\.mjs$|package\.json$)'
           # Any src change can strand a key, so the whole surface is an input, plus the
           # dictionary itself and this guard's own baseline.
           key_manifest_inputs='^(src/|scripts/check-key-manifest\.mjs$|scripts/key-manifest\.baseline\.json$)'
@@ -140,9 +142,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -165,15 +167,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0   # check:baseline-drift compares against the merge base
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: needs.changes.outputs.install == 'true'
         with:
           node-version: 24
           cache: npm
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: needs.changes.outputs.install != 'true'
         with:
           node-version: 24
@@ -236,6 +238,17 @@ jobs:
           needs.changes.outputs.decisions == 'true' ||
           needs.changes.outputs.noindex == 'true'
         run: npm run check:gate-controls
+      # No `if:` on purpose. These three read inputs that the per-guard filters above do not
+      # watch -- every workflow file rather than build.yml alone, the exception_type enum, and
+      # the debt register -- and all three together take under a second. A path filter here
+      # would be a fourth place for the same blind spot to reappear, which is the failure the
+      # first of them exists to close.
+      - name: Guards whose inputs no other filter watches
+        run: |
+          set -euo pipefail
+          npm run check:workflow-triggers
+          npm run check:exception-labels
+          npm run check:debt-numbers
       # THIRTEEN of the 26 guards in `npm run verify` were never run by this workflow.
       # It names sub-commands one by one rather than calling `npm run verify`, so a guard added
       # to the npm script alone simply did not execute -- and a green `verify` check meant half
