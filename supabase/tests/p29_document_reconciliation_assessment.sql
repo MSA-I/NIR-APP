@@ -492,4 +492,146 @@ select pg_temp.p29_assert(
   'a client role can reach the assessment, which takes org_id as an argument and would trust '
   'whatever a browser passed');
 
+-- ===== 11. DEBT §35 -- the document is measured against what the order has LEFT =====
+--
+-- 0284. The gate above compares a documented line against `purchase_order_items.qty`, the quantity
+-- ORDERED. It never asked how much of that same item earlier APPROVED invoices already consumed,
+-- so a second document could claim a quantity the order no longer had -- and be told so only three
+-- screens later, when `record_invoice_line_evidence` refused the approval. The money was never
+-- wrong; the person was told too late, on a screen whose whole purpose is deciding.
+--
+-- There is exactly ONE definition of "consumed" and this suite holds it to that: the immutable
+-- approval snapshots of 0099, latest revision per invoice, released by an owner reversal under
+-- 0174. No running total, no cache, no recount from live invoice lines.
+
+insert into auth.users (id, email) values
+  ('2a290000-0000-4000-8000-000000000001', 'p29-owner@example.test');
+insert into public.profiles (id, org_id, full_name, role) values
+  ('2a290000-0000-4000-8000-000000000001', '1a290000-0000-4000-8000-000000000001',
+   'P29 owner', 'owner');
+
+-- One earlier invoice of this supplier, approved over 8 kg of the 10 kg ordered.
+insert into public.invoices
+  (id, org_id, supplier_id, invoice_number, invoice_date, total_amount) values
+  ('6a290000-0000-4000-8000-000000000001', '1a290000-0000-4000-8000-000000000001',
+   '4a290000-0000-4000-8000-000000000001', 'INV-P29-PRIOR', '2026-06-12', 160);
+
+select set_config('app.invoice_three_way_writer', 'approval_snapshot', true);
+insert into public.invoice_three_way_approval_snapshots
+  (id, org_id, invoice_id, revision, assessment_hash, assessment, approved_by) values
+  ('6a290000-0000-4000-8000-000000000011', '1a290000-0000-4000-8000-000000000001',
+   '6a290000-0000-4000-8000-000000000001', 1, repeat('c', 64),
+   '{"order_items":[{"purchase_order_item_id":"8a290000-0000-4000-8000-000000000001","current_invoice_quantity":8,"unit_resolved":true}]}',
+   '2a290000-0000-4000-8000-000000000001');
+select set_config('app.invoice_three_way_writer', '', true);
+
+-- 3 kg is below the 10 ordered and below the 6 received, so every comparison that existed before
+-- this migration stays silent. Only the remainder -- 10 minus the 8 an approval already took --
+-- makes it an overrun, and the tolerance on a kg line is 0.2.
+select pg_temp.p29_assert(
+  (select (f ->> 'remaining_ordered_quantity')::numeric = 2
+          and (f ->> 'prior_approved_invoiced_quantity')::numeric = 8
+          and f ->> 'severity' = 'error'
+   from pg_temp.p29_finding(
+     pg_temp.p29_assess(pg_temp.p29_line('SKU-MEAT', '3', 'kg', '20', '60'),
+                        '{}'::jsonb, '5a290000-0000-4000-8000-000000000001', date '2026-06-15'),
+     'quantity_above_remaining_ordered') f),
+  'a document claimed 3 kg of an order item an approved invoice had already reduced to 2, and the '
+  'document gate reported nothing. The refusal still comes at final approval, so no money moves -- '
+  'but the reviewer decides at THIS screen, and a gate that stays silent about a known overrun '
+  'teaches them the assessment does not mean what it says');
+
+select pg_temp.p29_assert(
+  (select (r ->> 'approval_blocked')::boolean = true
+   from pg_temp.p29_assess(pg_temp.p29_line('SKU-MEAT', '3', 'kg', '20', '60'),
+                           '{}'::jsonb, '5a290000-0000-4000-8000-000000000001',
+                           date '2026-06-15') r),
+  'exceeding the remaining ordered quantity was reported but did not block approval');
+
+-- The rung ABOVE it still outranks it: 12 kg is above the whole order, and that is the stronger
+-- and more specific claim. Reporting both would be two findings for one fact.
+select pg_temp.p29_assert(
+  (select pg_temp.p29_finding(r, 'quantity_above_ordered') is not null
+          and pg_temp.p29_finding(r, 'quantity_above_remaining_ordered') is null
+   from pg_temp.p29_assess(pg_temp.p29_line('SKU-MEAT', '12', 'kg', '20', '240'),
+                           '{}'::jsonb, '5a290000-0000-4000-8000-000000000001',
+                           date '2026-06-15') r),
+  'a quantity above the WHOLE order was also reported as above the remainder. One fact, one '
+  'finding, and the stronger claim wins');
+
+-- 2 kg is exactly the remainder. A gate that fired here would block every legitimate second
+-- document and force the exception path onto work that is entirely in order.
+select pg_temp.p29_assert(
+  (select pg_temp.p29_finding(r, 'quantity_above_remaining_ordered') is null
+   from pg_temp.p29_assess(pg_temp.p29_line('SKU-MEAT', '2', 'kg', '20', '40'),
+                           '{}'::jsonb, '5a290000-0000-4000-8000-000000000001',
+                           date '2026-06-15') r),
+  'a document for exactly the remaining quantity was refused');
+
+-- §29/0174: an owner reversal RELEASES the consumed quantity. If the document gate read
+-- consumption from anywhere other than the snapshots -- a stored total, a recount from invoice
+-- lines -- the reversal would change what the invoice REPORTS while this screen stayed barred.
+select set_config('app.invoice_three_way_writer', 'approval_snapshot_reversal', true);
+update public.invoice_three_way_approval_snapshots
+   set reversed_at = now(), reversed_by = '2a290000-0000-4000-8000-000000000001',
+       reversal_reason = 'P29 reversal'
+ where id = '6a290000-0000-4000-8000-000000000011';
+select set_config('app.invoice_three_way_writer', '', true);
+
+select pg_temp.p29_assert(
+  (select pg_temp.p29_finding(r, 'quantity_above_remaining_ordered') is null
+   from pg_temp.p29_assess(pg_temp.p29_line('SKU-MEAT', '3', 'kg', '20', '60'),
+                           '{}'::jsonb, '5a290000-0000-4000-8000-000000000001',
+                           date '2026-06-15') r),
+  'an owner reversed the approval that consumed the quantity, and the document gate still counted '
+  'it. A reversal that releases capacity for the invoice path but not for the document path is a '
+  'second accumulator wearing the name of the first');
+
+-- An earlier approval whose unit could not be resolved makes the remainder UNKNOWN. The
+-- constitution is explicit: a figure with no data is not zero, because zero is also a claim.
+insert into public.invoices
+  (id, org_id, supplier_id, invoice_number, invoice_date, total_amount) values
+  ('6a290000-0000-4000-8000-000000000002', '1a290000-0000-4000-8000-000000000001',
+   '4a290000-0000-4000-8000-000000000001', 'INV-P29-UNRESOLVED', '2026-06-13', 40);
+select set_config('app.invoice_three_way_writer', 'approval_snapshot', true);
+insert into public.invoice_three_way_approval_snapshots
+  (id, org_id, invoice_id, revision, assessment_hash, assessment, approved_by) values
+  ('6a290000-0000-4000-8000-000000000012', '1a290000-0000-4000-8000-000000000001',
+   '6a290000-0000-4000-8000-000000000002', 1, repeat('d', 64),
+   '{"order_items":[{"purchase_order_item_id":"8a290000-0000-4000-8000-000000000001","current_invoice_quantity":1,"unit_resolved":false}]}',
+   '2a290000-0000-4000-8000-000000000001');
+select set_config('app.invoice_three_way_writer', '', true);
+
+select pg_temp.p29_assert(
+  (select (x.f ->> 'severity') = 'error'
+          and (r ->> 'approval_blocked')::boolean = true
+          and x.f -> 'remaining_ordered_quantity' is null
+   from pg_temp.p29_assess(pg_temp.p29_line('SKU-MEAT', '3', 'kg', '20', '60'),
+                           '{}'::jsonb, '5a290000-0000-4000-8000-000000000001',
+                           date '2026-06-15') r
+   cross join lateral (select pg_temp.p29_finding(r, 'prior_invoiced_unit_unresolved')) x(f)),
+  'a prior approval with an unresolvable unit was silently treated as consuming a comparable '
+  'quantity. The remainder is UNKNOWN there, and a number the gate cannot stand behind is worse '
+  'than a named refusal');
+
+-- The two readers of prior consumption must keep reading the same thing. This does not prove they
+-- compute the same number on the same data -- it proves neither has quietly stopped reading the
+-- snapshot field, or stopped honouring a reversal, which is how they would drift apart.
+select pg_temp.p29_assert(
+  (select position('current_invoice_quantity' in d.def) > 0
+          and position('approval.reversed_at is null' in d.def) > 0
+   from (select replace(pg_get_functiondef(
+           'private.invoice_three_way_raw(uuid,uuid)'::regprocedure), e'\r', '') as def) d),
+  'private.invoice_three_way_raw no longer reads consumption from the approval snapshot, or no '
+  'longer honours a reversal, so it and private.order_item_prior_invoiced now answer "how much was '
+  'consumed" from different places');
+
+select pg_temp.p29_assert(
+  not has_function_privilege(
+        'authenticated',
+        'private.order_item_prior_invoiced(uuid, uuid, uuid, uuid)',
+        'execute'),
+  'a client role can reach the consumption reader, which takes org_id as an argument and would '
+  'trust whatever a browser passed');
+
 rollback;
