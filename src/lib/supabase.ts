@@ -42,7 +42,26 @@ const correlatedFetch: typeof fetch = (input, init) => {
   return fetch(input, { ...init, headers });
 };
 
-export const supabase = createClient(url, anonKey, { global: { fetch: correlatedFetch } });
+/**
+ * PKCE, and the route that makes it survive a second device (security scan finding 5, `DEBT §99`).
+ *
+ * The implicit flow puts `access_token` and `refresh_token` in the address bar. Everything that
+ * ever reads a URL then holds a live session: browser history, a referrer, an extension, a
+ * screenshot in a support ticket. PKCE never puts a token there — the browser exchanges a code for
+ * a session over POST, and the code alone is useless without the verifier this client stored.
+ *
+ * THE OBJECTION PKCE USUALLY LOSES TO, and how it is answered here: the verifier lives in the
+ * browser that STARTED the flow, so a recovery mail opened on a phone would have nothing to
+ * exchange with. That is why this change could not ship alone. Every e-mail we send now links to
+ * `/auth/confirm?token_hash=…&type=…` (`docs/auth-email-templates/`), and `verifyOtp` on a
+ * token hash needs no verifier at all — it is a one-time secret from the mail, spendable in any
+ * browser. PKCE covers the flows that begin here (OAuth); token-hash covers the ones that begin
+ * in a mailbox. Neither of them writes a token into a URL.
+ */
+export const supabase = createClient(url, anonKey, {
+  auth: { flowType: 'pkce' },
+  global: { fetch: correlatedFetch },
+});
 
 /**
  * The address bar is not a place for tokens — see src/lib/authFragment.ts for the why.

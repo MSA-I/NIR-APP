@@ -444,7 +444,11 @@ insert into public.organizations (id, name, status, created_at) values
   ('75000000-0000-4000-8000-000000000011', 'P75 abandoned empty',     'active', now() - interval '40 days'),
   ('75000000-0000-4000-8000-000000000012', 'P75 abandoned active',    'active', now() - interval '40 days'),
   ('75000000-0000-4000-8000-000000000013', 'P75 verified owner',      'active', now() - interval '40 days'),
-  ('75000000-0000-4000-8000-000000000014', 'P75 young signup',        'active', now() - interval '10 days'),
+  -- Younger than `private.abandoned_signup_grace()` (0289: 24 hours, a documented default
+  -- pending an owner ruling). It was ten days while #175's window was thirty; #332 removed
+  -- the password from the moment of signup, so an unconfirmed empty tenant is released in a
+  -- day and ten days is now DUE rather than young.
+  ('75000000-0000-4000-8000-000000000014', 'P75 young signup',        'active', now() - interval '2 hours'),
   ('75000000-0000-4000-8000-000000000021', 'P75 class catalogue',     'active', now() - interval '40 days'),
   ('75000000-0000-4000-8000-000000000022', 'P75 class product',       'active', now() - interval '40 days'),
   ('75000000-0000-4000-8000-000000000023', 'P75 class invitation',    'active', now() - interval '40 days'),
@@ -659,7 +663,7 @@ select pg_temp.p75_assert(
   'an organization whose owner confirmed their address was deleted');
 select pg_temp.p75_assert(
   pg_temp.p75_refuses_cleanup('75000000-0000-4000-8000-000000000014', 'not_due'),
-  'an organization younger than the thirty days #175 fixed was deleted');
+  'an organization younger than private.abandoned_signup_grace() was deleted');
 
 -- ===== C4 -- the report writes nothing, and is not reachable without the capability =====
 select pg_temp.p75_assert(

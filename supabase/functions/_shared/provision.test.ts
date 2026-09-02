@@ -8,8 +8,9 @@ const valid = {
   name: "מסעדת הגפן",
   ownerEmail: "owner@example.test",
   ownerName: "בעלים בדיקה",
-  ownerPassword: "a-long-enough-password",
+  ownerPassword: "a-long-enough-password" as string | undefined,
   emailConfirmed: false,
+  passwordPending: false,
 };
 
 Deno.test("validation bounds everything an anonymous caller can send", () => {
@@ -26,6 +27,10 @@ Deno.test("validation bounds everything an anonymous caller can send", () => {
     // The upper bound matters as much as the lower one: an unbounded password field is a way to
     // make an anonymous request expensive to hash.
     [{ ownerPassword: "x".repeat(201) }, "over-long password"],
+    // Owner ruling #332, the direction that is easy to forget: the deferred path exists so that no
+    // password is chosen before the address is proved. A caller that could send one anyway would
+    // put the pre-hijacking hole back through a second door.
+    [{ passwordPending: true }, "a deferred-password payload that still carried a password"],
   ];
 
   for (const [override, what] of cases) {
@@ -33,12 +38,36 @@ Deno.test("validation bounds everything an anonymous caller can send", () => {
       throw new Error(`${what} was accepted`);
     }
   }
+
+  // And the shape the anonymous door actually sends: no password, and none expected.
+  if (validateProvisionInput({ ...valid, ownerPassword: undefined, passwordPending: true }) !== null) {
+    throw new Error("the deferred-password payload public-signup sends was rejected");
+  }
+  // The operator door still fails closed on a missing password, because it does not defer one.
+  if (validateProvisionInput({ ...valid, ownerPassword: "" }) === null) {
+    throw new Error("an operator payload with no password was accepted");
+  }
 });
 
 /** A client that records what it was asked to do and answers successfully. */
-function recordingAdmin(): { admin: ProvisionAdminClient; inserts: Record<string, unknown[]>; created: { emailConfirm?: boolean } } {
+function recordingAdmin(): {
+  admin: ProvisionAdminClient;
+  inserts: Record<string, unknown[]>;
+  created: {
+    emailConfirm?: boolean;
+    /** Whether the KEY was present, not what it held: absent and empty are different accounts. */
+    hasPasswordKey?: boolean;
+    password?: unknown;
+    metadata?: Record<string, unknown>;
+  };
+} {
   const inserts: Record<string, unknown[]> = {};
-  const created: { emailConfirm?: boolean } = {};
+  const created: {
+    emailConfirm?: boolean;
+    hasPasswordKey?: boolean;
+    password?: unknown;
+    metadata?: Record<string, unknown>;
+  } = {};
   const admin = {
     from(table: string) {
       return {
@@ -54,8 +83,15 @@ function recordingAdmin(): { admin: ProvisionAdminClient; inserts: Record<string
     },
     auth: {
       admin: {
-        createUser(input: { email_confirm: boolean }) {
+        createUser(input: {
+          email_confirm: boolean;
+          password?: string;
+          user_metadata?: Record<string, unknown>;
+        }) {
           created.emailConfirm = input.email_confirm;
+          created.hasPasswordKey = "password" in input;
+          created.password = input.password;
+          created.metadata = input.user_metadata;
           return Promise.resolve({ data: { user: { id: "user-1" } }, error: null });
         },
         deleteUser: () => Promise.resolve({ error: null }),
@@ -89,6 +125,49 @@ Deno.test("the public door starts unconfirmed and the operator door does not", a
   await provisionTenant(operator.admin, { ...valid, emailConfirmed: true });
   if (operator.created.emailConfirm !== true) {
     throw new Error("an operator-created account was left unconfirmed with nobody to confirm it");
+  }
+});
+
+/**
+ * Owner ruling #332, on the wire this module actually writes.
+ *
+ * The assertion that matters is `"password" in input` and not `input.password === undefined`: the
+ * admin API is an HTTP call, so a serialized `password: null` is a value GoTrue has to interpret,
+ * while an absent key is the only unambiguous spelling of "generate one nobody holds" — which is
+ * what leaves the account unusable until `/set-password` replaces it.
+ */
+Deno.test("the anonymous door creates an owner with NO password, named for the mail that follows", async () => {
+  const anonymous = recordingAdmin();
+  const outcome = await provisionTenant(anonymous.admin, {
+    ...valid,
+    ownerPassword: undefined,
+    passwordPending: true,
+  });
+  if (!outcome.ok) throw new Error("the deferred-password path failed on a valid payload");
+
+  if (anonymous.created.hasPasswordKey !== false) {
+    throw new Error("a self-signup still sent a password, so a stranger can set one on your address");
+  }
+  if (anonymous.created.emailConfirm !== false) {
+    throw new Error("a self-signup created a pre-confirmed account, so an unowned address could sign in");
+  }
+  if (anonymous.created.metadata?.password_pending !== true) {
+    throw new Error("the owner was not marked as owing a password, so /set-password is never offered");
+  }
+  // The confirmation template shows this so the reader can see which business the link belongs to
+  // before they trust it.
+  if (anonymous.created.metadata?.organization_name !== "מסעדת הגפן") {
+    throw new Error("the confirmation mail has no business name to show");
+  }
+
+  // The operator door is unchanged: it hands the credentials over in person.
+  const operator = recordingAdmin();
+  await provisionTenant(operator.admin, { ...valid, emailConfirmed: true });
+  if (operator.created.password !== "a-long-enough-password") {
+    throw new Error("the operator door stopped setting the password the operator chose");
+  }
+  if (operator.created.metadata?.password_pending === true) {
+    throw new Error("an operator-created owner was told to set a password nobody will ask them for");
   }
 });
 

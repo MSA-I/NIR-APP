@@ -1,10 +1,10 @@
 import { useT } from '../lib/i18n/LocaleProvider';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { KeyRound, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Card, ICON } from '../components/ui';
+import NewPasswordForm from '../components/NewPasswordForm';
 import { authCallbackFragment, supabase } from '../lib/supabase';
-import { MIN_PASSWORD_LENGTH, passwordProblemOf } from '../lib/password';
 import { APP_NAME } from '../lib/branding';
 
 type LinkState = 'checking' | 'ready' | 'invalid' | 'done';
@@ -12,21 +12,25 @@ type LinkState = 'checking' | 'ready' | 'invalid' | 'done';
 /**
  * Landing page of the recovery link (OPEN-DECISIONS #114).
  *
- * GoTrue's /verify redirect delivers either tokens (supabase-js exchanges them into a session
- * and fires onAuthStateChange) or an error_code in the hash — a consumed or expired link never
- * carries tokens. supabase.ts scrubs that fragment from the address bar as the client is created
- * and keeps it in `authCallbackFragment`, which is what this page reads. The page therefore has
- * exactly three honest states: a form when a session
- * exists, "the link is dead" when it provably is, and a short wait while the exchange runs.
- * The wait is bounded: tokens that never became a session within 8s are reported as a dead
- * link rather than a spinner that never resolves.
+ * IT NO LONGER LANDS HERE FIRST. `/auth/confirm` is the address every recovery mail carries now
+ * (`docs/auth-email-templates/recovery.html`): it spends the `token_hash`, gets a session, and
+ * navigates here with one already established. So the ordinary arrival is simply "there is a
+ * session", which the check below has always treated as ready — the route change cost this page
+ * nothing, and that is deliberate.
+ *
+ * The fragment path stays for the links that are already in mailboxes. GoTrue's /verify redirect
+ * delivers either tokens (supabase-js exchanges them into a session and fires onAuthStateChange)
+ * or an error_code in the hash — a consumed or expired link never carries tokens. supabase.ts
+ * scrubs that fragment from the address bar as the client is created and keeps it in
+ * `authCallbackFragment`, which is what this page reads. The page therefore has exactly three
+ * honest states: a form when a session exists, "the link is dead" when it provably is, and a short
+ * wait while the exchange runs. The wait is bounded: tokens that never became a session within 8s
+ * are reported as a dead link rather than a spinner that never resolves.
  */
 export default function ResetPassword() {
   const { errorText, t } = useT();
   const navigate = useNavigate();
   const [state, setState] = useState<LinkState>('checking');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,13 +66,19 @@ export default function ResetPassword() {
     };
   }, []);
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    const problem = passwordProblemOf(password, confirm);
-    setError(problem && t(problem.key, problem.vars));
-    if (problem) return;
+  async function changePassword(password: string) {
     setBusy(true);
-    const { error: updateError } = await supabase.auth.updateUser({ password });
+    setError(null);
+    /**
+     * `password_pending` is cleared here as well as on `/set-password`, and for a case that is not
+     * theoretical: an owner who closed the set-password screen has no password, so the way back in
+     * is "forgot password" — which lands on THIS page. Leaving the flag set would keep sending them
+     * to a screen whose job they had just finished.
+     */
+    const { error: updateError } = await supabase.auth.updateUser({
+      password,
+      data: { password_pending: false },
+    });
     setBusy(false);
     if (updateError) {
       setError(errorText(updateError.message));
@@ -76,7 +86,6 @@ export default function ResetPassword() {
     }
     setState('done');
     const signedOut = await supabase.auth.signOut({ scope: 'global' });
-    setBusy(false);
     if (signedOut.error) {
       await supabase.auth.signOut({ scope: 'local' });
       setError(t('resetPasswordTail.signOutFailed'));
@@ -114,33 +123,10 @@ export default function ResetPassword() {
         )}
 
         {state === 'ready' && (
-          <Card as="form" onSubmit={(event: FormEvent) => void onSubmit(event)} className="space-y-4">
-            <div>
-              <label className="label" htmlFor="reset-password-new">
-                {t('resetPasswordTail.newPasswordLabel', { min: MIN_PASSWORD_LENGTH })}
-              </label>
-              {/* `passwordProblem` judges the pair, so both boxes are marked and both point at the
-                  one message — the field that failed is no longer left for the reader to guess. */}
-              <input id="reset-password-new" type="password" className="input" dir="ltr"
-                autoComplete="new-password" value={password}
-                aria-invalid={error ? true : undefined}
-                aria-describedby={error ? 'reset-password-problem' : undefined}
-                onChange={(event) => { setPassword(event.target.value); setError(null); }} required />
-            </div>
-            <div>
-              <label className="label" htmlFor="reset-password-confirm">{t('resetPasswordTail.confirmPassword')}</label>
-              <input id="reset-password-confirm" type="password" className="input" dir="ltr"
-                autoComplete="new-password" value={confirm}
-                aria-invalid={error ? true : undefined}
-                aria-describedby={error ? 'reset-password-problem' : undefined}
-                onChange={(event) => { setConfirm(event.target.value); setError(null); }} required />
-            </div>
-            {error && <div id="reset-password-problem" role="alert" className="text-sm text-alert-fg">{error}</div>}
-            <button type="submit" className="btn-primary w-full" disabled={busy || !password || !confirm}>
-              {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <KeyRound size={ICON.sm} aria-hidden="true" />}
-              {t('resetPasswordTail.changePassword')}
-            </button>
-          </Card>
+          <NewPasswordForm idPrefix="reset-password" busy={busy} error={error}
+            submitLabel={t('resetPasswordTail.changePassword')}
+            onEdit={() => setError(null)}
+            onValidPassword={(password) => void changePassword(password)} />
         )}
 
         {state === 'done' && (

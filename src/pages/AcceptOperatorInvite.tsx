@@ -29,6 +29,8 @@ export default function AcceptOperatorInvite() {
 
   const [lookup, setLookup] = useState<InvitationLookup | null>(null);
   const [loading, setLoading] = useState(true);
+  /** The address of a session that already exists — the confirmation round trip's return leg. */
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
@@ -40,8 +42,14 @@ export default function AcceptOperatorInvite() {
     (async () => {
       if (!token) { setLookup({ status: 'unknown' }); setLoading(false); return; }
       try {
-        const result = await lookupOperatorInvitation(token);
-        if (!cancelled) setLookup(result);
+        const [result, session] = await Promise.all([
+          lookupOperatorInvitation(token),
+          supabase.auth.getSession(),
+        ]);
+        if (!cancelled) {
+          setLookup(result);
+          setSessionEmail(session.data.session?.user?.email ?? null);
+        }
       } catch {
         if (!cancelled) setLookup({ status: 'unknown' });
       } finally {
@@ -51,34 +59,51 @@ export default function AcceptOperatorInvite() {
     return () => { cancelled = true; };
   }, [token]);
 
+  /** The same rule as `AcceptInvite`: the confirmation round trip lands back here with a session. */
+  const signedInAsInvitee = Boolean(
+    sessionEmail && lookup?.email
+    && sessionEmail.trim().toLowerCase() === lookup.email.trim().toLowerCase(),
+  );
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
-    const problem = passwordProblemOf(password, confirm);
-    if (problem) { setFormError(t(problem.key, problem.vars)); return; }
+    if (!signedInAsInvitee) {
+      const problem = passwordProblemOf(password, confirm);
+      if (problem) { setFormError(t(problem.key, problem.vars)); return; }
+    }
 
     setBusy(true);
     try {
       const email = lookup!.email!;
-      // The account may already exist if a previous attempt signed up but did not finish. Same
-      // recovery as the tenant flow: sign in with what they just typed.
-      let { data: auth, error } = await supabase.auth.signUp({ email, password });
-      if (error && /already registered|already exists/i.test(error.message)) {
-        const retry = await supabase.auth.signInWithPassword({ email, password });
-        auth = retry.data;
-        error = retry.error;
+      if (!signedInAsInvitee) {
+        // The account may already exist if a previous attempt signed up but did not finish. Same
+        // recovery as the tenant flow: sign in with what they just typed.
+        //
+        // `emailRedirectTo` carries the operator token through the confirmation round trip, the
+        // way `AcceptInvite` carries the tenant one — one query parameter, for the same reason.
+        let { data: auth, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: `${window.location.origin}/operator-invite?token=${encodeURIComponent(token)}` },
+        });
+        if (error && /already registered|already exists/i.test(error.message)) {
+          const retry = await supabase.auth.signInWithPassword({ email, password });
+          auth = retry.data;
+          error = retry.error;
+        }
+        if (error) {
+          setFormError(
+            /Invalid login credentials/i.test(error.message)
+              ? t('operatorInvite.accountExistsWrongPassword')
+              : errorText(error),
+          );
+          return;
+        }
+        // No session means the project requires email confirmation. The window here is fifteen
+        // minutes, so say so plainly rather than implying the link will wait.
+        if (!auth?.session) { setConfirmEmailSent(true); return; }
       }
-      if (error) {
-        setFormError(
-          /Invalid login credentials/i.test(error.message)
-            ? t('operatorInvite.accountExistsWrongPassword')
-            : errorText(error),
-        );
-        return;
-      }
-      // No session means the project requires email confirmation. The window here is fifteen
-      // minutes, so say so plainly rather than implying the link will wait.
-      if (!auth?.session) { setConfirmEmailSent(true); return; }
 
       await acceptOperatorInvitation(token);
       // Full reload into the console: it is a separate application on this origin, and the
@@ -145,17 +170,23 @@ export default function AcceptOperatorInvite() {
         </div>
 
         <form onSubmit={submit} className="space-y-3">
-          <div>
-            <label className="label" htmlFor="operator-invite-password">{t('operatorInvite.passwordLabel')}</label>
-            <input id="operator-invite-password" className="input" type="password" autoComplete="new-password"
-              value={password} onChange={(event) => setPassword(event.target.value)} />
-            <p className="mt-1 text-xs text-ink-muted">{t('operatorInvite.passwordHint', { min: MIN_PASSWORD_LENGTH })}</p>
-          </div>
-          <div>
-            <label className="label" htmlFor="operator-invite-confirm">{t('operatorInvite.confirmLabel')}</label>
-            <input id="operator-invite-confirm" className="input" type="password" autoComplete="new-password"
-              value={confirm} onChange={(event) => setConfirm(event.target.value)} />
-          </div>
+          {signedInAsInvitee ? (
+            <p className="text-sm text-ink-muted">{t('operatorInvite.alreadyConfirmed')}</p>
+          ) : (
+            <>
+              <div>
+                <label className="label" htmlFor="operator-invite-password">{t('operatorInvite.passwordLabel')}</label>
+                <input id="operator-invite-password" className="input" type="password" autoComplete="new-password"
+                  value={password} onChange={(event) => setPassword(event.target.value)} />
+                <p className="mt-1 text-xs text-ink-muted">{t('operatorInvite.passwordHint', { min: MIN_PASSWORD_LENGTH })}</p>
+              </div>
+              <div>
+                <label className="label" htmlFor="operator-invite-confirm">{t('operatorInvite.confirmLabel')}</label>
+                <input id="operator-invite-confirm" className="input" type="password" autoComplete="new-password"
+                  value={confirm} onChange={(event) => setConfirm(event.target.value)} />
+              </div>
+            </>
+          )}
           {formError && (
             <p role="alert" className="note-alert text-sm">{formError}</p>
           )}
