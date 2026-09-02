@@ -2118,6 +2118,14 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
     // that the exact Request object was seen carrying a Bearer header while tracking was open, and
     // any read that starts after the transition closes still fails the gate.
     ['/rest/v1/supplier_balances_by_currency', 'GET'],
+    // AND THE SHELL ITSELF, not only the dashboard. `PlanBadge` and `NotificationBell` are mounted
+    // in Layout, so they are the LAST two reads still in flight when the account menu signs out --
+    // observed on 02.09.2026 once the recovery scenario ahead of this one began revoking sessions
+    // globally and shifted the timing again. Same race as the eleven above, same proof obligation:
+    // the exact Request object must have been seen with a Bearer header while tracking was open,
+    // so a read that starts after the transition closes still fails the gate.
+    ['/rest/v1/rpc/my_subscription', 'POST'],
+    ['/rest/v1/notifications', 'GET'],
   ]);
   const authenticatedTransitionReads = new WeakSet();
   let transitionReadTrackingOpen = true;
