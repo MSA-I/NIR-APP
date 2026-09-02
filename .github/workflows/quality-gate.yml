@@ -60,7 +60,7 @@ jobs:
       sql: ${{ steps.filter.outputs.sql }}
       browser: ${{ steps.filter.outputs.browser }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - id: filter
@@ -143,8 +143,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         if: needs.changes.outputs.edge == 'true'
         with:
           node-version: 24
@@ -223,6 +223,8 @@ jobs:
           npx --yes deno test \
             --config supabase/functions/interpret-document/deno.json \
             --allow-read=. \
+            --allow-env \
+            supabase/functions/_shared/cors.test.ts \
             supabase/functions/_shared/organization-access.test.ts \
             supabase/functions/_shared/organization-egress.test.ts \
             supabase/functions/_shared/reserved-egress.test.ts \
@@ -474,8 +476,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
       - name: High-severity production dependency audit
@@ -489,12 +491,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1 branch head, read 02.09.2026
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
 
@@ -533,14 +535,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
       - run: npm ci
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1 branch head, read 02.09.2026
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
 
@@ -665,7 +667,7 @@ jobs:
 
       - name: Keep the evidence — screenshots, the PDF and the report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: browser-evidence
           path: ${{ runner.temp }}/browser-evidence

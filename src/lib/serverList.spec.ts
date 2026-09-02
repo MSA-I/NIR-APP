@@ -486,6 +486,16 @@ describe('fetchServerList — filters', () => {
     expect(seen[0].url.searchParams.get('invoice_number')).toBe('ilike.%50\\%\\_%');
   });
 
+  it('is the escaper the refile search uses too, so one screen cannot drift from the other', async () => {
+    // DocumentsInbox builds its refile lookup by hand rather than through fetchServerList, and for
+    // a while it interpolated the typed term straight into an ilike pattern: "50%" listed every
+    // invoice beginning with 50. The claim lives here because this file owns the escaper.
+    const { readFileSync } = await import('node:fs');
+    const inbox = readFileSync('src/pages/DocumentsInbox.tsx', 'utf8');
+    expect(inbox).toContain("containsPattern(dq)");
+    expect(inbox).not.toContain("ilike('invoice_number', `%${dq}%`)");
+  });
+
   it('escapes wildcards inside an or-group too, where the backslash also forces quoting', async () => {
     const seen = useTable('invoices', invoices(1));
 
