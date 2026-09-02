@@ -108,6 +108,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // An operator hands the credentials over in person; there is nobody to send a confirmation
     // to. Self-signup (0159) is the path that starts unconfirmed.
     emailConfirmed: true,
+    // And it is also the path that defers the password (owner ruling #332). This one cannot: the
+    // operator IS the trusted party, the address is confirmed the moment the tenant exists, and
+    // there would be no confirmation link to carry a `/set-password` visit. Stated rather than
+    // defaulted, because `validateProvisionInput` refuses a payload whose two halves disagree.
+    passwordPending: false,
   };
 
   const problem = validateProvisionInput(input);

@@ -44,3 +44,22 @@ Deno.test("a confirmation-send failure stays generic to anonymous callers", () =
     }
   }
 });
+
+/**
+ * Owner ruling #332, asserted on the SOURCE because the alternative is a live GoTrue.
+ *
+ * Two things have to stay true together, and each one alone is a hole: the request body's
+ * `password` must not be read (or a stranger's password reaches the account), and the input handed
+ * to `provisionTenant` must declare `passwordPending` (or `validateProvisionInput` refuses the
+ * payload and signup stops working at all).
+ */
+Deno.test("the anonymous signup neither reads a password nor forgets to say so", () => {
+  const passwordBranch = source.slice(source.indexOf("const input = {"));
+  const inputLiteral = passwordBranch.slice(0, passwordBranch.indexOf("};") + 2);
+
+  if (/body\.password/.test(inputLiteral)) {
+    throw new Error("the anonymous signup still reads a password from the request body");
+  }
+  assertIncludes(inputLiteral, "passwordPending: true");
+  assertIncludes(inputLiteral, "emailConfirmed: false");
+});

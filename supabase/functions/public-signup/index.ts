@@ -9,14 +9,24 @@
  *      cold start, and Edge Functions cold-start constantly, so it would bound nothing.
  *   2. Nothing about the tenant is caller-selectable beyond a name. No status, no plan, no VAT
  *      rate, no categories — a signup form that could ask for Business would be a free upgrade.
- *   3. The owner's email starts UNCONFIRMED, so an address the visitor does not control cannot
- *      be used to sign in.
+ *   3. The owner's email starts UNCONFIRMED **and the account starts with no password at all**
+ *      (owner ruling #332, 02.09.2026). Unconfirmed alone was not enough: it stopped a stranger
+ *      signing in today, but the password they typed against somebody else's address stayed on
+ *      the account, and the real owner's confirmation click activated it. The password is now
+ *      chosen on `/set-password`, after the link has proved who holds the address.
  *   4. One answer for every outcome that involves an email address, so this endpoint cannot be
  *      used to discover who already has an account.
  *
  * It never invents a second mailer: Supabase Auth owns the confirmation link and hands it to the
  * configured SMTP provider. `auth.admin.createUser` does not trigger that delivery, so the
  * password branch requests it explicitly after tenant provisioning succeeds.
+ *
+ * NO `emailRedirectTo` IS SENT WITH THAT RESEND, and the omission is the safe choice rather than a
+ * gap. GoTrue then substitutes the project's Site URL into `{{ .RedirectTo }}`, the template hands
+ * that to `/auth/confirm` as `next`, and the route reads a bare site root as "no destination" and
+ * sends a pending owner to `/set-password`. The alternative — reading the caller's `Origin` header
+ * — would let an anonymous request choose where a confirmation mail lands, which is an open
+ * redirect with a session attached.
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -42,7 +52,7 @@ const CORS_HEADERS: Record<string, string> = {
  * of the two happened, and the reader is told what to do in either case.
  */
 const NEUTRAL_ANSWER =
-  'אם הכתובת אינה רשומה עדיין — נשלח אליה מייל אישור, ויש להשלים ממנו את ההרשמה. ' +
+  'אם הכתובת אינה רשומה עדיין — נשלח אליה מייל אישור, וממנו בוחרים סיסמה ומשלימים את ההרשמה. ' +
   'אם היא כבר רשומה — יש להיכנס עם הסיסמה הקיימת או לאפס אותה.';
 
 /**
@@ -327,12 +337,26 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ status: 'ready', message: 'הארגון נוצר. אפשר להתחיל.' }, 201);
   }
 
+  /**
+   * THE PASSWORD IS NOT READ FROM THIS REQUEST, and that is owner ruling #332 (02.09.2026).
+   *
+   * It used to be. `body.password` became the owner's password on an address nobody had proved, so
+   * a stranger could pre-register YOUR address with THEIR password: the account started
+   * unconfirmed, the confirmation mail went to you, and clicking it brought the account to life
+   * under their credentials, as the owner of an organization. "Unconfirmed" bounded who could sign
+   * in TODAY; it never bounded whose password was on the account tomorrow.
+   *
+   * `body.password` is not read here and is not passed on. A caller can still send the field — this
+   * is an anonymous HTTP endpoint and anyone may send anything — and it is ignored rather than
+   * refused, because a refusal would be a second answer this endpoint has to keep neutral. The
+   * account is created with no password at all, and the first one is chosen on `/set-password`
+   * after the confirmation link has proved who is holding the address.
+   */
   const input = {
     name: typeof body.organization_name === 'string' ? body.organization_name : '',
     ownerEmail: typeof body.email === 'string' ? body.email : '',
     ownerName: typeof body.full_name === 'string' ? body.full_name : '',
-    ownerPassword: typeof body.password === 'string' ? body.password : '',
-    // The fifth field, and the only one added since 0159 (owner decision #270). It is read on this
+    // The fourth field, and the only one added since 0159 (owner decision #270). It is read on this
     // branch too even though a password signup can almost never need it, because the requirement
     // follows the ADDRESS: somebody who types a relay forwarder into this form has exactly the
     // problem the decision is about, and a rule that only looked at the provider would miss them.
@@ -340,6 +364,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // Nothing else is read from the request. Plan, status, VAT rate and categories are the
     // database's to decide, and a form that could set them would be a free upgrade.
     emailConfirmed: false,
+    passwordPending: true,
   };
 
   const problem = validateProvisionInput(input);
