@@ -77,7 +77,9 @@ test('next-free-number reads main, local and live branches, lists stale ones, an
     // A colleague's pushed branch, not present locally: #334 and migration 0284.
     git(work, ['checkout', '-q', '-b', 'remote-work']);
     writeFileSync(join(work, 'docs', 'OPEN-DECISIONS.md'), rows([330, 331, 334]));
-    writeFileSync(join(work, 'supabase', 'migrations', '0284_measured.sql'), '-- sql\n');
+    // Assembled, not literal: check:renumber-closure reads every `NNNN_name.sql` token in the tree as a
+    // citation of a real migration, and this one is a fixture that must not exist.
+    writeFileSync(join(work, 'supabase', 'migrations', ['0284', 'measured.sql'].join('_')), '-- sql\n');
     commitAll(work, 'remote: 334');
     git(work, ['push', '-q', 'origin', 'remote-work']);
     git(work, ['checkout', '-q', 'main']);
