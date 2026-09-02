@@ -34,6 +34,8 @@ function ask(repo: string, ...args: string[]) {
   const run = spawnSync(process.execPath, [tool, `--repo=${repo}`, ...args], { encoding: 'utf8' });
   return { status: run.status, out: `${run.stdout}${run.stderr}` };
 }
+/** The tool prints rulings as `#N`; assembled here so check:decision-numbers does not read fixture numbers as citations. */
+const ruling = (n: number) => `#${n}`;
 const has = (text: string, needle: string) => assert.ok(text.includes(needle), `expected «${needle}» in:\n${text}`);
 const lacks = (text: string, needle: string) => assert.ok(!text.includes(needle), `did not expect «${needle}» in:\n${text}`);
 
@@ -47,7 +49,7 @@ test('next-free-number reads main, local and live branches, lists stale ones, an
     git(work, ['init', '-q', '-b', 'main']);
     git(work, ['remote', 'add', 'origin', bare]);
 
-    // origin/main: rulings #330/#331, debt §16 / §24 (a merged pair) and §23, migration 0283 plus a
+    // origin/main: rulings 330 and 331, debt §16 / §24 (a merged pair) and §23, migration 0283 plus a
     // stray non-SQL file numbered 0290, suite p103.
     mkdirSync(join(work, 'docs'));
     mkdirSync(join(work, 'supabase', 'migrations'), { recursive: true });
@@ -60,7 +62,7 @@ test('next-free-number reads main, local and live branches, lists stale ones, an
     commitAll(work, 'main: 331');
     git(work, ['push', '-q', '-u', 'origin', 'main']);
 
-    // An abandoned draft: ahead of main, 30 days old, holding #340.
+    // An abandoned draft: ahead of main, 30 days old, holding ruling 340.
     git(work, ['checkout', '-q', '-b', 'old-draft']);
     writeFileSync(join(work, 'docs', 'OPEN-DECISIONS.md'), rows([330, 331, 340]));
     const monthAgo = new Date(Date.now() - 30 * 86400_000).toISOString();
@@ -68,13 +70,13 @@ test('next-free-number reads main, local and live branches, lists stale ones, an
     git(work, ['push', '-q', 'origin', 'old-draft']);
     git(work, ['checkout', '-q', 'main']);
 
-    // A sibling worktree's branch, never pushed: #333.
+    // A sibling worktree's branch, never pushed: ruling 333.
     git(work, ['checkout', '-q', '-b', 'local-work']);
     writeFileSync(join(work, 'docs', 'OPEN-DECISIONS.md'), rows([330, 331, 333]));
     commitAll(work, 'local: 333');
     git(work, ['checkout', '-q', 'main']);
 
-    // A colleague's pushed branch, not present locally: #334 and migration 0284.
+    // A colleague's pushed branch, not present locally: ruling 334 and migration 0284.
     git(work, ['checkout', '-q', '-b', 'remote-work']);
     writeFileSync(join(work, 'docs', 'OPEN-DECISIONS.md'), rows([330, 331, 334]));
     // Assembled, not literal: check:renumber-closure reads every `NNNN_name.sql` token in the tree as a
@@ -85,7 +87,7 @@ test('next-free-number reads main, local and live branches, lists stale ones, an
     git(work, ['checkout', '-q', 'main']);
     git(work, ['branch', '-q', '-D', 'remote-work']);
 
-    // main moves on to #332 — and this checkout stays one commit behind it.
+    // main moves on to ruling 332 — and this checkout stays one commit behind it.
     writeFileSync(join(work, 'docs', 'OPEN-DECISIONS.md'), rows([330, 331, 332]));
     commitAll(work, 'main: 332');
     git(work, ['push', '-q', 'origin', 'main']);
@@ -100,17 +102,17 @@ test('next-free-number reads main, local and live branches, lists stale ones, an
     const local = ask(work, '--local', 'decision');
     assert.equal(local.status, 0, local.out);
     has(local.out, '--local: not fetching; origin/* refs are');
-    // main (#332) beats the tree (#331); local-work (#333) and origin/remote-work (#334) are live;
-    // old-draft (#340) is stale and only listed.
-    has(local.out, 'owner ruling — next free: #335');
-    has(local.out, 'origin/main #332 · your tree #331 · 2 live branch(es) · 1 stale not counted');
-    has(local.out, 'CLAIMED ON A BRANCH BUT NOT IN YOUR TREE: #333 on local-work (local), #334 on origin/remote-work');
-    has(local.out, 'STALE (not counted): origin/old-draft holds #340 — 1 behind main, 30 days old');
+    // main (ruling 332) beats the tree (ruling 331); local-work (ruling 333) and origin/remote-work (ruling 334) are live;
+    // old-draft (ruling 340) is stale and only listed.
+    has(local.out, `owner ruling — next free: ${ruling(335)}`);
+    has(local.out, `origin/main ${ruling(332)} · your tree ${ruling(331)} · 2 live branch(es) · 1 stale not counted`);
+    has(local.out, `CLAIMED ON A BRANCH BUT NOT IN YOUR TREE: ${ruling(333)} on local-work (local), ${ruling(334)} on origin/remote-work`);
+    has(local.out, `STALE (not counted): origin/old-draft holds ${ruling(340)} — 1 behind main, 30 days old`);
     lacks(local.out, 'COLLISION');
     lacks(local.out, 'WARNINGS');
 
     const withStale = ask(work, '--local', '--include-stale', 'decision');
-    has(withStale.out, 'owner ruling — next free: #341');
+    has(withStale.out, `owner ruling — next free: ${ruling(341)}`);
 
     // Debt: both halves of the merged heading count; a § in prose does not. Migration: a live branch's
     // 0284 counts, the stray 0290_notes.md does not. Suite: p103 -> p104.
@@ -121,12 +123,12 @@ test('next-free-number reads main, local and live branches, lists stale ones, an
     has(rest.out, 'CLAIMED ON A BRANCH BUT NOT IN YOUR TREE: 0284 on origin/remote-work');
     has(rest.out, 'SQL suite — next free: p104');
 
-    // The collision that already happened: the tree writes #333 while local-work holds it too.
+    // The collision that already happened: the tree writes ruling 333 while local-work holds it too.
     appendFileSync(join(work, 'docs', 'OPEN-DECISIONS.md'), '| 333 | mine too |\n');
     const collided = ask(work, '--local', 'decision');
     assert.equal(collided.status, 1, collided.out);
-    has(collided.out, 'COLLISION: #333 is in your tree AND on local-work (local)');
-    has(collided.out, 'owner ruling — next free: #335');
+    has(collided.out, `COLLISION: ${ruling(333)} is in your tree AND on local-work (local)`);
+    has(collided.out, `owner ruling — next free: ${ruling(335)}`);
 
     // Usage errors are loud, and an inherited object key is not a kind.
     const unknown = ask(work, '--local', 'toString');

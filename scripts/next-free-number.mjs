@@ -35,7 +35,7 @@
  * tip is older than 14 days or it is more than 20 commits behind origin/main. Stale branches are
  * LISTED with the numbers they hold but not counted, because an abandoned draft or a superseded
  * twin is "ahead of main" forever and would inflate the answer (measured 02.09.2026: one abandoned
- * draft pushed the ruling counter from #332 to #344 and parked twelve numbers nobody would merge).
+ * draft pushed the ruling counter from 332 to 344 and parked twelve numbers nobody would merge).
  * `--include-stale` counts them anyway.
  * ponytail: staleness is a threshold, not knowledge. If it misjudges a branch, the upgrade path is
  * `gh pr list --state open` — a branch with an open PR is alive by definition — with this as fallback.
