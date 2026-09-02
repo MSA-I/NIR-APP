@@ -1973,3 +1973,16 @@ Hebrew and clears the field" — עם `Unable to find an element with the text: 
   סיסמה (התבנית של `AcceptInvite`/`ResetPassword`); או, אם הסיסמה נשארת בטופס, לדרוס אותה ולבטל
   קישורי אישור קודמים בכל הרשמה חוזרת לכתובת שעדיין לא אושרה. בכל מקרה: ניקוי הרשמות לא
   מאושרות בשעות, כולל `auth.users`; ושם הארגון במייל האישור.
+
+### §103 — פקודת מפעילים שישית בודקת חברות ולא יכולת: `platform_set_price_list_automation_scope`
+
+- **מצב:** `public.platform_set_price_list_automation_scope` (`0096:2060`) מוגנת ב-`is_platform_admin()` ובאימות
+  מחודש, אך אינה דורשת שום יכולת מ-`private.platform_capability_definitions`, ומוענקת ל-`authenticated`.
+  אותו דפוס שמיגרציה `0286` סוגרת בחמש פקודות (`set_organization_lifecycle`, `platform_set_org_flag`,
+  `platform_set_approval_policy`, `platform_set_autonomy_policy`, `platform_set_assistant_policy`).
+- **למה נדחה:** נמצא בזמן כתיבת `0286`, מחוץ להיקף שנמדד בסריקה; הכותרת של `0286` מונה אותו, וההצהרה
+  המבנית שם מצמידה אותו בשמו כדי שלא יעבור כ"מכוסה".
+- **ראיה:** `supabase/migrations/0286_platform_writers_carry_their_capability.sql` (כותרת + זרוע (c) של ההצהרה);
+  `docs/SECURITY-SCAN-20260902.md` ממצא 3.
+- **הצעד הבא:** להעביר דרך `private.assert_platform_command` עם יכולת מתאימה (`policy.configure`, או יכולת
+  ייעודית למחירונים אם הבעלים יבחין), ולהסיר את השם מזרוע (c) כך שההצהרה תדרוש כיסוי מלא.
