@@ -2118,6 +2118,14 @@ async function pushLogout(browser, name, serverSuccess, localSuccess) {
     // that the exact Request object was seen carrying a Bearer header while tracking was open, and
     // any read that starts after the transition closes still fails the gate.
     ['/rest/v1/supplier_balances_by_currency', 'GET'],
+    // AND THE SHELL ITSELF, not only the dashboard. `PlanBadge` and `NotificationBell` are mounted
+    // in Layout, so they are the LAST two reads still in flight when the account menu signs out --
+    // observed on 02.09.2026 once the recovery scenario ahead of this one began revoking sessions
+    // globally and shifted the timing again. Same race as the eleven above, same proof obligation:
+    // the exact Request object must have been seen with a Bearer header while tracking was open,
+    // so a read that starts after the transition closes still fails the gate.
+    ['/rest/v1/rpc/my_subscription', 'POST'],
+    ['/rest/v1/notifications', 'GET'],
   ]);
   const authenticatedTransitionReads = new WeakSet();
   let transitionReadTrackingOpen = true;
@@ -2239,7 +2247,7 @@ async function publicSignupSurface(browser) {
       headers: jsonHeaders,
       json: {
         status: 'pending_confirmation',
-        message: 'אם הכתובת אינה רשומה עדיין — נשלח אליה מייל אישור, ויש להשלים ממנו את ההרשמה. אם היא כבר רשומה — יש להיכנס עם הסיסמה הקיימת או לאפס אותה.',
+        message: 'אם הכתובת אינה רשומה עדיין — נשלח אליה מייל אישור, וממנו בוחרים סיסמה ומשלימים את ההרשמה. אם היא כבר רשומה — יש להיכנס עם הסיסמה הקיימת או לאפס אותה.',
       },
     });
   });
@@ -2258,20 +2266,26 @@ async function publicSignupSurface(browser) {
 
     // The four fields moved when #195 merged `/signup` and `/login` into one card: `Signup.tsx`
     // is now a thin wrapper that renders `Entrance` on the "name a business" side, so the ids are
-    // `entrance-*`, and email and password are shared with the sign-in side and lost their prefix.
-    // The heading, the submit button and the post-submit text are unchanged, which is why this
-    // scenario failed at the first fill rather than earlier.
+    // `entrance-*`, and email is shared with the sign-in side and lost its prefix.
+    //
+    // AND THEN THERE WERE THREE. Owner ruling #332 took the password field off this side of the
+    // card: the account is created without one, and the first password is chosen from the
+    // confirmation mail. Its ABSENCE is asserted below rather than merely not typed into -- a form
+    // that quietly grew the box back would otherwise pass this scenario unchanged.
     await page.locator('#entrance-organization').fill('עסק בדיקה');
     await page.locator('#entrance-name').fill('בעלים בדיקה');
     await page.locator('#email').fill('p4-signup@example.invalid');
-    await page.locator('#password').fill('a-long-enough-password');
+    assert.equal(
+      await page.locator('#password').count(), 0,
+      'the signup side still asks for a password, so a stranger can set one on an unproved address',
+    );
     await page.getByRole('button', { name: 'פתיחת חשבון' }).click();
 
     await page.getByText('בדקו את תיבת הדואר').waitFor({ timeout: 20_000 });
     assert(sent !== null, 'the signup form sent nothing');
     assert.deepEqual(
       Object.keys(sent).sort(),
-      ['email', 'full_name', 'organization_name', 'password'],
+      ['email', 'full_name', 'organization_name'],
       'the signup form sent a field the visitor does not get to choose',
     );
 
@@ -3615,6 +3629,17 @@ async function receivingDecisionsContract(browser) {
  * recovery link: GoTrue itself mints it (admin generate_link — the same token the email would
  * carry), the browser lands on /reset-password exactly as a mail client would, sets a new
  * password through the form, and the new password must then open the app from a cold login.
+ *
+ * PART 2 FOLLOWS THE TOKEN HASH, NOT THE ACTION LINK, and that is not a preference. `action_link`
+ * is GoTrue's `/auth/v1/verify?token=…&redirect_to=…`, which answers with a redirect carrying an
+ * implicit `#access_token=` fragment. The client is created with `flowType: 'pkce'`
+ * (`src/lib/supabase.ts`), and auth-js REFUSES an implicit callback outright — it throws
+ * `AuthPKCEGrantCodeExchangeError('Not a valid PKCE flow url.')` (GoTrueClient.js:3212-3216)
+ * rather than exchanging it — so no session is ever created and ResetPassword never leaves its
+ * "checking" state. That is exactly the link shape the new templates retire: every mail now points
+ * at `/auth/confirm?token_hash=…&type=…`, which `verifyOtp` redeems over POST with no fragment and
+ * no code verifier, so it works in a browser that never started the flow. This scenario follows the
+ * same address, built from the SAME token generate_link minted.
  * The office password is restored through the admin API in `finally`, so later scenarios keep
  * their credentials no matter where this one stops.
  */
@@ -3661,14 +3686,23 @@ async function passwordRecovery(browser) {
     assert.equal(linkRes.status, 200, `admin generate_link answered HTTP ${linkRes.status}`);
     const link = await linkRes.json();
     const actionLink = link.action_link || (link.properties && link.properties.action_link);
+    const hashedToken = link.hashed_token || (link.properties && link.properties.hashed_token);
     userId = link.id || (link.user && link.user.id) || null;
     assert(actionLink, 'generate_link returned no action_link');
+    assert(hashedToken, 'generate_link returned no hashed_token — the templates link to /auth/confirm with it');
     assert(userId, 'generate_link did not name the user id (needed to restore the password)');
+    // Still asserted even though the browser no longer follows `action_link`: `{{ .RedirectTo }}`
+    // is what the templates hand to /auth/confirm as `next`, so a redirect_to GoTrue silently
+    // replaced with the Site URL is still a configuration regression worth failing on.
     assert.equal(new URL(actionLink).searchParams.get('redirect_to'), `${baseURL}/reset-password`,
       'GoTrue did not accept the preview redirect_to — check additional_redirect_urls in supabase/config.toml');
 
-    await page.goto(actionLink);
+    await page.goto(`${baseURL}/auth/confirm?token_hash=${encodeURIComponent(hashedToken)}&type=recovery`);
     await page.waitForFunction(() => location.pathname === '/reset-password', null, { timeout: 15_000 });
+    // Nothing token-shaped reached the address bar on the way. Under the implicit flow this hash
+    // carried the session; the whole point of the move is that it is now empty.
+    assert.equal(await page.evaluate(() => location.hash), '',
+      'the recovery landing still carries an auth fragment — the token-hash route was bypassed');
     await page.locator('#reset-password-new').fill(newPassword);
     await page.locator('#reset-password-confirm').fill(newPassword);
     await page.getByRole('button', { name: 'החלפת סיסמה' }).click();

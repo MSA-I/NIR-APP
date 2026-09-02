@@ -36,7 +36,22 @@ export interface ProvisionAdminClient {
   };
   auth: {
     admin: {
-      createUser(input: { email: string; password: string; email_confirm: boolean }): PromiseLike<{
+      /**
+       * `password` is OPTIONAL, and that is owner ruling #332 in the type system.
+       *
+       * WHAT GoTrue ACTUALLY DOES with an absent key, because "no password" would be a comforting
+       * simplification: it GENERATES a random one and stores its hash. The account is equally
+       * unusable either way — the value is not known to us, to the visitor, or to whoever filled
+       * the form — so nobody can sign in with a password until `/set-password` replaces it. That
+       * is the property #332 needs; `user_metadata.password_pending` is only the marker saying
+       * which screen is still owed.
+       */
+      createUser(input: {
+        email: string;
+        password?: string;
+        email_confirm: boolean;
+        user_metadata?: Record<string, unknown>;
+      }): PromiseLike<{
         data: { user: { id: string } | null }; error: Failure;
       }>;
       deleteUser(id: string): PromiseLike<{ error: Failure }>;
@@ -58,7 +73,13 @@ export interface ProvisionInput {
   name: string;
   ownerEmail: string;
   ownerName: string;
-  ownerPassword: string;
+  /**
+   * Absent on the deferred path (`passwordPending`), required on every other one. It is not
+   * "optional" in the sense of "may be skipped": `validateProvisionInput` refuses a payload whose
+   * two halves disagree, in BOTH directions, so a caller cannot forget a password and cannot
+   * smuggle one into the path that exists to have none.
+   */
+  ownerPassword?: string;
   vatRate?: number;
   categories?: string[];
   /**
@@ -78,6 +99,23 @@ export interface ProvisionInput {
    * address the visitor does not control cannot be used to sign in.
    */
   emailConfirmed: boolean;
+  /**
+   * Owner ruling #332, 02.09.2026: "the password is set only after the e-mail address is
+   * confirmed."
+   *
+   * UNCONFIRMED WAS NOT ENOUGH, and this is the whole finding. A stranger could type YOUR address
+   * and THEIR password into the anonymous form. The account was created unconfirmed, so they could
+   * not sign in — but the confirmation mail went to you, and the moment you clicked it the account
+   * became live with their password on it, as the owner of an organization. Account pre-hijacking,
+   * finding 4 of the 02.09.2026 security scan.
+   *
+   * So the ordering is inverted rather than tightened. On this path the auth user is created with
+   * NO password and marked `user_metadata.password_pending`; `/set-password` sets the first one,
+   * after the confirmation link has proved who holds the address. Confirming an account a stranger
+   * pre-registered now yields an account whose password is a random value nobody holds — not
+   * theirs, and not anyone's.
+   */
+  passwordPending: boolean;
 }
 
 export interface ProvisionResult {
@@ -110,10 +148,24 @@ export function validateProvisionInput(input: Partial<ProvisionInput>): string |
   if (!ownerName) return 'שם בעל העסק חסר';
   if (ownerName.length > 200) return 'שם בעל העסק ארוך מדי';
 
-  if (!input.ownerPassword || input.ownerPassword.length < MIN_PASSWORD_LENGTH) {
-    return `סיסמה חייבת להכיל לפחות ${MIN_PASSWORD_LENGTH} תווים`;
+  /**
+   * The two halves have to agree, and the refusal runs in both directions on purpose.
+   *
+   *   * `passwordPending` with a password is refused, because the point of that path is that no
+   *     password exists to be chosen by somebody who has not proved the address. A caller that
+   *     could pass one anyway would restore the pre-hijacking hole through a second door.
+   *   * No `passwordPending` and no usable password is refused exactly as before, so
+   *     `admin-provision` — which sends `body.owner_password ?? ''` — still fails closed when the
+   *     operator omitted one.
+   */
+  if (input.passwordPending) {
+    if (input.ownerPassword) return 'סיסמה אינה נקבעת בהרשמה — היא נבחרת אחרי אישור הכתובת';
+  } else {
+    if (!input.ownerPassword || input.ownerPassword.length < MIN_PASSWORD_LENGTH) {
+      return `סיסמה חייבת להכיל לפחות ${MIN_PASSWORD_LENGTH} תווים`;
+    }
+    if (input.ownerPassword.length > 200) return 'הסיסמה ארוכה מדי';
   }
-  if (input.ownerPassword.length > 200) return 'הסיסמה ארוכה מדי';
 
   if (input.vatRate !== undefined) {
     if (typeof input.vatRate !== 'number' || !Number.isFinite(input.vatRate)
@@ -228,10 +280,26 @@ export async function provisionTenant(
     }
     created.orgId = orgInsert.data.id as string;
 
+    /**
+     * The password key is SPREAD IN, never assigned. `password: undefined` and no `password` key
+     * are the same thing to this process and different things on the wire: the admin API is an
+     * HTTP call, and a serialized `password: null` is a value GoTrue would have to interpret.
+     * Omitting the key is the only spelling of "generate one for me" — GoTrue then stores a random
+     * password nobody holds, which is what leaves the account unusable until `/set-password` runs.
+     *
+     * `user_metadata` carries two things and no more. `password_pending` is the flag `/set-password`
+     * reads and clears — a hint about which screen is owed, never an authorization, since anyone
+     * holding the session can write it. `organization_name` is there for ONE reader: the
+     * confirmation e-mail template, which shows `{{ .Data.organization_name }}` so the person
+     * confirming can see which business the link belongs to before they trust it.
+     */
     const userCreate = await admin.auth.admin.createUser({
       email: ownerEmail,
-      password: input.ownerPassword,
+      ...(input.passwordPending ? {} : { password: input.ownerPassword }),
       email_confirm: input.emailConfirmed,
+      ...(input.passwordPending
+        ? { user_metadata: { password_pending: true, organization_name: name, full_name: ownerName } }
+        : {}),
     });
 
     if (userCreate.error || !userCreate.data.user) {

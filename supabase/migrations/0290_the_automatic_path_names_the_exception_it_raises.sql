@@ -1,4 +1,4 @@
--- 0288 -- the automatic path stops filing "an item you did not order" under a borrowed name.
+-- 0290 -- the automatic path stops filing "an item you did not order" under a borrowed name.
 --
 -- DEBT §17, and it is the last step of a job `0086` and `0087` already did most of.
 --
@@ -27,7 +27,7 @@
 -- `details.code` stays. It is the evidence three separate p14 assertions read, and dropping it
 -- would trade one honest label for a lost one.
 
-do $do_0288$
+do $do_0290$
 declare
   v_def     text;
   v_anchor  text;
@@ -41,19 +41,19 @@ begin
   from pg_catalog.pg_proc p
   where p.oid = v_signature::regprocedure;
   if v_def is null then
-    raise exception '0288: apply_document_interpretation not found';
+    raise exception '0290: apply_document_interpretation not found';
   end if;
 
   v_anchor := replace($anchor$          v_org, 'receipt_mismatch', 'medium', 'open',$anchor$, e'\r', '');
   v_patched := replace($patched$          v_org, 'item_not_ordered', 'medium', 'open',$patched$, e'\r', '');
   if (length(v_def) - length(replace(v_def, v_anchor, ''))) / length(v_anchor) <> 1 then
-    raise exception '0288: the exception-type anchor moved -- refusing to patch blindly';
+    raise exception '0290: the exception-type anchor moved -- refusing to patch blindly';
   end if;
   v_def := replace(v_def, v_anchor, v_patched);
 
   execute v_def;
 end
-$do_0288$;
+$do_0290$;
 
 -- 0182 pins this function's body by hash in private.document_automation_authoritative_functions,
 -- and private.document_automation_negative_guard_violations() reports any body that has drifted
@@ -67,12 +67,12 @@ $do_0288$;
 update private.document_automation_authoritative_functions registry
 set body_hash = md5(replace(proc.prosrc, e'\r', '')),
     responsibility = registry.responsibility
-      || ' 0288: the automatic path raises item_not_ordered under its own name.'
+      || ' 0290: the automatic path raises item_not_ordered under its own name.'
 from pg_proc proc
 where proc.oid = 'public.apply_document_interpretation(uuid,uuid,uuid)'::regprocedure
   and registry.function_signature = 'apply_document_interpretation(uuid,uuid,uuid)';
 
-do $assert_0288$
+do $assert_0290$
 declare
   v_body text;
   v_violations text;
@@ -82,18 +82,18 @@ begin
   where oid = 'public.apply_document_interpretation(uuid,uuid,uuid)'::regprocedure;
 
   if position($needle$'item_not_ordered', 'medium', 'open'$needle$ in v_body) = 0 then
-    raise exception '0288: the automatic path does not raise item_not_ordered after the patch';
+    raise exception '0290: the automatic path does not raise item_not_ordered after the patch';
   end if;
   -- The evidence key survives the rename; three p14 assertions read it.
   if position($needle$'code', 'item_not_ordered'$needle$ in v_body) = 0 then
-    raise exception '0288: details.code was lost in the patch';
+    raise exception '0290: details.code was lost in the patch';
   end if;
   if not exists (
     select 1 from pg_catalog.pg_proc
     where oid = 'public.apply_document_interpretation(uuid,uuid,uuid)'::regprocedure
       and prosecdef
   ) then
-    raise exception '0288: apply_document_interpretation lost SECURITY DEFINER';
+    raise exception '0290: apply_document_interpretation lost SECURITY DEFINER';
   end if;
 
   -- The pin above must have landed, or the alarm 0182 installed is still ringing.
@@ -101,14 +101,14 @@ begin
     into v_violations
   from private.document_automation_negative_guard_violations();
   if v_violations is not null then
-    raise exception e'0288: the automation negative guard is not silent after the repin:\n%', v_violations;
+    raise exception e'0290: the automation negative guard is not silent after the repin:\n%', v_violations;
   end if;
 
   select string_agg(assertion || ' -- ' || detail, e'\n' order by assertion, detail)
     into v_violations
   from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0288 scope assertions failed:\n%', v_violations;
+    raise exception e'0290 scope assertions failed:\n%', v_violations;
   end if;
 end
-$assert_0288$;
+$assert_0290$;

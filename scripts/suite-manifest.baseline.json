@@ -765,96 +765,103 @@
   {
     "ordinal": 109,
     "kind": "suite",
+    "path": "supabase/tests/p105_abandoned_signup_released_in_a_day.sql",
+    "label": "An abandoned self-signup is released in a day and its identity goes with it: the window is a named function reading the 24 hours #332 left as a documented default rather than a literal nobody can find, an empty unconfirmed organization past it loses its tenant rows AND the auth.users row that would otherwise hold the address hostage in GoTrue for ever, an organization still inside the window is refused by name, a confirmed owner and a single supplier row each still stop the delete without taking the identity with them, a platform operator who also opened a trial keeps the console account a retention job must never remove, the retained record counts the identities it released and still carries no PII, and neither browser role nor a non-service caller can reach any of it",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 110,
+    "kind": "suite",
     "path": "supabase/tests/payment_credit_override.sql",
     "label": "Payment approval with legal-entity scoped open-credit override",
     "role": "postgres"
   },
   {
-    "ordinal": 110,
+    "ordinal": 111,
     "kind": "suite",
     "path": "supabase/tests/monthly_report_snapshots.sql",
     "label": "Immutable legal-entity monthly accountant snapshots",
     "role": "postgres"
   },
   {
-    "ordinal": 111,
+    "ordinal": 112,
     "kind": "preflight",
     "path": "supabase/tests/p1_preflight.sql",
     "label": "P1 preflight",
     "role": null
   },
   {
-    "ordinal": 112,
+    "ordinal": 113,
     "kind": "suite",
     "path": "supabase/tests/p1_financial_commands.sql",
     "label": "P1 financial commands, rollback and idempotency",
     "role": "postgres"
   },
   {
-    "ordinal": 113,
+    "ordinal": 114,
     "kind": "suite",
     "path": "supabase/tests/p1_price_submissions.sql",
     "label": "Owner and office price-list reservation, registration, intake, review and evidence",
     "role": "postgres"
   },
   {
-    "ordinal": 114,
+    "ordinal": 115,
     "kind": "suite",
     "path": "supabase/tests/p1_price_submissions_concurrency.sql",
     "label": "Concurrent owner and office price-list submission and idempotency",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 115,
+    "ordinal": 116,
     "kind": "reset",
     "path": null,
     "label": "supabase db reset",
     "role": null
   },
   {
-    "ordinal": 116,
+    "ordinal": 117,
     "kind": "suite",
     "path": "supabase/tests/p2_data_reliability.sql",
     "label": "P2 retry, alerts, pagination and reliability",
     "role": "postgres"
   },
   {
-    "ordinal": 117,
+    "ordinal": 118,
     "kind": "suite",
     "path": "supabase/tests/server_list_contracts.sql",
     "label": "Server list predicates, duplicate key across pages and tenant scope",
     "role": "postgres"
   },
   {
-    "ordinal": 118,
+    "ordinal": 119,
     "kind": "suite",
     "path": "supabase/tests/roadmap_db_contracts.sql",
     "label": "Roadmap supplier, inventory, savings and WhatsApp contracts",
     "role": "postgres"
   },
   {
-    "ordinal": 119,
+    "ordinal": 120,
     "kind": "suite",
     "path": "supabase/tests/p1_concurrency.sql",
     "label": "P1 real concurrent sessions",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 120,
+    "ordinal": 121,
     "kind": "suite",
     "path": "supabase/tests/payment_credit_override_concurrency.sql",
     "label": "Concurrent payment replay, approval, execution and credit creation",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 121,
+    "ordinal": 122,
     "kind": "suite",
     "path": "supabase/tests/monthly_report_snapshots_concurrency.sql",
     "label": "Concurrent immutable monthly snapshot version allocation",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 122,
+    "ordinal": 123,
     "kind": "suite",
     "path": "supabase/tests/p63_financial_credit_concurrency.sql",
     "label": "Two accountants racing for one credit remainder: one payment, one named refusal, no double allocation",

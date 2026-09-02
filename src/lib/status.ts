@@ -261,12 +261,16 @@ export const EXCEPTION_TYPE: Record<string, string> = {
   credit_not_deducted: 'exceptionType_credit_not_deducted',
   receipt_mismatch: 'exceptionType_receipt_mismatch',
   // 0086 added the enum value §17 planned, 0087 gave the manual command the honest type from day
-  // one, and 0288 finished the job: the automatic path in apply_document_interpretation raises
+  // one, and 0290 finished the job: the automatic path in apply_document_interpretation raises
   // `item_not_ordered` itself rather than filing under receipt_mismatch with the real name hidden
   // in details.code. Both paths now land in one bucket, so a manager filtering for "פריט שלא
   // הוזמן" sees what the machine found as well as what a person opened. details.code survives —
   // it names the ITEM as well as the kind, and three p14 assertions read it.
   item_not_ordered: 'exceptionType_item_not_ordered',
+  // 0273. A document that was expected and never came -- a finding, not the absence of one.
+  // It waited here unlabelled: the table rendered an empty cell and the filter on /exceptions
+  // is built from THIS map, so the type could not even be selected. check:exception-labels.
+  expected_document_missing: 'exceptionType_expected_document_missing',
 };
 
 export const EXCEPTION_STATUS: Record<string, StatusMeta> = {

@@ -27,7 +27,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-const PINNED = 113;
+const PINNED = 106;
 
 const root = process.cwd();
 const DYNAMIC_NAMESPACES = new Set(['status', 'errors']);

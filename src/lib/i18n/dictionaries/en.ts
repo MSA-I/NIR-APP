@@ -60,7 +60,7 @@ export const en: Dictionary = {
     document_registration_failed: 'The file was saved, but the document registration did not complete. Do not upload it again; it needs review.',
     document_upload_cancelled: 'The upload was cancelled.',
     document_upload_too_large: 'The file is larger than 10MB. Choose a smaller file.',
-    document_upload_type_unsupported: 'The file type is not supported. You can upload a PDF, an image, Excel, Word, RTF, TXT, HTML or ODT.',
+    document_upload_type_unsupported: 'The file type is not supported. You can upload a PDF, an image, Excel, Word, RTF, TXT or ODT. An HTML file is not a document — convert it to PDF or Excel.',
     credit_allocation_exceeds_remaining: 'The offset is larger than the credit\'s remaining balance',
     credit_allocation_exceeds_invoice: 'The offset is larger than the invoice it is being set against',
     credit_allocation_invoice_required: 'Choose which invoice each unlinked credit is applied to. The system will not choose for you — the invoice you pick is the one that gets offset',
@@ -389,6 +389,7 @@ export const en: Dictionary = {
     exceptionType_credit_not_deducted: 'Credit never offset',
     exceptionType_receipt_mismatch: 'Receipt and invoice disagree',
     exceptionType_item_not_ordered: 'Item that was not ordered',
+    exceptionType_expected_document_missing: 'An expected document never arrived',
     /* The commercial catalogue. The Hebrew side mirrors the database verbatim; this side is the
        reason the file exists (owner decision 31.08.2026, OPEN-DECISIONS #303). */
     plan_legacy: 'Legacy customer',
@@ -3425,6 +3426,7 @@ export const en: Dictionary = {
     scopeNote: 'Joining opens an account for running the platform only. It does not open a business and it does not add you to any organisation.',
     heading: 'Join the team',
     subheading: 'Running the platform, not running a business',
+    alreadyConfirmed: 'The address is confirmed and the password is already set. You can join the team.',
   },
 
   orgSubscription: {
@@ -5321,6 +5323,7 @@ export const en: Dictionary = {
     consentLead: 'I have read and I agree to',
     consentAnd: 'and to',
     consentVersion: '(version {version}).',
+    alreadyConfirmed: 'The address is confirmed and the password is already set. All that is left is to fill in the details and join.',
   },
 
   receiptDetail: {
@@ -5358,7 +5361,7 @@ export const en: Dictionary = {
     setError_2: 'Signing up failed. Try again, and if the problem repeats contact support.',
     text: 'Check your inbox',
     text_3: 'Open an account',
-    text_4: 'The account is opened immediately, and signing in is possible once the email address is confirmed.',
+    text_4: 'The account opens immediately. The password is chosen from the confirmation email, and only then is signing in possible.',
     text_5: 'Signed in as ',
     text_6: 'Business name',
     text_7: 'Full name',
@@ -5371,7 +5374,7 @@ export const en: Dictionary = {
     signedInWith: 'with {provider}.',
     signedInWithNoEmail: 'Signed in with {provider}.',
     onlyNameTheBusiness: 'All that is left is to name the business.',
-    passwordRule: 'At least {min} characters.',
+    passwordAfterConfirmation: 'No password is chosen here. After you confirm the address from the email we send it, you will choose one — so nobody else can set a password for your address.',
     alreadyHaveAccount: 'Already have an account?',
     backupEmailLabel: 'Alternate email address',
     backupEmailWhy: 'The address we received is a forwarding one that can be switched off. The alternate address is how we reach you if it closes.',
@@ -5940,6 +5943,24 @@ export const en: Dictionary = {
     confirmPassword: 'Confirm password',
     changePassword: 'Change password',
     changedRedirecting: 'The password was changed. Disconnecting old sessions and taking you to sign in…',
+  },
+
+  authConfirm: {
+    title: 'Checking your link',
+    checking: 'Checking the link…',
+    invalidLink: 'The link is invalid, already used or has expired. You can ask for a new one.',
+    sendNewLink: 'Send a new link',
+    backToLogin: 'Back to sign in',
+  },
+
+  setPassword: {
+    title: 'Choose a password',
+    checking: 'Checking the account…',
+    intro: 'The address is confirmed. Now choose a password — it is what you will sign in with from here on.',
+    action: 'Save the password',
+    needsConfirmedLink: 'Choosing a password needs the confirmation link that was sent to the address. You can ask for a new one.',
+    sendNewLink: 'Send a new link',
+    backToLogin: 'Back to sign in',
   },
 
   forgotPassword: {

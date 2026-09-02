@@ -64,7 +64,7 @@ export const he = {
     document_registration_failed: 'הקובץ נשמר, אך רישום המסמך לא הושלם. אין להעלות אותו שוב; נדרשת בדיקה.',
     document_upload_cancelled: 'ההעלאה בוטלה.',
     document_upload_too_large: 'הקובץ גדול מ־10MB. יש לבחור קובץ קטן יותר.',
-    document_upload_type_unsupported: 'סוג הקובץ אינו נתמך. ניתן להעלות PDF, תמונה, Excel, Word, RTF, TXT, HTML או ODT.',
+    document_upload_type_unsupported: 'סוג הקובץ אינו נתמך. ניתן להעלות PDF, תמונה, Excel, Word, RTF, TXT או ODT. קובץ HTML אינו מסמך — יש להמיר אותו ל-PDF או ל-Excel.',
     credit_allocation_exceeds_remaining: 'סכום הקיזוז חורג מיתרת הזיכוי הזמינה',
     credit_allocation_exceeds_invoice: 'סכום הקיזוז חורג מסכום החשבונית שהזיכוי מקוזז מולה',
     credit_allocation_invoice_required: 'יש לבחור לאיזו חשבונית נזקף כל זיכוי שאינו משויך לחשבונית. המערכת לא תבחר עבורך — החשבונית שתיבחר היא זו שתקוזז',
@@ -393,6 +393,7 @@ export const he = {
     exceptionType_credit_not_deducted: 'זיכוי שלא קוזז',
     exceptionType_receipt_mismatch: 'פער קבלה מול חשבונית',
     exceptionType_item_not_ordered: 'פריט שלא הוזמן',
+    exceptionType_expected_document_missing: 'מסמך צפוי שלא הגיע',
     /* ---------- The commercial catalogue (src/lib/planLabels.ts) ----------
        These MIRROR the database verbatim: subscription_plans.label (0184),
        private.entitlement_definitions.label (0154/0164/0246/0247) and
@@ -3435,6 +3436,7 @@ export const he = {
     scopeNote: 'ההצטרפות פותחת חשבון לניהול הפלטפורמה בלבד. היא אינה פותחת עסק ואינה מצרפת אותך לאף ארגון.',
     heading: 'הצטרפות לצוות',
     subheading: 'ניהול הפלטפורמה, לא ניהול עסק',
+    alreadyConfirmed: 'הכתובת אושרה והסיסמה כבר נבחרה. אפשר להצטרף לצוות.',
   },
 
   orgSubscription: {
@@ -5331,6 +5333,7 @@ export const he = {
     consentLead: 'קראתי ואני מסכים/ה ל',
     consentAnd: 'ול',
     consentVersion: '(גרסה {version}).',
+    alreadyConfirmed: 'הכתובת אושרה והסיסמה כבר נבחרה. נשאר רק להשלים את הפרטים ולהצטרף.',
   },
 
   receiptDetail: {
@@ -5368,7 +5371,7 @@ export const he = {
     setError_2: 'ההרשמה נכשלה. יש לנסות שוב, ואם הבעיה חוזרת לפנות לתמיכה.',
     text: 'בדקו את תיבת הדואר',
     text_3: 'פתיחת חשבון',
-    text_4: 'החשבון נפתח מיד, וההתחברות אפשרית לאחר אישור כתובת האימייל.',
+    text_4: 'החשבון נפתח מיד. הסיסמה נבחרת מתוך מייל האישור, ורק אז אפשר להיכנס.',
     text_5: 'מחובר כ־',
     text_6: 'שם העסק',
     text_7: 'שם מלא',
@@ -5381,7 +5384,7 @@ export const he = {
     signedInWith: 'עם {provider}.',
     signedInWithNoEmail: 'מחובר עם {provider}.',
     onlyNameTheBusiness: 'נשאר רק לתת שם לעסק.',
-    passwordRule: 'לפחות {min} תווים.',
+    passwordAfterConfirmation: 'לא נבחרת סיסמה כאן. אחרי אישור הכתובת מהמייל שיישלח אליה, תבחרו סיסמה — כך אף אחד אחר לא יכול לקבוע סיסמה לכתובת שלכם.',
     alreadyHaveAccount: 'כבר יש חשבון?',
     backupEmailLabel: 'כתובת דואר חלופית',
     backupEmailWhy: 'הכתובת שקיבלנו היא כתובת העברה שאפשר לכבות. הכתובת החלופית היא הדרך להגיע אליך אם היא תיסגר.',
@@ -5950,6 +5953,26 @@ export const he = {
     confirmPassword: 'אימות סיסמה',
     changePassword: 'החלפת סיסמה',
     changedRedirecting: 'הסיסמה הוחלפה. מנתק את החיבורים הישנים ומעביר למסך הכניסה…',
+  },
+
+  /** `/auth/confirm` — the landing pad every Auth e-mail points at. */
+  authConfirm: {
+    title: 'אימות הקישור',
+    checking: 'בודק את הקישור…',
+    invalidLink: 'הקישור אינו תקין, כבר נוצל או שפג תוקפו. אפשר לבקש קישור חדש.',
+    sendNewLink: 'שליחת קישור חדש',
+    backToLogin: 'חזרה למסך הכניסה',
+  },
+
+  /** `/set-password` — the first password of an account opened without one (הכרעת בעלים #332). */
+  setPassword: {
+    title: 'בחירת סיסמה',
+    checking: 'בודק את החשבון…',
+    intro: 'הכתובת אושרה. עכשיו בוחרים סיסמה, וממנה מתחברים בכל פעם הבאה.',
+    action: 'שמירת הסיסמה',
+    needsConfirmedLink: 'כדי לבחור סיסמה צריך להגיע מקישור האישור שנשלח לכתובת. אפשר לבקש קישור חדש.',
+    sendNewLink: 'שליחת קישור חדש',
+    backToLogin: 'חזרה למסך הכניסה',
   },
 
   forgotPassword: {

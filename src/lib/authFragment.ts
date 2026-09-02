@@ -10,9 +10,11 @@
  * client exists and keeps the parsed fragment for the pages that need it (ResetPassword reads
  * error_code and access_token). Pure functions here so the rule has a test.
  *
- * Not PKCE, deliberately: a PKCE code verifier lives in the browser that started the flow, so a
- * recovery mail opened on a phone would fail to exchange, and ResetPassword's link states are built
- * on the fragment. Moving to PKCE needs the token-hash e-mail templates first (security plan, step 7).
+ * STILL HERE UNDER PKCE, AND THAT IS THE POINT. `supabase.ts` now creates the client with
+ * `flowType: 'pkce'` and every e-mail link goes through `/auth/confirm?token_hash=…`, so nothing
+ * we send produces a token fragment any more. What we do not control is what is already in a
+ * mailbox: a link minted before the templates changed still lands implicit, and so does an OAuth
+ * provider configured to answer that way. This is the fallback for those, not the main road.
  */
 const AUTH_CALLBACK_KEYS = ['access_token', 'refresh_token', 'error', 'error_code', 'error_description'];
 

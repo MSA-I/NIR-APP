@@ -23,7 +23,13 @@ describe('self-service account recovery contract', () => {
 
   it('updates only the active recovery user and revokes sessions', () => {
     const reset = page('ResetPassword.tsx');
-    expect(reset).toContain('supabase.auth.updateUser({ password })');
+    // The update carries the password AND clears `password_pending` (owner ruling #332). An owner
+    // who closed the set-password screen has no password, so their way back in is "forgot
+    // password" — which lands here; leaving the flag set would keep sending them to a screen whose
+    // job they had just finished.
+    expect(reset).toContain('supabase.auth.updateUser({');
+    expect(reset).toContain('password,');
+    expect(reset).toContain('data: { password_pending: false },');
     expect(reset).toContain("signOut({ scope: 'global' })");
     expect(reset).toContain('if (signedOut.error) {');
     expect(reset).toContain("t('resetPasswordTail.signOutFailed')");

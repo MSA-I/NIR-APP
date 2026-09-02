@@ -8,6 +8,7 @@ import { isActiveRole, type ActiveRole } from './lib/types';
 import { ACTIVE_ORGANIZATION_ACCESS } from './lib/organizationAccess';
 import { APP_ROUTE_POLICY } from './lib/routePolicy';
 import { capabilityValue, usePlanEntitlements } from './lib/planEntitlements';
+import { passwordPendingOf } from './lib/password';
 
 // Eager: the auth shell that must paint before (or regardless of) a resolved session.
 // Layout is the persistent chrome around every tenant screen; Login/AcceptInvite are the
@@ -18,6 +19,11 @@ import AcceptInvite from './pages/AcceptInvite';
 import AcceptOperatorInvite from './pages/AcceptOperatorInvite';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+// The landing pad every Auth e-mail points at, and the screen a confirmed-but-passwordless owner
+// is sent to from it (owner ruling #332). Both are public: the person holding the link may have no
+// session yet, and the one who does has no tenant profile until the organization resolves.
+import AuthConfirm from './pages/AuthConfirm';
+import SetPassword from './pages/SetPassword';
 import { TermsOfService, PrivacyPolicy } from './pages/Legal';
 // Public and unauthenticated, like Login: a visitor who has no account yet is exactly who
 // these two are for (0159).
@@ -279,11 +285,24 @@ export default function App() {
   // holding the link has no account and no authority yet, so the console's guard would
   // bounce them before the screen rendered.
   const isPublic = ['/accept-invite', '/operator-invite', '/login', '/forgot-password', '/reset-password', '/terms', '/privacy',
-    '/signup', '/pricing']
+    '/signup', '/pricing', '/auth/confirm', '/set-password']
     .includes(pathname);
   const isOfflineReceivingRoute = pathname === '/receiving' || pathname.startsWith('/receiving/');
 
   if (!isPublic && offlineBootstrap && !isOfflineReceivingRoute) return <OfflineReceivingOnly />;
+
+  /**
+   * An owner who confirmed their address and then closed the set-password screen (owner ruling
+   * #332). They hold a session — they proved the address — but the only password on the account is
+   * the random one GoTrue generated, so the next sign-in would fail and the way back would be
+   * "forgot password". Sending them to the screen they closed is the difference between a step they
+   * can finish and a lockout they have to discover. `password_pending` decides nothing but this
+   * redirect: it lives in `user_metadata`, which the holder of the session can write, and what
+   * actually protects the account is that generated password (`src/lib/password.ts`).
+   */
+  if (!isPublic && session && passwordPendingOf(session.user)) {
+    return <Navigate to="/set-password" replace />;
+  }
 
   // An operator with no tenant profile is legitimate — send them to the console, not to
   // the unavailable screen. The console is the separate operator application, so this is a
@@ -303,6 +322,8 @@ export default function App() {
       <Route path="/operator-invite" element={<AcceptOperatorInvite />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/auth/confirm" element={<AuthConfirm />} />
+      <Route path="/set-password" element={<SetPassword />} />
       <Route path="/terms" element={<TermsOfService />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route element={session || loading ? <Layout /> : <Navigate to="/login" replace />}>

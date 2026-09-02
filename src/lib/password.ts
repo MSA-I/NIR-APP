@@ -20,3 +20,23 @@ export function passwordProblemOf(password: string, confirmation: string): Passw
   if (password !== confirmation) return { key: 'password.mismatch' };
   return null;
 }
+
+/**
+ * Owner ruling #332: an account created by the anonymous signup form has NO password until the
+ * address behind it has been confirmed. `public-signup` marks the owner it creates with
+ * `user_metadata.password_pending`, `/set-password` clears it, and this reads it.
+ *
+ * IT IS A HINT, NEVER AN AUTHORIZATION. `user_metadata` is self-asserted — anybody holding a
+ * session can write anything into it — so the only thing this is ever allowed to decide is which
+ * screen to offer. What actually protects the account is the password GoTrue holds: the admin
+ * create was given none, so GoTrue generated a random one nobody has, and a stranger who
+ * pre-registered somebody else's address cannot sign in with the value they typed — whatever this
+ * function returns. Clearing the flag by hand grants nothing; it only skips a screen.
+ *
+ * Typed structurally so the rule can be tested without an auth client.
+ */
+export function passwordPendingOf(
+  user: { user_metadata?: Record<string, unknown> | null } | null | undefined,
+): boolean {
+  return user?.user_metadata?.password_pending === true;
+}

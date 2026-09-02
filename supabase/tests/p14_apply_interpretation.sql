@@ -1073,7 +1073,7 @@ select pg_temp.p14_assert(
   exists (
     select 1 from public.exceptions
     where org_id = '14000000-0000-4000-8000-000000000001'
-      -- 0288: the automatic path raises the exception under its own name now, exactly as a
+      -- 0290: the automatic path raises the exception under its own name now, exactly as a
       -- person opening it by hand does. The evidence key stays, because three assertions in
       -- this file read it and because it names the item as well as the kind.
       and type = 'item_not_ordered' and status = 'open'

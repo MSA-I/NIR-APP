@@ -1,17 +1,10 @@
 {
   "note": "Keys with no PRODUCTION call site. Names, not a count: four pull requests in one wave can wire one key and strand another while the total stands still. `specOnly` is the subset a test still names, which a count-based guard reads as healthy.",
-  "considered": 5430,
+  "considered": 5439,
   "orphans": [
     "answerView.text_6",
     "bank.find",
-    "bank.fmtDate",
-    "bank.fmtMoneyExact",
     "bank.searchLabel",
-    "bank.text",
-    "bank.text_2",
-    "bank.text_3",
-    "bank.text_4",
-    "bank.text_5",
     "bank.transactionLabel",
     "common.cancel",
     "common.close",

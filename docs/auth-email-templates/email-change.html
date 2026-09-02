@@ -1,0 +1,13 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+  <body style="margin:0;padding:0;background:#f4f4f2">
+    <div style="font-family:system-ui,-apple-system,'Segoe UI',Arial,sans-serif;line-height:1.6;color:#1a1a1a;max-width:34rem;margin:0 auto;padding:1.5rem">
+      <p style="margin:0 0 1.5rem;font-size:1.05rem;font-weight:600;color:#0a171d">InPlace</p>
+      <h1 style="font-size:1.25rem;margin:0 0 1rem;color:#0a171d">אישור החלפת כתובת דואר</h1>
+      <p style="margin:0 0 1rem">התבקשה החלפת כתובת הדואר של חשבון InPlace אל הכתובת הזאת.</p>
+      <p style="margin:0 0 1rem">הקישור שלמטה מאשר את ההחלפה. עד לאישור, הכתובת הקודמת נשארת הכתובת של החשבון.</p>
+      <p style="margin:0 0 1.5rem"><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=email_change&amp;next={{ .RedirectTo }}" style="display:inline-block;padding:0.65rem 1.3rem;background:#0a171d;color:#fff;text-decoration:none;border-radius:6px">אישור הכתובת החדשה</a></p>
+      <p style="margin:1.5rem 0 0;font-size:0.8125rem;color:#666">אם לא ביקשתם להחליף כתובת, אפשר להתעלם מהמייל ולפנות לבעל החשבון — בלי האישור לא משתנה דבר.</p>
+    </div>
+  </body>
+</html>
