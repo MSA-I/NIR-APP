@@ -393,6 +393,7 @@ export const he = {
     exceptionType_credit_not_deducted: 'זיכוי שלא קוזז',
     exceptionType_receipt_mismatch: 'פער קבלה מול חשבונית',
     exceptionType_item_not_ordered: 'פריט שלא הוזמן',
+    exceptionType_expected_document_missing: 'מסמך צפוי שלא הגיע',
     /* ---------- The commercial catalogue (src/lib/planLabels.ts) ----------
        These MIRROR the database verbatim: subscription_plans.label (0184),
        private.entitlement_definitions.label (0154/0164/0246/0247) and

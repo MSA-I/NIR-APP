@@ -30,8 +30,10 @@ name: quality-gate
 on:
   push:
     branches: [main]
+  # A pull request is checked because it is a pull request, not because of where it lands.
+  # `branches: [main]` here meant a PR stacked on another branch got ZERO checks and reported
+  # "no checks" -- which reads exactly like success. check:workflow-triggers keeps it out.
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
