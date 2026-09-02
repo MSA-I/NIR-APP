@@ -19,8 +19,16 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const migrationsDir = fileURLToPath(new URL('../supabase/migrations', import.meta.url));
-const p9Path = fileURLToPath(new URL('../supabase/tests/p9_five_domains.sql', import.meta.url));
+/**
+ * The two inputs, overridable ONLY so `check:gate-controls` can hand this guard a deliberately
+ * broken copy and prove it goes red. Nothing in the product sets these; the defaults are the
+ * real tree. A guard nobody has watched fail is a line in a config file that everyone believes
+ * -- and this one had no positive control at all until 02.09.2026 (DEBT §9).
+ */
+const migrationsDir = process.env.EXEMPTION_PIN_MIGRATIONS_DIR
+  ?? fileURLToPath(new URL('../supabase/migrations', import.meta.url));
+const p9Path = process.env.EXEMPTION_PIN_P9_PATH
+  ?? fileURLToPath(new URL('../supabase/tests/p9_five_domains.sql', import.meta.url));
 
 /**
  * 0057:260-266 seeds the registry from pg_proc, so its size is decided at migration time and

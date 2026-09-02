@@ -13,7 +13,7 @@
  *
  * Every mutation happens on a COPY in a scratch directory. Nothing here writes to the tree.
  */
-import { readFileSync, writeFileSync, readdirSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, mkdtempSync, mkdirSync, copyFileSync, rmSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -445,6 +445,77 @@ console.log('\nwiring');
   } else {
     console.log(`  ✓ all ${required.length} guards reachable from package.json and build.yml`);
   }
+}
+
+// ============================================================ definer exemption pin
+console.log('\ncheck:exemptions');
+{
+  // This guard holds two separate promises and neither had ever been watched fail (DEBT §9):
+  //   (a) every migration after 0057 re-runs private.scope_enforcement_violations();
+  //   (b) the number of SECURITY DEFINER exemptions matches the pin in p9_five_domains.sql.
+  // Both are checked here against copies. Nothing below writes to the tree.
+  const realMigrations = path.join(repoRoot, 'supabase', 'migrations');
+  const realP9 = path.join(repoRoot, 'supabase', 'tests', 'p9_five_domains.sql');
+  const copyMigrations = path.join(scratch, 'migrations');
+  mkdirSync(copyMigrations, { recursive: true });
+  const names = readdirSync(realMigrations).filter((n) => n.endsWith('.sql')).sort();
+  for (const name of names) {
+    copyFileSync(path.join(realMigrations, name), path.join(copyMigrations, name));
+  }
+
+  // The most recent migration that actually carries the re-assert, so the control mutates a
+  // real one rather than assuming a filename.
+  const carrier = [...names].reverse().find((name) => readFileSync(path.join(copyMigrations, name), 'utf8')
+    .includes('private.scope_enforcement_violations()'));
+
+  if (!carrier) {
+    failures += 1;
+    ran += 1;
+    console.error('  ✗ no migration carries the A1/A3/A5 re-assertion — the control cannot run');
+  } else {
+    // control 1 — a new migration lands without the re-assert block. This is `0067` again,
+    // which is the precedent the section is named after.
+    const stripped = readFileSync(path.join(copyMigrations, carrier), 'utf8')
+      .replaceAll('private.scope_enforcement_violations()', 'private.nothing_at_all()');
+    writeFileSync(path.join(copyMigrations, carrier), stripped, 'utf8');
+    mustFail('a migration that skips the A1/A3/A5 re-assert is caught', 'check-exemption-pin.ts', {
+      env: { EXEMPTION_PIN_MIGRATIONS_DIR: copyMigrations, EXEMPTION_PIN_P9_PATH: realP9 },
+      expect: 'must re-run private.scope_enforcement_violations()',
+    });
+    // put it back: control 2 is about the pin, not about the re-assert
+    copyFileSync(path.join(realMigrations, carrier), path.join(copyMigrations, carrier));
+  }
+
+  // control 2 — an exemption is added and the pin in p9 is left where it was. A definer function
+  // slipping into the registry unpinned is the whole failure mode this guard exists for.
+  const donor = [...names].reverse().find((name) => readFileSync(path.join(copyMigrations, name), 'utf8')
+    .includes('insert into private.scope_definer_exemptions'));
+  ran += 1;
+  if (!donor) {
+    failures += 1;
+    console.error('  ✗ no migration inserts a definer exemption — the control cannot run');
+  } else {
+    ran -= 1; // mustFail counts its own run
+    const source = readFileSync(path.join(copyMigrations, donor), 'utf8');
+    const marker = 'insert into private.scope_definer_exemptions';
+    const at = source.indexOf(marker);
+    const grown = `${source.slice(0, at)}insert into private.scope_definer_exemptions (function_signature, reason, target_wave)
+values ('public.control_only_never_deployed()', 'gate control', 'never');
+
+${source.slice(at)}`;
+    writeFileSync(path.join(copyMigrations, donor), grown, 'utf8');
+    mustFail('an exemption added without moving the pin is caught', 'check-exemption-pin.ts', {
+      env: { EXEMPTION_PIN_MIGRATIONS_DIR: copyMigrations, EXEMPTION_PIN_P9_PATH: realP9 },
+      expect: 'registry and its pin disagree',
+    });
+    copyFileSync(path.join(realMigrations, donor), path.join(copyMigrations, donor));
+  }
+
+  // control 3 — the unmutated copy must still pass, or the two controls above proved nothing
+  // except that this script can break a file.
+  mustPass('the real migration set passes', 'check-exemption-pin.ts', {
+    env: { EXEMPTION_PIN_MIGRATIONS_DIR: copyMigrations, EXEMPTION_PIN_P9_PATH: realP9 },
+  });
 }
 
 rmSync(scratch, { recursive: true, force: true });
