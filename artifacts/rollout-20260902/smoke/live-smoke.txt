@@ -1,0 +1,51 @@
+SIGNED IN  owner@gamos.demo
+  /dashboard                           2813 chars
+  /bank                                2278 chars
+  /pay                                 2813 chars
+  /documents/consolidated-invoices     1500 chars
+  /settings/subscription               2571 chars
+     subscription quota labels present: 3/3 [מסמכים בחודש, משתמשים פעילים, סניפים]
+  /alerts                              2725 chars
+  /suppliers                           2421 chars
+  /invoices                            3301 chars
+  ASSISTANT  status 200 ok=true
+     "{\"run_id\":\"8dbbfd52-25b7-4330-ba14-7f27aa20fa1a\",\"conversation_id\":\"b61b8c91-17af-4c1e-b383-c95f94da1378\",\"answer\":{\"blocks\":[{\"type\":\"text\",\"text\":\"יש כרגע כמה הזמנות פתוחות, אבל חלק מהשווי שלהן לא נמדד ולכן אי אפשר להציג תמונה כספית מלאה.\"},{\"type\":\"claim\",\"text\":\"יש כעת הזמנות רכש פתוחות.\",\"claim_kind\":\"metric.count\",\"subject\":null,\"claim_unit\":\"count\",\"c
+  console/page/http errors: 0
+  non-GET requests: 78
+     POST /cdn-cgi/rum?
+     POST /rest/v1/rpc/organization_access_state
+     POST /rest/v1/rpc/resolve_feature_flags
+     POST /rest/v1/rpc/my_entitlements
+     POST /rest/v1/rpc/management_dashboard_snapshot
+     POST /rest/v1/rpc/scheduled_payments_outlook
+     POST /rest/v1/rpc/my_subscription
+     POST /rest/v1/rpc/list_consolidated_invoice_cases
+     POST /rest/v1/rpc/list_consolidated_invoice_legal_entities
+     POST /rest/v1/rpc/organization_usage_snapshot
+     POST /rest/v1/rpc/my_upgrade_options
+     POST /rest/v1/rpc/my_plan_grant
+SIGNED IN  office@gamos.demo
+  /dashboard                           2441 chars
+  /orders                              2751 chars
+  /suppliers                           2150 chars
+  console/page/http errors: 0
+  non-GET requests: 25
+     POST /cdn-cgi/rum?
+     POST /rest/v1/rpc/organization_access_state
+     POST /rest/v1/rpc/resolve_feature_flags
+     POST /rest/v1/rpc/my_entitlements
+     POST /rest/v1/rpc/management_dashboard_snapshot
+     POST /rest/v1/rpc/scheduled_payments_outlook
+SIGNED IN  accountant@gamos.demo
+  /dashboard                           1028 chars
+  /invoices                            2030 chars
+  /payments                            1838 chars
+  console/page/http errors: 0
+  non-GET requests: 23
+     POST /cdn-cgi/rum?
+     POST /rest/v1/rpc/organization_access_state
+     POST /rest/v1/rpc/resolve_feature_flags
+     POST /rest/v1/rpc/my_entitlements
+RETIRED   nir@gamos.demo           REFUSED (still on /login)
+RETIRED   payer@gamos.demo         REFUSED (still on /login)
+RETIRED   meshek@supplier.demo     REFUSED (still on /login)
