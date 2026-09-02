@@ -1,8 +1,8 @@
--- p104 -- a platform writer carries the capability it was declared to need (0286).
+-- p104 -- a platform writer carries the capability it was declared to need (0287).
 --
 -- THE GATE THIS SUITE IS. 0151 built the capability axis and said in its own header that every
 -- capability except `customer.view` was DECLARED and not yet ENFORCED, each to be wired by the
--- wave that owns its surface. Five commands were never wired, so until 0286 any row in
+-- wave that owns its surface. Five commands were never wired, so until 0287 any row in
 -- `platform_admins` -- a support operator, a billing operator, an analyst whose four capabilities
 -- are all reads, or an operator holding no role at all -- could suspend and reactivate any tenant,
 -- flip any tenant's feature flags, and rewrite any tenant's approval, autonomy and assistant
@@ -10,7 +10,7 @@
 -- SHOULD be able to still can.
 --
 -- WHAT IT PROVES, and why each case is here rather than trusted:
---   1. The two capabilities 0286 added are declared as it says, and are held by exactly two roles.
+--   1. The two capabilities 0287 added are declared as it says, and are held by exactly two roles.
 --      A capability that quietly reached `support` would leave the hole open under a new name.
 --   2. Each of the five commands refuses a narrowed operator BY NAME -- `not_platform_capability`,
 --      not a generic 42501 -- and refuses an operator with membership and no role at all. Both
@@ -20,9 +20,9 @@
 --   4. An operator who HOLDS the capability succeeds on all five, with the step-up the lifecycle
 --      command has always demanded. A guard that closed the door on everybody would satisfy (2).
 --   5. Every by-name refusal these four commands already made -- unknown flag, blank reason,
---      unknown policy, a loosening -- still fires with its own name. 0286 appended a check; it did
+--      unknown policy, a loosening -- still fires with its own name. 0287 appended a check; it did
 --      not replace the vocabulary the operator reads.
---   6. The structural claim 0286 asserts at migration time is still true of the LIVE bodies, and
+--   6. The structural claim 0287 asserts at migration time is still true of the LIVE bodies, and
 --      no platform writer of this shape escaped the list.
 --
 -- Runs inside one transaction and rolls back. Every organization, user and operator it touches is
@@ -81,22 +81,22 @@ $$;
 select pg_temp.p104_assert(
   (select count(*) from private.platform_capability_definitions
     where capability in ('policy.configure', 'flag.configure')
-      and sensitivity = 'high' and not requires_step_up and enforced_since = '0286') = 2,
-  '0286 capabilities are not declared high / no-step-up / enforced_since 0286');
+      and sensitivity = 'high' and not requires_step_up and enforced_since = '0287') = 2,
+  '0287 capabilities are not declared high / no-step-up / enforced_since 0287');
 
 -- `requires_step_up = false` is not an oversight in this product: it is a promise that the body
--- calls assert_recent_password_authentication(), and 0286 records the console that has no such
+-- calls assert_recent_password_authentication(), and 0287 records the console that has no such
 -- flow. If a later wave sets the flag, the command must gain the call in the same migration.
 select pg_temp.p104_assert(
   (select array_agg(role_key order by role_key) from platform_role_capabilities
     where capability = 'policy.configure') = array['customer_ops', 'super_admin']
   and (select array_agg(role_key order by role_key) from platform_role_capabilities
     where capability = 'flag.configure') = array['customer_ops', 'super_admin'],
-  'a 0286 capability reached a role other than customer_ops and super_admin');
+  'a 0287 capability reached a role other than customer_ops and super_admin');
 
 select pg_temp.p104_assert(
   (select enforced_since from private.platform_capability_definitions
-    where capability = 'org.lifecycle') = '0286',
+    where capability = 'org.lifecycle') = '0287',
   'org.lifecycle still reads as declared-but-enforced-nowhere');
 
 -- =====================================================================================
@@ -202,7 +202,7 @@ select pg_temp.p104_refused(
   'not_platform_capability');
 
 -- A tenant owner is still refused earlier and by the older name: membership is asked first, and
--- 0286 must not have turned "you are not one of us" into "you lack a capability".
+-- 0287 must not have turned "you are not one of us" into "you lack a capability".
 select pg_temp.p104_as('a4100000-0000-4000-8000-000000000004', true);
 select pg_temp.p104_refused(
   $$select public.platform_set_org_flag(
@@ -307,7 +307,7 @@ select pg_temp.p104_assert(
   'an operator holding org.lifecycle could not reactivate a tenant');
 
 -- ===== The widening the header declares, measured rather than asserted in prose =====
--- 0286 routes the four configuration commands through a preamble that opens
+-- 0287 routes the four configuration commands through a preamble that opens
 -- `app.organization_lifecycle_writer`, so an operator may now configure a tenant that
 -- private.organization_row_write_guard (0103:2227) had made read-only -- where before, both the
 -- configuration row and its audit row were refused. The lifecycle tenant is suspended again to
@@ -347,7 +347,7 @@ select public.set_organization_lifecycle(
   'a4000000-0000-4000-8000-000000000002', 'active', null,
   'P104 reactivate after the widening arm');
 
--- The step-up the lifecycle command has demanded since 0134 is untouched by 0286: the same
+-- The step-up the lifecycle command has demanded since 0134 is untouched by 0287: the same
 -- operator, the same capability, no fresh password, and the answer must still be no.
 select pg_temp.p104_as('a4100000-0000-4000-8000-000000000001', false);
 select pg_temp.p104_refused(
@@ -393,7 +393,7 @@ select pg_temp.p104_refused(
 select pg_temp.p104_as(null);
 
 -- =====================================================================================
--- 6. The structural assertion 0286 makes is live, not merely historical
+-- 6. The structural assertion 0287 makes is live, not merely historical
 -- =====================================================================================
 -- Bodies are read with carriage returns stripped, so this means the same thing whether the
 -- migration was applied from Windows or from a Linux runner (0209).
@@ -463,7 +463,7 @@ begin
       ('public.platform_set_operator_roles(uuid,text[],text)'),
       ('public.platform_set_customer_account(uuid,uuid,date,text)'),
       ('public.platform_set_onboarding_step(uuid,text,text,text)'),
-      -- The one platform writer of this shape that still carries NO capability. 0286 records it
+      -- The one platform writer of this shape that still carries NO capability. 0287 records it
       -- by name in its header as a standing finding rather than an omission; when it is wired,
       -- this line moves up into the mapping above.
       ('public.platform_set_price_list_automation_scope(uuid,uuid,text,uuid,text)')

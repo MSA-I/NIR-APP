@@ -1,4 +1,4 @@
--- 0286 -- a platform writer carries the capability it was declared to need.
+-- 0287 -- a platform writer carries the capability it was declared to need.
 --
 -- WHAT WAS MEASURED, NOT ASSUMED. 0151 built a SECOND authority axis on top of
 -- `platform_admins`: a capability vocabulary, five named roles, and `platform_has_capability()`.
@@ -108,10 +108,10 @@ insert into private.platform_capability_definitions
 values
   ('policy.configure',
    'Set a customer organization''s approval, autonomy or assistant policy.',
-   'high', false, '0286'),
+   'high', false, '0287'),
   ('flag.configure',
    'Turn a feature flag on or off for a customer organization or one of its units.',
-   'high', false, '0286');
+   'high', false, '0287');
 
 -- Who gets them, and the reasoning per role -- the roster 0249:41-47 and 0257:57-63 argue through:
 --   super_admin  -- everything, by its own definition (0152's anchor asserts this globally).
@@ -132,7 +132,7 @@ on conflict (role_key, capability) do nothing;
 -- NULL means "declared for a later wave and enforced nowhere yet". This is that wave. The same
 -- update shape as 0152:46.
 update private.platform_capability_definitions
-   set enforced_since = '0286'
+   set enforced_since = '0287'
  where capability = 'org.lifecycle';
 
 -- =====================================================================================
@@ -143,7 +143,7 @@ update private.platform_capability_definitions
 -- from a Linux runner -- the 0181 failure, and what scripts/check-anchored-replacements.mjs
 -- enforces. The anchor is required to occur EXACTLY once; anything else aborts rather than
 -- patching a body that has moved.
-do $mig_0286_lifecycle$
+do $mig_0287_lifecycle$
 declare
   v_def     text;
   v_anchor  text;
@@ -155,23 +155,23 @@ begin
   from pg_catalog.pg_proc p
   where p.oid = v_signature::regprocedure;
   if v_def is null then
-    raise exception '0286: set_organization_lifecycle not found at the 0195 six-argument signature';
+    raise exception '0287: set_organization_lifecycle not found at the 0195 six-argument signature';
   end if;
 
   v_anchor := replace($anchor$  if v_actor is null or not public.is_platform_admin() then
     raise exception 'not_platform_admin' using errcode = '42501';
   end if;$anchor$, e'\r', '');
-  v_patched := replace($patched$  -- 0286: membership, the capability, a non-blank reason, a real target and the tenant write
+  v_patched := replace($patched$  -- 0287: membership, the capability, a non-blank reason, a real target and the tenant write
   -- handshake -- the one preamble every other reasoned platform command already goes through.
   v_reason := private.assert_platform_command(p_org_id, 'org.lifecycle', p_reason);$patched$, e'\r', '');
   if (length(v_def) - length(replace(v_def, v_anchor, ''))) / length(v_anchor) <> 1 then
-    raise exception '0286: the lifecycle membership anchor moved -- refusing to patch blindly';
+    raise exception '0287: the lifecycle membership anchor moved -- refusing to patch blindly';
   end if;
   v_def := replace(v_def, v_anchor, v_patched);
 
   execute v_def;
 end
-$mig_0286_lifecycle$;
+$mig_0287_lifecycle$;
 
 -- =====================================================================================
 -- 3. The four configuration commands
@@ -180,7 +180,7 @@ $mig_0286_lifecycle$;
 -- carries exactly once and which is the LAST check before any of them writes. Patching there is
 -- what keeps every earlier by-name refusal intact (see the header). The loop is not brevity for
 -- its own sake: four hand-copied blocks would be four chances for one of them to drift.
-do $mig_0286_config$
+do $mig_0287_config$
 declare
   v_target  record;
   v_def     text;
@@ -204,11 +204,11 @@ begin
     from pg_catalog.pg_proc p
     where p.oid = v_target.signature::regprocedure;
     if v_def is null then
-      raise exception '0286: % not found', v_target.signature;
+      raise exception '0287: % not found', v_target.signature;
     end if;
 
     if (length(v_def) - length(replace(v_def, v_anchor, ''))) / length(v_anchor) <> 1 then
-      raise exception '0286: the organization-exists anchor occurs % time(s) in % -- refusing to '
+      raise exception '0287: the organization-exists anchor occurs % time(s) in % -- refusing to '
                       'patch blindly',
                       (length(v_def) - length(replace(v_def, v_anchor, ''))) / length(v_anchor),
                       v_target.signature;
@@ -219,7 +219,7 @@ begin
     v_patched := replace(format($patched$  if not exists (select 1 from organizations o where o.id = p_org_id) then
     raise exception 'organization_unknown' using errcode = 'P0002';
   end if;
-  -- 0286: the capability 0151 declared for this surface, asked for where the reason is already
+  -- 0287: the capability 0151 declared for this surface, asked for where the reason is already
   -- non-blank and the target is already proven -- so this preamble can only refuse for authority.
   perform private.assert_platform_command(p_org_id, %L, v_reason);$patched$,
       v_target.capability), e'\r', '');
@@ -227,7 +227,7 @@ begin
     execute replace(v_def, v_anchor, v_patched);
   end loop;
 end
-$mig_0286_config$;
+$mig_0287_config$;
 
 -- =====================================================================================
 -- 3b. The SECOND registry -- re-pin the body 0182 holds a hash of
@@ -256,7 +256,7 @@ $mig_0286_config$;
 update private.document_automation_authoritative_functions registry
    set body_hash = md5(replace(proc.prosrc, e'\r', '')),
        responsibility = registry.responsibility
-         || ' 0286: demands policy.configure via private.assert_platform_command after its own checks.'
+         || ' 0287: demands policy.configure via private.assert_platform_command after its own checks.'
   from pg_proc proc
  where proc.oid = 'public.platform_set_autonomy_policy(uuid,text,boolean,numeric,text)'::regprocedure
    and to_regprocedure(registry.function_signature)::oid = proc.oid;
@@ -264,19 +264,19 @@ update private.document_automation_authoritative_functions registry
 -- =====================================================================================
 -- 4. Structural re-assertion (mandatory after 0057)
 -- =====================================================================================
-do $assert_0286$
+do $assert_0287$
 declare
   v_violations text;
 begin
   select string_agg(assertion || ' -- ' || detail, e'\n' order by assertion, detail)
     into v_violations from private.scope_enforcement_violations();
   if v_violations is not null then
-    raise exception e'0286 scope assertions failed:\n%', v_violations;
+    raise exception e'0287 scope assertions failed:\n%', v_violations;
   end if;
   select string_agg(detail, e'\n' order by detail)
     into v_violations from private.tenant_export_registry_violations();
   if v_violations is not null then
-    raise exception e'0286 tenant export assertions failed:\n%', v_violations;
+    raise exception e'0287 tenant export assertions failed:\n%', v_violations;
   end if;
 
   -- The 0230:15-22 arm: the re-pin in section 3b is proved to have LANDED, not merely attempted.
@@ -290,7 +290,7 @@ begin
     where to_regprocedure(registry.function_signature)::oid = proc.oid
       and registry.body_hash = md5(replace(proc.prosrc, e'\r', ''))
   ) then
-    raise exception '0286: the platform_set_autonomy_policy authoritative hash did not move -- '
+    raise exception '0287: the platform_set_autonomy_policy authoritative hash did not move -- '
                     'p68 and p14 will report authoritative_body_drift';
   end if;
 
@@ -299,10 +299,10 @@ begin
   select string_agg(assertion || ' -- ' || detail, e'\n' order by assertion, detail)
     into v_violations from private.document_automation_negative_guard_violations();
   if v_violations is not null then
-    raise exception e'0286 document automation guards failed:\n%', v_violations;
+    raise exception e'0287 document automation guards failed:\n%', v_violations;
   end if;
 end
-$assert_0286$;
+$assert_0287$;
 
 -- =====================================================================================
 -- 5. Anchors -- the claims this file makes, checked here
@@ -311,7 +311,7 @@ $assert_0286$;
 -- regex over `platform_has_capability\('([^']+)'\)` would happily accept a command that names the
 -- WRONG capability, which is the failure this whole file is about; and it would go quiet the day
 -- somebody spells the call differently. A list can be wrong only by being edited.
-do $anchor_0286$
+do $anchor_0287$
 declare
   v_row        record;
   v_body       text;
@@ -325,20 +325,20 @@ begin
     where definition.capability = 'policy.configure'
       and definition.sensitivity = 'high'
       and not definition.requires_step_up
-      and definition.enforced_since = '0286'
+      and definition.enforced_since = '0287'
   ) or not exists (
     select 1 from private.platform_capability_definitions definition
     where definition.capability = 'flag.configure'
       and definition.sensitivity = 'high'
       and not definition.requires_step_up
-      and definition.enforced_since = '0286'
+      and definition.enforced_since = '0287'
   ) then
-    raise exception '0286: the two new capabilities are not declared high / no-step-up / 0286';
+    raise exception '0287: the two new capabilities are not declared high / no-step-up / 0287';
   end if;
 
   if (select enforced_since from private.platform_capability_definitions
-       where capability = 'org.lifecycle') is distinct from '0286' then
-    raise exception '0286: org.lifecycle still reads as declared-but-unenforced';
+       where capability = 'org.lifecycle') is distinct from '0287' then
+    raise exception '0287: org.lifecycle still reads as declared-but-unenforced';
   end if;
 
   -- The 0249:764 shape: who holds it is counted, not assumed away.
@@ -347,7 +347,7 @@ begin
     from platform_role_capabilities granted
     where granted.capability = v_capability;
     if v_roles is distinct from array['customer_ops', 'super_admin'] then
-      raise exception '0286: % is held by [%] rather than by customer_ops and super_admin',
+      raise exception '0287: % is held by [%] rather than by customer_ops and super_admin',
         v_capability, coalesce(array_to_string(v_roles, ', '), 'no role at all');
     end if;
   end loop;
@@ -368,7 +368,7 @@ begin
     ) as t(signature, capability)
   loop
     if to_regprocedure(v_row.signature) is null then
-      raise exception '0286: % is not in the catalogue under that signature', v_row.signature;
+      raise exception '0287: % is not in the catalogue under that signature', v_row.signature;
     end if;
 
     if not exists (
@@ -376,7 +376,7 @@ begin
       where definition.capability = v_row.capability
         and (definition.sensitivity = 'high' or definition.requires_step_up)
     ) then
-      raise exception '0286: % is pinned to %, which is no longer declared high or step-up -- the '
+      raise exception '0287: % is pinned to %, which is no longer declared high or step-up -- the '
                       'assertion would silently stop covering it',
                       v_row.signature, v_row.capability;
     end if;
@@ -386,7 +386,7 @@ begin
     where proc.oid = v_row.signature::regprocedure;
 
     if strpos(v_body, v_row.capability) = 0 then
-      raise exception '0286: % does not name % anywhere in its body -- it is guarded by '
+      raise exception '0287: % does not name % anywhere in its body -- it is guarded by '
                       'membership alone, which is what this migration exists to end',
                       v_row.signature, v_row.capability;
     end if;
@@ -396,7 +396,7 @@ begin
     if position('assert_platform_command' in v_body) = 0
        and position('assert_platform_staff_command' in v_body) = 0
        and position('platform_has_capability' in v_body) = 0 then
-      raise exception '0286: % names its capability but calls no preamble that reads one',
+      raise exception '0287: % names its capability but calls no preamble that reads one',
                       v_row.signature;
     end if;
 
@@ -405,7 +405,7 @@ begin
     -- than discovered by calling as the wrong role, which segfaults this backend (0249:780).
     if not has_function_privilege('authenticated', v_row.signature, 'execute')
        or has_function_privilege('anon', v_row.signature, 'execute') then
-      raise exception '0286: % is unreachable by the browser role or reachable by anon',
+      raise exception '0287: % is unreachable by the browser role or reachable by anon',
                       v_row.signature;
     end if;
   end loop;
@@ -452,7 +452,7 @@ begin
   if v_uncovered is not null then
     -- One literal, deliberately: an E-string continued onto a second line is a shape this file
     -- should not be the place to find out about.
-    raise exception e'0286: platform writer(s) this file neither wired nor recorded:\n%', v_uncovered;
+    raise exception e'0287: platform writer(s) this file neither wired nor recorded:\n%', v_uncovered;
   end if;
 
   -- ----- (d) A definer with no JWT subject still refuses -----
@@ -466,24 +466,24 @@ begin
   begin
     perform public.platform_set_org_flag(
       '00000000-0000-4000-8000-000000000000'::uuid, 'assistant.ui', true, null, null,
-      '0286 anchor probe');
-    raise exception '0286: platform_set_org_flag answered with no JWT subject at all';
+      '0287 anchor probe');
+    raise exception '0287: platform_set_org_flag answered with no JWT subject at all';
   exception
     when sqlstate '42501' then null;
   end;
 end
-$anchor_0286$;
+$anchor_0287$;
 
 comment on function public.platform_set_org_flag(uuid, text, boolean, jsonb, uuid, text) is
-  'Sets one feature flag for one organization, or for one of its units (0059). Since 0286 it '
+  'Sets one feature flag for one organization, or for one of its units (0059). Since 0287 it '
   'demands `flag.configure` as well as platform membership, plus a reason, and audits to the '
   'target organization.';
 comment on function public.platform_set_approval_policy(uuid, text, numeric, integer, boolean, text) is
-  'Configures an organization''s approval policy, tighten-only (0070). Since 0286 it demands '
+  'Configures an organization''s approval policy, tighten-only (0070). Since 0287 it demands '
   '`policy.configure` as well as platform membership.';
 comment on function public.platform_set_autonomy_policy(uuid, text, boolean, numeric, text) is
-  'Configures an organization''s document-autonomy policy, tighten-only (0076). Since 0286 it '
+  'Configures an organization''s document-autonomy policy, tighten-only (0076). Since 0287 it '
   'demands `policy.configure` as well as platform membership.';
 comment on function public.platform_set_assistant_policy(uuid, text, boolean, text) is
-  'Configures an organization''s assistant policy (0164). Since 0286 it demands '
+  'Configures an organization''s assistant policy (0164). Since 0287 it demands '
   '`policy.configure` as well as platform membership.';
