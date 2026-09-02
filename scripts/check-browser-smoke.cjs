@@ -38,6 +38,8 @@ const report = {
   // Gateway failures from the isolated stack. Kept apart from consoleErrors on purpose:
   // see the classification note above captureConsole.
   infrastructure: [],
+  // What a screen cost to open. See measureScreenLoad.
+  performance: [],
 };
 
 const OCR_REVIEW_DOCUMENT_ID = '97000000-0000-4000-8000-000000000004';
@@ -154,6 +156,96 @@ async function settle(page) {
     throw new Error(`${new URL(page.url()).pathname}: main heading did not become visible — ${error.message}`);
   });
   await page.waitForTimeout(250);
+}
+
+/**
+ * THE STOPWATCH. DEBT §1 and §15 both end in the same instruction -- measure before you change
+ * anything -- and until now nothing in this repository timed a screen at all. The dashboard fires
+ * thirteen separate Supabase reads on open; whether that is a problem is a question nobody could
+ * answer, because there was no number to answer it with.
+ *
+ * TWO NUMBERS, AND THE SECOND ONE IS THE USEFUL ONE. Wall-clock milliseconds are the thing a
+ * person feels, and they are also the thing a shared CI runner distorts most: the same code can
+ * take twice as long on a busy machine. The request COUNT does not move with load. It moves when
+ * somebody adds a query, or turns one read into one-per-row -- which is the regression actually
+ * worth catching. So the milliseconds are recorded and the count is the measurement.
+ *
+ * The endpoints are grouped and counted by name, because "23 requests" tells you a screen got
+ * slower and "invoices x11" tells you where to look.
+ */
+async function measureScreenLoad(page, scope, url) {
+  const calls = [];
+  const onRequest = (request) => {
+    const value = request.url();
+    if (!apiURL || !value.startsWith(apiURL)) return;
+    // Everything after /rest/v1/ or /rpc/ up to the query string: the table or function name.
+    const match = /\/(?:rest\/v1|functions\/v1)\/(?:rpc\/)?([^?/]+)/.exec(value);
+    calls.push(match ? match[1] : 'other');
+  };
+  page.on('request', onRequest);
+  const startedAt = Date.now();
+  try {
+    await page.goto(url);
+    await settle(page);
+  } finally {
+    page.off('request', onRequest);
+  }
+  const elapsedMs = Date.now() - startedAt;
+
+  const byEndpoint = {};
+  for (const name of calls) byEndpoint[name] = (byEndpoint[name] ?? 0) + 1;
+  const measurement = {
+    scope,
+    path: new URL(url).pathname,
+    apiRequests: calls.length,
+    elapsedMs,
+    byEndpoint: Object.fromEntries(Object.entries(byEndpoint).sort((a, b) => b[1] - a[1])),
+  };
+  report.performance.push(measurement);
+  console.log(`  stopwatch ${scope}: ${measurement.apiRequests} API request(s), ${elapsedMs}ms`);
+  return measurement;
+}
+
+/**
+ * The ceiling, once there is one. `scripts/screen-load.baseline.json` does not exist yet and this
+ * is deliberate: the first honest number can only come from the CI runner, on the fixture data,
+ * and inventing one here would pin a guess. Until the file exists this records and says so, in
+ * the shape check-suite-manifest already uses for the same situation. Once the number is known,
+ * committing the file turns every measurement above into a gate that fails on a regression.
+ */
+function assertScreenLoadBaselines() {
+  const baselinePath = path.join(__dirname, 'screen-load.baseline.json');
+  if (!fs.existsSync(baselinePath)) {
+    if (report.performance.length) {
+      console.log('\nstopwatch: no ceiling pinned yet. Measured this run:');
+      for (const entry of report.performance) {
+        console.log(`  ${entry.scope} ${entry.path}: ${entry.apiRequests} API request(s), ${entry.elapsedMs}ms`);
+      }
+      console.log('  Pin them by committing scripts/screen-load.baseline.json as');
+      console.log(`  ${JSON.stringify(Object.fromEntries(report.performance.map((e) => [e.scope, { maxApiRequests: e.apiRequests }])))}`);
+    }
+    return;
+  }
+  const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
+  for (const entry of report.performance) {
+    const ceiling = baseline[entry.scope]?.maxApiRequests;
+    if (typeof ceiling !== 'number') {
+      report.failures.push({
+        name: `no request ceiling for ${entry.scope}`,
+        message: `${entry.scope} was measured at ${entry.apiRequests} request(s) and scripts/screen-load.baseline.json does not mention it.`,
+      });
+      continue;
+    }
+    if (entry.apiRequests > ceiling) {
+      report.failures.push({
+        name: `${entry.scope} got chattier`,
+        message: `${entry.path} made ${entry.apiRequests} API request(s); the pinned ceiling is ${ceiling}. `
+          + `By endpoint: ${JSON.stringify(entry.byEndpoint)}. `
+          + 'Either the screen gained a read it does not need, or one read became one-per-row. '
+          + 'If the growth is deliberate, move the ceiling in the same commit that causes it.',
+      });
+    }
+  }
 }
 
 async function retiredPersonasBlocked(browser) {
@@ -623,8 +715,8 @@ async function dashboardAndDialogs(browser) {
   captureConsole(page, 'dashboard-dialogs');
   try {
     await login(page, 'owner');
-    await page.goto(`${baseURL}/dashboard`);
-    await settle(page);
+    // Timed, because DEBT §1 asks for a number before it asks for a change.
+    await measureScreenLoad(page, 'dashboard:desktop', `${baseURL}/dashboard`);
     const dataHeadings = page.locator('#main .dash-enter h2');
     await dataHeadings.first().waitFor();
     assert((await dataHeadings.first().innerText()).includes('דורש טיפול'), 'dashboard does not begin with the attention briefing');
@@ -4268,6 +4360,7 @@ async function supplierEmailDeliverySurface(browser) {
   if (report.consoleErrors.length) {
     report.failures.push({ name: 'unexpected browser console errors', message: JSON.stringify(report.consoleErrors) });
   }
+  assertScreenLoadBaselines();
   fs.writeFileSync(path.join(outDir, 'p4-browser-report.json'), JSON.stringify(report, null, 2), 'utf8');
   console.log(JSON.stringify({
     passed: report.passed.length,
@@ -4277,6 +4370,7 @@ async function supplierEmailDeliverySurface(browser) {
     accessibilityAudits: report.accessibility.length,
     screenshots: report.screenshots,
     pdfBytes: report.pdf?.bytes ?? 0,
+    performance: report.performance,
     failures: report.failures,
   }, null, 2));
   if (report.failures.length) process.exitCode = 1;
