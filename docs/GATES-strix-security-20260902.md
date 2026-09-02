@@ -27,9 +27,15 @@ this repository before any code moved; the verdict column is the measurement, no
 - **G4 — no false positive is "fixed".** SSRF, `htmlEscape` and `orderImage` get a measurement in `DEBT-REGISTER.md`, not a change that adds a dependency for nothing.
 - **G5 — `npm run build` and `npm run verify` pass in this worktree.**
 
-## Owner decisions — NOT taken here
+- **G6 — no Edge Function answers a wildcard origin.** All six adopt `_shared/cors.ts`; a Deno test scans every function directory and fails on a seventh. `tenant-export`'s public download broker keeps answering its token links without CORS, because a wrapper that only fills a header the response already declares leaves those replies alone.
+- **G7 — every GitHub Action runs a reviewed commit.** All 21 uses pinned to SHAs of the versions already in use (`v4.4.0`, `v4.6.2`, `v1`) — a pin, not an upgrade — with `.github/dependabot.yml` opening one grouped weekly PR when they move.
+
+## Owner rulings taken, 02.09.2026
+
+- **CORS: tighten all six.** Done. This is a behaviour change: the six functions must be redeployed in the same rollout, and `ALLOWED_ORIGINS` or `APP_BASE_URL` must be set on the project — without either, the header is empty and every browser call is refused.
+- **Actions: pin and add Dependabot.** Done, GitHub Actions ecosystem only. npm is deliberately not enrolled: `exceljs`, `pdf-lib` and the CDN-fetched `xlsx` need a migration decision, not a bump.
+- **`git prune --expire=now`:** later, when no other agent is mid-run. Seven worktrees were live.
+
+## Owner decisions — still open
 
 - **Rotation** of `OPENAI_API_KEY`, `OCR_WORKER_TOKEN`, `INTERPRET_DOCUMENT_CRON_SECRET`. Requires provider consoles. Given C1, no push ever carried them, so this is hygiene, not incident response.
-- **`git prune --expire=now`** on the shared clone to drop blob `c9cdaa79`. Repository-wide, and seven worktrees are live.
-- **CORS tightening** on six Edge Functions — behaviour change requiring a redeploy.
-- **GitHub Actions SHA pinning** — 21 refs, and pinning without Dependabot trades one rot for another.

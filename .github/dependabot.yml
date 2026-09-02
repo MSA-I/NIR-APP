@@ -1,0 +1,25 @@
+# Actions are pinned to commit SHAs (02.09.2026, after the Strix scan), which is what stops a
+# rewritten tag from running code nobody reviewed. A pin without an updater is the other half of
+# the trade: it freezes the action at the day it was pinned, security fixes included. This file
+# is that other half -- Dependabot opens a PR when a pinned action moves, and the PR goes through
+# the same gates as any other change.
+#
+# Deliberately GitHub Actions only. The npm tree is not enrolled: `exceljs`, `pdf-lib` and the
+# CDN-fetched `xlsx` are unmaintained (DEBT §98 item 4), so an automatic updater would produce
+# noise on the packages that need a migration decision, not a version bump.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: sunday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore(ci)
+    groups:
+      # One PR for all of them. Four actions from two trusted publishers do not deserve four
+      # review cycles a week, and a grouped bump is easier to read than four one-line diffs.
+      actions:
+        patterns:
+          - "*"

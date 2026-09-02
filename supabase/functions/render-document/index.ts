@@ -8,6 +8,7 @@ import {
   sessionStorageKey,
   tokenExpiry,
 } from "./contract.ts";
+import { withAllowedOrigin } from "../_shared/cors.ts";
 
 /**
  * Produce a document the caller could not have produced for themselves.
@@ -45,7 +46,10 @@ import {
  */
 
 const CORS = {
-  "Access-Control-Allow-Origin": "*",
+  // Filled per request by withAllowedOrigin (../_shared/cors.ts): the caller's Origin when it
+  // is on ALLOWED_ORIGINS/APP_BASE_URL, and the first allowed origin otherwise. Never "*".
+  "Access-Control-Allow-Origin": "",
+  Vary: "Origin",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
@@ -56,7 +60,7 @@ const json = (body: unknown, status: number) =>
     headers: { ...CORS, "Content-Type": "application/json" },
   });
 
-Deno.serve(async (req) => {
+Deno.serve(withAllowedOrigin(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
@@ -151,4 +155,4 @@ Deno.serve(async (req) => {
       "Cache-Control": "no-store",
     },
   });
-});
+}));

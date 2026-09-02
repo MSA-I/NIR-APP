@@ -14,9 +14,13 @@ import {
   supplierLogoObjectPath,
   validatedLogoType,
 } from "./core.ts";
+import { withAllowedOrigin } from "../_shared/cors.ts";
 
 const CORS = {
-  "Access-Control-Allow-Origin": "*",
+  // Filled per request by withAllowedOrigin (../_shared/cors.ts): the caller's Origin when it
+  // is on ALLOWED_ORIGINS/APP_BASE_URL, and the first allowed origin otherwise. Never "*".
+  "Access-Control-Allow-Origin": "",
+  Vary: "Origin",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-correlation-id",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -60,7 +64,7 @@ function serviceRpc(admin: SupabaseClient): ServiceRpc {
     admin.rpc(name, args) as unknown as PromiseLike<ServiceRpcResult>;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAllowedOrigin(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
@@ -481,4 +485,4 @@ Deno.serve(async (req) => {
   } catch {
     return json({ error: "storage_operation_failed" }, 503);
   }
-});
+}));
