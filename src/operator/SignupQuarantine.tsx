@@ -36,7 +36,10 @@ export default function SignupQuarantine() {
         return { capabilities, candidates: [] as AbandonedSignupCandidate[], queue: [] as QuarantineEntry[] };
       }
       const [candidates, queue] = await Promise.all([
-        fetchAbandonedSignupCandidates(30),
+        // One DAY, not thirty. `private.abandoned_signup_grace()` (0287) is 24 hours since owner
+        // ruling #332 removed the password from the moment of signup, and a report that still
+        // listed only month-old tenants would never show what the cleanup is about to release.
+        fetchAbandonedSignupCandidates(1),
         fetchQuarantineQueue(),
       ]);
       return { capabilities, candidates, queue };
@@ -91,15 +94,15 @@ export default function SignupQuarantine() {
       </Note>
 
       <Card className="space-y-3">
-        <h2 className="section-title">מועמדים אחרי 30 יום</h2>
+        <h2 className="section-title">מועמדים אחרי 24 שעות</h2>
         {candidates.length === 0 ? (
-          <p className="text-sm text-ink-muted">אין ארגונים שהבעלים שלהם לא אישר מייל מעל 30 יום.</p>
+          <p className="text-sm text-ink-muted">אין ארגונים שהבעלים שלהם לא אישר מייל מעל 24 שעות.</p>
         ) : (
           // A read-only report, kept as a scroll region rather than moved to DataTable: the
           // screen's other half is the queue an operator acts on, and giving the REPORT a search
           // box, pagination and a row count would make it read like the work list beside it.
           <div className="table-scroll overflow-x-auto" role="region"
-            aria-label="מועמדים אחרי 30 יום — ניתן לגלול אופקית" tabIndex={0}>
+            aria-label="מועמדים אחרי 24 שעות — ניתן לגלול אופקית" tabIndex={0}>
             <table className="w-full">
               <thead className="table-head border-b border-line-soft">
                 <tr>
