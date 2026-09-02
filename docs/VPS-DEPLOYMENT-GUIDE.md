@@ -65,7 +65,7 @@ ssh -o BatchMode=yes -o StrictHostKeyChecking=no root@95.217.134.162 'whoami'
 | דבר | נתיב |
 |---|---|
 | ‏checkout של הריפו | `/opt/supplyflow` (‏detached HEAD; מ-שם בונים את שני ה-workers) |
-| ‏compose של OCR | `/opt/supplyflow/docker-compose.ocr.yml` |
+| משגר ה-pool של OCR | `/opt/supplyflow/scripts/run-ocr-worker.sh` — **הוא** שמייצר את `supplyflow-ocr-live-N`. `docker-compose.ocr.yml` קיים ואינו בשימוש בייצור (§4) |
 | ‏compose של render | `/opt/supplyflow/docker-compose.render.yml` (הקנוני מהריפו) |
 | סודות OCR | `/etc/supplyflow/ocr.env` (‏600, root) |
 | סודות render | `/etc/supplyflow/render.env` (‏600, root) |
@@ -75,11 +75,32 @@ ssh -o BatchMode=yes -o StrictHostKeyChecking=no root@95.217.134.162 'whoami'
 
 ## 4. פריסה מחדש / שדרוג גרסה
 
-**OCR** (ראה `docs/OCR-WORKER-HOSTING.md` לפרטים):
+**OCR** (ראה `docs/OCR-WORKER-HOSTING.md` לפרטים).
+**‏`docker compose` אינו הדרך — נמדד ב-03.09.2026.** ה-pool החי אינו נולד מ-`docker-compose.ocr.yml`:
+הוא שלושה־ארבעה דגלים של `docker run` שהסקריפט `scripts/run-ocr-worker.sh` מרכיב. ההבדל אינו
+קוסמטי — ה-compose נותן `OCR_ADAPTER` ברירת מחדל **`disabled`** ו-`ocr.env` אינו מגדיר אותו, ולכן
+`compose up` היה מחליף שני עובדים שעובדים על Mistral ב-pool בשם אחר שאינו מחלץ כלום. הסקריפט גם
+נותן לכל replica `OCR_WORKER_ID` ייחודי, ושני עובדים עם אותו מזהה מחדשים זה את החכירה של זה.
+
 ```bash
-cd /opt/supplyflow && git fetch origin main && git checkout origin/main -- worker/ocr
-docker compose --env-file /etc/supplyflow/ocr.env -f docker-compose.ocr.yml up -d --build
+cd /opt/supplyflow
+git fetch origin main
+git checkout origin/main -- worker/ocr scripts/run-ocr-worker.sh
+SHA=$(git rev-parse --short origin/main)
+
+# 1. לבנות מראש — ה-pool הישן ממשיך לשרת בזמן הזה.
+docker build --tag "supplyflow-ocr-worker:${SHA}" worker/ocr
+docker run --rm --entrypoint python "supplyflow-ocr-worker:${SHA}" self_check.py   # status: self_check_passed
+
+# 2. אם גרסת החוזה זזה — לפרוס עכשיו את ה-Edge, ורק אז להחליף. ראה §5.
+
+# 3. ההחלפה עצמה: הבנייה כאן היא cache hit, ולכן זה שניות.
+./scripts/run-ocr-worker.sh --adapter mistral --tag "$SHA"
+docker logs --tail 20 supplyflow-ocr-live-1
 ```
+> **‏`--adapter mistral` אינו קישוט.** ברירת המחדל של הסקריפט היא `openai`, ומנוע ה-OCR הפעיל
+> בייצור הוא Mistral (‏`docs/LOCAL-CREDENTIALS-PATH.md`). השמטת הדגל מחליפה ספק בשקט.
+> ‏`--tag` נדרש מפני שה-checkout הוא detached ו-`HEAD` שלו אינו הקומיט שממנו בונים.
 
 **render** (ראה `docs/RENDER-WORKER-HOSTING.md`):
 ```bash
