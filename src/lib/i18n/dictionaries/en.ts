@@ -3962,6 +3962,8 @@ export const en: Dictionary = {
     findingQuantityAboveOrdered: 'A quantity above what was ordered',
     findingQuantityDiffersFromOrdered: 'A quantity that differs from the order',
     findingQuantityAboveReceived: 'A quantity above what was received',
+    findingQuantityAboveRemainingOrdered: 'A quantity above what the order has left',
+    findingPriorInvoicedUnitUnresolved: 'The remaining ordered quantity cannot be computed',
     findingReceiptRecordedException: 'A shortfall, a defect or a return was recorded',
     findingUnitOrPackagingMismatch: 'A unit or packaging mismatch',
     findingLegacyOrderUnitSnapshotMissing: 'The historical order has no stored unit of measure',

@@ -3972,6 +3972,8 @@ export const he = {
     findingQuantityAboveOrdered: 'כמות מעל מה שהוזמן',
     findingQuantityDiffersFromOrdered: 'כמות שונה מההזמנה',
     findingQuantityAboveReceived: 'כמות מעל מה שהתקבל',
+    findingQuantityAboveRemainingOrdered: 'כמות מעל יתרת ההזמנה',
+    findingPriorInvoicedUnitUnresolved: 'יתרת ההזמנה אינה ניתנת לחישוב',
     findingReceiptRecordedException: 'נרשמו חסר, פגם או החזרה',
     findingUnitOrPackagingMismatch: 'אי-התאמת יחידה או אריזה',
     findingLegacyOrderUnitSnapshotMissing: 'להזמנה ההיסטורית אין יחידת מידה שמורה',

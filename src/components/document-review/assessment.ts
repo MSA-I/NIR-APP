@@ -170,6 +170,8 @@ export const FINDING_LABEL_KEYS: Record<string, TKey> = {
   quantity_above_ordered: 'assessment.findingQuantityAboveOrdered',
   quantity_differs_from_ordered: 'assessment.findingQuantityDiffersFromOrdered',
   quantity_above_received: 'assessment.findingQuantityAboveReceived',
+  quantity_above_remaining_ordered: 'assessment.findingQuantityAboveRemainingOrdered',
+  prior_invoiced_unit_unresolved: 'assessment.findingPriorInvoicedUnitUnresolved',
   receipt_recorded_exception: 'assessment.findingReceiptRecordedException',
   unit_or_packaging_mismatch: 'assessment.findingUnitOrPackagingMismatch',
   legacy_order_unit_snapshot_missing: 'assessment.findingLegacyOrderUnitSnapshotMissing',
