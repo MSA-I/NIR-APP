@@ -1982,7 +1982,7 @@ Hebrew and clears the field" — עם `Unable to find an element with the text: 
   `platform_set_approval_policy`, `platform_set_autonomy_policy`, `platform_set_assistant_policy`).
 - **למה נדחה:** נמצא בזמן כתיבת `0286`, מחוץ להיקף שנמדד בסריקה; הכותרת של `0286` מונה אותו, וההצהרה
   המבנית שם מצמידה אותו בשמו כדי שלא יעבור כ"מכוסה".
-- **ראיה:** `supabase/migrations/0286_platform_writers_carry_their_capability.sql` (כותרת + זרוע (c) של ההצהרה);
+- **ראיה:** מיגרציה `0286` (הכותרת, וזרוע (c) של ההצהרה המבנית; PR #230);
   `docs/SECURITY-SCAN-20260902.md` ממצא 3.
 - **הצעד הבא:** להעביר דרך `private.assert_platform_command` עם יכולת מתאימה (`policy.configure`, או יכולת
   ייעודית למחירונים אם הבעלים יבחין), ולהסיר את השם מזרוע (c) כך שההצהרה תדרוש כיסוי מלא.
