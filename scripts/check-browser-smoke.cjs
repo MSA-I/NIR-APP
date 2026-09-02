@@ -3621,6 +3621,17 @@ async function receivingDecisionsContract(browser) {
  * recovery link: GoTrue itself mints it (admin generate_link — the same token the email would
  * carry), the browser lands on /reset-password exactly as a mail client would, sets a new
  * password through the form, and the new password must then open the app from a cold login.
+ *
+ * PART 2 FOLLOWS THE TOKEN HASH, NOT THE ACTION LINK, and that is not a preference. `action_link`
+ * is GoTrue's `/auth/v1/verify?token=…&redirect_to=…`, which answers with a redirect carrying an
+ * implicit `#access_token=` fragment. The client is created with `flowType: 'pkce'`
+ * (`src/lib/supabase.ts`), and auth-js REFUSES an implicit callback outright — it throws
+ * `AuthPKCEGrantCodeExchangeError('Not a valid PKCE flow url.')` (GoTrueClient.js:3212-3216)
+ * rather than exchanging it — so no session is ever created and ResetPassword never leaves its
+ * "checking" state. That is exactly the link shape the new templates retire: every mail now points
+ * at `/auth/confirm?token_hash=…&type=…`, which `verifyOtp` redeems over POST with no fragment and
+ * no code verifier, so it works in a browser that never started the flow. This scenario follows the
+ * same address, built from the SAME token generate_link minted.
  * The office password is restored through the admin API in `finally`, so later scenarios keep
  * their credentials no matter where this one stops.
  */
@@ -3667,14 +3678,23 @@ async function passwordRecovery(browser) {
     assert.equal(linkRes.status, 200, `admin generate_link answered HTTP ${linkRes.status}`);
     const link = await linkRes.json();
     const actionLink = link.action_link || (link.properties && link.properties.action_link);
+    const hashedToken = link.hashed_token || (link.properties && link.properties.hashed_token);
     userId = link.id || (link.user && link.user.id) || null;
     assert(actionLink, 'generate_link returned no action_link');
+    assert(hashedToken, 'generate_link returned no hashed_token — the templates link to /auth/confirm with it');
     assert(userId, 'generate_link did not name the user id (needed to restore the password)');
+    // Still asserted even though the browser no longer follows `action_link`: `{{ .RedirectTo }}`
+    // is what the templates hand to /auth/confirm as `next`, so a redirect_to GoTrue silently
+    // replaced with the Site URL is still a configuration regression worth failing on.
     assert.equal(new URL(actionLink).searchParams.get('redirect_to'), `${baseURL}/reset-password`,
       'GoTrue did not accept the preview redirect_to — check additional_redirect_urls in supabase/config.toml');
 
-    await page.goto(actionLink);
+    await page.goto(`${baseURL}/auth/confirm?token_hash=${encodeURIComponent(hashedToken)}&type=recovery`);
     await page.waitForFunction(() => location.pathname === '/reset-password', null, { timeout: 15_000 });
+    // Nothing token-shaped reached the address bar on the way. Under the implicit flow this hash
+    // carried the session; the whole point of the move is that it is now empty.
+    assert.equal(await page.evaluate(() => location.hash), '',
+      'the recovery landing still carries an auth fragment — the token-hash route was bypassed');
     await page.locator('#reset-password-new').fill(newPassword);
     await page.locator('#reset-password-confirm').fill(newPassword);
     await page.getByRole('button', { name: 'החלפת סיסמה' }).click();

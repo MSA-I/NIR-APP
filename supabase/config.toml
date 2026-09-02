@@ -62,6 +62,42 @@ max_frequency = "1s"
 otp_length = 6
 otp_expiry = 3600
 
+# The five mailed links, pointed at /auth/confirm (owner ruling #332, security scan finding 5).
+#
+# WHY THE LOCAL STACK NEEDS THEM AT ALL, given `enable_confirmations = false` two lines up: the
+# DEFAULT GoTrue templates mail `/auth/v1/verify?token=...&redirect_to=...`, which redirects with an
+# implicit `#access_token=` fragment -- and the client is created with `flowType: 'pkce'`, which
+# REFUSES an implicit callback outright (`AuthPKCEGrantCodeExchangeError`, auth-js
+# GoTrueClient.js:3212). So a developer following a recovery mail out of Inbucket would meet exactly
+# the failure this change exists to remove, while production -- where the same five bodies are
+# applied through the Management API -- worked. The bodies are the SAME FILES the coordinator
+# applies to the hosted project (`docs/auth-email-templates/README.md` maps each to its
+# `mailer_templates_<x>_content` field), so the two cannot drift by being edited apart.
+#
+# `content_path` resolves from the PROJECT ROOT, not from `supabase/`. Measured with the pinned CLI
+# (2.98.2, the version `quality-gate.yml` installs): a deliberately wrong path is refused by name --
+# "Invalid config for auth.email.template.recovery.content_path: open <path>: cannot find the file"
+# -- so these five paths passing is a real check and not a silent skip.
+[auth.email.template.confirmation]
+subject = "אישור כתובת הדואר ובחירת סיסמה ב-InPlace"
+content_path = "./docs/auth-email-templates/confirmation.html"
+
+[auth.email.template.invite]
+subject = "הוזמנתם להצטרף לעסק ב-InPlace"
+content_path = "./docs/auth-email-templates/invite.html"
+
+[auth.email.template.magic_link]
+subject = "קישור הכניסה שלכם ל-InPlace"
+content_path = "./docs/auth-email-templates/magic-link.html"
+
+[auth.email.template.recovery]
+subject = "איפוס הסיסמה שלכם ב-InPlace"
+content_path = "./docs/auth-email-templates/recovery.html"
+
+[auth.email.template.email_change]
+subject = "אישור כתובת הדואר החדשה ב-InPlace"
+content_path = "./docs/auth-email-templates/email-change.html"
+
 # Google sign-up for the OWNER of a new organization (OPEN-DECISIONS #265, 24.08.2026).
 # Disabled unless the two secrets are present, so a checkout without them behaves exactly as
 # before. "Owner only" is NOT enforced here -- enabling a provider makes /auth/v1/authorize
