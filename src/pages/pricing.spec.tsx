@@ -121,6 +121,10 @@ const settle = () => screen.findByTestId('plan-cards');
 const card = (planKey: string) =>
   screen.getByTestId('plan-cards').querySelector(`[data-plan="${planKey}"]`) as HTMLElement;
 
+/** The frame the card sits in. It carries the pointer's strip, which is not inside the card. */
+const slot = (planKey: string) =>
+  screen.getByTestId('plan-cards').querySelector(`[data-plan-slot="${planKey}"]`) as HTMLElement;
+
 describe('דף המסלולים הציבורי', () => {
   it('מציג בדיוק את ארבעת המסלולים הציבוריים, ואת «ביזנס» בכלל לא', async () => {
     renderPage();
@@ -187,7 +191,7 @@ describe('דף המסלולים הציבורי', () => {
     await settle();
     // 300 is the fixture's synthetic value, 200 is #197's decided one. The page must print the
     // former: it reports the catalogue, never the decision table.
-    expect(within(card('pro')).getByText('300')).toBeInTheDocument();
+    expect(within(card('pro')).getAllByText('300').length).toBeGreaterThan(0);
     expect(within(card('pro')).queryByText('200')).not.toBeInTheDocument();
   });
 
@@ -237,8 +241,8 @@ describe('דף המסלולים הציבורי', () => {
     await settle();
     for (const planKey of ['free', 'basic', 'pro', 'premium']) {
       const promoted = planKey === RECOMMENDED_PLAN;
-      expect(card(planKey).className.includes('plan-card--pointed')).toBe(promoted);
-      expect(within(card(planKey)).queryByText('מומלץ') !== null).toBe(promoted);
+      expect(card(planKey).className.includes('plan-card--framed')).toBe(promoted);
+      expect(within(slot(planKey)).queryByText('מומלץ') !== null).toBe(promoted);
     }
   });
 

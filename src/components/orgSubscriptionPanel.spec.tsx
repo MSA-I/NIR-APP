@@ -219,7 +219,8 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     renderPanel();
     await settle();
     expect(await screen.findByText('ביזנס')).toBeInTheDocument();
-    expect(screen.getByText('דברו איתנו')).toBeInTheDocument();
+    // Twice in the DOM since 02.09.2026: the phone's chip and the card's own figure slot.
+    expect(screen.getAllByText('דברו איתנו').length).toBeGreaterThan(0);
     expect(screen.queryByText(/299/)).not.toBeInTheDocument();
     expect(screen.queryByText(/דמי הקמה/)).not.toBeInTheDocument();
   });
@@ -333,8 +334,10 @@ describe('מסלול ומנוי — המסך של הדייר', () => {
     for (const planKey of ['free', 'basic', 'pro', 'premium', 'business']) {
       const card = cards.querySelector(`[data-plan="${planKey}"]`);
       const promoted = planKey === RECOMMENDED_PLAN;
-      expect(card?.className.includes('plan-card--pointed')).toBe(promoted);
-      expect(/מומלץ/.test(card?.textContent ?? '')).toBe(promoted);
+      expect(card?.className.includes('plan-card--framed')).toBe(promoted);
+      // The strip is the slot's, not the card's: it is the label bar the card tucks under.
+      const slot = card?.closest('[data-plan-slot]');
+      expect(/מומלץ/.test(slot?.textContent ?? '')).toBe(promoted);
     }
     // The reader is on `free`. A reader-keyed emphasis would have promoted the rung above it.
     expect(RECOMMENDED_PLAN).not.toBe('basic');
@@ -723,9 +726,9 @@ describe('בורר מחזור החיוב', () => {
     );
     renderPanel();
     await settle();
-    expect(await screen.findByText(/69/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/69/)).length).toBeGreaterThan(0);
     await user.click(screen.getByRole('button', { name: 'שנתי' }));
-    expect(await screen.findByText(/690/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/690/)).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'שנתי' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { KeyRound, Loader2 } from 'lucide-react';
 import { Card, ICON } from '../components/ui';
-import { supabase } from '../lib/supabase';
+import { authCallbackFragment, supabase } from '../lib/supabase';
 import { MIN_PASSWORD_LENGTH, passwordProblemOf } from '../lib/password';
 import { APP_NAME } from '../lib/branding';
 
@@ -14,7 +14,9 @@ type LinkState = 'checking' | 'ready' | 'invalid' | 'done';
  *
  * GoTrue's /verify redirect delivers either tokens (supabase-js exchanges them into a session
  * and fires onAuthStateChange) or an error_code in the hash — a consumed or expired link never
- * carries tokens. The page therefore has exactly three honest states: a form when a session
+ * carries tokens. supabase.ts scrubs that fragment from the address bar as the client is created
+ * and keeps it in `authCallbackFragment`, which is what this page reads. The page therefore has
+ * exactly three honest states: a form when a session
  * exists, "the link is dead" when it provably is, and a short wait while the exchange runs.
  * The wait is bounded: tokens that never became a session within 8s are reported as a dead
  * link rather than a spinner that never resolves.
@@ -29,7 +31,7 @@ export default function ResetPassword() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const hash = authCallbackFragment; // supabase.ts scrubbed the address bar; this is what the link carried
     if (hash.get('error_code') || hash.get('error')) {
       setState('invalid');
       return;

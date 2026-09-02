@@ -1,3 +1,4 @@
+import { carriesAuthCallback, readAuthFragment } from './authFragment';
 import { createClient } from '@supabase/supabase-js';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string;
@@ -42,3 +43,15 @@ const correlatedFetch: typeof fetch = (input, init) => {
 };
 
 export const supabase = createClient(url, anonKey, { global: { fetch: correlatedFetch } });
+
+/**
+ * The address bar is not a place for tokens — see src/lib/authFragment.ts for the why.
+ *
+ * auth-js parsed window.location.href synchronously inside createClient above, so scrubbing here
+ * changes nothing it holds in memory; replaceState leaves no token-bearing history entry either.
+ * Pages that need to know what the link carried read `authCallbackFragment`.
+ */
+export const authCallbackFragment = readAuthFragment(typeof window === 'undefined' ? '' : window.location.hash);
+if (typeof window !== 'undefined' && carriesAuthCallback(authCallbackFragment)) {
+  window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+}

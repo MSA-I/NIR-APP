@@ -1,4 +1,18 @@
 -- P22 -- 30-day trial, 7-day grace, then DB-authoritative read-only.
+--
+-- RETIRED, AND KEPT ON PURPOSE. `0134_retire_trial_lifecycle.sql` removed the trial this file
+-- tests, and `04533b85` unwired the suite in the same breath. It is NOT in the 118 suites
+-- `scripts/ci-sql-suites.mjs` runs, it would fail if it were, and it must not be re-wired: the
+-- behaviour it asserts is gone by owner ruling (OPEN-DECISIONS #15, 13.08.2026). The file stays
+-- because that ruling cites it by name as the history of what was replaced.
+--
+-- ONE ASSERTION IN HERE OUTLIVED THE TRIAL, AND WENT QUIET WITH IT. The last check below --
+-- "an org-owned table is missing the read-only write trigger" -- has nothing to do with trials.
+-- It is the only thing that ever demanded full `zz_organization_write_guard` coverage, and while
+-- it sat here unrun, `0140` created two org-owned tables without the trigger and no gate said a
+-- word (DEBT §41). That assertion now lives in `0286_the_write_latch_covers_every_tenant_table.sql`,
+-- where it fails the migration that opens the gap instead of a report months later. It is left
+-- here too, unrun, so this file still reads as the document it is.
 \set ON_ERROR_STOP on
 
 begin;
