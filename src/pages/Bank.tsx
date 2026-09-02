@@ -162,12 +162,12 @@ export default function Bank() {
   const refetchAll = useCallback(() => { void refetch(); void imports.refetch(); }, [refetch, imports.refetch]);
 
   const columns: ServerColumn<TxRow>[] = [
-    { key: 'date', header: 'תאריך', render: (r) => fmtDate(r.tx_date) },
-    { key: 'desc', header: 'תיאור', render: (r) => <span className="max-w-72 truncate inline-block">{r.description}</span> },
-    { key: 'amount', header: 'סכום', className: 'num', render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount, r.currency)}</span> },
-    { key: 'ref', header: 'אסמכתא', className: 'num', render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
-    { key: 'supplier', header: 'ספק מזוהה', render: (r) => r.supplier?.name ?? <span className="text-ink-muted">לא זוהה</span> },
-    { key: 'status', header: 'סטטוס', render: (r) => <StatusBadge meta={BANK_TX_STATUS[r.status]} /> },
+    { key: 'date', header: t('bank.fmtDate'), render: (r) => fmtDate(r.tx_date) },
+    { key: 'desc', header: t('bank.text'), render: (r) => <span className="max-w-72 truncate inline-block">{r.description}</span> },
+    { key: 'amount', header: t('bank.fmtMoneyExact'), className: 'num', render: (r) => <span className="font-semibold">{fmtMoneyExact(r.amount, r.currency)}</span> },
+    { key: 'ref', header: t('bank.text_2'), className: 'num', render: (r) => <span dir="ltr">{r.reference ?? '—'}</span> },
+    { key: 'supplier', header: t('bank.text_3'), render: (r) => r.supplier?.name ?? <span className="text-ink-muted">{t('bank.text_4')}</span> },
+    { key: 'status', header: t('bank.text_5'), render: (r) => <StatusBadge meta={BANK_TX_STATUS[r.status]} /> },
   ];
 
   if (loading) return <SkeletonTable cols={6} />;
