@@ -306,6 +306,47 @@ select pg_temp.p104_assert(
     where id = 'a4000000-0000-4000-8000-000000000002') = 'active',
   'an operator holding org.lifecycle could not reactivate a tenant');
 
+-- ===== The widening the header declares, measured rather than asserted in prose =====
+-- 0286 routes the four configuration commands through a preamble that opens
+-- `app.organization_lifecycle_writer`, so an operator may now configure a tenant that
+-- private.organization_row_write_guard (0103:2227) had made read-only -- where before, both the
+-- configuration row and its audit row were refused. The lifecycle tenant is suspended again to
+-- stand still while that is measured on it, then reactivated.
+select public.set_organization_lifecycle(
+  'a4000000-0000-4000-8000-000000000002', 'suspended', null,
+  'P104 suspend before measuring the configuration widening');
+select pg_temp.p104_assert(
+  (select status from public.organizations
+    where id = 'a4000000-0000-4000-8000-000000000002') = 'suspended',
+  'the fixture tenant is not suspended -- the widening arm would prove nothing');
+
+-- The guard really is shut for this tenant: the preamble set the writer handshake when it
+-- suspended, so it is cleared first (the p44:150 idiom) and a bare INSERT is refused by name.
+-- Without this line the arm below could pass because the tenant was writable all along.
+select set_config('app.organization_lifecycle_writer', '', true);
+select pg_temp.p104_refused(
+  $$insert into public.org_flag_configurations (org_id, flag_key, state, targeting, unit_id)
+     values ('a4000000-0000-4000-8000-000000000002', 'receiving.barcode', true, '{}'::jsonb, null)$$,
+  'organization_read_only');
+select pg_temp.p104_assert(
+  public.platform_set_org_flag(
+    'a4000000-0000-4000-8000-000000000002', 'receiving.barcode', true, null, null,
+    'P104 configure a suspended tenant') is not null,
+  'a capable operator could not configure a SUSPENDED tenant -- the tenant write handshake the '
+  || 'preamble opens did not reach the write guard');
+select pg_temp.p104_assert(
+  (select state from public.org_flag_configurations
+    where org_id = 'a4000000-0000-4000-8000-000000000002'
+      and flag_key = 'receiving.barcode' and unit_id is null)
+  and (select count(*) from public.audit_logs
+    where org_id = 'a4000000-0000-4000-8000-000000000002'
+      and action = 'org_flag_configured') = 1,
+  'configuring a suspended tenant returned an id but wrote neither the row nor its audit entry');
+
+select public.set_organization_lifecycle(
+  'a4000000-0000-4000-8000-000000000002', 'active', null,
+  'P104 reactivate after the widening arm');
+
 -- The step-up the lifecycle command has demanded since 0134 is untouched by 0286: the same
 -- operator, the same capability, no fresh password, and the answer must still be no.
 select pg_temp.p104_as('a4100000-0000-4000-8000-000000000001', false);

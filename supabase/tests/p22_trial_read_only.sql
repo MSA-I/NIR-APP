@@ -50,7 +50,7 @@ insert into public.profiles (id, org_id, full_name, role) values
 insert into public.platform_admins (user_id, note)
 values ('2a220000-0000-4000-8000-000000000005', 'P22 platform operator');
 
--- 0285 routes this command through private.assert_platform_command, so platform membership is
+-- 0286 routes this command through private.assert_platform_command, so platform membership is
 -- no longer enough on its own: the operator must hold the capability too. super_admin is what this
 -- fixture always meant -- an operator with unrestricted authority -- and 0151:165 backfilled every
 -- operator that existed to exactly that. p104 is where the NARROWED operator is proved refused.

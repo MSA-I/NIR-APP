@@ -46,6 +46,14 @@
 --     SQLSTATE. Putting the preamble first would have renamed four of them to `reason_required`,
 --     which is a worse answer for the operator and would silently retire suite assertions that
 --     exist to keep those refusals honest.
+--   * THE LIFECYCLE COMMAND IS THE ONE PLACE THAT RENAME WAS ACCEPTED, and it is stated here
+--     rather than discovered later: its membership block is REPLACED by the preamble, so a blank
+--     reason now raises `reason_required` where it used to raise `lifecycle_invalid` (the same
+--     SQLSTATE 22023, which is what p75:231 catches by, so no suite changes), and a null or
+--     unknown `p_org_id` now raises `organization_unknown` BEFORE the step-up and before
+--     `trial_retired` rather than after the row lock. Accepted because the preamble's own
+--     refusals are the SAME refusals this command already made, under names at least as clear;
+--     the four configuration commands own vocabularies the preamble does not have.
 --
 -- ONE CONSEQUENCE WORTH STATING, because it is a widening and not a narrowing.
 -- `assert_platform_command` opens `app.organization_lifecycle_writer`, so an operator may now
@@ -79,7 +87,8 @@
 -- WHAT THIS FILE DELIBERATELY DOES NOT FIX, recorded so a later reader finds it named rather than
 -- missing: `public.platform_set_price_list_automation_scope` (0096:2060) is the SIXTH command of
 -- exactly this shape -- `is_platform_admin()` plus a step-up, granted to `authenticated`, and no
--- capability at all. It was not in the scope this file was given, its surface (price-list
+-- capability at all. It is recorded as DEBT §103. It was not in the scope this file was given,
+-- its surface (price-list
 -- calibration activation) has its own guard registry at 0182:228, and pinning it here would have
 -- meant re-opening the 0181 anchored rewrite of the same body. Section 5 lists it BY NAME in the
 -- no-capability arm, so it cannot pass as covered and cannot be forgotten.
@@ -221,6 +230,38 @@ end
 $mig_0286_config$;
 
 -- =====================================================================================
+-- 3b. The SECOND registry -- re-pin the body 0182 holds a hash of
+-- =====================================================================================
+-- THIS SCHEMA PINS DEFINER BODIES IN TWO PLACES and they answer different questions (0276:145):
+--
+--   private.scope_definer_enforcements                  -- does this body still enforce tenancy?
+--   private.document_automation_authoritative_functions -- is this body still the machine-writing
+--                                                          path #245/#251/#252 reviewed?
+--
+-- `platform_set_autonomy_policy` is registered in the SECOND one as an `activation_writer`
+-- (0182:230) -- one of the few functions allowed to hand a model authority over a tenant's
+-- documents -- pinned by `body_hash = md5(replace(prosrc, e'\r', ''))`. Section 3 rewrote that
+-- body, so the pin is stale from the next statement onwards and
+-- `private.document_automation_negative_guard_violations()` (0182:249-252) reports
+-- `authoritative_body_drift`. That is not a theoretical arm: p68_document_calibration_automation.sql:128-132
+-- requires the function to return NOTHING as its baseline, its falsification arm at :205-212
+-- counts EXACTLY two rows and would see three, and p14_apply_interpretation.sql:3092-3096 requires
+-- a count of zero. Three assertions in two suites, all red, on a change none of them is about.
+--
+-- Re-pinned in the 0230 shape, in the same migration that moved the body -- which is exactly the
+-- rule 0276:151-153 states after this was caught twice: re-pinning one registry and forgetting the
+-- other is the failure mode, not an edge case. `expected_callees` is deliberately NOT touched: the
+-- guard asserts every registered callee is still PRESENT, so it can never be satisfied falsely by
+-- an added call, and this body's registered call set is empty (0182:230) and stays empty.
+update private.document_automation_authoritative_functions registry
+   set body_hash = md5(replace(proc.prosrc, e'\r', '')),
+       responsibility = registry.responsibility
+         || ' 0286: demands policy.configure via private.assert_platform_command after its own checks.'
+  from pg_proc proc
+ where proc.oid = 'public.platform_set_autonomy_policy(uuid,text,boolean,numeric,text)'::regprocedure
+   and to_regprocedure(registry.function_signature)::oid = proc.oid;
+
+-- =====================================================================================
 -- 4. Structural re-assertion (mandatory after 0057)
 -- =====================================================================================
 do $assert_0286$
@@ -236,6 +277,29 @@ begin
     into v_violations from private.tenant_export_registry_violations();
   if v_violations is not null then
     raise exception e'0286 tenant export assertions failed:\n%', v_violations;
+  end if;
+
+  -- The 0230:15-22 arm: the re-pin in section 3b is proved to have LANDED, not merely attempted.
+  -- An UPDATE that matched no row succeeds silently, and the stale hash would then be discovered
+  -- by p68 and p14 instead of here.
+  if not exists (
+    select 1
+    from private.document_automation_authoritative_functions registry
+    join pg_proc proc
+      on proc.oid = 'public.platform_set_autonomy_policy(uuid,text,boolean,numeric,text)'::regprocedure
+    where to_regprocedure(registry.function_signature)::oid = proc.oid
+      and registry.body_hash = md5(replace(proc.prosrc, e'\r', ''))
+  ) then
+    raise exception '0286: the platform_set_autonomy_policy authoritative hash did not move -- '
+                    'p68 and p14 will report authoritative_body_drift';
+  end if;
+
+  -- ...and the whole negative guard is silent, which is the question p68 and p14 actually ask.
+  -- The hash arm alone would pass while a DIFFERENT arm of the same guard fired.
+  select string_agg(assertion || ' -- ' || detail, e'\n' order by assertion, detail)
+    into v_violations from private.document_automation_negative_guard_violations();
+  if v_violations is not null then
+    raise exception e'0286 document automation guards failed:\n%', v_violations;
   end if;
 end
 $assert_0286$;
@@ -380,7 +444,7 @@ begin
       ('public.platform_set_customer_account(uuid,uuid,date,text)'),
       ('public.platform_set_onboarding_step(uuid,text,text,text)'),
       -- CARRIES NO CAPABILITY AT ALL. The sixth instance of this file's finding, left standing
-      -- on purpose and named here so it cannot pass as covered. See the header.
+      -- on purpose and named here so it cannot pass as covered. DEBT §103, and the header.
       ('public.platform_set_price_list_automation_scope(uuid,uuid,text,uuid,text)')
     ) as covered(signature)
     where to_regprocedure(covered.signature)::oid = candidate.oid
@@ -391,10 +455,14 @@ begin
     raise exception e'0286: platform writer(s) this file neither wired nor recorded:\n%', v_uncovered;
   end if;
 
-  -- ----- (d) And the five must still refuse with no JWT subject at all -----
-  -- A definer that answers during a migration answers for anon at run time (0249:786). There is
-  -- no subject here, so `not_platform_admin` is the only honest outcome; anything else, including
-  -- success, is the door standing open.
+  -- ----- (d) A definer with no JWT subject still refuses -----
+  -- WHAT THIS PROVES, AND WHAT IT DOES NOT, because the two are easy to confuse here. A definer
+  -- that ANSWERS during a migration answers for anon at run time (0249:786), so a live probe is
+  -- worth having and this one is it. But the refusal it produces comes from the ORIGINAL
+  -- `v_actor is null` test (0059:247), which runs before any line this file added -- so it is
+  -- evidence that the door is shut to a caller with no identity, and NOT evidence about the
+  -- capability. It also probes one command of the five rather than all five. The capability
+  -- itself is proved behaviourally in p104, by operators who exist and are narrowed.
   begin
     perform public.platform_set_org_flag(
       '00000000-0000-4000-8000-000000000000'::uuid, 'assistant.ui', true, null, null,
