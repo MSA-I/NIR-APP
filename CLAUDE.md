@@ -110,6 +110,17 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   (‏88), ‏`Invoke-PriceListEdgeSmoke`, ‏`Invoke-OcrEdgeSmoke` ו-`check-p4-integrated-journey.cjs`.
   אלה קשורים ל-PowerShell של Windows ורצים רק בריצה הידנית. **תיק ירוק אינו טענה שהם עברו.**
 
+  **וגם — ‏13 מתוך 27 שומרי `npm run verify` (נמדד 01.09.2026 על `d9146bf4`).** ה-job
+  ‏`verify` ב-`build.yml` מריץ 14 תת-פקודות **בשמן** ואינו קורא `npm run verify` בשום מקום,
+  ולכן שומר שנוסף ל-`verify` בלי צעד ב-YAML פשוט אינו רץ. אלה שאינם רצים באף workflow:
+  ‏`check:typography`, ‏`check:i18n`, ‏`check:plurals`, ‏`check:orphan-keys`,
+  ‏`check:plan-labels`, ‏`check:jsx-space`, ‏`check:assistant-tool-schemas`,
+  ‏`check:anchored-replacements`, ‏`check:currency`, ‏`check:tolerance-surfaces`,
+  ‏`check:paddle-secrets`, ‏`check:appearance-scope`, ‏`check:contrast`.
+  ‏`quality-gate.yml` מריץ את **המדידה** בדפדפן (`check-contrast-rendered.mjs`) ולא את שומר
+  המניפסט. ‏**‏`check:contrast` נכשל על `main` היום** ומעולם לא עבר שם. ‏`DEBT §97`.
+  לפני מסירה: `npm run verify` מקומי הוא **הרחב** מבין השניים, לא הצר.
+
   ‏`.github/workflows/build.yml` יוצר תמיד את שמות ה־checks שהגנת הענף מצפה להם, אבל מקצה runner
   רק לצרכן הרלוונטי: `build` לקלטי bundle/typecheck; ‏`verify` לקוד, tests, scripts, migrations,
   Edge ו־Knip. שינוי test בלבד אינו בונה bundle; שינוי SQL suite/fixture בלבד אינו מריץ אף אחד
