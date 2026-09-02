@@ -88,6 +88,29 @@ select pg_temp.p51_assert(
    where space.nspname = 'public' and procedure.proname = 'my_entitlements') = 0,
   'my_entitlements() grew a parameter -- the tenant must come from auth_org() alone');
 
+-- DEBT §97, the half of it that 0285 closed. The body used to name auth_org() TWICE -- once as the
+-- lateral's argument and once in the WHERE -- and the planner evaluated it once per row of
+-- entitlement_definitions: twenty resolutions of the same caller, each a SECURITY DEFINER join of
+-- profiles against organizations. Measured before and after on the same database and org:
+-- 224 shared buffer hits became 184, and the row set was identical by EXCEPT in both directions.
+--
+-- Asserted structurally rather than by timing, because a timing assertion on a shared CI database
+-- fails for the weather. These two facts are what make the saving real, and both are exactly the
+-- kind a later edit removes without noticing.
+select pg_temp.p51_assert(
+  (select (length(body) - length(replace(body, 'auth_org()', ''))) / length('auth_org()')
+   from (select replace(pg_get_functiondef('public.my_entitlements()'::regprocedure), e'\r', '')
+         as body) d) = 1,
+  'my_entitlements() names auth_org() more than once again -- the planner resolves the caller per '
+  'row of entitlement_definitions, which is the cost DEBT §97 is about');
+
+select pg_temp.p51_assert(
+  (select position('with caller as materialized' in
+     replace(pg_get_functiondef('public.my_entitlements()'::regprocedure), e'\r', '')) > 0),
+  'the caller CTE in my_entitlements() is no longer MATERIALIZED. Without it the planner may pull '
+  'the single-row subquery back down into the per-row lateral, which restores the original cost '
+  'while the body still LOOKS hoisted');
+
 -- Until 19.08.2026 this asserted that NO plan carried a numeric limit, because the numbers were
 -- an open owner decision and a seeded limit would have been an invented one. The owner decided
 -- (#166), so the guard now pins what was decided rather than the absence of a decision: Free
