@@ -424,8 +424,11 @@ console.log('\nwiring');
   // control of its own because it IS the thing that runs them.
   const required = [...new Set([...[...exercised]
     .map((script) => `check:${script.replace(/^check-/, '').replace(/.mjs$|.ts$/, '')}`),
-    'check:gate-controls'])].sort();
-  if (required.length < 9) {
+    'check:gate-controls',
+    // Seeded, not derived: `check:env-files` is wired into verify and build.yml but has no
+    // positive control yet, and dropping it here would quietly retire an assertion main makes.
+    'check:env-files'])].sort();
+  if (required.length < 10) {
     failures += 1;
     console.error(`  ✗ only ${required.length} guard(s) were exercised -- controls went missing`);
   }

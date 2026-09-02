@@ -273,6 +273,7 @@ jobs:
           npm run check:currency
           npm run check:tolerance-surfaces
           npm run check:paddle-secrets
+          npm run check:env-files
           npm run check:appearance-scope
           npm run check:contrast
       - name: Vitest

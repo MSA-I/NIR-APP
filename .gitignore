@@ -1,8 +1,12 @@
 node_modules/
 dist/
 public/fonts/almoni/
-.env
-supabase/functions/.env
+# The whole family, not exact names: a snapshot such as .env.before-assistant-capture once reached
+# the index with live keys because only ".env" was listed. check:env-files measures this.
+.env*
+supabase/functions/.env*
+!.env.example
+!.env.qa.example
 *.local
 *.log
 .wrangler/

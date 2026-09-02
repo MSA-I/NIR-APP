@@ -3973,6 +3973,8 @@ export const he = {
     findingQuantityAboveOrdered: 'כמות מעל מה שהוזמן',
     findingQuantityDiffersFromOrdered: 'כמות שונה מההזמנה',
     findingQuantityAboveReceived: 'כמות מעל מה שהתקבל',
+    findingQuantityAboveRemainingOrdered: 'כמות מעל יתרת ההזמנה',
+    findingPriorInvoicedUnitUnresolved: 'יתרת ההזמנה אינה ניתנת לחישוב',
     findingReceiptRecordedException: 'נרשמו חסר, פגם או החזרה',
     findingUnitOrPackagingMismatch: 'אי-התאמת יחידה או אריזה',
     findingLegacyOrderUnitSnapshotMissing: 'להזמנה ההיסטורית אין יחידת מידה שמורה',
@@ -6135,6 +6137,14 @@ export const he = {
   planCard: {
     emphasisPremium: 'המקיף ביותר',
     loading: 'טוען',
+    // The two capability blocks the card grew on 02.09.2026, and the tag on a row that expires.
+    introTag: 'רק 30 יום ראשונים',
+    blockWork: 'עבודה ואוטומציה',
+    blockWorkNote: 'מה שהמערכת עושה על המסמכים',
+    blockMoney: 'כספים וחיבורים',
+    blockMoneyNote: 'הסט המלא כלול',
+    blockMoneyNone: 'אין גישה לכספים וחיבורים',
+    blockMoneyFrom: 'נפתח במסלול {name}',
   },
 
   planBadge: {
