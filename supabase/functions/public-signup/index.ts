@@ -9,8 +9,9 @@
  *      cold start, and Edge Functions cold-start constantly, so it would bound nothing.
  *   2. Nothing about the tenant is caller-selectable beyond a name. No status, no plan, no VAT
  *      rate, no categories — a signup form that could ask for Business would be a free upgrade.
- *   3. The owner's email starts UNCONFIRMED **and the account starts with no password at all**
- *      (owner ruling #332, 02.09.2026). Unconfirmed alone was not enough: it stopped a stranger
+ *   3. The owner's email starts UNCONFIRMED **and the account's password is one nobody holds** —
+ *      GoTrue generates a random one when the admin create is given none (owner ruling #332,
+ *      02.09.2026). Unconfirmed alone was not enough: it stopped a stranger
  *      signing in today, but the password they typed against somebody else's address stayed on
  *      the account, and the real owner's confirmation click activated it. The password is now
  *      chosen on `/set-password`, after the link has proved who holds the address.
@@ -349,8 +350,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
    * `body.password` is not read here and is not passed on. A caller can still send the field — this
    * is an anonymous HTTP endpoint and anyone may send anything — and it is ignored rather than
    * refused, because a refusal would be a second answer this endpoint has to keep neutral. The
-   * account is created with no password at all, and the first one is chosen on `/set-password`
-   * after the confirmation link has proved who is holding the address.
+   * account is created with a random password nobody holds — GoTrue's own, generated because the
+   * admin create was given none — so no password anybody typed can open it, and the first usable
+   * one is chosen on `/set-password` after the confirmation link has proved who holds the address.
    */
   const input = {
     name: typeof body.organization_name === 'string' ? body.organization_name : '',

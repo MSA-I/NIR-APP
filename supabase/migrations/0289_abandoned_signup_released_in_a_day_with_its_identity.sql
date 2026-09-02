@@ -1,7 +1,8 @@
 -- 0289 -- An abandoned signup is released in a day, and the identity goes with the organization.
 --
 -- WHY THIS MOVED. Owner ruling #332 (02.09.2026) reversed the order of a self-signup: the account
--- is now created with NO password, and the first one is chosen only after the confirmation link has
+-- is created with no password of the caller's -- GoTrue generates a random one nobody holds -- and
+-- the first password anybody knows is chosen only after the confirmation link has
 -- proved who holds the address (`supabase/functions/_shared/provision.ts`). That changes what an
 -- unconfirmed signup IS. Under 0159 it was a real account with a real password waiting for a click,
 -- and thirty days of patience was the right answer (#175). Now it is a name, an address nobody
@@ -32,23 +33,44 @@
 -- organization row, so a failure anywhere in between rolls the whole thing back rather than
 -- leaving an account with no tenant.
 --
+-- ONLY UNCONFIRMED IDENTITIES ARE RELEASED. #175 authorised removing the unverified auth row and
+-- nothing more, so the capture joins `auth.users` and requires `email_confirmed_at is null`. That is
+-- not the same test as the one that decides whether the cleanup runs at all: that one asks about
+-- the OWNER (`organization_owner_verified`), and an organization can be released while a second
+-- member -- an office user who did confirm -- still holds an address they proved. Their identity
+-- stays; only the tenant rows go.
+--
 -- One profile per identity is what makes that safe: `profiles.id` is the primary key AND the
 -- foreign key to `auth.users` (0001:32), so an auth user belongs to at most one organization and
 -- deleting it can never orphan a second tenant's member. A platform operator is excluded anyway —
 -- staff standing lives on a different axis (`platform_admins`), and an operator who also happens to
 -- own an abandoned trial must not lose their console account to a data-retention job.
 --
--- WHAT COULD STILL REFUSE THE DELETE, and why refusing is the right answer. Seven tables carry an
--- `on delete restrict` foreign key to `auth.users`: six of them name the OPERATOR who acted
--- (`referral_grants.granted_by`, `billing_provider_boundary.enabled_by`,
--- `inbound_channel_boundary.enabled_by`, `customer_internal_notes.author`,
--- `customer_onboarding_steps.recorded_by`, `organization_entitlement_overrides.granted_by`) and the
--- seventh (`price_list_automation_scope_decisions.decided_by`) is a tenant table that
+-- WHAT COULD STILL REFUSE THE DELETE, and why refusing is the right answer. Grepped rather than
+-- recalled: seven tables carry NINE `on delete restrict` foreign keys to `auth.users`, and eight of
+-- the columns name the OPERATOR who acted -- `customer_internal_notes.author` (0152:100) and
+-- `.resolved_by` (0152:103), `organization_entitlement_overrides.granted_by` (0154:187) and
+-- `.revoked_by` (0154:190), `customer_onboarding_steps.recorded_by` (0156:122),
+-- `private.referral_grants.revoked_by` (0186:197),
+-- `private.billing_provider_boundary.enabled_by` (0187:73) and
+-- `private.inbound_channel_boundary.enabled_by` (0279:334). (`referral_grants.granted_by` is NOT
+-- one: it carries no foreign key at all.) The ninth,
+-- `price_list_automation_scope_decisions.decided_by` (0096:1991), is a tenant table that
 -- `delete_tenant_rows` removes first -- and any row in it would have counted as activity and
 -- stopped the cleanup two checks earlier. An owner who never confirmed an address is none of those
 -- actors. If one of them ever does hold the row, the FK raises, the whole transaction rolls back,
 -- and nothing is half-done: the tenant survives with its identity, which is the state a human can
 -- still reason about.
+--
+-- WHAT THE RELEASE DOES NOT RECORD, stated because the alternative implementation does record it.
+-- A SQL `delete from auth.users` writes NOTHING to `auth.audit_log_entries`: that ledger is
+-- GoTrue's, and GoTrue is not in this path. `auth.admin.deleteUser` -- the Edge fallback named in
+-- section 3 -- would write a `user_deleted` entry, so moving the release there is not a neutral
+-- swap of mechanism: it changes what survives the deletion. Either way the trace this migration
+-- leaves is a COUNT (`removed_row_counts.auth_identities`) and never the identity itself, which is
+-- #175's requirement rather than an omission -- the retained record is minimal and structurally
+-- free of PII, and a released address written into a permanent log would be exactly the disclosure
+-- the neutral-answer rule exists to prevent.
 --
 -- Every anchor below is CR-stripped as well as the body it is matched against. A literal that git
 -- checks out with CRLF would otherwise never match a definition normalised to LF -- the failure
@@ -115,7 +137,9 @@ begin$replacement1$, e'\r', '');
   v_removed := private.delete_tenant_rows(v_org.id);$anchor3$, e'\r', '');
   v_capture_replacement text := replace($replacement3$  select coalesce(array_agg(member.id), '{}'::uuid[]) into v_identities
   from public.profiles member
+  join auth.users account on account.id = member.id
   where member.org_id = v_org.id
+    and account.email_confirmed_at is null
     and not exists (
       select 1 from public.platform_admins operator where operator.user_id = member.id);
 
@@ -138,19 +162,28 @@ begin$replacement1$, e'\r', '');
   delete from auth.users account where account.id = any(v_identities);
 
   perform set_config('app.audit_purge', '', true);$replacement4$, e'\r', '');
+
+  -- EXACTLY ONCE, not merely present. `replace()` rewrites EVERY occurrence, so an anchor that
+  -- matched twice would silently patch a second site as well -- and `position() = 0` cannot see
+  -- that: it answers "is it there", which is the wrong question for a rewrite that is not scoped.
+  -- Counting by length asks the right one, and it still catches the absent case.
+  v_anchors text[] := array[v_declare_anchor, v_due_anchor, v_capture_anchor, v_release_anchor];
+  v_labels  text[] := array['the cleanup declaration block',
+                            'the thirty-day gate',
+                            'the audit-purge window around delete_tenant_rows',
+                            'the organization-row deletion'];
+  v_hits    integer;
+  v_i       integer;
 begin
-  if position(v_declare_anchor in v_definition) = 0 then
-    raise exception '0289: the cleanup declaration block is not where 0196 left it';
-  end if;
-  if position(v_due_anchor in v_definition) = 0 then
-    raise exception '0289: the thirty-day gate is not where 0196 left it';
-  end if;
-  if position(v_capture_anchor in v_definition) = 0 then
-    raise exception '0289: the audit-purge window around delete_tenant_rows moved';
-  end if;
-  if position(v_release_anchor in v_definition) = 0 then
-    raise exception '0289: the organization-row deletion is not where 0196 left it';
-  end if;
+  for v_i in 1 .. array_length(v_anchors, 1) loop
+    v_hits := (length(v_definition) - length(replace(v_definition, v_anchors[v_i], '')))
+              / length(v_anchors[v_i]);
+    if v_hits <> 1 then
+      raise exception '0289: % occurs % time(s) in the live body, not exactly once -- either 0196''s '
+        'body moved under this patch, or the anchor stopped being unique and the replacement would '
+        'rewrite a site nobody chose', v_labels[v_i], v_hits;
+    end if;
+  end loop;
   -- 0196 put the lock and the two re-checks in this body, and they are the reason the report is
   -- not an authorization (p75 C3). Refusing to patch a body that lost them keeps the two from
   -- drifting apart silently, exactly as 0282 did for 0089's consent ancestry.

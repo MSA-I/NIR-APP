@@ -21,7 +21,7 @@ import { passwordPendingOf } from '../lib/password';
  * WHAT THIS SCREEN OWES THE READER. Nothing but speed and an honest failure. It spends the hash,
  * and then sends the person where they were going: a recovery link to `/reset-password`, an
  * invitation back to the invitation it came from, and a fresh owner to `/set-password` — because
- * under owner ruling #332 their account has no password yet. The routing rule is
+ * under owner ruling #332 the only password on their account is one GoTrue generated. The rule is
  * `src/lib/authConfirm.ts`, where `next` is checked against this origin: a redirect target read out
  * of a URL is an open redirect, and this one would come with a session already established.
  *

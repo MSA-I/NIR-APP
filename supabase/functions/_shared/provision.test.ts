@@ -133,7 +133,8 @@ Deno.test("the public door starts unconfirmed and the operator door does not", a
  *
  * The assertion that matters is `"password" in input` and not `input.password === undefined`: the
  * admin API is an HTTP call, so a serialized `password: null` is a value GoTrue has to interpret,
- * while an absent key is the only unambiguous spelling of "this account has no password".
+ * while an absent key is the only unambiguous spelling of "generate one nobody holds" — which is
+ * what leaves the account unusable until `/set-password` replaces it.
  */
 Deno.test("the anonymous door creates an owner with NO password, named for the mail that follows", async () => {
   const anonymous = recordingAdmin();

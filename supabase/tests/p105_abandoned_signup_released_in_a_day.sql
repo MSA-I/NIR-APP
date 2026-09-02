@@ -19,7 +19,12 @@
 --      Staff standing lives on a different axis (`platform_admins`); a data-retention job must not
 --      be able to remove a console account as a side effect.
 --   6. The retained record says how many identities were released, and still carries no PII.
---   7. No browser role can run any of it, and the command still refuses a caller that is not
+--   7. A member of the released organization who DID confirm their address keeps their auth row.
+--      #175 authorised removing the unverified identity and nothing else, and the test that lets
+--      the cleanup run at all asks only about the OWNER -- so a confirmed office user can be
+--      sitting in an organization that is about to go, and must come out of it still able to
+--      sign in.
+--   8. No browser role can run any of it, and the command still refuses a caller that is not
 --      service_role.
 --
 -- Runs entirely inside one transaction and rolls back. Every organization it may delete is
@@ -67,7 +72,9 @@ insert into auth.users (id, email, email_confirmed_at) values
   ('a5000000-0000-4000-8000-000000000002', 'p105-young@example.test',     null),
   ('a5000000-0000-4000-8000-000000000003', 'p105-verified@example.test',  now()),
   ('a5000000-0000-4000-8000-000000000004', 'p105-operator@example.test',  null),
-  ('a5000000-0000-4000-8000-000000000005', 'p105-busy@example.test',      null);
+  ('a5000000-0000-4000-8000-000000000005', 'p105-busy@example.test',      null),
+  -- The one identity inside a released organization that must NOT be released with it.
+  ('a5000000-0000-4000-8000-000000000006', 'p105-confirmed@example.test',  now());
 
 insert into public.organizations (id, name, status, created_at) values
   ('a5000000-0000-4000-8000-0000000000a1', 'P105 abandoned empty', 'active', now() - interval '2 days'),
@@ -86,7 +93,11 @@ insert into public.profiles (id, org_id, full_name, role, active) values
   ('a5000000-0000-4000-8000-000000000002', 'a5000000-0000-4000-8000-0000000000a2', 'P105 young owner',     'owner', true),
   ('a5000000-0000-4000-8000-000000000003', 'a5000000-0000-4000-8000-0000000000a3', 'P105 verified owner',  'owner', true),
   ('a5000000-0000-4000-8000-000000000004', 'a5000000-0000-4000-8000-0000000000a4', 'P105 operator owner',  'owner', true),
-  ('a5000000-0000-4000-8000-000000000005', 'a5000000-0000-4000-8000-0000000000a5', 'P105 busy owner',      'owner', true);
+  ('a5000000-0000-4000-8000-000000000005', 'a5000000-0000-4000-8000-0000000000a5', 'P105 busy owner',      'owner', true),
+  -- A second member of the ABANDONED organization who confirmed their own address. They do not stop
+  -- the cleanup -- `organization_owner_verified` asks about the owner -- but their identity is not
+  -- the unverified row #175 authorised removing.
+  ('a5000000-0000-4000-8000-000000000006', 'a5000000-0000-4000-8000-0000000000a1', 'P105 confirmed office', 'office', true);
 
 -- The one identity that must survive its own tenant's removal.
 insert into public.platform_admins (user_id, note)
@@ -136,13 +147,13 @@ begin
     raise exception 'p105.4: a refused cleanup deleted the identity anyway';
   end if;
 
-  -- ===== 7a. service_role is still required =====
+  -- ===== 8a. service_role is still required =====
   perform set_config('request.jwt.claim.role', 'authenticated', true);
   perform set_config('request.jwt.claims', jsonb_build_object('role', 'authenticated')::text, true);
   begin
     perform public.service_cleanup_abandoned_signup(
       pg_temp.p105_fixture_only('a5000000-0000-4000-8000-0000000000a1'));
-    raise exception 'p105.7: a non-service caller ran the cleanup';
+    raise exception 'p105.8: a non-service caller ran the cleanup';
   exception when sqlstate '42501' then
     if sqlerrm not like '%service_role_required%' then raise; end if;
   end;
@@ -163,6 +174,12 @@ begin
   if (select count(*) from auth.users
       where id = 'a5000000-0000-4000-8000-000000000001') <> 0 then
     raise exception 'p105.2: the address is still registered in GoTrue, so it can never sign up again';
+  end if;
+
+  -- ===== 7. The confirmed member keeps the account they proved =====
+  if (select count(*) from auth.users
+      where id = 'a5000000-0000-4000-8000-000000000006') <> 1 then
+    raise exception 'p105.7: a member who confirmed their address lost the account they proved';
   end if;
 
   -- ===== 6. The retained record counts what it released, and still carries no PII =====
@@ -210,18 +227,18 @@ begin
   perform set_config('request.jwt.claim.role', '', true);
   perform set_config('request.jwt.claims', '', true);
 
-  -- ===== 7b. Nothing here is reachable from a browser =====
+  -- ===== 8b. Nothing here is reachable from a browser =====
   if has_function_privilege('anon', 'public.service_cleanup_abandoned_signup(uuid)', 'EXECUTE')
      or has_function_privilege('authenticated', 'public.service_cleanup_abandoned_signup(uuid)', 'EXECUTE') then
-    raise exception 'p105.7: a browser role can run the abandoned-signup cleanup';
+    raise exception 'p105.8: a browser role can run the abandoned-signup cleanup';
   end if;
   if has_function_privilege('anon', 'private.abandoned_signup_grace()', 'EXECUTE')
      or has_function_privilege('authenticated', 'private.abandoned_signup_grace()', 'EXECUTE')
      or has_function_privilege('service_role', 'private.abandoned_signup_grace()', 'EXECUTE') then
-    raise exception 'p105.7: the cleanup window function is reachable outside the server';
+    raise exception 'p105.8: the cleanup window function is reachable outside the server';
   end if;
 
-  raise notice 'p105 passed: seven cases';
+  raise notice 'p105 passed: eight cases';
 end
 $suite$;
 

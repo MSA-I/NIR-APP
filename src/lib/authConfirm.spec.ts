@@ -45,7 +45,7 @@ describe('sameOriginNext', () => {
    * GoTrue substitutes the project's Site URL into `{{ .RedirectTo }}` whenever the caller passed
    * no redirect_to — which is exactly the sign-up confirmation, the one link that most needs to
    * land somewhere specific. Reading a bare root as a destination would walk a brand-new owner
-   * into the product holding a session and no password.
+   * into the product holding a session and a password only GoTrue generated.
    */
   it('reads a bare site root, and an empty value, as no destination at all', () => {
     expect(sameOriginNext(ORIGIN, ORIGIN)).toBeNull();

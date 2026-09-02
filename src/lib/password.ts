@@ -28,8 +28,9 @@ export function passwordProblemOf(password: string, confirmation: string): Passw
  *
  * IT IS A HINT, NEVER AN AUTHORIZATION. `user_metadata` is self-asserted — anybody holding a
  * session can write anything into it — so the only thing this is ever allowed to decide is which
- * screen to offer. What actually protects the account is that GoTrue has no password on file: a
- * stranger who pre-registers somebody else's address cannot sign in with one, whatever this
+ * screen to offer. What actually protects the account is the password GoTrue holds: the admin
+ * create was given none, so GoTrue generated a random one nobody has, and a stranger who
+ * pre-registered somebody else's address cannot sign in with the value they typed — whatever this
  * function returns. Clearing the flag by hand grants nothing; it only skips a screen.
  *
  * Typed structurally so the rule can be tested without an auth client.

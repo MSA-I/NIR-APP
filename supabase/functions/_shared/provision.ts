@@ -37,9 +37,14 @@ export interface ProvisionAdminClient {
   auth: {
     admin: {
       /**
-       * `password` is OPTIONAL, and that is owner ruling #332 in the type system. GoTrue creates a
-       * user with no password when the key is absent — not with an empty one — and an account with
-       * no password on file is an account nobody can sign into, however the address got there.
+       * `password` is OPTIONAL, and that is owner ruling #332 in the type system.
+       *
+       * WHAT GoTrue ACTUALLY DOES with an absent key, because "no password" would be a comforting
+       * simplification: it GENERATES a random one and stores its hash. The account is equally
+       * unusable either way — the value is not known to us, to the visitor, or to whoever filled
+       * the form — so nobody can sign in with a password until `/set-password` replaces it. That
+       * is the property #332 needs; `user_metadata.password_pending` is only the marker saying
+       * which screen is still owed.
        */
       createUser(input: {
         email: string;
@@ -107,7 +112,8 @@ export interface ProvisionInput {
    * So the ordering is inverted rather than tightened. On this path the auth user is created with
    * NO password and marked `user_metadata.password_pending`; `/set-password` sets the first one,
    * after the confirmation link has proved who holds the address. Confirming an account a stranger
-   * pre-registered now yields an account with no password — theirs or anyone's.
+   * pre-registered now yields an account whose password is a random value nobody holds — not
+   * theirs, and not anyone's.
    */
   passwordPending: boolean;
 }
@@ -278,7 +284,8 @@ export async function provisionTenant(
      * The password key is SPREAD IN, never assigned. `password: undefined` and no `password` key
      * are the same thing to this process and different things on the wire: the admin API is an
      * HTTP call, and a serialized `password: null` is a value GoTrue would have to interpret.
-     * Omitting the key is the only spelling of "this account has no password".
+     * Omitting the key is the only spelling of "generate one for me" — GoTrue then stores a random
+     * password nobody holds, which is what leaves the account unusable until `/set-password` runs.
      *
      * `user_metadata` carries two things and no more. `password_pending` is the flag `/set-password`
      * reads and clears — a hint about which screen is owed, never an authorization, since anyone

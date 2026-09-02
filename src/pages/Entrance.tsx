@@ -280,8 +280,9 @@ export default function Entrance({ initialMode }: { initialMode: EntranceMode })
    * It used to. `public-signup` created the auth account with whatever was typed here, against an
    * address nobody had proved — so a stranger could pre-register YOUR address with THEIR password,
    * and the confirmation mail you clicked would bring the account to life under their credentials.
-   * The account is now created with no password at all; the first one is chosen on `/set-password`,
-   * after the confirmation link has proved the address belongs to whoever opened it.
+   * The admin create is now given no password, so GoTrue generates a random one nobody holds; the
+   * first password anybody knows is chosen on `/set-password`, after the confirmation link has
+   * proved the address belongs to whoever opened it.
    */
   async function createBusiness() {
     setBusy(true);

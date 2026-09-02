@@ -293,12 +293,12 @@ export default function App() {
 
   /**
    * An owner who confirmed their address and then closed the set-password screen (owner ruling
-   * #332). They hold a session — they proved the address — but the account still has no password,
-   * so the next sign-in would fail and the only way back would be "forgot password". Sending them
-   * to the screen they closed is the difference between a step they can finish and a lockout they
-   * have to discover. `password_pending` decides nothing but this redirect: it lives in
-   * `user_metadata`, which the holder of the session can write, and what actually protects the
-   * account is that GoTrue has no password on file (`src/lib/password.ts`).
+   * #332). They hold a session — they proved the address — but the only password on the account is
+   * the random one GoTrue generated, so the next sign-in would fail and the way back would be
+   * "forgot password". Sending them to the screen they closed is the difference between a step they
+   * can finish and a lockout they have to discover. `password_pending` decides nothing but this
+   * redirect: it lives in `user_metadata`, which the holder of the session can write, and what
+   * actually protects the account is that generated password (`src/lib/password.ts`).
    */
   if (!isPublic && session && passwordPendingOf(session.user)) {
     return <Navigate to="/set-password" replace />;

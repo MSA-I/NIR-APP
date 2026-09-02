@@ -19,13 +19,15 @@ type ScreenState = 'checking' | 'ready' | 'noSession';
  * it the account went live — as the owner of an organization, with their password on it. That is
  * account pre-hijacking, and it was finding 4 of the 02.09.2026 security scan.
  *
- * SO THE ORDER IS REVERSED. `public-signup` creates the owner with no password at all and marks
- * them `user_metadata.password_pending`; until the address is confirmed there is nothing to sign in
- * with, and nothing a stranger can have set. The confirmation link lands on `/auth/confirm`, which
- * spends the token hash and sends a pending owner here. This is the first moment a password exists.
+ * SO THE ORDER IS REVERSED. `public-signup` gives the admin create no password, so GoTrue generates
+ * a random one nobody holds, and marks the owner `user_metadata.password_pending`. Nothing a
+ * stranger typed can open that account, and nothing they typed was ever stored. The confirmation
+ * link lands on `/auth/confirm`, which spends the token hash and sends a pending owner here — the
+ * first moment a password anybody knows exists.
  *
  * IF THE READER CLOSES THIS SCREEN, nothing is lost and nothing is granted: they hold a session
- * because they proved the address, and the account still has no password. Coming back to `/` sends
+ * because they proved the address, and the account's only password is still the generated one.
+ * Coming back to `/` sends
  * them here again (`App.tsx` routes a pending session to this screen), and a new browser reaches
  * the same place through "forgot password" — which is why `/reset-password` clears the same flag.
  */

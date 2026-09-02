@@ -16,7 +16,7 @@ describe('passwordProblemOf', () => {
  * Strictly on purpose: this decides which SCREEN a person is offered, and `user_metadata` is
  * self-asserted — anyone holding a session can write anything into it. A truthy-ish reading would
  * turn a stray string into a redirect loop for a customer, while the thing that actually protects
- * the account (GoTrue holding no password) is unaffected either way.
+ * the account (GoTrue holding a random password nobody was given) is unaffected either way.
  */
 describe('passwordPendingOf', () => {
   it('is true only for the literal flag the server wrote', () => {
