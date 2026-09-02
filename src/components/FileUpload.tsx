@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Camera, FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { Link } from 'react-router';
 import { supabase } from '../lib/supabase';
+import { signedDocumentSourceUrl } from '../lib/documentSource';
 import { useAuth } from '../auth/AuthContext';
 import { useToast, Skeleton, ConfirmDialog, ErrorNote, ICON, Modal, Note } from './ui';
 import { ActionMenu } from './ActionMenu';
@@ -915,9 +916,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
 
   async function open(doc: DocumentRow) {
     const result = await openReservedPopup(async () => {
-      const { data, error } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300);
-      if (error || !data) throw error ?? new Error('missing signed URL');
-      return data.signedUrl;
+      return signedDocumentSourceUrl(doc.storage_path, 300, doc.mime_type);
     });
     if (result === 'blocked') toast(t('fileUpload.toast'), 'error');
     if (result === 'error') toast(t('fileUpload.toast_2'), 'error');

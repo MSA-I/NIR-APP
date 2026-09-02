@@ -1,4 +1,18 @@
 -- P22 -- 30-day trial, 7-day grace, then DB-authoritative read-only.
+--
+-- RETIRED, AND KEPT ON PURPOSE. `0134_retire_trial_lifecycle.sql` removed the trial this file
+-- tests, and `04533b85` unwired the suite in the same breath. It is NOT in the 118 suites
+-- `scripts/ci-sql-suites.mjs` runs, it would fail if it were, and it must not be re-wired: the
+-- behaviour it asserts is gone by owner ruling (OPEN-DECISIONS #15, 13.08.2026). The file stays
+-- because that ruling cites it by name as the history of what was replaced.
+--
+-- ONE ASSERTION IN HERE OUTLIVED THE TRIAL, AND WENT QUIET WITH IT. The last check below --
+-- "an org-owned table is missing the read-only write trigger" -- has nothing to do with trials.
+-- It is the only thing that ever demanded full `zz_organization_write_guard` coverage, and while
+-- it sat here unrun, `0140` created two org-owned tables without the trigger and no gate said a
+-- word (DEBT §41). That assertion now lives in `0286_the_write_latch_covers_every_tenant_table.sql`,
+-- where it fails the migration that opens the gap instead of a report months later. It is left
+-- here too, unrun, so this file still reads as the document it is.
 \set ON_ERROR_STOP on
 
 begin;
@@ -49,6 +63,13 @@ insert into public.profiles (id, org_id, full_name, role) values
   ('2a220000-0000-4000-8000-000000000005', '1a220000-0000-4000-8000-000000000005', 'P22 platform owner', 'owner');
 insert into public.platform_admins (user_id, note)
 values ('2a220000-0000-4000-8000-000000000005', 'P22 platform operator');
+
+-- 0287 routes this command through private.assert_platform_command, so platform membership is
+-- no longer enough on its own: the operator must hold the capability too. super_admin is what this
+-- fixture always meant -- an operator with unrestricted authority -- and 0151:165 backfilled every
+-- operator that existed to exactly that. p104 is where the NARROWED operator is proved refused.
+insert into public.platform_admin_roles (user_id, role_key)
+values ('2a220000-0000-4000-8000-000000000005', 'super_admin');
 
 insert into public.categories (org_id, name, sort)
 values ('1a220000-0000-4000-8000-000000000004', 'expired readable fixture', 1);

@@ -114,7 +114,7 @@
       ]
     }
   ],
-  "decisionsNote": "Owner rulings that had to move because a number was claimed twice. A stale citation here is NOT a dangling one -- the old number still names a REAL ruling, a different one -- so check-decision-numbers cannot see it and this map is what makes it checkable. Declared before the work, like the migration moves above.",
+  "decisionsNote": "Owner rulings that had to move because a number was claimed twice. A stale citation here is NOT a dangling one -- the old number still names a REAL ruling, a different one -- so check-decision-numbers cannot see it and this map is what makes it checkable. Declared before the work, like the migration moves above. RECONCILED 01.09.2026 against what actually landed on main. The three entries below that were still `done: false` named destinations that are now WRONG: #315 and #316 were never created, and #317 names an unrelated ruling. What the tree shows: #180 KEPT #309 (the supplier-reply ruling is row 309) because #176 moved instead, to #330 in 93078fa4; #180's mailbox-domain ruling landed as #329, not #316; and #197's dark-theme ruling landed as #331, not #317. Corrected here so a later wave does not \"complete\" a move that would collide.",
   "decisions": [
     {
       "pr": "#174",
@@ -130,26 +130,27 @@
     {
       "pr": "#180",
       "from": "309",
-      "to": "315",
-      "why": "#176 keeps #309 by landing order; the supplier-reply ruling moves",
+      "to": "309",
+      "why": "CANCELLED, not performed. The map assumed #176 would keep #309; it did not — 93078fa4 moved #176's ruling to #330 instead, so #180's supplier-reply ruling keeps #309. Row 309 in docs/OPEN-DECISIONS.md is that ruling, added by e044b6aa. Nothing to carry through.",
       "carriers": [],
-      "done": false
+      "done": false,
+      "outcome": "cancelled — the number was not contested in the end"
     },
     {
       "pr": "#180",
       "from": "310",
-      "to": "316",
-      "why": "#175 keeps #310 by landing order; the mailbox-domain ruling moves",
+      "to": "329",
+      "why": "#175 keeps #310 (the countdown ruling); #180's mailbox-domain ruling moved. It landed as #329, NOT the #316 this map originally declared — #316 was never created. Row 329 in docs/OPEN-DECISIONS.md, added by e044b6aa. No file cites #310 for this ruling.",
       "carriers": [],
-      "done": false
+      "done": true
     },
     {
       "pr": "#197",
       "from": "309",
-      "to": "317",
-      "why": "#176 keeps #309; the dark-theme ruling moves",
+      "to": "331",
+      "why": "#176 keeps #309 in this map's original reading; either way the dark-theme ruling moved, and it landed as #331, NOT the #317 this map declared — #317 names the Twilio/dead-letter retention ruling. Row 331, added by e3979b50. Every live citation already says #331: 0283_profile_theme.sql, src/index.css, src/components/BrandMark.tsx, DESIGN.md, docs/adr/0010-dark-theme.md, scripts/check-design-tokens.ts.",
       "carriers": [],
-      "done": false
+      "done": true
     }
   ]
 }

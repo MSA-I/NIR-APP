@@ -310,6 +310,13 @@ insert into public.profiles (id, org_id, full_name, role) values
 insert into public.platform_admins (user_id, note) values
   ('25000000-0000-4000-8000-000000000007', 'P4 smart document suspended fixture');
 
+-- 0287 routes this command through private.assert_platform_command, so platform membership is
+-- no longer enough on its own: the operator must hold the capability too. super_admin is what this
+-- fixture always meant -- an operator with unrestricted authority -- and 0151:165 backfilled every
+-- operator that existed to exactly that. p104 is where the NARROWED operator is proved refused.
+insert into public.platform_admin_roles (user_id, role_key) values
+  ('25000000-0000-4000-8000-000000000007', 'super_admin');
+
 insert into storage.objects (bucket_id, name, owner, metadata) values
   ('documents', '15000000-0000-4000-8000-000000000001/smart-doc/main.pdf', '25000000-0000-4000-8000-000000000001', jsonb_build_object('mimetype', 'application/pdf', 'size', 100, 'eTag', upper(repeat('a', 64)))),
   ('documents', '15000000-0000-4000-8000-000000000001/smart-doc/retry.pdf', '25000000-0000-4000-8000-000000000001', jsonb_build_object('mimetype', 'application/pdf', 'size', 100, 'eTag', repeat('b', 64))),
@@ -422,6 +429,9 @@ insert into public.profiles (id, org_id, full_name, role) values
    'Smart doc platform operator', 'owner');
 insert into public.platform_admins (user_id, note) values
   ('25000000-0000-4000-8000-000000000099', 'Smart doc platform operator');
+
+insert into public.platform_admin_roles (user_id, role_key) values
+  ('25000000-0000-4000-8000-000000000099', 'super_admin');
 -- One DO block, deliberately: this file runs in autocommit, so transaction-local claims set in
 -- one statement would evaporate before the next. Inside the block the claims and the command
 -- share a transaction, and nothing leaks past its commit.

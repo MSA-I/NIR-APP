@@ -15,6 +15,7 @@
 | ‏טוקן ה-worker (**אינו מפתח ספק**) | `AI\API\NIR-OCR-WORKER-TOKEN.txt` → `OCR_WORKER_TOKEN` |
 | ‏Paddle **Sandbox** — מפתח שרת | `AI\API\Sandbox API Key.txt` → הסוד `PADDLE_API_KEY` |
 | ‏Paddle **Sandbox** — טוקן לקוח | `AI\API\InPlace Sandbox Web.txt` → `VITE_PADDLE_CLIENT_TOKEN` |
+| ‏VPS — מפתח SSH (**מוצפן ב-passphrase**) | `NIR-APP-DOCS\SSH\id_ed25519` · ה-passphrase ב-`NIR-APP-DOCS\passphrase for key.txt` · host `95.217.134.162` · user `root`. איך מתחברים ומלכודת ה-`BatchMode`: `docs/VPS-DEPLOYMENT-GUIDE.md` §2 |
 
 ## שני מפתחות Paddle, ורק אחד מהם מותר בדפדפן (31.08.2026)
 
