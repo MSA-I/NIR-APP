@@ -6124,6 +6124,13 @@ export const en: Dictionary = {
   planCard: {
     emphasisPremium: 'The most complete',
     loading: 'Loading',
+    introTag: 'First 30 days only',
+    blockWork: 'Work and automation',
+    blockWorkNote: 'What the system does to your documents',
+    blockMoney: 'Money and connections',
+    blockMoneyNote: 'The full set is included',
+    blockMoneyNone: 'No access to money and connections',
+    blockMoneyFrom: 'Opens on {name}',
   },
 
   planBadge: {

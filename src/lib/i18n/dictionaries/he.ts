@@ -6134,6 +6134,14 @@ export const he = {
   planCard: {
     emphasisPremium: 'המקיף ביותר',
     loading: 'טוען',
+    // The two capability blocks the card grew on 02.09.2026, and the tag on a row that expires.
+    introTag: 'רק 30 יום ראשונים',
+    blockWork: 'עבודה ואוטומציה',
+    blockWorkNote: 'מה שהמערכת עושה על המסמכים',
+    blockMoney: 'כספים וחיבורים',
+    blockMoneyNote: 'הסט המלא כלול',
+    blockMoneyNone: 'אין גישה לכספים וחיבורים',
+    blockMoneyFrom: 'נפתח במסלול {name}',
   },
 
   planBadge: {
