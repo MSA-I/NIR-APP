@@ -160,7 +160,6 @@ if (inject === 'external') {
 const HISTORICAL_DANGLING_REFS = new Set([
   '.claude/skills/new-migration/SKILL.md|0090_alter_suppliers.sql',
   '.claude/skills/new-migration/SKILL.md|0090_supplier_bank_stepup.sql',
-  'docs/DEBT-REGISTER.md|0067_offline_receiving.sql',
   'docs/DEBT-REGISTER.md|0069_global_search_result_type_gate.sql',
   'docs/DEBT-REGISTER.md|0095_scope_enforcement_marker_hardening.sql',
   'docs/PLAN-english-language-20260827.md|0212_profile_locale.sql',

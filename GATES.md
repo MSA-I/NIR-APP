@@ -63,7 +63,7 @@ and delivered by Paddle over the internet to the deployed `billing-webhook` sour
 - [x] B5 — ‏`PADDLE_WEBHOOK_SECRET` · `PADDLE_API_KEY` · `PADDLE_ENVIRONMENT=sandbox` ·
       ‏`BILLING_PROVIDER=paddle` · **נמדד:** `billing-webhook` עבר מ-`503` ל-`403`
 - [x] B6 — הוכחת מסירה חיה: מייל אחד יצא ו-Resend החזיר `delivered`, עם ה-`Reply-To` נשמר
-- [ ] B7 — `BLOCKED:` ארבעת כללי הניתוב (`support@` וחבריו) — ה-harness חסם. ‏`§86`
+- [ ] B7 — `BLOCKED:` ארבעת כללי הניתוב (`support@` וחבריו) — ה-harness חסם. ‏`§95` (נרשם אז כ-`§86`)
 
 ## C — קוד (מייל בלבד)
 
@@ -88,6 +88,6 @@ and delivered by Paddle over the internet to the deployed `billing-webhook` sour
 
 - **Workspace** — קונסולת אדמין = סיסמה, ואסור לי; והדומיין הרשום הוא `app.inplace.digital`.
   ‏`§88` · `#329`
-- **‏`support@` אינה מקבלת דואר** — והמוצר כבר מפרסם אותה. ‏`§86`
+- **‏`support@` אינה מקבלת דואר** — והמוצר כבר מפרסם אותה. ‏`§95` (נרשם אז כ-`§86`)
 - **‏Paddle live** — ‏sandbox פעיל, אבל KYC, payout ישראלי וקטלוג ILS לא הוכחו. ‏`#213` נשאר.
 - **פריסת Edge** — לא נפרסה מהענף הזה: זרימת העבודה היא PR → main → פריסה
