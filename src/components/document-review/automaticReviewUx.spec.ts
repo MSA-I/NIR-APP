@@ -53,7 +53,11 @@ describe('automatic document review UX', () => {
     expect(documentsInbox).toContain('navigate(`/documents/${encodeURIComponent(doc.id)}/review${query}`)');
     expect(documentsInbox).toContain("{ key: 'view', label: t('documents.open')");
     expect(he.documents.open).toBe('צפייה במקור');
-    expect(documentsInbox).toContain("supabase.storage.from('documents').createSignedUrl(doc.storage_path, 300)");
+    // The signed link is now built by one helper (src/lib/documentSource.ts) so that a document
+    // the browser would execute — an HTML price list — is fetched as a download rather than
+    // rendered in the Storage origin. The claim this line carries is unchanged: viewing the
+    // source is an explicit, signed, short-lived action and never a side effect of the row.
+    expect(documentsInbox).toContain('signedDocumentSourceUrl(doc.storage_path, 300, doc.mime_type)');
     expect(documentsInbox).not.toContain('onRowClick={(doc) => void open(doc)}');
   });
 

@@ -32,7 +32,8 @@
  *   4. origin/* branches   — work someone else has pushed.
  *
  * A branch counts only while it looks ALIVE: ahead of origin/main and not stale. Stale means its
- * tip is older than 14 days or it is more than 20 commits behind origin/main. Stale branches are
+ * tip is older than 14 days, or it is more than 20 commits behind origin/main AND older than two days
+ * (a busy day moves main by dozens of commits and must not make every open PR look abandoned). Stale branches are
  * LISTED with the numbers they hold but not counted, because an abandoned draft or a superseded
  * twin is "ahead of main" forever and would inflate the answer (measured 02.09.2026: one abandoned
  * draft pushed the ruling counter from 332 to 344 and parked twelve numbers nobody would merge).
@@ -65,6 +66,7 @@ const repoRoot = path.resolve(option('repo') ?? path.resolve(here, '..'));
 const MAIN = 'refs/remotes/origin/main';
 const STALE_DAYS = 14;
 const STALE_BEHIND = 20;
+const STALE_BEHIND_MIN_DAYS = 2; // a branch far behind main counts as stale only if its tip is also this old
 
 /** Every git failure, named. Printed at the end so a silent '' can never pose as "no numbers". */
 const problems = [];
@@ -170,7 +172,9 @@ function branches() {
       name: b.refname.startsWith('refs/heads/') ? `${b.refname.slice('refs/heads/'.length)} (local)` : b.refname.slice('refs/remotes/'.length),
       ahead, behind, ageDays,
     };
-    (ageDays > STALE_DAYS || behind > STALE_BEHIND ? stale : live).push(entry);
+    // ponytail: behind-count alone misjudged a same-day branch on 02.09.2026 (main took 37 commits in one
+    // day and every open PR looked abandoned). A branch is stale by distance only once it is also old.
+    (ageDays > STALE_DAYS || (behind > STALE_BEHIND && ageDays > STALE_BEHIND_MIN_DAYS) ? stale : live).push(entry);
   }
   return { live, stale };
 }

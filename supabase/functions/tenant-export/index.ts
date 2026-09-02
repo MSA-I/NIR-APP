@@ -13,9 +13,13 @@ import {
   type ManifestPageSummary,
   safeArchivePath,
 } from "./core.ts";
+import { withAllowedOrigin } from "../_shared/cors.ts";
 
 const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
+  // Filled per request by withAllowedOrigin (../_shared/cors.ts): the caller's Origin when it
+  // is on ALLOWED_ORIGINS/APP_BASE_URL, and the first allowed origin otherwise. Never "*".
+  "Access-Control-Allow-Origin": "",
+  Vary: "Origin",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-correlation-id",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1553,7 +1557,7 @@ async function brokerDownload(
   });
 }
 
-Deno.serve(async (request: Request): Promise<Response> => {
+Deno.serve(withAllowedOrigin(async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
   }
@@ -1670,4 +1674,4 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }&access=${encodeURIComponent(accessId)}`,
     expires_at: expiresAt,
   });
-});
+}));
