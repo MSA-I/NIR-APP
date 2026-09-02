@@ -419,7 +419,7 @@ export interface BankAllocation {
   amount: number; currency: string; confidence: number | null; confirmed: boolean;
 }
 
-export type ExceptionType = 'payment_without_invoice' | 'invoice_without_payment' | 'amount_mismatch' | 'duplicate_payment' | 'duplicate_invoice' | 'unknown_supplier' | 'unmatched_bank' | 'credit_not_deducted' | 'receipt_mismatch';
+export type ExceptionType = 'payment_without_invoice' | 'invoice_without_payment' | 'amount_mismatch' | 'duplicate_payment' | 'duplicate_invoice' | 'unknown_supplier' | 'unmatched_bank' | 'credit_not_deducted' | 'receipt_mismatch' | 'item_not_ordered';
 export type ExceptionStatus = 'open' | 'in_progress' | 'resolved' | 'dismissed';
 export interface ExceptionRow {
   id: string; org_id: string; type: ExceptionType; severity: 'low' | 'medium' | 'high';

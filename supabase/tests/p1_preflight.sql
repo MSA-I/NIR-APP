@@ -414,23 +414,28 @@ autonomy_policy_config_without_definition as (
 -- typed a row into private.document_interpretation_automation_config by hand. No migration, seed
 -- or script in the repository writes it -- 0081 says so outright ("Config is intentionally empty
 -- after migration") -- because the row holds a vault secret id that differs per environment and
--- cannot be portable.
+-- cannot be portable. `0081` DOES schedule the cron unconditionally, so every environment built
+-- from these migrations has an active dispatcher and an empty configuration.
 --
--- The consequence is the dangerous kind of silence. Build a fresh environment from this repository
--- and you get the cron job, the tables, the screens and the queue, all present and all correct,
--- and not one document is ever interpreted. Nothing looks wrong. An agent reading the repository
--- on 25.08.2026 concluded the feature had never run for anybody; production said the opposite.
+-- That is why this arm cannot simply ask "cron active and config empty". That is true of a fresh
+-- CI database by construction, and an anomaly that is always non-zero is not an anomaly, it is
+-- noise that trains its reader to skip the report. Measured: the first version of this check
+-- fired on every branch.
 --
--- This arm is the noise that was missing. A scheduled, active interpretation cron with an empty
--- config is not a state anyone chose, and it is now a preflight anomaly like any other. Where
--- there is no cron there is nothing to configure, so a fresh CI database reports zero and is
--- right to.
+-- The anomaly is the HARM, not the shape: documents that have been waiting for interpretation
+-- while the dispatcher cannot dispatch them. A database seeded seconds ago has nothing waiting
+-- thirty minutes, so CI reports zero and is right to. An environment where somebody uploaded a
+-- document and nothing happened reports the count and the job ids, which is the state that misled
+-- an agent on 25.08.2026 into concluding from the repository that the feature had never run.
 document_interpretation_cron_without_config as (
-  select j.jobid as id
-  from cron.job j
-  where to_regclass('cron.job') is not null
-    and j.jobname in ('supplyflow-document-interpretation', 'supplyflow-document-preprocessing')
-    and j.active
+  select job.id
+  from public.document_processing_jobs job
+  where job.status in ('queued', 'extracted')
+    and job.created_at < now() - interval '30 minutes'
+    and exists (
+      select 1 from cron.job cron_job
+      where cron_job.jobname = 'supplyflow-document-interpretation'
+        and cron_job.active)
     and not exists (select 1 from private.document_interpretation_automation_config)
 ),
 checks(check_name, rows_found, sample_ids) as (

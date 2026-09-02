@@ -260,9 +260,12 @@ export const EXCEPTION_TYPE: Record<string, string> = {
   unmatched_bank: 'exceptionType_unmatched_bank',
   credit_not_deducted: 'exceptionType_credit_not_deducted',
   receipt_mismatch: 'exceptionType_receipt_mismatch',
-  // 0086 added the enum value §17 planned. The automatic path (0077) still files under
-  // receipt_mismatch with details.code='item_not_ordered' — that injection is §17's
-  // remaining step; the manual command (0087) uses the honest type from day one.
+  // 0086 added the enum value §17 planned, 0087 gave the manual command the honest type from day
+  // one, and 0288 finished the job: the automatic path in apply_document_interpretation raises
+  // `item_not_ordered` itself rather than filing under receipt_mismatch with the real name hidden
+  // in details.code. Both paths now land in one bucket, so a manager filtering for "פריט שלא
+  // הוזמן" sees what the machine found as well as what a person opened. details.code survives —
+  // it names the ITEM as well as the kind, and three p14 assertions read it.
   item_not_ordered: 'exceptionType_item_not_ordered',
 };
 

@@ -276,5 +276,6 @@
   "0284_document_measured_against_what_the_order_has_left.sql",
   "0285_the_caller_is_resolved_once_not_once_per_entitlement.sql",
   "0286_the_write_latch_covers_every_tenant_table.sql",
-  "0287_platform_writers_carry_their_capability.sql"
+  "0287_platform_writers_carry_their_capability.sql",
+  "0288_the_automatic_path_names_the_exception_it_raises.sql"
 ]
