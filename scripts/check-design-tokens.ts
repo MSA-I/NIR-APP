@@ -234,7 +234,9 @@ const DARK_EXEMPT = new Map<string, string>([
   ['doc-plate-line', 'rules on that sheet; same reason'],
   ['doc-plate-action', 'the action colour printed on that sheet; same reason'],
   ['doc-ink-soft', 'ink on the paper sheet; same reason'],
-  ['doc-ink-muted', 'ink on the paper sheet; same reason'],
+  // doc-ink-muted is NOT here any more: it has a real dark value. The claim that the sheet
+  // is paper in both themes was wrong -- `doc-paper` aliases `surface`, which flips.
+  // The other five stay: three sit on the dark plate, and doc-ink-body follows `ink-soft`.
   ['doc-ink-dim', 'ink on the paper sheet; same reason'],
   ['aurora-5', 'the auth aurora paints an on-dark panel in both themes; its ramp is the frozen light values of the chart ramp'],
   // The assistant card, the third family on this list and the same reason as the first: it is a
