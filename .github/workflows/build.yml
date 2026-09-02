@@ -223,6 +223,32 @@ jobs:
           needs.changes.outputs.baselinedrift == 'true' ||
           needs.changes.outputs.decisions == 'true'
         run: npm run check:gate-controls
+      # THIRTEEN of the 26 guards in `npm run verify` were never run by this workflow.
+      # It names sub-commands one by one rather than calling `npm run verify`, so a guard added
+      # to the npm script alone simply did not execute -- and a green `verify` check meant half
+      # the guards, not all of them. Measured 01.09.2026: 13 named here, 13 silent.
+      #
+      # One step rather than thirteen, deliberately. All thirteen together take 23 seconds, so
+      # per-guard path filters would buy nothing and would give the same gap thirteen new places
+      # to reappear. The `vitest` filter is reused for the same reason: it is the existing
+      # broad code filter, and adding a fourteenth output is another thing to forget.
+      - name: The guards verify runs that this workflow did not
+        if: needs.changes.outputs.vitest == 'true'
+        run: |
+          set -euo pipefail
+          npm run check:typography
+          npm run check:i18n
+          npm run check:plurals
+          npm run check:orphan-keys
+          npm run check:plan-labels
+          npm run check:jsx-space
+          npm run check:assistant-tool-schemas
+          npm run check:anchored-replacements
+          npm run check:currency
+          npm run check:tolerance-surfaces
+          npm run check:paddle-secrets
+          npm run check:appearance-scope
+          npm run check:contrast
       - name: Vitest
         if: needs.changes.outputs.vitest == 'true'
         run: npm run test
