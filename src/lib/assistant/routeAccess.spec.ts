@@ -113,6 +113,10 @@ describe('assistant route policy parity', () => {
       // Year 0000 round-trips through Date and is still refused by the calendar parser the
       // destination screen uses, so a citation to it passed here and threw there.
       ['0000-01-01', '0000-01-01'],
+      // And every year below 0100: Date.UTC maps a one- or two-digit year onto 19xx, so the
+      // canonical parser sees 1901 and throws on what round-tripped fine here.
+      ['0001-01-01', '0001-01-01'],
+      ['0099-12-31', '0099-12-31'],
     ];
     for (const [from, to] of refused) {
       const declared = { from, to };

@@ -129,11 +129,22 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 function isRealCalendarRange(from: string | undefined, to: string | undefined): boolean {
   if (from === undefined || to === undefined) return false;
   const real = (value: string): number | null => {
-    // Year 0000 ROUND-TRIPS through `Date` and is still not a date this product has: the canonical
-    // calendar parser the destination screen uses refuses `year < 1` and throws `Invalid calendar
-    // date`, so a citation to `0000-01-01` passed here and broke there. The round trip proves the
-    // day exists in the proleptic calendar; this proves it exists in the product's.
-    if (value < '0001-01-01' || value > '9999-12-31') return null;
+    // THE BOUND IS THE DESTINATION'S, NOT THE CALENDAR'S. A round trip through `Date` proves the
+    // day exists in the proleptic calendar; it says nothing about whether the screen this
+    // citation points at can read it, and a citation that lands on `Invalid calendar date` is a
+    // broken promise however real the day was.
+    //
+    // Two years were found this way, one per round. `0000-01-01` round-trips and the canonical
+    // parser refuses `year < 1`. Then `0001-01-01` round-trips too — and `Date.UTC(1, …)` maps a
+    // one-or-two-digit year onto 19xx, so the parser sees 1901 and throws. Every year below 0100
+    // has that shape.
+    //
+    // The narrow bound is taken deliberately over "fix the parser with setUTCFullYear": that
+    // parser is canonical and shared, changing it late in a review round is a wider blast radius
+    // than this defect earns, and the correct behaviour HERE is to promise only what the
+    // destination can keep. The parser's own two-digit-year mapping is a real defect and is
+    // recorded rather than silently inherited.
+    if (value < '0100-01-01' || value > '9999-12-31') return null;
     const at = Date.parse(`${value}T12:00:00Z`);
     if (Number.isNaN(at)) return null;
     return new Date(at).toISOString().slice(0, 10) === value ? at : null;

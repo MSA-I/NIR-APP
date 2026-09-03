@@ -363,21 +363,18 @@ export async function rollbackTenant(
   //    that was still there. Round 2, finding 4 of the adversarial review, and the claim it
   //    refuted was mine: "every failure happens at or before the user step".
   //
-  //    So the profile goes first — but ONLY the one this attempt wrote, named by id. A blanket
-  //    `delete().eq('org_id', orgId)` was the first version of this fix and it re-opened finding
-  //    12 through a side door: it would let one rollback call clear a LIVE tenant's members and
-  //    then delete the tenant, which is precisely what the fence exists to prevent. Scoped to the
-  //    attempt's own row, a rollback aimed at somebody's business still meets the fence and
-  //    still refuses. The ACCOUNT is untouched either way, which is the whole point of the
-  //    federated path.
-  if (created.profileUserId) {
-    const profileSweep = await admin.from('profiles').delete()
-      .eq('org_id', orgId).eq('id', created.profileUserId);
-    if (profileSweep.error) attempts.push(`profiles: ${profileSweep.error.message}`);
-  }
+  //    So the profile is NAMED to the teardown rather than deleted here, and this is the third
+  //    shape of that fix. Deleting it from this side was two transactions: the delete committed,
+  //    the RPC then found business activity and refused, and the tenant was left with its data
+  //    and NO OWNER — a rollback that reported a failure after destroying something. One call,
+  //    one transaction, one lock: either everything goes or nothing does. The ACCOUNT is
+  //    untouched either way, which is the whole point of the federated path.
 
   // 1. The registry-driven teardown. One call, one transaction, every tenant table.
-  const teardown = await admin.rpc(ROLLBACK_TEARDOWN_RPC, { p_org_id: orgId });
+  const teardown = await admin.rpc(ROLLBACK_TEARDOWN_RPC, {
+    p_org_id: orgId,
+    p_attempt_profile_id: created.profileUserId ?? null,
+  });
   if (teardown.error) attempts.push(`${ROLLBACK_TEARDOWN_RPC}: ${teardown.error.message}`);
 
   // 2. The reachable tables, when it did not run. This is deliberately kept even though it cannot

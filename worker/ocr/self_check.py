@@ -1488,6 +1488,16 @@ def _line_order_check() -> dict[str, Any]:
         "(סעיף ראשון\n) המשך (סעיף שני\n) המשך (סעיף שלישי\n) סוף"
     )
     marker_without_space = "(סעיף ראשון\n) המשך (סעיף שני\n) סוף\nא)קמח"
+    # A space-less marker before a CURRENCY SIGN or a Latin word. The first lookahead named the
+    # characters that could follow -- whitespace, digit, Hebrew -- and a price list that opens an
+    # item with `₪` or an English product name fell straight back through the hole.
+    marker_before_currency = ')ק"ג 5( קמח לבן\nא)₪12 קמח'
+    marker_before_latin = ')ק"ג 5( קמח לבן\nא)FLOUR'
+
+    # AND THE OTHER DIRECTION: a document that IS damaged and used to be missed. A net-count
+    # shortcut let a later opener on the same line cancel a mirrored closer the depth-aware scan
+    # had already found, so these two lines went unrepaired.
+    net_count_damage = "(תנאים\n) המשך )100 יח (\n)ק\"ג 5( קמח לבן"
 
     def fires(text: str) -> bool:
         _, leading, inverted, _, _, _ = _line_order_evidence(text)
@@ -1567,11 +1577,19 @@ def _line_order_check() -> dict[str, Any]:
         ("wrapped parenthetical", wrapped_parenthetical),
         ("chained continuations", chained_continuations),
         ("list marker with no space", marker_without_space),
+        ("marker before a currency sign", marker_before_currency),
+        ("marker before a latin word", marker_before_latin),
     ):
         pages = {1: text}
         out, records = _normalize_pdf_text_layer(dict(pages))
         assert out == pages, (label, out)
         assert all(entry["applied"] is False for entry in records), (label, records)
+
+    # 5. And the false NEGATIVE: damage the net-count shortcut used to cancel must be repaired.
+    net_pages = {1: net_count_damage}
+    net_out, net_records = _normalize_pdf_text_layer(dict(net_pages))
+    assert net_out != net_pages, "the net-count damage was left unrepaired"
+    assert any(entry["applied"] for entry in net_records), net_records
 
     return {
         "damaged_detected": f"{len(damaged)}/{len(damaged)}",
@@ -1579,7 +1597,8 @@ def _line_order_check() -> dict[str, Any]:
         "round_trip": f"{len(readable)}/{len(readable)}",
         "word_order": "repaired",
         "one_line_inverts_a_document": "no",
-        "logical_documents_survive": "3/3",
+        "logical_documents_survive": "5/5",
+        "net_count_damage_repaired": "yes",
     }
 
 

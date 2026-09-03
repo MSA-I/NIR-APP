@@ -117,7 +117,14 @@ BRACKET_PAIRS = (("(", ")"), ("[", "]"), ("{", "}"))
 # The trailing separator is a LOOKAHEAD, not a consumed space: OCR drops the space after the
 # marker often enough that `א)קמח` is ordinary, and requiring `\s+` let exactly that spelling
 # score as inversion evidence while `א) קמח` did not.
-LIST_MARKER = re.compile(r"^[0-9֐-׿]{1,2}\s*[).\]](?=\s|[0-9֐-׿])")
+#
+# AND THE LOOKAHEAD ADMITS ANY CONTENT, not a chosen alphabet. Naming the characters that may
+# follow — whitespace, a digit, a Hebrew letter — left `א)₪12 קמח` and `א)FLOUR` outside it, so a
+# price list that opens an item with a currency sign or a Latin product name still read as
+# reversed. What makes this a marker is its SHAPE at the start of the line, not what comes after
+# it. A line that opens with the closer itself never matches, because the pattern requires one or
+# two ordinary characters before it.
+LIST_MARKER = re.compile(r"^[0-9֐-׿]{1,2}\s*[).\]](?=.)")
 
 
 def _line_order_evidence(text: str) -> tuple[int, int, int, int, int, int]:
@@ -216,11 +223,12 @@ def _line_order_evidence(text: str) -> tuple[int, int, int, int, int, int]:
                     depth -= 1
             if position < 0:
                 continue
-            # An unmatched closer that an EARLIER line's opener accounts for is not mirrored -- it
-            # is a parenthetical that wrapped. Only the closers beyond that debt can be evidence.
-            if line.count(closer) - line.count(opener) <= pending[closer]:
-                if line.count(opener) < line.count(closer):
-                    continue
+            # NO NET-COUNT SHORTCUT HERE. It used to stand where this comment does, and once the
+            # scan above began at `pending[closer]` it became both redundant and wrong: the scan
+            # has already spent the carried debt, so a `position` it returns is a closer nothing
+            # could match. Counting again over the whole line let a LATER opener cancel that
+            # finding — `) המשך )100 יח (` balances on the net and is still mirrored — and two
+            # genuinely damaged lines went unrepaired because of it.
             balanced = line.count(opener) == line.count(closer)
             # Real content, not a trailing quote or full stop: `(abc).` with the opener dropped
             # reads as `abc).`, and the `.` must not be mistaken for the text a closer preceded.

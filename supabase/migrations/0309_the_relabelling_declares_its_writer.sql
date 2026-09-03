@@ -69,12 +69,27 @@ begin
 end
 $patch_relabel_0309$;
 
--- The citations that predate 0308 keep their screen and lose their filter, so the run survives.
+-- CORRECTED IN PLACE, 03.09.2026, and the reason is stated because the constitution forbids this
+-- by default. The first version stripped the query string from EVERY citation carrying one, and
+-- only `/expenses` has a shaped rule that needs a declaration. So it turned a perfectly good
+-- `/orders?status=sent` into `/orders` — which is not allowlisted at all, dropping the very run it
+-- claimed to save — and `/prices?increases=1` into `/prices`, which still resolves but shows a
+-- different and wider population than the claim it cites. Both were found by round 4 of the
+-- review; the claim that "the run survives" was false for exactly the rows it touched.
+--
+-- Forward-only exists to stop an INSTALLED database diverging from the migration set. This one has
+-- never been installed anywhere but a developer's local stack, and a follow-up migration cannot
+-- repair it: once a query string is stripped it is not recoverable from the row. Leaving the file
+-- as written would destroy those citations on every fresh install, including production's first.
+-- So the statement is narrowed here, and the local rows it already stripped are demo data whose
+-- query strings are gone.
 update public.assistant_source_references
 set route = split_part(route, '?', 1)
 where route_params is null
   and route is not null
-  and route like '%?%';
+  -- ONLY the shaped route. An exact or entity-param route does not read `route_params`, is not
+  -- refused for lacking one, and must keep the filter it was issued with.
+  and route like '/expenses?%';
 
 do $assert_0309$
 declare
@@ -88,9 +103,10 @@ begin
 
   select count(*) into v_stranded
   from public.assistant_source_references
-  where route_params is null and route is not null and route like '%?%';
+  where route_params is null and route is not null and route like '/expenses?%';
   if v_stranded <> 0 then
-    raise exception '0309: % citation(s) still carry a filter with no declaration', v_stranded;
+    raise exception '0309: % shaped citation(s) still carry a filter with no declaration',
+      v_stranded;
   end if;
 
   select string_agg(assertion || ' -- ' || detail, chr(10) order by assertion, detail)

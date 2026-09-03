@@ -262,3 +262,70 @@ The OCR self-check now reports `logical_documents_survive: 3/3` — the wrapped 
 
 `npm run verify`: 225 test files, 2416 tests, all 27 guards, green.
 
+## Round 4 — Codex
+
+Six findings, three HIGH, every one of them a consequence of a round-3 fix.
+
+לא מאושר. נמצאו שישה כשלים חדשים; ה־MVCC race המוכר נשאר פתוח ואינו נספר שוב.
+
+1. **HIGH — backfill של `0309` משכתב כל citation מסונן, לא רק `/expenses`.**  
+   קבצים: [0309:73](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/migrations/0309_the_relabelling_declares_its_writer.sql:73>), [routeAccess.ts:31](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/src/lib/assistant/routeAccess.ts:31>), [history.ts:252](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/functions/assistant/history.ts:252>).  
+   קלט שובר: מקור היסטורי תקין עם `route='/orders?status=sent'` ו־`route_params=NULL`. המיגרציה הופכת אותו ל־`/orders`, שאינו allowlisted, ולכן כל הריצה מושמטת. גם `/prices?increases=1` הופך ל־`/prices`, נשאר מותר אך מציג אוכלוסייה רחבה ושונה מהטענה. הטענה שההיסטוריה הישנה “keeps its runs” שגויה.  
+   תיקון: להגביל את העדכון רק ל־`/expenses?from=…&to=…`; exact/entity-param routes אינם משתמשים ב־`route_params` ואסור לגעת בהם.
+
+2. **MEDIUM — `0310` מאפס בשקט רצף כישלונות קיים.**  
+   קובץ: [0310:29](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/migrations/0310_a_window_that_actually_rolls.sql:29>).  
+   קלט שובר: לפני המיגרציה קיימת שורה מ־`0306` עם `failed_count=9`, ‏`last_failed_at=now()-1 minute`, ‏`locked_until=NULL`. הוספת העמודה נותנת לה `failed_at={}`; הכישלון הבא נבנה בשורות 92–99 כמערך באורך 1 ומותר במקום לנעול. גם הטענה ש־`failed_count` הוא projection של המערך שגויה מיד לאחר ההחלה.  
+   תיקון: לבצע backfill שמרני של `failed_at` מתוך `failed_count/last_failed_at`, או להשבית את ה־hook ולתעד איפוס מכוון בזמן ההגירה.
+
+3. **HIGH — ה־profile sweep מתבצע לפני גדרות ה־DB ובטרנזקציה נפרדת.**  
+   קבצים: [provision.ts:373](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/functions/_shared/provision.ts:373>), [provision.ts:568](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/functions/_shared/provision.ts:568>), [0297:95](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/migrations/0297_a_failed_signup_leaves_nothing_behind.sql:95>).  
+   רצף שובר: federated profile נוצר ומתחייב; המשתמש המאומת מבצע במקביל פעילות עסקית; הכנסת categories נכשלת; rollback מוחק ומתחייב את ה־profile; רק אחר כך ה־RPC מזהה פעילות ומסרב למחוק את הארגון. נשארים tenant ונתונים עסקיים ללא owner profile. בנוסף, `org_id + profile id` אינם הוכחה שהשורה שייכת לניסיון הנוכחי.  
+   תיקון: להעביר את בדיקת הפעילות, מחיקת ה־profile וה־teardown ל־RPC אטומי אחד תחת אותה נעילת ארגון.
+
+4. **MEDIUM — בדיקת count עדיין מבטלת unmatched closer שהסריקה המסודרת כבר מצאה.**  
+   קובץ: [parsers.py:207](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/worker/ocr/src/parsers.py:207>).  
+   קלט שובר:
+   ```text
+   (תנאים
+   ) המשך )100 יח (
+   )ק"ג 5( קמח לבן
+   ```
+   ה־depth התלוי צורך את הסוגר הראשון ואז מוצא את הסוגר העודף בשורה השנייה, אך שורות 221–223 מתעלמות ממנו משום שה־opener המאוחר מאזן את ה־net count. הפרוב החזיר `(3,1,1,2,1,1)`, ‏`applied=false`; שתי שורות הנזק אינן מתוקנות.  
+   תיקון: לאחר שהסריקה שמתחילה ב־`pending` מצאה `position`, להסיר את קיצור ה־net-count הישן; המיקום כבר מוכיח שהעומק נוצל.
+
+5. **HIGH — list-marker ללא רווח עדיין נכשל לפני מטבע או טקסט לטיני.**  
+   קובץ: [parsers.py:120](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/worker/ocr/src/parsers.py:120>).  
+   קלט שובר:
+   ```text
+   )ק"ג 5( קמח לבן
+   א)₪12 קמח
+   ```
+   ה־lookahead מאפשר רק whitespace, ספרה או תו מהבלוק העברי; `₪` ו־`F` אינם עוברים. לכן `א)` אינו מוסר ומספק corroborating evidence לשורת strong יחידה. הפרוב החזיר `(2,1,2,1,1,2)`, ‏`applied=true`, והשורה הלוגית נכתבה מחדש. אותו כשל קיים ב־`א)FLOUR`.  
+   תיקון: לזהות marker לפי המבנה בתחילת השורה ולא לפי קבוצת התו הבא, או לכלול כל התחלת תוכן חוקית לרבות מטבע ו־Latin.
+
+6. **MEDIUM — טווח השנים עדיין אינו תואם ל־parser של מסך היעד.**  
+   קבצים: [routeAccess.ts:136](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/src/lib/assistant/routeAccess.ts:136>), [format.ts:357](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/src/lib/format.ts:357>).  
+   קלט שובר: route ו־`route_params` עם `from=0001-01-01&to=0001-01-01`. ‏`Date.parse` round-trips את 0001 ולכן route מאושר, אבל `Date.UTC(1,…)` ממפה את השנה ל־1901; `parseCalendarDate` זורק `Invalid calendar date`. אותו כשל חל על השנים 0001–0099.  
+   תיקון: לתקן את ה־parser הקנוני באמצעות `setUTCFullYear`, או להגביל זמנית את route לשנים 0100–9999.
+
+לא שונו קבצים; HEAD הוא `dcd39110`, וה־WIP היחיד נשאר `.claude/settings.local.json`.
+
+VERDICT: REVISE
+### Claude's response — round 4
+
+All six fixed. The MVCC race stays open with the argument recorded in `0309`.
+
+| # | verdict | what changed |
+|---|---|---|
+| 1 | **confirmed, my claim was false** | the backfill stripped EVERY filtered citation, not the shaped one — turning `/orders?status=sent` into a route that is not allowlisted at all, dropping the run it claimed to save. Narrowed to `/expenses?%`. `0309` is corrected IN PLACE, with the reason in the file: it has never been installed anywhere but a developer stack, and once a query string is stripped no follow-up can recover it |
+| 2 | **confirmed** | `0310`'s new column reset a live run to zero. `0311` reconstructs it conservatively from `failed_count` and `last_failed_at` — every surviving failure dated at the most recent moment it could have been, so a run is preserved and never lengthened |
+| 3 | **confirmed** | the profile deletion was a separate committed transaction BEFORE the fences: delete, then refuse on activity, leaving a tenant with its data and no owner. It moves into the RPC, after the fences, under the same lock. Third shape of that fix and the first that is atomic |
+| 4 | **confirmed, a false NEGATIVE** | the net-count shortcut let a later opener cancel a mirrored closer the depth-aware scan had already found, so two genuinely damaged lines went unrepaired. Removed — the scan has already spent the carried debt |
+| 5 | **confirmed** | the marker lookahead named the characters that could follow, so `א)₪12` and `א)FLOUR` fell through. What makes it a marker is its shape at the start of the line, not what comes after |
+| 6 | **confirmed** | `Date.UTC(1, …)` maps a one- or two-digit year onto 19xx, so every year below 0100 round-tripped here and threw there. Bounded to 0100–9999, and the canonical parser's own two-digit mapping is recorded rather than silently inherited |
+
+The OCR self-check now reports `logical_documents_survive: 5/5` and `net_count_damage_repaired: yes` — five logical shapes that must survive and one damaged shape that must not.
+
+`npm run verify`: 225 test files, 2416 tests, all 27 guards, green.
+
