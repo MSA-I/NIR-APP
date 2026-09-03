@@ -1,0 +1,44 @@
+{
+  "_note": "Wave 5 i18n keys. NOT written into src/lib/i18n/dictionaries/{he,en}.ts by this agent — parallel agents edit those files and would clobber each other. Merge these into both dictionaries under their existing namespace objects. Until merged, `t()` reports a type error on each key named here; that is expected.",
+  "_tone": "Hebrew copy is plain and calm, addressed to a business owner who is not technical. Two of these name a MONEY COLUMN, and they are renames rather than annotations: a figure says what it is in its own label, so nothing here is an omission notice (decision D rejected those).",
+  "_removals": "Two keys lose their last call site in this wave and must be DELETED from he.ts and en.ts in the same merge, or `check:orphan-keys` rises above its pin of 106: `reports.kpiPaidThisMonth` (replaced by reports.kpiPaidAgainstInvoices) and `reports.text_43` (replaced by reports.amountAgainstInvoices). Nothing else is removed; `reports.xlPayments`, `reports.xlAmount` and `reports.unattributedBlocksClose` all keep call sites.",
+
+  "productPurchase.committedCost": {
+    "he": "עלות לפי ההזמנה",
+    "en": "Cost as ordered"
+  },
+  "productPurchase.committedCostRule": {
+    "he": "„עלות לפי ההזמנה” היא המחיר שנשמר בהזמנה כפול הכמות שהוזמנה, במטבע ההזמנה. „הוצאה” היא מה שנרשם בחשבוניות שאושרו. אלה שני מספרים שונים ואין לחבר ביניהם.",
+    "en": "\"Cost as ordered\" is the price saved on the order multiplied by the quantity ordered, in the order's currency. \"Expense\" is what approved invoices recorded. They are two different figures and are never added together."
+  },
+
+  "reports.kpiPaidAgainstInvoices": {
+    "he": "שולם החודש כנגד חשבוניות",
+    "en": "Paid this month against invoices"
+  },
+  "reports.amountAgainstInvoices": {
+    "he": "סכום כנגד חשבוניות",
+    "en": "Amount against invoices"
+  },
+  "reports.xlPaymentsAgainstInvoices": {
+    "he": "תשלומים כנגד חשבוניות",
+    "en": "Payments against invoices"
+  },
+  "reports.xlAmountAgainstInvoices": {
+    "he": "סכום כנגד חשבוניות",
+    "en": "Amount against invoices"
+  },
+
+  "reports.bankBlockerNotOnThisScreen": {
+    "he": "אין החודש תנועת בנק שמסומנת „ללא התאמה” או „הצעת התאמה”, ולכן אי אפשר להצביע מכאן על התנועה שחוסמת. ייתכן שזו תנועה שסומנה כלא רלוונטית, תנועה שההתאמה שלה לא אושרה או מובילה ליותר מישות משפטית אחת, או תנועה מחודש אחר שפתוחה עליה חריגה.",
+    "en": "No bank transaction this month is marked unmatched or awaiting approval, so the blocking transaction cannot be pointed at from here. It may be one marked not relevant, one whose match was never approved or leads to more than one legal entity, or one from another month with an open exception on it."
+  },
+  "reports.openMonthBank": {
+    "he": "פתיחת תנועות הבנק של החודש",
+    "en": "Open this month's bank transactions"
+  },
+  "reports.openExceptionsLink": {
+    "he": "מעבר לחריגות הפתוחות",
+    "en": "Go to the open exceptions"
+  }
+}

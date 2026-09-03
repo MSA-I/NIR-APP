@@ -115,13 +115,35 @@ export const getPaymentExposure: AssistantTool = {
     );
     count(readerText(ctx.locale, "assistantTools.exposurePendingApproval"), values.pendingApproval);
 
-    const source = ctx.evidence.source({
-      entity: "organization",
-      entity_id: ctx.actor.orgId,
-      label: readerText(ctx.locale, "assistantTools.exposureScreen"),
-      route: "/payment-requests",
-      classification: "financial_sensitive",
-    });
+    /**
+     * One source per WINDOW, not one per screen.
+     *
+     * The single `/payment-requests` reference this replaces opened the screen's default list —
+     * every request that is not finished — under an answer about what is already late or falls
+     * inside seven days. A reader following it counted a different population from the one they
+     * had just been told about, which is the failure a source exists to prevent.
+     *
+     * Each route below is the screen state that reproduces its own figure exactly: after the
+     * list's `due=overdue` and `due=today` branches were corrected (they kept drafts, which
+     * `management_dashboard_snapshot` excludes from every due-date metric), all three due filters
+     * measure the same statuses the server does. The plain screen link stays for the two figures
+     * it really does isolate — the active count and the coverage beside it, whose definition IS
+     * the list's own `status=active`.
+     */
+    const screenSource = (labelKey: TKey, route: string) =>
+      ctx.evidence.source({
+        entity: "organization",
+        entity_id: ctx.actor.orgId,
+        label: readerText(ctx.locale, labelKey),
+        route,
+        classification: "financial_sensitive",
+      });
+    const sources = [
+      screenSource("assistantTools.exposureScreen", "/payment-requests"),
+      screenSource("assistantTools.exposureScreenOverdue", "/payment-requests?due=overdue"),
+      screenSource("assistantTools.exposureScreenDueToday", "/payment-requests?due=today"),
+      screenSource("assistantTools.exposureScreenDueSoon", "/payment-requests?status=active&due=soon"),
+    ];
 
     const undatedKnown = values.activeCount !== null &&
       values.dueDateCoverage !== null;
@@ -140,7 +162,7 @@ export const getPaymentExposure: AssistantTool = {
       result_count: 1,
       has_more: false,
       facts,
-      sources: [source],
+      sources,
       warnings,
     };
   },

@@ -251,10 +251,18 @@ Deno.test("get_business_summary: nothing owed is a SENTENCE -- complete, no fail
   );
   assert.equal(typeof stated.value, "string");
   assert.ok(!envelope.facts.some((fact) => MONEY_UNIT.test(fact.unit)));
-  // The route is still offered, so "nothing is owed" remains checkable rather than asserted.
+  /* The route is still offered, so "nothing is owed" remains checkable rather than asserted —
+     and since Wave 7 it names the STATUSES the metric was summed over. Bare `/payment-requests`
+     opens on the screen's own `active` set, which also holds `investigation` and
+     `suspected_duplicate`; those are excluded from this total, so a reader following the old
+     link could have found money on a screen the answer had just called empty. */
   assert.ok(
-    envelope.sources.some((source) => source.route === "/payment-requests"),
+    envelope.sources.some((source) =>
+      source.route ===
+        "/payment-requests?status=draft,pending_approval,approved,sent_for_execution"
+    ),
   );
+  assert.ok(!envelope.sources.some((source) => source.route === "/payment-requests"));
 });
 
 Deno.test("get_business_summary: 'could not measure' stays a named failure, and reads differently", async () => {

@@ -287,5 +287,8 @@
   "0295_a_bound_the_screen_cannot_be_asked_to_keep.sql",
   "0296_a_sign_in_attempt_that_can_be_counted.sql",
   "0297_a_failed_signup_leaves_nothing_behind.sql",
-  "0298_one_parser_for_a_price.sql"
+  "0298_one_parser_for_a_price.sql",
+  "0299_the_derived_answer_gets_a_name.sql",
+  "0300_every_reader_moves_to_the_derived_answer.sql",
+  "0301_a_report_that_names_its_cost.sql"
 ]

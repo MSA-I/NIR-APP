@@ -27,12 +27,20 @@ const allFive = () => [
  * wording half is below, against the dictionaries — split because a single assertion comparing
  * `t(key)` to `t(key)` would pass whether or not either language says anything at all.
  */
+/*
+ * `to` and `evidenceRoute` are two different promises, and wave 7 split them for that reason.
+ * `to` is where /alerts sends someone to WORK on a subject — a whole screen is right for that.
+ * `evidenceRoute` is the state that reproduces THIS metric's population, which is what the
+ * assistant issues as a source; four of the five needed a filter the screen's default does not
+ * apply, and `received_week` has none at all (no screen state narrows the invoice list to a
+ * trailing seven days on `received_date`).
+ */
 const EXPECTED_LINES = [
-  { key: 'received_week', labelKey: 'businessSummary.receivedWeek', labelVars: { days: 7 }, unit: 'count', to: '/invoices', currency: null, state: 'measured' },
-  { key: 'awaiting_approval', labelKey: 'businessSummary.awaitingApproval', unit: 'count', to: '/invoices', currency: null, state: 'measured' },
-  { key: 'expected_payments', labelKey: 'businessSummary.expectedPayments', unit: 'currency', to: '/payment-requests', currency: 'ILS', state: 'measured' },
-  { key: 'suppliers_raised', labelKey: 'businessSummary.suppliersRaised', labelVars: { days: 30 }, unit: 'count', to: '/prices', currency: null, state: 'measured' },
-  { key: 'open_exceptions', labelKey: 'businessSummary.openExceptions', unit: 'count', to: '/exceptions', currency: null, state: 'measured' },
+  { key: 'received_week', labelKey: 'businessSummary.receivedWeek', labelVars: { days: 7 }, unit: 'count', to: '/invoices', evidenceRoute: null, currency: null, state: 'measured' },
+  { key: 'awaiting_approval', labelKey: 'businessSummary.awaitingApproval', unit: 'count', to: '/invoices', evidenceRoute: '/invoices?review=pending_approval', currency: null, state: 'measured' },
+  { key: 'expected_payments', labelKey: 'businessSummary.expectedPayments', unit: 'currency', to: '/payment-requests', evidenceRoute: '/payment-requests?status=draft,pending_approval,approved,sent_for_execution', currency: 'ILS', state: 'measured' },
+  { key: 'suppliers_raised', labelKey: 'businessSummary.suppliersRaised', labelVars: { days: 30 }, unit: 'count', to: '/prices', evidenceRoute: '/prices?increases=1&days=30', currency: null, state: 'measured' },
+  { key: 'open_exceptions', labelKey: 'businessSummary.openExceptions', unit: 'count', to: '/exceptions', evidenceRoute: '/exceptions?status=open', currency: null, state: 'measured' },
 ] as const;
 
 /** Decision F's sentence key. The wording itself merges with the dictionaries in the same wave. */

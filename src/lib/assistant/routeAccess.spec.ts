@@ -8,7 +8,9 @@ import {
 import type { SourceReference } from './contracts';
 import {
   ASSISTANT_DYNAMIC_ROUTE_RULES,
+  ASSISTANT_ENTITY_PARAM_ROUTE_RULES,
   ASSISTANT_EXACT_ROUTE_RULES,
+  ASSISTANT_SHAPED_PARAM_ROUTE_RULES,
   assistantSourceRouteDecision,
 } from './routeAccess';
 
@@ -62,5 +64,95 @@ describe('assistant route policy parity', () => {
           .toBe(expectedDecision(rule.appRoute, role));
       }
     }
+  });
+
+  it('route עם פרמטר-ישות מתקבל רק כשהערך הוא ה-entity_id עצמו', () => {
+    for (const rule of ASSISTANT_ENTITY_PARAM_ROUTE_RULES) {
+      const path = APP_ROUTE_POLICY[rule.appRoute].path;
+      expect(path).not.toContain(':');
+      const good = source(`${path}?${rule.param}=entity-1`, rule.entity, 'entity-1');
+      for (const role of ACTIVE_ROLES) {
+        expect(assistantSourceRouteDecision(good, role))
+          .toBe(expectedDecision(rule.appRoute, role));
+      }
+      // The value is compared with the id the tool returned, so a route pointing at a DIFFERENT
+      // row is refused — the model cannot compose a reference of its own out of this rule.
+      expect(assistantSourceRouteDecision(source(`${path}?${rule.param}=entity-2`, rule.entity, 'entity-1')))
+        .toBe('not_allowlisted');
+      // One parameter, and only the named one.
+      expect(assistantSourceRouteDecision(source(`${path}?${rule.param}=entity-1&next=x`, rule.entity, 'entity-1')))
+        .toBe('not_allowlisted');
+      expect(assistantSourceRouteDecision(source(`${path}?other=entity-1`, rule.entity, 'entity-1')))
+        .toBe('not_allowlisted');
+      // The entity has to match too: /payments?id=<x> is not a reference to a product.
+      const wrongEntity = rule.entity === 'product' ? 'invoice' : 'product';
+      expect(assistantSourceRouteDecision(source(`${path}?${rule.param}=entity-1`, wrongEntity, 'entity-1')))
+        .toBe('not_allowlisted');
+    }
+  });
+
+  it('route עם פרמטרים מעוצבים מתקבל רק בצורה המדויקת שהוגדרה לו', () => {
+    for (const rule of ASSISTANT_SHAPED_PARAM_ROUTE_RULES) {
+      const path = APP_ROUTE_POLICY[rule.appRoute].path;
+      const names = Object.keys(rule.params);
+      const query = names.map((name) => `${name}=2026-09-03`).join('&');
+      const good = source(`${path}?${query}`, rule.entities[0]);
+      for (const role of ACTIVE_ROLES) {
+        expect(assistantSourceRouteDecision(good, role))
+          .toBe(expectedDecision(rule.appRoute, role));
+      }
+      // A value that is not the declared shape is refused rather than passed through.
+      const bad = names.map((name, index) => `${name}=${index === 0 ? 'yesterday' : '2026-09-03'}`).join('&');
+      expect(assistantSourceRouteDecision(source(`${path}?${bad}`, rule.entities[0])))
+        .toBe('not_allowlisted');
+      // Every declared parameter is required, and nothing else is accepted alongside them.
+      expect(assistantSourceRouteDecision(source(`${path}?${names[0]}=2026-09-03`, rule.entities[0])))
+        .toBe(names.length === 1 ? 'allowed' : 'not_allowlisted');
+      expect(assistantSourceRouteDecision(source(`${path}?${query}&extra=1`, rule.entities[0])))
+        .toBe('not_allowlisted');
+    }
+  });
+});
+
+/**
+ * Wave 7's own list, spelled out rather than derived.
+ *
+ * The rules above prove that whatever is allowlisted behaves consistently. They cannot prove that
+ * the RIGHT things are allowlisted — a future edit could delete `?days=30` and every test would
+ * still pass, because the remaining rules would stay internally consistent. These are the exact
+ * claim/screen-state pairs the citation-landing work established, each one measured against the
+ * definition that produces the figure, so removing one is a failing test and not a quiet
+ * regression.
+ */
+describe('citation landing (wave 7)', () => {
+  const cases: { route: string; entity: SourceReference['entity']; why: string }[] = [
+    { route: '/prices?increases=1&days=30', entity: 'organization', why: 'p2_suppliers_with_price_increase_since bounds price_effective_date to thirty days; ?increases=1 alone has no window at all' },
+    { route: '/payment-requests?due=overdue', entity: 'organization', why: 'the overdue exposure, matching management_dashboard_snapshot.overdue' },
+    { route: '/payment-requests?due=today', entity: 'organization', why: 'the due-today exposure' },
+    { route: '/payment-requests?status=active&due=soon', entity: 'organization', why: 'the seven-day exposure' },
+    { route: '/bank?status=attention', entity: 'bank_transaction', why: "the screen's own name for in ('unmatched','suggested') — exactly what get_unmatched_bank_transactions returns" },
+    { route: '/credits?status=active', entity: 'organization', why: 'open/requested/received — the statuses the credit count and sum are taken over' },
+    { route: '/invoices?review=pending_approval', entity: 'organization', why: "the business summary's awaiting_approval metric" },
+    { route: '/exceptions?status=open', entity: 'organization', why: "open+in_progress on both sides" },
+  ];
+
+  it.each(cases)('$route נשאר משטח מותר — $why', ({ route, entity }) => {
+    expect(assistantSourceRouteDecision(source(route, entity), 'owner')).toBe('allowed');
+  });
+
+  it('הפניה לשורה בודדת אפשרית בכל אחד מארבעת המסכים שאין בהם דף לרשומה', () => {
+    for (const [route, entity] of [
+      ['/products?id=p1', 'product'],
+      ['/payments?id=p1', 'payment'],
+      ['/credits?id=p1', 'credit_note'],
+      ['/prices?product=p1', 'product'],
+    ] as const) {
+      expect(assistantSourceRouteDecision(source(route, entity, 'p1'), 'owner')).toBe('allowed');
+    }
+  });
+
+  it('חלון המדידה של get_purchase_metrics עובר אל /expenses', () => {
+    expect(assistantSourceRouteDecision(source('/expenses?from=2026-08-04&to=2026-09-03', 'organization'), 'owner'))
+      .toBe('allowed');
   });
 });

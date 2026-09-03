@@ -138,6 +138,98 @@ export function monthlyReportScreenTotals(data: {
   };
 }
 
+/* ---------------------------------------------------------------------------
+ * Decision E [owner 03.09.2026] — the payment sheet reports the approved-invoice portion
+ * -------------------------------------------------------------------------*/
+
+/**
+ * One row of `public.payment_reportable_amounts`: per payment, the sum of its allocations to
+ * invoices THE CALLER MAY SEE, in that payment's currency.
+ *
+ * The view is `security_invoker`, so "may see" is answered by `invoices_select` and the scope
+ * rider rather than by a second copy of them here. An accountant's row therefore covers approved
+ * invoices only; an owner's covers all of them.
+ */
+export interface ReportablePaymentAmount {
+  payment_id: string;
+  currency: string;
+  reportable_amount: number;
+}
+
+/**
+ * THE MONTH'S PAYMENT ROWS AS THE REPORT MAY STATE THEM.
+ *
+ * Row-level security can hide a payment or reveal it; it cannot report a different amount. So the
+ * report stopped reading `payments.amount` and reads this instead, and three consequences follow —
+ * all of them intended, all of them recorded here so the first person to notice does not file a
+ * bug against them:
+ *
+ *   1. An accountant's "paid this month" legitimately differs from an owner's whenever a payment
+ *      touches an invoice the accountant may not see.
+ *   2. Neither total reconciles against the bank statement. It is the portion of money that moved
+ *      which stands against invoices — not the money that moved.
+ *   3. A payment with no visible invoice allocation has no portion at all, so it is DROPPED. It is
+ *      not reported at zero: zero would be this report asserting that nothing was paid, which is
+ *      the fabricated figure the constitution forbids.
+ *
+ * A payment carrying two currency rows would emit two entries rather than one summed one. Today
+ * the allocation foreign keys make that impossible — every allocation of a payment is in the
+ * payment's own currency — and if that ever changes this returns two true rows instead of one
+ * false one.
+ */
+export function reportedPaymentRows<T extends { id: string; amount: number; currency: string }>(
+  payments: readonly T[],
+  reportable: readonly ReportablePaymentAmount[],
+): T[] {
+  const byPayment = new Map<string, ReportablePaymentAmount[]>();
+  for (const row of reportable) {
+    const existing = byPayment.get(row.payment_id);
+    if (existing) existing.push(row);
+    else byPayment.set(row.payment_id, [row]);
+  }
+  return payments.flatMap((payment) => (byPayment.get(payment.id) ?? [])
+    .map((row) => ({ ...payment, amount: row.reportable_amount, currency: row.currency })));
+}
+
+/* ---------------------------------------------------------------------------
+ * The month close was refused, and the screen used to blame a zero
+ * -------------------------------------------------------------------------*/
+
+/**
+ * WHAT THE SCREEN MAY SAY WHEN THE FINAL LOCKED REPORT IS REFUSED OVER THE BANK.
+ *
+ * `create_monthly_report_snapshot` refuses when any relevant bank transaction lacks CONFIRMED
+ * allocations that resolve to exactly one legal entity. This screen counts something else
+ * entirely — rows in the month whose `status` is `unmatched` — and then printed that count inside
+ * the refusal: "Open the 0 unmatched bank transactions this month", with a link to an empty list.
+ * Zero is not what the server measured; the screen simply had nothing to say and said it with a
+ * number.
+ *
+ * The two states are Wave 1b's, not a second vocabulary invented here:
+ *   - `measured`: the screen counted transactions that certainly block. An `unmatched` row has no
+ *     allocation at all and a `suggested` one has no CONFIRMED allocation, so each of them fails
+ *     the server's rule. The count is real and the link lands on real work.
+ *   - `unmeasured`: it counted none, and the server refused anyway. The blocker is a row this
+ *     screen cannot see from here — one marked not-relevant with no confirmed allocation, one
+ *     whose match does not resolve to exactly one legal entity, or one from another month carried
+ *     in by an open exception. The screen says that, and states no figure.
+ *
+ * There is deliberately no third `absent` state. The server has just said something blocks, so
+ * "nothing blocks" is not one of the answers available.
+ */
+export type SnapshotBankBlockGuidance =
+  | { state: 'measured'; unmatched: number; suggested: number }
+  | { state: 'unmeasured' };
+
+export function snapshotBankBlockGuidance(
+  totals: { unmatchedBank: number; suggestedBank: number },
+): SnapshotBankBlockGuidance {
+  if (totals.unmatchedBank > 0 || totals.suggestedBank > 0) {
+    return { state: 'measured', unmatched: totals.unmatchedBank, suggested: totals.suggestedBank };
+  }
+  return { state: 'unmeasured' };
+}
+
 /** A key/value line inside a summary sheet: label in the first column, value in the second. */
 const pair = (label: string, value: unknown, type?: WorkbookCellType): WorkbookMatrixRow =>
   ({ cells: [label, value], types: [undefined, type] });
@@ -193,8 +285,18 @@ export function buildMonthlyWorkbook(input: {
   generatedAt: Date;
   data: MonthlyReportData;
   labels: MonthlyReportLabels;
+  /**
+   * Decision E: the LIVE report's payment rows are the portion allocated to invoices the reader
+   * may see, so the two labels that name that money say so. Absent — which is how the locked
+   * snapshot builder calls this — the rows are payments as recorded and the labels stay as they
+   * were. The SHEET NAME never changes either way: Excel refuses a name over 31 characters and
+   * refuses the whole file rather than the sheet, and the locked artifact's sheet names are part
+   * of what its checksum stands over.
+   */
+  paymentsAreAllocatedPortion?: boolean;
 }): WorkbookSpec {
   const { data, t } = input;
+  const paymentsAllocated = input.paymentsAreAllocatedPortion === true;
   const baseCurrency = input.baseCurrency ?? 'ILS';
   const currencies = orderedCurrencies([
     ...(input.currencyCodes ?? []),
@@ -244,7 +346,8 @@ export function buildMonthlyWorkbook(input: {
       line(t('reports.xlInvoices'), invoices.length, sum(invoices, (row) => row.total_amount)),
       line(t('reports.xlBeforeVat'), invoices.length, sum(invoices, (row) => row.amount_before_vat)),
       line(t('reports.xlVat'), invoices.length, sum(invoices, (row) => row.vat_amount)),
-      line(t('reports.xlPayments'), payments.length, sum(payments, (row) => row.amount)),
+      line(paymentsAllocated ? t('reports.xlPaymentsAgainstInvoices') : t('reports.xlPayments'),
+        payments.length, sum(payments, (row) => row.amount)),
       line(t('reports.xlCredits'), credits.length, sum(credits, (row) => row.amount)),
     );
   }
@@ -301,7 +404,8 @@ export function buildMonthlyWorkbook(input: {
         columns: [
           { header: t('reports.xlSupplier'), key: 'supplier', width: 24 },
           { header: t('reports.xlDate'), key: 'date', width: 12, type: 'date' },
-          { header: t('reports.xlAmount'), key: 'amount', width: 14, type: 'money' },
+          { header: paymentsAllocated ? t('reports.xlAmountAgainstInvoices') : t('reports.xlAmount'),
+            key: 'amount', width: 14, type: 'money' },
           { header: t('reports.xlCurrency'), key: 'currency', width: 10 },
           { header: t('reports.xlMethod'), key: 'method', width: 14 },
           { header: t('reports.xlReference'), key: 'reference', width: 18 },
@@ -406,7 +510,12 @@ export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthly
       { cells: [] },
       { cells: [t('reports.xlMeasure'), t('reports.xlRecordCount')], header: true },
       { cells: [t('reports.xlInvoices'), data.invoices.length], types: [undefined, 'number'] },
-      { cells: [t('reports.xlPayments'), data.payments.length], types: [undefined, 'number'] },
+      // The COUNT moves too, not only the money: a payment with no visible invoice allocation is
+      // not in `data.payments` at all, so a row labelled "payments" would be counting something
+      // this sheet does not contain.
+      { cells: [input.paymentsAreAllocatedPortion === true
+        ? t('reports.xlPaymentsAgainstInvoices') : t('reports.xlPayments'),
+      data.payments.length], types: [undefined, 'number'] },
       { cells: [t('reports.xlCredits'), data.credits.length], types: [undefined, 'number'] },
       { cells: [t('reports.xlOpenExceptionsNow'), data.exceptions.length], types: [undefined, 'number'] },
       { cells: [] },

@@ -97,12 +97,19 @@ const DEFAULT_SORT: readonly ServerSort[] = [{ column: 'invoice_date', ascending
 function reviewFilterOptions(
   statusLabel: (meta: { key: string } | null | undefined) => string,
   allLabel: string,
+  toReviewLabel: string,
 ): ReadonlyArray<readonly [string, string]> {
   return [
     ['', allLabel],
+    // The pair the control centre calls "חשבוניות לבדיקה". Offered as a choice rather than left
+    // as a URL-only state, so a reader who arrived from that tile can see which filter is on and
+    // reach it again without the tile.
+    [TO_REVIEW_FILTER, toReviewLabel],
     ...Object.entries(INVOICE_REVIEW_STATUS).map(([key, value]) => [key, statusLabel(value)] as const),
   ];
 }
+/** `invoice_metrics.to_review` in `management_dashboard_snapshot`, spelled for the URL. */
+export const TO_REVIEW_FILTER = 'received,in_review';
 // Phone quick filters are the stages that start or unblock work. Every stage remains in the
 // existing filter sheet, and a deep-linked/active secondary stage makes itself visible here.
 const MOBILE_PRIMARY_REVIEW_FILTERS = new Set(['', 'received', 'pending_approval', 'investigation']);
@@ -160,7 +167,16 @@ export function InvoicesList() {
         { kind: 'eq', column: 'financial_role', value: 'payable' },
         { kind: 'is', column: 'deleted_at', value: null },
       ];
-      if (reviewFilter) predicates.push({ kind: 'eq', column: 'review_status', value: reviewFilter });
+      /* A comma carries a SET, the same way `?type=` already does on /exceptions. It exists
+         because `invoices.toReview` on the control centre counts `review_status in
+         ('received','in_review')` and the tile beside it could only link to one of the two — so
+         the list opened with fewer rows than the number that sent the reader to it. */
+      if (reviewFilter) {
+        const statuses = reviewFilter.split(',').filter(Boolean);
+        predicates.push(statuses.length > 1
+          ? { kind: 'in', column: 'review_status', values: statuses }
+          : { kind: 'eq', column: 'review_status', value: statuses[0] ?? reviewFilter });
+      }
       if (payFilter) {
         predicates.push(payFilter === 'open'
           ? { kind: 'neq', column: 'payment_status', value: 'paid' }
@@ -269,7 +285,16 @@ export function InvoicesList() {
     columns.splice(4, 0, { key: 'balance', header: t('invoiceList.splice'), className: 'num', render: (r) => (r.balance != null && r.balance > 0 ? <span className="text-await-fg">{fmtMoneyExact(r.balance, r.currency)}</span> : <span className="text-done-fg">—</span>) });
   }
   if (canViewExport) {
-    columns.push({ key: 'export', header: t('invoiceList.push'), priority: 3, render: (r) => <StatusBadge meta={INVOICE_EXPORT_STATUS[r.export_status]} /> });
+    /* `priority: 2`, and the change is a data one rather than a layout one. Priority 3 means
+       "not rendered on mobile" (`ui.tsx`: the card's detail grid keeps `(priority ?? 2) <= 2`),
+       and every other priority-3 column on this screen has a mobile home — number and supplier
+       are the card title, payment status is the trailing badge. The accountant hand-off state
+       had none, so on a phone it simply did not exist: the desktop list showed it on every row
+       and the card showed it on none. It is the one column that answers "did this already go to
+       the bookkeeper", which is a question people ask away from a desk. The header label rides
+       along (`mobileLabel` defaults to it) because the review badge beside it is unlabelled, and
+       two bare badges on one card cannot be told apart. */
+    columns.push({ key: 'export', header: t('invoiceList.push'), priority: 2, render: (r) => <StatusBadge meta={INVOICE_EXPORT_STATUS[r.export_status]} /> });
   }
 
   const activeFilters = [reviewFilter, payFilter, canViewExport ? exportFilter : '', monthFilter, attentionFilter]
@@ -310,7 +335,7 @@ export function InvoicesList() {
         className="gap-1.5"
         value={reviewFilter}
         onChange={(value) => patchParams({ review: value, page: '' })}
-        items={reviewFilterOptions(statusLabel, t('invoiceList.reviewFilterAll')).map(([value, label]) => ({
+        items={reviewFilterOptions(statusLabel, t('invoiceList.reviewFilterAll'), t('invoiceList.reviewFilterToReview')).map(([value, label]) => ({
           key: value,
           label,
           className: MOBILE_PRIMARY_REVIEW_FILTERS.has(value) || reviewFilter === value ? '' : 'max-sm:hidden',
@@ -355,7 +380,7 @@ export function InvoicesList() {
             {data.narrowed && <span className="text-xs text-await-fg" role="status">{t(SUPPLIER_SEARCH_NARROWED_KEY)}</span>}
             <select className="input w-auto! md:hidden" aria-label={t('invoiceList.aria_label')}
               value={reviewFilter} onChange={(e) => patchParams({ review: e.target.value, page: '' })}>
-              {reviewFilterOptions(statusLabel, t('invoiceList.reviewFilterAll')).map(([value, label]) => <option key={value || 'all'} value={value}>{label}</option>)}
+              {reviewFilterOptions(statusLabel, t('invoiceList.reviewFilterAll'), t('invoiceList.reviewFilterToReview')).map(([value, label]) => <option key={value || 'all'} value={value}>{label}</option>)}
             </select>
             {/* `without-order` is available only on the active invoice-reading surface. */}
             <select className="input w-auto!" aria-label={t('invoiceList.aria_label_2')} value={attentionFilter} onChange={(e) => patchParams({ attention: e.target.value, page: '' })}>

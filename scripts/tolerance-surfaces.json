@@ -33,6 +33,13 @@
       "unconfigured": "skip",
       "why": "the header total against the sum of the lines",
       "derivedMinorUnits": 100
+    },
+    "invoice_payment_settled_tolerance": {
+      "surface": "settings",
+      "ilsBaseline": 1,
+      "unconfigured": "skip",
+      "why": "how little may remain on an invoice before it counts as paid. It is the FIFTH key and it existed all along as a bare `<= 1` inside p1_refresh_invoice_payment_statuses -- one unit of whatever currency the invoice happened to be in, which this guard could not see because it finds money_tolerance call sites and that was a literal. 0299 routes it through the same door as the other four; its derived value for a two-decimal currency is exactly 1.00, so the shekel does not move by a single agora.",
+      "derivedMinorUnits": 100
     }
   },
   "probes": {

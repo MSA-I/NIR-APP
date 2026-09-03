@@ -359,6 +359,19 @@ export const getPurchaseComparison: AssistantTool = {
           classification: "financial_sensitive",
         }));
       }
+      /* Per line, and this is the source that actually carries the claim. Every fact above is
+         about ONE product, and `/prices?product=<id>` is that product's offers across suppliers
+         — the same cross-supplier comparison this tool ran, on the screen (18.08.2026). The bare
+         `/prices` reference below stays as the catalogue the figures came from, but it is a
+         table of every price the business holds, and a reader sent there to check one line has
+         to find it first. */
+      sources.push(ctx.evidence.source({
+        entity: "product",
+        entity_id: line.product_id,
+        label: productLabel,
+        route: `/prices?product=${line.product_id}`,
+        classification: "financial_sensitive",
+      }));
     }
 
     const summary = summarizeComparison(comparisons);

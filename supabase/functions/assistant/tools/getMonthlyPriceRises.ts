@@ -264,13 +264,39 @@ export const getMonthlyPriceRises: AssistantTool = {
         as_of: asOf,
         classification: "financial_sensitive",
       }));
+      /* The product's own price row, across suppliers. It isolates the SUBJECT of the three
+         facts above — the fact carries the delta, its baseline and the baseline's date, and this
+         is where the reader sees the price those were computed from. */
+      sources.push(ctx.evidence.source({
+        entity: "product",
+        entity_id: row.product_id,
+        label: productLabel,
+        route: `/prices?product=${row.product_id}`,
+        classification: "financial_sensitive",
+      }));
     }
 
+    /* THE ORG-LEVEL REFERENCE KEEPS ITS NAME AND LOSES ITS ROUTE, AND THAT IS THE FIX.
+       It pointed at `/prices?increases=1`, and that is the report's own worked example: an answer
+       reading "no supplier raised a price this month" opened a screen headed "7 price rises".
+       The two are not a filter apart. This tool measures a CALENDAR MONTH against the last price
+       in effect when the month opened, counts only a NET positive difference, and excludes any
+       product whose baseline cannot be established; `?increases=1` asks whether the last recorded
+       change on a row happened to be upward, ever, with no month and no baseline. The `?days=`
+       window added for the thirty-day counters does not close that gap either — it is a trailing
+       window, not a calendar month, and it cannot express "net against the 1st".
+
+       No state of any existing screen reproduces this population, and producing one would mean
+       running `supplier_monthly_price_rises()` in the browser. So the reference stays as an
+       ATTRIBUTION — it names where prices live, which the answer should say — and carries no
+       route, the shape `SourceReferenceSchema` already allows and `getPurchaseComparison` already
+       uses for a draft it may name and not open. What can be checked is checked: the per-supplier
+       and per-product references above point at the rows this figure is made of. */
     sources.push(ctx.evidence.source({
       entity: "organization",
       entity_id: ctx.actor.orgId,
       label: readerText(ctx.locale, "assistantTools.priceScreenRises"),
-      route: "/prices?increases=1",
+      route: null,
       classification: "financial_sensitive",
     }));
 

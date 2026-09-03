@@ -23,6 +23,7 @@ import {
 } from "./registry.ts";
 import type { ReadError, RowsResult, ToolReads } from "./reads.ts";
 import { deterministicBusinessTools } from "./business.ts";
+import { assistantSourceRouteDecision } from "../../../../src/lib/assistant/routeAccess.ts";
 
 const INVOICE_ID = "11111111-1111-4111-8111-111111111111";
 const SUPPLIER_ID = "22222222-2222-4222-8222-222222222222";
@@ -814,16 +815,61 @@ Deno.test("open credits: a failed per-supplier breakdown degrades to complete:fa
     {},
   );
   assert.equal(envelope.complete, false);
-  assert.equal(envelope.failures[0].code, "supplier_credit_breakdown_failed");
-  // The org-wide figures that DID measure are still there -- zero credits, null sum.
+  assert.equal(
+    envelope.failures.some((entry) => entry.code === "supplier_credit_breakdown_failed"),
+    true,
+  );
+  // The count that DID measure is still there: zero credits are open, and that is an answer.
   const count = envelope.facts.find((fact) =>
     fact.label.startsWith("זיכויים פתוחים (open/requested/received)")
   );
-  const sum = envelope.facts.find((fact) => fact.kind === "credit.open_amount");
   assert.equal(count?.value, 0);
-  assert.equal(sum?.value, null);
+  /* NO MONEY FACT, and that is the repair rather than a regression. The tool used to read
+     `credits.sum`, a key `management_dashboard_snapshot` stopped returning at 0218, and emit
+     whatever came back — always null — under a hardcoded `ils`. Wave 1b fixed the three adapters
+     the plan named; this was a fourth, found by walking this tool's citations.
+     With nothing open there is no currency to state a sum in, so the absence is NAMED instead,
+     exactly as the dashboard and exposure adapters name theirs. */
+  assert.deepEqual(envelope.facts.filter((fact) => fact.kind === "credit.open_amount"), []);
+  assert.equal(
+    envelope.failures.some((entry) => entry.code === "credits_open_sum:not_measured"),
+    true,
+  );
   assert.equal(envelope.sources[0]?.entity, "organization");
   assert.equal(envelope.sources[0]?.entity_id, actor().orgId);
+});
+
+Deno.test("open credits: one fact per currency, and the two are never added", async () => {
+  const snapshot = {
+    ...SNAPSHOT_WITH_NULLS,
+    credits: {
+      count: 4,
+      sumByCurrency: [
+        { currency: "ILS", amount: 1200 },
+        { currency: "USD", amount: 300 },
+      ],
+    },
+  };
+  const envelope = await getOpenCredits.run(
+    ctxWith(fakeDb({
+      rpc: { management_dashboard_snapshot: { data: snapshot, error: null } },
+      reads: { listSupplierOpenCredits: () => Promise.resolve({ rows: [], hasMore: false, error: null }) },
+    })),
+    {},
+  );
+  const orgSums = envelope.facts.filter((fact) =>
+    fact.kind === "credit.open_amount" && fact.subject === null
+  );
+  assert.equal(orgSums.length, 2);
+  assert.deepEqual(orgSums.map((fact) => [fact.unit, fact.value]), [["ils", 1200], ["usd", 300]]);
+  // The currency is in the label too, because the reader sees the label and not the unit.
+  assert.equal(orgSums.every((fact) => fact.label.includes(`(${fact.unit.toUpperCase()})`)), true);
+  // Nothing anywhere is 1500.
+  assert.equal(envelope.facts.some((fact) => fact.value === 1500), false);
+  assert.equal(
+    envelope.failures.some((entry) => entry.code.startsWith("credits_open_sum")),
+    false,
+  );
 });
 
 // The count is pinned rather than derived: a tool is a capability, and a capability arriving
@@ -1217,4 +1263,156 @@ Deno.test("matrix / no adapter can emit a money fact whose unit is not a currenc
       assert.equal(fact.unit, "count", `${fact.label} is a count with unit ${fact.unit}`);
     }
   }
+});
+
+/* ============================================================================
+ * Citation landing (wave 7)
+ *
+ * A source is a promise: "go here and you will see this". Ten of the references these tools issued
+ * opened a screen holding a DIFFERENT population from the claim beside them — the whole payment-
+ * requests list under an overdue figure, every bank transaction ever imported under a count of
+ * unmatched ones, the product catalogue under "which record did you mean". A near-miss is not a
+ * weaker source; it is one that contradicts the answer.
+ *
+ * Each assertion below names the definition its filter mirrors, so a later edit that drops a
+ * query string fails here rather than quietly restoring the old link.
+ * ==========================================================================*/
+
+Deno.test("payment exposure cites one window per figure, not one screen for all of them", async () => {
+  const envelope = await getPaymentExposure.run(
+    ctxWith(fakeDb({
+      rpc: { management_dashboard_snapshot: { data: TWO_CURRENCY_SNAPSHOT, error: null } },
+    })),
+    {},
+  );
+  const routes = envelope.sources.map((source) => source.route);
+  // The screen's own `due=` branches, which after wave 7 exclude drafts on all three — the same
+  // statuses `management_dashboard_snapshot` filters every due-date metric on.
+  assert.ok(routes.includes("/payment-requests?due=overdue"));
+  assert.ok(routes.includes("/payment-requests?due=today"));
+  assert.ok(routes.includes("/payment-requests?status=active&due=soon"));
+  // The plain screen stays for the two figures it really does isolate: the active count and the
+  // dated coverage beside it, whose definition IS the list's own `status=active`.
+  assert.ok(routes.includes("/payment-requests"));
+  for (const source of envelope.sources) {
+    assert.equal(assistantSourceRouteDecision(source, "owner"), "allowed", source.route ?? "null");
+  }
+});
+
+Deno.test("unmatched bank transactions cite the two statuses they are, not every transaction", async () => {
+  const envelope = await getUnmatchedBankTransactions.run(
+    ctxWith(fakeDb({
+      reads: {
+        listUnmatchedBankTransactions: () =>
+          Promise.resolve({
+            rows: [{
+              id: "77777777-7777-4777-8777-777777777777",
+              tx_date: "2026-08-19",
+              amount: 500,
+              direction: "debit",
+              description: "העברה",
+              status: "unmatched",
+            }],
+            hasMore: false,
+            error: null,
+          }) as never,
+      },
+    }), "accountant"),
+    { limit: null },
+  );
+  // `?status=attention` is the screen's own name for `in ('unmatched','suggested')` — exactly the
+  // population this tool returns, and exactly what its `filters.statuses` already declares.
+  assert.equal(envelope.filters.statuses, "unmatched,suggested");
+  for (const source of envelope.sources) {
+    assert.equal(source.route, "/bank?status=attention");
+    assert.equal(assistantSourceRouteDecision(source, "accountant"), "allowed");
+  }
+});
+
+Deno.test("open credits cite the three statuses the count was taken over", async () => {
+  const envelope = await getOpenCredits.run(
+    ctxWith(fakeDb({
+      rpc: { management_dashboard_snapshot: { data: TWO_CURRENCY_SNAPSHOT, error: null } },
+    })),
+    {},
+  );
+  const org = envelope.sources.find((source) => source.entity === "organization");
+  assert.equal(org?.route, "/credits?status=active");
+  assert.equal(envelope.filters.statuses, "open,requested,received");
+  assert.equal(assistantSourceRouteDecision(org!, "owner"), "allowed");
+});
+
+Deno.test("find_entity points at the row, not at the list the reader already searched", async () => {
+  const PRODUCT = "88888888-8888-4888-8888-888888888888";
+  const envelope = await findEntity.run(
+    ctxWith(fakeDb({
+      rpc: {
+        global_search: {
+          data: [{ entity: "product", id: PRODUCT, title: "אורז בסמטי", subtitle: null }],
+          error: null,
+        },
+      },
+    })),
+    { query: "אורז", kind: null },
+  );
+  const [source] = envelope.sources;
+  assert.ok(source, "the resolver returned no source at all");
+  // `?id=` pins that screen's list to one row and opens it. Bare `/products` hands the reader
+  // back the search they had just done.
+  assert.equal(source.route, `/products?id=${PRODUCT}`);
+  assert.equal(assistantSourceRouteDecision(source, "owner"), "allowed");
+  // And the value is compared with the id the tool returned, so nothing can point elsewhere.
+  assert.equal(
+    assistantSourceRouteDecision({ ...source, route: "/products?id=99999999-9999-4999-8999-999999999999" }, "owner"),
+    "not_allowlisted",
+  );
+});
+
+Deno.test("purchase metrics hand /expenses the window they measured", async () => {
+  const envelope = await getPurchaseMetrics.run(
+    ctxWith(fakeDb({
+      rpc: {
+        get_purchase_metrics: {
+          data: {
+            net_definition: "ברוטו פחות זיכויים שהוכרו",
+            committed_by_currency: [{ currency: "ILS", amount: 100 }],
+            committed_order_count: 1,
+            gross_expense_by_currency: [{ currency: "ILS", amount: 100 }],
+            gross_invoice_count: 1,
+            credits_recognised_by_currency: [{ currency: "ILS", amount: 0 }],
+            credits_pending_by_currency: [{ currency: "ILS", amount: 0 }],
+            net_expense_by_currency: [{ currency: "ILS", amount: 100 }],
+          },
+          error: null,
+        },
+      },
+    })),
+    { window: null },
+  );
+  const [source] = envelope.sources;
+  // /expenses reads ?from=/?to= off the URL and calls this same RPC with them, so the screen
+  // reproduces the figure exactly. Bare /expenses opens on the current calendar month.
+  assert.equal(source.route, `/expenses?from=${envelope.filters.from}&to=${envelope.filters.to}`);
+  assert.equal(assistantSourceRouteDecision(source, "owner"), "allowed");
+  assert.equal(assistantSourceRouteDecision(source, "accountant"), "allowed");
+});
+
+Deno.test("office is told where these figures live and is offered no route it cannot open", async () => {
+  /* /expenses is owner+accountant. The control centre shows office the same subject under
+     "נרכש החודש" — but that is a calendar month in one picked currency, not this trailing window,
+     so pointing a windowed answer at it would be the same near-miss in the other direction. */
+  const envelope = await getPurchaseMetrics.run(
+    ctxWith(fakeDb({
+      rpc: {
+        get_purchase_metrics: {
+          data: { net_definition: null, gross_expense_by_currency: null },
+          error: null,
+        },
+      },
+    }), "office"),
+    { window: null },
+  );
+  const [source] = envelope.sources;
+  assert.equal(source.route, null);
+  assert.equal(assistantSourceRouteDecision(source, "office"), "allowed");
 });

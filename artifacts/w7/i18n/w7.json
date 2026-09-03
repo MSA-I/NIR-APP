@@ -1,0 +1,49 @@
+{
+  "_note": "Wave 7 keys. src/lib/i18n/dictionaries/{he,en}.ts are owned by another agent, so these are staged here and referenced by t()/readerText(). A TKey type error naming any key below is expected until they are merged.",
+
+  "priceLists.windowFilterLabel": {
+    "he": "חלון זמן לשינויי מחיר",
+    "en": "Price-change time window"
+  },
+  "priceLists.windowAnyTime": {
+    "he": "בכל זמן",
+    "en": "Any time"
+  },
+  "priceLists.windowLastDays": {
+    "he": "{days} הימים האחרונים",
+    "en": "Last {days} days"
+  },
+
+  "invoiceList.reviewFilterToReview": {
+    "he": "לבדיקה (התקבלו ובבדיקה)",
+    "en": "To review (received and in review)"
+  },
+
+  "orders.statusWithSupplier": {
+    "he": "אצל הספק — נשלחו, אושרו וחלקיות",
+    "en": "With the supplier — sent, confirmed and partial"
+  },
+
+  "paymentRequests.statusCommitted": {
+    "he": "כסף שכבר התחייבנו לו — טיוטות, ממתינות לאישור, מאושרות ולביצוע",
+    "en": "Money already committed — drafts, pending approval, approved and sent for execution"
+  },
+
+  "inventory.lowStockUnmeasured": {
+    "he": "אין מוצר עם יתרה שנספרה ומינימום מוגדר",
+    "en": "No product has both a counted balance and a minimum"
+  },
+
+  "assistantTools.exposureScreenOverdue": {
+    "he": "מסך דרישות התשלום — באיחור",
+    "en": "The payment-requests screen — overdue"
+  },
+  "assistantTools.exposureScreenDueToday": {
+    "he": "מסך דרישות התשלום — לפירעון היום",
+    "en": "The payment-requests screen — due today"
+  },
+  "assistantTools.exposureScreenDueSoon": {
+    "he": "מסך דרישות התשלום — לפירעון בשבעת הימים הקרובים",
+    "en": "The payment-requests screen — due within seven days"
+  }
+}

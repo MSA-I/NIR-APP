@@ -142,7 +142,7 @@ export const getOpenAlertsTool: AssistantTool = {
               raised,
             )],
             sources: raised
-              ? [listSource(readerText(ctx.locale, "assistantTools.alertPriceIncreases"), "/prices?increases=1")]
+              ? [listSource(readerText(ctx.locale, "assistantTools.alertPriceIncreases"), "/prices?increases=1&days=30")]
               : [],
             warnings: [
               // The scope-limit sentence is still `alerts.ts`’s own, resolved rather than

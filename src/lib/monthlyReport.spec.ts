@@ -5,6 +5,8 @@ import {
   buildMonthlyWorkbook,
   buildStyledMonthlyWorkbook,
   monthlyReportScreenTotals,
+  reportedPaymentRows,
+  snapshotBankBlockGuidance,
   type MonthlyReportLabels,
   type MonthlyReportSnapshot,
 } from './monthlyReport';
@@ -527,5 +529,151 @@ describe('monthlyReportScreenTotals — אפס שנמדד מול אפס שלא �
     expect(totals.unpaidCount).toBe(2);
     // And nothing anywhere in the answer equals 15,500.
     expect(totals.invoices.some((entry) => entry.amount === 15500)).toBe(false);
+  });
+});
+
+/**
+ * DECISION E [owner 03.09.2026]. Every expectation below is the RULING, asserted as intended
+ * behaviour. None of them is a bug in waiting:
+ *   - the accountant's figure differing from the owner's is the point;
+ *   - the total not reconciling against the bank is the point;
+ *   - a payment vanishing when nothing visible is allocated to it is the point.
+ */
+describe('reportedPaymentRows — the approved-invoice portion, never the raw payment row', () => {
+  const payment = (id: string, amount: number, currency = 'ILS') => ({
+    id, amount, currency,
+    supplier: { name: 'ספק אחד' }, paid_date: '2026-08-04',
+    method: null as string | null, reference: null as string | null,
+  });
+
+  it('a payment whose allocations are all visible is reported unchanged', () => {
+    const rows = reportedPaymentRows(
+      [payment('p1', 1180)],
+      [{ payment_id: 'p1', currency: 'ILS', reportable_amount: 1180 }],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.amount).toBe(1180);
+    expect(rows[0]!.supplier.name).toBe('ספק אחד');
+  });
+
+  it('a payment covering an invoice the reader may not see is reported at the visible portion', () => {
+    // 300 paid across three invoices of 100. The accountant may see two of them.
+    const rows = reportedPaymentRows(
+      [payment('p1', 300)],
+      [{ payment_id: 'p1', currency: 'ILS', reportable_amount: 200 }],
+    );
+    expect(rows[0]!.amount).toBe(200);
+    // INTENDED, and the reason the plan wrote it down in advance: this no longer reconciles
+    // against the bank statement, because it is not the money that moved.
+    expect(rows[0]!.amount).not.toBe(300);
+  });
+
+  it('the owner and the accountant read two true numbers from the same payment', () => {
+    const asOwner = reportedPaymentRows([payment('p1', 300)],
+      [{ payment_id: 'p1', currency: 'ILS', reportable_amount: 300 }]);
+    const asAccountant = reportedPaymentRows([payment('p1', 300)],
+      [{ payment_id: 'p1', currency: 'ILS', reportable_amount: 200 }]);
+    expect(asOwner[0]!.amount).toBe(300);
+    expect(asAccountant[0]!.amount).toBe(200);
+  });
+
+  it('a payment with no visible allocation disappears, and is never reported as zero', () => {
+    const rows = reportedPaymentRows([payment('p1', 750)], []);
+    expect(rows).toEqual([]);
+    expect(rows.some((row) => row.amount === 0)).toBe(false);
+  });
+
+  it('drops only the unallocated payments and keeps the rest of the month', () => {
+    const rows = reportedPaymentRows(
+      [payment('p1', 500), payment('p2', 750), payment('p3', 120)],
+      [
+        { payment_id: 'p1', currency: 'ILS', reportable_amount: 500 },
+        { payment_id: 'p3', currency: 'ILS', reportable_amount: 60 },
+      ],
+    );
+    expect(rows.map((row) => [row.id, row.amount])).toEqual([['p1', 500], ['p3', 60]]);
+  });
+
+  it('two currency rows stay two rows and are never added together', () => {
+    const rows = reportedPaymentRows(
+      [payment('p1', 1000)],
+      [
+        { payment_id: 'p1', currency: 'ILS', reportable_amount: 400 },
+        { payment_id: 'p1', currency: 'USD', reportable_amount: 90 },
+      ],
+    );
+    expect(rows.map((row) => [row.currency, row.amount])).toEqual([['ILS', 400], ['USD', 90]]);
+    expect(rows.some((row) => row.amount === 490)).toBe(false);
+  });
+
+  it('the currency travels with the figure, not from the payment row', () => {
+    const rows = reportedPaymentRows(
+      [payment('p1', 1000, 'ILS')],
+      [{ payment_id: 'p1', currency: 'USD', reportable_amount: 250 }],
+    );
+    expect(rows[0]!.currency).toBe('USD');
+  });
+});
+
+describe('the payment money is labelled as the portion only where it IS the portion', () => {
+  it('the live workbook renames the amount column; the as-recorded one does not; the sheet name never moves', () => {
+    const asRecorded = buildMonthlyWorkbook({ t, ...input });
+    const allocated = buildMonthlyWorkbook({ t, ...input, paymentsAreAllocatedPortion: true });
+    const name = t('reports.xlPayments');
+    const columnHeader = (spec: { sheets: { name: string }[] }) => {
+      const sheet = spec.sheets.find((candidate) => candidate.name === name) as
+        { columns?: { key: string; header: string }[] } | undefined;
+      return sheet?.columns?.find((column) => column.key === 'amount')?.header;
+    };
+    // Excel refuses a sheet name over 31 characters and refuses the whole FILE rather than the
+    // sheet, and the locked snapshot's checksum stands over its sheet names. So the NAME is
+    // identical in both and only the column header carries the distinction.
+    expect(asRecorded.sheets.map((sheet) => sheet.name))
+      .toEqual(allocated.sheets.map((sheet) => sheet.name));
+    expect(columnHeader(asRecorded)).toBe(t('reports.xlAmount'));
+    expect(columnHeader(allocated)).not.toBe(t('reports.xlAmount'));
+  });
+});
+
+/**
+ * The refusal to close a month used to print "Open the 0 unmatched bank transactions this month"
+ * over a link to an empty list. The zero was never measured: the screen counts `unmatched` rows
+ * dated inside the month, and the server refuses on a wider rule — no CONFIRMED allocation, or one
+ * that does not resolve to exactly one legal entity, including transactions from other months
+ * carried in by an open exception.
+ *
+ * The two states are Wave 1b's `measured` / `unmeasured`, not a second vocabulary.
+ */
+describe('snapshotBankBlockGuidance — a refusal never blames a zero', () => {
+  it('unmatched transactions are a measured count, and they really do block', () => {
+    expect(snapshotBankBlockGuidance({ unmatchedBank: 3, suggestedBank: 0 }))
+      .toEqual({ state: 'measured', unmatched: 3, suggested: 0 });
+  });
+
+  it('suggested-only is still measured: a suggestion is not an approved match', () => {
+    expect(snapshotBankBlockGuidance({ unmatchedBank: 0, suggestedBank: 2 }))
+      .toEqual({ state: 'measured', unmatched: 0, suggested: 2 });
+  });
+
+  it('THE DEFECT: nothing counted and the month still refused is UNMEASURED, and carries no figure', () => {
+    const guidance = snapshotBankBlockGuidance({ unmatchedBank: 0, suggestedBank: 0 });
+    expect(guidance).toEqual({ state: 'unmeasured' });
+    expect(Object.values(guidance).includes(0)).toBe(false);
+  });
+
+  it('no state ever carries a zero count that a sentence could print', () => {
+    for (const unmatchedBank of [0, 1, 5]) {
+      for (const suggestedBank of [0, 1, 5]) {
+        const guidance = snapshotBankBlockGuidance({ unmatchedBank, suggestedBank });
+        if (guidance.state === 'unmeasured') {
+          expect(unmatchedBank + suggestedBank).toBe(0);
+        } else {
+          // A zero half is allowed inside a measured answer because the screen only RENDERS the
+          // halves that are positive; what may never happen is a zero standing alone as the
+          // whole message.
+          expect(guidance.unmatched + guidance.suggested).toBeGreaterThan(0);
+        }
+      }
+    }
   });
 });

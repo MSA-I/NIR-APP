@@ -240,13 +240,27 @@ function RoleQueueCard({ queue, total, className = '' }: {
   className?: string;
 }) {
   const { t } = useT();
+  /* Every row here promises "this many, and here they are". Four of the six links used to open a
+     list holding a different population from the number beside them, and in each case the number
+     was the one telling the truth — `management_dashboard_snapshot` is where these counts are
+     defined, and the link was simply pointed at the nearest screen rather than at the state that
+     reproduces the count. Each `to` below now spells the snapshot's own predicate. */
   const rows = [
-    { label: t('dashboard.text_5'), count: queue.receiving, to: '/orders?status=open' },
-    { label: t('dashboard.text_6'), count: queue.invoicesToReview, to: '/invoices?review=received' },
-    { label: t('dashboard.text_7'), count: queue.prDrafts, to: '/payment-requests' },
+    // `openOrders.count` is `status in ('sent','confirmed','partial')` — which is exactly what
+    // /receiving queries. /orders?status=open means "not received and not cancelled", so it also
+    // listed draft and ready orders that are not awaiting goods at all.
+    { label: t('dashboard.text_5'), count: queue.receiving, to: '/receiving' },
+    // `invoices.toReview` counts `review_status in ('received','in_review')`; the link carried
+    // only the first of the two.
+    { label: t('dashboard.text_6'), count: queue.invoicesToReview, to: '/invoices?review=received,in_review' },
+    // This row counts DRAFTS. Bare /payment-requests opens on `status=active`, i.e. every
+    // request that is not finished — the widest list on the screen.
+    { label: t('dashboard.text_7'), count: queue.prDrafts, to: '/payment-requests?status=draft' },
     { label: t('dashboard.text_8'), count: queue.prPendingApproval, to: '/payment-requests?status=pending_approval' },
     { label: t('dashboard.text_9'), count: queue.highExceptions, to: '/exceptions?status=open&severity=high' },
-    { label: t('dashboard.text_10'), count: queue.notSentToAccountant, to: '/invoices?export=not_sent' },
+    // `invoices.notSent` is `review_status = 'approved' AND export_status = 'not_sent'`: an
+    // invoice nobody has approved yet is not waiting on the bookkeeper.
+    { label: t('dashboard.text_10'), count: queue.notSentToAccountant, to: '/invoices?export=not_sent&review=approved' },
   ];
   // The reference's dot-matrix rendering, on TRUE data: one dot per open task in the queue,
   // capped at 12 (the number beside carries the exact count; the dots are aria-hidden texture).
@@ -778,8 +792,14 @@ export default function Dashboard() {
       }
       return buckets.map(({ week, total, count }) => ({ week, total, count, label: count ? moneyShortFor(viewCurrency)(total) : '' }));
     };
-    const weekly = weeklySeries(orders.map((order) => ({ date: order.created_at, value: orderValue(order) })));
-    const paidWeekly = weeklySeries(payments.map((payment) => ({ date: payment.paid_date, value: payment.amount })));
+    /* `inView`, and it is not a refinement — it is the currency rule (R4-04, 03.09.2026).
+       These four aggregates were the only ones inside `currencyView` that read the raw arrays,
+       so every bucket added shekel rows to dollar rows and then printed the total under the
+       picker's currency: in USD the weekly chart drew the ILS figures, byte-identical once the
+       sign was stripped, directly beneath the banner that says nothing is converted. A sum
+       across currencies is not an approximation of anything, and a label cannot repair it. */
+    const weekly = weeklySeries(inView(orders).map((order) => ({ date: order.created_at, value: orderValue(order) })));
+    const paidWeekly = weeklySeries(inView(payments).map((payment) => ({ date: payment.paid_date, value: payment.amount })));
 
     // MTD is compared with the same number of calendar days in the previous month. Missing/zero
     // baseline means "not measurable", so the delta is omitted rather than rendered as 0%.
@@ -789,9 +809,12 @@ export default function Dashboard() {
       const key = localDateKey(date);
       return key >= prevMonthStartISO && key <= previousCutoffISO;
     };
-    const purchasedPreviousMTD = orders.filter((order) => inPreviousMTD(order.created_at))
+    /* Same rule, same reason: `mtdBasis` stamps `currency: viewCurrency` on this baseline, so a
+       baseline taken over every currency would put a mixed-currency figure behind a single-
+       currency percentage — a comparison between a dollar month and a dollar-plus-shekel one. */
+    const purchasedPreviousMTD = inView(orders).filter((order) => inPreviousMTD(order.created_at))
       .reduce((sum, order) => sum + orderValue(order), 0);
-    const paidPreviousMTD = payments.filter((payment) => inPreviousMTD(payment.paid_date))
+    const paidPreviousMTD = inView(payments).filter((payment) => inPreviousMTD(payment.paid_date))
       .reduce((sum, payment) => sum + payment.amount, 0);
     /* The two periods, named rather than described. "Against the same days last month" states a
        relationship; a reader on the 17th cannot tell from it whether the baseline is a whole month
@@ -854,10 +877,16 @@ export default function Dashboard() {
       { key: 'pay-today', label: t('dashboard.text_27'), count: paymentsDueToday, tone: 'await', to: '/payment-requests?due=today', hint: paymentsDueToday == null ? t('dashboard.text_28') : undefined, clearLabel: t('dashboard.text_29') },
       { key: 'exceptions', label: t('dashboard.openExceptions'), count: exceptions.length, tone: 'alert', to: '/exceptions?status=open', hint: highExceptions ? t('dashboard.highSeverity', { count: highExceptions }) : undefined, clearLabel: t('dashboard.noOpenExceptions') },
       { key: 'credits', label: t('dashboard.text_30'), count: snapshot.credits.count, amounts: amountsIn(openCreditsByCurrency), tone: 'info', to: '/credits?status=active', clearLabel: t('dashboard.text_31') },
-      { key: 'commitments', label: t('dashboard.openCommitments'), count: snapshot.openOrders.count, amounts: amountsIn(committedByCurrency), tone: 'idle', to: '/orders?status=open', hint: remainingInView != null && remainingInView.amount > 0 ? t('dashboard.remainingToReceive', { amount: fmtMoneyRounded(remainingInView.amount, remainingInView.currency) }) : undefined, clearLabel: t('dashboard.noOpenCommitments') },
+      // `openOrders` is `status in ('sent','confirmed','partial')` — an order that has not left
+      // the building is not a commitment. `?status=open` on that screen means "not received and
+      // not cancelled", which also lists drafts and ready orders.
+      { key: 'commitments', label: t('dashboard.openCommitments'), count: snapshot.openOrders.count, amounts: amountsIn(committedByCurrency), tone: 'idle', to: '/orders?status=sent,confirmed,partial', hint: remainingInView != null && remainingInView.amount > 0 ? t('dashboard.remainingToReceive', { amount: fmtMoneyRounded(remainingInView.amount, remainingInView.currency) }) : undefined, clearLabel: t('dashboard.noOpenCommitments') },
       { key: 'late-delivery', label: t('dashboard.text_32'), count: lateDeliveries, tone: 'alert', to: '/receiving', clearLabel: t('dashboard.text_33') },
       { key: 'awaiting-confirmation', label: t('dashboard.text_34'), count: awaitingConfirmation, tone: 'await', to: '/orders?status=sent', clearLabel: t('dashboard.text_35') },
-      { key: 'price-increases', label: t('dashboard.text_36'), count: priceIncreaseSuppliers, tone: 'await', to: '/prices?increases=1', clearLabel: t('dashboard.text_37') },
+      // The label says "(30 יום)" and the fetch above bounds `price_effective_date` to the last
+      // thirty days. `?increases=1` alone is every row whose last change happened to be upward,
+      // with no window at all — a screen headed with a larger number than the tile that opened it.
+      { key: 'price-increases', label: t('dashboard.text_36'), count: priceIncreaseSuppliers, tone: 'await', to: '/prices?increases=1&days=30', clearLabel: t('dashboard.text_37') },
     ];
 
     /* The open balance is read out of the per-currency list rather than summed from it. ABSENT is
@@ -1441,7 +1470,8 @@ export default function Dashboard() {
                 summary={view.priceIncreases[0] ? t('dashboard.largestIncrease', { percent: view.priceIncreases[0].pct.toFixed(1) }) : undefined}
                 empty={t('dashboard.empty_2')}>
                 <div className="flex justify-end">
-                  <Link to="/prices?increases=1" className="btn-ghost min-h-11 text-xs">{t('dashboard.text_62')} <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
+                  {/* Same thirty-day window as the list it sits above (see the tile note). */}
+                  <Link to="/prices?increases=1&days=30" className="btn-ghost min-h-11 text-xs">{t('dashboard.text_62')} <ChevronLeft size={ICON.xs} aria-hidden="true" /></Link>
                 </div>
                 <ul className="divide-y divide-line-soft">
                   {view.priceIncreases.map((price, index) => (

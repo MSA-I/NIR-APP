@@ -37,6 +37,14 @@ export const he = {
    * pattern in src/lib/errors.ts matches, not numbered, so a call site says which failure it means.
    */
   errors: {
+    invoice_not_payable: 'אי אפשר לשייך תשלום, זיכוי או בקשת תשלום לחשבונית הזו: היא נמחקה, או שהיא מסמך תומך ולא חשבונית לתשלום. בחר את החשבונית שהחוב רשום עליה.',
+    credit_request_concurrent_change: 'הזיכוי או החשבונית שהוא מקוזז מולה השתנו בזמן שהמסך היה פתוח, ולכן הפעולה לא בוצעה ושום דבר לא נרשם. רענן את המסך, בדוק את מצב הזיכוי ונסה שוב.',
+    payment_request_checks_currency_mismatch: 'החשבוניות שנבחרו אינן במטבע אחד, או שאינן במטבע של הבקשה הקיימת. בקשת תשלום היא במטבע אחד בלבד — יש לפצל לבקשה נפרדת לכל מטבע.',
+    payment_request_checks_invalid: 'בדיקות טרום-האישור לא רצו: הבקשה נשלחה בלי ספק, בלי סכום חיובי או בלי חשבוניות. בחר ספק וחשבוניות ונסה שוב.',
+    payment_settlement_invalid: 'פרטי הסכום שיצא מהחשבון אינם תקינים: המטבע חייב להיות פעיל ושונה ממטבע החוב, והסכום חייב להיות חיובי ובמספר הספרות שאותו מטבע מאפשר. אין המרה — שני הסכומים נרשמים כפי שהם.',
+    payment_settlement_pair_invalid: 'כשמשלמים מחשבון במטבע אחר צריך למלא את שני השדות יחד — הסכום שיצא מהחשבון והמטבע שלו — או להשאיר את שניהם ריקים. אחד מהם לבדו אינו אומר כלום.',
+    payment_execution_currency_invalid: 'מטבע החוב של הבקשה אינו מטבע פעיל, ולכן אי אפשר לבצע את התשלום. הכסף לא יצא ולא נרשם דבר. בדוק את מטבע הבקשה לפני ניסיון נוסף.',
+    payment_request_currency_invalid: 'מטבע הבקשה אינו מטבע פעיל במערכת, ולכן אי אפשר ליצור או לקדם את בקשת התשלום. בדוק את המטבע של החשבוניות שנבחרו, ואם מטבע הושבת — פנה לבעלים.',
     bank_direct_match_requires_financial_correction: 'ההתאמה הזו רשמה תשלום בפועל, ולכן היא אינה מתבטלת בלחיצה — ביטול היה מוחק רשומת תשלום קיימת. את התיקון עושים בחשבונית עצמה: בכרטיס החשבונית פותחים דרישת זיכוי (מנהל/בעלים או מנהל רכש), והמעקב אחריה במסך "זיכויים".',
     invoice_three_way_assessment_stale: 'המצב השתנה מאז שנפתח החלון — ההתאמה נבדקה מחדש. עברו על מה שהשתנה ואשרו שוב.',
     approved_invoice_override_immutable: 'החשבונית כבר אושרה, ולכן אי אפשר לעקוף את ההתאמה שלה.',
@@ -506,6 +514,8 @@ export const he = {
     keyInvoiceLineHint: 'הפרש מותר בין כמות × מחיר פחות הנחה לבין סכום השורה. זהו סכום קטן — עודף, לא יחידה.',
     keyInvoiceTotal: 'סה״כ החשבונית',
     keyInvoiceTotalHint: 'הפרש מותר בין סכום הכותרת לבין סכום השורות.',
+    keyInvoiceSettled: 'חשבונית נחשבת משולמת',
+    keyInvoiceSettledHint: 'כמה מותר שיישאר פתוח בחשבונית והיא עדיין תיחשב משולמת.',
     sourceBaseCurrency: 'מטבע הספרים',
     sourceSupplierDefault: 'ברירת מחדל של ספק',
     sourceInvoice: 'חשבוניות',
@@ -999,6 +1009,7 @@ export const he = {
     eyebrowReport: 'דיווח · REPORT',
   },
   orders: {
+    statusWithSupplier: 'אצל הספק — נשלחו, אושרו וחלקיות',
     toastPdf: 'קובץ ה-PDF הורד',
     exportPdf: 'הורדת ההזמנה כקובץ PDF מעוצב עם הלוגו של הארגון',
     exportPdfLabel: 'הורדת PDF',
@@ -1899,6 +1910,7 @@ export const he = {
   },
 
   inventory: {
+    lowStockUnmeasured: 'אין מוצר עם יתרה שנספרה ומינימום מוגדר',
     quantityTooLarge: 'הכמות גדולה מדי. אפשר להזין עד 1,000,000',
     pricesInSeveralCurrencies: 'מחירים בכמה מטבעות',
     text: 'קבלת סחורה',
@@ -1992,6 +2004,9 @@ export const he = {
   },
 
   priceLists: {
+    windowLastDays: '{days} הימים האחרונים',
+    windowAnyTime: 'בכל זמן',
+    windowFilterLabel: 'חלון זמן לשינויי מחיר',
     productLabel: 'מוצר',
     text: 'ספק',
     formatUnit: 'יחידה',
@@ -2062,6 +2077,7 @@ export const he = {
   },
 
   paymentRequests: {
+    statusCommitted: 'כסף שכבר התחייבנו לו — טיוטות, ממתינות לאישור, מאושרות ולביצוע',
     toast: 'הדרישה בוטלה',
     text: 'ספק',
     fmtMoneyExact: 'סכום',
@@ -2738,6 +2754,13 @@ export const he = {
   },
 
   reports: {
+    openExceptionsLink: 'מעבר לחריגות הפתוחות',
+    openMonthBank: 'פתיחת תנועות הבנק של החודש',
+    bankBlockerNotOnThisScreen: 'אין החודש תנועת בנק שמסומנת „ללא התאמה” או „הצעת התאמה”, ולכן אי אפשר להצביע מכאן על התנועה שחוסמת. ייתכן שזו תנועה שסומנה כלא רלוונטית, תנועה שההתאמה שלה לא אושרה או מובילה ליותר מישות משפטית אחת, או תנועה מחודש אחר שפתוחה עליה חריגה.',
+    xlAmountAgainstInvoices: 'סכום כנגד חשבוניות',
+    xlPaymentsAgainstInvoices: 'תשלומים כנגד חשבוניות',
+    amountAgainstInvoices: 'סכום כנגד חשבוניות',
+    kpiPaidAgainstInvoices: 'שולם החודש כנגד חשבוניות',
     toast: 'קובץ ה-Excel הורד',
     message: 'שגיאה',
     text: 'הנתונים נטענים…',
@@ -2805,7 +2828,6 @@ export const he = {
     title_7: 'אין תשלומים בחודש זה',
     aria_label_4: 'תשלומים לפי ספק — טבלה נגללת',
     text_42: 'ספק',
-    text_43: 'סכום ששולם',
     title_8: 'אין תשלומים בחודש זה',
     text_44: 'אין תשלומים בחודש זה',
     text_45: 'זיכויים',
@@ -2842,7 +2864,6 @@ export const he = {
     kpiInvoices: 'חשבוניות',
     kpiInvoiceTotal: 'סה״כ חשבוניות',
     kpiVat: 'מע״מ',
-    kpiPaidThisMonth: 'שולם החודש',
     kpiUnpaid: 'חשבוניות שטרם שולמו',
     kpiUnmatchedBank: 'תנועות בנק ללא התאמה',
     kpiSuggested: 'התאמות שממתינות לאישור',
@@ -4497,6 +4518,7 @@ export const he = {
   },
 
   invoiceList: {
+    reviewFilterToReview: 'לבדיקה (התקבלו ובבדיקה)',
     text: 'כל הבדיקות האוטומטיות עברו ללא ממצאים.',
     toast: 'החשבונית נמחקה',
     text_2: 'מס׳ חשבונית',
@@ -4750,6 +4772,8 @@ export const he = {
   },
 
   productPurchase: {
+    committedCostRule: '„עלות לפי ההזמנה” היא המחיר שנשמר בהזמנה כפול הכמות שהוזמנה, במטבע ההזמנה. „הוצאה” היא מה שנרשם בחשבוניות שאושרו. אלה שני מספרים שונים ואין לחבר ביניהם.',
+    committedCost: 'עלות לפי ההזמנה',
     text: 'מוצר',
     text_2: '· חלק מהכמות לפי החשבונית בלבד',
     text_3: '· חלק מהשורות טרם אושרו בראיה',
@@ -6235,6 +6259,9 @@ export const he = {
      instruction was ignored in all five runs.
      Tool DESCRIPTIONS are deliberately not here: only the model reads those. */
   assistantTools: {
+    exposureScreenDueSoon: 'מסך דרישות התשלום — לפירעון בשבעת הימים הקרובים',
+    exposureScreenDueToday: 'מסך דרישות התשלום — לפירעון היום',
+    exposureScreenOverdue: 'מסך דרישות התשלום — באיחור',
     supplierWindowWarning: 'כל המדדים המחוּלנים נמדדים ב-{window}; \'שינוי מחיר\' כולל גם ירידות מחיר ואינו נושא גודל שינוי.',
     lineWord: 'שורה',
     orderWord: 'הזמנה',

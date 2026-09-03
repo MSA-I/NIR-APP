@@ -73,6 +73,10 @@ export interface Organization {
     payment_request_amount_tolerance?: ToleranceSetting;
     invoice_line_amount_tolerance?: ToleranceSetting;
     invoice_document_amount_tolerance?: ToleranceSetting;
+    /* The fifth, added by 0299. It is not new behaviour — it is the bare `<= 1` that decided
+       "paid" inside the status writer, which was one unit of whatever currency the invoice
+       happened to be in and which no screen could state. */
+    invoice_payment_settled_tolerance?: ToleranceSetting;
     // Per-tenant display names for roles. The user_role enum is fixed (it is baked into the
     // RLS policies); only the label moves. resolveRoleLabels() in status.ts honors a key
     // only if it already exists in ROLE_LABEL, so a settings blob can rename a role but

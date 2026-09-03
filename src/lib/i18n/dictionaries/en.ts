@@ -33,6 +33,14 @@ export const en: Dictionary = {
    * it into something vaguer: the rule did not change with the language.
    */
   errors: {
+    invoice_not_payable: 'A payment, credit or payment request cannot be attached to this invoice: it has been deleted, or it is a supporting document rather than a payable invoice. Choose the invoice the debt is recorded on.',
+    credit_request_concurrent_change: 'The credit, or the invoice it is set against, changed while this screen was open, so nothing was done and nothing was recorded. Refresh, check the credit\'s state, and try again.',
+    payment_request_checks_currency_mismatch: 'The selected invoices are not in one currency, or not in the existing request\'s currency. A payment request holds one currency only — split them into a separate request per currency.',
+    payment_request_checks_invalid: 'The pre-approval checks did not run: the request arrived with no supplier, no positive amount, or no invoices. Pick a supplier and invoices and try again.',
+    payment_settlement_invalid: 'The account-side amount is not valid: its currency must be active and different from the debt currency, and the amount must be positive and within that currency\'s number of decimals. Nothing is converted — both amounts are recorded as they are.',
+    payment_settlement_pair_invalid: 'Paying from an account in another currency needs both fields together — the amount that left the account and its currency — or neither. One without the other says nothing.',
+    payment_execution_currency_invalid: 'The request\'s debt currency is not an active currency, so the payment cannot be executed. No money moved and nothing was recorded. Check the request\'s currency before trying again.',
+    payment_request_currency_invalid: 'The request\'s currency is not an active currency, so the payment request cannot be created or moved on. Check the currency of the selected invoices; if a currency was deactivated, ask the owner.',
     bank_direct_match_requires_financial_correction: 'This match recorded an actual payment, so a click cannot undo it — undoing it would delete an existing payment record. The correction is made on the invoice itself: open a credit request from the invoice card (manager/owner or purchasing manager), and follow it on the Credits screen.',
     invoice_three_way_assessment_stale: 'The state changed while this dialog was open — the match was re-checked. Read what changed and approve again.',
     approved_invoice_override_immutable: 'This invoice is already approved, so its match cannot be overridden.',
@@ -498,6 +506,8 @@ export const en: Dictionary = {
     keyInvoiceLineHint: 'The difference permitted between quantity × price less discount and the line total. This is small change — a rounding, not a unit.',
     keyInvoiceTotal: 'Invoice total',
     keyInvoiceTotalHint: 'The difference permitted between the header amount and the sum of the lines.',
+    keyInvoiceSettled: 'An invoice counts as paid',
+    keyInvoiceSettledHint: 'How much may remain open on an invoice while it still counts as paid.',
     sourceBaseCurrency: 'Books currency',
     sourceSupplierDefault: 'Supplier default',
     sourceInvoice: 'Invoices',
@@ -989,6 +999,7 @@ export const en: Dictionary = {
     eyebrowReport: 'REPORT',
   },
   orders: {
+    statusWithSupplier: 'With the supplier — sent, confirmed and partial',
     toastPdf: 'The PDF file was downloaded',
     exportPdf: 'Download the order as a PDF laid out with the organisation logo',
     exportPdfLabel: 'Download PDF',
@@ -1889,6 +1900,7 @@ export const en: Dictionary = {
   },
 
   inventory: {
+    lowStockUnmeasured: 'No product has both a counted balance and a minimum',
     quantityTooLarge: 'That quantity is too large. You can enter up to 1,000,000',
     pricesInSeveralCurrencies: 'Prices in several currencies',
     text: 'Goods receipt',
@@ -1982,6 +1994,9 @@ export const en: Dictionary = {
   },
 
   priceLists: {
+    windowLastDays: 'Last {days} days',
+    windowAnyTime: 'Any time',
+    windowFilterLabel: 'Price-change time window',
     productLabel: 'Product',
     text: 'Supplier',
     formatUnit: 'Unit',
@@ -2052,6 +2067,7 @@ export const en: Dictionary = {
   },
 
   paymentRequests: {
+    statusCommitted: 'Money already committed — drafts, pending approval, approved and sent for execution',
     toast: 'The request was cancelled',
     text: 'Supplier',
     fmtMoneyExact: 'Amount',
@@ -2728,6 +2744,13 @@ export const en: Dictionary = {
   },
 
   reports: {
+    openExceptionsLink: 'Go to the open exceptions',
+    openMonthBank: 'Open this month\'s bank transactions',
+    bankBlockerNotOnThisScreen: 'No bank transaction this month is marked unmatched or awaiting approval, so the blocking transaction cannot be pointed at from here. It may be one marked not relevant, one whose match was never approved or leads to more than one legal entity, or one from another month with an open exception on it.',
+    xlAmountAgainstInvoices: 'Amount against invoices',
+    xlPaymentsAgainstInvoices: 'Payments against invoices',
+    amountAgainstInvoices: 'Amount against invoices',
+    kpiPaidAgainstInvoices: 'Paid this month against invoices',
     toast: 'The Excel file was downloaded',
     message: 'Error',
     text: 'Loading the data…',
@@ -2795,7 +2818,6 @@ export const en: Dictionary = {
     title_7: 'No payments this month',
     aria_label_4: 'Payments by supplier — scrollable table',
     text_42: 'Supplier',
-    text_43: 'Amount paid',
     title_8: 'No payments this month',
     text_44: 'No payments this month',
     text_45: 'Credits',
@@ -2832,7 +2854,6 @@ export const en: Dictionary = {
     kpiInvoices: 'Invoices',
     kpiInvoiceTotal: 'Invoice total',
     kpiVat: 'VAT',
-    kpiPaidThisMonth: 'Paid this month',
     kpiUnpaid: 'Invoices not yet paid',
     kpiUnmatchedBank: 'Unmatched bank transactions',
     kpiSuggested: 'Matches awaiting approval',
@@ -4487,6 +4508,7 @@ export const en: Dictionary = {
   },
 
   invoiceList: {
+    reviewFilterToReview: 'To review (received and in review)',
     text: 'Every automatic check passed with no findings.',
     toast: 'The invoice was deleted',
     text_2: 'Invoice no.',
@@ -4740,6 +4762,8 @@ export const en: Dictionary = {
   },
 
   productPurchase: {
+    committedCostRule: '"Cost as ordered" is the price saved on the order multiplied by the quantity ordered, in the order\'s currency. "Expense" is what approved invoices recorded. They are two different figures and are never added together.',
+    committedCost: 'Cost as ordered',
     text: 'Product',
     text_2: '· part of the quantity is from the invoice only',
     text_3: '· some of the lines have not been confirmed by sight yet',
@@ -6215,6 +6239,9 @@ export const en: Dictionary = {
   },
 
   assistantTools: {
+    exposureScreenDueSoon: 'The payment-requests screen — due within seven days',
+    exposureScreenDueToday: 'The payment-requests screen — due today',
+    exposureScreenOverdue: 'The payment-requests screen — overdue',
     supplierWindowWarning: 'Every windowed figure is measured over {window}; a \'price change\' includes decreases and carries no size.',
     lineWord: 'Line',
     orderWord: 'Order',

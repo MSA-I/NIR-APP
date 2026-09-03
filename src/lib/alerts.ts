@@ -103,7 +103,10 @@ async function scanPriceIncreases(): Promise<Alert | null> {
     severity: 'warning',
     title: { key: 'alerts.priceIncrease_title', vars: { count: raised, days: PRICE_INCREASE_WINDOW_DAYS } },
     detail: { key: PRICE_INCREASE_SCOPE_DETAIL_KEY },
-    to: '/prices?increases=1',
+    // The window this scan measures on (p2_recent_price_increase_count reads
+    // price_effective_date >= today - 30). Without it the link opens every rise the catalogue
+    // still remembers, under a title that counted thirty days.
+    to: '/prices?increases=1&days=30',
   };
 }
 

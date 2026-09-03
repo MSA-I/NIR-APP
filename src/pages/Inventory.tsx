@@ -84,6 +84,33 @@ type InventoryCommand = 'stocktake' | 'consumption' | 'adjustment';
  * silently empty the table with no way to tell why.
  */
 const BALANCE_FILTERS = ['low', 'counted', 'uncounted'] as const;
+/**
+ * "מתחת למינימום" has THREE states, and it used to have two.
+ *
+ * `is_low_stock` is `null` in the view whenever a product has not been counted or carries no
+ * minimum — the comparison has no two sides. Counting `=== true` over a set where every row is
+ * null gives 0, and the tile printed `0` under the words "דורש בדיקת רכש": a clean sheet, on a
+ * business where nothing has ever been counted. That is the reading this page's own header
+ * sentence forbids three lines above it — „מוצר שלא נספר מוצג כמקף — יתרה לא ידועה, לא אפס" —
+ * and it is how somebody buys a pallet of what they already have.
+ *
+ * So: a real measured zero when at least one product HAS a verdict and none of them is low;
+ * `—` when no product has one, because there was nothing to measure; `—` when the fetch itself
+ * failed. An empty catalogue keeps the zero — there genuinely is no product below a minimum —
+ * and the table's own empty state says the catalogue is empty.
+ *
+ * The filter follows the figure: `low == null` already leaves the segment unclickable, and a
+ * segment that cannot state its count must not promise to filter by it.
+ */
+export function lowStockCount(
+  rows: readonly { is_low_stock: boolean | null }[] | null,
+): number | null {
+  if (rows == null) return null;
+  if (rows.length === 0) return 0;
+  if (!rows.some((row) => row.is_low_stock !== null)) return null;
+  return rows.filter((row) => row.is_low_stock === true).length;
+}
+
 type BalanceFilter = '' | typeof BALANCE_FILTERS[number];
 
 const MOVEMENT_LABEL: Record<InventoryMovement['movement_type'], string> = {
@@ -281,8 +308,8 @@ export default function Inventory() {
   const canRecord = organizationAccess.canWrite;
   const canAdjust = canRecord && (profile?.role === 'owner' || profile?.role === 'office');
   const counted = balances.data?.filter((row) => row.is_counted).length ?? null;
-  const low = balances.data?.filter((row) => row.is_low_stock === true).length ?? null;
   const uncounted = balances.data?.filter((row) => !row.is_counted).length ?? null;
+  const low = lowStockCount(balances.data ?? null);
   // Clicking the segment that is already live clears it — a filter you entered by clicking is a
   // filter you should be able to leave the same way, without hunting for the dropdown.
   const toggleFilter = (value: BalanceFilter) => () => setFilter(filter === value ? '' : value);
@@ -337,7 +364,10 @@ export default function Inventory() {
           <div className="card grid grid-cols-1 sm:grid-cols-3">
             <StockStat title={t('inventory.title_2')} value={counted == null ? '—' : fmtNum(counted)} sub={t('inventory.sub')}
               active={filter === 'counted'} onClick={counted == null ? undefined : toggleFilter('counted')} />
-            <StockStat title={t('inventory.title_3')} value={low == null ? '—' : fmtNum(low)} sub={t('inventory.sub_2')}
+            {/* The sub-line changes with the state, because "דורש בדיקת רכש" under a dash reads as
+                a task nobody has to do rather than as an answer nobody has. */}
+            <StockStat title={t('inventory.title_3')} value={low == null ? '—' : fmtNum(low)}
+              sub={low == null ? t('inventory.lowStockUnmeasured') : t('inventory.sub_2')}
               tone={low && low > 0 ? 'alert' : 'idle'}
               active={filter === 'low'} onClick={low == null ? undefined : toggleFilter('low')} />
             {/* `idle`, matching the "טרם נספר" badge in the table below. The same set of products

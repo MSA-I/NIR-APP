@@ -150,8 +150,19 @@ export const getPurchaseMetrics: AssistantTool = {
     money("credits_pending_by_currency", readerText(ctx.locale, "assistantTools.purchaseCreditsPending"));
     money("net_expense_by_currency", readerText(ctx.locale, "assistantTools.purchaseNetExpense"));
 
-    // /expenses is an owner+accountant route; office reads these same figures on the dashboard.
-    // A source must point at a screen its reader can actually open.
+    /* /expenses is an owner+accountant route; office reads these same figures on the dashboard.
+       A source must point at a screen its reader can actually open.
+
+       For the two roles that CAN open it the reference now carries the window it measured.
+       `/expenses` reads `?from=`/`?to=` off the URL and calls this same `get_purchase_metrics`
+       with them, so the screen reproduces the figure exactly — while the bare route opens on the
+       current calendar month, which is not the trailing window this tool was asked for.
+
+       For office it carries no route at all, and that is the honest answer rather than a
+       degradation. The control centre shows "נרכש החודש": a calendar month, in whichever single
+       currency the picker is on. It is a different period and a different scope, so pointing a
+       trailing-window answer at it would be the same near-miss in the other direction. The label
+       still names the screen, so the reader knows where these figures live. */
     const officeActor = ctx.actor.role === "office";
     const source = ctx.evidence.source({
       entity: "organization",
@@ -159,7 +170,7 @@ export const getPurchaseMetrics: AssistantTool = {
       label: officeActor
         ? readerText(ctx.locale, "assistantTools.screenControlCentre")
         : readerText(ctx.locale, "assistantTools.screenExpenses"),
-      route: officeActor ? "/dashboard" : "/expenses",
+      route: officeActor ? null : `/expenses?from=${from}&to=${to}`,
       classification: "financial_sensitive",
     });
 

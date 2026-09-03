@@ -723,7 +723,13 @@ insert into payment_allocations (payment_id, invoice_id, credit_id, amount) valu
 ('f7000000-0000-4000-8000-000000000004', 'f4000000-0000-4000-8000-000000000004', null, 413.00),
 ('f7000000-0000-4000-8000-000000000004', 'f4000000-0000-4000-8000-000000000005', null, 826.00),
 ('f7000000-0000-4000-8000-000000000005', 'f4000000-0000-4000-8000-000000000006', null, 500.00),
-('f7000000-0000-4000-8000-000000000006', 'f4000000-0000-4000-8000-000000000014', null, 750.00);
+('f7000000-0000-4000-8000-000000000006', 'f4000000-0000-4000-8000-000000000014', null, 750.00),
+-- Invoice 3377 is 900 = 750 cash + 150 credit, which is what the payment's own note says. Until
+-- Wave 6 this file wrote only the cash half, so the credit request sat at `offset` with nothing
+-- allocated to it: the invoice read `paid` while its derived balance read 150 ILS still owed —
+-- the one row in the whole database where the stored label and the computed balance disagreed.
+-- Without this line every `npm run demo:restore` and every `supabase db reset` recreates it.
+('f7000000-0000-4000-8000-000000000006', null, 'f5000000-0000-4000-8000-000000000004', 150.00);
 
 -- ===== Bank imports & transactions =====
 insert into bank_imports (id, org_id, filename, file_hash, column_mapping, row_count, imported_by, imported_at) values

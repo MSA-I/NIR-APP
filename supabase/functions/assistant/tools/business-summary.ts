@@ -113,6 +113,14 @@ export const getBusinessSummaryTool: AssistantTool = {
     const facts: Fact[] = [];
     const sources: SourceReference[] = [];
     const failures: { code: string; label: string }[] = [];
+    /* Every reference below carries `line.evidenceRoute`, not `line.to`.
+       `to` is where /alerts sends someone to WORK on a subject; the summary table's five entries
+       all pointed at a whole screen, and three of them held a bounded question — a trailing week,
+       a status subset, a thirty-day window — that the screen's own default contradicts. As a
+       source that is worse than none: it invites a reader to check a figure against a list that
+       was never counting the same thing. `evidenceRoute` is null for the two that no screen state
+       can reproduce, and `SourceReferenceSchema` already allows a reference with no route, so the
+       line still names what was measured without promising a place to see it. */
     for (const line of SUMMARY_METRIC_LINES) {
       const matching = rows.filter((row) => row.metric_key === line.key);
       const lineLabel = readerText(ctx.locale, line.labelKey, line.labelVars);
@@ -145,7 +153,7 @@ export const getBusinessSummaryTool: AssistantTool = {
             entity: "organization",
             entity_id: ctx.actor.orgId,
             label: lineLabel,
-            route: line.to,
+            route: line.evidenceRoute,
             classification: "tenant_standard",
           }));
           continue;
@@ -175,7 +183,7 @@ export const getBusinessSummaryTool: AssistantTool = {
             entity: "organization",
             entity_id: ctx.actor.orgId,
             label: lineLabel,
-            route: line.to,
+            route: line.evidenceRoute,
             classification: "tenant_standard",
           }));
         }
@@ -202,7 +210,7 @@ export const getBusinessSummaryTool: AssistantTool = {
           entity: "organization",
           entity_id: ctx.actor.orgId,
           label,
-          route: line.to,
+          route: line.evidenceRoute,
           classification: "tenant_standard",
         }));
       }
