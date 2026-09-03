@@ -107,6 +107,14 @@ LTR_RUN = re.compile(r"[A-Za-z0-9]+(?:(?:[.,:/*+\-]|[ ])[A-Za-z0-9]+)*[%°]?")
 MIRRORED = {"(": ")", ")": "(", "[": "]", "]": "[", "{": "}", "}": "{", "<": ">", ">": "<"}
 BRACKET_PAIRS = (("(", ")"), ("[", "]"), ("{", "}"))
 
+# How a Hebrew document enumerates: a single letter or a small number, a closer, then the item.
+# `א) מוצר`, `1) קמח`, `ב. שמן` -- and the first two put a closer after one character with content
+# after it, which is precisely the shape the inversion scan treats as a mirrored bracket. Counting
+# them made every itemised price list look reversed, so the marker is stripped before a line is
+# judged. Deliberately narrow: ONE character before the closer. `12) x` is a marker; `(100 יח` is
+# not, and `100 יח)` is the stray-closer case that has its own rule.
+LIST_MARKER = re.compile(r"^[0-9֐-׿]{1,2}\s*[).\]]\s+")
+
 
 def _line_order_evidence(text: str) -> tuple[int, int, int, int, int, int]:
     """`(lines_judged, leading_closer, closer_before_opener, unbalanced, strong, evidence)`.
@@ -143,16 +151,39 @@ def _line_order_evidence(text: str) -> tuple[int, int, int, int, int, int]:
     `closer_before_opener`, so summing those two would have let a single line corroborate itself.
     """
     lines = judged = leading = inverted = unbalanced = strong = evidence = 0
+    # Unclosed openers carried over from earlier lines, per pair. A bracket that OPENS on one line
+    # and CLOSES on the next is ordinary logical text -- a sentence in parentheses that wrapped --
+    # and judging each line as if it were a whole paragraph read the second line's leading closer
+    # as a mirrored bracket. Measured: `(תנאים / ) המשך / א) מוצר` scored strong=1, evidence=2 and
+    # inverted a valid document.
+    pending = {closer: 0 for _, closer in BRACKET_PAIRS}
     for raw_line in text.split("\n"):
         line = raw_line.strip()
         if not line:
             continue
         lines += 1
         if not HEBREW_RUN.search(line):
-            # A line with no Hebrew carries no evidence about Hebrew layout either way.
+            # A line with no Hebrew carries no evidence about Hebrew layout either way, but its
+            # brackets still open and close, so the running depth has to see it.
+            for opener, closer in BRACKET_PAIRS:
+                pending[closer] = max(0, pending[closer] + line.count(opener) - line.count(closer))
             continue
         judged += 1
-        line_leading = any(line.startswith(close) for _, close in BRACKET_PAIRS)
+        # A HEBREW LIST MARKER IS NOT A MIRRORED BRACKET. `א) מוצר` and `1) מוצר` are how a Hebrew
+        # document enumerates, and they put a closer after a single character with content after
+        # it -- which is exactly the shape the inversion scan below looks for. Counting them made
+        # any itemised price list look reversed. The marker is removed before the line is judged,
+        # and its closer is not allowed to satisfy the depth bookkeeping either.
+        marker = LIST_MARKER.match(line)
+        if marker:
+            line = line[marker.end() :].strip()
+            if not line or not HEBREW_RUN.search(line):
+                judged -= 1
+                continue
+        # A leading closer is evidence ONLY when nothing earlier left an opener hanging.
+        line_leading = any(
+            line.startswith(close) and pending[close] == 0 for _, close in BRACKET_PAIRS
+        )
         if line_leading:
             leading += 1
         for opener, closer in BRACKET_PAIRS:
@@ -176,6 +207,11 @@ def _line_order_evidence(text: str) -> tuple[int, int, int, int, int, int]:
                     depth -= 1
             if position < 0:
                 continue
+            # An unmatched closer that an EARLIER line's opener accounts for is not mirrored -- it
+            # is a parenthetical that wrapped. Only the closers beyond that debt can be evidence.
+            if line.count(closer) - line.count(opener) <= pending[closer]:
+                if line.count(opener) < line.count(closer):
+                    continue
             balanced = line.count(opener) == line.count(closer)
             # Real content, not a trailing quote or full stop: `(abc).` with the opener dropped
             # reads as `abc).`, and the `.` must not be mistaken for the text a closer preceded.
@@ -191,6 +227,9 @@ def _line_order_evidence(text: str) -> tuple[int, int, int, int, int, int]:
             strong += 1
         if line_leading or line_inverted:
             evidence += 1
+        # Carry this line's unclosed openers to the next one.
+        for opener, closer in BRACKET_PAIRS:
+            pending[closer] = max(0, pending[closer] + line.count(opener) - line.count(closer))
     return judged, leading, inverted, unbalanced, strong, evidence
 
 

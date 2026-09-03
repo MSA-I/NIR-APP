@@ -29,6 +29,10 @@ import { backupEmailProblem, normaliseEmail } from '../../../src/lib/backupEmail
 
 type Failure = { message: string } | null;
 type Row = { id?: string };
+/** A delete filter that can be narrowed more than once and awaited at any point. */
+interface DeleteFilter extends PromiseLike<{ error: Failure }> {
+  eq(column: string, value: string): DeleteFilter;
+}
 
 export interface ProvisionAdminClient {
   from(table: string): {
@@ -37,7 +41,12 @@ export interface ProvisionAdminClient {
         single(): PromiseLike<{ data: Row | null; error: Failure }>;
       };
     };
-    delete(): { eq(column: string, value: string): PromiseLike<{ error: Failure }> };
+    /**
+     * `eq` CHAINS, because a scoped delete needs two of them: the rollback removes the profile
+     * this attempt wrote by org AND by id, and a single-key filter would have swept a live
+     * tenant's members.
+     */
+    delete(): DeleteFilter;
     /**
      * READ-BACK, and it is the whole reason this member exists.
      *
@@ -329,7 +338,7 @@ async function organizationStillPresent(
  */
 export async function rollbackTenant(
   admin: ProvisionAdminClient,
-  created: { orgId?: string; userId?: string },
+  created: { orgId?: string; userId?: string; profileUserId?: string },
 ): Promise<string[]> {
   const leftovers: string[] = [];
 
@@ -342,6 +351,30 @@ export async function rollbackTenant(
   const orgId = created.orgId;
   /** What was tried and what it said — diagnosis, attached to the verdict rather than mistaken for it. */
   const attempts: string[] = [];
+
+  // 0. THE PROFILE THIS ATTEMPT CREATED, and it is not always the user's.
+  //
+  //    `0305` fences the teardown on the organization having no profile, because a failed
+  //    provision has no user attached — that is what makes the door safe to hand `service_role`.
+  //    It is true of the ordinary path and FALSE of the federated one: `adoptExistingUserAsOwner`
+  //    attaches an EXISTING account, so it writes a profile and deliberately leaves
+  //    `created.userId` empty — the account is not ours to delete. A later step failing then left
+  //    an organization the fence refused to clean, and the next attempt jammed on the profile
+  //    that was still there. Round 2, finding 4 of the adversarial review, and the claim it
+  //    refuted was mine: "every failure happens at or before the user step".
+  //
+  //    So the profile goes first — but ONLY the one this attempt wrote, named by id. A blanket
+  //    `delete().eq('org_id', orgId)` was the first version of this fix and it re-opened finding
+  //    12 through a side door: it would let one rollback call clear a LIVE tenant's members and
+  //    then delete the tenant, which is precisely what the fence exists to prevent. Scoped to the
+  //    attempt's own row, a rollback aimed at somebody's business still meets the fence and
+  //    still refuses. The ACCOUNT is untouched either way, which is the whole point of the
+  //    federated path.
+  if (created.profileUserId) {
+    const profileSweep = await admin.from('profiles').delete()
+      .eq('org_id', orgId).eq('id', created.profileUserId);
+    if (profileSweep.error) attempts.push(`profiles: ${profileSweep.error.message}`);
+  }
 
   // 1. The registry-driven teardown. One call, one transaction, every tenant table.
   const teardown = await admin.rpc(ROLLBACK_TEARDOWN_RPC, { p_org_id: orgId });
@@ -384,7 +417,7 @@ export async function provisionTenant(
     .map((c) => c.trim())
     .filter((c) => c.length > 0);
 
-  const created: { orgId?: string; userId?: string } = {};
+  const created: { orgId?: string; userId?: string; profileUserId?: string } = {};
 
   try {
     // Status defaults to active and the plan comes from the 0154 trigger. Provisioning never
@@ -446,6 +479,10 @@ export async function provisionTenant(
     });
     if (profileInsert.error) {
       throw new Error(`יצירת פרופיל הבעלים נכשלה: ${profileInsert.error.message}`);
+    // The rollback removes THIS row and no other. Recorded here rather than inferred from
+    // created.userId, because the federated path writes a profile for an account it did not
+    // create and must still be able to clean up after itself.
+    created.profileUserId = created.userId;
     }
 
     let categoriesCreated = 0;
@@ -502,7 +539,7 @@ export async function adoptExistingUserAsOwner(
     .map((c) => c.trim())
     .filter((c) => c.length > 0);
 
-  const created: { orgId?: string; userId?: string } = {};
+  const created: { orgId?: string; userId?: string; profileUserId?: string } = {};
 
   try {
     const orgInsert = await admin
@@ -525,6 +562,9 @@ export async function adoptExistingUserAsOwner(
     });
     if (profileInsert.error) {
       throw new Error(`יצירת פרופיל הבעלים נכשלה: ${profileInsert.error.message}`);
+    // The account is not ours to delete, but the PROFILE is ours to clean up -- and 0305 will
+    // refuse the teardown while it stands.
+    created.profileUserId = input.ownerUserId;
     }
 
     let categoriesCreated = 0;

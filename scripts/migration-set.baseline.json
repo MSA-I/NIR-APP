@@ -294,5 +294,8 @@
   "0302_a_marker_belongs_at_one_end_of_the_cell.sql",
   "0303_a_counter_that_cannot_be_outrun.sql",
   "0304_the_writer_and_the_reader_answer_the_same_question.sql",
-  "0305_a_rollback_that_only_reaches_a_tenant_with_nobody_in_it.sql"
+  "0305_a_rollback_that_only_reaches_a_tenant_with_nobody_in_it.sql",
+  "0306_the_whole_decision_under_one_lock.sql",
+  "0307_a_tolerance_change_carries_the_labels_with_it.sql",
+  "0308_a_citation_keeps_its_window_after_a_refresh.sql"
 ]

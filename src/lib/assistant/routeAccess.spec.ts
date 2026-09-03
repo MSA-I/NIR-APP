@@ -100,6 +100,36 @@ describe('assistant route policy parity', () => {
     }
   });
 
+  it('לא כל צורה היא תאריך, ולא כל צמד הוא טווח', () => {
+    /* Round 2, finding 6. `2026-02-31` satisfies the ISO shape and then makes the destination
+       screen throw `Invalid calendar date`; a reversed pair lands on an invalid-range screen.
+       Either way the reader follows a citation to an error instead of to the evidence. */
+    const path = APP_ROUTE_POLICY.expenses.path;
+    const refused: readonly [string, string][] = [
+      ['2026-02-31', '2026-02-31'],   // February has no thirty-first
+      ['2026-13-01', '2026-13-05'],   // no thirteenth month
+      ['2026-09-10', '2026-09-01'],   // the range runs backwards
+      ['2026-00-10', '2026-00-11'],   // no zeroth month
+    ];
+    for (const [from, to] of refused) {
+      const declared = { from, to };
+      expect(
+        assistantSourceRouteDecision(shaped(`${path}?from=${from}&to=${to}`, 'organization', declared)),
+        `${from}..${to}`,
+      ).toBe('not_allowlisted');
+    }
+    // A real single-day range is still a range, and a leap day in a leap year is still a day.
+    for (const [from, to] of [['2026-09-03', '2026-09-03'], ['2024-02-29', '2024-03-01']] as const) {
+      expect(
+        assistantSourceRouteDecision(shaped(`${path}?from=${from}&to=${to}`, 'organization', { from, to })),
+        `${from}..${to}`,
+      ).not.toBe('not_allowlisted');
+    }
+    // ...and a leap day in a NON-leap year is not.
+    expect(assistantSourceRouteDecision(
+      shaped(`${path}?from=2026-02-29&to=2026-03-01`, 'organization', { from: '2026-02-29', to: '2026-03-01' }),
+    )).toBe('not_allowlisted');
+  });
   it('route עם פרמטרים מעוצבים מתקבל רק בצורה המדויקת שהוגדרה לו', () => {
     for (const rule of ASSISTANT_SHAPED_PARAM_ROUTE_RULES) {
       const path = APP_ROUTE_POLICY[rule.appRoute].path;

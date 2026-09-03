@@ -1466,7 +1466,18 @@ def _line_order_check() -> dict[str, Any]:
         # `(ג"ק 5 ןבל חמק`. A closer that ENDS a line is where a closer belongs; the bracket that
         # went missing is the opener, and no repair can put it back by reversing the letters.
         'קמח לבן 5 ק"ג)',
+        # A HEBREW LIST MARKER. `א)` puts a closer after one character with content after it --
+        # exactly the shape the inversion scan looks for -- so every itemised price list read as
+        # reversed. It is how a Hebrew document enumerates, not a mirrored bracket.
+        'א) קמח לבן',
+        '1) שמן זית',
     ]
+
+    # A PARENTHETICAL THAT WRAPPED, which no single-line fixture can express. The opener is on one
+    # line and its closer begins the next, and judging each line as a whole paragraph read that
+    # leading closer as mirrored. Together with a list marker on a third line it scored
+    # `strong=1, evidence=2` and inverted a document of ordinary logical text.
+    wrapped_parenthetical = "(תנאים\n) המשך\nא) מוצר"
 
     def fires(text: str) -> bool:
         _, leading, inverted, _, _, _ = _line_order_evidence(text)
@@ -1538,12 +1549,22 @@ def _line_order_check() -> dict[str, Any]:
     assert untouched == clean_pages, untouched
     assert all(entry["applied"] is False for entry in clean_records), clean_records
 
+    # 4. A parenthetical that wrapped across two lines, with an enumerated item under it. Every
+    #    line here is ordinary logical text and the document must arrive unchanged. This is the
+    #    shape that survived the first repair: the leading closer on the second line belongs to
+    #    the first line's opener, and `א)` is a list marker rather than a mirrored bracket.
+    wrapped_pages = {1: wrapped_parenthetical}
+    wrapped_out, wrapped_records = _normalize_pdf_text_layer(dict(wrapped_pages))
+    assert wrapped_out == wrapped_pages, wrapped_out
+    assert all(entry["applied"] is False for entry in wrapped_records), wrapped_records
+
     return {
         "damaged_detected": f"{len(damaged)}/{len(damaged)}",
         "readable_false_positives": f"0/{len(readable)}",
         "round_trip": f"{len(readable)}/{len(readable)}",
         "word_order": "repaired",
         "one_line_inverts_a_document": "no",
+        "wrapped_parenthetical_survives": "yes",
     }
 
 

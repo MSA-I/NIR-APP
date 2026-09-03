@@ -115,6 +115,29 @@ export type AssistantShapedParamRouteRule = {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * Both halves are real days on the calendar, and the first is not after the second.
+ *
+ * `ISO_DATE` above is a shape and nothing more: `2026-02-31` and `2026-13-01` satisfy it. The
+ * round-trip through `Date` is what settles it — a rolled-over day reappears as a different
+ * string, so comparing the formatted value against the input catches February the thirty-first
+ * without a month-length table. Both ends are UTC noon so no zone can move the day.
+ *
+ * `undefined` is a false, deliberately: this is called only after every declared parameter has
+ * been matched, so a missing one is already a refusal and this must not turn it into a pass.
+ */
+function isRealCalendarRange(from: string | undefined, to: string | undefined): boolean {
+  if (from === undefined || to === undefined) return false;
+  const real = (value: string): number | null => {
+    const at = Date.parse(`${value}T12:00:00Z`);
+    if (Number.isNaN(at)) return null;
+    return new Date(at).toISOString().slice(0, 10) === value ? at : null;
+  };
+  const start = real(from);
+  const end = real(to);
+  return start !== null && end !== null && start <= end;
+}
+
 export const ASSISTANT_SHAPED_PARAM_ROUTE_RULES: readonly AssistantShapedParamRouteRule[] = [
   { appRoute: 'expenses', params: { from: ISO_DATE, to: ISO_DATE }, entities: ['organization'] },
 ];
@@ -201,6 +224,12 @@ export function assistantSourceRouteDecision(
         if (value === undefined || !shape.test(value)) return 'not_allowlisted';
         if (parameters.get(name) !== value) return 'not_allowlisted';
       }
+      // A SHAPE IS NOT A DATE, and a pair is not a range. Round 2, finding 6: `2026-02-31` passes
+      // `^\d{4}-\d{2}-\d{2}$` and then makes the destination screen throw `Invalid calendar date`,
+      // and `from=2026-09-10&to=2026-09-01` passes and lands on an invalid-range screen. Either
+      // way the reader follows a citation to an error instead of to the evidence, which is the
+      // same broken promise as a window that does not isolate the claim.
+      if (!isRealCalendarRange(declared.from, declared.to)) return 'not_allowlisted';
       return role && !rolesFor(shapedRule.appRoute).includes(role) ? 'not_permitted' : 'allowed';
     }
 

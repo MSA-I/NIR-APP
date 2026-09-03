@@ -87,6 +87,17 @@ const MARKER = /₪|\$|€|£|¥|ש"ח|ש״ח|ש\.ח|שח|[\p{L}]+/u;
  * The caller has already proved `digits` matches `^[0-9]+([.][0-9]+)?$`, so there is no sign, no
  * exponent and no separator left to handle here; the sign is reapplied by the caller.
  */
+/**
+ * Did rounding to `places` throw away anything? Answered from the digit string, because the two
+ * numbers cannot answer it: `Number('1.000000000000000001')` is already exactly 1, so comparing
+ * the parsed value with the rounded one reports "not rounded" for a cell `numeric` calls rounded.
+ */
+function discardedDigits(digits: string, places: number): boolean {
+  const point = digits.indexOf('.');
+  if (point === -1) return false;
+  return /[1-9]/.test(digits.slice(point + 1 + places));
+}
+
 function roundDecimalDigits(digits: string, places: number): number {
   const point = digits.indexOf('.');
   const whole = point === -1 ? digits : digits.slice(0, point);
@@ -219,7 +230,13 @@ export function parsePrice(
     currency: expected,
     printedCurrency: printed,
     minorUnits,
-    rounded: roundedValue !== value,
+    /* Read off the DIGITS THAT WERE DISCARDED, not off two numbers that have already lost the
+       distinction. `1.000000000000000001` becomes exactly 1 the moment `Number()` touches it, so
+       `roundedValue !== value` answered false while `numeric` — which loses nothing — reports the
+       cell as rounded. Round 2, finding 8: the value agreed after the digit rounding landed and
+       this flag still did not, which is a contract the preview and the writer must share or the
+       "this price was rounded" notice appears on one side only. */
+    rounded: discardedDigits(body, minorUnits),
   };
 }
 
