@@ -1836,7 +1836,24 @@ function ColumnChecklist({ options }: { options: ColumnPickerOption[] }) {
 
 /** Desktop column picker. Portals to body for the same reason ActionMenu does — the DataTable
     card is overflow-hidden — and reuses its measure-then-place pattern (end-edge aligned,
-    flipped above when the viewport has no room below, clamped inside). */
+    flipped above when the viewport has no room below, clamped inside).
+ *
+ * KEYBOARD CONTRACT, and it is written down because the previous version had none and the gap was
+ * invisible to the unit tests. Measured in Chrome on /invoices, 03.09.2026:
+ *   · opening the picker left `document.activeElement` on the TRIGGER — the focus call at the end
+ *     of the measuring layout effect ran while `pos` was still `null`, so the panel was
+ *     `visibility: hidden`, and a `visibility: hidden` element cannot take focus. jsdom does not
+ *     implement that rule, so `expect(checkbox).toHaveFocus()` passed while the browser did not;
+ *   · because the panel is portalled to the END of `<body>`, Tab from the trigger walked into the
+ *     table BEHIND the open dialog instead of into it;
+ *   · from inside, the eighth Tab dropped focus onto `<body>` with the dialog still open — and the
+ *     next Tab restarted at "דלג לתוכן", i.e. the whole application, with a dialog covering it.
+ *
+ * So the contract is: Tab from the trigger ENTERS the panel; Tab past the last control (or
+ * Shift+Tab past the first) CLOSES and returns focus to the trigger, so the next Tab continues
+ * through the toolbar; Escape does the same; and focus landing anywhere else closes it. This is a
+ * popover and not a modal, so it deliberately does not run on `useDialogLayer` — that locks body
+ * scroll and holds the Escape stack, which a column checklist has no business doing. */
 function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
@@ -1845,10 +1862,20 @@ function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   const close = useCallback((focusTrigger = false) => {
+    // Focus is never abandoned on a node that is about to unmount. It used to be: a close from the
+    // scroll or pointer handler left `document.activeElement` inside the removed panel, which the
+    // browser resolves to `<body>` — and from `<body>` the next Tab starts the page over.
+    const focusWasInside = !!panelRef.current?.contains(document.activeElement);
     setOpen(false);
     setPos(null);
-    if (focusTrigger) triggerRef.current?.focus();
+    if (focusTrigger || focusWasInside) triggerRef.current?.focus();
   }, []);
+
+  /** The panel's own controls, in tab order. Disabled boxes are not focusable and not in it. */
+  const focusablesInPanel = useCallback(
+    () => Array.from(panelRef.current?.querySelectorAll<HTMLElement>('input:not(:disabled)') ?? []),
+    [],
+  );
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -1865,8 +1892,22 @@ function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
     if (top + ph > window.innerHeight - 8 && rect.top - ph - 4 >= 8) top = rect.top - ph - 4;
     top = Math.min(Math.max(top, 8), window.innerHeight - ph - 8);
     setPos({ top, left });
-    panel.querySelector<HTMLElement>('input:not(:disabled)')?.focus();
   }, [open]);
+
+  /**
+   * Initial focus waits for the POSITION, not merely for `open`.
+   *
+   * This call used to be the last line of the effect above, and in a browser it did nothing: until
+   * `pos` is measured the panel renders `visibility: hidden`, and `visibility: hidden` makes an
+   * element unfocusable. Keying it on `pos` moves it to the first render in which the panel is
+   * actually visible. Measured before/after on /invoices: activeElement was the trigger, now it is
+   * the first enabled checkbox.
+   */
+  useEffect(() => {
+    if (!open || !pos) return;
+    const panel = panelRef.current;
+    (panel?.querySelector<HTMLElement>('input:not(:disabled)') ?? panel)?.focus();
+  }, [open, pos]);
 
   useEffect(() => {
     if (!open) return;
@@ -1876,9 +1917,44 @@ function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
       close();
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.stopPropagation(); // an open popover consumes Escape — a Modal underneath must not also close
+      if (event.key === 'Escape') {
+        event.stopPropagation(); // an open popover consumes Escape — a Modal underneath must not also close
+        close(true);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const panel = panelRef.current;
+      const trigger = triggerRef.current;
+      if (!panel || !trigger) return;
+      const nodes = focusablesInPanel();
+      const active = document.activeElement;
+
+      // Tab from the trigger ENTERS the panel. Without this the portal's position at the end of
+      // <body> sends the caret into the page behind an open dialog.
+      if (trigger.contains(active) && nodes.length > 0) {
+        event.preventDefault();
+        (event.shiftKey ? nodes[nodes.length - 1] : nodes[0]).focus();
+        return;
+      }
+      if (!panel.contains(active)) return;
+
+      // Tab past the end (or Shift+Tab past the start) LEAVES — closing and handing focus back to
+      // the trigger, so the next Tab carries on through the toolbar. That is the exit; the panel
+      // is never a place the keyboard can be stranded outside of or inside.
+      const leaving = event.shiftKey
+        ? active === nodes[0] || active === panel
+        : active === nodes[nodes.length - 1] || nodes.length === 0;
+      if (!leaving) return;
+      event.preventDefault();
       close(true);
+    };
+    /** Any other route out — a click elsewhere, a focus() from another component — closes it too,
+        without stealing focus back: the user chose where to go. */
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target as Node;
+      if (panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+      setOpen(false);
+      setPos(null);
     };
     // The page scrolling moves the anchor — close rather than chase it (same call as ActionMenu).
     // The panel's own overflow scroll is exempt, or scrolling the checklist would dismiss it.
@@ -1891,13 +1967,15 @@ function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
     window.addEventListener('keydown', onKey, true);
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', onResize);
+    document.addEventListener('focusin', onFocusIn);
     return () => {
       document.removeEventListener('pointerdown', onPointerDown, true);
       window.removeEventListener('keydown', onKey, true);
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', onResize);
+      document.removeEventListener('focusin', onFocusIn);
     };
-  }, [open, close]);
+  }, [open, close, focusablesInPanel]);
 
   return (
     <>

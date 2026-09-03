@@ -62,6 +62,12 @@ export function orderLifecycle(status: PoStatus, wasSent: boolean, wasConfirmed:
   ];
 }
 
+/**
+ * `open_orders` in `management_dashboard_snapshot`, spelled for the URL: an order that has left
+ * the building and has not finished arriving.
+ */
+export const WITH_SUPPLIER_FILTER = 'sent,confirmed,partial';
+
 export function OrdersList() {
   const { errorText, statusLabel, t } = useT();
   const navigate = useNavigate();
@@ -93,6 +99,16 @@ export function OrdersList() {
     const all = data?.orders ?? [];
     if (statusFilter === 'all') return all;
     if (statusFilter === 'open') return all.filter((o) => !['received', 'cancelled'].includes(o.status));
+    /* A comma carries a SET (the shape /exceptions already uses for `?type=`). `?status=open`
+       here means "not finished", which is the right default for someone working the screen but
+       is NOT what `open_orders` means anywhere else in the product: the control centre's
+       "התחייבויות פתוחות" — count and committed money both — is `status in
+       ('sent','confirmed','partial')`, because an order still in draft is not a commitment to
+       anyone. The tile now links to that set by name instead of to the wider default. */
+    if (statusFilter.includes(',')) {
+      const statuses = statusFilter.split(',').filter(Boolean);
+      return all.filter((o) => statuses.includes(o.status));
+    }
     return all.filter((o) => o.status === statusFilter);
   }, [data, statusFilter]);
 
@@ -227,6 +243,9 @@ export function OrdersList() {
           <select className="input w-auto!" aria-label={t('orders.aria_label')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="open">{t('orders.text_11')}</option>
             <option value="all">{t('orders.text_12')}</option>
+            {/* Named in the dropdown rather than left as a URL-only state, so a reader arriving
+                from the control centre's commitments tile can see which set is on. */}
+            <option value={WITH_SUPPLIER_FILTER}>{t('orders.statusWithSupplier')}</option>
             {Object.entries(PO_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
           </select>
         }

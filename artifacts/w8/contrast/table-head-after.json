@@ -1,0 +1,26 @@
+{
+  "light": {
+    "headBackground": "oklch(0.3366 0.058 209)",
+    "thColor": "oklch(0.88 0.014 80)",
+    "ratio": 8.127052022992666,
+    "tokens": {
+      "action": "oklch(33.66% 0.058 209)",
+      "shell": "oklch(19.57% 0.022 229)",
+      "shell-ink-soft": "oklch(88% 0.014 80)",
+      "table-head": "oklch(33.66% 0.058 209)",
+      "table-head-ink": "oklch(88% 0.014 80)"
+    }
+  },
+  "dark": {
+    "headBackground": "oklch(0.3366 0.058 209)",
+    "thColor": "oklch(0.88 0.014 80)",
+    "ratio": 8.127052022992666,
+    "tokens": {
+      "action": "oklch(95% 0.006 80)",
+      "shell": "oklch(19.57% 0.022 229)",
+      "shell-ink-soft": "oklch(88% 0.014 80)",
+      "table-head": "oklch(33.66% 0.058 209)",
+      "table-head-ink": "oklch(88% 0.014 80)"
+    }
+  }
+}

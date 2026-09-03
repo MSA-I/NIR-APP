@@ -12,6 +12,7 @@ import { ROLE_LABEL } from '../lib/status';
 // No resetUserPassword: the campaign replaced owner-initiated password reset with self-service
 // recovery to the verified address (campaign report §15), so the function no longer exists.
 import { provisionOrg, generatePassword, type ProvisionResult } from '../lib/platform';
+import { VAT_RATE_MAX, VAT_RATE_MIN, isVatRateInRange } from '../lib/inputBounds';
 
 interface NewOrgForm {
   name: string;
@@ -120,6 +121,15 @@ export default function Admin() {
   }
 
   async function submitNewOrg(form: NewOrgForm) {
+    /* Unlike the Settings screen, this one already has a server bound behind it:
+       `validateProvisionInput` refuses a rate outside 0-100 before the organization row is
+       created (`supabase/functions/_shared/provision.ts:170-172`), and `admin-provision` calls
+       it (`index.ts:121-122`). So this check is genuinely only a courtesy — it turns a 400 from
+       a remote function into a sentence next to the field. It is here so the operator learns
+       about the bound at the same moment the tenant owner does, not so it can be relied on. */
+    const vat = Number(form.vatRate);
+    if (!isVatRateInRange(vat)) { toast(t('admin.vatRateOutOfRange'), 'error'); return; }
+
     setBusy(true);
     const categories = form.categories.split(',').map((c) => c.trim()).filter(Boolean);
     const res = await provisionOrg({
@@ -127,7 +137,7 @@ export default function Admin() {
       owner_email: form.ownerEmail.trim(),
       owner_name: form.ownerName.trim(),
       owner_password: form.password,
-      vat_rate: Number(form.vatRate),
+      vat_rate: vat,
       ...(categories.length ? { categories } : {}),
     });
     setBusy(false);
@@ -429,7 +439,7 @@ function NewOrgModal({ open, busy, onClose, onSubmit }: {
           </div>
           <div>
             <label className="label" htmlFor="new-org-vat">{t('admin.text_35')}</label>
-            <input id="new-org-vat" className="input num" type="number" step="0.5" value={form.vatRate} onChange={(e) => set('vatRate', e.target.value)} />
+            <input id="new-org-vat" className="input num" type="number" step="0.5" min={VAT_RATE_MIN} max={VAT_RATE_MAX} value={form.vatRate} onChange={(e) => set('vatRate', e.target.value)} />
           </div>
           <div className="sm:col-span-2">
             <label className="label" htmlFor="new-org-categories">{t('admin.text_36')}</label>

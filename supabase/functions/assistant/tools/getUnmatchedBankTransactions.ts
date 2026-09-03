@@ -108,7 +108,10 @@ export const getUnmatchedBankTransactions: AssistantTool = {
         entity: "bank_transaction",
         entity_id: row.id,
         label: title,
-        route: "/bank",
+        // `?status=attention` is the screen's own name for `in ('unmatched','suggested')` — the
+        // two statuses this tool returns and no others. Bare /bank opens on every transaction
+        // ever imported, most of them already matched.
+        route: "/bank?status=attention",
         classification: "financial_sensitive",
       }));
       return {

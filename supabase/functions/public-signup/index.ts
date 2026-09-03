@@ -322,6 +322,14 @@ Deno.serve(withAllowedOrigin(async (req: Request): Promise<Response> => {
     });
     if (!adopted.ok) {
       await admin0.rpc('service_mark_signup_rejected', { p_email_hash: await sha256Hex(email) });
+      // Same rule as the password branch below: the measurement reaches the log, never the caller.
+      if (adopted.failure.leftovers.length > 0) {
+        console.error('signup rollback left a tenant behind', {
+          leftovers: adopted.failure.leftovers,
+          kind: adopted.failure.kind,
+          identity: requestedIdentity,
+        });
+      }
       return json({
         error: {
           code: 'signup_failed',
@@ -411,6 +419,28 @@ Deno.serve(withAllowedOrigin(async (req: Request): Promise<Response> => {
 
   if (!outcome.ok) {
     await admin.rpc('service_mark_signup_rejected', { p_email_hash: emailHash });
+
+    /**
+     * THE ONE PLACE THE DEBRIS WAS AUDIBLE, AND IT WAS SILENT.
+     *
+     * `provisionTenant` measures whether the organization survived its own rollback and returns
+     * that as `leftovers`. `admin-provision` shows it to the operator who called it; this door has
+     * no operator, and it simply dropped the list — so an orphaned tenant produced a 500 to a
+     * stranger, nothing in the log, and no way for anybody to learn it existed until somebody read
+     * the table by hand. That is how `QA-AGENT10-DO-NOT-KEEP` sat in production unremarked.
+     *
+     * It goes to the function log and NEVER to the response: the identifiers are internal, and this
+     * endpoint's answers have to stay neutral (an error body that varied with what was left behind
+     * would be a second channel for telling a caller whether their address already existed). No
+     * address and no name are logged — an organization id is not personal data and is the only
+     * thing an operator needs to find the row.
+     */
+    if (outcome.failure.leftovers.length > 0) {
+      console.error('signup rollback left a tenant behind', {
+        leftovers: outcome.failure.leftovers,
+        kind: outcome.failure.kind,
+      });
+    }
 
     // The response stays identical to a fresh signup. The confirmation screen offers Auth's
     // public, rate-limited resend without making this endpoint reveal confirmation state.

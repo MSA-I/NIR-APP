@@ -3,6 +3,15 @@
 // fence). The window anchors on the current business day in Asia/Jerusalem and uses the product's
 // own trailing definition (0165: `>= today - N`). Committed and gross are never netted against
 // each other, and gross buckets by invoice_date -- the day the supplier billed, not intake day.
+//
+// EVERY MONEY FIGURE IS PER CURRENCY (0221). The live body behind the RPC --
+// `private.canonical_purchase_metrics(uuid,date,date)`, which is what
+// `public.get_purchase_metrics` returns unchanged -- emits `committed_by_currency`,
+// `gross_expense_by_currency`, `credits_recognised_by_currency`, `credits_pending_by_currency`
+// and `net_expense_by_currency`, each an array of `{currency, amount}` or a JSON null. ALL FIVE
+// flat scalars this tool used to read are gone, not just `gross_expense`. Net is gross minus
+// recognised credits WITHIN ONE CURRENCY -- a dollar credit does not reduce a shekel bill -- so
+// the per-currency rows must survive all the way into the facts.
 import { z } from "zod";
 import {
   type Fact,
@@ -13,6 +22,7 @@ import {
 import { addCalendarDays, toZoneISO } from "../time.ts";
 import { readerText } from "../reader-locale.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
+import { currencyUnit, moneyByCurrency } from "./moneyByCurrency.ts";
 import { failure, num, record } from "./shared.ts";
 
 const inputSchema = z
@@ -27,8 +37,10 @@ export const getPurchaseMetrics: AssistantTool = {
     "מדדי הרכש הקנוניים לחלון נגרר (7/30/90 יום אחורה מהיום העסקי): התחייבות — הזמנות שאינן " +
     "טיוטה ולא בוטלו, במחירי הרגע שבו הוזמנו, לפי יום היצירה העסקי; הוצאה ברוטו — חשבוניות ספק " +
     "מאושרות בלבד, לפי תאריך החשבונית (מתי הספק חייב) ולא לפי מועד הקליטה; זיכויים שהוכרו — " +
-    "offset/closed בלבד; זיכויים ממתינים בנפרד; ונטו = ברוטו פחות זיכויים שהוכרו. " +
-    "ערך שמקורו ריק מוחזר null, לא אפס. התחייבות והוצאה הם שני מובנים שונים ואין לחבר אותם.",
+    "offset/closed בלבד; זיכויים ממתינים בנפרד; ונטו = ברוטו פחות זיכויים שהוכרו באותו מטבע. " +
+    "ערך שמקורו ריק מוחזר null, לא אפס. התחייבות והוצאה הם שני מובנים שונים ואין לחבר אותם. " +
+    "כל סכום מוחזר שורה לכל מטבע, עם קוד המטבע בתווית וביחידה. אין המרה בין מטבעות ואין לחבר " +
+    "או להשוות סכומים ממטבעות שונים; מדד שאין לו אף שורת מטבע מוחזר ככשל מוצהר, לא כאפס.",
   inputSchema,
   inputJsonSchema: {
     type: "object",
@@ -89,17 +101,34 @@ export const getPurchaseMetrics: AssistantTool = {
     filters.net_definition = netDefinition;
 
     const facts: Fact[] = [];
+    const failures: { code: string; label: string }[] = [];
+    /**
+     * One money fact per currency. A null array means the window contained nothing of this kind
+     * to measure -- there is no currency in which to state it, so nothing is emitted and the
+     * absence is NAMED. `committed_order_count` and `gross_invoice_count` are the measured zeros
+     * that say why, and inventing `ils` here is exactly the defect this replaced.
+     */
     const money = (key: string, label: string) => {
-      facts.push(ctx.evidence.fact({
-        kind: "metric.money",
-        subject: null,
-        label: `${label} — ${windowLabel}`,
-        value: num(metrics[key]),
-        unit: "ils",
-        tool: getPurchaseMetrics.name,
-        as_of: asOf,
-        classification: "financial_sensitive",
-      }));
+      const parsed = moneyByCurrency(metrics[key]);
+      if (parsed === null || parsed.rows.length === 0) {
+        failures.push({ code: `${key}:not_measured`, label: `${label} — ${windowLabel}` });
+        return;
+      }
+      if (parsed.skipped > 0) {
+        failures.push({ code: `${key}:currency_unrecognised`, label: `${label} — ${windowLabel}` });
+      }
+      for (const row of parsed.rows) {
+        facts.push(ctx.evidence.fact({
+          kind: "metric.money",
+          subject: null,
+          label: `${label} (${row.currency}) — ${windowLabel}`,
+          value: row.amount,
+          unit: currencyUnit(row.currency),
+          tool: getPurchaseMetrics.name,
+          as_of: asOf,
+          classification: "financial_sensitive",
+        }));
+      }
     };
     const count = (key: string, label: string) => {
       facts.push(ctx.evidence.fact({
@@ -113,16 +142,27 @@ export const getPurchaseMetrics: AssistantTool = {
         classification: "tenant_standard",
       }));
     };
-    money("committed", readerText(ctx.locale, "assistantTools.purchaseCommitted"));
+    money("committed_by_currency", readerText(ctx.locale, "assistantTools.purchaseCommitted"));
     count("committed_order_count", readerText(ctx.locale, "assistantTools.purchaseCommittedOrderCount"));
-    money("gross_expense", readerText(ctx.locale, "assistantTools.purchaseGrossExpense"));
+    money("gross_expense_by_currency", readerText(ctx.locale, "assistantTools.purchaseGrossExpense"));
     count("gross_invoice_count", readerText(ctx.locale, "assistantTools.purchaseGrossInvoiceCount"));
-    money("credits_recognised", readerText(ctx.locale, "assistantTools.purchaseCreditsRecognised"));
-    money("credits_pending", readerText(ctx.locale, "assistantTools.purchaseCreditsPending"));
-    money("net_expense", readerText(ctx.locale, "assistantTools.purchaseNetExpense"));
+    money("credits_recognised_by_currency", readerText(ctx.locale, "assistantTools.purchaseCreditsRecognised"));
+    money("credits_pending_by_currency", readerText(ctx.locale, "assistantTools.purchaseCreditsPending"));
+    money("net_expense_by_currency", readerText(ctx.locale, "assistantTools.purchaseNetExpense"));
 
-    // /expenses is an owner+accountant route; office reads these same figures on the dashboard.
-    // A source must point at a screen its reader can actually open.
+    /* /expenses is an owner+accountant route; office reads these same figures on the dashboard.
+       A source must point at a screen its reader can actually open.
+
+       For the two roles that CAN open it the reference now carries the window it measured.
+       `/expenses` reads `?from=`/`?to=` off the URL and calls this same `get_purchase_metrics`
+       with them, so the screen reproduces the figure exactly — while the bare route opens on the
+       current calendar month, which is not the trailing window this tool was asked for.
+
+       For office it carries no route at all, and that is the honest answer rather than a
+       degradation. The control centre shows "נרכש החודש": a calendar month, in whichever single
+       currency the picker is on. It is a different period and a different scope, so pointing a
+       trailing-window answer at it would be the same near-miss in the other direction. The label
+       still names the screen, so the reader knows where these figures live. */
     const officeActor = ctx.actor.role === "office";
     const source = ctx.evidence.source({
       entity: "organization",
@@ -130,14 +170,20 @@ export const getPurchaseMetrics: AssistantTool = {
       label: officeActor
         ? readerText(ctx.locale, "assistantTools.screenControlCentre")
         : readerText(ctx.locale, "assistantTools.screenExpenses"),
-      route: officeActor ? "/dashboard" : "/expenses",
+      route: officeActor ? null : `/expenses?from=${from}&to=${to}`,
+      /* The window as a VALUE, not as a slice of the string above. `routeAccess` compares the two
+         and refuses a shaped route that declares nothing, so the range in the link is the range
+         this reference stands for and cannot be widened by an edit to the route alone. Both
+         halves read the same `from`/`to` this tool measured on — which is the claim a reviewer
+         has to check here, because no allowlist can check it at run time. */
+      route_params: officeActor ? undefined : { from, to },
       classification: "financial_sensitive",
     });
 
     return {
       data: [metrics],
       complete: true,
-      failures: [],
+      failures,
       filters,
       as_of: asOf,
       result_count: 1,

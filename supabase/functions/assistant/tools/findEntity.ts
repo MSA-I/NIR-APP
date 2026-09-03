@@ -49,6 +49,12 @@ interface EntityMapping {
 
 // 'draft' (purchase request drafts, 0145) is deliberately absent: it has no evidence entity, and
 // a resolver hit the other tools cannot act on is noise.
+//
+// THE ROUTE IS THE ROW, not the screen the row lives on. This tool answers "which record did you
+// mean", so a reference that opens an unfiltered list has answered nothing — the reader is handed
+// back the search they had already done. Products, payments and credits have no page of their own
+// and were the three doing exactly that; each of those screens takes an `?id=` that pins the list
+// to one row and opens it, so the reference carries it now.
 const ENTITY_MAP: Record<string, EntityMapping> = {
   supplier: {
     evidence: "supplier",
@@ -58,7 +64,7 @@ const ENTITY_MAP: Record<string, EntityMapping> = {
   },
   product: {
     evidence: "product",
-    route: () => "/products",
+    route: (id) => `/products?id=${id}`,
     keepSubtitle: false, // category + sku: harmless but not needed for resolution
     kindName: "product",
   },
@@ -76,13 +82,13 @@ const ENTITY_MAP: Record<string, EntityMapping> = {
   },
   payment: {
     evidence: "payment",
-    route: () => "/payments",
+    route: (id) => `/payments?id=${id}`,
     keepSubtitle: false, // supplier · method · reference -- reference stays inside
     kindName: "payment",
   },
   credit: {
     evidence: "credit_note",
-    route: () => "/credits",
+    route: (id) => `/credits?id=${id}`,
     keepSubtitle: true,
     kindName: "credit",
   },

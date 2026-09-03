@@ -78,10 +78,30 @@ export interface CheckoutRequestBody {
 const REFUSED = JSON.stringify({ error: "refused" });
 const UNAVAILABLE = JSON.stringify({ error: "provider_not_enabled" });
 
+/**
+ * The CORS shape every response of this function carries, preflight and answer alike.
+ *
+ * It lives HERE rather than in index.ts because that is where the answers are built. A preflight
+ * fixed in the wiring while these bodies stayed bare would move the failure rather than remove
+ * it: the browser would send the POST and then refuse to let the screen read the reply.
+ *
+ * `Access-Control-Allow-Origin` is deliberately EMPTY at rest. `withAllowedOrigin`
+ * (../_shared/cors.ts) fills it per request with the caller's Origin when it is on
+ * ALLOWED_ORIGINS/APP_BASE_URL and with the first allowed origin otherwise -- never "*", which
+ * on a purchasing surface would be an invitation.
+ */
+export const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "",
+  Vary: "Origin",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-correlation-id",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 function answer(status: number, body: string): Response {
   return new Response(body, {
     status,
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 }
 

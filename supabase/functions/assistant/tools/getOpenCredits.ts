@@ -11,6 +11,7 @@ import type {
 import { fetchDashboardSnapshot } from "./dashboardSnapshot.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
 import { readerText } from "../reader-locale.ts";
+import { currencyUnit, moneyByCurrency } from "./moneyByCurrency.ts";
 import {
   EMPTY_OBJECT_JSON_SCHEMA,
   failure,
@@ -31,7 +32,9 @@ export const getOpenCredits: AssistantTool = {
   description:
     "זיכויים פתוחים מול ספקים: סך הזיכויים במצב open/requested/received (רק offset/closed " +
     "מקטינים יתרה בפועל), והפירוט הכספי פר ספק. נספרות אך ורק רשומות זיכוי שנקלטו במערכת — " +
-    "מסמך זיכוי שנסרק ולא הפך לרשומת זיכוי אינו נכלל. סכום כולל מוחזר null כשאין אף זיכוי פתוח.",
+    "מסמך זיכוי שנסרק ולא הפך לרשומת זיכוי אינו נכלל. הסכום הכולל מוחזר שורה לכל מטבע, עם קוד " +
+    "המטבע בתווית וביחידה; אין המרה ואין לחבר סכומים ממטבעות שונים. כשאין אף זיכוי פתוח אין " +
+    "מטבע לנקוב בו סכום, ולכן לא מוחזר סכום כלל — המונה שלצדו הוא האפס שנמדד.",
   inputSchema,
   inputJsonSchema: EMPTY_OBJECT_JSON_SCHEMA,
   requiredRoles: ["owner", "office"],
@@ -48,11 +51,11 @@ export const getOpenCredits: AssistantTool = {
     if (fetched.failed || !fetched.snapshot) return fetched.failed!;
     const credits = record(fetched.snapshot.credits) ?? {};
     const openCount = num(credits.count);
-    const openSum = num(credits.sum);
     const filters = { business_date: fetched.businessDate, statuses: "open,requested,received" };
 
     const facts: Fact[] = [];
     const sources: SourceReference[] = [];
+    const failures: { code: string; label: string }[] = [];
     facts.push(ctx.evidence.fact({
       kind: "metric.count",
       subject: null,
@@ -63,25 +66,49 @@ export const getOpenCredits: AssistantTool = {
       as_of: asOf,
       classification: "tenant_standard",
     }));
-    facts.push(ctx.evidence.fact({
-      kind: "credit.open_amount",
-      subject: null,
-      label: readerText(ctx.locale, "assistantTools.creditsOpenSumOrg"),
-      value: openSum,
-      unit: "ils",
-      tool: getOpenCredits.name,
-      as_of: asOf,
-      classification: "financial_sensitive",
-    }));
+    /* A FOURTH ADAPTER READING A KEY THAT NO LONGER EXISTS — the same defect Wave 1b repaired in
+       three, found while walking this tool's citations. `management_dashboard_snapshot` has
+       returned `credits.sumByCurrency` since 0218; `credits.sum` was never restored, so
+       `num(credits.sum)` was null on every run and the answer carried a `credit.open_amount`
+       fact valued null and labelled `ils` — a currency nothing in the row had chosen. Null at
+       least reads as "not measured" rather than as zero, which is why it was quiet; but the
+       organisation's open credits were simply unavailable to the assistant, and the ILS unit was
+       a claim about a figure that did not exist.
+       One fact per currency now, through the reader the other three already use. */
+    const openByCurrency = moneyByCurrency(credits.sumByCurrency);
+    const openSumLabel = readerText(ctx.locale, "assistantTools.creditsOpenSumOrg");
+    if (openByCurrency === null || openByCurrency.rows.length === 0) {
+      // No credit is open in ANY currency, so there is no currency to state a sum in. The count
+      // fact above is the measured zero that says so; inventing one here is the defect itself.
+      failures.push({ code: "credits_open_sum:not_measured", label: openSumLabel });
+    } else {
+      if (openByCurrency.skipped > 0) {
+        failures.push({ code: "credits_open_sum:currency_unrecognised", label: openSumLabel });
+      }
+      for (const row of openByCurrency.rows) {
+        facts.push(ctx.evidence.fact({
+          kind: "credit.open_amount",
+          subject: null,
+          label: `${openSumLabel} (${row.currency})`,
+          value: row.amount,
+          unit: currencyUnit(row.currency),
+          tool: getOpenCredits.name,
+          as_of: asOf,
+          classification: "financial_sensitive",
+        }));
+      }
+    }
     sources.push(ctx.evidence.source({
       entity: "organization",
       entity_id: ctx.actor.orgId,
       label: readerText(ctx.locale, "assistantTools.creditsScreen"),
-      route: "/credits",
+      // The screen's `active` set is `open/requested/received` — exactly the statuses this
+      // count and sum are taken over. Its default happens to be the same, but a source states
+      // its filter rather than relying on a default staying put.
+      route: "/credits?status=active",
       classification: "financial_sensitive",
     }));
 
-    const failures: { code: string; label: string }[] = [];
     const perSupplier = await reads.listSupplierOpenCredits(PER_SUPPLIER_LIMIT);
     const supplierRows: {
       supplier_id: string;
@@ -146,7 +173,9 @@ export const getOpenCredits: AssistantTool = {
     return {
       data: [{
         open_count: openCount,
-        open_sum: openSum,
+        // Per currency, never one number: the rows are separate figures and adding them is the
+        // thing the money rules forbid. `null` means the snapshot measured nothing at all.
+        open_sum_by_currency: openByCurrency?.rows ?? null,
         suppliers: supplierRows,
       }],
       complete: failures.length === 0,

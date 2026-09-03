@@ -1,0 +1,34 @@
+{
+  "errors.payment_request_currency_invalid": {
+    "he": "מטבע הבקשה אינו מטבע פעיל במערכת, ולכן אי אפשר ליצור או לקדם את בקשת התשלום. בדוק את המטבע של החשבוניות שנבחרו, ואם מטבע הושבת — פנה לבעלים.",
+    "en": "The request's currency is not an active currency, so the payment request cannot be created or moved on. Check the currency of the selected invoices; if a currency was deactivated, ask the owner."
+  },
+  "errors.payment_execution_currency_invalid": {
+    "he": "מטבע החוב של הבקשה אינו מטבע פעיל, ולכן אי אפשר לבצע את התשלום. הכסף לא יצא ולא נרשם דבר. בדוק את מטבע הבקשה לפני ניסיון נוסף.",
+    "en": "The request's debt currency is not an active currency, so the payment cannot be executed. No money moved and nothing was recorded. Check the request's currency before trying again."
+  },
+  "errors.payment_settlement_pair_invalid": {
+    "he": "כשמשלמים מחשבון במטבע אחר צריך למלא את שני השדות יחד — הסכום שיצא מהחשבון והמטבע שלו — או להשאיר את שניהם ריקים. אחד מהם לבדו אינו אומר כלום.",
+    "en": "Paying from an account in another currency needs both fields together — the amount that left the account and its currency — or neither. One without the other says nothing."
+  },
+  "errors.payment_settlement_invalid": {
+    "he": "פרטי הסכום שיצא מהחשבון אינם תקינים: המטבע חייב להיות פעיל ושונה ממטבע החוב, והסכום חייב להיות חיובי ובמספר הספרות שאותו מטבע מאפשר. אין המרה — שני הסכומים נרשמים כפי שהם.",
+    "en": "The account-side amount is not valid: its currency must be active and different from the debt currency, and the amount must be positive and within that currency's number of decimals. Nothing is converted — both amounts are recorded as they are."
+  },
+  "errors.payment_request_checks_invalid": {
+    "he": "בדיקות טרום-האישור לא רצו: הבקשה נשלחה בלי ספק, בלי סכום חיובי או בלי חשבוניות. בחר ספק וחשבוניות ונסה שוב.",
+    "en": "The pre-approval checks did not run: the request arrived with no supplier, no positive amount, or no invoices. Pick a supplier and invoices and try again."
+  },
+  "errors.payment_request_checks_currency_mismatch": {
+    "he": "החשבוניות שנבחרו אינן במטבע אחד, או שאינן במטבע של הבקשה הקיימת. בקשת תשלום היא במטבע אחד בלבד — יש לפצל לבקשה נפרדת לכל מטבע.",
+    "en": "The selected invoices are not in one currency, or not in the existing request's currency. A payment request holds one currency only — split them into a separate request per currency."
+  },
+  "errors.credit_request_concurrent_change": {
+    "he": "הזיכוי או החשבונית שהוא מקוזז מולה השתנו בזמן שהמסך היה פתוח, ולכן הפעולה לא בוצעה ושום דבר לא נרשם. רענן את המסך, בדוק את מצב הזיכוי ונסה שוב.",
+    "en": "The credit, or the invoice it is set against, changed while this screen was open, so nothing was done and nothing was recorded. Refresh, check the credit's state, and try again."
+  },
+  "errors.invoice_not_payable": {
+    "he": "אי אפשר לשייך תשלום, זיכוי או בקשת תשלום לחשבונית הזו: היא נמחקה, או שהיא מסמך תומך ולא חשבונית לתשלום. בחר את החשבונית שהחוב רשום עליה.",
+    "en": "A payment, credit or payment request cannot be attached to this invoice: it has been deleted, or it is a supporting document rather than a payable invoice. Choose the invoice the debt is recorded on."
+  }
+}

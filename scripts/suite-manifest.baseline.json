@@ -772,96 +772,110 @@
   {
     "ordinal": 110,
     "kind": "suite",
+    "path": "supabase/tests/p106_a_number_belongs_to_one_tenant.sql",
+    "label": "Every tenant counts its own documents from 1: on all six numbered tables a brand-new organization is numbered 1 however busy the tenant beside it is -- the cross-tenant activity signal a global identity sequence published every time somebody read their own numbers -- while an existing tenant continues from its OWN maximum and never reuses a number it has already issued, including one whose row was deleted, because the counter records what was handed out rather than what survived; an explicit number is refused BY NAME rather than honoured, since the identity it replaces refused one at the storage layer; and the structure that makes all of it checkable holds -- unique (org_id, number) on all six, the global identity and its sequence really gone rather than merely unused, the counter table granted to no client role, and the allocator still SECURITY INVOKER so no A5 definer exemption is spent on allocating an integer",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 111,
+    "kind": "suite",
+    "path": "supabase/tests/p107_a_failed_signup_leaves_nothing_behind.sql",
+    "label": "A failed signup leaves nothing behind, and a real tenant survives the same door: the compensation for a two-minute-old organization whose only member is the profile the attempt itself created removes every row on every public table carrying an org_id rather than a hand-picked list, each of the three fences -- past the window, a member nobody named, one supplier row of real business -- refuses BY NAME and changes nothing, the named profile is still standing after a refusal because the deletion happens inside the transaction and after the fences rather than from the Edge function beforehand, naming another tenant's profile excuses nobody, a second rollback reports the organization absent instead of raising so a partial compensation can be retried, and the door itself holds: no browser role, a non-service caller refused by name, no one-argument overload, and no DEFAULT on the second parameter -- which to_regprocedure cannot see and pronargdefaults can",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 112,
+    "kind": "suite",
     "path": "supabase/tests/payment_credit_override.sql",
     "label": "Payment approval with legal-entity scoped open-credit override",
     "role": "postgres"
   },
   {
-    "ordinal": 111,
+    "ordinal": 113,
     "kind": "suite",
     "path": "supabase/tests/monthly_report_snapshots.sql",
     "label": "Immutable legal-entity monthly accountant snapshots",
     "role": "postgres"
   },
   {
-    "ordinal": 112,
+    "ordinal": 114,
     "kind": "preflight",
     "path": "supabase/tests/p1_preflight.sql",
     "label": "P1 preflight",
     "role": null
   },
   {
-    "ordinal": 113,
+    "ordinal": 115,
     "kind": "suite",
     "path": "supabase/tests/p1_financial_commands.sql",
     "label": "P1 financial commands, rollback and idempotency",
     "role": "postgres"
   },
   {
-    "ordinal": 114,
+    "ordinal": 116,
     "kind": "suite",
     "path": "supabase/tests/p1_price_submissions.sql",
     "label": "Owner and office price-list reservation, registration, intake, review and evidence",
     "role": "postgres"
   },
   {
-    "ordinal": 115,
+    "ordinal": 117,
     "kind": "suite",
     "path": "supabase/tests/p1_price_submissions_concurrency.sql",
     "label": "Concurrent owner and office price-list submission and idempotency",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 116,
+    "ordinal": 118,
     "kind": "reset",
     "path": null,
     "label": "supabase db reset",
     "role": null
   },
   {
-    "ordinal": 117,
+    "ordinal": 119,
     "kind": "suite",
     "path": "supabase/tests/p2_data_reliability.sql",
     "label": "P2 retry, alerts, pagination and reliability",
     "role": "postgres"
   },
   {
-    "ordinal": 118,
+    "ordinal": 120,
     "kind": "suite",
     "path": "supabase/tests/server_list_contracts.sql",
     "label": "Server list predicates, duplicate key across pages and tenant scope",
     "role": "postgres"
   },
   {
-    "ordinal": 119,
+    "ordinal": 121,
     "kind": "suite",
     "path": "supabase/tests/roadmap_db_contracts.sql",
     "label": "Roadmap supplier, inventory, savings and WhatsApp contracts",
     "role": "postgres"
   },
   {
-    "ordinal": 120,
+    "ordinal": 122,
     "kind": "suite",
     "path": "supabase/tests/p1_concurrency.sql",
     "label": "P1 real concurrent sessions",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 121,
+    "ordinal": 123,
     "kind": "suite",
     "path": "supabase/tests/payment_credit_override_concurrency.sql",
     "label": "Concurrent payment replay, approval, execution and credit creation",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 122,
+    "ordinal": 124,
     "kind": "suite",
     "path": "supabase/tests/monthly_report_snapshots_concurrency.sql",
     "label": "Concurrent immutable monthly snapshot version allocation",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 123,
+    "ordinal": 125,
     "kind": "suite",
     "path": "supabase/tests/p63_financial_credit_concurrency.sql",
     "label": "Two accountants racing for one credit remainder: one payment, one named refusal, no double allocation",

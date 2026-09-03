@@ -271,6 +271,12 @@ export const EXCEPTION_TYPE: Record<string, string> = {
   // It waited here unlabelled: the table rendered an empty cell and the filter on /exceptions
   // is built from THIS map, so the type could not even be selected. check:exception-labels.
   expected_document_missing: 'exceptionType_expected_document_missing',
+  // 0291/0292. Money recorded against an invoice nobody approved. The bank door does two jobs --
+  // paying through the product, and recording money that already left the account -- and recording
+  // is never refused, because refusing it would make the ledger less true. So the control is that
+  // it cannot happen QUIETLY: 0292 opens one of these in the same transaction as the allocations.
+  // Unlike amount_mismatch, the figures here agree perfectly; what is missing is the authority.
+  unapproved_invoice_settled: 'exceptionType_unapproved_invoice_settled',
 };
 
 export const EXCEPTION_STATUS: Record<string, StatusMeta> = {

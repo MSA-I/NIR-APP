@@ -68,6 +68,16 @@ export default function Alerts() {
   if (error && !data) return <ErrorNote message={error} />;
   if (!data) return null;
 
+  /* Decision F (owner, 03.09.2026): "nothing is owed" is a SENTENCE, not a number.
+     It used to arrive here as a named failure — the currency-less measured zero the summary RPC
+     returns when there is nothing open was filtered out upstream and reported as unmeasured — so
+     this page painted the red bar below over a perfectly healthy organisation. It is stated in
+     the same place now, in the register it deserves: no figure, no `—` (this product reserves
+     that for UNKNOWN), and no alert colour. */
+  const statedAbsences = data.lines
+    .map((line) => (line.state === 'absent' ? line.absenceKey : undefined))
+    .filter((key): key is TKey => key !== undefined);
+
   const SEV_ORDER: AlertSeverity[] = ['critical', 'warning', 'info'];
   const present = SEV_ORDER.filter((s) => data.alerts.some((a) => a.severity === s));
   const shown = sevFilter ? data.alerts.filter((a) => a.severity === sevFilter) : data.alerts;
@@ -93,6 +103,12 @@ export default function Alerts() {
             {error ?? t('alertsPage.partialScan', { scans: data.failures.map((failure) => tDynamic(failure.labelKey, failure.labelVars) ?? failure.labelKey).join(', ') })}
           </span>
         </Note>
+      )}
+
+      {statedAbsences.length > 0 && (
+        <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
+          {statedAbsences.map((key) => <li key={key}>{t(key)}</li>)}
+        </ul>
       )}
 
       <div>

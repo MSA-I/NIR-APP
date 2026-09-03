@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Building, Building2, Check, Clock, Landmark, Lock, Sparkles, Sprout, Store, Wallet, X } from 'lucide-react';
+import { Building, Building2, Check, Clock, Landmark, Lock, Minus, Sparkles, Sprout, Store, Wallet, X } from 'lucide-react';
 import { Skeleton } from './ui';
 import { useT } from '../lib/i18n/LocaleProvider';
 import presentation from '../data/plan-presentation.json';
@@ -150,21 +150,76 @@ export interface PlanTicketFeature {
    * The marketing site learned this the hard way and wrote down why: with a plain tick «the free
    * card then read as the FULLEST card on the page: five ticks for five capabilities it loses on
    * day thirty-one. A tick that expires is not a tick.»
+   *
+   * It is read WHENEVER it is set, and no longer only when `affirmative` is false. Both surfaces
+   * passed `affirmative: row.included || (free && intro_included)` and never passed `intro` at
+   * all, so every intro-only row arrived here as an ordinary inclusion and the clock this field
+   * exists for was unreachable code on both of them.
    */
   intro?: boolean;
+  /**
+   * NOT MEASURED, which is a third thing and not a quiet kind of exclusion.
+   *
+   * `users.max` and `suppliers.max` have no counter behind them (DEBT §56), and `/pricing` renders
+   * them as «— label». It used to hand that row `affirmative: false`, which drew the same ✗ as
+   * `bank.reconciliation` on the free plan — so a row that asserts NOTHING was published as a row
+   * that asserts «you do not get this». The dash glyph its own comment already claimed did not
+   * exist here until now.
+   */
+  unmeasured?: boolean;
 }
+
+/**
+ * WHAT A ROW ASSERTS, as one value rather than as two booleans read in the right order.
+ *
+ * Four states, and the reason they are named here is that three of them used to collapse into two
+ * marks: an intro row and an included row shared the tick, an unmeasured row and an excluded row
+ * shared the cross.
+ */
+type RowState = 'included' | 'intro' | 'unmeasured' | 'excluded';
+
+const rowStateOf = (row: PlanTicketFeature): RowState => {
+  if (row.intro === true) return 'intro';
+  if (row.affirmative) return 'included';
+  return row.unmeasured === true ? 'unmeasured' : 'excluded';
+};
 
 /** One row of a block. Not exported: the blocks are this component's own anatomy. */
 function BlockRow({ row, introTag }: { row: PlanTicketFeature; introTag: string }) {
-  const intro = !row.affirmative && row.intro === true;
-  const on = row.affirmative;
+  const { t } = useT();
+  const state = rowStateOf(row);
+  const intro = state === 'intro';
+  /**
+   * THE MARK IS DECORATION AND THE WORD IS THE FACT.
+   *
+   * `.plan-row__mark` is `aria-hidden`, which is right — a lucide glyph has no name worth reading —
+   * but it was the ONLY thing on the row that said whether the rung includes this. So a screen
+   * reader met «התאמות בנק» on the free card and «התאמות בנק» on the premium card and heard the
+   * same four syllables, on a comparison whose entire purpose is that difference. WCAG 1.3.1: the
+   * information carried by the glyph has to survive without it.
+   *
+   * `data-row-state` carries the same fact for a machine — a spec or the browser gate reads the
+   * state instead of matching a translated word, which is how this stays checkable in both
+   * languages.
+   */
+  const stateWord = {
+    included: t('planCard.stateIncluded'),
+    intro: t('planCard.stateIntro'),
+    unmeasured: t('planCard.stateUnmeasured'),
+    excluded: t('planCard.stateExcluded'),
+  }[state];
   return (
-    <li className={`plan-row ${on ? '' : intro ? 'plan-row--intro' : 'plan-row--off'}`}>
+    <li
+      className={`plan-row ${state === 'included' ? '' : intro ? 'plan-row--intro' : 'plan-row--off'}`}
+      data-row-state={state}
+    >
       <span className="plan-row__mark" aria-hidden="true">
-        {on ? <Check className="size-3.5" strokeWidth={2.6} />
+        {state === 'included' ? <Check className="size-3.5" strokeWidth={2.6} />
           : intro ? <Clock className="size-3.5" strokeWidth={2.4} />
-            : <X className="size-3.5" strokeWidth={2.6} />}
+            : state === 'unmeasured' ? <Minus className="size-3.5" strokeWidth={2.6} />
+              : <X className="size-3.5" strokeWidth={2.6} />}
       </span>
+      <span className="sr-only">{stateWord}</span>
       <span className="plan-row__label">{row.text}</span>
       {intro && <span className="plan-row__tag">{introTag}</span>}
     </li>
@@ -172,7 +227,7 @@ function BlockRow({ row, introTag }: { row: PlanTicketFeature; introTag: string 
 }
 
 export function PlanTicket({
-  planKey, label, who, figure, figureIsWords = false, term,
+  planKey, label, who, figure, figureIsWords = false, term, figureDescription,
   action, quotaLabel, quota, quotaLines = [], quotaChip, features = [], badgeLabel,
   moneyFromLabel, current = false,
 }: {
@@ -194,6 +249,21 @@ export function PlanTicket({
   figureIsWords?: boolean;
   /** The period beside the figure — the marketing site's `.plan-card__per`. */
   term?: string;
+  /**
+   * WHAT THE FIGURE IS, spoken. Absent leaves the figure exactly as it was.
+   *
+   * The slot is a price slot: on `/settings/subscription` it holds a price, and on the marketing
+   * card it holds a price. A surface that puts something else there owes the reader a sentence
+   * saying so, and owes it in BOTH modalities — the visible term beside the figure is read by the
+   * eye, and this is read by everything else.
+   *
+   * It is rendered TWICE and that is not a duplication in the accessibility tree: `.plan-card__chip`
+   * is `display:none` above 60rem and `.plan-card__pricing` is `display:none` below it
+   * (`plan-card.css:898, 992, 1009`), so exactly one of the two is ever live. Writing it in only
+   * one would leave the phone — where the chip is the ONLY place the figure appears at all, and
+   * where the chip's own contents are `aria-hidden` — with a card that never says its number.
+   */
+  figureDescription?: string;
   /** The full-width action. `/pricing` passes none, and passes none on EVERY card equally. */
   action?: ReactNode;
   /**
@@ -266,12 +336,25 @@ export function PlanTicket({
 
           {/* The phone's figure chip, at the far edge of the head. Same figure as the block below;
               the card publishes the catalogue once, on the panel, so nothing is repeated here as
-              an attribute. */}
-          <span className="plan-card__chip" aria-hidden="true">
-            <span className={`plan-card__price ${figureIsWords ? 'plan-card__price--words' : 'num'}`}>
+              an attribute.
+
+              The `aria-hidden` moved OFF the chip and onto its two visible spans. The chip is the
+              only place the figure appears on a phone — `.plan-card__pricing` is `display:none`
+              there — so hiding the whole chip meant a phone reader never met the number at all,
+              and `figureDescription` inside a hidden subtree would have been hidden with it. */}
+          <span className="plan-card__chip">
+            {figureDescription && <span className="sr-only">{figureDescription}</span>}
+            <span
+              className={`plan-card__price ${figureIsWords ? 'plan-card__price--words' : 'num'}`}
+              aria-hidden={figureDescription ? 'true' : undefined}
+            >
               {figure}
             </span>
-            {term && <span className="plan-card__per">{term}</span>}
+            {term && (
+              <span className="plan-card__per" aria-hidden={figureDescription ? 'true' : undefined}>
+                {term}
+              </span>
+            )}
           </span>
         </div>
 
@@ -302,14 +385,21 @@ export function PlanTicket({
         )}
 
         <p className="plan-card__pricing">
+          {figureDescription && <span className="sr-only">{figureDescription}</span>}
           <span
             data-testid="plan-figure"
             data-plan-figure={figure}
+            data-figure-kind={figureDescription ? 'described' : 'bare'}
             className={`plan-card__price ${figureIsWords ? 'plan-card__price--words' : 'num'}`}
+            aria-hidden={figureDescription ? 'true' : undefined}
           >
             {figure}
           </span>
-          {term && <span className="plan-card__per">{term}</span>}
+          {term && (
+            <span className="plan-card__per" aria-hidden={figureDescription ? 'true' : undefined}>
+              {term}
+            </span>
+          )}
         </p>
         {/* The slot holds its height even when empty, or five cards in a row would start their
             blocks at five different offsets. */}

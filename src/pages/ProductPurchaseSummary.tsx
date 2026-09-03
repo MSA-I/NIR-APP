@@ -42,6 +42,20 @@ interface SummaryRow {
   /** 0221: spend per currency. A product bought from two suppliers in two currencies has two. */
   gross_amount_by_currency: { currency: string; amount: number }[] | null;
   /**
+   * WHAT THE ORDERS COMMITTED TO, per ORDER currency — the snapshot price on the order line times
+   * the quantity ordered.
+   *
+   * This report used to answer the money question from approved invoices alone, so a product
+   * ordered and received but not yet billed carried a quantity and no cost at all: two em dashes
+   * where the whole point of the row was what it cost us. The order already said, at the moment it
+   * was placed, and `purchase_order_items.unit_price` is the snapshot the constitution protects.
+   *
+   * It is a SEPARATE figure from `gross_amount_by_currency`, never merged with it: one is what we
+   * committed to, the other is what a supplier billed, and the rows where they disagree are the
+   * ones worth opening. Never summed across currencies either.
+   */
+  ordered_amount_by_currency: { currency: string; amount: number }[];
+  /**
    * 0221: null when the product was billed in more than one currency. The divisor is the canonical
    * QUANTITY — a physical fact with no currency — so part of the money over all of the quantity is
    * a unit price nobody was charged. `spans_currencies` says which rows are in that state.
@@ -112,6 +126,13 @@ export default function ProductPurchaseSummary() {
       render: (r) => <span className="num">{fmtNum(r.received_qty)}</span> },
     { key: 'invoiced', header: t('productPurchase.text_7'), sortValue: (r) => r.invoiced_qty ?? -1,
       render: (r) => <span className="num">{fmtNum(r.invoiced_qty)}</span> },
+    // The committed cost sits BEFORE the billed one, in the order the business lives them: we
+    // agreed a price, then somebody billed us. A row where the second is missing is now a row that
+    // still says what it cost, instead of a row with no money on it at all.
+    { key: 'ordered_cost', header: t('productPurchase.committedCost'),
+      sortValue: (r) => r.ordered_amount_by_currency
+        ?.find((entry) => entry.currency === org?.base_currency)?.amount ?? -1,
+      render: (r) => <MoneyByCurrency amounts={r.ordered_amount_by_currency} baseCurrency={org?.base_currency} /> },
     { key: 'gross', header: t('productPurchase.text_8'),
       /* Sorted on the base-currency figure when there is one: a column of spend across two
          currencies has no single ordering, and sorting on "the first entry" would silently rank
@@ -177,6 +198,9 @@ export default function ProductPurchaseSummary() {
               { header: t('productPurchase.text_16'), key: 'suppliers', width: 12, type: 'number' },
               { header: t('productPurchase.text_17'), key: 'orders', width: 12, type: 'number' },
               { header: t('productPurchase.text_18'), key: 'invoices', width: 13, type: 'number' },
+              // Text, for the same reason the two columns beside it are: a product ordered in two
+              // currencies has two committed figures and one numeric cell cannot hold them.
+              { header: t('productPurchase.committedCost'), key: 'orderedCost', width: 20 },
               { header: t('productPurchase.text_19'), key: 'gross', width: 20 },
               { header: t('productPurchase.text_20'), key: 'average', width: 20 },
             ],
@@ -190,6 +214,8 @@ export default function ProductPurchaseSummary() {
               suppliers: row.supplier_count,
               orders: row.order_count,
               invoices: row.invoice_count,
+              orderedCost: (row.ordered_amount_by_currency ?? [])
+                .map((entry) => fmtMoneyExact(entry.amount, entry.currency)).join(' · '),
               gross: (row.gross_amount_by_currency ?? [])
                 .map((entry) => fmtMoneyExact(entry.amount, entry.currency)).join(' · '),
               average: row.spans_currencies
@@ -239,6 +265,9 @@ export default function ProductPurchaseSummary() {
           <span>
             <strong>{t('productPurchase.countedOnceRule')}</strong>{' '}
             {t('productPurchase.countedOnceDetail')}
+            {/* Two money columns, two different questions. Said on the screen rather than left for
+                a reader to infer from a total that does not reconcile with the other one. */}
+            <span className="mt-1 block">{t('productPurchase.committedCostRule')}</span>
           </span>
         </p>
       </Note>
@@ -259,7 +288,7 @@ export default function ProductPurchaseSummary() {
         </Note>
       )}
 
-      {loading && !data ? <SkeletonTable cols={8} /> : (
+      {loading && !data ? <SkeletonTable cols={9} /> : (
         <DataTable rows={rows} columns={columns} searchable mobile="cards"
           searchFn={(r, q) => r.product_name.toLowerCase().includes(q)}
           emptyTitle={t('productPurchase.emptyTitle')}

@@ -1,0 +1,10 @@
+{
+  "errors.bank_direct_match_requires_financial_correction": {
+    "he": "ההתאמה הזו רשמה תשלום בפועל, ולכן היא אינה מתבטלת בלחיצה — ביטול היה מוחק רשומת תשלום קיימת. את התיקון עושים בחשבונית עצמה: בכרטיס החשבונית פותחים דרישת זיכוי (מנהל/בעלים או מנהל רכש), והמעקב אחריה במסך \"זיכויים\".",
+    "en": "This match recorded an actual payment, so a click cannot undo it — undoing it would delete an existing payment record. The correction is made on the invoice itself: open a credit request from the invoice card (manager/owner or purchasing manager), and follow it on the Credits screen."
+  },
+  "bank.directMatchCorrection": {
+    "he": "תיקון כספי אינו מחיקה של תשלום שכבר נרשם, אלא זיכוי שנרשם מולו. פותחים אותו בכרטיס החשבונית — \"דרישת זיכוי\" (מנהל/בעלים או מנהל רכש) — והוא נמצא במסך \"זיכויים\".",
+    "en": "A financial correction is not the deletion of a payment already recorded — it is a credit recorded against it. It is opened from the invoice card (\"Credit request\", manager/owner or purchasing manager) and appears on the Credits screen."
+  }
+}

@@ -10,14 +10,23 @@
 //
 // The Hebrew labels, units and routes come from src/lib/assistant/summaryLines.ts -- the same
 // dependency-free table the /alerts screen renders, imported here directly so a metric can never
-// reach one consumer carrying a name the other does not know.
+// reach one consumer carrying a name the other does not know. Since 03.09.2026 the same module
+// also owns the READING of a money metric (readCurrencyMetric): this file and src/lib/summary.ts
+// each kept a private copy of the `/^[A-Z]{3}$/` filter, both dropped the RPC's deliberate
+// currency-less measured zero, and both then reported "nothing is owed" as "we could not measure".
 import { z } from "zod";
 import type {
   Fact,
+  FactKind,
   SourceReference,
   ToolEnvelope,
 } from "../../../../src/lib/assistant/contracts.ts";
-import { SUMMARY_METRIC_LINES } from "../../../../src/lib/assistant/summaryLines.ts";
+import {
+  readCurrencyMetric,
+  SUMMARY_ABSENCE_KEYS,
+  SUMMARY_METRIC_LINES,
+  type SummaryMetricRowLike,
+} from "../../../../src/lib/assistant/summaryLines.ts";
 import { readerText } from "../reader-locale.ts";
 import type { AssistantTool, ToolContext } from "./registry.ts";
 
@@ -52,18 +61,37 @@ function metricRows(data: unknown): SummaryMetricRow[] {
 
 /** Same guard summary.ts applies: PostgREST may serialize numeric as a string, so coerce with
  * Number(); a non-finite or negative figure is no figure. */
-function metricValue(row: SummaryMetricRow | undefined): number | null {
+function metricValue(row: SummaryMetricRowLike | undefined): number | null {
   if (!row || !row.measured || row.value == null) return null;
   const value = Number(row.value);
   return Number.isFinite(value) && value >= 0 ? value : null;
 }
+
+/**
+ * What a STATED ABSENCE is a fact about (decision F, owner 03.09.2026).
+ *
+ * Deliberately a status kind and never `payment_request.total`: the currency-less measured zero
+ * must not become a money fact, so `contracts.ts` is left exactly as it is — no widened unit, no
+ * `count` (which would be a different lie: nothing is owed is not "zero of something counted"),
+ * and no invented currency. The fact's VALUE is the sentence and its unit is `text`, so every
+ * surface that renders it prints words where a figure would otherwise have gone. `unit: "text"`
+ * also keeps it out of `factValueText`'s money branch in AnswerView.tsx, which formats a
+ * three-letter unit as currency.
+ *
+ * A currency metric present in SUMMARY_ABSENCE_KEYS but missing here — or the reverse — cannot be
+ * stated, and the tool names the miss instead of guessing at either half.
+ */
+const ABSENCE_FACT_KIND: Record<string, FactKind> = {
+  expected_payments: "payment_request.status",
+};
 
 export const getBusinessSummaryTool: AssistantTool = {
   name: "get_business_summary",
   description:
     "מחזיר את הסיכום העסקי של הארגון: חשבוניות שנקלטו השבוע, חשבוניות הממתינות לאישור, " +
     "סכום פתוח בדרישות תשלום, ספקים שהעלו מחיר וחריגים פתוחים. " +
-    "ערך שלא נמדד מסומן ככזה ואינו אפס.",
+    "ערך שלא נמדד מסומן ככזה ואינו אפס. " +
+    "כשאין כלל התחייבות פתוחה מוחזר משפט במקום סכום — זו תשובה מלאה, לא מדידה חסרה.",
   inputSchema: z.object({}).strict(),
   inputJsonSchema: {
     type: "object",
@@ -85,15 +113,56 @@ export const getBusinessSummaryTool: AssistantTool = {
     const facts: Fact[] = [];
     const sources: SourceReference[] = [];
     const failures: { code: string; label: string }[] = [];
+    /* Every reference below carries `line.evidenceRoute`, not `line.to`.
+       `to` is where /alerts sends someone to WORK on a subject; the summary table's five entries
+       all pointed at a whole screen, and three of them held a bounded question — a trailing week,
+       a status subset, a thirty-day window — that the screen's own default contradicts. As a
+       source that is worse than none: it invites a reader to check a figure against a list that
+       was never counting the same thing. `evidenceRoute` is null for the two that no screen state
+       can reproduce, and `SourceReferenceSchema` already allows a reference with no route, so the
+       line still names what was measured without promising a place to see it. */
     for (const line of SUMMARY_METRIC_LINES) {
       const matching = rows.filter((row) => row.metric_key === line.key);
-      const selected = line.unit === "currency"
-        ? matching.filter((row): row is SummaryMetricRow & { currency: string } =>
-          typeof row.currency === "string" && /^[A-Z]{3}$/.test(row.currency))
-          .sort((a, b) => a.currency.localeCompare(b.currency))
-        : [matching.find((row) => row.currency == null) ?? matching[0]].filter(Boolean) as SummaryMetricRow[];
+      const lineLabel = readerText(ctx.locale, line.labelKey, line.labelVars);
+      let selected: SummaryMetricRowLike[];
+      if (line.unit === "currency") {
+        // The one reading of a money metric, shared with /alerts (src/lib/assistant/summaryLines.ts).
+        const reading = readCurrencyMetric(matching);
+        if (reading.state === "absent") {
+          // Decision F: nothing is owed is a SENTENCE, not a number — and emphatically not a
+          // failure. This branch is the whole repair: until 03.09.2026 the currency-less measured
+          // zero was filtered out here, `complete` went false, and AnswerView painted the answer
+          // as partial. We measured, the answer is "none", and it says so in words.
+          const absenceKey = SUMMARY_ABSENCE_KEYS[line.key];
+          const absenceKind = ABSENCE_FACT_KIND[line.key];
+          if (!absenceKey || !absenceKind) {
+            failures.push({ code: `${line.key}:unstated_absence`, label: lineLabel });
+            continue;
+          }
+          facts.push(ctx.evidence.fact({
+            kind: absenceKind,
+            subject: null,
+            label: lineLabel,
+            value: readerText(ctx.locale, absenceKey),
+            unit: "text",
+            tool: "get_business_summary",
+            as_of: asOf,
+            classification: "financial_sensitive",
+          }));
+          sources.push(ctx.evidence.source({
+            entity: "organization",
+            entity_id: ctx.actor.orgId,
+            label: lineLabel,
+            route: line.evidenceRoute,
+            classification: "tenant_standard",
+          }));
+          continue;
+        }
+        selected = reading.state === "measured" ? reading.rows : [];
+      } else {
+        selected = [matching.find((row) => row.currency == null) ?? matching[0]].filter(Boolean) as SummaryMetricRowLike[];
+      }
       if (selected.length === 0) {
-        const lineLabel = readerText(ctx.locale, line.labelKey, line.labelVars);
         failures.push({ code: line.key, label: lineLabel });
         // Counts still have a truthful unit when the whole RPC failed, so retain their null facts:
         // the model may say they were not measured but can never turn them into zero. A missing
@@ -114,7 +183,7 @@ export const getBusinessSummaryTool: AssistantTool = {
             entity: "organization",
             entity_id: ctx.actor.orgId,
             label: lineLabel,
-            route: line.to,
+            route: line.evidenceRoute,
             classification: "tenant_standard",
           }));
         }
@@ -123,8 +192,7 @@ export const getBusinessSummaryTool: AssistantTool = {
       for (const row of selected) {
         const value = metricValue(row);
         const currency = line.unit === "currency" ? row.currency : null;
-        const base = readerText(ctx.locale, line.labelKey, line.labelVars);
-        const label = currency ? `${base} (${currency})` : base;
+        const label = currency ? `${lineLabel} (${currency})` : lineLabel;
         if (value === null) failures.push({ code: currency ? `${line.key}:${currency}` : line.key, label });
         facts.push(ctx.evidence.fact({
           kind: line.unit === "currency" ? "metric.money" : "metric.count",
@@ -142,7 +210,7 @@ export const getBusinessSummaryTool: AssistantTool = {
           entity: "organization",
           entity_id: ctx.actor.orgId,
           label,
-          route: line.to,
+          route: line.evidenceRoute,
           classification: "tenant_standard",
         }));
       }

@@ -337,6 +337,140 @@ describe('דף המסלולים הציבורי', () => {
     expect(screen.getByRole('main').className).toBe(loadingClass);
   });
 
+  /**
+   * THE FIGURE IS A QUOTA AND THE CARD HAS TO SAY SO WHERE THE FIGURE IS.
+   *
+   * The slot is a price slot — `/settings/subscription` puts a price in it and so does the
+   * marketing card — and this page put a bare number in it with «בתקופת שימוש חודשית» beside it,
+   * which is a billing period. The noun sat one line lower in `.plan-card__billed`, the slot the
+   * marketing card fills with «חיוב חודשי», and on a phone `plan-card.css:1009` hides both that
+   * line and the figure line, leaving the head chip alone: a number with no noun anywhere.
+   *
+   * So the assertion is about ADJACENCY, not about the page containing the words somewhere.
+   */
+  it('לא מציג את המכסה כאילו הייתה מחיר — המילה צמודה למספר, בשתי הגרסאות של הכרטיס', async () => {
+    renderPage();
+    await settle();
+    for (const [planKey, expected] of [['free', '25'], ['basic', '50'], ['pro', '300'], ['premium', '500']] as const) {
+      // The desktop figure line and the phone's head chip carry the same figure...
+      const figures = card(planKey).querySelectorAll('.plan-card__price');
+      expect(figures.length).toBe(2);
+      for (const figure of figures) {
+        expect(figure.textContent).toBe(expected);
+        // ...and the noun is the NEXT element in both, never a line away and never a period.
+        const per = figure.nextElementSibling;
+        expect(per?.className).toContain('plan-card__per');
+        // The catalogue's own name for this quota, resolved through `usePlanCatalogue` — not the
+        // billing-period phrase that used to sit here.
+        expect(per?.textContent).toBe('מסמכים בחודש');
+        expect(per?.textContent).not.toMatch(/תקופת שימוש/);
+      }
+    }
+  });
+
+  /**
+   * ...and says it to a reader who is not looking at it. Both figure containers are `sr-only`-
+   * described and their visible halves are hidden from the tree, so exactly one description is
+   * live at any viewport (the two containers are `display:none` at opposite widths).
+   */
+  it('אומר מה המספר גם למי שאינו רואה אותו', async () => {
+    renderPage();
+    await settle();
+    for (const planKey of ['free', 'basic', 'pro', 'premium']) {
+      const described = card(planKey).querySelectorAll('[data-figure-kind="described"]');
+      expect(described.length).toBe(1);
+      // The number is not left to speak for itself.
+      expect(described[0]!.getAttribute('aria-hidden')).toBe('true');
+      expect(card(planKey).querySelectorAll('.sr-only').length).toBeGreaterThan(0);
+    }
+  });
+
+  /**
+   * A COMPARISON THAT TICKS WHAT YOU DO NOT GET IS WORSE THAN NO COMPARISON.
+   *
+   * Two collapses shipped together and both are pinned here, derived from the fixtures rather than
+   * written as constants so a fixture change cannot leave this passing about the wrong rows:
+   *
+   *   · `affirmative: included || (free && intro_included)` gave the free rung a TICK for every
+   *     capability it loses on day thirty-one — five of them in production, one in these fixtures.
+   *   · An UNMEASURED quota (`suppliers.max`, `assistant_runs.monthly`) was `affirmative: false`,
+   *     which drew the same ✗ as a real exclusion. A row that asserts nothing was published as a
+   *     row that asserts «you do not get this».
+   */
+  it('לא מסמן ב־✓ שורה שאינה כלולה, ולא ב־✗ שורה שאינה נמדדת', async () => {
+    renderPage();
+    await settle();
+
+    const rowsOf = (planKey: string) =>
+      [...card(planKey).querySelectorAll('[data-row-state]')]
+        .map((li) => li.getAttribute('data-row-state'));
+
+    for (const planKey of ['free', 'basic', 'pro', 'premium']) {
+      const states = rowsOf(planKey);
+      const features = FEATURES.filter((row) => row.plan_key === planKey);
+      const introOnly = features.filter((row) => row.intro_included && !row.included).length;
+      const excludedFeatures = features.filter((row) => !row.included && !row.intro_included).length;
+      const unmeasuredQuotas = QUOTAS.filter(
+        (row) => row.plan_key === planKey && !row.measured && row.entitlement_key !== 'documents.monthly',
+      ).length;
+
+      expect(states.filter((s) => s === 'intro')).toHaveLength(introOnly);
+      expect(states.filter((s) => s === 'excluded')).toHaveLength(excludedFeatures);
+      expect(states.filter((s) => s === 'unmeasured')).toHaveLength(unmeasuredQuotas);
+      // Nothing the server refuses is counted as an inclusion.
+      expect(states.filter((s) => s === 'included')).toHaveLength(
+        states.length - introOnly - excludedFeatures - unmeasuredQuotas,
+      );
+    }
+
+    // And the collapse itself, stated as the thing it was: not every row is the same mark.
+    const everyState = new Set(
+      ['free', 'basic', 'pro', 'premium'].flatMap((planKey) => rowsOf(planKey)),
+    );
+    expect([...everyState].sort()).toEqual(['excluded', 'included', 'intro', 'unmeasured']);
+  });
+
+  /**
+   * The distinction has to survive a screen reader. `.plan-row__mark` is `aria-hidden` — a lucide
+   * glyph has no name worth reading — and it was the only thing on the row that carried the state,
+   * so «התאמות בנק» on the free card and «התאמות בנק» on the premium card were the same four
+   * syllables on a comparison whose entire purpose is that difference (WCAG 1.3.1).
+   */
+  it('מבחין בין כלול ללא־כלול גם בלי לראות את הסמל', async () => {
+    renderPage();
+    await settle();
+    const spoken = (planKey: string, entitlementKey: string) => {
+      const row = card(planKey).querySelector(`[data-row-state]:has(+ *), [data-row-state]`);
+      expect(row).not.toBeNull();
+      return entitlementKey;
+    };
+    expect(spoken('free', 'bank.reconciliation')).toBe('bank.reconciliation');
+
+    // The glyph stays hidden, and a word stands beside it on every single row.
+    for (const planKey of ['free', 'basic', 'pro', 'premium']) {
+      for (const row of card(planKey).querySelectorAll('[data-row-state]')) {
+        expect(row.querySelector('.plan-row__mark')?.getAttribute('aria-hidden')).toBe('true');
+        const word = row.querySelector('.sr-only');
+        expect(word).not.toBeNull();
+        expect(word!.textContent?.trim().length).toBeGreaterThan(0);
+      }
+    }
+
+    // Two rows that differ ONLY in state must not read alike. `bank.reconciliation` is excluded on
+    // the free rung and included on premium, and the label is identical on both.
+    const wordFor = (planKey: string, index: number) => {
+      const row = [...card(planKey).querySelectorAll('[data-row-state]')][index]!;
+      return `${row.getAttribute('data-row-state')}|${row.querySelector('.sr-only')?.textContent}`;
+    };
+    const freeBank = [...card('free').querySelectorAll('[data-row-state]')]
+      .findIndex((row) => row.textContent?.includes('התאמות בנק'));
+    const premiumBank = [...card('premium').querySelectorAll('[data-row-state]')]
+      .findIndex((row) => row.textContent?.includes('התאמות בנק'));
+    expect(freeBank).toBeGreaterThanOrEqual(0);
+    expect(premiumBank).toBeGreaterThanOrEqual(0);
+    expect(wordFor('free', freeBank)).not.toBe(wordFor('premium', premiumBank));
+  });
+
   it('renders the public-plan promise in English', async () => {
     renderPage('en');
     await settle();

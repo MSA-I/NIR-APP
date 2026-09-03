@@ -1,6 +1,12 @@
 import { supabase } from './supabase';
 import { scanAlerts, type Alert } from './alerts';
-import { SUMMARY_METRIC_LINES, type SummaryUnit } from './assistant/summaryLines.ts';
+import {
+  readCurrencyMetric,
+  SUMMARY_ABSENCE_KEYS,
+  SUMMARY_METRIC_LINES,
+  type SummaryMetricRowLike,
+  type SummaryUnit,
+} from './assistant/summaryLines.ts';
 import type { TKey } from './i18n/t';
 
 /**
@@ -24,21 +30,45 @@ import type { TKey } from './i18n/t';
  * function's own exception blocks: a failed metric arrives as `measured: false` and never
  * blanks its four neighbours.
  *
+ * Since 03.09.2026 (decision F) a money metric has THREE readings, not two, and the reading
+ * itself lives in `./assistant/summaryLines.ts` so this screen and the assistant tool cannot
+ * disagree about which one they are looking at. The third is a measured ABSENCE — nothing is
+ * owed — which used to be filtered out here and reported as a metric that could not be measured.
+ *
+
  * ponytail: swap in a language model only when the questions stop being countable.
  */
 
 export type { SummaryUnit } from './assistant/summaryLines.ts';
 
+/**
+ * Which of the three readings a line is.
+ *
+ * `value` alone cannot carry this. Until 03.09.2026 `null` meant BOTH "we could not measure" and
+ * "nothing is owed", and the second was drawn on `/alerts` as a red bar over a healthy
+ * organisation. They are different states about the business and they must read differently.
+ */
+export type SummaryLineState = 'measured' | 'unmeasured' | 'absent';
+
 export interface SummaryLine {
   key: string;
   labelKey: TKey;
   labelVars?: Record<string, string | number>;
-  /** null means "no data behind this figure" and must render as `—`. Zero is a real zero. */
+  /** null means "no figure to show". `state` says which of the two reasons it is. */
   value: number | null;
   unit: SummaryUnit;
   /** Money lines carry their ISO code; counts carry null. */
   currency: string | null;
   to: string;
+  /**
+   * `measured` — `value` is a real figure, zero included.
+   * `unmeasured` — `value` is null because we could not measure it; renders `—`.
+   * `absent` — measured, and there is positively nothing open. No figure at all: `absenceKey`
+   *   is the sentence the surface prints instead (decision F).
+   */
+  state: SummaryLineState;
+  /** Present only on `absent`. */
+  absenceKey?: TKey;
 }
 
 // The wording, unit and route per metric live in ./assistant/summaryLines.ts — a dependency-free
@@ -60,7 +90,7 @@ async function fetchMetricRows(): Promise<SummaryMetricRow[] | null> {
 }
 
 /** Same guard the per-metric rpcNumber applied: a non-finite or negative figure is no figure. */
-function metricValue(row: SummaryMetricRow | undefined): number | null {
+function metricValue(row: SummaryMetricRowLike | undefined): number | null {
   if (!row || !row.measured || row.value == null) return null;
   const value = Number(row.value);
   return Number.isFinite(value) && value >= 0 ? value : null;
@@ -96,15 +126,30 @@ export async function buildSummary(): Promise<Summary> {
   const lines = SUMMARY_METRIC_LINES.flatMap((definition): SummaryLine[] => {
     const matching = rows?.filter((row) => row.metric_key === definition.key) ?? [];
     if (definition.unit === 'currency') {
-      const currencyRows = matching
-        .filter((row): row is SummaryMetricRow & { currency: string } =>
-          typeof row.currency === 'string' && /^[A-Z]{3}$/.test(row.currency))
-        .sort((a, b) => a.currency.localeCompare(b.currency));
-      if (currencyRows.length === 0) {
-        failures.push({ code: definition.key, labelKey: definition.labelKey, labelVars: definition.labelVars });
-        return [{ ...definition, value: null, currency: null }];
+      // The one reading of a money metric, shared with the assistant tool (summaryLines.ts).
+      const reading = readCurrencyMetric(matching);
+      if (reading.state === 'absent') {
+        const absenceKey = SUMMARY_ABSENCE_KEYS[definition.key];
+        // NOT a failure, and this is the whole point of decision F: we measured, nothing is owed,
+        // and the line says so in words instead of showing a figure or an em dash.
+        if (absenceKey) {
+          return [{ ...definition, value: null, currency: null, state: 'absent', absenceKey }];
+        }
+        // The absence is real but the product has no sanctioned sentence for this metric. We name
+        // the miss rather than inventing wording — and rather than falling back to a red bar that
+        // says the opposite of what we know.
+        failures.push({
+          code: `${definition.key}:unstated_absence`,
+          labelKey: definition.labelKey,
+          labelVars: definition.labelVars,
+        });
+        return [{ ...definition, value: null, currency: null, state: 'unmeasured' }];
       }
-      return currencyRows.map((row) => {
+      if (reading.state === 'unmeasured') {
+        failures.push({ code: definition.key, labelKey: definition.labelKey, labelVars: definition.labelVars });
+        return [{ ...definition, value: null, currency: null, state: 'unmeasured' }];
+      }
+      return reading.rows.map((row) => {
         const value = metricValue(row);
         if (value == null) failures.push({
           code: `${definition.key}:${row.currency}`,
@@ -112,14 +157,19 @@ export async function buildSummary(): Promise<Summary> {
           labelVars: definition.labelVars,
           currency: row.currency,
         });
-        return { ...definition, value, currency: row.currency };
+        return {
+          ...definition,
+          value,
+          currency: row.currency,
+          state: value == null ? 'unmeasured' as const : 'measured' as const,
+        };
       });
     }
     const value = metricValue(matching.find((row) => row.currency == null) ?? matching[0]);
     if (value == null) {
       failures.push({ code: definition.key, labelKey: definition.labelKey, labelVars: definition.labelVars });
     }
-    return [{ ...definition, value, currency: null }];
+    return [{ ...definition, value, currency: null, state: value == null ? 'unmeasured' : 'measured' }];
   });
 
   return { lines, alerts: alertScan.alerts, complete: failures.length === 0, failures, generatedAt: new Date() };

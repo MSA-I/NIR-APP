@@ -169,7 +169,7 @@ export default function OfflineQueueStatus() {
         <ul className="mt-1.5 space-y-1">
           {photoProblems.map((photo) => (
             <li key={photo.id} className="text-alert-fg">
-              {photo.fileName}: {errorText(photo.reason)}{photo.needsAttention && t('offline.errorText')}{photo.attempts > 0 && <> <span className="num">{t('offline.attempts', { count: photo.attempts })}</span></>}
+              <bdi>{photo.fileName}</bdi>: {errorText(photo.reason)}{photo.needsAttention && t('offline.errorText')}{photo.attempts > 0 && <> <span className="num">{t('offline.attempts', { count: photo.attempts })}</span></>}
             </li>
           ))}
         </ul>

@@ -10,8 +10,10 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, PageHeader, StatusBadge, Note, SkeletonTable, EmptyState, Card, ICON, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
-import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
-import { bidiIsolate, fmtDate, fmtMoneyExact, fmtMoneyRounded, formatUnit, productLabel, todayISO, fmtNum } from '../lib/format';
+import { readSheet, matchColumn, mapRows, cellText, skipRow } from '../lib/importSheet';
+import type { TKey } from '../lib/i18n/t';
+import { PRICE_REASON_KEYS, parsePrice } from '../lib/price';
+import { addCalendarDays, bidiIsolate, fmtDate, fmtMoneyExact, fmtMoneyRounded, formatUnit, productLabel, todayISO, fmtNum } from '../lib/format';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useChartTheme } from '../lib/theme';
 import { PRODUCT_AVAILABILITY } from '../lib/status';
@@ -29,6 +31,13 @@ const SUBMISSION_STATUS = {
   accepted_with_rejections: { key: 'submission_accepted_with_rejections', tone: 'await' },
   rejected: { key: 'submission_rejected', tone: 'alert' },
 } as const;
+
+/**
+ * The trailing windows `?days=` accepts, as strings because that is what a URL carries.
+ * 30 is the one the dashboard tile and `p2_suppliers_with_price_increase_since` both use; 7 and
+ * 90 are offered so the reader can widen or narrow without leaving the screen.
+ */
+const PRICE_WINDOW_DAYS = ['7', '30', '90'] as const;
 
 const monthLabel = (value: string, locale: Locale) => new Intl.DateTimeFormat(INTL_LOCALE[locale], {
   month: 'long', year: 'numeric', timeZone: 'UTC',
@@ -51,6 +60,23 @@ export default function PriceLists() {
   // '1' via ?increases=1 (from the dashboard price-increase card); re-syncs on navigation.
   const [increasesStr, setIncreasesStr] = useParamState('increases');
   const onlyIncreases = increasesStr === '1';
+  /**
+   * `?days=30` — how far back a change has to have taken effect to be listed.
+   *
+   * `?increases=1` on its own asks a question with no clock in it: "is the last recorded change
+   * on this row upward". Every screen that COUNTS price rises asks a bounded one — the dashboard
+   * tile is labelled "(30 יום)" and fetches thirty days, and `p2_suppliers_with_price_increase_since`
+   * bounds `price_effective_date` the same way. So a tile saying "no supplier raised a price"
+   * opened a screen headed with every historic rise the catalogue still remembers. This is the
+   * missing half of that filter, and it is in the URL for the same reason the others are: the
+   * count and the list it opens have to be able to state the same window.
+   *
+   * Anything outside the offered windows is dropped back to "no window" rather than silently
+   * emptying the table — the rule `Inventory` already applies to `?stock=`.
+   */
+  const [daysStr, setDaysStr] = useParamState('days');
+  const windowDays = (PRICE_WINDOW_DAYS as readonly string[]).includes(daysStr) ? daysStr : '';
+  const windowFrom = windowDays ? addCalendarDays(todayISO(), -Number(windowDays)) : null;
   // ?product=<product_id> deep-links from a product/supplier card to that one product's prices;
   // coexists with the supplier + increases filters and is cleared from the chip below.
   const [productFilter, setProductFilter] = useParamState('product');
@@ -115,11 +141,14 @@ export default function PriceLists() {
     const filtered = (data ?? []).filter((r) =>
       (!supplierFilter || r.supplier_id === supplierFilter) &&
       (!productFilter || r.product_id === productFilter) &&
-      (!onlyIncreases || (r.previous_price != null && r.current_price > r.previous_price)));
+      (!onlyIncreases || (r.previous_price != null && r.current_price > r.previous_price)) &&
+      // Same column and same comparison the counting definitions use: `price_effective_date`,
+      // inclusive of the boundary day.
+      (!windowFrom || r.price_effective_date >= windowFrom));
     if (!productFilter) return filtered;
     // Comparison order: offers first, cheapest to dearest; unavailable rows sink to the bottom.
     return [...filtered].sort((a, b) => Number(b.available) - Number(a.available) || a.current_price - b.current_price);
-  }, [data, supplierFilter, productFilter, onlyIncreases]);
+  }, [data, supplierFilter, productFilter, onlyIncreases, windowFrom]);
 
   const activeProductRow = productFilter ? data?.find((r) => r.product_id === productFilter) : null;
   const activeProductName = activeProductRow ? productLabel(activeProductRow.product) : null;
@@ -165,9 +194,16 @@ export default function PriceLists() {
   return (
     <div className="space-y-4">
       <PageHeader title={t('priceLists.title')}
+        /* Counted over the ROWS ON SCREEN, not over the whole catalogue — and this line is the
+           other half of the `?days=` filter above. „7 התייקרויות" stood in this header whatever
+           was filtered below it, so an answer reading "no supplier raised a price this month"
+           opened a screen headed with seven of them. A page header describes its page; every
+           other list screen here already counts what it is showing (`Orders` names shown and
+           total, `PaymentRequests` counts its filtered rows). With no filter on, `rows` IS
+           `data` and the numbers are the ones that were always there. */
         meta={t('priceListsTail.meta', {
-          priceCount: data?.length ?? 0,
-          increaseCount: (data ?? []).filter((row) => row.previous_price != null && row.current_price > row.previous_price).length,
+          priceCount: rows.length,
+          increaseCount: rows.filter((row) => row.previous_price != null && row.current_price > row.previous_price).length,
         })}
         actions={canWrite ? (
           <div className="flex flex-wrap gap-2">
@@ -249,6 +285,15 @@ export default function PriceLists() {
               <input type="checkbox" className="rounded" checked={onlyIncreases} onChange={(e) => setIncreasesStr(e.target.checked ? '1' : '')} />
               {t('priceLists.text_11')}
             </label>
+            {/* The window the counting screens use, made visible and changeable here so a reader
+                who arrives from one of them can see WHICH window produced the number. */}
+            <select className="input w-auto!" aria-label={t('priceLists.windowFilterLabel')} value={windowDays}
+              onChange={(e) => setDaysStr(e.target.value)}>
+              <option value="">{t('priceLists.windowAnyTime')}</option>
+              {PRICE_WINDOW_DAYS.map((days) => (
+                <option key={days} value={days}>{t('priceLists.windowLastDays', { days })}</option>
+              ))}
+            </select>
           </>
         }
         emptyTitle={t('priceLists.emptyTitle')}
@@ -272,7 +317,7 @@ export default function PriceLists() {
                         <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
                       </div>
                       <div className="mt-1 text-sm text-ink-muted break-words">
-                        {submission.file_name ?? t('priceLists.text_14')} · {t('priceListsTail.accepted')}{' '}<span className="num">{submission.accepted_count}</span> {t('priceLists.text_15')} <span className="num">{submission.unchanged_count}</span> {t('priceLists.text_16')} <span className="num">{submission.rejected_count}</span>
+                        <bdi>{submission.file_name ?? t('priceLists.text_14')}</bdi> · {t('priceListsTail.accepted')}{' '}<span className="num">{submission.accepted_count}</span> {t('priceLists.text_15')} <span className="num">{submission.unchanged_count}</span> {t('priceLists.text_16')} <span className="num">{submission.rejected_count}</span>
                       </div>
                     </div>
                   ))}
@@ -416,12 +461,28 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         product: matchColumn(sheet.headers, ['מוצר', 'product'], false),
         price: matchColumn(sheet.headers, ['מחיר', 'price'], false),
       };
+      // ONE PARSER, THE SAME ONE THE WRITER USES. This preview used to read the price with
+      // `cellNumber`, which deletes every character that is not a digit, a dot or a minus -- so
+      // `$12.50` previewed as a plain 12.50 and would have been written in whatever currency the
+      // named supplier trades in. This sheet carries many suppliers, so the currency is resolved
+      // per row from the supplier the row names; a row naming a supplier this organisation does
+      // not have is skipped here rather than at import.
+      const suppliers = unwrap(await supabase.from('suppliers')
+        .select('name, default_currency').is('deleted_at', null)) as
+        { name: string; default_currency: string }[];
+      const currencyByName = new Map(suppliers.map((row) => [row.name.trim(), row.default_currency]));
+      const codes = new Set(suppliers.map((row) => row.default_currency));
       const { valid } = mapRows(sheet.rows, (r) => {
         const supplier = cellText(r, cols.supplier);
         const product = cellText(r, cols.product);
-        const price = cellNumber(r, cols.price) ?? 0;
-        if (!supplier || !product || price <= 0) return skipRow(t('priceLists.skipRow'));
-        return { supplier, product, price };
+        const parsed = parsePrice(cellText(r, cols.price, 64), currencyByName.get(supplier), codes);
+        if (!supplier || !product) return skipRow(t('priceLists.skipRow'));
+        if (!parsed.ok || parsed.value === null) {
+          return skipRow(t(PRICE_REASON_KEYS[parsed.reason ?? 'price_unreadable'] as TKey, {
+            currency: parsed.currency ?? '', printed: parsed.printedCurrency ?? '',
+          }));
+        }
+        return { supplier, product, price: parsed.value };
       }, t('importSheet.invalidRow'));
       if (!valid.length) { toast(t('priceLists.toast_2'), 'error'); return; }
       setPreview(valid);

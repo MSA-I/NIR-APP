@@ -282,6 +282,12 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
           </div>
         </SubPanel>
         <Note tone="await">{t('bank.text_11')}</Note>
+        {/* `text_11` already ends with "a direct match to an invoice requires a separate financial
+            correction" — a thing named without a door. The refusal itself
+            (`bank_direct_match_requires_financial_correction`, `0034`) arrives only AFTER the
+            click, so the sentence saying what that correction is and where it is opened belongs
+            here, before it. One quiet line, not a second panel. */}
+        <p className="text-xs text-ink-muted">{t('bank.directMatchCorrection')}</p>
         <div>
           <label className="label" htmlFor="bank-unmatch-reason">{t('bank.text_12')}</label>
           <input id="bank-unmatch-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} />

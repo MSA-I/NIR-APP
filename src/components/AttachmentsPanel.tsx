@@ -3,7 +3,7 @@ import { Eye, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
-import { fmtDate, fmtDateTime } from '../lib/format';
+import { bidiIsolate, fmtDate, fmtDateTime } from '../lib/format';
 import { ok } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { signedDocumentSourceUrl } from '../lib/documentSource';
@@ -279,7 +279,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
 
       <ConfirmDialog open={pendingDelete !== null} onClose={() => setPendingDelete(null)}
         onConfirm={() => { if (pendingDelete) void remove(pendingDelete); }}
-        title={t('attachments.removeTitle')} message={t('attachments.removeMessage', { file: pendingDelete?.file_name ?? '' })}
+        title={t('attachments.removeTitle')} message={t('attachments.removeMessage', { file: bidiIsolate(pendingDelete?.file_name ?? '') })}
         confirmLabel={t('attachments.confirmLabel')} danger busy={deleting} />
     </section>
   );

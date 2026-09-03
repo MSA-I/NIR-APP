@@ -4,6 +4,32 @@ import {
   type ProvisionAdminClient,
 } from "./provision.ts";
 
+/**
+ * THE TWO MEMBERS EVERY FAKE IN THIS FILE NEEDS SINCE 03.09.2026, and a warning about what they
+ * cannot show.
+ *
+ * `rollbackTenant` now calls the database's own tenant teardown and then READS THE ORGANIZATION
+ * BACK, because a PostgREST delete answers `error: null` whether it removed a row, matched nothing,
+ * or was refused a row it could not see. The fakes below are call RECORDERS — they answer every
+ * statement with success and never hold a row — so they can prove what the code asks for and can
+ * never prove what the database is left holding.
+ *
+ * That is exactly the blind spot the live defect lived in: this file was green while every
+ * self-signup that failed after the organization insert left the organization standing, because
+ * two `on delete restrict` children in a schema PostgREST does not expose made the delete
+ * impossible. The measurement of that lives in `provision-rollback.test.ts`, whose fake is a small
+ * database with foreign keys that refuse. These helpers keep the recorder tests running; they are
+ * not the gate.
+ */
+const cleanRollbackStubs = {
+  /** The teardown succeeded, so the fallback sweep is not exercised by these fakes. */
+  rpc: () => Promise.resolve({ data: { removed: true }, error: null }),
+  /** ...and the organization verifies as gone. */
+  gone: () => ({
+    eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+  }),
+};
+
 const valid = {
   name: "מסעדת הגפן",
   ownerEmail: "owner@example.test",
@@ -79,8 +105,10 @@ function recordingAdmin(): {
           });
         },
         delete: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        select: cleanRollbackStubs.gone,
       };
     },
+    rpc: cleanRollbackStubs.rpc,
     auth: {
       admin: {
         createUser(input: {
@@ -189,8 +217,23 @@ Deno.test("a failure after the organization exists unwinds it, and reports what 
             error: table === "organizations" ? { message: "still referenced" } : null,
           }),
         }),
+        // And it is still THERE afterwards, which is the fact the verdict is now built on. The
+        // error above is only the diagnosis attached to it.
+        select: () => ({
+          eq: () => ({
+            maybeSingle: () => Promise.resolve({
+              data: table === "organizations" ? { id: "org-1" } : null,
+              error: null,
+            }),
+          }),
+        }),
       };
     },
+    // No teardown function on this database, so the fallback sweep runs and cannot finish.
+    rpc: () => Promise.resolve({
+      data: null,
+      error: { message: "Could not find the function in the schema cache" },
+    }),
     auth: {
       admin: {
         createUser: () => Promise.resolve({ data: { user: { id: "user-1" } }, error: null }),
@@ -223,8 +266,10 @@ Deno.test("an already-registered address is a distinct outcome, so a door can ch
           });
         },
         delete: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        select: cleanRollbackStubs.gone,
       };
     },
+    rpc: cleanRollbackStubs.rpc,
     auth: {
       admin: {
         createUser: () => Promise.resolve({
@@ -242,28 +287,55 @@ Deno.test("an already-registered address is a distinct outcome, so a door can ch
   }
 });
 
-Deno.test("rollback removes the subscription the database trigger created", async () => {
-  // 0154 attaches a default subscription to every new organization. A rollback that forgot it
-  // would leave the organization undeletable and the failure unexplained.
+/**
+ * THE FALLBACK SWEEP — what runs when the database has no teardown function yet, and the two
+ * things that are still true about it.
+ *
+ * This test used to be the whole claim: "rollback removes the subscription the trigger created",
+ * with 0154's subscription as the single child anybody had remembered. It was true and it was not
+ * enough. FIVE triggers fire on an `organizations` insert and they write six tables; two of them —
+ * `private.referral_codes` (0186:84) and `private.organization_usage_anchors` (0185:65) — carry
+ * `on delete restrict` and live in a schema `supabase/config.toml:6` does not expose, so this
+ * sweep can never finish and the delete below can never succeed while they stand.
+ *
+ * So what is pinned here is ORDER and REACH, not completion: children before the organization they
+ * reference, and the sweep only running when the teardown function is absent. Whether the tenant is
+ * actually gone is `provision-rollback.test.ts`'s question, asked against a store that can refuse.
+ */
+Deno.test("the fallback sweep runs only without the teardown function, children first", async () => {
   const deleted: string[] = [];
-  const admin = {
+  const makeAdmin = (teardown: boolean) => ({
     from(table: string) {
       return {
         insert: () => Object.assign(Promise.resolve({ error: null }), {
           select: () => ({ single: () => Promise.resolve({ data: { id: "org-1" }, error: null }) }),
         }),
         delete: () => ({ eq: () => { deleted.push(table); return Promise.resolve({ error: null }); } }),
+        select: cleanRollbackStubs.gone,
       };
     },
+    rpc: () => Promise.resolve(
+      teardown
+        ? { data: { removed: true }, error: null }
+        : { data: null, error: { message: "Could not find the function in the schema cache" } },
+    ),
     auth: { admin: { createUser: () => Promise.resolve({ data: { user: null }, error: null }), deleteUser: () => Promise.resolve({ error: null }) } },
-  } as unknown as ProvisionAdminClient;
+  } as unknown as ProvisionAdminClient);
 
-  await rollbackTenant(admin, { orgId: "org-1", userId: "user-1" });
+  await rollbackTenant(makeAdmin(false), { orgId: "org-1", userId: "user-1" });
   if (!deleted.includes("organization_subscriptions")) {
-    throw new Error("rollback left the default subscription behind");
+    throw new Error("the fallback left the default subscription behind");
   }
   if (deleted.indexOf("organizations") < deleted.indexOf("organization_subscriptions")) {
     throw new Error("the organization was deleted before the rows referencing it");
+  }
+
+  // With the teardown present, nothing is swept by hand: one transaction in the database does it,
+  // and a second pass from here would only be a second way to be incomplete.
+  deleted.length = 0;
+  await rollbackTenant(makeAdmin(true), { orgId: "org-1", userId: "user-1" });
+  if (deleted.length > 0) {
+    throw new Error(`the hand-written sweep ran alongside the teardown: ${deleted.join(", ")}`);
   }
 });
 
@@ -318,8 +390,14 @@ function adoptionAdmin(failInsertOn?: string): {
             return Promise.resolve({ error: null });
           },
         }),
+        select: cleanRollbackStubs.gone,
       };
     },
+    // No teardown function, so the adoption tests still exercise the reachable sweep by name.
+    rpc: () => Promise.resolve({
+      data: null,
+      error: { message: "Could not find the function in the schema cache" },
+    }),
     auth: {
       admin: {
         createUser: () => {

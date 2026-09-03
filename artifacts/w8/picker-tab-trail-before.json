@@ -1,0 +1,137 @@
+[
+  {
+    "after": "open",
+    "tag": "button",
+    "type": "button",
+    "text": "עמודות",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": true
+  },
+  {
+    "after": "Tab#1",
+    "tag": "div",
+    "type": null,
+    "text": "מס׳ חשבוניתספקתאריךסה״כיתרהבדיקהתש",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#2",
+    "tag": "button",
+    "type": "button",
+    "text": "תאריך",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#3",
+    "tag": "button",
+    "type": "button",
+    "text": "P3-ILS-12400",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#4",
+    "tag": "button",
+    "type": "button",
+    "text": "",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#5",
+    "tag": "button",
+    "type": "button",
+    "text": "P3-USD-3100",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#6",
+    "tag": "button",
+    "type": "button",
+    "text": "",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#7",
+    "tag": "button",
+    "type": "button",
+    "text": "1509",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#8",
+    "tag": "button",
+    "type": "button",
+    "text": "",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#9",
+    "tag": "button",
+    "type": "button",
+    "text": "6633",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#10",
+    "tag": "button",
+    "type": "button",
+    "text": "",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#11",
+    "tag": "button",
+    "type": "button",
+    "text": "45120",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#12",
+    "tag": "button",
+    "type": "button",
+    "text": "",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#13",
+    "tag": "button",
+    "type": "button",
+    "text": "7702",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#14",
+    "tag": "button",
+    "type": "button",
+    "text": "",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  }
+]

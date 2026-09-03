@@ -1,0 +1,89 @@
+{
+  "marks": {
+    "domcontentloaded": 147,
+    "firstCard": 225,
+    "networkidle": 1281
+  },
+  "rest": [
+    {
+      "at": 214,
+      "ms": 8,
+      "url": "profiles?select=*&id=eq.6217200e-b99c-49aa-845e-e4d1afb42144"
+    },
+    {
+      "at": 225,
+      "ms": 11,
+      "url": "organizations?select=*&id=eq.11111111-1111-4111-8111-111111111111"
+    },
+    {
+      "at": 236,
+      "ms": 7,
+      "url": "rpc/organization_access_state"
+    },
+    {
+      "at": 244,
+      "ms": 6,
+      "url": "platform_admins?select=user_id&user_id=eq.6217200e-b99c-49aa-845e-e4d1afb42144"
+    },
+    {
+      "at": 326,
+      "ms": 69,
+      "url": "documents?select=id&entity_type=eq.inbox&deleted_at=is.null"
+    },
+    {
+      "at": 326,
+      "ms": 68,
+      "url": "rpc/resolve_feature_flags"
+    },
+    {
+      "at": 326,
+      "ms": 68,
+      "url": "notifications?select=id&user_id=eq.6217200e-b99c-49aa-845e-e4d1afb42144&read_at=is.null"
+    },
+    {
+      "at": 326,
+      "ms": 68,
+      "url": "notifications?select=id&user_id=eq.6217200e-b99c-49aa-845e-e4d1afb42144&read_at=is.null"
+    },
+    {
+      "at": 326,
+      "ms": 68,
+      "url": "rpc/my_entitlements"
+    },
+    {
+      "at": 687,
+      "ms": 45,
+      "url": "rpc/organization_usage_snapshot"
+    },
+    {
+      "at": 687,
+      "ms": 45,
+      "url": "suppliers?select=id,name&deleted_at=is.null&order=name.asc,id.asc&offset=0&limit=1000"
+    },
+    {
+      "at": 687,
+      "ms": 47,
+      "url": "documents?select=*,supplier:suppliers(id,name)&deleted_at=is.null&entity_type=neq.archive&order=created_at.desc,id.asc&offset=0&limit=1000"
+    },
+    {
+      "at": 687,
+      "ms": 45,
+      "url": "suppliers?select=id,name&deleted_at=is.null&order=name.asc,id.asc&offset=0&limit=1000"
+    },
+    {
+      "at": 687,
+      "ms": 48,
+      "url": "documents?select=*,supplier:suppliers(id,name)&deleted_at=is.null&entity_type=neq.archive&order=created_at.desc,id.asc&offset=0&limit=1000"
+    },
+    {
+      "at": 758,
+      "ms": 16,
+      "url": "rpc/get_document_processing_statuses?offset=0&limit=1000"
+    },
+    {
+      "at": 758,
+      "ms": 16,
+      "url": "document_auto_actions?select=id,document_id,invoice_id,decision&document_id=in.(f1111111-1111-4111-8111-111111111112,f184b58b-fc5c-42d0-b0ed-a4c3853971e9,9408767b-00fe-4d76-97cf-2792bcabdfbc,565f4531-7b48-4ee7-ae9e-8289f6c5b523)&reverted_at=is.null&order=created_at.desc,id.asc&offset=0&limit=1000"
+    }
+  ]
+}

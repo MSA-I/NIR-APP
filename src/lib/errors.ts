@@ -176,6 +176,19 @@ const PATTERNS: [RegExp, string][] = [
     'payment_request_not_executable'],
   [/payment_execution_fields_required/i,
     'payment_execution_fields_required'],
+  /* WAVE 6 — the execution's three currency refusals, and the same reasoning as the block at the
+     top of this file. `execute_payment_request` raises all three BEFORE it writes anything, so
+     each one means the money did not move — which is the first thing an accountant staring at a
+     failed payment needs to be told, and exactly what "contact support" did not say. */
+  [/payment_execution_currency_invalid/i,
+    'payment_execution_currency_invalid'],
+  // Ahead of `payment_settlement_invalid` on purpose. They are different questions — "you filled
+  // in one half of a pair" is not "the half you filled in is wrong" — and the narrower one is
+  // first so a later broadening of the second cannot quietly swallow it.
+  [/payment_settlement_pair_invalid/i,
+    'payment_settlement_pair_invalid'],
+  [/payment_settlement_invalid/i,
+    'payment_settlement_invalid'],
   [/payment_execution_conflict|payment_request_idempotency_conflict|invoice_idempotency_conflict|receipt_idempotency_conflict|bank_payment_idempotency_conflict|credit_request_idempotency_conflict/i,
     'payment_execution_conflict'],
   // Ahead of the server's allocation family on purpose: `credit_allocation_exceeds_invoice` and
@@ -220,6 +233,17 @@ const PATTERNS: [RegExp, string][] = [
     'payment_request_checks_failed'],
   [/payment_request_checks_mismatch/i,
     'payment_request_checks_mismatch'],
+  /* WAVE 6. `payment_request_financial_check_signals` (`checks.ts:220`) runs while the user is
+     still deciding, so its refusals arrive at the worst possible moment to read "contact
+     support". Two of them had no sentence at all: the call carried no supplier, no positive
+     amount or no invoices; and the chosen invoices span two currencies, or do not match the
+     currency of the request being edited. The second is the same rule as
+     `payment_request_currency_mixed` below, caught one screen earlier — so it says the same
+     thing, and sends the user to the same fix. */
+  [/payment_request_checks_currency_mismatch/i,
+    'payment_request_checks_currency_mismatch'],
+  [/payment_request_checks_invalid/i,
+    'payment_request_checks_invalid'],
   [/payment_request_credit_override_required/i,
     'payment_request_credit_override_required'],
   [/payment_request_credit_total_changed|payment_request_credit_supplier_mismatch/i,
@@ -230,12 +254,26 @@ const PATTERNS: [RegExp, string][] = [
     'payment_request_credit_override_not_required'],
   [/payment_request_credit_scope_unresolved|payment_request_scope_unresolved|payment_request_scope_invalid/i,
     'payment_request_credit_scope_unresolved'],
+  // WAVE 6. Raised by BOTH `create_payment_request` and `p1_transition_payment_request` when the
+  // request's currency has no active row in `currencies` — a deactivated currency, not a typo.
+  // Its own sentence rather than an arm of `payment_request_currency_mixed`: "these invoices are
+  // in two currencies" and "this currency is switched off" have different fixes.
+  [/payment_request_currency_invalid/i,
+    'payment_request_currency_invalid'],
   [/payment_request_transition_invalid/i,
     'payment_request_transition_invalid'],
   [/payment_request_unknown/i,
     'payment_request_unknown'],
   [/payment_request_supplier_invalid|payment_request_invalid/i,
     'payment_request_supplier_invalid'],
+  // The one refusal on the bank screen that is neither a race nor a mistake. A DIRECT match to an
+  // invoice records a payment (`0023`), so removing it would delete a payment record —
+  // `unmatch_bank_transaction` (`0034`) refuses it by name, deliberately, and the refusal stays.
+  // Absent from this list it fell through to FALLBACK, "the action failed — contact support", for
+  // a refusal whose answer is a correction the business makes itself. Same reasoning as the
+  // currency block at the top of this file: support is the wrong destination.
+  [/bank_direct_match_requires_financial_correction/i,
+    'bank_direct_match_requires_financial_correction'],
   [/bank_transaction_already_matched|payment_already_bank_matched/i,
     'bank_transaction_already_matched'],
   [/bank_transaction_not_matchable|bank_transaction_not_ignorable/i,
@@ -291,6 +329,13 @@ const PATTERNS: [RegExp, string][] = [
     'invoice_has_financial_references'],
   [/invoice_not_found/i,
     'invoice_not_found'],
+  // WAVE 6. Not an RPC refusal but a TRIGGER one: `guard_payable_invoice_reference` fires on
+  // `payment_allocations`, `payment_request_invoices`, `bank_allocations` and `credit_requests`,
+  // so it can surface from four different screens. It means the invoice is soft-deleted or is a
+  // supporting document rather than a payable one — never "the invoice does not exist", which is
+  // what `invoice_not_found` above says and why this one is separate.
+  [/invoice_not_payable/i,
+    'invoice_not_payable'],
   // Two guards, two sentences (0146). They shared one line until the owner hit it: a supplier with
   // a forgotten draft order and no money owed was told he had an open balance.
   [/supplier_has_open_balance/i,
@@ -305,6 +350,12 @@ const PATTERNS: [RegExp, string][] = [
     'invoice_fields_required'],
   [/credit_request_not_fully_allocated/i,
     'credit_request_not_fully_allocated'],
+  // WAVE 6. `transition_credit_request` takes the invoice and the credit `for update` and then
+  // checks that the credit still points at the same invoice; errcode 40001 says so. It is a race,
+  // not a mistake, and nothing was written — so the sentence says a refresh is the whole answer,
+  // which is true here and is not true of the transition refusal above it.
+  [/credit_request_concurrent_change/i,
+    'credit_request_concurrent_change'],
   [/credit_request_transition_invalid/i,
     'credit_request_transition_invalid'],
   [/credit_request_invoice_unknown|credit_request_unknown/i,

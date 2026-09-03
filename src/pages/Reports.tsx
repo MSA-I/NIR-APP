@@ -13,7 +13,11 @@ import { MoneyByCurrency, sortByBaseCurrency } from '../components/Money';
 import type { MoneyAmount } from '../lib/types';
 import { useParamState } from '../lib/useParamState';
 import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
-import { buildLockedMonthlyWorkbook, buildStyledMonthlyWorkbook, monthlyReportScreenTotals, type MonthlyReportLabels, type MonthlyReportSnapshot } from '../lib/monthlyReport';
+import {
+  buildLockedMonthlyWorkbook, buildStyledMonthlyWorkbook, monthlyReportScreenTotals,
+  reportedPaymentRows, snapshotBankBlockGuidance,
+  type MonthlyReportLabels, type MonthlyReportSnapshot, type ReportablePaymentAmount,
+} from '../lib/monthlyReport';
 
 import { financialSupplierMap } from '../lib/financialSuppliers';
 import { downloadWorkbook, safeFileName } from '../lib/workbook';
@@ -144,13 +148,30 @@ export default function Reports() {
     // by `auth_org()` and `auth_role()` — so this returns exactly what the signed-in reader may
     // see, nothing wider. Chunked because `.in()` has a URL-length ceiling.
     // An invoice with no balance row keeps `null` and prints `—`; it never prints 0.
-    const [suppliers, balanceRows] = await Promise.all([
+    const paymentIds = (rawPayments as unknown as { id: string }[]).map((row) => row.id);
+    /**
+     * DECISION E [owner 03.09.2026]. The reported figure for a payment is no longer
+     * `payments.amount`. It is the sum of that payment's allocations to invoices THIS READER MAY
+     * SEE, read from `payment_reportable_amounts` — a `security_invoker` view, so the question of
+     * which invoices those are is answered by `invoices_select` and the scope rider rather than by
+     * a rule written a second time here.
+     *
+     * Row-level security can hide a payment or reveal it; it cannot report a different amount.
+     * That is why this is a read model and not a change to `payments_select`, which is untouched:
+     * the raw row is still readable, it is simply no longer what the report states.
+     */
+    const [suppliers, balanceRows, reportableRows] = await Promise.all([
       financialSupplierMap(linkedRows.flatMap((row) => row.supplier_id ? [row.supplier_id] : [])),
       invoiceIds.length
         ? fetchInChunks(invoiceIds, (chunk) => fetchAll<InvoiceBalanceRow>((from, to) => supabase.from('invoice_balances_by_currency')
           .select('invoice_id, currency, paid_amount, credited_amount, balance_in_currency')
           .in('invoice_id', chunk).order('invoice_id').range(from, to)))
         : Promise.resolve<InvoiceBalanceRow[]>([]),
+      paymentIds.length
+        ? fetchInChunks(paymentIds, (chunk) => fetchAll<ReportablePaymentAmount>((from, to) => supabase.from('payment_reportable_amounts')
+          .select('payment_id, currency, reportable_amount')
+          .in('payment_id', chunk).order('payment_id').range(from, to)))
+        : Promise.resolve<ReportablePaymentAmount[]>([]),
     ]);
     const balances = new Map(balanceRows.map((row) => [row.invoice_id, row]));
     const supplier = (supplierId: string | null) => ({
@@ -159,8 +180,14 @@ export default function Reports() {
     return {
       invoices: (rawInvoices as unknown as (SupplierLinked & { id: string; invoice_number: string; invoice_date: string; received_date: string | null; total_amount: number; amount_before_vat: number; vat_amount: number; currency: string; review_status: string; payment_status: string; export_status: string; notes: string | null })[])
         .map((row) => ({ ...row, supplier: supplier(row.supplier_id), balance: balances.get(row.id) ?? null })),
-      payments: (rawPayments as unknown as (SupplierLinked & { id: string; number: number; paid_date: string; amount: number; currency: string; method: string | null; reference: string | null })[])
-        .map((row) => ({ ...row, supplier: supplier(row.supplier_id) })),
+      // Not the payments of the month — the PORTION of them this reader's report may state. A
+      // payment with no visible invoice allocation has no portion and is dropped rather than
+      // shown at zero, because zero would assert that nothing was paid.
+      payments: reportedPaymentRows(
+        (rawPayments as unknown as (SupplierLinked & { id: string; number: number; paid_date: string; amount: number; currency: string; method: string | null; reference: string | null })[])
+          .map((row) => ({ ...row, supplier: supplier(row.supplier_id) })),
+        reportableRows,
+      ),
       credits: (rawCredits as unknown as (SupplierLinked & { id: string; number: number; reason: string; amount: number; currency: string; status: string })[])
         .map((row) => ({ ...row, supplier: supplier(row.supplier_id) })),
       exceptions: (rawExceptions as unknown as (SupplierLinked & { id: string; type: string; title: string })[])
@@ -257,6 +284,10 @@ export default function Reports() {
           t,
           orgName: org.name, baseCurrency: org.base_currency, month, generatedAt: data.generatedAt, data,
           labels: reportLabels, summary: values,
+          // The rows handed in are the allocated portion (decision E), so the two labels that name
+          // that money say so. The locked snapshot builder does not pass this: its rows are
+          // payments as recorded, and its labels must keep saying that.
+          paymentsAreAllocatedPortion: true,
         }), fileName);
       }
       toast(t('reports.toast'));
@@ -352,6 +383,12 @@ export default function Reports() {
     openBalance: balancesComplete ? within(data.invoices, (i) => i.currency, (i) => i.balance?.balance_in_currency ?? 0) : null,
   };
   const orderedTotals = (rows: MoneyAmount[]) => sortByBaseCurrency(rows, baseCurrency);
+  /**
+   * What the refusal note may say. `measured` when this screen counted rows that certainly block
+   * the close; `unmeasured` when it counted none and the server refused anyway — which is the case
+   * that used to print "the 0 unmatched bank transactions" over a link to an empty list.
+   */
+  const bankBlock = snapshotBankBlockGuidance(totals);
 
   /* Payments grouped by supplier AND currency, and ordered inside each currency. A supplier paid
      ₪4,000 and $900 this month appears twice, because those are two payments of two kinds of
@@ -498,19 +535,37 @@ export default function Reports() {
                 <Note tone="alert" role="alert">
                   <span>
                     {snapshotBlock.message}
-                    {snapshotBlock.bank && (
+                    {/* The recovery line, and the one thing it may never do again: state a figure
+                        it did not measure. This screen counts `unmatched` rows dated inside the
+                        month; the server refuses on a wider rule it cannot evaluate here. When
+                        the two disagree the answer is "I cannot point at it", not "0". */}
+                    {snapshotBlock.bank && (bankBlock.state === 'measured' ? (
                       <span className="block mt-1">
-                        <Link className="link" to={`/bank?month=${month}&status=unmatched`}>
-                          {t('reports.openUnmatchedBank', { count: totals.unmatchedBank })}
-                        </Link>
-                        {totals.suggestedBank > 0 && (
-                          <> · <Link className="link" to={`/bank?month=${month}&status=suggested`}>
-                            {t('reports.suggestedAwaiting', { count: totals.suggestedBank })}
-                          </Link></>
+                        {bankBlock.unmatched > 0 && (
+                          <Link className="link" to={`/bank?month=${month}&status=unmatched`}>
+                            {t('reports.openUnmatchedBank', { count: bankBlock.unmatched })}
+                          </Link>
+                        )}
+                        {bankBlock.unmatched > 0 && bankBlock.suggested > 0 && ' · '}
+                        {bankBlock.suggested > 0 && (
+                          <Link className="link" to={`/bank?month=${month}&status=suggested`}>
+                            {t('reports.suggestedAwaiting', { count: bankBlock.suggested })}
+                          </Link>
                         )}
                         {' '}{t('reports.unattributedBlocksClose')}
                       </span>
-                    )}
+                    ) : (
+                      <span className="block mt-1">
+                        {t('reports.bankBlockerNotOnThisScreen')}{' '}
+                        <Link className="link" to={`/bank?month=${month}`}>
+                          {t('reports.openMonthBank')}
+                        </Link>
+                        {' · '}
+                        <Link className="link" to="/exceptions?status=open">
+                          {t('reports.openExceptionsLink')}
+                        </Link>
+                      </span>
+                    ))}
                   </span>
                 </Note>
               </div>
@@ -582,7 +637,10 @@ export default function Reports() {
           <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">{t('reports.kpiInvoices')}</div><div className="kpi-value-compact num">{data.invoices.length}</div></Card>
           <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">{t('reports.kpiInvoiceTotal')}</div><div className="kpi-value-compact text-start"><MoneyByCurrency amounts={orderedTotals(totals.invoices)} baseCurrency={baseCurrency} /></div></Card>
           <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}`}><div className="text-xs text-ink-muted">{t('reports.kpiVat')}</div><div className="kpi-value-compact text-start"><MoneyByCurrency amounts={orderedTotals(totals.vat)} baseCurrency={baseCurrency} /></div></Card>
-          <Card as={Link} className={metricLinkClass} to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">{t('reports.kpiPaidThisMonth')}</div><div className={`kpi-value-compact text-start ${totals.paid.length ? 'text-done-fg' : 'text-idle-fg'}`}><MoneyByCurrency amounts={orderedTotals(totals.paid)} baseCurrency={baseCurrency} /></div></Card>
+          {/* Decision E: this is not "paid this month", it is the portion of it standing against
+              invoices this reader may see. The tile is renamed rather than annotated — a figure
+              says what it is in its own label. */}
+          <Card as={Link} className={metricLinkClass} to={`/payments?month=${month}`}><div className="text-xs text-ink-muted">{t('reports.kpiPaidAgainstInvoices')}</div><div className={`kpi-value-compact text-start ${totals.paid.length ? 'text-done-fg' : 'text-idle-fg'}`}><MoneyByCurrency amounts={orderedTotals(totals.paid)} baseCurrency={baseCurrency} /></div></Card>
           <Card as={Link} className={metricLinkClass} to={`/invoices?month=${month}&pay=open`}><div className="text-xs text-ink-muted">{t('reports.kpiUnpaid')}</div><div className={`kpi-value-compact num ${totals.unpaidCount ? 'text-await-fg' : ''}`}>{totals.unpaidCount}</div></Card>
           <Card as={Link} className={metricLinkClass} to={`/bank?month=${month}&status=unmatched`}><div className="text-xs text-ink-muted">{t('reports.kpiUnmatchedBank')}</div><div className={`kpi-value-compact num ${totals.unmatchedBank ? 'text-alert-fg' : ''}`}>{totals.unmatchedBank}</div></Card>
           <Card as={Link} className={metricLinkClass} to={`/bank?month=${month}&status=suggested`}><div className="text-xs text-ink-muted">{t('reports.kpiSuggested')}</div><div className={`kpi-value-compact num ${totals.suggestedBank ? 'text-await-fg' : ''}`}>{totals.suggestedBank}</div></Card>
@@ -736,7 +794,9 @@ export default function Reports() {
             </ul>
             <div className="report-table-wrap table-scroll hidden overflow-x-auto xl:block print:block" tabIndex={0} role="region" aria-label={t('reports.aria_label_4')}>
             <table className="w-full">
-              <thead className="table-head"><tr><th scope="col" className="th">{t('reports.text_42')}</th><th scope="col" className="th">{t('reports.text_43')}</th></tr></thead>
+              {/* "סכום ששולם" would now be a false column heading: the figure is the portion
+                  allocated to invoices this reader may see, not the amount that left the account. */}
+              <thead className="table-head"><tr><th scope="col" className="th">{t('reports.text_42')}</th><th scope="col" className="th">{t('reports.amountAgainstInvoices')}</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {paymentsBySupplier.map((row) => (
                   <tr key={`${row.name}|${row.currency}`}><td className="td">{row.name}</td><td className="td num font-medium">{fmtMoneyExact(row.amount, row.currency)}</td></tr>

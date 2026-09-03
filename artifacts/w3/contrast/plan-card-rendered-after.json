@@ -1,0 +1,3195 @@
+{
+  "rows": [
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-card__name",
+      "text": "חינם",
+      "px": 21.6,
+      "threshold": 3,
+      "ratio": 17.804
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 7.662
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 17.804
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-card__price num",
+      "text": "20",
+      "px": 33.3,
+      "threshold": 3,
+      "ratio": 17.804
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 13.1,
+      "threshold": 4.5,
+      "ratio": 5.07
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-card__billed",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.794
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-block__title",
+      "text": "עבודה ואוטומציה",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 16.052
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-block__note",
+      "text": "מה שהמערכת עושה על המסמכים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.703
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "1 משתמשים פעילים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.703
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "num font-medium",
+      "text": "1",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.703
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.703
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "1 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.703
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "num font-medium",
+      "text": "1",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.703
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateIntro",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "קריאה אוטומטית של מסמכים — פ",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__tag",
+      "text": "רק 30 יום ראשונים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.141
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateIntro",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "היסטוריה מלאה — פתוח ב־30 הי",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__tag",
+      "text": "רק 30 יום ראשונים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.141
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateIntro",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "ייצוא Excel ודוחות לרו״ח — פ",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__tag",
+      "text": "רק 30 יום ראשונים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.141
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateIntro",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "לוח ביצועי ספקים — פתוח ב־30",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__tag",
+      "text": "רק 30 יום ראשונים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.141
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateIntro",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "התראות ואוטומציות במייל — פת",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__tag",
+      "text": "רק 30 יום ראשונים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.141
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.492
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "עד 10 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.492
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-block__title",
+      "text": "אין גישה לכספים וחיבורים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 7.662
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "התאמות בנק",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "תור תשלומים לרואה החשבון",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "חשבוניות מרכזות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "חיבור למערכות אחרות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "תמיכה מורחבת",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-card__name",
+      "text": "בסיס",
+      "px": 21.6,
+      "threshold": 3,
+      "ratio": 16.61
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 7.148
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 16.61
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-card__price num",
+      "text": "40",
+      "px": 33.3,
+      "threshold": 3,
+      "ratio": 16.61
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 13.1,
+      "threshold": 4.5,
+      "ratio": 4.948
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-card__billed",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.634
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-block__title",
+      "text": "עבודה ואוטומציה",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 14.989
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-block__note",
+      "text": "מה שהמערכת עושה על המסמכים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 6.451
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "5 משתמשים פעילים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "num font-medium",
+      "text": "5",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "1 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "num font-medium",
+      "text": "1",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "קריאה אוטומטית של מסמכים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "היסטוריה מלאה",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "ייצוא Excel ודוחות לרו״ח",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "לוח ביצועי ספקים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "התראות ואוטומציות במייל",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.128
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "עד 10 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.128
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-block__title",
+      "text": "אין גישה לכספים וחיבורים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 7.148
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "התאמות בנק",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "תור תשלומים לרואה החשבון",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "חשבוניות מרכזות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "חיבור למערכות אחרות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "תמיכה מורחבת",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-card__name",
+      "text": "פרו",
+      "px": 21.6,
+      "threshold": 3,
+      "ratio": 15.023
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.61
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 15.023
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-card__price num",
+      "text": "150",
+      "px": 33.3,
+      "threshold": 3,
+      "ratio": 15.023
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 13.1,
+      "threshold": 4.5,
+      "ratio": 6.531
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-card__billed",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 7.221
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-block__title",
+      "text": "עבודה ואוטומציה",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 13.014
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-block__note",
+      "text": "מה שהמערכת עושה על המסמכים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 9.192
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "15 משתמשים פעילים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "num font-medium",
+      "text": "15",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "1 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "num font-medium",
+      "text": "1",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "קריאה אוטומטית של מסמכים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "היסטוריה מלאה",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "ייצוא Excel ודוחות לרו״ח",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "לוח ביצועי ספקים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "התראות ואוטומציות במייל",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.444
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "עד 10 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.444
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-block__title",
+      "text": "כספים וחיבורים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 11.629
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-block__note",
+      "text": "הסט המלא כלול",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 8.214
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.353
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "התאמות בנק",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.353
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.353
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "תור תשלומים לרואה החשבון",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.353
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.353
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "חשבוניות מרכזות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.353
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.758
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "חיבור למערכות אחרות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.758
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.758
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "תמיכה מורחבת",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.758
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-card__name",
+      "text": "פרימיום",
+      "px": 21.6,
+      "threshold": 3,
+      "ratio": 14.978
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 12.282
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 14.978
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-card__price num",
+      "text": "375",
+      "px": 33.3,
+      "threshold": 3,
+      "ratio": 14.978
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 13.1,
+      "threshold": 4.5,
+      "ratio": 6.381
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-card__billed",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 7.069
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-block__title",
+      "text": "עבודה ואוטומציה",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 13.199
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-block__note",
+      "text": "מה שהמערכת עושה על המסמכים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 10.823
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "30 משתמשים פעילים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "num font-medium",
+      "text": "30",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "10 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "num font-medium",
+      "text": "10",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "קריאה אוטומטית של מסמכים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "היסטוריה מלאה",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "ייצוא Excel ודוחות לרו״ח",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "לוח ביצועי ספקים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "התראות ואוטומציות במייל",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "עד 10 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-block__title",
+      "text": "כספים וחיבורים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 11.874
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-block__note",
+      "text": "הסט המלא כלול",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 9.736
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "התאמות בנק",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "תור תשלומים לרואה החשבון",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "חשבוניות מרכזות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "חיבור למערכות אחרות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "תמיכה מורחבת",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-card__name",
+      "text": "חינם",
+      "px": 21.6,
+      "threshold": 3,
+      "ratio": 17.804
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 7.662
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 17.804
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-card__price num",
+      "text": "20",
+      "px": 33.3,
+      "threshold": 3,
+      "ratio": 17.804
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 13.1,
+      "threshold": 4.5,
+      "ratio": 5.07
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-card__billed",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.794
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-block__title",
+      "text": "עבודה ואוטומציה",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 16.052
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-block__note",
+      "text": "מה שהמערכת עושה על המסמכים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.703
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "1 משתמשים פעילים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.703
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "num font-medium",
+      "text": "1",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.703
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.703
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "1 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.703
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "num font-medium",
+      "text": "1",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.703
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateIntro",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "קריאה אוטומטית של מסמכים — פ",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__tag",
+      "text": "רק 30 יום ראשונים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.141
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateIntro",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "היסטוריה מלאה — פתוח ב־30 הי",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__tag",
+      "text": "רק 30 יום ראשונים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.141
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateIntro",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "ייצוא Excel ודוחות לרו״ח — פ",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__tag",
+      "text": "רק 30 יום ראשונים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.141
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateIntro",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "לוח ביצועי ספקים — פתוח ב־30",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__tag",
+      "text": "רק 30 יום ראשונים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.141
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateIntro",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "התראות ואוטומציות במייל — פת",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.908
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__tag",
+      "text": "רק 30 יום ראשונים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.141
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.492
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "עד 10 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.492
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-block__title",
+      "text": "אין גישה לכספים וחיבורים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 7.662
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "התאמות בנק",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "תור תשלומים לרואה החשבון",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "חשבוניות מרכזות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "חיבור למערכות אחרות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-row__label",
+      "text": "תמיכה מורחבת",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.091
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-card__name",
+      "text": "בסיס",
+      "px": 21.6,
+      "threshold": 3,
+      "ratio": 16.61
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 7.148
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 16.61
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-card__price num",
+      "text": "40",
+      "px": 33.3,
+      "threshold": 3,
+      "ratio": 16.61
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 13.1,
+      "threshold": 4.5,
+      "ratio": 4.948
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-card__billed",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.634
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-block__title",
+      "text": "עבודה ואוטומציה",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 14.989
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-block__note",
+      "text": "מה שהמערכת עושה על המסמכים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 6.451
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "5 משתמשים פעילים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "num font-medium",
+      "text": "5",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "1 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "num font-medium",
+      "text": "1",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "קריאה אוטומטית של מסמכים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "היסטוריה מלאה",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "ייצוא Excel ודוחות לרו״ח",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "לוח ביצועי ספקים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "התראות ואוטומציות במייל",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 11.073
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.128
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "עד 10 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.128
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-block__title",
+      "text": "אין גישה לכספים וחיבורים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 7.148
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "התאמות בנק",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "תור תשלומים לרואה החשבון",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "חשבוניות מרכזות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "חיבור למערכות אחרות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-row__label",
+      "text": "תמיכה מורחבת",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.682
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-card__name",
+      "text": "פרו",
+      "px": 21.6,
+      "threshold": 3,
+      "ratio": 15.023
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.61
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 15.023
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-card__price num",
+      "text": "150",
+      "px": 33.3,
+      "threshold": 3,
+      "ratio": 15.023
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 13.1,
+      "threshold": 4.5,
+      "ratio": 6.531
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-card__billed",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 7.221
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-block__title",
+      "text": "עבודה ואוטומציה",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 13.014
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-block__note",
+      "text": "מה שהמערכת עושה על המסמכים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 9.192
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "15 משתמשים פעילים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "num font-medium",
+      "text": "15",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "1 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "num font-medium",
+      "text": "1",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "קריאה אוטומטית של מסמכים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "היסטוריה מלאה",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "ייצוא Excel ודוחות לרו״ח",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "לוח ביצועי ספקים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "התראות ואוטומציות במייל",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.371
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.444
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "עד 10 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 6.444
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-block__title",
+      "text": "כספים וחיבורים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 11.629
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-block__note",
+      "text": "הסט המלא כלול",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 8.214
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.353
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "התאמות בנק",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.353
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.353
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "תור תשלומים לרואה החשבון",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.353
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.353
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "חשבוניות מרכזות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.353
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.758
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "חיבור למערכות אחרות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.758
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "planCard.stateExcluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.758
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-row__label",
+      "text": "תמיכה מורחבת",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 5.758
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-card__name",
+      "text": "פרימיום",
+      "px": 21.6,
+      "threshold": 3,
+      "ratio": 14.978
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 12.282
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 14.978
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-card__price num",
+      "text": "375",
+      "px": 33.3,
+      "threshold": 3,
+      "ratio": 14.978
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 13.1,
+      "threshold": 4.5,
+      "ratio": 6.381
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-card__billed",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 7.069
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-block__title",
+      "text": "עבודה ואוטומציה",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 13.199
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-block__note",
+      "text": "מה שהמערכת עושה על המסמכים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 10.823
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "30 משתמשים פעילים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "num font-medium",
+      "text": "30",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "10 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "num font-medium",
+      "text": "10",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "קריאה אוטומטית של מסמכים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "היסטוריה מלאה",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "ייצוא Excel ודוחות לרו״ח",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "לוח ביצועי ספקים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "התראות ואוטומציות במייל",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "עד 10 סניפים",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.46
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-block__title",
+      "text": "כספים וחיבורים",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 11.874
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-block__note",
+      "text": "הסט המלא כלול",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 9.736
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "התאמות בנק",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "תור תשלומים לרואה החשבון",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "חשבוניות מרכזות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "חיבור למערכות אחרות",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "planCard.stateIncluded",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-row__label",
+      "text": "תמיכה מורחבת",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 9.499
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-card__name",
+      "text": "חינם",
+      "px": 17.6,
+      "threshold": 4.5,
+      "ratio": 17.804,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 7.662,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 14.39,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-card__price num",
+      "text": "20",
+      "px": 20,
+      "threshold": 3,
+      "ratio": 14.39,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "free",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 4.691,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-card__name",
+      "text": "בסיס",
+      "px": 17.6,
+      "threshold": 4.5,
+      "ratio": 16.61,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 7.148,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 13.449,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-card__price num",
+      "text": "40",
+      "px": 20,
+      "threshold": 3,
+      "ratio": 13.449,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "basic",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 4.571,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-card__name",
+      "text": "פרו",
+      "px": 17.6,
+      "threshold": 4.5,
+      "ratio": 15.023,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.61,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 11.191,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-card__price num",
+      "text": "150",
+      "px": 20,
+      "threshold": 3,
+      "ratio": 11.191,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "pro",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.36,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-card__name",
+      "text": "פרימיום",
+      "px": 17.6,
+      "threshold": 4.5,
+      "ratio": 14.978,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 12.282,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 11.456,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-card__price num",
+      "text": "375",
+      "px": 20,
+      "threshold": 3,
+      "ratio": 11.456,
+      "viewport": 390
+    },
+    {
+      "theme": "light",
+      "plan": "premium",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.39,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-card__name",
+      "text": "חינם",
+      "px": 17.6,
+      "threshold": 4.5,
+      "ratio": 17.804,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 7.662,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 14.39,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-card__price num",
+      "text": "20",
+      "px": 20,
+      "threshold": 3,
+      "ratio": 14.39,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "free",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 4.691,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-card__name",
+      "text": "בסיס",
+      "px": 17.6,
+      "threshold": 4.5,
+      "ratio": 16.61,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 7.148,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 13.449,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-card__price num",
+      "text": "40",
+      "px": 20,
+      "threshold": 3,
+      "ratio": 13.449,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "basic",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 4.571,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-card__name",
+      "text": "פרו",
+      "px": 17.6,
+      "threshold": 4.5,
+      "ratio": 15.023,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 10.61,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 11.191,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-card__price num",
+      "text": "150",
+      "px": 20,
+      "threshold": 3,
+      "ratio": 11.191,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "pro",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.36,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-card__name",
+      "text": "פרימיום",
+      "px": 17.6,
+      "threshold": 4.5,
+      "ratio": 14.978,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-card__who",
+      "text": "בתקופת שימוש חודשית",
+      "px": 12.8,
+      "threshold": 4.5,
+      "ratio": 12.282,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "sr-only",
+      "text": "pricingTail.figureIsQuota",
+      "px": 15,
+      "threshold": 4.5,
+      "ratio": 11.456,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-card__price num",
+      "text": "375",
+      "px": 20,
+      "threshold": 3,
+      "ratio": 11.456,
+      "viewport": 390
+    },
+    {
+      "theme": "dark",
+      "plan": "premium",
+      "cls": "plan-card__per",
+      "text": "מסמכים בחודש",
+      "px": 12,
+      "threshold": 4.5,
+      "ratio": 5.39,
+      "viewport": 390
+    }
+  ],
+  "failing": []
+}

@@ -205,8 +205,12 @@
   /* `--color-shell*` NARROWED (31.08.2026, ADR-0010, decision #331). It used to mean six unrelated
      things at once, and four of them break if the pair is simply flipped for a dark theme. What is
      left under this name is ONE job: **a dark ground that stays dark in both themes** — the auth
-     panels and their aurora, the dark chart tooltip, and the table head. Those surfaces are dark by
+     panels and their aurora, and the dark chart tooltip. Those surfaces are dark by
      design and not by theme, so they do not appear in the dark block below at all.
+     The table head USED to be on this list and no longer is: it borrowed the ink from here and the
+     band from `--color-action`, and only one half of that pair was fixed. It now owns
+     `--color-table-head*` below, which carries the same "dark in both themes" contract on BOTH
+     halves.
      The other five jobs moved out, each to a name that says what it is:
        · `--color-inverse*`   the drawer and the role-queue card — deliberately the inverse of the
                               page, so they FLIP (dark on light paper, light on a dark page)
@@ -221,6 +225,32 @@
   --color-shell-ink: oklch(97.5% 0.012 80);
   --color-shell-ink-soft: oklch(88% 0.014 80);
   --color-shell-ink-dim: oklch(73% 0.016 80);
+
+  /* ---- The table header strip — ONE FAMILY, FIXED DARK IN BOTH THEMES (RC6, 03.09.2026) ----
+     The band and its letters used to come from two unrelated families: `bg-action` for the strip
+     and `text-shell-ink-soft` for the type. `shell-ink-soft` is fixed at L 88% by the contract
+     three comments up; `action` is NOT — the dark theme deliberately turns the primary action into
+     light paper at L 95%, because on a teal-black ground paper is the loudest a control can be.
+     So the pair drifted apart the moment the dark theme landed, and the strip rendered near-white
+     letters on a near-white band. MEASURED IN A BROWSER, both themes, before this change:
+     light 8.13:1, dark **1.24:1** where lettering needs 4.5.
+
+     The fix is deliberately NOT a per-theme override of `action` — a second definition of a token
+     that flips is exactly how these two came apart. The band is its own thing, so it gets its own
+     name, and the name carries the whole claim: **this surface is dark by design and not by theme.**
+     Both halves are therefore ABSENT from the dark block below, like `--color-shell*`.
+     Values unchanged from what the light theme has always rendered: the oceanic band of T7.3g
+     ("שנה את הפס השחור לכחול") and the same soft warm ink. 8.13:1 in BOTH themes now.
+
+     WHAT KEEPS IT FIXED, because a comment is not a guard: the pair is listed in
+     `scripts/contrast-pairs.mjs` and `scripts/check-contrast-rendered.mjs` measures every listed
+     pair in light AND dark. Redefining either token in the dark block below at a value that
+     does not clear 4.5:1 fails that gate instead of shipping. The old pair was in neither list —
+     `.table-head` composes its colours in a CSS `@apply`, and the observed-pair scanner only reads
+     `className` literals out of `.tsx`, so the one pair that mattered was invisible to both gates.
+     Composing the strip from tokens whose pairing IS listed is what closes that hole. */
+  --color-table-head: oklch(33.66% 0.058 209);     /* #003F47 — the oceanic band (T7.3g) */
+  --color-table-head-ink: oklch(88% 0.014 80);
 
   /* The inverse surface. In the light theme it is the onyx the drawer and the role-queue card have
      always been; in the dark theme it inverts, because its whole job is to be the opposite of the
@@ -1197,9 +1227,13 @@ body {
   /* T7.3b (owner): EVERY table header strip is the dark band with light letters — one idiom,
      everywhere a table has a header row. Print gets paper back.
      T7.3g (owner, image #15): the band is OCEANIC, not Onyx — "שנה את הפס השחור לכחול".
-     shell-ink-soft on action measures 8.13:1 (ledger). */
-  .table-head { @apply bg-action; }
-  .table-head .th { @apply text-shell-ink-soft; }
+     RC6 (03.09.2026): the pixels are unchanged in the light theme, but the two tokens are now the
+     strip's OWN family instead of `action` + `shell-ink-soft`. `action` flips to light paper in the
+     dark theme and `shell-ink-soft` does not, so the band measured 1.24:1 there. See the
+     `--color-table-head*` block in `@theme` for the measurement and for what now keeps it fixed.
+     table-head-ink on table-head measures 8.13:1 in BOTH themes (browser-measured, not derived). */
+  .table-head { @apply bg-table-head; }
+  .table-head .th { @apply text-table-head-ink; }
 
   /* No uppercase/tracking: Hebrew has no case — the tracked-caps table header was a
      Latin-template relic. Hierarchy comes from size, weight and color alone. */

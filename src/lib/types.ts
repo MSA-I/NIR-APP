@@ -73,6 +73,10 @@ export interface Organization {
     payment_request_amount_tolerance?: ToleranceSetting;
     invoice_line_amount_tolerance?: ToleranceSetting;
     invoice_document_amount_tolerance?: ToleranceSetting;
+    /* The fifth, added by 0299. It is not new behaviour — it is the bare `<= 1` that decided
+       "paid" inside the status writer, which was one unit of whatever currency the invoice
+       happened to be in and which no screen could state. */
+    invoice_payment_settled_tolerance?: ToleranceSetting;
     // Per-tenant display names for roles. The user_role enum is fixed (it is baked into the
     // RLS policies); only the label moves. resolveRoleLabels() in status.ts honors a key
     // only if it already exists in ROLE_LABEL, so a settings blob can rename a role but
@@ -238,7 +242,18 @@ export type SupplierPriceSubmissionStatus = 'accepted' | 'accepted_with_rejectio
 export interface SupplierPriceRejection {
   row: number;
   product?: string | null;
-  reason: 'unknown_product' | 'invalid_price' | 'duplicate_product' | 'invalid_row';
+  /* `invalid_price` used to answer five different failures at once, so a row refused for being
+     priced in dollars and a row refused for being unreadable arrived under one word. The parser
+     names the cause now; `invalid_price` stays in the union because submissions written before
+     this change still carry it. `currency` and `printed_currency` are present only on the
+     currency refusals. */
+  reason: 'unknown_product' | 'invalid_price' | 'duplicate_product' | 'invalid_row'
+    | 'price_missing' | 'price_unreadable' | 'price_not_positive' | 'price_below_minor_unit'
+    | 'price_above_cap' | 'price_currency_mismatch' | 'price_currency_unknown'
+    | 'currency_mismatch_existing_price';
+  currency?: string | null;
+  printed_currency?: string | null;
+  existing_currency?: string | null;
   message: string;
 }
 export interface SupplierPriceSubmission {

@@ -701,16 +701,26 @@ export function OrgSubscriptionPanel() {
                       : <><span className="num font-medium">{fmtNum(row.numeric_limit)}</span> {quotaName(row.entitlement_key, row.label)}</>,
                     affirmative: true,
                   }));
+              /* THE INTRO WINDOW IS NOT AN INCLUSION, here for the same reason as on `/pricing`.
+                 `affirmative: included || (free && intro_included)` drew a TICK on every capability
+                 the free rung loses on day thirty-one, and `PlanTicket`'s `intro` flag — which
+                 draws the clock and the «רק 30 יום ראשונים» tag — was never set by either surface.
+                 #276 already requires the end of an introductory window to be said out loud; a tick
+                 that expires says the opposite. */
               const capabilityRows = planFeatures
                 .filter((row) => row.plan_key === option.plan_key)
                 .sort((a, b) => a.display_order - b.display_order)
-                .map((row) => ({
-                  key: row.entitlement_key,
-                  text: row.plan_key === 'free' && row.intro_included && !row.included
-                    ? t('orgSubscription.entitlementIntroOnly', { label: featureName(row.entitlement_key, row.label) })
-                    : featureName(row.entitlement_key, row.label),
-                  affirmative: row.included || (row.plan_key === 'free' && row.intro_included),
-                }));
+                .map((row) => {
+                  const introOnly = row.plan_key === 'free' && row.intro_included && !row.included;
+                  return {
+                    key: row.entitlement_key,
+                    text: introOnly
+                      ? t('orgSubscription.entitlementIntroOnly', { label: featureName(row.entitlement_key, row.label) })
+                      : featureName(row.entitlement_key, row.label),
+                    affirmative: row.included,
+                    intro: introOnly,
+                  };
+                });
 
               return (
                 <PlanTicket

@@ -1,0 +1,22 @@
+{
+  "planCard.stateIncluded": {
+    "he": "כלול",
+    "en": "Included"
+  },
+  "planCard.stateExcluded": {
+    "he": "לא כלול",
+    "en": "Not included"
+  },
+  "planCard.stateIntro": {
+    "he": "כלול ב־30 הימים הראשונים בלבד",
+    "en": "Included for the first 30 days only"
+  },
+  "planCard.stateUnmeasured": {
+    "he": "לא נמדד",
+    "en": "Not measured"
+  },
+  "pricingTail.figureIsQuota": {
+    "he": "מכסת {label}: {value}",
+    "en": "{label} allowance: {value}"
+  }
+}

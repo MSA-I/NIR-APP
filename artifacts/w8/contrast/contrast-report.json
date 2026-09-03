@@ -1,0 +1,3319 @@
+{
+  "rows": [
+    {
+      "fg": "ink",
+      "bg": "canvas",
+      "where": "page titles on the page ground",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 16.65079204196627,
+      "shown": 16.65
+    },
+    {
+      "fg": "ink",
+      "bg": "surface",
+      "where": "strongest text on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 17.803949505719928,
+      "shown": 17.8
+    },
+    {
+      "fg": "ink-body",
+      "bg": "canvas",
+      "where": "body copy on the page ground",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 13.287475643799628,
+      "shown": 13.29
+    },
+    {
+      "fg": "ink-body",
+      "bg": "surface",
+      "where": "body copy on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 14.20770524455819,
+      "shown": 14.21
+    },
+    {
+      "fg": "ink-mid",
+      "bg": "surface",
+      "where": "secondary figures on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 10.328471405909841,
+      "shown": 10.33
+    },
+    {
+      "fg": "ink-soft",
+      "bg": "surface",
+      "where": "quiet labels on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 7.662157365916176,
+      "shown": 7.66
+    },
+    {
+      "fg": "ink-muted",
+      "bg": "surface",
+      "where": "12px card labels — the smallest real text in the product",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 6.642700366845276,
+      "shown": 6.64
+    },
+    {
+      "fg": "ink-muted",
+      "bg": "canvas",
+      "where": "12px labels on the page ground",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 6.212454285488676,
+      "shown": 6.21
+    },
+    {
+      "fg": "ink-soft",
+      "bg": "surface-hover",
+      "where": "a row label under the pointer",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 6.889936306530986,
+      "shown": 6.89
+    },
+    {
+      "fg": "ink",
+      "bg": "surface-selected",
+      "where": "the chosen option in a list",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 14.104096531688464,
+      "shown": 14.1
+    },
+    {
+      "fg": "on-solid",
+      "bg": "action",
+      "where": "every primary button in the product",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 11.653788031017536,
+      "shown": 11.65
+    },
+    {
+      "fg": "on-solid",
+      "bg": "action-solid",
+      "where": "a filled brand mark",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 9.369788323698202,
+      "shown": 9.37
+    },
+    {
+      "fg": "action-on-soft",
+      "bg": "action-soft",
+      "where": "the secondary button and the filter chip",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 10.21253019429724,
+      "shown": 10.21
+    },
+    {
+      "fg": "done-fg",
+      "bg": "surface",
+      "where": "paid / complete, as text on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.24436320708438,
+      "shown": 5.24
+    },
+    {
+      "fg": "await-fg",
+      "bg": "surface",
+      "where": "awaiting us, as text on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 4.918331430117585,
+      "shown": 4.92
+    },
+    {
+      "fg": "alert-fg",
+      "bg": "surface",
+      "where": "overdue / possible loss, as text on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.897026126877886,
+      "shown": 5.9
+    },
+    {
+      "fg": "info-fg",
+      "bg": "surface",
+      "where": "ball with an outside party, as text on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.725397565110943,
+      "shown": 5.73
+    },
+    {
+      "fg": "idle-fg",
+      "bg": "surface",
+      "where": "inactive, as text on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 10.125930252768413,
+      "shown": 10.13
+    },
+    {
+      "fg": "alert-fg",
+      "bg": "canvas",
+      "where": "the loudest status, read straight off the page ground",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.515077184033781,
+      "shown": 5.52
+    },
+    {
+      "fg": "done-on-soft",
+      "bg": "done-soft",
+      "where": "the done badge",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 6.700651281961838,
+      "shown": 6.7
+    },
+    {
+      "fg": "await-on-soft",
+      "bg": "await-soft",
+      "where": "the awaiting badge",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 6.3634502942026225,
+      "shown": 6.36
+    },
+    {
+      "fg": "alert-on-soft",
+      "bg": "alert-soft",
+      "where": "the alert badge",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 6.592953546661222,
+      "shown": 6.59
+    },
+    {
+      "fg": "info-on-soft",
+      "bg": "info-soft",
+      "where": "the info badge",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 6.534315045489202,
+      "shown": 6.53
+    },
+    {
+      "fg": "idle-on-soft",
+      "bg": "idle-soft",
+      "where": "the idle badge",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 13.341456306661685,
+      "shown": 13.34
+    },
+    {
+      "fg": "on-solid",
+      "bg": "done-solid",
+      "where": "a filled done chip",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.363999913316052,
+      "shown": 5.36
+    },
+    {
+      "fg": "on-solid",
+      "bg": "await-solid",
+      "where": "a filled awaiting chip",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.030530556917215,
+      "shown": 5.03
+    },
+    {
+      "fg": "on-solid",
+      "bg": "alert-solid",
+      "where": "the unread-alert count and the toast",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 6.031551664969671,
+      "shown": 6.03
+    },
+    {
+      "fg": "on-solid",
+      "bg": "info-solid",
+      "where": "a filled info chip",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.856007837418439,
+      "shown": 5.86
+    },
+    {
+      "fg": "on-solid",
+      "bg": "idle-solid",
+      "where": "a filled idle chip",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 10.356927400589216,
+      "shown": 10.36
+    },
+    {
+      "fg": "inverse-ink",
+      "bg": "inverse",
+      "where": "the phone drawer and the role-queue card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 16.92564901884111,
+      "shown": 16.93
+    },
+    {
+      "fg": "inverse-ink-soft",
+      "bg": "inverse",
+      "where": "quiet rows in the drawer / queue card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 12.699256040934642,
+      "shown": 12.7
+    },
+    {
+      "fg": "shell-ink",
+      "bg": "shell",
+      "where": "the auth panels — dark in BOTH themes",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 16.92564901884111,
+      "shown": 16.93
+    },
+    {
+      "fg": "shell-ink-soft",
+      "bg": "shell",
+      "where": "quiet copy on the auth panels, and the series name in a chart tooltip",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 12.699256040934642,
+      "shown": 12.7
+    },
+    {
+      "fg": "table-head-ink",
+      "bg": "table-head",
+      "where": "the header strip of every table in the product — dark in BOTH themes",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 8.127052022992666,
+      "shown": 8.13
+    },
+    {
+      "fg": "inverse-ink-dim",
+      "bg": "inverse",
+      "where": "the org name under the brand mark in the phone drawer",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 7.623267002206536,
+      "shown": 7.62
+    },
+    {
+      "fg": "inverse",
+      "bg": "inverse-ink",
+      "where": "the drawer’s ACTIVE row — a light pill on the dark panel, so the family runs both ways",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 16.92564901884111,
+      "shown": 16.93
+    },
+    {
+      "fg": "shell-ink-dim",
+      "bg": "shell",
+      "where": "the axis label at the top of a chart tooltip",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 7.623267002206536,
+      "shown": 7.62
+    },
+    {
+      "fg": "nav-current-ink",
+      "bg": "nav-current",
+      "where": "the current page in the phone action bar",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 4.927780806871024,
+      "shown": 4.93
+    },
+    {
+      "fg": "fab-puck-ink",
+      "bg": "fab-puck",
+      "where": "the camera glyph on the raised puck",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 11.653788031017536,
+      "shown": 11.65
+    },
+    {
+      "fg": "toggle-knob-ink",
+      "bg": "toggle-knob",
+      "where": "the sun/moon on the appearance switch",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 17.803949505719928,
+      "shown": 17.8
+    },
+    {
+      "fg": "fixed-onyx",
+      "bg": "series-2",
+      "where": "the initials on identity step 2",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 7.766054955206123,
+      "shown": 7.77
+    },
+    {
+      "fg": "on-solid",
+      "bg": "series-3",
+      "where": "the initials on identity step 3",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 7.499889037576076,
+      "shown": 7.5
+    },
+    {
+      "fg": "fixed-onyx",
+      "bg": "series-4",
+      "where": "the initials on identity step 4",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 8.03836746074602,
+      "shown": 8.04
+    },
+    {
+      "fg": "on-solid",
+      "bg": "series-5",
+      "where": "the initials on identity step 5",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 7.333089308921882,
+      "shown": 7.33
+    },
+    {
+      "fg": "chart-tick",
+      "bg": "surface",
+      "where": "axis ticks",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.967760889911321,
+      "shown": 5.97
+    },
+    {
+      "fg": "chart-label",
+      "bg": "surface",
+      "where": "on-chart labels",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 7.662157365916176,
+      "shown": 7.66
+    },
+    {
+      "fg": "trend-up-fg",
+      "bg": "surface",
+      "where": "a rising cost — bad news in this product",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.897026126877886,
+      "shown": 5.9
+    },
+    {
+      "fg": "trend-down-fg",
+      "bg": "surface",
+      "where": "a falling cost",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.24436320708438,
+      "shown": 5.24
+    },
+    {
+      "fg": "doc-ink",
+      "bg": "doc-plate",
+      "where": "lettering on the dark outbound plate",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 16.92564901884111,
+      "shown": 16.93
+    },
+    {
+      "fg": "doc-ink-soft",
+      "bg": "doc-plate",
+      "where": "secondary lettering on the dark plate",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 8.390915029748827,
+      "shown": 8.39
+    },
+    {
+      "fg": "doc-ink-dim",
+      "bg": "doc-plate",
+      "where": "the faintest lettering on the dark plate",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.406634738422043,
+      "shown": 5.41
+    },
+    {
+      "fg": "doc-ink-body",
+      "bg": "doc-paper",
+      "where": "body copy on the document sheet",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 7.662157365916176,
+      "shown": 7.66
+    },
+    {
+      "fg": "doc-ink-muted",
+      "bg": "doc-paper",
+      "where": "labels and folios on the document sheet",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 4.81527651924225,
+      "shown": 4.82
+    },
+    {
+      "fg": "line-strong",
+      "bg": "surface",
+      "where": "an input border on a card",
+      "kind": "non-text",
+      "threshold": 3,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 3.4300978146931653,
+      "shown": 3.43
+    },
+    {
+      "fg": "line-strong",
+      "bg": "canvas",
+      "where": "an input border on the page ground",
+      "kind": "non-text",
+      "threshold": 3,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 3.2079312164814735,
+      "shown": 3.21
+    },
+    {
+      "fg": "line-strong",
+      "bg": "surface-sunken",
+      "where": "an input border on a quiet strip",
+      "kind": "non-text",
+      "threshold": 3,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 3.065146362687215,
+      "shown": 3.07
+    },
+    {
+      "fg": "action-line",
+      "bg": "surface",
+      "where": "the secondary button border",
+      "kind": "non-text",
+      "threshold": 3,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 3.482807209395522,
+      "shown": 3.48
+    },
+    {
+      "fg": "focus",
+      "bg": "surface",
+      "where": "the focus ring on a card",
+      "kind": "non-text",
+      "threshold": 3,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.683357226622485,
+      "shown": 5.68
+    },
+    {
+      "fg": "focus",
+      "bg": "canvas",
+      "where": "the focus ring on the page ground",
+      "kind": "non-text",
+      "threshold": 3,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.315247566293891,
+      "shown": 5.32
+    },
+    {
+      "fg": "nav-current-edge",
+      "bg": "nav-current",
+      "where": "the ring that separates the current pill from the puck",
+      "kind": "non-text",
+      "threshold": 3,
+      "source": "manifest",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 3.1811315495626626,
+      "shown": 3.18
+    },
+    {
+      "fg": "action",
+      "bg": "surface",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/components/document-review/DocumentScanPreview.tsx",
+      "sites": [
+        "src/components/document-review/DocumentScanPreview.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 11.393866174626023,
+      "shown": 11.39
+    },
+    {
+      "fg": "action-line",
+      "bg": "action-wash",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/components/assistant/AnswerView.tsx",
+      "sites": [
+        "src/components/assistant/AnswerView.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 3.23650601267989,
+      "shown": 3.24
+    },
+    {
+      "fg": "focus",
+      "bg": "surface-hover",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/components/FeedbackButton.tsx and 4 other file(s)",
+      "sites": [
+        "src/components/FeedbackButton.tsx",
+        "src/lib/i18n/LanguageMenuRow.tsx",
+        "src/operator/OperatorShell.tsx"
+      ],
+      "siteCount": 5,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.110567093398418,
+      "shown": 5.11
+    },
+    {
+      "fg": "focus",
+      "bg": "surface",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/lib/i18n/LanguageMenuRow.tsx",
+      "sites": [
+        "src/lib/i18n/LanguageMenuRow.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.683357226622485,
+      "shown": 5.68
+    },
+    {
+      "fg": "focus",
+      "bg": "surface-selected",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/pages/Expenses.tsx",
+      "sites": [
+        "src/pages/Expenses.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 4.502294219751633,
+      "shown": 4.5
+    },
+    {
+      "fg": "info-line",
+      "bg": "info-wash",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/components/BenefitWindowStrip.tsx",
+      "sites": [
+        "src/components/BenefitWindowStrip.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 3.7729530604283776,
+      "shown": 3.77
+    },
+    {
+      "fg": "line-strong",
+      "bg": "surface",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/components/ui.tsx and 7 other file(s)",
+      "sites": [
+        "src/components/ui.tsx",
+        "src/lib/i18n/LanguageMenuRow.tsx",
+        "src/pages/Entrance.tsx"
+      ],
+      "siteCount": 8,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 3.4300978146931653,
+      "shown": 3.43
+    },
+    {
+      "fg": "line-strong",
+      "bg": "surface-hover",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/lib/i18n/LanguageMenuRow.tsx and 1 other file(s)",
+      "sites": [
+        "src/lib/i18n/LanguageMenuRow.tsx",
+        "src/pages/Entrance.tsx"
+      ],
+      "siteCount": 2,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 3.084399646179961,
+      "shown": 3.08
+    },
+    {
+      "fg": "nav-current-edge",
+      "bg": "nav-current",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/components/Fab.tsx",
+      "sites": [
+        "src/components/Fab.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 3.1811315495626626,
+      "shown": 3.18
+    },
+    {
+      "fg": "nav-current-ink",
+      "bg": "nav-current",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/components/Fab.tsx",
+      "sites": [
+        "src/components/Fab.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 4.927780806871024,
+      "shown": 4.93
+    },
+    {
+      "fg": "on-solid",
+      "bg": "action",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/operator/OperatorShell.tsx",
+      "sites": [
+        "src/operator/OperatorShell.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 11.653788031017536,
+      "shown": 11.65
+    },
+    {
+      "fg": "action",
+      "bg": "surface-hover",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/charts.tsx and 2 other file(s)",
+      "sites": [
+        "src/components/charts.tsx",
+        "src/pages/DocumentsInbox.tsx",
+        "src/pages/Receiving.tsx"
+      ],
+      "siteCount": 3,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 10.245549455499134,
+      "shown": 10.25
+    },
+    {
+      "fg": "action",
+      "bg": "surface",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/document-review/DocumentScanPreview.tsx",
+      "sites": [
+        "src/components/document-review/DocumentScanPreview.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 11.393866174626023,
+      "shown": 11.39
+    },
+    {
+      "fg": "action",
+      "bg": "surface-selected",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Receiving.tsx",
+      "sites": [
+        "src/pages/Receiving.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 9.02609773996701,
+      "shown": 9.03
+    },
+    {
+      "fg": "action-on-soft",
+      "bg": "surface-selected",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Fab.tsx and 1 other file(s)",
+      "sites": [
+        "src/components/Fab.tsx",
+        "src/components/assistant/AnswerView.tsx"
+      ],
+      "siteCount": 2,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 9.619262267524814,
+      "shown": 9.62
+    },
+    {
+      "fg": "action-on-soft",
+      "bg": "action-soft",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Fab.tsx and 4 other file(s)",
+      "sites": [
+        "src/components/Fab.tsx",
+        "src/components/Layout.tsx",
+        "src/components/ui.tsx"
+      ],
+      "siteCount": 5,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 10.21253019429724,
+      "shown": 10.21
+    },
+    {
+      "fg": "action-on-soft",
+      "bg": "surface-hover",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/assistant/AnswerView.tsx",
+      "sites": [
+        "src/components/assistant/AnswerView.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 10.918852213503998,
+      "shown": 10.92
+    },
+    {
+      "fg": "alert-fg",
+      "bg": "alert-wash",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Layout.tsx",
+      "sites": [
+        "src/components/Layout.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.4905156637087655,
+      "shown": 5.49
+    },
+    {
+      "fg": "alert-fg",
+      "bg": "alert-soft",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/UploadCenter.tsx",
+      "sites": [
+        "src/components/UploadCenter.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.023993952060686,
+      "shown": 5.02
+    },
+    {
+      "fg": "await-fg",
+      "bg": "await-wash",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/neworder/SupplierSplitStep.tsx",
+      "sites": [
+        "src/pages/neworder/SupplierSplitStep.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 4.85098943420702,
+      "shown": 4.85
+    },
+    {
+      "fg": "done-fg",
+      "bg": "done-soft",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Onboarding.tsx",
+      "sites": [
+        "src/pages/Onboarding.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 4.722274146277795,
+      "shown": 4.72
+    },
+    {
+      "fg": "fixed-onyx",
+      "bg": "series-2",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/EntityMonogram.tsx",
+      "sites": [
+        "src/components/EntityMonogram.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 7.766054955206123,
+      "shown": 7.77
+    },
+    {
+      "fg": "fixed-onyx",
+      "bg": "series-4",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/EntityMonogram.tsx",
+      "sites": [
+        "src/components/EntityMonogram.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 8.03836746074602,
+      "shown": 8.04
+    },
+    {
+      "fg": "idle-fg",
+      "bg": "surface-sunken",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Expenses.tsx",
+      "sites": [
+        "src/pages/Expenses.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 9.048563615342246,
+      "shown": 9.05
+    },
+    {
+      "fg": "ink",
+      "bg": "surface-hover",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/FeedbackButton.tsx and 5 other file(s)",
+      "sites": [
+        "src/components/FeedbackButton.tsx",
+        "src/components/Layout.tsx",
+        "src/components/assistant/AnswerView.tsx"
+      ],
+      "siteCount": 6,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 16.009600461192893,
+      "shown": 16.01
+    },
+    {
+      "fg": "ink",
+      "bg": "surface-selected",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/assistant/AnswerView.tsx",
+      "sites": [
+        "src/components/assistant/AnswerView.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 14.104096531688464,
+      "shown": 14.1
+    },
+    {
+      "fg": "ink",
+      "bg": "surface",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/lib/i18n/LanguageMenuRow.tsx and 1 other file(s)",
+      "sites": [
+        "src/lib/i18n/LanguageMenuRow.tsx",
+        "src/pages/Entrance.tsx"
+      ],
+      "siteCount": 2,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 17.803949505719928,
+      "shown": 17.8
+    },
+    {
+      "fg": "ink",
+      "bg": "surface-sunken",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/operator/Team.tsx",
+      "sites": [
+        "src/operator/Team.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 15.909666142802374,
+      "shown": 15.91
+    },
+    {
+      "fg": "ink-body",
+      "bg": "surface-hover",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/FeedbackButton.tsx and 3 other file(s)",
+      "sites": [
+        "src/components/FeedbackButton.tsx",
+        "src/components/Layout.tsx",
+        "src/components/ui.tsx"
+      ],
+      "siteCount": 4,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 12.775799232787918,
+      "shown": 12.78
+    },
+    {
+      "fg": "ink-mid",
+      "bg": "surface-sunken",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/OfflineQueueStatus.tsx",
+      "sites": [
+        "src/components/OfflineQueueStatus.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 9.229555036690812,
+      "shown": 9.23
+    },
+    {
+      "fg": "ink-mid",
+      "bg": "action-wash",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/neworder/NewOrder.tsx",
+      "sites": [
+        "src/pages/neworder/NewOrder.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 9.598050594601053,
+      "shown": 9.6
+    },
+    {
+      "fg": "ink-muted",
+      "bg": "surface",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/ui.tsx",
+      "sites": [
+        "src/components/ui.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 6.642700366845276,
+      "shown": 6.64
+    },
+    {
+      "fg": "ink-muted",
+      "bg": "surface-hover",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/ui.tsx",
+      "sites": [
+        "src/components/ui.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.973224021021062,
+      "shown": 5.97
+    },
+    {
+      "fg": "ink-muted",
+      "bg": "surface-selected",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/ui.tsx",
+      "sites": [
+        "src/components/ui.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.262275495387601,
+      "shown": 5.26
+    },
+    {
+      "fg": "ink-soft",
+      "bg": "surface-hover",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Fab.tsx and 3 other file(s)",
+      "sites": [
+        "src/components/Fab.tsx",
+        "src/components/Layout.tsx",
+        "src/operator/OperatorShell.tsx"
+      ],
+      "siteCount": 4,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 6.889936306530986,
+      "shown": 6.89
+    },
+    {
+      "fg": "ink-soft",
+      "bg": "surface-selected",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Fab.tsx",
+      "sites": [
+        "src/components/Fab.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 6.0698783208270894,
+      "shown": 6.07
+    },
+    {
+      "fg": "ink-soft",
+      "bg": "surface-sunken",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/document-review/DocumentReviewProposals.tsx and 7 other file(s)",
+      "sites": [
+        "src/components/document-review/DocumentReviewProposals.tsx",
+        "src/pages/Credits.tsx",
+        "src/pages/Exceptions.tsx"
+      ],
+      "siteCount": 8,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 6.846928294543662,
+      "shown": 6.85
+    },
+    {
+      "fg": "ink-soft",
+      "bg": "surface",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/document-review/DocumentScanPreview.tsx",
+      "sites": [
+        "src/components/document-review/DocumentScanPreview.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 7.662157365916176,
+      "shown": 7.66
+    },
+    {
+      "fg": "ink-soft",
+      "bg": "idle-soft",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Onboarding.tsx",
+      "sites": [
+        "src/pages/Onboarding.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 7.153652978887774,
+      "shown": 7.15
+    },
+    {
+      "fg": "inverse",
+      "bg": "inverse-ink",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Layout.tsx",
+      "sites": [
+        "src/components/Layout.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 16.92564901884111,
+      "shown": 16.93
+    },
+    {
+      "fg": "inverse-ink",
+      "bg": "inverse",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Layout.tsx and 3 other file(s)",
+      "sites": [
+        "src/components/Layout.tsx",
+        "src/lib/i18n/LanguageMenuRow.tsx",
+        "src/operator/Overview.tsx"
+      ],
+      "siteCount": 4,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 16.92564901884111,
+      "shown": 16.93
+    },
+    {
+      "fg": "nav-current-ink",
+      "bg": "nav-current",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Fab.tsx",
+      "sites": [
+        "src/components/Fab.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 4.927780806871024,
+      "shown": 4.93
+    },
+    {
+      "fg": "on-solid",
+      "bg": "series-3",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/EntityMonogram.tsx",
+      "sites": [
+        "src/components/EntityMonogram.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 7.499889037576076,
+      "shown": 7.5
+    },
+    {
+      "fg": "on-solid",
+      "bg": "series-5",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/EntityMonogram.tsx",
+      "sites": [
+        "src/components/EntityMonogram.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 7.333089308921882,
+      "shown": 7.33
+    },
+    {
+      "fg": "on-solid",
+      "bg": "action",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/EntityMonogram.tsx and 8 other file(s)",
+      "sites": [
+        "src/components/EntityMonogram.tsx",
+        "src/components/Fab.tsx",
+        "src/components/Layout.tsx"
+      ],
+      "siteCount": 9,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 11.653788031017536,
+      "shown": 11.65
+    },
+    {
+      "fg": "on-solid",
+      "bg": "alert-solid",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/NotificationBell.tsx and 2 other file(s)",
+      "sites": [
+        "src/components/NotificationBell.tsx",
+        "src/components/ui.tsx",
+        "src/pages/Receiving.tsx"
+      ],
+      "siteCount": 3,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 6.031551664969671,
+      "shown": 6.03
+    },
+    {
+      "fg": "on-solid",
+      "bg": "action-solid",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/assistant/AssistantDialog.tsx",
+      "sites": [
+        "src/components/assistant/AssistantDialog.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 9.369788323698202,
+      "shown": 9.37
+    },
+    {
+      "fg": "on-solid",
+      "bg": "ink-body",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/ui.tsx",
+      "sites": [
+        "src/components/ui.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 14.531817627978404,
+      "shown": 14.53
+    },
+    {
+      "fg": "on-solid",
+      "bg": "done-solid",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Receiving.tsx",
+      "sites": [
+        "src/pages/Receiving.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.363999913316052,
+      "shown": 5.36
+    },
+    {
+      "fg": "on-solid",
+      "bg": "await-solid",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Receiving.tsx",
+      "sites": [
+        "src/pages/Receiving.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.030530556917215,
+      "shown": 5.03
+    },
+    {
+      "fg": "on-solid",
+      "bg": "info-solid",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Receiving.tsx",
+      "sites": [
+        "src/pages/Receiving.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.856007837418439,
+      "shown": 5.86
+    },
+    {
+      "fg": "on-solid",
+      "bg": "idle-solid",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Receiving.tsx",
+      "sites": [
+        "src/pages/Receiving.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 10.356927400589216,
+      "shown": 10.36
+    },
+    {
+      "fg": "shell-ink",
+      "bg": "assistant-bubble",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/assistant/AssistantDialog.tsx",
+      "sites": [
+        "src/components/assistant/AssistantDialog.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 12.64114851055048,
+      "shown": 12.64
+    },
+    {
+      "fg": "shell-ink",
+      "bg": "assistant-bubble-hover",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/assistant/AssistantDialog.tsx",
+      "sites": [
+        "src/components/assistant/AssistantDialog.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 10.45384645607992,
+      "shown": 10.45
+    },
+    {
+      "fg": "shell-ink",
+      "bg": "shell",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/charts.tsx",
+      "sites": [
+        "src/components/charts.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 16.92564901884111,
+      "shown": 16.93
+    },
+    {
+      "fg": "shell-ink-dim",
+      "bg": "assistant-bubble",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/assistant/AssistantDialog.tsx",
+      "sites": [
+        "src/components/assistant/AssistantDialog.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 5.693539444378126,
+      "shown": 5.69
+    },
+    {
+      "fg": "shell-ink-soft",
+      "bg": "assistant-bubble",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/assistant/AssistantDialog.tsx",
+      "sites": [
+        "src/components/assistant/AssistantDialog.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "light",
+      "resolved": true,
+      "ratio": 9.484610097270691,
+      "shown": 9.48
+    },
+    {
+      "fg": "ink",
+      "bg": "canvas",
+      "where": "page titles on the page ground",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 17.799597993889126,
+      "shown": 17.8
+    },
+    {
+      "fg": "ink",
+      "bg": "surface",
+      "where": "strongest text on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 16.636323428607916,
+      "shown": 16.64
+    },
+    {
+      "fg": "ink-body",
+      "bg": "canvas",
+      "where": "body copy on the page ground",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 15.336774501188643,
+      "shown": 15.34
+    },
+    {
+      "fg": "ink-body",
+      "bg": "surface",
+      "where": "body copy on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 14.334455252360033,
+      "shown": 14.33
+    },
+    {
+      "fg": "ink-mid",
+      "bg": "surface",
+      "where": "secondary figures on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 11.464230614286567,
+      "shown": 11.46
+    },
+    {
+      "fg": "ink-soft",
+      "bg": "surface",
+      "where": "quiet labels on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.668536941296384,
+      "shown": 8.67
+    },
+    {
+      "fg": "ink-muted",
+      "bg": "surface",
+      "where": "12px card labels — the smallest real text in the product",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 6.502858887906278,
+      "shown": 6.5
+    },
+    {
+      "fg": "ink-muted",
+      "bg": "canvas",
+      "where": "12px labels on the page ground",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 6.957563340989108,
+      "shown": 6.96
+    },
+    {
+      "fg": "ink-soft",
+      "bg": "surface-hover",
+      "where": "a row label under the pointer",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 7.756251937493795,
+      "shown": 7.76
+    },
+    {
+      "fg": "ink",
+      "bg": "surface-selected",
+      "where": "the chosen option in a list",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 12.88478467882725,
+      "shown": 12.88
+    },
+    {
+      "fg": "on-solid",
+      "bg": "action",
+      "where": "every primary button in the product",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 17.16708635133935,
+      "shown": 17.17
+    },
+    {
+      "fg": "on-solid",
+      "bg": "action-solid",
+      "where": "a filled brand mark",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 14.716246564069714,
+      "shown": 14.72
+    },
+    {
+      "fg": "action-on-soft",
+      "bg": "action-soft",
+      "where": "the secondary button and the filter chip",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 11.842890553925605,
+      "shown": 11.84
+    },
+    {
+      "fg": "done-fg",
+      "bg": "surface",
+      "where": "paid / complete, as text on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 10.460651479440465,
+      "shown": 10.46
+    },
+    {
+      "fg": "await-fg",
+      "bg": "surface",
+      "where": "awaiting us, as text on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 10.596582637100264,
+      "shown": 10.6
+    },
+    {
+      "fg": "alert-fg",
+      "bg": "surface",
+      "where": "overdue / possible loss, as text on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.93258746161932,
+      "shown": 8.93
+    },
+    {
+      "fg": "info-fg",
+      "bg": "surface",
+      "where": "ball with an outside party, as text on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 10.20700878384605,
+      "shown": 10.21
+    },
+    {
+      "fg": "idle-fg",
+      "bg": "surface",
+      "where": "inactive, as text on a card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 9.344644205465798,
+      "shown": 9.34
+    },
+    {
+      "fg": "alert-fg",
+      "bg": "canvas",
+      "where": "the loudest status, read straight off the page ground",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 9.557187713041644,
+      "shown": 9.56
+    },
+    {
+      "fg": "done-on-soft",
+      "bg": "done-soft",
+      "where": "the done badge",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 10.607315182441052,
+      "shown": 10.61
+    },
+    {
+      "fg": "await-on-soft",
+      "bg": "await-soft",
+      "where": "the awaiting badge",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 10.472180271602918,
+      "shown": 10.47
+    },
+    {
+      "fg": "alert-on-soft",
+      "bg": "alert-soft",
+      "where": "the alert badge",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 10.797608441210725,
+      "shown": 10.8
+    },
+    {
+      "fg": "info-on-soft",
+      "bg": "info-soft",
+      "where": "the info badge",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 10.845554605437362,
+      "shown": 10.85
+    },
+    {
+      "fg": "idle-on-soft",
+      "bg": "idle-soft",
+      "where": "the idle badge",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 10.474492228201374,
+      "shown": 10.47
+    },
+    {
+      "fg": "on-solid",
+      "bg": "done-solid",
+      "where": "a filled done chip",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.494605889703445,
+      "shown": 8.49
+    },
+    {
+      "fg": "on-solid",
+      "bg": "await-solid",
+      "where": "a filled awaiting chip",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.511207250377518,
+      "shown": 8.51
+    },
+    {
+      "fg": "on-solid",
+      "bg": "alert-solid",
+      "where": "the unread-alert count and the toast",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 6.4054340644079275,
+      "shown": 6.41
+    },
+    {
+      "fg": "on-solid",
+      "bg": "info-solid",
+      "where": "a filled info chip",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.179106525145137,
+      "shown": 8.18
+    },
+    {
+      "fg": "on-solid",
+      "bg": "idle-solid",
+      "where": "a filled idle chip",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 7.46947647901374,
+      "shown": 7.47
+    },
+    {
+      "fg": "inverse-ink",
+      "bg": "inverse",
+      "where": "the phone drawer and the role-queue card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 15.37001100067363,
+      "shown": 15.37
+    },
+    {
+      "fg": "inverse-ink-soft",
+      "bg": "inverse",
+      "where": "quiet rows in the drawer / queue card",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 10.22726773613738,
+      "shown": 10.23
+    },
+    {
+      "fg": "shell-ink",
+      "bg": "shell",
+      "where": "the auth panels — dark in BOTH themes",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 16.92564901884111,
+      "shown": 16.93
+    },
+    {
+      "fg": "shell-ink-soft",
+      "bg": "shell",
+      "where": "quiet copy on the auth panels, and the series name in a chart tooltip",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 12.699256040934642,
+      "shown": 12.7
+    },
+    {
+      "fg": "table-head-ink",
+      "bg": "table-head",
+      "where": "the header strip of every table in the product — dark in BOTH themes",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.127052022992666,
+      "shown": 8.13
+    },
+    {
+      "fg": "inverse-ink-dim",
+      "bg": "inverse",
+      "where": "the org name under the brand mark in the phone drawer",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 5.73667590906138,
+      "shown": 5.74
+    },
+    {
+      "fg": "inverse",
+      "bg": "inverse-ink",
+      "where": "the drawer’s ACTIVE row — a light pill on the dark panel, so the family runs both ways",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 15.37001100067363,
+      "shown": 15.37
+    },
+    {
+      "fg": "shell-ink-dim",
+      "bg": "shell",
+      "where": "the axis label at the top of a chart tooltip",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 7.623267002206536,
+      "shown": 7.62
+    },
+    {
+      "fg": "nav-current-ink",
+      "bg": "nav-current",
+      "where": "the current page in the phone action bar",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 7.08026505407521,
+      "shown": 7.08
+    },
+    {
+      "fg": "fab-puck-ink",
+      "bg": "fab-puck",
+      "where": "the camera glyph on the raised puck",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 14.794403264116966,
+      "shown": 14.79
+    },
+    {
+      "fg": "toggle-knob-ink",
+      "bg": "toggle-knob",
+      "where": "the sun/moon on the appearance switch",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.963592990289499,
+      "shown": 8.96
+    },
+    {
+      "fg": "fixed-onyx",
+      "bg": "series-2",
+      "where": "the initials on identity step 2",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 9.896611640675605,
+      "shown": 9.9
+    },
+    {
+      "fg": "on-solid",
+      "bg": "series-3",
+      "where": "the initials on identity step 3",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 7.164870662198742,
+      "shown": 7.16
+    },
+    {
+      "fg": "fixed-onyx",
+      "bg": "series-4",
+      "where": "the initials on identity step 4",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 9.549920294380287,
+      "shown": 9.55
+    },
+    {
+      "fg": "on-solid",
+      "bg": "series-5",
+      "where": "the initials on identity step 5",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 6.234484703105012,
+      "shown": 6.23
+    },
+    {
+      "fg": "chart-tick",
+      "bg": "surface",
+      "where": "axis ticks",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 6.502858887906278,
+      "shown": 6.5
+    },
+    {
+      "fg": "chart-label",
+      "bg": "surface",
+      "where": "on-chart labels",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 10.003890341616573,
+      "shown": 10
+    },
+    {
+      "fg": "trend-up-fg",
+      "bg": "surface",
+      "where": "a rising cost — bad news in this product",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.93258746161932,
+      "shown": 8.93
+    },
+    {
+      "fg": "trend-down-fg",
+      "bg": "surface",
+      "where": "a falling cost",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 10.460651479440465,
+      "shown": 10.46
+    },
+    {
+      "fg": "doc-ink",
+      "bg": "doc-plate",
+      "where": "lettering on the dark outbound plate",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 16.92564901884111,
+      "shown": 16.93
+    },
+    {
+      "fg": "doc-ink-soft",
+      "bg": "doc-plate",
+      "where": "secondary lettering on the dark plate",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.390915029748827,
+      "shown": 8.39
+    },
+    {
+      "fg": "doc-ink-dim",
+      "bg": "doc-plate",
+      "where": "the faintest lettering on the dark plate",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 5.406634738422043,
+      "shown": 5.41
+    },
+    {
+      "fg": "doc-ink-body",
+      "bg": "doc-paper",
+      "where": "body copy on the document sheet",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.668536941296384,
+      "shown": 8.67
+    },
+    {
+      "fg": "doc-ink-muted",
+      "bg": "doc-paper",
+      "where": "labels and folios on the document sheet",
+      "kind": "text",
+      "threshold": 4.5,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 5.161239060017371,
+      "shown": 5.16
+    },
+    {
+      "fg": "line-strong",
+      "bg": "surface",
+      "where": "an input border on a card",
+      "kind": "non-text",
+      "threshold": 3,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 4.239928699781862,
+      "shown": 4.24
+    },
+    {
+      "fg": "line-strong",
+      "bg": "canvas",
+      "where": "an input border on the page ground",
+      "kind": "non-text",
+      "threshold": 3,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 4.536400527600539,
+      "shown": 4.54
+    },
+    {
+      "fg": "line-strong",
+      "bg": "surface-sunken",
+      "where": "an input border on a quiet strip",
+      "kind": "non-text",
+      "threshold": 3,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 4.416417899620997,
+      "shown": 4.42
+    },
+    {
+      "fg": "action-line",
+      "bg": "surface",
+      "where": "the secondary button border",
+      "kind": "non-text",
+      "threshold": 3,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 5.110428977442001,
+      "shown": 5.11
+    },
+    {
+      "fg": "focus",
+      "bg": "surface",
+      "where": "the focus ring on a card",
+      "kind": "non-text",
+      "threshold": 3,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 13.0438966739028,
+      "shown": 13.04
+    },
+    {
+      "fg": "focus",
+      "bg": "canvas",
+      "where": "the focus ring on the page ground",
+      "kind": "non-text",
+      "threshold": 3,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 13.955975192814895,
+      "shown": 13.96
+    },
+    {
+      "fg": "nav-current-edge",
+      "bg": "nav-current",
+      "where": "the ring that separates the current pill from the puck",
+      "kind": "non-text",
+      "threshold": 3,
+      "source": "manifest",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 4.120767891143792,
+      "shown": 4.12
+    },
+    {
+      "fg": "action",
+      "bg": "surface",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/components/document-review/DocumentScanPreview.tsx",
+      "sites": [
+        "src/components/document-review/DocumentScanPreview.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 16.143830126804428,
+      "shown": 16.14
+    },
+    {
+      "fg": "action-line",
+      "bg": "action-wash",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/components/assistant/AnswerView.tsx",
+      "sites": [
+        "src/components/assistant/AnswerView.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 4.8158021768011405,
+      "shown": 4.82
+    },
+    {
+      "fg": "focus",
+      "bg": "surface-hover",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/components/FeedbackButton.tsx and 4 other file(s)",
+      "sites": [
+        "src/components/FeedbackButton.tsx",
+        "src/lib/i18n/LanguageMenuRow.tsx",
+        "src/operator/OperatorShell.tsx"
+      ],
+      "siteCount": 5,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 11.671144685033456,
+      "shown": 11.67
+    },
+    {
+      "fg": "focus",
+      "bg": "surface",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/lib/i18n/LanguageMenuRow.tsx",
+      "sites": [
+        "src/lib/i18n/LanguageMenuRow.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 13.0438966739028,
+      "shown": 13.04
+    },
+    {
+      "fg": "focus",
+      "bg": "surface-selected",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/pages/Expenses.tsx",
+      "sites": [
+        "src/pages/Expenses.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 10.102460482770983,
+      "shown": 10.1
+    },
+    {
+      "fg": "info-line",
+      "bg": "info-wash",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/components/BenefitWindowStrip.tsx",
+      "sites": [
+        "src/components/BenefitWindowStrip.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 3.5757087694353062,
+      "shown": 3.58
+    },
+    {
+      "fg": "line-strong",
+      "bg": "surface",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/components/ui.tsx and 7 other file(s)",
+      "sites": [
+        "src/components/ui.tsx",
+        "src/lib/i18n/LanguageMenuRow.tsx",
+        "src/pages/Entrance.tsx"
+      ],
+      "siteCount": 8,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 4.239928699781862,
+      "shown": 4.24
+    },
+    {
+      "fg": "line-strong",
+      "bg": "surface-hover",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/lib/i18n/LanguageMenuRow.tsx and 1 other file(s)",
+      "sites": [
+        "src/lib/i18n/LanguageMenuRow.tsx",
+        "src/pages/Entrance.tsx"
+      ],
+      "siteCount": 2,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 3.7937146043471204,
+      "shown": 3.79
+    },
+    {
+      "fg": "nav-current-edge",
+      "bg": "nav-current",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/components/Fab.tsx",
+      "sites": [
+        "src/components/Fab.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 4.120767891143792,
+      "shown": 4.12
+    },
+    {
+      "fg": "nav-current-ink",
+      "bg": "nav-current",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/components/Fab.tsx",
+      "sites": [
+        "src/components/Fab.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 7.08026505407521,
+      "shown": 7.08
+    },
+    {
+      "fg": "on-solid",
+      "bg": "action",
+      "kind": "non-text",
+      "threshold": 3,
+      "where": "rendered together in src/operator/OperatorShell.tsx",
+      "sites": [
+        "src/operator/OperatorShell.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 17.16708635133935,
+      "shown": 17.17
+    },
+    {
+      "fg": "action",
+      "bg": "surface-hover",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/charts.tsx and 2 other file(s)",
+      "sites": [
+        "src/components/charts.tsx",
+        "src/pages/DocumentsInbox.tsx",
+        "src/pages/Receiving.tsx"
+      ],
+      "siteCount": 3,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 14.444838217517187,
+      "shown": 14.44
+    },
+    {
+      "fg": "action",
+      "bg": "surface",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/document-review/DocumentScanPreview.tsx",
+      "sites": [
+        "src/components/document-review/DocumentScanPreview.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 16.143830126804428,
+      "shown": 16.14
+    },
+    {
+      "fg": "action",
+      "bg": "surface-selected",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Receiving.tsx",
+      "sites": [
+        "src/pages/Receiving.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 12.503350032119759,
+      "shown": 12.5
+    },
+    {
+      "fg": "action-on-soft",
+      "bg": "surface-selected",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Fab.tsx and 1 other file(s)",
+      "sites": [
+        "src/components/Fab.tsx",
+        "src/components/assistant/AnswerView.tsx"
+      ],
+      "siteCount": 2,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 11.425505100476785,
+      "shown": 11.43
+    },
+    {
+      "fg": "action-on-soft",
+      "bg": "action-soft",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Fab.tsx and 4 other file(s)",
+      "sites": [
+        "src/components/Fab.tsx",
+        "src/components/Layout.tsx",
+        "src/components/ui.tsx"
+      ],
+      "siteCount": 5,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 11.842890553925605,
+      "shown": 11.84
+    },
+    {
+      "fg": "action-on-soft",
+      "bg": "surface-hover",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/assistant/AnswerView.tsx",
+      "sites": [
+        "src/components/assistant/AnswerView.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 13.199628284086723,
+      "shown": 13.2
+    },
+    {
+      "fg": "alert-fg",
+      "bg": "alert-wash",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Layout.tsx",
+      "sites": [
+        "src/components/Layout.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.32612873158039,
+      "shown": 8.33
+    },
+    {
+      "fg": "alert-fg",
+      "bg": "alert-soft",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/UploadCenter.tsx",
+      "sites": [
+        "src/components/UploadCenter.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 7.320511888586256,
+      "shown": 7.32
+    },
+    {
+      "fg": "await-fg",
+      "bg": "await-wash",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/neworder/SupplierSplitStep.tsx",
+      "sites": [
+        "src/pages/neworder/SupplierSplitStep.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 9.834941105176648,
+      "shown": 9.83
+    },
+    {
+      "fg": "done-fg",
+      "bg": "done-soft",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Onboarding.tsx",
+      "sites": [
+        "src/pages/Onboarding.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.32957899941226,
+      "shown": 8.33
+    },
+    {
+      "fg": "fixed-onyx",
+      "bg": "series-2",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/EntityMonogram.tsx",
+      "sites": [
+        "src/components/EntityMonogram.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 9.896611640675605,
+      "shown": 9.9
+    },
+    {
+      "fg": "fixed-onyx",
+      "bg": "series-4",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/EntityMonogram.tsx",
+      "sites": [
+        "src/components/EntityMonogram.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 9.549920294380287,
+      "shown": 9.55
+    },
+    {
+      "fg": "idle-fg",
+      "bg": "surface-sunken",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Expenses.tsx",
+      "sites": [
+        "src/pages/Expenses.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 9.733619798071619,
+      "shown": 9.73
+    },
+    {
+      "fg": "ink",
+      "bg": "surface-hover",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/FeedbackButton.tsx and 5 other file(s)",
+      "sites": [
+        "src/components/FeedbackButton.tsx",
+        "src/components/Layout.tsx",
+        "src/components/assistant/AnswerView.tsx"
+      ],
+      "siteCount": 6,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 14.885501059722799,
+      "shown": 14.89
+    },
+    {
+      "fg": "ink",
+      "bg": "surface-selected",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/assistant/AnswerView.tsx",
+      "sites": [
+        "src/components/assistant/AnswerView.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 12.88478467882725,
+      "shown": 12.88
+    },
+    {
+      "fg": "ink",
+      "bg": "surface",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/lib/i18n/LanguageMenuRow.tsx and 1 other file(s)",
+      "sites": [
+        "src/lib/i18n/LanguageMenuRow.tsx",
+        "src/pages/Entrance.tsx"
+      ],
+      "siteCount": 2,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 16.636323428607916,
+      "shown": 16.64
+    },
+    {
+      "fg": "ink",
+      "bg": "surface-sunken",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/operator/Team.tsx",
+      "sites": [
+        "src/operator/Team.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 17.328818896829148,
+      "shown": 17.33
+    },
+    {
+      "fg": "ink-body",
+      "bg": "surface-hover",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/FeedbackButton.tsx and 3 other file(s)",
+      "sites": [
+        "src/components/FeedbackButton.tsx",
+        "src/components/Layout.tsx",
+        "src/components/ui.tsx"
+      ],
+      "siteCount": 4,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 12.825883661448449,
+      "shown": 12.83
+    },
+    {
+      "fg": "ink-mid",
+      "bg": "surface-sunken",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/OfflineQueueStatus.tsx",
+      "sites": [
+        "src/components/OfflineQueueStatus.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 11.941435074821683,
+      "shown": 11.94
+    },
+    {
+      "fg": "ink-mid",
+      "bg": "action-wash",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/neworder/NewOrder.tsx",
+      "sites": [
+        "src/pages/neworder/NewOrder.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 10.803294007476127,
+      "shown": 10.8
+    },
+    {
+      "fg": "ink-muted",
+      "bg": "surface",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/ui.tsx",
+      "sites": [
+        "src/components/ui.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 6.502858887906278,
+      "shown": 6.5
+    },
+    {
+      "fg": "ink-muted",
+      "bg": "surface-hover",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/ui.tsx",
+      "sites": [
+        "src/components/ui.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 5.818491885094143,
+      "shown": 5.82
+    },
+    {
+      "fg": "ink-muted",
+      "bg": "surface-selected",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/ui.tsx",
+      "sites": [
+        "src/components/ui.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 5.036445517967522,
+      "shown": 5.04
+    },
+    {
+      "fg": "ink-soft",
+      "bg": "surface-hover",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Fab.tsx and 3 other file(s)",
+      "sites": [
+        "src/components/Fab.tsx",
+        "src/components/Layout.tsx",
+        "src/operator/OperatorShell.tsx"
+      ],
+      "siteCount": 4,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 7.756251937493795,
+      "shown": 7.76
+    },
+    {
+      "fg": "ink-soft",
+      "bg": "surface-selected",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Fab.tsx",
+      "sites": [
+        "src/components/Fab.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 6.713756945660067,
+      "shown": 6.71
+    },
+    {
+      "fg": "ink-soft",
+      "bg": "surface-sunken",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/document-review/DocumentReviewProposals.tsx and 7 other file(s)",
+      "sites": [
+        "src/components/document-review/DocumentReviewProposals.tsx",
+        "src/pages/Credits.tsx",
+        "src/pages/Exceptions.tsx"
+      ],
+      "siteCount": 8,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 9.029369223363794,
+      "shown": 9.03
+    },
+    {
+      "fg": "ink-soft",
+      "bg": "surface",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/document-review/DocumentScanPreview.tsx",
+      "sites": [
+        "src/components/document-review/DocumentScanPreview.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.668536941296384,
+      "shown": 8.67
+    },
+    {
+      "fg": "ink-soft",
+      "bg": "idle-soft",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Onboarding.tsx",
+      "sites": [
+        "src/pages/Onboarding.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 6.968032703370793,
+      "shown": 6.97
+    },
+    {
+      "fg": "inverse",
+      "bg": "inverse-ink",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Layout.tsx",
+      "sites": [
+        "src/components/Layout.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 15.37001100067363,
+      "shown": 15.37
+    },
+    {
+      "fg": "inverse-ink",
+      "bg": "inverse",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Layout.tsx and 3 other file(s)",
+      "sites": [
+        "src/components/Layout.tsx",
+        "src/lib/i18n/LanguageMenuRow.tsx",
+        "src/operator/Overview.tsx"
+      ],
+      "siteCount": 4,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 15.37001100067363,
+      "shown": 15.37
+    },
+    {
+      "fg": "nav-current-ink",
+      "bg": "nav-current",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/Fab.tsx",
+      "sites": [
+        "src/components/Fab.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 7.08026505407521,
+      "shown": 7.08
+    },
+    {
+      "fg": "on-solid",
+      "bg": "series-3",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/EntityMonogram.tsx",
+      "sites": [
+        "src/components/EntityMonogram.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 7.164870662198742,
+      "shown": 7.16
+    },
+    {
+      "fg": "on-solid",
+      "bg": "series-5",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/EntityMonogram.tsx",
+      "sites": [
+        "src/components/EntityMonogram.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 6.234484703105012,
+      "shown": 6.23
+    },
+    {
+      "fg": "on-solid",
+      "bg": "action",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/EntityMonogram.tsx and 8 other file(s)",
+      "sites": [
+        "src/components/EntityMonogram.tsx",
+        "src/components/Fab.tsx",
+        "src/components/Layout.tsx"
+      ],
+      "siteCount": 9,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 17.16708635133935,
+      "shown": 17.17
+    },
+    {
+      "fg": "on-solid",
+      "bg": "alert-solid",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/NotificationBell.tsx and 2 other file(s)",
+      "sites": [
+        "src/components/NotificationBell.tsx",
+        "src/components/ui.tsx",
+        "src/pages/Receiving.tsx"
+      ],
+      "siteCount": 3,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 6.4054340644079275,
+      "shown": 6.41
+    },
+    {
+      "fg": "on-solid",
+      "bg": "action-solid",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/assistant/AssistantDialog.tsx",
+      "sites": [
+        "src/components/assistant/AssistantDialog.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 14.716246564069714,
+      "shown": 14.72
+    },
+    {
+      "fg": "on-solid",
+      "bg": "ink-body",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/ui.tsx",
+      "sites": [
+        "src/components/ui.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 15.243026542263596,
+      "shown": 15.24
+    },
+    {
+      "fg": "on-solid",
+      "bg": "done-solid",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Receiving.tsx",
+      "sites": [
+        "src/pages/Receiving.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.494605889703445,
+      "shown": 8.49
+    },
+    {
+      "fg": "on-solid",
+      "bg": "await-solid",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Receiving.tsx",
+      "sites": [
+        "src/pages/Receiving.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.511207250377518,
+      "shown": 8.51
+    },
+    {
+      "fg": "on-solid",
+      "bg": "info-solid",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Receiving.tsx",
+      "sites": [
+        "src/pages/Receiving.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 8.179106525145137,
+      "shown": 8.18
+    },
+    {
+      "fg": "on-solid",
+      "bg": "idle-solid",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/pages/Receiving.tsx",
+      "sites": [
+        "src/pages/Receiving.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 7.46947647901374,
+      "shown": 7.47
+    },
+    {
+      "fg": "shell-ink",
+      "bg": "assistant-bubble",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/assistant/AssistantDialog.tsx",
+      "sites": [
+        "src/components/assistant/AssistantDialog.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 12.64114851055048,
+      "shown": 12.64
+    },
+    {
+      "fg": "shell-ink",
+      "bg": "assistant-bubble-hover",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/assistant/AssistantDialog.tsx",
+      "sites": [
+        "src/components/assistant/AssistantDialog.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 10.45384645607992,
+      "shown": 10.45
+    },
+    {
+      "fg": "shell-ink",
+      "bg": "shell",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/charts.tsx",
+      "sites": [
+        "src/components/charts.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 16.92564901884111,
+      "shown": 16.93
+    },
+    {
+      "fg": "shell-ink-dim",
+      "bg": "assistant-bubble",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/assistant/AssistantDialog.tsx",
+      "sites": [
+        "src/components/assistant/AssistantDialog.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 5.693539444378126,
+      "shown": 5.69
+    },
+    {
+      "fg": "shell-ink-soft",
+      "bg": "assistant-bubble",
+      "kind": "text",
+      "threshold": 4.5,
+      "where": "rendered together in src/components/assistant/AssistantDialog.tsx",
+      "sites": [
+        "src/components/assistant/AssistantDialog.tsx"
+      ],
+      "siteCount": 1,
+      "source": "rendered",
+      "theme": "dark",
+      "resolved": true,
+      "ratio": 9.484610097270691,
+      "shown": 9.48
+    }
+  ],
+  "failures": []
+}

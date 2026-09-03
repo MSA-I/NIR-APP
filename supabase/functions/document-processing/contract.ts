@@ -9,7 +9,7 @@ export const GATEWAY_CONTRACT_HEADER = "x-ocr-gateway-contract-version";
 // sides in the same commit -- `worker/ocr/src/gateway.py` -- because moving it on one side leaves
 // a pool that reports `Up`, claims every job and fails `gateway_contract_mismatch` on every poll
 // while the screen says "waiting in queue". That is a3603c0: five days, zero documents processed.
-export const GATEWAY_CONTRACT_VERSION = "3";
+export const GATEWAY_CONTRACT_VERSION = "4";
 
 type JsonObject = Record<string, unknown>;
 
@@ -126,7 +126,10 @@ const MARK_KINDS = new Set([
 //
 // The id set is closed and mirrors `worker/ocr/src/contract.py`. Adding a corrector is a contract
 // change on both sides of this wire, deliberately.
-const NORMALIZATION_IDS = new Set(["hebrew_visual_order"]);
+// "4": a second corrector, `hebrew_line_order`. A worker still on "3" cannot emit it, and a
+// worker on "4" emits two entries where a "3" validator allowed one -- so the number moves
+// on both sides in the same commit and the VPS is redeployed WITH it, never after it.
+const NORMALIZATION_IDS = new Set(["hebrew_visual_order", "hebrew_line_order"]);
 const MAX_NORMALIZATION_MEASUREMENTS = 16;
 
 const isRecord = (value: unknown): value is JsonObject =>

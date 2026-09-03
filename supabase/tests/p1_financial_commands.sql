@@ -1502,6 +1502,302 @@ select pg_temp.p1_assert(
   'failed finalize left an order behind'
 );
 
+
+-- ===== 0292: the bank door declares what it settles (RC1, owner decision C) =====
+--
+-- Bank matching does two jobs that look identical from outside: PAYING through the product, and
+-- RECORDING money that already left the account. Recording is never refused — refusing it would
+-- make the ledger less true and strand the transaction. So the control is a declaration: an
+-- `unapproved_invoice_settled` exception opened in the SAME transaction as the allocations.
+--
+-- Before 0292 the only approval condition on the direct branch was
+-- `(v_role = 'accountant' and i.review_status <> 'approved')` — it refused the ACCOUNTANT and
+-- waved the OWNER through, with nothing recording that it had happened. Both halves are tested
+-- here: the accountant is no longer singled out, and neither role settles unapproved work quietly.
+
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
+
+insert into bank_imports (id, org_id, filename, file_hash, column_mapping, row_count, imported_by)
+values (
+  '91000000-0000-0000-0000-000000000021',
+  '10000000-0000-0000-0000-000000000001',
+  'rc1.csv', repeat('e', 64), '{}'::jsonb, 5,
+  '20000000-0000-0000-0000-000000000001'
+);
+insert into bank_transactions (
+  id, org_id, import_id, tx_date, description, amount, is_debit, raw, row_hash
+) values
+  ('92000000-0000-0000-0000-000000000021', '10000000-0000-0000-0000-000000000001',
+   '91000000-0000-0000-0000-000000000021', '2026-07-23', 'owner direct unapproved', 40, true,
+   '{}'::jsonb, repeat('e', 63) || '1'),
+  ('92000000-0000-0000-0000-000000000022', '10000000-0000-0000-0000-000000000001',
+   '91000000-0000-0000-0000-000000000021', '2026-07-23', 'accountant direct unapproved', 40, true,
+   '{}'::jsonb, repeat('e', 63) || '2'),
+  ('92000000-0000-0000-0000-000000000023', '10000000-0000-0000-0000-000000000001',
+   '91000000-0000-0000-0000-000000000021', '2026-07-23', 'direct approved', 40, true,
+   '{}'::jsonb, repeat('e', 63) || '3'),
+  ('92000000-0000-0000-0000-000000000024', '10000000-0000-0000-0000-000000000001',
+   '91000000-0000-0000-0000-000000000021', '2026-07-23', 'standalone payment', 30, true,
+   '{}'::jsonb, repeat('e', 63) || '4'),
+  ('92000000-0000-0000-0000-000000000025', '10000000-0000-0000-0000-000000000001',
+   '91000000-0000-0000-0000-000000000021', '2026-07-23', 'request backed payment', 30, true,
+   '{}'::jsonb, repeat('e', 63) || '5');
+
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '20000000-0000-0000-0000-000000000001'
+)::text, true);
+set local role authenticated;
+
+-- Four invoices that nobody approved, and one that was approved through the real command.
+select create_invoice('60000000-0000-0000-0000-000000000021',
+  '30000000-0000-0000-0000-000000000001', 'ILS', 'RC1-UNAPPROVED-A', '2026-07-23',
+  33.9, 6.1, 40, null, null, null, null, 'חשבונית שלא אושרה');
+select create_invoice('60000000-0000-0000-0000-000000000022',
+  '30000000-0000-0000-0000-000000000001', 'ILS', 'RC1-UNAPPROVED-B', '2026-07-23',
+  33.9, 6.1, 40, null, null, null, null, 'חשבונית שלא אושרה');
+select create_invoice('60000000-0000-0000-0000-000000000023',
+  '30000000-0000-0000-0000-000000000001', 'ILS', 'RC1-APPROVED', '2026-07-23',
+  33.9, 6.1, 40, null, null, null, null, 'חשבונית שתאושר');
+select create_invoice('60000000-0000-0000-0000-000000000024',
+  '30000000-0000-0000-0000-000000000001', 'ILS', 'RC1-STANDALONE', '2026-07-23',
+  25.42, 4.58, 30, null, null, null, null, 'חשבונית לתשלום עצמאי');
+select create_invoice('60000000-0000-0000-0000-000000000025',
+  '30000000-0000-0000-0000-000000000001', 'ILS', 'RC1-REQUEST-BACKED', '2026-07-23',
+  25.42, 4.58, 30, null, null, null, null, 'חשבונית לבקשת תשלום');
+select set_invoice_review_status(
+  '60000000-0000-0000-0000-000000000023', 'in_review', 'תחילת בדיקה');
+select set_invoice_review_status(
+  '60000000-0000-0000-0000-000000000023', 'approved', 'אישור לפני התאמה');
+
+select pg_temp.p1_assert(
+  (select count(*) = 4 from invoices
+   where id in ('60000000-0000-0000-0000-000000000021','60000000-0000-0000-0000-000000000022',
+                '60000000-0000-0000-0000-000000000024','60000000-0000-0000-0000-000000000025')
+     and review_status <> 'approved'),
+  'the RC1 fixtures are not unapproved, so the test would prove nothing'
+);
+
+-- (a) The OWNER settles an unapproved invoice directly. It succeeds — recording is never refused —
+--     and it is declared.
+select match_bank_transaction(
+  '92000000-0000-0000-0000-000000000021',
+  '30000000-0000-0000-0000-000000000001', null,
+  '90000000-0000-0000-0000-000000000021',
+  '[{"invoice_id":"60000000-0000-0000-0000-000000000021","amount":40}]'::jsonb,
+  0.9, 'רישום העברה שכבר יצאה'
+);
+select pg_temp.p1_assert(
+  (select count(*) = 1 from exceptions
+   where type = 'unapproved_invoice_settled'
+     and invoice_id = '60000000-0000-0000-0000-000000000021'
+     and bank_transaction_id = '92000000-0000-0000-0000-000000000021'
+     and status = 'open'
+     and payment_id = '90000000-0000-0000-0000-000000000021'
+     and details->>'branch' = 'direct'
+     and details->>'settled_by_role' = 'owner'),
+  'the owner settled an unapproved invoice with no exception declared'
+);
+
+-- (b) A retry declares nothing twice. The match is idempotent; so is its declaration.
+select pg_temp.p1_assert(
+  (match_bank_transaction(
+    '92000000-0000-0000-0000-000000000021',
+    '30000000-0000-0000-0000-000000000001', null,
+    '90000000-0000-0000-0000-000000000021',
+    '[{"invoice_id":"60000000-0000-0000-0000-000000000021","amount":40}]'::jsonb,
+    0.9, 'ניסיון חוזר'
+  )->>'idempotent')::boolean,
+  'unapproved direct match retry must be idempotent'
+);
+select pg_temp.p1_assert(
+  (select count(*) = 1 from exceptions
+   where type = 'unapproved_invoice_settled'
+     and bank_transaction_id = '92000000-0000-0000-0000-000000000021'),
+  'a retried match opened a second exception for the same settlement'
+);
+
+-- (c) The ACCOUNTANT is no longer singled out. Before 0292 this raised allocation_exceeds_balance
+--     for the accountant alone, which is backwards: recording is the accountant's job.
+reset role;
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000004', true);
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '20000000-0000-0000-0000-000000000004'
+)::text, true);
+set local role authenticated;
+select match_bank_transaction(
+  '92000000-0000-0000-0000-000000000022',
+  '30000000-0000-0000-0000-000000000001', null,
+  '90000000-0000-0000-0000-000000000022',
+  '[{"invoice_id":"60000000-0000-0000-0000-000000000022","amount":40}]'::jsonb,
+  0.9, 'רואה החשבון רושם העברה'
+);
+select pg_temp.p1_assert(
+  (select count(*) = 1 from exceptions
+   where type = 'unapproved_invoice_settled'
+     and invoice_id = '60000000-0000-0000-0000-000000000022'
+     and details->>'settled_by_role' = 'accountant'),
+  'the accountant recording an unapproved settlement was not declared'
+);
+
+-- (d) An APPROVED invoice declares nothing. The exception is about authority, not about matching.
+reset role;
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '20000000-0000-0000-0000-000000000001'
+)::text, true);
+set local role authenticated;
+select match_bank_transaction(
+  '92000000-0000-0000-0000-000000000023',
+  '30000000-0000-0000-0000-000000000001', null,
+  '90000000-0000-0000-0000-000000000023',
+  '[{"invoice_id":"60000000-0000-0000-0000-000000000023","amount":40}]'::jsonb,
+  0.9, 'התאמה לחשבונית מאושרת'
+);
+select pg_temp.p1_assert(
+  not exists (select 1 from exceptions
+    where type = 'unapproved_invoice_settled'
+      and bank_transaction_id = '92000000-0000-0000-0000-000000000023'),
+  'an approved settlement opened an exception it has no business opening'
+);
+
+-- (e) The role matrix is otherwise unchanged: office is still refused at the door.
+reset role;
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000002', true);
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '20000000-0000-0000-0000-000000000002'
+)::text, true);
+set local role authenticated;
+do $$
+begin
+  perform match_bank_transaction(
+    '92000000-0000-0000-0000-000000000024',
+    '30000000-0000-0000-0000-000000000001', null,
+    '90000000-0000-0000-0000-000000000099',
+    '[{"invoice_id":"60000000-0000-0000-0000-000000000024","amount":30}]'::jsonb,
+    0.9, 'ניסיון של תפקיד שאינו מורשה'
+  );
+  raise exception 'expected office to be refused at the bank door';
+exception when sqlstate '42501' then
+  if sqlerrm not like '%not_authorized%' then raise; end if;
+end
+$$;
+
+-- (f) STANDALONE payment on the existing-payment branch: no request, so it is RECORDING and is
+--     declared. This is the "standalone / legacy / service-role / migration-created" class.
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
+insert into payments (
+  id, org_id, supplier_id, amount, paid_date, method, reference, executed_by
+) values (
+  '90000000-0000-0000-0000-000000000024', '10000000-0000-0000-0000-000000000001',
+  '30000000-0000-0000-0000-000000000001', 30, '2026-07-23', 'העברה בנקאית', 'RC1-STANDALONE',
+  '20000000-0000-0000-0000-000000000001'
+);
+insert into payment_allocations (payment_id, invoice_id, amount) values
+  ('90000000-0000-0000-0000-000000000024', '60000000-0000-0000-0000-000000000024', 30);
+
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '20000000-0000-0000-0000-000000000001'
+)::text, true);
+set local role authenticated;
+select match_bank_transaction(
+  '92000000-0000-0000-0000-000000000024',
+  '30000000-0000-0000-0000-000000000001',
+  '90000000-0000-0000-0000-000000000024',
+  null, '[]'::jsonb, 0.99, 'רישום תשלום עצמאי'
+);
+select pg_temp.p1_assert(
+  (select count(*) = 1 from exceptions
+   where type = 'unapproved_invoice_settled'
+     and invoice_id = '60000000-0000-0000-0000-000000000024'
+     and bank_transaction_id = '92000000-0000-0000-0000-000000000024'
+     and details->>'branch' = 'existing_payment'),
+  'a standalone payment settled an unapproved invoice with no declaration'
+);
+
+-- (g) TRUSTED request-backed payment: the product itself executed it against a request that
+--     passed the role-blind approval gate in p1_transition_payment_request, an execution audit row
+--     names THIS payment, and every invoice it allocates to is on that request. Nothing is
+--     declared, because nothing happened quietly.
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
+insert into payment_requests (
+  id, org_id, supplier_id, amount, status, created_by, approved_by, approved_at
+) values (
+  '80000000-0000-0000-0000-000000000025', '10000000-0000-0000-0000-000000000001',
+  '30000000-0000-0000-0000-000000000001', 30, 'executed',
+  '20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', now()
+);
+insert into payment_request_invoices (
+  org_id, payment_request_id, invoice_id, amount_allocated
+) values (
+  '10000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000025',
+  '60000000-0000-0000-0000-000000000025', 30
+);
+insert into payments (
+  id, org_id, supplier_id, payment_request_id, amount, paid_date, method, reference, executed_by
+) values (
+  '90000000-0000-0000-0000-000000000025', '10000000-0000-0000-0000-000000000001',
+  '30000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000025',
+  30, '2026-07-23', 'העברה בנקאית', 'RC1-REQUEST', '20000000-0000-0000-0000-000000000001'
+);
+insert into payment_allocations (payment_id, invoice_id, amount) values
+  ('90000000-0000-0000-0000-000000000025', '60000000-0000-0000-0000-000000000025', 30);
+insert into audit_logs (
+  org_id, user_id, action, entity_type, entity_id, old_values, new_values, reason
+) values (
+  '10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001',
+  'payment_request_executed', 'payment_requests', '80000000-0000-0000-0000-000000000025',
+  jsonb_build_object('status', 'approved'),
+  jsonb_build_object('status', 'executed', 'payment_id', '90000000-0000-0000-0000-000000000025'),
+  'ביצוע בקשת תשלום'
+);
+
+select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000001', true);
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '20000000-0000-0000-0000-000000000001'
+)::text, true);
+set local role authenticated;
+select match_bank_transaction(
+  '92000000-0000-0000-0000-000000000025',
+  '30000000-0000-0000-0000-000000000001',
+  '90000000-0000-0000-0000-000000000025',
+  null, '[]'::jsonb, 0.99, 'התאמת תשלום שבוצע דרך המוצר'
+);
+select pg_temp.p1_assert(
+  not exists (select 1 from exceptions
+    where type = 'unapproved_invoice_settled'
+      and bank_transaction_id = '92000000-0000-0000-0000-000000000025'),
+  'a trusted request-backed payment was declared as if it were a silent settlement'
+);
+select pg_temp.p1_assert(
+  (select status = 'matched' from payment_requests
+   where id = '80000000-0000-0000-0000-000000000025'),
+  'the trusted match did not advance its request'
+);
+
+-- (h) The exception carries enough to act on: who did it, what it was worth, and why they said
+--     they were doing it. An open finding nobody can investigate is not a control.
+select pg_temp.p1_assert(
+  (select details->>'invoice_number' = 'RC1-UNAPPROVED-A'
+      and details->>'currency' = 'ILS'
+      and (details->>'invoice_total')::numeric = 40
+      and details->>'settled_by' = '20000000-0000-0000-0000-000000000001'
+      and details->>'reason' = 'רישום העברה שכבר יצאה'
+      and severity = 'high'
+      and assigned_role = 'owner'
+   from exceptions
+   where type = 'unapproved_invoice_settled'
+     and bank_transaction_id = '92000000-0000-0000-0000-000000000021'),
+  'the unapproved-settlement exception cannot be acted on from what it records'
+);
+
 reset role;
 select 'p1_financial_commands: all assertions passed' as result;
 rollback;

@@ -154,6 +154,10 @@ function parseSources(value: unknown): SourceReference[] | null {
       !oneOf(item.entity, EVIDENCE_ENTITIES) ||
       typeof item.entity_id !== "string" || typeof item.label !== "string" ||
       !(item.route === null || typeof item.route === "string") ||
+      // The declared window travels with the citation or the citation is not the one that was
+      // issued. Absent is fine -- most references declare no shaped filter -- but a value that
+      // is not a map is a corrupt row, not a reference with no window.
+      !(item.route_params === null || item.route_params === undefined || isRecord(item.route_params)) ||
       !oneOf(item.classification, DATA_CLASSES)
     ) return null;
     parsed.push({
@@ -162,6 +166,7 @@ function parseSources(value: unknown): SourceReference[] | null {
       entity_id: item.entity_id,
       label: item.label,
       route: item.route,
+      ...(isRecord(item.route_params) ? { route_params: item.route_params as Record<string, string> } : {}),
       classification: item.classification,
     });
   }

@@ -31,7 +31,8 @@
  * This file is a transcription of `src/styles.css:2840-3816` in `LANDING-PAGE-NIR` at
  * `28d36b5`. Every rule below is that file's; the edits are mechanical and listed here.
  *
- * THE FIVE MECHANICAL EDITS, and there are no others:
+ * THE SIX MECHANICAL EDITS, and there are no others. The first five are shape; the sixth is the
+ * only one that changes a colour the reference chose, and it is argued from a measurement:
  *   1. `--color-*` host tokens became a `--pc-*` namespace with absolute values. See below: the
  *      two repositories give the same names opposite meanings.
  *   2. THE VALUES ARE THE MARKETING SITE'S **LIGHT VIEW**, not its default dark one. This is the
@@ -51,6 +52,25 @@
  *      ladder has. The button's rules are the marketing site's `.flow` / `.flow--ghost` AS THEY
  *      ARE OVERRIDDEN INSIDE A CARD there, which is the same look under another name; the fill
  *      circle `.flow__fill` became `.plan-card__cta-fill`. Both are marked where they appear.
+ *   6. TWO INK VALUES ARE DARKER THAN THE REFERENCE'S, and this is the one edit made against the
+ *      owner's «אתר נחיתה קובע» rather than under it. `PRODUCT.md` states WCAG 2.1 AA, and this
+ *      card is the public pricing page — the surface a prospect meets before they are a customer.
+ *      MEASURED 03.09.2026 in a real browser, on `/pricing`, at 1280 and 390, in both themes:
+ *        · `.plan-row--off .plan-row__label` (an excluded capability) `--pc-ink-dim` #63737a
+ *          → **4.054:1** on the בסיס card and 4.342:1 on the חינם card. Needs 4.5.
+ *        · `.plan-card__billed`, `color-mix(--pc-ink 56%)` → **4.082:1** and 4.163:1. Needs 4.5.
+ *      Both are BODY TEXT at 12–12.8px, so 4.5 is the threshold and not 3. `--pc-ink-dim` becomes
+ *      #556368 and the billed line 66%, the smallest pair of steps that clears the bar with margin
+ *      rather than by rounding: worst case across all four rungs, both themes and both viewports
+ *      goes to **5.128:1**. The rung stays visibly dimmer than `--pc-ink-soft` (#46545b), so the
+ *      three-step ink hierarchy the card is built on is unchanged.
+ *      The other three faces override `--pc-ink-dim` locally and were already clear (worst 5.758),
+ *      so nothing about the coloured cards moves.
+ *      WHY NEITHER GATE SAW IT, which matters more than the two numbers: `check:contrast` reads the
+ *      `--color-*` manifest and this file has none, and `check-contrast-rendered.mjs` adds pairs it
+ *      finds in `.tsx` `className` LITERALS — and every pair here is composed in CSS. The same
+ *      blind spot hid `.table-head` at 1.24:1 in dark. This file is unmeasured by both, and staying
+ *      a faithful transcription is not a reason for the public pricing page to fail AA.
  *
  * WHAT CAME WITH THE CARD THIS TIME, and did not exist here before: the quota panel
  * (`.plan-quota`), the two capability BLOCKS with their grey twin (`.plan-block`, `--money`,
@@ -101,7 +121,8 @@
   --pc-ground-lift: #f4efe7;  /* one step up: the basic card */
   --pc-ink: #0a171d;          /* ink on the two cards that are the ground */
   --pc-ink-soft: #46545b;
-  --pc-ink-dim: #63737a;
+  /* #63737a there; darkened here — mechanical edit 6, measured. See the header. */
+  --pc-ink-dim: #556368;
   --pc-oceanic: #003f47;      /* the brand, at the depth a cream card needs */
   --pc-action-solid: #0d4e56;
   --pc-wheat: #fffcf8;        /* the light ink the three coloured cards carry */
@@ -595,7 +616,8 @@
   margin-block-start: 0.3rem;
   min-block-size: 1.1em;
   font-size: 0.75rem;
-  color: color-mix(in srgb, var(--pc-ink) 56%, transparent);
+  /* 56% there; 66% here — mechanical edit 6, measured. See the header. */
+  color: color-mix(in srgb, var(--pc-ink) 66%, transparent);
 }
 
 /* ---- the ask ------------------------------------------------------------- */

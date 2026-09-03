@@ -4,6 +4,7 @@ import type { NextOrderItem } from '../../lib/nextOrderItems';
 import type { Category, Product, SupplierProduct } from '../../lib/types';
 import { fmtMoneyExact, formatQuantity, formatUnit, productLabel } from '../../lib/format';
 import { useT } from '../../lib/i18n/LocaleProvider';
+import { QUANTITY_MAX } from '../../lib/inputBounds';
 
 interface ProductCartItem {
   product: Product;
@@ -124,8 +125,11 @@ export default function ProductStep({ products, categories, offersByProduct, car
                   problem the row-as-toggle fixed (owner report, 19.08.2026) — the row is the
                   documented remove affordance now. A floor of 1 also keeps the newly editable
                   input safe: clearing it clamps to 1 instead of deleting the line mid-keystroke. */}
+              {/* `max` is the magnitude guard, not an opinion about how much may be ordered —
+                  see `lib/inputBounds.ts`. The Stepper clamps typed input to it, so the ceiling
+                  holds for the keyboard as well as the ± buttons. */}
               {carted && (
-                <Stepper className="me-3 shrink-0 sm:me-4" value={carted.qty} min={1}
+                <Stepper className="me-3 shrink-0 sm:me-4" value={carted.qty} min={1} max={QUANTITY_MAX}
                   label={t('productStep.quantityLabel', { product: productLabel(product) })}
                   /* The picker's own sentences, kept verbatim from the control this replaced.
                      „הוספת כמות X" inflects the verbal noun to take the object; the primitive's

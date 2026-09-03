@@ -15,7 +15,8 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { Modal, Note, ErrorNote, useToast } from './ui';
-import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow, nameKey, groupSkipped } from '../lib/importSheet';
+import { readSheet, matchColumn, mapRows, cellText, skipRow, nameKey, groupSkipped } from '../lib/importSheet';
+import { PRICE_REASON_KEYS, parsePrice } from '../lib/price';
 import { fetchAll } from '../lib/supabasePaging';
 import { fmtMoneyExact, normalizeUnitInput, todayISO } from '../lib/format';
 import { canStartSupplierCommerce, NEW_COMMERCE_SUPPLIER_STATUSES } from '../lib/status';
@@ -160,6 +161,10 @@ export async function uploadPriceDocument(orgId: string, supplierId: string, fil
 interface SheetPreviewRow {
   name: string;
   price: number;
+  /* The currency this row will be WRITTEN in. The preview used to render every figure with the
+     supplier's currency while the writer named no currency at all and the row landed as ILS --
+     a dollar list previewed in dollars and stored in shekels. */
+  currency: string;
   unit: string;
   productId: string | null;
   /** null productId + ambiguous=true: catalog holds two products with this normalized name. */
@@ -216,6 +221,13 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
   // resolves the moment the row exists rather than after the next refetch.
   const picker = useQuickSupplier(suppliers, setSupplierId);
 
+  /* `Intl` calls any three-letter code a currency, `KGM` included. The database asks
+     `public.currencies`; so does this, once, and hands the set to the shared parser. */
+  const { data: currencyCodes } = useQuery(async () => new Set(
+    (unwrap(await supabase.from('currencies').select('code').eq('active', true)) as { code: string }[])
+      .map((row) => row.code),
+  ));
+
   const accept = `${PRICE_DOCUMENT_ACCEPT},.xlsx,.xls,.csv`;
   const newRows = useMemo(() => (preview?.rows ?? []).filter((r) => !r.productId && !r.ambiguous), [preview]);
   const matchedRows = useMemo(() => (preview?.rows ?? []).filter((r) => r.productId), [preview]);
@@ -245,12 +257,24 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
     // size of the number rather than on an amount of money. The message used to call it
     // ₪1,000,000, which described a shekel limit the server never had — and read as a much
     // tighter rule than it is to anyone importing a price list in another currency.
+    // THE PREVIEW AND THE WRITER NOW READ A PRICE THE SAME WAY, because they call one parser.
+    // They did not before, and the disagreement was silent in BOTH directions: `cellNumber`
+    // deleted every character that was not a digit, a dot or a minus, so `$12.50` previewed as a
+    // shekel 12.50 that the writer then refused, while `1.2345` previewed at four decimals and
+    // was stored rounded to two. The cap keeps its own explanation above.
+    const currency = (picker.suppliers.find((row) => row.id === supplierId)?.default_currency
+      ?? '').toUpperCase();
     const seenKeys = new Set<string>();
     const { valid, skipped } = mapRows(sheet.rows, (row) => {
       const name = cellText(row, cols.product);
-      const price = cellNumber(row, cols.price);
-      if (!name || price == null || price <= 0) return skipRow('חסר שם מוצר או מחיר תקין');
-      if (price > 1_000_000) return skipRow('מחיר מעל הטווח המותר (עד 1,000,000)');
+      const parsed = parsePrice(cellText(row, cols.price, 64), currency, currencyCodes ?? null);
+      if (!name) return skipRow(t('priceUpload.skipRow_missing_name'));
+      if (!parsed.ok || parsed.value === null) {
+        return skipRow(t(PRICE_REASON_KEYS[parsed.reason ?? 'price_unreadable'] as TKey, {
+          currency: parsed.currency ?? '', printed: parsed.printedCurrency ?? '',
+        }));
+      }
+      const price = parsed.value;
       const key = nameKey(name);
       if (seenKeys.has(key)) return skipRow(t('priceUpload.has'));
       seenKeys.add(key);
@@ -259,6 +283,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
       return {
         name,
         price,
+        currency,
         unit: normalizeUnitInput(cellText(row, cols.unit) || 'יחידה'),
         productId: match?.id ?? null,
         ambiguous: match === null,
@@ -344,7 +369,10 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
         setCreateNew(false);
       }
       const rows = workingRows.filter((r) => r.productId)
-        .map((r) => ({ supplier_id: supplierId, product_id: r.productId!, price: r.price, available: true }));
+        .map((r) => ({
+          supplier_id: supplierId, product_id: r.productId!, price: r.price,
+          available: true, currency: r.currency,
+        }));
       if (!rows.length) throw new PriceDocumentError(t('priceUpload.PriceDocumentError_7'));
       const imported = unwrap(await supabase.rpc('import_supplier_prices', {
         p_rows: rows,
@@ -436,7 +464,7 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
                 {preview.rows.slice(0, 100).map((r, i) => (
                   <tr key={i}>
                     <td className="td">{r.name}</td>
-                    <td className="td num">{fmtMoneyExact(r.price, supplierCurrency)}</td>
+                    <td className="td num">{fmtMoneyExact(r.price, r.currency || supplierCurrency)}</td>
                     <td className="td">{r.productId ? <span className="badge-done">{t('priceUpload.text_12')}</span>
                       : r.ambiguous ? <span className="badge-alert">{t('priceUpload.text_13')}</span>
                         : <span className="badge-await">{t('priceUpload.text_14')}</span>}</td>

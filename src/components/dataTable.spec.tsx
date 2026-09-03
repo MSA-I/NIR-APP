@@ -314,6 +314,77 @@ describe('DataTable — column picker (OPEN-DECISIONS #80)', () => {
 });
 
 /**
+ * The picker's KEYBOARD EXIT (wave 8). Measured in Chrome on /invoices before this was written:
+ * the eighth Tab inside the open picker dropped focus onto `<body>` with the dialog still open,
+ * and the next Tab restarted the whole application behind it.
+ *
+ * WHAT THESE TESTS DO NOT PROVE, said plainly so nobody reads more into a green run than is there.
+ * The other half of the same defect was that opening the picker never moved focus into it at all,
+ * because the focus call ran while the panel was still `visibility: hidden`. **jsdom does not
+ * implement visibility-based focusability**, so it focused happily and the existing
+ * `toHaveFocus()` assertion above passed for as long as the bug existed. Only a browser can fail
+ * on that one; the evidence for it is `artifacts/w8/picker-tab-trail-{before,after}.json`, a real
+ * Chrome walking Tab. What IS testable here is the exit logic, which is plain JavaScript.
+ */
+describe('DataTable — the column picker can be left with the keyboard', () => {
+  const openPicker = () => {
+    render(<DataTable rows={makeRows(3)} columns={clientColumns} columnPicker="spec-keys" />);
+    fireEvent.click(screen.getByRole('button', { name: 'עמודות' }));
+    return screen.getByRole('button', { name: 'עמודות' });
+  };
+
+  it('Tab past the last checkbox closes it and hands focus back to the trigger', () => {
+    const trigger = openPicker();
+    const last = screen.getByRole('checkbox', { name: 'סכום' });
+    last.focus();
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('Shift+Tab past the first checkbox does the same, so the exit works in both directions', () => {
+    const trigger = openPicker();
+    const first = screen.getByRole('checkbox', { name: 'שם' });
+    first.focus();
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('Tab BETWEEN checkboxes is left to the browser — the popover is not a trap in either direction', () => {
+    openPicker();
+    const first = screen.getByRole('checkbox', { name: 'שם' });
+    first.focus();
+    fireEvent.keyDown(window, { key: 'Tab' });
+    // Still open: only the edges of the list are exits.
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('Tab from the trigger enters the panel, which a portal at the end of <body> otherwise prevents', () => {
+    const trigger = openPicker();
+    trigger.focus();
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(screen.getByRole('checkbox', { name: 'שם' })).toHaveFocus();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('Escape closes it and returns focus to the trigger', () => {
+    const trigger = openPicker();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('focus moving anywhere else closes it, so no dialog stays open behind the page', () => {
+    openPicker();
+    const outside = screen.getByRole('columnheader', { name: 'שם' }).querySelector('button');
+    expect(outside).not.toBeNull();
+    fireEvent.focusIn(outside as HTMLElement);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+/**
  * The phone is where filtering was unreachable, and the two causes were independent.
  *
  * 1. The sheet was gated on `server || columnPicker`. Nine screens — orders, suppliers, credits,

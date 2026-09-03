@@ -20,6 +20,56 @@ import { paymentRequestCheckFingerprint } from '../lib/checkFingerprint';
 import { SupplierSelectField, useQuickSupplier, type SupplierOption } from '../components/QuickSupplierPicker';
 import { financialSupplierMap, readFinancialSuppliers } from '../lib/financialSuppliers';
 
+/**
+ * The statuses a due date is a claim on cash for — the complement of
+ * `('draft', 'executed', 'matched', 'cancelled')`, which is the set every due-date metric in
+ * `management_dashboard_snapshot` filters on (`overdue`, `due_today`, `due_within_7`, and the
+ * money beside each of them).
+ *
+ * It exists because the three due-date branches below used to disagree with each other. `soon`
+ * spelled this list out with a comment explaining why a draft is not a claim on cash; `overdue`
+ * and `today` two lines above it used the screen's broad `active` set instead, which keeps
+ * drafts. So the dashboard's "דרישות תשלום באיחור" tile counted one population and the list it
+ * links to showed a larger one — the tile was right and the list was wrong, and only in two of
+ * its three branches. One named constant now, so the three cannot drift again.
+ */
+export const DUE_PRESSURE_STATUSES: readonly PaymentRequestStatus[] = [
+  'pending_approval', 'approved', 'sent_for_execution', 'investigation', 'suspected_duplicate',
+];
+
+/**
+ * `p2_active_payment_request_total_by_currency()` — the statuses the business summary's "money
+ * committed on active payment requests" is summed over, spelled for the URL.
+ *
+ * It is NOT the screen's own `active`, and the gap is the reason this exists: `active` means
+ * "not matched, cancelled or executed", which also holds `investigation` and
+ * `suspected_duplicate` — two statuses that total leaves out. So an answer saying "nothing is
+ * open" could send a reader to a screen holding money, which is the shape of near-miss a source
+ * must not have.
+ */
+export const COMMITTED_FILTER = 'draft,pending_approval,approved,sent_for_execution';
+
+/**
+ * The `?due=` filter, as a function so the three branches can be tested against the definition
+ * they mirror rather than only by reading them. `today` and `dueSoon` are plain ISO dates; the
+ * caller owns the calendar so the comparison stays a string one.
+ */
+export function matchesDueFilter(
+  row: { status: PaymentRequestStatus; due_date: string | null },
+  filter: string,
+  today: string,
+  dueSoon: string,
+): boolean {
+  if (!filter) return true;
+  if (!DUE_PRESSURE_STATUSES.includes(row.status)) {
+    return !['today', 'overdue', 'soon'].includes(filter);
+  }
+  if (filter === 'today') return row.due_date === today;
+  if (filter === 'overdue') return !!row.due_date && row.due_date < today;
+  if (filter === 'soon') return !!row.due_date && row.due_date <= dueSoon;
+  return true;
+}
+
 type Row = Omit<PaymentRequest, 'supplier'> & { supplier: { name: string }; approver: { full_name: string } | null };
 type RawRow = Omit<Row, 'supplier'>;
 type PaymentInvoiceCandidate = {
@@ -84,16 +134,12 @@ export default function PaymentRequests() {
   const rows = (data ?? []).filter((r) => {
     if (idFilter) return r.id === idFilter;
     const active = !['matched', 'cancelled', 'executed'].includes(r.status);
-    const statusOk = statusFilter === 'all' ? true : statusFilter === 'active' ? active : r.status === statusFilter;
-    const dueOk = !dueFilter ? true
-      : dueFilter === 'today' ? active && r.due_date === today
-      : dueFilter === 'overdue' ? active && !!r.due_date && r.due_date < today
-      // Drafts are excluded here for the same reason 0168 excludes them from the aggregate:
-      // a request still being written is not a claim on cash. Keeping them would show more
-      // rows than the tile counted, and the tile is where people arrive from.
-      : dueFilter === 'soon' ? ['pending_approval', 'approved', 'sent_for_execution', 'investigation', 'suspected_duplicate'].includes(r.status) && !!r.due_date && r.due_date <= dueSoon
-      : true;
-    return statusOk && dueOk;
+    // A comma carries a SET, the shape /exceptions already uses for `?type=`.
+    const statusOk = statusFilter === 'all' ? true
+      : statusFilter === 'active' ? active
+        : statusFilter.includes(',') ? statusFilter.split(',').includes(r.status)
+          : r.status === statusFilter;
+    return statusOk && matchesDueFilter(r, dueFilter, today, dueSoon);
   });
 
   const isOffice = organizationAccess.canWrite && !!profile && ['owner', 'office'].includes(profile.role);
@@ -173,6 +219,10 @@ export default function PaymentRequests() {
             <select className="input w-auto!" aria-label={t('paymentRequests.aria_label')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="active">{t('paymentRequests.text_7')}</option>
               <option value="all">{t('paymentRequests.text_8')}</option>
+              {/* Named in the dropdown, not left as a URL-only state: this is the set the business
+                  summary calls "סכום פתוח בדרישות תשלום", so a reader arriving from that figure
+                  can see which requests it counted and reach the same list again. */}
+              <option value={COMMITTED_FILTER}>{t('paymentRequests.statusCommitted')}</option>
               {Object.entries(PAYMENT_REQUEST_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
             </select>
             <select className="input w-auto!" aria-label={t('paymentRequests.aria_label_2')} value={dueFilter} onChange={(e) => setDueFilter(e.target.value)}>

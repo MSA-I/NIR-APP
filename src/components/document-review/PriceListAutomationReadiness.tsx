@@ -56,8 +56,13 @@ interface QualifiedProductRow {
   barcode: string | null;
   product_name: string | null;
   unit_price: number | null;
+  /* The dry run reports the parser's own reason now instead of one `invalid_price` for every
+     way a price can fail to read. `invalid_price` is kept so a stored dry run from before the
+     change still types. */
   outcome: 'qualified_create' | 'existing_product' | 'ambiguous_input' | 'ambiguous_catalog'
-    | 'missing_qualification' | 'invalid_price';
+    | 'missing_qualification' | 'invalid_price'
+    | 'price_missing' | 'price_unreadable' | 'price_not_positive' | 'price_below_minor_unit'
+    | 'price_above_cap' | 'price_currency_mismatch' | 'price_currency_unknown';
 }
 
 interface QualifiedProductDryRun {

@@ -215,10 +215,17 @@ const DARK_SELECTOR = ":root[data-theme='dark']";
 
 /** Tokens that legitimately have no dark value, each with the reason it does not need one. */
 const DARK_EXEMPT = new Map<string, string>([
-  ['shell', 'the on-dark family is dark BY DESIGN, not by theme — auth panels, aurora, tooltip, table head'],
+  ['shell', 'the on-dark family is dark BY DESIGN, not by theme — auth panels, aurora, tooltip'],
   ['shell-ink', 'ink on the on-dark ground; same reason'],
   ['shell-ink-soft', 'ink on the on-dark ground; same reason'],
   ['shell-ink-dim', 'ink on the on-dark ground; same reason'],
+  // The table header strip, moved off `action` + `shell-ink-soft` on 03.09.2026 (RC6). The strip
+  // always claimed the `shell` contract — this list said so — but only its INK came from `shell`;
+  // its band came from `action`, which the dark theme turns into light paper. Half a contract is
+  // not a contract: the band measured 1.24:1 in the dark. Both halves are named here now, so
+  // "dark in both themes" is a claim about the whole strip and not about one of its two colours.
+  ['table-head', 'the table header strip is dark BY DESIGN, not by theme — one idiom on every screen'],
+  ['table-head-ink', 'ink on that strip; same reason'],
   ['fixed-onyx', 'onyx as fill/ink on a LIGHT surface (btn-rainbow body, plan badge words) in both themes'],
   ['aurora-1', 'the auth aurora paints an on-dark panel in both themes; its ramp is the frozen light values of the chart ramp'],
   ['aurora-2', 'the auth aurora paints an on-dark panel in both themes; its ramp is the frozen light values of the chart ramp'],

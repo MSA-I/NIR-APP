@@ -37,6 +37,15 @@ export const he = {
    * pattern in src/lib/errors.ts matches, not numbered, so a call site says which failure it means.
    */
   errors: {
+    invoice_not_payable: 'אי אפשר לשייך תשלום, זיכוי או בקשת תשלום לחשבונית הזו: היא נמחקה, או שהיא מסמך תומך ולא חשבונית לתשלום. בחר את החשבונית שהחוב רשום עליה.',
+    credit_request_concurrent_change: 'הזיכוי או החשבונית שהוא מקוזז מולה השתנו בזמן שהמסך היה פתוח, ולכן הפעולה לא בוצעה ושום דבר לא נרשם. רענן את המסך, בדוק את מצב הזיכוי ונסה שוב.',
+    payment_request_checks_currency_mismatch: 'החשבוניות שנבחרו אינן במטבע אחד, או שאינן במטבע של הבקשה הקיימת. בקשת תשלום היא במטבע אחד בלבד — יש לפצל לבקשה נפרדת לכל מטבע.',
+    payment_request_checks_invalid: 'בדיקות טרום-האישור לא רצו: הבקשה נשלחה בלי ספק, בלי סכום חיובי או בלי חשבוניות. בחר ספק וחשבוניות ונסה שוב.',
+    payment_settlement_invalid: 'פרטי הסכום שיצא מהחשבון אינם תקינים: המטבע חייב להיות פעיל ושונה ממטבע החוב, והסכום חייב להיות חיובי ובמספר הספרות שאותו מטבע מאפשר. אין המרה — שני הסכומים נרשמים כפי שהם.',
+    payment_settlement_pair_invalid: 'כשמשלמים מחשבון במטבע אחר צריך למלא את שני השדות יחד — הסכום שיצא מהחשבון והמטבע שלו — או להשאיר את שניהם ריקים. אחד מהם לבדו אינו אומר כלום.',
+    payment_execution_currency_invalid: 'מטבע החוב של הבקשה אינו מטבע פעיל, ולכן אי אפשר לבצע את התשלום. הכסף לא יצא ולא נרשם דבר. בדוק את מטבע הבקשה לפני ניסיון נוסף.',
+    payment_request_currency_invalid: 'מטבע הבקשה אינו מטבע פעיל במערכת, ולכן אי אפשר ליצור או לקדם את בקשת התשלום. בדוק את המטבע של החשבוניות שנבחרו, ואם מטבע הושבת — פנה לבעלים.',
+    bank_direct_match_requires_financial_correction: 'ההתאמה הזו רשמה תשלום בפועל, ולכן היא אינה מתבטלת בלחיצה — ביטול היה מוחק רשומת תשלום קיימת. את התיקון עושים בחשבונית עצמה: בכרטיס החשבונית פותחים דרישת זיכוי (מנהל/בעלים או מנהל רכש), והמעקב אחריה במסך "זיכויים".',
     invoice_three_way_assessment_stale: 'המצב השתנה מאז שנפתח החלון — ההתאמה נבדקה מחדש. עברו על מה שהשתנה ואשרו שוב.',
     approved_invoice_override_immutable: 'החשבונית כבר אושרה, ולכן אי אפשר לעקוף את ההתאמה שלה.',
     definite_duplicate_invoice_cannot_be_overridden: 'החשבונית זוהתה ככפילות ודאית. עקיפה אינה אפשרית — יש לבטל את הכפילות תחילה.',
@@ -394,6 +403,7 @@ export const he = {
     exceptionType_receipt_mismatch: 'פער קבלה מול חשבונית',
     exceptionType_item_not_ordered: 'פריט שלא הוזמן',
     exceptionType_expected_document_missing: 'מסמך צפוי שלא הגיע',
+    exceptionType_unapproved_invoice_settled: 'נרשם תשלום מול חשבונית שלא אושרה',
     /* ---------- The commercial catalogue (src/lib/planLabels.ts) ----------
        These MIRROR the database verbatim: subscription_plans.label (0184),
        private.entitlement_definitions.label (0154/0164/0246/0247) and
@@ -504,6 +514,8 @@ export const he = {
     keyInvoiceLineHint: 'הפרש מותר בין כמות × מחיר פחות הנחה לבין סכום השורה. זהו סכום קטן — עודף, לא יחידה.',
     keyInvoiceTotal: 'סה״כ החשבונית',
     keyInvoiceTotalHint: 'הפרש מותר בין סכום הכותרת לבין סכום השורות.',
+    keyInvoiceSettled: 'חשבונית נחשבת משולמת',
+    keyInvoiceSettledHint: 'כמה מותר שיישאר פתוח בחשבונית והיא עדיין תיחשב משולמת.',
     sourceBaseCurrency: 'מטבע הספרים',
     sourceSupplierDefault: 'ברירת מחדל של ספק',
     sourceInvoice: 'חשבוניות',
@@ -519,6 +531,7 @@ export const he = {
   },
 
   settings: {
+    vatRateOutOfRange: 'שיעור מע״מ חייב להיות בין 0 ל־100',
     undoAction: 'ביטול הפעולה',
     enableUndone: 'ההפעלה בוטלה — המשתמש מושבת',
     disableUndone: 'ההשבתה בוטלה — המשתמש פעיל',
@@ -996,6 +1009,7 @@ export const he = {
     eyebrowReport: 'דיווח · REPORT',
   },
   orders: {
+    statusWithSupplier: 'אצל הספק — נשלחו, אושרו וחלקיות',
     toastPdf: 'קובץ ה-PDF הורד',
     exportPdf: 'הורדת ההזמנה כקובץ PDF מעוצב עם הלוגו של הארגון',
     exportPdfLabel: 'הורדת PDF',
@@ -1116,6 +1130,7 @@ export const he = {
   },
 
   bank: {
+    directMatchCorrection: 'תיקון כספי אינו מחיקה של תשלום שכבר נרשם, אלא זיכוי שנרשם מולו. פותחים אותו בכרטיס החשבונית — "דרישת זיכוי" (מנהל/בעלים או מנהל רכש) — והוא נמצא במסך "זיכויים".',
     toleranceRefusal: '{currency}: {refusal} הצעות לפי אסמכתא עדיין מוצגות, והתאמה ידנית פתוחה.',
     fmtDate: 'תאריך',
     text: 'תיאור',
@@ -1652,6 +1667,10 @@ export const he = {
   },
 
   documents: {
+    filing_line_price_currency_mismatch: 'השורה נקובה במטבע אחר מזה של המחירון. אין המרה בין מטבעות, ולכן השורה ממתינה לבדיקה.',
+    filing_line_price_above_cap: 'המחיר בשורה חורג מהתקרה של 1,000,000, ולכן השורה ממתינה לבדיקה.',
+    filing_line_price_below_minor_unit: 'המחיר בשורה קטן מהיחידה הקטנה ביותר של מטבע המחירון, ולכן השורה ממתינה לבדיקה.',
+    filing_line_price_not_positive: 'המחיר שנקרא בשורה אינו חיובי, ולכן השורה ממתינה לבדיקה.',
     text: 'סטטוס לא זמין',
     text_2: 'מצב המסמך',
     text_3: 'הכול',
@@ -1891,6 +1910,9 @@ export const he = {
   },
 
   inventory: {
+    lowStockEmptyCatalogue: 'אין עדיין מוצרים פעילים לבדוק',
+    lowStockUnmeasured: 'אין מוצר עם יתרה שנספרה ומינימום מוגדר',
+    quantityTooLarge: 'הכמות גדולה מדי. אפשר להזין עד 1,000,000',
     pricesInSeveralCurrencies: 'מחירים בכמה מטבעות',
     text: 'קבלת סחורה',
     text_2: 'צריכה',
@@ -1983,6 +2005,9 @@ export const he = {
   },
 
   priceLists: {
+    windowLastDays: '{days} הימים האחרונים',
+    windowAnyTime: 'בכל זמן',
+    windowFilterLabel: 'חלון זמן לשינויי מחיר',
     productLabel: 'מוצר',
     text: 'ספק',
     formatUnit: 'יחידה',
@@ -2053,6 +2078,7 @@ export const he = {
   },
 
   paymentRequests: {
+    statusCommitted: 'כסף שכבר התחייבנו לו — טיוטות, ממתינות לאישור, מאושרות ולביצוע',
     toast: 'הדרישה בוטלה',
     text: 'ספק',
     fmtMoneyExact: 'סכום',
@@ -2729,6 +2755,13 @@ export const he = {
   },
 
   reports: {
+    openExceptionsLink: 'מעבר לחריגות הפתוחות',
+    openMonthBank: 'פתיחת תנועות הבנק של החודש',
+    bankBlockerNotOnThisScreen: 'אין החודש תנועת בנק שמסומנת „ללא התאמה” או „הצעת התאמה”, ולכן אי אפשר להצביע מכאן על התנועה שחוסמת. ייתכן שזו תנועה שסומנה כלא רלוונטית, תנועה שההתאמה שלה לא אושרה או מובילה ליותר מישות משפטית אחת, או תנועה מחודש אחר שפתוחה עליה חריגה.',
+    xlAmountAgainstInvoices: 'סכום כנגד חשבוניות',
+    xlPaymentsAgainstInvoices: 'תשלומים כנגד חשבוניות',
+    amountAgainstInvoices: 'סכום כנגד חשבוניות',
+    kpiPaidAgainstInvoices: 'שולם החודש כנגד חשבוניות',
     toast: 'קובץ ה-Excel הורד',
     message: 'שגיאה',
     text: 'הנתונים נטענים…',
@@ -2796,7 +2829,6 @@ export const he = {
     title_7: 'אין תשלומים בחודש זה',
     aria_label_4: 'תשלומים לפי ספק — טבלה נגללת',
     text_42: 'ספק',
-    text_43: 'סכום ששולם',
     title_8: 'אין תשלומים בחודש זה',
     text_44: 'אין תשלומים בחודש זה',
     text_45: 'זיכויים',
@@ -2833,7 +2865,6 @@ export const he = {
     kpiInvoices: 'חשבוניות',
     kpiInvoiceTotal: 'סה״כ חשבוניות',
     kpiVat: 'מע״מ',
-    kpiPaidThisMonth: 'שולם החודש',
     kpiUnpaid: 'חשבוניות שטרם שולמו',
     kpiUnmatchedBank: 'תנועות בנק ללא התאמה',
     kpiSuggested: 'התאמות שממתינות לאישור',
@@ -3211,6 +3242,14 @@ export const he = {
   },
 
   priceUpload: {
+    reason_price_currency_unknown: 'לא ידוע באיזה מטבע המחירון הזה; בחר ספק עם מטבע מוגדר',
+    reason_price_currency_mismatch: 'המחיר נקוב ב-{printed} והמחירון הזה ב-{currency}; אין המרה בין מטבעות',
+    reason_price_above_cap: 'המחיר חורג מהתקרה של 1,000,000',
+    reason_price_below_minor_unit: 'המחיר קטן מהיחידה הקטנה ביותר של {currency}',
+    reason_price_not_positive: 'המחיר שנקרא אינו חיובי',
+    reason_price_unreadable: 'לא ניתן לקרוא את המחיר בתא',
+    reason_price_missing: 'תא המחיר ריק',
+    skipRow_missing_name: 'חסר שם מוצר בשורה',
     PriceDocumentError: 'הספק לא פעיל לפעילות מסחרית חדשה. מחירון חדש לא ייקלט.',
     skipRow: 'חסר שם מוצר או מחיר תקין',
     skipRow_2: 'מחיר מעל הטווח המותר (עד ₪1,000,000)',
@@ -3348,6 +3387,7 @@ export const he = {
   },
 
   admin: {
+    vatRateOutOfRange: 'שיעור מע״מ חייב להיות בין 0 ל־100',
     toast: 'הארגון הופעל מחדש במצב פעיל.',
     text: 'הבקשה אושרה והכנת הייצוא הועברה לעיבוד.',
     text_2: 'ניסיון הכנת הייצוא הועבר מחדש לעיבוד.',
@@ -4479,6 +4519,7 @@ export const he = {
   },
 
   invoiceList: {
+    reviewFilterToReview: 'לבדיקה (התקבלו ובבדיקה)',
     text: 'כל הבדיקות האוטומטיות עברו ללא ממצאים.',
     toast: 'החשבונית נמחקה',
     text_2: 'מס׳ חשבונית',
@@ -4732,6 +4773,8 @@ export const he = {
   },
 
   productPurchase: {
+    committedCostRule: '„עלות לפי ההזמנה” היא המחיר שנשמר בהזמנה כפול הכמות שהוזמנה, במטבע ההזמנה. „הוצאה” היא מה שנרשם בחשבוניות שאושרו. אלה שני מספרים שונים ואין לחבר ביניהם.',
+    committedCost: 'עלות לפי ההזמנה',
     text: 'מוצר',
     text_2: '· חלק מהכמות לפי החשבונית בלבד',
     text_3: '· חלק מהשורות טרם אושרו בראיה',
@@ -4775,6 +4818,7 @@ export const he = {
   },
 
   invoiceLineReview: {
+    quantityTooLarge: 'הכמות בשורה גדולה מדי. אפשר להזין עד 1,000,000',
     completeAllLines: 'יש להשלים את כל נתוני השורות',
     noEvidenceVersion: 'אין גרסת ראיה לשורות — יש לשמור תחילה את שורות החשבונית',
     reasonLabel: 'סיבת תיקון השורות (רשות)',
@@ -5865,6 +5909,7 @@ export const he = {
   },
 
   pricingTail: {
+    figureIsQuota: 'מכסת {label}: {value}',
     entitlementIntroOnly: '{label} — פתוח ב־30 הימים הראשונים',
     perUsagePeriod: 'בתקופת שימוש חודשית',
     recommended: 'מומלץ',
@@ -5966,6 +6011,10 @@ export const he = {
 
   /** `/set-password` — the first password of an account opened without one (הכרעת בעלים #332). */
   setPassword: {
+    backToApp: 'חזרה למערכת',
+    changeAction: 'עדכון הסיסמה',
+    changeIntro: 'לחשבון הזה כבר יש סיסמה. כאן בוחרים סיסמה חדשה במקומה — ואם לא רוצים להחליף, אפשר פשוט לחזור למערכת והסיסמה הקיימת נשארת.',
+    changeTitle: 'החלפת סיסמה',
     title: 'בחירת סיסמה',
     checking: 'בודק את החשבון…',
     intro: 'הכתובת אושרה. עכשיו בוחרים סיסמה, וממנה מתחברים בכל פעם הבאה.',
@@ -6157,6 +6206,10 @@ export const he = {
   },
 
   planCard: {
+    stateUnmeasured: 'לא נמדד',
+    stateIntro: 'כלול ב־30 הימים הראשונים בלבד',
+    stateExcluded: 'לא כלול',
+    stateIncluded: 'כלול',
     emphasisPremium: 'המקיף ביותר',
     loading: 'טוען',
     // The two capability blocks the card grew on 02.09.2026, and the tag on a row that expires.
@@ -6191,6 +6244,7 @@ export const he = {
   },
 
   businessSummary: {
+    expectedPaymentsNone: 'אין התחייבויות פתוחות',
     receivedWeek: 'חשבוניות שנקלטו ב-{days} הימים האחרונים',
     awaitingApproval: 'חשבוניות הממתינות לאישור',
     expectedPayments: 'סכום פתוח בדרישות תשלום',
@@ -6206,6 +6260,9 @@ export const he = {
      instruction was ignored in all five runs.
      Tool DESCRIPTIONS are deliberately not here: only the model reads those. */
   assistantTools: {
+    exposureScreenDueSoon: 'מסך דרישות התשלום — לפירעון בשבעת הימים הקרובים',
+    exposureScreenDueToday: 'מסך דרישות התשלום — לפירעון היום',
+    exposureScreenOverdue: 'מסך דרישות התשלום — באיחור',
     supplierWindowWarning: 'כל המדדים המחוּלנים נמדדים ב-{window}; \'שינוי מחיר\' כולל גם ירידות מחיר ואינו נושא גודל שינוי.',
     lineWord: 'שורה',
     orderWord: 'הזמנה',

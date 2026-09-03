@@ -62,6 +62,18 @@ const TOLERANCE_KEYS = [
     labelKey: 'tolerances.keyInvoiceTotal',
     hintKey: 'tolerances.keyInvoiceTotalHint',
   },
+  /* The fifth, and it was here all along without a name. Until 0299 the rule that decides an
+     invoice is PAID was a bare `<= 1` inside the status writer — one unit of whatever currency
+     the invoice happened to be in, which is a shekel's worth of rounding for a shekel and a
+     hundred times that for a currency with no minor units. This guard could not see it, because
+     it looks for `money_tolerance` call sites and that was a literal. Routing it through the same
+     door as the other four is what makes it statable, and its derived value for a two-decimal
+     currency is exactly 1.00 — so nothing about the shekel moves today. */
+  {
+    key: 'invoice_payment_settled_tolerance',
+    labelKey: 'tolerances.keyInvoiceSettled',
+    hintKey: 'tolerances.keyInvoiceSettledHint',
+  },
 ] as const;
 
 type ToleranceKey = (typeof TOLERANCE_KEYS)[number]['key'];

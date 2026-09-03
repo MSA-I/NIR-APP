@@ -203,20 +203,56 @@ Deno.test("an unmeasurable row is null and never zero, and is counted separately
   );
 });
 
-Deno.test("the price-rise source is the allowlisted increases route", () => {
-  const rules = getMonthlyPriceRises;
-  assert.ok(rules); // keeps the import honest if the assertion below is ever loosened
-  const source = {
-    id: "s1",
-    entity: "organization" as const,
-    entity_id: ORG_ID,
-    label: "מסך המחירים — התייקרויות",
-    route: "/prices?increases=1",
-    classification: "financial_sensitive" as const,
-  };
-  assert.equal(assistantSourceRouteDecision(source, "owner"), "allowed");
-  assert.equal(assistantSourceRouteDecision(source, "office"), "allowed");
-  assert.equal(assistantSourceRouteDecision(source, "accountant"), "not_permitted");
+Deno.test("the monthly rise cites its rows, and no screen that contradicts the month", async () => {
+  /* WAVE 7. This tool used to close with an organisation-level reference to
+     `/prices?increases=1`, and that is the report's own worked example: an answer reading "no
+     supplier raised a price this month" opened a screen headed "7 price rises".
+
+     They are not a filter apart. This tool measures a CALENDAR MONTH against the last price in
+     effect when the month opened, counts only a NET positive difference, and excludes any product
+     whose baseline cannot be established. `?increases=1` asks whether the last recorded change on
+     a row happened to be upward, ever. No state of that screen reproduces this population — the
+     `?days=` window added for the thirty-day counters is a trailing window, not a calendar month —
+     so the claim is cited by the rows it is made of and by nothing that would contradict it. */
+  const envelope = await getMonthlyPriceRises.run(
+    ctxWith(fakeDb({
+      supplier_monthly_price_rises: { data: [riseRow(), UNMEASURABLE_ROW], error: null },
+    })),
+    {},
+  );
+  assert.equal(
+    envelope.sources.some((source) => source.route?.startsWith("/prices?increases=")),
+    false,
+  );
+  // The organisation-level reference survives as an ATTRIBUTION: it still names where prices
+  // live, and carries no route, because there is no state of that screen to send anyone to.
+  const org = envelope.sources.find((source) => source.entity === "organization");
+  assert.ok(org);
+  assert.equal(org.route, null);
+  assert.equal(assistantSourceRouteDecision(org, "owner"), "allowed");
+  // What it does cite: the supplier the rise is attributed to, and the product's own price row.
+  assert.ok(envelope.sources.some((source) =>
+    source.entity === "supplier" && source.route === `/suppliers/${SUPPLIER_A}`
+  ));
+  const productSource = envelope.sources.find((source) => source.entity === "product");
+  assert.ok(productSource);
+  assert.equal(productSource.route, `/prices?product=${productSource.entity_id}`);
+  for (const role of ["owner", "office"] as const) {
+    assert.equal(assistantSourceRouteDecision(productSource, role), "allowed");
+  }
+  assert.equal(assistantSourceRouteDecision(productSource, "accountant"), "not_permitted");
+});
+
+Deno.test("an unmeasurable row cites no price screen of its own", async () => {
+  // The product whose baseline nobody can establish is excluded from every count; pointing at its
+  // price row would suggest a rise was measured for it and merely not shown.
+  const envelope = await getMonthlyPriceRises.run(
+    ctxWith(fakeDb({
+      supplier_monthly_price_rises: { data: [UNMEASURABLE_ROW], error: null },
+    })),
+    {},
+  );
+  assert.deepEqual(envelope.sources.filter((source) => source.entity === "product"), []);
 });
 
 Deno.test("every source the price-rise tool issues survives the route allowlist", async () => {

@@ -1010,6 +1010,219 @@ exception when foreign_key_violation then
 end
 $$;
 
+
+-- ===== (g) 0293: every password change is recorded, inside GoTrue's own transaction =====
+--
+-- Owner decision G (03.09.2026). The constraint the decision carries is that a write placed AFTER
+-- `auth.updateUser` is not atomic with it, so the password can change while the audit fails. The
+-- trigger is the only boundary that owns both effects. These assertions are the ones that would
+-- have caught each way of getting it wrong.
+
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
+
+-- A password change writes exactly one row, and it names the account, the tenant and the kind.
+update auth.users
+set encrypted_password = 'p4-hash-after'
+where id = '27000000-0000-0000-0000-000000000001';
+select pg_temp.p4_assert(
+  (select count(*) = 1 from audit_logs
+   where action = 'password_changed'
+     and entity_type = 'auth.users'
+     and entity_id = '27000000-0000-0000-0000-000000000001'
+     and user_id = '27000000-0000-0000-0000-000000000001'
+     and org_id = '17000000-0000-0000-0000-000000000001'
+     and reason is not null),
+  'P4 flags/identity assertion failed: a password change wrote no audit row'
+);
+select pg_temp.p4_assert(
+  (select scope_class = 'cross_scope' and scope_domain = 'organization_identity_platform'
+     and legal_entity_id is null
+   from audit_logs
+   where action = 'password_changed'
+     and entity_id = '27000000-0000-0000-0000-000000000001'),
+  'P4 flags/identity assertion failed: the password row did not take the auth.users audit scope'
+);
+
+-- A SIGN-IN is not a password change. Every sign-in updates this table, so a trigger without the
+-- WHEN clause would file a false record on each one.
+update auth.users
+set last_sign_in_at = now()
+where id = '27000000-0000-0000-0000-000000000001';
+select pg_temp.p4_assert(
+  (select count(*) = 1 from audit_logs
+   where action = 'password_changed'
+     and entity_id = '27000000-0000-0000-0000-000000000001'),
+  'P4 flags/identity assertion failed: a sign-in was recorded as a password change'
+);
+
+-- Nor is clearing a metadata flag — which matters because two of the three product screens send
+-- the password and `password_pending:false` in ONE call, and only one of those is the event.
+update auth.users
+set raw_user_meta_data = jsonb_build_object('password_pending', false)
+where id = '27000000-0000-0000-0000-000000000001';
+select pg_temp.p4_assert(
+  (select count(*) = 1 from audit_logs
+   where action = 'password_changed'
+     and entity_id = '27000000-0000-0000-0000-000000000001'),
+  'P4 flags/identity assertion failed: a metadata update was recorded as a password change'
+);
+
+-- THE KNOWN GAP, asserted rather than discovered later. The platform operator has no profile, so
+-- there is no tenant to file the change against -- but the change must still SUCCEED. A recorder
+-- that raised here would lock every profile-less account out of its own password.
+update auth.users
+set encrypted_password = 'p4-platform-hash'
+where id = '27000000-0000-0000-0000-000000000010';
+select pg_temp.p4_assert(
+  (select encrypted_password = 'p4-platform-hash' from auth.users
+   where id = '27000000-0000-0000-0000-000000000010'),
+  'P4 flags/identity assertion failed: a profile-less account could not change its password'
+);
+select pg_temp.p4_assert(
+  not exists (select 1 from audit_logs
+    where action = 'password_changed'
+      and entity_id = '27000000-0000-0000-0000-000000000010'),
+  'P4 flags/identity assertion failed: a password row was filed against no tenant'
+);
+
+-- WHAT THE CARVE-OUT BUYS. A suspended tenant is exactly the population that needs to recover an
+-- account. Without `identity_audit_exempt` in the write guard the audit insert raises, GoTrue's
+-- UPDATE rolls back with it, and the reader is told only "Database error updating user".
+--
+-- Freezing the tenant goes through the product's own door: the owner asks to leave. That is what
+-- makes `organization_access_mode` stop returning `active`, and it is the shape a real frozen
+-- tenant has. A raw status write is not available here and should not be — `organizations` is
+-- audited too, and its own audit row is refused the moment the organization stops being active.
+-- Leaving is a step-up action, so the claims carry a fresh password `amr` -- the same helper the
+-- rest of this suite uses for every step-up path.
+select pg_temp.p4_claims('27000000-0000-0000-0000-000000000001', interval '0');
+set local role authenticated;
+select request_organization_offboarding(gen_random_uuid());
+
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
+select pg_temp.p4_assert(
+  private.organization_access_mode('17000000-0000-0000-0000-000000000001') <> 'active',
+  'P4 flags/identity assertion failed: the fixture organization is still writable, so the next assertion proves nothing'
+);
+update auth.users
+set encrypted_password = 'p4-hash-while-suspended'
+where id = '27000000-0000-0000-0000-000000000002';
+select pg_temp.p4_assert(
+  (select count(*) = 1 from audit_logs
+   where action = 'password_changed'
+     and entity_id = '27000000-0000-0000-0000-000000000002'),
+  'P4 flags/identity assertion failed: a suspended tenant cannot record -- or make -- a password change'
+);
+
+-- AND WHAT IT MUST NOT BUY. The carve-out relaxes the access-mode refusal only. A business write
+-- for the same frozen tenant is still refused, so the exemption is not a hole.
+do $$
+begin
+  insert into audit_logs (org_id, user_id, action, entity_type, entity_id, reason)
+  values ('17000000-0000-0000-0000-000000000001', '27000000-0000-0000-0000-000000000001',
+          'invoice_created', 'invoices', '27000000-0000-0000-0000-000000000001', 'ניסיון כתיבה עסקית');
+  raise exception 'P4 flags/identity assertion failed: a frozen tenant accepted a business audit row';
+exception when sqlstate '42501' then
+  if sqlerrm not like '%organization_read_only%' then raise; end if;
+end
+$$;
+
+-- Nor does it relax the missing-tenant refusal: an identity row with no organization is still
+-- refused, so the exemption cannot become a door for org-less rows.
+do $$
+begin
+  insert into audit_logs (org_id, user_id, action, entity_type, entity_id, reason)
+  values (null, '27000000-0000-0000-0000-000000000001', 'password_changed',
+          'auth.users', '27000000-0000-0000-0000-000000000001', 'ללא ארגון');
+  raise exception 'P4 flags/identity assertion failed: an identity audit row with no tenant was accepted';
+exception when others then
+  if sqlerrm not like '%organization_write_guard_missing_org%'
+     and sqlerrm not like '%null value in column "org_id"%' then raise; end if;
+end
+$$;
+
+
+-- ===== (h) 0296: a sign-in attempt that can be counted, and stopped (W0-G4, ruling #347) =====
+--
+-- W0-G4 found NO sign-in attempt limit in the production auth configuration at all -- the QA
+-- round reached 33 attempts unblocked -- and the supported mechanism, GoTrue's
+-- password-verification-attempt hook, was off with its URI null. Enabling it with nothing behind
+-- it would not weaken sign-in, it would REFUSE every sign-in, so the hook had to exist first.
+-- These are the assertions that hold it to its contract.
+
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
+
+insert into auth.users (id, email) values
+  ('2f000000-0000-0000-0000-000000000001', 'p4-lockout@example.test');
+
+-- Nine failures are a bad week, not an attack.
+select pg_temp.p4_assert(
+  (select bool_and(public.password_verification_attempt(jsonb_build_object(
+     'user_id', '2f000000-0000-0000-0000-000000000001', 'valid', false)) ->> 'decision' = 'continue')
+   from generate_series(1, 9)),
+  'P4 flags/identity assertion failed: the lockout fired before the tenth failure'
+);
+
+-- The tenth closes the door.
+select pg_temp.p4_assert(
+  public.password_verification_attempt(jsonb_build_object(
+    'user_id', '2f000000-0000-0000-0000-000000000001', 'valid', false)) ->> 'decision' = 'reject',
+  'P4 flags/identity assertion failed: ten consecutive failures did not lock the account'
+);
+
+-- AND IT STAYS SHUT FOR A CORRECT PASSWORD. This is the whole point of a lockout rather than a
+-- counter: an attacker who eventually guesses right must still wait.
+select pg_temp.p4_assert(
+  public.password_verification_attempt(jsonb_build_object(
+    'user_id', '2f000000-0000-0000-0000-000000000001', 'valid', true)) ->> 'decision' = 'reject',
+  'P4 flags/identity assertion failed: a correct password walked straight through the lockout'
+);
+
+-- A success BEFORE the threshold clears the run, which is what makes ten a usable number rather
+-- than a trap for somebody who mistyped nine times and then got it right.
+delete from private.password_attempt_counters;
+select public.password_verification_attempt(jsonb_build_object(
+  'user_id', '2f000000-0000-0000-0000-000000000001', 'valid', false)) from generate_series(1, 9);
+select public.password_verification_attempt(jsonb_build_object(
+  'user_id', '2f000000-0000-0000-0000-000000000001', 'valid', true));
+select pg_temp.p4_assert(
+  not exists (select 1 from private.password_attempt_counters
+              where user_id = '2f000000-0000-0000-0000-000000000001'),
+  'P4 flags/identity assertion failed: a success did not clear the failure run'
+);
+
+-- IT FAILS OPEN. A payload the hook cannot read must never refuse a sign-in: this function sits
+-- on every sign-in in the product, and a rate limiter that raises is an outage, not a control.
+select pg_temp.p4_assert(
+  public.password_verification_attempt('{}'::jsonb) ->> 'decision' = 'continue'
+  and public.password_verification_attempt('{"user_id":"not-a-uuid"}'::jsonb) ->> 'decision' = 'continue'
+  and public.password_verification_attempt('{"valid":false}'::jsonb) ->> 'decision' = 'continue',
+  'P4 flags/identity assertion failed: an unreadable payload refuses a sign-in'
+);
+
+-- Only GoTrue may call it. A browser role that could would simply answer `continue` for itself.
+select pg_temp.p4_assert(
+  has_function_privilege('supabase_auth_admin', 'public.password_verification_attempt(jsonb)', 'execute')
+  and not has_function_privilege('authenticated', 'public.password_verification_attempt(jsonb)', 'execute')
+  and not has_function_privilege('anon', 'public.password_verification_attempt(jsonb)', 'execute'),
+  'P4 flags/identity assertion failed: the lockout hook is callable by the wrong role'
+);
+
+-- And the counters are not a readable record of who failed to sign in as whom.
+select pg_temp.p4_assert(
+  not exists (
+    select 1 from information_schema.role_table_grants
+    where table_schema = 'private' and table_name = 'password_attempt_counters'
+      and grantee in ('authenticated', 'anon')),
+  'P4 flags/identity assertion failed: the failed-sign-in counters are readable by a client role'
+);
+
 rollback;
 
 \echo 'p4_flags_identity_passed'

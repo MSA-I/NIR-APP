@@ -19,6 +19,7 @@ import {
   type Column,
 } from '../components/ui';
 import { ok } from '../lib/errors';
+import { QUANTITY_MAX, isQuantityInRange } from '../lib/inputBounds';
 import { fmtDate, fmtDateTime, fmtMoneyRounded, fmtNum, formatQuantity, formatUnit } from '../lib/format';
 import { supabase } from '../lib/supabase';
 import { fetchAll } from '../lib/supabasePaging';
@@ -83,6 +84,67 @@ type InventoryCommand = 'stocktake' | 'consumption' | 'adjustment';
  * silently empty the table with no way to tell why.
  */
 const BALANCE_FILTERS = ['low', 'counted', 'uncounted'] as const;
+/**
+ * "מתחת למינימום" has THREE states, and it used to have two.
+ *
+ * `is_low_stock` is `null` in the view whenever a product has not been counted or carries no
+ * minimum — the comparison has no two sides. Counting `=== true` over a set where every row is
+ * null gives 0, and the tile printed `0` under the words "דורש בדיקת רכש": a clean sheet, on a
+ * business where nothing has ever been counted. That is the reading this page's own header
+ * sentence forbids three lines above it — „מוצר שלא נספר מוצג כמקף — יתרה לא ידועה, לא אפס" —
+ * and it is how somebody buys a pallet of what they already have.
+ *
+ * So: a real measured zero when at least one product HAS a verdict and none of them is low;
+ * `—` when no product has one, because there was nothing to measure; `—` when the fetch itself
+ * failed. An empty catalogue keeps the zero.
+ *
+ * ── THE EMPTY CATALOGUE, ARGUED (finding 11 of the 03.09.2026 review, which asked for `—`)
+ *
+ * The em dash marks a question this screen COULD NOT ANSWER. A zero marks one it answered, and
+ * the answer is none. Those are different failures and only the first is what `CLAUDE.md` forbids
+ * — "אפס הוא גם טענה על המציאות" is a test of whether the claim is TRUE, not of whether the set
+ * was big.
+ *
+ * What made the original defect a lie was not an empty set, it was a THREE-VALUED PREDICATE.
+ * `is_low_stock` is null on a product that exists and has never been evaluated, so `=== true`
+ * over twelve uncounted products returns 0 while twelve products sit uninspected behind it. The
+ * zero conceals a population. Over an empty catalogue there is no concealed population: every
+ * member of the set was inspected, because there are none. `|{p ∈ ∅ : low(p)}| = 0` is the same
+ * kind of statement as the segment beside it — "0 counted" and "0 awaiting a count" are true
+ * measured zeros that nobody disputes, and they are computed over the identical set.
+ *
+ * This is the rule the rest of the product already applies, not an exception carved for this
+ * tile. The dashboard's balance tile: "ABSENT is not ZERO … a currency that holds invoices
+ * appears here even when they are all settled (amount 0, a measured fact)" — a ledger that was
+ * inspected and summed to nothing is a zero; a currency with no ledger to inspect is a dash.
+ * `ToolEnvelope` states it in general: "Zero rows with `complete: true` means measured, and the
+ * answer is none." An empty catalogue is a completed measurement returning no rows.
+ *
+ * The one reading that WOULD make this a false clean sheet is a reader seeing zero rows because
+ * rows were withheld rather than absent, and `inventory_balances` does carry such a predicate:
+ * `auth_role() = ANY (ARRAY['owner','office'])`. Checked, and it cannot land here — `/inventory`
+ * is `STAFF_ROLES`, the same two roles, so the only people who reach this screen are the ones the
+ * view answers in full. The other narrowing, `p.active`, excludes archived products, and "none of
+ * my ACTIVE products is below its minimum" is the question the table beside it is also answering.
+ *
+ * What the review was right about is the SENTENCE, not the figure: "0 · דורש בדיקת רכש" is true
+ * on an empty catalogue but does not distinguish it from a stocked one that is entirely healthy.
+ * The band already varies its sub-line by state, so it says which — the glance surface has to
+ * stand on its own, since the whole Wave 7 defect was a glance asserting what the detail below
+ * contradicted.
+ *
+ * The filter follows the figure: `low == null` already leaves the segment unclickable, and a
+ * segment that cannot state its count must not promise to filter by it.
+ */
+export function lowStockCount(
+  rows: readonly { is_low_stock: boolean | null }[] | null,
+): number | null {
+  if (rows == null) return null;
+  if (rows.length === 0) return 0;
+  if (!rows.some((row) => row.is_low_stock !== null)) return null;
+  return rows.filter((row) => row.is_low_stock === true).length;
+}
+
 type BalanceFilter = '' | typeof BALANCE_FILTERS[number];
 
 const MOVEMENT_LABEL: Record<InventoryMovement['movement_type'], string> = {
@@ -280,8 +342,11 @@ export default function Inventory() {
   const canRecord = organizationAccess.canWrite;
   const canAdjust = canRecord && (profile?.role === 'owner' || profile?.role === 'office');
   const counted = balances.data?.filter((row) => row.is_counted).length ?? null;
-  const low = balances.data?.filter((row) => row.is_low_stock === true).length ?? null;
   const uncounted = balances.data?.filter((row) => !row.is_counted).length ?? null;
+  const low = lowStockCount(balances.data ?? null);
+  // A read that SUCCEEDED and returned nothing — not a read that has not happened. `balances.data`
+  // is null while loading and on failure, and both of those are the em-dash state already.
+  const emptyCatalogue = balances.data != null && balances.data.length === 0;
   // Clicking the segment that is already live clears it — a filter you entered by clicking is a
   // filter you should be able to leave the same way, without hunting for the dropdown.
   const toggleFilter = (value: BalanceFilter) => () => setFilter(filter === value ? '' : value);
@@ -336,7 +401,15 @@ export default function Inventory() {
           <div className="card grid grid-cols-1 sm:grid-cols-3">
             <StockStat title={t('inventory.title_2')} value={counted == null ? '—' : fmtNum(counted)} sub={t('inventory.sub')}
               active={filter === 'counted'} onClick={counted == null ? undefined : toggleFilter('counted')} />
-            <StockStat title={t('inventory.title_3')} value={low == null ? '—' : fmtNum(low)} sub={t('inventory.sub_2')}
+            {/* The sub-line changes with the state, because "דורש בדיקת רכש" under a dash reads as
+                a task nobody has to do rather than as an answer nobody has — and, on an empty
+                catalogue, under a ZERO it reads as a stocked business with nothing to fix. Three
+                figures, three sentences: the count is unknown, the count is zero because there is
+                nothing to count, or the count is a real one. See `lowStockCount`. */}
+            <StockStat title={t('inventory.title_3')} value={low == null ? '—' : fmtNum(low)}
+              sub={low == null
+                ? t('inventory.lowStockUnmeasured')
+                : emptyCatalogue ? t('inventory.lowStockEmptyCatalogue') : t('inventory.sub_2')}
               tone={low && low > 0 ? 'alert' : 'idle'}
               active={filter === 'low'} onClick={low == null ? undefined : toggleFilter('low')} />
             {/* `idle`, matching the "טרם נספר" badge in the table below. The same set of products
@@ -480,6 +553,14 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
       toast(t('inventory.toast_4'), 'error');
       return;
     }
+    /* The ceiling the three inventory commands already enforce (`0026:202-203`, `0026:294`),
+       said here too so the person gets a sentence instead of a raised exception. The `max`
+       attribute alone would not do it: a `type="number"` field still accepts a pasted or typed
+       value above `max`, it only marks the field invalid. */
+    if (!isQuantityInRange(parsed)) {
+      toast(t('inventory.quantityTooLarge'), 'error');
+      return;
+    }
 
     setBusy(true);
     try {
@@ -516,8 +597,12 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
         <div>
           <label className="label" htmlFor="inventory-command-quantity">{copy.quantity}</label>
           <div className="flex items-center gap-2">
+            {/* An adjustment is signed, so it gets both ends of the range; the other two already
+                have a floor. `max` mirrors what the command itself enforces (`0026:202-203`,
+                `0026:294`) — see `lib/inputBounds.ts`. */}
             <input id="inventory-command-quantity" className="input num" dir="ltr" type="number" step="0.01"
-              min={command === 'adjustment' ? undefined : 0} value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+              min={command === 'adjustment' ? -QUANTITY_MAX : 0} max={QUANTITY_MAX}
+              value={quantity} onChange={(event) => setQuantity(event.target.value)} />
             <span className="shrink-0 text-sm text-ink-soft">{formatUnit(product.unit, locale)}</span>
           </div>
         </div>

@@ -166,7 +166,12 @@ export default function Pricing() {
       // Same shape as a measured row — value then label — so a column of rows stays a column.
       // No colour class of its own: the row already wears the card's tone, and a hardcoded
       // `text-ink-muted` here would be invisible on the inverted fill.
-      return { key, text: <><span>—</span> {label}</>, affirmative: false };
+      //
+      // `unmeasured`, not a bare `affirmative: false`. The dash glyph this comment has claimed
+      // since 26.08.2026 did not exist: `BlockRow` drew a ✗ for anything not affirmative, so an
+      // unmeasured row was published as a refusal. It is now the third state it always said it
+      // was — and a screen reader hears «לא נמדד» rather than «לא כלול».
+      return { key, text: <><span>—</span> {label}</>, affirmative: false, unmeasured: true };
     }
     if (row.unlimited) return { key, text: t('pricingTail.unlimitedFeature', { label }), affirmative: true };
     return {
@@ -243,37 +248,68 @@ export default function Pricing() {
         {plans.map((plan) => {
           const headline = quotaOf(plan.plan_key, HEADLINE_QUOTA_KEY);
           const measured = !!headline && headline.measured;
+          /**
+           * A ROW SAYS WHICH OF FOUR THINGS IT IS, and the intro window is not «included».
+           *
+           * `affirmative: row.included || (free && intro_included)` handed the free card a TICK for
+           * every capability it loses on day thirty-one, which is the exact failure `PlanTicket`'s
+           * own note records the marketing site learning: «a tick that expires is not a tick». The
+           * `intro` flag that draws the clock existed the whole time and no call site ever set it.
+           *
+           * `affirmative` is now the server's `included` and nothing else, so a row that is not
+           * included cannot be marked as though it were.
+           */
           const capabilityRows = state.features
             .filter((row) => row.plan_key === plan.plan_key)
             .sort((a, b) => a.display_order - b.display_order)
-            .map((row): PlanTicketFeature => ({
-              key: row.entitlement_key,
-              text: row.plan_key === 'free' && row.intro_included && !row.included
-                ? t('pricingTail.entitlementIntroOnly', { label: featureName(row.entitlement_key, row.label) })
-                : featureName(row.entitlement_key, row.label),
-              affirmative: row.included || (row.plan_key === 'free' && row.intro_included),
-            }));
+            .map((row): PlanTicketFeature => {
+              const introOnly = row.plan_key === 'free' && row.intro_included && !row.included;
+              return {
+                key: row.entitlement_key,
+                text: introOnly
+                  ? t('pricingTail.entitlementIntroOnly', { label: featureName(row.entitlement_key, row.label) })
+                  : featureName(row.entitlement_key, row.label),
+                affirmative: row.included,
+                intro: introOnly,
+              };
+            });
           return (
             <PlanTicket
               key={plan.plan_key}
               planKey={plan.plan_key}
               label={planName(plan.plan_key, plan.label)}
-              /* THE FIGURE SLOT HOLDS THE QUOTA, NOT A PRICE, and the line under it says so. This
-                 page publishes no amount (owner decision 25.08.2026 / #267), so the largest true
-                 number it owns takes the slot the card reserves for its biggest figure. A
-                 price-shaped slot holding «—» would be a page about a price it refuses to give.
+              /* THE FIGURE SLOT HOLDS THE QUOTA, NOT A PRICE, and from 03.09.2026 it says which of
+                 the two it is IN THE SLOT rather than one line below it. This page publishes no
+                 amount (owner decision 25.08.2026 / #267), so the largest true number it owns takes
+                 the slot the card reserves for its biggest figure. A price-shaped slot holding «—»
+                 would be a page about a price it refuses to give.
 
-                 The label moved from a slot of its own into `.plan-card__billed` when the card was
-                 re-transcribed on 31.08.2026: the marketing site's card has no label ABOVE its
-                 figure, and inventing one here would be the product growing a second opinion about
-                 a design it does not own. The quiet line under the figure is where that card puts
-                 the sentence about what the figure is, and «מסמכים בחודש» is exactly that. */
-              who={quotaLabel(HEADLINE_QUOTA_KEY)}
+                 What the 31.08.2026 re-transcription got wrong was WHICH line carries the noun. It
+                 put «מסמכים בחודש» in `.plan-card__billed` — the marketing card's «חיוב חודשי»
+                 slot — and left the figure wearing a period phrase. See `term` below. */
+              who={t('pricingTail.perUsagePeriod')}
               figure={!measured ? '—'
                 : headline.unlimited ? t('pricingTail.unlimited')
                   : fmtNum(headline.numeric_limit)}
               figureIsWords={!measured || headline.unlimited}
-              term={measured && !headline.unlimited ? t('pricingTail.perUsagePeriod') : undefined}
+              /* THE NOUN GOES BESIDE THE NUMBER, and the billing-shaped phrase does not.
+                 The slot used to read «20» + «בתקופת שימוש חודשית» — a figure at price size with a
+                 period beside it, which is the shape of a price and is the shape `/settings/
+                 subscription` uses for an actual one. The noun sat one line lower, in
+                 `.plan-card__billed`, the slot the marketing card fills with «חיוב חודשי». On a
+                 PHONE it was worse than ambiguous: `plan-card.css:1009` hides both the figure line
+                 and the billed line, leaving only the head chip — «20 בתקופת שימוש חודשית», a
+                 number with no noun anywhere on the card.
+                 So `term` carries the catalogue's own label for this quota and the counting window
+                 moves down to `who`, where it describes the period without claiming a bill. */
+              term={quotaLabel(HEADLINE_QUOTA_KEY)}
+              /* And said outright for a reader who is not looking at it. */
+              figureDescription={t('pricingTail.figureIsQuota', {
+                label: quotaLabel(HEADLINE_QUOTA_KEY),
+                value: !measured ? '—'
+                  : headline.unlimited ? t('pricingTail.unlimited')
+                    : fmtNum(headline.numeric_limit),
+              })}
               /* The badge, and ONLY from the shared presentation file. #202 forbids an emphasis
                  keyed to the reader, and a stranger holds no rung to be keyed to in the first
                  place; this is the one static mark, identical for everyone, and it is the same

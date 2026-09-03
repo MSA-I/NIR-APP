@@ -4,6 +4,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fmtMoneyExact, formatQuantity, formatUnit, normalizeUnitInput } from '../lib/format';
 import { reasonOr } from '../lib/reason';
+import { QUANTITY_MAX, isQuantityInRange } from '../lib/inputBounds';
 import { ICON, Modal, Note, useToast } from './ui';
 
 export type InvoiceReviewCandidate = {
@@ -173,6 +174,14 @@ export function InvoiceLineReviewModal({
       toast(t('invoiceLineReview.completeAllLines'), 'error');
       return;
     }
+    /* Separate from `invalid` on purpose: "fill in every line" and "that number is too big" are
+       different problems and a person fixing the second one should not be sent hunting for a
+       blank field. The ceiling is the shared magnitude guard (`lib/inputBounds.ts`); allocations
+       inherit it, because `saveMatches` already requires them to sum to this quantity. */
+    if (parsed.some((line) => line.quantity != null && !isQuantityInRange(line.quantity))) {
+      toast(t('invoiceLineReview.quantityTooLarge'), 'error');
+      return;
+    }
 
     setBusy('evidence');
     const result = await supabase.rpc('record_invoice_line_evidence', {
@@ -287,7 +296,7 @@ export function InvoiceLineReviewModal({
                   <label className="sm:col-span-2 lg:col-span-4"><span className="label">{t('invoiceLineReview.updateLine')}</span><input className="input" value={line.description} onChange={(event) => updateLine(index, 'description', event.target.value)} /></label>
                   <label><span className="label">{t('invoiceLineReview.updateLine_2')}</span><input className="input num" dir="ltr" value={line.supplierSku} onChange={(event) => updateLine(index, 'supplierSku', event.target.value)} /></label>
                   <label><span className="label">{t('invoiceLineReview.updateLine_3')}</span><input className="input num" inputMode="numeric" dir="ltr" value={line.barcode} onChange={(event) => updateLine(index, 'barcode', event.target.value)} /></label>
-                  <label><span className="label">{t('invoiceLineReview.updateLine_4')}</span><input className="input num" type="number" min="0" step="any" value={line.quantity} onChange={(event) => updateLine(index, 'quantity', event.target.value)} /></label>
+                  <label><span className="label">{t('invoiceLineReview.updateLine_4')}</span><input className="input num" type="number" min="0" max={QUANTITY_MAX} step="any" value={line.quantity} onChange={(event) => updateLine(index, 'quantity', event.target.value)} /></label>
                   <label><span className="label">{t('invoiceLineReview.updateLine_5')}</span><input className="input" value={line.unit} onChange={(event) => updateLine(index, 'unit', event.target.value)} /></label>
                   <label><span className="label">{t('invoiceLineReview.updateLine_6')}</span><input className="input num" type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(index, 'unitPrice', event.target.value)} /></label>
                   <label><span className="label">{t('invoiceLineReview.updateLine_7')}</span><input className="input num" type="number" min="0" step="0.01" value={line.discountAmount} onChange={(event) => updateLine(index, 'discountAmount', event.target.value)} /></label>
