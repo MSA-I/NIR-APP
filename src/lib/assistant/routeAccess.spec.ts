@@ -110,6 +110,9 @@ describe('assistant route policy parity', () => {
       ['2026-13-01', '2026-13-05'],   // no thirteenth month
       ['2026-09-10', '2026-09-01'],   // the range runs backwards
       ['2026-00-10', '2026-00-11'],   // no zeroth month
+      // Year 0000 round-trips through Date and is still refused by the calendar parser the
+      // destination screen uses, so a citation to it passed here and threw there.
+      ['0000-01-01', '0000-01-01'],
     ];
     for (const [from, to] of refused) {
       const declared = { from, to };

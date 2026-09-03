@@ -297,5 +297,7 @@
   "0305_a_rollback_that_only_reaches_a_tenant_with_nobody_in_it.sql",
   "0306_the_whole_decision_under_one_lock.sql",
   "0307_a_tolerance_change_carries_the_labels_with_it.sql",
-  "0308_a_citation_keeps_its_window_after_a_refresh.sql"
+  "0308_a_citation_keeps_its_window_after_a_refresh.sql",
+  "0309_the_relabelling_declares_its_writer.sql",
+  "0310_a_window_that_actually_rolls.sql"
 ]

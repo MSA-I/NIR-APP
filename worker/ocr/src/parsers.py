@@ -113,7 +113,11 @@ BRACKET_PAIRS = (("(", ")"), ("[", "]"), ("{", "}"))
 # them made every itemised price list look reversed, so the marker is stripped before a line is
 # judged. Deliberately narrow: ONE character before the closer. `12) x` is a marker; `(100 יח` is
 # not, and `100 יח)` is the stray-closer case that has its own rule.
-LIST_MARKER = re.compile(r"^[0-9֐-׿]{1,2}\s*[).\]]\s+")
+#
+# The trailing separator is a LOOKAHEAD, not a consumed space: OCR drops the space after the
+# marker often enough that `א)קמח` is ordinary, and requiring `\s+` let exactly that spelling
+# score as inversion evidence while `א) קמח` did not.
+LIST_MARKER = re.compile(r"^[0-9֐-׿]{1,2}\s*[).\]](?=\s|[0-9֐-׿])")
 
 
 def _line_order_evidence(text: str) -> tuple[int, int, int, int, int, int]:
@@ -195,7 +199,12 @@ def _line_order_evidence(text: str) -> tuple[int, int, int, int, int, int]:
         line_inverted = False
         line_strong = False
         for opener, closer in BRACKET_PAIRS:
-            depth = 0
+            # START FROM WHAT EARLIER LINES LEFT OPEN. Resetting to zero on every line made a
+            # chain of continuation lines read as balanced-and-inverted: each one closes the
+            # previous line's opener and opens its own, which is ordinary wrapped prose. Carrying
+            # the depth into the SCAN, and not only into the skip test above, is what makes the
+            # cross-line bookkeeping actually decide anything.
+            depth = pending[closer]
             position = -1
             for index, char in enumerate(line):
                 if char == opener:

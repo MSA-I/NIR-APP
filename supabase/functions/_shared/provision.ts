@@ -479,11 +479,11 @@ export async function provisionTenant(
     });
     if (profileInsert.error) {
       throw new Error(`יצירת פרופיל הבעלים נכשלה: ${profileInsert.error.message}`);
+    }
     // The rollback removes THIS row and no other. Recorded here rather than inferred from
     // created.userId, because the federated path writes a profile for an account it did not
     // create and must still be able to clean up after itself.
     created.profileUserId = created.userId;
-    }
 
     let categoriesCreated = 0;
     if (categories.length > 0) {
@@ -562,10 +562,10 @@ export async function adoptExistingUserAsOwner(
     });
     if (profileInsert.error) {
       throw new Error(`יצירת פרופיל הבעלים נכשלה: ${profileInsert.error.message}`);
+    }
     // The account is not ours to delete, but the PROFILE is ours to clean up -- and 0305 will
     // refuse the teardown while it stands.
     created.profileUserId = input.ownerUserId;
-    }
 
     let categoriesCreated = 0;
     if (categories.length > 0) {

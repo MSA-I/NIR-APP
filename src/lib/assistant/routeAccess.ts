@@ -129,6 +129,11 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 function isRealCalendarRange(from: string | undefined, to: string | undefined): boolean {
   if (from === undefined || to === undefined) return false;
   const real = (value: string): number | null => {
+    // Year 0000 ROUND-TRIPS through `Date` and is still not a date this product has: the canonical
+    // calendar parser the destination screen uses refuses `year < 1` and throws `Invalid calendar
+    // date`, so a citation to `0000-01-01` passed here and broke there. The round trip proves the
+    // day exists in the proleptic calendar; this proves it exists in the product's.
+    if (value < '0001-01-01' || value > '9999-12-31') return null;
     const at = Date.parse(`${value}T12:00:00Z`);
     if (Number.isNaN(at)) return null;
     return new Date(at).toISOString().slice(0, 10) === value ? at : null;

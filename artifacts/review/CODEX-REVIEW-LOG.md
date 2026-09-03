@@ -180,3 +180,85 @@ All eight acted on. **Six of the eight were defects in round 1's own fixes, and 
 
 `npm run verify`: 225 test files, 2416 tests, all 27 guards, green.
 
+## Round 3 — Codex
+
+Eight findings, five HIGH, and it named four more of my claims as false. Two of them were about my own PROOFS rather than my code.
+
+לא מאושר. שמונה כשלים נשארו; ארבע טענות בתגובה אינן נכונות.
+
+1. **HIGH — `0306` אינו חלון rolling ומפר את הכרעה #347.**  
+   קבצים: [0306:109](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/migrations/0306_the_whole_decision_under_one_lock.sql:109>), [OPEN-DECISIONS.md:848](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/docs/OPEN-DECISIONS.md:848>).  
+   רצף שובר: כישלונות בדקות 0, 14, 28, …, 126. אף חלון בן 15 דקות אינו מכיל יותר משני כישלונות, אך העשירי נועל משום שהקוד מאפס רק אחרי פער של 15 דקות. תוקף אטי משאיר ספירה ישנה בחיים ונועל חשבון אחרי יותר משעתיים. הטענה ש“מספרי הכרעה #347 לא השתנו” שגויה; ההכרעה דורשת במפורש חלון מתגלגל.  
+   תיקון: לשמור ולגזום timestamps של כישלונות ב־15 הדקות האחרונות, או לממש sliding-window אמיתי.
+
+2. **HIGH — trigger של `0307` מגלגל לאחור שמירה אמיתית מהדפדפן.**  
+   קבצים: [0307:62](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/migrations/0307_a_tolerance_change_carries_the_labels_with_it.sql:62>), [0033:13](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/migrations/0033_p1_financial_guard_table_safety.sql:13>), [CurrencyTolerancesPanel.tsx:164](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/src/components/CurrencyTolerancesPanel.tsx:164>).  
+   קלט שובר: חשבונית עם יתרה 0.75 מסומנת `paid` תחת סף 1.00; owner שומר 0.50. ה־trigger קורא ל־`p1_refresh_invoice_payment_statuses`, אך לא קובע `app.p1_financial_writer`. ‏`auth.uid()` אינו null, guard החשבוניות זורק `financial_command_rpc_required`, וכל שינוי ההגדרות מתבטל. ההוכחה כ־postgres עקפה בדיוק את המסלול האמיתי.  
+   תיקון: לקבוע את GUC בתוך ה־trigger/refresh המורשה לפני עדכון החשבוניות.
+
+3. **HIGH — גם אחרי תיקון ה־GUC, `0307` משאיר race שמפריד שוב writer ו־reader.**  
+   קובץ: [0307:54](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/migrations/0307_a_tolerance_change_carries_the_labels_with_it.sql:54>).  
+   רצף שובר: T1 מכניס allocation לא־מחויב שמשאיר 0.75; T2 משנה 1.00 ל־0.50 וה־trigger אינו רואה את allocation ולכן מוצא אפס drift; בעוד T2 פתוחה, T1 קורא את גרסת ההגדרות הישנה ב־MVCC וכותב `paid`; שתי הטרנזקציות מתחייבות. התוצאה הסופית היא stored=`paid`, derived=`partial`. הטענה ש“השינוי והתיוג הם מעשה אחד” שגויה תחת concurrency.  
+   תיקון: לקחת lock משותף פר־ארגון בכל כותבי התשלום ובשינוי הסף, או להסיר את העמודה הנגזרת.
+
+4. **HIGH — תיקון ה־profile sweep אינו יכול לרוץ.**  
+   קובץ: [provision.ts:563](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/functions/_shared/provision.ts:563>).  
+   רצף שובר: `adoptExistingUserAsOwner` מכניס profile בהצלחה ואז הכנסת categories נכשלת. `created.profileUserId = input.ownerUserId` נמצא אחרי `throw` ובתוך `if (profileInsert.error)`, ולכן בענף הצלחה הוא מדולג ובענף כשל הוא unreachable. ‏`rollbackTenant` אינו מוחק profile, ו־`0305` מסרב למחוק את הארגון. הטענה שה־profile של הניסיון נמחק לפי id שגויה. אותו פגם קיים בשורות 480–486 במסלול הרגיל.  
+   תיקון: לסגור את ענף השגיאה מיד אחרי ה־`throw` ולהעביר את שתי ההשמות אחריו.
+
+5. **HIGH — עומק הסוגריים אינו באמת משתתף בסריקת הסדר.**  
+   קובץ: [parsers.py:198](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/worker/ocr/src/parsers.py:198>).  
+   קלט שובר:
+   ```text
+   (סעיף ראשון
+   ) המשך (סעיף שני
+   ) המשך (סעיף שלישי
+   ) סוף
+   ```
+   הטקסט מאוזן ולוגי גלובלית. הסריקה מאפסת `depth = 0` בכל שורה, ולכן שתי שורות ההמשך נחשבות `balanced` אך הפוכות. פרוב החזיר `(4, 0, 2, 2, 2, 2)`, ‏`applied=true`, והטקסט השתנה. הטענה ש־bracket depth נישא בין שורות נכונה רק לחלק מהבדיקות, לא להכרעה עצמה.  
+   תיקון: להתחיל את הסריקה המסודרת מהעומק התלוי ולעדכן stack/depth תו־אחר־תו בין שורות.
+
+6. **MEDIUM — סמן רשימה בלי רווח עדיין נספר כראיית היפוך.**  
+   קובץ: [parsers.py:116](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/worker/ocr/src/parsers.py:116>).  
+   קלט שובר:
+   ```text
+   (סעיף ראשון
+   ) המשך (סעיף שני
+   ) סוף
+   א)קמח
+   ```
+   OCR שמסיר את הרווח אחרי הסמן אינו מתאים ל־`\s+`. פרוב החזיר `(4, 0, 2, 3, 1, 2)`, ‏`applied=true`; אותו קלט עם `א) קמח` החזיר `applied=false`.  
+   תיקון: לזהות גם marker צמוד לתוכן, עם lookahead מוגבל לתחילת טקסט עברי/מספרי.
+
+7. **MEDIUM — `isRealCalendarRange` מאשר שנה 0000 שהיעד מסרב לה.**  
+   קבצים: [routeAccess.ts:132](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/src/lib/assistant/routeAccess.ts:132>), [format.ts:358](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/src/lib/format.ts:358>).  
+   קלט שובר: route ו־`route_params` שניהם `from=0000-01-01&to=0000-01-01`. ‏`Date.parse` round-trips אותו כ־`0000-01-01`, ולכן המקור מאושר; `Expenses` קורא `addCalendarDays`, וה־parser הקנוני זורק `Invalid calendar date` בגלל `year < 1`. הטענה ששני הקצוות הם ימים אמיתיים שגויה.  
+   תיקון: לדרוש year ‏1–9999 או להשתמש באותו parser קלנדרי קנוני בשני המקומות.
+
+8. **MEDIUM — `0308` מתקן רק ריצות חדשות ומעלים היסטוריה קיימת.**  
+   קבצים: [0308:39](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/migrations/0308_a_citation_keeps_its_window_after_a_refresh.sql:39>), [routeAccess.ts:211](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/src/lib/assistant/routeAccess.ts:211>), [history.ts:252](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/functions/assistant/history.ts:252>).  
+   רצף שובר: ריצת `get_purchase_metrics` שנשמרה לפני השינוי נושאת `route='/expenses'` ואין לה `route_params`. ‏`0308` מוסיף עמודה nullable אך אינו מבצע backfill. לאחר הפריסה, shaped rule דורש בדיוק `from` ו־`to`, מחזיר `not_allowlisted`, ו־history משמיט את כל הריצה.  
+   תיקון: במיגרציה להפוך routes ישנים כאלה ל־`null` כדי לשמר את הריצה בלי קישור מטעה, או לבצע backfill מאומת כשקיים חלון בר־שחזור.
+
+`discardedDigits` וה־advisory-lock primitive עצמם שרדו את מקרי הקצה שנבדקו. לא שונו קבצים; HEAD הוא `50d71b54`, וה־WIP היחיד נשאר `.claude/settings.local.json`.
+
+VERDICT: REVISE
+### Claude's response — round 3
+
+Seven of eight fixed and proved; one recorded as open with the argument for the better answer.
+
+| # | verdict | what changed |
+|---|---|---|
+| 1 | **confirmed, my claim was false** | `0310` stores the failure timestamps and prunes them. A rolling window cannot be derived from a counter and one date — anchored to the first it resets on its own edge, anchored to the last it never resets for a patient attacker. Proved both ways: nine failures 14 minutes apart no longer lock, ten inside the window still do |
+| 2 | **confirmed, and my PROOF was worthless** | the trigger raised `financial_command_rpc_required` and rolled back the whole settings save. My verification ran as `postgres` with no JWT — the one context where the guard does not apply. `0309` declares the writer; re-proved through an authenticated owner |
+| 3 | **confirmed, left open with its argument** | a genuine MVCC race between a payment writer and a tolerance change. Closing it needs a per-org lock across every payment writer, or step 3 — the column removed and nothing left to disagree. Step 3 is the better answer and is recorded in `0309`'s header rather than implied |
+| 4 | **confirmed, my fix was dead code** | both `created.profileUserId` assignments landed INSIDE the error branch, after the `throw`. Unreachable. The brace is moved and both sites verified by reading the control flow, not the diff |
+| 5 | **confirmed** | the ordered scan restarted at depth zero per line, so carrying the depth into the skip test alone decided nothing. It now starts from what earlier lines left open |
+| 6 | **confirmed** | a list marker whose trailing space OCR dropped missed `\s+`. The separator is a lookahead now |
+| 7 | **confirmed** | year 0000 round-trips through `Date` and is still refused by the calendar parser the destination screen uses. Bounded to 0001–9999 |
+| 8 | **confirmed** | `0308` fixed the future and left the past holding the same defect. `0309` strips the query string from the 23 citations that predate it: weaker, honest, and the run survives |
+
+The OCR self-check now reports `logical_documents_survive: 3/3` — the wrapped parenthetical, the chained continuations and the space-less list marker are permanent fixtures.
+
+`npm run verify`: 225 test files, 2416 tests, all 27 guards, green.
+

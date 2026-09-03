@@ -1479,6 +1479,16 @@ def _line_order_check() -> dict[str, Any]:
     # `strong=1, evidence=2` and inverted a document of ordinary logical text.
     wrapped_parenthetical = "(תנאים\n) המשך\nא) מוצר"
 
+    # And the two shapes that survived the SECOND repair. A chain of continuation lines -- each
+    # closing the previous line's bracket and opening its own -- read as balanced-and-inverted
+    # because the ordered scan restarted at depth zero on every line, so carrying the depth into
+    # the skip test alone had decided nothing. And a list marker whose trailing space OCR dropped
+    # (`א)קמח`) missed a `\\s+` and scored as evidence, while the same line with the space did not.
+    chained_continuations = (
+        "(סעיף ראשון\n) המשך (סעיף שני\n) המשך (סעיף שלישי\n) סוף"
+    )
+    marker_without_space = "(סעיף ראשון\n) המשך (סעיף שני\n) סוף\nא)קמח"
+
     def fires(text: str) -> bool:
         _, leading, inverted, _, _, _ = _line_order_evidence(text)
         return leading + inverted > 0
@@ -1553,10 +1563,15 @@ def _line_order_check() -> dict[str, Any]:
     #    line here is ordinary logical text and the document must arrive unchanged. This is the
     #    shape that survived the first repair: the leading closer on the second line belongs to
     #    the first line's opener, and `א)` is a list marker rather than a mirrored bracket.
-    wrapped_pages = {1: wrapped_parenthetical}
-    wrapped_out, wrapped_records = _normalize_pdf_text_layer(dict(wrapped_pages))
-    assert wrapped_out == wrapped_pages, wrapped_out
-    assert all(entry["applied"] is False for entry in wrapped_records), wrapped_records
+    for label, text in (
+        ("wrapped parenthetical", wrapped_parenthetical),
+        ("chained continuations", chained_continuations),
+        ("list marker with no space", marker_without_space),
+    ):
+        pages = {1: text}
+        out, records = _normalize_pdf_text_layer(dict(pages))
+        assert out == pages, (label, out)
+        assert all(entry["applied"] is False for entry in records), (label, records)
 
     return {
         "damaged_detected": f"{len(damaged)}/{len(damaged)}",
@@ -1564,7 +1579,7 @@ def _line_order_check() -> dict[str, Any]:
         "round_trip": f"{len(readable)}/{len(readable)}",
         "word_order": "repaired",
         "one_line_inverts_a_document": "no",
-        "wrapped_parenthetical_survives": "yes",
+        "logical_documents_survive": "3/3",
     }
 
 
