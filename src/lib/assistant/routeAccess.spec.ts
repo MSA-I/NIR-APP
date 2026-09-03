@@ -117,6 +117,9 @@ describe('assistant route policy parity', () => {
       // canonical parser sees 1901 and throws on what round-tripped fine here.
       ['0001-01-01', '0001-01-01'],
       ['0099-12-31', '0099-12-31'],
+      // The last representable day is refused too: the screen makes the range exclusive with
+      // addCalendarDays(to, 1), and the day after it formats as +010000-01-01.
+      ['9999-12-31', '9999-12-31'],
     ];
     for (const [from, to] of refused) {
       const declared = { from, to };

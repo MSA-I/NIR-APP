@@ -144,7 +144,13 @@ function isRealCalendarRange(from: string | undefined, to: string | undefined): 
     // than this defect earns, and the correct behaviour HERE is to promise only what the
     // destination can keep. The parser's own two-digit-year mapping is a real defect and is
     // recorded rather than silently inherited.
-    if (value < '0100-01-01' || value > '9999-12-31') return null;
+    // The upper bound stops one day SHORT of the maximum, and that is not an off-by-one. The
+    // screen turns the range into an exclusive one with `addCalendarDays(to, 1)`, and the day
+    // after 9999-12-31 leaves the four-digit year: JavaScript formats it `+010000-01-01`, whose
+    // first ten characters are `+010000-01` — not a date at all, handed straight to the invoice
+    // query as a bound. A citation must be followable, and `to` is only followable if its
+    // SUCCESSOR is representable too.
+    if (value < '0100-01-01' || value > '9999-12-30') return null;
     const at = Date.parse(`${value}T12:00:00Z`);
     if (Number.isNaN(at)) return null;
     return new Date(at).toISOString().slice(0, 10) === value ? at : null;

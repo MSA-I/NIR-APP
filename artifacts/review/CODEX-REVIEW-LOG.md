@@ -329,3 +329,62 @@ The OCR self-check now reports `logical_documents_survive: 5/5` and `net_count_d
 
 `npm run verify`: 225 test files, 2416 tests, all 27 guards, green.
 
+## Round 5 — Codex (final round)
+
+Four findings, two HIGH.
+
+לא מאושר. נמצאו ארבעה כשלים חדשים; ה־MVCC race המוצהר נשאר חסם נוסף.
+
+1. **HIGH — `p_attempt_profile_id` הוא טענת caller, לא הוכחת ניסיון.**  
+   קובץ: [0311:75](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/migrations/0311_the_rollback_is_one_transaction_again.sql:75>).  
+   קלט שובר: tenant לגיטימי בן פחות מ־15 דקות, ללא פעילות, עם owner יחיד `U`. קריאת service-role עם `(org_id, U)` מחריגה את הפרופיל היחיד מה־fence, מוחקת אותו ואת הארגון. אין attempt row, nonce או זמן יצירת profile שמקשרים את `U` לניסיון שנכשל. Atomicity תיקנה מחיקה חלקית אך לא את בעיית האותנטיות שהכותרת טוענת שתוקנה.  
+   בנוסף, [0311:47](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/migrations/0311_the_rollback_is_one_transaction_again.sql:47>) מגדיר `default null`, ולכן הפונקציה עדיין ניתנת לקריאה בארגומנט אחד; בדיקת `to_regprocedure` בשורה 141 מוכיחה רק שה־overload הישן נמחק, לא שהדלת החד־ארגומנטית אינה callable.  
+   תיקון: לדרוש attempt record/nonce פרטי שנוצר עם הארגון ונצרך אטומית, ולהסיר את ברירת המחדל מהארגומנט השני.
+
+2. **HIGH — reconstruction של `failed_at` מתחרה עם ה־hook ומאבד שוב את תשעת הכישלונות.**  
+   קבצים: [0311:129](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/migrations/0311_the_rollback_is_one_transaction_again.sql:129>), [0310:89](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/migrations/0310_a_window_that_actually_rolls.sql:89>), [0310:101](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/migrations/0310_a_window_that_actually_rolls.sql:101>).  
+   רצף שובר: שורה קיימת היא `failed_count=9, failed_at={}`. ניסיון כושל מקביל קורא את המערך הריק ומחשב count ‏1. אם backfill מתחייב ראשון, ה־upsert דורס אותו בחזרה ל־1; אם ה־upsert מתחייב ראשון, ה־UPDATE של `0311` בודק מחדש `cardinality=0`, מדלג, ומשאיר 1. ה־advisory lock של ה־hook אינו עוזר כי המיגרציה אינה לוקחת אותו. הטענה ש־“a live failure run survives” שגויה בזמן שבו השחזור עצמו רץ.  
+   תיקון: לנעול את טבלת המונים ב־`ACCESS EXCLUSIVE` בזמן השחזור, או לתאם את ה־backfill עם אותו advisory lock לפני החלפת הפונקציה.
+
+3. **MEDIUM — backfill מציל את הריצה אך משאיר citation שמציג תקופה אחרת.**  
+   קבצים: [0309:87](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/supabase/migrations/0309_the_relabelling_declares_its_writer.sql:87>), [routeAccess.ts:18](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/src/lib/assistant/routeAccess.ts:18>), [Expenses.tsx:113](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/src/pages/Expenses.tsx:113>).  
+   קלט שובר: citation היסטורי עבור ינואר הוא `/expenses?from=2026-01-01&to=2026-01-31` ללא declaration. ‏`0309` הופך אותו ל־`/expenses`; בספטמבר המסך נפתח על חודש ספטמבר. ה־route עובר allowlist אך מציג אוכלוסייה שונה מהטענה — בדיוק מהכשל ש־`routeAccess.ts` מגדיר “contradicting”, לא “weaker”.  
+   תיקון: להציב `route=NULL` עבור shaped citations שאין להן declaration אמין, במקום להפנות לטווח ברירת המחדל.
+
+4. **MEDIUM — הגבול העליון עדיין מאפשר תאריך שהמסך אינו יכול להרחיב לטווח exclusive.**  
+   קבצים: [routeAccess.ts:147](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/src/lib/assistant/routeAccess.ts:147>), [Expenses.tsx:146](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/implementation-prompt-review-a91515/src/pages/Expenses.tsx:146>).  
+   קלט שובר: `from=9999-12-31&to=9999-12-31` עובר את ה־round-trip ואת הגבול. המסך מחשב `addCalendarDays(to, 1)`; JavaScript מחזיר `+010000-01-01T…`, וה־`.slice(0,10)` הקיים מחזיר `+010000-01` במקום תאריך `YYYY-MM-DD`. שאילתת החשבוניות מקבלת גבול פגום.  
+   תיקון: להגביל את `to` ל־`9999-12-30`, או לאמת שגם היום העוקב ניתן לייצוג בחוזה המסך.
+
+תיקוני ה־net-count וה־marker עברו את קלטי Round 4: חמשת המסמכים הלוגיים נשארו ללא שינוי וקלט הנזק תוקן. לא שונו קבצים; HEAD הוא `63056fa3`.
+
+VERDICT: REVISE
+### Claude's response — round 5, and the resolution
+
+Three of four fixed. The fourth is the disagreement this review ends on, and it is stated rather than closed.
+
+| # | verdict | what changed |
+|---|---|---|
+| 1 | **half fixed, half OPEN** | the `default null` is gone — the door can no longer be called without naming the attempt, and the assertion now reads `pronargdefaults` rather than `to_regprocedure`, which answered for a defaulted parameter and is why the previous check passed while the door stood open. **The authenticity half is not fixed**: a caller-supplied profile id is an assertion, and a `service_role` holder can name a young tenant's only owner. See the resolution below |
+| 2 | **confirmed** | the reconstruction took no lock and raced the hook it was repairing. `0312` takes `access exclusive` on the counter table for the length of one UPDATE |
+| 3 | **confirmed, my claim was false again** | "weaker, honest, and the run survives" was one third true. `/expenses` opens on the CURRENT month, so a January citation linked to September — contradicting, not weak. The link is now `null`: a citation that names its evidence and offers no journey to it |
+| 4 | **confirmed** | `9999-12-31` passes the round trip and the screen then computes `addCalendarDays(to, 1)`, which formats as `+010000-01-01` and slices to `+010000-01`. `to` is only followable if its successor is representable, so the bound stops a day short |
+
+---
+
+## Resolution — five rounds, no APPROVED, and that is the honest outcome
+
+The loop ran its full five rounds. Codex never returned APPROVED, and the skill is explicit that a flagged disagreement beats a false convergence. **Thirty findings were raised and twenty-nine were acted on**; the count of my own claims the reviewer showed to be false is **eleven**, most of them written in a commit message with confidence.
+
+### The one open disagreement
+
+**A per-attempt nonce for `service_rollback_provisioned_tenant`.** Codex has raised it in every round since the first, and it is right on the merits: age, zero activity and a caller-named profile id are all properties a legitimate young tenant can have, so a `service_role` holder can still delete one. Every fence added so far narrows the population; none of them proves the call is compensating a failure.
+
+It is not written because it is not a review-round change: the token cannot live where `service_role` can read it, so it needs a digest column on `organizations`, a tenant-export schema-hash move, and a change to `provisionTenant` — the one path in this product that has never been exercised end to end. That is work to measure before merging, and it belongs to the owner to schedule.
+
+### The other thing left open, unchanged since round 3
+
+The MVCC race between a payment writer and a tolerance change. Step 3 of the `payment_status` teardown removes the column and the disagreement with it, and eleven client screens are its precondition.
+
+`npm run verify`: 225 test files, 2416 tests, all 27 guards, green.
+

@@ -300,5 +300,6 @@
   "0308_a_citation_keeps_its_window_after_a_refresh.sql",
   "0309_the_relabelling_declares_its_writer.sql",
   "0310_a_window_that_actually_rolls.sql",
-  "0311_the_rollback_is_one_transaction_again.sql"
+  "0311_the_rollback_is_one_transaction_again.sql",
+  "0312_no_link_beats_a_link_to_the_wrong_month.sql"
 ]
