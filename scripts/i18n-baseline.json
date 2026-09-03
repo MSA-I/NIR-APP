@@ -61,7 +61,8 @@
     "src/operator/Overview.tsx": "Owner decision, 27.08.2026: the internal operator console is not translated. It is used by the InPlace team only and is not sold to a tenant, so translating it serves no end user. These counts stay pinned where they are rather than dropping to zero; see GATES.md ABANDON: P2-G4 and DEBT-REGISTER.md. This file was written after the other twelve were documented, which is why it carried the decision without stating it.",
     "src/operator/Team.tsx": "Owner decision, 27.08.2026: the internal operator console is not translated. It is used by the InPlace team only and is not sold to a tenant, so translating it serves no end user. These counts stay pinned where they are rather than dropping to zero; see GATES.md ABANDON: P2-G4 and DEBT-REGISTER.md. This file was written after the other twelve were documented, which is why it carried the decision without stating it.",
     "src/operator/UserDetail.tsx": "Owner decision, 27.08.2026: the internal operator console is not translated. It is used by the InPlace team only and is not sold to a tenant, so translating it serves no end user. These counts stay pinned where they are rather than dropping to zero; see GATES.md ABANDON: P2-G4 and DEBT-REGISTER.md. This file was written after the other twelve were documented, which is why it carried the decision without stating it.",
-    "src/operator/Users.tsx": "Owner decision, 27.08.2026: the internal operator console is not translated. It is used by the InPlace team only and is not sold to a tenant, so translating it serves no end user. These counts stay pinned where they are rather than dropping to zero; see GATES.md ABANDON: P2-G4 and DEBT-REGISTER.md. This file was written after the other twelve were documented, which is why it carried the decision without stating it."
+    "src/operator/Users.tsx": "Owner decision, 27.08.2026: the internal operator console is not translated. It is used by the InPlace team only and is not sold to a tenant, so translating it serves no end user. These counts stay pinned where they are rather than dropping to zero; see GATES.md ABANDON: P2-G4 and DEBT-REGISTER.md. This file was written after the other twelve were documented, which is why it carried the decision without stating it.",
+    "src/lib/price.ts": "Five lines, and none of them is interface copy: they are the LEXICON a Hebrew price sheet actually prints. `שח`, `ש\"ח`, `שקל`, `דולר`, `אירו` and `יורו` are tokens this parser has to recognise in a supplier's spreadsheet cell, alongside `₪`, `$`, `€` and `£`. They must match what the SUPPLIER wrote, never what the reader's interface language happens to be -- moving them into a dictionary would make an English-locale session stop recognising a shekel sign, which is the opposite of a fix. The parser's own refusal messages are translation KEYS and carry no Hebrew at all (0298, Wave 2)."
   },
   "counts": {
     "src/components/document-review/DocumentAssessmentPanel.tsx": 1,
@@ -73,7 +74,7 @@
     "src/components/document-review/PriceListReviewConfirmation.tsx": 9,
     "src/components/ExportTemplatesPanel.tsx": 3,
     "src/components/InvoiceLineReviewModal.tsx": 2,
-    "src/components/PriceListUpload.tsx": 7,
+    "src/components/PriceListUpload.tsx": 5,
     "src/components/product-tour/ProductTour.tsx": 11,
     "src/components/QuickCreateProduct.tsx": 2,
     "src/components/SupplierCommunicationCard.tsx": 1,
@@ -89,6 +90,7 @@
     "src/lib/offlineQueue.ts": 1,
     "src/lib/orderDrafts.ts": 1,
     "src/lib/orderImage.ts": 12,
+    "src/lib/price.ts": 5,
     "src/lib/productDisplayName.ts": 12,
     "src/lib/reason.ts": 1,
     "src/lib/reportTemplateExport.ts": 1,

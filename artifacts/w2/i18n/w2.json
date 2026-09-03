@@ -1,0 +1,53 @@
+{
+  "_note": "Wave 2 keys. NOT merged into src/lib/i18n/dictionaries/{he,en}.ts by this package -- that file is owned elsewhere. Every key below is referenced from code in this wave, so `t()` will report each one as unknown until they land. The Hebrew is the primary; the English mirrors it.",
+
+  "priceUpload.skipRow_missing_name": {
+    "he": "חסר שם מוצר בשורה",
+    "en": "The row has no product name."
+  },
+  "priceUpload.reason_price_missing": {
+    "he": "תא המחיר ריק",
+    "en": "The price cell is empty."
+  },
+  "priceUpload.reason_price_unreadable": {
+    "he": "לא ניתן לקרוא את המחיר בתא",
+    "en": "The price in this cell could not be read."
+  },
+  "priceUpload.reason_price_not_positive": {
+    "he": "המחיר שנקרא אינו חיובי",
+    "en": "The price that was read is not a positive number."
+  },
+  "priceUpload.reason_price_below_minor_unit": {
+    "he": "המחיר קטן מהיחידה הקטנה ביותר של {currency}",
+    "en": "The price is smaller than the smallest unit of {currency}."
+  },
+  "priceUpload.reason_price_above_cap": {
+    "he": "המחיר חורג מהתקרה של 1,000,000",
+    "en": "The price is above the 1,000,000 ceiling."
+  },
+  "priceUpload.reason_price_currency_mismatch": {
+    "he": "המחיר נקוב ב-{printed} והמחירון הזה ב-{currency}; אין המרה בין מטבעות",
+    "en": "The price is quoted in {printed} and this price list is in {currency}. There is no conversion between currencies."
+  },
+  "priceUpload.reason_price_currency_unknown": {
+    "he": "לא ידוע באיזה מטבע המחירון הזה; בחר ספק עם מטבע מוגדר",
+    "en": "The currency of this price list is unknown. Pick a supplier whose currency is set."
+  },
+
+  "documents.filing_line_price_not_positive": {
+    "he": "המחיר שנקרא בשורה אינו חיובי, ולכן השורה ממתינה לבדיקה.",
+    "en": "The unit price read on this line is not positive, so the line waits for review."
+  },
+  "documents.filing_line_price_below_minor_unit": {
+    "he": "המחיר בשורה קטן מהיחידה הקטנה ביותר של מטבע המחירון, ולכן השורה ממתינה לבדיקה.",
+    "en": "The unit price on this line is smaller than the smallest unit of the list's currency, so the line waits for review."
+  },
+  "documents.filing_line_price_above_cap": {
+    "he": "המחיר בשורה חורג מהתקרה של 1,000,000, ולכן השורה ממתינה לבדיקה.",
+    "en": "The unit price on this line is above the 1,000,000 ceiling, so the line waits for review."
+  },
+  "documents.filing_line_price_currency_mismatch": {
+    "he": "השורה נקובה במטבע אחר מזה של המחירון. אין המרה בין מטבעות, ולכן השורה ממתינה לבדיקה.",
+    "en": "This line is priced in a currency other than the price list's. There is no conversion between currencies, so the line waits for review."
+  }
+}

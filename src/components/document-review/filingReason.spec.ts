@@ -37,8 +37,19 @@ function readLadderCodes(): string[] {
   const codes = new Set<string>();
   for (const file of readdirSync(migrationsDir).filter((f) => f.endsWith('.sql'))) {
     const sql = readFileSync(join(migrationsDir, file), 'utf8');
+    // A plain assignment, `v_reason_code := 'x';`.
     for (const match of sql.matchAll(/v_(?:line_)?reason_code\s*:=\s*'([a-z_]+)'/g)) {
       codes.add(match[1]);
+    }
+    // And an assignment that BRANCHES. 0298 maps the parser's own refusal onto a filing code with
+    // `v_line_reason_code := case ... when 'price_above_cap' then 'line_price_above_cap' ... end;`
+    // and the literal-only scan above saw none of it — four real stops the reviewer can reach
+    // read as labels for states that could not happen. Only the RESULT arms count: a `when` arm
+    // is the parser's vocabulary, not a filing code, and adding it would break the other direction.
+    // Scoped to `v_line_reason_code`: `0190` assigns the EMAIL DELIVERY reason with the same
+    // `v_reason_code := case` shape, and `delivered`/`complaint` are not stops on this ladder.
+    for (const assignment of sql.matchAll(/v_line_reason_code\s*:=\s*case[\s\S]*?end\s*;/g)) {
+      for (const arm of assignment[0].matchAll(/(?:then|else)\s+'([a-z_]+)'/g)) codes.add(arm[1]);
     }
   }
   return [...codes].sort();

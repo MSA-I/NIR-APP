@@ -513,6 +513,7 @@ export const en: Dictionary = {
   },
 
   settings: {
+    vatRateOutOfRange: 'The VAT rate must be between 0 and 100',
     undoAction: 'Undo',
     enableUndone: 'Enabling was undone — the user is disabled',
     disableUndone: 'Disabling was undone — the user is active',
@@ -1645,6 +1646,10 @@ export const en: Dictionary = {
   },
 
   documents: {
+    filing_line_price_currency_mismatch: 'This line is priced in a currency other than the price list\'s. There is no conversion between currencies, so the line waits for review.',
+    filing_line_price_above_cap: 'The unit price on this line is above the 1,000,000 ceiling, so the line waits for review.',
+    filing_line_price_below_minor_unit: 'The unit price on this line is smaller than the smallest unit of the list\'s currency, so the line waits for review.',
+    filing_line_price_not_positive: 'The unit price read on this line is not positive, so the line waits for review.',
     text: 'Status unavailable',
     text_2: 'Document state',
     text_3: 'All',
@@ -1884,6 +1889,7 @@ export const en: Dictionary = {
   },
 
   inventory: {
+    quantityTooLarge: 'That quantity is too large. You can enter up to 1,000,000',
     pricesInSeveralCurrencies: 'Prices in several currencies',
     text: 'Goods receipt',
     text_2: 'Consumption',
@@ -3204,6 +3210,14 @@ export const en: Dictionary = {
   },
 
   priceUpload: {
+    reason_price_currency_unknown: 'The currency of this price list is unknown. Pick a supplier whose currency is set.',
+    reason_price_currency_mismatch: 'The price is quoted in {printed} and this price list is in {currency}. There is no conversion between currencies.',
+    reason_price_above_cap: 'The price is above the 1,000,000 ceiling.',
+    reason_price_below_minor_unit: 'The price is smaller than the smallest unit of {currency}.',
+    reason_price_not_positive: 'The price that was read is not a positive number.',
+    reason_price_unreadable: 'The price in this cell could not be read.',
+    reason_price_missing: 'The price cell is empty.',
+    skipRow_missing_name: 'The row has no product name.',
     PriceDocumentError: 'The supplier is not active for new commercial activity. A new price list will not be taken in.',
     skipRow: 'A product name or a valid price is missing',
     skipRow_2: 'A price above the allowed range (up to ₪1,000,000)',
@@ -3341,6 +3355,7 @@ export const en: Dictionary = {
   },
 
   admin: {
+    vatRateOutOfRange: 'The VAT rate must be between 0 and 100',
     toast: 'The organisation was reactivated and is active.',
     text: 'The request was approved and the export build was queued.',
     text_2: 'The export build was queued again.',
@@ -4768,6 +4783,7 @@ export const en: Dictionary = {
   },
 
   invoiceLineReview: {
+    quantityTooLarge: 'The quantity on the line is too large. You can enter up to 1,000,000',
     completeAllLines: 'Every line still needs its figures filled in',
     noEvidenceVersion: 'There is no evidence version for the lines — the invoice lines have to be saved first',
     reasonLabel: 'Reason for correcting the lines (optional)',
@@ -5858,6 +5874,7 @@ export const en: Dictionary = {
   },
 
   pricingTail: {
+    figureIsQuota: '{label} allowance: {value}',
     entitlementIntroOnly: '{label} — open for the first 30 days',
     perUsagePeriod: 'per monthly usage period',
     recommended: 'Recommended',
@@ -6152,6 +6169,10 @@ export const en: Dictionary = {
   },
 
   planCard: {
+    stateUnmeasured: 'Not measured',
+    stateIntro: 'Included for the first 30 days only',
+    stateExcluded: 'Not included',
+    stateIncluded: 'Included',
     emphasisPremium: 'The most complete',
     loading: 'Loading',
     introTag: 'First 30 days only',

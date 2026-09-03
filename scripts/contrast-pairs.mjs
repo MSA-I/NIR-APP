@@ -61,6 +61,15 @@ export const TEXT_PAIRS = [
   { fg: 'inverse-ink-soft', bg: 'inverse', where: 'quiet rows in the drawer / queue card' },
   { fg: 'shell-ink', bg: 'shell', where: 'the auth panels — dark in BOTH themes' },
   { fg: 'shell-ink-soft', bg: 'shell', where: 'quiet copy on the auth panels, and the series name in a chart tooltip' },
+  /* RC6, and the reason it took a QA sweep to find. Until 03.09.2026 the header strip of every
+     table in the product was `bg-action` + `text-shell-ink-soft`, composed inside a CSS `@apply`.
+     The manifest never named the pair, and the observed-pair scanner cannot see it — that scanner
+     reads `className` literals out of `.tsx`, and this pairing exists only in `src/index.css`. So
+     the one strip that appears on every screen was measured by neither gate, and when the dark
+     theme turned `action` into light paper while `shell-ink-soft` stayed at L 88%, it shipped at
+     1.24:1. Naming the strip's own family here is what makes the rendered gate measure it, in both
+     themes, from now on. */
+  { fg: 'table-head-ink', bg: 'table-head', where: 'the header strip of every table in the product — dark in BOTH themes' },
 
   { fg: 'inverse-ink-dim', bg: 'inverse', where: 'the org name under the brand mark in the phone drawer' },
   { fg: 'inverse', bg: 'inverse-ink', where: 'the drawer’s ACTIVE row — a light pill on the dark panel, so the family runs both ways' },

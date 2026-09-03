@@ -1145,6 +1145,84 @@ exception when others then
 end
 $$;
 
+
+-- ===== (h) 0296: a sign-in attempt that can be counted, and stopped (W0-G4, ruling #347) =====
+--
+-- W0-G4 found NO sign-in attempt limit in the production auth configuration at all -- the QA
+-- round reached 33 attempts unblocked -- and the supported mechanism, GoTrue's
+-- password-verification-attempt hook, was off with its URI null. Enabling it with nothing behind
+-- it would not weaken sign-in, it would REFUSE every sign-in, so the hook had to exist first.
+-- These are the assertions that hold it to its contract.
+
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
+
+insert into auth.users (id, email) values
+  ('2f000000-0000-0000-0000-000000000001', 'p4-lockout@example.test');
+
+-- Nine failures are a bad week, not an attack.
+select pg_temp.p4_assert(
+  (select bool_and(public.password_verification_attempt(jsonb_build_object(
+     'user_id', '2f000000-0000-0000-0000-000000000001', 'valid', false)) ->> 'decision' = 'continue')
+   from generate_series(1, 9)),
+  'P4 flags/identity assertion failed: the lockout fired before the tenth failure'
+);
+
+-- The tenth closes the door.
+select pg_temp.p4_assert(
+  public.password_verification_attempt(jsonb_build_object(
+    'user_id', '2f000000-0000-0000-0000-000000000001', 'valid', false)) ->> 'decision' = 'reject',
+  'P4 flags/identity assertion failed: ten consecutive failures did not lock the account'
+);
+
+-- AND IT STAYS SHUT FOR A CORRECT PASSWORD. This is the whole point of a lockout rather than a
+-- counter: an attacker who eventually guesses right must still wait.
+select pg_temp.p4_assert(
+  public.password_verification_attempt(jsonb_build_object(
+    'user_id', '2f000000-0000-0000-0000-000000000001', 'valid', true)) ->> 'decision' = 'reject',
+  'P4 flags/identity assertion failed: a correct password walked straight through the lockout'
+);
+
+-- A success BEFORE the threshold clears the run, which is what makes ten a usable number rather
+-- than a trap for somebody who mistyped nine times and then got it right.
+delete from private.password_attempt_counters;
+select public.password_verification_attempt(jsonb_build_object(
+  'user_id', '2f000000-0000-0000-0000-000000000001', 'valid', false)) from generate_series(1, 9);
+select public.password_verification_attempt(jsonb_build_object(
+  'user_id', '2f000000-0000-0000-0000-000000000001', 'valid', true));
+select pg_temp.p4_assert(
+  not exists (select 1 from private.password_attempt_counters
+              where user_id = '2f000000-0000-0000-0000-000000000001'),
+  'P4 flags/identity assertion failed: a success did not clear the failure run'
+);
+
+-- IT FAILS OPEN. A payload the hook cannot read must never refuse a sign-in: this function sits
+-- on every sign-in in the product, and a rate limiter that raises is an outage, not a control.
+select pg_temp.p4_assert(
+  public.password_verification_attempt('{}'::jsonb) ->> 'decision' = 'continue'
+  and public.password_verification_attempt('{"user_id":"not-a-uuid"}'::jsonb) ->> 'decision' = 'continue'
+  and public.password_verification_attempt('{"valid":false}'::jsonb) ->> 'decision' = 'continue',
+  'P4 flags/identity assertion failed: an unreadable payload refuses a sign-in'
+);
+
+-- Only GoTrue may call it. A browser role that could would simply answer `continue` for itself.
+select pg_temp.p4_assert(
+  has_function_privilege('supabase_auth_admin', 'public.password_verification_attempt(jsonb)', 'execute')
+  and not has_function_privilege('authenticated', 'public.password_verification_attempt(jsonb)', 'execute')
+  and not has_function_privilege('anon', 'public.password_verification_attempt(jsonb)', 'execute'),
+  'P4 flags/identity assertion failed: the lockout hook is callable by the wrong role'
+);
+
+-- And the counters are not a readable record of who failed to sign in as whom.
+select pg_temp.p4_assert(
+  not exists (
+    select 1 from information_schema.role_table_grants
+    where table_schema = 'private' and table_name = 'password_attempt_counters'
+      and grantee in ('authenticated', 'anon')),
+  'P4 flags/identity assertion failed: the failed-sign-in counters are readable by a client role'
+);
+
 rollback;
 
 \echo 'p4_flags_identity_passed'

@@ -45,7 +45,10 @@ function oklchToLinearRgb(lightness: number, chroma: number, hue: number) {
  * back rather than throwing. Reading only the first match in the file, which is what this spec did
  * until 31.08.2026, silently measures the light theme and calls it the product.
  */
-const DARK_START = css.indexOf("[data-theme='dark']");
+/* Anchored to the RULE, not to the text. Slicing on the first occurrence of the selector
+   anywhere in the file meant a comment that merely MENTIONED it truncated the light palette,
+   and every token declared below that sentence reported itself as undeclared. */
+const DARK_START = css.search(/^:root\[data-theme='dark'\]/m);
 const LIGHT_CSS = DARK_START === -1 ? css : css.slice(0, DARK_START);
 const DARK_CSS = DARK_START === -1 ? '' : css.slice(DARK_START);
 /* Imported, not redeclared: a test that keeps its own copy of the theme list would keep passing on

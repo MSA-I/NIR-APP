@@ -1,0 +1,137 @@
+[
+  {
+    "after": "open",
+    "tag": "input",
+    "type": "checkbox",
+    "text": "",
+    "label": "מס׳ חשבונית",
+    "insidePanel": true,
+    "panelOpen": true
+  },
+  {
+    "after": "Tab#1",
+    "tag": "input",
+    "type": "checkbox",
+    "text": "",
+    "label": "ספק",
+    "insidePanel": true,
+    "panelOpen": true
+  },
+  {
+    "after": "Tab#2",
+    "tag": "input",
+    "type": "checkbox",
+    "text": "",
+    "label": "תאריך",
+    "insidePanel": true,
+    "panelOpen": true
+  },
+  {
+    "after": "Tab#3",
+    "tag": "input",
+    "type": "checkbox",
+    "text": "",
+    "label": "סה״כ",
+    "insidePanel": true,
+    "panelOpen": true
+  },
+  {
+    "after": "Tab#4",
+    "tag": "input",
+    "type": "checkbox",
+    "text": "",
+    "label": "יתרה",
+    "insidePanel": true,
+    "panelOpen": true
+  },
+  {
+    "after": "Tab#5",
+    "tag": "input",
+    "type": "checkbox",
+    "text": "",
+    "label": "בדיקה",
+    "insidePanel": true,
+    "panelOpen": true
+  },
+  {
+    "after": "Tab#6",
+    "tag": "input",
+    "type": "checkbox",
+    "text": "",
+    "label": "תשלום",
+    "insidePanel": true,
+    "panelOpen": true
+  },
+  {
+    "after": "Tab#7",
+    "tag": "input",
+    "type": "checkbox",
+    "text": "",
+    "label": "רו״ח",
+    "insidePanel": true,
+    "panelOpen": true
+  },
+  {
+    "after": "Tab#8",
+    "tag": "button",
+    "type": "button",
+    "text": "עמודות",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#9",
+    "tag": "div",
+    "type": null,
+    "text": "מס׳ חשבוניתספקתאריךסה״כיתרהבדיקהתש",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#10",
+    "tag": "button",
+    "type": "button",
+    "text": "תאריך",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#11",
+    "tag": "button",
+    "type": "button",
+    "text": "P3-ILS-12400",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#12",
+    "tag": "button",
+    "type": "button",
+    "text": "",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#13",
+    "tag": "button",
+    "type": "button",
+    "text": "P3-USD-3100",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  },
+  {
+    "after": "Tab#14",
+    "tag": "button",
+    "type": "button",
+    "text": "",
+    "label": "",
+    "insidePanel": false,
+    "panelOpen": false
+  }
+]

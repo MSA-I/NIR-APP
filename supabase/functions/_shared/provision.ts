@@ -12,6 +12,11 @@
  * work is unwound in reverse order of creation, and whatever could not be undone is REPORTED
  * rather than swallowed — a half-provisioned tenant that nobody hears about is worse than a loud
  * failure.
+ *
+ * THAT SENTENCE WAS TRUE ABOUT THE INTENT AND FALSE ABOUT THE CODE until 03.09.2026, twice over:
+ * the unwind could not remove the organization at all, and it reported nothing when it failed to.
+ * The full measurement is above `rollbackTenant`. The rule that came out of it is short enough to
+ * state here: **a rollback reports what it MEASURED, never what it attempted.**
  */
 
 /**
@@ -33,7 +38,26 @@ export interface ProvisionAdminClient {
       };
     };
     delete(): { eq(column: string, value: string): PromiseLike<{ error: Failure }> };
+    /**
+     * READ-BACK, and it is the whole reason this member exists.
+     *
+     * A PostgREST `delete().eq()` answers `error: null` for three different worlds: the row was
+     * removed, the row was never there, and the row was there but the caller could not see it. The
+     * rollback treated the first as proved by the absence of an error, so a compensation that
+     * removed nothing reported a clean unwind. This asks the only question with one answer.
+     *
+     * RETURNS `unknown`, AND THAT IS DELIBERATE. Spelling the builder out here — `{ eq(): {
+     * maybeSingle(): ... } }` — made `deno check` fail the whole of `public-signup` with TS2589,
+     * "type instantiation is excessively deep": `PostgrestQueryBuilder.select` is generic over the
+     * schema, the relation and the selected columns, and structurally matching the real one against
+     * a hand-written shape forces the compiler to expand all of it. `unknown` costs the checker
+     * nothing, every real client satisfies it, and `readBack` below narrows it in ONE place where
+     * the shape is written down once and can be read.
+     */
+    select(columns: string): unknown;
   };
+  /** The database's own tenant teardown — see `ROLLBACK_TEARDOWN_RPC`. */
+  rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: Failure }>;
   auth: {
     admin: {
       /**
@@ -225,6 +249,84 @@ function backupEmailColumn(backupEmail: string | undefined): { backup_email?: st
   return address ? { backup_email: address } : {};
 }
 
+/**
+ * The database function that owns a COMPLETE tenant teardown, filed as a migration request in
+ * `artifacts/w3/migration-requests/w3-signup.sql`. It is named here rather than spelled at the call
+ * site so the fallback below, the tests, and the request itself all refer to one string.
+ */
+export const ROLLBACK_TEARDOWN_RPC = 'service_rollback_provisioned_tenant';
+
+/**
+ * Is this organization still in the table? The one narrowing site for the `unknown` above.
+ *
+ * A read that could not RUN is not an absence, so the two are returned separately: `present` says
+ * what was found, `problem` says why nothing could be found out. Collapsing them into a boolean is
+ * how "we could not check" becomes "there is nothing there".
+ */
+async function organizationStillPresent(
+  admin: ProvisionAdminClient,
+  orgId: string,
+): Promise<{ present: boolean; problem: string | null }> {
+  const query = admin.from('organizations').select('id') as {
+    eq(column: string, value: string): {
+      maybeSingle(): PromiseLike<{ data: Row | null; error: Failure }>;
+    };
+  };
+  try {
+    const { data, error } = await query.eq('id', orgId).maybeSingle();
+    if (error) return { present: false, problem: error.message };
+    return { present: data !== null, problem: null };
+  } catch (e) {
+    return { present: false, problem: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * ───────────────────────────────────────────────────────────────────────────────────────────────
+ * WHY THE HAND-WRITTEN COMPENSATION COULD NEVER HAVE WORKED, measured 03.09.2026.
+ *
+ * Inserting one row into `organizations` fires FIVE `AFTER INSERT` triggers, and they write to six
+ * tables. This function deleted rows from two of them.
+ *
+ *   trigger                              writes to                              this deleted it?
+ *   p0_organizations_seed_units          public.org_units                       no  (cascades)
+ *   organizations_prelaunch_assistant    public.org_flag_configurations         no  (cascades)
+ *   organizations_prelaunch_autonomy     public.org_autonomy_policies           no  (cascades)
+ *   zzz_organizations_default_subscription  public.organization_subscriptions   YES
+ *   zzz_organizations_referral_code      private.referral_codes                 NO  — RESTRICT
+ *   zzz_organizations_usage_anchor       private.organization_usage_anchors     NO  — RESTRICT
+ *
+ * The last two carry `on delete restrict` (`0185:65`, `0186:84`, unchanged since), so Postgres
+ * REFUSES the `delete from organizations` while they stand. Every self-signup that failed after the
+ * organization insert therefore left the organization behind — including the commonest failure of
+ * all, an address that is already registered (`:305-315` below), where nothing else has even been
+ * created yet. That is the production organization `QA-AGENT10-DO-NOT-KEEP`.
+ *
+ * AND IT CANNOT BE FIXED BY LENGTHENING THE LIST. `supabase/config.toml:6` exposes `public` and
+ * `graphql_public` to PostgREST and nothing else, so an Edge function holding the service key has
+ * no route to `private.referral_codes` or `private.organization_usage_anchors` at all. A complete
+ * compensation is not something this side of the wire can express. The database already owns one —
+ * `private.delete_tenant_rows` walks a REGISTRY of every tenant table in foreign-key order, repeats
+ * until a whole pass removes nothing, and raises `tenant_delete_orphans_remain` if any stage leaves
+ * a row — so the fix is to call it, not to re-derive it here where it would drift again on the next
+ * trigger somebody adds.
+ *
+ * ───────────────────────────────────────────────────────────────────────────────────────────────
+ * AND WHY THE OLD ONE REPORTED SUCCESS WHILE DOING THIS.
+ *
+ * It reported a leftover only when a statement returned an error. `delete().eq()` returns
+ * `error: null` when it matched nothing, so three of the six tables above were "cleaned" by a
+ * statement that touched no row, and a caller reading `leftovers.length === 0` was reading the
+ * absence of an exception rather than the absence of a tenant.
+ *
+ * So the last thing this function does is ASK: is the organization still there? That question has
+ * one answer, it does not depend on which mechanism ran, and it stays true when the teardown
+ * function lands, when it is renamed, and when somebody adds a seventh trigger.
+ *
+ * A verification that could not run is NOT a pass. It is reported as its own leftover, because
+ * "we do not know whether a tenant survived" and "no tenant survived" are different states and only
+ * one of them is safe to say nothing about.
+ */
 export async function rollbackTenant(
   admin: ProvisionAdminClient,
   created: { orgId?: string; userId?: string },
@@ -235,18 +337,37 @@ export async function rollbackTenant(
     const { error } = await admin.auth.admin.deleteUser(created.userId);
     if (error) leftovers.push(`auth user ${created.userId}: ${error.message}`);
   }
-  if (created.orgId) {
-    // Categories before the organization they reference; the profile goes with the auth user
-    // through the cascade on auth.users (0001_init.sql:32).
-    const cats = await admin.from('categories').delete().eq('org_id', created.orgId);
-    if (cats.error) leftovers.push(`categories of org ${created.orgId}: ${cats.error.message}`);
+  if (!created.orgId) return leftovers;
 
-    // The default-subscription trigger (0154) put a row here; it references the organization.
-    const sub = await admin.from('organization_subscriptions').delete().eq('org_id', created.orgId);
-    if (sub.error) leftovers.push(`subscription of org ${created.orgId}: ${sub.error.message}`);
+  const orgId = created.orgId;
+  /** What was tried and what it said — diagnosis, attached to the verdict rather than mistaken for it. */
+  const attempts: string[] = [];
 
-    const org = await admin.from('organizations').delete().eq('id', created.orgId);
-    if (org.error) leftovers.push(`organization ${created.orgId}: ${org.error.message}`);
+  // 1. The registry-driven teardown. One call, one transaction, every tenant table.
+  const teardown = await admin.rpc(ROLLBACK_TEARDOWN_RPC, { p_org_id: orgId });
+  if (teardown.error) attempts.push(`${ROLLBACK_TEARDOWN_RPC}: ${teardown.error.message}`);
+
+  // 2. The reachable tables, when it did not run. This is deliberately kept even though it cannot
+  //    finish: while the migration is unlanded it still removes what it can, and the verification
+  //    below is what stops it being mistaken for a completed rollback.
+  if (teardown.error) {
+    for (const [table, column] of [
+      ['categories', 'org_id'],
+      ['organization_subscriptions', 'org_id'],
+      ['organizations', 'id'],
+    ] as const) {
+      const { error } = await admin.from(table).delete().eq(column, orgId);
+      if (error) attempts.push(`${table}: ${error.message}`);
+    }
+  }
+
+  // 3. THE VERDICT. Everything above is an attempt; this is the measurement.
+  const check = await organizationStillPresent(admin, orgId);
+  const detail = attempts.length > 0 ? ` (${attempts.join('; ')})` : '';
+  if (check.problem !== null) {
+    leftovers.push(`organization ${orgId}: removal could not be verified — ${check.problem}${detail}`);
+  } else if (check.present) {
+    leftovers.push(`organization ${orgId}: still present after rollback${detail}`);
   }
 
   return leftovers;

@@ -1,0 +1,223 @@
+{
+  "desktopFromInside": [
+    {
+      "after": "focus first checkbox",
+      "tag": "input",
+      "label": "מס׳ חשבונית",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#1",
+      "tag": "input",
+      "label": "ספק",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#2",
+      "tag": "input",
+      "label": "תאריך",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#3",
+      "tag": "input",
+      "label": "סה״כ",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#4",
+      "tag": "input",
+      "label": "יתרה",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#5",
+      "tag": "input",
+      "label": "בדיקה",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#6",
+      "tag": "input",
+      "label": "תשלום",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#7",
+      "tag": "input",
+      "label": "רו״ח",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#8",
+      "tag": "body",
+      "label": "דלג לתוכןInPlaceמרכז הבקרההזמנ",
+      "insidePanel": false,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#9",
+      "tag": "a",
+      "label": "דלג לתוכן",
+      "insidePanel": false,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#10",
+      "tag": "a",
+      "label": "InPlace",
+      "insidePanel": false,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#11",
+      "tag": "a",
+      "label": "מרכז הבקרה",
+      "insidePanel": false,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#12",
+      "tag": "a",
+      "label": "הזמנה חדשה",
+      "insidePanel": false,
+      "panelOpen": true
+    }
+  ],
+  "mobileSheet": [
+    {
+      "after": "sheet open",
+      "tag": "div",
+      "label": "סינון ותצוגההכלהתקבלהבבדיקהממת",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#1",
+      "tag": "button",
+      "label": "",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#2",
+      "tag": "select",
+      "label": "הכלהתקבלהבבדיקהממתינה לאישורמא",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#3",
+      "tag": "select",
+      "label": "כל החשבוניותחשד לכפילותללא הזמ",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#4",
+      "tag": "select",
+      "label": "כל סטטוסי התשלוםפתוחות לתשלוםל",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#5",
+      "tag": "select",
+      "label": "כל החודשיםינוארפברוארמרץאפרילמ",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#6",
+      "tag": "select",
+      "label": "כל השנים2027202620252024202320",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#7",
+      "tag": "select",
+      "label": "כל סטטוסי הרו״חטרם הועברה לרו״",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#8",
+      "tag": "input",
+      "label": "מס׳ חשבונית",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#9",
+      "tag": "input",
+      "label": "ספק",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#10",
+      "tag": "input",
+      "label": "תאריך",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#11",
+      "tag": "input",
+      "label": "סה״כ",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#12",
+      "tag": "input",
+      "label": "יתרה",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#13",
+      "tag": "input",
+      "label": "בדיקה",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#14",
+      "tag": "input",
+      "label": "תשלום",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#15",
+      "tag": "input",
+      "label": "רו״ח",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Tab#16",
+      "tag": "button",
+      "label": "",
+      "insidePanel": true,
+      "panelOpen": true
+    },
+    {
+      "after": "Escape",
+      "tag": "button",
+      "label": "סינון ותצוגה",
+      "insidePanel": false,
+      "panelOpen": false
+    }
+  ]
+}

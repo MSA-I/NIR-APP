@@ -10,7 +10,9 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, PageHeader, StatusBadge, Note, SkeletonTable, EmptyState, Card, ICON, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
-import { readSheet, matchColumn, mapRows, cellText, cellNumber, skipRow } from '../lib/importSheet';
+import { readSheet, matchColumn, mapRows, cellText, skipRow } from '../lib/importSheet';
+import type { TKey } from '../lib/i18n/t';
+import { PRICE_REASON_KEYS, parsePrice } from '../lib/price';
 import { bidiIsolate, fmtDate, fmtMoneyExact, fmtMoneyRounded, formatUnit, productLabel, todayISO, fmtNum } from '../lib/format';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useChartTheme } from '../lib/theme';
@@ -272,7 +274,7 @@ export default function PriceLists() {
                         <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
                       </div>
                       <div className="mt-1 text-sm text-ink-muted break-words">
-                        {submission.file_name ?? t('priceLists.text_14')} · {t('priceListsTail.accepted')}{' '}<span className="num">{submission.accepted_count}</span> {t('priceLists.text_15')} <span className="num">{submission.unchanged_count}</span> {t('priceLists.text_16')} <span className="num">{submission.rejected_count}</span>
+                        <bdi>{submission.file_name ?? t('priceLists.text_14')}</bdi> · {t('priceListsTail.accepted')}{' '}<span className="num">{submission.accepted_count}</span> {t('priceLists.text_15')} <span className="num">{submission.unchanged_count}</span> {t('priceLists.text_16')} <span className="num">{submission.rejected_count}</span>
                       </div>
                     </div>
                   ))}
@@ -416,12 +418,28 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         product: matchColumn(sheet.headers, ['מוצר', 'product'], false),
         price: matchColumn(sheet.headers, ['מחיר', 'price'], false),
       };
+      // ONE PARSER, THE SAME ONE THE WRITER USES. This preview used to read the price with
+      // `cellNumber`, which deletes every character that is not a digit, a dot or a minus -- so
+      // `$12.50` previewed as a plain 12.50 and would have been written in whatever currency the
+      // named supplier trades in. This sheet carries many suppliers, so the currency is resolved
+      // per row from the supplier the row names; a row naming a supplier this organisation does
+      // not have is skipped here rather than at import.
+      const suppliers = unwrap(await supabase.from('suppliers')
+        .select('name, default_currency').is('deleted_at', null)) as
+        { name: string; default_currency: string }[];
+      const currencyByName = new Map(suppliers.map((row) => [row.name.trim(), row.default_currency]));
+      const codes = new Set(suppliers.map((row) => row.default_currency));
       const { valid } = mapRows(sheet.rows, (r) => {
         const supplier = cellText(r, cols.supplier);
         const product = cellText(r, cols.product);
-        const price = cellNumber(r, cols.price) ?? 0;
-        if (!supplier || !product || price <= 0) return skipRow(t('priceLists.skipRow'));
-        return { supplier, product, price };
+        const parsed = parsePrice(cellText(r, cols.price, 64), currencyByName.get(supplier), codes);
+        if (!supplier || !product) return skipRow(t('priceLists.skipRow'));
+        if (!parsed.ok || parsed.value === null) {
+          return skipRow(t(PRICE_REASON_KEYS[parsed.reason ?? 'price_unreadable'] as TKey, {
+            currency: parsed.currency ?? '', printed: parsed.printedCurrency ?? '',
+          }));
+        }
+        return { supplier, product, price: parsed.value };
       }, t('importSheet.invalidRow'));
       if (!valid.length) { toast(t('priceLists.toast_2'), 'error'); return; }
       setPreview(valid);

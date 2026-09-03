@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { PackageCheck, Save, CheckCircle2, FileText, Camera, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { QUANTITY_MAX } from '../lib/inputBounds';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { Breadcrumbs, Card, useToast, StatusBadge, EmptyState, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonList, Note, ConfirmDialog, Stepper, ICON } from '../components/ui';
 import { useAuth } from '../auth/AuthContext';
@@ -341,7 +342,7 @@ export function ReceivingList() {
           {source
             ? <>
                 {t('receiving.fromDeliveryNoteLead')}{' '}
-                {source.fileName ? <strong>{source.fileName}</strong> : t('receiving.text_8')}
+                {source.fileName ? <strong><bdi>{source.fileName}</bdi></strong> : t('receiving.text_8')}
                 {supplierName ? <> {t('receiving.text_9')} <strong>{supplierName}</strong></> : null}
                 {'. '}{t('receiving.fromDeliveryNoteChoose')}
               </>
@@ -1103,7 +1104,12 @@ export function ReceiveOrder() {
                   the number means, which „הוספה — כמות שהתקבלה עבור X" only gestures at. They are
                   also what a screen-reader user on this screen has been hearing since the control
                   was hand-rolled here, and convergence had no mandate to change that. */}
-              <Stepper value={line.qty} min={0} inputStep="any"
+              {/* `max` is the magnitude guard only (`lib/inputBounds.ts`). It is deliberately NOT
+                  `remaining`: over-receipt is a real event this screen must be able to record, and
+                  the server decides whether a specific over-receipt is allowed
+                  (`receipt_qty_exceeds_order`). A ceiling of a million refuses a fat finger
+                  without pre-judging a delivery. */}
+              <Stepper value={line.qty} min={0} max={QUANTITY_MAX} inputStep="any"
                 inputClassName="w-24! text-lg! py-2.5! font-semibold"
                 label={t('receiving.qtyLabel', { product: productLabel(item.product) })}
                 decrementLabel={t('receiving.qtyDecrement', { product: productLabel(item.product) })}

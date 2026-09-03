@@ -521,6 +521,7 @@ export const he = {
   },
 
   settings: {
+    vatRateOutOfRange: 'שיעור מע״מ חייב להיות בין 0 ל־100',
     undoAction: 'ביטול הפעולה',
     enableUndone: 'ההפעלה בוטלה — המשתמש מושבת',
     disableUndone: 'ההשבתה בוטלה — המשתמש פעיל',
@@ -1655,6 +1656,10 @@ export const he = {
   },
 
   documents: {
+    filing_line_price_currency_mismatch: 'השורה נקובה במטבע אחר מזה של המחירון. אין המרה בין מטבעות, ולכן השורה ממתינה לבדיקה.',
+    filing_line_price_above_cap: 'המחיר בשורה חורג מהתקרה של 1,000,000, ולכן השורה ממתינה לבדיקה.',
+    filing_line_price_below_minor_unit: 'המחיר בשורה קטן מהיחידה הקטנה ביותר של מטבע המחירון, ולכן השורה ממתינה לבדיקה.',
+    filing_line_price_not_positive: 'המחיר שנקרא בשורה אינו חיובי, ולכן השורה ממתינה לבדיקה.',
     text: 'סטטוס לא זמין',
     text_2: 'מצב המסמך',
     text_3: 'הכול',
@@ -1894,6 +1899,7 @@ export const he = {
   },
 
   inventory: {
+    quantityTooLarge: 'הכמות גדולה מדי. אפשר להזין עד 1,000,000',
     pricesInSeveralCurrencies: 'מחירים בכמה מטבעות',
     text: 'קבלת סחורה',
     text_2: 'צריכה',
@@ -3214,6 +3220,14 @@ export const he = {
   },
 
   priceUpload: {
+    reason_price_currency_unknown: 'לא ידוע באיזה מטבע המחירון הזה; בחר ספק עם מטבע מוגדר',
+    reason_price_currency_mismatch: 'המחיר נקוב ב-{printed} והמחירון הזה ב-{currency}; אין המרה בין מטבעות',
+    reason_price_above_cap: 'המחיר חורג מהתקרה של 1,000,000',
+    reason_price_below_minor_unit: 'המחיר קטן מהיחידה הקטנה ביותר של {currency}',
+    reason_price_not_positive: 'המחיר שנקרא אינו חיובי',
+    reason_price_unreadable: 'לא ניתן לקרוא את המחיר בתא',
+    reason_price_missing: 'תא המחיר ריק',
+    skipRow_missing_name: 'חסר שם מוצר בשורה',
     PriceDocumentError: 'הספק לא פעיל לפעילות מסחרית חדשה. מחירון חדש לא ייקלט.',
     skipRow: 'חסר שם מוצר או מחיר תקין',
     skipRow_2: 'מחיר מעל הטווח המותר (עד ₪1,000,000)',
@@ -3351,6 +3365,7 @@ export const he = {
   },
 
   admin: {
+    vatRateOutOfRange: 'שיעור מע״מ חייב להיות בין 0 ל־100',
     toast: 'הארגון הופעל מחדש במצב פעיל.',
     text: 'הבקשה אושרה והכנת הייצוא הועברה לעיבוד.',
     text_2: 'ניסיון הכנת הייצוא הועבר מחדש לעיבוד.',
@@ -4778,6 +4793,7 @@ export const he = {
   },
 
   invoiceLineReview: {
+    quantityTooLarge: 'הכמות בשורה גדולה מדי. אפשר להזין עד 1,000,000',
     completeAllLines: 'יש להשלים את כל נתוני השורות',
     noEvidenceVersion: 'אין גרסת ראיה לשורות — יש לשמור תחילה את שורות החשבונית',
     reasonLabel: 'סיבת תיקון השורות (רשות)',
@@ -5868,6 +5884,7 @@ export const he = {
   },
 
   pricingTail: {
+    figureIsQuota: 'מכסת {label}: {value}',
     entitlementIntroOnly: '{label} — פתוח ב־30 הימים הראשונים',
     perUsagePeriod: 'בתקופת שימוש חודשית',
     recommended: 'מומלץ',
@@ -6164,6 +6181,10 @@ export const he = {
   },
 
   planCard: {
+    stateUnmeasured: 'לא נמדד',
+    stateIntro: 'כלול ב־30 הימים הראשונים בלבד',
+    stateExcluded: 'לא כלול',
+    stateIncluded: 'כלול',
     emphasisPremium: 'המקיף ביותר',
     loading: 'טוען',
     // The two capability blocks the card grew on 02.09.2026, and the tag on a row that expires.

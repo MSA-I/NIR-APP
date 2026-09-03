@@ -1407,7 +1407,100 @@ def _hebrew_order_check() -> dict[str, Any]:
     assert repaired == logical, f"repair produced {repaired!r}"
     # Digits, separators and Latin text must survive untouched -- this runs on the price path.
     assert _reverse_hebrew_runs('סה"כ 1,392.00 ILS') == 'כ"הס 1,392.00 ILS'
-    return {"detect": "passed", "repair": "passed", "word_order": "not_repaired_by_design"}
+    # Word order is repaired by the SECOND corrector now -- see `_line_order_check`. This one is
+    # deliberately unchanged: it is still the right answer for a generator that stored the words
+    # backwards without moving them, and it still runs on documents that show no line-order tell.
+    return {"detect": "passed", "repair": "passed", "word_order": "repaired_by_hebrew_line_order"}
+
+
+def _line_order_check() -> dict[str, Any]:
+    """#A: a product name's WORD ORDER is its meaning, and the repair only ever fixed letters.
+
+    WHAT WAS MEASURED, AND WHERE. W0-G8 read production: 271 catalogue products, 105 names (39%)
+    damaged, 166 clean. The damage is a bidirectional extraction failure -- the PDF text layer
+    holds glyphs in visual order and the extractor read them as logical order -- and its signature
+    is specific: names beginning with a closing bracket, names carrying a close with no open, and
+    names with a digit fused to the Hebrew letter that belonged after it. `_reverse_hebrew_runs`
+    cannot remove any of those three, because it never moves a word. `_hebrew_order_check` above
+    has said so in its own return value for as long as it has existed.
+
+    THE TWO HALVES THIS ASSERTS, because a repair that only proves one of them is not finished:
+
+      1. A visual-order layer comes back EXACTLY logical. Every fixture below is round-tripped
+         through the layout and back, and must return byte for byte what it started as.
+      2. A logical-order layer DOES NOT MOVE. The detector must not fire on a single one of the
+         readable names, including the bilingual ones W0-G8 reported as undamaged -- those are
+         the 166 that must not move, and a corrector that "fixes" them is a worse defect than the
+         one it replaces.
+
+    THE FIXTURES ARE REAL. The three damaged strings are the ones measured in the live catalogue
+    and kept verbatim in `src/lib/productDisplayName.spec.ts`; the readable ones are that file's
+    own readable corpus plus catalogue rows from the demo seed. THE DAMAGED THREE ARE USED FOR
+    DETECTION ONLY: they are catalogue rows, not raw text layers, so asserting a repaired value
+    for them would be asserting something about a pipeline stage this repository does not hold.
+    Repairing the rows that already exist is a data remediation and is not this change.
+    """
+    from src.parsers import _line_order_evidence, _restore_line_order
+
+    damaged = [
+        ')ב12- אר30*30מטליות מיקרופייבר',
+        ')ק"ג 5( קמח לבן',
+        'שקיות אשפה 60*80 )100 יח',
+    ]
+    readable = [
+        'שמן קנולה 100 מ״ל',
+        'קוטג׳ תנובה 250 גרם',
+        'עגבניות שרי',
+        'מטליות מיקרופייבר 30*30 (12 ביחידה)',
+        'מפיות דמוי בד לבן PREMIUM NAPKINS',
+        'תה עטוף 100/1ג',
+        'סודה 1.5 ליטר (ארגז 6)',
+        'סכו"ם חד"פ (מארז 300)',
+        'גבינה 5% (מיכל 5 ק"ג)',
+        'ביצים L (תבנית 30)',
+        'קמח לבן (שק 25 ק"ג)',
+        'P18B product',
+    ]
+
+    def fires(text: str) -> bool:
+        _, leading, inverted, _ = _line_order_evidence(text)
+        return leading + inverted > 0
+
+    for name in damaged:
+        assert fires(name), f"the detector missed a name measured as damaged: {name!r}"
+    for name in readable:
+        assert not fires(name), f"the detector fired on a readable name: {name!r}"
+        # Belt and braces: even if the detector ever did fire, running the transform over an
+        # undamaged pure-Latin or bilingual name must not reorder its words.
+        assert _restore_line_order(_restore_line_order(name)) == name, name
+
+    # The round trip. `_restore_line_order` is its own inverse, so laying a logical name out
+    # backwards and inverting it must return the original -- which is exactly what re-running the
+    # extraction over the retained submissions does.
+    for name in readable:
+        laid_out = _restore_line_order(name)
+        assert _restore_line_order(laid_out) == name, f"round trip lost {name!r}"
+
+    # And the residue the shipped repair leaves behind, stated as a fact rather than a worry: on a
+    # line laid out backwards, the word-level repair returns something that is NOT the original.
+    sample = 'מטליות מיקרופייבר 30*30 (12 ביחידה)'
+    laid_out = _restore_line_order(sample)
+    from src.parsers import _reverse_hebrew_runs as word_only
+
+    assert word_only(laid_out) != sample, (
+        "the word-level repair now recovers word order, so this check is measuring nothing"
+    )
+    assert _restore_line_order(laid_out) == sample
+
+    # A pure-Latin line is not a right-to-left line and is returned untouched.
+    assert _restore_line_order('P18B product') == 'P18B product'
+
+    return {
+        "damaged_detected": f"{len(damaged)}/{len(damaged)}",
+        "readable_false_positives": f"0/{len(readable)}",
+        "round_trip": f"{len(readable)}/{len(readable)}",
+        "word_order": "repaired",
+    }
 
 
 def _normalization_evidence_check(fixtures: Path, adapter: SyntheticOcrAdapter) -> dict[str, Any]:
@@ -1428,7 +1521,7 @@ def _normalization_evidence_check(fixtures: Path, adapter: SyntheticOcrAdapter) 
       4. WHEN IT DOES NOT FIRE, THE DECISION IS STILL RECORDED, with `applied: false` and no
          second copy of the text. Silence and "we looked and left it alone" are different facts.
     """
-    from src.contract import HEBREW_VISUAL_ORDER
+    from src.contract import HEBREW_LINE_ORDER, HEBREW_VISUAL_ORDER
     from src.parsers import (
         _hebrew_is_reversed,
         _normalize_pdf_text_layer,
@@ -1439,7 +1532,13 @@ def _normalization_evidence_check(fixtures: Path, adapter: SyntheticOcrAdapter) 
         1: 'הלבק רוקמ ךמסמ בשחוממ סומאג םיעוריא מ"עב 516660602',
         2: 'ריחמ 1,392.00 ILS',
     }
-    corrected, record = _normalize_pdf_text_layer(dict(visual_pages))
+    corrected, records = _normalize_pdf_text_layer(dict(visual_pages))
+    # Two correctors are evaluated on every PDF text layer; at most one of them fires. The
+    # word-level one is the second entry and it is the one this fixture triggers, because the
+    # fixture stores words backwards without moving them.
+    assert [entry["id"] for entry in records] == [HEBREW_LINE_ORDER, HEBREW_VISUAL_ORDER], records
+    assert records[0]["applied"] is False, records[0]
+    record = records[1]
     assert record["id"] == HEBREW_VISUAL_ORDER, record["id"]
     assert record["applied"] is True, "the visual-order fixture did not trigger the correction"
     assert record["original_text"] == "\n".join(visual_pages.values()), "original not preserved"
@@ -1451,7 +1550,9 @@ def _normalization_evidence_check(fixtures: Path, adapter: SyntheticOcrAdapter) 
     assert measured["hebrew_words"] >= measured["final_letter_first"], measured
 
     logical_pages = {1: 'קבלה מקור מסמך ממוחשב', 2: 'סה"כ 10'}
-    untouched, quiet = _normalize_pdf_text_layer(dict(logical_pages))
+    untouched, quiet_records = _normalize_pdf_text_layer(dict(logical_pages))
+    assert all(entry["applied"] is False for entry in quiet_records), quiet_records
+    quiet = quiet_records[1]
     assert untouched == logical_pages, "a document in logical order must not be rewritten"
     assert quiet["applied"] is False and quiet["original_text"] is None, quiet
     assert quiet["measurements"], "an unapplied decision must still say what it measured"
@@ -1472,8 +1573,9 @@ def _normalization_evidence_check(fixtures: Path, adapter: SyntheticOcrAdapter) 
         fixtures / "text.pdf", "application/pdf", adapter=adapter, limits=DEFAULT_LIMITS
     )
     entries = payload["normalizations"]
-    assert len(entries) == 1 and entries[0]["id"] == HEBREW_VISUAL_ORDER, entries
-    assert entries[0]["applied"] is False and entries[0]["original_text"] is None, entries
+    assert [entry["id"] for entry in entries] == [HEBREW_LINE_ORDER, HEBREW_VISUAL_ORDER], entries
+    assert all(entry["applied"] is False for entry in entries), entries
+    assert all(entry["original_text"] is None for entry in entries), entries
 
     # ...and a parser with no text layer to lay out backwards says so by staying empty, rather
     # than claiming a decision it never made.
@@ -2004,6 +2106,7 @@ def main() -> int:
         _retry_and_cleanup_check(scratch)
         second_pass = _second_pass_check(fixtures)
         hebrew_order = _hebrew_order_check()
+        line_order = _line_order_check()
         normalization_evidence = _normalization_evidence_check(fixtures, adapter)
         mistral_adapter = _mistral_adapter_check(fixtures)
         mistral_page_progress = _mistral_page_progress_check(fixtures)
@@ -2028,6 +2131,7 @@ def main() -> int:
                     "retry_cleanup": "passed",
                     "second_pass": second_pass,
                     "hebrew_order": hebrew_order,
+                    "line_order": line_order,
                     "normalization_evidence": normalization_evidence,
                     "mistral_adapter": mistral_adapter,
                     "mistral_page_progress": mistral_page_progress,

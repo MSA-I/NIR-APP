@@ -11,7 +11,7 @@ import { ConfirmDialog, DataTable, ErrorNote, ICON, Modal, Note, PageHeader, Ske
 import { PlanLimitNote } from '../components/PlanLimitNote';
 import { DocumentRemovalDialog } from '../components/DocumentRemovalDialog';
 import { ok } from '../lib/errors';
-import { fmtDate, fmtDateTime, todayISO } from '../lib/format';
+import { bidiIsolate, fmtDate, fmtDateTime, todayISO } from '../lib/format';
 import type { DocumentRow } from '../lib/types';
 import {
   DOCUMENT_KIND_OPTIONS,
@@ -467,7 +467,21 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   const { data, loading, fetching, error, refetch } = useQuery<{
     docs: GalleryDocument[]; suppliers: SupplierOption[];
   }>(async () => {
-    const suppliers = await fetchAll<SupplierOption>((from, to) => supabase.from('suppliers').select('id, name')
+    /**
+     * The two reads are CONCURRENT, and the change is one measurement rather than a preference.
+     *
+     * The supplier list used to be `await`ed before the document query was even issued, and nothing
+     * in the document query uses it: the supplier name each row shows comes from the embedded
+     * `supplier:suppliers(id, name)` join, and this list only fills the filter dropdown. Measured
+     * on /documents (Chrome, 03.09.2026, artifacts/w8/documents-timing-before.json): suppliers
+     * started at 706ms and documents at 745ms — the document read waited a full round trip for an
+     * answer it does not read. On localhost that is 39ms and invisible; against a hosted Supabase
+     * every one of those arrows is a WAN round trip, paid on every visit to the screen.
+     *
+     * The third stage — processing statuses and the autonomy ledger — genuinely depends on the id
+     * list and stays sequential. This removes the one arrow that was there for no reason.
+     */
+    const suppliersPromise = fetchAll<SupplierOption>((from, to) => supabase.from('suppliers').select('id, name')
       .is('deleted_at', null).order('name').order('id').range(from, to));
     // The two views partition the register; they do not overlap. The requirement is that a document
     // matching no category is *מועבר* to the archive — moved, not tagged — and a row appearing in
@@ -481,11 +495,12 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     // fills it automatically yet — the interpretation layer that will (task C2) is not written —
     // so in practice the archive is still empty for most tenants, and the empty state below says
     // which emptiness that is rather than dressing it as a failure.
-    const docs = await fetchAll((from, to) => {
+    const docsPromise = fetchAll((from, to) => {
       const rows = supabase.from('documents').select('*, supplier:suppliers(id, name)').is('deleted_at', null);
       return (archive ? rows.eq('entity_type', 'archive') : rows.neq('entity_type', 'archive'))
         .order('created_at', { ascending: false }).order('id').range(from, to);
-    }) as unknown as GalleryDocument[];
+    }) as unknown as Promise<GalleryDocument[]>;
+    const [suppliers, docs] = await Promise.all([suppliersPromise, docsPromise]);
     return { docs, suppliers };
   }, [archive]);
   const documentIds = useMemo(() => data?.docs.map((doc) => doc.id) ?? [], [data]);
@@ -1055,10 +1070,20 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
 
       {/* requireReason, always. The reason travels to audit_logs through the RPC, and the
           server refuses an empty one by name (reason_required) regardless of what the browser
-          sends — this dialog is the courtesy, not the enforcement. */}
+          sends — this dialog is the courtesy, not the enforcement.
+
+          The file name in each of the three messages below goes through `bidiIsolate` and not
+          <bdi>, because it is interpolated INTO a Hebrew sentence and there is no element to wrap.
+          It is the plain-text half of the same rule the list cells use (DESIGN.md, חוק בידוד
+          השמות), and file names were simply never brought under it. Measured in Chrome,
+          artifacts/w8/filenames-sentence-probe.json: without the isolate, "למחוק את
+          invoice-2026-08 סופי.pdf?" puts the `.pdf` next to the question mark, at the opposite end
+          of the sentence from the name it belongs to. Only names mixing both scripts change —
+          pure-Hebrew and pure-Latin names render identically either way, which is why this
+          survived every screenshot review. FSI and PDI measured 0px wide, so nothing is drawn. */}
       <ConfirmDialog open={!!rescueDoc} onClose={() => setRescueDoc(null)} onConfirm={(reason) => void rescue(reason)}
         title={t('documents.title_3')}
-        message={t('documentsInboxTail.rescueMessage', { fileName: rescueDoc?.file_name ?? '' })}
+        message={t('documentsInboxTail.rescueMessage', { fileName: bidiIsolate(rescueDoc?.file_name ?? '') })}
         confirmLabel={t('documents.confirmLabel')} requireReason busy={rescuing} />
 
       {/* The one dialog in this app that undoes a financial record nobody authorised by hand, so it
@@ -1070,7 +1095,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         onConfirm={(reason) => void revertAutoAction(reason)}
         title={t('documents.title_4')}
         message={t('documentsInboxTail.revertMessage', {
-          fileName: revertDoc?.file_name ?? '',
+          fileName: bidiIsolate(revertDoc?.file_name ?? ''),
           confidence: revertConfidence,
         })}
         confirmLabel={t('documents.confirmLabel_2')} danger requireReason busy={reverting} />
@@ -1080,7 +1105,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           as destruction and the file is kept. */}
       <ConfirmDialog open={!!deleteDoc} onClose={() => setDeleteDoc(null)} onConfirm={() => void removeDoc()}
         title={t('documents.title_5')}
-        message={t('documentsInboxTail.deleteMessage', { fileName: deleteDoc?.file_name ?? '' })}
+        message={t('documentsInboxTail.deleteMessage', { fileName: bidiIsolate(deleteDoc?.file_name ?? '') })}
         confirmLabel={t('documents.confirmLabel_3')} danger busy={deleting} />
 
       <DocumentRemovalDialog

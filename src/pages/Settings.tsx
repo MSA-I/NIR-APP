@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, KeyRound, ClipboardCheck, ImageUp, Download, Undo2, UserCog, LogOut } from 'lucide-react';
 import { MIN_PASSWORD_LENGTH, passwordProblemOf } from '../lib/password';
+import { VAT_RATE_MAX, VAT_RATE_MIN, isVatRateInRange } from '../lib/inputBounds';
 import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -171,6 +172,16 @@ export default function Settings() {
       toast(t('settings.toast_3'), 'error');
       return;
     }
+    /* Checked here AND requested as a CHECK on `organizations.vat_rate`, because this screen is
+       not the only door: `authenticated` holds `update (name, vat_rate, settings)` directly
+       (`0036:51`, confirmed against the live catalogue), so anything holding a session can PATCH
+       the column straight past this function. The message saves a typist a round trip; the
+       constraint is what makes the value impossible. Neither one replaces the other. */
+    const vat = Number(vatRate);
+    if (!isVatRateInRange(vat)) {
+      toast(t('settings.vatRateOutOfRange'), 'error');
+      return;
+    }
     setBusy(true);
     // merge, don't replace — settings also carries keys this screen doesn't edit
     // (e.g. invite_expiry_days, read by invitation_expiry_days() in migration 0007)
@@ -185,7 +196,7 @@ export default function Settings() {
        CurrencyTolerancesPanel, one currency at a time (#288, #290). */
     const res = await supabase.from('organizations').update({
       name,
-      vat_rate: Number(vatRate),
+      vat_rate: vat,
       settings,
     }).eq('id', profile!.org_id);
     setBusy(false);
@@ -548,7 +559,7 @@ export default function Settings() {
         <h2 className="section-title">{t('settings.text_22')}</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="sm:col-span-3"><label className="label" htmlFor="settings-org-name">{t('settings.setOrgName')}</label><input id="settings-org-name" className="input" maxLength={120} value={orgName} disabled={!canWrite} onChange={(e) => setOrgName(e.target.value)} /></div>
-          <div><label className="label" htmlFor="settings-vat-rate">{t('settings.setVatRate')}</label><input id="settings-vat-rate" type="number" step="0.5" className="input num" value={vatRate} disabled={!canWrite} onChange={(e) => setVatRate(e.target.value)} /></div>
+          <div><label className="label" htmlFor="settings-vat-rate">{t('settings.setVatRate')}</label><input id="settings-vat-rate" type="number" step="0.5" min={VAT_RATE_MIN} max={VAT_RATE_MAX} className="input num" value={vatRate} disabled={!canWrite} onChange={(e) => setVatRate(e.target.value)} /></div>
           {/* The amount tolerance left this card for CurrencyTolerancesPanel below. It used to sit
               here as one field labelled `(₪)`, which was three separate untruths: the business may
               not keep its books in shekels, the same key holds a value per currency (#288), and

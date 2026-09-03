@@ -1030,7 +1030,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
                     <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
                   </div>
                   <div className="mt-1 text-sm text-ink-muted break-words">
-                    {submission.file_name ?? t('suppliers.text_57')} · {t('suppliers.acceptedWord')} <span className="num">{submission.accepted_count}</span> {t('suppliers.text_58')} <span className="num">{submission.unchanged_count}</span> {t('suppliers.text_59')} <span className="num">{submission.rejected_count}</span>
+                    <bdi>{submission.file_name ?? t('suppliers.text_57')}</bdi> · {t('suppliers.acceptedWord')} <span className="num">{submission.accepted_count}</span> {t('suppliers.text_58')} <span className="num">{submission.unchanged_count}</span> {t('suppliers.text_59')} <span className="num">{submission.rejected_count}</span>
                   </div>
                 </div>
               ))}

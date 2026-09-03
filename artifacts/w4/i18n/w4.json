@@ -1,0 +1,21 @@
+{
+  "_note": "Wave 4 i18n keys. NOT written into src/lib/i18n/dictionaries/{he,en}.ts by this agent — parallel agents edit those files and would clobber each other. Merge these into both dictionaries under their existing namespace objects. Until merged, `t()` reports a type error on each key named here; that is expected.",
+  "_tone": "Hebrew copy is plain and calm, addressed to a business owner who is not technical. It says what to do, not what the system rejected. The existing `onboarding.isFinite` string is the precedent for the VAT wording and is reused verbatim so the same rule does not get two different sentences.",
+
+  "settings.vatRateOutOfRange": {
+    "he": "שיעור מע״מ חייב להיות בין 0 ל־100",
+    "en": "The VAT rate must be between 0 and 100"
+  },
+  "admin.vatRateOutOfRange": {
+    "he": "שיעור מע״מ חייב להיות בין 0 ל־100",
+    "en": "The VAT rate must be between 0 and 100"
+  },
+  "inventory.quantityTooLarge": {
+    "he": "הכמות גדולה מדי. אפשר להזין עד 1,000,000",
+    "en": "That quantity is too large. You can enter up to 1,000,000"
+  },
+  "invoiceLineReview.quantityTooLarge": {
+    "he": "הכמות בשורה גדולה מדי. אפשר להזין עד 1,000,000",
+    "en": "The quantity on the line is too large. You can enter up to 1,000,000"
+  }
+}

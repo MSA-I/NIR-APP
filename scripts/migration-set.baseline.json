@@ -283,5 +283,9 @@
   "0291_unapproved_invoice_settled_exception_type.sql",
   "0292_the_bank_door_declares_what_it_settles.sql",
   "0293_every_password_change_is_recorded.sql",
-  "0294_a_number_belongs_to_one_tenant.sql"
+  "0294_a_number_belongs_to_one_tenant.sql",
+  "0295_a_bound_the_screen_cannot_be_asked_to_keep.sql",
+  "0296_a_sign_in_attempt_that_can_be_counted.sql",
+  "0297_a_failed_signup_leaves_nothing_behind.sql",
+  "0298_one_parser_for_a_price.sql"
 ]

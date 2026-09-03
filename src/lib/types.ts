@@ -238,7 +238,18 @@ export type SupplierPriceSubmissionStatus = 'accepted' | 'accepted_with_rejectio
 export interface SupplierPriceRejection {
   row: number;
   product?: string | null;
-  reason: 'unknown_product' | 'invalid_price' | 'duplicate_product' | 'invalid_row';
+  /* `invalid_price` used to answer five different failures at once, so a row refused for being
+     priced in dollars and a row refused for being unreadable arrived under one word. The parser
+     names the cause now; `invalid_price` stays in the union because submissions written before
+     this change still carry it. `currency` and `printed_currency` are present only on the
+     currency refusals. */
+  reason: 'unknown_product' | 'invalid_price' | 'duplicate_product' | 'invalid_row'
+    | 'price_missing' | 'price_unreadable' | 'price_not_positive' | 'price_below_minor_unit'
+    | 'price_above_cap' | 'price_currency_mismatch' | 'price_currency_unknown'
+    | 'currency_mismatch_existing_price';
+  currency?: string | null;
+  printed_currency?: string | null;
+  existing_currency?: string | null;
   message: string;
 }
 export interface SupplierPriceSubmission {

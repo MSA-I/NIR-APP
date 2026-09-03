@@ -35,7 +35,16 @@ MARK_KINDS = {"circle", "check", "cross", "underline", "star", "custom", "unknow
 # a contract change on both sides of the gateway wire and must be seen as one -- an open string
 # would let a new correction reach stored evidence without anyone reviewing what it does to it.
 HEBREW_VISUAL_ORDER = "hebrew_visual_order"
-NORMALIZATION_IDS = {HEBREW_VISUAL_ORDER}
+# The second corrector, added because the first one only ever fixed half the problem: it
+# turned each Hebrew word the right way round and left the words themselves where they sat.
+# For an invoice that is enough -- a reader wants field values. For a PRODUCT NAME the order
+# IS the value, and W0-G8 measured the cost in production: 105 of 271 catalogue names
+# carrying a bracket at the wrong end or a digit fused to the letter that belonged after it.
+# At most one of the two fires. Inverting a line already turns every word in it, so
+# `hebrew_line_order` SUPERSEDES `hebrew_visual_order` rather than running after it, and a
+# stored extraction still shows exactly which decision was taken and on what evidence.
+HEBREW_LINE_ORDER = "hebrew_line_order"
+NORMALIZATION_IDS = {HEBREW_VISUAL_ORDER, HEBREW_LINE_ORDER}
 MAX_NORMALIZATION_MEASUREMENTS = 16
 
 # WHAT `document.partial` MEANS. One rule, because every consumer reads the same field:

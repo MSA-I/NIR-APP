@@ -1,0 +1,83 @@
+=== 1. the detector recognises every damaged name measured in the live catalogue ===
+  WHAT THIS SECTION DOES AND DOES NOT SHOW. These three strings are CATALOGUE ROWS, not
+  raw text layers: whatever produced them is upstream of the row, and the intermediate
+  form is not in this repository. So this section measures the DETECTOR only -- it must
+  recognise all three -- and does NOT claim the transform repairs them. Repairing existing
+  rows is a data remediation against production and is out of scope by instruction; the
+  owner's ruling is to fix the extraction and RE-RUN it against the retained submissions,
+  which is what section 4 measures.
+
+  damaged : ')ב12- אר30*30מטליות מיקרופייבר'
+  detector: judged=1 leading_closer=1 closer_before_opener=1 unbalanced=1
+  detector fires: True
+  transform is its own inverse on this string: True
+
+  damaged : ')ק"ג 5( קמח לבן'
+  detector: judged=1 leading_closer=1 closer_before_opener=1 unbalanced=0
+  detector fires: True
+  transform is its own inverse on this string: True
+
+  damaged : 'שקיות אשפה 60*80 )100 יח'
+  detector: judged=1 leading_closer=0 closer_before_opener=1 unbalanced=1
+  detector fires: True
+  transform is its own inverse on this string: True
+
+  damaged names the detector missed: 0 / 3
+
+=== 2. readable names must not move ===
+  'שמן קנולה 100 מ״ל'                        fires=False unchanged_when_not_applied=True
+  'קוטג׳ תנובה 250 גרם'                      fires=False unchanged_when_not_applied=True
+  'עגבניות שרי'                              fires=False unchanged_when_not_applied=True
+  'מטליות מיקרופייבר 30*30 (12 ביחידה)'      fires=False unchanged_when_not_applied=True
+  'מפיות דמוי בד לבן PREMIUM NAPKINS'        fires=False unchanged_when_not_applied=True
+  'תה עטוף 100/1ג'                           fires=False unchanged_when_not_applied=True
+  'סודה 1.5 ליטר (ארגז 6)'                   fires=False unchanged_when_not_applied=True
+  'סכו"ם חד"פ (מארז 300)'                    fires=False unchanged_when_not_applied=True
+  'גבינה 5% (מיכל 5 ק"ג)'                    fires=False unchanged_when_not_applied=True
+  'ביצים L (תבנית 30)'                       fires=False unchanged_when_not_applied=True
+  'קמח לבן (שק 25 ק"ג)'                      fires=False unchanged_when_not_applied=True
+  'P18B product'                             fires=False unchanged_when_not_applied=True
+  readable names the detector wrongly fired on: 0 / 12
+
+=== 3. agreement with the reference Unicode bidi algorithm ===
+  DISAGREE on 'שקיות אשפה 60*80 )100 יח'
+     reference: 'חי 100( 80*60 הפשא תויקש'
+     ours     : 'חי 100( 60*80 הפשא תויקש'
+  agree 14 / 15
+
+=== 4. round trip: logical -> visual -> repaired, over every readable name ===
+  OK    detector_fires=False 'שמן קנולה 100 מ״ל'
+  OK    detector_fires=False 'קוטג׳ תנובה 250 גרם'
+  OK    detector_fires=False 'עגבניות שרי'
+  OK    detector_fires=False 'מטליות מיקרופייבר 30*30 (12 ביחידה)'
+  OK    detector_fires=False 'מפיות דמוי בד לבן PREMIUM NAPKINS'
+  OK    detector_fires=False 'תה עטוף 100/1ג'
+  OK    detector_fires=False 'סודה 1.5 ליטר (ארגז 6)'
+  OK    detector_fires=False 'סכו"ם חד"פ (מארז 300)'
+  OK    detector_fires=False 'גבינה 5% (מיכל 5 ק"ג)'
+  OK    detector_fires=False 'ביצים L (תבנית 30)'
+  OK    detector_fires=False 'קמח לבן (שק 25 ק"ג)'
+  OK    detector_fires=False 'P18B product'
+  round trips that failed: 0 / 12
+
+=== 5. what today's shipped repair leaves behind, on the same round trip ===
+  logical      : 'שמן קנולה 100 מ״ל'
+  visual layer : 'ל״מ 100 הלונק ןמש'
+  word repair  : 'מ״ל 100 קנולה שמן'   <- what ships today
+  line repair  : 'שמן קנולה 100 מ״ל'   <- this change
+
+  logical      : 'קוטג׳ תנובה 250 גרם'
+  visual layer : 'םרג 250 הבונת ׳גטוק'
+  word repair  : 'גרם 250 תנובה קוטג׳'   <- what ships today
+  line repair  : 'קוטג׳ תנובה 250 גרם'   <- this change
+
+  logical      : 'עגבניות שרי'
+  visual layer : 'ירש תוינבגע'
+  word repair  : 'שרי עגבניות'   <- what ships today
+  line repair  : 'עגבניות שרי'   <- this change
+
+  logical      : 'מטליות מיקרופייבר 30*30 (12 ביחידה)'
+  visual layer : '(הדיחיב 12) 30*30 רבייפורקימ תוילטמ'
+  word repair  : '(ביחידה 12) 30*30 מיקרופייבר מטליות'   <- what ships today
+  line repair  : 'מטליות מיקרופייבר 30*30 (12 ביחידה)'   <- this change
+

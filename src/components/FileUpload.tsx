@@ -23,7 +23,7 @@ import { ok, toErrorKey } from '../lib/errors';
 import type { TKey } from '../lib/i18n/t.ts';
 import { useQuery, unwrap } from '../lib/useQuery';
 import type { DocumentKind, DocumentRow } from '../lib/types';
-import { fmtDateTime } from '../lib/format';
+import { bidiIsolate, fmtDateTime } from '../lib/format';
 import { openReservedPopup } from '../lib/popup';
 import {
   mergeUploadBatchSummary,
@@ -1079,7 +1079,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
         onClose={() => setPending(null)}
         onConfirm={() => { if (pending) void remove(pending); }}
         title={t('fileUpload.title')}
-        message={t('fileUpload.removeConfirm', { file: pending?.file_name ?? '' })}
+        message={t('fileUpload.removeConfirm', { file: bidiIsolate(pending?.file_name ?? '') })}
         confirmLabel={t('fileUpload.confirmLabel')}
         danger
         busy={deleting}

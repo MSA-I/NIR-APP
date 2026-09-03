@@ -615,6 +615,12 @@ export const FILING_REASON_KEYS: Record<string, TKey> = {
   line_product_unmatched: 'documents.filing_line_product_unmatched',
   line_product_ambiguous: 'documents.filing_line_product_ambiguous',
   line_price_unreadable: 'documents.filing_line_price_unreadable',
+  /* One code used to cover five failures, so a review screen told a person the price could not
+     be read when the real answer was that the line is priced in another currency. */
+  line_price_not_positive: 'documents.filing_line_price_not_positive',
+  line_price_below_minor_unit: 'documents.filing_line_price_below_minor_unit',
+  line_price_above_cap: 'documents.filing_line_price_above_cap',
+  line_price_currency_mismatch: 'documents.filing_line_price_currency_mismatch',
   already_decided: 'documents.filing_already_decided',
 };
 

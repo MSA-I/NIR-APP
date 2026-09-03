@@ -19,6 +19,7 @@ import {
   type Column,
 } from '../components/ui';
 import { ok } from '../lib/errors';
+import { QUANTITY_MAX, isQuantityInRange } from '../lib/inputBounds';
 import { fmtDate, fmtDateTime, fmtMoneyRounded, fmtNum, formatQuantity, formatUnit } from '../lib/format';
 import { supabase } from '../lib/supabase';
 import { fetchAll } from '../lib/supabasePaging';
@@ -480,6 +481,14 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
       toast(t('inventory.toast_4'), 'error');
       return;
     }
+    /* The ceiling the three inventory commands already enforce (`0026:202-203`, `0026:294`),
+       said here too so the person gets a sentence instead of a raised exception. The `max`
+       attribute alone would not do it: a `type="number"` field still accepts a pasted or typed
+       value above `max`, it only marks the field invalid. */
+    if (!isQuantityInRange(parsed)) {
+      toast(t('inventory.quantityTooLarge'), 'error');
+      return;
+    }
 
     setBusy(true);
     try {
@@ -516,8 +525,12 @@ function InventoryCommandModal({ command, product, canAllowNegative, onClose, on
         <div>
           <label className="label" htmlFor="inventory-command-quantity">{copy.quantity}</label>
           <div className="flex items-center gap-2">
+            {/* An adjustment is signed, so it gets both ends of the range; the other two already
+                have a floor. `max` mirrors what the command itself enforces (`0026:202-203`,
+                `0026:294`) — see `lib/inputBounds.ts`. */}
             <input id="inventory-command-quantity" className="input num" dir="ltr" type="number" step="0.01"
-              min={command === 'adjustment' ? undefined : 0} value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+              min={command === 'adjustment' ? -QUANTITY_MAX : 0} max={QUANTITY_MAX}
+              value={quantity} onChange={(event) => setQuantity(event.target.value)} />
             <span className="shrink-0 text-sm text-ink-soft">{formatUnit(product.unit, locale)}</span>
           </div>
         </div>

@@ -24,7 +24,7 @@ except ImportError:  # pragma: no cover - guarded for older pinned wheels
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from .contract import HEBREW_VISUAL_ORDER, validate_extraction
+from .contract import HEBREW_LINE_ORDER, HEBREW_VISUAL_ORDER, validate_extraction
 from .errors import ProcessingError
 from .limits import DEFAULT_LIMITS, ExtractionLimits
 from .mime import mime_matches, sniff_mime, inspect_zip
@@ -81,13 +81,136 @@ def _hebrew_is_reversed(text: str) -> bool:
 
 
 def _reverse_hebrew_runs(text: str) -> str:
-    """Restores logical order. Latin text, digits and layout are left untouched."""
+    """Restores logical order WITHIN each Hebrew word. Word order is not touched.
+
+    This is half of the repair, and for years it was the whole of it. See
+    `_restore_line_order` below for the half that was missing and what it cost.
+    """
     return HEBREW_RUN.sub(lambda match: match.group(0)[::-1], text)
+
+
+# A run a bidirectional layout keeps together and left-to-right on the page: Latin letters,
+# digits, and the separators that live INSIDE a number or a code -- `1,392.00`, `30*30`, `100/1`.
+# Their internal order is already logical in a visual-order layer, because the printed page has to
+# be readable: a generator that emitted `1/001` would have printed `1/001`, and no supplier ships
+# a price list like that.
+#
+# THE SPACE INSIDE THE CLASS IS LOAD-BEARING, and it was found by measurement rather than by
+# reading. Without it `מפיות דמוי בד לבן PREMIUM NAPKINS` -- one of the bilingual names W0-G8
+# explicitly reported as UNDAMAGED -- came back as `... NAPKINS PREMIUM`, because two Latin words
+# separated by a space were treated as two runs and swapped. A bidirectional layout keeps a whole
+# left-to-right SEQUENCE together, spaces included. The alternation only absorbs a space when
+# another Latin or digit token follows it, so `100 מ״ל` still breaks after `100`.
+LTR_RUN = re.compile(r"[A-Za-z0-9]+(?:(?:[.,:/*+\-]|[ ])[A-Za-z0-9]+)*[%°]?")
+# Brackets are mirrored when a run order flips. `(` at the end of a right-to-left line is drawn as
+# `)` at its left edge, and an extractor that reads glyphs reads the mirrored character.
+MIRRORED = {"(": ")", ")": "(", "[": "]", "]": "[", "{": "}", "}": "{", "<": ">", ">": "<"}
+BRACKET_PAIRS = (("(", ")"), ("[", "]"), ("{", "}"))
+
+
+def _line_order_evidence(text: str) -> tuple[int, int, int, int]:
+    """`(lines_judged, leading_closer, closer_before_opener, unbalanced)`.
+
+    THE SAME THREE SIGNALS THE PRODUCT ALREADY COUNTS. `src/lib/productDisplayName.ts` and
+    `scripts/report-product-name-health.ts` carry this detector on the client side, pinned against
+    each other by `productDisplayName.spec.ts`, and W0-G8 measured production with it: 6 names
+    began with a closing bracket and 27 carried a close with no open. This is that detector, in
+    the one place that could have prevented the damage instead of reporting it.
+
+    Brackets are the cheap, reliable tell. In logical order an opener precedes its closer; a line
+    stored in visual order has them the other way round. `unbalanced` is recorded but does NOT
+    decide, because OCR loses a bracket often enough that it would fire on undamaged text.
+    """
+    lines = judged = leading = inverted = unbalanced = 0
+    for raw_line in text.split("\n"):
+        line = raw_line.strip()
+        if not line:
+            continue
+        lines += 1
+        if not HEBREW_RUN.search(line):
+            # A line with no Hebrew carries no evidence about Hebrew layout either way.
+            continue
+        judged += 1
+        if any(line.startswith(close) for _, close in BRACKET_PAIRS):
+            leading += 1
+        for opener, closer in BRACKET_PAIRS:
+            opens = line.count(opener)
+            closes = line.count(closer)
+            if opens != closes:
+                unbalanced += 1
+                break
+        for opener, closer in BRACKET_PAIRS:
+            depth = 0
+            found = False
+            for char in line:
+                if char == opener:
+                    depth += 1
+                elif char == closer:
+                    if depth == 0:
+                        found = True
+                        break
+                    depth -= 1
+            if found:
+                inverted += 1
+                break
+    return judged, leading, inverted, unbalanced
+
+
+def _restore_line_order(text: str) -> str:
+    """Invert a visual-order LINE: the whole line, not each word separately.
+
+    WHAT WENT WRONG WITHOUT THIS, MEASURED. `_reverse_hebrew_runs` turns each Hebrew word the
+    right way round and leaves everything else exactly where it sits -- the self-check has said
+    so in as many words for a long time, returning `"word_order": "not_repaired_by_design"`. For
+    an invoice that is enough: a reader wants field values, not sentences. For a PRODUCT NAME the
+    order IS the value, and the residue is exactly what W0-G8 counted in production: of 271
+    catalogue names, 105 carry a bracket at the wrong end or a digit fused to the Hebrew letter
+    that belonged after it -- `)ק"ג 5( קמח לבן` for `קמח לבן (5 ק"ג)`.
+
+    THE TRANSFORM. Split the line into runs; emit them in reverse; reverse each Hebrew run
+    internally; leave each left-to-right run alone; mirror each bracket. That is the Unicode
+    bidirectional reordering for a right-to-left paragraph, and running it on visual order gives
+    logical order back.
+
+    IT IS ITS OWN INVERSE. The run sequence is reversed twice, each Hebrew run twice, each bracket
+    mirrored twice -- and reversing a Hebrew run leaves it a Hebrew run, so the second pass finds
+    the same run boundaries. The evidence contract depends on this: re-applying the named
+    transform to the preserved `original_text` must reproduce the stored text, and the self-check
+    asserts it rather than trusting the argument.
+    """
+    out: list[str] = []
+    for line in text.split("\n"):
+        if not HEBREW_RUN.search(line):
+            # A line with no Hebrew was never laid out right-to-left, so there is nothing to
+            # invert. Without this, `P18B product` came back as `product P18B`: a correction
+            # inventing damage on a line that had none.
+            out.append(line)
+            continue
+        runs: list[str] = []
+        position = 0
+        while position < len(line):
+            match = HEBREW_RUN.match(line, position) or LTR_RUN.match(line, position)
+            if match and match.end() > position:
+                runs.append(match.group(0))
+                position = match.end()
+            else:
+                runs.append(line[position])
+                position += 1
+        rebuilt = []
+        for run in reversed(runs):
+            if HEBREW_RUN.fullmatch(run):
+                rebuilt.append(run[::-1])
+            elif len(run) == 1:
+                rebuilt.append(MIRRORED.get(run, run))
+            else:
+                rebuilt.append(run)
+        out.append("".join(rebuilt))
+    return "\n".join(out)
 
 
 def _normalize_pdf_text_layer(
     native_text: dict[int, str]
-) -> tuple[dict[int, str], dict[str, Any]]:
+) -> tuple[dict[int, str], list[dict[str, Any]]]:
     """Repairs a visual-order text layer AND returns the record of that decision beside it.
 
     THE POINT OF RETURNING TWO THINGS. This correction used to be a one-line in-place overwrite.
@@ -105,29 +228,65 @@ def _normalize_pdf_text_layer(
 
     Whole document, one decision, unchanged from before: a single page may not carry enough final
     letters to judge, and a per-page vote would repair some pages of an invoice and not others.
+
+    TWO CORRECTIONS NOW, AND AT MOST ONE OF THEM FIRES.
+
+      `hebrew_line_order`   -- the whole line was laid out backwards. Inverting the line already
+                               turns every Hebrew word the right way round, so this SUPERSEDES the
+                               word-level repair rather than running after it.
+      `hebrew_visual_order` -- the words were stored backwards but their order on the line was
+                               not. This is what shipped before, unchanged, and it is still the
+                               right answer for every generator that behaves that way.
+
+    Both are recorded either way, because "evaluated and left it alone" and "never looked" are
+    different facts and the stored evidence has to keep them apart.
+
+    WHY THE LINE DECISION IS NOT PER LINE. A price list has hundreds of lines and only some carry
+    a bracket. A per-line vote would inverse the bracketed lines and leave the rest, producing a
+    document half in one order and half in the other -- which is worse than either. One layer, one
+    layout, one decision.
     """
     original = "\n".join(native_text.values())
     words, first_letter, last_letter = _hebrew_order_evidence(original)
+    lines, leading_closer, closer_first, unbalanced = _line_order_evidence(original)
+    # A closing bracket where an opening one belongs cannot happen in logical order, so one is
+    # enough. `unbalanced` is measured and deliberately does not decide: OCR drops a bracket often
+    # enough that it would fire on undamaged text.
+    line_applied = leading_closer + closer_first > 0
     # `_hebrew_is_reversed`'s rule, spelled here so the counts that go into the record and the
     # comparison that decides are read from one measurement rather than two passes of the same
     # regex. The self-check asserts the two agree on both fixtures, so this cannot drift into a
     # second, quieter definition of "reversed".
-    applied = first_letter > last_letter
-    record = {
+    word_applied = (first_letter > last_letter) and not line_applied
+    line_record = {
+        "id": HEBREW_LINE_ORDER,
+        "applied": line_applied,
+        "original_text": original if line_applied else None,
+        "measurements": [
+            {"name": "hebrew_lines", "value": lines},
+            {"name": "leading_closer", "value": leading_closer},
+            {"name": "closer_before_opener", "value": closer_first},
+            {"name": "unbalanced_brackets", "value": unbalanced},
+        ],
+    }
+    word_record = {
         "id": HEBREW_VISUAL_ORDER,
-        "applied": applied,
+        "applied": word_applied,
         # Non-null exactly when something changed. An unapplied correction storing a second copy
         # of the untouched text would be a claim that a correction happened.
-        "original_text": original if applied else None,
+        "original_text": original if word_applied else None,
         "measurements": [
             {"name": "hebrew_words", "value": words},
             {"name": "final_letter_first", "value": first_letter},
             {"name": "final_letter_last", "value": last_letter},
         ],
     }
-    if not applied:
-        return native_text, record
-    return {page: _reverse_hebrew_runs(text) for page, text in native_text.items()}, record
+    records = [line_record, word_record]
+    if line_applied:
+        return {page: _restore_line_order(text) for page, text in native_text.items()}, records
+    if word_applied:
+        return {page: _reverse_hebrew_runs(text) for page, text in native_text.items()}, records
+    return native_text, records
 
 
 def _languages(text: str) -> list[str]:
@@ -698,7 +857,7 @@ def _parse_pdf(
     # so the one place this system rewrites what a document said was also the one place it could
     # not prove it had. `_normalize_pdf_text_layer` returns both, and the record travels in the
     # payload as evidence -- never through the sanitizer, which 0182 keeps out of this path.
-    native_text, text_layer_normalization = _normalize_pdf_text_layer(native_text)
+    native_text, text_layer_normalizations = _normalize_pdf_text_layer(native_text)
 
     for page_number in sorted(native_text):
         if native_text[page_number]:
@@ -799,7 +958,7 @@ def _parse_pdf(
         # Always present, applied or not. The PDF text layer is the only surface in this worker
         # that gets corrected, so this is the only parser that can honestly claim a decision was
         # made -- and it makes the claim on every PDF, including the ones it left alone.
-        normalizations=[text_layer_normalization],
+        normalizations=text_layer_normalizations,
     )
 
 
