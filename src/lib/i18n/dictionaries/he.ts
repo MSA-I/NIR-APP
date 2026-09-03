@@ -37,6 +37,7 @@ export const he = {
    * pattern in src/lib/errors.ts matches, not numbered, so a call site says which failure it means.
    */
   errors: {
+    bank_direct_match_requires_financial_correction: 'ההתאמה הזו רשמה תשלום בפועל, ולכן היא אינה מתבטלת בלחיצה — ביטול היה מוחק רשומת תשלום קיימת. את התיקון עושים בחשבונית עצמה: בכרטיס החשבונית פותחים דרישת זיכוי (מנהל/בעלים או מנהל רכש), והמעקב אחריה במסך "זיכויים".',
     invoice_three_way_assessment_stale: 'המצב השתנה מאז שנפתח החלון — ההתאמה נבדקה מחדש. עברו על מה שהשתנה ואשרו שוב.',
     approved_invoice_override_immutable: 'החשבונית כבר אושרה, ולכן אי אפשר לעקוף את ההתאמה שלה.',
     definite_duplicate_invoice_cannot_be_overridden: 'החשבונית זוהתה ככפילות ודאית. עקיפה אינה אפשרית — יש לבטל את הכפילות תחילה.',
@@ -394,6 +395,7 @@ export const he = {
     exceptionType_receipt_mismatch: 'פער קבלה מול חשבונית',
     exceptionType_item_not_ordered: 'פריט שלא הוזמן',
     exceptionType_expected_document_missing: 'מסמך צפוי שלא הגיע',
+    exceptionType_unapproved_invoice_settled: 'נרשם תשלום מול חשבונית שלא אושרה',
     /* ---------- The commercial catalogue (src/lib/planLabels.ts) ----------
        These MIRROR the database verbatim: subscription_plans.label (0184),
        private.entitlement_definitions.label (0154/0164/0246/0247) and
@@ -1116,6 +1118,7 @@ export const he = {
   },
 
   bank: {
+    directMatchCorrection: 'תיקון כספי אינו מחיקה של תשלום שכבר נרשם, אלא זיכוי שנרשם מולו. פותחים אותו בכרטיס החשבונית — "דרישת זיכוי" (מנהל/בעלים או מנהל רכש) — והוא נמצא במסך "זיכויים".',
     toleranceRefusal: '{currency}: {refusal} הצעות לפי אסמכתא עדיין מוצגות, והתאמה ידנית פתוחה.',
     fmtDate: 'תאריך',
     text: 'תיאור',
@@ -5966,6 +5969,10 @@ export const he = {
 
   /** `/set-password` — the first password of an account opened without one (הכרעת בעלים #332). */
   setPassword: {
+    backToApp: 'חזרה למערכת',
+    changeAction: 'עדכון הסיסמה',
+    changeIntro: 'לחשבון הזה כבר יש סיסמה. כאן בוחרים סיסמה חדשה במקומה — ואם לא רוצים להחליף, אפשר פשוט לחזור למערכת והסיסמה הקיימת נשארת.',
+    changeTitle: 'החלפת סיסמה',
     title: 'בחירת סיסמה',
     checking: 'בודק את החשבון…',
     intro: 'הכתובת אושרה. עכשיו בוחרים סיסמה, וממנה מתחברים בכל פעם הבאה.',
@@ -6191,6 +6198,7 @@ export const he = {
   },
 
   businessSummary: {
+    expectedPaymentsNone: 'אין התחייבויות פתוחות',
     receivedWeek: 'חשבוניות שנקלטו ב-{days} הימים האחרונים',
     awaitingApproval: 'חשבוניות הממתינות לאישור',
     expectedPayments: 'סכום פתוח בדרישות תשלום',

@@ -56,3 +56,80 @@ export const SUMMARY_METRIC_LINES: readonly SummaryMetricLine[] = [
   { key: 'suppliers_raised', labelKey: 'businessSummary.suppliersRaised', labelVars: { days: PRICE_INCREASE_WINDOW_DAYS }, unit: 'count', to: '/prices' },
   { key: 'open_exceptions', labelKey: 'businessSummary.openExceptions', unit: 'count', to: '/exceptions' },
 ];
+
+/* ---------------------------------------------------------------------------
+ * The three readings of a money metric — one definition, two consumers
+ * -------------------------------------------------------------------------*/
+
+/**
+ * `p2_business_summary_rows_by_currency()` answers a money metric in one of THREE ways, and until
+ * 03.09.2026 both readers collapsed two of them into one.
+ *
+ * Metric 3 of `0219` returns a deliberately CURRENCY-LESS measured zero when nothing is owed,
+ * because "nothing is owed" is true in every currency at once. Each reader then kept its own copy
+ * of the same `/^[A-Z]{3}$/` filter — `summary.ts` and `assistant/tools/business-summary.ts` —
+ * dropped that row, and reported the metric as one that could not be measured. The result was a
+ * red bar over a perfectly healthy organisation on `/alerts` and a partial answer in the
+ * assistant: *nothing is owed* read exactly like *we could not find out what is owed*.
+ *
+ * The filter was never the bug; the SECOND COPY of it was. There is one reading function now, and
+ * it lives here beside the wording table both consumers already share, for the same reason that
+ * table does — a metric cannot reach one consumer meaning something the other does not know.
+ */
+
+/** Upper-case ISO-4217, as the RPC returns it. The lower-case form is a FACT unit, not this. */
+const ISO_CURRENCY_CODE = /^[A-Z]{3}$/;
+
+/**
+ * The row shape both readers hand in. Structural rather than shared-by-import: the browser row and
+ * the Edge row are declared in their own modules and neither should have to import the other.
+ */
+export interface SummaryMetricRowLike {
+  value: number | string | null;
+  measured: boolean;
+  currency: string | null;
+}
+
+export type SummaryCurrencyRow = SummaryMetricRowLike & { currency: string };
+
+export type SummaryCurrencyReading =
+  /** Real obligations: one row per currency, ordered, never summed across them. */
+  | { state: 'measured'; rows: SummaryCurrencyRow[] }
+  /** Measured, and there is positively nothing open. A SENTENCE, not a figure — decision F. */
+  | { state: 'absent' }
+  /** We could not measure. The named failure, and the only one of the three that is one. */
+  | { state: 'unmeasured' };
+
+export function readCurrencyMetric(
+  rows: readonly SummaryMetricRowLike[],
+): SummaryCurrencyReading {
+  const byCurrency = rows
+    .filter((row): row is SummaryCurrencyRow =>
+      typeof row.currency === 'string' && ISO_CURRENCY_CODE.test(row.currency))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
+  if (byCurrency.length > 0) return { state: 'measured', rows: byCurrency };
+
+  const unpriced = rows.find((row) => row.currency == null);
+  // A MEASURED ZERO with no currency on it is the RPC stating that nothing is owed. Anything else
+  // without a currency is not something this product may state: a non-zero amount whose currency
+  // is unknown is not a measurement, and naming a currency for it would be exactly the invention
+  // the money rules exist to prevent. `value == null` is caught first because `Number(null)` is 0.
+  if (unpriced && unpriced.measured && unpriced.value != null && Number(unpriced.value) === 0) {
+    return { state: 'absent' };
+  }
+  return { state: 'unmeasured' };
+}
+
+/**
+ * What a measured absence SAYS, per metric (decision F, owner 03.09.2026).
+ *
+ * Not `—`: this product reserves the em dash for UNKNOWN, and "nothing is owed" is something we
+ * positively know. Not `0 ILS` either — that asserts something about one currency while saying
+ * nothing at all about the others. It is a sentence, and no figure beside it.
+ *
+ * A currency metric with no entry here has no sanctioned wording, and both readers say so as a
+ * named miss rather than writing a sentence of their own.
+ */
+export const SUMMARY_ABSENCE_KEYS: Readonly<Record<string, TKey>> = {
+  expected_payments: 'businessSummary.expectedPaymentsNone',
+};

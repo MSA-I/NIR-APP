@@ -29,7 +29,16 @@ import { Disclosure, ICON, Note } from '../ui';
  * product is exactly what this feature exists to prevent.
  */
 
-/** `value: null` is "not measured". It renders as `—`, never as 0 — zero is a claim about the business. */
+/**
+ * `value: null` is "not measured". It renders as `—`, never as 0 — zero is a claim about the
+ * business.
+ *
+ * A `text` fact is the opposite case and the two must not be confused: it is something the server
+ * positively KNOWS and states in words. Decision F (owner 03.09.2026) is the reason there is one —
+ * when nothing is owed the summary tool issues a sentence rather than a money fact, because
+ * `0 ILS` would assert something about one currency while saying nothing about the others, and
+ * `—` would call a known state unknown.
+ */
 function factValueText(fact: Fact): string {
   if (fact.value === null) return '—';
   if (typeof fact.value === 'string') return fact.unit === 'date' ? fmtDate(fact.value) : fact.value;
@@ -124,7 +133,15 @@ function EvidenceTrail({ facts, sources, sourceIsCurrent, onNavigate }: {
                 <span className="block">{fact.label}</span>
                 <span className="mt-0.5 block text-xs">{t('answerView.fmtDateTime')}<span className="num">{fmtDateTime(fact.as_of)}</span></span>
               </dt>
-              <dd className="num shrink-0 text-sm font-medium text-ink-mid">{factValueText(fact)}</dd>
+              {/* `.num` is this repo's marker for a cell holding a FIGURE — tabular lining
+                  numerals — and `shrink-0` because a number must never wrap. A `text` fact holds
+                  a SENTENCE, so it takes neither: it wraps like the prose it is, and is not
+                  dressed up as a quantity in a column of quantities. */}
+              <dd className={fact.unit === 'text'
+                ? 'min-w-0 text-end text-sm font-medium text-ink-mid'
+                : 'num shrink-0 text-sm font-medium text-ink-mid'}>
+                {factValueText(fact)}
+              </dd>
             </div>
           ))}
         </dl>

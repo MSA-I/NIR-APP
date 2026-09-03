@@ -247,6 +247,11 @@ jobs:
       # webhook-verify is the outbound trust boundary -- the SSRF corpus behind #253, and since
       # guardedDownload the only code here that reads a remote body. It ran in no gate at all,
       # so its corpus and its two mutation proofs were green by assumption.
+      #
+      # The GLOB, not the hand-kept list this step used to carry: preflight.test.ts was added
+      # beside the other two and a list would have shipped it silently. --allow-env is granted
+      # to the whole invocation for the same reason the assistant step grants it -- splitting
+      # the glob into per-permission lists would reintroduce the list.
       - name: Outbound trust boundary (SSRF corpus, guarded download, signature verification)
         if: needs.changes.outputs.edge == 'true'
         run: |
@@ -254,8 +259,8 @@ jobs:
           VERIFY_ROOT=supabase/functions/webhook-verify
           npx --yes deno test \
             --config "$VERIFY_ROOT/deno.json" \
-            "$VERIFY_ROOT/ssrf.test.ts" \
-            "$VERIFY_ROOT/verify.test.ts" 2>&1 | tee deno-webhook-verify.log
+            --allow-env \
+            "$VERIFY_ROOT"/*.test.ts 2>&1 | tee deno-webhook-verify.log
           grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-webhook-verify.log \
             || { echo 'No outbound trust boundary test completed.'; exit 1; }
           ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-webhook-verify.log \
@@ -297,6 +302,28 @@ jobs:
           ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' \
             deno-billing-webhook.log deno-email-webhook.log deno-whatsapp-webhook.log \
             || { echo 'Ignored or skipped webhook-door cases are not acceptable.'; exit 1; }
+
+      # The OTHER half of billing: the function a signed-in owner calls to start a payment.
+      # core.test.ts -- twelve cases, including the ordering that keeps a payment attributable
+      # -- ran in NO gate, exactly like the three signature doors above before this file grew
+      # a step for them. preflight.test.ts joins it: on 03.09.2026 this function answered a
+      # live CORS preflight 401, so the browser never sent the purchase POST at all.
+      # A glob, not a list. --allow-read is core.test.ts's source assertion; --allow-env is
+      # preflight.test.ts reading the origin allowlist.
+      - name: Billing-checkout ordering and preflight contracts
+        if: needs.changes.outputs.edge == 'true'
+        run: |
+          set -euo pipefail
+          CHECKOUT_ROOT=supabase/functions/billing-checkout
+          npx --yes deno test \
+            --allow-read="$CHECKOUT_ROOT" \
+            --allow-env \
+            "$CHECKOUT_ROOT"/*.test.ts 2>&1 | tee deno-billing-checkout.log
+          grep -Eq '\b[1-9][0-9]*\s+passed\b' deno-billing-checkout.log \
+            || { echo 'No billing-checkout test completed.'; exit 1; }
+          ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-billing-checkout.log \
+            || { echo 'Ignored or skipped billing-checkout cases are not acceptable.'; exit 1; }
+          npx --yes deno check "$CHECKOUT_ROOT/index.ts"
 
       - name: Email order-delivery template contracts
         if: needs.changes.outputs.edge == 'true'

@@ -1,0 +1,11 @@
+{
+  "__note": "RC7 / Wave 1b. NO key here is referenced from code — the three adapters ship using only keys that already exist in he.ts/en.ts, so nothing is blocked on this file. These are the two sentences the per-currency shape would state better than the existing wording. Adopting them is optional and is a wording improvement, not a fix.",
+  "assistantTools.moneyPerCurrencyWarning": {
+    "he": "כל סכום מוחזר שורה לכל מטבע. אין המרה בין מטבעות ואין לחבר או להשוות סכומים ממטבעות שונים.",
+    "en": "Every amount is returned as one row per currency. There is no conversion between currencies, and amounts in different currencies are never added or compared."
+  },
+  "assistantTools.moneyNoCurrencyRow": {
+    "he": "המדד הזה לא נמדד באף מטבע — אין מטבע לנקוב בו סכום. הספירה שלצדו היא שאומרת שאין מה למדוד, ואין להציג כאן אפס.",
+    "en": "This figure was not measured in any currency, so there is no currency to state an amount in. The count beside it is what says there is nothing to measure; it must never be shown as zero."
+  }
+}

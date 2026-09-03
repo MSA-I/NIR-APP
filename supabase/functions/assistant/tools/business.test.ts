@@ -2,7 +2,7 @@
 // null-stays-null, projections that never widen, and deltas that only ever come from the server.
 // Every database interaction is a fake -- nothing here touches a live Supabase.
 import assert from "node:assert/strict";
-import type { ActorContext } from "../../../../src/lib/assistant/contracts.ts";
+import type { ActorContext, Fact } from "../../../../src/lib/assistant/contracts.ts";
 import { compareOrderReceiptInvoice } from "./compareOrderReceiptInvoice.ts";
 import { explainInvoiceBlock } from "./explainInvoiceBlock.ts";
 import { findEntity } from "./findEntity.ts";
@@ -78,6 +78,21 @@ function ctxWith(db: ToolReads, role: ActorContext["role"] = "owner"): ToolConte
     now: () => new Date("2026-08-20T08:00:00.000Z"),
     locale: "he",
   };
+}
+
+/**
+ * A money fact is one whose unit is a currency. `FACT_UNITS` -- count, percent, date, text -- has
+ * no three-letter member, so the ISO-4217 shape the contract demands is also the test for one.
+ * Reading it off the emitted unit (rather than off a list of labels) is deliberate: the defect
+ * being guarded here was a unit the adapter chose instead of read.
+ */
+function moneyFacts(envelope: { facts: readonly Fact[] }): Fact[] {
+  return envelope.facts.filter((fact) => /^[a-z]{3}$/.test(fact.unit));
+}
+
+/** Every distinct unit a money fact carried, for asserting "one per currency and no other". */
+function moneyUnits(envelope: { facts: readonly Fact[] }): string[] {
+  return [...new Set(moneyFacts(envelope).map((fact) => fact.unit))].sort();
 }
 
 /* ============================================================================
@@ -198,35 +213,39 @@ Deno.test("registry role gate refuses an accountant before the dashboard tool ru
  * Unmeasured stays null and never becomes 0
  * ==========================================================================*/
 
+// The snapshot's own shape since 0218/0221, verified against the LIVE body of
+// public.management_dashboard_snapshot(date) rather than the migration that created it: every
+// money figure is a `<name>ByCurrency` ARRAY, or a JSON null when the guard above the aggregate
+// found nothing to measure. This fixture is the "null" column of the matrix below.
 const SNAPSHOT_WITH_NULLS = {
-  money: { openBalance: null, openInvoiceCount: 0 },
+  money: { openBalanceByCurrency: null, openInvoiceCount: 0 },
   paymentRequests: {
     pendingApproval: 0,
     drafts: 0,
     activeCount: 3,
     dueDateCoverage: 0,
     overdue: null,
-    overdueAmount: null,
+    overdueAmountByCurrency: null,
     dueToday: null,
     dueWithin7Count: null,
-    dueWithin7Amount: null,
+    dueWithin7AmountByCurrency: null,
   },
-  credits: { count: 0, sum: null },
+  credits: { count: 0, sumByCurrency: null },
   bank: { unmatched: 2, suggested: 1 },
   invoices: { pendingApproval: 1, toReview: 0, notSent: 0 },
   openOrders: {
     count: 0,
-    committed: null,
-    remaining: 0,
+    committedByCurrency: null,
+    remainingByCurrency: [],
     noDate: 0,
     late: 0,
     awaitingConfirmation: 0,
   },
   openSupplierCount: 0,
-  topBalances: [],
+  topBalancesByCurrency: [],
 };
 
-Deno.test("dashboard nulls survive as null facts; measured zeros stay zero", async () => {
+Deno.test("dashboard nulls emit no money fact at all; measured zero counts stay zero", async () => {
   const envelope = await getDashboardSnapshot.run(
     ctxWith(fakeDb({
       rpc: { management_dashboard_snapshot: { data: SNAPSHOT_WITH_NULLS, error: null } },
@@ -235,10 +254,24 @@ Deno.test("dashboard nulls survive as null facts; measured zeros stay zero", asy
   );
   assert.equal(envelope.complete, true);
   const byLabel = new Map(envelope.facts.map((fact) => [fact.label, fact.value]));
-  assert.equal(byLabel.get("יתרה פתוחה לספקים (חשבוניות payable בקיזוז תשלומים וזיכויים)"), null);
-  assert.equal(byLabel.get("סכום הזיכויים הפתוחים"), null);
   assert.equal(byLabel.get("חשבוניות עם יתרה פתוחה"), 0);
   assert.equal(byLabel.get("תנועות בנק ללא התאמה"), 2);
+  // A money figure with no currency row has no currency to be stated in. It is NOT emitted as a
+  // fact -- there is no honest unit for it -- and it is NOT silent either: every one is named.
+  assert.deepEqual(moneyFacts(envelope), []);
+  const named = envelope.failures.map((entry) => entry.code);
+  assert.deepEqual(named.filter((code) => !code.endsWith(":not_measured")), []);
+  assert.equal(named.includes("money.openBalanceByCurrency:not_measured"), true);
+  assert.equal(named.includes("credits.sumByCurrency:not_measured"), true);
+  assert.equal(named.includes("openOrders.committedByCurrency:not_measured"), true);
+  // `remainingByCurrency` arrives as [] rather than null when there are no open orders. An empty
+  // list is still "no currency to say it in", and it must not become a zero either.
+  assert.equal(named.includes("openOrders.remainingByCurrency:not_measured"), true);
+  assert.equal(
+    envelope.warnings.some((warning) => warning.includes("null")),
+    true,
+    "the null warning is missing",
+  );
   for (const fact of envelope.facts) {
     assert.notEqual(fact.value, undefined);
     if (fact.value === null) continue;
@@ -274,12 +307,16 @@ Deno.test("office never receives the snapshot's RLS-empty bank and balance zeros
   const data = envelope.data[0] as Record<string, unknown>;
   assert.equal("bank" in data, false);
   assert.equal("openSupplierCount" in data, false);
-  assert.equal("topBalances" in data, false);
-  // The open balance itself stays, as the null the snapshot computes for office by design.
-  const openBalance = envelope.facts.find((fact) =>
-    fact.label.startsWith("יתרה פתוחה לספקים")
+  // The key is `topBalancesByCurrency` since 0218; stripping the OLD name would have stripped
+  // nothing at all and left the per-currency supplier rows in the office copy.
+  assert.equal("topBalancesByCurrency" in data, false);
+  // The open balance is the null the snapshot computes for office by design, so for office it is
+  // a NAMED not-measured entry rather than a money fact with an invented currency on it.
+  assert.deepEqual(moneyFacts(envelope), []);
+  assert.equal(
+    envelope.failures.some((entry) => entry.code === "money.openBalanceByCurrency:not_measured"),
+    true,
   );
-  assert.equal(openBalance?.value, null);
 });
 
 Deno.test("owner still receives the bank counts the office test strips", async () => {
@@ -290,9 +327,18 @@ Deno.test("owner still receives the bank counts the office test strips", async (
     {},
   );
   assert.equal(envelope.complete, true);
-  assert.deepEqual(envelope.failures, []);
   assert.equal(
     envelope.facts.some((fact) => fact.label === "תנועות בנק ללא התאמה"),
+    true,
+  );
+  // The owner's failures on this fixture are the six money figures that have no currency row —
+  // "not measured", not "not allowed". The office refusal is what must NOT be here.
+  assert.equal(
+    envelope.failures.some((entry) => entry.code === "not_permitted"),
+    false,
+  );
+  assert.equal(
+    envelope.failures.every((entry) => entry.code.endsWith(":not_measured")),
     true,
   );
 });
@@ -303,9 +349,9 @@ Deno.test("purchase metrics relays the product's own net definition, never a res
       rpc: {
         get_purchase_metrics: {
           data: {
-            gross_expense: 100,
+            gross_expense_by_currency: [{ currency: "ILS", amount: 100 }],
             gross_invoice_count: 1,
-            net_expense: 100,
+            net_expense_by_currency: [{ currency: "ILS", amount: 100 }],
             net_definition: "gross_minus_offset_and_closed_credits",
           },
           error: null,
@@ -333,7 +379,17 @@ Deno.test("payment exposure keeps nulls null and always carries the coverage", a
   );
   assert.equal(envelope.complete, true);
   const byLabel = new Map(envelope.facts.map((fact) => [fact.label, fact.value]));
-  assert.equal(byLabel.get("סכום דרישות שמועדן עבר (רק דרישות מתוארכות)"), null);
+  // No dated request exists, so there is no currency in which to state the exposure: no money
+  // fact, and the absence is named rather than left to be inferred from a missing row.
+  assert.deepEqual(moneyFacts(envelope), []);
+  assert.equal(
+    envelope.failures.some((entry) => entry.code === "overdueAmountByCurrency:not_measured"),
+    true,
+  );
+  assert.equal(
+    envelope.failures.some((entry) => entry.code === "dueWithin7AmountByCurrency:not_measured"),
+    true,
+  );
   assert.equal(
     byLabel.get("דרישות פעילות עם תאריך יעד (הכיסוי של כל מדדי החשיפה)"),
     0,
@@ -392,13 +448,13 @@ Deno.test("purchase metrics passes the server's nulls through untouched", async 
             from: "2026-07-21",
             to: "2026-08-20",
             time_zone: "Asia/Jerusalem",
-            committed: null,
+            committed_by_currency: null,
             committed_order_count: 0,
-            gross_expense: 1234.56,
+            gross_expense_by_currency: [{ currency: "ILS", amount: 1234.56 }],
             gross_invoice_count: 3,
-            credits_recognised: null,
-            credits_pending: null,
-            net_expense: 1234.56,
+            credits_recognised_by_currency: null,
+            credits_pending_by_currency: null,
+            net_expense_by_currency: [{ currency: "ILS", amount: 1234.56 }],
             net_definition: "gross_minus_offset_and_closed_credits",
           },
           error: null,
@@ -409,14 +465,27 @@ Deno.test("purchase metrics passes the server's nulls through untouched", async 
   );
   assert.equal(envelope.complete, true);
   const byLabel = new Map(envelope.facts.map((fact) => [fact.label, fact.value]));
+  // Nothing was committed in the window, so no currency carries a commitment figure: no fact,
+  // a named absence, and the measured zero order count beside it saying why.
+  assert.equal(
+    envelope.failures.some((entry) => entry.code === "committed_by_currency:not_measured"),
+    true,
+  );
+  assert.equal(
+    envelope.facts.some((fact) => fact.label.startsWith("התחייבות בהזמנות")),
+    false,
+  );
   assert.equal(
     byLabel.get("התחייבות בהזמנות (במחירי הזמנה, לפי יום יצירה עסקי) — 30 הימים האחרונים"),
-    null,
+    undefined,
   );
   assert.equal(
-    byLabel.get("הוצאה ברוטו (חשבוניות מאושרות, לפי תאריך החשבונית) — 30 הימים האחרונים"),
+    byLabel.get(
+      "הוצאה ברוטו (חשבוניות מאושרות, לפי תאריך החשבונית) (ILS) — 30 הימים האחרונים",
+    ),
     1234.56,
   );
+  assert.deepEqual(moneyUnits(envelope), ["ils"]);
 });
 
 Deno.test("purchase metrics window anchors on the business day with the product's trailing shape", async () => {
@@ -425,7 +494,7 @@ Deno.test("purchase metrics window anchors on the business day with the product'
   db.rpc = (name, args) => {
     captured = args;
     return Promise.resolve({
-      data: { committed: null },
+      data: { committed_by_currency: null },
       error: null,
     });
   };
@@ -771,4 +840,381 @@ Deno.test("every tool declares roles, a Hebrew description and a strict JSON sch
   }
   const names = new Set(deterministicBusinessTools.map((tool) => tool.name));
   assert.equal(names.size, 15);
+});
+
+/* ============================================================================
+ * RC7 -- the per-currency / measured-zero / not-measured matrix
+ *
+ * One comparison is not enough, so each of the three money adapters is put through the same three
+ * columns:
+ *   TWO CURRENCIES  one fact per currency, each with its own lower-case ISO unit, and NEVER a
+ *                   row carrying the arithmetic sum of the two;
+ *   MEASURED ZERO   a 0 in a currency is a measurement and survives as 0 with that currency;
+ *   NOT MEASURED    a JSON null (or an empty list) has no currency to be stated in, so no money
+ *                   fact is emitted and the absence is NAMED rather than left silent.
+ *
+ * The fixtures are the live read models' own shapes, taken from
+ * `pg_get_functiondef('public.management_dashboard_snapshot(date)')` and
+ * `private.canonical_purchase_metrics(uuid,date,date)` -- not from the migrations that first
+ * created them, because both were replaced in place by 0218/0221.
+ * ==========================================================================*/
+
+const TWO_CURRENCY_SNAPSHOT = {
+  money: {
+    openBalanceByCurrency: [
+      { currency: "ILS", amount: 11571, invoiceCount: 7 },
+      { currency: "USD", amount: 900, invoiceCount: 2 },
+    ],
+    openInvoiceCount: 9,
+  },
+  paymentRequests: {
+    pendingApproval: 2,
+    drafts: 1,
+    activeCount: 6,
+    dueDateCoverage: 4,
+    overdue: 2,
+    overdueAmountByCurrency: [
+      { currency: "ILS", amount: 4300 },
+      { currency: "USD", amount: 0 },
+    ],
+    dueToday: 1,
+    dueWithin7Count: 3,
+    dueWithin7AmountByCurrency: [
+      { currency: "ILS", amount: 2200 },
+      { currency: "USD", amount: 150 },
+    ],
+  },
+  credits: {
+    count: 3,
+    sumByCurrency: [
+      { currency: "ILS", amount: 640 },
+      { currency: "USD", amount: 25 },
+    ],
+  },
+  bank: { unmatched: 2, suggested: 1 },
+  invoices: { pendingApproval: 1, toReview: 0, notSent: 0 },
+  openOrders: {
+    count: 4,
+    committedByCurrency: [
+      { currency: "ILS", amount: 8800 },
+      { currency: "USD", amount: 1200 },
+    ],
+    remainingByCurrency: [
+      { currency: "ILS", amount: 3100 },
+      { currency: "USD", amount: 0 },
+    ],
+    noDate: 1,
+    late: 1,
+    awaitingConfirmation: 2,
+  },
+  openSupplierCount: 2,
+  // The same supplier owes in both currencies -- two facts, ONE link, and never a combined total.
+  topBalancesByCurrency: [
+    { currency: "ILS", rows: [{ id: SUPPLIER_ID, name: "אחים כהן", balance: 9100 }] },
+    {
+      currency: "USD",
+      rows: [
+        { id: SUPPLIER_ID, name: "אחים כהן", balance: 400 },
+        { id: ORDER_ID, name: "Global Foods", balance: 500 },
+      ],
+    },
+  ],
+};
+
+async function dashboardFor(snapshot: unknown, role: ActorContext["role"] = "owner") {
+  return await getDashboardSnapshot.run(
+    ctxWith(
+      fakeDb({ rpc: { management_dashboard_snapshot: { data: snapshot, error: null } } }),
+      role,
+    ),
+    {},
+  );
+}
+
+async function exposureFor(snapshot: unknown) {
+  return await getPaymentExposure.run(
+    ctxWith(fakeDb({ rpc: { management_dashboard_snapshot: { data: snapshot, error: null } } })),
+    {},
+  );
+}
+
+async function purchaseFor(metrics: unknown) {
+  return await getPurchaseMetrics.run(
+    ctxWith(fakeDb({ rpc: { get_purchase_metrics: { data: metrics, error: null } } })),
+    { window: "last_30_days" },
+  );
+}
+
+Deno.test("matrix / dashboard / two currencies: one fact each, no cross-currency sum", async () => {
+  const envelope = await dashboardFor(TWO_CURRENCY_SNAPSHOT);
+  assert.equal(envelope.complete, true);
+  assert.deepEqual(envelope.failures, []);
+  assert.deepEqual(moneyUnits(envelope), ["ils", "usd"]);
+
+  const amountsFor = (prefix: string) =>
+    envelope.facts
+      .filter((fact) => fact.label.startsWith(prefix) && /^[a-z]{3}$/.test(fact.unit))
+      .map((fact) => [fact.unit, fact.value] as const)
+      .sort();
+  assert.deepEqual(amountsFor("יתרה פתוחה לספקים"), [["ils", 11571], ["usd", 900]]);
+  assert.deepEqual(amountsFor("סכום הזיכויים הפתוחים"), [["ils", 640], ["usd", 25]]);
+  assert.deepEqual(amountsFor("שווי ההזמנות הפתוחות"), [["ils", 8800], ["usd", 1200]]);
+  // A USD row of exactly 0 is a MEASURED zero and keeps its own currency; it is not dropped and
+  // it is not folded into the shekel row.
+  assert.deepEqual(amountsFor("סכום הדרישות שמועדן עבר"), [["ils", 4300], ["usd", 0]]);
+  assert.deepEqual(amountsFor("שווי הכמות שטרם התקבלה"), [["ils", 3100], ["usd", 0]]);
+
+  // The one thing no adapter may ever produce: a fact whose value is two currencies added up.
+  // Only pairs of two NON-ZERO amounts are listed: x + 0 equals x, so a pair containing a
+  // measured zero would fail this check on the honest per-currency row itself.
+  const forbidden = new Set([11571 + 900, 640 + 25, 8800 + 1200, 2200 + 150, 9100 + 400]);
+  for (const fact of moneyFacts(envelope)) {
+    assert.equal(
+      forbidden.has(fact.value as number),
+      false,
+      `a cross-currency total leaked into ${fact.label}`,
+    );
+  }
+
+  // Every money fact carries the lower-case ISO unit the contract demands, and its currency is
+  // in the label too, so a reader can never be handed an unlabelled amount.
+  for (const fact of moneyFacts(envelope)) {
+    assert.match(fact.unit, /^[a-z]{3}$/);
+    assert.equal(
+      fact.label.includes(`(${fact.unit.toUpperCase()})`),
+      true,
+      `${fact.label} does not name its currency`,
+    );
+  }
+
+  // topBalancesByCurrency is a list of GROUPS: three supplier facts across two currencies, and
+  // two sources, because one supplier owed in two currencies is one supplier to open.
+  const balances = envelope.facts.filter((fact) => fact.kind === "supplier.balance");
+  assert.equal(balances.length, 3);
+  assert.deepEqual(
+    balances.map((fact) => [fact.unit, fact.value]).sort(),
+    [["ils", 9100], ["usd", 400], ["usd", 500]],
+  );
+  assert.equal(envelope.sources.length, 2);
+  assert.equal(new Set(envelope.sources.map((source) => source.entity_id)).size, 2);
+});
+
+Deno.test("matrix / dashboard / measured zero stays zero in its own currency", async () => {
+  const zeroed = {
+    ...TWO_CURRENCY_SNAPSHOT,
+    money: { openBalanceByCurrency: [{ currency: "ILS", amount: 0, invoiceCount: 0 }], openInvoiceCount: 0 },
+    credits: { count: 1, sumByCurrency: [{ currency: "ILS", amount: 0 }] },
+  };
+  const envelope = await dashboardFor(zeroed);
+  const openBalance = envelope.facts.filter((fact) => fact.label.startsWith("יתרה פתוחה לספקים"));
+  assert.equal(openBalance.length, 1);
+  assert.equal(openBalance[0].value, 0);
+  assert.equal(openBalance[0].unit, "ils");
+  const credits = envelope.facts.filter((fact) => fact.kind === "credit.open_amount");
+  assert.equal(credits.length, 1);
+  assert.equal(credits[0].value, 0);
+  assert.equal(credits[0].unit, "ils");
+  // A measured zero is a measurement: it is never reported as "not measured".
+  assert.equal(
+    envelope.failures.some((entry) => entry.code.startsWith("money.openBalanceByCurrency")),
+    false,
+  );
+});
+
+Deno.test("matrix / dashboard / a null amount inside a currency row stays null", async () => {
+  const envelope = await dashboardFor({
+    ...TWO_CURRENCY_SNAPSHOT,
+    money: { openBalanceByCurrency: [{ currency: "ILS", amount: null }], openInvoiceCount: 1 },
+  });
+  const openBalance = envelope.facts.filter((fact) => fact.label.startsWith("יתרה פתוחה לספקים"));
+  assert.equal(openBalance.length, 1);
+  assert.equal(openBalance[0].value, null, "a null amount became a number");
+  assert.equal(openBalance[0].unit, "ils");
+  assert.equal(envelope.warnings.some((warning) => warning.includes("null")), true);
+});
+
+Deno.test("matrix / dashboard / a currency this product cannot name is reported, not guessed", async () => {
+  const envelope = await dashboardFor({
+    ...TWO_CURRENCY_SNAPSHOT,
+    money: {
+      openBalanceByCurrency: [{ currency: "ILS", amount: 12 }, { currency: "shekel", amount: 30 }],
+      openInvoiceCount: 2,
+    },
+  });
+  assert.deepEqual(
+    envelope.facts
+      .filter((fact) => fact.label.startsWith("יתרה פתוחה לספקים"))
+      .map((fact) => [fact.unit, fact.value]),
+    [["ils", 12]],
+  );
+  assert.equal(
+    envelope.failures.some((entry) =>
+      entry.code === "money.openBalanceByCurrency:currency_unrecognised"
+    ),
+    true,
+  );
+});
+
+Deno.test("matrix / exposure / two currencies, a measured zero, and no total", async () => {
+  const envelope = await exposureFor(TWO_CURRENCY_SNAPSHOT);
+  assert.equal(envelope.complete, true);
+  assert.deepEqual(envelope.failures, []);
+  assert.deepEqual(moneyUnits(envelope), ["ils", "usd"]);
+  const overdue = envelope.facts
+    .filter((fact) => fact.label.startsWith("סכום דרישות שמועדן עבר"))
+    .map((fact) => [fact.unit, fact.value] as const)
+    .sort();
+  assert.deepEqual(overdue, [["ils", 4300], ["usd", 0]]);
+  const within7 = envelope.facts
+    .filter((fact) => fact.label.startsWith("סכום דרישות שמועדן בשבעת"))
+    .map((fact) => [fact.unit, fact.value] as const)
+    .sort();
+  assert.deepEqual(within7, [["ils", 2200], ["usd", 150]]);
+  // 4300 + 0 and 2200 + 150 must appear nowhere.
+  for (const fact of moneyFacts(envelope)) {
+    assert.notEqual(fact.value, 2350, `a cross-currency total leaked into ${fact.label}`);
+  }
+  // The exposure envelope's own data keeps the per-currency arrays, not a flattened scalar.
+  const data = envelope.data[0] as Record<string, unknown>;
+  assert.equal(Array.isArray(data.overdueAmountByCurrency), true);
+  assert.equal(Array.isArray(data.dueWithin7AmountByCurrency), true);
+});
+
+Deno.test("matrix / exposure / a dated window with nothing in it is a measured zero", async () => {
+  const envelope = await exposureFor({
+    ...TWO_CURRENCY_SNAPSHOT,
+    paymentRequests: {
+      ...TWO_CURRENCY_SNAPSHOT.paymentRequests,
+      overdue: 0,
+      overdueAmountByCurrency: [{ currency: "ILS", amount: 0 }],
+    },
+  });
+  const overdue = envelope.facts.filter((fact) =>
+    fact.label.startsWith("סכום דרישות שמועדן עבר")
+  );
+  assert.equal(overdue.length, 1);
+  assert.equal(overdue[0].value, 0);
+  assert.equal(overdue[0].unit, "ils");
+  assert.equal(
+    envelope.failures.some((entry) => entry.code.startsWith("overdueAmountByCurrency")),
+    false,
+  );
+});
+
+const TWO_CURRENCY_PURCHASE = {
+  from: "2026-07-21",
+  to: "2026-08-20",
+  time_zone: "Asia/Jerusalem",
+  committed_by_currency: [
+    { currency: "ILS", amount: 52000 },
+    { currency: "USD", amount: 3100 },
+  ],
+  committed_order_count: 12,
+  gross_expense_by_currency: [
+    { currency: "ILS", amount: 41000 },
+    { currency: "USD", amount: 2000 },
+  ],
+  gross_invoice_count: 18,
+  credits_recognised_by_currency: [{ currency: "ILS", amount: 500 }],
+  credits_pending_by_currency: [{ currency: "USD", amount: 0 }],
+  // Net is gross minus recognised credits WITHIN one currency: USD has no credit, so its net
+  // equals its gross. A cross-currency net would have produced 42500 here.
+  net_expense_by_currency: [
+    { currency: "ILS", amount: 40500 },
+    { currency: "USD", amount: 2000 },
+  ],
+  net_definition: "gross_minus_offset_and_closed_credits_within_one_currency",
+};
+
+Deno.test("matrix / purchase metrics / two currencies, per-currency net, no total", async () => {
+  const envelope = await purchaseFor(TWO_CURRENCY_PURCHASE);
+  assert.equal(envelope.complete, true);
+  assert.deepEqual(envelope.failures, []);
+  assert.deepEqual(moneyUnits(envelope), ["ils", "usd"]);
+  const amountsFor = (prefix: string) =>
+    envelope.facts
+      .filter((fact) => fact.label.startsWith(prefix) && /^[a-z]{3}$/.test(fact.unit))
+      .map((fact) => [fact.unit, fact.value] as const)
+      .sort();
+  assert.deepEqual(amountsFor("התחייבות בהזמנות"), [["ils", 52000], ["usd", 3100]]);
+  assert.deepEqual(amountsFor("הוצאה ברוטו"), [["ils", 41000], ["usd", 2000]]);
+  assert.deepEqual(amountsFor("הוצאה נטו"), [["ils", 40500], ["usd", 2000]]);
+  // A recognised credit in shekels does not reduce the dollar bill, and the pending USD 0 is a
+  // measured zero that keeps its currency.
+  assert.deepEqual(amountsFor("זיכויים שהוכרו"), [["ils", 500]]);
+  assert.deepEqual(amountsFor("זיכויים שסוכמו וטרם קוזזו"), [["usd", 0]]);
+  // The shekel credit did NOT touch the dollar net: USD net equals USD gross exactly. Had the
+  // 500 ILS credit been applied across currencies this would read 1500.
+  const usdNet = envelope.facts.find((fact) =>
+    fact.label.startsWith("הוצאה נטו") && fact.unit === "usd"
+  );
+  assert.equal(usdNet?.value, 2000);
+  const forbidden = new Set([52000 + 3100, 41000 + 2000, 40500 + 2000]);
+  for (const fact of moneyFacts(envelope)) {
+    assert.equal(
+      forbidden.has(fact.value as number),
+      false,
+      `a cross-currency total leaked into ${fact.label}`,
+    );
+  }
+  // Every money label still carries the window, so a figure can never be read against the wrong
+  // period just because the currency was added to it.
+  for (const fact of moneyFacts(envelope)) {
+    assert.equal(fact.label.endsWith("— 30 הימים האחרונים"), true, fact.label);
+  }
+});
+
+Deno.test("matrix / purchase metrics / everything unmeasured: no facts, every absence named", async () => {
+  const envelope = await purchaseFor({
+    from: "2026-07-21",
+    to: "2026-08-20",
+    time_zone: "Asia/Jerusalem",
+    committed_by_currency: null,
+    committed_order_count: 0,
+    gross_expense_by_currency: null,
+    gross_invoice_count: 0,
+    credits_recognised_by_currency: null,
+    credits_pending_by_currency: null,
+    net_expense_by_currency: null,
+    net_definition: "gross_minus_offset_and_closed_credits_within_one_currency",
+  });
+  assert.deepEqual(moneyFacts(envelope), []);
+  assert.deepEqual(
+    envelope.failures.map((entry) => entry.code).sort(),
+    [
+      "committed_by_currency:not_measured",
+      "credits_pending_by_currency:not_measured",
+      "credits_recognised_by_currency:not_measured",
+      "gross_expense_by_currency:not_measured",
+      "net_expense_by_currency:not_measured",
+    ],
+  );
+  // The counts beside them are the measured zeros that say why nothing has a currency.
+  const byLabel = new Map(envelope.facts.map((fact) => [fact.label, fact.value]));
+  assert.equal(
+    byLabel.get("מספר ההזמנות שנספרו בהתחייבות — 30 הימים האחרונים") ??
+      [...byLabel.entries()].find(([label]) => label.startsWith("מספר ההזמנות"))?.[1],
+    0,
+  );
+});
+
+Deno.test("matrix / no adapter can emit a money fact whose unit is not a currency", async () => {
+  const envelopes = [
+    await dashboardFor(TWO_CURRENCY_SNAPSHOT),
+    await exposureFor(TWO_CURRENCY_SNAPSHOT),
+    await purchaseFor(TWO_CURRENCY_PURCHASE),
+  ];
+  for (const envelope of envelopes) {
+    for (const fact of envelope.facts) {
+      const isMoneyKind = fact.kind === "metric.money" || fact.kind === "credit.open_amount" ||
+        fact.kind === "supplier.balance";
+      if (!isMoneyKind) continue;
+      assert.match(fact.unit, /^[a-z]{3}$/, `${fact.label} carries a non-currency unit`);
+    }
+    // …and no count fact ever picked up a currency unit on the way.
+    for (const fact of envelope.facts) {
+      if (fact.kind !== "metric.count") continue;
+      assert.equal(fact.unit, "count", `${fact.label} is a count with unit ${fact.unit}`);
+    }
+  }
 });

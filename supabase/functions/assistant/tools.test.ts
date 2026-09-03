@@ -3,6 +3,8 @@
 // roles and inputs outside its allowlist -- as envelopes, never as silence.
 import assert from "node:assert/strict";
 import type { ActorContext } from "../../../src/lib/assistant/contracts.ts";
+import { SUMMARY_ABSENCE_KEYS } from "../../../src/lib/assistant/summaryLines.ts";
+import { readerText } from "./reader-locale.ts";
 import { getBusinessSummaryTool } from "./tools/business-summary.ts";
 import { getOpenAlertsTool } from "./tools/open-alerts.ts";
 import {
@@ -187,6 +189,127 @@ Deno.test("get_business_summary: an unmeasured line stays null and never blanks 
   // PostgREST string-serialized numeric coerced; a measured zero stays a real zero.
   const raised = envelope.facts[3];
   assert.equal(raised.value, 0);
+});
+
+/* ---------------------------------------------------------------------------
+ * Decision F (owner 03.09.2026) -- the three readings of the money line, and the
+ * two of them that must never read the same way again.
+ * -------------------------------------------------------------------------*/
+
+/** The four count metrics, always measured, so each case below varies only the money line. */
+const COUNT_ROWS = [
+  { metric_key: "received_week", value: 12, measured: true, currency: null },
+  { metric_key: "awaiting_approval", value: 3, measured: true, currency: null },
+  { metric_key: "suppliers_raised", value: 1, measured: true, currency: null },
+  { metric_key: "open_exceptions", value: 2, measured: true, currency: null },
+];
+
+function summaryDb(moneyRows: Record<string, unknown>[]): ToolDataPort {
+  return {
+    rpc: () =>
+      Promise.resolve({ data: [...COUNT_ROWS, ...moneyRows], error: null }),
+    countSentOrders: () => Promise.resolve({ count: 0, error: null }),
+  };
+}
+
+/** The money unit shape `FactUnitSchema` accepts. A stated absence must never carry one. */
+const MONEY_UNIT = /^[a-z]{3}$/;
+
+Deno.test("get_business_summary: nothing owed is a SENTENCE -- complete, no failure, no figure", async () => {
+  // 0219 metric 3 answers a CURRENCY-LESS measured zero when nothing is committed, because
+  // "nothing is owed" is true in every currency at once. This tool used to drop that row on
+  // `/^[A-Z]{3}$/`, report `complete: false`, and AnswerView painted the answer as partial.
+  const ctx = context(
+    summaryDb([{
+      metric_key: "expected_payments",
+      value: 0,
+      measured: true,
+      currency: null,
+    }]),
+  );
+  const envelope = await runRegisteredTool(
+    REGISTRY,
+    ctx,
+    "get_business_summary",
+    {},
+  );
+  assert.equal(envelope.complete, true);
+  assert.deepEqual(envelope.failures, []);
+  // Five facts: the four counts and the money line's stated absence -- which is a fact, so the
+  // model may state it and the reader can trace it, and it is not a money fact, so `contracts.ts`
+  // never had to widen.
+  assert.equal(envelope.facts.length, 5);
+  const stated = envelope.facts.find((fact) => fact.unit === "text");
+  assert.ok(stated);
+  assert.equal(stated.label, "סכום פתוח בדרישות תשלום");
+  assert.equal(stated.kind, "payment_request.status");
+  // The sentence comes from the table both consumers share, in the run's language -- never a
+  // literal in this file, and never `0`, `—` or an invented currency.
+  assert.equal(
+    stated.value,
+    readerText("he", SUMMARY_ABSENCE_KEYS.expected_payments),
+  );
+  assert.equal(typeof stated.value, "string");
+  assert.ok(!envelope.facts.some((fact) => MONEY_UNIT.test(fact.unit)));
+  // The route is still offered, so "nothing is owed" remains checkable rather than asserted.
+  assert.ok(
+    envelope.sources.some((source) => source.route === "/payment-requests"),
+  );
+});
+
+Deno.test("get_business_summary: 'could not measure' stays a named failure, and reads differently", async () => {
+  // The other currency-less row: measured false. Same missing currency, opposite meaning.
+  const ctx = context(
+    summaryDb([{
+      metric_key: "expected_payments",
+      value: null,
+      measured: false,
+      currency: null,
+    }]),
+  );
+  const envelope = await runRegisteredTool(
+    REGISTRY,
+    ctx,
+    "get_business_summary",
+    {},
+  );
+  assert.equal(envelope.complete, false);
+  assert.deepEqual(envelope.failures, [
+    { code: "expected_payments", label: "סכום פתוח בדרישות תשלום" },
+  ]);
+  // Four count facts and no money line at all: an unmeasured amount has no currency to attach
+  // to, and no absence to state either.
+  assert.equal(envelope.facts.length, 4);
+  assert.ok(!envelope.facts.some((fact) => fact.unit === "text"));
+  assert.ok(!envelope.facts.some((fact) => MONEY_UNIT.test(fact.unit)));
+});
+
+Deno.test("get_business_summary: two currencies are two money facts, never their sum", async () => {
+  const ctx = context(
+    summaryDb([
+      { metric_key: "expected_payments", value: "3100", measured: true, currency: "USD" },
+      { metric_key: "expected_payments", value: 1234.56, measured: true, currency: "ILS" },
+    ]),
+  );
+  const envelope = await runRegisteredTool(
+    REGISTRY,
+    ctx,
+    "get_business_summary",
+    {},
+  );
+  assert.equal(envelope.complete, true);
+  assert.deepEqual(envelope.failures, []);
+  const money = envelope.facts.filter((fact) => MONEY_UNIT.test(fact.unit));
+  assert.deepEqual(
+    money.map((fact) => ({ unit: fact.unit, value: fact.value, label: fact.label })),
+    [
+      { unit: "ils", value: 1234.56, label: "סכום פתוח בדרישות תשלום (ILS)" },
+      { unit: "usd", value: 3100, label: "סכום פתוח בדרישות תשלום (USD)" },
+    ],
+  );
+  assert.ok(!money.some((fact) => fact.value === 4334.56));
+  // Real obligations are never dressed as an absence.
+  assert.ok(!envelope.facts.some((fact) => fact.unit === "text"));
 });
 
 Deno.test("get_open_alerts: an accountant gets a named refusal on the §10 debt scan, never a wrong count", async () => {

@@ -33,6 +33,7 @@ export const en: Dictionary = {
    * it into something vaguer: the rule did not change with the language.
    */
   errors: {
+    bank_direct_match_requires_financial_correction: 'This match recorded an actual payment, so a click cannot undo it — undoing it would delete an existing payment record. The correction is made on the invoice itself: open a credit request from the invoice card (manager/owner or purchasing manager), and follow it on the Credits screen.',
     invoice_three_way_assessment_stale: 'The state changed while this dialog was open — the match was re-checked. Read what changed and approve again.',
     approved_invoice_override_immutable: 'This invoice is already approved, so its match cannot be overridden.',
     definite_duplicate_invoice_cannot_be_overridden: 'This invoice is a confirmed duplicate. It cannot be overridden — resolve the duplicate first.',
@@ -390,6 +391,7 @@ export const en: Dictionary = {
     exceptionType_receipt_mismatch: 'Receipt and invoice disagree',
     exceptionType_item_not_ordered: 'Item that was not ordered',
     exceptionType_expected_document_missing: 'An expected document never arrived',
+    exceptionType_unapproved_invoice_settled: 'A payment was recorded against an unapproved invoice',
     /* The commercial catalogue. The Hebrew side mirrors the database verbatim; this side is the
        reason the file exists (owner decision 31.08.2026, OPEN-DECISIONS #303). */
     plan_legacy: 'Legacy customer',
@@ -1106,6 +1108,7 @@ export const en: Dictionary = {
   },
 
   bank: {
+    directMatchCorrection: 'A financial correction is not the deletion of a payment already recorded — it is a credit recorded against it. It is opened from the invoice card ("Credit request", manager/owner or purchasing manager) and appears on the Credits screen.',
     toleranceRefusal: '{currency}: {refusal} Suggestions by reference are still shown, and matching by hand is open.',
     fmtDate: 'Date',
     text: 'Description',
@@ -5954,6 +5957,10 @@ export const en: Dictionary = {
   },
 
   setPassword: {
+    backToApp: 'Back to the app',
+    changeAction: 'Update the password',
+    changeIntro: 'This account already has a password. Choose a new one here to replace it — or simply go back to the app and the existing password stays as it is.',
+    changeTitle: 'Change password',
     title: 'Choose a password',
     checking: 'Checking the account…',
     intro: 'The address is confirmed. Now choose a password — it is what you will sign in with from here on.',
@@ -6178,6 +6185,7 @@ export const en: Dictionary = {
   },
 
   businessSummary: {
+    expectedPaymentsNone: 'No open obligations',
     receivedWeek: 'Invoices received in the last {days} days',
     awaitingApproval: 'Invoices awaiting approval',
     expectedPayments: 'Open amount in payment requests',

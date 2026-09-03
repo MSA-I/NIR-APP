@@ -30,16 +30,29 @@
 //   SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY -- injected by the platform
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.91.1';
 import { billingAdapterFor } from '../_shared/billing-adapter.ts';
-import { type CheckoutAuthorization, type CheckoutPorts, handleCheckout } from './core.ts';
+import { withAllowedOrigin } from '../_shared/cors.ts';
+import { CORS_HEADERS, type CheckoutAuthorization, type CheckoutPorts, handleCheckout } from './core.ts';
 
-Deno.serve((incoming) => {
+/**
+ * Exported so the wiring above the handler -- the preflight, the environment refusal and the
+ * unauthenticated refusal -- is provable without a listener. `assistant/index.ts` is the
+ * precedent: the handler is a value, and `Deno.serve` runs only when this file is the program.
+ */
+export const handler = withAllowedOrigin((incoming: Request): Response | Promise<Response> => {
+  // FIRST — before the environment read below and before the Authorization check under it.
+  // A CORS preflight is an OPTIONS request that carries no Authorization header by definition,
+  // so the `unauthenticated` refusal answered every preflight 401 with no CORS headers, and the
+  // browser never sent the POST behind it. The order is the fix; same shape as
+  // assistant/index.ts, which has always answered OPTIONS on its first line.
+  if (incoming.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
+
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!supabaseUrl || !anonKey || !serviceKey) {
     return new Response(JSON.stringify({ error: 'refused' }), {
       status: 503,
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     });
   }
 
@@ -49,7 +62,7 @@ Deno.serve((incoming) => {
   if (!authorization) {
     return new Response(JSON.stringify({ error: 'unauthenticated' }), {
       status: 401,
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     });
   }
 
@@ -118,3 +131,7 @@ Deno.serve((incoming) => {
 
   return handleCheckout(incoming, ports);
 });
+
+if (import.meta.main) {
+  Deno.serve(handler);
+}

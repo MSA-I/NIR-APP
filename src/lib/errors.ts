@@ -236,6 +236,14 @@ const PATTERNS: [RegExp, string][] = [
     'payment_request_unknown'],
   [/payment_request_supplier_invalid|payment_request_invalid/i,
     'payment_request_supplier_invalid'],
+  // The one refusal on the bank screen that is neither a race nor a mistake. A DIRECT match to an
+  // invoice records a payment (`0023`), so removing it would delete a payment record —
+  // `unmatch_bank_transaction` (`0034`) refuses it by name, deliberately, and the refusal stays.
+  // Absent from this list it fell through to FALLBACK, "the action failed — contact support", for
+  // a refusal whose answer is a correction the business makes itself. Same reasoning as the
+  // currency block at the top of this file: support is the wrong destination.
+  [/bank_direct_match_requires_financial_correction/i,
+    'bank_direct_match_requires_financial_correction'],
   [/bank_transaction_already_matched|payment_already_bank_matched/i,
     'bank_transaction_already_matched'],
   [/bank_transaction_not_matchable|bank_transaction_not_ignorable/i,

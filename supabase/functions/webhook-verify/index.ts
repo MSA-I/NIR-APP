@@ -28,20 +28,31 @@
 // Required environment (injected by the platform):
 //   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
 //
-// Request contract: POST { "verificationId": "<uuid>" }
+// Request contract: POST { "verificationId": "<uuid>" }, preceded by the browser's own CORS
+// preflight (OPTIONS), which is answered before anything else this function checks.
 // Response: { ok: true, verified: boolean, code: "<named_code>" } — a NAMED code, never a
 // provider string and never a database message (#98 forbids raw errors on this surface).
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { withAllowedOrigin } from '../_shared/cors.ts';
 import { denoDialDeps } from './ssrf.ts';
 import { runVerification, type BeginEnvelope, type VerifyRpc } from './verify.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const CORS_HEADERS: Record<string, string> = {
+  // Filled per request by withAllowedOrigin (../_shared/cors.ts): the caller's Origin when it
+  // is on ALLOWED_ORIGINS/APP_BASE_URL, and the first allowed origin otherwise. Never "*".
+  'Access-Control-Allow-Origin': '',
+  Vary: 'Origin',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-correlation-id',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
   });
 }
 
@@ -49,7 +60,18 @@ function fail(code: string, message: string, status: number): Response {
   return json({ error: { code, message } }, status);
 }
 
-Deno.serve(async (req: Request): Promise<Response> => {
+/**
+ * Exported so the preflight and the method door are provable without a listener --
+ * `assistant/index.ts` is the precedent. `Deno.serve` runs only when this file is the program.
+ */
+export const handler = withAllowedOrigin(async (req: Request): Promise<Response> => {
+  // FIRST — before the method check, before the environment read, before the body is touched.
+  // A CORS preflight is an OPTIONS request carrying no Authorization header and no body, and
+  // until now it fell through to the line below and was answered 405 with no CORS headers at
+  // all. The browser then never sent the POST, so `requestWebhookVerification` failed for every
+  // owner while the function itself looked healthy. Same shape as assistant/index.ts.
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
+
   if (req.method !== 'POST') return fail('method_not_allowed', 'POST only', 405);
 
   const url = Deno.env.get('SUPABASE_URL');
@@ -89,3 +111,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const outcome = await runVerification(verificationId, rpc, denoDialDeps);
   return json({ ok: true, ...outcome }, 200);
 });
+
+if (import.meta.main) {
+  Deno.serve(handler);
+}

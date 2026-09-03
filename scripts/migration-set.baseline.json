@@ -279,5 +279,8 @@
   "0287_platform_writers_carry_their_capability.sql",
   "0288_html_is_not_a_document.sql",
   "0289_abandoned_signup_released_in_a_day_with_its_identity.sql",
-  "0290_the_automatic_path_names_the_exception_it_raises.sql"
+  "0290_the_automatic_path_names_the_exception_it_raises.sql",
+  "0291_unapproved_invoice_settled_exception_type.sql",
+  "0292_the_bank_door_declares_what_it_settles.sql",
+  "0293_every_password_change_is_recorded.sql"
 ]

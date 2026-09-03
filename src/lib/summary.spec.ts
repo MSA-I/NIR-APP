@@ -28,12 +28,15 @@ const allFive = () => [
  * `t(key)` to `t(key)` would pass whether or not either language says anything at all.
  */
 const EXPECTED_LINES = [
-  { key: 'received_week', labelKey: 'businessSummary.receivedWeek', labelVars: { days: 7 }, unit: 'count', to: '/invoices', currency: null },
-  { key: 'awaiting_approval', labelKey: 'businessSummary.awaitingApproval', unit: 'count', to: '/invoices', currency: null },
-  { key: 'expected_payments', labelKey: 'businessSummary.expectedPayments', unit: 'currency', to: '/payment-requests', currency: 'ILS' },
-  { key: 'suppliers_raised', labelKey: 'businessSummary.suppliersRaised', labelVars: { days: 30 }, unit: 'count', to: '/prices', currency: null },
-  { key: 'open_exceptions', labelKey: 'businessSummary.openExceptions', unit: 'count', to: '/exceptions', currency: null },
+  { key: 'received_week', labelKey: 'businessSummary.receivedWeek', labelVars: { days: 7 }, unit: 'count', to: '/invoices', currency: null, state: 'measured' },
+  { key: 'awaiting_approval', labelKey: 'businessSummary.awaitingApproval', unit: 'count', to: '/invoices', currency: null, state: 'measured' },
+  { key: 'expected_payments', labelKey: 'businessSummary.expectedPayments', unit: 'currency', to: '/payment-requests', currency: 'ILS', state: 'measured' },
+  { key: 'suppliers_raised', labelKey: 'businessSummary.suppliersRaised', labelVars: { days: 30 }, unit: 'count', to: '/prices', currency: null, state: 'measured' },
+  { key: 'open_exceptions', labelKey: 'businessSummary.openExceptions', unit: 'count', to: '/exceptions', currency: null, state: 'measured' },
 ] as const;
+
+/** Decision F's sentence key. The wording itself merges with the dictionaries in the same wave. */
+const ABSENCE_KEY = 'businessSummary.expectedPaymentsNone';
 
 beforeEach(() => {
   rpc.mockReset().mockResolvedValue({ data: allFive(), error: null });
@@ -60,6 +63,92 @@ describe('הסיכום העסקי מול המודל השרתי (0165)', () => {
       { value: 1234.56, currency: 'ILS' }, { value: 3100, currency: 'USD' },
     ]);
     expect(payments.some((line) => line.value === 4334.56)).toBe(false);
+    // Outcome 3 of decision F: real obligations in two currencies are two MEASURED rows. Neither
+    // is a stated absence, and no absence sentence rides along beside a figure.
+    expect(payments.map((line) => line.state)).toEqual(['measured', 'measured']);
+    expect(payments.every((line) => line.absenceKey === undefined)).toBe(true);
+    expect(summary.complete).toBe(true);
+    expect(summary.failures).toEqual([]);
+  });
+
+  /* --------------------------------------------------------------------------
+   * Decision F (owner 03.09.2026) — the three readings of a money metric, and
+   * the two that must never be confused again.
+   * ------------------------------------------------------------------------*/
+
+  it('אין התחייבויות פתוחות — משפט, בלי מספר, בלי כשל ובלי פס אדום', async () => {
+    // 0219's metric 3 answers a CURRENCY-LESS measured zero when nothing is committed, because
+    // "nothing is owed" is true in every currency at once. Both readers used to filter that row
+    // out on `/^[A-Z]{3}$/` and report the metric as unmeasured.
+    rpc.mockResolvedValue({
+      data: [
+        ...allFive().filter((r) => r.metric_key !== 'expected_payments'),
+        row('expected_payments', 0, true, null),
+      ],
+      error: null,
+    });
+    const summary = await buildSummary();
+    const payments = summary.lines.filter((line) => line.key === 'expected_payments');
+    expect(payments).toHaveLength(1);
+    expect(payments[0].state).toBe('absent');
+    expect(payments[0].absenceKey).toBe(ABSENCE_KEY);
+    // No figure at all: not `0` (a claim about one currency), and `value: null` is never rendered
+    // as `—` for this state — the surface prints the sentence instead.
+    expect(payments[0].value).toBeNull();
+    expect(payments[0].currency).toBeNull();
+    // And, the point of the whole item: /alerts draws its red bar from these two.
+    expect(summary.failures).toEqual([]);
+    expect(summary.complete).toBe(true);
+  });
+
+  it('אפס מחרוזתי חסר-מטבע נקרא גם הוא כהיעדר — PostgREST מחזיר numeric כמחרוזת', async () => {
+    rpc.mockResolvedValue({
+      data: [
+        ...allFive().filter((r) => r.metric_key !== 'expected_payments'),
+        row('expected_payments', '0', true, null),
+      ],
+      error: null,
+    });
+    const summary = await buildSummary();
+    const payments = summary.lines.find((line) => line.key === 'expected_payments');
+    expect(payments?.state).toBe('absent');
+    expect(summary.complete).toBe(true);
+  });
+
+  it('"לא הצלחנו למדוד" נשאר כשל — וקריא אחרת מ"אין התחייבויות"', async () => {
+    rpc.mockResolvedValue({
+      data: [
+        ...allFive().filter((r) => r.metric_key !== 'expected_payments'),
+        row('expected_payments', null, false, null),
+      ],
+      error: null,
+    });
+    const summary = await buildSummary();
+    const payments = summary.lines.find((line) => line.key === 'expected_payments');
+    expect(payments?.state).toBe('unmeasured');
+    expect(payments?.absenceKey).toBeUndefined();
+    expect(payments?.value).toBeNull();
+    expect(summary.failures).toEqual([
+      { code: 'expected_payments', labelKey: 'businessSummary.expectedPayments', labelVars: undefined },
+    ]);
+    expect(summary.complete).toBe(false);
+  });
+
+  it('סכום חסר-מטבע שאינו אפס אינו היעדר — אין למי לייחס אותו, ולכן הוא כשל נקוב', async () => {
+    // The defensive third case. 0219 never emits this, but a reader that treated any
+    // currency-less row as "nothing owed" would silently swallow a real, unattributable amount.
+    rpc.mockResolvedValue({
+      data: [
+        ...allFive().filter((r) => r.metric_key !== 'expected_payments'),
+        row('expected_payments', 8131, true, null),
+      ],
+      error: null,
+    });
+    const summary = await buildSummary();
+    const payments = summary.lines.find((line) => line.key === 'expected_payments');
+    expect(payments?.state).toBe('unmeasured');
+    expect(payments?.value).toBeNull();
+    expect(summary.failures.map((failure) => failure.code)).toEqual(['expected_payments']);
   });
 
   it('אפס נשאר אפס — מדד שנמדד ומצא כלום אינו הופך ל"אין נתונים"', async () => {
