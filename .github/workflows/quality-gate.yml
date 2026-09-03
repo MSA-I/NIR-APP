@@ -315,8 +315,17 @@ jobs:
         if: needs.changes.outputs.edge == 'true'
         run: |
           set -euo pipefail
+          # --config, because this function's graph reaches npm through a remote URL. `index.ts`
+          # imports `https://esm.sh/@supabase/supabase-js@2.91.1`: the TOP version is pinned, the
+          # versions under it are not, and esm.sh resolves them fresh on every run. It now serves
+          # `storage-js@2.112.4`, which pulls `iceberg-js` and references `@types/node` -- a bare
+          # specifier Deno cannot resolve without a node_modules directory, so the step died on
+          # `Could not find "@types/node" in a node_modules folder` while type-checking a file
+          # this branch had not touched. `deno.json` names that type package and asks for the
+          # directory, the way `supabase/functions/assistant/deno.json` already does.
           CHECKOUT_ROOT=supabase/functions/billing-checkout
           npx --yes deno test \
+            --config "$CHECKOUT_ROOT/deno.json" \
             --allow-read="$CHECKOUT_ROOT" \
             --allow-env \
             "$CHECKOUT_ROOT"/*.test.ts 2>&1 | tee deno-billing-checkout.log
@@ -324,7 +333,7 @@ jobs:
             || { echo 'No billing-checkout test completed.'; exit 1; }
           ! grep -Eqi '\b[1-9][0-9]*\s+(ignored|skipped)\b' deno-billing-checkout.log \
             || { echo 'Ignored or skipped billing-checkout cases are not acceptable.'; exit 1; }
-          npx --yes deno check "$CHECKOUT_ROOT/index.ts"
+          npx --yes deno check --config "$CHECKOUT_ROOT/deno.json" "$CHECKOUT_ROOT/index.ts"
 
       - name: Email order-delivery template contracts
         if: needs.changes.outputs.edge == 'true'

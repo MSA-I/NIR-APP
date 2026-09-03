@@ -1,0 +1,9 @@
+{
+  "nodeModulesDir": "auto",
+  "imports": {
+    "@types/node": "npm:@types/node@22.10.2"
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}
