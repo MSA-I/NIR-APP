@@ -24,6 +24,12 @@
 --      excludes nobody and the real member still refuses.
 --   5. An organization that is already gone is reported, not raised on -- a compensation that
 --      throws on a partly-completed rollback cannot be retried.
+--   7. The address the attempt registered is RELEASED with the tenant, and the two carve-outs
+--      hold. Running the real signup end to end is what found this: the teardown left zero tenant
+--      rows and an `auth.users` row, and a second signup with the same address returned the
+--      endpoint's one reassuring sentence while creating nothing at all -- the address unusable
+--      for ever, with nobody able to say why. `0313` copied `0289`'s rule; a CONFIRMED address
+--      (which is what the federated branch attaches) and a platform operator both survive.
 --   6. The door itself: no browser role holds EXECUTE, a non-service caller is refused by name,
 --      the one-argument form does not resolve, and the second parameter has NO DEFAULT, so the
 --      caller cannot decline to name the attempt. That last one is here because the assertion that
@@ -34,6 +40,11 @@
 -- BELONGS to the failed attempt. It is a caller assertion, and a service_role holder can name a
 -- legitimate young tenant's only owner. That is the open disagreement of the review, recorded in
 -- DEBT-REGISTER section 110 -- not something a suite can assert its way out of.
+--
+-- THE SEVENTH CASE IS NOT IN THE GATE LABEL, AND THAT IS DELIBERATE. `check:baseline-drift`
+-- identifies a gate step by its label, so sharpening the label of a suite that already exists
+-- reads as the suite LEAVING CI -- the one thing that guard exists to catch. The claim therefore
+-- lives here, in the file that makes it, where it can grow without lying to the guard.
 --
 -- Runs inside one transaction and rolls back. Every organization it may delete is registered in a
 -- containment table first and the deleting helper refuses an id that is not in it: a test that can
@@ -108,25 +119,38 @@ insert into auth.users (id, email, email_confirmed_at) values
   ('a7000000-0000-4000-8000-000000000001', 'p107-failed@example.test',    null),
   ('a7000000-0000-4000-8000-000000000002', 'p107-old@example.test',       null),
   ('a7000000-0000-4000-8000-000000000003', 'p107-busy@example.test',      null),
-  ('a7000000-0000-4000-8000-000000000004', 'p107-neighbour@example.test', null);
+  ('a7000000-0000-4000-8000-000000000004', 'p107-neighbour@example.test', null),
+  -- A CONFIRMED address, which is the shape the federated branch attaches: an account that
+  -- already existed and proved itself. Releasing it over a failed provision would destroy a real
+  -- person's identity, so it must survive the teardown of the tenant it was attached to.
+  ('a7000000-0000-4000-8000-000000000005', 'p107-federated@example.test', now()),
+  -- Unconfirmed, but a platform operator. Staff standing lives on a different axis.
+  ('a7000000-0000-4000-8000-000000000006', 'p107-operator@example.test',  null);
 
 insert into public.organizations (id, name, status, created_at) values
   ('a7000000-0000-4000-8000-0000000000a1', 'P107 failed provision', 'active', now() - interval '2 minutes'),
   ('a7000000-0000-4000-8000-0000000000a2', 'P107 past the window',  'active', now() - interval '20 minutes'),
   ('a7000000-0000-4000-8000-0000000000a3', 'P107 did business',     'active', now() - interval '2 minutes'),
-  ('a7000000-0000-4000-8000-0000000000a4', 'P107 real tenant',      'active', now() - interval '2 minutes');
+  ('a7000000-0000-4000-8000-0000000000a4', 'P107 real tenant',      'active', now() - interval '2 minutes'),
+  ('a7000000-0000-4000-8000-0000000000a5', 'P107 federated owner',  'active', now() - interval '2 minutes'),
+  ('a7000000-0000-4000-8000-0000000000a6', 'P107 operator owner',   'active', now() - interval '2 minutes');
 
 insert into pg_temp.p107_fixture_orgs (org_id)
 select id from public.organizations
 where id between 'a7000000-0000-4000-8000-0000000000a1'
-              and 'a7000000-0000-4000-8000-0000000000a4';
+              and 'a7000000-0000-4000-8000-0000000000a6';
 
 insert into public.profiles (id, org_id, full_name, role, active) values
   ('a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-0000000000a1', 'P107 attempt owner', 'owner', true),
   ('a7000000-0000-4000-8000-000000000002', 'a7000000-0000-4000-8000-0000000000a2', 'P107 old attempt',   'owner', true),
   ('a7000000-0000-4000-8000-000000000003', 'a7000000-0000-4000-8000-0000000000a3', 'P107 busy attempt',  'owner', true),
   -- The real tenant's own member. Nobody named it, and it is what makes case 4 a refusal.
-  ('a7000000-0000-4000-8000-000000000004', 'a7000000-0000-4000-8000-0000000000a4', 'P107 real member',   'owner', true);
+  ('a7000000-0000-4000-8000-000000000004', 'a7000000-0000-4000-8000-0000000000a4', 'P107 real member',   'owner', true),
+  ('a7000000-0000-4000-8000-000000000005', 'a7000000-0000-4000-8000-0000000000a5', 'P107 federated owner', 'owner', true),
+  ('a7000000-0000-4000-8000-000000000006', 'a7000000-0000-4000-8000-0000000000a6', 'P107 operator owner',  'owner', true);
+
+insert into public.platform_admins (user_id, note)
+values ('a7000000-0000-4000-8000-000000000006', 'P107 operator who also opened a tenant');
 
 -- One row of real business, so the activity fence has something to find.
 insert into public.suppliers (org_id, name)
@@ -214,6 +238,15 @@ begin
     raise exception 'p107.1: the organization row itself survived its own rollback';
   end if;
 
+  -- ===== 7a. The address is released, and the result says so =====
+  if (select count(*) from auth.users
+      where id = 'a7000000-0000-4000-8000-000000000001') <> 0 then
+    raise exception 'p107.7: the address is still registered in GoTrue, so it can never sign up again';
+  end if;
+  if (v_result -> 'removed' ->> 'auth_identities')::int <> 1 then
+    raise exception 'p107.7: the rollback did not report the identity it released';
+  end if;
+
   -- ===== 5. Already gone is reported, not raised on =====
   perform pg_temp.p107_service_claims();
   v_result := public.service_rollback_provisioned_tenant(
@@ -221,6 +254,42 @@ begin
     'a7000000-0000-4000-8000-000000000001');
   if not coalesce((v_result ->> 'already_absent')::boolean, false) then
     raise exception 'p107.5: a second rollback did not report the organization as absent';
+  end if;
+
+  -- ===== 7b. A CONFIRMED address survives the teardown of the tenant it was attached to =====
+  -- The federated branch attaches an account that already existed and proved itself. Deleting it
+  -- over an unrelated failed provision would be far worse than the leak this release closes.
+  perform pg_temp.p107_service_claims();
+  v_result := public.service_rollback_provisioned_tenant(
+    pg_temp.p107_fixture_only('a7000000-0000-4000-8000-0000000000a5'),
+    'a7000000-0000-4000-8000-000000000005');
+  if (select count(*) from public.organizations
+      where id = 'a7000000-0000-4000-8000-0000000000a5') <> 0 then
+    raise exception 'p107.7: the federated tenant was not rolled back';
+  end if;
+  if (select count(*) from auth.users
+      where id = 'a7000000-0000-4000-8000-000000000005') <> 1 then
+    raise exception 'p107.7: a rollback destroyed a real account that had proved its own address';
+  end if;
+  if (v_result -> 'removed' ->> 'auth_identities')::int <> 0 then
+    raise exception 'p107.7: a confirmed account was counted as released';
+  end if;
+
+  -- ===== 7c. A platform operator keeps their console account =====
+  perform pg_temp.p107_service_claims();
+  v_result := public.service_rollback_provisioned_tenant(
+    pg_temp.p107_fixture_only('a7000000-0000-4000-8000-0000000000a6'),
+    'a7000000-0000-4000-8000-000000000006');
+  if (select count(*) from public.organizations
+      where id = 'a7000000-0000-4000-8000-0000000000a6') <> 0 then
+    raise exception 'p107.7: the operator-owned tenant was not rolled back';
+  end if;
+  if (select count(*) from auth.users
+      where id = 'a7000000-0000-4000-8000-000000000006') <> 1 then
+    raise exception 'p107.7: a rollback deleted a platform operator''s console account';
+  end if;
+  if (v_result -> 'removed' ->> 'auth_identities')::int <> 0 then
+    raise exception 'p107.7: the operator identity was counted as released';
   end if;
 
   -- The neighbours are untouched. A teardown that scanned without anchoring on org_id would have
@@ -253,7 +322,7 @@ begin
     raise exception 'p107.6: the rollback can be called without naming the attempt';
   end if;
 
-  raise notice 'p107 passed: six cases';
+  raise notice 'p107 passed: seven cases';
 end
 $suite$;
 
