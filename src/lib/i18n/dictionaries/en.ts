@@ -1900,6 +1900,7 @@ export const en: Dictionary = {
   },
 
   inventory: {
+    lowStockEmptyCatalogue: 'No active products to check yet',
     lowStockUnmeasured: 'No product has both a counted balance and a minimum',
     quantityTooLarge: 'That quantity is too large. You can enter up to 1,000,000',
     pricesInSeveralCurrencies: 'Prices in several currencies',

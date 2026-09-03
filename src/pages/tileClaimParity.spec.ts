@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../lib/supabase', () => ({ supabase: {} }));
 
+import { monthlySeriesHasObservation } from './Dashboard';
 import { DUE_PRESSURE_STATUSES, matchesDueFilter } from './PaymentRequests';
 import { lowStockCount } from './Inventory';
 import { TO_REVIEW_FILTER } from './Invoices';
@@ -90,8 +91,31 @@ describe('"below minimum" has three states, not two', () => {
     expect(lowStockCount(null)).toBeNull();
   });
 
+  /**
+   * Finding 11 of the 03.09.2026 review asked for `—` here, and the answer is no — argued in
+   * full on `lowStockCount`. The short form: the em dash marks a question this screen could not
+   * answer, and an empty catalogue is one it answered. What made the original defect a lie was a
+   * three-valued predicate hiding an uninspected population behind a zero; over an empty set
+   * there is no population to hide, and the two segments beside this one compute a true measured
+   * zero over the identical set. The one reading that would make it a false clean sheet — rows
+   * WITHHELD rather than absent — is closed at the route: `inventory_balances` returns nothing to
+   * a role outside `('owner','office')` and `/inventory` admits exactly those two.
+   *
+   * Kept as its own case, separately from the measured-zero one above, because the two are
+   * arrived at for different reasons and a later edit that collapses them should fail here.
+   */
   it('an empty catalogue keeps its honest zero', () => {
     expect(lowStockCount([])).toBe(0);
+  });
+
+  it('and the screen says WHICH zero it is, rather than leaving the sub-line to imply a stocked business', () => {
+    const inventory = readFileSync('src/pages/Inventory.tsx', 'utf8');
+    // The figure stays 0; only the sentence under it changes. Pinned as source because the whole
+    // difference between "all healthy" and "nothing to check" is which key the ternary picks.
+    expect(inventory).toContain('const emptyCatalogue = balances.data != null && balances.data.length === 0;');
+    expect(inventory).toContain("emptyCatalogue ? t('inventory.lowStockEmptyCatalogue') : t('inventory.sub_2')");
+    // And the value is still the count, not a dash smuggled in through the other side.
+    expect(inventory).toContain("value={low == null ? '—' : fmtNum(low)}");
   });
 });
 
@@ -165,6 +189,47 @@ describe('every aggregate inside the currency view is taken inside one currency'
       const narrowed = dashboard.split(`inView(${needle}`).length - 1;
       expect(bare - narrowed).toBe(0);
     }
+  });
+
+  it('the monthly card no longer asks about every currency at once', () => {
+    // The fifth aggregate the R4-04 sweep left behind: the buckets were narrowed, the question
+    // "is there anything to draw" was not. Pinned as a string because the whole defect was one
+    // identifier — `invoices.length` where `monthBuckets` was meant.
+    expect(dashboard).not.toContain('const monthly = invoices.length');
+    expect(dashboard).toContain('const monthly = monthlySeriesHasObservation(monthBuckets)');
+  });
+});
+
+describe('a currency with no invoices in the window draws nothing, not a flat zero line', () => {
+  /**
+   * Finding 10 of the 03.09.2026 adversarial review, and the fifth instance of the currency rule.
+   *
+   * `SpendBarChart` branches on `points.length`, so a four-point all-zero series is not "no data"
+   * to it — it draws four month names, four gridlines and four bars of height zero. Reproduced in
+   * a real browser against the local demo organisation with its USD invoices withheld from the
+   * chart read: BEFORE, the USD tab rendered 4 bars and 4 axis ticks; AFTER, 0 bars and the
+   * sentence „אין נתוני חשבוניות לתקופה". The ILS control is byte-identical across the two runs
+   * (sha256 `107dfb40…`), which is what says the change touched only the case it aimed at.
+   * `artifacts/review/shots/finding-10/`, produced by `scripts/currency-empty-series-check.cjs`.
+   */
+  const bucket = (count: number, total = 0) => ({ count, total });
+
+  it('a month with invoices in it is an observation', () => {
+    expect(monthlySeriesHasObservation([bucket(0), bucket(0), bucket(3), bucket(0)])).toBe(true);
+  });
+
+  it('four empty buckets are not a measurement of zero spending', () => {
+    expect(monthlySeriesHasObservation([bucket(0), bucket(0), bucket(0), bucket(0)])).toBe(false);
+  });
+
+  it('an empty window is empty', () => {
+    expect(monthlySeriesHasObservation([])).toBe(false);
+  });
+
+  it('invoices that sum to zero ARE an observation — count decides, never total', () => {
+    // A credited-out month is a real month. The distinction is the same one /inventory makes:
+    // "measured, and the answer is zero" is not "nothing was measured".
+    expect(monthlySeriesHasObservation([bucket(0), bucket(2, 0), bucket(0), bucket(0)])).toBe(true);
   });
 });
 

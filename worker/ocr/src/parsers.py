@@ -108,8 +108,8 @@ MIRRORED = {"(": ")", ")": "(", "[": "]", "]": "[", "{": "}", "}": "{", "<": ">"
 BRACKET_PAIRS = (("(", ")"), ("[", "]"), ("{", "}"))
 
 
-def _line_order_evidence(text: str) -> tuple[int, int, int, int]:
-    """`(lines_judged, leading_closer, closer_before_opener, unbalanced)`.
+def _line_order_evidence(text: str) -> tuple[int, int, int, int, int, int]:
+    """`(lines_judged, leading_closer, closer_before_opener, unbalanced, strong, evidence)`.
 
     THE SAME THREE SIGNALS THE PRODUCT ALREADY COUNTS. `src/lib/productDisplayName.ts` and
     `scripts/report-product-name-health.ts` carry this detector on the client side, pinned against
@@ -120,8 +120,29 @@ def _line_order_evidence(text: str) -> tuple[int, int, int, int]:
     Brackets are the cheap, reliable tell. In logical order an opener precedes its closer; a line
     stored in visual order has them the other way round. `unbalanced` is recorded but does NOT
     decide, because OCR loses a bracket often enough that it would fire on undamaged text.
+
+    A STRAY CLOSER AT THE END OF A LINE IS NOT EVIDENCE, and counting it as evidence was a real
+    defect. `קמח לבן 5 ק"ג)` -- an ordinary product name with one dropped opener -- used to score
+    `closer_before_opener = 1` and, because the decision is taken for the WHOLE DOCUMENT, that one
+    line was enough to reverse the letters of every line on every page. The discriminator is not
+    "is the line balanced", because a line whose opener OCR dropped is unbalanced either way. It is
+    WHERE the unmatched closer sits:
+
+      `שקיות אשפה 60*80 )100 יח`  the closer comes BEFORE the `100 יח` it would enclose. No
+                                  logical order puts it there; it is a mirrored `(` that travelled
+                                  with the reversed run. Evidence.
+      `קמח לבן 5 ק"ג)`            the closer ENDS the line, which is exactly where a closer belongs.
+                                  The bracket that went missing is the opener. Not evidence.
+
+    So an unmatched closer counts only when real content follows it on the same line. A closer that
+    is matched but out of order -- `)…(` on a balanced line -- cannot happen in logical order at
+    all, so it counts on its own and is reported as `strong` alongside a leading closer.
+
+    `strong` and `evidence` are counts of LINES, not of tells, and they are what the document-level
+    decision is allowed to read. One line can raise both `leading_closer` and
+    `closer_before_opener`, so summing those two would have let a single line corroborate itself.
     """
-    lines = judged = leading = inverted = unbalanced = 0
+    lines = judged = leading = inverted = unbalanced = strong = evidence = 0
     for raw_line in text.split("\n"):
         line = raw_line.strip()
         if not line:
@@ -131,7 +152,8 @@ def _line_order_evidence(text: str) -> tuple[int, int, int, int]:
             # A line with no Hebrew carries no evidence about Hebrew layout either way.
             continue
         judged += 1
-        if any(line.startswith(close) for _, close in BRACKET_PAIRS):
+        line_leading = any(line.startswith(close) for _, close in BRACKET_PAIRS)
+        if line_leading:
             leading += 1
         for opener, closer in BRACKET_PAIRS:
             opens = line.count(opener)
@@ -139,21 +161,37 @@ def _line_order_evidence(text: str) -> tuple[int, int, int, int]:
             if opens != closes:
                 unbalanced += 1
                 break
+        line_inverted = False
+        line_strong = False
         for opener, closer in BRACKET_PAIRS:
             depth = 0
-            found = False
-            for char in line:
+            position = -1
+            for index, char in enumerate(line):
                 if char == opener:
                     depth += 1
                 elif char == closer:
                     if depth == 0:
-                        found = True
+                        position = index
                         break
                     depth -= 1
-            if found:
-                inverted += 1
+            if position < 0:
+                continue
+            balanced = line.count(opener) == line.count(closer)
+            # Real content, not a trailing quote or full stop: `(abc).` with the opener dropped
+            # reads as `abc).`, and the `.` must not be mistaken for the text a closer preceded.
+            content_follows = any(char.isalnum() for char in line[position + 1 :])
+            if balanced or content_follows:
+                line_inverted = True
+                if balanced:
+                    line_strong = True
                 break
-    return judged, leading, inverted, unbalanced
+        if line_inverted:
+            inverted += 1
+        if line_leading or line_strong:
+            strong += 1
+        if line_leading or line_inverted:
+            evidence += 1
+    return judged, leading, inverted, unbalanced, strong, evidence
 
 
 def _restore_line_order(text: str) -> str:
@@ -248,11 +286,22 @@ def _normalize_pdf_text_layer(
     """
     original = "\n".join(native_text.values())
     words, first_letter, last_letter = _hebrew_order_evidence(original)
-    lines, leading_closer, closer_first, unbalanced = _line_order_evidence(original)
-    # A closing bracket where an opening one belongs cannot happen in logical order, so one is
-    # enough. `unbalanced` is measured and deliberately does not decide: OCR drops a bracket often
-    # enough that it would fire on undamaged text.
-    line_applied = leading_closer + closer_first > 0
+    (
+        lines,
+        leading_closer,
+        closer_first,
+        unbalanced,
+        strong_lines,
+        evidence_lines,
+    ) = _line_order_evidence(original)
+    # ONE LINE IS NOT A DOCUMENT. This used to read `leading_closer + closer_first > 0`: a single
+    # bracket anywhere in a hundred-page price list reversed the letters of every line on every
+    # page, and a false positive here does not merely fail to repair -- `_restore_line_order`
+    # rewrites the text, so it DESTROYS a name that was fine. The decision now needs a line whose
+    # bracket order cannot occur in logical text at all (a leading closer, or a balanced pair the
+    # wrong way round) AND a second line that independently carries the tell. `unbalanced` is
+    # still measured and still does not decide.
+    line_applied = strong_lines > 0 and evidence_lines >= 2
     # `_hebrew_is_reversed`'s rule, spelled here so the counts that go into the record and the
     # comparison that decides are read from one measurement rather than two passes of the same
     # regex. The self-check asserts the two agree on both fixtures, so this cannot drift into a
@@ -267,6 +316,10 @@ def _normalize_pdf_text_layer(
             {"name": "leading_closer", "value": leading_closer},
             {"name": "closer_before_opener", "value": closer_first},
             {"name": "unbalanced_brackets", "value": unbalanced},
+            # The two the decision actually reads, so a stored record can be re-judged without
+            # re-deriving them from the text. Both count LINES.
+            {"name": "impossible_order_lines", "value": strong_lines},
+            {"name": "evidence_lines", "value": evidence_lines},
         ],
     }
     word_record = {

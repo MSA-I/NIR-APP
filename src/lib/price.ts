@@ -68,6 +68,40 @@ const SYMBOL_TO_CODE: Record<string, string> = {
 
 const MARKER = /₪|\$|€|£|¥|ש"ח|ש״ח|ש\.ח|שח|[\p{L}]+/u;
 
+/**
+ * Round a clean decimal STRING to `places`, the way `numeric` does — half away from zero, on the
+ * digits, without ever multiplying by a power of ten.
+ *
+ * WHY THIS EXISTS (finding 8 of the 03.09.2026 review, and it is the second half of the defect
+ * this whole file was written to close). The obvious `Math.round(value * 10 ** places) / 10 **
+ * places` disagrees with Postgres, because the multiplication happens in binary floating point
+ * and lands just under the halfway mark:
+ *
+ *   1.005 * 100 = 100.49999999999999  ->  JS 1.00   ·  round(1.005, 2) = 1.01
+ *   1.015 * 100 = 101.49999999999999  ->  JS 1.01   ·  round(1.015, 2) = 1.02
+ *   0.145 * 100 =  14.499999999999998 ->  JS 0.14   ·  round(0.145, 2) = 0.15
+ *
+ * So the preview showed one price and the writer stored another — preview/write divergence,
+ * exactly what `0298` exists to end, reintroduced by the arithmetic rather than by the rules.
+ *
+ * The caller has already proved `digits` matches `^[0-9]+([.][0-9]+)?$`, so there is no sign, no
+ * exponent and no separator left to handle here; the sign is reapplied by the caller.
+ */
+function roundDecimalDigits(digits: string, places: number): number {
+  const point = digits.indexOf('.');
+  const whole = point === -1 ? digits : digits.slice(0, point);
+  const fraction = point === -1 ? '' : digits.slice(point + 1);
+  if (fraction.length <= places) return Number(digits);
+
+  const kept = `${whole}${fraction.slice(0, places)}`;
+  // Half away from zero. The magnitude is unsigned here, so "away from zero" is "up".
+  const carry = fraction.charCodeAt(places) >= 53; /* '5' */
+  const shifted = carry ? (BigInt(kept) + 1n).toString().padStart(kept.length, '0') : kept;
+  if (places === 0) return Number(shifted);
+  const padded = shifted.padStart(places + 1, '0');
+  return Number(`${padded.slice(0, -places)}.${padded.slice(-places)}`);
+}
+
 function reject(
   reason: PriceRejectionReason,
   currency: string | null,
@@ -128,6 +162,14 @@ export function parsePrice(
     let code: string | null = SYMBOL_TO_CODE[token] ?? SYMBOL_TO_CODE[upper] ?? null;
     if (code === null && /^[A-Z]{3}$/.test(upper) && known(upper)) code = upper;
     if (code === null) return reject('price_unreadable', expected, printed, minorUnits);
+    // A CURRENCY MARKER BELONGS AT ONE END OF THE CELL, NEVER BETWEEN TWO DIGITS. Removing the
+    // marker leaves a space, and the spaces are deleted a few lines below, so `1 USD 2` and
+    // `1USD2` were both read as the number TWELVE — a wrong price that looked like a clean parse.
+    // A cell with digits on both sides of a marker is not one price, and this parser says so
+    // instead of joining them.
+    if (/[0-9]/.test(body.slice(0, found.index)) && /[0-9]/.test(body.slice(found.index + token.length))) {
+      return reject('price_unreadable', expected, printed, minorUnits);
+    }
     if (printed === null) printed = code;
     else if (printed !== code) return reject('price_currency_mismatch', expected, printed, minorUnits);
     body = `${body.slice(0, found.index)} ${body.slice(found.index + token.length)}`
@@ -161,8 +203,8 @@ export function parsePrice(
   const magnitude = Number(body);
   if (!Number.isFinite(magnitude)) return reject('price_unreadable', expected, printed, minorUnits);
   const value = negative ? -magnitude : magnitude;
-  const factor = 10 ** minorUnits;
-  const roundedValue = Math.round(value * factor) / factor;
+  const roundedMagnitude = roundDecimalDigits(body, minorUnits);
+  const roundedValue = negative ? -roundedMagnitude : roundedMagnitude;
 
   // The signed value travels back with every refusal below: a reader can see it was minus five,
   // not a five that failed some unnamed test.

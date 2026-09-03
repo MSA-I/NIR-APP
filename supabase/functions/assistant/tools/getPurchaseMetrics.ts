@@ -171,6 +171,12 @@ export const getPurchaseMetrics: AssistantTool = {
         ? readerText(ctx.locale, "assistantTools.screenControlCentre")
         : readerText(ctx.locale, "assistantTools.screenExpenses"),
       route: officeActor ? null : `/expenses?from=${from}&to=${to}`,
+      /* The window as a VALUE, not as a slice of the string above. `routeAccess` compares the two
+         and refuses a shaped route that declares nothing, so the range in the link is the range
+         this reference stands for and cannot be widened by an edit to the route alone. Both
+         halves read the same `from`/`to` this tool measured on — which is the claim a reviewer
+         has to check here, because no allowlist can check it at run time. */
+      route_params: officeActor ? undefined : { from, to },
       classification: "financial_sensitive",
     });
 

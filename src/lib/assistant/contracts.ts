@@ -297,6 +297,24 @@ export const SourceReferenceSchema = z
   label: z.string().min(1).max(300),
   /** In-app route returned by the tool. The model may not compose a route of its own. */
   route: AssistantSourceRouteSchema.nullable(),
+  /**
+   * The window (or other shaped filter) this reference stands for, written by the tool as a
+   * VALUE rather than as a fragment of the route string.
+   *
+   * Only the shaped-param rules in `routeAccess.ts` read it, and they read it as the single
+   * authority for what the query string may contain: the link's parameters must equal these
+   * entries exactly. Absent means the reference declares no shaped filter, and a shaped route
+   * arriving without one is refused — the rule cannot be reached by a tool that has not stated
+   * its window.
+   *
+   * What this buys and what it does not, because the distinction is the whole reason the field
+   * exists: it removes the class of bug where a route string and the window a tool measured drift
+   * apart, and it stops the query string from being a place a shape check is the only guard. It
+   * cannot prove the tool measured what it declares — the validator holds no measurement, and a
+   * tool that widens both halves together is a lie no allowlist can see. That is a code-review
+   * obligation on the tool, not a runtime guarantee, and it is stated here rather than implied.
+   */
+  route_params: z.record(z.string().min(1).max(40), z.string().min(1).max(64)).optional(),
   classification: DataClassSchema,
   })
   .strict();

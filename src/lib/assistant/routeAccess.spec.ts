@@ -27,6 +27,15 @@ function source(route: string, entity: SourceReference['entity'], entityId = 'en
   };
 }
 
+/** A source that also declares the shaped window it stands for, the way a tool issues one. */
+function shaped(
+  route: string,
+  entity: SourceReference['entity'],
+  routeParams: Record<string, string>,
+): SourceReference {
+  return { ...source(route, entity), route_params: routeParams };
+}
+
 function expectedDecision(appRoute: AppRoutePolicyKey, role: ActiveRole) {
   const roles = APP_ROUTE_POLICY[appRoute].roles as readonly ActiveRole[];
   return roles.includes(role) ? 'allowed' : 'not_permitted';
@@ -95,22 +104,80 @@ describe('assistant route policy parity', () => {
     for (const rule of ASSISTANT_SHAPED_PARAM_ROUTE_RULES) {
       const path = APP_ROUTE_POLICY[rule.appRoute].path;
       const names = Object.keys(rule.params);
+      const declared = Object.fromEntries(names.map((name) => [name, '2026-09-03']));
       const query = names.map((name) => `${name}=2026-09-03`).join('&');
-      const good = source(`${path}?${query}`, rule.entities[0]);
+      const good = shaped(`${path}?${query}`, rule.entities[0], declared);
       for (const role of ACTIVE_ROLES) {
         expect(assistantSourceRouteDecision(good, role))
           .toBe(expectedDecision(rule.appRoute, role));
       }
-      // A value that is not the declared shape is refused rather than passed through.
-      const bad = names.map((name, index) => `${name}=${index === 0 ? 'yesterday' : '2026-09-03'}`).join('&');
-      expect(assistantSourceRouteDecision(source(`${path}?${bad}`, rule.entities[0])))
+      // A value that is not the declared shape is refused rather than passed through — on BOTH
+      // sides, because either side alone would be a hole.
+      const badValues = Object.fromEntries(names.map((name, index) => [name, index === 0 ? 'yesterday' : '2026-09-03']));
+      const bad = names.map((name) => `${name}=${badValues[name]}`).join('&');
+      expect(assistantSourceRouteDecision(shaped(`${path}?${bad}`, rule.entities[0], badValues)))
         .toBe('not_allowlisted');
       // Every declared parameter is required, and nothing else is accepted alongside them.
-      expect(assistantSourceRouteDecision(source(`${path}?${names[0]}=2026-09-03`, rule.entities[0])))
+      expect(assistantSourceRouteDecision(shaped(`${path}?${names[0]}=2026-09-03`, rule.entities[0], declared)))
         .toBe(names.length === 1 ? 'allowed' : 'not_allowlisted');
-      expect(assistantSourceRouteDecision(source(`${path}?${query}&extra=1`, rule.entities[0])))
+      expect(assistantSourceRouteDecision(shaped(`${path}?${query}&extra=1`, rule.entities[0], declared)))
         .toBe('not_allowlisted');
     }
+  });
+
+  /**
+   * Finding 9 of the adversarial review, and the reason the rule stopped being a shape check.
+   *
+   * Validating only that `from`/`to` parse as ISO dates admitted `0001-01-01`..`9999-12-31`: a
+   * window that can be any window, cited under a figure measured over seven days. These four
+   * cases are the boundary, and they fail on the version of this rule that checked shape alone.
+   */
+  describe('a shaped route may only carry the window its own reference declares', () => {
+    const WINDOW = { from: '2026-08-28', to: '2026-09-03' } as const;
+    const cited = '/expenses?from=2026-08-28&to=2026-09-03';
+
+    it('הטווח שהעובדה מדדה עובר', () => {
+      expect(assistantSourceRouteDecision(shaped(cited, 'organization', WINDOW), 'owner'))
+        .toBe('allowed');
+    });
+
+    it('טווח שנפתח לכל ההיסטוריה נדחה, גם כשהוא בצורת תאריך תקינה', () => {
+      expect(assistantSourceRouteDecision(
+        shaped('/expenses?from=0001-01-01&to=9999-12-31', 'organization', WINDOW),
+        'owner',
+      )).toBe('not_allowlisted');
+    });
+
+    it('הזזה של קצה אחד בלבד נדחית — אין כאן "כמעט אותו חלון"', () => {
+      for (const widened of ['/expenses?from=2026-01-01&to=2026-09-03', '/expenses?from=2026-08-28&to=2026-12-31']) {
+        expect(assistantSourceRouteDecision(shaped(widened, 'organization', WINDOW), 'owner'))
+          .toBe('not_allowlisted');
+      }
+    });
+
+    it('מקור שלא הצהיר על חלון כלל אינו מקבל חלון', () => {
+      expect(assistantSourceRouteDecision(source(cited, 'organization'), 'owner'))
+        .toBe('not_allowlisted');
+    });
+
+    it('הצהרה שאינה בצורת תאריך נדחית גם כשהיא תואמת לקישור', () => {
+      expect(assistantSourceRouteDecision(
+        shaped('/expenses?from=always&to=always', 'organization', { from: 'always', to: 'always' }),
+        'owner',
+      )).toBe('not_allowlisted');
+    });
+
+    it('הצהרה עם פרמטר עודף נדחית — לא מתעלמים ממנו', () => {
+      expect(assistantSourceRouteDecision(
+        shaped(cited, 'organization', { ...WINDOW, days: '30' }),
+        'owner',
+      )).toBe('not_allowlisted');
+    });
+
+    it('/expenses ללא חלון נשאר מותר דרך ה-exact rule ואינו נוגע בכלל המעוצב', () => {
+      expect(assistantSourceRouteDecision(source('/expenses', 'organization'), 'owner'))
+        .toBe('allowed');
+    });
   });
 });
 
@@ -152,7 +219,9 @@ describe('citation landing (wave 7)', () => {
   });
 
   it('חלון המדידה של get_purchase_metrics עובר אל /expenses', () => {
-    expect(assistantSourceRouteDecision(source('/expenses?from=2026-08-04&to=2026-09-03', 'organization'), 'owner'))
-      .toBe('allowed');
+    expect(assistantSourceRouteDecision(
+      shaped('/expenses?from=2026-08-04&to=2026-09-03', 'organization', { from: '2026-08-04', to: '2026-09-03' }),
+      'owner',
+    )).toBe('allowed');
   });
 });

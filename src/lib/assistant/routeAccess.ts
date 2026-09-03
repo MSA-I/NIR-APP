@@ -84,12 +84,28 @@ export const ASSISTANT_ENTITY_PARAM_ROUTE_RULES: readonly AssistantEntityParamRo
 ];
 
 /**
- * A list screen plus parameters whose values are checked against a SHAPE rather than an id.
+ * A list screen plus parameters whose values must equal the ones the SOURCE ITSELF declares.
  *
  * One member, and it earns its place: `get_purchase_metrics` measures a trailing window and
  * `/expenses` reads the same window off `?from=`/`?to=` and calls the same RPC, so the tool can
- * hand a reader the exact range it measured. Dates are the only shape allowed, and the parameter
- * set must match exactly — an unknown parameter is not ignored, it is refused.
+ * hand a reader the range it declared it measured.
+ *
+ * **The shape is not the check, and an earlier version of this comment said it was.** Validating
+ * only that `from`/`to` look like ISO dates admits `?from=0001-01-01&to=9999-12-31` — a window
+ * that can be any window isolates nothing, which is the exact failure the header of this file
+ * says a filtered entry exists to prevent. So the values are compared against
+ * `source.route_params`, the window the tool wrote as a value beside the route rather than
+ * inside it; a shaped route whose reference declares no window is refused outright.
+ *
+ * `params` therefore does two jobs, and neither is redundant with the other. The KEY SET is the
+ * exact parameter set the screen may be handed — an unknown parameter is not ignored, it is
+ * refused, and a declared parameter the URL omits is refused too. The REGEX bounds what a tool
+ * is allowed to declare, so the field cannot become a free-text channel into a query string.
+ *
+ * What is still outside this rule's reach, stated rather than implied: a tool that widens the
+ * link and the declaration together is consistent, and consistency is all a validator can see.
+ * Nothing here holds the measurement. Binding a citation to the number it cites is the tool
+ * author's obligation; this rule only removes the drift between the two halves.
  */
 export type AssistantShapedParamRouteRule = {
   appRoute: AppRoutePolicyKey;
@@ -173,8 +189,17 @@ export function assistantSourceRouteDecision(
       if (names.length !== expected.length || expected.some((name) => !parameters.has(name))) {
         return 'not_allowlisted';
       }
+      // Fail closed: no declared window, no shaped route. A reference that has not said which
+      // range it stands for cannot be handed a range.
+      const declared = source.route_params;
+      if (!declared) return 'not_allowlisted';
+      if (Object.keys(declared).length !== expected.length) return 'not_allowlisted';
       for (const [name, shape] of Object.entries(shapedRule.params)) {
-        if (!shape.test(parameters.get(name) ?? '')) return 'not_allowlisted';
+        const value = declared[name];
+        // `undefined` fails the regex too, but test it by name so a declaration that simply
+        // omits a parameter is refused for the reason it was refused.
+        if (value === undefined || !shape.test(value)) return 'not_allowlisted';
+        if (parameters.get(name) !== value) return 'not_allowlisted';
       }
       return role && !rolesFor(shapedRule.appRoute).includes(role) ? 'not_permitted' : 'allowed';
     }

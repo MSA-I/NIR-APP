@@ -1460,10 +1460,16 @@ def _line_order_check() -> dict[str, Any]:
         'ביצים L (תבנית 30)',
         'קמח לבן (שק 25 ק"ג)',
         'P18B product',
+        # An ordinary name with ONE dropped opening bracket. This used to score
+        # `closer_before_opener = 1`, and because the decision is taken for the whole document that
+        # one line was enough to reverse every line on every page -- turning this name into
+        # `(ג"ק 5 ןבל חמק`. A closer that ENDS a line is where a closer belongs; the bracket that
+        # went missing is the opener, and no repair can put it back by reversing the letters.
+        'קמח לבן 5 ק"ג)',
     ]
 
     def fires(text: str) -> bool:
-        _, leading, inverted, _ = _line_order_evidence(text)
+        _, leading, inverted, _, _, _ = _line_order_evidence(text)
         return leading + inverted > 0
 
     for name in damaged:
@@ -1495,11 +1501,49 @@ def _line_order_check() -> dict[str, Any]:
     # A pure-Latin line is not a right-to-left line and is returned untouched.
     assert _restore_line_order('P18B product') == 'P18B product'
 
+    # AND THE DECISION IS TAKEN FOR A WHOLE DOCUMENT, so line-level evidence is not the whole
+    # story. `_restore_line_order` does not merely reorder words -- it reverses letters -- so a
+    # false positive here does not fail to repair a name, it destroys one. Three documents:
+    from src.parsers import _normalize_pdf_text_layer
+
+    def inverts(pages: dict[int, str]) -> bool:
+        _text, records = _normalize_pdf_text_layer(dict(pages))
+        return bool(records[0]["applied"])
+
+    # 1. A clean catalogue that contains ONE line carrying the strongest possible tell is still a
+    #    clean catalogue. One line may not speak for a hundred pages; that was the defect.
+    one_tell = {1: "\n".join(readable), 2: 'ק"ג 5( קמח לבן)'}
+    assert not inverts(one_tell), "a single line inverted an entire document"
+
+    # 2. Corroboration must not have silenced the repair. A layer carrying the measured damage
+    #    signature on more than one line is still inverted, and the record still pairs: the
+    #    preserved original, put through the named transform, reproduces the stored text.
+    damaged_pages = {
+        1: ')ק"ג 5( קמח לבן\nשקיות אשפה 60*80 )100 יח',
+        2: ')ביחידה 12( מטליות מיקרופייבר 30*30\nשמן קנולה 100 מ״ל',
+    }
+    assert inverts(damaged_pages), "corroboration silenced a document that really was backwards"
+    repaired, damaged_records = _normalize_pdf_text_layer(dict(damaged_pages))
+    assert repaired != damaged_pages, "the document was reported inverted but nothing moved"
+    preserved = damaged_records[0]["original_text"]
+    assert preserved == "\n".join(damaged_pages.values()), "original not preserved"
+    assert _restore_line_order(preserved) == "\n".join(repaired.values()), (
+        "the preserved original does not reproduce the stored text under the named transform"
+    )
+
+    # 3. And the document made of the readable corpus alone -- stray closing bracket included --
+    #    is left exactly as it arrived, by both correctors.
+    clean_pages = {1: "\n".join(readable[:6]), 2: "\n".join(readable[6:])}
+    untouched, clean_records = _normalize_pdf_text_layer(dict(clean_pages))
+    assert untouched == clean_pages, untouched
+    assert all(entry["applied"] is False for entry in clean_records), clean_records
+
     return {
         "damaged_detected": f"{len(damaged)}/{len(damaged)}",
         "readable_false_positives": f"0/{len(readable)}",
         "round_trip": f"{len(readable)}/{len(readable)}",
         "word_order": "repaired",
+        "one_line_inverts_a_document": "no",
     }
 
 

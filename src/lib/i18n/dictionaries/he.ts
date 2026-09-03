@@ -1910,6 +1910,7 @@ export const he = {
   },
 
   inventory: {
+    lowStockEmptyCatalogue: 'אין עדיין מוצרים פעילים לבדוק',
     lowStockUnmeasured: 'אין מוצר עם יתרה שנספרה ומינימום מוגדר',
     quantityTooLarge: 'הכמות גדולה מדי. אפשר להזין עד 1,000,000',
     pricesInSeveralCurrencies: 'מחירים בכמה מטבעות',

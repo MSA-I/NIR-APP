@@ -290,5 +290,9 @@
   "0298_one_parser_for_a_price.sql",
   "0299_the_derived_answer_gets_a_name.sql",
   "0300_every_reader_moves_to_the_derived_answer.sql",
-  "0301_a_report_that_names_its_cost.sql"
+  "0301_a_report_that_names_its_cost.sql",
+  "0302_a_marker_belongs_at_one_end_of_the_cell.sql",
+  "0303_a_counter_that_cannot_be_outrun.sql",
+  "0304_the_writer_and_the_reader_answer_the_same_question.sql",
+  "0305_a_rollback_that_only_reaches_a_tenant_with_nobody_in_it.sql"
 ]

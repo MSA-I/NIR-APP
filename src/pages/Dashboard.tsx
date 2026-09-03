@@ -542,6 +542,30 @@ function DashboardSkeleton() {
   );
 }
 
+/**
+ * Does the monthly bar series hold anything that was actually observed?
+ *
+ * The zero-policy guard the weekly comparison already applies (`weeklyHasActivity` below), lifted
+ * out so it can be measured rather than read. Finding 10 of the 03.09.2026 review: this card was
+ * the one place inside `currencyView` still asking the question of the WRONG set — `invoices` is
+ * every currency the business holds, while the buckets are the one the reader picked. A business
+ * with an open dollar balance whose last dollar invoice is older than the window got a USD tab
+ * with nothing in it, and the old test answered "yes, draw" because shekel invoices exist: four
+ * bars of height zero under four month names, which is a chart saying "four months, nothing
+ * spent". Measured — `artifacts/review/shots/finding-10/{before,after}-usd-no-invoices.png`.
+ *
+ * Counting the buckets is also stricter than counting `byMonth`: an invoice dated ahead of this
+ * month lands in the map but in none of the four columns, and a series drawn for it would be four
+ * zero bars again.
+ *
+ * `count`, never `total`: a month in which real invoices sum to zero IS an observation, and the
+ * bar language already draws it with `barLow`. Emptiness is "nothing was measured", not "the
+ * measurement came out zero" — the same distinction `lowStockCount` makes on /inventory.
+ */
+export function monthlySeriesHasObservation(buckets: readonly { count: number }[]): boolean {
+  return buckets.some((bucket) => bucket.count > 0);
+}
+
 export default function Dashboard() {
   const { statusLabel, t, locale } = useT();
   const { profile, org } = useAuth();
@@ -737,7 +761,8 @@ export default function Dashboard() {
     const priceIncreaseSuppliers = new Set(priceIncreases.map((r) => r.supplier.name)).size;
 
     // ── monthly expense chart (invoices by calendar month) + MoM change. Calendar buckets stay
-    // consecutive even when a month has no invoices; an entirely empty source stays empty.
+    // consecutive even when a month has no invoices; a window with nothing observed in it stays
+    // empty.
     const byMonth = new Map<string, { total: number; count: number }>();
     for (const inv of inView(invoices)) {
       const m = inv.invoice_date.slice(0, 7);
@@ -752,7 +777,10 @@ export default function Dashboard() {
       const total = bucket.total;
       return { key, month: fmtMonth(`${key}-01`, locale), total, count: bucket.count, label: bucket.count ? moneyFor(viewCurrency)(total) : '' };
     });
-    const monthly = invoices.length ? monthBuckets.map(({ month, total, count, label }) => ({ month, total, count, label })) : [];
+    // The rule itself, and why it is not `invoices.length`, is on `monthlySeriesHasObservation`.
+    const monthly = monthlySeriesHasObservation(monthBuckets)
+      ? monthBuckets.map(({ month, total, count, label }) => ({ month, total, count, label }))
+      : [];
     const curMonthBucket = byMonth.get(monthKey);
     const prevMonthBucket = byMonth.get(prevMonthKey);
     /* The third copy of the same arithmetic, now the third caller of the same primitive. Two

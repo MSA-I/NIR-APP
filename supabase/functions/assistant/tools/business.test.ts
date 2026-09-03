@@ -1393,6 +1393,13 @@ Deno.test("purchase metrics hand /expenses the window they measured", async () =
   // /expenses reads ?from=/?to= off the URL and calls this same RPC with them, so the screen
   // reproduces the figure exactly. Bare /expenses opens on the current calendar month.
   assert.equal(source.route, `/expenses?from=${envelope.filters.from}&to=${envelope.filters.to}`);
+  // The declared window is the measured one. `routeAccess` proves the LINK matches this
+  // declaration; only an assertion here can prove the declaration matches the measurement, so
+  // this is the half of finding 9 that no allowlist can carry.
+  assert.deepEqual(source.route_params, {
+    from: envelope.filters.from,
+    to: envelope.filters.to,
+  });
   assert.equal(assistantSourceRouteDecision(source, "owner"), "allowed");
   assert.equal(assistantSourceRouteDecision(source, "accountant"), "allowed");
 });
