@@ -154,4 +154,19 @@ $assert_0314$;
 -- existing rows were all written under the stricter list and are therefore still valid; the
 -- constraint is left validated rather than re-validated, because nothing about them changed.
 
+-- THE STANDING RE-ASSERTION every migration after `0057` carries. This file replaces a function
+-- body a CHECK constraint depends on, which is exactly the kind of change that can widen the
+-- SECURITY DEFINER surface or move a scope-enforced object without anyone noticing.
+do $assert_scope$
+declare
+  v_violations text;
+begin
+  select string_agg(assertion || ' -- ' || detail, e'\n' order by assertion, detail)
+    into v_violations from private.scope_enforcement_violations();
+  if v_violations is not null then
+    raise exception e'0314 scope failed:\n%', v_violations;
+  end if;
+end
+$assert_scope$;
+
 commit;
