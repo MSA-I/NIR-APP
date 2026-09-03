@@ -282,5 +282,6 @@
   "0290_the_automatic_path_names_the_exception_it_raises.sql",
   "0291_unapproved_invoice_settled_exception_type.sql",
   "0292_the_bank_door_declares_what_it_settles.sql",
-  "0293_every_password_change_is_recorded.sql"
+  "0293_every_password_change_is_recorded.sql",
+  "0294_a_number_belongs_to_one_tenant.sql"
 ]
