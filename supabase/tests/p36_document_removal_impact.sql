@@ -127,6 +127,24 @@ insert into public.invoices
    '40360000-0000-4000-8000-000000000001', 'INV-3', '2026-08-10', 50, 'received', 'paid');
 alter table public.invoices enable trigger invoice_three_way_approval_guard_insert;
 
+-- INV-3 IS PAID BECAUSE MONEY MOVED, not because a column says so. Until `0300` the removal
+-- guard read `invoices.payment_status`, so writing 'paid' into the column was enough to make
+-- this fixture mean what it claims. `0300` moved the guard to the derived answer, which counts
+-- `payment_allocations` -- and a fixture that names an invoice paid while allocating nothing to
+-- it stopped describing a paid invoice at all. It described a labelling mistake, and the suite
+-- then asserted that a labelling mistake blocks removal, which is not the claim.
+--
+-- 50 against a total of 50: the derived state is 'paid' by settlement, and the stored column and
+-- the derived answer now agree rather than being asked to disagree quietly.
+insert into public.payments
+  (id, org_id, supplier_id, amount, paid_date, method, reference) values
+  ('e0360000-0000-4000-8000-000000000001', '10360000-0000-4000-8000-000000000001',
+   '40360000-0000-4000-8000-000000000001', 50, '2026-08-11', 'bank', 'P36-PAY');
+insert into public.payment_allocations
+  (id, org_id, payment_id, invoice_id, amount) values
+  ('e0361000-0000-4000-8000-000000000001', '10360000-0000-4000-8000-000000000001',
+   'e0360000-0000-4000-8000-000000000001', 'c0360000-0000-4000-8000-000000000003', 50);
+
 insert into public.goods_receipts (id, org_id, order_id, status, received_at) values
   ('d0360000-0000-4000-8000-000000000001', '10360000-0000-4000-8000-000000000001',
    '50360000-0000-4000-8000-000000000001', 'draft', '2026-08-10'),

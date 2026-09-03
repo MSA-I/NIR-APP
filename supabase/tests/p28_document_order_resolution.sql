@@ -50,9 +50,11 @@ create function pg_temp.p28_resolve(
     p_org, p_supplier, p_type, coalesce(p_payload, pg_temp.p28_payload()), p_date, p_products);
 $$;
 
--- `purchase_orders.number` is GENERATED ALWAYS, so the suite cannot choose the numbers a document
--- would print -- it has to read back the ones the database assigned. Anything else would be testing
--- a number the product can never produce.
+-- The suite cannot choose the numbers a document would print -- it has to read back the ones the
+-- database assigned. Anything else would be testing a number the product can never produce. This
+-- was true when the column was `generated always as identity`, and `0294` kept it true by a
+-- different route: the per-tenant allocator RAISES `org_number_is_allocated_not_supplied` on an
+-- explicit number rather than honouring it, so the refusal moved from storage to the trigger.
 create function pg_temp.p28_num(p_order uuid)
 returns text language sql stable as $$
   select number::text from public.purchase_orders where id = p_order;
@@ -453,11 +455,20 @@ select pg_temp.p28_assert(
      '1a280000-0000-4000-8000-000000000001') r),
   'another tenant''s supplier, read with OUR org id, produced candidates');
 
+-- THE DIRECTION OF THIS CLAIM CHANGED WITH `0294`, and the old one had quietly stopped meaning
+-- anything. Until per-tenant numbering, a number was unique across the whole database, so asking
+-- for the other tenant's order number while reading as ours was a clean cross-tenant probe. Now
+-- every tenant counts from 1: their ONLY order is number 1, and so is ours. Asking for it here
+-- would prove nothing -- the resolver would find OUR number 1 and be right to.
+--
+-- So the probe runs the other way. Ours has eight orders and theirs has one, so any of our
+-- numbers above 1 is a number that tenant demonstrably does not have. O2 is number 2.
 select pg_temp.p28_assert(
   (select r ->> 'reason' = 'no_evidence'
    from pg_temp.p28_resolve(
-     'invoice', '4a280000-0000-4000-8000-000000000001',
-     pg_temp.p28_payload(pg_temp.p28_num('5a280000-0000-4000-8000-000000000006'))) r),
+     'invoice', '4a280000-0000-4000-8000-000000000003',
+     pg_temp.p28_payload(pg_temp.p28_num('5a280000-0000-4000-8000-000000000002')),
+     null, null, '1a280000-0000-4000-8000-000000000002') r),
   'a number belonging to another tenant''s order was matched');
 
 select pg_temp.p28_assert(

@@ -102,11 +102,21 @@ select pg_temp.p68_assert(
     like '%''ambiguous_catalog''%'
   and pg_get_functiondef('public.get_qualified_product_creation_dry_run(uuid)'::regprocedure)
     like '%''missing_qualification''%'
+  -- The unsafe-price outcome is no longer ONE literal. `0298` replaced the preview's private
+  -- `[^0-9.]` scrub -- the expression that swallowed letters and destroyed the sign -- with
+  -- `private.parse_price`, the same reading the writers use, so the preview now reports WHY:
+  -- `price_missing`, `price_unreadable`, `price_not_positive`, `price_below_minor_unit`,
+  -- `price_above_cap`, `price_currency_unknown`, `price_currency_mismatch`. Pinning the old
+  -- lumped `'invalid_price'` would demand back the very ambiguity that change removed, so the
+  -- assertion is inverted: the shared parser must be there, and the lump must not.
   and pg_get_functiondef('public.get_qualified_product_creation_dry_run(uuid)'::regprocedure)
-    like '%''invalid_price''%'
+    like '%private.parse_price(%'
+  and pg_get_functiondef('public.get_qualified_product_creation_dry_run(uuid)'::regprocedure)
+    not like '%''invalid_price''%'
   and pg_get_functiondef('public.get_qualified_product_creation_dry_run(uuid)'::regprocedure)
     not like '%insert into public.products%',
-  'qualified creation dry-run writes or hides unsafe outcome counts');
+  'qualified creation dry-run writes, hides unsafe outcome counts, or still lumps every '
+  'unreadable price into one reason instead of reading it with the writers'' parser');
 select pg_temp.p68_assert(
   pg_get_functiondef('public.get_qualified_product_creation_dry_run(uuid)'::regprocedure)
     like '%''currency'',v_currency%'

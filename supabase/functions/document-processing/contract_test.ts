@@ -303,9 +303,11 @@ Deno.test("document processing request and extraction contracts", () => {
 });
 
 Deno.test("gateway contract handshake is exact and header based", () => {
-  // Moved 2 -> 3 with `normalizations`. This literal and `GATEWAY_CONTRACT_VERSION` in
-  // `worker/ocr/src/gateway.py` are the pair a3603c0 broke by moving only one of them.
-  assert.equal(GATEWAY_CONTRACT_VERSION, "3");
+  // Moved 2 -> 3 with `normalizations`, then 3 -> 4 with `hebrew_line_order`. This literal and
+  // `GATEWAY_CONTRACT_VERSION` in `worker/ocr/src/gateway.py` are the pair a3603c0 broke by
+  // moving only one of them — and this test is the third member of that set, which the 3 -> 4
+  // move left behind: both sides were already "4" while this assertion still demanded "3".
+  assert.equal(GATEWAY_CONTRACT_VERSION, "4");
   assert.equal(
     gatewayContractMatches(
       new Headers({

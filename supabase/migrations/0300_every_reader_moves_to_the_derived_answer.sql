@@ -249,7 +249,16 @@ declare
   v_anchor text; v_replacement text; v_count integer;
 begin
   v_anchor := e'            i.payment_status::text, i.total_amount, i.currency, i.invoice_date,';
-  v_replacement := e'            private.invoice_payment_state(i)::text, i.total_amount, i.currency, i.invoice_date,';
+  -- THE ONE READER THAT MUST NOT CALL `private`. `global_search` is the only one of the eight
+  -- that is SECURITY INVOKER (`0224`: `language plpgsql / stable / set search_path to 'public'`,
+  -- no `security definer`), so its body runs as the signed-in user. `private` carries no grants
+  -- to `authenticated` — `0296` granted usage to `supabase_auth_admin` alone and `0303` took even
+  -- that back — so a call to `private.invoice_payment_state` here is `permission denied`, which
+  -- PostgREST returns as HTTP 403 and the screen shows as a search that finds nothing.
+  -- `0299` built the wrapper for exactly this caller: `public.invoice_payment_state(invoices)` is
+  -- SECURITY DEFINER and granted to `authenticated`. It reads no column — it delegates to the
+  -- same private body — so the step-2 self-check below is satisfied by it.
+  v_replacement := e'            public.invoice_payment_state(i)::text, i.total_amount, i.currency, i.invoice_date,';
   v_count := (length(v_definition) - length(replace(v_definition, v_anchor, '')))
              / length(v_anchor);
   if v_count <> 1 then raise exception 'w6/step2: global_search anchor count %', v_count; end if;
