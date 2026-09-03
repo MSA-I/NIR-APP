@@ -43,7 +43,30 @@ function Stop-Or-Skip([string]$Message) {
 # ---------- 1. Manifest ----------------------------------------------------------------
 if (-not $ManifestPath) { $ManifestPath = $env:INPLACE_DEMO_MANIFEST }
 if (-not $ManifestPath) {
-  $ManifestPath = Join-Path (Split-Path -Parent $repoRoot) "NIR-APP-DOCS\DEMO-USERS.local.json"
+  # The default manifest is a SIBLING of the main checkout, and this script runs from worktrees
+  # more often than from the checkout itself -- agents work in `.claude\worktrees\<name>`, where
+  # the old default resolved to `.claude\worktrees\NIR-APP-DOCS` and the restore that CLAUDE.md
+  # makes mandatory failed with a path nobody recognises.
+  #
+  # It WALKS UP rather than asking git. `git rev-parse --git-common-dir` returns the right answer
+  # and was tried first: PS 5.1 decodes a native command's stdout with the console codepage, this
+  # repository lives under a Hebrew path, and the string that came back PRINTED correctly and
+  # still would not resolve -- `Resolve-Path` returned nothing and the fallback took over in
+  # silence. Directory names the walk tests come from the filesystem, so there is nothing to
+  # decode and nothing to get wrong.
+  $probe = $repoRoot
+  for ($hop = 0; $hop -lt 6 -and $probe; $hop++) {
+    $parent = Split-Path -Parent $probe
+    if (-not $parent) { break }
+    $candidate = Join-Path $parent "NIR-APP-DOCS\DEMO-USERS.local.json"
+    if (Test-Path -LiteralPath $candidate) { $ManifestPath = $candidate; break }
+    $probe = $parent
+  }
+  # Unchanged when nothing is found, so a machine that genuinely has no manifest still reports the
+  # path it expected rather than the last directory the walk happened to reach.
+  if (-not $ManifestPath) {
+    $ManifestPath = Join-Path (Split-Path -Parent $repoRoot) "NIR-APP-DOCS\DEMO-USERS.local.json"
+  }
 }
 if (-not (Test-Path -LiteralPath $ManifestPath)) {
   Stop-Or-Skip "the demo manifest was not found at $ManifestPath"
