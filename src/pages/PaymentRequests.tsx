@@ -10,7 +10,7 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, StatusBadge, useToast, Modal, ConfirmDialog, Disclosure, ErrorNote, Note, PageHeader, SkeletonTable, SubPanel, ICON, type Column } from '../components/ui';
 import { CheckList } from './Invoices';
-import { checkText, runPaymentRequestChecks, type CheckResult } from '../lib/checks';
+import { allocationBalanceChecks, checkText, runPaymentRequestChecks, type CheckResult } from '../lib/checks';
 import { summarizeChecks, type ChecksSummary } from '../lib/checkSummary';
 import { PAYMENT_REQUEST_STATUS } from '../lib/status';
 import { addCalendarDays, fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
@@ -252,7 +252,7 @@ export default function PaymentRequests() {
 }
 
 /* ---------- creation ---------- */
-function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
+export function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
   presetInvoiceId: string | null; onClose: () => void; onSaved: () => void;
 }) {
   const { errorText, t } = useT();
@@ -393,13 +393,41 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
     };
   }, [checkFingerprint]);
 
-  const checks = checked?.fingerprint === checkFingerprint ? checked.results : null;
+  /* REQ-03. The bound the server enforces, measured here against the number this screen printed
+     beside the field — see `allocationBalanceChecks`. It is computed from state rather than
+     fetched, so it is correct on the keystroke and does not wait for the debounce: a figure above
+     the printed balance is critical immediately, and the submit closes with it. */
+  const allocationChecks = useMemo(() => allocationBalanceChecks(
+    (invoices ?? [])
+      .filter((invoice) => (chosen[invoice.id] ?? 0) > 0)
+      .map((invoice) => ({
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoice_number,
+        amount: chosen[invoice.id],
+        openBalance: invoice.allocationAmount,
+        currency: invoice.currency,
+      })),
+  ), [chosen, invoices]);
+  const overAllocated = allocationChecks.length > 0;
+  const serverChecks = checked?.fingerprint === checkFingerprint ? checked.results : null;
+  const checks = serverChecks ? [...allocationChecks, ...serverChecks]
+    : allocationChecks.length ? allocationChecks : null;
   const hasCritical = checks?.some((c) => c.severity === 'critical') ?? false;
+  /* REQ-05. `suspected_duplicate` is not what a critical check means — the server assigns it only
+     when a live request already exists for this supplier at this exact amount (0073:457-469), which
+     is the one signal below, and every other critical leaves the record `pending_approval`. Keying
+     the button's promise on `hasCritical` meant an unapproved invoice produced a button offering a
+     quarantine and a record that went straight into the approval queue. */
+  const hasDuplicateSignal = checks?.some((check) => check.code === 'similar_pr') ?? false;
   const supplierName = supplierPicker.suppliers.find((supplier) => supplier.id === supplierId)?.name ?? t('paymentRequests.find');
-  const checksReady = checkFingerprint != null && checks != null && !checking && !checkError;
+  const checksReady = checkFingerprint != null && serverChecks != null && !checking && !checkError;
 
   async function save(toApproval: boolean) {
     if (!supplierId || amount <= 0) { toast(t('paymentRequests.toast_7'), 'error'); return; }
+    // Both buttons are already closed on this; the second reading is here because `save` is also
+    // the only place a keystroke landing between render and click would be caught, and the server
+    // refuses it either way (`payment_request_allocation_invalid`).
+    if (overAllocated) { toast(t('paymentRequests.toastAllocationOverBalance'), 'error'); return; }
     if (!checkFingerprint || !checksReady) {
       toast(checkError ?? t('paymentRequests.toast_8'), 'error');
       return;
@@ -540,10 +568,17 @@ function CreatePaymentRequest({ presetInvoiceId, onClose, onSaved }: {
 
         <div className="flex flex-wrap justify-end gap-2">
           <button className="btn-secondary" disabled={busy} onClick={onClose}>{t('paymentRequests.text_20')}</button>
-          <button className="btn-secondary" disabled={busy || amount <= 0 || !checksReady || !!suppliersError || !!invoicesError} onClick={() => void save(false)}>{t('paymentRequests.save')}</button>
-          <button className={hasCritical ? 'btn-danger' : 'btn-primary'} disabled={busy || amount <= 0 || !checksReady || !!suppliersError || !!invoicesError} onClick={() => void save(true)}>
+          {/* The draft closes on an over-allocation too. `create_payment_request` applies the same
+              allocation bound to a draft as to a request sent for approval, so a "save as draft"
+              that stayed enabled would only move the refusal one click later. */}
+          <button className="btn-secondary" disabled={busy || amount <= 0 || !checksReady || overAllocated || !!suppliersError || !!invoicesError}
+            aria-label={overAllocated ? t('paymentRequests.draftBlockedOverBalance') : undefined}
+            onClick={() => void save(false)}>{t('paymentRequests.save')}</button>
+          <button className={hasCritical ? 'btn-danger' : 'btn-primary'} disabled={busy || amount <= 0 || !checksReady || overAllocated || !!suppliersError || !!invoicesError}
+            aria-label={overAllocated ? t('paymentRequests.submitBlockedOverBalance') : undefined}
+            onClick={() => void save(true)}>
             {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : hasCritical ? <ShieldAlert size={ICON.sm} aria-hidden="true" /> : <Send size={ICON.sm} aria-hidden="true" />}
-            {hasCritical ? t('paymentRequests.text_21') : t('paymentRequests.text_22')}
+            {hasDuplicateSignal ? t('paymentRequests.text_21') : t('paymentRequests.text_22')}
           </button>
         </div>
       </div>
@@ -650,6 +685,9 @@ function CheckSummary({ summary, checks }: { summary: ChecksSummary; checks: Che
 }
 
 /* ---------- detail + approval flow ---------- */
+/** One linked invoice, as the detail panel reads it. */
+interface InvoiceLinkRow { invoice_number: string; invoice_date: string; review_status: string }
+
 export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
   pr: Row; isOffice: boolean; onClose: () => void; onChanged: () => void;
 }) {
@@ -665,12 +703,18 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
   const [creditOverrideAcknowledged, setCreditOverrideAcknowledged] = useState(false);
 
   const { data: links, loading: linksLoading, error: linksError } = useQuery(async () => {
+    /* REQ-02. `review_status` is read here for one reason: `p1_transition_payment_request` refuses
+       approval unless EVERY linked invoice is `approved` (0031:903), and the screen could not name
+       which one was not. On the tenant this was measured in, all five live requests were refused
+       for exactly this and the product said nothing — so the money read as committed while none of
+       it could move. The column belongs to a row this query already returns and to a table this
+       role already reads; nothing here widens what the screen can see. */
     const rows = await fetchAll<{
       invoice_id: string;
       amount_allocated: number;
-      invoice: { invoice_number: string; invoice_date: string } | { invoice_number: string; invoice_date: string }[];
+      invoice: InvoiceLinkRow | InvoiceLinkRow[];
     }>((from, to) => supabase.from('payment_request_invoices')
-      .select('invoice_id, amount_allocated, invoice:invoices(invoice_number, invoice_date)')
+      .select('invoice_id, amount_allocated, invoice:invoices(invoice_number, invoice_date, review_status)')
       .eq('payment_request_id', pr.id).order('invoice_id').range(from, to));
     return rows.map((row) => ({
       ...row,
@@ -824,6 +868,10 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
   // screen can repair an allocation. Both approval routes are closed here so the refusal arrives
   // with its reason attached instead of as a server error the user cannot act on.
   const overAllocated = summary?.blocking.some(isAllocationVsBalanceCheck) ?? false;
+  /* REQ-02. The invoices this request is waiting for, by name. Read from the rows already listed
+     above rather than from the check, because the check is a COUNT — the 0034 anti-oracle keeps the
+     server from naming an invoice, and the panel does not need it to: it is holding the rows. */
+  const unapprovedLinks = (links ?? []).filter((link) => link.invoice.review_status !== 'approved');
 
   return (
     <Modal open onClose={onClose} title={t('paymentRequests.detailTitle', { number: pr.number, supplier: pr.supplier.name })} wide busy={busy} statusMessage={busy ? t('paymentRequests.detailBusy') : undefined}>
@@ -853,12 +901,32 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
             <ul className="divide-y divide-line-soft border border-line-soft rounded-lg text-sm">
               {links.map((l) => (
                 <li key={l.invoice_id} className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2">
-                  <span>{t('paymentRequests.fmtDate_4')} <b dir="ltr" className="num">{l.invoice.invoice_number}</b> · {fmtDate(l.invoice.invoice_date)}</span>
+                  <span>
+                    {t('paymentRequests.fmtDate_4')} <b dir="ltr" className="num">{l.invoice.invoice_number}</b> · {fmtDate(l.invoice.invoice_date)}
+                    {l.invoice.review_status !== 'approved' && <span className="badge-await ms-2">{t('paymentRequests.text_16')}</span>}
+                  </span>
                   {/* An allocation is money in the debt's currency, which is the request's. */}
                   <span className="num font-medium">{fmtMoneyExact(l.amount_allocated, pr.currency)}</span>
                 </li>
               ))}
             </ul>
+            {/* REQ-02. The dependency, named. `invoice_unapproved` already said that AN invoice is
+                unapproved; it could not say WHICH, because the check is a count from the server's
+                anti-oracle. This line reads the rows the panel is already showing and names them,
+                so a request nobody can approve says what it is waiting for instead of leaving the
+                reader to press a button and receive `payment_request_checks_failed`. */}
+            {unapprovedLinks.length > 0 && (
+              <Note tone="alert" className="mt-2">
+                <span className="min-w-0 flex-1">
+                  {unapprovedLinks.length === 1
+                    ? t('paymentRequests.awaitingInvoiceApprovalOne', { invoice: unapprovedLinks[0].invoice.invoice_number })
+                    : t('paymentRequests.awaitingInvoiceApprovalMany', {
+                      count: unapprovedLinks.length,
+                      invoices: unapprovedLinks.map((link) => link.invoice.invoice_number).join(', '),
+                    })}
+                </span>
+              </Note>
+            )}
           </div>
         ) : <div className="text-sm text-await-fg">{t('paymentRequests.text_32')}</div>}
 

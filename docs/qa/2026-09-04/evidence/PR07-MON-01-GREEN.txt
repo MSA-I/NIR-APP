@@ -1,0 +1,244 @@
+﻿PR07 / MON-01 + DEBT 119 -- GREEN
+run at 2026-09-04T15:04:56.7023484Z (UTC)
+database: local supabase_db_supplyflow-p0, reset from the migration tree, head 0315 (0315 applied by the reset itself)
+command: docker exec supabase_db_supplyflow-p0 psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/p108_one_balance_one_approval.sql
+
+CREATE EXTENSION
+psql:/var/lib/postgresql/run-p108_one_balance_one_approval.sql:29: NOTICE:  schema "p108" does not exist, skipping
+DROP SCHEMA
+CREATE SCHEMA
+CREATE TABLE
+GRANT
+GRANT
+CREATE FUNCTION
+GRANT
+CREATE FUNCTION
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 2
+INSERT 0 4
+              set_config              
+--------------------------------------
+ f1080000-0000-4000-8000-000000000002
+(1 row)
+
+                   set_config                    
+-------------------------------------------------
+ {"sub": "f1080000-0000-4000-8000-000000000002"}
+(1 row)
+
+SET
+                                         set_invoice_review_status                                         
+-----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000021", "review_status": "in_review"}
+(1 row)
+
+                                        set_invoice_review_status                                         
+----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000021", "review_status": "approved"}
+(1 row)
+
+                                         set_invoice_review_status                                         
+-----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000022", "review_status": "in_review"}
+(1 row)
+
+                                        set_invoice_review_status                                         
+----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000022", "review_status": "approved"}
+(1 row)
+
+                                         set_invoice_review_status                                         
+-----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000023", "review_status": "in_review"}
+(1 row)
+
+                                        set_invoice_review_status                                         
+----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000023", "review_status": "approved"}
+(1 row)
+
+                                         set_invoice_review_status                                         
+-----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000024", "review_status": "in_review"}
+(1 row)
+
+                                        set_invoice_review_status                                         
+----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000024", "review_status": "approved"}
+(1 row)
+
+RESET
+ set_config 
+------------
+ 
+(1 row)
+
+ set_config 
+------------
+ 
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+              set_config              
+--------------------------------------
+ f1080000-0000-4000-8000-000000000002
+(1 row)
+
+  set_config   
+---------------
+ authenticated
+(1 row)
+
+                                                set_config                                                 
+-----------------------------------------------------------------------------------------------------------
+ {"amr": [{"method": "password", "timestamp": 1788534298}], "sub": "f1080000-0000-4000-8000-000000000002"}
+(1 row)
+
+SET
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+RESET
+ set_config 
+------------
+ 
+(1 row)
+
+ set_config 
+------------
+ 
+(1 row)
+
+ set_config 
+------------
+ 
+(1 row)
+
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+ dblink_connect 
+----------------
+ OK
+(1 row)
+
+ dblink_connect 
+----------------
+ OK
+(1 row)
+
+ dblink_send_query 
+-------------------
+                 1
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+ dblink_send_query 
+-------------------
+                 1
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+ dblink_disconnect 
+-------------------
+ OK
+(1 row)
+
+ dblink_disconnect 
+-------------------
+ OK
+(1 row)
+
+DROP TRIGGER
+CREATE TABLE
+INSERT 0 13
+DO
+ assert 
+--------
+ 
+(1 row)
+
+ assert 
+--------
+ 
+(1 row)
+
+ assert 
+--------
+ 
+(1 row)
+
+ assert 
+--------
+ 
+(1 row)
+
+psql:/var/lib/postgresql/run-p108_one_balance_one_approval.sql:421: NOTICE:  drop cascades to 6 other objects
+DETAIL:  drop cascades to table p108.results
+drop cascades to function p108.try_sql(text)
+drop cascades to function p108.assert(boolean,text)
+drop cascades to function p108.pause_first_approval()
+drop cascades to function p108.approve_as_owner(uuid,text)
+drop cascades to table p108.expectations
+DROP SCHEMA
+                result                
+--------------------------------------
+ p108_one_balance_one_approval_passed
+(1 row)
+
+EXIT_CODE=0
+
+
+================ committed end state of the P108 tenant, read back after the suite ================
+
+The suite drops its own schema on success, so this is queried from the product tables it left behind.
+P108-RACE: session A's 400.00 is approved and session B's 380.00 is still pending_approval -- one
+winner, and the loser's record is left for a person rather than destroyed. P108-SEQUENTIAL: 300.00
+approved and the 640.00 that followed it refused, so the invoice holds 300.00 of its 640.00 and not
+940.00. P108-SPLIT: 250.00 + 390.00 both approved against the same 640.00 invoice -- #350 does not
+forbid splitting a payment. P108-PARTIAL-CREDIT: no 900.00 request exists at all because the writer
+refused to create it (DEBT 119), and the 780.00 the reader printed went through.
+
+Border style is 2.
++---------+------------------+---------------------+
+| amount  |      status      |   invoice_number    |
++---------+------------------+---------------------+
+| 780.000 | pending_approval | P108-PARTIAL-CREDIT |
+| 380.000 | pending_approval | P108-RACE           |
+| 400.000 | approved         | P108-RACE           |
+| 300.000 | approved         | P108-SEQUENTIAL     |
+| 640.000 | pending_approval | P108-SEQUENTIAL     |
+| 250.000 | approved         | P108-SPLIT          |
+| 390.000 | approved         | P108-SPLIT          |
++---------+------------------+---------------------+
+(7 rows)
+
++---------------------+--------------+-------------------+
+|   invoice_number    | total_amount | approved_and_held |
++---------------------+--------------+-------------------+
+| P108-PARTIAL-CREDIT |      900.000 |                 0 |
+| P108-RACE           |      640.000 |           400.000 |
+| P108-SEQUENTIAL     |      640.000 |           300.000 |
+| P108-SPLIT          |      640.000 |           640.000 |
++---------------------+--------------+-------------------+
+(4 rows)
+

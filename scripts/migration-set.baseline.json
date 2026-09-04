@@ -303,5 +303,6 @@
   "0311_the_rollback_is_one_transaction_again.sql",
   "0312_no_link_beats_a_link_to_the_wrong_month.sql",
   "0313_the_rollback_releases_the_address_it_registered.sql",
-  "0314_the_second_hebrew_correction_has_a_name_the_database_knows.sql"
+  "0314_the_second_hebrew_correction_has_a_name_the_database_knows.sql",
+  "0315_one_balance_one_approval.sql"
 ]

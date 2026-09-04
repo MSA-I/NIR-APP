@@ -34,6 +34,8 @@ const CODES: CheckCode[] = [
   'invoice_unapproved',
   'allocation_vs_balance_one',
   'allocation_vs_balance_many',
+  'allocation_over_open_balance_one',
+  'allocation_over_open_balance_many',
   'amount_vs_balance',
   'similar_pr',
   'similar_bank_unavailable',

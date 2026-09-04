@@ -1,0 +1,1607 @@
+PR07 / REQ-03 + REQ-05 -- RED
+src/pages/PaymentRequests.tsx temporarily reverted to the shipped behaviour for this run:
+  * the client-side allocation checks dropped from the rendered set and from the submit gate
+  * the submit label keyed on `hasCritical` again
+  * the over-allocation guard removed from save()
+Everything else (the new specs, checks.ts, the dictionaries) is the change under test.
+command: npx vitest run src/pages/paymentRequestCreateBounds.spec.tsx
+
+REQ-03 fails twice: 999,999.99 and 150.01 against a printed 150.00 produce no critical finding
+and leave both submits enabled. REQ-05 fails once, with the label the sweep photographed:
+  AssertionError: expected 'שמירה (יסומן כחשד לכפילות)' to contain 'שליחה לאישור'
+
+---------------- captured output ----------------
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a37194cd6c1d29194
+
+ ❯ src/pages/paymentRequestCreateBounds.spec.tsx (6 tests | 3 failed) 8801ms
+     × closes both submits and states the bound when the allocation goes above the printed balance 3509ms
+     × fires one agora over the balance, where the tolerance signal said the amount matched 3086ms
+     × promises approval, not a quarantine, when the critical is an unapproved invoice 485ms
+node.exe : 
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/paymentRequestCreateBounds.spec.tsx > CreatePaymentRequest — the allocation bound and the promise on 
+the button > closes both submits and states the bound when the allocation goes above the printed balance
+TestingLibraryElementError: Unable to find an element with the text: /הסכום שהוקצה לחשבונית 3377 גבוה מהיתרה הפתוחה 
+שלה/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for 
+your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body[39m
+  [33mstyle[39m=[32m"overflow: hidden;"[39m
+[36m>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 
+pointer-events-none no-print sm:start-6 sm:end-6"[39m
+    [36m/>[39m
+  [36m</div>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center 
+bg-scrim p-0 sm:p-4"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33maria-labelledby[39m=[32m"_r_2_"[39m
+      [33maria-modal[39m=[32m"true"[39m
+      [33mclass[39m=[32m"dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full 
+sm:max-w-3xl flex flex-col focus:outline-none"[39m
+      [33mrole[39m=[32m"dialog"[39m
+      [33mtabindex[39m=[32m"-1"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center justify-between px-5 py-4 border-b border-line-soft"[39m
+      [36m>[39m
+        [36m<h3[39m
+          [33mclass[39m=[32m"font-semibold text-ink focus:outline-none"[39m
+          [33mid[39m=[32m"_r_2_"[39m
+          [33mtabindex[39m=[32m"-1"[39m
+        [36m>[39m
+          [0mדרישת תשלום חדשה[0m
+        [36m</h3>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"סגירה"[39m
+          [33mclass[39m=[32m"btn-ghost p-1.5! min-w-11 min-h-11"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-x"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"17"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"17"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M18 6 6 18"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"m6 6 12 12"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"dialog-safe-body p-5 overflow-y-auto"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-4"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"grid grid-cols-1 sm:grid-cols-3 gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"sm:col-span-2"[39m
+            [36m>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"label"[39m
+                [33mfor[39m=[32m"payment-request-supplier"[39m
+              [36m>[39m
+                [0mספק *[0m
+              [36m</label>[39m
+              [36m<div[39m
+                [33maria-label[39m=[32m"ספק — בחירה או יצירה"[39m
+                [33mclass[39m=[32m"flex items-center gap-2"[39m
+                [33mrole[39m=[32m"group"[39m
+              [36m>[39m
+                [36m<select[39m
+                  [33maria-describedby[39m=[32m"payment-request-supplier-quick-create-field-hint"[39m
+                  [33mclass[39m=[32m"input min-w-0"[39m
+                  [33mid[39m=[32m"payment-request-supplier"[39m
+                [36m>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m""[39m
+                  [36m>[39m
+                    [0mבחר ספק...[0m
+                  [36m</option>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m"sup-1"[39m
+                  [36m>[39m
+                    [0mמשק ירוק — ירקות ופירות[0m
+                  [36m</option>[39m
+                [36m</select>[39m
+                [36m<button[39m
+                  [33maria-describedby[39m=[32m"payment-request-supplier-quick-create-hint"[39m
+                  [33mclass[39m=[32m"btn-secondary shrink-0"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-plus"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"15"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"15"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M5 12h14"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M12 5v14"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [0m [0m
+                  [0mספק חדש[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"sr-only"[39m
+                [33mid[39m=[32m"payment-request-supplier-quick-create-field-hint"[39m
+              [36m>[39m
+                [0mאין ספק מתאים ברשימה? הכפתור ״ספק חדש״ שליד יוצר ספק ובוחר אותו כאן.[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"sr-only"[39m
+                [33mid[39m=[32m"payment-request-supplier-quick-create-hint"[39m
+              [36m>[39m
+                [0mהספק החדש ייווצר וייבחר מיד בשדה זה[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<div>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"label"[39m
+                [33mfor[39m=[32m"payment-request-due-date"[39m
+              [36m>[39m
+                [0mתאריך יעד[0m
+              [36m</label>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input"[39m
+                [33mid[39m=[32m"payment-request-due-date"[39m
+                [33mtype[39m=[32m"date"[39m
+                [33mvalue[39m=[32m""[39m
+              [36m/>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<fieldset>[39m
+            [36m<legend[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mחשבוניות פתוחות לתשלום[0m
+            [36m</legend>[39m
+            [36m<div[39m
+              [33maria-label[39m=[32m"חשבוניות פתוחות לבחירה — רשימה נגללת"[39m
+              [33mclass[39m=[32m"max-h-56 divide-y divide-line-soft overflow-y-auto rounded-lg border 
+border-line"[39m
+              [33mrole[39m=[32m"region"[39m
+              [33mtabindex[39m=[32m"0"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 text-sm "[39m
+              [36m>[39m
+                [36m<label[39m
+                  [33mclass[39m=[32m"flex min-h-11 min-w-0 flex-1 basis-full cursor-pointer items-center gap-3 
+sm:basis-auto"[39m
+                [36m>[39m
+                  [36m<input[39m
+                    [33maria-label[39m=[32m"בחירת חשבונית 3377 של משק ירוק — ירקות ופירות להקצאה בדרישת התשלום"[39m
+                    [33mchecked[39m=[32m""[39m
+                    [33mclass[39m=[32m"size-5 shrink-0 accent-action"[39m
+                    [33mtype[39m=[32m"checkbox"[39m
+                  [36m/>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"min-w-0 break-words"[39m
+                  [36m>[39m
+                    [0mחשבונית[0m
+                    [0m [0m
+                    [36m<b[39m
+                      [33mclass[39m=[32m"num"[39m
+                      [33mdir[39m=[32m"ltr"[39m
+                    [36m>[39m
+                      [0m3377[0m
+                    [36m</b>[39m
+                    [0m · [0m
+                    [0m01.08.2026[0m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"badge-await ms-2"[39m
+                    [36m>[39m
+                      [0mטרם אושרה[0m
+                    [36m</span>[39m
+                  [36m</span>[39m
+                [36m</label>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"text-ink-muted text-xs num"[39m
+                [36m>[39m
+                  [0mיתרה[0m
+                  [0m [0m
+                  [0m‏150.00 ‏₪[0m
+                [36m</span>[39m
+                [36m<input[39m
+                  [33maria-label[39m=[32m"סכום ההקצאה לחשבונית 3377 של משק ירוק — ירקות ופירות"[39m
+                  [33mclass[39m=[32m"input w-28! num"[39m
+                  [33mstep[39m=[32m"0.01"[39m
+                  [33mtype[39m=[32m"number"[39m
+                  [33mvalue[39m=[32m"999999.99"[39m
+                [36m/>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</fieldset>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"rounded-2xl bg-surface-sunken p-3 sm:p-4 flex flex-wrap items-center justify-between 
+gap-x-4 gap-y-1"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+            [36m>[39m
+              [0mסכום הדרישה[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"kpi-value-compact num"[39m
+            [36m>[39m
+              [0m‏999,999.99 ‏₪[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"payment-request-notes"[39m
+            [36m>[39m
+              [0mהערות[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"payment-request-notes"[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"payment-request-reason"[39m
+            [36m>[39m
+              [0mסיבת יצירת הדרישה (רשות)[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"payment-request-reason"[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"space-y-2"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"note-alert "[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-octagon-alert mt-0.5 shrink-0"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 16h.01"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 8v4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 
+1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 
+.586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span>[39m
+                [0mהדרישה כוללת חשבונית שטרם אושרה לתשלום[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"note-await "[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-triangle-alert mt-0.5 shrink-0"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 9v4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 17h.01"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span>[39m
+                [0mבדיקת העברה דומה אינה זמינה עד שיוך בנק לישות[0m
+              [36m</span>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap justify-end gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+            [36m>[39m
+              [0mביטול[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+            [36m>[39m
+              [0mשמירה כטיוטה[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-danger"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-shield-alert"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 
+1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 8v4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 16h.01"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mשמירה (יסומן כחשד לכפילות)[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33maria-live[39m=[32m"polite"[39m
+        [33mclass[39m=[32m"sr-only"[39m
+      [36m>[39m
+        [0mדרישת תשלום חדשה[0m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body[39m
+  [33mstyle[39m=[32m"overflow: hidden;"[39m
+[36m>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 
+pointer-events-none no-print sm:start-6 sm:end-6"[39m
+    [36m/>[39m
+  [36m</div>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center 
+bg-scrim p-0 sm:p-4"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33maria-labelledby[39m=[32m"_r_2_"[39m
+      [33maria-modal[39m=[32m"true"[39m
+      [33mclass[39m=[32m"dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full 
+sm:max-w-3xl flex flex-col focus:outline-none"[39m
+      [33mrole[39m=[32m"dialog"[39m
+      [33mtabindex[39m=[32m"-1"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center justify-between px-5 py-4 border-b border-line-soft"[39m
+      [36m>[39m
+        [36m<h3[39m
+          [33mclass[39m=[32m"font-semibold text-ink focus:outline-none"[39m
+          [33mid[39m=[32m"_r_2_"[39m
+          [33mtabindex[39m=[32m"-1"[39m
+        [36m>[39m
+          [0mדרישת תשלום חדשה[0m
+        [36m</h3>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"סגירה"[39m
+          [33mclass[39m=[32m"btn-ghost p-1.5! min-w-11 min-h-11"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-x"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"17"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"17"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M18 6 6 18"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"m6 6 12 12"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"dialog-safe-body p-5 overflow-y-auto"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-4"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"grid grid-cols-1 sm:grid-cols-3 gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"sm:col-span-2"[39m
+            [36m>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"label"[39m
+                [33mfor[39m=[32m"payment-request-supplier"[39m
+              [36m>[39m
+                [0mספק *[0m
+              [36m</label>[39m
+              [36m<div[39m
+                [33maria-label[39m=[32m"ספק — בחירה או יצירה"[39m
+                [33mclass[39m=[32m"flex items-center gap-2"[39m
+                [33mrole[39m=[32m"group"[39m
+              [36m>[39m
+                [36m<select[39m
+                  [33maria-describedby[39m=[32m"payment-request-supplier-quick-create-field-hint"[39m
+                  [33mclass[39m=[32m"input min-w-0"[39m
+                  [33mid[39m=[32m"payment-request-supplier"[39m
+                [36m>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m""[39m
+                  [36m>[39m
+                    [0mבחר ספק...[0m
+                  [36m</option>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m"sup-1"[39m
+                  [36m>[39m
+                    [0mמשק ירוק — ירקות ופירות[0m
+                  [36m</option>[39m
+                [36m</select>[39m
+                [36m<button[39m
+                  [33maria-describedby[39m=[32m"payment-request-supplier-quick-create-hint"[39m
+                  [33mclass[39m=[32m"btn-secondary shrink-0"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-plus"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"15"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"15"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M5 12h14"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M12 5v14"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [0m [0m
+                  [0mספק חדש[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"sr-only"[39m
+                [33mid[39m=[32m"payment-request-supplier-quick-create-field-hint"[39m
+              [36m>[39m
+                [0mאין ספק מתאים ברשימה? הכפתור ״ספק חדש״ שליד יוצר ספק ובוחר אותו כאן.[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"sr-only"[39m
+                [33mid[39m=[32m"payment-request-supplier-quick-create-hint"[39m
+              [36m>[39m
+                [0mהספק החדש ייווצר וייבחר מיד בשדה זה[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<div>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"label"[39m
+                [33mfor[39m=[32m"payment-request-due-date"[39m
+              [36m>[39m
+                [0mתאריך יעד[0m
+              [36m</label>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input"[39m
+                [33mid[39m=[32m"payment-request-due-date"[39m
+                [33mtype[39m=[32m"date"[39m
+                [33mvalue[39m=[32m""[39m
+              [36m/>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<fieldset>[39m
+            [36m<legend[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mחשבוניות פתוחות לתשלום[0m
+            [36m</legend>[39m
+            [36m<div[39m
+              [33maria-label[39m=[32m"חשבוניות פתוחות לבחירה — רשימה נגללת"[39m
+              [33mclass[39m=[32m"max-h-56 divide-y divide-line-soft overflow-y-auto rounded-lg border 
+border-line"[39m
+              [33mrole[39m=[32m"region"[39m
+              [33mtabindex[39m=[32m"0"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 text-sm "[39m
+              [36m>[39m
+                [36m<label[39m
+                  [33mclass[39m=[32m"flex min-h-11 min-w-0 flex-1 basis-full cursor-pointer items-center gap-3 
+sm:basis-auto"[39m
+                [36m>[39m
+                  [36m<input[39m
+                    [33maria-label[39m=[32m"בחירת חשבונית 3377 של משק ירוק — ירקות ופירות להקצאה בדרישת התשלום"[39m
+                    [33mchecked[39m=[32m""[39m
+                    [33mclass[39m=[32m"size-5 shrink-0 accent-action"[39m
+                    [33mtype[39m=[32m"checkbox"[39m
+                  [36m/>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"min-w-0 break-words"[39m
+                  [36m>[39m
+                    [0mחשבונית[0m
+                    [0m [0m
+                    [36m<b[39m
+                      [33mclass[39m=[32m"num"[39m
+                      [33mdir[39m=[32m"ltr"[39m
+                    [36m>[39m
+                      [0m3377[0m
+                    [36m</b>[39m
+                    [0m · [0m
+                    [0m01.08.2026[0m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"badge-await ms-2"[39m
+                    [36m>[39m
+                      [0mטרם אושרה[0m
+                    [36m</span>[39m
+                  [36m</span>[39m
+                [36m</label>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"text-ink-muted text-xs num"[39m
+                [36m>[39m
+                  [0mיתרה[0m
+                  [0m [0m
+                  [0m‏150.00 ‏₪[0m
+                [36m</span>[39m
+                [36m<input[39m
+                  [33maria-label[39m=[32m"סכום ההקצאה לחשבונית 3377 של משק ירוק — ירקות ופירות"[39m
+                  [33mclass[39m=[32m"input w-28! num"[39m
+                  [33mstep[39m=[32m"0.01"[39m
+                  [33mtype[39m=[32m"number"[39m
+                  [33mvalue[39m=[32m"999999.99"[39m
+                [36m/>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</fieldset>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"rounded-2xl bg-surface-sunken p-3 sm:p-4 flex flex-wrap items-center justify-between 
+gap-x-4 gap-y-1"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+            [36m>[39m
+              [0mסכום הדרישה[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"kpi-value-compact num"[39m
+            [36m>[39m
+              [0m‏999,999.99 ‏₪[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"payment-request-notes"[39m
+            [36m>[39m
+              [0mהערות[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"payment-request-notes"[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"payment-request-reason"[39m
+            [36m>[39m
+              [0mסיבת יצירת הדרישה (רשות)[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"payment-request-reason"[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"space-y-2"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"note-alert "[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-octagon-alert mt-0.5 shrink-0"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 16h.01"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 8v4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 
+1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 
+.586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span>[39m
+                [0mהדרישה כוללת חשבונית שטרם אושרה לתשלום[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"note-await "[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-triangle-alert mt-0.5 shrink-0"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 9v4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 17h.01"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span>[39m
+                [0mבדיקת העברה דומה אינה זמינה עד שיוך בנק לישות[0m
+              [36m</span>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap justify-end gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+            [36m>[39m
+              [0mביטול[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+            [36m>[39m
+              [0mשמירה כטיוטה[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-danger"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-shield-alert"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 
+1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 8v4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 16h.01"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mשמירה (יסומן כחשד לכפילות)[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33maria-live[39m=[32m"polite"[39m
+        [33mclass[39m=[32m"sr-only"[39m
+      [36m>[39m
+        [0mדרישת תשלום חדשה[0m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/paymentRequestCreateBounds.spec.tsx:160:25
+    158|
+    159|     // The finding: critical, and it names the invoice and the balance…
+    160|     expect(await screen.findByText(/הסכום שהוקצה לחשבונית 3377 גבוה מה…
+       |                         ^
+    161|     await waitFor(() => expect(primaryButton().hasAttribute('disabled'…
+    162|     // The draft closes too: create_payment_request applies the same b…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/pages/paymentRequestCreateBounds.spec.tsx > CreatePaymentRequest — the allocation bound and the promise on 
+the button > fires one agora over the balance, where the tolerance signal said the amount matched
+TestingLibraryElementError: Unable to find an element with the text: /הסכום שהוקצה לחשבונית 3377 גבוה מהיתרה הפתוחה 
+שלה/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for 
+your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body[39m
+  [33mstyle[39m=[32m"overflow: hidden;"[39m
+[36m>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 
+pointer-events-none no-print sm:start-6 sm:end-6"[39m
+    [36m/>[39m
+  [36m</div>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center 
+bg-scrim p-0 sm:p-4"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33maria-labelledby[39m=[32m"_r_4_"[39m
+      [33maria-modal[39m=[32m"true"[39m
+      [33mclass[39m=[32m"dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full 
+sm:max-w-3xl flex flex-col focus:outline-none"[39m
+      [33mrole[39m=[32m"dialog"[39m
+      [33mtabindex[39m=[32m"-1"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center justify-between px-5 py-4 border-b border-line-soft"[39m
+      [36m>[39m
+        [36m<h3[39m
+          [33mclass[39m=[32m"font-semibold text-ink focus:outline-none"[39m
+          [33mid[39m=[32m"_r_4_"[39m
+          [33mtabindex[39m=[32m"-1"[39m
+        [36m>[39m
+          [0mדרישת תשלום חדשה[0m
+        [36m</h3>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"סגירה"[39m
+          [33mclass[39m=[32m"btn-ghost p-1.5! min-w-11 min-h-11"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-x"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"17"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"17"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M18 6 6 18"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"m6 6 12 12"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"dialog-safe-body p-5 overflow-y-auto"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-4"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"grid grid-cols-1 sm:grid-cols-3 gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"sm:col-span-2"[39m
+            [36m>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"label"[39m
+                [33mfor[39m=[32m"payment-request-supplier"[39m
+              [36m>[39m
+                [0mספק *[0m
+              [36m</label>[39m
+              [36m<div[39m
+                [33maria-label[39m=[32m"ספק — בחירה או יצירה"[39m
+                [33mclass[39m=[32m"flex items-center gap-2"[39m
+                [33mrole[39m=[32m"group"[39m
+              [36m>[39m
+                [36m<select[39m
+                  [33maria-describedby[39m=[32m"payment-request-supplier-quick-create-field-hint"[39m
+                  [33mclass[39m=[32m"input min-w-0"[39m
+                  [33mid[39m=[32m"payment-request-supplier"[39m
+                [36m>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m""[39m
+                  [36m>[39m
+                    [0mבחר ספק...[0m
+                  [36m</option>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m"sup-1"[39m
+                  [36m>[39m
+                    [0mמשק ירוק — ירקות ופירות[0m
+                  [36m</option>[39m
+                [36m</select>[39m
+                [36m<button[39m
+                  [33maria-describedby[39m=[32m"payment-request-supplier-quick-create-hint"[39m
+                  [33mclass[39m=[32m"btn-secondary shrink-0"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-plus"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"15"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"15"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M5 12h14"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M12 5v14"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [0m [0m
+                  [0mספק חדש[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"sr-only"[39m
+                [33mid[39m=[32m"payment-request-supplier-quick-create-field-hint"[39m
+              [36m>[39m
+                [0mאין ספק מתאים ברשימה? הכפתור ״ספק חדש״ שליד יוצר ספק ובוחר אותו כאן.[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"sr-only"[39m
+                [33mid[39m=[32m"payment-request-supplier-quick-create-hint"[39m
+              [36m>[39m
+                [0mהספק החדש ייווצר וייבחר מיד בשדה זה[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<div>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"label"[39m
+                [33mfor[39m=[32m"payment-request-due-date"[39m
+              [36m>[39m
+                [0mתאריך יעד[0m
+              [36m</label>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input"[39m
+                [33mid[39m=[32m"payment-request-due-date"[39m
+                [33mtype[39m=[32m"date"[39m
+                [33mvalue[39m=[32m""[39m
+              [36m/>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<fieldset>[39m
+            [36m<legend[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mחשבוניות פתוחות לתשלום[0m
+            [36m</legend>[39m
+            [36m<div[39m
+              [33maria-label[39m=[32m"חשבוניות פתוחות לבחירה — רשימה נגללת"[39m
+              [33mclass[39m=[32m"max-h-56 divide-y divide-line-soft overflow-y-auto rounded-lg border 
+border-line"[39m
+              [33mrole[39m=[32m"region"[39m
+              [33mtabindex[39m=[32m"0"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 text-sm "[39m
+              [36m>[39m
+                [36m<label[39m
+                  [33mclass[39m=[32m"flex min-h-11 min-w-0 flex-1 basis-full cursor-pointer items-center gap-3 
+sm:basis-auto"[39m
+                [36m>[39m
+                  [36m<input[39m
+                    [33maria-label[39m=[32m"בחירת חשבונית 3377 של משק ירוק — ירקות ופירות להקצאה בדרישת התשלום"[39m
+                    [33mchecked[39m=[32m""[39m
+                    [33mclass[39m=[32m"size-5 shrink-0 accent-action"[39m
+                    [33mtype[39m=[32m"checkbox"[39m
+                  [36m/>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"min-w-0 break-words"[39m
+                  [36m>[39m
+                    [0mחשבונית[0m
+                    [0m [0m
+                    [36m<b[39m
+                      [33mclass[39m=[32m"num"[39m
+                      [33mdir[39m=[32m"ltr"[39m
+                    [36m>[39m
+                      [0m3377[0m
+                    [36m</b>[39m
+                    [0m · [0m
+                    [0m01.08.2026[0m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"badge-await ms-2"[39m
+                    [36m>[39m
+                      [0mטרם אושרה[0m
+                    [36m</span>[39m
+                  [36m</span>[39m
+                [36m</label>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"text-ink-muted text-xs num"[39m
+                [36m>[39m
+                  [0mיתרה[0m
+                  [0m [0m
+                  [0m‏150.00 ‏₪[0m
+                [36m</span>[39m
+                [36m<input[39m
+                  [33maria-label[39m=[32m"סכום ההקצאה לחשבונית 3377 של משק ירוק — ירקות ופירות"[39m
+                  [33mclass[39m=[32m"input w-28! num"[39m
+                  [33mstep[39m=[32m"0.01"[39m
+                  [33mtype[39m=[32m"number"[39m
+                  [33mvalue[39m=[32m"150.01"[39m
+                [36m/>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</fieldset>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"rounded-2xl bg-surface-sunken p-3 sm:p-4 flex flex-wrap items-center justify-between 
+gap-x-4 gap-y-1"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+            [36m>[39m
+              [0mסכום הדרישה[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"kpi-value-compact num"[39m
+            [36m>[39m
+              [0m‏150.01 ‏₪[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"payment-request-notes"[39m
+            [36m>[39m
+              [0mהערות[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"payment-request-notes"[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"payment-request-reason"[39m
+            [36m>[39m
+              [0mסיבת יצירת הדרישה (רשות)[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"payment-request-reason"[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"space-y-2"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"note-alert "[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-octagon-alert mt-0.5 shrink-0"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 16h.01"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 8v4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 
+1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 
+.586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span>[39m
+                [0mהדרישה כוללת חשבונית שטרם אושרה לתשלום[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"note-await "[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-triangle-alert mt-0.5 shrink-0"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 9v4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 17h.01"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span>[39m
+                [0mבדיקת העברה דומה אינה זמינה עד שיוך בנק לישות[0m
+              [36m</span>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap justify-end gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+            [36m>[39m
+              [0mביטול[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+            [36m>[39m
+              [0mשמירה כטיוטה[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-danger"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-shield-alert"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 
+1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 8v4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 16h.01"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mשמירה (יסומן כחשד לכפילות)[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33maria-live[39m=[32m"polite"[39m
+        [33mclass[39m=[32m"sr-only"[39m
+      [36m>[39m
+        [0mדרישת תשלום חדשה[0m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body[39m
+  [33mstyle[39m=[32m"overflow: hidden;"[39m
+[36m>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 
+pointer-events-none no-print sm:start-6 sm:end-6"[39m
+    [36m/>[39m
+  [36m</div>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center 
+bg-scrim p-0 sm:p-4"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33maria-labelledby[39m=[32m"_r_4_"[39m
+      [33maria-modal[39m=[32m"true"[39m
+      [33mclass[39m=[32m"dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full 
+sm:max-w-3xl flex flex-col focus:outline-none"[39m
+      [33mrole[39m=[32m"dialog"[39m
+      [33mtabindex[39m=[32m"-1"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center justify-between px-5 py-4 border-b border-line-soft"[39m
+      [36m>[39m
+        [36m<h3[39m
+          [33mclass[39m=[32m"font-semibold text-ink focus:outline-none"[39m
+          [33mid[39m=[32m"_r_4_"[39m
+          [33mtabindex[39m=[32m"-1"[39m
+        [36m>[39m
+          [0mדרישת תשלום חדשה[0m
+        [36m</h3>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"סגירה"[39m
+          [33mclass[39m=[32m"btn-ghost p-1.5! min-w-11 min-h-11"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-x"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"17"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"17"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M18 6 6 18"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"m6 6 12 12"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"dialog-safe-body p-5 overflow-y-auto"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-4"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"grid grid-cols-1 sm:grid-cols-3 gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"sm:col-span-2"[39m
+            [36m>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"label"[39m
+                [33mfor[39m=[32m"payment-request-supplier"[39m
+              [36m>[39m
+                [0mספק *[0m
+              [36m</label>[39m
+              [36m<div[39m
+                [33maria-label[39m=[32m"ספק — בחירה או יצירה"[39m
+                [33mclass[39m=[32m"flex items-center gap-2"[39m
+                [33mrole[39m=[32m"group"[39m
+              [36m>[39m
+                [36m<select[39m
+                  [33maria-describedby[39m=[32m"payment-request-supplier-quick-create-field-hint"[39m
+                  [33mclass[39m=[32m"input min-w-0"[39m
+                  [33mid[39m=[32m"payment-request-supplier"[39m
+                [36m>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m""[39m
+                  [36m>[39m
+                    [0mבחר ספק...[0m
+                  [36m</option>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m"sup-1"[39m
+                  [36m>[39m
+                    [0mמשק ירוק — ירקות ופירות[0m
+                  [36m</option>[39m
+                [36m</select>[39m
+                [36m<button[39m
+                  [33maria-describedby[39m=[32m"payment-request-supplier-quick-create-hint"[39m
+                  [33mclass[39m=[32m"btn-secondary shrink-0"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-plus"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"15"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"15"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M5 12h14"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M12 5v14"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [0m [0m
+                  [0mספק חדש[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"sr-only"[39m
+                [33mid[39m=[32m"payment-request-supplier-quick-create-field-hint"[39m
+              [36m>[39m
+                [0mאין ספק מתאים ברשימה? הכפתור ״ספק חדש״ שליד יוצר ספק ובוחר אותו כאן.[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"sr-only"[39m
+                [33mid[39m=[32m"payment-request-supplier-quick-create-hint"[39m
+              [36m>[39m
+                [0mהספק החדש ייווצר וייבחר מיד בשדה זה[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<div>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"label"[39m
+                [33mfor[39m=[32m"payment-request-due-date"[39m
+              [36m>[39m
+                [0mתאריך יעד[0m
+              [36m</label>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input"[39m
+                [33mid[39m=[32m"payment-request-due-date"[39m
+                [33mtype[39m=[32m"date"[39m
+                [33mvalue[39m=[32m""[39m
+              [36m/>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<fieldset>[39m
+            [36m<legend[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mחשבוניות פתוחות לתשלום[0m
+            [36m</legend>[39m
+            [36m<div[39m
+              [33maria-label[39m=[32m"חשבוניות פתוחות לבחירה — רשימה נגללת"[39m
+              [33mclass[39m=[32m"max-h-56 divide-y divide-line-soft overflow-y-auto rounded-lg border 
+border-line"[39m
+              [33mrole[39m=[32m"region"[39m
+              [33mtabindex[39m=[32m"0"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 text-sm "[39m
+              [36m>[39m
+                [36m<label[39m
+                  [33mclass[39m=[32m"flex min-h-11 min-w-0 flex-1 basis-full cursor-pointer items-center gap-3 
+sm:basis-auto"[39m
+                [36m>[39m
+                  [36m<input[39m
+                    [33maria-label[39m=[32m"בחירת חשבונית 3377 של משק ירוק — ירקות ופירות להקצאה בדרישת התשלום"[39m
+                    [33mchecked[39m=[32m""[39m
+                    [33mclass[39m=[32m"size-5 shrink-0 accent-action"[39m
+                    [33mtype[39m=[32m"checkbox"[39m
+                  [36m/>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"min-w-0 break-words"[39m
+                  [36m>[39m
+                    [0mחשבונית[0m
+                    [0m [0m
+                    [36m<b[39m
+                      [33mclass[39m=[32m"num"[39m
+                      [33mdir[39m=[32m"ltr"[39m
+                    [36m>[39m
+                      [0m3377[0m
+                    [36m</b>[39m
+                    [0m · [0m
+                    [0m01.08.2026[0m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"badge-await ms-2"[39m
+                    [36m>[39m
+                      [0mטרם אושרה[0m
+                    [36m</span>[39m
+                  [36m</span>[39m
+                [36m</label>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"text-ink-muted text-xs num"[39m
+                [36m>[39m
+                  [0mיתרה[0m
+                  [0m [0m
+                  [0m‏150.00 ‏₪[0m
+                [36m</span>[39m
+                [36m<input[39m
+                  [33maria-label[39m=[32m"סכום ההקצאה לחשבונית 3377 של משק ירוק — ירקות ופירות"[39m
+                  [33mclass[39m=[32m"input w-28! num"[39m
+                  [33mstep[39m=[32m"0.01"[39m
+                  [33mtype[39m=[32m"number"[39m
+                  [33mvalue[39m=[32m"150.01"[39m
+                [36m/>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</fieldset>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"rounded-2xl bg-surface-sunken p-3 sm:p-4 flex flex-wrap items-center justify-between 
+gap-x-4 gap-y-1"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+            [36m>[39m
+              [0mסכום הדרישה[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"kpi-value-compact num"[39m
+            [36m>[39m
+              [0m‏150.01 ‏₪[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"payment-request-notes"[39m
+            [36m>[39m
+              [0mהערות[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"payment-request-notes"[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"payment-request-reason"[39m
+            [36m>[39m
+              [0mסיבת יצירת הדרישה (רשות)[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"payment-request-reason"[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"space-y-2"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"note-alert "[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-octagon-alert mt-0.5 shrink-0"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 16h.01"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 8v4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 
+1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 
+.586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span>[39m
+                [0mהדרישה כוללת חשבונית שטרם אושרה לתשלום[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"note-await "[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-triangle-alert mt-0.5 shrink-0"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 9v4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 17h.01"[39m
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 3 passed (6)
+   Start at  17:25:16
+   Duration  12.35s (transform 940ms, setup 541ms, import 1.41s, tests 8.80s, environment 1.28s)
+
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span>[39m
+                [0mבדיקת העברה דומה אינה זמינה עד שיוך בנק לישות[0m
+              [36m</span>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap justify-end gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+            [36m>[39m
+              [0mביטול[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+            [36m>[39m
+              [0mשמירה כטיוטה[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-danger"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-shield-alert"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 
+1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 8v4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 16h.01"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mשמירה (יסומן כחשד לכפילות)[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33maria-live[39m=[32m"polite"[39m
+        [33mclass[39m=[32m"sr-only"[39m
+      [36m>[39m
+        [0mדרישת תשלום חדשה[0m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/paymentRequestCreateBounds.spec.tsx:177:25
+    175|     fireEvent.change(amountField(), { target: { value: '150.01' } });
+    176|
+    177|     expect(await screen.findByText(/הסכום שהוקצה לחשבונית 3377 גבוה מה…
+       |                         ^
+    178|     await waitFor(() => expect(primaryButton().hasAttribute('disabled'…
+    179|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/pages/paymentRequestCreateBounds.spec.tsx > CreatePaymentRequest — the allocation bound and the promise on 
+the button > promises approval, not a quarantine, when the critical is an unapproved invoice
+AssertionError: expected 'שמירה (יסומן כחשד לכפילות)' to contain 'שליחה לאישור'
+
+Expected: "שליחה לאישור"
+Received: "שמירה (יסומן כחשד לכפילות)"
+
+ ❯ src/pages/paymentRequestCreateBounds.spec.tsx:204:41
+    202|     // defect only exists once the checks have come back.
+    203|     expect(await screen.findByText(/הדרישה כוללת חשבונית שטרם אושרה לת…
+    204|     expect(primaryButton().textContent).toContain('שליחה לאישור');
+       |                                         ^
+    205|     expect(screen.queryByRole('button', { name: /יסומן כחשד לכפילות/ }…
+    206|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+

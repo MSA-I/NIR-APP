@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { unwrap } from './useQuery';
-import { addCalendarDays, fmtDate, fmtMoneyExact } from './format';
+import { addCalendarDays, currencyMinorUnits, fmtDate, fmtMoneyExact } from './format';
 import { fetchAll, fetchInChunks } from './supabasePaging';
 import type { TKey } from './i18n/t';
 
@@ -22,6 +22,8 @@ export type CheckCode =
   | 'invoice_unapproved'
   | 'allocation_vs_balance_one'
   | 'allocation_vs_balance_many'
+  | 'allocation_over_open_balance_one'
+  | 'allocation_over_open_balance_many'
   | 'amount_vs_balance'
   | 'similar_pr'
   | 'similar_bank_unavailable'
@@ -56,6 +58,8 @@ export const CHECK_MESSAGE_KEY: Readonly<Record<CheckCode, TKey>> = {
   invoice_unapproved: 'checks.invoiceUnapproved',
   allocation_vs_balance_one: 'checks.allocationVsBalanceOne',
   allocation_vs_balance_many: 'checks.allocationVsBalanceMany',
+  allocation_over_open_balance_one: 'checks.allocationOverOpenBalanceOne',
+  allocation_over_open_balance_many: 'checks.allocationOverOpenBalanceMany',
   amount_vs_balance: 'checks.amountVsBalance',
   similar_pr: 'checks.similarPaymentRequest',
   similar_bank_unavailable: 'checks.similarBankUnavailable',
@@ -311,6 +315,70 @@ export async function runPaymentRequestChecks(pr: {
   }
 
   return results;
+}
+
+/** One line of the create screen: the invoice, what is being asked for it, and what it still owes. */
+export interface ProposedAllocation {
+  invoiceId: string;
+  invoiceNumber: string;
+  /** What the person typed into the amount field for this invoice. */
+  amount: number;
+  /** The open balance THIS SCREEN PRINTED beside that field, in the invoice's own currency. */
+  openBalance: number;
+  currency: string;
+}
+
+/**
+ * The allocation bound, measured against the number the screen itself printed.
+ *
+ * `runPaymentRequestChecks` cannot answer this and never could: its only critical balance signal is
+ * `over_allocated_invoice_count`, which the server derives from EXISTING `payment_request_invoices`
+ * rows and is therefore structurally 0 for a request that does not exist yet. Its other balance
+ * signal, `amount_matches_open_balance`, is a symmetric tolerance comparison on the SUM — false for
+ * a perfectly legal part-payment of 300 against 640, and hard-coded `true` for office by the 0034
+ * anti-oracle. Neither can say "this invoice is being asked for more than it owes", which is why
+ * 999,999.99 against a printed 150.00 was an amber warning under a green enabled button (`REQ-03`).
+ *
+ * So the comparison is made here, per invoice, against the balance the screen has already shown the
+ * reader — no new server surface, no widened query, and nothing revealed that was not on screen a
+ * line above the field. For the owner that number is the invoice's live balance from
+ * `invoice_balances_by_currency`; for office it is the total of an invoice the list only offers
+ * while it is WHOLLY unpaid. Both are what the server will measure the allocation against, so the
+ * screen now refuses exactly what `create_payment_request` refuses, before the form is finished
+ * rather than after.
+ *
+ * Rounded to the currency's own scale first, because 0231 made the server's comparison
+ * `round(a.amount, v_minor_units) > round(balance, v_minor_units)` and a float remainder of 1e-13
+ * is not an over-allocation. A currency the platform cannot scale falls back to comparing the raw
+ * figures, which is the conservative direction: it can only report a difference that is really there.
+ */
+export function allocationBalanceChecks(allocations: readonly ProposedAllocation[]): CheckResult[] {
+  const scaled = (value: number, currency: string) => {
+    const minorUnits = currencyMinorUnits(currency);
+    return minorUnits == null ? value : Math.round(value * 10 ** minorUnits);
+  };
+  const over = allocations.filter((allocation) =>
+    scaled(allocation.amount, allocation.currency) > scaled(allocation.openBalance, allocation.currency));
+  if (over.length === 0) return [];
+  if (over.length === 1) {
+    const [only] = over;
+    return [{
+      code: 'allocation_over_open_balance_one',
+      severity: 'critical',
+      vars: {
+        invoice: only.invoiceNumber,
+        balance: fmtMoneyExact(only.openBalance, only.currency),
+      },
+    }];
+  }
+  return [{
+    code: 'allocation_over_open_balance_many',
+    severity: 'critical',
+    vars: {
+      count: over.length,
+      invoices: over.map((allocation) => allocation.invoiceNumber).join(', '),
+    },
+  }];
 }
 
 /** Recompute an invoice's payment status through the server-authoritative command. */

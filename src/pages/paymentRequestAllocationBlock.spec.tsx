@@ -88,9 +88,12 @@ beforeEach(() => {
 
 function useScreen(signals: Partial<typeof BASE_SIGNALS>) {
   server.use(
+    // `review_status` is approved throughout this suite on purpose: the finding under test here is
+    // the credit that moved the balance, and an invoice still awaiting approval would add a second,
+    // unrelated blocking sentence (REQ-02) to every assertion below.
     http.get(LINKS_ENDPOINT, () => HttpResponse.json([{
       invoice_id: 'inv-1', amount_allocated: 1000,
-      invoice: { invoice_number: 'A-1', invoice_date: '2026-08-01' },
+      invoice: { invoice_number: 'A-1', invoice_date: '2026-08-01', review_status: 'approved' },
     }])),
     // The duplicate probe reads the same table the list screen does; nothing similar exists here.
     http.get(SIMILAR_ENDPOINT, () => HttpResponse.json([])),
