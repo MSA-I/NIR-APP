@@ -44,6 +44,42 @@ export const fmtLeadDays = (v: number | null | undefined, locale: Locale) => (
   v == null ? '—' : translateIn(locale, 'supplierMetrics.days', { value: v.toFixed(1) })
 );
 
+/**
+ * How many receipts an on-time rate needs before it may be shown at all (ruling #356, 04.09.2026).
+ *
+ * An on-time percentage is a verdict on a supplier, and a verdict needs a sample. The sweep of
+ * 04.09.2026 found nine suppliers carrying a confident figure drawn from one or two deliveries —
+ * one of them `0%` on a single late supply, which is a sentence passed on a sample of one.
+ *
+ * ONE DEFINITION, IMPORTED BY BOTH SCREENS, and that is the point rather than tidiness. The number
+ * lived in two files before this, where in each it chose a COLOUR and in neither a VALUE: the tone
+ * went quiet below five while `fmtPct` printed the percentage anyway, so /analytics greyed a figure
+ * it was still asserting. The supplier card meanwhile gated the same word at `otd_samples > 0`.
+ * Two screens holding two rules for one word is the finding; a shared constant that either screen
+ * could still ignore would not have closed it, so the PREDICATE and the FORMATTER live here too
+ * and the screens no longer own the decision.
+ */
+export const OTD_MIN_SAMPLES = 5;
+
+/**
+ * Narrows to a metrics row whose on-time rate may actually be reported. A type guard rather than a
+ * boolean so callers read `m.on_time_pct` afterwards without a non-null assertion — the assertion
+ * would be the place a future edit could quietly re-introduce the unguarded read.
+ */
+export function hasReportableOtd(
+  m: SupplierMetrics | null | undefined,
+): m is SupplierMetrics & { on_time_pct: number } {
+  return m != null && m.on_time_pct != null && m.otd_samples >= OTD_MIN_SAMPLES;
+}
+
+/**
+ * The on-time VALUE both screens render: the percentage above the threshold, and below it the em
+ * dash the constitution mandates — never `0%`, because zero is also a claim about reality.
+ */
+export const fmtOtdPct = (m: SupplierMetrics | null | undefined) => (
+  hasReportableOtd(m) ? fmtPct(m.on_time_pct) : '—'
+);
+
 // Value text colour per tone → the semantic token utilities. Mirrors KpiCard's mapping (ui.tsx).
 // await-fg lifts the 16px tile value off the failing 3.19:1 contrast that amber-600 gave.
 const TONE_TEXT: Record<ScoreTone, string> = {

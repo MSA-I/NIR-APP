@@ -9,7 +9,7 @@ import { useAuth } from '../auth/AuthContext';
 import { Breadcrumbs, Card, DataTable, StatusBadge, useToast, Modal, ErrorNote, Note, ConfirmDialog, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, SubPanel, Tabs, TabPanel, ToggleGroup, ICON, type Column } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { PriceListUploadModal, SUBMISSION_STATUS, submissionMonthLabel } from '../components/PriceListUpload';
-import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
+import { Scorecard, RatingStars, PriceSparkline, fmtOtdPct, hasReportableOtd, OTD_MIN_SAMPLES, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
 import { canStartSupplierCommerce, SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
 import { fmtMoneyExact, fmtNum, fmtDate, fmtDays, productLabel } from '../lib/format';
 import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission, SupplierBankDetails, SupplierBankMigrationItem, MoneyAmount } from '../lib/types';
@@ -45,10 +45,13 @@ interface SupplierWithBalance extends SupplierRow {
   metrics?: SupplierMetrics;
 }
 
-// On-time tone: green ≥90 / amber ≥75 / red <75 — but slate below 5 samples. A red tag drawn
-// from 3 deliveries is a confident lie; a null pct (no promised dates at all) is slate too.
+// On-time tone: green ≥90 / amber ≥75 / red <75 — but slate below the reportable sample size. A
+// red tag drawn from 3 deliveries is a confident lie; a null pct (no promised dates at all) is
+// slate too. The sample threshold itself is `hasReportableOtd` in supplier-metrics.tsx and is
+// shared with /analytics (ruling #356) — this file used to spell it out a second time, and the
+// tile below it gated the same word at `otd_samples > 0`.
 function otdTone(m: SupplierMetrics | null | undefined): ScoreTone {
-  if (!m || m.on_time_pct == null || m.otd_samples < 5) return 'idle';
+  if (!hasReportableOtd(m)) return 'idle';
   if (m.on_time_pct >= 90) return 'done';
   if (m.on_time_pct >= 75) return 'await';
   return 'alert';
@@ -801,8 +804,16 @@ export function SupplierCard() {
       },
     {
       label: t('suppliers.text_39'),
-      value: m && m.otd_samples > 0 ? fmtPct(m.on_time_pct) : '—',
-      sub: m && m.otd_samples > 0 ? t('suppliers.otdSamples', { count: m.otd_samples }) : t('suppliers.noDeliveryDate'),
+      /* RULING #356. This read `otd_samples > 0`, so one delivery was enough to print a
+         percentage on a supplier's card — while /analytics claimed five and the tone here
+         already used five. Two screens, two rules, one word. */
+      value: fmtOtdPct(m),
+      /* Three states, not two. The sub-line used to say "no delivery date was entered" for every
+         supplier it would not rate, which is false for the ones that have four receipts: they
+         have dates, just not enough of them to answer the question. */
+      sub: hasReportableOtd(m) ? t('suppliers.otdSamples', { count: m.otd_samples })
+        : m && m.otd_samples > 0 ? t('suppliers.otdBelowMinimum', { min: OTD_MIN_SAMPLES })
+          : t('suppliers.noDeliveryDate'),
       tone: otdTone(m),
     },
     { label: t('suppliers.fmtLeadDays'), value: fmtLeadDays(m?.avg_lead_days ?? null, locale), sub: t('suppliers.fmtLeadDays_2'), tone: 'idle' },

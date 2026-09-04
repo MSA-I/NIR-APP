@@ -3,7 +3,7 @@ import { Star } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { ErrorNote, DataTable, PageHeader, SkeletonTable, ICON, type Column } from '../components/ui';
-import { fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreTone } from '../components/supplier-metrics';
+import { fmtOtdPct, hasReportableOtd, OTD_MIN_SAMPLES, fmtLeadDays, type SupplierMetrics, type ScoreTone } from '../components/supplier-metrics';
 import { fmtMoneyExact, fmtNum } from '../lib/format';
 
 /**
@@ -15,9 +15,11 @@ import { fmtMoneyExact, fmtNum } from '../lib/format';
 interface SupplierRow { id: string; name: string; rating: number | null; status: string }
 interface Row { id: string; name: string; rating: number | null; m: SupplierMetrics | null }
 
-// Mirrors Suppliers.tsx: below 5 samples we cannot claim an on-time rate (idle = "not enough data").
+// The threshold is `hasReportableOtd` and lives in supplier-metrics.tsx, not here (ruling #356):
+// the same predicate now chooses the VALUE as well, so a supplier can no longer be greyed as
+// "not enough data" while the cell beside the colour still prints the percentage.
 function otdTone(m: SupplierMetrics | null): ScoreTone {
-  if (!m || m.on_time_pct == null || m.otd_samples < 5) return 'idle';
+  if (!hasReportableOtd(m)) return 'idle';
   if (m.on_time_pct >= 90) return 'done';
   if (m.on_time_pct >= 75) return 'await';
   return 'alert';
@@ -51,8 +53,13 @@ export default function Analytics() {
       render: (r) => r.rating != null ? <span className="inline-flex items-center gap-1"><Star size={ICON.xs} className="fill-star text-star" aria-hidden="true" />{r.rating}</span> : '—' },
     { key: 'lead', header: t('analytics.leadTime'), className: 'num', sortValue: (r) => r.m?.avg_lead_days ?? Number.MAX_SAFE_INTEGER,
       render: (r) => fmtLeadDays(r.m?.avg_lead_days, locale) },
-    { key: 'otd', header: t('analytics.onTime'), className: 'num', sortValue: (r) => r.m?.on_time_pct ?? -1,
-      render: (r) => <span className={toneClass[otdTone(r.m)]}>{fmtPct(r.m?.on_time_pct)}</span> },
+    // Sorted by the same predicate that decides the value: a supplier the column refuses to rate
+    // must not be ordered by the rate it is refusing to print, or the reader gets dashes scattered
+    // through the ranking at positions only the hidden number explains. -1 keeps them together at
+    // the bottom, which is the convention the other unmeasured columns already use.
+    { key: 'otd', header: t('analytics.onTime'), className: 'num',
+      sortValue: (r) => (hasReportableOtd(r.m) ? r.m.on_time_pct : -1),
+      render: (r) => <span className={toneClass[otdTone(r.m)]}>{fmtOtdPct(r.m)}</span> },
     // A supplier with no supplier_metrics row has no measured counts; rendering 0 would assert
     // "nothing happened" instead of "not measured". Sorting still treats absence as 0 so the
     // unmeasured suppliers group at the bottom rather than scattering.
@@ -69,8 +76,11 @@ export default function Analytics() {
 
   return (
     <div className="space-y-5">
+      {/* The header states the rule and the code enforces it, from the SAME constant. It carried
+          "after at least 5 receipts" as a literal while the column printed a figure at one — so
+          that sentence was not merely unenforced, it was the clearest evidence of the gap. */}
       <PageHeader title={t('analytics.title')}
-        meta={t('analytics.meta', { count: rows.length })} />
+        meta={t('analytics.meta', { count: rows.length, min: OTD_MIN_SAMPLES })} />
       <DataTable
         rows={rows}
         columns={columns}
