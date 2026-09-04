@@ -1,0 +1,60 @@
+﻿
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-afd3bd9c7823f7049
+
+ ❯ src/lib/assistant/paymentExposureWeekAhead.spec.ts (6 tests | 3 failed) 54ms
+     × carries the shekel figure the dashboard tile prints for the same question 40ms
+     × carries the number of requests behind it 2ms
+     × composes inside one currency and never across two 1ms
+node.exe : 
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/assistant/paymentExposureWeekAhead.spec.ts > ASSIST-07 — the assistant can answer the week the way the screen answers it > carries the shekel figure the dashboard tile prints for the 
+same question
+AssertionError: expected [ 4236, 500 ] to include 4736
+ ❯ src/lib/assistant/paymentExposureWeekAhead.spec.ts:91:43
+     89|   it('carries the shekel figure the dashboard tile prints for the same…
+     90|     const envelope = await run(snapshot);
+     91|     expect(values(envelope.facts, 'ils')).toContain(4736);
+       |                                           ^
+     92|   });
+     93|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/lib/assistant/paymentExposureWeekAhead.spec.ts > ASSIST-07 — the assistant can answer the week the way the screen answers it > carries the number of requests behind it
+AssertionError: expected [ 9, 5, 2, +0, 1, 4 ] to include 3
+ ❯ src/lib/assistant/paymentExposureWeekAhead.spec.ts:96:45
+     94|   it('carries the number of requests behind it', async () => {
+     95|     const envelope = await run(snapshot);
+     96|     expect(values(envelope.facts, 'count')).toContain(3);
+       |                                             ^
+     97|   });
+     98|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/lib/assistant/paymentExposureWeekAhead.spec.ts > ASSIST-07 — the assistant can answer the week the way the screen answers it > composes inside one currency and never across two
+AssertionError: expected [ 100, 20 ] to include 120
+ ❯ src/lib/assistant/paymentExposureWeekAhead.spec.ts:105:43
+    103|   it('composes inside one currency and never across two', async () => {
+    104|     const envelope = await run(snapshot);
+    105|     expect(values(envelope.facts, 'usd')).toContain(120);
+       |                                           ^
+    106|     expect(envelope.facts.map((fact) => fact.value)).not.toContain(485…
+    107|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 3 passed (6)
+   Start at  17:32:53
+   Duration  2.82s (transform 592ms, setup 560ms, import 637ms, tests 54ms, environment 1.31s)
+
+

@@ -474,6 +474,45 @@ export default function Expenses() {
             context={hasInvoices ? t('expenses.text_22') : t('expenses.text_21')} />
         </div>
 
+        {/* ASSIST-06. This screen has ALWAYS called `get_purchase_metrics(from, to)` — the same
+            RPC, on the same window — and then showed the result to nobody: it went into the Excel
+            export and nowhere else. So the workbook produced by the button above carried one set
+            of figures while the strip above it printed another, and the assistant, which quotes
+            the canonical figures and cites THIS screen as the place to check them, sent the reader
+            to a page where none of its three numbers appeared.
+
+            The strip's own total is not touched and must not be: "every supplier invoice in the
+            range" is a true answer to a different question, and replacing it would be the same
+            defect facing the other way. Both populations are printed, each beside the definition
+            that separates them. No query is added and no scope is widened — this renders a value
+            the screen already held in hand.
+
+            A metric with no rows renders "—" through `MoneyByCurrency`'s own empty, never 0. */}
+        <section className="border-b border-line-strong bg-surface px-4 py-4 sm:px-5" aria-labelledby="canonical-metrics-title">
+          <h2 id="canonical-metrics-title" className="section-title">{t('expenses.canonicalTitle')}</h2>
+          <p className="mt-0.5 text-xs text-ink-muted">{t('expenses.canonicalNote')}</p>
+          <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="text-ink-muted">{t('expenses.canonicalCommitted')}</dt>
+              <dd className="mt-0.5 font-medium text-ink-body">
+                <MoneyByCurrency amounts={data.metrics.committed_by_currency} baseCurrency={baseCurrency} />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-ink-muted">{t('expenses.canonicalGross')}</dt>
+              <dd className="mt-0.5 font-medium text-ink-body">
+                <MoneyByCurrency amounts={data.metrics.gross_expense_by_currency} baseCurrency={baseCurrency} />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-ink-muted">{t('expenses.canonicalNet')}</dt>
+              <dd className="mt-0.5 font-medium text-ink-body">
+                <MoneyByCurrency amounts={data.metrics.net_expense_by_currency} baseCurrency={baseCurrency} />
+              </dd>
+            </div>
+          </dl>
+        </section>
+
         {!hasInvoices ? (
           <div className="border-y border-line-soft bg-surface">
             <EmptyState title={t('expenses.title_5')}

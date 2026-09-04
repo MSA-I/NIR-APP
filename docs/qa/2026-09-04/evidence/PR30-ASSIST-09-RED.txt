@@ -1,0 +1,61 @@
+﻿
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-afd3bd9c7823f7049
+
+ ❯ src/lib/assistant/priceRisesMeasuredZero.spec.ts (4 tests | 2 failed) 17ms
+     × counts a month with no rise as a measured zero 8ms
+     × counts the unmeasurable products of that same month as a measured zero too 1ms
+node.exe : 
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/assistant/priceRisesMeasuredZero.spec.ts > ASSIST-09 — a month that was read and held nothing is a zero, not an absence > counts a month with no rise as a measured zero
+AssertionError: expected null to be +0 // Object.is equality
+
+- Expected:
+0
+
++ Received:
+null
+
+ ❯ src/lib/assistant/priceRisesMeasuredZero.spec.ts:74:53
+     72|   it('counts a month with no rise as a measured zero', async () => {
+     73|     const envelope = await getMonthlyPriceRises.run(context({ data: []…
+     74|     expect(factNamed(envelope.facts, RISEN)?.value).toBe(0);
+       |                                                     ^
+     75|   });
+     76|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/lib/assistant/priceRisesMeasuredZero.spec.ts > ASSIST-09 — a month that was read and held nothing is a zero, not an absence > counts the unmeasurable products of that same month as a 
+measured zero too
+AssertionError: expected null to be +0 // Object.is equality
+
+- Expected:
+0
+
++ Received:
+null
+
+ ❯ src/lib/assistant/priceRisesMeasuredZero.spec.ts:79:60
+     77|   it('counts the unmeasurable products of that same month as a measure…
+     78|     const envelope = await getMonthlyPriceRises.run(context({ data: []…
+     79|     expect(factNamed(envelope.facts, UNMEASURABLE)?.value).toBe(0);
+       |                                                            ^
+     80|   });
+     81|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+   Start at  17:31:44
+   Duration  3.17s (transform 599ms, setup 609ms, import 622ms, tests 17ms, environment 1.53s)
+
+

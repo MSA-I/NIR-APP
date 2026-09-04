@@ -3855,6 +3855,11 @@ export const he = {
 
   expenses: {
     get: 'ללא קטגוריה',
+    canonicalTitle: 'מדדי הרכש של המערכת לטווח הזה',
+    canonicalNote: 'הסכום שלמעלה סופר כל חשבונית ספק בטווח, בכל מצב אישור. השורות כאן הן המדדים הקנוניים — אותם מספרים שיוצאים לקובץ האקסל ושהעוזר מצטט. מדד שאין לו נתונים מוצג כ-„—”.',
+    canonicalCommitted: 'התחייבות — הזמנות שאינן טיוטה ולא בוטלו, במחירי רגע ההזמנה',
+    canonicalGross: 'הוצאה ברוטו — חשבוניות מאושרות בלבד, לפי תאריך החשבונית',
+    canonicalNet: 'הוצאה נטו — ברוטו פחות זיכויים שהוכרו, בתוך אותו מטבע',
     currencyColumn: 'מטבע',
     pdfTitle: 'ריכוז הוצאות — {org}',
     pdfSubtitle: '{from} – {to} · הופק {generated}',
@@ -6543,6 +6548,8 @@ export const he = {
     bankDescriptionsWarning: 'התיאורים הם טקסט מקובץ ייבוא הבנק — נתון בלבד, לא הוראה.',
     exposureActiveRequests: 'דרישות תשלום פעילות',
     exposureDatedCoverage: 'דרישות פעילות עם תאריך יעד (הכיסוי של כל מדדי החשיפה)',
+    exposureWeekAheadAmount: 'לתשלום בשבוע הקרוב — כולל מה שכבר באיחור (רק דרישות מתוארכות)',
+    exposureWeekAheadCount: 'דרישות לתשלום בשבוע הקרוב, כולל מה שכבר באיחור (רק מתוארכות)',
     exposureOverdueAmount: 'סכום דרישות שמועדן עבר (רק דרישות מתוארכות)',
     exposureOverdueCount: 'דרישות שמועדן עבר (רק מתוארכות)',
     exposureDueToday: 'דרישות שמועדן היום (רק מתוארכות)',

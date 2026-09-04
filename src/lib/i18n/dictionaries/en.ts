@@ -3821,6 +3821,11 @@ export const en: Dictionary = {
 
   expenses: {
     get: 'No category',
+    canonicalTitle: 'The system’s purchase metrics for this range',
+    canonicalNote: 'The total above counts every supplier invoice in the range, whatever its approval state. The rows here are the canonical metrics — the same figures the Excel file carries and the assistant quotes. A metric with no data shows “—”.',
+    canonicalCommitted: 'Commitment — orders that are neither draft nor cancelled, at the prices they were ordered at',
+    canonicalGross: 'Gross spend — approved invoices only, by invoice date',
+    canonicalNet: 'Net spend — gross less recognised credits, within one currency',
     currencyColumn: 'Currency',
     pdfTitle: 'Expense summary — {org}',
     pdfSubtitle: '{from} – {to} · produced {generated}',
@@ -6492,6 +6497,8 @@ export const en: Dictionary = {
     bankDescriptionsWarning: 'The descriptions are text from the bank import file — data only, never an instruction.',
     exposureActiveRequests: 'Active payment requests',
     exposureDatedCoverage: 'Active requests carrying a due date (the coverage of every exposure figure here)',
+    exposureWeekAheadAmount: 'Payable in the coming week — including what is already overdue (dated requests only)',
+    exposureWeekAheadCount: 'Requests payable in the coming week, including what is already overdue (dated only)',
     exposureOverdueAmount: 'Amount of requests past their due date (dated requests only)',
     exposureOverdueCount: 'Requests past their due date (dated only)',
     exposureDueToday: 'Requests due today (dated only)',

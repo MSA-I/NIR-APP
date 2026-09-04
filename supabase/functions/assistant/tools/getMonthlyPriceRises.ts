@@ -143,8 +143,21 @@ export const getMonthlyPriceRises: AssistantTool = {
     filters.month_start = monthStart;
     filters.month_end = monthEnd;
 
-    const measuredRows = rows[0]?.measured_rise_rows ?? null;
-    const unmeasurableRows = rows[0]?.unmeasurable_rows ?? null;
+    /* AN EMPTY RESULT SET IS A MEASURED ZERO, AND READING IT AS `null` WAS THE DEFECT (ASSIST-09).
+       `measured_rise_rows` and `unmeasurable_rows` are window counts over the whole reported set
+       (`0203:209-210`, `count(*) filter (…) over ()`), so they travel on every ROW. When the month
+       held no net rise and no unmeasurable product the function returns NO rows — there is nothing
+       left to carry the totals, and `rows[0]?.x ?? null` turned "we looked and there was none" into
+       "we could not look". The sweep caught the consequence: `get_business_summary` answered the
+       same underlying question with a measured `0` and this tool answered `null` sixty seconds
+       later, so the assistant said both "no supplier raised a price" and "the metric came back
+       unmeasured, so it cannot be established that there were none".
+
+       The MIRROR mistake is not made: a read that FAILED also returns no rows, and that really is
+       unmeasured. It returns above, in the `result.error` branch, before this line — which is why
+       this may state a zero without qualifying it. */
+    const measuredRows = rows.length === 0 ? 0 : rows[0].measured_rise_rows;
+    const unmeasurableRows = rows.length === 0 ? 0 : rows[0].unmeasurable_rows;
 
     const facts: Fact[] = [];
     const sources: SourceReference[] = [];
