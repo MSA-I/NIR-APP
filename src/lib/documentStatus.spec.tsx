@@ -73,12 +73,13 @@ describe('documentUiStatus precedence', () => {
     }).progress).toBeNull();
   });
 
-  it('shows the page counter on the badge itself', () => {
-    render(<DocumentStatusBadge status={documentUiStatus({
+  it('keeps row badges compact even when the server reports page progress', () => {
+    const { container } = render(<DocumentStatusBadge status={documentUiStatus({
       job: job('leased', { progress_done: 4, progress_total: 12 }),
       document: inbox, evaluatedAt: NOW,
     })} />);
-    expect(screen.getByText('· עמוד 4 מתוך 12')).toBeInTheDocument();
+    expect(container.querySelector('[data-document-status-progress]')).toBeNull();
+    expect(screen.getByText('בעיבוד')).toBeInTheDocument();
   });
 
   it('keeps never-enqueued and actively queued documents distinct', () => {
@@ -380,7 +381,8 @@ describe('DocumentStatusBadge loading contract', () => {
     expect(spinner).toHaveClass('animate-spin', 'motion-reduce:animate-none');
     expect(screen.getByRole('status')).toHaveTextContent('ממתין לעיבוד');
     expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true');
-    expect(screen.getByText(/5 דק׳/)).toHaveAttribute('data-document-status-age');
+    expect(container.querySelector('[data-document-status-progress]')).toBeNull();
+    expect(container.querySelector('[data-document-status-age]')).toBeNull();
 
     const review = documentUiStatus({ job: job('review'), document: inbox, evaluatedAt: NOW });
     rerender(<DocumentStatusBadge status={review} />);
@@ -388,5 +390,17 @@ describe('DocumentStatusBadge loading contract', () => {
     expect(screen.queryByRole('status')).toBeNull();
     expect(container.querySelector('[aria-busy]')).toBeNull();
     expect(container.querySelector('[data-document-status-age]')).toBeNull();
+  });
+
+  it('keeps a stuck job identifiable without row-level page and age telemetry', () => {
+    const stuck = documentUiStatus({
+      job: { ...job('queued'), is_stuck: true, stuck_reason: 'queue_age' },
+      document: inbox,
+      evaluatedAt: NOW,
+    });
+    const { container } = render(<DocumentStatusBadge status={stuck} />);
+    expect(screen.getByText('עיבוד תקוע')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-triangle-alert')).not.toBeNull();
+    expect(container.querySelector('[data-document-status-progress],[data-document-status-age]')).toBeNull();
   });
 });

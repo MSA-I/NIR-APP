@@ -11,7 +11,7 @@ import { ConfirmDialog, DataTable, ErrorNote, ICON, Modal, Note, PageHeader, Ske
 import { PlanLimitNote } from '../components/PlanLimitNote';
 import { DocumentRemovalDialog } from '../components/DocumentRemovalDialog';
 import { ok } from '../lib/errors';
-import { bidiIsolate, fmtDate, fmtDateTime, todayISO } from '../lib/format';
+import { bidiIsolate, fmtDate, fmtDateTime } from '../lib/format';
 import type { DocumentRow } from '../lib/types';
 import {
   DOCUMENT_KIND_OPTIONS,
@@ -294,7 +294,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
   const toast = useToast();
   const [files, setFiles] = useState<File[]>([]);
   const [supplierId, setSupplierId] = useState('');
-  const [documentDate, setDocumentDate] = useState(todayISO());
+  const [documentDate, setDocumentDate] = useState('');
   const [busy, setBusy] = useState(false);
   const [uploadSummary, setUploadSummary] = useState<UploadBatchSummary | null>(null);
 
@@ -875,7 +875,6 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             audit row — it simply has no control on this screen, because the intended filer is
             the interpretation layer (task C2, not yet written). */}
       <PageHeader title={<span className="flex items-center gap-2"><HeadingIcon size={ICON.xl} aria-hidden="true" /> {archive ? t('documents.text_41') : t('documents.text_42')}</span>}
-        meta={!archive ? t('documents.text_43') : undefined}
         actions={<>
           {canUpload && !archive && (
             <button type="button" data-tour-anchor="documents-upload" className="btn-primary" onClick={() => setUploadOpen(true)}>

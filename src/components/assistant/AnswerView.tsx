@@ -375,7 +375,7 @@ export default function AnswerView({ result, role, onNavigate }: {
 
       {result.tools_used.length > 0 && (
         <div className="rounded-2xl ring-1 ring-line-soft">
-          <Disclosure title={t('answerView.title')} count={result.tools_used.length}>
+          <Disclosure title={t('answerView.title')}>
             <ul className="space-y-1 text-xs text-ink-muted">
               {result.tools_used.map((tool) => (
                 <li key={tool.tool} className="flex items-center justify-between gap-3">

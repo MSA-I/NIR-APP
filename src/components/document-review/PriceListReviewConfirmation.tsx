@@ -178,7 +178,6 @@ function parseReceipt(value: unknown, t: (key: TKey) => string): SubmissionRecei
       || typeof row.rejected_count !== 'number'
       || typeof row.unchanged_count !== 'number'
       || typeof row.idempotent !== 'boolean') {
-  const { t } = useT();
     throw new Error(t('priceListReview.receiptMalformed'));
   }
   return row as unknown as SubmissionReceipt;
@@ -1175,12 +1174,8 @@ export function PriceListReviewConfirmation({
       {refreshWarning && <Note tone="alert" role="alert" className="mt-4">{refreshWarning}</Note>}
       {receipt && (
         <div className="mt-4 rounded-lg border border-done-line bg-done-wash p-4" aria-live="polite">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-semibold text-ink-body">{t('priceListReview.text_61')}</h3>
-            <span className={receipt.idempotent ? 'badge-info' : 'badge-done'}>{receipt.idempotent ? t('priceListReview.text_62') : t('priceListReview.text_63')}</span>
-          </div>
+          <h3 className="font-semibold text-ink-body">{t('priceListReview.text_61')}</h3>
           <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-            <div><dt className="inline font-medium">גרסה: </dt><dd className="inline num">{receipt.revision}</dd></div>
             <div><dt className="inline font-medium">שורות שהתקבלו: </dt><dd className="inline num">{receipt.accepted_count}</dd></div>
             <div><dt className="inline font-medium">שורות שנדחו: </dt><dd className="inline num">{receipt.rejected_count}</dd></div>
             <div><dt className="inline font-medium">שורות ללא שינוי: </dt><dd className="inline num">{receipt.unchanged_count}</dd></div>

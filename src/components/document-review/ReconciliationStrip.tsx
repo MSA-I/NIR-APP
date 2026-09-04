@@ -22,12 +22,10 @@ import { formatLineRanges } from './assessment';
  * document. The tolerance printed is `document_tolerance` — the one the server actually used, not
  * one this component looked up for itself.
  *
- * TWO LADDERS, AND A MISSING RUNG ONLY CANCELS ITS OWN. "The document's account" is a closed sum
- * whose every rung exists on every document today. "What will actually be paid" — withholding at
- * source, what landed in the bank — is a second ladder whose rungs are NOT extracted at all.
- * Merging them would make every document in the country read "cannot be calculated", because
- * withholding is never known, and that would delete the feature rather than build it. So the
- * second block says "not extracted" and does not touch the first block's gap.
+ * ONE LADDER, FROM VALUES THE SERVER ACTUALLY PUBLISHES. A former second card permanently showed
+ * withholding and bank receipt as "not extracted" because no pipeline supplies either value.
+ * The owner ruling in `UX-REMEDIATION-DECISIONS-20260904.md` removed that empty promise; it can
+ * return when the read model carries data.
  *
  * AND A RUNG THAT WAS NEVER READ IS NOT A ZERO. `missing_rungs` names the ones the extractor could
  * not produce, so each row says "not extracted" against its own label rather than showing a dash
@@ -214,19 +212,6 @@ export function ReconciliationStrip({ ladder, title, onGoToLines }: {
         )}
       </section>
 
-      {/* THE SECOND LADDER. Its rungs are not extracted by anything today, and saying so is the
-          honest report — a zero here would claim the document was read and found to withhold
-          nothing. It deliberately does not participate in the gap above. */}
-      <section className="card p-4" aria-labelledby="reconciliation-payable">
-        <h3 id="reconciliation-payable" className="mb-2 text-sm font-semibold text-ink-body">
-          {t('reconciliation.payableTitle')}
-        </h3>
-        <div className="divide-y divide-line-soft">
-          <Rung label={t('reconciliation.withholding')} value={null} currency={currency} missing />
-          <Rung label={t('reconciliation.actuallyReceived')} value={null} currency={currency} missing />
-        </div>
-        <p className="mt-2 text-xs text-ink-muted">{t('reconciliation.payableNote')}</p>
-      </section>
     </div>
   );
 }

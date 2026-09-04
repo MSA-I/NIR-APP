@@ -103,7 +103,7 @@ function renderGallery(props: { archive?: boolean }) {
     <QueryClientProvider client={createAppQueryClient()}>
       <OrgScopeProvider org="org-1">
         <ToastProvider>
-          <MemoryRouter>{children}</MemoryRouter>
+          <MemoryRouter initialEntries={[props.archive ? '/documents/archive' : '/documents']}>{children}</MemoryRouter>
         </ToastProvider>
       </OrgScopeProvider>
     </QueryClientProvider>
@@ -166,7 +166,7 @@ describe('מה שמסך הארכיון אומר על עצמו', () => {
     server.use(documents, ...quietTraffic);
     renderGallery({});
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('תיקיית המסמכים');
-    expect(screen.getByText(/כל החשבוניות/)).toBeInTheDocument();
+    expect(screen.getByText('איתור כל מסמך שנקלט למערכת ושיוכו לרשומה העסקית שלו.')).toBeInTheDocument();
   });
 
   // The state the archive is actually in until the interpretation layer starts filing, so it has
@@ -197,6 +197,15 @@ describe('כפתור ההעלאה', () => {
     renderGallery({});
     expect(await screen.findAllByText(FILED)).not.toHaveLength(0);
     expect(screen.queryByRole('button', { name: /העלאת מסמך/ })).toBeInTheDocument();
+  });
+
+  it('אינו מכפיל את תיאור המסך שכבר מגיע מקטלוג הנתיבים', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({});
+    await screen.findAllByText(FILED);
+
+    expect(screen.getByText('איתור כל מסמך שנקלט למערכת ושיוכו לרשומה העסקית שלו.')).toBeInTheDocument();
+    expect(screen.queryByText('כל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.')).toBeNull();
   });
 });
 
@@ -319,6 +328,17 @@ describe('קליטה אחת — הסוג נקרא מהמסמך, לא נבחר מ
     expect(within(dialog).queryByLabelText('סוג מסמך')).not.toBeInTheDocument();
     // …and it says who will answer the question instead, so the omission does not read as a gap.
     expect(within(dialog).getByText(/המערכת תזהה בעצמה מה סוג המסמך/)).toBeInTheDocument();
+  });
+
+  it('אינו חותם את תאריך היום כשהמשתמש לא פתח את השדות האופציונליים', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({});
+    await screen.findAllByText(UNFILED);
+
+    await userEvent.click(screen.getByRole('button', { name: /העלאת מסמך/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'העלאת מסמך' });
+    const date = dialog.querySelector('input[type="date"]') as HTMLInputElement;
+    expect(date.value).toBe('');
   });
 
   it('מסמך שטרם נקרא מציג — בעמודת הסוג, ומסמך שנקרא מציג את סוגו', async () => {

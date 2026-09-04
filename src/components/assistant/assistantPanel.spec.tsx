@@ -437,6 +437,9 @@ describe('העוזר של InPlace — הפאנל', () => {
     await askQuestion();
     await screen.findByText('היתרה הפתוחה לספק ירקות השדה גבוהה מהרגיל.');
 
+    const scopeToggle = screen.getByText('היקף הבדיקה').closest('summary');
+    expect(scopeToggle).not.toBeNull();
+    expect(scopeToggle?.querySelector('.badge-idle')).toBeNull();
     fireEvent.click(screen.getByText('היקף הבדיקה'));
     expect(screen.getByText('זיכויים פתוחים')).toBeInTheDocument();
     expect(screen.queryByText('get_open_credits')).toBeNull();
