@@ -373,6 +373,38 @@ ledger's own completeness check.)
 
 ---
 
+### The findings that were only covered by a range
+
+Twenty-six ids were in scope by range (`DASH-01`..`DASH-06`, `RTL-A11Y-02`..`-12`, `EXP-01`..
+`EXP-10`, `OWN-09`..`OWN-15`) but had no cause of their own. They do now. Each line below was
+read in the file it names, except the four marked **measure** — those are recorded as unproven
+rather than guessed, which is the difference between a plan and a wish.
+
+| id | root cause | state |
+|---|---|---|
+| `DASH-04` | the tile's count and its link's filter are written independently, and `/receiving` has no "late" filter for the link to carry | verified in code |
+| `DASH-05` | same shape: `/orders` has no "open, no delivery date" filter, so the link opens 254 rows | verified in code |
+| `DASH-10` | the open-credits predicate counts a credit whose own badge reads settled, on three surfaces that all say "open" | **measure** — which predicate differs |
+| `DASH-11` | `₪9 · 0%` — the amount is exact and the percentage is rounded to whole units, so a real saving prints as none | **measure** — confirm the formatter |
+| `DASH-12` | the four action rows on `/alerts` are `<button>`; a queue meant to be worked through needs anchors so middle-click and open-in-new-tab work | verified in code |
+| `EXP-03` | three workbook builders each pick their own representation of "no data" — blank, a literal `0`, an em dash — because no single formatter owns the empty case | verified in code |
+| `EXP-04` | the provenance caveat is attached in the screen component, not in the export path, so 74 rows assert `נרכש בפועל 0` where the source is unknown | verified in code |
+| `EXP-05` | an empty month writes header-only sheets and says nothing about why | verified in code |
+| `EXP-06` | exceptions are fetched without the report's window predicate, so nine current rows land under a January-2020 banner | verified in code |
+| `EXP-07` | the xlsx filename is built from today; the PDF button beside it is built from the window | verified in code |
+| `EXP-08` | the row action labelled "ייצוא" routes to the review screen, which carries no export control | verified in code |
+| `EXP-09` | the bank import template is a machine header — English keys, five columns, no currency column, no example row, no Hebrew | verified in code |
+| `OWN-10` | the webhook lifecycle has deactivate and no delete, so every connection ever registered accumulates permanently. **This is why the sweep did not create one** — see the untested table in the manifest | verified in code |
+| `OWN-11` | `SupplierLog.tsx:118` — `.limit(400)`, no paging and no date filter, under an empty state promising "ההיסטוריה נשמרת". 344 of 400 used, 321 of them written in one night | verified in code |
+| `OWN-13` | the bank-match-days input carries no `min`/`max` while the VAT field beside it does | verified in code |
+| `OWN-14` | `/onboarding` opens pre-filled from the live organisation and nothing marks its first button as a write to it | **measure** — confirm the write path |
+| `RTL-A11Y-03`, `RTL-A11Y-04`, `RTL-A11Y-05` | **already F1**: `ui.tsx:2216` excludes `priority: 3` from the mobile card unconditionally, over the picker. One cause, and `RTL-A11Y-02` makes four | verified in code |
+| `RTL-A11Y-07` | the mandated `—` is drawn in `text-ink-faint` (`Suppliers.tsx:989`, `PriceLists.tsx:168,171,181`) — the token `DESIGN.md` reserves for decoration. A required assertion in a decorative colour, at 1.9:1 | verified in code |
+| `RTL-A11Y-09` | `ui.tsx:1987` announces `role="dialog"` on a popover that deliberately does **not** contain focus. **Half the report is wrong**: `:1920-1922` shows Escape calls `close(true)`, which returns focus to the trigger, and `:1934-1949` shows Tab entering and leaving by design. The defect is the mismatch between what it announces and what it is — the fix is to stop calling it a dialog, not to trap focus in it | verified in code, **finding partly refuted** |
+| `RTL-A11Y-10` | `Dashboard.tsx:169` renders the hero figure inside `dir="ltr"` while the same formatter (`fmtMoneyRounded`) renders elsewhere in RTL — so the shekel sign lands on the other side of the number on one screen | verified in code |
+| `RTL-A11Y-11` | `Suppliers.tsx:213` — the risk column carries `mobileLabel: null`, so on a phone its value is an orphan number with no field name | verified in code |
+| `ASSIST-V2`, `ASSIST-V3`, `ASSIST-V4` | not defects — verified-working records | no work owed |
+
 ## 4. Dependency map
 
 ```

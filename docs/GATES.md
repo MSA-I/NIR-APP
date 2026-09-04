@@ -214,7 +214,7 @@ These are conditions on the work itself, not rows from the sweep.
 
 | gate | oracle | status |
 |---|---|---|
-| G1 — the sweep's evidence is checkable from the tree | `docs/QA-SWEEP-20260904.md` carries all 146 findings, their SHA-256 hashes and the deployed SHA they were measured against | PENDING |
+| G1 — the sweep's evidence is checkable from the tree | `docs/QA-SWEEP-20260904.md` carries all 146 findings, the SHA-256 of each `findings.json`, the deployment measured, the regression baseline, the six untested surfaces and the leftover test data | **MET** — 146/146 present, verified mechanically against the aggregate |
 | G2 — no pre-existing failure is reported as caused by this work | baseline `npm run verify` on an idle machine, recorded before the first change | PENDING |
 | G3 — `CLAUDE.md`'s four stale claims are corrected | the four paragraphs re-measured against HEAD and rewritten | PENDING |
 | G4 — every number is drawn before it is written | `npm run next-number` output pasted into each PR that claims one | PENDING |
@@ -222,3 +222,5 @@ These are conditions on the work itself, not rows from the sweep.
 | G6 — the QA data left in production is dealt with deliberately | an explicit id list, an authorised domain action per row, owner approval, before/after counts, no hard `DELETE` | BLOCKED — owner decision |
 | G7 — the seven blocking decisions are answered | rulings #350-#356 recorded in `docs/OPEN-DECISIONS.md`, `check:decision-numbers` green | **MET** — answered 2026-09-04, guard reports 332 rulings #10-#356, none duplicated |
 | G8 — work is isolated from the shared checkout | a worktree off `origin/main`, its own branch, files staged by name | **MET** — branch `worktree-qa-sweep-20260904` at `ccdfe4c0`, pristine; the shared checkout was left on another agent's branch untouched |
+| G9 — no PR breaks the regression baseline | the "measured and found correct" list in `docs/QA-SWEEP-20260904.md` re-measured for the surfaces a PR touches, alongside that PR's own oracle | PENDING — a fix that closes a finding and breaks a baseline line has closed nothing |
+| G10 — the six untested surfaces stay visible | the "what was NOT tested" table in `docs/QA-SWEEP-20260904.md`; the data-deletion screen in particular has **no finding** and none may be inferred | PENDING |
