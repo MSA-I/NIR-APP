@@ -212,6 +212,12 @@ export const ltrIsolate = (s: string): string => `⁦${s}⁩`; // LRI … PDI
  *     `PriceListUpload.tsx`, `QuickCreateProduct.tsx`, `Onboarding.tsx`, and the SQL twin
  *     `private.name_match_key`. Canonicalising here changes which rows are treated as the same
  *     product, which is a data outcome, not a display one.
+ *     ONE OF THEM READS THE COLUMN, AND THIS IS THE DISTINCTION (`PL-05`, 04.09.2026):
+ *     `PriceListUpload.tsx` indexes the approved canonical name as a SECOND key, consulted only
+ *     for a name the raw index has never heard of. A name this product displays everywhere had to
+ *     be offered as a NEW product for the importer to keep the ban whole, which is the duplication
+ *     the approval queue exists to reduce. Substituting the composed name is still forbidden;
+ *     adding it as an alias cannot move a row that already resolved.
  *   * SUPPLIER-FACING. `share.ts` (the WhatsApp order) and `orderImage.ts` (the order image). The
  *     supplier recognises THEIR name for the item; a name we composed arrives at someone who has
  *     never seen it and cannot act on it.

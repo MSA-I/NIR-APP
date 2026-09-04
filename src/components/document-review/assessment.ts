@@ -373,6 +373,21 @@ export function noApprovalRouteNextStep(documentType: string | null): NoApproval
       linkLabelKey: 'assessment.nextStepPriceScreen',
     };
   }
+  /**
+   * `PL-11`. Both price lists the sweep found in the tenant were dead ends, and this is the first:
+   * a supplier's price list classified „הצעת מחיר". The generic unrouted sentence below is true and
+   * points at filing the document against an invoice or a goods receipt — which for a price list is
+   * not the action. There is exactly ONE that opens it, the control for it is on this same page,
+   * and what follows it is the price-list intake further down this screen. So the quote says that
+   * instead of inheriting the catch-all.
+   */
+  if (documentType === 'quote') {
+    return {
+      textKey: 'assessment.nextStepQuote',
+      to: '/documents',
+      linkLabelKey: 'assessment.nextStepDocumentsFolder',
+    };
+  }
   return {
     textKey: 'assessment.nextStepUnroutedDocument',
     to: '/documents',

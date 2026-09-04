@@ -169,6 +169,22 @@ interface SheetPreviewRow {
   productId: string | null;
   /** null productId + ambiguous=true: catalog holds two products with this normalized name. */
   ambiguous: boolean;
+  /**
+   * The row resolved through the product's APPROVED CANONICAL NAME rather than its stored one.
+   *
+   * Worth its own flag because the reader is entitled to know which of the two names matched: the
+   * sheet says one thing, the catalogue stores another, and „מוצר קיים" alone would leave a person
+   * comparing the two columns with no explanation of why they differ.
+   */
+  matchedCanonical: boolean;
+  /**
+   * Rounding to the currency's minor units changed the number the supplier wrote (`PL-07`).
+   *
+   * `parsePrice` has always reported this and its docblock states the contract as "says so when
+   * rounding changed it"; neither consumer read it, so 1.2345 became 1.23 with nothing anywhere
+   * recording that the figure moved.
+   */
+  rounded: boolean;
 }
 
 interface SheetPreview {
@@ -243,12 +259,35 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
     if (!cols.product || !cols.price) {
       throw new PriceDocumentError(t('priceUpload.columnsRequired'));
     }
-    const products = await fetchAll<{ id: string; name: string; active: boolean }>((from, to) =>
-      supabase.from('products').select('id, name, active').order('id').range(from, to));
-    const byName = new Map<string, { id: string; active: boolean } | null>();
+    type CatalogueRow = { id: string; name: string; display_name: string | null; active: boolean };
+    const products = await fetchAll<CatalogueRow>((from, to) =>
+      supabase.from('products').select('id, name, display_name, active').order('id').range(from, to));
+    const byName = new Map<string, CatalogueRow | null>();
     for (const product of products) {
       const key = nameKey(product.name);
       byName.set(key, byName.has(key) ? null : product);
+    }
+    /**
+     * THE APPROVED CANONICAL NAME, AS A SECOND KEY (`PL-05`).
+     *
+     * `/products` and `/prices` both render the canonical name once a person has approved one, so
+     * it is the name a manager copies into a sheet — and this door indexed the catalogue by the
+     * STORED name alone, previewed the row as „מוצר חדש", and would have created a second product
+     * for the item the approval queue exists to stop duplicating.
+     *
+     * Additive, and deliberately so. The stored name is consulted first and always wins: a key the
+     * raw index already holds is skipped here, so no row that resolved before this existed can
+     * start resolving to anything else, and the "two products share a name" refusal keeps its
+     * meaning. This is not `productLabel` — nothing here composes a name or displays one; the
+     * catalogue's own approved alias is being read as an alias.
+     */
+    const byCanonicalName = new Map<string, CatalogueRow | null>();
+    for (const product of products) {
+      const canonical = product.display_name?.trim();
+      if (!canonical) continue;
+      const key = nameKey(canonical);
+      if (byName.has(key)) continue;
+      byCanonicalName.set(key, byCanonicalName.has(key) ? null : product);
     }
     // Every rejection rule of import_supplier_prices is mirrored here per-row, so one bad line is
     // skipped with its reason instead of poisoning the whole batch server-side: in-file duplicates
@@ -278,7 +317,11 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
       const key = nameKey(name);
       if (seenKeys.has(key)) return skipRow(t('priceUpload.has'));
       seenKeys.add(key);
-      const match = byName.get(key);
+      // `has`, not `get`: the raw index stores `null` for a name two products share, and that
+      // ambiguity is an answer. Only a key the raw index never heard of falls through to the
+      // canonical one.
+      const canonical = byName.has(key) ? undefined : byCanonicalName.get(key);
+      const match = byName.has(key) ? byName.get(key) : canonical ?? undefined;
       if (match && !match.active) return skipRow(t('priceUpload.skipRow_3'));
       return {
         name,
@@ -286,7 +329,9 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
         currency,
         unit: normalizeUnitInput(cellText(row, cols.unit) || 'יחידה'),
         productId: match?.id ?? null,
-        ambiguous: match === null,
+        ambiguous: byName.has(key) ? byName.get(key) === null : canonical === null,
+        matchedCanonical: Boolean(canonical),
+        rounded: parsed.rounded,
       } satisfies SheetPreviewRow;
     }, t('importSheet.invalidRow'));
     if (!valid.length) throw new PriceDocumentError(t('priceUpload.PriceDocumentError_5'));
@@ -447,6 +492,14 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
               {preview.skipped.length ? <> {t('priceUpload.rowsSkipped', { count: preview.skipped.length })}</> : null}
             </span>
           </Note>
+          {/* PL-12. The other intake door — the document reviewer — prints its rule outright:
+              „…לפי מק״ט או ברקוד; שם מוצר לעולם אינו מפתח התאמה". This one printed nothing, so the
+              same file read 6 of 16 here and 0 of 16 there and the two screens looked like they
+              disagreed about the file rather than about the key. Two rules are allowed; two silent
+              rules are not. */}
+          <p className="text-xs text-ink-muted" data-testid="sheet-match-rule">
+            {t('priceUpload.matchRule')}
+          </p>
           {preview.skipped.length > 0 && (
             <details className="text-sm">
               <summary className="link flex min-h-11 cursor-pointer items-center">{t('priceUpload.text_8')}</summary>
@@ -471,8 +524,14 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
                 {preview.rows.slice(0, 100).map((r, i) => (
                   <tr key={i}>
                     <td className="td">{r.name}</td>
-                    <td className="td num">{fmtMoneyExact(r.price, r.currency || supplierCurrency)}</td>
-                    <td className="td">{r.productId ? <span className="badge-done">{t('priceUpload.text_12')}</span>
+                    <td className="td num">
+                      {fmtMoneyExact(r.price, r.currency || supplierCurrency)}
+                      {/* PL-07. The supplier wrote one number and the catalogue will hold another.
+                          `parsePrice` reports it; until now nothing did. */}
+                      {r.rounded && <span className="badge-idle ms-2">{t('priceUpload.priceRounded')}</span>}
+                    </td>
+                    <td className="td">{r.productId
+                      ? <span className="badge-done">{t(r.matchedCanonical ? 'priceUpload.matchedCanonical' : 'priceUpload.text_12')}</span>
                       : r.ambiguous ? <span className="badge-alert">{t('priceUpload.text_13')}</span>
                         : <span className="badge-await">{t('priceUpload.text_14')}</span>}</td>
                   </tr>

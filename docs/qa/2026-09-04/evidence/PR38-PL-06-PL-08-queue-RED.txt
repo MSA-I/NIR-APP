@@ -1,0 +1,760 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a183f8959614045c8
+
+ ❯ src/pages/productNameQueueWork.spec.tsx (4 tests | 4 failed) 3334ms
+     × הלשונית סופרת את השמות שידרשו החלטה, לא את כל הקטלוג 3199ms
+     × מפריד את האישורים שאינם משנים דבר, וסופר אותם בנפרד 46ms
+     × בקרה — שום שורה לא נעלמת, וכל אחת עדיין ניתנת לאישור 49ms
+     × אומר איפה הרישום נקרא ומי יכול לקרוא אותו 33ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/productNameQueueWork.spec.tsx > PL-08 · התור מציע כעבודה את מה שבאמת ישתנה > הלשונית סופרת את השמות שידרשו החלטה, לא את כל הקטלוג
+Error: [2mexpect([22m[31melement[39m[2m).toHaveTextContent()[22m
+
+Expected element to have text content:
+[32m  /\(2\)/[39m
+Received:
+[31m  שמות לאישור (5)[39m
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-4"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+          [36m>[39m
+            [36m<h1[39m
+              [33mclass[39m=[32m"page-title break-words"[39m
+            [36m>[39m
+              [0mמוצרים[0m
+            [36m</h1>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"section-mark"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+            [36m>[39m
+              [0mניהול קטלוג המוצרים שמהם נבנות ההזמנות, והעלאת מחירוני ספקים עבורם.[0m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+            [36m>[39m
+              [0m5 מוצרים בתצוגה[0m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-upload"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 3v12"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m17 8-5-5-5 5"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mהעלאת מחירון ספק[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-primary"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-plus"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M5 12h14"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 5v14"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mמוצר חדש[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33maria-label[39m=[32m"תצוגת מסך המוצרים"[39m
+          [33mclass[39m=[32m"flex flex-wrap gap-2 "[39m
+          [33mrole[39m=[32m"group"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33maria-pressed[39m=[32m"true"[39m
+            [33mclass[39m=[32m"chip-filter chip-filter-active disabled:cursor-not-allowed disabled:opacity-50 "[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mקטלוג[0m
+          [36m</button>[39m
+          [36m<button[39m
+            [33maria-pressed[39m=[32m"false"[39m
+            [33mclass[39m=[32m"chip-filter  disabled:cursor-not-allowed disabled:opacity-50 "[39m
+            [33mdata-testid[39m=[32m"name-review-toggle"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mשמות לאישור (5)[0m
+          [36m</button>[39m
+          [36m<button[39m
+            [33maria-pressed[39m=[32m"false"[39m
+            [33mclass[39m=[32m"chip-filter  disabled:cursor-not-allowed disabled:opacity-50 "[39m
+            [33mdata-testid[39m=[32m"source-name-repair-toggle"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mתיקון ממקור (—)[0m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"card overflow-hidden"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"relative flex-1 min-w-44 max-w-xs"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21 21-4.34-4.34"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"11"[39m
+                  [33mcy[39m=[32m"11"[39m
+                  [33mr[39m=[32m"8"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<input[39m
+                [33maria-label[39m=[32m"חיפוש במוצרים"[39m
+                [33mclass[39m=[32m"input ps-9!"[39m
+                [33mplaceholder[39m=[32m"חיפוש..."[39m
+                [33mvalue[39m=[32m""[39m
+              [36m/>[39m
+            [36m</div>[39m
+            [36m<select[39m
+              [33maria-label[39m=[32m"סינון מוצרים לפי קטגוריה"[39m
+             ...
+ ❯ waitFor.timeout src/pages/productNameQueueWork.spec.tsx:109:40
+    107|     const toggle = await screen.findByTestId('name-review-toggle');
+    108|     // Five products with no canonical name; two of them would change …
+    109|     await waitFor(() => expect(toggle).toHaveTextContent(/\(2\)/), { t…
+       |                                        ^
+    110|     expect(toggle).not.toHaveTextContent(/\(5\)/);
+    111|   });
+ ❯ runWithExpensiveErrorDiagnosticsDisabled ../../../node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback ../../../node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback ../../../node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/pages/productNameQueueWork.spec.tsx > PL-08 · התור מציע כעבודה את מה שבאמת ישתנה > מפריד את האישורים שאינם משנים דבר, וסופר אותם בנפרד
+TestingLibraryElementError: Unable to find an element by: [data-testid="name-review-confirm-only"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33maria-labelledby[39m=[32m"name-review-heading"[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-2"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-lg font-semibold text-ink focus:outline-none"[39m
+          [33mid[39m=[32m"name-review-heading"[39m
+          [33mtabindex[39m=[32m"-1"[39m
+        [36m>[39m
+          [0mשמות לאישור[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+        [36m>[39m
+          [0mלכל מוצר מוצג השם השמור בקטלוג לצד השם הקנוני המוצע ומה יורד ממנו. השם השמור אינו משתנה — הוא זה שנשלח לספק ושלפיו מתבצעת ההתאמה למחירונים. כל אישור נרשם ביומן הביקורת.[0m
+        [36m</p>[39m
+      [36m</div>[39m
+      [36m<ul[39m
+        [33mclass[39m=[32m"space-y-3"[39m
+      [36m>[39m
+        [36m<li[39m
+          [33mclass[39m=[32m"card card-pad  space-y-4"[39m
+          [33mdata-testid[39m=[32m"review-p-proposal"[39m
+          [33mdata-verdict[39m=[32m"proposal"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap items-start justify-between gap-2"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"min-w-0"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+              [36m>[39m
+                [0mהשם השמור בקטלוג[0m
+              [36m</p>[39m
+              [36m<h3[39m
+                [33mclass[39m=[32m"text-sm font-medium text-ink-mid break-words"[39m
+              [36m>[39m
+                [36m<bdi>[39m
+                  [0mשמן קנולה 100 מ״ל חברת דגן[0m
+                [36m</bdi>[39m
+              [36m</h3>[39m
+            [36m</div>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"badge-info"[39m
+            [36m>[39m
+              [0mהצעה מוכנה[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"space-y-3"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+              [36m>[39m
+                [0mהשם הקנוני המוצע[0m
+              [36m</p>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-base font-medium text-ink break-words"[39m
+                [33mdata-testid[39m=[32m"review-proposal"[39m
+              [36m>[39m
+                [36m<bdi>[39m
+                  [0mשמן קנולה — 100 מ״ל[0m
+                [36m</bdi>[39m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mdata-testid[39m=[32m"review-dropped"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted mb-1"[39m
+              [36m>[39m
+                [0mיורד מהשם[0m
+              [36m</p>[39m
+              [36m<ul[39m
+                [33mclass[39m=[32m"flex flex-wrap gap-1.5"[39m
+              [36m>[39m
+                [36m<li[39m
+                  [33mclass[39m=[32m"badge-idle"[39m
+                [36m>[39m
+                  [36m<bdi>[39m
+                    [0mחברת דגן[0m
+                  [36m</bdi>[39m
+                [36m</li>[39m
+              [36m</ul>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-primary"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-check"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M20 6 9 17l-5-5"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mאישור[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-pencil"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m15 5 4 4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mעריכה ואישור[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-ghost"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-skip-forward"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 4v16"[39m
+                [36m/>[39...
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/productNameQueueWork.spec.tsx:116:32
+    114|     renderQueue();
+    115|
+    116|     const confirmOnly = screen.getByTestId('name-review-confirm-only');
+       |                                ^
+    117|     // The count is stated where the group is, so nothing is hidden — …
+    118|     expect(confirmOnly).toHaveTextContent('3');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/pages/productNameQueueWork.spec.tsx > PL-08 · התור מציע כעבודה את מה שבאמת ישתנה > בקרה — שום שורה לא נעלמת, וכל אחת עדיין ניתנת לאישור
+TestingLibraryElementError: Unable to find an element by: [data-testid="name-review-confirm-only-summary"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33maria-labelledby[39m=[32m"name-review-heading"[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-2"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-lg font-semibold text-ink focus:outline-none"[39m
+          [33mid[39m=[32m"name-review-heading"[39m
+          [33mtabindex[39m=[32m"-1"[39m
+        [36m>[39m
+          [0mשמות לאישור[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+        [36m>[39m
+          [0mלכל מוצר מוצג השם השמור בקטלוג לצד השם הקנוני המוצע ומה יורד ממנו. השם השמור אינו משתנה — הוא זה שנשלח לספק ושלפיו מתבצעת ההתאמה למחירונים. כל אישור נרשם ביומן הביקורת.[0m
+        [36m</p>[39m
+      [36m</div>[39m
+      [36m<ul[39m
+        [33mclass[39m=[32m"space-y-3"[39m
+      [36m>[39m
+        [36m<li[39m
+          [33mclass[39m=[32m"card card-pad  space-y-4"[39m
+          [33mdata-testid[39m=[32m"review-p-proposal"[39m
+          [33mdata-verdict[39m=[32m"proposal"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap items-start justify-between gap-2"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"min-w-0"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+              [36m>[39m
+                [0mהשם השמור בקטלוג[0m
+              [36m</p>[39m
+              [36m<h3[39m
+                [33mclass[39m=[32m"text-sm font-medium text-ink-mid break-words"[39m
+              [36m>[39m
+                [36m<bdi>[39m
+                  [0mשמן קנולה 100 מ״ל חברת דגן[0m
+                [36m</bdi>[39m
+              [36m</h3>[39m
+            [36m</div>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"badge-info"[39m
+            [36m>[39m
+              [0mהצעה מוכנה[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"space-y-3"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+              [36m>[39m
+                [0mהשם הקנוני המוצע[0m
+              [36m</p>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-base font-medium text-ink break-words"[39m
+                [33mdata-testid[39m=[32m"review-proposal"[39m
+              [36m>[39m
+                [36m<bdi>[39m
+                  [0mשמן קנולה — 100 מ״ל[0m
+                [36m</bdi>[39m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mdata-testid[39m=[32m"review-dropped"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted mb-1"[39m
+              [36m>[39m
+                [0mיורד מהשם[0m
+              [36m</p>[39m
+              [36m<ul[39m
+                [33mclass[39m=[32m"flex flex-wrap gap-1.5"[39m
+              [36m>[39m
+                [36m<li[39m
+                  [33mclass[39m=[32m"badge-idle"[39m
+                [36m>[39m
+                  [36m<bdi>[39m
+                    [0mחברת דגן[0m
+                  [36m</bdi>[39m
+                [36m</li>[39m
+              [36m</ul>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-primary"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-check"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M20 6 9 17l-5-5"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mאישור[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-pencil"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m15 5 4 4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mעריכה ואישור[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-ghost"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-skip-forward"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 4v16"[39m
+                [36m/>[39...
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/productNameQueueWork.spec.tsx:135:29
+    133|     }
+    134|     // The confirm-only group is folded, not removed: it opens, and it…
+    135|     await user.click(screen.getByTestId('name-review-confirm-only-summ…
+       |                             ^
+    136|     expect(within(screen.getByTestId(`review-${CONFIRM_ONLY[0].id}`))
+    137|       .getByRole('button', { name: /^אישור$/ })).toBeInTheDocument();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/pages/productNameQueueWork.spec.tsx > PL-06 · המסך אינו מבטיח יומן שאי אפשר לפתוח > אומר איפה הרישום נקרא ומי יכול לקרוא אותו
+TestingLibraryElementError: Unable to find an element by: [data-testid="name-review-intro"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33maria-labelledby[39m=[32m"name-review-heading"[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-2"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-lg font-semibold text-ink focus:outline-none"[39m
+          [33mid[39m=[32m"name-review-heading"[39m
+          [33mtabindex[39m=[32m"-1"[39m
+        [36m>[39m
+          [0mשמות לאישור[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+        [36m>[39m
+          [0mלכל מוצר מוצג השם השמור בקטלוג לצד השם הקנוני המוצע ומה יורד ממנו. השם השמור אינו משתנה — הוא זה שנשלח לספק ושלפיו מתבצעת ההתאמה למחירונים. כל אישור נרשם ביומן הביקורת.[0m
+        [36m</p>[39m
+      [36m</div>[39m
+      [36m<ul[39m
+        [33mclass[39m=[32m"space-y-3"[39m
+      [36m>[39m
+        [36m<li[39m
+          [33mclass[39m=[32m"card card-pad  space-y-4"[39m
+          [33mdata-testid[39m=[32m"review-p-proposal"[39m
+          [33mdata-verdict[39m=[32m"proposal"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap items-start justify-between gap-2"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"min-w-0"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+              [36m>[39m
+                [0mהשם השמור בקטלוג[0m
+              [36m</p>[39m
+              [36m<h3[39m
+                [33mclass[39m=[32m"text-sm font-medium text-ink-mid break-words"[39m
+              [36m>[39m
+                [36m<bdi>[39m
+                  [0mשמן קנולה 100 מ״ל חברת דגן[0m
+                [36m</bdi>[39m
+              [36m</h3>[39m
+            [36m</div>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"badge-info"[39m
+            [36m>[39m
+              [0mהצעה מוכנה[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"space-y-3"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+              [36m>[39m
+                [0mהשם הקנוני המוצע[0m
+              [36m</p>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-base font-medium text-ink break-words"[39m
+                [33mdata-testid[39m=[32m"review-proposal"[39m
+              [36m>[39m
+                [36m<bdi>[39m
+                  [0mשמן קנולה — 100 מ״ל[0m
+                [36m</bdi>[39m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mdata-testid[39m=[32m"review-dropped"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted mb-1"[39m
+              [36m>[39m
+                [0mיורד מהשם[0m
+              [36m</p>[39m
+              [36m<ul[39m
+                [33mclass[39m=[32m"flex flex-wrap gap-1.5"[39m
+              [36m>[39m
+                [36m<li[39m
+                  [33mclass[39m=[32m"badge-idle"[39m
+                [36m>[39m
+                  [36m<bdi>[39m
+                    [0mחברת דגן[0m
+                  [36m</bdi>[39m
+                [36m</li>[39m
+              [36m</ul>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-primary"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-check"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M20 6 9 17l-5-5"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mאישור[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-pencil"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m15 5 4 4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mעריכה ואישור[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-ghost"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-skip-forward"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 4v16"[39m
+                [36m/>[39...
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/productNameQueueWork.spec.tsx:145:26
+    143|     renderQueue();
+    144|
+    145|     const intro = screen.getByTestId('name-review-intro');
+       |                          ^
+    146|     expect(intro).toHaveTextContent(/יומן ביקורת|יומן הביקורת/);
+    147|     // The screen that reads it, and the role that may open it — the t…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  17:22:13
+   Duration  8.28s (transform 1.30s, setup 658ms, import 2.50s, tests 3.33s, environment 1.46s)
+

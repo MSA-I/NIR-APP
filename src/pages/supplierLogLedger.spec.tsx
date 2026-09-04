@@ -219,7 +219,10 @@ describe('/supplier-log — OWN-04: an import is described as an import', () => 
 
     const imported = rowsWhere((cells) => cells.includes('קליטת מחירון'));
     expect(imported).toHaveLength(1);
-    expect(imported[0]).toContain('6 שורות מחירון');
+    // Read as a substring of the row rather than as the whole of one cell: `PL-03` adds the
+    // supplier's name to that same subject, and OWN-04's claim is that the row NAMES THE IMPORT —
+    // not that the subject cell says these three words and nothing else.
+    expect(imported[0].join(' ')).toContain('6 שורות מחירון');
     expect(imported[0]).not.toContain('שורת מחירון שנמחקה');
 
     // The fallback still belongs to the row whose price line is genuinely gone — and to it alone.

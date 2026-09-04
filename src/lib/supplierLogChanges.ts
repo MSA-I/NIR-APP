@@ -35,6 +35,10 @@ const FIELD_LABELS: Record<string, { labelKey: TKey; kind?: 'money' | 'date' | '
   min_qty: { labelKey: 'supplierLog.fieldMinQty' },
   package_size: { labelKey: 'supplierLog.fieldPackageSize' },
   supplier_sku: { labelKey: 'supplierLog.fieldSupplierSku' },
+  // products — the two fields `set_product_display_name` records (0149). The raw `name` shares its
+  // label with the supplier one below and is unchanged by that command, so it never renders here;
+  // it is in the record so the approved name can be read next to what it was approved instead of.
+  display_name: { labelKey: 'supplierLog.fieldDisplayName' },
   // suppliers
   name: { labelKey: 'supplierLog.fieldName' },
   status: { labelKey: 'supplierLog.fieldStatus' },

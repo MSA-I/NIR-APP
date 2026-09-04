@@ -41,7 +41,7 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import type { TKey } from '../lib/i18n/t';
 import { useMemo, useState } from 'react';
-import { ScrollText, Tags, Truck } from 'lucide-react';
+import { Package, ScrollText, Tags, Truck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
@@ -52,13 +52,33 @@ import { fieldChanges, renderValue } from '../lib/supplierLogChanges';
 import { foldLedger, type LedgerEntry } from '../lib/supplierLogLedger';
 import type { AuditLog } from '../lib/types';
 
-/** The two entity types this log covers. Everything else stays out of the customer-facing app. */
-const ENTITY_TYPES = ['suppliers', 'supplier_products'] as const;
+/**
+ * The entity types this log covers. Everything else stays out of the customer-facing app.
+ *
+ * `products` joined on 04.09.2026 and joined NARROWLY (`PL-06`). `/products → שמות לאישור`
+ * promises „כל אישור נרשם ביומן הביקורת", `set_product_display_name` (`0149`) writes exactly that
+ * row — raw name beside the approved one, with the reviewer's reason — and no screen in the
+ * product asked for it, so the promise named a ledger nobody could open. It is read here because
+ * `audit_logs` is already owner-readable (`0031`) and this screen is already owner-only: nothing
+ * about who may read what changed.
+ */
+const ENTITY_TYPES = ['suppliers', 'supplier_products', 'products'] as const;
 type EntityType = (typeof ENTITY_TYPES)[number];
+
+/**
+ * And only these two actions of it.
+ *
+ * The generic `products_audit` trigger writes a row for every product mutation there is. Reading
+ * them all would turn יומן עדכון ספקים into a product-change firehose and answer a question this
+ * screen is not named after. The two reasoned name actions are the ones the approval screen
+ * promised, and they are the ones asked for.
+ */
+const PRODUCT_NAME_ACTIONS = ['product_display_name_set', 'product_display_name_cleared'] as const;
 
 const ENTITY_KEY: Record<EntityType, TKey> = {
   suppliers: 'supplierLog.entitySuppliers',
   supplier_products: 'supplierLog.entityPriceList',
+  products: 'supplierLog.entityProductNames',
 };
 
 /**
@@ -76,6 +96,8 @@ const ACTION_KEY: Record<string, TKey> = {
   supplier_product_price_set: 'supplierLog.actionPriceSet',
   supplier_prices_imported: 'supplierLog.actionPricesImported',
   price_list_auto_action_reverted: 'supplierLog.actionAutoReverted',
+  product_display_name_set: 'supplierLog.actionProductNameApproved',
+  product_display_name_cleared: 'supplierLog.actionProductNameCleared',
 };
 
 /**
@@ -127,6 +149,29 @@ const price = (values: Record<string, unknown> | null | undefined) => {
   return typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : null;
 };
 
+const counted = (values: Record<string, unknown> | null | undefined, field: string) => {
+  const raw = values?.[field];
+  return typeof raw === 'number' ? raw : 0;
+};
+
+/**
+ * What an import did, from the numbers the command itself recorded — or null when this is not one.
+ *
+ * `import_supplier_prices` stores `row_count`, `created`, `updated` and `unchanged` in the
+ * command row's `new_values`. Nothing had ever read them, so the one row that summarises the
+ * batch went through the price diff, found no `current_price` on either side, and printed
+ * „אין נתוני מחיר" over an import that had just moved six prices.
+ */
+function importOutcome(row: Pick<LogRow, 'entity_type' | 'entity_id' | 'new_values'>) {
+  if (row.entity_type !== 'supplier_products' || row.entity_id !== null) return null;
+  if (typeof row.new_values?.row_count !== 'number') return null;
+  return {
+    updated: counted(row.new_values, 'updated'),
+    created: counted(row.new_values, 'created'),
+    unchanged: counted(row.new_values, 'unchanged'),
+  };
+}
+
 // The tracked-field catalogue, `renderValue` and `fieldChanges` live in
 // `src/lib/supplierLogChanges.ts`: the diff of an audit row is pure logic over two plain objects,
 // and testing it should not require supabase and react-router inside jsdom.
@@ -151,7 +196,9 @@ export default function SupplierLog() {
     // one. The count is asked for so the screen can say how much it is NOT showing.
     const response = await supabase.from('audit_log_read_model')
       .select('*', { count: 'exact' })
-      .in('entity_type', ENTITY_TYPES)
+      // Two clauses, because the third entity type is admitted by action and not wholesale.
+      .or(`entity_type.in.(suppliers,supplier_products),`
+        + `and(entity_type.eq.products,action.in.(${PRODUCT_NAME_ACTIONS.join(',')}))`)
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .range(0, loaded - 1);
@@ -215,12 +262,51 @@ export default function SupplierLog() {
 
   const entries: LedgerEntry<LogRow>[] = useMemo(() => foldLedger(data?.rows ?? []), [data]);
 
+  /**
+   * Which supplier an import belonged to — read, never guessed (`PL-03`).
+   *
+   * `import_supplier_prices` writes its audit row with `entity_id = null` (`0032:375`), so the
+   * price-line lookup resolves nothing for it and the row could only ever count lines. The
+   * supplier IS recorded, on every trigger row of the SAME request: `correlation_id` is a column
+   * default since `0062` and one browser request carries one id, so the group is a recorded fact
+   * rather than an inference from a shared timestamp.
+   *
+   * A group naming two suppliers names none. A multi-supplier sheet is one request and several
+   * commands, and picking one of its suppliers for the row would be the ledger asserting something
+   * nobody wrote.
+   */
+  const supplierByCorrelation = useMemo(() => {
+    const found = new Map<string, string | null>();
+    for (const entry of entries) {
+      const log = entry.row;
+      if (log.entity_type !== 'supplier_products' || !log.correlation_id || !log.supplierName) continue;
+      const known = found.get(log.correlation_id);
+      if (known === undefined) found.set(log.correlation_id, log.supplierName);
+      else if (known !== log.supplierName) found.set(log.correlation_id, null);
+    }
+    return found;
+  }, [entries]);
+
   const all = useMemo<Row[]>(() => entries.map((entry) => {
     const log = entry.row;
     // The deleted-row case is not a gap to hide: old_values still holds what the row was, and a
     // name read from there is more honest than an em dash that implies nothing was recorded.
     const fallbackName = typeof log.old_values?.name === 'string' ? log.old_values.name : null;
     const rowCount = log.new_values?.row_count;
+    // The raw product name as the record kept it, on both sides, so a cleared name still has one.
+    const productName = typeof log.new_values?.name === 'string' ? log.new_values.name : fallbackName;
+    const importSupplier = log.correlation_id
+      ? supplierByCorrelation.get(log.correlation_id) ?? null
+      : null;
+    if (log.entity_type === 'products') {
+      return {
+        ...log,
+        subject: productName ?? t('supplierLog.entityProductNames'),
+        displayAction: entry.action,
+        displayReason: entry.reason,
+        reasonFromCommand: entry.reasonFromCommand,
+      };
+    }
     return {
       ...log,
       subject: log.entity_type === 'supplier_products'
@@ -231,14 +317,16 @@ export default function SupplierLog() {
           // itself (`0032:375`). Calling it a deleted row asserted a deletion the database never
           // performed, on the ledger whose job is to be the record (`OWN-04`).
           : (typeof rowCount === 'number'
-            ? t('supplierLog.subjectImportedRows', { count: rowCount })
+            ? (importSupplier
+              ? t('supplierLog.subjectImportedRowsFor', { count: rowCount, supplier: importSupplier })
+              : t('supplierLog.subjectImportedRows', { count: rowCount }))
             : t('supplierLog.entityPriceList')))
         : log.supplierName ?? fallbackName ?? t('supplierLog.text'),
       displayAction: entry.action,
       displayReason: entry.reason,
       reasonFromCommand: entry.reasonFromCommand,
     };
-  }), [entries, t]);
+  }), [entries, supplierByCorrelation, t]);
 
   const suppliers = useMemo(() => {
     const map = new Map<string, string>();
@@ -269,7 +357,9 @@ export default function SupplierLog() {
         <span className="inline-flex items-center gap-1.5 text-ink-soft">
           {r.entity_type === 'supplier_products'
             ? <Tags size={ICON.xs} aria-hidden="true" />
-            : <Truck size={ICON.xs} aria-hidden="true" />}
+            : r.entity_type === 'products'
+              ? <Package size={ICON.xs} aria-hidden="true" />
+              : <Truck size={ICON.xs} aria-hidden="true" />}
           {t(ENTITY_KEY[r.entity_type])}
         </span>
       ),
@@ -286,6 +376,28 @@ export default function SupplierLog() {
       // `—` remains the app-wide "no data" glyph everywhere else — this is scoped to the
       // before/after diff on this screen, so please do not "restore consistency" here.
       render: (r) => {
+        // The import command row is not a price line and never had a before and an after. Reading
+        // it as one produced „אין נתוני מחיר" on the single row that reports what an import did to
+        // six prices — the ledger's own summary denying that any price data existed (`PL-03`).
+        const outcome = importOutcome(r);
+        if (outcome) return <span className="text-ink-muted">{t('supplierLog.importOutcome', outcome)}</span>;
+        // A name approval carries no money either. `fieldChanges` already knows which of the two
+        // recorded fields moved, so the cell reads it rather than naming the column here — the log
+        // says what the record said, and this file never has to hold the column's name.
+        if (r.entity_type === 'products') {
+          const changes = fieldChanges(r.old_values, r.new_values, t);
+          if (!changes.length) return <span className="text-ink-faint">{t('supplierLog.text_7')}</span>;
+          return (
+            <span className="inline-flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+              {changes.map((change) => (
+                <span key={change.field} className="inline-flex items-baseline gap-1 text-ink">
+                  <span className="text-xs text-ink-muted">{change.label}</span>
+                  <bdi className="font-semibold">{change.after}</bdi>
+                </span>
+              ))}
+            </span>
+          );
+        }
         const before = price(r.old_values);
         const after = price(r.new_values);
         const supplierCurrency = r.currency;

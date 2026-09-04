@@ -538,6 +538,11 @@ const PATTERNS: [RegExp, string][] = [
   [/price_list_confirm_forbidden/i, 'price_list_confirm_forbidden'],
   [/price_list_confirm_conflict/i, 'price_list_confirm_conflict'],
   [/price_list_confirm_unavailable/i, 'price_list_confirm_unavailable'],
+  // 0182's readiness dry run refuses ONE context and names it: the document is not a price list,
+  // or it carries no supplier. `PL-04` — no client mapping existed, so a condition the reader can
+  // clear in a single action arrived as `fallback`, "contact support", on a screen that was
+  // already printing „הספק שהוצע בפירוש: לא זוהה" one line above it.
+  [/qualified_product_dry_run_context_invalid/i, 'qualified_product_dry_run_context_invalid'],
   [/monthly_report_snapshot_unattributed_bank_transactions/i, 'monthly_report_snapshot_unattributed_bank'],
   [/monthly_report_snapshot_unattributed_(invoices|payments|credits|exceptions)/i, 'monthly_report_snapshot_unattributed'],
   [/monthly_report_snapshot_legal_entity_invalid|unit_out_of_scope/i, 'monthly_report_snapshot_legal_entity_invalid'],

@@ -1,0 +1,914 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a183f8959614045c8
+
+ ❯ src/pages/supplierLogImportAndNames.spec.tsx (6 tests | 4 failed) 1965ms
+     × נושאת את שם הספק לצד מספר השורות 285ms
+     × לא אומרת „אין נתוני מחיר" על השורה שמסכמת שישה מחירים שהשתנו 113ms
+     × היומן מציג את רישום האישור עם השם הגולמי והסיבה 129ms
+     × אפשר לסנן אליו 1194ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/supplierLogImportAndNames.spec.tsx > PL-03 · שורת הקליטה אומרת של מי המחירון ומה קרה בו > נושאת את שם הספק לצד מספר השורות
+AssertionError: expected '6 שורות מחירון' to contain 'ספק הבדיקה'
+
+Expected: "ספק הבדיקה"
+Received: "6 שורות מחירון"
+
+ ❯ src/pages/supplierLogImportAndNames.spec.tsx:189:28
+    187|     const imported = rowsWhere((cells) => cells.includes('קליטת מחירון…
+    188|     expect(imported).toHaveLength(1);
+    189|     expect(imported[0][1]).toContain(SUPPLIER);
+       |                            ^
+    190|     expect(imported[0][1]).toContain('6');
+    191|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/pages/supplierLogImportAndNames.spec.tsx > PL-03 · שורת הקליטה אומרת של מי המחירון ומה קרה בו > לא אומרת „אין נתוני מחיר" על השורה שמסכמת שישה מחירים שהשתנו
+AssertionError: expected '04.09.2026, 15:00 6 שורות מחירון מחיר…' not to contain 'אין נתוני מחיר'
+
+Expected: "אין נתוני מחיר"
+Received: "04.09.2026, 15:00 6 שורות מחירון מחירון קליטת מחירון אין נתוני מחיר בעל העסק בדיקת QA — סריקת רגרסיה 04.09.2026"
+
+ ❯ src/pages/supplierLogImportAndNames.spec.tsx:198:36
+    196|
+    197|     const imported = rowsWhere((cells) => cells.includes('קליטת מחירון…
+    198|     expect(imported.join(' ')).not.toContain('אין נתוני מחיר');
+       |                                    ^
+    199|     // What the import actually did, from the row's own `new_values`.
+    200|     expect(imported.join(' ')).toMatch(/עודכנו/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/pages/supplierLogImportAndNames.spec.tsx > PL-06 · אישור שם קנוני נקרא ביומן > היומן מציג את רישום האישור עם השם הגולמי והסיבה
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/pages/supplierLogImportAndNames.spec.tsx:219:23
+    217|
+    218|     const approvals = rowsWhere((cells) => cells.join(' ').includes(NA…
+    219|     expect(approvals).toHaveLength(1);
+       |                       ^
+    220|     // The record says what the record said: the raw name is the subje…
+    221|     expect(approvals[0][1]).toContain('מלח גס');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/pages/supplierLogImportAndNames.spec.tsx > PL-06 · אישור שם קנוני נקרא ביומן > אפשר לסנן אליו
+TestingLibraryElementError: Unable to find an accessible element with the role "option" and name "שמות מוצרים"
+
+Here are the accessible roles:
+
+  banner:
+
+  Name "":
+  [36m<header[39m
+    [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  heading:
+
+  Name "יומן עדכון ספקים":
+  [36m<h1[39m
+    [33mclass[39m=[32m"page-title break-words"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  textbox:
+
+  Name "חיפוש ביומן":
+  [36m<input[39m
+    [33maria-label[39m=[32m"חיפוש ביומן"[39m
+    [33mclass[39m=[32m"input ps-9!"[39m
+    [33mplaceholder[39m=[32m"חיפוש..."[39m
+    [33mvalue[39m=[32m""[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  combobox:
+
+  Name "סינון לפי סוג עדכון":
+  [36m<select[39m
+    [33maria-label[39m=[32m"סינון לפי סוג עדכון"[39m
+    [33mclass[39m=[32m"input w-auto!"[39m
+  [36m/>[39m
+
+  Name "סינון לפי ספק":
+  [36m<select[39m
+    [33maria-label[39m=[32m"סינון לפי ספק"[39m
+    [33mclass[39m=[32m"input w-auto!"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  option:
+
+  Name "כל העדכונים":
+  [36m<option[39m
+    [33mvalue[39m=[32m""[39m
+  [36m/>[39m
+
+  Name "פרטי ספק":
+  [36m<option[39m
+    [33mvalue[39m=[32m"suppliers"[39m
+  [36m/>[39m
+
+  Name "מחירון":
+  [36m<option[39m
+    [33mvalue[39m=[32m"supplier_products"[39m
+  [36m/>[39m
+
+  Name "כל הספקים":
+  [36m<option[39m
+    [33mvalue[39m=[32m""[39m
+  [36m/>[39m
+
+  Name "ספק הבדיקה":
+  [36m<option[39m
+    [33mvalue[39m=[32m"sup-1"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  list:
+
+  Name "":
+  [36m<ul[39m
+    [33mclass[39m=[32m"lg:hidden divide-y divide-line-soft"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  listitem:
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"mobile-data-card p-4 row-hover cursor-pointer "[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"mobile-data-card p-4 row-hover cursor-pointer "[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"mobile-data-card p-4 row-hover cursor-pointer "[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"mobile-data-card p-4 row-hover cursor-pointer "[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"mobile-data-card p-4 row-hover cursor-pointer "[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"mobile-data-card p-4 row-hover cursor-pointer "[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"mobile-data-card p-4 row-hover cursor-pointer "[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"mobile-data-card p-4 row-hover cursor-pointer "[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  button:
+
+  Name "6 שורות מחירון":
+  [36m<button[39m
+    [33mclass[39m=[32m"min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "מוצר 1 · ספק הבדיקה":
+  [36m<button[39m
+    [33mclass[39m=[32m"min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "מוצר 2 · ספק הבדיקה":
+  [36m<button[39m
+    [33mclass[39m=[32m"min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "מוצר 3 · ספק הבדיקה":
+  [36m<button[39m
+    [33mclass[39m=[32m"min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "מוצר 4 · ספק הבדיקה":
+  [36m<button[39m
+    [33mclass[39m=[32m"min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "מוצר 5 · ספק הבדיקה":
+  [36m<button[39m
+    [33mclass[39m=[32m"min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "מוצר 6 · ספק הבדיקה":
+  [36m<button[39m
+    [33mclass[39m=[32m"min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "ספק הבדיקה":
+  [36m<button[39m
+    [33mclass[39m=[32m"min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "מועד":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "ספק · מוצר":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "פתיחת קליטת מחירון · 6 שורות מחירון":
+  [36m<button[39m
+    [33maria-label[39m=[32m"פתיחת קליטת מחירון · 6 שורות מחירון"[39m
+    [33mclass[39m=[32m"min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "פתיחת עדכון · מוצר 1 · ספק הבדיקה":
+  [36m<button[39m
+    [33maria-label[39m=[32m"פתיחת עדכון · מוצר 1 · ספק הבדיקה"[39m
+    [33mclass[39m=[32m"min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "פתיחת עדכון · מוצר 2 · ספק הבדיקה":
+  [36m<button[39m
+    [33maria-label[39m=[32m"פתיחת עדכון · מוצר 2 · ספק הבדיקה"[39m
+    [33mclass[39m=[32m"min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "פתיחת עדכון · מוצר 3 · ספק הבדיקה":
+  [36m<button[39m
+    [33maria-label[39m=[32m"פתיחת עדכון · מוצר 3 · ספק הבדיקה"[39m
+    [33mclass[39m=[32m"min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "פתיחת עדכון · מוצר 4 · ספק הבדיקה":
+  [36m<button[39m
+    [33maria-label[39m=[32m"פתיחת עדכון · מוצר 4 · ספק הבדיקה"[39m
+    [33mclass[39m=[32m"min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "פתיחת עדכון · מוצר 5 · ספק הבדיקה":
+  [36m<button[39m
+    [33maria-label[39m=[32m"פתיחת עדכון · מוצר 5 · ספק הבדיקה"[39m
+    [33mclass[39m=[32m"min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "פתיחת עדכון · מוצר 6 · ספק הבדיקה":
+  [36m<button[39m
+    [33maria-label[39m=[32m"פתיחת עדכון · מוצר 6 · ספק הבדיקה"[39m
+    [33mclass[39m=[32m"min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "פתיחת עדכון · ספק הבדיקה":
+  [36m<button[39m
+    [33maria-label[39m=[32m"פתיחת עדכון · ספק הבדיקה"[39m
+    [33mclass[39m=[32m"min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  region:
+
+  Name "טבלת נתונים — ניתן לגלול אופקית":
+  [36m<div[39m
+    [33maria-label[39m=[32m"טבלת נתונים — ניתן לגלול אופקית"[39m
+    [33mclass[39m=[32m"table-scroll overflow-x-auto hidden lg:block"[39m
+    [33mrole[39m=[32m"region"[39m
+    [33mtabindex[39m=[32m"0"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  table:
+
+  Name "":
+  [36m<table[39m
+    [33mclass[39m=[32m"w-full"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  rowgroup:
+
+  Name "":
+  [36m<thead[39m
+    [33mclass[39m=[32m"table-head border-b border-line-soft"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<tbody[39m
+    [33mclass[39m=[32m"divide-y divide-line-soft"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  row:
+
+  Name "מועד ספק · מוצר סוג פעולה שינוי משתמש סיבה":
+  [36m<tr />[39m
+
+  Name "04.09.2026, 15:00 6 שורות מחירון מחירון קליטת מחירון אין נתוני מחיר בעל העסק בדיקת QA — סריקת רגרסיה 04.09.2026":
+  [36m<tr[39m
+    [33mclass[39m=[32m"row-hover cursor-pointer"[39m
+  [36m/>[39m
+
+  Name "04.09.2026, 14:59 מוצר 1 · ספק הבדיקה מחירון עדכון לפני‏11.00 ‏₪אחרי‏13.00 ‏₪ בעל העסק בדיקת QA — סריקת רגרסיה 04.09.2026מהפקודה שביצעה את השינוי":
+  [36m<tr[39m
+    [33mclass[39m=[32m"row-hover cursor-pointer"[39m
+  [36m/>[39m
+
+  Name "04.09.2026, 14:58 מוצר 2 · ספק הבדיקה מחירון עדכון לפני‏12.00 ‏₪אחרי‏14.00 ‏₪ בעל העסק בדיקת QA — סריקת רגרסיה 04.09.2026מהפקודה שביצעה את השינוי":
+  [36m<tr[39m
+    [33mclass[39m=[32m"row-hover cursor-pointer"[39m
+  [36m/>[39m
+
+  Name "04.09.2026, 14:57 מוצר 3 · ספק הבדיקה מחירון עדכון לפני‏13.00 ‏₪אחרי‏15.00 ‏₪ בעל העסק בדיקת QA — סריקת רגרסיה 04.09.2026מהפקודה שביצעה את השינוי":
+  [36m<tr[39m
+    [33mclass[39m=[32m"row-hover cursor-pointer"[39m
+  [36m/>[39m
+
+  Name "04.09.2026, 14:56 מוצר 4 · ספק הבדיקה מחירון עדכון לפני‏14.00 ‏₪אחרי‏16.00 ‏₪ בעל העסק בדיקת QA — סריקת רגרסיה 04.09.2026מהפקודה שביצעה את השינוי":
+  [36m<tr[39m
+    [33mclass[39m=[32m"row-hover cursor-pointer"[39m
+  [36m/>[39m
+
+  Name "04.09.2026, 14:55 מוצר 5 · ספק הבדיקה מחירון עדכון לפני‏15.00 ‏₪אחרי‏17.00 ‏₪ בעל העסק בדיקת QA — סריקת רגרסיה 04.09.2026מהפקודה שביצעה את השינוי":
+  [36m<tr[39m
+    [33mclass[39m=[32m"row-hover cursor-pointer"[39m
+  [36m/>[39m
+
+  Name "04.09.2026, 14:54 מוצר 6 · ספק הבדיקה מחירון עדכון לפני‏16.00 ‏₪אחרי‏18.00 ‏₪ בעל העסק בדיקת QA — סריקת רגרסיה 04.09.2026מהפקודה שביצעה את השינוי":
+  [36m<tr[39m
+    [33mclass[39m=[32m"row-hover cursor-pointer"[39m
+  [36m/>[39m
+
+  Name "04.09.2026, 14:51 ספק הבדיקה פרטי ספק עדכון אין נתוני מחיר בעל העסק לא נרשמה סיבה":
+  [36m<tr[39m
+    [33mclass[39m=[32m"row-hover cursor-pointer"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  columnheader:
+
+  Name "מועד":
+  [36m<th[39m
+    [33maria-sort[39m=[32m"none"[39m
+    [33mclass[39m=[32m"th"[39m
+    [33mscope[39m=[32m"col"[39m
+  [36m/>[39m
+
+  Name "ספק · מוצר":
+  [36m<th[39m
+    [33maria-sort[39m=[32m"none"[39m
+    [33mclass[39m=[32m"th"[39m
+    [33mscope[39m=[32m"col"[39m
+  [36m/>[39m
+
+  Name "סוג":
+  [36m<th[39m
+    [33mclass[39m=[32m"th"[39m
+    [33mscope[39m=[32m"col"[39m
+  [36m/>[39m
+
+  Name "פעולה":
+  [36m<th[39m
+    [33mclass[39m=[32m"th"[39m
+    [33mscope[39m=[32m"col"[39m
+  [36m/>[39m
+
+  Name "שינוי":
+  [36m<th[39m
+    [33mclass[39m=[32m"th"[39m
+    [33mscope[39m=[32m"col"[39m
+  [36m/>[39m
+
+  Name "משתמש":
+  [36m<th[39m
+    [33mclass[39m=[32m"th"[39m
+    [33mscope[39m=[32m"col"[39m
+  [36m/>[39m
+
+  Name "סיבה":
+  [36m<th[39m
+    [33mclass[39m=[32m"th"[39m
+    [33mscope[39m=[32m"col"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  cell:
+
+  Name "04.09.2026, 15:00":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "6 שורות מחירון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "מחירון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "קליטת מחירון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "אין נתוני מחיר":
+  [36m<td[39m
+    [33mclass[39m=[32m"td num"[39m
+  [36m/>[39m
+
+  Name "בעל העסק":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "בדיקת QA — סריקת רגרסיה 04.09.2026":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "04.09.2026, 14:59":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "מוצר 1 · ספק הבדיקה":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "מחירון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "עדכון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "לפני‏11.00 ‏₪אחרי‏13.00 ‏₪":
+  [36m<td[39m
+    [33mclass[39m=[32m"td num"[39m
+  [36m/>[39m
+
+  Name "בעל העסק":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "בדיקת QA — סריקת רגרסיה 04.09.2026מהפקודה שביצעה את השינוי":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "04.09.2026, 14:58":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "מוצר 2 · ספק הבדיקה":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "מחירון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "עדכון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "לפני‏12.00 ‏₪אחרי‏14.00 ‏₪":
+  [36m<td[39m
+    [33mclass[39m=[32m"td num"[39m
+  [36m/>[39m
+
+  Name "בעל העסק":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "בדיקת QA — סריקת רגרסיה 04.09.2026מהפקודה שביצעה את השינוי":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "04.09.2026, 14:57":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "מוצר 3 · ספק הבדיקה":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "מחירון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "עדכון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "לפני‏13.00 ‏₪אחרי‏15.00 ‏₪":
+  [36m<td[39m
+    [33mclass[39m=[32m"td num"[39m
+  [36m/>[39m
+
+  Name "בעל העסק":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "בדיקת QA — סריקת רגרסיה 04.09.2026מהפקודה שביצעה את השינוי":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "04.09.2026, 14:56":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "מוצר 4 · ספק הבדיקה":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "מחירון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "עדכון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "לפני‏14.00 ‏₪אחרי‏16.00 ‏₪":
+  [36m<td[39m
+    [33mclass[39m=[32m"td num"[39m
+  [36m/>[39m
+
+  Name "בעל העסק":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "בדיקת QA — סריקת רגרסיה 04.09.2026מהפקודה שביצעה את השינוי":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "04.09.2026, 14:55":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "מוצר 5 · ספק הבדיקה":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "מחירון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "עדכון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "לפני‏15.00 ‏₪אחרי‏17.00 ‏₪":
+  [36m<td[39m
+    [33mclass[39m=[32m"td num"[39m
+  [36m/>[39m
+
+  Name "בעל העסק":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "בדיקת QA — סריקת רגרסיה 04.09.2026מהפקודה שביצעה את השינוי":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "04.09.2026, 14:54":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "מוצר 6 · ספק הבדיקה":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "מחירון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "עדכון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "לפני‏16.00 ‏₪אחרי‏18.00 ‏₪":
+  [36m<td[39m
+    [33mclass[39m=[32m"td num"[39m
+  [36m/>[39m
+
+  Name "בעל העסק":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "בדיקת QA — סריקת רגרסיה 04.09.2026מהפקודה שביצעה את השינוי":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "04.09.2026, 14:51":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "ספק הבדיקה":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "פרטי ספק":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "עדכון":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "אין נתוני מחיר":
+  [36m<td[39m
+    [33mclass[39m=[32m"td num"[39m
+  [36m/>[39m
+
+  Name "בעל העסק":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  Name "לא נרשמה סיבה":
+  [36m<td[39m
+    [33mclass[39m=[32m"td "[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-scroll-text"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"22"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"22"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M15 12h-5"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M15 8h-5"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M19 17V5a2 2 0 0 0-2-2H4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mיומן עדכון ספקים[0m
+            [36m</span>[39m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+          [36m>[39m
+            [0mבדיקה מי שינה פרט של ספק או מחיר של מוצר, מתי, ומאיזו סיבה.[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0m8 עדכונים בתצוגה · מתוך 8 ביומן[0m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"card overflow-hidden"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"relative flex-1 min-w-44 max-w-xs"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m21 21-4.34-4.34"[39m
+              [36m/>[39m
+              [36m<circle[39m
+                [33mcx[39m=[32m"11"[39m
+                [33mcy[39m=[32m"11"[39m
+                [33mr[39m=[32m"8"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<input[39m
+              [33maria-label[39m=[32m"חיפוש ביומן"[39m
+              [33mclass[39m=[32m"input ps-9!"[39m
+              [33mplaceholder[39m=[32m"חיפוש..."[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<select[39m
+            [33maria-label[39m=[32m"סינון לפי סוג עדכון"[39m
+            [33mclass[39m=[32m"input w-auto!"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m""[39m
+            [36m>[39m
+              [0mכל העדכונים[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"suppliers"[39m
+            [36m>[39m
+              [0mפרטי ספק[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"supplier_products"[39m
+            [36m>[39m
+              [0mמחירון[0m
+            [36m</option>[39m
+          [36m</select>[39m
+          [36m<select[39m
+            [33maria-label[39m=[32m"סינון לפי ספק"[39m
+            [33mclass[39m=[32m"input w-auto!"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m""[39m
+            [36m>[39m
+              [0mכל הספקים[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"sup-1"[39m
+            [36m>[39m
+              [0mספק הבדיקה[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</div>[39m
+        [36m<ul[39m
+          [33mclass[39m=[32m"lg:hidden divide-y divide-line-soft"[39m
+        [36m>[39m
+          [36m<li[39m
+            [33mclass[39m=[32m"mobile-data-card p-4 row-hover cursor-pointer "[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"min-w-0 flex-1"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<bdi>[39m
+                    [0m6 שורות מחירון[0m
+                  [36m</bdi>[39m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-sm text-ink-mid"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"inline-flex min-w-0 flex-wrap items-baseline gap-1"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+                  [36m>[39m
+                    [0mמועד[0m
+          ...
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/supplierLogImportAndNames.spec.tsx:229:19
+    227|     await screen.findAllByText('מוצר 1 · ספק הבדיקה');
+    228|
+    229|     expect(screen.getByRole('option', { name: 'שמות מוצרים' })).toBeIn…
+       |                   ^
+    230|   });
+    231|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 2 passed (6)
+   Start at  17:22:03
+   Duration  5.88s (transform 952ms, setup 626ms, import 1.40s, tests 1.96s, environment 1.52s)
+

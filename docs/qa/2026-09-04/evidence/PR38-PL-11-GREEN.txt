@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a183f8959614045c8
+
+
+ Test Files  3 passed (3)
+      Tests  30 passed (30)
+   Start at  17:47:24
+   Duration  10.17s (transform 2.89s, setup 1.80s, import 4.36s, tests 7.22s, environment 4.13s)
+

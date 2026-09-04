@@ -1,0 +1,431 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a183f8959614045c8
+
+ ❯ src/pages/priceListSheetMatching.spec.tsx (5 tests | 4 failed) 4160ms
+     × שורה שנושאת את השם שמסך המוצרים מציג אינה מוצעת כמוצר חדש 375ms
+     × כותב את המחיר על המוצר הקיים, לא על מוצר שני 234ms
+     × מסמן את השורה שעוגלה, ואינו מסמן את השורות שלא 164ms
+     × מסך העלאת המחירון מצהיר על מפתח ההתאמה שלו, כמו מסך בדיקת המסמך 3135ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/priceListSheetMatching.spec.tsx > PL-05 · שם קנוני שאושר מתאים למוצר שהוא מתאר > שורה שנושאת את השם שמסך המוצרים מציג אינה מוצעת כמוצר חדש
+AssertionError: expected 'סבון ידיים נוזלי — 4 ליטר \u200f18.90…' not to contain 'מוצר חדש'
+
+Expected: "מוצר חדש"
+Received: "סבון ידיים נוזלי — 4 ליטר ‏18.90 ‏₪ מוצר חדש"
+
+ ❯ src/pages/priceListSheetMatching.spec.tsx:144:32
+    142|     const soap = rowFor(CANONICAL_SOAP);
+    143|     expect(soap.length).toBeGreaterThan(0);
+    144|     expect(soap.join(' ')).not.toContain(translateIn('he', 'priceUploa…
+       |                                ^
+    145|     // And the preview says WHICH name matched, so nobody has to guess…
+    146|     expect(soap.join(' ')).toMatch(/קנוני/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/pages/priceListSheetMatching.spec.tsx > PL-05 · שם קנוני שאושר מתאים למוצר שהוא מתאר > כותב את המחיר על המוצר הקיים, לא על מוצר שני
+AssertionError: expected undefined to be 18.9 // Object.is equality
+
+- Expected:
+18.9
+
++ Received:
+undefined
+
+ ❯ src/pages/priceListSheetMatching.spec.tsx:155:40
+    153|
+    154|     const byProduct = new Map((rpcBody?.p_rows ?? []).map((row) => [ro…
+    155|     expect(byProduct.get('prod-soap')).toBe(18.9);
+       |                                        ^
+    156|   });
+    157|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/pages/priceListSheetMatching.spec.tsx > PL-07 · עיגול למטבע אינו שקט > מסמן את השורה שעוגלה, ואינו מסמן את השורות שלא
+AssertionError: expected 'בצל יבש \u200f1.23 \u200f₪ מוצר קיים' to match /עוגל/
+
+- Expected:
+/עוגל/
+
++ Received:
+"בצל יבש ‏1.23 ‏₪ מוצר קיים"
+
+ ❯ src/pages/priceListSheetMatching.spec.tsx:175:41
+    173|     // 1.2345 in a two-minor-unit currency: the catalogue will hold 1.…
+    174|     // something else. `parsePrice` has always reported this; nothing …
+    175|     expect(rowFor('בצל יבש').join(' ')).toMatch(/עוגל/);
+       |                                         ^
+    176|     expect(rowFor('ריבה').join(' ')).not.toMatch(/עוגל/);
+    177|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/pages/priceListSheetMatching.spec.tsx > PL-12 · שני הפתחים אומרים לפי מה הם מתאימים > מסך העלאת המחירון מצהיר על מפתח ההתאמה שלו, כמו מסך בדיקת המסמך
+TestingLibraryElementError: Unable to find an element by: [data-testid="sheet-match-rule"]
+
+Ignored nodes: comments, script, style
+[36m<body[39m
+  [33mstyle[39m=[32m"overflow: hidden;"[39m
+[36m>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [0mמחירונים[0m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+          [36m>[39m
+            [0mהשוואת מחירי הספקים לכל מוצר, איתור התייקרויות וייבוא מחירונים חדשים.[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0m0 מחירי ספקים · 0 התייקרויות[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-upload"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 3v12"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m17 8-5-5-5 5"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m ייבוא רב־ספקים מ־Excel[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-primary"[39m
+              [33mdata-tour-anchor[39m=[32m"prices-upload"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-upload"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 3v12"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m17 8-5-5-5 5"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m העלאת מחירון[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"card overflow-hidden"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"relative flex-1 min-w-44 max-w-xs"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m21 21-4.34-4.34"[39m
+              [36m/>[39m
+              [36m<circle[39m
+                [33mcx[39m=[32m"11"[39m
+                [33mcy[39m=[32m"11"[39m
+                [33mr[39m=[32m"8"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<input[39m
+              [33maria-label[39m=[32m"חיפוש במחירונים"[39m
+              [33mclass[39m=[32m"input ps-9!"[39m
+              [33mplaceholder[39m=[32m"חיפוש..."[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<select[39m
+            [33maria-label[39m=[32m"סינון מחירונים לפי ספק"[39m
+            [33mclass[39m=[32m"input w-auto!"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m""[39m
+            [36m>[39m
+              [0mכל הספקים[0m
+            [36m</option>[39m
+          [36m</select>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"flex items-center gap-1.5 text-sm text-ink-soft"[39m
+          [36m>[39m
+            [36m<input[39m
+              [33mclass[39m=[32m"rounded"[39m
+              [33mtype[39m=[32m"checkbox"[39m
+            [36m/>[39m
+            [0mרק התייקרויות[0m
+          [36m</label>[39m
+          [36m<select[39m
+            [33maria-label[39m=[32m"חלון זמן לשינויי מחיר"[39m
+            [33mclass[39m=[32m"input w-auto!"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m""[39m
+            [36m>[39m
+              [0mבכל זמן[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"7"[39m
+            [36m>[39m
+              [0m7 הימים האחרונים[0m
+            [36m</option>[39m
+            [36...
+
+Ignored nodes: comments, script, style
+[36m<body[39m
+  [33mstyle[39m=[32m"overflow: hidden;"[39m
+[36m>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [0mמחירונים[0m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+          [36m>[39m
+            [0mהשוואת מחירי הספקים לכל מוצר, איתור התייקרויות וייבוא מחירונים חדשים.[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0m0 מחירי ספקים · 0 התייקרויות[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-upload"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 3v12"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m17 8-5-5-5 5"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m ייבוא רב־ספקים מ־Excel[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-primary"[39m
+              [33mdata-tour-anchor[39m=[32m"prices-upload"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-upload"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 3v12"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m17 8-5-5-5 5"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m העלאת מחירון[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"card overflow-hidden"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"relative flex-1 min-w-44 max-w-xs"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m21 21-4.34-4.34"[39m
+              [36m/>[39m
+              [36m<circle[39m
+                [33mcx[39m=[32m"11"[39m
+                [33mcy[39m=[32m"11"[39m
+                [33mr[39m=[32m"8"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<input[39m
+              [33maria-label[39m=[32m"חיפוש במחירונים"[39m
+              [33mclass[39m=[32m"input ps-9!"[39m
+              [33mplaceholder[39m=[32m"חיפוש..."[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<select[39m
+            [33maria-label[39m=[32m"סינון מחירונים לפי ספק"[39m
+            [33mclass[39m=[32m"input w-auto!"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m""[39m
+            [36m>[39m
+              [0mכל הספקים[0m
+            [36m</option>[39m
+          [36m</select>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"flex items-center gap-1.5 text-sm text-ink-soft"[39m
+          [36m>[39m
+            [36m<input[39m
+              [33mclass[39m=[32m"rounded"[39m
+              [33mtype[39m=[32m"checkbox"[39m
+            [36m/>[39m
+            [0mרק התייקרויות[0m
+          [36m</label>[39m
+          [36m<select[39m
+            [33maria-label[39m=[32m"חלון זמן לשינויי מחיר"[39m
+            [33mclass[39m=[32m"input w-auto!"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m""[39m
+            [36m>[39m
+              [0mבכל זמן[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"7"[39m
+            [36m>[39m
+              [0m7 הימים האחרונים[0m
+            [36m</option>[39m
+            [36...
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/priceListSheetMatching.spec.tsx:186:31
+    184|     // The other door already prints "…לפי מק״ט או ברקוד; שם מוצר לעול…
+    185|     // This one said nothing at all, so two counts for one file looked…
+    186|     const rule = await screen.findByTestId('sheet-match-rule');
+       |                               ^
+    187|     expect(rule).toHaveTextContent(/שם/);
+    188|     expect(rule).toHaveTextContent(/מק״ט|ברקוד/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 1 passed (5)
+   Start at  17:21:44
+   Duration  8.78s (transform 1.09s, setup 633ms, import 2.22s, tests 4.16s, environment 1.47s)
+
