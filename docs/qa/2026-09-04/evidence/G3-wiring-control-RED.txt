@@ -1,0 +1,19 @@
+29:  ✓ stranding one key while wiring another is caught (total unchanged)
+30-  ✓ a call site that is commented out rather than deleted is caught
+31-  ✓ the real dictionary still passes
+32-
+33-check:renumber-closure (map mode)
+34-  ✓ a completed move passes, and the number it moved TO is not banned elsewhere
+35-  ✓ a move whose innards still carry the old number is caught
+--
+72:wiring
+73-  ✓ all 12 guards reachable from package.json and build.yml
+74-  ✗ every `verify` sub-command has a build.yml step
+75-      no build.yml step: check:contrast
+76-
+77-check:exemptions
+78-  ✓ a migration that skips the A1/A3/A5 re-assert is caught
+  ✓ an exemption added without moving the pin is caught
+  ✓ the real migration set passes
+
+check:gate-controls passed: 49 controls, every guard failed exactly when it should.

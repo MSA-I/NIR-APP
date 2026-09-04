@@ -112,16 +112,17 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   (‏88), ‏`Invoke-PriceListEdgeSmoke`, ‏`Invoke-OcrEdgeSmoke` ו-`check-p4-integrated-journey.cjs`.
   אלה קשורים ל-PowerShell של Windows ורצים רק בריצה הידנית. **תיק ירוק אינו טענה שהם עברו.**
 
-  **וגם — ‏13 מתוך 27 שומרי `npm run verify` (נמדד 01.09.2026 על `d9146bf4`).** ה-job
-  ‏`verify` ב-`build.yml` מריץ 14 תת-פקודות **בשמן** ואינו קורא `npm run verify` בשום מקום,
-  ולכן שומר שנוסף ל-`verify` בלי צעד ב-YAML פשוט אינו רץ. אלה שאינם רצים באף workflow:
-  ‏`check:typography`, ‏`check:i18n`, ‏`check:plurals`, ‏`check:orphan-keys`,
-  ‏`check:plan-labels`, ‏`check:jsx-space`, ‏`check:assistant-tool-schemas`,
-  ‏`check:anchored-replacements`, ‏`check:currency`, ‏`check:tolerance-surfaces`,
-  ‏`check:paddle-secrets`, ‏`check:appearance-scope`, ‏`check:contrast`.
-  ‏`quality-gate.yml` מריץ את **המדידה** בדפדפן (`check-contrast-rendered.mjs`) ולא את שומר
-  המניפסט. ‏**‏`check:contrast` נכשל על `main` היום** ומעולם לא עבר שם. ‏`DEBT §97`.
-  לפני מסירה: `npm run verify` מקומי הוא **הרחב** מבין השניים, לא הצר.
+  **וגם — כל 32 שומרי `npm run verify` רצים ב-CI (נמדד 04.09.2026 על עץ העבודה).** ה-job
+  `verify` ב-`build.yml` מריץ אותם **בשמן** ואינו קורא `npm run verify` בשום מקום — 18 בצעדים
+  ממוקדים, ו-14 בצעד „The guards verify runs that this workflow did not" (`build.yml:265-278`).
+  הפער ש-`DEBT §105` תיעד — 13 מ-27 שלא רצו באף workflow — **נסגר**, ו-`check:gate-controls`
+  גוזר עכשיו מ-`package.json` את הטענה „לכל תת-פקודה ב-`verify` יש צעד ב-`build.yml`", כך
+  שהפער אינו יכול להיפתח שוב בשקט: שומר שיתווסף ל-`verify` לבדו יאדים אותה במקום לרוץ בשום
+  מקום. `quality-gate.yml` מריץ את **המדידה** בדפדפן (`check-contrast-rendered.mjs`) ואילו
+  `build.yml` מריץ את שומר המניפסט — שני דברים שונים, ושניהם רצים.
+  **`check:contrast` עובר** על עץ נקי כשהוא רץ לבדו (נמדד 04.09.2026); הטענה שמעולם לא עבר
+  הייתה נכונה ב-01.09 ואינה נכונה היום. לפני מסירה `npm run verify` מקומי עדיין הוא **הרחב**
+  מבין השניים — הוא רץ בלי מסנני הנתיבים של CI.
 
   ‏`.github/workflows/build.yml` יוצר תמיד את שמות ה־checks שהגנת הענף מצפה להם, אבל מקצה runner
   רק לצרכן הרלוונטי: `build` לקלטי bundle/typecheck; ‏`verify` לקוד, tests, scripts, migrations,
@@ -133,11 +134,12 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   והמסונן לפי נתיבים. migration בלבד אינו מפעיל browser, אלא אם תוכנו משנה policy/RLS,
   ‏`user_role`, פונקציות ה־auth של ה־scope או grant/revoke ל־`authenticated`/`anon`.
 
-  **‏PR שהבסיס שלו אינו `main` מקבל אפס בדיקות, וזה נראה כמו הצלחה.** שני ה-workflows
-  מופעלים על `pull_request: branches: [main]` בלבד. ‏PR ערום על ענף של PR אחר מחזיר
-  „no checks reported" — לא build, לא verify, לא סוויטות SQL — ואין סימן אדום שיאמר זאת.
-  לענף כזה מריצים את השער במפורש — `gh workflow run quality-gate.yml --ref <branch>` — וקושרים
-  לתוצאה בהערה על ה-PR, מפני ש-`workflow_dispatch` אינו מופיע ברשימת ה-checks שלו. ‏`DEBT §65`.
+  **PR נבדק מפני שהוא PR, לא בגלל היעד שלו.** `build.yml:23` ו-`quality-gate.yml:36` נושאים
+  `pull_request:` ערום, ו-`check:workflow-triggers` מכשיל כל ניסיון להחזיר לשם
+  `branches: [main]`. PR ערום על ענף של PR אחר מקבל היום את אותם checks כמו PR ל-`main`.
+  `DEBT §65` **סגור** (נמדד 04.09.2026); מה שהוא תיעד — „no checks reported" שנקרא בדיוק כמו
+  הצלחה — אינו יכול לחזור בלי שהשומר ייפול. `workflow_dispatch` עדיין אינו מופיע ברשימת
+  ה-checks של PR, ולכן ריצה ידנית של השער הכבד עדיין מקושרת בהערה על ה-PR.
 
   **ריצה מקומית — רק כמוצא אחרון**, לניפוי כשל ש-CI כבר דיווח עליו או לעבודה על הסקריפט עצמו:
   ‏`$env:SUPPLYFLOW_ALLOW_LOCAL_QUALITY = '1'; npm run quality`. לפני כן: לעצור `npm run dev`
@@ -177,9 +179,14 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
 
   שינוי חוצה־משטחים מחבר את הדרישות; הוא אינו מחזיר אוטומטית את השער הידני המלא. ריצת
   `workflow_dispatch` היא חריג מפורש שמריץ הכול. PASS היסטורי לעולם אינו מחליף check טרי על ה־SHA.
-- מיגרציות: `scripts/db-query.ps1` (Windows) / `scripts/db-query.sh` (Linux/Mac) — שניהם רצים מול
-  **הפרויקט המרוחק** דרך Management API (`-SqlFile` + `-ProjectRef` חובה). ריצה מקומית של סוויטה או
-  מיגרציה היא `docker exec … psql` על `supabase_db_supplyflow-p0`, הדפוס של `Invoke-SqlTest`.
+- מיגרציות לייצור: **`scripts/rollout-apply.ps1`** — מחיל טווח לפי סדר, כותב את שורת
+  `supabase_migrations.schema_migrations` מיד אחרי כל apply שהצליח, מוודא בקריאה חוזרת שהשורה
+  נכתבה, ועוצר **בלי שורה** על הקובץ שנכשל (כל מה שלפניו מוחל ורשום). „להוסיף את שורת ה-ledger
+  ביד" הוא מתכון לרולאאוט חצי-מוחל — הסכימה זזה וה-ledger לא, והריצה הבאה מחילה הכול מחדש.
+  `scripts/db-query.ps1` (Windows) / `scripts/db-query.sh` (Linux/Mac) נשארים לשאילתה בודדת
+  מול **הפרויקט המרוחק** דרך Management API (`-SqlFile` + `-ProjectRef` חובה) — הם **אינם**
+  כותבים ledger. ריצה מקומית של סוויטה או מיגרציה היא `docker exec … psql` על
+  `supabase_db_supplyflow-p0`, הדפוס של `Invoke-SqlTest`.
 
 **Tailwind v4: אין `tailwind.config.js`.** טוקנים ב-`@theme` בתוך `src/index.css`. מחלקות מותאמות יכולות `@apply` רק utilities אמיתיים — לכן `btn`/`badge` רשומים כ-`@utility`.
 

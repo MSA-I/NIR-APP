@@ -249,15 +249,21 @@ jobs:
           npm run check:workflow-triggers
           npm run check:exception-labels
           npm run check:debt-numbers
-      # THIRTEEN of the 26 guards in `npm run verify` were never run by this workflow.
-      # It names sub-commands one by one rather than calling `npm run verify`, so a guard added
-      # to the npm script alone simply did not execute -- and a green `verify` check meant half
-      # the guards, not all of them. Measured 01.09.2026: 13 named here, 13 silent.
+      # WHY THIS STEP EXISTS. This workflow names `verify`'s sub-commands one by one rather than
+      # calling `npm run verify`, so a guard added to the npm script alone simply did not execute
+      # -- and a green `verify` check meant half the guards, not all of them. Measured
+      # 01.09.2026: 13 of the 27 sub-commands ran in no workflow at all.
       #
-      # One step rather than thirteen, deliberately. All thirteen together take 23 seconds, so
-      # per-guard path filters would buy nothing and would give the same gap thirteen new places
+      # Measured 04.09.2026: `verify` has 32 sub-commands and ALL 32 are named in this file --
+      # 18 in the focused steps above, the 14 below. The gap is closed, and it stays closed
+      # because check:gate-controls now derives "every `verify` sub-command has a step here"
+      # from package.json rather than from a hand-kept list, so the next guard added to `verify`
+      # alone turns that control red instead of running nowhere.
+      #
+      # One step rather than fourteen, deliberately. All fourteen together take 23 seconds, so
+      # per-guard path filters would buy nothing and would give the same gap fourteen new places
       # to reappear. The `vitest` filter is reused for the same reason: it is the existing
-      # broad code filter, and adding a fourteenth output is another thing to forget.
+      # broad code filter, and adding a fifteenth output is another thing to forget.
       - name: The guards verify runs that this workflow did not
         if: needs.changes.outputs.vitest == 'true'
         run: |
