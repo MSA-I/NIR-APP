@@ -119,7 +119,7 @@ yet; the other signal is mapped to `severity: 'warning'`, so 999,999.99 against 
 amber with a green enabled submit.
 
 - Files: a new migration (anchored patch), `src/lib/checks.ts`, the payment-request create screen.
-- Change: per D1's chosen model. **The function may not be re-declared from `0073`** — `0231`
+- Change: per ruling #350 — approval reserves, creation warns critically. **The function may not be re-declared from `0073`** — `0231`
   rewrote both `create_payment_request` and `p1_transition_payment_request` by anchored replacement
   and registered them in `private.scope_definer_enforcements` (`0231:8,175,256-266`). This is an
   anchored patch against the live body with the enforcement rows updated and the signature
@@ -155,9 +155,12 @@ legitimate act. What goes is the **contradiction**, not the capability: today an
   approve button under a panel saying approval is impossible, a refusal naming a cause that did not
   happen, and an instruction that changes nothing. Its oracle is on that screen and it gets its own
   PR.
-- Oracle: a browser scenario in the QA harness that opens `/pay` with a settled invoice in the
-  queue and asserts the balance is visible and the primary is disabled; plus a screenshot read and
-  compared, per the project rule that a visual change is not done without one.
+- Oracle: a browser scenario that opens `/pay` with a settled invoice in the queue and asserts the
+  live balance is visible, the queued request is marked settled, and **no red block claims the
+  transfer cannot be performed** — the primary stays enabled, because ruling #353 says the
+  recording is always accepted. `MON-05` measured that block on every card and then performed the
+  recording twice. A screenshot is read and compared, per the project rule that a visual change is
+  not finished without one.
 
 **A4 · `MON-04` — one bank line, two full allocations**
 
@@ -413,7 +416,8 @@ first 30 days because the intro branch returns before the override is read.
 
 `OWN-03`, `OWN-04`, `OWN-05`, `OWN-09`..`OWN-15`, `PERM-06`, `FIN-05`, `FIN-08`, `MON-08`,
 `MON-10`, `PL-03`, `PL-06`, `PL-07`, `PL-08`, `REQ-07`, `DOC-09`, `DOC-11`, `PROC-06`, `PROC-08`,
-`ASSIST-04`, `ASSIST-11`. (`OWN-12` moved to B2; `PERM-06` was missed twice and caught by the
+`ASSIST-04`, `DOC-12`. (`ASSIST-11` is **not** here — the report withdrew it. `DOC-12` is, because
+its own record carries an acceptance criterion.) (`OWN-12` moved to B2; `PERM-06` was missed twice and caught by the
 ledger's own completeness check.)
 
 ---
@@ -490,10 +494,10 @@ Stacked PRs are checked normally — `build.yml:23` carries a bare `pull_request
 |---|---|---|
 | 0 | isolation: base SHA, worktree, branch, staging allowlist | P1, P2 |
 | 1 | offboarding step-up, and the sentence for an owner with no password | `OWN-01`, `RTL-A11Y-01` |
-| 2 | receipt conflict re-read and its three neighbours | `PROC-01`, `PROC-03`, `PROC-04`, `PROC-07` |
-| 3 | entrance: dead rate-limit message, no-404, invite refusal | `ENTRY-07`, `ENTRY-10`, `PERM-04`, `ENTRY-11` |
-| 4 | entrance: the two oracles recorded as debt, not closed | `ENTRY-01`, `ENTRY-03`, `ENTRY-04`, `ENTRY-09` |
-| 5 | settings boundary, phase 1 — the client stops asking | `PERM-01` (part) |
+| 2 | entrance: dead rate-limit message, no-404, invite refusal | `ENTRY-07`, `ENTRY-10`, `PERM-04`, `ENTRY-11` |
+| 3 | entrance: the debt record ruling #352 asks for — **closes nothing**, and the ledger keeps these BLOCKED | records `ENTRY-01`, `ENTRY-03`, `ENTRY-04`, `ENTRY-09` |
+| 4 | receipt conflict re-read and its three neighbours | `PROC-01`, `PROC-03`, `PROC-04`, `PROC-07` |
+| 5 | settings boundary, phase 1 — the client stops asking for what it must not receive | closes nothing on its own; the finding closes with PR 6 |
 | 6 | settings boundary, phase 2 — revoke, re-grant, guard | `PERM-01` |
 | 7 | committed-amount guard at approval | `MON-01`, `REQ-02`, `REQ-03`, `REQ-05` |
 | 8 | `/pay` stops contradicting itself | `FIN-03`, `FIN-10`, `MON-05` |
@@ -501,7 +505,8 @@ Stacked PRs are checked normally — `build.yml:23` carries a bare `pull_request
 | 10 | `/payment-requests` approval refusal | `REQ-01` |
 | 11 | bank allocation trigger | `MON-04` |
 | 12 | manual price editor uses the parser | `PROC-02` |
-| 13 | audit read-model scope; `PERM-03`/`PERM-05` diagnosis only | `PERM-02` |
+| 13 | audit read-model scope | `PERM-02` |
+| 13a | **measure first**: `EXPLAIN (ANALYZE, BUFFERS)` on the owner's read, and tie each `password_changed` row back to one Auth request. `p4_flags_identity.sql:1025` and the rollout log may already explain both | `PERM-03`, `PERM-05` |
 | 14 | supplier balance role predicate | `MON-03`, `FIN-04`, `FIN-07` |
 | 15 | the credits a definer counts and the reader cannot show | `MON-06` |
 | 16 | multi-supplier import: skipped rows, source row numbers, partial import, paging | `PL-01`, `PL-02`, `PL-10` |
@@ -519,7 +524,8 @@ Stacked PRs are checked normally — `build.yml:23` carries a bare `pull_request
 | 28 | credits: one answer to "are there open credits" | `FIN-01`, `FIN-02`, `FIN-06`, `FIN-09`, `MON-02`, `MON-09` |
 | 29 | proposals and receipts become discoverable | `REQ-04`, `REQ-06` |
 | 30 | assistant citations that match their claim | `ASSIST-06`, `ASSIST-07`, `ASSIST-09` |
-| 31 | the month that travels | `DASH-07`, `DASH-08`, `EXP-02` |
+| 31 | the month that travels | `DASH-08`, `EXP-02` |
+| 31a | **measure first**: why every cost column on the products report is empty. Its own record says a database check is needed, so no oracle can be written before it | `DASH-07` |
 | 32 | one empty-cell rule, one window header, per-currency sections | `EXP-01`, `EXP-03`, `EXP-05`, `EXP-06` |
 | 33 | export provenance and naming | `EXP-04`, `EXP-07`, `EXP-08`, `EXP-09`, `EXP-10` |
 | 34 | bidi file names: tighten the guard, add the rendered check | `DOC-07`, `RTL-A11Y-08`, `DOC-10` |
@@ -532,10 +538,17 @@ Stacked PRs are checked normally — `build.yml:23` carries a bare `pull_request
 | 41 | the audit ledger stops dropping history | `OWN-11`, `OWN-04`, `OWN-05`, `PERM-06` |
 | 42 | settings bounds, tolerance shape, the wizard's first button | `OWN-09`, `OWN-13`, `OWN-14` |
 | 43 | refusals that arrive as HTTP 500 | `REQ-07`, `DOC-09`, `DOC-11`, `PROC-06`, `PROC-08` |
-| 44 | the remaining money-shape details | `FIN-08`, `MON-08`, `MON-10`, `ASSIST-04`, `DOC-12` |
+| 44 | the bank un-match reason the client defeats with a placeholder | `FIN-08`, `MON-08` |
+| 45 | the currency printed twice on one label | `MON-10` |
+| 46 | a suggested question the asking role cannot have answered | `ASSIST-04` |
+| 47 | the goods-receipt route nothing links to | `DOC-12` |
 
-Forty-four PRs, and every one of the 138 actionable ids appears in exactly one of them — checked
-the same way the wave placement is. "17.. the remainder" is not a plan and is gone.
+Forty-eight PRs. Every one of the 138 actionable ids appears in the `closes` column of exactly
+one — checked the same way the wave placement is. Two rows deliberately close nothing and say so:
+PR 3 records the entrance oracles as debt because ruling #352 says they are not closed now, and
+PR 5 is the client half of a two-phase boundary whose finding closes only when PR 6 lands. PR 31a
+exists because `DASH-07` has no root cause yet and a PR that pretends otherwise is worse than one
+that says "measure this first". There is no remainder row.
 
 ## 6. Not repository code
 
@@ -561,9 +574,12 @@ Measured against HEAD, not remembered. Correcting it is part of this work.
 1. `DEBT §65` is closed — `build.yml:23` has a bare `pull_request:` and a guard.
 2. `npm run verify` is **32** sub-commands and `build.yml:265-278` runs **fourteen** of them by
    name — an earlier draft of this very correction said thirteen, off by one, which is precisely
-   the error it was written to correct. The guards debt is **§105**, not §97 — §97 is
-   `my_entitlements()`. And `check:contrast` **passes** when run alone on a clean tree, which
-   replaces the claim that it never has; its log path is recorded under gate G2.
+   the error it was written to correct. The stale count is not only in `CLAUDE.md`:
+   `build.yml:252-255` still says "THIRTEEN of the 26 guards … 13 named here, 13 silent" directly
+   above the fourteen it now runs, so **the workflow's own comment is corrected in the same PR**.
+   The guards debt is **§105**, not §97 — §97 is `my_entitlements()`. And `check:contrast`
+   **passes** when run alone on a clean tree, which replaces the claim that it never has; its log
+   path is recorded under gate G2.
 3. `check:contrast` **passes** on a clean tree, run alone. The claim that it never has is wrong.
 4. Migrations reach production through `scripts/rollout-apply.ps1`, which applies, writes the
    ledger row and verifies as one sequence and stops without a row on failure. "Add the ledger row
@@ -571,7 +587,8 @@ Measured against HEAD, not remembered. Correcting it is part of this work.
 
 ## 8. Out of scope
 
-- The 9 findings that are not defects.
+- The eight findings that are not defects, listed in full at the end of `docs/GATES.md`. `PL-10`
+  and `DOC-12` were on that list in an earlier draft and are not on it now: both are real defects.
 - Rewriting the OCR engine — extraction was measured accurate on every field of three documents;
   every defect is downstream of it.
 - `worker/ocr` and `worker/render`, unless a group changes a gateway contract version — in which

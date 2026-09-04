@@ -1,0 +1,93 @@
+[
+  {
+    "id": "PERM-01",
+    "severity": "high",
+    "kind": "KNOWN",
+    "area": "trust boundary / settings",
+    "route": "/settings",
+    "role": "office, accountant",
+    "title": "The /settings refusal is cosmetic: every row the screen displays is served to office and accountant by the API, including colleague phone numbers and personal backup e-mail addresses",
+    "evidence": "out/permissions/settings-data.json + out/permissions/ui-matrix.json. UI: office and accountant are silently redirected /settings -> /dashboard (screenshots ui-office-_settings.png, ui-accountant-_settings.png). API, same session, own session token: `GET /rest/v1/profiles?select=*&limit=10` returns HTTP 200 with 6 rows for ALL THREE roles, columns id,org_id,full_name,role,phone,active,created_at,supplier_id,locale,backup_email,theme. `GET /rest/v1/organizations?select=*` returns HTTP 200, 1 row, columns id,name,vat_rate,settings,created_at,status,trial_ends_at,logo_path,logo_updated_at,base_currency,country_code,onboarding_completed_at — for all three roles. `org_flag_configurations?select=*` 3 rows and `org_autonomy_policies?select=*` 4 rows, also all three roles. Those are exactly the two tabs of the owner-only Settings screen (Settings.tsx reads profiles, organizations, invitations). Contrast: `GET /rest/v1/suppliers?select=*` returns HTTP 403 42501 'permission denied for table suppliers' for all three roles — the repo already applies column-level protection to suppliers.bank_details and does not apply it to profiles.phone / profiles.backup_email.",
+    "repro": "Sign in as office. Navigate to /settings — you land on /dashboard. From the same page, with the session's own token, request /rest/v1/profiles?select=*&limit=10 and /rest/v1/organizations?select=*. Both return 200 with full rows.",
+    "expected": "A role refused the screen receives an empty list, a column-limited row, or an error from the endpoints behind it — the same way office receives 0 rows from /rest/v1/payments.",
+    "actual": "office and accountant receive the complete contents of the owner-only screen, including a colleague's phone number and backup (account-recovery) e-mail address. Within-tenant only — no cross-tenant leakage was observed. `profiles_select` was last written in migration 0133, so this is pre-existing code and not shipped by this deploy; I could not confirm whether it is already in the 200-finding baseline."
+  },
+  {
+    "id": "PERM-02",
+    "severity": "medium",
+    "kind": "NEW",
+    "area": "audit / migration 0293",
+    "route": "REST /rest/v1/audit_log_read_model?action=eq.password_changed",
+    "role": "accountant",
+    "title": "0293's password-change audit rows are readable by the accountant, who is the subject of none of them and has no audit screen in the product",
+    "evidence": "out/permissions/writes-and-audit.json. As accountant: HTTP 200, 2 rows, both action=password_changed, user_id=273d686e-f15e-4af7-a4ee-d21269e5b6a0, reason='הסיסמה של המשתמש הוחלפה', created_at 2026-09-03T21:42:57.546511Z and 2026-09-03T21:42:58.985191Z. `profiles?select=id,role` in the same session shows 273d686e-... is the OWNER (accountant is 4ca9a395-...). office receives HTTP 200 with 0 rows on the identical query, so the policy does discriminate. The only audit screen in the product is /supplier-log, which is owner-only (App.tsx: Guard roles={['owner']}); the accountant is redirected from it (out/permissions/ui-matrix.json) yet reads the rows behind it directly.",
+    "repro": "Sign in as accountant. GET /rest/v1/audit_log_read_model?action=eq.password_changed&select=id,user_id,reason,created_at with the session's own token.",
+    "expected": "Identity/security events about another user are readable by the owner (and the subject), not by a peer role that the product gives no audit surface at all.",
+    "actual": "The accountant can enumerate when the owner's password was changed, to the microsecond. Migration 0293 shipped in this deploy and created this row class; the audit_select policy (0175) already granted the accountant cross_scope/organization_identity_platform rows, so the deploy widened what that grant reaches without changing the grant."
+  },
+  {
+    "id": "PERM-03",
+    "severity": "medium",
+    "kind": "NEW",
+    "area": "audit / availability",
+    "route": "REST /rest/v1/audit_log_read_model?action=eq.password_changed",
+    "role": "owner",
+    "title": "The owner cannot reliably read the new password-change audit rows: 2 of 3 attempts returned HTTP 500 statement timeout, while the accountant read the same 2 rows first try",
+    "evidence": "out/permissions/writes-and-audit.json (owner attempt 1: HTTP 500 {\"code\":\"57014\",\"message\":\"canceling statement due to statement timeout\"}) and out/permissions/audit-remeasure.json, measured alone with no other script of mine running: password_rows_1 = HTTP 500 after 10017 ms, password_rows_2 = HTTP 200 array(2) after 2369 ms. Baselines in the SAME session and the same second: audit_logs?select=id,action&order=created_at.desc&limit=50 = 200 in 470 ms; audit_logs?user_id=is.null&...&limit=20 = 200 in 484 ms and 347 ms. So it is not the table and it is not the session — it is this view plus this filter. audit_log_read_model is declared security_barrier=on over audit_logs (migration 0175), which blocks predicate push-down, and the owner's audit_select branch evaluates auth_scopes() sub-selects. accountant ran the identical query once and got 200 with 2 rows.",
+    "repro": "Sign in as owner. GET /rest/v1/audit_log_read_model?action=eq.password_changed&select=id,user_id,reason,created_at&limit=10 with the session's own token. Repeat.",
+    "expected": "The owner — the one role the product intends to audit with — reads their own tenant's audit rows without a statement timeout.",
+    "actual": "Roughly two thirds of attempts return HTTP 500 at the 10 s statement limit. The /supplier-log screen itself still renders (15 rows, 344 updates) because it does not filter on `action`; the failure only appears once you filter, which is what any password-change or security review would do."
+  },
+  {
+    "id": "PERM-04",
+    "severity": "low",
+    "kind": "KNOWN",
+    "area": "trust boundary / router",
+    "route": "/no-such-screen, /admin, /admin/*, /operator",
+    "role": "owner, office, accountant",
+    "title": "There is no 404: every unknown or refused path silently lands on the dashboard with no message",
+    "evidence": "out/permissions/ui-matrix.json and out/permissions/ui-owner-_no_such_screen.png. /no-such-screen -> /dashboard for all three roles, page renders the normal dashboard, no banner, no toast, no 'not found'. The same silent bounce covers /admin, /admin/customers, /admin/users, /admin/team, /admin/platform, /admin/signups, /admin/funnel, /admin/autonomy for all three roles (App.tsx: <Route path=\"*\" element={<Navigate to=\"/\" replace />} />), and /operator (OperatorRoutes.tsx PlatformGuard -> DocumentRedirect to '/'). A user who mistypes or follows a stale link cannot tell a typo from a permission refusal from a deleted screen.",
+    "repro": "Sign in as any role, navigate to https://app.inplace.digital/no-such-screen.",
+    "expected": "A proper 404 screen, and a distinct refusal message for a route that exists but is not permitted.",
+    "actual": "Silent redirect to the role's home screen in every case. Router-level behaviour that predates this deploy; reported because it is an explicit row on this agent's map."
+  },
+  {
+    "id": "PERM-05",
+    "severity": "low",
+    "kind": "NEW",
+    "area": "audit / migration 0293",
+    "route": "REST /rest/v1/audit_log_read_model?action=eq.password_changed",
+    "role": "owner, accountant",
+    "title": "Two password_changed audit rows 1.4 s apart for the same user — either the deploy set the password twice or the 0293 trigger fires twice for one change",
+    "evidence": "out/permissions/writes-and-audit.json: id 85413c21-2c01-478d-9160-ad83ad1d94ef at 2026-09-03T21:42:57.546511Z and id 4f4d5bc8-3fe4-485d-a25b-3fe2dc138aac at 2026-09-03T21:42:58.985191Z, both action=password_changed, both user_id=273d686e-... (the owner), both reason='הסיסמה של המשתמש הוחלפה'. Those are the only two password_changed rows in the tenant.",
+    "repro": "Read the two rows above as owner or accountant.",
+    "expected": "One audit row per password change. An audit log that says a password changed twice when it changed once is not a record of what happened.",
+    "actual": "Two rows, 1.439 s apart. I cannot tell from inside the product whether the deploy genuinely wrote the password twice or the trigger double-fired — this needs the 2026-09-03 21:42 deploy log to settle. Reported as an observation with the exact ids so it can be settled, not as a proven defect."
+  },
+  {
+    "id": "PERM-06",
+    "severity": "low",
+    "kind": "KNOWN",
+    "area": "audit / reason discipline",
+    "route": "/supplier-log",
+    "role": "owner",
+    "title": "Price changes are audited without a reason: 24 of the 25 most recent reason-less audit rows are supplier_products updates and price_history inserts",
+    "evidence": "out/permissions/audit-remeasure.json, query audit_logs?reason=is.null&created_at=gte.2026-09-03&order=created_at.desc&limit=25 as owner: 12 x update|supplier_products, 12 x insert|price_history, 1 x update|documents, all between 2026-09-03T22:52:11Z and 2026-09-03T22:59:45Z, the 12 pairs sharing a created_at to the microsecond (one bulk statement, i.e. the price-list import path, not per-row set_supplier_product_price calls, which do pass p_reason). Screenshot out/permissions/audit-owner-supplier-log.png shows the consequence on the owner's only audit screen: the subtitle promises 'מי שינה … ומאיזו סיבה' and 8 of the 9 visible price rows print 'לא נרשמה סיבה'.",
+    "repro": "Sign in as owner, open /supplier-log, read the סיבה column for rows of type מחירון.",
+    "expected": "Per the project constitution, a sensitive action is recorded in audit_logs WITH a reason; a price change is a sensitive action.",
+    "actual": "The bulk import path writes row-level trigger audit rows with reason NULL. Downgraded to low because the screen names the state honestly ('לא נרשמה סיבה') rather than blanking it, and because the row-level trigger mechanism predates this deploy."
+  },
+  {
+    "id": "PERM-R1",
+    "severity": "low",
+    "kind": "NEW",
+    "area": "retraction",
+    "route": "/admin, /admin/customers",
+    "role": "office",
+    "title": "RETRACTED — the 'לא ניתן לטעון את החשבון' card office saw at /admin was transient, not a defect",
+    "evidence": "First pass (out/permissions/ui-office-_admin.png, 2026-09-04 01:42) showed office landing on '/' with the profile-load-timeout card 'לא ניתן לטעון את החשבון / טעינת פרטי החשבון נמשכה זמן רב מדי' instead of the normal bounce. Re-measured three times in a later session (out/permissions/retry-office-admin-1..3.png, and writes-and-audit.json office_admin_retry_1..3): 3 of 3 landed cleanly on /dashboard with the normal dashboard content. Two other agents were working the same tenant during the first pass.",
+    "repro": "n/a — could not be reproduced.",
+    "expected": "n/a",
+    "actual": "Retracted. Recorded so the next round does not re-hunt it. Note that the app's answer to a slow profile load is a card that offers only 'ניסיון חוזר' and 'התנתקות' — if it ever does reproduce, that is where to look."
+  }
+]
