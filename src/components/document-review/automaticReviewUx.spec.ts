@@ -29,7 +29,11 @@ describe('automatic document review UX', () => {
   });
 
   it('opens every price-list row from one summary-level details control', () => {
-    expect(priceListReview).toContain('data-testid="price-list-details-toggle"');
+    // The control changed on 04.09.2026 and the contract did not. There is still exactly ONE
+    // summary-level door into the per-line grid — it is now the button that names the lines waiting
+    // behind it rather than a generic "פרטים נוספים", and it is offered only while such lines exist.
+    expect(priceListReview).toContain('data-testid="price-list-show-unmatched"');
+    expect(priceListReview).not.toContain('data-testid="price-list-details-toggle"');
     expect(priceListReview).toContain('aria-controls="price-list-line-details"');
     expect(priceListReview).toMatch(/detailsOpen && lineItems\.length > 0[\s\S]*?Object\.entries\(item\.values\)/);
     expect(priceListReview).not.toContain('<details');

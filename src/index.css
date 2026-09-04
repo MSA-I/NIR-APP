@@ -2027,6 +2027,27 @@ html[dir='rtl'] { --knob: -1; }
 @keyframes split-bar-reveal { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0 0 0 0); } }
 .split-bar { animation: split-bar-reveal 0.5s ease-out 0.3s both; }
 
+/* The document-processing bar. Indeterminate ON PURPOSE, and the only place in this application
+   where that is allowed (owner ruling 04.09.2026, from a live phone screenshot: the strip is to be
+   "פרוגרס בר שנע כל הזמן, אנימציית טעינה, ומלל שמתחלף"). It is not a claim about how far the
+   work has come — the sentence beside it carries that, including the page or chunk counter when
+   the server has one. It claims one thing only, and the thing is true: work is in flight. It is
+   mounted exclusively while a job is queued, being read or being interpreted, so it cannot outlive
+   the state it stands for; a stopped, failed or finished document renders no bar at all.
+
+   The sweep runs on `inset-inline-start`, not on `transform`, because a physical translate would
+   run left-to-right against an RTL document. Under reduced motion it SLOWS rather than stops, the
+   same ruling `.animate-spin` already carries: a still bar over live work is the false claim. */
+@keyframes processing-sweep {
+  from { inset-inline-start: -45%; }
+  to { inset-inline-start: 100%; }
+}
+.processing-track { @apply relative h-1.5 w-full overflow-hidden rounded-full bg-line-soft; }
+.processing-track > span {
+  @apply absolute inset-y-0 w-2/5 rounded-full bg-action;
+  animation: processing-sweep 1.5s ease-in-out infinite;
+}
+
 /* The navigation stays scrollable when its content exceeds the viewport, but the operating-system
    track is visual noise inside the fixed sidebar. Scope this narrowly: tables and page content keep
    their native scrollbars as an overflow affordance. */
@@ -2241,6 +2262,7 @@ html[dir='rtl'] { --knob: -1; }
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
   .animate-spin { animation-duration: 1.5s; }
+  .processing-track > span { animation-duration: 4s; }
 
   .btn-primary, .btn-secondary, .btn-danger, .btn-ghost, .card-link-hover {
     transition-duration: 0.01ms !important;

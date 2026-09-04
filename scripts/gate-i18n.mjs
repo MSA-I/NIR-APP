@@ -54,7 +54,6 @@ const EXTRACTED = [
   'src/components/document-review/DocumentReviewWorkspace.tsx',
   'src/pages/SupplierLog.tsx',
   'src/pages/Invoices.tsx',
-  'src/components/document-review/PriceListAutomationReadiness.tsx',
   'src/components/document-review/DocumentScanPreview.tsx',
   'src/components/assistant/AnswerView.tsx',
   'src/components/WhatsAppConnectionCard.tsx',

@@ -2,11 +2,17 @@
 // 523, 614, 615 and 746 seconds to be claimed and the screen called all of it "בעיבוד", so a
 // document that was simply behind a busy queue looked identical to a broken upload.
 //
-// Two things are asserted here and neither is cosmetic: that queue time and read time are
-// different steps, and that a page counter appears ONLY when the server actually reported one.
-// The second is the constitution's rule about invented values, applied to a progress bar — an
-// empty bar at 0% is a claim that no page is done, which is not the same fact as "nobody has
-// reported yet", and it is the one a person watching would act on.
+// Three things are asserted here and none is cosmetic.
+//
+// (1) Queue time and read time are different steps, and the sentence says which one is running.
+// (2) A counter appears ONLY when the server actually reported one — the constitution's rule about
+//     invented values, applied to a progress indicator. "0 מתוך 0" is a claim that no page is done,
+//     which is not the same fact as "nobody has reported yet", and it is the one a person watching
+//     would act on.
+// (3) The sweeping bar appears ONLY while work is genuinely in flight. This is the load-bearing one
+//     after the 04.09.2026 rebuild: the bar no longer measures anything, so the only claim it can
+//     still make is "something is happening" — and a stopped, failed, stuck or finished job renders
+//     no bar at all rather than animating over a process that is not running.
 
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -61,11 +67,12 @@ function snapshot(job: JobOverrides | null, extra: Partial<ReviewSnapshot> = {})
   } as ReviewSnapshot;
 }
 
-/** The `<li>` carrying aria-current, whatever markup sits between it and the label. */
-function currentStepLabel(): string {
-  const marked = document.querySelector('li[aria-current="step"]');
-  return marked?.textContent ?? '';
+/** The one live sentence, whatever markup sits between the container and the words. */
+function sentence(): string {
+  return screen.queryByTestId('document-processing-progress')?.textContent ?? '';
 }
+
+const sweepingBar = () => document.querySelector('.processing-track');
 
 describe('רצועת שלבי העיבוד', () => {
   it('מפרידה המתנה בתור מקריאה בפועל', () => {
@@ -73,29 +80,34 @@ describe('רצועת שלבי העיבוד', () => {
       snapshot={snapshot({ status: 'queued', queue_age_seconds: 523 })}
       now={NOW}
     />);
-    expect(currentStepLabel()).toContain('ממתין בתור');
+    expect(screen.getByTestId('document-processing-progress')).toHaveAttribute('data-step', 'queued');
+    expect(sentence()).toContain('ממתין בתור');
     // The measured wait, and nothing about the worker pool it is waiting on: "לעובד פנוי" named a
     // process the reader cannot see, next to a step already labelled "ממתין בתור".
-    expect(screen.getByText(/ממתין 8 דק׳\. העבודה תתחיל מעצמה\./)).toBeTruthy();
+    expect(sentence()).toContain('ממתין 8 דק׳. העבודה תתחיל מעצמה.');
     expect(document.body.textContent).not.toContain('עובד פנוי');
-    // The queue is not the work, so nothing here may look like measured progress.
-    expect(screen.queryByRole('progressbar')).toBeNull();
   });
 
-  // Owner ruling 25.08.2026, from a phone screenshot of the live site: "this doesn't look like the
-  // app — not the design and not the colours". The active disc was `info` (sky), and DESIGN.md gives
-  // sky exactly one meaning — the ball is with an outside party. A document being read is the system
-  // working. The oceanic action colour is the same mark the setup wizard puts on its active step, so
-  // the two steppers in the product now speak one language. Pinned here because a colour that means
-  // the wrong thing reads as correct to everyone who did not write the rule.
-  it('הצעד הפעיל לובש את צבע הפעולה של המערכת ולא את גוון „מידע”', () => {
+  /**
+   * The whole 04.09.2026 ruling, as one assertion: "צריך להיות רק פרוגרס בר ואנימציית טעינה — ללא
+   * עיגולי מלל וללא פרוגרס בר נוסף מתחת". The screen carried a step-counting bar AND four labelled
+   * discs AND a sentence, three instruments for one fact. What is left is one sweeping bar, one
+   * spinner and one sentence — and the discs may not come back.
+   */
+  it('מציגה בר אחד שנע, ספינר, ומשפט אחד — בלי עיגולי שלבים ובלי בר שני', () => {
     render(<DocumentProcessingProgress
-      snapshot={snapshot({ status: 'leased', attempt_count: 1 })}
+      snapshot={snapshot({ status: 'leased', attempt_count: 1, progress_done: 7, progress_total: 27 })}
       now={NOW}
     />);
-    const marker = document.querySelector('li[aria-current="step"] span span');
-    expect(marker?.className).toContain('bg-action');
-    expect(marker?.className).not.toContain('bg-info-solid');
+    expect(document.querySelectorAll('.processing-track')).toHaveLength(1);
+    expect(document.querySelector('.animate-spin')).toBeTruthy();
+    expect(document.querySelectorAll('li[aria-current="step"]')).toHaveLength(0);
+    expect(document.querySelectorAll('ol')).toHaveLength(0);
+    // Indeterminate by construction: it measures nothing, so it must not pose as a measurement.
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(sweepingBar()).toHaveAttribute('aria-hidden', 'true');
+    // One live region, so a screen reader hears the change once.
+    expect(document.querySelectorAll('[aria-live]')).toHaveLength(1);
   });
 
   it('מציגה מונה עמודים אמיתי בזמן קריאה', () => {
@@ -103,15 +115,12 @@ describe('רצועת שלבי העיבוד', () => {
       snapshot={snapshot({ status: 'leased', attempt_count: 1, progress_done: 7, progress_total: 27 })}
       now={NOW}
     />);
-    expect(currentStepLabel()).toContain('קריאת המסמך');
-    const bar = screen.getByRole('progressbar');
-    expect(bar.getAttribute('aria-valuenow')).toBe('7');
-    expect(bar.getAttribute('aria-valuemax')).toBe('27');
-    expect(bar.getAttribute('aria-valuetext')).toBe('עמוד 7 מתוך 27');
-    // The bar REPLACES the count, it does not sit under a copy of it (owner ruling 25.08.2026).
-    // The words are still delivered — as the bar's `aria-valuetext`, asserted above — so a screen
-    // reader loses nothing while the screen stops saying the same thing twice.
-    expect(screen.queryByText('עמוד 7 מתוך 27')).toBeNull();
+    // The counter is BACK in the words, and that is the point of the rebuild rather than a
+    // regression of owner ruling 25.08.2026: that ruling forbade printing the count twice while a
+    // determinate bar was also drawing it. The bar draws nothing now, so the sentence must.
+    expect(screen.getByTestId('document-processing-progress')).toHaveAttribute('data-step', 'reading');
+    expect(sentence()).toContain('קריאת המסמך');
+    expect(sentence()).toContain('עמוד 7 מתוך 27');
   });
 
   it('resolves the same measured reading stage in English', () => {
@@ -123,21 +132,23 @@ describe('רצועת שלבי העיבוד', () => {
         />
       </LocaleProvider>,
     );
-    expect(currentStepLabel()).toContain('Reading the document');
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'Page 7 of 27');
+    expect(sentence()).toContain('Reading the document');
+    expect(sentence()).toContain('Page 7 of 27');
     expect(document.body.textContent).not.toContain('קריאת המסמך');
   });
 
-  it('לא ממציאה בר כשהעובד עדיין לא דיווח עמודים', () => {
+  it('לא ממציאה מונה כשהעובד עדיין לא דיווח עמודים', () => {
     render(<DocumentProcessingProgress
       snapshot={snapshot({ status: 'leased', attempt_count: 1, progress_done: null, progress_total: null })}
       now={NOW}
     />);
-    expect(currentStepLabel()).toContain('קריאת המסמך');
-    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(sentence()).toContain('קריאת המסמך');
     // Still says the count is missing — DESIGN.md §5 requires it rather than silence. What went is
     // the telemetry framing: "טרם דווח" is a field nobody reported, "עדיין לא ידוע" is the fact.
-    expect(screen.getByText('מספר העמודים עדיין לא ידוע.')).toBeTruthy();
+    expect(sentence()).toContain('מספר העמודים עדיין לא ידוע.');
+    expect(sentence()).not.toContain('מתוך');
+    // The bar keeps moving even with no count: the work is running, which is all it ever claimed.
+    expect(sweepingBar()).toBeTruthy();
   });
 
   it('מציגה מונה מקטעים אמיתי בזמן פירוש', () => {
@@ -147,31 +158,29 @@ describe('רצועת שלבי העיבוד', () => {
       snapshot={snapshot({ status: 'interpreting', attempt_count: 1, progress_done: 2, progress_total: 4 })}
       now={NOW}
     />);
-    expect(currentStepLabel()).toContain('פירוש הנתונים');
-    const bar = screen.getByRole('progressbar');
-    expect(bar.getAttribute('aria-valuenow')).toBe('2');
-    expect(bar.getAttribute('aria-valuetext')).toBe('מקטע 2 מתוך 4');
-    expect(screen.queryByText(/מקטע 2 מתוך 4/)).toBeNull();
+    expect(screen.getByTestId('document-processing-progress')).toHaveAttribute('data-step', 'interpreting');
+    expect(sentence()).toContain('פירוש הנתונים');
+    expect(sentence()).toContain('מקטע 2 מתוך 4');
   });
 
-  it('לא ממציאה בר פירוש כשהשרת לא דיווח מקטעים', () => {
+  it('לא ממציאה מונה פירוש כשהשרת לא דיווח מקטעים', () => {
     render(<DocumentProcessingProgress
       snapshot={snapshot({ status: 'interpreting', attempt_count: 1, progress_done: null, progress_total: null })}
       now={NOW}
     />);
-    expect(currentStepLabel()).toContain('פירוש הנתונים');
-    expect(screen.queryByRole('progressbar')).toBeNull();
-    // The line under the strip may not be the step label again. "הנתונים מתפרשים לשדות ולשורות"
-    // was "פירוש הנתונים" a second time; the missing segment count is the fact it did not carry.
-    expect(screen.getByText('מספר המקטעים עדיין לא ידוע.')).toBeTruthy();
+    expect(sentence()).toContain('פירוש הנתונים');
+    // The detail may not be the step label again. "הנתונים מתפרשים לשדות ולשורות" was
+    // "פירוש הנתונים" a second time; the missing segment count is the fact it did not carry.
+    expect(sentence()).toContain('מספר המקטעים עדיין לא ידוע.');
     expect(document.body.textContent).not.toContain('מתפרשים לשדות ולשורות');
   });
 
-  it('לא מציגה בר התקדמות לג׳וב תקוע', () => {
+  it('אינה מציגה דבר לג׳וב תקוע', () => {
     // Caught by the first screenshot of the real screen: the badge said "עיבוד תקוע" while the bar
     // underneath it went on implying live progress on page 7 of 27. Two claims about one job, and
-    // the reassuring one was the false one.
-    render(<DocumentProcessingProgress
+    // the reassuring one was the false one. A bar that now only means "work is running" has exactly
+    // one honest rendering for a stopped job, and this is it.
+    const { container } = render(<DocumentProcessingProgress
       snapshot={snapshot({
         status: 'leased',
         attempt_count: 1,
@@ -182,30 +191,27 @@ describe('רצועת שלבי העיבוד', () => {
       })}
       now={NOW}
     />);
-    expect(screen.queryByRole('progressbar')).toBeNull();
-    expect(screen.queryByText('עמוד 7 מתוך 27')).toBeNull();
-    expect(currentStepLabel()).toContain('קריאת המסמך');
-    expect(screen.getByText('— השלב שנעצר', { exact: false })).toBeTruthy();
+    expect(container.textContent).toBe('');
+    expect(sweepingBar()).toBeNull();
   });
 
-  it('מסמנת את שלב הפירוש כשנכשל אחרי שהחילוץ הצליח', () => {
+  it('אינה מציגה דבר לג׳וב שנכשל', () => {
     const withExtraction = snapshot(
       { status: 'failed', attempt_count: 1, last_error_code: 'provider_timeout' },
       { extraction: { id: 'extraction-1' } as ReviewSnapshot['extraction'] },
     );
-    render(<DocumentProcessingProgress snapshot={withExtraction} now={NOW} />);
-    expect(currentStepLabel()).toContain('פירוש הנתונים');
-    expect(screen.getByText('— השלב שנעצר', { exact: false })).toBeTruthy();
-    // A failed job has no live work to measure, whatever the last reported counter said.
-    expect(screen.queryByRole('progressbar')).toBeNull();
+    const { container } = render(<DocumentProcessingProgress snapshot={withExtraction} now={NOW} />);
+    expect(container.textContent).toBe('');
   });
 
-  it('מסמנת את שלב הקריאה כשנכשל לפני שהיה חילוץ', () => {
-    render(<DocumentProcessingProgress
-      snapshot={snapshot({ status: 'failed', attempt_count: 3, last_error_code: 'processing_timeout' })}
+  it('אינה מציגה דבר כשהמסמך כבר ממתין לאדם', () => {
+    // 'review' is the absence of work, not its last frame. The review screen below is what a person
+    // is meant to look at, and a bar still sweeping above it would say the machine is not finished.
+    const { container } = render(<DocumentProcessingProgress
+      snapshot={snapshot({ status: 'review', attempt_count: 1 })}
       now={NOW}
     />);
-    expect(currentStepLabel()).toContain('קריאת המסמך');
+    expect(container.textContent).toBe('');
   });
 
   it('אינה מציגה דבר כשאין ג׳וב', () => {

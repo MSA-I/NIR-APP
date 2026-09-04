@@ -62,7 +62,6 @@ describe('the reason box no longer blocks a button', () => {
     ['components', 'InvoiceLineReviewModal.tsx'],
     ['components', 'SupplierCommunicationCard.tsx'],
     ['components', 'WhatsAppConnectionCard.tsx'],
-    ['components', 'document-review', 'PriceListAutomationReadiness.tsx'],
     ['pages', 'ProductNameRepairReview.tsx'],
     ['pages', 'SupplierProposalReview.tsx'],
     ['pages', 'Settings.tsx'],
@@ -81,11 +80,10 @@ describe('the reason box no longer blocks a button', () => {
    * is optional on purpose: an earlier draft required one and silently stopped matching plain
    * `!reason.trim()`, which is the most common spelling of all.
    *
-   * It still cannot see two of the ten — `ProductNameRepairReview` and `PriceListAutomationReadiness`
-   * trimmed into a local first (`const reason = x.trim(); if (!reason)`), and matching a bare `!ident`
-   * would flag every legitimate `if (!action || !reason) return;` after a `ConfirmDialog`. Those two
-   * are caught by the refusal sweep below instead. Checked against the pre-change sources: the two
-   * sweeps together flag 10 of 10.
+   * It still cannot see `ProductNameRepairReview`, which trims into a local first (`const reason = x.trim(); if (!reason)`), and matching a bare `!ident`
+   * would flag every legitimate `if (!action || !reason) return;` after a `ConfirmDialog`. That file is caught by the refusal sweep below instead. Checked against the pre-change sources: the
+   * two sweeps together flag 10 of 10. (`PriceListAutomationReadiness` was the other blind spot and
+   * was deleted with the operator disclosure on 04.09.2026.)
    */
   const GATE = /!\s*[\w$.]*[Rr]eason\.trim\(\)|[\w$.]*[Rr]eason\.trim\(\)\s*===\s*(''|"")/;
 
