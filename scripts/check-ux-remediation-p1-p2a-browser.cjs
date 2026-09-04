@@ -553,7 +553,11 @@ async function main() {
   process.stdout.write(`ux-remediation-p1-p2a browser ${args.viewport} passed\n`);
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error.stack || error.message}\n`);
-  process.exitCode = 1;
-});
+module.exports = { installReviewMocks, metrics, reviewFixture, settle };
+
+if (require.main === module) {
+  main().catch((error) => {
+    process.stderr.write(`${error.stack || error.message}\n`);
+    process.exitCode = 1;
+  });
+}

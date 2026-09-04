@@ -297,12 +297,13 @@ describe('עמודת התיוק אינה נשאלת בארכיון', () => {
     expect(screen.queryByLabelText('סטטוס תיוק')).not.toBeInTheDocument();
   });
 
-  it('תיקיית המסמכים כן מציגה את שניהם', async () => {
+  it('תיקיית המסמכים מציגה את מצב השיוך בשורה אבל לא מסנן כפול', async () => {
     server.use(documents, ...quietTraffic);
     renderGallery({});
     await screen.findAllByText(UNFILED);
     expect(screen.queryAllByText('לא משויך')).not.toHaveLength(0);
-    expect(screen.getByLabelText('סטטוס תיוק')).toBeInTheDocument();
+    expect(screen.queryByLabelText('סטטוס תיוק')).not.toBeInTheDocument();
+    expect(screen.getByTestId('documents-processing-filter')).toBeInTheDocument();
   });
 });
 
@@ -339,6 +340,18 @@ describe('קליטה אחת — הסוג נקרא מהמסמך, לא נבחר מ
     const dialog = await screen.findByRole('dialog', { name: 'העלאת מסמך' });
     const date = dialog.querySelector('input[type="date"]') as HTMLInputElement;
     expect(date.value).toBe('');
+  });
+
+  it('מציג את תקרת 10MB לפני בחירת הקובץ', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({});
+    await screen.findAllByText(UNFILED);
+
+    await userEvent.click(screen.getByRole('button', { name: /העלאת מסמך/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'העלאת מסמך' });
+    const input = dialog.querySelector('input[type="file"]') as HTMLInputElement;
+    const limit = within(dialog).getByText(/10MB/);
+    expect(limit.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('מסמך שטרם נקרא מציג — בעמודת הסוג, ומסמך שנקרא מציג את סוגו', async () => {

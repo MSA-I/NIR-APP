@@ -59,6 +59,30 @@ function valueText(value: string | number | null, t: (key: TKey) => string): str
   return value === null ? t('priceListReview.valueNotRecognised') : String(value);
 }
 
+const SOURCE_LINE_LABELS: Readonly<Record<string, TKey>> = {
+  description: 'priceListReview.sourceDescription',
+  product_name: 'priceListReview.sourceDescription',
+  sku: 'priceListReview.sourceSku',
+  barcode: 'priceListReview.sourceBarcode',
+  quantity: 'priceListReview.sourceQuantity',
+  unit: 'priceListReview.sourceUnit',
+  unit_price: 'priceListReview.sourceUnitPrice',
+  discount_amount: 'priceListReview.sourceDiscount',
+  vat_rate: 'priceListReview.sourceVat',
+  line_total: 'priceListReview.sourceLineTotal',
+};
+
+function sourceLineSummary(
+  values: Record<string, string | number | null>,
+  t: (key: TKey) => string,
+) {
+  return Object.entries(values).map(([key, value]) => ({
+    key,
+    label: t(SOURCE_LINE_LABELS[key] ?? 'priceListReview.sourceAdditionalValue'),
+    value: valueText(value, t),
+  }));
+}
+
 /** Best-effort name prefill for a new product, taken from the line's own extracted values. */
 function guessLineName(values: Record<string, string | number | null>): string {
   for (const [key, value] of Object.entries(values)) {
@@ -1063,14 +1087,13 @@ export function PriceListReviewConfirmation({
                 </div>
               </div>
               <SubPanel className="mt-3">
-                  <dl className="grid gap-2 sm:grid-cols-2">
-                    {Object.entries(item.values).map(([key, value]) => (
-                      <div key={key} className="min-w-0 rounded-lg bg-surface-sunken p-2">
-                        <dt className="text-xs font-medium text-ink-muted">{key}</dt>
-                        <dd className="mt-1 break-words text-sm text-ink-body">{valueText(value, t)}</dd>
-                      </div>
+                  <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm" aria-label={t('priceListReview.sourceLineSummary')}>
+                    {sourceLineSummary(item.values, t).map(({ key, label, value }) => (
+                      <li key={key} className="min-w-0 break-words text-ink-body">
+                        <span className="font-medium text-ink-muted">{label}:</span>{' '}{value}
+                      </li>
                     ))}
-                  </dl>
+                  </ul>
 
                   {autoLine?.reason_code && (
                     <Note tone="await" className="mt-3">

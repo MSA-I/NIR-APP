@@ -7,13 +7,13 @@ Scope: complete every authorized package from P2b through P10, excluding cancell
 - [x] G0: the execution plan reflects all 16 owner decisions before product code changes
   EVIDENCE: main plan now removes P7/P4b from the DAG, fixes P3 order behavior, locks P4 document-level feedback, expands P5 progress, and applies P9 decisions #368-#372.
 
-- [ ] P2B1: P2b replacements preserve evidence and reduce controls, panels and text in both viewports
-  CHECK: npm.cmd run test -- src/components/document-review/uxRemediationP2b.spec.tsx src/pages/documentsArchiveView.spec.tsx
+- [x] P2B1: P2b replacements preserve evidence and reduce controls, panels and text in both viewports
+  CHECK: npm.cmd run test -- src/lib/documentStatus.spec.tsx src/pages/documentsArchiveView.spec.tsx src/components/UploadCenter.spec.tsx src/components/document-review/DocumentReviewWorkspace.spec.tsx src/components/document-review/DocumentExportPreview.spec.tsx src/components/document-review/PriceListReviewConfirmation.spec.tsx
   EXPECT: passed
-  EVIDENCE: pending
+  EVIDENCE: focused Vitest passed 93/93; browser measured folder controls 24->23 desktop and 21->20 mobile, review panels 10->9 and text blocks 35->34; source-line evidence, static/live status and export-template disclosure tests passed.
 
-- [ ] P2B2: legacy /inbox filing link reaches the equivalent processing filter result
-  EVIDENCE: pending
+- [x] P2B2: legacy /inbox filing link reaches the equivalent processing filter result
+  EVIDENCE: desktop and mobile browser runs reached /documents?processing=unassigned, selected the visible unassigned filter and rendered no filing filter; direct legacy unfiled token maps to unassigned in documentStatus tests.
 
 - [ ] P3A: a document without a supplier can select or create one and then approve through protected commands
   CHECK: npm.cmd run test -- src/components/document-review/supplierResolutionUx.spec.tsx
@@ -111,4 +111,3 @@ Scope: complete every authorized package from P2b through P10, excluding cancell
 
 - [ ] R5: final diff contains no P7 or P4b implementation and preserves unrelated WIP
   EVIDENCE: pending
-

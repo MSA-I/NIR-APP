@@ -7,7 +7,6 @@ import { DocumentStatusBadge } from '../components/DocumentStatusBadge';
 import {
   DOCUMENT_STUCK_ATTEMPT_COUNT,
   documentMatchesStatusFilter,
-  documentMatchesFilingFilter,
   documentProcessingFailureKey,
   documentProcessingStuckKey,
   documentStatusElapsed,
@@ -96,7 +95,6 @@ describe('documentUiStatus precedence', () => {
     expect(status.state).toBe('processing');
     expect(status.loading).toBe(true);
     expect(status.countsAsUnassigned).toBe(false);
-    expect(documentMatchesFilingFilter(status, 'unfiled')).toBe(false);
     expect(status.elapsedSeconds).toBe(300);
   });
 
@@ -104,7 +102,6 @@ describe('documentUiStatus precedence', () => {
     const status = documentUiStatus({ status: null, document: inbox, evaluatedAt: NOW });
     expect(status.state).toBe('unavailable');
     expect(status.countsAsUnassigned).toBe(false);
-    expect(documentMatchesFilingFilter(status, 'unfiled')).toBe(false);
   });
 
   it('review + inbox is only human review', () => {
@@ -290,24 +287,23 @@ describe('documentUiStatus precedence', () => {
   });
 });
 
-describe('document status filtering and filing contracts', () => {
-  it('accepts only canonical filter tokens and rejects legacy, empty and prototype keys', () => {
+describe('document status filtering contracts', () => {
+  it('maps the legacy unfiled link to the canonical unassigned filter and rejects ambiguous tokens', () => {
     expect(documentStatusFilterFromParam('stuck')).toBe('stuck');
     expect(documentStatusFilterFromParam('assigned')).toBe('assigned');
-    for (const value of ['queued', 'completed', 'banana', '', 'toString', '__proto__']) {
+    expect(documentStatusFilterFromParam('unfiled')).toBe('unassigned');
+    for (const value of ['linked', 'queued', 'completed', 'banana', '', 'toString', '__proto__']) {
       expect(documentStatusFilterFromParam(value)).toBeNull();
     }
     expect(documentStatusFilterFromParam(null)).toBeNull();
   });
 
-  it('never includes archived documents in either active filing bucket', () => {
+  it('never includes archived documents in either assignment bucket', () => {
     const archived = documentUiStatus({
       status: 'completed',
       document: { entity_type: 'archive', entity_id: null },
       evaluatedAt: NOW,
     });
-    expect(documentMatchesFilingFilter(archived, 'unfiled')).toBe(false);
-    expect(documentMatchesFilingFilter(archived, 'linked')).toBe(false);
     expect(documentMatchesStatusFilter(archived, 'unassigned')).toBe(false);
     expect(documentMatchesStatusFilter(archived, 'assigned')).toBe(false);
   });

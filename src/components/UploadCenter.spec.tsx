@@ -134,6 +134,20 @@ describe('runUploadBatch — signature compatibility through the Center queue', 
 });
 
 describe('state machine and progressbar aria', () => {
+  it('shows the file name and state without non-actionable byte telemetry', async () => {
+    server.use(jobsRpc([]));
+    renderCenter();
+    await act(async () => {
+      await enqueueUploadCenterBatch([file('measured.pdf', 2048)], async (_item, context) => {
+        context.markRegistered('doc-measured');
+      });
+    });
+
+    const section = uploadCenter();
+    expect(within(section).getByText('measured.pdf')).toBeInTheDocument();
+    expect(within(section).queryByText('2 KB')).toBeNull();
+  });
+
   it('renders the queue, announcements and default failure in English without Hebrew leakage', async () => {
     server.use(rest('document_processing_jobs', []));
     renderCenter('en');

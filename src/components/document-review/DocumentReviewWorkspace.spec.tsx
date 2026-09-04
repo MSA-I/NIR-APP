@@ -303,7 +303,7 @@ describe('a job that stopped is not also promised an update', () => {
 });
 
 describe('one level-one heading per screen', () => {
-  it('leaves the h1 to the page and names its own card instead', () => {
+  it('leaves the h1 to the page and lets the live progress sentence name its own state', () => {
     const snapshot = withJob(READING);
     snapshot.stage = 'processing';
     renderSnapshot(snapshot);
@@ -312,7 +312,19 @@ describe('one level-one heading per screen', () => {
     // a scan is still pending and this component does not mount. Two of them on one page is a
     // WCAG 2.1 AA defect against PRODUCT.md's target.
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
-    expect(screen.getByRole('heading', { level: 2, name: 'מצב המסמך' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 2, name: 'מצב המסמך' })).toBeNull();
+    expect(screen.getByTestId('document-processing-progress')).toBeInTheDocument();
+  });
+
+  it('renders a settled state as a compact row rather than a card', () => {
+    const snapshot = snapshotWith(0.95);
+    snapshot.stage = 'review';
+    renderSnapshot(snapshot);
+
+    const status = screen.getByTestId('document-static-status');
+    expect(status).toHaveTextContent('מצב המסמך');
+    expect(status).toHaveTextContent('נדרשת בדיקה');
+    expect(status).not.toHaveClass('card');
   });
 });
 

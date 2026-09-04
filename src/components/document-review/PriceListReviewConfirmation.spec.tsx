@@ -212,6 +212,22 @@ describe('אישור מחירון', () => {
     expect(screen.getAllByText(/אני מאשר שורה זו לקליטה/)).toHaveLength(LINE_COUNT);
   });
 
+  it('מציג את ראיית שורת המקור בסיכום עברי קומפקטי בלי שמות שדות גולמיים', async () => {
+    render(
+      <MemoryRouter>
+        <PriceListReviewConfirmation snapshot={snapshot(predictions())} actorId="owner-1" onRefetch={async () => true} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('price-list-intake-confirm')).toBeEnabled());
+    await userEvent.click(screen.getByTestId('price-list-show-unmatched'));
+    const cards = screen.getAllByRole('article');
+    expect(cards[0]).toHaveTextContent('תיאור:');
+    expect(cards[0]).toHaveTextContent('מחיר ליחידה:');
+    expect(cards[0]).not.toHaveTextContent('description');
+    expect(cards[0]).not.toHaveTextContent('unit_price');
+  });
+
   it('מחלק רשימה ארוכה לעמודים ומסמן עמוד שלם בסימון אחד', async () => {
     const LONG = 120;
     render(

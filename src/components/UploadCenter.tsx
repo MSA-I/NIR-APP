@@ -605,13 +605,6 @@ function displayMeta(
   return UPLOAD_STATE_META[entry.status];
 }
 
-function formatFileSize(bytes: number): string {
-  if (!bytes) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function useOnlineStatus() {
   return useSyncExternalStore(
     (listener) => {
@@ -740,7 +733,6 @@ export function UploadCenter() {
             <li key={entry.id} className="px-3 py-2.5">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="min-w-0 flex-1 truncate text-sm text-ink-mid" title={entry.fileName}><bdi>{entry.fileName}</bdi></span>
-                {entry.size > 0 && <span className="num text-xs text-ink-muted">{formatFileSize(entry.size)}</span>}
                 {processingStatus
                   ? <DocumentStatusBadge status={processingStatus} />
                   : <StatusBadge meta={displayMeta(entry, stage, t)} />}

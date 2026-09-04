@@ -354,23 +354,16 @@ export function documentStatusElapsed(
   return { key: 'documentStatus.elapsedDays', vars: { count: Math.floor(seconds / 86_400) } };
 }
 
-export function documentMatchesFilingFilter(
-  status: DocumentUiStatus,
-  filing: 'all' | 'unfiled' | 'linked',
-): boolean {
-  if (filing === 'all') return true;
-  if (filing === 'unfiled') return status.countsAsUnassigned;
-  return status.state === 'assigned' || status.state === 'completed';
-}
-
 /**
  * Old URLs used raw pipeline stages. They are ambiguous under canonical precedence: a queued job
  * may be stuck, a failed job may be superseded history, and an unprocessed document may already
- * be assigned. Therefore only current canonical filter tokens survive; old tokens fall back to
- * "all" instead of showing a control that claims a filter different from the rendered badges.
+ * be assigned. Therefore only current canonical filter tokens survive. `unfiled` is the one exact
+ * legacy mapping: `/inbox` meant the same visible bucket now named `unassigned`; `linked` remains
+ * ambiguous because it mixed assigned and completed states.
  */
 export function documentStatusFilterFromParam(value: string | null): DocumentStatusFilter | null {
   if (!value) return null;
+  if (value === 'unfiled') return 'unassigned';
   if (DOCUMENT_STATUS_FILTER_VALUES.has(value as DocumentStatusFilter)) return value as DocumentStatusFilter;
   return null;
 }

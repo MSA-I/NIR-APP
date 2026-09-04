@@ -1004,7 +1004,10 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <span className="text-sm font-medium text-ink-soft flex items-center gap-1.5"><Paperclip size={ICON.sm} /> {t('fileUpload.text_11')}</span>
+        <div>
+          <span className="text-sm font-medium text-ink-soft flex items-center gap-1.5"><Paperclip size={ICON.sm} /> {t('fileUpload.text_11')}</span>
+          <p className="mt-1 text-xs text-ink-muted">{t('fileUpload.uploadLimitHint')}</p>
+        </div>
         {/* The "סוג" select that stood here — delivery note / invoice / other, chosen before the
             camera opened — is gone. This is the receiving screen: the person holding the phone is
             standing at the truck with the paper in the other hand, and the one question they

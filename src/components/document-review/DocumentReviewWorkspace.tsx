@@ -79,38 +79,27 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
 
   return (
     <div className="min-w-0 space-y-5" data-testid="document-review-page">
-      <section className="card card-pad">
-        {/* One h1 per page, and it belongs to the page. `DocumentReview` renders "בדיקת מסמך" and
-            the file name above this card, and renders them even while a scan is still waiting and
-            this workspace does not mount at all — so the copy here was the second h1 and the
-            second file name on the same screen. This card owns one thing: where the document is. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="section-title">{t('docWorkspace.text_3')}</h2>
-          {/* The strip below is the single place this screen says how far the document got. While
-              a job is in flight the badge said it again, and `DocumentStatusBadge` carries the page
-              counter for the surfaces that have no strip (the folder, the upload centre) — so
-              "עמוד 7 מתוך 27" was rendered twice, from two code paths, a few pixels apart. The
-              badge stays for every state the strip cannot express: not sent yet, stuck, failed,
-              filed, archived. It steps aside only while the strip is telling the story. */}
-          {!uiStatus.loading && <DocumentStatusBadge status={uiStatus} data-stage={snapshot.stage} />}
-        </div>
-
-        {/* Above the review layers on purpose: while a document is still being read there is
-            nothing to review, and "where is it now" is the only question the screen can answer. */}
-        <div className="mt-4">
+      {/* A live process and a settled state answer different questions. The live strip names its
+          own work and count; adding a "מצב המסמך" heading and badge above it repeats the same fact.
+          Settled states need only one compact label/value row, not an otherwise empty card. */}
+      {uiStatus.loading ? (
+        <div data-testid="document-live-status">
           <DocumentProcessingProgress snapshot={snapshot} />
         </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 px-1" data-testid="document-static-status">
+          <span className="text-sm font-medium text-ink-soft">{t('docWorkspace.text_3')}</span>
+          <DocumentStatusBadge status={uiStatus} data-stage={snapshot.stage} />
+        </div>
+      )}
 
-        {/* "0 תיקונים · 0 הערות" is the ordinary case, and it took a box on the first screen of
-            every review to say that nothing happened. The tile now appears once there is a layer
-            to report; its absence carries the same information without spending the space. */}
-        {(snapshot.reviewCorrections.length > 0 || snapshot.annotations.length > 0) && (
-          <div className="mt-4 rounded-lg bg-surface-sunken p-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-ink-soft"><FileCheck2 size={ICON.md} aria-hidden="true" /> {t('docWorkspace.text_4')}</div>
-            <p className="mt-1 text-sm text-ink-body"><span className="num">{snapshot.reviewCorrections.length}</span> {t('docWorkspace.text_5')} <span className="num">{snapshot.annotations.length}</span> {t('docWorkspace.text_6')}</p>
-          </div>
-        )}
-      </section>
+      {/* "0 תיקונים · 0 הערות" is the ordinary case. Render this only when it carries evidence. */}
+      {(snapshot.reviewCorrections.length > 0 || snapshot.annotations.length > 0) && (
+        <div className="rounded-lg bg-surface-sunken p-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-ink-soft"><FileCheck2 size={ICON.md} aria-hidden="true" /> {t('docWorkspace.text_4')}</div>
+          <p className="mt-1 text-sm text-ink-body"><span className="num">{snapshot.reviewCorrections.length}</span> {t('docWorkspace.text_5')} <span className="num">{snapshot.annotations.length}</span> {t('docWorkspace.text_6')}</p>
+        </div>
+      )}
 
       {snapshot.stage === 'failed' && (
         <Note tone="alert" role="alert" className="flex-wrap">
