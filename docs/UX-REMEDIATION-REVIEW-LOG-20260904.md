@@ -365,3 +365,59 @@ VERDICT: REVISE
   apply+ledger ידניים
 
 ---
+
+## סבב 4 — Codex
+
+**`VERDICT: REVISE`** — ממצא כספי אחד מהותי, וארבעה פערי קבלה.
+
+התוכנית כמעט מוכנה, אבל נשאר פער כספי אחד מהותי ועוד פערי קבלה. אלה אינם פרטי implementation.
+
+### ממצאים חומריים
+
+- **P7 עדיין עלולה לזרוע מחיר במטבע שגוי.** `PriceSeedRow` אינו נושא `currency` ב־[`assessment.ts:464–468`](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/src/components/document-review/assessment.ts:464>). ‏`0298` גורמת ל־`import_supplier_prices` להשתמש ב־`supplier.default_currency` כשהשורה אינה מצהירה מטבע ([`0298:311–327`](<D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/supabase/migrations/0298_one_parser_for_a_price.sql:311>)). לכן מסמך USD של ספק שברירת המחדל שלו ILS עלול להיזרע כ־ILS, אף שהמחיר המנורמל נכון. תיקון: parser ה־assessment חייב להפיק גם `currency`; כל `PriceSeedRow` חייב לשאת את `serverAssessment.currency`; השער חייב לבדוק שגם `supplier_products.currency` וגם `price_history.currency` שווים למטבע המסמך.
+
+- **טבלת השערים מכילה 19 assertions, לא 20, וחסרים בה P9c, ‏P9d ו־P4b.** בלי זה אפשר להכריז completion בלי להוכיח שהערת feedback נשמרה, שה־glass הוסר, שה־AI disclosure הוצג, שהחלטת D-18 יושמה או ש־P4b נשאר owner-only. תיקון: להוסיף assertions מפורשים לשלוש החבילות.
+
+- **לחבילות ה־DB יש רק happy-path gates.** P3 מוסיפה read model/RPC ו־server eligibility; P4 עשויה להוסיף feedback contract; P8 מוסיפה supersede command. אין assertion ל־cross-tenant denial, role denial או idempotent replay. תיקון: להוסיף לכל חוזה DB שער שמוכיח `org_id/RLS`, תפקידים, replay יחיד ו־audit reason.
+
+- **שער P5 דורש בטעות recovery לכל state.** `processing`, ‏`review`, ‏`assigned` ו־`completed` אינם כולם מצבי recovery. ניסוח זה עלול להוסיף פעולות מיותרות. תיקון: לדרוש מטריצה `state → wait/retry/review/file/no-action`, עם פעולה רק במקום שבו המשתמש באמת יכול לפעול.
+
+- **שער הקלט של P7 מחבר צורות שונות לתוצאה אחת.** `interpretation_number` מסיר `₪` ופסיקים; לכן `1,5` עלול להפוך ל־15, אבל `1,234.50` ו־`₪12.50` ניתנים לפענוח בטוח. תיקון: לנעול מטריצה: thousands separator תקין מתקבל, comma-decimal עמום נדחה, currency symbol תואם מנורמל, מטבע סותר ושלילי נדחים.
+
+### Refinement בלבד
+
+- P4b לא בהכרח דורשת Migration אם הטבלאות וה־RLS הקיימים מספיקים; מותר לבונה להוכיח Frontend-only לפני הוספת read model.
+- 9.13 צריך להפנות ישירות לחוקה, לא ל־D-15 שכעת עוסקת רק במספר ההצעות.
+- אפשר לשנות את P2 מ־“9 + שניים” ל־11 בלבד; המספר עצמו כבר נכון.
+
+יתר תיקוני סבב 3 — P7 sole-writer, ‏P8 ללא fallback גאומטרי מומצא, מיפוי P9, ‏D-15/D-18, rollout-apply, R-1 וה־DAG — תקינים. לא נמצאה טענת קוד שגויה נוספת. לא בוצעה עריכה והעץ העקוב נשאר נקי.
+
+VERDICT: REVISE
+### תגובת Claude — סבב 4
+
+**חוסם כספי שני — אומת ומתקבל.** `PriceSeedRow` (`assessment.ts:462-468`) מגדיר
+`supplier_id`, `product_id`, `price`, `available` — **ואין בו `currency`**.
+`import_supplier_prices` דווקא כן מקבל `currency` בקלט, ובהיעדרו נופל חזרה ל-
+`supplier.default_currency` (`0298:311-327`, וההערה שם אומרת זאת במפורש).
+⇒ **מסמך ב-USD של ספק שברירת המחדל שלו ILS ייזרע כ-ILS** — במספר הנכון ובמטבע השגוי,
+**גם אחרי שתיקנו את 7.1.** סותר את כלל הברזל „כל סכום נושא מטבע". נוסף כ-**7.6**,
+ועם שער שבודק את `supplier_products.currency` **וגם** את `price_history.currency`.
+
+**ארבעת פערי הקבלה — התקבלו:**
+- **הטבלה החסירה את P9c, P9d ו-P4b** ⇒ אפשר היה להכריז „בוצע" בלי להוכיח שהערת
+  המשוב נשמרת, שה-glass ירד, שה-disclosure הוצג, או שהקונסולה נשארה owner-only
+- **לחבילות ה-DB היו רק happy-path gates** ⇒ נוספו ארבע הוכחות לכל חוזה DB חדש:
+  דחיית cross-tenant · דחיית תפקיד · replay אידמפוטנטי · `audit_logs` עם `reason`
+- **שער P5 דרש recovery לכל state בטעות** — `processing`/`review`/`assigned`/
+  `completed` אינם מצבי recovery, והדרישה הגורפת הייתה **מוסיפה פעולות מיותרות**
+  ⇒ הוחלף במטריצת `state → wait/retry/review/file/no-action`
+- **שער הקלט של P7 חיבר צורות שונות לתוצאה אחת** ⇒ מטריצה נעולה:
+  `1,234.50` מתקבל · `1,5` **נדחה** (`interpretation_number` מסיר פסיקים, ולכן
+  היה הופך ל-15) · `₪12.50` מנורמל · מטבע סותר ושלילי נדחים
+
+**Refinement שהתקבל:** ‏P4b תוכיח Frontend-only לפני שמוסיפים read model;
+‏9.13 מפנה ישירות לחוקה ולא ל-D-15 שצומצמה למספר ההצעות.
+
+‏Codex אישר במפורש שיתר תיקוני סבב 3 תקינים, **ולא מצא אף טענת קוד שגויה נוספת.**
+
+---
