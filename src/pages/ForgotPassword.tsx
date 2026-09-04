@@ -20,6 +20,35 @@ import { APP_NAME } from '../lib/branding';
  * yet, so recovery mail rides Supabase's built-in mailer — rate-limited and unbranded. The
  * rate-limit failure is the one worth naming in the user's language.
  */
+/**
+ * ENTRY-07 — the rate-limit branch used to test `/rate limit|too many/i` against `err.message`,
+ * and GoTrue's throttle message contains neither phrase. What it really sends, captured on the
+ * live site 2026-09-04 (`docs/qa/2026-09-04/entry.json`):
+ *
+ *   { "code": "429", "error_code": "over_email_send_rate_limit",
+ *     "msg": "For security purposes, you can only request this after 55 seconds." }
+ *
+ * So the branch never ran, and a visitor throttled for under a minute was told the operation
+ * had failed and to contact support.
+ *
+ * Match on the STATUS, not on prose. Which field carries the code depends on a response header:
+ * with `x-supabase-api-version: 2024-01-01` supabase-js reads `data.code` (the string "429"),
+ * otherwise `data.error_code`. A fix keyed to either field alone is live in one deployment and
+ * dead in the next; `status` is 429 in both. The code list and the prose test stay behind it as
+ * fallbacks, so a future transport that omits the status still lands here.
+ */
+const RATE_LIMIT_CODES = new Set([
+  'over_email_send_rate_limit',
+  'over_request_rate_limit',
+  'over_sms_send_rate_limit',
+]);
+
+function isRateLimited(err: { status?: number; code?: string; message: string }): boolean {
+  if (err.status === 429) return true;
+  if (err.code && RATE_LIMIT_CODES.has(err.code)) return true;
+  return /rate limit|too many/i.test(err.message);
+}
+
 export default function ForgotPassword() {
   const { errorText, t } = useT();
   const [email, setEmail] = useState('');
@@ -36,9 +65,7 @@ export default function ForgotPassword() {
     });
     setBusy(false);
     if (err) {
-      setError(/rate limit|too many/i.test(err.message)
-        ? t('forgotPassword.rateLimited')
-        : errorText(err.message));
+      setError(isRateLimited(err) ? t('forgotPassword.rateLimited') : errorText(err.message));
       return;
     }
     setSent(true);

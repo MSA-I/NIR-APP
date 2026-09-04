@@ -1,0 +1,13 @@
+     × names a next step for "expired" in English 5ms
+     × names a next step for "revoked" in Hebrew 1ms
+     × names a next step for "revoked" in English 1ms
+     × names a next step for "unknown" in Hebrew 1ms
+     × names a next step for "unknown" in English 1ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'The invitation has expired. Team invi…' to match /ask |request |sign in|contact |you c…/i
+AssertionError: expected 'ההזמנה בוטלה.' to match /יש ל|אפשר|בקש|לבקש|ניתן ל/
+AssertionError: expected 'The invitation was withdrawn.' to match /ask |request |sign in|contact |you c…/i
+AssertionError: expected 'הקישור אינו תקין.' to match /יש ל|אפשר|בקש|לבקש|ניתן ל/
+AssertionError: expected 'The link is not valid.' to match /ask |request |sign in|contact |you c…/i
+ Test Files  1 failed (1)
+      Tests  5 failed | 4 passed (9)

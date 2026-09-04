@@ -1229,6 +1229,16 @@ export const he = {
     capabilityBlockedTitle: 'היכולת אינה כלולה במסלול',
     capabilityBlockedBody: 'המסך נשאר סגור גם בבקשה ישירה לשרת. אפשר לראות באיזה מסלול הוא נפתח במסך המנוי.',
     capabilityBlockedAction: 'למסלולים ולמחירים',
+    // ENTRY-10 / PERM-04. Two different things happened, and until now both were the same
+    // silent bounce: an address that does not exist, and an address that exists and is closed
+    // to this role. The wording keeps them apart, because the next action is different.
+    notFoundTitle: 'הכתובת הזו לא קיימת',
+    notFoundBody: 'ייתכן שהקישור הועתק חלקית או שהמסך הוסר. אפשר לחזור למסך הראשי ולהמשיך משם.',
+    notFoundAction: 'למסך הראשי',
+    notPermittedTitle: 'המסך הזה סגור לתפקיד שלך',
+    notPermittedBody: 'הכתובת קיימת, אך היא פתוחה לתפקידים אחרים. בעל העסק יכול לשנות את התפקיד במסך ההגדרות.',
+    notPermittedAction: 'למסך הראשי',
+    operatorConsoleNotPermittedBody: 'מסוף הפלטפורמה פתוח לצוות התפעול של המערכת בלבד. החשבון שלך נשאר פעיל — אפשר לחזור לאפליקציה ולהמשיך משם.',
     groupPurchasing: 'רכש',
     groupDocuments: 'מסמכים',
     groupFinance: 'כספים',
@@ -3481,9 +3491,9 @@ export const he = {
     accountExistsWrongPassword: 'קיים כבר חשבון לכתובת הזו, והסיסמה שהוזנה אינה נכונה.',
     loading: 'טוען',
     expired: 'תוקף ההזמנה פג. ההזמנות לצוות תקפות לחמש עשרה דקות בלבד — יש לבקש קישור חדש.',
-    revoked: 'ההזמנה בוטלה.',
+    revoked: 'ההזמנה בוטלה. יש לבקש הזמנה חדשה ממי ששלח את הקישור.',
     accepted: 'ההזמנה כבר נוצלה. אפשר להיכנס עם החשבון שנפתח.',
-    unknown: 'הקישור אינו תקין.',
+    unknown: 'הקישור אינו תקין. ייתכן שהועתק חלקית — יש לבקש קישור חדש ממי ששלח אותו.',
     toLogin: 'למסך הכניסה',
     confirmEmailSent: 'נשלח מייל אימות לכתובת. יש לאשר אותו ולפתוח שוב את הקישור — ואם חלפו חמש עשרה דקות, לבקש קישור חדש.',
     invitedAs: 'הוזמנת להצטרף לצוות התפעול של {app} בתפקיד',
@@ -6044,7 +6054,11 @@ export const he = {
   },
 
   forgotPassword: {
-    rateLimited: 'נשלחו יותר מדי בקשות איפוס. יש להמתין מספר דקות ולנסות שוב.',
+    // Neutral on purpose. A throttle only fires where there is an address to send to, so
+    // "נשלחו" would tell a stranger the address is registered -- the enumeration question
+    // ruling #352 deliberately leaves open. Naming the wait in seconds does the same with a
+    // number, so the sentence says "a few minutes" and not what GoTrue reported.
+    rateLimited: 'התקבלו יותר מדי בקשות בזמן קצר. יש להמתין מספר דקות ולנסות שוב.',
     title: 'איפוס סיסמה',
     sentNotice: 'אם הכתובת רשומה במערכת, נשלח אליה קישור לאיפוס הסיסמה. הקישור תקף לשעה.',
     notReceived: 'לא הגיע מייל? בדקו את תיקיית הספאם, או פנו למפעיל המערכת.',

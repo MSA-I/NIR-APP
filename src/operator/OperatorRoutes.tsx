@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router';
 import { useEffect, type ReactNode } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { useT } from '../lib/i18n/LocaleProvider';
 import { RecordSkeleton } from '../components/ui';
 import Admin from '../pages/Admin';
 import OperatorShell from './OperatorShell';
@@ -48,8 +49,22 @@ function PlatformGuard({ children }: { children: ReactNode }) {
   const { session, loading, isPlatformAdmin } = useAuth();
   if (loading) return <RecordSkeleton />;
   if (!session) return <DocumentRedirect to="/login" />;
-  if (!isPlatformAdmin) return <DocumentRedirect to="/" />;
+  // PERM-04's fourth silent case. A signed-in visitor who is not a platform operator used to be
+  // thrown out of the document with no message, which reads as "the console is broken" rather
+  // than "this is not yours". Say which, and leave the way out as a link they choose to take.
+  if (!isPlatformAdmin) return <OperatorConsoleNotPermitted />;
   return <>{children}</>;
+}
+
+function OperatorConsoleNotPermitted() {
+  const { t } = useT();
+  return (
+    <div role="alert" className="card card-pad mx-auto mt-10 max-w-xl text-center">
+      <h1 className="page-title">{t('nav.notPermittedTitle')}</h1>
+      <p className="mt-2 text-sm text-ink-soft">{t('nav.operatorConsoleNotPermittedBody')}</p>
+      <a className="btn-secondary mt-5" href="/">{t('nav.notPermittedAction')}</a>
+    </div>
+  );
 }
 
 export default function OperatorRoutes() {

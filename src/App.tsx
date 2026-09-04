@@ -114,7 +114,10 @@ function Guard({ roles, children, write = false, capability }: {
   const entitlements = usePlanEntitlements(!!capability);
   if (loading) return <RecordSkeleton />;
   if (!session || !profile) return <Navigate to="/login" replace />;
-  if (!isActiveRole(profile.role) || !roles.includes(profile.role)) return <Navigate to={homeFor(profile.role)} replace />;
+  // PERM-04: a route that exists and is closed to this role used to answer with the same silent
+  // bounce a mistyped address got, so the two were one experience. It says which one it is now,
+  // and it stays on the address rather than moving the person somewhere they did not ask for.
+  if (!isActiveRole(profile.role) || !roles.includes(profile.role)) return <RouteNotPermitted />;
   if (write && !organizationAccess.canWrite) return <ReadOnlyUnavailable />;
   if (capability && entitlements.isLoading) return <RecordSkeleton />;
   if (capability && capabilityValue(entitlements.data, capability) !== true) {
@@ -132,6 +135,41 @@ function PlanCapabilityUnavailable() {
         {t('nav.capabilityBlockedBody')}
       </p>
       <a className="btn-primary mt-5" href="/settings/subscription">{t('nav.capabilityBlockedAction')}</a>
+    </div>
+  );
+}
+
+/**
+ * ENTRY-10 — an address that does not exist.
+ *
+ * Standalone on purpose: it must render for a signed-out visitor too, and the Layout is only
+ * mounted behind a session. It carries no `/dashboard` link for that reason — `homeFor` is the
+ * signed-in answer, and `/` resolves correctly in both states.
+ *
+ * This is a SOFT 404. `public/_redirects` keeps its `/* /index.html 200` catch-all, which is a
+ * decided position recorded in PROGRESS.md and DEBT-REGISTER.md: the host is `noindex`, so a
+ * soft 404 costs nothing a crawler would notice, and turning the catch-all off would break the
+ * single-page app for every real route.
+ */
+function RouteNotFound() {
+  const { t } = useT();
+  return (
+    <div role="alert" className="card card-pad mx-auto max-w-xl text-center mt-10">
+      <h1 className="page-title">{t('nav.notFoundTitle')}</h1>
+      <p className="mt-2 text-sm text-ink-soft">{t('nav.notFoundBody')}</p>
+      <a className="btn-secondary mt-5" href="/">{t('nav.notFoundAction')}</a>
+    </div>
+  );
+}
+
+/** PERM-04 — the address exists and this role may not open it. A different sentence, deliberately. */
+function RouteNotPermitted() {
+  const { t } = useT();
+  return (
+    <div role="alert" className="card card-pad mx-auto max-w-xl text-center">
+      <h1 className="page-title">{t('nav.notPermittedTitle')}</h1>
+      <p className="mt-2 text-sm text-ink-soft">{t('nav.notPermittedBody')}</p>
+      <a className="btn-secondary mt-5" href="/">{t('nav.notPermittedAction')}</a>
     </div>
   );
 }
@@ -389,9 +427,13 @@ export default function App() {
         <Route path="/settings/subscription" element={<Guard roles={['owner']}><Subscription /></Guard>} />
         <Route path={APP_ROUTE_POLICY.onboarding.path} element={<Guard roles={APP_ROUTE_POLICY.onboarding.roles} write><Onboarding /></Guard>} />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Route>
+      {/* ENTRY-10: at the TOP level, not inside the Layout group. Nested, it was reached only
+          behind a session, so a signed-out visitor's typo was answered by the parent's redirect
+          to /login -- HTTP 200, no message, indistinguishable from arriving at the sign-in
+          screen on purpose. Here it answers in both states. */}
+      <Route path="*" element={<RouteNotFound />} />
     </Routes>
   );
 }

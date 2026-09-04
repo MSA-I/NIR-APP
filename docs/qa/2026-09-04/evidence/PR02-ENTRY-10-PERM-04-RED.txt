@@ -1,0 +1,9 @@
+     × says so to a signed-out visitor instead of bouncing to the sign-in screen 3126ms
+     × says so to a signed-in user instead of bouncing to the dashboard 3050ms
+     × reads differently from a wrong address, and does not bounce 3029ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+TestingLibraryElementError: Unable to find role="alert"
+TestingLibraryElementError: Unable to find role="alert"
+TestingLibraryElementError: Unable to find role="alert"
+ Test Files  1 failed (1)
+      Tests  3 failed (3)

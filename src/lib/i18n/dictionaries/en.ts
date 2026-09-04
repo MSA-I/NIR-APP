@@ -1219,6 +1219,14 @@ export const en: Dictionary = {
     capabilityBlockedTitle: 'This capability is not part of the plan',
     capabilityBlockedBody: 'The screen stays closed to a direct request to the server too. The subscription screen shows which plan opens it.',
     capabilityBlockedAction: 'Plans and prices',
+    // ENTRY-10 / PERM-04 -- see the Hebrew note. Two different states, two different next steps.
+    notFoundTitle: 'This address does not exist',
+    notFoundBody: 'The link may have been copied only in part, or the screen may have been removed. You can go back to the main screen and continue from there.',
+    notFoundAction: 'To the main screen',
+    notPermittedTitle: 'This screen is closed to your role',
+    notPermittedBody: 'The address exists, but it is open to other roles. The business owner can change the role on the settings screen.',
+    notPermittedAction: 'To the main screen',
+    operatorConsoleNotPermittedBody: 'The platform console is open to the system operations team only. Your account is still active — you can go back to the application and continue from there.',
     groupPurchasing: 'Purchasing',
     groupDocuments: 'Documents',
     groupFinance: 'Finance',
@@ -3462,9 +3470,9 @@ export const en: Dictionary = {
     accountExistsWrongPassword: 'An account already exists for this address, and the password entered is not the right one.',
     loading: 'Loading',
     expired: 'The invitation has expired. Team invitations are valid for fifteen minutes only — a new link has to be requested.',
-    revoked: 'The invitation was withdrawn.',
+    revoked: 'The invitation was withdrawn. Ask whoever sent the link for a new invitation.',
     accepted: 'The invitation has already been used. You can sign in with the account that was opened.',
-    unknown: 'The link is not valid.',
+    unknown: 'The link is not valid. It may have been copied only in part — ask whoever sent it for a new link.',
     toLogin: 'To the sign-in screen',
     confirmEmailSent: 'A verification email was sent to the address. Confirm it and open the link again — and if fifteen minutes have passed, request a new link.',
     invitedAs: 'You have been invited to join the {app} operations team as',
@@ -6023,7 +6031,9 @@ export const en: Dictionary = {
   },
 
   forgotPassword: {
-    rateLimited: 'Too many reset requests were sent. Wait a few minutes and try again.',
+    // Neutral on purpose -- see the Hebrew note. "were sent" asserts a send, and a throttle only
+    // fires where there is an address to send to.
+    rateLimited: 'Too many requests in a short time. Wait a few minutes and try again.',
     title: 'Reset password',
     sentNotice: 'If the address is registered, a password reset link was sent to it. The link is valid for one hour.',
     notReceived: 'No email? Check the spam folder or contact the system operator.',
