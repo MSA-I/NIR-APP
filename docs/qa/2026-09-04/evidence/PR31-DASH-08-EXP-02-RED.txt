@@ -1,0 +1,108 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/qa-sweep-20260904
+
+ × src/pages/reportsProductWindow.spec.tsx > DASH-08 — the link a July report hands you > carries July, the way every other tile on that page does 360ms
+   → [2mexpect([22m[31melement[39m[2m).toHaveAttribute([22m[32m[32m"href"[32m[39m[2m, [22m[32m[32m"/reports/products?from=2026-07-01&to=2026-07-31"[32m[39m[2m) // element.getAttribute("href") === "/reports/products?from=2026-07-01&to=2026-07-31"[22m
+
+Expected the element to have attribute:
+[32m  href="/reports/products?from=2026-07-01&to=2026-07-31"[39m
+Received:
+[31m  href="/reports/products"[39m
+ × src/pages/reportsProductWindow.spec.tsx > DASH-08 — the screen you arrive at > reads its window from the URL instead of resetting to the current month 72ms
+   → [2mexpect([22m[31melement[39m[2m).toHaveValue([22m[32m2020-01-01[39m[2m)[22m
+
+Expected the element to have value:
+[32m  2020-01-01[39m
+Received:
+[31m  2026-09-01[39m
+ × src/pages/reportsProductWindow.spec.tsx > EXP-02 — the file that leaves that screen > is named for the window on screen, and every sheet states that window 45ms
+   → [2mexpect([22m[31melement[39m[2m).toHaveValue([22m[32m2026-07-01[39m[2m)[22m
+
+Expected the element to have value:
+[32m  2026-07-01[39m
+Received:
+[31m  2026-09-01[39m
+ × src/pages/reportsProductWindow.spec.tsx > EXP-02 — the file that leaves that screen > carries the rows, adds no two currencies together, and computes no error 60ms
+   → [2mexpect([22m[31melement[39m[2m).toHaveValue([22m[32m2026-07-01[39m[2m)[22m
+
+Expected the element to have value:
+[32m  2026-07-01[39m
+Received:
+[31m  2026-09-01[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/reportsProductWindow.spec.tsx > DASH-08 — the link a July report hands you > carries July, the way every other tile on that page does
+Error: [2mexpect([22m[31melement[39m[2m).toHaveAttribute([22m[32m[32m"href"[32m[39m[2m, [22m[32m[32m"/reports/products?from=2026-07-01&to=2026-07-31"[32m[39m[2m) // element.getAttribute("href") === "/reports/products?from=2026-07-01&to=2026-07-31"[22m
+
+Expected the element to have attribute:
+[32m  href="/reports/products?from=2026-07-01&to=2026-07-31"[39m
+Received:
+[31m  href="/reports/products"[39m
+ ❯ src/pages/reportsProductWindow.spec.tsx:198:18
+    196|
+    197|     const link = await screen.findByRole('link', { name: /סיכום רכישות…
+    198|     expect(link).toHaveAttribute('href', `/reports/products?from=${JUL…
+       |                  ^
+    199|   });
+    200| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/pages/reportsProductWindow.spec.tsx > DASH-08 — the screen you arrive at > reads its window from the URL instead of resetting to the current month
+Error: [2mexpect([22m[31melement[39m[2m).toHaveValue([22m[32m2020-01-01[39m[2m)[22m
+
+Expected the element to have value:
+[32m  2020-01-01[39m
+Received:
+[31m  2026-09-01[39m
+ ❯ src/pages/reportsProductWindow.spec.tsx:207:52
+    205|     renderAt(<ProductPurchaseSummary />, `/reports/products?from=${LON…
+    206|
+    207|     expect(await screen.findByLabelText('מתאריך')).toHaveValue(LONG_AG…
+       |                                                    ^
+    208|     expect(screen.getByLabelText('עד תאריך')).toHaveValue(LONG_AGO.to);
+    209|     await waitFor(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/pages/reportsProductWindow.spec.tsx > EXP-02 — the file that leaves that screen > is named for the window on screen, and every sheet states that window
+Error: [2mexpect([22m[31melement[39m[2m).toHaveValue([22m[32m2026-07-01[39m[2m)[22m
+
+Expected the element to have value:
+[32m  2026-07-01[39m
+Received:
+[31m  2026-09-01[39m
+ ❯ src/pages/reportsProductWindow.spec.tsx:224:52
+    222|     renderAt(<ProductPurchaseSummary />, `/reports/products?from=${JUL…
+    223|
+    224|     expect(await screen.findByLabelText('מתאריך')).toHaveValue(JULY.fr…
+       |                                                    ^
+    225|     await userEvent.click(await screen.findByRole('button', { name: 'י…
+    226|     const { fileName, book } = await exportedWorkbook();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/pages/reportsProductWindow.spec.tsx > EXP-02 — the file that leaves that screen > carries the rows, adds no two currencies together, and computes no error
+Error: [2mexpect([22m[31melement[39m[2m).toHaveValue([22m[32m2026-07-01[39m[2m)[22m
+
+Expected the element to have value:
+[32m  2026-07-01[39m
+Received:
+[31m  2026-09-01[39m
+ ❯ src/pages/reportsProductWindow.spec.tsx:243:52
+    241|     renderAt(<ProductPurchaseSummary />, `/reports/products?from=${JUL…
+    242|
+    243|     expect(await screen.findByLabelText('מתאריך')).toHaveValue(JULY.fr…
+       |                                                    ^
+    244|     await userEvent.click(await screen.findByRole('button', { name: 'י…
+    245|     const { book } = await exportedWorkbook();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  13:18:22
+   Duration  4.28s (transform 902ms, setup 654ms, import 1.39s, tests 545ms, environment 1.42s)
+

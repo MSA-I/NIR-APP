@@ -1,7 +1,9 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { AlertTriangle, FileSpreadsheet, Info, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useParamState } from '../lib/useParamState';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { fmtDate, fmtMoneyExact, fmtNum, formatUnit, todayISO } from '../lib/format';
 import { Card, DataTable, ErrorNote, ICON, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
@@ -84,9 +86,35 @@ export default function ProductPurchaseSummary() {
   const { t, errorText, locale } = useT();
   const { org } = useAuth();
   const toast = useToast();
-  const [from, setFrom] = useState(monthStart);
-  const [to, setTo] = useState(todayISO);
+  /**
+   * The window lives in the URL, not in component state — `?from=YYYY-MM-DD&to=YYYY-MM-DD`, the
+   * same shape `/expenses` uses.
+   *
+   * It used to be `useState`, and that was not merely un-shareable: it made the screen INCAPABLE
+   * of being told which window to show. `/reports` now links here with the month it is displaying,
+   * and against component state that link could have carried July and still landed on September —
+   * which is exactly what a manager measured (DASH-08), and then exported (EXP-02).
+   *
+   * An absent parameter still means "the current month to date", so a bare `/reports/products`
+   * opens on the window it always did.
+   */
+  const [from] = useParamState('from', monthStart());
+  const [to] = useParamState('to', todayISO());
+  const [params, setParams] = useSearchParams();
   const [exporting, setExporting] = useState(false);
+
+  /**
+   * Both ends move together, in one replace-navigation. Written as a pair rather than through two
+   * independent setters because a range is one claim: `from` alone briefly describes a window
+   * nobody asked for, and the query would fire for it.
+   */
+  function setRange(nextFrom: string, nextTo: string) {
+    if (!nextFrom || !nextTo) return; // a cleared date input is not a range claim
+    const next = new URLSearchParams(params);
+    next.set('from', nextFrom);
+    next.set('to', nextTo);
+    setParams(next, { replace: true });
+  }
 
   const { data, loading, error } = useQuery<SummaryResponse>(async () =>
     unwrap(await supabase.rpc('get_product_purchase_summary', {
@@ -248,12 +276,12 @@ export default function ProductPurchaseSummary() {
         <div>
           <label className="label" htmlFor="summary-from">{t('productPurchase.text_23')}</label>
           <input id="summary-from" type="date" className="input num" value={from}
-            onChange={(event) => setFrom(event.target.value)} />
+            onChange={(event) => setRange(event.target.value, to)} />
         </div>
         <div>
           <label className="label" htmlFor="summary-to">{t('productPurchase.text_24')}</label>
           <input id="summary-to" type="date" className="input num" value={to}
-            onChange={(event) => setTo(event.target.value)} />
+            onChange={(event) => setRange(from, event.target.value)} />
         </div>
       </Card>
 

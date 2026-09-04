@@ -65,6 +65,20 @@ function toSnapshotCondition(error: unknown): string {
   return raw;
 }
 
+/**
+ * The window the sibling products report should open on, carried in the address the way every
+ * other tile on this page carries its month.
+ *
+ * `monthRange` ends a month EXCLUSIVELY — the first of the next one — because that is the shape a
+ * `.lt()` predicate needs. The products screen's `to` is INCLUSIVE, and it is also what a person
+ * reads under the title, so the day before is what travels. Confusing the two would put a whole
+ * extra day of purchases inside a July report.
+ */
+function productSummaryHref(month: string): string {
+  const { start, end } = monthRange(month);
+  return `/reports/products?from=${start}&to=${addCalendarDays(end, -1)}`;
+}
+
 export default function Reports() {
   const { profile, org, organizationAccess } = useAuth();
   const baseCurrency = org?.base_currency ?? null;
@@ -439,9 +453,14 @@ export default function Reports() {
       {/* The product summary is a sibling report, reached from here rather than from the main
           navigation: it answers a different question about the same money, and a sub-report that
           earns its own top-level row makes the catalogue longer without making anything easier
-          to find. */}
+          to find.
+
+          It carries the month, like every other link on this page. It was the one that did not,
+          and the cost was not cosmetic: an accountant closing July followed it and exported a
+          SEPTEMBER file (DASH-08 / EXP-02) — migration 0312's own rule, "no link beats a link to
+          the wrong month", applied everywhere here except this line. */}
       <p className="no-print text-sm">
-        <Link className="link" to="/reports/products">{t('reports.text_11')}</Link>
+        <Link className="link" to={productSummaryHref(month)}>{t('reports.text_11')}</Link>
       </p>
 
       <ConfirmDialog open={sendSnapshot !== null} onClose={() => setSendSnapshot(null)}
