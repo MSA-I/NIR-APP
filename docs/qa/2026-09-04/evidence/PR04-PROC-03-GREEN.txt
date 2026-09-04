@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/pr04-receipt-conflict
+
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  13:30:11
+   Duration  3.14s (transform 901ms, setup 472ms, import 1.35s, tests 36ms, environment 1.05s)
+

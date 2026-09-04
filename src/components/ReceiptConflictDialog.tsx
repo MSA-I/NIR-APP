@@ -49,6 +49,16 @@ export interface ReceiptConflictState {
   lines: ReceiptConflictLine[];
   /** Device clock when the person recorded the goods. */
   localObservedAt: number;
+  /**
+   * Whether the rejection came back from a receipt that had waited in the offline queue, rather
+   * than from a submission that went straight to the server.
+   *
+   * It decides which cause the dialog names. An offline race — somebody else receiving against
+   * the order while this device was away — is a real thing that happens to a queued replay, and a
+   * plain fiction for a quantity typed and sent seconds earlier on a connected device. Naming it
+   * anyway sent a clerk looking for a colleague who never touched the order (`PROC-04`).
+   */
+  queuedReplay: boolean;
   serverReceiptId: string | null;
   serverReceiptStatus: 'draft' | 'completed' | null;
   serverReceiptAt: string | null;
@@ -80,7 +90,10 @@ export interface ConflictPresentation {
  *
  * Exported and pure so the mapping is a tested claim rather than JSX nobody can assert on.
  */
-export function conflictPresentation(code: ReceiptConflictCode): ConflictPresentation {
+export function conflictPresentation(
+  code: ReceiptConflictCode,
+  context: { queuedReplay?: boolean } = {},
+): ConflictPresentation {
   const keepLocal = { kind: 'keep-local' as const, labelKey: 'receiptConflict.keepLocal' as TKey };
   const discardLocal = { kind: 'discard-local' as const, labelKey: 'receiptConflict.discardLocal' as TKey, danger: true };
   const localOnly: TKey = 'receiptConflict.localOnlyNote';
@@ -89,7 +102,11 @@ export function conflictPresentation(code: ReceiptConflictCode): ConflictPresent
     case 'receipt_qty_exceeds_order':
       return {
         titleKey: 'receiptConflict.qtyExceedsTitle',
-        summaryKey: 'receiptConflict.qtyExceedsSummary',
+        // Both sentences are true of a queued replay; only one is true of a live submission, and
+        // the comparison table below already holds the two numbers that prove which.
+        summaryKey: context.queuedReplay
+          ? 'receiptConflict.qtyExceedsSummaryQueued'
+          : 'receiptConflict.qtyExceedsSummary',
         perLineDecision: true,
         resendable: true,
         requiresExplanation: true,
@@ -141,6 +158,39 @@ export function conflictPresentation(code: ReceiptConflictCode): ConflictPresent
 
 /* ============================ the re-read ============================ */
 
+/**
+ * Every column this re-read names — selected, filtered or ordered — as data rather than as
+ * strings scattered through the calls.
+ *
+ * The query below is built from this object, so the two cannot drift, and
+ * `receiptConflictReread.spec.ts` checks every name here against the columns the migrations
+ * actually create. That guard exists because a name that is only a string got one wrong:
+ * `created_at` on `goods_receipts`, a column no migration ever added. PostgREST answered
+ * `42703` on every call for a month, and the only symptom anyone saw was this dialog showing
+ * em dashes where the server's own values belong.
+ */
+export const RECEIPT_CONFLICT_READ = {
+  purchase_order_items: { select: 'id, qty, received_qty', filter: ['order_id'] },
+  purchase_orders: { select: 'status', filter: ['id'] },
+  goods_receipts: {
+    select: 'id, status, received_at, received_by, items:goods_receipt_items(order_item_id, qty_received)',
+    filter: ['order_id'],
+    // `received_at` is the receipt's only timestamp (`0001_init.sql:174-183`) and it is
+    // `not null default now()`, so ordering by it is both legal and the ordering that was meant.
+    order: 'received_at',
+  },
+  profiles: { select: 'full_name', filter: ['id'] },
+  audit_logs: {
+    select: 'user_id',
+    filter: ['entity_type', 'entity_id'],
+    order: 'created_at',
+  },
+} as const satisfies Record<string, {
+  readonly select: string;
+  readonly filter: readonly string[];
+  readonly order?: string;
+}>;
+
 interface ConflictReadInput {
   orderId: string;
   receiptId: string;
@@ -155,6 +205,8 @@ interface ConflictReadInput {
   products: Map<string, { label: string; unit: string }>;
   localObservedAt: number;
   code: ReceiptConflictCode;
+  /** See `ReceiptConflictState.queuedReplay`: it decides which cause the dialog names. */
+  queuedReplay: boolean;
 }
 
 /**
@@ -172,6 +224,7 @@ export async function loadReceiptConflict(input: ConflictReadInput): Promise<Rec
     receiptId: input.receiptId,
     lines: [],
     localObservedAt: input.localObservedAt,
+    queuedReplay: input.queuedReplay,
     serverReceiptId: null,
     serverReceiptStatus: null,
     serverReceiptAt: null,
@@ -181,12 +234,14 @@ export async function loadReceiptConflict(input: ConflictReadInput): Promise<Rec
   };
 
   const [items, order, receipts] = await Promise.all([
-    supabase.from('purchase_order_items').select('id, qty, received_qty').eq('order_id', input.orderId),
-    supabase.from('purchase_orders').select('status').eq('id', input.orderId).maybeSingle(),
+    supabase.from('purchase_order_items')
+      .select(RECEIPT_CONFLICT_READ.purchase_order_items.select).eq('order_id', input.orderId),
+    supabase.from('purchase_orders')
+      .select(RECEIPT_CONFLICT_READ.purchase_orders.select).eq('id', input.orderId).maybeSingle(),
     supabase.from('goods_receipts')
-      .select('id, status, received_at, created_at, received_by, items:goods_receipt_items(order_item_id, qty_received)')
+      .select(RECEIPT_CONFLICT_READ.goods_receipts.select)
       .eq('order_id', input.orderId)
-      .order('created_at', { ascending: false }),
+      .order(RECEIPT_CONFLICT_READ.goods_receipts.order, { ascending: false }),
   ]);
 
   if (items.error || order.error || receipts.error) {
@@ -200,7 +255,9 @@ export async function loadReceiptConflict(input: ConflictReadInput): Promise<Rec
   state.serverOrderStatus = (order.data as { status: string } | null)?.status ?? null;
 
   type ServerReceipt = {
-    id: string; status: 'draft' | 'completed'; received_at: string | null; created_at: string;
+    // `received_at` is `not null` in the schema, so there is nothing to fall back to and no
+    // second timestamp to fall back on — the fallback that used to sit here named the absent column.
+    id: string; status: 'draft' | 'completed'; received_at: string;
     received_by: string | null; items: { order_item_id: string; qty_received: number }[];
   };
   const serverReceipts = (receipts.data ?? []) as ServerReceipt[];
@@ -212,24 +269,26 @@ export async function loadReceiptConflict(input: ConflictReadInput): Promise<Rec
   if (relevant) {
     state.serverReceiptId = relevant.id;
     state.serverReceiptStatus = relevant.status;
-    state.serverReceiptAt = relevant.received_at ?? relevant.created_at;
+    state.serverReceiptAt = relevant.received_at;
     if (relevant.received_by) {
       // Same lookup AuditLog/fetchActorNames use, and the same fallback: RLS may hide the name,
       // and an unknown actor reads as — rather than as a guess.
-      const { data } = await supabase.from('profiles').select('full_name').eq('id', relevant.received_by).maybeSingle();
+      const { data } = await supabase.from('profiles')
+        .select(RECEIPT_CONFLICT_READ.profiles.select).eq('id', relevant.received_by).maybeSingle();
       state.serverActorName = (data as { full_name: string } | null)?.full_name ?? '—';
     }
     if (state.serverActorName === '—') {
       const { data } = await supabase.from('audit_logs')
-        .select('user_id')
+        .select(RECEIPT_CONFLICT_READ.audit_logs.select)
         .eq('entity_type', 'goods_receipts')
         .eq('entity_id', relevant.id)
-        .order('created_at', { ascending: false })
+        .order(RECEIPT_CONFLICT_READ.audit_logs.order, { ascending: false })
         .limit(1)
         .maybeSingle();
       const actorId = (data as { user_id: string | null } | null)?.user_id ?? null;
       if (actorId) {
-        const profile = await supabase.from('profiles').select('full_name').eq('id', actorId).maybeSingle();
+        const profile = await supabase.from('profiles')
+          .select(RECEIPT_CONFLICT_READ.profiles.select).eq('id', actorId).maybeSingle();
         state.serverActorName = (profile.data as { full_name: string } | null)?.full_name ?? '—';
       }
     }
@@ -320,7 +379,7 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
   }, [conflict]);
 
   const presentation = useMemo(
-    () => (conflict ? conflictPresentation(conflict.code) : null),
+    () => (conflict ? conflictPresentation(conflict.code, { queuedReplay: conflict.queuedReplay }) : null),
     [conflict],
   );
 
@@ -358,7 +417,9 @@ export default function ReceiptConflictDialog({ conflict, busy, onClose, onResol
     <Modal open onClose={onClose} title={t(presentation.titleKey)} wide busy={busy}
       description={t(presentation.summaryKey)}>
       <div className="space-y-4">
-        <Note tone="alert">{t(presentation.summaryKey)}</Note>
+        {/* The summary is the Modal's `description` — rendered once, under the title, and named by
+            `aria-describedby`. It used to be printed a second time here, word for word, which
+            pushed the comparison table (the part that carries the information) off the screen. */}
         {conflict.rereadErrorKey && <Note tone="await">{t(conflict.rereadErrorKey)}</Note>}
 
         <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">

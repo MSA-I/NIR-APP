@@ -1,0 +1,52 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/pr04-receipt-conflict
+
+ ❯ src/components/receiptConflictReread.spec.ts (9 tests | 2 failed) 26ms
+     × goods_receipts — every column it names is real 10ms
+     × stays live against the exact column that broke it for a month 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/receiptConflictReread.spec.ts > the receipt-conflict re-read names only columns that exist > goods_receipts — every column it names is real
+AssertionError: expected { table: 'goods_receipts', …(1) } to deeply equal { table: 'goods_receipts', absent: [] }
+
+- Expected
++ Received
+
+  {
+-   "absent": [],
++   "absent": [
++     "created_at",
++     "created_at",
++   ],
+    "table": "goods_receipts",
+  }
+
+ ❯ src/components/receiptConflictReread.spec.ts:73:8
+     71|     // column instead of reporting that false is not true.
+     72|     expect({ table, absent: asked.filter((column) => !columns.has(colu…
+     73|       .toEqual({ table, absent: [] });
+       |        ^
+     74|   });
+     75|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/components/receiptConflictReread.spec.ts > the receipt-conflict re-read names only columns that exist > stays live against the exact column that broke it for a month
+AssertionError: expected [ 'id', 'status', 'received_at', …(4) ] to not include 'created_at'
+ ❯ src/components/receiptConflictReread.spec.ts:81:35
+     79|     expect(schema.get('goods_receipts')?.has('created_at')).toBe(false…
+     80|     const receipts = named.find((entry) => entry.table === 'goods_rece…
+     81|     expect(receipts?.columns).not.toContain('created_at');
+       |                                   ^
+     82|   });
+     83|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 7 passed (9)
+   Start at  13:24:31
+   Duration  4.09s (transform 973ms, setup 789ms, import 1.60s, tests 26ms, environment 1.40s)
+

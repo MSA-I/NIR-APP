@@ -144,6 +144,28 @@ export function hydrateReceiptLines(input: {
   return init;
 }
 
+/**
+ * What the line card is allowed to claim about a quantity.
+ *
+ * `save_goods_receipt` refuses `qty_received > (qty - received_qty)` unconditionally
+ * (`0023:1516`): there is no over-receipt the server accepts, for any status. The screen used to
+ * badge such a line 'התקבל מלא' on a green card anyway, and let the clerk finish a whole
+ * multi-line count before the refusal arrived — then land in a conflict dialog that could not
+ * recover (`PROC-03`, and `PROC-01` behind it).
+ *
+ * Extracted so the claim is a tested rule rather than a ternary inside JSX. It changes what the
+ * screen SAYS, not what the line saves: the stored status stays one of the five the
+ * `receipt_line_status` enum holds, and the server remains the only authority on the quantity.
+ */
+export function receiptLineClaim(
+  qty: number,
+  remaining: number,
+  status: ReceiptLineStatus,
+): { overReceipt: boolean; tone: Tone } {
+  const overReceipt = qty > remaining;
+  return { overReceipt, tone: overReceipt ? 'alert' : RECEIPT_LINE_STATUS[status].tone };
+}
+
 /** A draft the machine opened from a delivery note, and the evidence that picked this order. */
 interface MachineDraft {
   orderMatchedBy: 'by_number' | 'by_items' | 'single_open_order';
@@ -617,6 +639,9 @@ export function ReceiveOrder() {
           products,
           localObservedAt: queuedConflict.observedAt,
           code: queuedConflict.conflictCode,
+          // This branch exists only because a queued action came back from the server carrying a
+          // conflict code, so the offline race the dialog may mention is a real possibility here.
+          queuedReplay: true,
         }).catch((): ReceiptConflictState => ({
           code: queuedConflict.conflictCode!,
           orderId: data.order.id,
@@ -636,6 +661,7 @@ export function ReceiveOrder() {
             serverDraftQty: null,
           })),
           localObservedAt: queuedConflict.observedAt,
+          queuedReplay: true,
           serverReceiptId: null,
           serverReceiptStatus: null,
           serverReceiptAt: null,
@@ -851,6 +877,9 @@ export function ReceiveOrder() {
           products: new Map(order.items.map((item) => [item.id, { label: productLabel(item.product), unit: item.product.unit }])),
           localObservedAt: observedAt,
           code: outcome.code,
+          // The submission just crossed the wire from this screen. Nothing waited in a queue, so
+          // the dialog does not get to blame an offline race for it.
+          queuedReplay: false,
         }));
         return;
       case 'rejected':
@@ -1080,9 +1109,10 @@ export function ReceiveOrder() {
         const line = lines[item.id];
         if (!line) return null;
         const remaining = Math.max(0, item.qty - item.received_qty);
+        const { overReceipt, tone } = receiptLineClaim(line.qty, remaining, line.status);
         const scanned = highlightItemId === item.id;
         return (
-          <div key={item.id} className={`card p-4 border-2 ${CARD[RECEIPT_LINE_STATUS[line.status].tone]} ${scanned ? 'ring-2 ring-action-line' : ''}`}>
+          <div key={item.id} className={`card p-4 border-2 ${CARD[tone]} ${scanned ? 'ring-2 ring-action-line' : ''}`}>
             <div className="flex items-start justify-between gap-2">
               <div>
                 <div className="font-semibold text-ink"><bdi>{productLabel(item.product)}</bdi></div>
@@ -1091,7 +1121,9 @@ export function ReceiveOrder() {
                   {item.received_qty > 0 && <> {t('receiving.formatQuantity')} <span className="num">{formatQuantity(item.received_qty, item.product.unit, locale)}</span></>}
                 </div>
               </div>
-              <StatusBadge meta={RECEIPT_LINE_STATUS[line.status]} />
+              <StatusBadge meta={overReceipt
+                ? { label: t('receiving.overReceiptBadge'), tone: 'alert' as const }
+                : RECEIPT_LINE_STATUS[line.status]} />
             </div>
 
             <div className="flex items-center gap-2 mt-3">
@@ -1105,10 +1137,16 @@ export function ReceiveOrder() {
                   also what a screen-reader user on this screen has been hearing since the control
                   was hand-rolled here, and convergence had no mandate to change that. */}
               {/* `max` is the magnitude guard only (`lib/inputBounds.ts`). It is deliberately NOT
-                  `remaining`: over-receipt is a real event this screen must be able to record, and
-                  the server decides whether a specific over-receipt is allowed
-                  (`receipt_qty_exceeds_order`). A ceiling of a million refuses a fat finger
-                  without pre-judging a delivery. */}
+                  `remaining`, so a miscount is recorded as the person typed it rather than
+                  silently clamped to a number nobody chose — a ceiling of a million refuses a fat
+                  finger without editing a delivery.
+
+                  This comment used to say the server "decides whether a specific over-receipt is
+                  allowed". It does not: `save_goods_receipt` refuses `qty_received >
+                  (qty - received_qty)` unconditionally (`0023:1516`), for every status. That
+                  false premise is what let a green 'התקבל מלא' card sit above a quantity the
+                  server would certainly reject (`PROC-03`). The field still accepts the number;
+                  `receiptLineClaim` above makes the card say what will happen to it. */}
               <Stepper value={line.qty} min={0} max={QUANTITY_MAX} inputStep="any"
                 inputClassName="w-24! text-lg! py-2.5! font-semibold"
                 label={t('receiving.qtyLabel', { product: productLabel(item.product) })}
@@ -1127,6 +1165,16 @@ export function ReceiveOrder() {
                 </button>
               )}
             </div>
+
+            {/* `role="alert"` so the reason reaches a screen-reader user at the moment the number
+                stops being acceptable, rather than after 'סיום קבלה' fails. */}
+            {overReceipt && (
+              <p role="alert" className="text-xs text-alert-fg mt-2">
+                {t('receiving.overReceiptHint', {
+                  quantity: formatQuantity(remaining, item.product.unit, locale),
+                })}
+              </p>
+            )}
 
             <div className="grid grid-cols-5 gap-1.5 mt-3">
               {statusButtons.map((b) => (
