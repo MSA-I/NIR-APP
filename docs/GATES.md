@@ -211,3 +211,28 @@ appears exactly once, checked mechanically.
 | `PERM-R1` | retraction — RETRACTED — the 'לא ניתן לטעון את החשבון' card office saw at /admin was transient, not a defect |
 | `OWN-16` | retraction / severity change — RETRACTION / severity change: webhook-verify is reachable from the browser - the earlier no-CORS fi… |
 | `ASSIST-11` | observation withdrawn by the report itself — eight consecutive loads, eight successes, no server fault — OBSERVATION — management_dashboard_snapshot intermittently times out, and the assistant inherits it |
+
+## Gates that are not findings
+
+Conditions on the work itself, not rows from the sweep. **This section is generated with the
+table above** — an earlier revision kept it by hand, a regeneration dropped it silently, and the
+patch that claimed to fix it reported success while replacing nothing. That is the failure this
+whole ledger exists to catch, so it is no longer possible here.
+
+| gate | oracle — false before, true after | status |
+|---|---|---|
+| G1 — a claim citing a finding is checkable from this tree | the thirteen raw `findings.json` and the prose report are **committed** at `docs/qa/2026-09-04/`, so every `expected`, `evidence` and `repro` an oracle was derived from is readable without the scratchpad. **The 605 screenshots and 273 measurement files are NOT here** — a claim resting on one must re-measure, not cite | **MET** — 14 files committed, hashes in the manifest, 146/146 indexed |
+| G2 — no pre-existing failure is blamed on this work | a baseline `npm run verify` on an **idle** machine, its log path recorded. The 2026-09-04 run had 3 fork timeouts under load from a concurrent review and is not that baseline | PENDING |
+| G3 — the stale claims are corrected | the four `CLAUDE.md` paragraphs **and** `build.yml:252-255`, each re-measured against HEAD and rewritten with the measurement | PENDING |
+| G4 — every number is drawn before it is written | `npm run next-number` output pasted into each PR that claims one, drawn under the lock | PENDING |
+| G5 — no guard is weakened to make a wave pass | the `npm run verify` sub-command count never decreases and no exemption is added without a written reason | PENDING |
+| G6 — the sweep's leftover production data is dealt with deliberately | an explicit id list, an authorised domain action per row, owner approval, before/after counts, no hard `DELETE` | BLOCKED — owner decision |
+| G7 — the decisions that blocked the plan being written are answered | rulings in `docs/OPEN-DECISIONS.md`, `check:decision-numbers` green | **MET** — #350-#357, answered 2026-09-04 |
+| G8 — work is isolated from the shared checkout | every agent in its own worktree off `origin/main`, its own branch, files staged by name | **MET** for this branch — `worktree-qa-sweep-20260904` at `ccdfe4c0`; the shared checkout was left on another agent's branch untouched |
+| G9 — no PR breaks the regression baseline | the "measured and found correct" list in `docs/QA-SWEEP-20260904.md`, re-measured for the surfaces a PR touches, beside that PR's own oracle | PENDING |
+| G10 — the untested surfaces stay visible | the "what was NOT tested" table in the manifest. The data-deletion screen has **no finding**, and none may be inferred from its silence | PENDING |
+| G11 — a row reaches `MET` only on a re-run oracle | every `MET` row names the command or measurement and the path to its output | PENDING |
+| G12 — the decisions that block specific PRs are answered | one ruling each: which of the two 2,950.00 bank allocations is real; what happens to the leftover test data; whether `/alerts` widens its coverage or stops claiming to be the full queue | **BLOCKED** — three open; PR 11's data half, PR 26 and G6 wait on them |
+| G13 — no agent marks its own row `MET` | each `MET` row names **two** agents: the one that wrote the fix and the one that reproduced the red-to-green from a clean worktree on the merge-base. An agent marks its own work `FIXED` and stops | PENDING |
+| G14 — every oracle was seen failing | each `MET` row records the run against the **unfixed** tree as well as the fixed one. An oracle never seen red is a claim — three oracles here were caught demanding the opposite of what their finding asked | PENDING |
+| G15 — the serialised resources stayed serialised | one holder at a time for number drawing, the local Supabase stack and SQL suites, `npm run quality`, and production rollout, evidenced by `.claude/locks/` | PENDING |

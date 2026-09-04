@@ -550,7 +550,121 @@ PR 5 is the client half of a two-phase boundary whose finding closes only when P
 exists because `DASH-07` has no root cause yet and a PR that pretends otherwise is worse than one
 that says "measure this first". There is no remainder row.
 
-## 6. Not repository code
+## 6. How this is executed — many agents, and none of them marks its own homework
+
+**The instruction is unlimited parallelism.** The PR map is built for it: fifty rows, one root
+cause each, and a dependency map that says exactly which of them may start at once. What follows is
+what makes "as many agents as we like" actually finish faster instead of producing fifty branches
+that cannot merge.
+
+### One agent, one PR, one worktree
+
+Every agent works in **its own git worktree off `origin/main`**, on its own branch, and stages
+files by name. This is not ceremony — it is the reason parallelism is possible at all. Measured on
+2026-09-04, the shared checkout was on another agent's branch with four modified product files, one
+written the same minute; a second agent starting work there would have carried that into a money
+change. A worktree costs nothing and removes the whole class.
+
+An agent that finishes takes the next unblocked PR. There is no assignment table and no idle
+waiting for a batch to complete.
+
+### What "unblocked" means
+
+A PR may start when every id it depends on reads `MET` in `docs/GATES.md`. The dependency map in §4
+is the schedule; nothing else gates a start. Concretely, after PR 0 lands almost everything is
+parallel, and only these are genuinely sequential:
+
+```
+PR 5  -> PR 6     the settings boundary: the client must stop asking before the database stops
+                  answering, or every open tab 403s
+PR 19 -> DOC-13   the VAT rate is decided before the draft that carries it
+PR 31a -> nothing DASH-07 has no root cause yet; the measurement is the deliverable
+PR 13a -> nothing PERM-03/PERM-05 may turn out to be correct behaviour
+PR 7  -> PR 10    REQ-01's refusal text depends on what the approval guard now refuses
+```
+
+Everything else in the map can be in flight simultaneously. **The critical path, not the agent
+count, sets the floor** — adding agents past the width of the graph buys nothing.
+
+### Four resources that cannot be parallel, and the lock that says so
+
+These are the places where more agents make things slower or wrong. Each is taken by **one agent at
+a time**, named in a lock file at `.claude/locks/<resource>`:
+
+| resource | why it serialises | what an agent does instead of waiting idle |
+|---|---|---|
+| Drawing a number (ruling, debt, migration, SQL suite) | `npm run next-number` reads live branches, and six collisions still happened in one campaign on 01.09 because agents drew concurrently. Git does not conflict on a taken number | draw late — immediately before writing it, never at PR start |
+| The local Supabase stack and the SQL suites | `scripts/ci-sql-suites.mjs` without `--list` **resets the database**. Two agents on it corrupt each other's fixtures | run SQL suites in CI on the PR, not locally |
+| `npm run quality` (the heavy gate) | single-occupancy on this machine by the project's own rule | let CI run it; local runs are for debugging a failure CI already reported |
+| Production rollout | one ledger, one forward-only sequence | rollouts are serialised behind a merged, green PR |
+
+### Two edits that must not be made by two agents at once
+
+Not resources — **shared bodies**. The PR map groups by root cause, which mostly separates them,
+but these overlap and must be claimed:
+
+- **A `SECURITY DEFINER` function body.** `create_payment_request` and
+  `p1_transition_payment_request` are patched by *anchored replacement against the live body*
+  (ancestor `0231`, not `0073`). Two anchored patches to one body land as one silently winning.
+  PRs 7, 14 and 15 touch different functions; if that changes, they serialise.
+- **`src/components/ui.tsx` and the two dictionaries.** PR 20 (mobile columns), PR 21 (tokens) and
+  PR 37 (column chooser) all live near each other, and every wave touches
+  `src/lib/i18n/dictionaries/*.ts`. Dictionary edits are additive and keyed, so they merge — but a
+  key added twice under two names is a `check:orphan-keys` failure nobody looked for.
+
+### Every agent checks itself — and this is not a formality
+
+Before an agent may move a row past `FIXED`, in this order:
+
+1. **Show the red.** Run the row's oracle **against the unfixed tree** and record that it fails. An
+   oracle that has never been seen failing is a claim, not a check. This step is why three oracles
+   in this ledger were caught demanding the opposite of what their finding asked for.
+2. **Show the green.** Apply the fix, re-run the same oracle, record the output path.
+3. **`npm run verify`** — 32 sub-commands, the wider of the two gates. Local, before the PR.
+4. **Re-measure the regression baseline** for the surfaces the PR touched, from
+   `docs/QA-SWEEP-20260904.md`. Gate G9: a fix that closes a finding and breaks a baseline line has
+   closed nothing.
+5. **A visual change is not done without a screenshot that was read** — the project's own rule.
+   Desktop and 390px where the finding is a mobile one.
+
+### And every agent checks another agent — no row reaches `MET` on its author's word
+
+**An agent never marks its own row `MET`.** It marks it `FIXED` and hands it on. A *different*
+agent, from a *clean worktree*, then:
+
+- re-runs the oracle on the merge-base and confirms it **fails**;
+- re-runs it with the branch applied and confirms it **passes**;
+- confirms the files the PR touched are the files the ledger row names, and no others;
+- writes `MET` with the evidence path.
+
+The reviewing agent is not reading a diff for style. It is reproducing a red-to-green transition it
+did not perform. Two agents both wrong in the same direction is possible; two agents wrong in the
+same direction about a measurement they each ran independently is much less so.
+
+**Cross-checks are the parallel work.** While agent A waits for a review, it is verifying agent B's
+row. There is no queue of finished-but-unverified work, because verification is what an agent does
+when it is not fixing.
+
+### What an agent must not do alone
+
+- **Never mark a row `MET` on a re-read of the code.** `RTL-A11Y-09`'s finding was called refuted
+  from source, and the sweep had *measured* the opposite. Source shows intent; only a run shows
+  behaviour.
+- **Never widen a query to make two numbers agree.** The accountant's narrower population is a
+  trust boundary. Agreement comes from the label, never from more rows.
+- **Never resolve a `BLOCKED` row.** Three decisions are open (G12) and four rows are blocked by
+  ruling #352. An agent that finds a way to close one has misread the ruling, not found a shortcut.
+- **Never run `git add -A`.** The repository has permanent litter; one such command swept 313 files
+  into a one-line commit on 01.09.
+- **Never touch another agent's worktree or branch**, and never `git checkout` in the shared one.
+
+### How progress is read
+
+`docs/GATES.md` is the only status. A row is `PENDING`, `DIAGNOSED`, `FIXED`, `MET`, `BLOCKED` or
+`ABANDON:` with a reason — never blank, never optimistic. Counting rows at `MET` is the measure of
+this campaign; counting merged PRs is not, because three PRs in the map deliberately close nothing.
+
+## 7. Not repository code
 
 Each gets its own decision record with the exact action, the rollback, the evidence that closes it,
 and a `BLOCKED` status until performed — "not a code fix" is not a disposition.
@@ -567,7 +681,7 @@ and a `BLOCKED` status until performed — "not a code fix" is not a disposition
 - Three things the sweep could not restore: the `מחיר קודם` column on six products, one invoice
   moved to "בבדיקה" with no path back, one product display name that left the approval queue.
 
-## 7. `CLAUDE.md` is stale in four places
+## 8. `CLAUDE.md` is stale in four places
 
 Measured against HEAD, not remembered. Correcting it is part of this work.
 
@@ -585,7 +699,7 @@ Measured against HEAD, not remembered. Correcting it is part of this work.
    ledger row and verifies as one sequence and stops without a row on failure. "Add the ledger row
    by hand" is a recipe for a half-applied rollout.
 
-## 8. Out of scope
+## 9. Out of scope
 
 - The eight findings that are not defects, listed in full at the end of `docs/GATES.md`. `PL-10`
   and `DOC-12` were on that list in an earlier draft and are not on it now: both are real defects.
