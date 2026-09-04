@@ -1,0 +1,145 @@
+{
+  "verdict": {
+    "RTL-A11Y-09": {
+      "pass": false,
+      "measuredOn": [
+        "suppliers"
+      ],
+      "runs": {
+        "suppliers": {
+          "pass": false,
+          "announcesDialog": true,
+          "containsFocus": false,
+          "escapeReturns": true,
+          "disclosureWired": false,
+          "panelRole": "dialog",
+          "firstTabThatLeft": 9,
+          "focusAfterEscape": {
+            "tag": "BUTTON",
+            "role": null,
+            "type": "button",
+            "name": "עמודות",
+            "where": "trigger"
+          },
+          "focusAfterSweepRepro": {
+            "tag": "BUTTON",
+            "role": null,
+            "type": "button",
+            "name": "יתרה פתוחה",
+            "where": "table-behind"
+          },
+          "semantics": {
+            "role": "dialog",
+            "ariaModal": null,
+            "ariaLabel": "בחירת עמודות",
+            "id": null,
+            "innerGroupLabel": "בחירת עמודות",
+            "triggerHasPopup": "dialog",
+            "triggerExpanded": "true",
+            "triggerControls": null,
+            "controlsResolves": false
+          }
+        }
+      }
+    },
+    "RTL-A11Y-11": {
+      "pass": false,
+      "cards": 2,
+      "orphans": [
+        "card 1: \"1 חריג1 זיכוי\"",
+        "card 2: \"—\""
+      ]
+    },
+    "RTL-A11Y-10": {
+      "pass": false,
+      "counts": {
+        "left": 7,
+        "right": 5
+      },
+      "occurrences": 12
+    },
+    "RTL-A11Y-12": {
+      "pass": false,
+      "byWidth": [
+        {
+          "width": 430,
+          "bars": 4,
+          "ticks": [
+            "יוני 2026",
+            "יולי 2026",
+            "אוגוסט 2026",
+            "ספטמבר 2026"
+          ],
+          "cardWidth": 415
+        },
+        {
+          "width": 412,
+          "bars": 4,
+          "ticks": [
+            "יוני 2026",
+            "יולי 2026",
+            "אוגוסט 2026",
+            "ספטמבר 2026"
+          ],
+          "cardWidth": 397
+        },
+        {
+          "width": 390,
+          "bars": 4,
+          "ticks": [
+            "יוני 2026",
+            "יולי 2026",
+            "אוגוסט 2026",
+            "ספטמבר 2026"
+          ],
+          "cardWidth": 375
+        },
+        {
+          "width": 375,
+          "bars": 4,
+          "ticks": [
+            "יוני 2026",
+            "יולי 2026",
+            "אוגוסט 2026",
+            "ספטמבר 2026"
+          ],
+          "cardWidth": 360
+        },
+        {
+          "width": 360,
+          "bars": 4,
+          "ticks": [
+            "יוני 2026",
+            "יולי 2026",
+            "אוגוסט 2026",
+            "ספטמבר 2026"
+          ],
+          "cardWidth": 345
+        },
+        {
+          "width": 344,
+          "bars": 4,
+          "ticks": [
+            "יוני 2026",
+            "יולי 2026",
+            "ספטמבר 2026"
+          ],
+          "cardWidth": 329
+        }
+      ],
+      "unlabelledAt": [
+        344
+      ]
+    }
+  },
+  "pageErrors": [],
+  "missedRoutes": [
+    "/rest/v1/rpc/my_subscription"
+  ],
+  "shots": [
+    "D:\\משה פרוייקטים\\פיתוח אתרים\\NIR-APP\\.claude\\worktrees\\agent-a72ce96274003d4f1\\docs\\qa\\2026-09-04\\evidence\\PR37-RED-09-suppliers-picker-open-1440x900.png",
+    "D:\\משה פרוייקטים\\פיתוח אתרים\\NIR-APP\\.claude\\worktrees\\agent-a72ce96274003d4f1\\docs\\qa\\2026-09-04\\evidence\\PR37-RED-11-suppliers-mobile-390x844.png",
+    "D:\\משה פרוייקטים\\פיתוח אתרים\\NIR-APP\\.claude\\worktrees\\agent-a72ce96274003d4f1\\docs\\qa\\2026-09-04\\evidence\\PR37-RED-dashboard-desktop-1440x900.png",
+    "D:\\משה פרוייקטים\\פיתוח אתרים\\NIR-APP\\.claude\\worktrees\\agent-a72ce96274003d4f1\\docs\\qa\\2026-09-04\\evidence\\PR37-RED-dashboard-mobile-390x844.png"
+  ]
+}

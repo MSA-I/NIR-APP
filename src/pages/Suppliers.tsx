@@ -213,7 +213,11 @@ export function SuppliersList() {
     { key: 'contact', header: t('suppliers.text_8'), priority: 3, render: (r) => r.contact_name || '—' },
     { key: 'phone', header: t('suppliers.text_9'), render: (r) => <span dir="ltr">{r.phone || '—'}</span> },
     { key: 'min', header: t('suppliers.fmtMoneyExact'), priority: 3, className: 'num', sortValue: (r) => r.min_order_amount ?? 0, render: (r) => fmtMoneyExact(r.min_order_amount, r.default_currency) },
-    { key: 'risk', header: t('suppliers.text_10'), mobileLabel: null, render: (r) => <RiskCell m={r.metrics} /> },
+    /* `mobileLabel: null` is for a value that names itself, and this one does not. Two of its
+       three states are a bare number — an em dash when nothing is open, `1 חריג` when something
+       is — sitting on the phone card between `טלפון:` and `יתרה פתוחה:` with nothing saying what
+       it counts. It carries its header like every other field on that card. */
+    { key: 'risk', header: t('suppliers.text_10'), render: (r) => <RiskCell m={r.metrics} /> },
     {
       key: 'balance', header: t('suppliers.balanceHeader'), className: 'num',
       /* Sorted on the organisation's own currency: a column holding two currencies has no single

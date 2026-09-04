@@ -1833,11 +1833,15 @@ interface ColumnPickerOption {
 }
 
 /** Native checkboxes inside their labels: accessible names and state announcements for free,
-    no ids to collide between the picker's popover and sheet renderings (only one is mounted). */
-function ColumnChecklist({ options }: { options: ColumnPickerOption[] }) {
-  const { t } = useT();
+    no ids to collide between the picker's popover and sheet renderings (only one is mounted).
+ *
+ * The group's NAME is passed in rather than read here, because the two renderings are named by
+ * different keys and the popover has no other labelled container to carry one: the popover panel
+ * used to be a `role="dialog"` holding an identically named group, i.e. the same name announced
+ * twice on two nested containers, one of which was lying about what it was. */
+function ColumnChecklist({ options, label }: { options: ColumnPickerOption[]; label: string }) {
   return (
-    <div role="group" aria-label={t('ui.aria_label_4')} className="flex flex-col">
+    <div role="group" aria-label={label} className="flex flex-col">
       {options.map((o) => (
         <label key={o.key}
           className={`flex min-h-11 items-center gap-2.5 rounded-lg px-2 text-sm ${o.disabled ? 'text-ink-faint cursor-default' : 'text-ink-body cursor-pointer hover:bg-surface-hover'}`}>
@@ -1869,9 +1873,27 @@ function ColumnChecklist({ options }: { options: ColumnPickerOption[] }) {
  * Shift+Tab past the first) CLOSES and returns focus to the trigger, so the next Tab continues
  * through the toolbar; Escape does the same; and focus landing anywhere else closes it. This is a
  * popover and not a modal, so it deliberately does not run on `useDialogLayer` — that locks body
- * scroll and holds the Escape stack, which a column checklist has no business doing. */
+ * scroll and holds the Escape stack, which a column checklist has no business doing.
+ *
+ * WHICH IS WHY IT NO LONGER SAYS `role="dialog"`, and the correction is worth the paragraph.
+ * The panel announced itself as a dialog while being neither modal (`aria-modal` was never set)
+ * nor focus-containing — the contract two paragraphs up is that Tab LEAVES it, and measured in
+ * Edge on /suppliers the ninth Tab closed it and handed focus back to the trigger. A dialog that
+ * tabs out of itself and vanishes is not a dialog, and a screen-reader user was told to expect
+ * one. It is a disclosure and is now announced as one: the trigger carries `aria-expanded` and
+ * `aria-controls` pointing at the revealed panel, and the panel's contents are one named group.
+ *
+ * What the same run also showed, because it is the reason this row existed at all: Escape DOES
+ * return focus to the trigger, immediately and reliably. The sweep reported otherwise after
+ * pressing Tab fourteen times first — by the ninth press the popover had already closed itself on
+ * the way out, so the Escape at the end landed on a page with no popover on it and focus stayed
+ * where the five extra Tabs had walked, on a column-header button in the table. That is the exit
+ * working, not focus being dropped. Evidence: `docs/qa/2026-09-04/evidence/PR37-RED-oracle.txt`. */
 function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
   const { t } = useT();
+  /** The panel is portalled to the end of <body>, so `aria-controls` is the only thing that ties
+      it back to the button that reveals it. */
+  const panelId = useId();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -1995,15 +2017,15 @@ function ColumnPickerPopover({ options }: { options: ColumnPickerOption[] }) {
 
   return (
     <>
-      <button ref={triggerRef} type="button" className="btn-secondary" aria-haspopup="dialog" aria-expanded={open}
+      <button ref={triggerRef} type="button" className="btn-secondary" aria-expanded={open} aria-controls={panelId}
         onClick={() => (open ? close() : setOpen(true))}>
         <Columns3 size={ICON.sm} aria-hidden="true" /> {t('ui.text_19')}
       </button>
       {open && createPortal(
-        <div ref={panelRef} role="dialog" aria-label={t('ui.aria_label_5')} tabIndex={-1}
+        <div ref={panelRef} id={panelId} tabIndex={-1}
           style={{ position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, visibility: pos ? 'visible' : 'hidden' }}
           className="z-50 min-w-44 max-w-64 max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain border border-line bg-surface p-2 shadow-menu">
-          <ColumnChecklist options={options} />
+          <ColumnChecklist options={options} label={t('ui.aria_label_5')} />
         </div>,
         document.body,
       )}
@@ -2473,7 +2495,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
             {pickerOptions && (
               <div>
                 <div className="label">{t('ui.text_19')}</div>
-                <ColumnChecklist options={pickerOptions} />
+                <ColumnChecklist options={pickerOptions} label={t('ui.aria_label_4')} />
               </div>
             )}
             {hasActiveFilters && (

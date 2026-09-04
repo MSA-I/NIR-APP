@@ -225,6 +225,11 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, c
         <span className="text-xs font-medium text-ink-muted">{title}</span>
       </div>
       <div className="mt-2 flex items-center gap-3">
+        {/* No `dir="ltr"`. `.num` already carries `unicode-bidi: isolate`, which is what protects
+            the Hebrew around a figure; the direction override on top of it is what put the shekel
+            sign on the far side of the digits — `68,663₪` in the strip against `₪ 573.00` further
+            down the same screen. The rule `src/index.css` states beside `.num` is that callers set
+            `dir=ltr` only for atomic Latin identifiers, and a sum of money is not one. */}
         <div className={`shrink-0 kpi-hero num ${toneCls}`}>{glanceMoney(value, currency)}</div>
         {hasSpark && spark && sparkLabel && <TrendSparkline points={spark} label={sparkLabel} currency={currency} />}
       </div>
@@ -1328,6 +1333,7 @@ export default function Dashboard() {
                 <ReceiptText size={ICON.md} className="shrink-0 text-ink-muted" aria-hidden="true" />
                 <span className="text-xs font-medium text-ink-muted">{t('dashboard.title_3')}</span>
               </div>
+              {/* Direction: see the note on `BandStat`'s figure — one money shape per screen. */}
               <div className="mt-2 kpi-hero num text-await-fg">
                 {glanceMoney(view.money.openBalance, viewCurrency)}
               </div>
@@ -1468,6 +1474,7 @@ export default function Dashboard() {
                   </p>
                 ) : (
                   <div className="mt-2 flex min-h-32 flex-col justify-center gap-4 sm:min-h-40">
+                    {/* Direction: see the note on `BandStat`'s figure — one money shape per screen. */}
                     <div className="kpi-hero num text-ink">
                       {glanceMoney(view.dueWindow.overdueAmount + (view.dueWindow.dueWithin7Amount ?? 0), viewCurrency)}
                     </div>
