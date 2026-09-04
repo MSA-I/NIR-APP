@@ -1,0 +1,235 @@
+PR 22 — ASSIST-01 — RED
+=======================
+Gate      : ASSIST-01 (docs/GATES.md, Wave G)
+Oracle    : Once a person has asked a question, history adoption cannot replace it —
+            including when the request has already SETTLED.
+Spec      : src/components/assistant/assistantHistoryAdoption.spec.tsx (new)
+Command   : npx vitest run src/components/assistant/assistantHistoryAdoption.spec.tsx
+Tree      : UNFIXED — src/lib/assistant/runSession.ts and src/components/AssistantPanel.tsx
+            exactly as on qa/pr22-assistant-history at 0454c411.
+
+WHERE THIS RAN
+--------------
+Executed in the worktree .claude/worktrees/qa-sweep-20260904, NOT in
+.claude/worktrees/pr22-assistant-history. The agent's harness isolation root was pinned to
+qa-sweep-20260904 and refused every write and every git call against the pr22 worktree.
+Before the run, all four files that carry this behaviour were verified byte-identical between
+the two worktrees (diff -q, no differences):
+    src/lib/assistant/runSession.ts
+    src/components/AssistantPanel.tsx
+    src/components/assistant/AssistantDialog.tsx
+    src/components/assistant/assistantPanel.spec.tsx
+
+RESULT — the oracle fails, and it fails for the right reason
+------------------------------------------------------------
+The failing assertion is line 162: after the adoption window closes, the question the person
+asked is no longer anywhere in the conversation thread. It was overwritten, together with its
+error, by an older answer to a different question.
+
+The two neighbouring tests PASS on the unfixed tree, which is what makes the failure specific:
+  - the still-pending case is already covered by inFlightRef;
+  - automatic adoption itself still works, so the defect is the race, not the feature.
+
+RAW OUTPUT
+==========
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/qa-sweep-20260904
+
+stderr | src/components/assistant/assistantHistoryAdoption.spec.tsx > העוזר של InPlace — אימוץ history מול שאלה שנשאלה בתוך החלון > שאלה שהוכרעה בתוך חלון האימוץ שורדת — תשובה ישנה אינה מוחקת אותה ואת התוצאה שלה
+An update to AssistantPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+[supplyflow] assistant_limit_reached
+An update to AssistantPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AssistantPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AssistantPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ❯ src/components/assistant/assistantHistoryAdoption.spec.tsx (3 tests | 1 failed) 505ms
+     × שאלה שהוכרעה בתוך חלון האימוץ שורדת — תשובה ישנה אינה מוחקת אותה ואת התוצאה שלה 337ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/assistant/assistantHistoryAdoption.spec.tsx > העוזר של InPlace — אימוץ history מול שאלה שנשאלה בתוך החלון > שאלה שהוכרעה בתוך חלון האימוץ שורדת — תשובה ישנה אינה מוחקת אותה ואת התוצאה שלה
+TestingLibraryElementError: Unable to find an element with the text: כמה חשבוניות ממתינות לי היום?. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<div
+  class="assistant-scroll flex-1 overflow-y-auto p-4 "
+  data-assistant-thread="true"
+>
+  <div
+    class="space-y-4"
+  >
+    <p
+      class="sr-only"
+      id="_r_1_"
+    >
+      העוזר מציג רק נתונים שהמערכת מדדה, ולכל ממצא מצרף עדכניות ומקור לבדיקה.
+    </p>
+    <ol
+      aria-label="השיחה עם העוזר"
+      class="space-y-5"
+    >
+      <li
+        class="space-y-2"
+      >
+        <div
+          class="page-fade flex justify-end"
+        >
+          <p
+            class="max-w-[85%] rounded-3xl rounded-ee-sm bg-action px-4 py-2.5 text-sm font-medium leading-relaxed text-on-solid shadow-card"
+          >
+            מה מצב הספקים?
+          </p>
+        </div>
+        <div
+          class="card page-fade rounded-ss-sm p-3"
+        >
+          <p
+            class="mb-2 text-xs text-ink-muted"
+          >
+            עודכן ל־
+            <span
+              class="num"
+            >
+              20.08.2026, 11:00
+            </span>
+          </p>
+          <div>
+            <div
+              class="assistant-clamped"
+              id="_r_2_"
+            >
+              <div
+                class="space-y-3"
+              >
+                <p
+                  class="text-sm leading-relaxed text-ink-body"
+                >
+                  התשובה הישנה מהשיחה הקודמת.
+                </p>
+                <div
+                  class="flex flex-wrap items-center gap-2"
+                >
+                  <span
+                    class="text-xs text-ink-muted"
+                  >
+                    האם התשובה עזרה?
+                  </span>
+                  <button
+                    class="btn-ghost btn-sm"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-thumbs-up"
+                      fill="none"
+                      height="13"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"
+                      />
+                      <path
+                        d="M7 10v12"
+                      />
+                    </svg>
+                     
+                    מועיל
+                  </button>
+                  <button
+                    class="btn-ghost btn-sm"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-thumbs-down"
+                      fill="none"
+                      height="13"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"
+                      />
+                      <path
+                        d="M17 14V2"
+                      />
+                    </svg>
+                     
+                    לא מועיל
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+  </div>
+</div>
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/assistant/assistantHistoryAdoption.spec.tsx:162:29
+    160|     // האורקל: השאלה של האדם והתוצאה שלה נשארות. לפני התיקון שתיהן נמח…
+    161|     // בתשובה ישנה לשאלה אחרת — והשגיאה נעלמה בשקט יחד איתן.
+    162|     expect(within(thread()).getByText(ASKED_NOW)).toBeInTheDocument();
+       |                             ^
+    163|     expect(within(thread()).getByText(he.errors.assistant_limit_reache…
+    164|     expect(within(thread()).queryByText(ASKED_BEFORE)).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  13:14:36
+   Duration  3.91s (transform 868ms, setup 579ms, import 1.26s, tests 505ms, environment 1.32s)
+

@@ -37,7 +37,21 @@ export interface AssistantRunSession {
    * guard and the authorization epoch in one place instead of duplicating them at the call site.
    */
   submit: (route: string | null, askDirectly?: string) => Promise<boolean>;
+  /**
+   * The person asked for this thread — they pressed a stored conversation in the list. An explicit
+   * request may replace what is on screen, including a question they just asked.
+   */
   restoreHistory: (
+    turns: readonly AssistantHistoryView[],
+    expectedAuthorizationFingerprint: string,
+  ) => boolean;
+  /**
+   * Nobody asked for this thread — the panel offers it when it opens onto an empty session. That
+   * convenience must never cost the person anything, so it refuses the moment this panel session
+   * has produced a question at all. Same write as `restoreHistory`, stricter entry condition; the
+   * two are separate because only this one is racing a person.
+   */
+  adoptHistory: (
     turns: readonly AssistantHistoryView[],
     expectedAuthorizationFingerprint: string,
   ) => boolean;
@@ -96,6 +110,20 @@ export function useAssistantRunSession(
   const [errorText, setErrorText] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const inFlightRef = useRef<Promise<boolean> | null>(null);
+  /**
+   * Has this panel session produced a question at all — which is NOT "is a request in flight".
+   * `inFlightRef` is cleared the instant a run settles, while the panel's adoption path re-checks
+   * its guard only after two awaits (list the conversations, then load the newest one). A question
+   * asked and SETTLED inside that window therefore satisfied the in-flight check and had its
+   * question, its answer and its error overwritten by an older answer to a different question.
+   * Fast outcomes — every error path — are precisely the ones that land inside the window, which
+   * is why the loss was most visible when something had already gone wrong.
+   *
+   * Deliberately not cleared by `resetConversation`: "בדיקה חדשה" empties the thread, and dragging
+   * the old one back in its place is the same surprise from the other direction. Only a new
+   * authorization clears it, because that is a different person.
+   */
+  const askedRef = useRef(false);
   const authorizationRef = useRef(authorizationFingerprint);
   const authorizationEpochRef = useRef(0);
   const authorizationChanged = authorizationRef.current !== authorizationFingerprint;
@@ -109,6 +137,7 @@ export function useAssistantRunSession(
     authorizationRef.current = authorizationFingerprint;
     authorizationEpochRef.current += 1;
     inFlightRef.current = null;
+    askedRef.current = false;
     setQuestion('');
     setSubmittedQuestion(null);
     setPending(false);
@@ -125,6 +154,9 @@ export function useAssistantRunSession(
     const trimmed = (askDirectly ?? question).trim();
     if (!trimmed) return Promise.resolve(false);
     const authorizationEpoch = authorizationEpochRef.current;
+    // Recorded here, synchronously, and never unset by the run settling — that is the whole
+    // difference from `inFlightRef`, and the reason an unrequested thread cannot take this over.
+    askedRef.current = true;
     setSubmittedQuestion(trimmed);
 
     const run = (async () => {
@@ -214,6 +246,16 @@ export function useAssistantRunSession(
     return true;
   }, [authorizationFingerprint]);
 
+  const adoptHistory = useCallback((
+    restored: readonly AssistantHistoryView[],
+    expectedAuthorizationFingerprint: string,
+  ): boolean => {
+    // Read from a ref, not from state: the caller awaited twice before getting here, so any state
+    // this callback closed over is from before the question it must not overwrite.
+    if (askedRef.current) return false;
+    return restoreHistory(restored, expectedAuthorizationFingerprint);
+  }, [restoreHistory]);
+
   return {
     // `useLayoutEffect` clears before paint; masking here also prevents a stale render during the
     // authorization-changing commit itself, before that effect has run.
@@ -232,6 +274,7 @@ export function useAssistantRunSession(
     announcement: authorizationChanged ? '' : announcement,
     submit,
     restoreHistory,
+    adoptHistory,
     resetConversation,
   };
 }

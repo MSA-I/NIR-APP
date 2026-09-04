@@ -83,7 +83,10 @@ export default function AssistantPanel({ session: sharedSession }: {
         if (cancelled || !newest) return;
         const turns = await loadAssistantConversation(newest.id);
         if (cancelled) return;
-        session.restoreHistory(turns, fingerprint);
+        // `adoptHistory`, never `restoreHistory`: the guard above ran BEFORE these two awaits, and
+        // a question asked and settled in between has already cleared the in-flight ref. Only the
+        // adopting entry point re-checks that this session has stayed unasked.
+        session.adoptHistory(turns, fingerprint);
       } catch {
         // An unavailable history is not an error the person asked for. The panel stays usable.
       }
