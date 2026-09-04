@@ -239,13 +239,15 @@ describe('a document being read makes exactly one claim that it is being read', 
     snapshot.stage = 'processing';
     renderSnapshot(snapshot);
 
-    // ZERO printed copies now, not one (owner ruling 25.08.2026: the bar replaces the numbers).
-    // The count is still delivered where a determinate progressbar is supposed to carry it — the
-    // `aria-valuetext` asserted on the next line. `DocumentStatusBadge` renders the very same
-    // string from `progressLabel` for the folder and the upload centre, which have no strip, and
-    // it stays suppressed here; that is the third assertion.
-    expect(screen.queryAllByText('עמוד 3 מתוך 12')).toHaveLength(0);
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'עמוד 3 מתוך 12');
+    // EXACTLY ONE printed copy, and the count moved back into the words on 04.09.2026. Owner ruling
+    // 25.08.2026 — "the bar replaces the numbers" — was about a DETERMINATE bar drawing the same
+    // count the sentence beside it printed. The bar is indeterminate now and measures nothing, so
+    // there is no second voice; a sentence that never changed while twelve pages were read is what
+    // the rebuild was asked to remove. `DocumentStatusBadge` renders the very same string from
+    // `progressLabel` for the folder and the upload centre, which have no strip, and it stays
+    // suppressed here — that is what keeps the count printed once rather than twice.
+    expect(screen.queryAllByText(/עמוד 3 מתוך 12/)).toHaveLength(1);
+    expect(screen.queryByRole('progressbar')).toBeNull();
     expect(document.querySelectorAll('[data-document-status-progress]')).toHaveLength(0);
   });
 
@@ -254,7 +256,7 @@ describe('a document being read makes exactly one claim that it is being read', 
     snapshot.stage = 'processing';
     renderSnapshot(snapshot);
 
-    expect(screen.getByRole('list', { name: 'שלבי התהליך' })).toBeInTheDocument();
+    expect(screen.getByTestId('document-processing-progress')).toBeInTheDocument();
     // The three that used to stand beside it.
     expect(screen.queryByText('בעיבוד')).toBeNull();
     expect(screen.queryByText(/מוצג כרגע לקריאה בלבד/)).toBeNull();

@@ -37,15 +37,23 @@ function renderAt(path: string, props: { inboxCount?: number | null } = {}) {
 const items = () => [...screen.getByRole('group', { name: 'קיצורי דרך ופעולות' }).querySelectorAll('.mobile-action')];
 
 describe('סרגל פעולות מהירות תחתון', () => {
-  it('מחזיר לבעלים חמישה יעדים כשהצילום באמצע ובקרת מסמכים בסוף', () => {
+  /**
+   * The bar a first-day user meets, and the assertion that keeps it that way. Both procurement
+   * roles now get the SAME five doors (owner report 04.09.2026): the operator console
+   * `בקרת מסמכים` and `קבלת סחורה` — neither of which a user without orders can act on — left for
+   * the drawer, and `מסמכים` (where the camera's output lands) and `ספקים` (without which nothing
+   * else on this bar produces anything) took their places.
+   */
+  it('מחזיר לבעלים חמישה יעדים כשהצילום באמצע וספקים בסוף', () => {
     state.role = 'owner';
     renderAt('/orders/order-1');
     expect(items().map((item) => item.textContent)).toEqual([
       // 'חשבונית חדשה' left this bar in G1: an invoice is received, not created.
-      'הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'בקרת מסמכים',
+      'מרכז הבקרה', 'הזמנה חדשה', 'צילום מסמך', 'מסמכים', 'ספקים',
     ]);
     expect(items()[2]).toHaveAttribute('data-quick-action-key', 'capture');
-    expect(screen.getByRole('link', { name: 'בקרת מסמכים' })).toHaveAttribute('href', '/documents/operations');
+    expect(screen.getByRole('link', { name: 'מסמכים' })).toHaveAttribute('href', '/documents');
+    expect(screen.getByRole('link', { name: 'ספקים' })).toHaveAttribute('href', '/suppliers');
     expect(screen.queryByRole('navigation', { name: 'ניווט ראשי בנייד' })).toBeNull();
   });
 
@@ -53,7 +61,7 @@ describe('סרגל פעולות מהירות תחתון', () => {
     state.role = 'office';
     renderAt('/documents');
     expect(items().map((item) => item.textContent)).toEqual([
-      'הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'מסמכים',
+      'מרכז הבקרה', 'הזמנה חדשה', 'צילום מסמך', 'מסמכים', 'ספקים',
     ]);
     expect(items()[2]).toHaveAttribute('data-quick-action-key', 'capture');
     expect(screen.getByRole('link', { name: 'מסמכים' })).toHaveAttribute('aria-current', 'page');
@@ -80,16 +88,16 @@ describe('סרגל פעולות מהירות תחתון', () => {
 
   /**
    * A suspended or offboarding tenant used to lose the ENTIRE bar, because the gate returned `[]`
-   * rather than filtering the writes out of it. מרכז הבקרה, קבלת סחורה and the documents door are
-   * places to LOOK — exactly what a business in that state has been told it may still do, and
-   * exactly what it needs on a phone. Only the camera writes.
+   * rather than filtering the writes out of it. מרכז הבקרה, the documents door and the supplier
+   * list are places to LOOK — exactly what a business in that state has been told it may still do,
+   * and exactly what it needs on a phone. Only the camera writes.
    */
   it('ארגון לקריאה בלבד שומר את הניווט ומאבד רק את הצילום', () => {
     state.role = 'office';
     state.organizationAccess = { mode: 'read_only', canWrite: false };
     renderAt('/dashboard');
     expect(items().map((item) => item.textContent)).toEqual([
-      'הזמנה חדשה', 'מרכז הבקרה', 'קבלת סחורה', 'מסמכים',
+      'מרכז הבקרה', 'הזמנה חדשה', 'מסמכים', 'ספקים',
     ]);
     expect(screen.queryByRole('button', { name: 'צילום מסמך' })).toBeNull();
     expect(screen.getByRole('link', { name: 'מרכז הבקרה' })).toHaveAttribute('href', '/dashboard');
@@ -108,8 +116,8 @@ describe('סרגל פעולות מהירות תחתון', () => {
    */
   it('המסך הנוכחי מסומן בצבע משלו — לא בצבע של פוק המצלמה — והלחיצה סימון חלש משלה', () => {
     state.role = 'office';
-    renderAt('/receiving');
-    const current = screen.getByRole('link', { name: 'קבלת סחורה' });
+    renderAt('/suppliers');
+    const current = screen.getByRole('link', { name: 'ספקים' });
     expect(current).toHaveAttribute('aria-current', 'page');
     expect(current.className).toContain('bg-nav-current');
     // The whole defect, as a test: the pill and the camera puck may never share a fill again.

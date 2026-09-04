@@ -501,8 +501,13 @@ async function roleAndViewportMatrix(browser) {
 
 async function quickActionsContract(browser) {
   const roleLabels = {
-    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'בקרת מסמכים'],
-    office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'מסמכים'],
+    // Both procurement roles get the SAME five doors from 04.09.2026 (owner report: a first-day
+    // user understood nothing on this bar but the camera). `בקרת מסמכים` is the operator's queue
+    // and `קבלת סחורה` can do nothing before an order exists; both kept their place in the drawer.
+    // What took their slots is where the camera's output lands and the list without which no other
+    // action on this bar produces anything.
+    owner: ['מרכז הבקרה', 'הזמנה חדשה', 'צילום מסמך', 'מסמכים', 'ספקים'],
+    office: ['מרכז הבקרה', 'הזמנה חדשה', 'צילום מסמך', 'מסמכים', 'ספקים'],
     // 'תשלומים לביצוע', not 'תשלומים'. The bar used to hand-write the second, which is
     // `/payments`'s canonical name, while its own target is `/pay` — so for the ONE role that
     // holds both screens, the bar's "תשלומים" opened the execution queue and the drawer's
@@ -512,8 +517,8 @@ async function quickActionsContract(browser) {
     accountant: ['מרכז הבקרה', 'חשבוניות', 'תשלומים לביצוע'],
   };
   const roleTargets = {
-    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/documents/operations'],
-    office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/documents'],
+    owner: ['/dashboard', '/orders/new?fresh=1', null, '/documents', '/suppliers'],
+    office: ['/dashboard', '/orders/new?fresh=1', null, '/documents', '/suppliers'],
     accountant: ['/dashboard', '/invoices', '/pay'],
   };
 
@@ -606,13 +611,13 @@ async function quickActionsContract(browser) {
           await page.goto(`${baseURL}${route}`);
           await settle(page);
           await assertFullMobileActions(page, route,
-            ['order', 'dashboard', 'capture', 'receive', 'document-operations']);
+            ['dashboard', 'order', 'capture', 'documents', 'suppliers']);
         }
 
         await page.goto(`${baseURL}/receiving/f0000000-0000-4000-8000-000000000011`);
         await settle(page);
         await assertFullMobileActions(page, 'receiving detail',
-          ['order', 'dashboard', 'capture', 'receive', 'document-operations']);
+          ['dashboard', 'order', 'capture', 'documents', 'suppliers']);
         assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail lost its contextual phone taskbar');
       }
     } finally {
@@ -930,7 +935,7 @@ async function receivingAccessibility(browser) {
     await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור מוצר בדיקת נגישות' }).waitFor();
     // The office receiver keeps the complete role-aware bar on the exact screen under audit.
     await assertFullMobileActions(page, 'receiving detail accessibility',
-      ['order', 'dashboard', 'capture', 'receive', 'documents']);
+      ['dashboard', 'order', 'capture', 'documents', 'suppliers']);
     assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail lost its contextual phone taskbar');
     // Same repair as the order-approval claim below: the phrase this looked for exists nowhere,
     // so the assertion could not fail. The reason box a routine receipt would grow is
@@ -2652,21 +2657,22 @@ async function automaticPriceListAcceptance(browser) {
     assert.match(body, /2 שורות נקלטו/, 'automatic price-list receipt did not report two accepted rows');
     assert.match(body, /1 שורות ממתינות/, 'automatic price-list receipt did not report one waiting row');
     assert.match(body, /1 מוצרים חדשים נוצרו/, 'automatic price-list receipt did not report the created product');
-    const detailsToggle = panel.locator('[data-testid="price-list-details-toggle"]');
-    assert.equal(await detailsToggle.getAttribute('aria-expanded'), 'false',
-      'the global price-list details control was not collapsed by default');
+    // "פרטים נוספים" was removed from this screen on 04.09.2026 (owner ruling). What is left on a
+    // FINISHED intake is one door named after what it shows: the rows the intake actually took.
+    assert.equal(await panel.locator('[data-testid="price-list-details-toggle"]').count(), 0,
+      'the generic details toggle came back to the price-list screen');
+    const showLines = panel.locator('[data-testid="price-list-show-lines"]');
+    await showLines.waitFor({ timeout: 25_000 });
     assert.equal(await panel.locator('#price-list-line-details article').count(), 0,
-      'price-list rows were visible before the global details control was opened');
+      'price-list rows were visible before anybody asked to see them');
 
     await auditAccessibility(page, 'ocr-price-list/1440');
     await page.screenshot({ path: path.join(outDir, 'ocr-price-list-collapsed-1440.png'), fullPage: true });
     report.screenshots.push('ocr-price-list-collapsed-1440.png');
 
-    await detailsToggle.click();
-    assert.equal(await detailsToggle.getAttribute('aria-expanded'), 'true',
-      'the global price-list details control did not open all rows');
+    await showLines.click();
     assert.equal(await panel.locator('#price-list-line-details article').count(), 3,
-      'the global price-list details control did not reveal every row');
+      'the receipt door did not reveal every row the intake took');
     const expandedBody = await panel.innerText();
     assert.match(expandedBody, /נקלטה אוטומטית/, 'the existing product row was not marked as automatically applied');
     assert.match(expandedBody, /מוצר חדש נוצר ונקלט/, 'the keyed new product row was not marked as created');
@@ -2679,9 +2685,9 @@ async function automaticPriceListAcceptance(browser) {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(250);
-    await detailsToggle.click();
+    await panel.locator('[data-testid="price-list-details-close"]').click();
     assert.equal(await panel.locator('#price-list-line-details article').count(), 0,
-      'the global price-list details control did not collapse every row on mobile');
+      'the rows did not fold away again on mobile');
     const [mobileResultBox, mobileSourceBox] = await Promise.all([
       panel.boundingBox(),
       page.locator('[data-testid="document-source-viewer"]').boundingBox(),
@@ -2723,8 +2729,10 @@ async function manualPriceListConfirmation(browser) {
     await confirm.waitFor({ timeout: 25_000 });
     await page.locator('[data-testid="price-list-intake-summary"]').waitFor({ timeout: 25_000 });
 
+    // One sentence, counting what the reader can act on. It replaced six blocks that all described
+    // these same 22 lines (owner ruling 04.09.2026).
     assert.match(await panel.locator('[data-testid="price-list-intake-summary"]').innerText(),
-      /20 מתוך 22 שורות זוהו במלואן/,
+      /22 שורות במחירון · 20 מוכנות לקליטה · 2 דורשות מוצר חדש\./,
       'the confirmation screen did not report the twenty rows the server had already matched');
     // The screen must not claim an automatic intake on a document where none happened.
     const headerBody = await panel.innerText();
@@ -2742,11 +2750,14 @@ async function manualPriceListConfirmation(browser) {
       null,
       { timeout: 25_000 },
     ).catch(() => { throw new Error('the primary intake button never became clickable') });
-    assert.match(await confirm.innerText(), /קליטת\s*20\s*המחירים שנבחרו/,
+    assert.match(await confirm.innerText(), /עדכון\s*20\s*המחירים/,
       'the primary button did not carry the matched row count');
-    const detailsToggle = panel.locator('[data-testid="price-list-details-toggle"]');
-    assert.equal(await detailsToggle.getAttribute('aria-expanded'), 'false',
-      'the per-line form was open by default again');
+    // The month and the audit note are inside the line panel now, not between the reader and the
+    // one button; the generic toggle is gone entirely.
+    assert.equal(await panel.locator('[data-testid="price-list-details-toggle"]').count(), 0,
+      'the generic details toggle came back to the price-list screen');
+    assert.doesNotMatch(await panel.innerText(), /החודש קובע לאיזו גרסת מחירון/,
+      'the target-month field is standing in front of the primary decision again');
     assert.equal(await panel.locator('#price-list-line-details article').count(), 0,
       'per-line cards were rendered before anybody asked for them');
 
@@ -2774,7 +2785,7 @@ async function manualPriceListConfirmation(browser) {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(250);
-    await detailsToggle.click();
+    await panel.locator('[data-testid="price-list-details-close"]').click();
     assert.equal(await panel.locator('#price-list-line-details article').count(), 0,
       'the per-line form did not fold away again on mobile');
     // auditAccessibility also fails on any horizontal overflow, which is the measurement that
