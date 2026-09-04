@@ -62,7 +62,7 @@ function RiskCell({ m }: { m?: SupplierMetrics }) {
   const { t } = useT();
   const ex = m?.open_exceptions ?? 0;
   const cr = m?.open_credits ?? 0;
-  if (!ex && !cr) return <span className="text-ink-ghost">—</span>;
+  if (!ex && !cr) return <span className="text-ink-muted">—</span>;
   return (
     <span className="flex items-center gap-1">
       {/* Singular is not a rounding error in Hebrew: the plural form read "1 חריגים" on every
@@ -208,7 +208,7 @@ export function SuppliersList() {
     ) },
     { key: 'rating', header: t('suppliers.text_7'), priority: 3, className: 'num', sortValue: (r) => r.rating ?? 0, render: (r) => r.rating != null
         ? <span className="inline-flex items-center gap-1"><Star size={ICON.xs} className="fill-star text-star" aria-hidden="true" />{r.rating}</span>
-        : <span className="text-ink-ghost">—</span> },
+        : <span className="text-ink-muted">—</span> },
     { key: 'cats', header: t('suppliers.join'), priority: 3, render: (r) => <span className="text-ink-muted">{r.categories?.join(', ') || '—'}</span> },
     { key: 'contact', header: t('suppliers.text_8'), priority: 3, render: (r) => r.contact_name || '—' },
     { key: 'phone', header: t('suppliers.text_9'), render: (r) => <span dir="ltr">{r.phone || '—'}</span> },
@@ -998,7 +998,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
       key: 'change', header: t('suppliers.text_52'), sortValue: changePct,
       render: (r) => {
         const pct = changePct(r);
-        if (!r.previous_price || pct === 0) return <span className="text-ink-faint">—</span>;
+        if (!r.previous_price || pct === 0) return <span className="text-ink-muted">—</span>;
         // Same treatment as PriceLists.tsx:50-56 (LRM keeps the sign on the correct side in RTL),
         // and the same TOKENS: this is a direction of change, not a status claim, so it speaks
         // trend-*. It used to say alert-solid/done-fg — identical values today, which is exactly
@@ -1012,7 +1012,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
       key: 'trend', header: t('suppliers.text_53'),
       render: (r) => {
         const pts = histBySp.get(r.id) ?? [];
-        return pts.length >= 2 ? <PriceSparkline points={pts} /> : <span className="text-ink-ghost">—</span>;
+        return pts.length >= 2 ? <PriceSparkline points={pts} /> : <span className="text-ink-muted">—</span>;
       },
     },
     { key: 'date', header: t('suppliers.fmtDate_6'), sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },

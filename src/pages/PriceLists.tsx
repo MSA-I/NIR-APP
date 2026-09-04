@@ -168,10 +168,10 @@ export default function PriceLists() {
       key: 'delta', header: t('priceLists.text_2'), className: 'num',
       render: (r: Row) => {
         const cheapest = comparison?.cheapest;
-        if (!cheapest || !r.available) return <span className="text-ink-faint">—</span>;
+        if (!cheapest || !r.available) return <span className="text-ink-muted">—</span>;
         if (r.id === cheapest.id) return <StatusBadge meta={{ key: 'priceList_cheapest', tone: 'done' }} />;
         const diff = r.current_price - cheapest.current_price;
-        if (diff <= 0) return <span className="text-ink-faint">—</span>;
+        if (diff <= 0) return <span className="text-ink-muted">—</span>;
         const pct = cheapest.current_price > 0 ? (diff / cheapest.current_price) * 100 : null;
         return <span className="text-trend-up-fg">‎+{fmtMoneyExact(diff, r.currency)}{pct != null ? ` (+${pct.toFixed(1)}%)` : ''}</span>;
       },
@@ -181,7 +181,7 @@ export default function PriceLists() {
       key: 'change', header: t('priceLists.text_3'), sortValue: changePct,
       render: (r) => {
         const pct = changePct(r);
-        if (!r.previous_price || pct === 0) return <span className="text-ink-faint">—</span>;
+        if (!r.previous_price || pct === 0) return <span className="text-ink-muted">—</span>;
         return pct > 0
           ? <span className="inline-flex items-center gap-1 text-trend-up-fg font-medium"><TrendingUp size={ICON.xs} aria-hidden="true" />‎+{pct.toFixed(1)}%</span>
           : <span className="inline-flex items-center gap-1 text-trend-down-fg font-medium"><TrendingDown size={ICON.xs} aria-hidden="true" />‎{pct.toFixed(1)}%</span>;

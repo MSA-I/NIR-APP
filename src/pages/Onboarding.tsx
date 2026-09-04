@@ -1145,7 +1145,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
       render: (r) => {
         if (r.priceNote) return <span className="text-await-fg text-xs">{r.priceNote}</span>;
         if (r.existingProductId) return <span className="text-ink-muted text-xs">{t('onboarding.text_30')}</span>;
-        return <span className="text-ink-ghost">—</span>;
+        return <span className="text-ink-muted">—</span>;
       },
     },
   ];
