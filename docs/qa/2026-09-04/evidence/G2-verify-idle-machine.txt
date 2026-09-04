@@ -1,0 +1,288 @@
+
+> inplace@0.1.0 verify
+> npm run check:dead-code && npm run check:tokens && npm run check:typography && npm run check:i18n && npm run check:plurals && npm run check:orphan-keys && npm run check:plan-labels && npm run check:jsx-space && npm run check:money && npm run check:exemptions && npm run check:supplier-columns && npm run check:assistant-no-send && npm run check:assistant-tool-schemas && npm run check:anchored-replacements && npm run check:currency && npm run check:tolerance-surfaces && npm run check:suite-manifest && npm run check:migration-numbers && npm run check:renumber-closure && npm run check:key-manifest && npm run check:baseline-drift && npm run check:decision-numbers && npm run check:gate-controls && npm run check:workflow-triggers && npm run check:exception-labels && npm run check:debt-numbers && npm run check:noindex-posture && npm run test && npm run check:paddle-secrets && npm run check:env-files && npm run check:appearance-scope && npm run check:contrast
+
+
+> inplace@0.1.0 check:dead-code
+> knip --config knip.json
+
+Configuration hints (5)
+playwright-core     knip.json  Remove from ignoreDependencies                               
+src/main.tsx        knip.json  Remove redundant entry pattern                               
+vite.config.ts      knip.json  Remove redundant entry pattern                               
+vitest.config.ts    knip.json  Remove redundant entry pattern                               
+.css                knip.json  Compiled extension excluded by project (imports not followed)
+
+> inplace@0.1.0 check:tokens
+> node scripts/check-design-tokens.ts
+
+check:tokens passed: 529 .ts/.tsx files with zero raw palette classes, zero hex literals, zero stock Tailwind shadows and zero references to a colour outside the 145 tokens @theme actually defines; src/index.css keeps every colour literal inside @theme and uses no rgb()/hsl(); 2 stylesheet(s) under src/, and the only one exempt from the token layer is styles/plan-card.css (OPEN-DECISIONS #296).
+
+> inplace@0.1.0 check:typography
+> node scripts/check-typography.ts
+
+Typography contract passed (532 source files).
+
+> inplace@0.1.0 check:i18n
+> node scripts/check-i18n.ts
+
+check:i18n passed: 63 file(s) still carry 908 Hebrew line(s), all at their pinned counts (63 documented exception(s)).
+
+> inplace@0.1.0 check:plurals
+> node scripts/check-plurals.mjs
+
+check:plurals passed: 76 counted phrase(s), 31 with a singular sibling, 45 pinned.
+
+> inplace@0.1.0 check:orphan-keys
+> node scripts/check-orphan-keys.mjs
+
+check:orphan-keys passed: 6021 leaf key(s), 106 with no call site, pinned.
+
+> inplace@0.1.0 check:plan-labels
+> node scripts/check-plan-labels.mjs
+
+check:plan-labels passed: 37 Hebrew label(s) match their seeded row.
+
+> inplace@0.1.0 check:jsx-space
+> node scripts/check-jsx-space.mjs
+
+check:jsx-space passed: 152 .tsx file(s), no glued translated expressions.
+
+> inplace@0.1.0 check:money
+> node scripts/check-money.ts
+
+check:money passed: 3 rules over src/**/*.ts(x), src/lib/format.ts exempt.
+
+> inplace@0.1.0 check:exemptions
+> node scripts/check-exemption-pin.ts
+
+check:exemptions passed: 241 post-0057 migration(s) re-assert A1/A3/A5 (7 pinned historical omissions); pin 96 matches 22 migration(s) (+41 / -4 over 0057's seed of 59).
+
+> inplace@0.1.0 check:supplier-columns
+> node scripts/check-supplier-columns.ts
+
+check:supplier-columns passed: zero `select('*')` against suppliers across 529 files.
+
+> inplace@0.1.0 check:assistant-no-send
+> node scripts/check-assistant-no-send.mjs
+
+assistant-no-send: OK
+
+> inplace@0.1.0 check:assistant-tool-schemas
+> node scripts/check-assistant-tool-schemas.mjs
+
+check:assistant-tool-schemas passed: 18 tool declaration(s); every property is required, so strict mode accepts them.
+
+> inplace@0.1.0 check:anchored-replacements
+> node scripts/check-anchored-replacements.mjs
+
+check:anchored-replacements passed: 305 migration(s) scanned, 107 read a live function body, 35 pinned pre-rule file(s), 0 new unnormalised reader(s).
+
+> inplace@0.1.0 check:currency
+> node scripts/check-currency.mjs
+
+GATE_CURRENCY_COLUMNS_OK — 84 numeric columns declared, all classified (40 money, 44 not money); carrier check enforced.
+GATE_CURRENCY_AGGREGATES_OK — money aggregates enforced from 0217 onward.
+GATE_CURRENCY_INTAKE_GUARD_OK — 0244_intake_says_when_it_could_not_check.sql still rejects an unrecognised currency as currency_unrecognised/error.
+
+> inplace@0.1.0 check:tolerance-surfaces
+> node scripts/check-tolerance-surfaces.mjs
+
+GATE_TOLERANCE_KEYS_OK — 5 tolerance key(s) classified, 0 unlisted.
+GATE_TOLERANCE_SURFACES_OK — 5/5 key(s) configurable in src/components/CurrencyTolerancesPanel.tsx.
+
+> inplace@0.1.0 check:suite-manifest
+> node scripts/check-suite-manifest.mjs
+
+check:suite-manifest passed: 126 entries, 122 suites, identical to the baseline in identity and order, and in agreement with what ci-sql-suites.mjs would run.
+
+> inplace@0.1.0 check:migration-numbers
+> node scripts/check-migration-numbers.mjs
+
+check:migration-numbers passed: 305 migrations, 0001–0314, no duplicate, no new gap.
+
+> inplace@0.1.0 check:renumber-closure
+> node scripts/check-renumber-closure.mjs
+
+check:renumber-closure passed: 305 migrations, 448 numbered dollar tag(s) and every raise-exception prefix match their own file, 715 filename reference(s) resolve, 4 of 4 declared renumber(s) done, 3 decision move(s) carried through.
+
+> inplace@0.1.0 check:key-manifest
+> node scripts/check-key-manifest.mjs
+
+check:key-manifest passed: 5532 keys considered, 107 without a production call site — the same names as the baseline, none newly stranded, none spec-only.
+
+> inplace@0.1.0 check:baseline-drift
+> node scripts/check-baseline-drift.mjs
+
+check:baseline-drift passed: baselines moved only in the allowed direction since eb1cc718.
+
+> inplace@0.1.0 check:decision-numbers
+> node scripts/check-decision-numbers.mjs
+
+check:decision-numbers passed: 333 rulings, #10–#357, none duplicated, 79 prose citation(s) and 1830 in code all resolve.
+
+> inplace@0.1.0 check:gate-controls
+> node scripts/check-gate-controls.mjs
+
+
+check:suite-manifest
+  ✓ a deleted suite is caught
+  ✓ a duplicated suite is caught
+  ✓ a reordered suite is caught
+  ✓ an added suite is caught
+  ✓ a canonical-looking call nested inside a conditional block is caught
+  ✓ a call wrapped in a conditional is caught
+  ✓ the real registry still passes
+
+check:migration-numbers
+  ✓ a duplicate migration number is caught
+  ✓ a gap in the migration sequence is caught
+  ✓ deleting the HIGHEST migration is caught (it makes no gap)
+  ✓ the real migration sequence still passes
+
+check:renumber-closure
+  ✓ a stale dollar tag of ANY name is caught
+  ✓ a stale raise-exception prefix is caught
+  ✓ a stale external reference is caught
+  ✓ the real tree still passes
+
+check:key-manifest
+  ✓ a key that loses its last production call site is caught
+  ✓ stranding one key while wiring another is caught (total unchanged)
+  ✓ a call site that is commented out rather than deleted is caught
+  ✓ the real dictionary still passes
+
+check:renumber-closure (map mode)
+  ✓ a completed move passes, and the number it moved TO is not banned elsewhere
+  ✓ a move whose innards still carry the old number is caught
+  ✓ a declared reference that no longer carries the old number passes
+  ✓ a completed move passes while its old number stays live in another migration
+  ✓ a declared reference still carrying the old number is caught
+
+check:baseline-drift
+  ✓ deleting a suite and re-pinning the baseline is caught
+  ✓ the real baselines still pass
+
+check:decision-numbers
+  ✓ a duplicated ruling number is caught
+  ✓ a citation of a ruling that does not exist is caught
+  ✓ a code citation of a ruling that does not exist is caught
+  ✓ the real decision table still passes
+
+check:workflow-triggers
+  ✓ a pull_request trigger filtered by base branch is caught
+  ✓ the real workflow triggers still pass
+
+check:exception-labels
+  ✓ an enum value with no label is caught
+  ✓ every real exception type is still labelled
+
+check:debt-numbers
+  ✓ a duplicated debt section number is caught
+  ✓ the real debt register still passes
+
+check:noindex-posture
+  ✓ removing X-Robots-Tag from public/_headers is caught
+  ✓ narrowing the header from /* to one path is caught
+  ✓ deleting public/robots.txt is caught
+  ✓ an HTML entry losing its meta robots tag is caught
+  ✓ a blanket Disallow with nobody recording the index empty is caught
+  ✓ deleting the SPA catch-all to manufacture a 404 is caught
+  ✓ a blanket Disallow WITH an INDEX-CLEARED observation passes
+  ✓ the real tree still passes
+
+wiring
+  ✓ all 12 guards reachable from package.json and build.yml
+  ✓ all 32 `verify` sub-commands appear in build.yml
+
+check:exemptions
+  ✓ a migration that skips the A1/A3/A5 re-assert is caught
+  ✓ an exemption added without moving the pin is caught
+  ✓ the real migration set passes
+
+check:gate-controls passed: 49 controls, every guard failed exactly when it should.
+
+> inplace@0.1.0 check:workflow-triggers
+> node scripts/check-workflow-triggers.mjs
+
+check:workflow-triggers passed: 2 pull_request trigger(s) across 3 workflow file(s), none filtered by base branch.
+
+> inplace@0.1.0 check:exception-labels
+> node scripts/check-exception-labels.mjs
+
+check:exception-labels passed: 12 exception_type value(s), every one mapped in EXCEPTION_TYPE and named in both dictionaries.
+
+> inplace@0.1.0 check:debt-numbers
+> node scripts/check-debt-numbers.mjs
+
+check:debt-numbers passed: 98 debt section number(s), none duplicated.
+
+> inplace@0.1.0 check:noindex-posture
+> node scripts/check-noindex-posture.mjs
+
+check:noindex-posture passed: X-Robots-Tag noindex on /*, a real robots.txt that still
+  allows crawling, the meta tag in all 3 HTML entries, and the SPA catch-all intact.
+
+> inplace@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/qa-sweep-20260904
+
+Not implemented: navigation to another Document
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+ Test Files  246 passed (246)
+      Tests  2549 passed (2549)
+   Start at  14:44:17
+   Duration  93.29s (transform 58.20s, setup 248.74s, import 183.06s, tests 282.04s, environment 519.47s)
+
+
+> inplace@0.1.0 check:paddle-secrets
+> node scripts/check-paddle-secrets.mjs
+
+Paddle credential guard: no server key or endpoint secret is reachable from the browser.
+
+> inplace@0.1.0 check:env-files
+> node scripts/check-env-files.mjs
+
+env-file guard: no env file is tracked; 6 sibling names are ignored; 2 templates stay visible.
+
+> inplace@0.1.0 check:appearance-scope
+> node scripts/check-appearance-scope.mjs
+
+check:appearance-scope passed: operator.html and portal.html are pinned to light, the pre-paint bootstrap exists only in index.html, src/lib/appearance.ts is the only writer of data-theme and of the theme key, src/index.css carries the dark selector and no second dark mechanism, and no in-page mark uses the OS-adaptive /favicon.svg; the inline mark matches the shipped asset and the first-paint theme-color matches the light --color-canvas.
+
+> inplace@0.1.0 check:contrast
+> node scripts/check-contrast-manifest.mjs
+
+check:contrast passed: 53 text pair(s) at 4.5:1, 7 non-text pair(s) at 3:1, 1 direction contract(s), 2 text and 14 non-text exemption(s) each carrying a reason; every token defined in @theme, no duplicates, and all 5 status families accounted for on text, badge, filled chip and boundary. The RATIOS are measured in the CI browser job (scripts/check-contrast-rendered.mjs) -- this gate only proves the list is honest.
