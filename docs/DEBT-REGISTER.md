@@ -2523,3 +2523,38 @@ Hebrew and clears the field" — עם `Unable to find an element with the text: 
   אליו את מטען ההשלמה שהוא באמת פולט. זה קיים כמעט במלואו — `contracts` כבר בונה את התמונה
   ו-`sql` כבר מקים מסד; חסר צעד אחד שמחבר ביניהם. עד שיהיה, כל העלאת חוזה מחייבת מסמך אמיתי
   בייצור אחרי הפריסה, ולא `job_claimed` על מסמך כלשהו אלא על מסמך שמפעיל את התכונה החדשה.
+
+### §114 — אין שום הגבלה על ניסיונות כניסה, והמתג שנועד לסגור זאת חסום בתוכנית
+
+- **מצב, נמדד 04.09.2026 מול הייצור.** שני מתגי הסיסמה שהבעלים אישר הודלקו והם בתוקף:
+  `password_min_length = 10` ‏(השרת קיבל 6 עד אז, בעוד הלקוח דרש 10) ו-`password_hibp_enabled = true`.
+  **המתג השלישי נדחה:**
+  ```
+  PATCH HTTP 402: {"message":"The following auth hooks cannot be configured for this
+  organization: HOOK_PASSWORD_VERIFICATION_ATTEMPT"}
+  ```
+  ‏402 הוא חסם חיוב, לא תקלה. הארגון `MSA-I` בתוכנית **`pro`**, וה-hook הזה אינו זמין בה.
+  התוצאה: **אין בייצור שום הגבלה על מספר ניסיונות הכניסה** — הממצא של 33 ניסיונות רצופים
+  ללא חסימה עומד בעינו. ‏`rate_limit_verify`, ‏`_otp`, ‏`_token_refresh`, ‏`_anonymous_users`
+  ו-`_email_sent` קיימים ואף אחד מהם אינו נוגע בכניסה עם סיסמה.
+- **מה שכן מוכן ולא צריך עבודה:** ‏`0296` יצרה את `public.password_verification_attempt(jsonb)`
+  בייצור עם EXECUTE ל-`supabase_auth_admin`. ברגע שהתוכנית תאפשר, הפקודה
+  ‏`node scripts/auth-hardening.mjs --with-lockout` תעבוד כפי שהיא. אין קוד לכתוב.
+- **למה הגבלה בשכבה שלנו אינה פתרון, נמדד ולא שוער.** ה-bundle החי קורא ל-
+  `https://rkftlbctohswhbbiaqin.supabase.co` — נבדק על `assets/index-CZKZg-lF.js` שהאתר מגיש
+  עכשיו: אזכור אחד לכתובת של Supabase, **אפס** ל-`auth.inplace.digital`. הכתובת המותאמת
+  קיימת ופעילה בצד Supabase (`custom-hostname: 5_services_reconfigured`), אבל רשומת ה-DNS
+  שלה היא `CNAME … proxied=False` — כלומר התעבורה **אינה** עוברת דרך Cloudflare ואי אפשר
+  להגביל אותה שם. וגם אילו תוקנו שני אלה, כתובת ה-Supabase המקורית נשארת פתוחה: הגבלה
+  שאפשר לעקוף בשורה אחת נראית כמו הגנה בלי להיות הגנה, וזה גרוע מלדעת שאין.
+  בנוסף — בלי ה-hook, **כשל כניסה אינו נראה לנו בכלל**; הוא מתרחש אצל GoTrue. דיווח מהדפדפן
+  אינו ראיה, כי מי שתוקף פשוט לא ידווח.
+- **ראיה:** כותרת `scripts/auth-hardening.mjs` (מה W0-G4 מדד), ‏`0296`, פלט ה-402 לעיל,
+  ‏`GET /v1/projects/rkftlbctohswhbbiaqin/config/auth`, ‏`GET …/custom-hostname`,
+  ורשומת ה-DNS של `auth.inplace.digital` ב-Cloudflare.
+- **הצעד הזול הבא:** לבדוק אם **‏CAPTCHA** זמין ב-`pro`. ‏`security_captcha_provider` כבר
+  ‏`hcaptcha` ו-`security_captcha_enabled = false`; זו הגדרה ממשפחה אחרת מ-auth hooks, ולכן
+  ייתכן שהיא אינה חסומה — **לא אומת**, והאימות הוא PATCH שהבעלים מריץ. ‏CAPTCHA נאכף אצל
+  GoTrue לכל פונה, כולל מי שעוקף את האפליקציה, ולכן הוא הגנה אמיתית ולא מחסום. הוא **הכרעה
+  נפרדת של הבעלים** ‏(`DEBT §109` פריט 4 והערת התוכנית: „‏CAPTCHA היא הכרעה נפרדת שלא נשאלה").
+  החלופה השנייה היא שדרוג תוכנית, שהיא החלטה כספית ולא הנדסית.
