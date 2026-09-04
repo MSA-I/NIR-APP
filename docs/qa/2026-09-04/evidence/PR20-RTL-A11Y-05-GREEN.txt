@@ -1,0 +1,32 @@
+RTL-A11Y-05 — /reports at 390px loses the entry date and four of the five totals.
+
+ORACLE (GATES.md): at 390px /reports shows the entry date and all five totals.
+
+A CORRECTION TO THE PLAN, MEASURED. The ledger row and the remediation plan both name
+"src/pages/Reports.tsx (add columnPicker)". /reports renders NO DataTable at all: a hand-written
+<table> hidden below xl (it is also the printed sheet the accountant receives, with its own
+colgroup and print-only rows) and a hand-written card list beside it. There is no priority, no
+picker, and nothing for a picker to be added to — so the fix is in the two hand-written bodies and
+the oracle is the finding's own words rather than the plan's mechanism.
+
+WHAT IS RUN: the real /reports screen rendered at a phone viewport. Two claims: תאריך קליטה — the
+date that decides which month an invoice belongs to — is on every invoice card; and the month's
+totals line states all five figures the desktop <tfoot> states, including the 487.66 pre-VAT total
+the sweep found nowhere on the phone.
+
+RUN AGAINST THE FIXED TREE. Same command, same file, no edit to the spec between the two runs.
+
+COMMAND: npx vitest run src/pages/reportsMobileParity.spec.tsx
+  (run from another worktree in this session, so the actual invocation carried the tree
+   explicitly: npx vitest run --root <worktree> --config <worktree>/vitest.config.ts <spec>)
+
+------------------------------------------------------------------------------
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/pr20-mobile-columns
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  13:56:21
+   Duration  3.12s (transform 713ms, setup 470ms, import 1.11s, tests 395ms, environment 934ms)

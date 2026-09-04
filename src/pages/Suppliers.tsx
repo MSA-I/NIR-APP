@@ -244,6 +244,7 @@ export function SuppliersList() {
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.contact_name ?? '').toLowerCase().includes(q) || (r.tax_id ?? '').toLowerCase().includes(q)}
         searchLabel={t('suppliers.searchLabel')}
+        columnPicker="suppliers"
         rowLabel={(r) => t('suppliers.rowLabel', { name: r.name })}
         onRowClick={(r) => navigate(`/suppliers/${r.id}`)}
         mobile="cards"

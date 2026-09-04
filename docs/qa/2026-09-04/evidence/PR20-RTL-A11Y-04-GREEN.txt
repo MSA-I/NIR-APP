@@ -1,0 +1,29 @@
+RTL-A11Y-04 — /suppliers at 390px drops rating, categories, contact person and minimum order
+value.
+
+ORACLE (GATES.md): at 390px /suppliers shows rating, categories, contact and minimum order.
+Same correction as RTL-A11Y-03 — /suppliers passed no columnPicker.
+
+WHAT IS RUN: the real /suppliers screen rendered at a phone viewport with its data served from a
+fixture. Two claims: the mobile sheet contains a column checklist at all, and ticking איש קשר,
+מינ׳ הזמנה, דירוג and קטגוריות puts them on the card — including the 1,250.00 minimum order that
+decides whether an order can be placed.
+
+The same file carries RTL-A11Y-03's two claims; both ids share one run.
+
+RUN AGAINST THE FIXED TREE. Same command, same file, no edit to the spec between the two runs.
+
+COMMAND: npx vitest run src/pages/mobileColumnScreens.spec.tsx
+  (run from another worktree in this session, so the actual invocation carried the tree
+   explicitly: npx vitest run --root <worktree> --config <worktree>/vitest.config.ts <spec>)
+
+------------------------------------------------------------------------------
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/pr20-mobile-columns
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  13:56:09
+   Duration  4.16s (transform 884ms, setup 443ms, import 1.71s, tests 766ms, environment 1.00s)

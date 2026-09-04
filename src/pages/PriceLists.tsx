@@ -260,6 +260,7 @@ export default function PriceLists() {
           || r.supplier.name.toLowerCase().includes(q)
         )}
         searchLabel={t('priceLists.searchLabel')}
+        columnPicker="prices"
         rowLabel={(r) => t('priceListsTail.rowLabel', { product: productLabel(r.product), supplier: r.supplier.name })}
         mobileTitle={(r) => <><bdi>{productLabel(r.product)}</bdi> · <bdi>{r.supplier.name}</bdi></>}
         mobileTrailing={(r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} />}

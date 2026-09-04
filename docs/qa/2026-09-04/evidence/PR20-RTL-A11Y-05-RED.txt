@@ -1,0 +1,411 @@
+RTL-A11Y-05 — /reports at 390px loses the entry date and four of the five totals.
+
+ORACLE (GATES.md): at 390px /reports shows the entry date and all five totals.
+
+A CORRECTION TO THE PLAN, MEASURED. The ledger row and the remediation plan both name
+"src/pages/Reports.tsx (add columnPicker)". /reports renders NO DataTable at all: a hand-written
+<table> hidden below xl (it is also the printed sheet the accountant receives, with its own
+colgroup and print-only rows) and a hand-written card list beside it. There is no priority, no
+picker, and nothing for a picker to be added to — so the fix is in the two hand-written bodies and
+the oracle is the finding's own words rather than the plan's mechanism.
+
+WHAT IS RUN: the real /reports screen rendered at a phone viewport. Two claims: תאריך קליטה — the
+date that decides which month an invoice belongs to — is on every invoice card; and the month's
+totals line states all five figures the desktop <tfoot> states, including the 487.66 pre-VAT total
+the sweep found nowhere on the phone.
+
+RUN AGAINST THE UNFIXED TREE. An oracle that has never been seen failing is a claim, not a
+check (plan §6, gate G14).
+
+COMMAND: npx vitest run src/pages/reportsMobileParity.spec.tsx
+  (run from another worktree in this session, so the actual invocation carried the tree
+   explicitly: npx vitest run --root <worktree> --config <worktree>/vitest.config.ts <spec>)
+
+------------------------------------------------------------------------------
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/pr20-mobile-columns
+
+ ❯ src/pages/reportsMobileParity.spec.tsx (2 tests | 2 failed) 369ms
+     × carries תאריך קליטה on every invoice card 286ms
+     × states all five month totals, not only the gross one 78ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/reportsMobileParity.spec.tsx > /reports at 390px — the entry date and all five totals (RTL-A11Y-05) > carries תאריך קליטה on every invoice card
+TestingLibraryElementError: Unable to find an element with the text: /תאריך קליטה/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<li
+  class="p-4"
+>
+  <div
+    class="flex min-w-0 flex-wrap items-start justify-between gap-2"
+  >
+    <div
+      class="min-w-0"
+    >
+      <div
+        class="break-words font-medium text-ink-body"
+      >
+        חוות השדה
+      </div>
+      <div
+        class="mt-0.5 text-xs text-ink-muted"
+      >
+        <span
+          class="num"
+          dir="ltr"
+        >
+          3377
+        </span>
+         · 
+        01.09.2026
+      </div>
+    </div>
+    <div
+      class="num shrink-0 font-semibold text-ink-body"
+    >
+      ‏354.00 ‏₪
+    </div>
+  </div>
+  <dl
+    class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm"
+  >
+    <div>
+      <dt
+        class="text-xs text-ink-muted"
+      >
+        לפני מע״מ
+      </dt>
+      <dd
+        class="num mt-0.5"
+      >
+        ‏300.00 ‏₪
+      </dd>
+    </div>
+    <div>
+      <dt
+        class="text-xs text-ink-muted"
+      >
+        מע״מ
+      </dt>
+      <dd
+        class="num mt-0.5"
+      >
+        ‏54.00 ‏₪
+      </dd>
+    </div>
+    <div>
+      <dt
+        class="text-xs text-ink-muted"
+      >
+        שולם
+      </dt>
+      <dd
+        class="num mt-0.5"
+      >
+        ‏354.00 ‏₪
+      </dd>
+    </div>
+    <div>
+      <dt
+        class="text-xs text-ink-muted"
+      >
+        יתרה לתשלום
+      </dt>
+      <dd
+        class="num mt-0.5"
+      >
+        ‏0.00 ‏₪
+      </dd>
+    </div>
+  </dl>
+  <div
+    class="mt-3 flex flex-wrap gap-2"
+  >
+    <span
+      class="badge-done"
+    >
+      מאושרת
+    </span>
+    <span
+      class="badge-done"
+    >
+      שולמה
+    </span>
+  </div>
+</li>
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/reportsMobileParity.spec.tsx:133:27
+    131|     // The date that decides an invoice's month, and it was on no card.
+    132|     for (const card of cards.slice(0, 2)) {
+    133|       expect(within(card).getByText(/תאריך קליטה/)).toBeInTheDocument(…
+       |                           ^
+    134|       expect(within(card).getByText('02.09.2026')).toBeInTheDocument();
+    135|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/pages/reportsMobileParity.spec.tsx > /reports at 390px — the entry date and all five totals (RTL-A11Y-05) > states all five month totals, not only the gross one
+TestingLibraryElementError: Found multiple elements with the text: לפני מע״מ
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+<dt
+  class="text-xs text-ink-muted"
+>
+  לפני מע״מ
+</dt>
+
+Ignored nodes: comments, script, style
+<dt
+  class="text-xs text-ink-muted"
+>
+  לפני מע״מ
+</dt>
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+<ul
+  aria-label="חשבוניות בדוח"
+  class="report-mobile-cards xl:hidden divide-y divide-line-soft print:hidden"
+>
+  <li
+    class="p-4"
+  >
+    <div
+      class="flex min-w-0 flex-wrap items-start justify-between gap-2"
+    >
+      <div
+        class="min-w-0"
+      >
+        <div
+          class="break-words font-medium text-ink-body"
+        >
+          חוות השדה
+        </div>
+        <div
+          class="mt-0.5 text-xs text-ink-muted"
+        >
+          <span
+            class="num"
+            dir="ltr"
+          >
+            3377
+          </span>
+           · 
+          01.09.2026
+        </div>
+      </div>
+      <div
+        class="num shrink-0 font-semibold text-ink-body"
+      >
+        ‏354.00 ‏₪
+      </div>
+    </div>
+    <dl
+      class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm"
+    >
+      <div>
+        <dt
+          class="text-xs text-ink-muted"
+        >
+          לפני מע״מ
+        </dt>
+        <dd
+          class="num mt-0.5"
+        >
+          ‏300.00 ‏₪
+        </dd>
+      </div>
+      <div>
+        <dt
+          class="text-xs text-ink-muted"
+        >
+          מע״מ
+        </dt>
+        <dd
+          class="num mt-0.5"
+        >
+          ‏54.00 ‏₪
+        </dd>
+      </div>
+      <div>
+        <dt
+          class="text-xs text-ink-muted"
+        >
+          שולם
+        </dt>
+        <dd
+          class="num mt-0.5"
+        >
+          ‏354.00 ‏₪
+        </dd>
+      </div>
+      <div>
+        <dt
+          class="text-xs text-ink-muted"
+        >
+          יתרה לתשלום
+        </dt>
+        <dd
+          class="num mt-0.5"
+        >
+          ‏0.00 ‏₪
+        </dd>
+      </div>
+    </dl>
+    <div
+      class="mt-3 flex flex-wrap gap-2"
+    >
+      <span
+        class="badge-done"
+      >
+        מאושרת
+      </span>
+      <span
+        class="badge-done"
+      >
+        שולמה
+      </span>
+    </div>
+  </li>
+  <li
+    class="p-4"
+  >
+    <div
+      class="flex min-w-0 flex-wrap items-start justify-between gap-2"
+    >
+      <div
+        class="min-w-0"
+      >
+        <div
+          class="break-words font-medium text-ink-body"
+        >
+          חוות השדה
+        </div>
+        <div
+          class="mt-0.5 text-xs text-ink-muted"
+        >
+          <span
+            class="num"
+            dir="ltr"
+          >
+            7702
+          </span>
+           · 
+          01.09.2026
+        </div>
+      </div>
+      <div
+        class="num shrink-0 font-semibold text-ink-body"
+      >
+        ‏219.00 ‏₪
+      </div>
+    </div>
+    <dl
+      class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm"
+    >
+      <div>
+        <dt
+          class="text-xs text-ink-muted"
+        >
+          לפני מע״מ
+        </dt>
+        <dd
+          class="num mt-0.5"
+        >
+          ‏187.66 ‏₪
+        </dd>
+      </div>
+      <div>
+        <dt
+          class="text-xs text-ink-muted"
+        >
+          מע״מ
+        </dt>
+        <dd
+          class="num mt-0.5"
+        >
+          ‏31.34 ‏₪
+        </dd>
+      </div>
+      <div>
+        <dt
+          class="text-xs text-ink-muted"
+        >
+          שולם
+        </dt>
+        <dd
+          class="num mt-0.5"
+        >
+          ‏208.00 ‏₪
+        </dd>
+      </div>
+      <div>
+        <dt
+          class="text-xs text-ink-muted"
+        >
+          יתרה לתשלום
+        </dt>
+        <dd
+          class="num mt-0.5"
+        >
+          ‏11.00 ‏₪
+        </dd>
+      </div>
+    </dl>
+    <div
+      class="mt-3 flex flex-wrap gap-2"
+    >
+      <span
+        class="badge-done"
+      >
+        מאושרת
+      </span>
+      <span
+        class="badge-await"
+      >
+        שולמה חלקית
+      </span>
+    </div>
+  </li>
+  <li
+    class="flex min-h-11 flex-wrap items-center justify-between gap-2 bg-surface-sunken px-4 py-3 font-semibold"
+  >
+    <span>
+      סה״כ
+    </span>
+    <span
+      class="num"
+    >
+      ‏573.00 ‏₪
+    </span>
+  </li>
+</ul>
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ getElementError ../../../node_modules/@testing-library/dom/dist/query-helpers.js:20:35
+ ❯ getMultipleElementsFoundError ../../../node_modules/@testing-library/dom/dist/query-helpers.js:23:10
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:55:13
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/reportsMobileParity.spec.tsx:145:27
+    143|     // The five the desktop <tfoot> carries, in its order.
+    144|     for (const label of ['לפני מע״מ', 'מע״מ', 'סה״כ', 'שולם', 'יתרה'])…
+    145|       expect(within(list).getByText(label)).toBeInTheDocument();
+       |                           ^
+    146|     }
+    147|     // 487.66 is the figure the sweep found nowhere on the phone: the …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  13:23:52
+   Duration  3.43s (transform 844ms, setup 458ms, import 1.31s, tests 369ms, environment 1.05s)

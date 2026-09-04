@@ -1,0 +1,28 @@
+RTL-A11Y-03 — /prices at 390px loses the unit of measure and the previous price, on the screen
+whose job is comparing prices.
+
+ORACLE (GATES.md): at 390px /prices shows unit of measure and previous price. The ui.tsx override
+alone does not close it — /prices passed no columnPicker, so there was nothing to turn on.
+
+WHAT IS RUN: the real /prices screen rendered at a phone viewport with its data served from a
+fixture. Two claims: the mobile sheet contains a column checklist at all, and ticking יחידה and
+מחיר קודם puts both on the card — with 12.50, the base the −74.4% was computed from.
+
+The same file carries RTL-A11Y-04's two claims; both ids share one run.
+
+RUN AGAINST THE FIXED TREE. Same command, same file, no edit to the spec between the two runs.
+
+COMMAND: npx vitest run src/pages/mobileColumnScreens.spec.tsx
+  (run from another worktree in this session, so the actual invocation carried the tree
+   explicitly: npx vitest run --root <worktree> --config <worktree>/vitest.config.ts <spec>)
+
+------------------------------------------------------------------------------
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/pr20-mobile-columns
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  13:56:09
+   Duration  4.16s (transform 884ms, setup 443ms, import 1.71s, tests 766ms, environment 1.00s)

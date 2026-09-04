@@ -1768,20 +1768,36 @@ const SEARCH_DEBOUNCE_MS = 300;
     hand-edited entry cannot hide a column that no longer exists. */
 const COLUMN_PREFS_PREFIX = 'sf.columns.';
 
-function readHiddenColumns(storageKey: string | undefined, validKeys: readonly string[]): Record<string, boolean> {
-  if (!storageKey) return {};
+/** A SECOND key, not a second format. A phone asking for a column its priority keeps off a card
+    must not rewrite the hidden list a desktop reader's browser already stores. */
+const COLUMN_SHOWN_SUFFIX = '.shown';
+
+function readStoredKeys(storageKey: string, valid: ReadonlySet<string>): string[] {
   try {
-    const raw = localStorage.getItem(COLUMN_PREFS_PREFIX + storageKey);
-    if (!raw) return {};
-    const hidden: unknown = JSON.parse(raw);
-    if (!Array.isArray(hidden)) return {};
-    const valid = new Set(validKeys);
-    const state: Record<string, boolean> = {};
-    for (const key of hidden) if (typeof key === 'string' && valid.has(key)) state[key] = false;
-    return state;
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((key): key is string => typeof key === 'string' && valid.has(key));
   } catch {
-    return {};
+    return [];
   }
+}
+
+/**
+ * Three states, deliberately. `false` = the viewer hid it. `true` = the viewer asked for it even
+ * though its `priority` keeps it off a card by default. ABSENT = nobody chose, so `priority`
+ * decides. Collapsing the third into `true` is what let the mobile checklist report every column
+ * as shown while three of them were on no card at all (RTL-A11Y-02).
+ */
+function readColumnChoices(storageKey: string | undefined, validKeys: readonly string[]): Record<string, boolean> {
+  if (!storageKey) return {};
+  const valid = new Set(validKeys);
+  const state: Record<string, boolean> = {};
+  for (const key of readStoredKeys(COLUMN_PREFS_PREFIX + storageKey + COLUMN_SHOWN_SUFFIX, valid)) state[key] = true;
+  // Hidden last: hiding a column is the stronger statement, and it is the one the table obeys.
+  for (const key of readStoredKeys(COLUMN_PREFS_PREFIX + storageKey, valid)) state[key] = false;
+  return state;
 }
 
 /**
@@ -2051,15 +2067,20 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
   // Column visibility is presentation state, owned here (not by the engine): the picker is
   // declared temporary (#80) and hiding a column must not disturb the row model.
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(
-    () => readHiddenColumns(columnPicker, columns.map((c) => c.key)),
+    () => readColumnChoices(columnPicker, columns.map((c) => c.key)),
   );
-  const setColumnVisible = (key: string, visible: boolean) => {
+  /** `undefined` clears the choice and hands the column back to its `priority` default. */
+  const setColumnChoice = (key: string, choice: boolean | undefined) => {
     setColumnVisibility((prev) => {
-      const next = { ...prev, [key]: visible };
+      const next = { ...prev };
+      if (choice === undefined) delete next[key]; else next[key] = choice;
       if (columnPicker) {
         try {
-          const hidden = columns.map((c) => c.key).filter((k) => next[k] === false);
-          localStorage.setItem(COLUMN_PREFS_PREFIX + columnPicker, JSON.stringify(hidden));
+          const keys = columns.map((c) => c.key);
+          localStorage.setItem(COLUMN_PREFS_PREFIX + columnPicker,
+            JSON.stringify(keys.filter((k) => next[k] === false)));
+          localStorage.setItem(COLUMN_PREFS_PREFIX + columnPicker + COLUMN_SHOWN_SUFFIX,
+            JSON.stringify(keys.filter((k) => next[k] === true)));
         } catch { /* storage unavailable — the session still works, the preference just is not kept */ }
       }
       return next;
@@ -2126,6 +2147,16 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
     [columns, columnVisibility],
   );
 
+  /**
+   * ONE predicate for the mobile card and for the checklist that claims to describe it. `priority`
+   * is the default for a column nobody chose, not a ban: an explicit tick beats it, and no tick
+   * still means the default. The two used to disagree — the card filtered on `priority` alone
+   * while the sheet rendered ticks it then ignored, so a viewer turned a column on and nothing
+   * happened (RTL-A11Y-02, measured on /payments at 390px).
+   */
+  const shownOnCard = (c: { key: string; priority?: 1 | 2 | 3 }) =>
+    columnVisibility[c.key] === true || (c.priority ?? 2) <= 2;
+
   const filteredCount = server ? server.total : table.getFilteredRowModel().rows.length;
   const pageRows: T[] = server ? rows : table.getRowModel().rows.map((r) => r.original);
   const pages = server ? Math.max(1, Math.ceil(server.total / pageSize)) : Math.max(1, table.getPageCount());
@@ -2170,15 +2201,25 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
   const [sheetOpen, setSheetOpen] = useState(false);
   useEffect(() => { if (isDesktop) setSheetOpen(false); }, [isDesktop]);
 
-  const visibleCount = visibleColumns.length;
+  // Below `lg` with a cards body the checklist governs the CARD, so it must report the card. A
+  // column reading "on" while absent from every card is the state RTL-A11Y-02 measured, and it is
+  // why the control read as broken rather than as absent.
+  const cardsBody = mobile === 'cards' && !isDesktop;
+  const shownCount = (cardsBody ? visibleColumns.filter(shownOnCard) : visibleColumns).length;
   const pickerOptions: ColumnPickerOption[] | null = columnPicker === undefined ? null : columns.map((c) => {
-    const visible = columnVisibility[c.key] !== false;
+    const kept = columnVisibility[c.key] !== false;
+    const visible = cardsBody ? kept && shownOnCard(c) : kept;
     return {
       key: c.key,
       header: c.header || c.key,
       visible,
-      disabled: visible && visibleCount === 1,
-      onToggle: (v: boolean) => setColumnVisible(c.key, v),
+      disabled: visible && shownCount === 1,
+      // Turning a phone-only default back off restores the DEFAULT rather than hiding the column
+      // everywhere: `false` travels to the desktop table, which the viewer never asked to change.
+      onToggle: (v: boolean) => setColumnChoice(
+        c.key,
+        v ? true : (cardsBody && (c.priority ?? 2) === 3 ? undefined : false),
+      ),
     };
   });
 
@@ -2213,7 +2254,7 @@ export function DataTable<T extends { id: string }>(props: DataTableProps<T>) {
             <ul className="lg:hidden divide-y divide-line-soft">
               {pageRows.map((row) => {
                 const title = mobileTitle ? mobileTitle(row) : visibleColumns[0]?.render(row);
-                const details = visibleColumns.filter((c, i) => (c.priority ?? 2) <= 2 && !(i === 0 && !mobileTitle));
+                const details = visibleColumns.filter((c, i) => shownOnCard(c) && !(i === 0 && !mobileTitle));
                 const body = (
                   <>
                     <div className="flex items-center justify-between gap-3">
