@@ -7,7 +7,7 @@ import { Link } from 'react-router';
 import { supabase } from '../../lib/supabase';
 import type { PriceListPredictedLine } from '../../lib/useDocumentProcessing';
 import { useAuth } from '../../auth/AuthContext';
-import { ConfirmDialog, ICON, MonthPicker, Note, SubPanel } from '../ui';
+import { ConfirmDialog, Disclosure, ICON, MonthPicker, Note, SubPanel } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
 import { PriceListAutomationReadiness } from './PriceListAutomationReadiness';
 import { FILING_REASON_KEYS, type ReviewSnapshot } from './model';
@@ -256,6 +256,8 @@ export function PriceListReviewConfirmation({
   // Rendered inside the per-line form — the shared error Note sits below all the lines,
   // far off-screen on a long price list, so a failure there would look like a dead button.
   const [createError, setCreateError] = useState<string | null>(null);
+  /** How many products the bulk create made, so the screen can say so instead of just changing. */
+  const [bulkCreated, setBulkCreated] = useState<number | null>(null);
   const createErrorId = useId();
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -633,6 +635,83 @@ export function PriceListReviewConfirmation({
       targets.has(index) ? { ...draft, approved } : draft));
   }
 
+  /**
+   * Create, in one act, a product for every line the matcher could not attach to the catalogue.
+   *
+   * This is the first-run path. A new tenant's catalogue is empty, so nothing matches, the confirm
+   * button below is disabled by construction, and it read "קליטת 0" — it offered the customer the
+   * one thing it could never do. Creating the products is what they came to do, so it is offered
+   * as an action rather than left per-line behind "פרטים נוספים", 74 forms deep.
+   *
+   * It creates products ONLY. Prices still go through the ordinary confirmation below, so the
+   * server invariant `createProduct` records — "האישור אינו יוצר מוצרים" — holds exactly as it did
+   * when creation was one line at a time: creation stays its own user act, and this is that act
+   * performed once instead of seventy-four times.
+   *
+   * Two lines naming the same product create it once. A line whose name cannot be read is skipped
+   * rather than creating a product called nothing — the same choice `planBulkCreate` makes.
+   */
+  async function createAllMissingProducts() {
+    if (!profile) return;
+    const known = new Set(products.map((product) => product.name.trim().toLowerCase()));
+    const wanted = new Map<string, { name: string; unit: string; indexes: number[] }>();
+    for (const index of unmatchedIndexes) {
+      const item = lineItems[index];
+      if (!item) continue;
+      const prediction = predictions.get(index);
+      const name = (prediction?.product_name ?? guessLineName(item.values)).trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (known.has(key)) continue;
+      const already = wanted.get(key);
+      if (already) { already.indexes.push(index); continue; }
+      wanted.set(key, {
+        name,
+        unit: (prediction?.unit ?? '').trim() || t('priceListReview.createAllDefaultUnit'),
+        indexes: [index],
+      });
+    }
+    const rows = [...wanted.values()];
+    if (rows.length === 0) { setCreateError(t('priceListReview.createAllNone')); return; }
+    setBusyCreate(true);
+    setCreateError(null);
+    try {
+      const inserted = await supabase.from('products')
+        .insert(rows.map((row) => ({
+          org_id: profile.org_id, name: row.name, unit: normalizeUnitInput(row.unit), active: true,
+        })))
+        .select('id,name,unit,sku');
+      if (inserted.error) throw inserted.error;
+      const created = (inserted.data ?? []) as ProductOption[];
+      // Claim the prefill BEFORE the catalogue grows. The prefill effect above skips an empty
+      // catalogue without claiming it, so the moment `setProducts` makes the catalogue non-empty
+      // that effect fires — and it prefills from `predictions`, which were computed when these
+      // products did not exist and therefore carry `product_id: null`. It would overwrite every
+      // draft this function is about to fill, one render later, and the screen would go back to
+      // "קליטת 0" with the products silently created. Marking it here says what is true: this
+      // interpretation's drafts have been filled, by hand, from the lines themselves.
+      prefilledFor.current = currentInterpretation.id;
+      setProducts((current) => [...current, ...created]
+        .sort((left, right) => left.name.localeCompare(right.name, 'he')));
+      // Joined by name, never by position: the insert preserves order today, and relying on that
+      // would be a silent mis-mapping the day it stops.
+      const byName = new Map(created.map((product) => [product.name.trim().toLowerCase(), product]));
+      for (const row of rows) {
+        const product = byName.get(row.name.toLowerCase());
+        if (!product) continue;
+        for (const index of row.indexes) {
+          const price = predictedPriceText(index, drafts[index]);
+          updateDraft(index, { productId: product.id, ...(price === null ? {} : { priceText: price }) });
+        }
+      }
+      setBulkCreated(created.length);
+    } catch (insertError) {
+      setCreateError(errorText(insertError));
+    } finally {
+      setBusyCreate(false);
+    }
+  }
+
   const pager = pageCount > 1 && (
     <div className="flex flex-wrap items-center justify-between gap-2" data-testid="price-list-pager">
       <span className="text-sm text-ink-muted">
@@ -706,12 +785,20 @@ export function PriceListReviewConfirmation({
           a price list that has already been taken in has nothing left to prepare, and „מוכנים
           ליצירה N" beside a live „הכנת האצווה" button on such a document offered work that is over.
           When the intake is done the block says so instead of disappearing without explanation. */}
+      {/* Folded, because this is an operator tool wearing a customer's screen. It speaks of dry
+          runs, calibration batches and Platform activation, and its dry run answers "בדיקת
+          הכשירות נכשלה — פנה לתמיכה" — a red failure for a check the customer never asked to run
+          and cannot act on. It stays here and stays reachable; it no longer greets somebody
+          reading their first price list. */}
       {(showControls || priceListIngested) && (
-        <PriceListAutomationReadiness
-          documentId={snapshot.documentId}
-          interpretationId={currentInterpretation.id}
-          ingested={priceListIngested}
-        />
+        <Disclosure title={t('priceListReview.operationalTools')} className="mt-4 card"
+          id="price-list-automation-readiness">
+          <PriceListAutomationReadiness
+            documentId={snapshot.documentId}
+            interpretationId={currentInterpretation.id}
+            ingested={priceListIngested}
+          />
+        </Disclosure>
       )}
 
       {autoDecision && (
@@ -793,8 +880,42 @@ export function PriceListReviewConfirmation({
           <button type="button" className="btn-secondary" onClick={() => setCatalogRevision((value) => value + 1)}>{t('priceListReview.setCatalogRevision')}</button>
         </Note>
       )}
+      {/* An empty catalogue is where every customer starts, so it is stated as a step rather than
+          as a failure, and the action that clears it sits in the note that names it. The confirm
+          button further down stays disabled — correctly, there is nothing yet to confirm — but it
+          is no longer the only thing on offer. */}
       {showControls && !catalogLoading && !catalogError && products.length === 0 && (
-        <Note tone="alert" className="mt-4">{t('priceListReview.text_30')}</Note>
+        <div className="mt-4" data-testid="price-list-empty-catalogue">
+          <Note tone="info" className="flex-wrap">
+            {/* Full width on a phone so the sentence gets the line and the button drops beneath
+                it. Sharing the row at 390px left the text in a two-word column beside a button
+                that took most of the width. */}
+            <span className="w-full sm:w-auto sm:min-w-0 sm:flex-1">
+              {t('priceListReview.text_30')} {t('priceListReview.createAllLead')}
+            </span>
+            {unmatchedIndexes.length > 0 && (
+              <button type="button" className="btn-primary" data-testid="price-list-create-all"
+                disabled={busyCreate} onClick={() => void createAllMissingProducts()}>
+                {busyCreate
+                  ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />
+                  : <Plus size={ICON.md} aria-hidden="true" />}
+                {busyCreate
+                  ? t('priceListReview.createAllBusy')
+                  : t('priceListReview.createAllAction', { count: unmatchedIndexes.length })}
+              </button>
+            )}
+          </Note>
+        </div>
+      )}
+      {bulkCreated !== null && (
+        <div className="mt-3" data-testid="price-list-create-all-done">
+          <Note tone="done" role="status">{t('priceListReview.createAllDone', { count: bulkCreated })}</Note>
+        </div>
+      )}
+      {createError && products.length === 0 && (
+        <div className="mt-3">
+          <Note tone="alert" role="alert">{t('priceListReview.createAllFailed')}{createError}</Note>
+        </div>
       )}
 
       {/* The whole decision, above the lines rather than below them: what was read, what is
@@ -856,7 +977,12 @@ export function PriceListReviewConfirmation({
               </button>
             </PrimaryDecision>
           </div>
-          {pendingIndexes.length > 0 && !catalogLoading && (
+          {/* Silent while the catalogue is empty. "לא הותאמו לבד — מק״ט חסר" is true, and it is
+              the third time the same screen states the same fact: the summary line above counts
+              them, the note above that explains why, and this would name a cause the reader
+              cannot act on until products exist. It returns the moment there is a catalogue to
+              match against, which is when it starts telling the reader something new. */}
+          {pendingIndexes.length > 0 && !catalogLoading && products.length > 0 && (
             <Note tone="await" className="mt-3 flex-wrap">
               <span className="min-w-0 flex-1">
                 <span className="num">{pendingIndexes.length}</span>{t('priceListReview.unmatchedExplain')}
