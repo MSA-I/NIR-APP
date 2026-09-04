@@ -438,8 +438,12 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
         <div className="space-y-4">
           <Note tone={newRows.length || ambiguousRows.length ? 'await' : 'info'}>
             <span className="min-w-0 flex-1">
-              {t('priceUpload.detectedBefore')}<span className="num">{preview.rows.length}</span>{t('priceUpload.rowsForSupplier')} {supplierName}: <span className="num">{matchedRows.length}</span>{t('priceUpload.existingProducts')}
-              {' '}<span className="num">{newRows.length}</span>{t('priceUpload.newProductsWord')}{ambiguousRows.length ? <>, <span className="num">{ambiguousRows.length}</span>{t('priceUpload.duplicateNamesWord')}</> : null}.
+              {/* Four counted CLAUSES, not six fragments glued to three counters. The old shape
+                  froze every noun in the plural — a one-row file read «1 מוצרים חדשים» — because a
+                  fragment cannot agree with a number it never receives. Each clause now carries its
+                  own `count`, and `t()` picks the `_one` sibling through `Intl.PluralRules`. */}
+              {t('priceUpload.detected', { count: preview.rows.length, supplier: supplierName ?? '' })}{' '}
+              {t('priceUpload.matchedExisting', { count: matchedRows.length })}, {t('priceUpload.newProducts', { count: newRows.length })}{ambiguousRows.length ? <>, {t('priceUpload.duplicateNames', { count: ambiguousRows.length })}</> : null}.
               {preview.skipped.length ? <> {t('priceUpload.rowsSkipped', { count: preview.skipped.length })}</> : null}
             </span>
           </Note>
@@ -449,7 +453,10 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
               <ul className="mt-2 space-y-1 text-ink-soft">
                 {groupSkipped(preview.skipped).map(({ reason: skipReason, rows: skipRows }) => (
                   <li key={skipReason}>
-                    {skipReason}{t('priceUpload.rowsWord')}<span className="num">{skipRows.slice(0, 12).join(', ')}</span>
+                    {/* «שורות» / «שורה» — the noun agrees with how many lines this reason names,
+                        which is what `count` is for. The list itself stays outside the sentence so
+                        the digits keep their own direction (`num`). */}
+                    {skipReason}{t('priceUpload.rowsWord', { count: skipRows.length })}<span className="num">{skipRows.slice(0, 12).join(', ')}</span>
                     {skipRows.length > 12 ? t('priceUpload.andMore', { more: skipRows.length - 12 }) : ''}
                   </li>
                 ))}
@@ -476,7 +483,10 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
           {newRows.length > 0 && (
             <label className="flex min-h-11 items-center gap-2 text-sm text-ink-mid">
               <input type="checkbox" className="rounded shrink-0" checked={createNew} onChange={(e) => setCreateNew(e.target.checked)} />
-              {t('priceUpload.createWord')} {newRows.length === 1 ? t('priceUpload.text_15') : <>‏<span className="num">{newRows.length}</span> {t('priceUpload.text_16')}</>}{t('priceUpload.inCatalogueAndUpdate')}
+              {/* One sentence, one key. The hand-rolled `=== 1` got the NOUN right and left the
+                  pronoun behind it plural — «צור מוצר חדש אחד … ועדכן את מחירם», their price, for
+                  one product — because only half the sentence knew the count. */}
+              {t('priceUpload.createInCatalogue', { count: newRows.length })}
             </label>
           )}
           <div><label className="label" htmlFor="price-upload-reason">{t('priceUpload.setReason')}</label><input id="price-upload-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('priceUpload.placeholder')} /></div>

@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { en } from './dictionaries/en';
 import { he } from './dictionaries/he';
 import type { Dictionary } from './dictionaries/he';
-import { dirFor, resolveLocale, type Locale } from './locale';
+import { BASE_LOCALE, dirFor, resolveLocale, type Locale } from './locale';
 import { translate, tryTranslate, type TKey } from './t';
 import { toErrorKey } from '../errors';
 
@@ -74,7 +74,15 @@ interface LocaleState {
    * `undefined` in, empty string out: a status the map has not caught up with must not render a
    * key at a customer, and `StatusBadge` already declines to draw a badge it has no meta for.
    */
-  statusLabel: (metaOrKey: { key: string } | string | null | undefined) => string;
+  statusLabel: (
+    metaOrKey: { key: string } | string | null | undefined,
+    /**
+     * Interpolation for the few catalogue labels that are printed BESIDE a number, so `count`
+     * can select their `_one` sibling. Every existing call passes nothing and is unaffected —
+     * `t()` only reaches for a sibling when `vars.count` is a number in the `one` category.
+     */
+    vars?: Record<string, string | number>,
+  ) => string;
   /**
    * The sentence for a thrown value, in the reader's language. Takes the error itself rather than
    * a key so a call site reads `errorText(e)` — the same shape the code already had — and so the
@@ -109,10 +117,15 @@ interface LocaleState {
  * hand out `{ key, tone }`, while the label-only ones (credit reasons, exception types, role names)
  * are just `Record<value, key>`. One resolver rather than two spellings of the same lookup.
  */
-function resolveStatus(dictionary: Dictionary, metaOrKey: { key: string } | string | null | undefined): string {
+function resolveStatus(
+  dictionary: Dictionary,
+  metaOrKey: { key: string } | string | null | undefined,
+  vars?: Record<string, string | number>,
+  locale: Locale = BASE_LOCALE,
+): string {
   if (!metaOrKey) return '';
   const key = typeof metaOrKey === 'string' ? metaOrKey : metaOrKey.key;
-  return tryTranslate(dictionary, `status.${key}`) ?? '';
+  return tryTranslate(dictionary, `status.${key}`, vars, locale) ?? '';
 }
 
 /** Keeps the key-resolution in one place: `toErrorKey` decides WHICH failure, this decides its words. */
@@ -127,7 +140,7 @@ const LocaleContext = createContext<LocaleState>({
   dir: 'rtl',
   t: (key, vars) => translate(FALLBACK_DICTIONARY, key, vars),
   tDynamic: (key, vars) => tryTranslate(FALLBACK_DICTIONARY, key, vars),
-  statusLabel: (metaOrKey) => resolveStatus(FALLBACK_DICTIONARY, metaOrKey),
+  statusLabel: (metaOrKey, vars) => resolveStatus(FALLBACK_DICTIONARY, metaOrKey, vars),
   errorText: (error) => resolveError(FALLBACK_DICTIONARY, error),
   setLocale: () => {},
   adoptLocale: () => {},
@@ -174,7 +187,7 @@ export function LocaleProvider({
       dir: dirFor(locale),
       t: (key, vars) => translate(dictionary, key, vars, locale),
       tDynamic: (key, vars) => tryTranslate(dictionary, key, vars, locale),
-      statusLabel: (metaOrKey) => resolveStatus(dictionary, metaOrKey),
+      statusLabel: (metaOrKey, vars) => resolveStatus(dictionary, metaOrKey, vars, locale),
       errorText: (error) => resolveError(dictionary, error),
       setLocale,
       adoptLocale,

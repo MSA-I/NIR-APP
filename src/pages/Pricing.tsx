@@ -150,8 +150,14 @@ export default function Pricing() {
 
   const quotaOf = (planKey: string, key: string) =>
     state.quotas.find((entry) => entry.plan_key === planKey && entry.entitlement_key === key);
-  const quotaLabel = (key: string) =>
-    quotaName(key, state.quotas.find((row) => row.entitlement_key === key)?.label ?? key);
+  /**
+   * `count` is the figure this label is printed beside, when one is printed. Without it the noun
+   * is frozen in the plural and the free rung published «1 משתמשים פעילים» and «1 סניפים» to a
+   * logged-out visitor (`ENTRY-08`). The category comes from `Intl.PluralRules` via `t()`, never
+   * from a `=== 1` here: Hebrew has one/two/many/other and English does not.
+   */
+  const quotaLabel = (key: string, count?: number) =>
+    quotaName(key, state.quotas.find((row) => row.entitlement_key === key)?.label ?? key, count);
 
   /**
    * A quota as one feature row. Unmeasured is the honest state of `users.max` and `suppliers.max`
@@ -161,6 +167,7 @@ export default function Pricing() {
    */
   const featureRow = (planKey: string, key: string): PlanTicketFeature => {
     const row = quotaOf(planKey, key);
+    // No number is printed on the two branches below, so neither asks the label to agree with one.
     const label = quotaLabel(key);
     if (!row || !row.measured || (!row.unlimited && row.numeric_limit === null)) {
       // Same shape as a measured row — value then label — so a column of rows stays a column.
@@ -176,7 +183,7 @@ export default function Pricing() {
     if (row.unlimited) return { key, text: t('pricingTail.unlimitedFeature', { label }), affirmative: true };
     return {
       key,
-      text: <><span className="num font-medium">{fmtNum(row.numeric_limit)}</span> {label}</>,
+      text: <><span className="num font-medium">{fmtNum(row.numeric_limit)}</span> {quotaLabel(key, row.numeric_limit ?? undefined)}</>,
       affirmative: true,
     };
   };
@@ -248,6 +255,12 @@ export default function Pricing() {
         {plans.map((plan) => {
           const headline = quotaOf(plan.plan_key, HEADLINE_QUOTA_KEY);
           const measured = !!headline && headline.measured;
+          // The figure slot prints a number only when the quota is measured and bounded; on the
+          // other two branches it prints «—» or «ללא הגבלה», which no noun has to agree with.
+          const headlineLabel = quotaLabel(
+            HEADLINE_QUOTA_KEY,
+            measured && !headline.unlimited ? headline.numeric_limit ?? undefined : undefined,
+          );
           /**
            * A ROW SAYS WHICH OF FOUR THINGS IT IS, and the intro window is not «included».
            *
@@ -302,10 +315,10 @@ export default function Pricing() {
                  number with no noun anywhere on the card.
                  So `term` carries the catalogue's own label for this quota and the counting window
                  moves down to `who`, where it describes the period without claiming a bill. */
-              term={quotaLabel(HEADLINE_QUOTA_KEY)}
+              term={headlineLabel}
               /* And said outright for a reader who is not looking at it. */
               figureDescription={t('pricingTail.figureIsQuota', {
-                label: quotaLabel(HEADLINE_QUOTA_KEY),
+                label: headlineLabel,
                 value: !measured ? '—'
                   : headline.unlimited ? t('pricingTail.unlimited')
                     : fmtNum(headline.numeric_limit),

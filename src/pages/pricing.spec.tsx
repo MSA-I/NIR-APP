@@ -181,7 +181,9 @@ describe('דף המסלולים הציבורי', () => {
     await settle();
     // One card per plan now, so the four cells of the old «משתמשים» row are one row in each card.
     for (const planKey of ['free', 'basic', 'pro', 'premium']) {
-      const users = within(card(planKey)).getByText(/משתמשים/);
+      // `/משתמש/`, not `/משתמשים/`: the free rung is capped at ONE user and its label now agrees
+      // with that number (`ENTRY-08`). Matching only the plural would pin the defect.
+      const users = within(card(planKey)).getByText(/משתמש/);
       expect(users.textContent).toMatch(/\d/);
     }
   });
@@ -285,7 +287,7 @@ describe('דף המסלולים הציבורי', () => {
     expect(document.querySelectorAll('.overflow-x-auto')).toHaveLength(0);
     expect(screen.queryByRole('region', { name: /השוואת המסלולים/ })).not.toBeInTheDocument();
     // Every rung is reachable by reading, not by scrolling: each card holds its own quota rows.
-    expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/משתמשים/);
+    expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/משתמש/);
     expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/עמודי סריקה/);
   });
 

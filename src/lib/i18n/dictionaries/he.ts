@@ -420,10 +420,19 @@ export const he = {
     plan_pro: 'פרו',
     plan_premium: 'פרימיום',
     plan_business: 'ביזנס',
+    /* A QUOTA LABEL IS PRINTED BESIDE ITS NUMBER, so the numeric quotas carry a `_one` sibling:
+       /pricing published «1 משתמשים פעילים» and «1 סניפים» to a logged-out visitor. The base entry
+       stays character-for-character what `entitlement_definitions.label` holds — `check:plan-labels`
+       compares it against the seeding migration — and the sibling is the client's own copy for the
+       case the database has no column for. `quotaName(key, label, count)` asks for it. */
     entitlement_users_max: 'משתמשים פעילים',
+    entitlement_users_max_one: 'משתמש פעיל',
     entitlement_suppliers_max: 'ספקים',
+    entitlement_suppliers_max_one: 'ספק',
     entitlement_documents_monthly: 'מסמכים בחודש',
+    entitlement_documents_monthly_one: 'מסמך בחודש',
     entitlement_ocr_pages_monthly: 'עמודי סריקה בחודש',
+    entitlement_ocr_pages_monthly_one: 'עמוד סריקה בחודש',
     entitlement_storage_bytes: 'שטח אחסון',
     entitlement_reports_advanced: 'דוחות מתקדמים',
     entitlement_bank_reconciliation: 'התאמות בנק',
@@ -432,8 +441,11 @@ export const he = {
     entitlement_org_multi_unit: 'ריבוי יחידות',
     entitlement_support_premium: 'תמיכה מורחבת',
     entitlement_assistant_runs_monthly: 'שאלות עוזר בחודש',
+    entitlement_assistant_runs_monthly_one: 'שאלת עוזר בחודש',
     entitlement_branches_max: 'סניפים',
+    entitlement_branches_max_one: 'סניף',
     entitlement_documents_automatic_monthly: 'מסמכים בקריאה אוטומטית',
+    entitlement_documents_automatic_monthly_one: 'מסמך בקריאה אוטומטית',
     entitlement_history_full: 'היסטוריה מלאה',
     entitlement_notifications_email: 'התראות ואוטומציות במייל',
     entitlement_payments_accountant_queue: 'תור תשלומים לרואה החשבון',
@@ -3323,8 +3335,6 @@ export const he = {
     text_12: 'מוצר קיים',
     text_13: 'שם כפול בקטלוג',
     text_14: 'מוצר חדש',
-    text_15: 'מוצר חדש אחד',
-    text_16: 'מוצרים חדשים',
     placeholder: 'מחירון חודשי מהספק',
     setReason: 'סיבת העדכון (רשות)',
     setPreview: 'חזרה',
@@ -3356,18 +3366,29 @@ export const he = {
     productsCreated: 'נוצרו {count} מוצרים חדשים בקטלוג.',
     unknownSkipped: '{count} מוצרים לא מוכרים דולגו (לא אושרה יצירה).',
     ambiguousSkipped: '{count} שורות דולגו — שם המוצר מופיע פעמיים בקטלוג.',
+    ambiguousSkipped_one: 'שורה אחת דולגה — שם המוצר מופיע פעמיים בקטלוג.',
     uploadTitle: 'העלאת מחירון',
     uploadTitleFor: 'העלאת מחירון — {supplier}',
-    detectedBefore: 'זוהו ',
-    rowsForSupplier: ' שורות עבור',
-    existingProducts: ' הותאמו למוצרים קיימים,',
-    newProductsWord: ' מוצרים חדשים',
-    duplicateNamesWord: ' שמות כפולים בקטלוג',
+    /* ONE SENTENCE PER CLAUSE, not one key per word. This summary used to be six fragments
+       concatenated around three `<span class="num">` counters — «זוהו » + N + « שורות עבור» — so
+       every noun in it was frozen in the plural and a one-row file read «1 מוצרים חדשים». A
+       fragment cannot agree with a number it never sees; a clause that carries `{count}` can, and
+       `t()` reaches for the `_one` sibling through `Intl.PluralRules`. */
+    detected: 'זוהו {count} שורות עבור {supplier}:',
+    detected_one: 'זוהתה שורה אחת עבור {supplier}:',
+    matchedExisting: '{count} הותאמו למוצרים קיימים',
+    matchedExisting_one: 'אחת הותאמה למוצר קיים',
+    newProducts: '{count} מוצרים חדשים',
+    newProducts_one: 'מוצר חדש אחד',
+    duplicateNames: '{count} שמות כפולים בקטלוג',
+    duplicateNames_one: 'שם כפול אחד בקטלוג',
     rowsSkipped: '{count} שורות דולגו.',
+    rowsSkipped_one: 'שורה אחת דולגה.',
     rowsWord: ' — שורות ',
+    rowsWord_one: ' — שורה ',
     andMore: ' ועוד {more}',
-    createWord: 'צור',
-    inCatalogueAndUpdate: ' בקטלוג ועדכן את מחירם',
+    createInCatalogue: 'צור {count} מוצרים חדשים בקטלוג ועדכן את מחירם',
+    createInCatalogue_one: 'צור מוצר חדש אחד בקטלוג ועדכן את מחירו',
   },
 
   legal: {
@@ -3796,6 +3817,7 @@ export const he = {
     text_21: 'חזרה לסיכום ולאישור מחדש',
     skippedItems: '{count} פריטים מההזמנה המקורית דולגו — המוצר כבר אינו קיים',
     ordersCreated: 'נוצרו {count} הזמנות ספק',
+    ordersCreated_one: 'נוצרה הזמנת ספק אחת',
     reviewAndConfirm: 'סקירה ואישור',
     markAsSent: 'סמן כנשלחה לספק',
     unavailable: 'לא זמין',
@@ -5879,6 +5901,7 @@ export const he = {
     unresolvedReason: 'ספק או מוצר לא נמצאו בשם מדויק',
     importReport: 'עודכנו {updated} מחירים, נוצרו {created} רשומות חדשות, {unchanged} ללא שינוי.',
     previewSummary: '{count} שורות זוהו. ההתאמה מתבצעת לפי שם ספק ושם מוצר מדויקים.',
+    previewSummary_one: 'שורה אחת זוהתה. ההתאמה מתבצעת לפי שם ספק ושם מוצר מדויקים.',
   },
 
   whatsAppSendDialog: {

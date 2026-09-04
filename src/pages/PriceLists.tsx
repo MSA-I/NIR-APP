@@ -510,7 +510,10 @@ function SkippedRowsPanel({ skipped }: { skipped: SkippedRow[] }) {
         <ul className="mt-2 space-y-1 text-ink-soft">
           {groupSkipped(skipped).map(({ reason: skipReason, rows: skipRows }) => (
             <li key={skipReason}>
-              {skipReason}{t('priceUpload.rowsWord')}<span className="num">{skipRows.slice(0, 12).join(', ')}</span>
+              {/* The sister door's key AND the sister door's count. Shared wording that one door
+                  asks with a count and the other does not is the same «one product, two answers»
+                  this panel was built to end. */}
+              {skipReason}{t('priceUpload.rowsWord', { count: skipRows.length })}<span className="num">{skipRows.slice(0, 12).join(', ')}</span>
               {skipRows.length > 12 ? t('priceUpload.andMore', { more: skipRows.length - 12 }) : ''}
             </li>
           ))}

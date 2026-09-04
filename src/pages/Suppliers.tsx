@@ -687,7 +687,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
 
 /* ================= Supplier card ================= */
 export function SupplierCard() {
-  const { locale, t } = useT();
+  const { locale, statusLabel, t } = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
@@ -925,7 +925,9 @@ export function SupplierCard() {
         <TabPanel idPrefix="supplier" tabKey="credits">
         <DataTable rows={data.credits} columns={[
           { key: 'num', header: t('suppliers.numberHeader'), className: 'num', render: (r: CreditRequest) => `#${r.number}` },
-          { key: 'reason', header: t('suppliers.statusLabel'), render: (r: CreditRequest) => CREDIT_REASON[r.reason] },
+          // Resolved, not printed raw: this tab reads the same map `/credits` does, and it had
+          // the same defect (`FIN-05`).
+          { key: 'reason', header: t('suppliers.statusLabel'), render: (r: CreditRequest) => statusLabel(CREDIT_REASON[r.reason]) },
           { key: 'amount', header: t('suppliers.fmtMoneyExact_6'), className: 'num', sortValue: (r: CreditRequest) => r.amount, render: (r: CreditRequest) => fmtMoneyExact(r.amount, r.currency) },
           { key: 'status', header: t('suppliers.text_51'), render: (r: CreditRequest) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
           { key: 'date', header: t('suppliers.fmtDate_5'), sortValue: (r: CreditRequest) => r.created_at, render: (r: CreditRequest) => fmtDate(r.created_at) },

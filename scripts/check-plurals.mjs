@@ -19,7 +19,10 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const PINNED = 48;
+// 48 → 45 on 04.09.2026: the price-list intake's three counted phrases (`priceUpload.rowsSkipped`,
+// `priceUpload.ambiguousSkipped`, `priceListsTail.previewSummary`) got their singular siblings with
+// `PL-09`. Both import doors share them, so one conversion answered both.
+const PINNED = 45;
 
 const root = process.cwd();
 const source = readFileSync(path.join(root, 'src/lib/i18n/dictionaries/en.ts'), 'utf8');
