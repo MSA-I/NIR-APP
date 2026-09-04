@@ -1,0 +1,98 @@
+PR23 — OWN-06 / ASSIST-03 (the /settings half) — RED
+
+Tree: worktree-qa-sweep-20260904 @ b2f91be2, UNFIXED.
+Oracle: npx vitest run src/pages/subscriptionQuotaDisclosure.spec.tsx
+
+The four assertions and what each measures:
+  1. the period consumption is on /settings/subscription at all      -> data-testid="period-usage"
+  2. the assistant is named in it (the metered feature with no meter) -> period-usage-assistant_runs.monthly
+  3. an unstated ceiling renders the em dash, never 0
+  4. what the organisation actually receives is listed, for a rung    -> current-plan-includes
+     (legacy / לקוח ותיק) that appears on no card
+
+Result: 4 of 4 FAIL. Nothing on the screen carries either testid, and the page text
+holds no consumption figure — exactly what the sweep measured on 42-subscription.png.
+
+---------------------------------------------------------------------------------
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a94afa0d4fae1a715
+
+stderr | src/pages/subscriptionQuotaDisclosure.spec.tsx > /settings/subscription — the screen states what its header promises > שמראה כמה מהמכסה נוצל בתקופה הזו, ולא רק את סולם המסלולים
+In HTML, <div> cannot be a descendant of <p>.
+This will cause a hydration error.
+
+  ...
+>                           <p className="plan-card__billed">
+>                               <div className="skeleton h-3 w-32" aria-hidden={true}>
+
+See this log for the ancestor stack trace.
+
+ ❯ src/pages/subscriptionQuotaDisclosure.spec.tsx (4 tests | 4 failed) 12235ms
+     × שמראה כמה מהמכסה נוצל בתקופה הזו, ולא רק את סולם המסלולים 3100ms
+     × שמונה את העוזר בשמו — התכונה הנמדדת שלא הופיעה בשום מקום במוצר 3048ms
+     × שמציג «—» ולא «0» לתקרה שאיש לא קבע 3040ms
+     × שמפרט מה הארגון מקבל בפועל, גם כשהמסלול שלו אינו אחד הכרטיסים 3040ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/subscriptionQuotaDisclosure.spec.tsx > /settings/subscription — the screen states what its header promises > שמראה כמה מהמכסה נוצל בתקופה הזו, ולא רק את סולם המסלולים
+TestingLibraryElementError: Unable to find an element by: [data-testid="period-usage"]
+
+Ignored nodes: comments, script, style
+    >
+
+Ignored nodes: comments, script, style
+    >
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/subscriptionQuotaDisclosure.spec.tsx:138:32
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/pages/subscriptionQuotaDisclosure.spec.tsx > /settings/subscription — the screen states what its header promises > שמונה את העוזר בשמו — התכונה הנמדדת שלא הופיעה בשום מקום במוצר
+TestingLibraryElementError: Unable to find an element by: [data-testid="period-usage"]
+
+Ignored nodes: comments, script, style
+    >
+
+Ignored nodes: comments, script, style
+    >
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/subscriptionQuotaDisclosure.spec.tsx:146:32
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/pages/subscriptionQuotaDisclosure.spec.tsx > /settings/subscription — the screen states what its header promises > שמציג «—» ולא «0» לתקרה שאיש לא קבע
+TestingLibraryElementError: Unable to find an element by: [data-testid="period-usage"]
+
+Ignored nodes: comments, script, style
+    >
+
+Ignored nodes: comments, script, style
+    >
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/subscriptionQuotaDisclosure.spec.tsx:155:32
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/pages/subscriptionQuotaDisclosure.spec.tsx > /settings/subscription — the screen states what its header promises > שמפרט מה הארגון מקבל בפועל, גם כשהמסלול שלו אינו אחד הכרטיסים
+TestingLibraryElementError: Unable to find an element by: [data-testid="current-plan-includes"]
+
+Ignored nodes: comments, script, style
+    >
+
+Ignored nodes: comments, script, style
+    >
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/subscriptionQuotaDisclosure.spec.tsx:163:35
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+   Start at  17:05:53
+   Duration  14.87s (transform 717ms, setup 428ms, import 999ms, tests 12.24s, environment 1.01s)
+

@@ -1,0 +1,38 @@
+PR23 — ASSIST-08 — RED (static; the charge and the refusal are both server-side)
+
+Oracle: either the run is not charged, or the person is told that it was.
+
+What the tree actually does, and it is TWO different answers wearing one sentence:
+
+  A. The persistence failure itself (supabase/functions/assistant/index.ts lines 209, 530).
+     public.assistant_record_run() writes the dialogue, the evidence, the tool shapes, the
+     optional proposal, the usage event and the audit row in ONE transaction — 0202's own
+     comment on the function says "or nothing". So when that call fails, the counter did not
+     move: record_usage_event sits at 0164 line 869, inside the same
+     function, after the inserts. The run is NOT charged. Nothing says so.
+
+  B. Every OTHER failed run IS charged. supabase/functions/assistant/index.ts line 510 records a
+     failed run through the same recording door, with complete: false — and
+     record_usage_event is unconditional in that body. A provider timeout, an unsupported
+     answer and a tool failure each consume a question. Nothing says that either.
+
+  C. The one sentence the person reads, for case A:
+     assistant_persistence_failed: 'התשובה לא נשמרה, ולכן הריצה לא הושלמה. אפשר לנסות שוב.',
+     It tells them to try again and says nothing about the meter. On a feature metered at
+     20-70 questions per period, "try again" is an instruction to spend another one.
+
+RESULT: FAIL — the expectation "either not charged, or told" is met by neither branch. A is
+not charged and not said; B is charged and not said.
+
+WHY THIS ROW IS BLOCKED RATHER THAN FIXED: the honest sentence for A depends on a fact only
+the server can state. A persistence failure that is a lost RESPONSE rather than a lost WRITE
+leaves the row committed and the counter moved, and the Edge cannot tell the two apart from
+where it stands. Writing "your question was not counted" into the dictionary would be true in
+the common case and a lie in the other, which is exactly the invented certainty this
+repository punishes. The fix is a server one: have the recording door report, or the Edge
+confirm by run id, whether the counter moved — and case B needs a decision about whether a
+failed run should be charged at all, which is an owner ruling.
+
+The measurement that is missing and cannot be taken here: whether the 51-second run of
+question F1 (out/assistant/run-officeB.json) left an assistant_runs row and a usage counter
+increment. That is one SELECT against the live organisation and it settles A definitively.

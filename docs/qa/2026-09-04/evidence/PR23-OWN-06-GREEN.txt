@@ -1,0 +1,39 @@
+PR23 — OWN-06 / ASSIST-03 (the /settings half) — GREEN
+
+Tree: worktree-qa-sweep-20260904 @ b2f91be2 + this branch.
+Oracle: npx vitest run src/pages/subscriptionQuotaDisclosure.spec.tsx
+
+The fix, in src/ only, asking the server for nothing new:
+  src/components/PlanUsagePanel.tsx   NEW — organization_usage_snapshot() + my_entitlements(),
+                                      both already granted to authenticated and already fetched
+                                      on this screen (shared cache key with PlanLimitNote).
+  src/pages/Subscription.tsx          mounts it above the ladder.
+  src/lib/planEntitlements.ts         names unlimited/numeric_limit, which my_entitlements() has
+                                      returned since 0154 and this interface simply did not list.
+  src/lib/i18n/dictionaries/{he,en}.ts  the planUsage namespace.
+
+Result: 4 of 4 PASS.
+
+---------------------------------------------------------------------------------
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a94afa0d4fae1a715
+
+stderr | src/pages/subscriptionQuotaDisclosure.spec.tsx > /settings/subscription — the screen states what its header promises > שמראה כמה מהמכסה נוצל בתקופה הזו, ולא רק את סולם המסלולים
+In HTML, <div> cannot be a descendant of <p>.
+This will cause a hydration error.
+
+  ...
+>                           <p className="plan-card__billed">
+>                               <div className="skeleton h-3 w-32" aria-hidden={true}>
+
+See this log for the ancestor stack trace.
+
+ ✓ src/pages/subscriptionQuotaDisclosure.spec.tsx > /settings/subscription — the screen states what its header promises > שמראה כמה מהמכסה נוצל בתקופה הזו, ולא רק את סולם המסלולים 144ms
+ ✓ src/pages/subscriptionQuotaDisclosure.spec.tsx > /settings/subscription — the screen states what its header promises > שמונה את העוזר בשמו — התכונה הנמדדת שלא הופיעה בשום מקום במוצר 78ms
+ ✓ src/pages/subscriptionQuotaDisclosure.spec.tsx > /settings/subscription — the screen states what its header promises > שמציג «—» ולא «0» לתקרה שאיש לא קבע 67ms
+ ✓ src/pages/subscriptionQuotaDisclosure.spec.tsx > /settings/subscription — the screen states what its header promises > שמפרט מה הארגון מקבל בפועל, גם כשהמסלול שלו אינו אחד הכרטיסים 76ms
+
+ Test Files  1 passed (1)
+   Start at  17:10:20
+   Duration  3.63s (transform 792ms, setup 610ms, import 1.11s, tests 371ms, environment 1.24s)
+

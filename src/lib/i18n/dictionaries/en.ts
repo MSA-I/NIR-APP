@@ -6211,6 +6211,21 @@ export const en: Dictionary = {
     existingUnaffected: 'Anything already received and saved is unaffected.',
   },
 
+  planUsage: {
+    heading: 'Quota used in this period',
+    periodEnds: 'The current usage period ends on {date}.',
+    loading: 'Loading the usage figures',
+    readFailed: 'The usage figures cannot be loaded right now.',
+    outOf: 'of',
+    unlimited: 'Unlimited',
+    nothingCounted: 'No metric is counted in this period.',
+    includedHeading: 'What this organisation receives today',
+    includedUnavailable: 'This organisation\'s entitlements cannot be shown right now.',
+    included: 'Included',
+    notIncluded: 'Not included',
+    fromOverride: 'Set for this organisation',
+  },
+
   inventoryTail: {
     nearestDate: 'Nearest date: {date}',
     onlyActivePrice: 'Only active price',

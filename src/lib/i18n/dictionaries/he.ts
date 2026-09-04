@@ -6254,6 +6254,21 @@ export const he = {
     existingUnaffected: 'מה שכבר נקלט ונשמר אינו מושפע.',
   },
 
+  planUsage: {
+    heading: 'ניצול המכסה בתקופה הזו',
+    periodEnds: 'תקופת השימוש הנוכחית מסתיימת ב־{date}.',
+    loading: 'טוען את נתוני הניצול',
+    readFailed: 'לא ניתן לטעון כרגע את נתוני הניצול.',
+    outOf: 'מתוך',
+    unlimited: 'ללא הגבלה',
+    nothingCounted: 'אין בתקופה הזו מדד שנספר.',
+    includedHeading: 'מה הארגון מקבל היום',
+    includedUnavailable: 'לא ניתן להציג כרגע את זכאויות הארגון.',
+    included: 'כלול',
+    notIncluded: 'לא כלול',
+    fromOverride: 'הותאם לארגון הזה',
+  },
+
   inventoryTail: {
     nearestDate: 'המועד הקרוב: {date}',
     onlyActivePrice: 'מחיר פעיל יחיד',

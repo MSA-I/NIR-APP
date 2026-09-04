@@ -1,0 +1,25 @@
+PR23 — ASSIST-03, the /pricing half — RED (static; the publish list is in a migration)
+
+Oracle: the manager can see what the metered feature costs him before he hits the wall.
+
+The /settings half is CLOSED by this PR — see PR23-OWN-06-GREEN.txt. This file records the
+half that is not, and why.
+
+Measured on supabase/migrations/0246_plan_capability_ladder.sql, line 353:
+  get_public_plan_quotas() publishes exactly: 'documents.monthly', 'users.max', 'branches.max'
+  assistant_runs.monthly is not among them, so no plan card on /pricing or on the
+  authenticated ladder can mention the assistant. That matches the sweep's measurement:
+  2,676 characters of /pricing text containing neither the word for "assistant" nor the word
+  for "questions".
+
+  and the numbers exist: 0202 seeded the four decided figures: YES
+  (free 20, basic 40, pro 100, premium 250 — #198), with business and legacy deliberately
+  left unmeasured.
+
+RESULT: FAIL — the figures are in plan_entitlements and the label is already in
+src/lib/planLabels.ts, and the only thing between them and the card is a three-key IN list
+inside a SECURITY DEFINER function.
+
+WHY THIS ROW IS BLOCKED RATHER THAN FIXED: widening that list is a migration, drawn under the
+coordinator's lock, and 0246 asserts its own publish list further down the same file, so the
+change has to move both together and be proved against the stack another agent holds.
