@@ -1,0 +1,69 @@
+PR 47 · DOC-12 — GREEN. The same oracle after the fix.
+
+date:    2026-09-04
+branch:  worktree-agent-a0a2aac045395d268
+change:  src/pages/InvoiceDetail.tsx — the `invoices.text_8` row of the details card
+
+THE ANSWER WAS A LINK, NOT A REMOVAL, and the reason is on the route itself:
+/receipts/:receiptId is a working, role-guarded screen; two surfaces already link to
+it (`document-review/model.ts` and the linked-context strip on /invoices/new); and
+`REQ-06`, a separate open finding, asks that page to say MORE about what is still
+outstanding. Deleting it would have broken two live paths and pre-empted an owner
+decision nobody made. What it lacked was a door from a record somebody is reading,
+and the invoice details card is where the product names a receipt to such a reader.
+
+command: npx vitest run src/pages/receiptLinkFromInvoice.spec.tsx
+    -> 5 passed (5).
+
+command: npx vitest run src/pages/receiptLinkFromInvoice.spec.tsx \
+             src/pages/creditRequestCurrencyLabel.spec.tsx \
+             src/pages/invoiceOverrideImpact.spec.tsx \
+             src/pages/invoiceTransitions.spec.tsx \
+             src/pages/invoiceThreeWayView.spec.ts \
+             src/pages/consolidatedInvoices.spec.tsx
+    -> 6 files, 50 passed.
+
+READ ON SCREEN AT 1440x900. The running product could not be used: the shared local
+Supabase stack is at ledger head 0245 against a 0314 tree and is off limits for this
+package, so what was photographed is the FIXTURE RENDER — the details card exactly as
+the component emitted it in the oracle run, dropped into a page carrying the product's
+own built stylesheet and opened in system Edge through playwright-core.
+
+    PR47-doc12-1440x900.png   the two cards at the full viewport
+    PR47-doc12-rows-zoom.png  the two cards cropped to the rows
+    PR47-doc12-screen-read.json  every row, with its tag, href and computed colour
+
+What the picture shows, measured rather than eyeballed:
+
+    owner / office card
+      הזמנות מקושרות: #1042  <A> href=/orders/b2000000-...-000000000042  oklch(0.3366 0.058 209)
+      קבלות סחורה:    #77    <A> href=/receipts/a1000000-...-000000000077  oklch(0.3366 0.058 209)
+
+    accountant card
+      הזמנות מקושרות: #1042  <SPAN> href=null  oklch(0.28 0.021 229)
+      קבלות סחורה:    #77    <SPAN> href=null  oklch(0.28 0.021 229)
+
+The receipt row is now the same kind of thing as the order row above it — same element,
+same link colour, same behaviour — for the two roles App.tsx admits to the route, and
+the accountant's two rows are unchanged plain text in the ordinary ink colour.
+
+WHAT COULD NOT BE RENDERED: the live /receipts/:receiptId page itself, and the
+/receiving screen the sweep measured. Both need the running stack. /receiving is also
+not where this belongs — it lists ORDERS awaiting receiving and holds no receipt rows
+at all, and giving it a receipts list would be a new capability, which §9 of the plan
+puts out of scope.
+
+guards: check:money · check:currency · check:i18n · check:orphan-keys · check:plurals ·
+        check:jsx-space · check:typography · check:supplier-columns all pass, and
+        `npx tsc --noEmit` is silent.
+
+--------------------------------------------------------------------------------
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a0a2aac045395d268
+
+
+ Test Files  6 passed (6)
+      Tests  50 passed (50)
+   Start at  16:23:45
+   Duration  5.75s (transform 4.32s, setup 4.30s, import 8.03s, tests 2.78s, environment 9.17s)
+

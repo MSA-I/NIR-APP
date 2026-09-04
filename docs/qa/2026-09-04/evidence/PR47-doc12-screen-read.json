@@ -1,0 +1,96 @@
+[
+  {
+    "title": "בעלים / משרד — הקבלה נפתחת",
+    "rows": [
+      {
+        "label": "תאריך חשבונית",
+        "value": "01.08.2026",
+        "tag": "DD",
+        "href": null,
+        "colour": "oklch(0.28 0.021 229)"
+      },
+      {
+        "label": "נקלטה במערכת",
+        "value": "02.08.2026",
+        "tag": "DD",
+        "href": null,
+        "colour": "oklch(0.28 0.021 229)"
+      },
+      {
+        "label": "תאריך לתשלום",
+        "value": "",
+        "tag": "DD",
+        "href": null,
+        "colour": "oklch(0.28 0.021 229)"
+      },
+      {
+        "label": "ספק",
+        "value": "ספק בדיקה",
+        "tag": "A",
+        "href": "/suppliers/sup-1",
+        "colour": "oklch(0.3366 0.058 209)"
+      },
+      {
+        "label": "הזמנות מקושרות",
+        "value": "#1042",
+        "tag": "A",
+        "href": "/orders/b2000000-0000-4000-8000-000000000042",
+        "colour": "oklch(0.3366 0.058 209)"
+      },
+      {
+        "label": "קבלות סחורה",
+        "value": "#77",
+        "tag": "A",
+        "href": "/receipts/a1000000-0000-4000-8000-000000000077",
+        "colour": "oklch(0.3366 0.058 209)"
+      }
+    ]
+  },
+  {
+    "title": "הנהלת חשבונות — מספר בלבד, בלי דלת",
+    "rows": [
+      {
+        "label": "תאריך חשבונית",
+        "value": "01.08.2026",
+        "tag": "DD",
+        "href": null,
+        "colour": "oklch(0.28 0.021 229)"
+      },
+      {
+        "label": "נקלטה במערכת",
+        "value": "02.08.2026",
+        "tag": "DD",
+        "href": null,
+        "colour": "oklch(0.28 0.021 229)"
+      },
+      {
+        "label": "תאריך לתשלום",
+        "value": "01.09.2026",
+        "tag": "DD",
+        "href": null,
+        "colour": "oklch(0.28 0.021 229)"
+      },
+      {
+        "label": "ספק",
+        "value": "ספק בדיקה",
+        "tag": "DD",
+        "href": null,
+        "colour": "oklch(0.28 0.021 229)"
+      },
+      {
+        "label": "הזמנות מקושרות",
+        "value": "#1042",
+        "tag": "SPAN",
+        "href": null,
+        "colour": "oklch(0.28 0.021 229)"
+      },
+      {
+        "label": "קבלות סחורה",
+        "value": "#77",
+        "tag": "SPAN",
+        "href": null,
+        "colour": "oklch(0.28 0.021 229)"
+      }
+    ]
+  }
+]
