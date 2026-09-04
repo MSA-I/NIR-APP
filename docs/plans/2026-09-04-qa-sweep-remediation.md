@@ -10,10 +10,22 @@ Thirteen QA agents swept `app.inplace.digital` on 2026-09-04 in three identities
 Zero confirmed regressions from the Wave 0-8 rollout — 130 of the 146 pre-date it. This is debt
 collection, and the owner asked for the full scope.
 
-**137 actionable · 9 not defects** (`ASSIST-V1`..`V4` verified-working, `EXP-R1`/`PERM-R1`/`OWN-16`
-retractions, `PL-10` code-level only, `DOC-12` unchanged). `ASSIST-02` was never issued — the ids
-run 01, 03-12, V1-V4 and 146 is the true total. Every id is placed in exactly one wave and the
-placement is checked mechanically, which is how `PERM-06` was caught after being missed twice.
+**138 actionable, 8 not defects.** The eight: `ASSIST-V1`..`ASSIST-V4` (verified-working records),
+the `EXP-R1`, `PERM-R1` and `OWN-16` retractions, and `ASSIST-11` — an OBSERVATION the report itself
+withdrew, because its own follow-up measured eight consecutive dashboard loads with eight successes
+and concluded there was no server fault. `ASSIST-02` was never issued; the ids run 01, 03-12, V1-V4
+and 146 is the true total.
+
+Five ids were placed wrongly in an earlier draft and are corrected here. `PL-10` is a real defect —
+"not reproduced, code-level only" is a statement about evidence, not about the code, and
+`PriceLists.tsx:494-499` reads the catalogue unpaged; it joins B3. `DOC-12` carries an explicit
+acceptance criterion in its own record, so "severity unchanged" is not "no work owed"; it joins H.
+`ASSIST-11` moved the other way. And two were moved in this plan's prose while the ledger still
+said otherwise — `OWN-12` to B2, because `DOC-13` depends on it, and `PROC-02` to A, because storing
+`12,50` as 1,250.00 is a money-shape defect. The ledger now agrees with the prose in all five.
+
+Every id is placed in exactly one wave and the placement is checked mechanically, which is how
+`PERM-06` was caught after being missed twice.
 
 **Evidence:** `docs/QA-SWEEP-20260904.md` (in this repo) carries all 146 findings, the SHA-256 of
 each of the 13 `findings.json`, and the deployment they were measured against — merge `4f477671`,
@@ -55,9 +67,19 @@ means for the work below.
 | #355 | can a Google-authenticated owner end the service? | **no, and the screen says so** | A1 adds a sentence in place of an unfillable password box. Federated step-up is not built: there is no such owner today. |
 | #356 | the on-time threshold | **five receipts, `—` below that** | C3 is unblocked. `Suppliers.tsx` moves to the same threshold — two screens will not hold two rules for one word. |
 
-Two things these answers did **not** dissolve, and they stay owner decisions of their own:
-`MON-04`'s existing 200% bank allocation (which of the two rows is real) and the sweep's leftover
-data in the live tenant. Both are in §6.
+An eighth was raised by the review of this plan and answered the same day: ruling **#357** widens
+`PERM-01` from employee data to **all four** surfaces behind the refused settings screen —
+`profiles`, the full `organizations` row, `org_flag_configurations` and `org_autonomy_policies`.
+Ruling #351 had answered "how do we hide employee data", which is a narrower question than the
+finding asked.
+
+**Three decisions remain open, and each blocks a specific PR:**
+
+| what | who decides | what it blocks |
+|---|---|---|
+| `MON-04` — which of the two 2,950.00 allocations is real | owner | the data half of PR 11; the trigger itself does not wait |
+| The sweep's leftover data in the live tenant | owner | gate G6; soft-delete only, from the id list in the manifest |
+| `DASH-01` — does `/alerts` widen its coverage, or stop calling itself the full queue | owner | PR 26, marked BLOCKED |
 
 ## 3. The work
 
@@ -115,10 +137,24 @@ the product already has an open duplicate-payment exception for one of them and 
 nothing. Separately, an enabled "ההעברה בוצעה" sits under a block stating the transfer cannot be
 performed, and an enabled approve button sits under a panel stating approval is impossible.
 
-- The **screen** half is unblocked: show the live balance, mark queued requests whose invoice is
-  settled, surface the open exception, and never render an enabled primary under a blocking panel.
-- The **server** half follows ruling #353: the recording is accepted and the excess becomes a
-  supplier advance. It needs a named contract before it is written.
+Ruling #353 decides the shape: **the recording is always accepted.** So the primary action is
+never disabled on a settled invoice — an earlier draft of this plan said it should be, which
+contradicted the ruling and the sweep's own note that recording a completed transfer is a
+legitimate act. What goes is the **contradiction**, not the capability: today an enabled
+"ההעברה בוצעה" sits under a panel saying the transfer cannot be performed.
+
+- **Screen:** show the invoice's live balance beside the amount, mark a queued request whose
+  invoice has since been settled, surface the tenant's open duplicate-payment exception, and stop
+  rendering a block that the button beneath it ignores. Information, not prohibition.
+- **Server:** accept the recording and route the excess to a **supplier advance**. That needs its
+  own contract — the advance's currency, its row in the monthly report, its reconciliation path,
+  its idempotency, and how the exception it opens is closed — and its own PR. It replaces
+  `allocation_exceeds_balance` (`0031:690`) **at `/pay` only**; the guard at request time (#350)
+  stays, because there no money has moved yet.
+- `REQ-01` does **not** belong to this group. It is a `/payment-requests` defect — an enabled
+  approve button under a panel saying approval is impossible, a refusal naming a cause that did not
+  happen, and an instruction that changes nothing. Its oracle is on that screen and it gets its own
+  PR.
 - Oracle: a browser scenario in the QA harness that opens `/pay` with a settled invoice in the
   queue and asserts the balance is visible and the primary is disabled; plus a screenshot read and
   compared, per the project rule that a visual change is not done without one.
@@ -162,8 +198,14 @@ Following the `bank_details` precedent (`0088:15`, `0112:16,51`), and the multi-
 - Oracle: `has_column_privilege` asserted **both ways** for owner, office, accountant and a
   cross-tenant identity; and a seed with three tenants, because one hides every isolation bug and
   two hide the asymmetric ones.
-- Ruling #351: two-phase rollout, client first. `organizations` needs no narrowing — its
-  `settings` column was measured and holds no personal data and no secret.
+- Rulings #351 **and #357**: two-phase rollout, client first, across **all four surfaces the
+  finding names** — `profiles`, the full `organizations` row, `org_flag_configurations` and
+  `org_autonomy_policies`. An earlier draft of this plan closed only `phone` and `backup_email` and
+  excused the rest on the grounds that they hold nothing personal. That answered a different
+  question: the finding is that a role the product **bounces off the screen** still receives
+  everything behind it. Flags and autonomy policies change what a user sees, so a blanket revoke
+  can break screens — what each role genuinely needs is served by a focused reader, not by the
+  table.
 
 **A6 · `PERM-02`, `PERM-03`, `PERM-05` — the password-change audit rows**
 
@@ -324,11 +366,14 @@ sheet or its own section. Every generated workbook is recalculated and scanned f
 `RTL-A11Y-02`..`RTL-A11Y-12`, `DOC-07`, `DOC-10`, `ENTRY-02`, `ENTRY-05`, `ENTRY-06`, `ENTRY-08`,
 `ENTRY-12`, `PL-09`, `PROC-05`.
 
-**F1 — four findings, one line.** `ui.tsx:2216` renders the mobile card from
+**F1 — one shared cause, but not one line.** `ui.tsx:2216` renders the mobile card from
 `visibleColumns.filter((c, i) => (c.priority ?? 2) <= 2 …)`, so a `priority: 3` column is excluded
-**unconditionally** — while `:2432-2436` shows the column checklist *is* in the mobile sheet,
-toggling a `columnVisibility` the priority filter then overrides. An explicit picker choice must
-win over the priority default. Closes `RTL-A11Y-02`..`-05` at `ui.tsx`, not on four pages.
+**unconditionally**, while `:2432-2436` shows the checklist *is* in the mobile sheet, toggling a
+`columnVisibility` the priority filter then overrides. Making an explicit picker choice win closes
+**`RTL-A11Y-02`** and nothing else — because only `/payments`, `/invoices` and `/bank` pass
+`columnPicker` at all. `/prices`, `/suppliers` and `/reports` pass none, so on those three there is
+nothing for a viewer to turn on and `RTL-A11Y-03`, `-04`, `-05` need the picker added as well. An
+earlier draft claimed one line closed four findings; measured, it closes one.
 
 **F2 — `RTL-A11Y-06`, `-07`**: per ruling #354 the orb is off in dark. Measured on composited pixels in both themes, and
 `DESIGN.md` moves with `src/index.css` in the same commit.
@@ -400,50 +445,97 @@ rather than guessed, which is the difference between a plan and a wish.
 | `OWN-14` | `/onboarding` opens pre-filled from the live organisation and nothing marks its first button as a write to it | **measure** — confirm the write path |
 | `RTL-A11Y-03`, `RTL-A11Y-04`, `RTL-A11Y-05` | **already F1**: `ui.tsx:2216` excludes `priority: 3` from the mobile card unconditionally, over the picker. One cause, and `RTL-A11Y-02` makes four | verified in code |
 | `RTL-A11Y-07` | the mandated `—` is drawn in `text-ink-faint` (`Suppliers.tsx:989`, `PriceLists.tsx:168,171,181`) — the token `DESIGN.md` reserves for decoration. A required assertion in a decorative colour, at 1.9:1 | verified in code |
-| `RTL-A11Y-09` | `ui.tsx:1987` announces `role="dialog"` on a popover that deliberately does **not** contain focus. **Half the report is wrong**: `:1920-1922` shows Escape calls `close(true)`, which returns focus to the trigger, and `:1934-1949` shows Tab entering and leaving by design. The defect is the mismatch between what it announces and what it is — the fix is to stop calling it a dialog, not to trap focus in it | verified in code, **finding partly refuted** |
+| `RTL-A11Y-09` | `ui.tsx:1987` announces `role="dialog"` on a popover that deliberately does **not** contain focus, and `:1920-1922` shows Escape calling `close(true)`, which returns focus to the trigger. But the sweep **measured** focus landing on a row button instead, and reading the source is not a runtime proof — an earlier draft called the finding refuted on that basis, which was wrong. Re-measure live first; then either it becomes a real dialog or it stops announcing itself as one | **measure** — code intent read, runtime contradicts it |
 | `RTL-A11Y-10` | `Dashboard.tsx:169` renders the hero figure inside `dir="ltr"` while the same formatter (`fmtMoneyRounded`) renders elsewhere in RTL — so the shekel sign lands on the other side of the number on one screen | verified in code |
 | `RTL-A11Y-11` | `Suppliers.tsx:213` — the risk column carries `mobileLabel: null`, so on a phone its value is an orphan number with no field name | verified in code |
 | `ASSIST-V2`, `ASSIST-V3`, `ASSIST-V4` | not defects — verified-working records | no work owed |
 
 ## 4. Dependency map
 
+Rulings, not the old `D1`..`D7` labels — those were the question numbers while the questions were
+open and no longer name anything.
+
 ```
-P1,P2 (isolation)  ──────────────────────────────► everything
-D1 ──► A2                     D4 ──► A3 server half
-D2 ──► A5                     D5 ──► F2
-D3 ──► ENTRY-01, ENTRY-03     D6 ──► A1 (Google owners)
-D7 ──► DASH-02 (C3)
-OWN-12 (VAT) ──► DOC-13       B5 needs production rows read first
-B1 needs the document payload read first   D3 needs the live 429 message captured first
-A5 needs a two-phase rollout: client projection ships BEFORE the migration
+P1,P2  isolation ............................. blocks everything
+#350   money committed at approval .......... A2, and REQ-03's client check
+#351   employee columns, two phases ......... A5 phase 1 (client) -> A5 phase 2 (migration)
+#357   the other three settings surfaces .... A5, both phases, widened
+#352   enumeration recorded, not closed ..... ENTRY-01, ENTRY-03 become debt; ENTRY-07/10/11 proceed
+#353   over-balance recording accepted ...... A3 server half + the advance contract PR
+#354   orb off in dark ...................... F2
+#355   no password identity, say so ......... A1's second half
+#356   five receipts ........................ C3
+OWN-12 (the VAT rate) ........................ DOC-13 cannot close before it
+DASH-01 coverage-or-copy ..................... C4 is BLOCKED until the owner rules
+MON-04 which allocation is real .............. A4's data half; the trigger does not wait for it
+
+Measure before writing, not after:
+  B1  read the production document payload — which field is null decides the fix
+  B5  read the 737 queue rows — "all empty runs" and "prices never populated" differ
+  D   capture the live rate-limit message — ENTRY-07's regex is dead against the real string
+  RTL-A11Y-09  re-measure focus after Escape; the source says one thing, the sweep measured another
+  DASH-07  root cause not established by the sweep; needs a DB check before it is planned
 ```
+
+**Ordering that the PR map must respect.** Wave D is placed ahead of every non-security wave in
+§3. An earlier PR map contradicted that by scheduling it ninth; it is now third.
 
 ## 5. PR map
 
-One PR per root cause, each naming the finding ids it closes and updating their `GATES.md` rows.
+One PR per root cause. Each names the finding ids it closes and moves their `docs/GATES.md` rows.
 Stacked PRs are checked normally — `build.yml:23` carries a bare `pull_request:` guarded by
 `check:workflow-triggers`, so `DEBT §65` is closed.
 
-| order | PR | closes |
+| # | PR | closes |
 |---|---|---|
 | 0 | isolation: base SHA, worktree, branch, staging allowlist | P1, P2 |
-| 1 | offboarding step-up | `OWN-01`, `RTL-A11Y-01` |
-| 2 | receipt conflict re-read | `PROC-01` (+ `PROC-03`, `-04`, `-07`) |
-| 3 | profile + organisation projection, client first | `PERM-01` |
-| 4 | profile + organisation projection, migration + guard | `PERM-01` |
-| 5 | committed-amount guard | `MON-01`, `REQ-02`, `REQ-03`, `REQ-05` |
-| 6 | `/pay` screen truth | `FIN-03`, `FIN-10`, `MON-05`, `REQ-01` |
-| 7 | bank allocation trigger | `MON-04` |
-| 8 | audit read-model scope | `PERM-02` (+ `-03`, `-05` diagnosis) |
-| 9 | entrance | Wave D |
-| 10 | supplier balance role predicate | `MON-03`, `FIN-04`, `FIN-07`, `MON-06` |
-| 11 | multi-supplier import | `PL-01`, `PL-02`, `PL-10` |
-| 12 | document assessment coverage | `DOC-02`, `DOC-03`, `DOC-04`, `DOC-08` |
-| 13 | document status: awaiting scan approval | `DOC-01`, `DOC-06` |
-| 14 | mobile column override | `RTL-A11Y-02`..`-05` |
-| 15 | atmosphere token | `RTL-A11Y-06`, `-07` |
-| 16 | assistant history guard | `ASSIST-01` |
-| 17.. | the remainder, grouped the same way | C2, E, F3-F5, G, H |
+| 1 | offboarding step-up, and the sentence for an owner with no password | `OWN-01`, `RTL-A11Y-01` |
+| 2 | receipt conflict re-read and its three neighbours | `PROC-01`, `PROC-03`, `PROC-04`, `PROC-07` |
+| 3 | entrance: dead rate-limit message, no-404, invite refusal | `ENTRY-07`, `ENTRY-10`, `PERM-04`, `ENTRY-11` |
+| 4 | entrance: the two oracles recorded as debt, not closed | `ENTRY-01`, `ENTRY-03`, `ENTRY-04`, `ENTRY-09` |
+| 5 | settings boundary, phase 1 — the client stops asking | `PERM-01` (part) |
+| 6 | settings boundary, phase 2 — revoke, re-grant, guard | `PERM-01` |
+| 7 | committed-amount guard at approval | `MON-01`, `REQ-02`, `REQ-03`, `REQ-05` |
+| 8 | `/pay` stops contradicting itself | `FIN-03`, `FIN-10`, `MON-05` |
+| 9 | the supplier advance: contract, report row, reconciliation, idempotency | the server half of #353 |
+| 10 | `/payment-requests` approval refusal | `REQ-01` |
+| 11 | bank allocation trigger | `MON-04` |
+| 12 | manual price editor uses the parser | `PROC-02` |
+| 13 | audit read-model scope; `PERM-03`/`PERM-05` diagnosis only | `PERM-02` |
+| 14 | supplier balance role predicate | `MON-03`, `FIN-04`, `FIN-07` |
+| 15 | the credits a definer counts and the reader cannot show | `MON-06` |
+| 16 | multi-supplier import: skipped rows, source row numbers, partial import, paging | `PL-01`, `PL-02`, `PL-10` |
+| 17 | document assessment carries coverage | `DOC-02`, `DOC-03`, `DOC-04`, `DOC-08` |
+| 18 | a state for "waiting for scan approval" | `DOC-01`, `DOC-06` |
+| 19 | the VAT rate, then the draft that depends on it | `OWN-12`, `DOC-13`, `DOC-05`, `MON-07` |
+| 20 | mobile columns: the override, plus a picker on three screens that have none | `RTL-A11Y-02`, `RTL-A11Y-03`, `RTL-A11Y-04`, `RTL-A11Y-05` |
+| 21 | the atmosphere token | `RTL-A11Y-06`, `RTL-A11Y-07` |
+| 22 | assistant history guard | `ASSIST-01` |
+| 23 | assistant quota: a meter, distinct refusals, the intro-window override | `ASSIST-03`, `ASSIST-05`, `ASSIST-08`, `ASSIST-10`, `OWN-06` |
+| 24 | dashboard tiles link to what they counted | `DASH-03`, `DASH-04`, `DASH-05`, `DASH-06` |
+| 25 | dashboard and alerts arithmetic | `DASH-09`, `DASH-10`, `DASH-11`, `DASH-12`, `DASH-13`, `ASSIST-12` |
+| 26 | `/alerts` coverage or copy | `DASH-01` — **BLOCKED** on an owner ruling |
+| 27 | on-time threshold on both screens | `DASH-02` |
+| 28 | credits: one answer to "are there open credits" | `FIN-01`, `FIN-02`, `FIN-06`, `FIN-09`, `MON-02`, `MON-09` |
+| 29 | proposals and receipts become discoverable | `REQ-04`, `REQ-06` |
+| 30 | assistant citations that match their claim | `ASSIST-06`, `ASSIST-07`, `ASSIST-09` |
+| 31 | the month that travels | `DASH-07`, `DASH-08`, `EXP-02` |
+| 32 | one empty-cell rule, one window header, per-currency sections | `EXP-01`, `EXP-03`, `EXP-05`, `EXP-06` |
+| 33 | export provenance and naming | `EXP-04`, `EXP-07`, `EXP-08`, `EXP-09`, `EXP-10` |
+| 34 | bidi file names: tighten the guard, add the rendered check | `DOC-07`, `RTL-A11Y-08`, `DOC-10` |
+| 35 | Hebrew plural agreement and a raw key | `ENTRY-08`, `PL-09`, `PROC-05`, `FIN-05` |
+| 36 | the public pricing page on a phone | `ENTRY-02`, `ENTRY-05`, `ENTRY-06`, `ENTRY-12` |
+| 37 | column chooser: dialog or disclosure, after re-measuring | `RTL-A11Y-09`, `RTL-A11Y-10`, `RTL-A11Y-11`, `RTL-A11Y-12` |
+| 38 | price intake: the second door's keys, names and refusals | `PL-04`, `PL-05`, `PL-11`, `PL-12`, `PL-03`, `PL-06`, `PL-07`, `PL-08` |
+| 39 | the operations console has numbers to decide on | `OWN-02`, `OWN-07`, `OWN-08` |
+| 40 | webhooks: a last step, a failure that says so, validation while typing | `OWN-03`, `OWN-10`, `OWN-15` |
+| 41 | the audit ledger stops dropping history | `OWN-11`, `OWN-04`, `OWN-05`, `PERM-06` |
+| 42 | settings bounds, tolerance shape, the wizard's first button | `OWN-09`, `OWN-13`, `OWN-14` |
+| 43 | refusals that arrive as HTTP 500 | `REQ-07`, `DOC-09`, `DOC-11`, `PROC-06`, `PROC-08` |
+| 44 | the remaining money-shape details | `FIN-08`, `MON-08`, `MON-10`, `ASSIST-04`, `DOC-12` |
+
+Forty-four PRs, and every one of the 138 actionable ids appears in exactly one of them — checked
+the same way the wave placement is. "17.. the remainder" is not a plan and is gone.
 
 ## 6. Not repository code
 
@@ -467,8 +559,11 @@ and a `BLOCKED` status until performed — "not a code fix" is not a disposition
 Measured against HEAD, not remembered. Correcting it is part of this work.
 
 1. `DEBT §65` is closed — `build.yml:23` has a bare `pull_request:` and a guard.
-2. `npm run verify` is **32** sub-commands and `build.yml:265-278` runs the thirteen that were
-   unwired. The guards debt is **§105**, not §97 — §97 is `my_entitlements()`.
+2. `npm run verify` is **32** sub-commands and `build.yml:265-278` runs **fourteen** of them by
+   name — an earlier draft of this very correction said thirteen, off by one, which is precisely
+   the error it was written to correct. The guards debt is **§105**, not §97 — §97 is
+   `my_entitlements()`. And `check:contrast` **passes** when run alone on a clean tree, which
+   replaces the claim that it never has; its log path is recorded under gate G2.
 3. `check:contrast` **passes** on a clean tree, run alone. The claim that it never has is wrong.
 4. Migrations reach production through `scripts/rollout-apply.ps1`, which applies, writes the
    ledger row and verifies as one sequence and stops without a row on failure. "Add the ledger row
