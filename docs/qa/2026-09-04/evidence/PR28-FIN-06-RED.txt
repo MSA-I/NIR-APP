@@ -1,0 +1,87 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a266499e2ee47690a
+
+ ❯ src/pages/duplicateInvoiceWarning.spec.ts (4 tests | 4 failed) 17ms
+     × he: does not gate the action on an approval that may already have happened 6ms
+     × he: says who resolves the duplicate when the second copy is out of the reader's scope 3ms
+     × en: does not gate the action on an approval that may already have happened 1ms
+     × en: says who resolves the duplicate when the second copy is out of the reader's scope 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/duplicateInvoiceWarning.spec.ts > the definite-duplicate warning names a step its reader can actually take > he: does not gate the action on an approval that may already have happened
+AssertionError: expected 'נמצאה חשבונית נוספת של אותו ספק עם או…' not to match /לפני\s+אישור/
+
+- Expected:
+/לפני\s+אישור/
+
++ Received:
+"נמצאה חשבונית נוספת של אותו ספק עם אותו מספר — יש לתקן את הכפילות לפני אישור."
+
+ ❯ src/pages/duplicateInvoiceWarning.spec.ts:45:27
+     43|     it(`${locale}: does not gate the action on an approval that may al…
+     44|       const message = translateIn(locale, 'invoices.reason_definite_du…
+     45|       expect(message).not.toMatch(APPROVAL_GATED[locale]);
+       |                           ^
+     46|     });
+     47|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/pages/duplicateInvoiceWarning.spec.ts > the definite-duplicate warning names a step its reader can actually take > he: says who resolves the duplicate when the second copy is out of the reader's scope
+AssertionError: expected 'נמצאה חשבונית נוספת של אותו ספק עם או…' to contain 'בעלים'
+
+Expected: "בעלים"
+Received: "נמצאה חשבונית נוספת של אותו ספק עם אותו מספר — יש לתקן את הכפילות לפני אישור."
+
+ ❯ src/pages/duplicateInvoiceWarning.spec.ts:54:37
+     52|       const ownerWord = translateIn(locale, `status.${ACTIVE_ROLE_LABE…
+     53|         .split(/[\s/]+/).filter(Boolean).at(-1)!;
+     54|       expect(message.toLowerCase()).toContain(ownerWord.toLowerCase());
+       |                                     ^
+     55|     });
+     56|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/pages/duplicateInvoiceWarning.spec.ts > the definite-duplicate warning names a step its reader can actually take > en: does not gate the action on an approval that may already have happened
+AssertionError: expected 'Another invoice from the same supplie…' not to match /before\s+approval/i
+
+- Expected:
+/before\s+approval/i
+
++ Received:
+"Another invoice from the same supplier carries the same number — the duplicate must be fixed before approval."
+
+ ❯ src/pages/duplicateInvoiceWarning.spec.ts:45:27
+     43|     it(`${locale}: does not gate the action on an approval that may al…
+     44|       const message = translateIn(locale, 'invoices.reason_definite_du…
+     45|       expect(message).not.toMatch(APPROVAL_GATED[locale]);
+       |                           ^
+     46|     });
+     47|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/pages/duplicateInvoiceWarning.spec.ts > the definite-duplicate warning names a step its reader can actually take > en: says who resolves the duplicate when the second copy is out of the reader's scope
+AssertionError: expected 'another invoice from the same supplie…' to contain 'owner'
+
+Expected: "owner"
+Received: "another invoice from the same supplier carries the same number — the duplicate must be fixed before approval."
+
+ ❯ src/pages/duplicateInvoiceWarning.spec.ts:54:37
+     52|       const ownerWord = translateIn(locale, `status.${ACTIVE_ROLE_LABE…
+     53|         .split(/[\s/]+/).filter(Boolean).at(-1)!;
+     54|       expect(message.toLowerCase()).toContain(ownerWord.toLowerCase());
+       |                                     ^
+     55|     });
+     56|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  16:07:00
+   Duration  2.85s (transform 583ms, setup 607ms, import 595ms, tests 17ms, environment 1.33s)
+

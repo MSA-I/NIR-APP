@@ -2455,7 +2455,9 @@ export const en: Dictionary = {
     setNotes: 'Detail',
     text_26: 'Cancel',
     save: 'Open a credit request',
-    reason_definite_duplicate_invoice: 'Another invoice from the same supplier carries the same number — the duplicate must be fixed before approval.',
+    // FIN-06: see the Hebrew twin. The old wording named a step gated on an approval the invoice
+    // may already have passed, and one the reader may not be allowed to perform.
+    reason_definite_duplicate_invoice: 'Another invoice from the same supplier carries the same number. Compare the two and decide which one stands. Removing the duplicate is done by an owner or a procurement manager; if the second invoice is not in your list, hand the check to them.',
     reason_no_order_not_comparable: 'This invoice has no purchase order to compare against',
     reason_invoice_lines_missing: 'No invoice lines are available to match.',
     reason_duplicate_invoice_line_suspected: 'This line is suspected of being a duplicate and needs review; it was neither deleted nor merged.',
@@ -5003,6 +5005,9 @@ export const en: Dictionary = {
     text_4: 'Updating…',
     text_5: 'Credits',
     fmtMoneyExact_2: 'Total not yet offset:',
+    // The same sentence the dashboards print for this population when it is empty. `—` there
+    // would say "not measured"; this screen has measured, and the two must not disagree (FIN-01).
+    openTotalNone: 'No credits not yet offset',
     searchLabel: 'Search the credit requests',
     setSelected: 'Open the details',
     aria_label: 'Filter credit requests by status',

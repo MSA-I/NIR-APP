@@ -319,7 +319,14 @@ export function InvoicesList() {
     { key: 'payment', header: t('invoiceList.text_5'), priority: 3, render: (r) => <StatusBadge meta={INVOICE_PAYMENT_STATUS[r.payment_status]} /> },
   ];
   if (!isProcurementManager) {
-    columns.splice(4, 0, { key: 'balance', header: t('invoiceList.splice'), className: 'num', render: (r) => (r.balance != null && r.balance > 0 ? <span className="text-await-fg">{fmtMoneyExact(r.balance, r.currency)}</span> : <span className="text-done-fg">—</span>) });
+    /* `FIN-09`/`MON-09`: three states, three answers, and this column used to give two.
+       `r.balance` is `undefined` only when `invoice_balances_by_currency` returned NO ROW for the
+       invoice — the reader's role may not value it (`0218`), so the balance is genuinely unknown
+       and keeps the em dash. A measured `0` is the opposite: it is the claim "this invoice is
+       settled", and printing it as `—` made "paid in full" and "could not be read" the same glyph.
+       `fmtMoneyExact` already draws `—` for `null` and a figure for a number, so the rule lives in
+       one place instead of being re-decided here; only the tone is chosen at this call site. */
+    columns.splice(4, 0, { key: 'balance', header: t('invoiceList.splice'), className: 'num', render: (r) => <span className={r.balance != null && r.balance > 0 ? 'text-await-fg' : 'text-done-fg'}>{fmtMoneyExact(r.balance ?? null, r.currency)}</span> });
   }
   if (canViewExport) {
     /* `priority: 2`, and the change is a data one rather than a layout one. Priority 3 means

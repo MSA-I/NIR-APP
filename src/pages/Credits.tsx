@@ -82,7 +82,13 @@ export default function Credits() {
       {error && <ErrorNote message={error} />}
       {fetching && data && <div className="text-xs text-ink-muted" role="status">{t('credits.text_4')}</div>}
       <PageHeader title={<span className="flex items-center gap-2"><RotateCcw size={ICON.xl} aria-hidden="true" /> {t('credits.text_5')}</span>}
-        meta={<>{t('credits.fmtMoneyExact_2')} <b className="text-await-fg"><MoneyByCurrency amounts={openTotals} baseCurrency={org?.base_currency} /></b></>} />
+        /* `FIN-01`: `openTotals` is derived from a list that has already loaded, so an empty
+           result here is the measurement "nothing is open" — not the absence of one. The em dash
+           `MoneyByCurrency` draws by default is this codebase's marker for a figure it could NOT
+           measure, and printing it here made `/credits` say "unknown" while the dashboards, over
+           the very same population, said "none". The screen supplies the better sentence the
+           component's `empty` prop exists for, and it is the dashboards' own words. */
+        meta={<>{t('credits.fmtMoneyExact_2')} <b className="text-await-fg"><MoneyByCurrency amounts={openTotals} baseCurrency={org?.base_currency} empty={t('credits.openTotalNone')} /></b></>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.notes ?? '').toLowerCase().includes(q)}
         searchLabel={t('credits.searchLabel')}

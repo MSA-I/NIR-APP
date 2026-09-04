@@ -2472,7 +2472,12 @@ export const he = {
     setNotes: 'פירוט',
     text_26: 'ביטול',
     save: 'פתיחת דרישת זיכוי',
-    reason_definite_duplicate_invoice: 'נמצאה חשבונית נוספת של אותו ספק עם אותו מספר — יש לתקן את הכפילות לפני אישור.',
+    // FIN-06: the old wording named one step, 'לתקן את הכפילות לפני אישור', on a card whose own
+    // badges could already read מאושרת ושולמה — and the step itself is closed to the reader most
+    // likely to be looking: soft_delete_invoice (0034) admits owner and office only. The action
+    // now holds whatever state the invoice is in, and says where it goes when the second copy is
+    // not in this reader's list.
+    reason_definite_duplicate_invoice: 'נמצאה חשבונית נוספת של אותו ספק עם אותו מספר. יש להשוות בין השתיים ולהחליט איזו תקפה. ביטול הכפילות נעשה בידי בעלים או מנהל רכש; אם החשבונית השנייה אינה מופיעה ברשימה שלך, יש להעביר להם את הבירור.',
     reason_no_order_not_comparable: 'לחשבונית זו אין הזמנת רכש להשוואה',
     reason_invoice_lines_missing: 'אין שורות חשבונית זמינות להתאמה.',
     reason_duplicate_invoice_line_suspected: 'שורה זו חשודה ככפולה ונדרשת בדיקה; היא לא נמחקה ולא מוזגה.',
@@ -5039,6 +5044,9 @@ export const he = {
     text_4: 'מתעדכן…',
     text_5: 'זיכויים',
     fmtMoneyExact_2: 'סה״כ זיכויים שטרם קוזזו:',
+    // The same sentence the dashboards print for this population when it is empty. `—` there
+    // would say "not measured"; this screen has measured, and the two must not disagree (FIN-01).
+    openTotalNone: 'אין זיכויים שטרם קוזזו',
     searchLabel: 'חיפוש בדרישות זיכוי',
     setSelected: 'פתיחת פרטים',
     aria_label: 'סינון דרישות זיכוי לפי סטטוס',

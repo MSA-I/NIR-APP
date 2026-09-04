@@ -1,0 +1,30 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a266499e2ee47690a
+
+ ❯ src/pages/creditsOpenTotal.spec.tsx (2 tests | 1 failed) 310ms
+     × answers a measured-empty open-credit total in the dashboard's own words, not with — 221ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/creditsOpenTotal.spec.tsx > /credits — a measured empty population is not an unknown one > answers a measured-empty open-credit total in the dashboard's own words, not with —
+AssertionError: expected '—' to be 'אין זיכויים פתוחים' // Object.is equality
+
+Expected: "אין זיכויים פתוחים"
+Received: "—"
+
+ ❯ src/pages/creditsOpenTotal.spec.tsx:120:33
+    118|     await screen.findAllByText('#4');
+    119|
+    120|     expect(await headerTotal()).toBe(NO_OPEN_CREDITS);
+       |                                 ^
+    121|     expect(await headerTotal()).not.toBe('—');
+    122|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  16:06:53
+   Duration  3.89s (transform 838ms, setup 583ms, import 1.25s, tests 310ms, environment 1.45s)
+
