@@ -37,6 +37,52 @@ const glanceMoney = fmtMoneyRounded;
 // "עודכן ב-HH:MM" freshness stamp — the screen promises real-time, so it says when it last read.
 const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TIME_ZONE });
 
+/**
+ * WHERE FOUR TILES OPEN — and why these are functions rather than four strings inside the JSX.
+ *
+ * `DASH-03`..`DASH-06` were one defect wearing four faces: each tile's count and its link's
+ * filter were written independently, so a manager pressed a number and landed on a list of a
+ * different size — 2 opened 9, 7 opened 254, ₪2,353 opened every order the tenant had ever
+ * placed, and ₪11,582 opened a list missing the ₪150 inside it and holding a $300 that was not.
+ * A tile that cannot be checked is not a picture of the business (§12).
+ *
+ * A builder takes the SAME inputs the count is derived from, which is what makes the two
+ * comparable — `src/pages/dashboardTileDestinations.spec.ts` runs each link through the
+ * destination screen's own filter and asserts it lands on exactly the rows the tile counted.
+ */
+
+/**
+ * `invoice_balance_money` (`0218:378-382`): invoices with `balance_in_currency > 0`, one row per
+ * currency. `?pay=open` is `payment_status <> 'paid'` — the partially-paid invoice inside the
+ * figure lives there and NOT under `?pay=unpaid` — and `?currency=` narrows to the unit the
+ * picker is on. Nothing is converted; the other currency stays one click away in the picker.
+ */
+export const openInvoiceBalanceLink = (currency: string | null) =>
+  `/invoices?pay=open${currency ? `&currency=${encodeURIComponent(currency)}` : ''}`;
+
+/**
+ * `open_order_metrics.late` (`0218:474`): open orders whose `expected_date` is before today.
+ * `?status=late` on `/receiving` and NOT `?status=attention`, which is a wider set — it also holds
+ * every partial receipt and every delivery promised for today.
+ */
+export const lateDeliveriesLink = () => '/receiving?status=late';
+
+/**
+ * `open_order_metrics.no_date` (`0218:473`): open orders with no `expected_date` at all. It is a
+ * count of things rather than a sum of money, so it carries no currency — narrowing this one to
+ * the picker would hide undated orders the business really does have out.
+ */
+export const undatedOpenOrdersLink = () => '/orders?status=sent,confirmed,partial&delivery=undated';
+
+/**
+ * "נרכש החודש": the orders this screen sums — `not status in ('draft','cancelled')`, created this
+ * month, inside the currency being read. The month is carried the way `/payments?month=` already
+ * carries it; the status set and the currency are what `?status=all` alone could not say.
+ */
+export const purchasedThisMonthLink = (monthKey: string, currency: string | null) =>
+  `/orders?status=ready,sent,confirmed,partial,received&month=${monthKey}`
+  + `${currency ? `&currency=${encodeURIComponent(currency)}` : ''}`;
+
 type WeeklyPoint = { week: string; total: number; count: number; label: string };
 /**
  * 0218 split every money figure on this snapshot into one entry per currency, and renamed each key
@@ -341,7 +387,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
   // The honesty line: open orders (same statuses) that simply have no expected_date. Without it,
   // a quiet card could read "all clear" while five undated orders are still in flight.
   const noDateHint = noDateCount > 0 ? (
-    <Link to="/orders" className="inline-flex min-h-11 items-center text-xs text-ink-muted hover:text-ink-mid active:text-ink">
+    <Link to={undatedOpenOrdersLink()} className="inline-flex min-h-11 items-center text-xs text-ink-muted hover:text-ink-mid active:text-ink">
       <span className="num me-1">{noDateCount}</span> {t('dashboard.openOrdersNoDate')}
     </Link>
   ) : null;
@@ -909,7 +955,10 @@ export default function Dashboard() {
       // the building is not a commitment. `?status=open` on that screen means "not received and
       // not cancelled", which also lists drafts and ready orders.
       { key: 'commitments', label: t('dashboard.openCommitments'), count: snapshot.openOrders.count, amounts: amountsIn(committedByCurrency), tone: 'idle', to: '/orders?status=sent,confirmed,partial', hint: remainingInView != null && remainingInView.amount > 0 ? t('dashboard.remainingToReceive', { amount: fmtMoneyRounded(remainingInView.amount, remainingInView.currency) }) : undefined, clearLabel: t('dashboard.noOpenCommitments') },
-      { key: 'late-delivery', label: t('dashboard.text_32'), count: lateDeliveries, tone: 'alert', to: '/receiving', clearLabel: t('dashboard.text_33') },
+      // `DASH-04`: the row-queue link beside this one correctly opens the whole receiving queue
+      // (9). This row counts the late subset, so it carries the late filter and nothing else —
+      // two numbers pointing at one URL is what made the 2 unfindable among the 9.
+      { key: 'late-delivery', label: t('dashboard.text_32'), count: lateDeliveries, tone: 'alert', to: lateDeliveriesLink(), clearLabel: t('dashboard.text_33') },
       { key: 'awaiting-confirmation', label: t('dashboard.text_34'), count: awaitingConfirmation, tone: 'await', to: '/orders?status=sent', clearLabel: t('dashboard.text_35') },
       // The label says "(30 יום)" and the fetch above bounds `price_effective_date` to the last
       // thirty days. `?increases=1` alone is every row whose last change happened to be upward,
@@ -1231,12 +1280,11 @@ export default function Dashboard() {
                 owner's ruling is that the reader chooses the unit instead of reading every unit at
                 once. Nothing is summed and nothing is converted: the other currency is a click
                 away in the picker, holding its own balance and its own invoice count. */}
-            {/* `/invoices` takes review/pay/export/month/attention/q/page/sort and no currency,
-                so the link does NOT carry one: a query parameter the target silently ignores
-                promises a filtered list and delivers every currency's invoices. The tile still
-                names its currency in the label; narrowing the list itself needs a currency
-                filter on that screen, which is its own change. */}
-            <Card as={Link} pad={false} to="/invoices?pay=unpaid"
+            {/* `DASH-03`: the link now carries the tile's own predicate — `?pay=open` for the
+                balance the figure is taken over, and `?currency=` for the unit the picker is on.
+                Both exist on `/invoices` as visible controls, so a reader who arrives can see
+                which narrowing is on and clear it. */}
+            <Card as={Link} pad={false} to={openInvoiceBalanceLink(viewCurrency)}
               aria-label={t('dashboard.openBalanceAria', { currency: viewCurrency ?? '', count: view.money.openInvoiceCount })}
               className="card-link-hover block min-h-24 px-4 py-3.5 sm:px-5">
               <div className="flex items-center gap-2">
@@ -1254,7 +1302,7 @@ export default function Dashboard() {
             <BandStat title={t('dashboard.paidThisMonth')} value={view.money.paidMonth} tone="done" to={`/payments?month=${view.money.monthKey}`}
               icon={Banknote} context={t('dashboard.context_2')} comparison={view.money.paidComparison} currency={viewCurrency}
               spark={view.paidWeekly} sparkLabel={t('dashboard.sparkLabel')} />
-            <BandStat title={t('dashboard.title_4')} value={view.money.purchasedMonth} to="/orders?status=all"
+            <BandStat title={t('dashboard.title_4')} value={view.money.purchasedMonth} to={purchasedThisMonthLink(view.money.monthKey, viewCurrency)}
               icon={ShoppingCart} context={t('dashboard.context_3')} comparison={view.money.purchasedComparison} currency={viewCurrency}
               aux={view.savings != null
                 ? (view.savingsPct != null

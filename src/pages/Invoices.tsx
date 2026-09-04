@@ -3,7 +3,7 @@ import { pluralCategory, type TKey } from '../lib/i18n/t';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
-import { Plus, AlertTriangle, AlertOctagon, Info, Eye, Share2, Printer, Trash2 } from 'lucide-react';
+import { Plus, AlertTriangle, AlertOctagon, Info, Eye, Share2, Printer, Trash2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery } from '../lib/useQuery';
 import { DOMAIN } from '../lib/query/keys';
@@ -110,6 +110,70 @@ function reviewFilterOptions(
 }
 /** `invoice_metrics.to_review` in `management_dashboard_snapshot`, spelled for the URL. */
 export const TO_REVIEW_FILTER = 'received,in_review';
+
+/** Every narrowing this screen turns into a server predicate. */
+export interface InvoiceListFilters {
+  review: string;
+  pay: string;
+  export: string;
+  month: string;
+  attention: string;
+  /**
+   * One ISO code. `DASH-03`: the control centre's open-balance figure is taken inside one
+   * currency, so the list it opens has to be readable inside that same currency. It NARROWS —
+   * there is no conversion in this product and no rate source to invent one from.
+   */
+  currency: string;
+  /** `office` never sees the accountant hand-off column, so it never filters on it either. */
+  canViewExport: boolean;
+}
+
+/**
+ * Every URL filter on `/invoices`, as the predicates that actually go to the server.
+ *
+ * Pure and exported so a control-centre tile's population and this list's can be compared without
+ * rendering either (`src/pages/dashboardTileDestinations.spec.ts`). The search term is deliberately
+ * NOT here: it needs a supplier lookup round trip, and a pure function that awaits is not one.
+ */
+export function invoiceListPredicates(filters: InvoiceListFilters): ServerPredicate[] {
+  // Always sent, filter or not: the 0053 indexes are partial on `deleted_at is null`, and a
+  // query that omits it cannot use them.
+  const predicates: ServerPredicate[] = [
+    { kind: 'eq', column: 'financial_role', value: 'payable' },
+    { kind: 'is', column: 'deleted_at', value: null },
+  ];
+  /* A comma carries a SET, the same way `?type=` already does on /exceptions. It exists
+     because `invoices.toReview` on the control centre counts `review_status in
+     ('received','in_review')` and the tile beside it could only link to one of the two — so
+     the list opened with fewer rows than the number that sent the reader to it. */
+  if (filters.review) {
+    const statuses = filters.review.split(',').filter(Boolean);
+    predicates.push(statuses.length > 1
+      ? { kind: 'in', column: 'review_status', values: statuses }
+      : { kind: 'eq', column: 'review_status', value: statuses[0] ?? filters.review });
+  }
+  if (filters.pay) {
+    predicates.push(filters.pay === 'open'
+      ? { kind: 'neq', column: 'payment_status', value: 'paid' }
+      : { kind: 'eq', column: 'payment_status', value: filters.pay });
+  }
+  if (filters.canViewExport && filters.export) {
+    predicates.push({ kind: 'eq', column: 'export_status', value: filters.export });
+  }
+  if (filters.currency) {
+    predicates.push({ kind: 'eq', column: 'currency', value: filters.currency });
+  }
+  predicates.push(...monthRangePredicates('invoice_date', filters.month));
+  // The attention filters are 0053's computed fields — whole-table questions the old
+  // client-side computation could not answer once the screen stopped downloading the table.
+  if (filters.attention === 'duplicates') {
+    predicates.push({ kind: 'eq', column: 'invoice_has_duplicate', value: true });
+  }
+  if (filters.attention === 'without-order') {
+    predicates.push({ kind: 'eq', column: 'invoice_without_order', value: true });
+  }
+  return predicates;
+}
 // Phone quick filters are the stages that start or unblock work. Every stage remains in the
 // existing filter sheet, and a deep-linked/active secondary stage makes itself visible here.
 const MOBILE_PRIMARY_REVIEW_FILTERS = new Set(['', 'received', 'pending_approval', 'investigation']);
@@ -129,6 +193,7 @@ export function InvoicesList() {
   const [exportFilter] = useParamState('export');
   const [monthFilter] = useParamState('month');
   const [attentionFilter] = useParamState('attention');
+  const [currencyFilter] = useParamState('currency');
   const [searchTerm] = useParamState('q');
   const [pageParam] = useParamState('page');
   const [sortParam] = useParamState('sort');
@@ -161,39 +226,10 @@ export function InvoicesList() {
 
   const { data, loading, fetching, error, refetch } = useQuery(
     async () => {
-      // Always sent, filter or not: the 0053 indexes are partial on `deleted_at is null`, and a
-      // query that omits it cannot use them.
-      const predicates: ServerPredicate[] = [
-        { kind: 'eq', column: 'financial_role', value: 'payable' },
-        { kind: 'is', column: 'deleted_at', value: null },
-      ];
-      /* A comma carries a SET, the same way `?type=` already does on /exceptions. It exists
-         because `invoices.toReview` on the control centre counts `review_status in
-         ('received','in_review')` and the tile beside it could only link to one of the two — so
-         the list opened with fewer rows than the number that sent the reader to it. */
-      if (reviewFilter) {
-        const statuses = reviewFilter.split(',').filter(Boolean);
-        predicates.push(statuses.length > 1
-          ? { kind: 'in', column: 'review_status', values: statuses }
-          : { kind: 'eq', column: 'review_status', value: statuses[0] ?? reviewFilter });
-      }
-      if (payFilter) {
-        predicates.push(payFilter === 'open'
-          ? { kind: 'neq', column: 'payment_status', value: 'paid' }
-          : { kind: 'eq', column: 'payment_status', value: payFilter });
-      }
-      if (canViewExport && exportFilter) {
-        predicates.push({ kind: 'eq', column: 'export_status', value: exportFilter });
-      }
-      predicates.push(...monthRangePredicates('invoice_date', monthFilter));
-      // The attention filters are 0053's computed fields — whole-table questions the old
-      // client-side computation could not answer once the screen stopped downloading the table.
-      if (attentionFilter === 'duplicates') {
-        predicates.push({ kind: 'eq', column: 'invoice_has_duplicate', value: true });
-      }
-      if (attentionFilter === 'without-order') {
-        predicates.push({ kind: 'eq', column: 'invoice_without_order', value: true });
-      }
+      const predicates: ServerPredicate[] = invoiceListPredicates({
+        review: reviewFilter, pay: payFilter, export: exportFilter, month: monthFilter,
+        attention: attentionFilter, currency: currencyFilter, canViewExport,
+      });
 
       let narrowed = false;
       if (searchTerm) {
@@ -238,6 +274,7 @@ export function InvoicesList() {
       export: canViewExport ? exportFilter : '',
       month: monthFilter,
       attention: attentionFilter,
+      currency: currencyFilter,
       q: searchTerm,
       sort: sortParam,
       page,
@@ -297,12 +334,12 @@ export function InvoicesList() {
     columns.push({ key: 'export', header: t('invoiceList.push'), priority: 2, render: (r) => <StatusBadge meta={INVOICE_EXPORT_STATUS[r.export_status]} /> });
   }
 
-  const activeFilters = [reviewFilter, payFilter, canViewExport ? exportFilter : '', monthFilter, attentionFilter]
+  const activeFilters = [reviewFilter, payFilter, canViewExport ? exportFilter : '', monthFilter, attentionFilter, currencyFilter]
     .filter(Boolean).length;
   const clearFilters = useCallback(() => {
     // `q` is cleared here too: DataTable clears its own search first, but its two calls share one
     // stale params snapshot (see `patchParams`), so this patch must stand on its own.
-    patchParams({ review: '', pay: '', export: '', month: '', attention: '', q: '', page: '' });
+    patchParams({ review: '', pay: '', export: '', month: '', attention: '', currency: '', q: '', page: '' });
   }, [patchParams]);
 
   if (loading) return <SkeletonTable cols={6} />;
@@ -395,6 +432,16 @@ export function InvoicesList() {
             </select>
             <MonthPicker label={t('invoiceList.aria_label_4')} value={monthFilter} allowEmpty
               onChange={(next) => patchParams({ month: next, page: '' })} />
+            {/* A chip, not a select: this list is server-paged, so a dropdown built from the rows
+                on screen would offer whichever currencies page 1 happens to hold. The chip names
+                the narrowing that IS on and removes it in one click, which is what keeps
+                `?currency=` from being invisible URL-only state. */}
+            {currencyFilter && (
+              <button type="button" className="btn-ghost min-h-11 text-xs" onClick={() => patchParams({ currency: '', page: '' })}>
+                {t('invoiceList.currencyFilterChip', { currency: currencyFilter })}
+                <X size={ICON.xs} aria-hidden="true" />
+              </button>
+            )}
             {canViewExport && (
               <select className="input w-auto!" aria-label={t('invoiceList.aria_label_5')} value={exportFilter} onChange={(e) => patchParams({ export: e.target.value, page: '' })}>
                 <option value="">{t('invoiceList.text_14')}</option>

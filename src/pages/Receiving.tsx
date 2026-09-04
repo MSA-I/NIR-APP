@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { PackageCheck, Save, CheckCircle2, FileText, Camera, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useParamState } from '../lib/useParamState';
 import { QUANTITY_MAX } from '../lib/inputBounds';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { Breadcrumbs, Card, useToast, StatusBadge, EmptyState, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonList, Note, ConfirmDialog, Stepper, ICON } from '../components/ui';
@@ -93,6 +94,34 @@ interface DeliveredMatch {
 
 function needsReceivingAttention(order: { status: string; expected_date: string | null }, today: string): boolean {
   return order.status === 'partial' || (!!order.expected_date && order.expected_date <= today);
+}
+
+/** The late set, spelled for the URL. */
+export const LATE_DELIVERY_FILTER = 'late';
+
+/**
+ * `open_order_metrics.late` in `management_dashboard_snapshot` — `expected_date < p_today`
+ * (`0218:474`), strictly before, so a delivery promised for today is not yet late.
+ *
+ * NARROWER than `needsReceivingAttention` on purpose, and that difference is the whole of
+ * `DASH-04`: "דורש פעולה" also holds every partial receipt and every delivery due today, so the
+ * screen's existing filter could not reproduce the number the control centre put on the link.
+ */
+export function isLateDelivery(order: { expected_date: string | null }, today: string): boolean {
+  return !!order.expected_date && order.expected_date < today;
+}
+
+/** `?status=` on the receiving list, as one pure function so a tile's count can be checked
+    against the list its link opens (`src/pages/dashboardTileDestinations.spec.ts`). */
+export function receivingMatchesStatus(
+  order: { status: string; expected_date: string | null },
+  filter: string,
+  today: string,
+): boolean {
+  if (!filter || filter === 'all') return true;
+  if (filter === 'attention') return needsReceivingAttention(order, today);
+  if (filter === LATE_DELIVERY_FILTER) return isLateDelivery(order, today);
+  return order.status === filter;
 }
 
 interface ReceivingListOrder {
@@ -228,7 +257,10 @@ export function ReceivingList() {
   const [params] = useSearchParams();
   const documentId = params.get('document');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  /* In the URL rather than in component state (`DASH-04`): a control centre that counts a subset
+     has to be able to open that subset, and the rest of the product already puts view state in
+     query parameters. `?document=` is preserved by `useParamState`, which writes only its own. */
+  const [statusFilter, setStatusFilter] = useParamState('status', 'all');
   const [localDrafts, setLocalDrafts] = useState<string[]>([]);
   const { data, loading, error } = useQuery(async () => {
     try {
@@ -334,10 +366,8 @@ export function ReceivingList() {
   const query = search.trim().toLowerCase();
   const orders = data?.orders ?? [];
   const filtered = orders.filter((order) =>
-    (!query || order.supplier.name.toLowerCase().includes(query) || String(order.number).includes(query)) &&
-    (statusFilter === 'all'
-      || (statusFilter === 'attention' && needsReceivingAttention(order, today))
-      || order.status === statusFilter));
+    (!query || order.supplier.name.toLowerCase().includes(query) || String(order.number).includes(query))
+    && receivingMatchesStatus(order, statusFilter, today));
   const attention = filtered.filter((order) => needsReceivingAttention(order, today));
   const remaining = filtered.filter((order) => !needsReceivingAttention(order, today));
   const focusedQueue = !query && statusFilter === 'all';
@@ -346,8 +376,12 @@ export function ReceivingList() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div data-tour-anchor="receiving-overview">
+      {/* A narrowed list says so in the header. Reporting the whole queue above a filtered list
+          is the same defect as the link that got here: a number beside a list of another size. */}
       <PageHeader title={t('receiving.pageTitle')}
-        meta={t('receiving.listMeta', { orders: orders.length, attention: attention.length })} />
+        meta={filtered.length === orders.length
+          ? t('receiving.listMeta', { orders: orders.length, attention: attention.length })
+          : t('receiving.listMetaFiltered', { shown: filtered.length, orders: orders.length })} />
       </div>
       <OfflineQueueStatus />
       {data?.fromDevice && (
@@ -382,6 +416,9 @@ export function ReceivingList() {
           value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
           <option value="all">{t('receiving.text_12')}</option>
           <option value="attention">{t('receiving.text_13')}</option>
+          {/* Narrower than "דורש פעולה", which also holds partial receipts and deliveries due
+              today. This one is `expected_date < today` — the set the control centre counts. */}
+          <option value={LATE_DELIVERY_FILTER}>{t('receiving.filterLate')}</option>
           {/* Read from PO_STATUS rather than retyped, so the filter cannot drift from the badge
               beside it — which is exactly what happened to "נשלחה" before it became "נשלחה לספק". */}
           <option value="sent">{statusLabel(PO_STATUS.sent)}</option>

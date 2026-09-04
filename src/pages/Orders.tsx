@@ -1,15 +1,15 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import type { TKey } from '../lib/i18n/t';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
-import { FileDown, Loader2, Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle, Pencil, Copy, Plus, FileText } from 'lucide-react';
+import { FileDown, Loader2, Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle, Pencil, Copy, Plus, FileText, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
-import { Breadcrumbs, DataTable, StatusBadge, useToast, ConfirmDialog, LifecycleStrip, Modal, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, Note, EmptyState, Card, ICON, type Column } from '../components/ui';
+import { Breadcrumbs, DataTable, MonthPicker, StatusBadge, useToast, ConfirmDialog, LifecycleStrip, Modal, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, Note, EmptyState, Card, ICON, type Column } from '../components/ui';
 import { PO_STATUS } from '../lib/status';
-import { fmtMoneyExact, fmtDate, fmtDateTime, formatQuantity, formatUnit, productLabel, todayISO } from '../lib/format';
+import { fmtMoneyExact, fmtDate, fmtDateTime, formatQuantity, formatUnit, localDateKey, productLabel, todayISO } from '../lib/format';
 import { orderWhatsAppLink, markOrderSentToSupplier, needsSentConfirmation } from '../lib/share';
 import { downloadDocumentPdf } from '../lib/pdf';
 import { exportWatermark } from '../lib/exportBranding';
@@ -68,12 +68,92 @@ export function orderLifecycle(status: PoStatus, wasSent: boolean, wasConfirmed:
  */
 export const WITH_SUPPLIER_FILTER = 'sent,confirmed,partial';
 
+/**
+ * Every order that was actually placed — `not status in ('draft','cancelled')`, which is exactly
+ * the set the control centre's "נרכש החודש" figure is summed over (`Dashboard.tsx` reads
+ * `purchase_orders` with `.not('status','in','(draft,cancelled)')`). Spelled for the URL for the
+ * same reason `WITH_SUPPLIER_FILTER` is: the tile that counts this set has to be able to open it,
+ * and `?status=all` — the link it used to carry — also holds drafts and cancellations.
+ */
+export const PLACED_FILTER = 'ready,sent,confirmed,partial,received';
+
+/**
+ * `open_order_metrics.no_date` in `management_dashboard_snapshot` (`0218:473`,
+ * `count(*) filter (where expected_date is null)`), spelled for the URL.
+ *
+ * It is a SEPARATE parameter from `?status=` rather than another status token, because the count
+ * it mirrors is the intersection of two independent questions — which statuses are open, and
+ * whether a delivery date was ever given. Folding it into the status set would have made
+ * "open and undated" unrepresentable the moment either half changed.
+ */
+export const UNDATED_DELIVERY_FILTER = 'undated';
+
+/** The four narrowings `/orders` reads from the URL. Every one of them is also a visible control. */
+export interface OrderListFilters {
+  /** `all`, `open` (not finished), one status, or a comma-separated set. */
+  status: string;
+  /** `undated` keeps only orders that carry no `expected_date` at all. */
+  delivery: string;
+  /** `YYYY-MM` against `created_at`, read in the business time zone. Anything else is no filter. */
+  month: string;
+  /**
+   * One ISO code. This NARROWS to a unit; it never converts and never sums — a per-currency figure
+   * on the control centre has to be able to open the rows it was taken over.
+   */
+  currency: string;
+}
+
+/** What the list filter needs of a row, and nothing more. */
+export type OrderFilterRow = {
+  status: string;
+  expected_date: string | null;
+  created_at: string;
+  currency: string;
+};
+
+/**
+ * The whole of what `?status=`, `?delivery=`, `?month=` and `?currency=` mean on this screen, as
+ * one pure function.
+ *
+ * Pure and exported so a control-centre tile's count and the list its link opens can be checked
+ * against each other without rendering either (`src/pages/dashboardTileDestinations.spec.ts`).
+ * `DASH-04`/`DASH-05`/`DASH-06` all had the same shape: the count and the destination's filter
+ * were written independently, and nothing in the repository could compare them.
+ */
+export function orderMatchesListFilters(row: OrderFilterRow, filters: OrderListFilters): boolean {
+  const { status, delivery, month, currency } = filters;
+  if (status === 'all') {
+    // every status
+  } else if (status === 'open') {
+    /* A comma carries a SET (the shape /exceptions already uses for `?type=`). `?status=open`
+       here means "not finished", which is the right default for someone working the screen but
+       is NOT what `open_orders` means anywhere else in the product: the control centre's
+       "התחייבויות פתוחות" — count and committed money both — is `status in
+       ('sent','confirmed','partial')`, because an order still in draft is not a commitment to
+       anyone. The tile links to that set by name instead of to the wider default. */
+    if (['received', 'cancelled'].includes(row.status)) return false;
+  } else if (status.includes(',')) {
+    if (!status.split(',').filter(Boolean).includes(row.status)) return false;
+  } else if (row.status !== status) {
+    return false;
+  }
+  if (delivery === UNDATED_DELIVERY_FILTER && row.expected_date != null) return false;
+  // A crafted `?month=` degrades to "no month filter", the same way `monthRangePredicates` does.
+  if (/^\d{4}-\d{2}$/.test(month) && localDateKey(row.created_at).slice(0, 7) !== month) return false;
+  if (currency && row.currency !== currency) return false;
+  return true;
+}
+
 export function OrdersList() {
   const { errorText, statusLabel, t } = useT();
   const navigate = useNavigate();
   const { profile, org, organizationAccess } = useAuth();
   const toast = useToast();
+  const [, setParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useParamState('status', 'open');
+  const [deliveryFilter, setDeliveryFilter] = useParamState('delivery');
+  const [monthFilter, setMonthFilter] = useParamState('month');
+  const [currencyFilter, setCurrencyFilter] = useParamState('currency');
   const [cancelTarget, setCancelTarget] = useState<OrderRow | null>(null);
   const [draftCancelTarget, setDraftCancelTarget] = useState<DraftListRow | null>(null);
   const [sentConfirmTarget, setSentConfirmTarget] = useState<OrderRow | null>(null);
@@ -95,22 +175,24 @@ export function OrdersList() {
     return { orders: unwrap(orders) as OrderRow[], drafts: unwrap(drafts) as DraftListRow[] };
   }, [profile?.id]);
 
-  const rows = useMemo(() => {
-    const all = data?.orders ?? [];
-    if (statusFilter === 'all') return all;
-    if (statusFilter === 'open') return all.filter((o) => !['received', 'cancelled'].includes(o.status));
-    /* A comma carries a SET (the shape /exceptions already uses for `?type=`). `?status=open`
-       here means "not finished", which is the right default for someone working the screen but
-       is NOT what `open_orders` means anywhere else in the product: the control centre's
-       "התחייבויות פתוחות" — count and committed money both — is `status in
-       ('sent','confirmed','partial')`, because an order still in draft is not a commitment to
-       anyone. The tile now links to that set by name instead of to the wider default. */
-    if (statusFilter.includes(',')) {
-      const statuses = statusFilter.split(',').filter(Boolean);
-      return all.filter((o) => statuses.includes(o.status));
-    }
-    return all.filter((o) => o.status === statusFilter);
-  }, [data, statusFilter]);
+  const rows = useMemo(() => (data?.orders ?? []).filter((order) => orderMatchesListFilters(order, {
+    status: statusFilter, delivery: deliveryFilter, month: monthFilter, currency: currencyFilter,
+  })), [data, statusFilter, deliveryFilter, monthFilter, currencyFilter]);
+
+  const activeFilters = (statusFilter === 'all' ? 0 : 1)
+    + [deliveryFilter, monthFilter, currencyFilter].filter(Boolean).length;
+
+  /** One atomic URL write — see the note on `patchParams` in Invoices.tsx: two sequential
+      functional `setParams` calls in the same handler read the same stale snapshot, and the
+      second silently drops the first's change. */
+  const clearFilters = useCallback(() => {
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('status', 'all');
+      for (const name of ['delivery', 'month', 'currency']) next.delete(name);
+      return next;
+    }, { replace: true });
+  }, [setParams]);
 
   const orderTotal = (o: OrderRow) => o.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
 
@@ -237,17 +319,39 @@ export function OrdersList() {
             onSelect: () => setCancelTarget(r),
           },
         ]}
-        activeFilters={statusFilter === 'all' ? 0 : 1}
-        onClearFilters={() => setStatusFilter('all')}
+        activeFilters={activeFilters}
+        onClearFilters={clearFilters}
         toolbar={
-          <select className="input w-auto!" aria-label={t('orders.aria_label')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="open">{t('orders.text_11')}</option>
-            <option value="all">{t('orders.text_12')}</option>
-            {/* Named in the dropdown rather than left as a URL-only state, so a reader arriving
-                from the control centre's commitments tile can see which set is on. */}
-            <option value={WITH_SUPPLIER_FILTER}>{t('orders.statusWithSupplier')}</option>
-            {Object.entries(PO_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
-          </select>
+          <>
+            <select className="input w-auto!" aria-label={t('orders.aria_label')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="open">{t('orders.text_11')}</option>
+              <option value="all">{t('orders.text_12')}</option>
+              {/* Named in the dropdown rather than left as a URL-only state, so a reader arriving
+                  from the control centre's commitments tile can see which set is on. */}
+              <option value={WITH_SUPPLIER_FILTER}>{t('orders.statusWithSupplier')}</option>
+              <option value={PLACED_FILTER}>{t('orders.statusPlaced')}</option>
+              {Object.entries(PO_STATUS).map(([k, v]) => <option key={k} value={k}>{statusLabel(v)}</option>)}
+            </select>
+            {/* The undated set is a control of its own for the same reason it is a separate URL
+                parameter: "open" and "no delivery date promised" are two questions, and the
+                control centre counts their intersection. */}
+            <select className="input w-auto!" aria-label={t('orders.deliveryFilterLabel')} value={deliveryFilter} onChange={(e) => setDeliveryFilter(e.target.value)}>
+              <option value="">{t('orders.deliveryFilterAny')}</option>
+              <option value={UNDATED_DELIVERY_FILTER}>{t('orders.deliveryFilterUndated')}</option>
+            </select>
+            <MonthPicker label={t('orders.monthFilterLabel')} value={monthFilter} allowEmpty
+              onChange={setMonthFilter} />
+            {/* A chip rather than a select: the currency catalogue is not on this screen, and a
+                dropdown built from the rows already on it would offer a choice that depends on
+                what happens to be loaded. The chip states the narrowing that IS on and removes it
+                in one click, which is what stops `?currency=` from being invisible URL-only state. */}
+            {currencyFilter && (
+              <button type="button" className="btn-ghost min-h-11 text-xs" onClick={() => setCurrencyFilter('')}>
+                {t('orders.currencyFilterChip', { currency: currencyFilter })}
+                <X size={ICON.xs} aria-hidden="true" />
+              </button>
+            )}
+          </>
         }
         emptyTitle={t('orders.emptyTitle')} emptySubtitle={t('orders.emptySubtitle')}
         emptyAction={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={ICON.sm} aria-hidden="true" /> {t('orders.navigate_2')}</button>} />

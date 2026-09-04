@@ -1,0 +1,60 @@
+signed in, landed on /dashboard
+screenshot: PR24-dashboard-1440x900.png
+
+--- dashboard anchors into /invoices, /orders, /receiving ---
+  /orders/new
+      "הזמנה חדשה"
+  /orders
+      "הזמנות רכש"
+  /receiving
+      "קבלת סחורה"
+  /invoices
+      "חשבוניות"
+  /receiving?status=late
+      "5הזמנות באיחור באספקה"
+  /invoices?review=pending_approval
+      "1חשבוניות הממתינות לאישור"
+  /orders?status=sent
+      "2הזמנות ממתינות לאישור ספק"
+  /orders?status=sent,confirmed,partial
+      "5התחייבויות רכש פתוחותנותר לקבלה ‏5,911 ‏₪‏11,511 ‏₪"
+  /invoices?pay=open&currency=ILS
+      "יתרת חשבוניות פתוחות‏30,970 ‏₪נכון לעכשיו11 חשבוניות פתוחות"
+  /orders?status=ready,sent,confirmed,partial,received&month=2026-09&currency=ILS
+      "נרכש החודש—מתחילת החודש"
+  /receiving
+      "הזמנות ממתינות לקבלת סחורה (ניר)5"
+  /invoices?review=received,in_review
+      "חשבוניות לבדיקה (מזכירות)5"
+  /invoices?export=not_sent&review=approved
+      "חשבוניות שטרם הועברו לרו״ח2"
+  /orders/new?fresh=1
+      "הזמנה חדשה"
+  /receiving
+      "קבלת סחורה"
+
+--- following each link ---
+  DASH-03  tile text : "יתרת חשבוניות פתוחות‏30,970 ‏₪נכון לעכשיו11 חשבוניות פתוחות"
+         link      : /invoices?pay=open&currency=ILS
+         header    : חשבוניותמעקב אחר חשבוניות הספקים: מצב הבדיקה, מצב התשלום והיתרה הפתוחה בכל חשבונית.11 חשבוניות · 2 מסננים פעילים
+         table rows: 11
+         filters on: ["=עברית","סינון חשבוניות לפי שלב הבדיקה=הכל","סינון חשבוניות לפי צורך בטיפול=כל החשבוניות","סינון חשבוניות לפי סטטוס תשלום=פתוחות לתשלום"]
+         screenshot: PR24-DASH-03-destination-1440x900.png
+  DASH-04  tile text : "5הזמנות באיחור באספקה"
+         link      : /receiving?status=late
+         header    : קבלת סחורהרישום מה הגיע בפועל מול ההזמנה — כמויות, חוסרים ופערים — כבסיס לבדיקת החשבונית.5 הזמנות ממתינות · 5 דורשות פעולה
+         table rows: 0
+         filters on: ["=עברית","סינון הזמנות לקבלה=מועד האספקה עבר"]
+         screenshot: PR24-DASH-04-destination-1440x900.png
+  DASH-05  tile text : "(row not rendered — its count is zero in this tenant)"
+         link      : /orders?status=sent,confirmed,partial&delivery=undated
+         header    : הזמנות רכשמעקב אחר הזמנות הרכש שנשלחו לספקים ואחר מצב הביצוע של כל אחת מהן.0 הזמנות בתצוגה · 17 בסך הכול
+         table rows: 0
+         filters on: ["=עברית","סינון הזמנות רכש לפי סטטוס=אצל הספק — נשלחו, אושרו וחלקיות","סינון לפי תאריך אספקה=ללא תאריך אספקה","חודש — סינון לפי חודש הפתיחה=כל החודשים"]
+         screenshot: PR24-DASH-05-destination-1440x900.png
+  DASH-06  tile text : "נרכש החודש—מתחילת החודש"
+         link      : /orders?status=ready,sent,confirmed,partial,received&month=2026-09&currency=ILS
+         header    : הזמנות רכשמעקב אחר הזמנות הרכש שנשלחו לספקים ואחר מצב הביצוע של כל אחת מהן.0 הזמנות בתצוגה · 17 בסך הכול
+         table rows: 0
+         filters on: ["=עברית","סינון הזמנות רכש לפי סטטוס=הזמנות שנשלחו — הכל חוץ מטיוטות ומבוטלות","סינון לפי תאריך אספקה=כל תאריכי האספקה","חודש — סינון לפי חודש הפתיחה=ספטמבר"]
+         screenshot: PR24-DASH-06-destination-1440x900.png
