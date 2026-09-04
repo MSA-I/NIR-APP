@@ -1,0 +1,50 @@
+PR 45 · MON-10 — GREEN. The same oracle after the fix.
+
+date:    2026-09-04
+branch:  worktree-agent-a0a2aac045395d268
+change:  src/lib/i18n/dictionaries/he.ts:2471 · src/lib/i18n/dictionaries/en.ts:2454
+         `setAmount` no longer carries a currency. The call site
+         (src/pages/InvoiceDetail.tsx:1080) already appends the INVOICE's currency,
+         so the dictionary's hard-coded shekel was the second, wrong marker.
+
+WHAT THE LABEL NOW RENDERS — read off the DOM in the same way the RED run read it
+(a temporary copy of the oracle wrote the label text to a file; the copy was deleted):
+
+    USD invoice -> 'סכום (USD)'
+    ILS invoice -> 'סכום (ILS)'
+
+command: npx vitest run src/pages/creditRequestCurrencyLabel.spec.tsx
+    -> 4 passed (4).
+
+command: npx vitest run src/pages/creditRequestCurrencyLabel.spec.tsx              src/pages/invoiceOverrideImpact.spec.tsx              src/pages/invoiceTransitions.spec.tsx              src/pages/accountantPaymentCredits.spec.ts              src/pages/hebrewNumberAgreement.spec.tsx
+    -> 5 files, 81 passed. The four neighbours are the other specs that read the
+       invoice detail screen and the credit surfaces; they are green here and were
+       green before the change.
+
+guards: check:money · check:currency · check:i18n · check:orphan-keys · check:plurals
+        all pass, and `npx tsc --noEmit` is silent. (`check:money` deliberately allows
+        `(₪)` beside a numeric input — see its header — so it could never have caught
+        this; the defect is that THIS field is not a shekel-only field.)
+
+--------------------------------------------------------------------------------
+=== oracle alone ===
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a0a2aac045395d268
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  15:51:21
+   Duration  4.24s (transform 1.04s, setup 465ms, import 1.62s, tests 733ms, environment 1.16s)
+
+
+=== oracle with its neighbours ===
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a0a2aac045395d268
+
+
+ Test Files  5 passed (5)
+      Tests  81 passed (81)
+   Start at  15:53:32
+   Duration  6.66s (transform 4.07s, setup 3.40s, import 8.63s, tests 4.20s, environment 8.60s)
+

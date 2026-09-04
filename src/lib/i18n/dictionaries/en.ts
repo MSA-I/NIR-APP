@@ -2451,7 +2451,7 @@ export const en: Dictionary = {
     toast_3: 'The credit amount is not valid',
     text_24: 'Open a credit request from an invoice',
     text_25: 'Reason for the credit',
-    setAmount: 'Amount (₪)',
+    setAmount: 'Amount',
     setNotes: 'Detail',
     text_26: 'Cancel',
     save: 'Open a credit request',
