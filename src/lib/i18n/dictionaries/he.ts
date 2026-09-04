@@ -2983,6 +2983,12 @@ export const he = {
     xlTitleLocked: 'דוח סופי נעול — {org} · {entity}',
     xlLockedSubtitle: '{month} · גרסה {version} · נוצר {at}',
     xlStyledSubtitle: '{label} · {from}–{to} · הופק {at}',
+    xlMonthWindow: '{label} · {from}–{to}',
+    xlExceptionsSubtitle: 'חריגים פתוחים במועד ההפקה — אינם מוגבלים לתקופת הדוח · הופק {at}',
+    xlExceptionsScopeNote: 'שורת החריגים מונה את החריגים הפתוחים במועד ההפקה ואינה מוגבלת לתקופת הדוח.',
+    xlNoOpenExceptions: 'אין חריגים פתוחים במועד ההפקה',
+    xlNoBankTransactions: 'אין תנועות בנק בחודש זה',
+    xlNoRowsInCurrency: '{note} — {currency}',
   },
 
   consolidated: {

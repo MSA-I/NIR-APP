@@ -1,0 +1,21 @@
+PR32 - EXP-05 - GREEN
+tree: fixed
+oracle: npx vitest run src/lib/exportAbsenceAndWindow.spec.ts -t "EXP-05"
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab033ae7e071c8f4a
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ↓ src/lib/exportAbsenceAndWindow.spec.ts > EXP-01 — the mixed-currency month is not a second-class workbook > states its reporting window on every sheet that asserts one
+ ↓ src/lib/exportAbsenceAndWindow.spec.ts > EXP-01 — the mixed-currency month is not a second-class workbook > leaves the payment and credit amounts of a month with none unstated, never 0.00
+ ↓ src/lib/exportAbsenceAndWindow.spec.ts > EXP-03 — one representation of "not measured" in an exported cell > renders a blank number, an empty money list and fmtMoneyExact identically
+ ↓ src/lib/exportAbsenceAndWindow.spec.ts > EXP-03 — one representation of "not measured" in an exported cell > never writes a literal zero for a figure an empty month cannot have
+ ✓ src/lib/exportAbsenceAndWindow.spec.ts > EXP-05 — a sheet with no rows says so, the way the screen does > writes the screen's own sentence into each empty month sheet 847ms
+ ↓ src/lib/exportAbsenceAndWindow.spec.ts > EXP-06 — an out-of-window block states that it is out of window > replaces the month banner on the exceptions sheet with what that sheet actually holds
+ ↓ src/lib/exportAbsenceAndWindow.spec.ts > the generated workbooks recalculate clean > carries no formula and no formula error in any cell
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 6 skipped (7)
+   Start at  16:07:45
+   Duration  3.63s (transform 686ms, setup 447ms, import 933ms, tests 854ms, environment 1.15s)
+

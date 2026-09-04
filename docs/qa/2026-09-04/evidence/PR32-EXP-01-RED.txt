@@ -1,0 +1,56 @@
+PR32 - EXP-01 - RED
+tree: unfixed, HEAD 50188f6e (worktree-qa-sweep-20260904)
+oracle: npx vitest run src/lib/exportAbsenceAndWindow.spec.ts -t "EXP-01"
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab033ae7e071c8f4a
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ❯ src/lib/exportAbsenceAndWindow.spec.ts (7 tests | 2 failed | 5 skipped) 724ms
+     × states its reporting window on every sheet that asserts one 693ms
+     × leaves the payment and credit amounts of a month with none unstated, never 0.00 25ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/exportAbsenceAndWindow.spec.ts > EXP-01 — the mixed-currency month is not a second-class workbook > states its reporting window on every sheet that asserts one
+AssertionError: expected '2026-08 · הופק 04.09.2026, 05:42' to contain 'אוגוסט 2026 · 01.08.2026–31.08.2026'
+
+Expected: "אוגוסט 2026 · 01.08.2026–31.08.2026"
+Received: "2026-08 · הופק 04.09.2026, 05:42"
+
+ ❯ src/lib/exportAbsenceAndWindow.spec.ts:117:53
+    115|     expect(withWindow.length).toBeGreaterThan(0);
+    116|     for (const name of withWindow) {
+    117|       expect(String(book.Sheets[name].A2?.v ?? '')).toContain('אוגוסט …
+       |                                                     ^
+    118|     }
+    119|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/lib/exportAbsenceAndWindow.spec.ts > EXP-01 — the mixed-currency month is not a second-class workbook > leaves the payment and credit amounts of a month with none unstated, never 0.00
+AssertionError: expected +0 to be '—' // Object.is equality
+
+- Expected:
+"—"
+
++ Received:
+0
+
+ ❯ src/lib/exportAbsenceAndWindow.spec.ts:132:24
+    130|         expect(row[1]).toBe(0);
+    131|         // The AMOUNT was never measured. `0.00` would be this file as…
+    132|         expect(row[2]).toBe(ABSENT);
+       |                        ^
+    133|       }
+    134|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 5 skipped (7)
+   Start at  15:53:14
+   Duration  4.15s (transform 687ms, setup 608ms, import 934ms, tests 724ms, environment 1.55s)
+

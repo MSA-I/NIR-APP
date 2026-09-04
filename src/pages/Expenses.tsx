@@ -297,7 +297,8 @@ export default function Expenses() {
               currency: r.currency,
               count: r.count,
               total: r.total,
-              // A share of an empty total is not 0% — it is unmeasured, so the cell stays empty.
+              // A share of an empty total is not 0% — it is unmeasured, so the cell carries the
+              // one absence marker `workbook.ts` owns (`EXP-03`), the same one the screen shows.
               share: sheetTotalFor(r.currency) > 0 ? r.total / sheetTotalFor(r.currency) : null,
             })),
           },

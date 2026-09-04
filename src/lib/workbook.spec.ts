@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
-import { buildWorkbook, safeFileName, sheetName } from './workbook';
+import { ABSENT_CELL, buildWorkbook, safeFileName, sheetName } from './workbook';
 
 /**
  * Read back what the writer actually produced.
@@ -92,10 +92,23 @@ describe('styled workbook writer', () => {
     expect(book.Sheets['לפי ספק'].A6.f).toBeUndefined();
   });
 
-  it('leaves an absent number empty rather than writing a fake zero', async () => {
+  /**
+   * `EXP-03`, 04.09.2026. This used to assert that an absent number left the cell EMPTY, and that
+   * half of the rule was the defect: the sweep found the same absence spelled three ways in one
+   * workbook — blank here, a literal `0` from a sum over an empty set, an em dash wherever the
+   * value happened to pass through `fmtMoneyExact`. A blank is the worst of the three, because
+   * `SUM()` over a column of them returns 0 and reads as reconciled.
+   *
+   * What survives untouched is the half that was always right: it is never a fake zero.
+   */
+  it('writes the one absence marker for an absent value, and never a fake zero', async () => {
     const bytes = await buildWorkbook(SPEC);
     const book = XLSX.read(bytes, { type: 'array' });
-    expect(book.Sheets['לפי ספק'].C6).toBeUndefined();
+    // Money, percent and date, all absent on the same row, all reading the same.
+    for (const address of ['B6', 'C6', 'D6']) {
+      expect(book.Sheets['לפי ספק'][address].v).toBe(ABSENT_CELL);
+    }
+    expect(ABSENT_CELL).not.toBe(0);
   });
 
   it('keeps a sheet name inside the limits Excel refuses the whole file over', () => {

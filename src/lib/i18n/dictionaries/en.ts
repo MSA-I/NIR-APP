@@ -2957,6 +2957,12 @@ export const en: Dictionary = {
     xlTitleLocked: 'Locked final report — {org} · {entity}',
     xlLockedSubtitle: '{month} · version {version} · produced {at}',
     xlStyledSubtitle: '{label} · {from}–{to} · produced {at}',
+    xlMonthWindow: '{label} · {from}–{to}',
+    xlExceptionsSubtitle: 'Exceptions open when this file was produced — not limited to the report period · produced {at}',
+    xlExceptionsScopeNote: 'The exceptions line counts what was open when this file was produced, and is not limited to the report period.',
+    xlNoOpenExceptions: 'No exceptions were open when this file was produced',
+    xlNoBankTransactions: 'No bank transactions this month',
+    xlNoRowsInCurrency: '{note} — {currency}',
   },
 
   consolidated: {

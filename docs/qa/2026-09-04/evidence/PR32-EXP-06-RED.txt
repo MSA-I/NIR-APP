@@ -1,0 +1,35 @@
+PR32 - EXP-06 - RED
+tree: unfixed, HEAD 50188f6e (worktree-qa-sweep-20260904)
+oracle: npx vitest run src/lib/exportAbsenceAndWindow.spec.ts -t "EXP-06"
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab033ae7e071c8f4a
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ❯ src/lib/exportAbsenceAndWindow.spec.ts (7 tests | 1 failed | 6 skipped) 517ms
+     × replaces the month banner on the exceptions sheet with what that sheet actually holds 512ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/exportAbsenceAndWindow.spec.ts > EXP-06 — an out-of-window block states that it is out of window > replaces the month banner on the exceptions sheet with what that sheet actually holds
+AssertionError: expected 'ינואר 2020 · 01.01.2020–31.01.2020 · …' not to contain '01.01.2020'
+
+Expected: "01.01.2020"
+Received: "ינואר 2020 · 01.01.2020–31.01.2020 · הופק 04.09.2026, 02:39"
+
+ ❯ src/lib/exportAbsenceAndWindow.spec.ts:197:24
+    195|   it('replaces the month banner on the exceptions sheet with what that…
+    196|     const banner = String((await read(emptyMonth())).Sheets[EXCEPTIONS…
+    197|     expect(banner).not.toContain('01.01.2020');
+       |                        ^
+    198|     expect(banner).toContain(OUT_OF_WINDOW);
+    199|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 skipped (7)
+   Start at  15:54:07
+   Duration  3.13s (transform 594ms, setup 429ms, import 813ms, tests 517ms, environment 1.07s)
+

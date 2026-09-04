@@ -283,6 +283,19 @@ export function buildMonthlyWorkbook(input: {
   currencyCodes?: string[];
   month: string;
   generatedAt: Date;
+  /**
+   * THE REPORTING WINDOW, STATED THE WAY THE SCREEN STATES IT (`EXP-01`, 04.09.2026).
+   *
+   * Present, every sheet's banner reads `אוגוסט 2026 · 01.08.2026–31.08.2026 · הופק …` and the
+   * summary names the same period. Absent, the banner keeps the bare `{month}` key it always had.
+   *
+   * This exists because the window used to be added AFTER the fact, by the styled builder, on the
+   * one branch that reached the end of it: a month holding two currencies returned early and
+   * shipped eight sheets whose only period statement was the machine key `2026-08`, with no start
+   * and no end date anywhere in the file. The window is a property of the report, not of how many
+   * currencies it happened to hold, so it belongs to the builder every path goes through.
+   */
+  window?: { label: string; from: string; to: string; at: string };
   data: MonthlyReportData;
   labels: MonthlyReportLabels;
   /**
@@ -320,10 +333,21 @@ export function buildMonthlyWorkbook(input: {
    * two currencies down to one name.
    */
   const named = (name: string, currency: string) => namedSheet(name, currency, mixed);
+  /**
+   * The sentence an empty sheet states (`EXP-05`) — the screen's own words, and in a mixed month
+   * the currency too, because "no payments this month" is a different claim from "no payments in
+   * dollars this month" and the second is the one an empty `תשלומים USD` sheet is making.
+   */
+  const emptyNote = (note: string, currency: string) =>
+    mixed ? t('reports.xlNoRowsInCurrency', { note, currency }) : note;
 
   const summaryMatrix: WorkbookMatrixRow[] = [
     pair(t('reports.xlOrgName'), input.orgName ?? '—'),
-    pair(t('reports.xlMonth'), input.month),
+    pair(t('reports.xlMonth'), input.window
+      ? t('reports.xlMonthWindow', {
+        label: input.window.label, from: input.window.from, to: input.window.to,
+      })
+      : input.month),
     pair(t('reports.xlCreatedOn'), input.generatedAt, 'date'),
     pair(t('reports.xlNote'), t('reports.xlNoteLive')),
     { cells: [] },
@@ -337,24 +361,35 @@ export function buildMonthlyWorkbook(input: {
     const invoices = invoiceRows(currency);
     const payments = paymentRows(currency);
     const credits = creditRows(currency);
-    const line = (label: string, count: number, amount: number): WorkbookMatrixRow => ({
+    const line = (label: string, count: number, amount: number | null): WorkbookMatrixRow => ({
       cells: [label, count, amount, currency],
       types: [undefined, 'number', 'money'],
       moneyFormat: moneyFormat(currency),
     });
+    /* A SUM OVER AN EMPTY SET IS AN ABSENCE, NOT A ZERO (`EXP-01`/`EXP-03`). The count stays a
+       number — a set of zero payments genuinely contains zero of them, and that count was taken.
+       The AMOUNT was never measured, and `0.00` here is this file telling an accountant that
+       nothing was paid in a currency it simply has no rows for. `workbook.ts` writes the one
+       marker the screen uses. A month that HAS rows summing to 0 keeps a real 0: a measurement. */
+    const total = <T>(rows: readonly T[], value: (row: T) => number) =>
+      rows.length === 0 ? null : sum(rows, value);
     summaryMatrix.push(
-      line(t('reports.xlInvoices'), invoices.length, sum(invoices, (row) => row.total_amount)),
-      line(t('reports.xlBeforeVat'), invoices.length, sum(invoices, (row) => row.amount_before_vat)),
-      line(t('reports.xlVat'), invoices.length, sum(invoices, (row) => row.vat_amount)),
+      line(t('reports.xlInvoices'), invoices.length, total(invoices, (row) => row.total_amount)),
+      line(t('reports.xlBeforeVat'), invoices.length, total(invoices, (row) => row.amount_before_vat)),
+      line(t('reports.xlVat'), invoices.length, total(invoices, (row) => row.vat_amount)),
       line(paymentsAllocated ? t('reports.xlPaymentsAgainstInvoices') : t('reports.xlPayments'),
-        payments.length, sum(payments, (row) => row.amount)),
-      line(t('reports.xlCredits'), credits.length, sum(credits, (row) => row.amount)),
+        payments.length, total(payments, (row) => row.amount)),
+      line(t('reports.xlCredits'), credits.length, total(credits, (row) => row.amount)),
     );
   }
   summaryMatrix.push({
     cells: [t('reports.xlOpenExceptionsNow'), data.exceptions.length, null, null],
     types: [undefined, 'number', 'money'],
   });
+  /* The exception count sits in the same `מספר רשומות` column as the month's own counts, so read
+     downward it looks like one more figure the window governs. It is not, and the sentence saying
+     so goes directly beneath it (`EXP-06`). */
+  summaryMatrix.push({ cells: [t('reports.xlExceptionsScopeNote')] });
 
   /**
    * Every value below that is not a number is tenant data — supplier names, exception titles,
@@ -369,12 +404,17 @@ export function buildMonthlyWorkbook(input: {
    */
   return {
     title: t('reports.xlTitleMonthly', { org: input.orgName ?? '—' }),
-    subtitle: t('reports.xlProducedAt', { month: input.month, at: fmtDateTime(input.generatedAt.toISOString()) }),
+    subtitle: input.window
+      ? t('reports.xlStyledSubtitle', {
+        label: input.window.label, from: input.window.from, to: input.window.to, at: input.window.at,
+      })
+      : t('reports.xlProducedAt', { month: input.month, at: fmtDateTime(input.generatedAt.toISOString()) }),
     sheets: [
       { name: t('reports.xlSheetReportDetails'), widths: [30, 22, 16, 10], matrix: summaryMatrix },
       ...currencies.map((currency): WorkbookSheet => ({
         name: named(t('reports.xlInvoices'), currency),
         moneyFormat: moneyFormat(currency),
+        emptyNote: emptyNote(t('reports.text_39'), currency),
         columns: [
           { header: t('reports.xlSupplier'), key: 'supplier', width: 24 },
           { header: t('reports.xlInvoiceNumber'), key: 'number', width: 16 },
@@ -401,6 +441,7 @@ export function buildMonthlyWorkbook(input: {
       ...currencies.map((currency): WorkbookSheet => ({
         name: named(t('reports.xlPayments'), currency),
         moneyFormat: moneyFormat(currency),
+        emptyNote: emptyNote(t('reports.text_44'), currency),
         columns: [
           { header: t('reports.xlSupplier'), key: 'supplier', width: 24 },
           { header: t('reports.xlDate'), key: 'date', width: 12, type: 'date' },
@@ -422,6 +463,7 @@ export function buildMonthlyWorkbook(input: {
       ...currencies.map((currency): WorkbookSheet => ({
         name: named(t('reports.xlCredits'), currency),
         moneyFormat: moneyFormat(currency),
+        emptyNote: emptyNote(t('reports.text_50'), currency),
         columns: [
           { header: t('reports.xlSupplier'), key: 'supplier', width: 24 },
           { header: t('reports.xlReason'), key: 'reason', width: 16 },
@@ -439,6 +481,15 @@ export function buildMonthlyWorkbook(input: {
       })),
       {
         name: t('reports.xlOpenExceptionsNow'),
+        /* THE ONE SHEET THE REPORTING WINDOW DOES NOT GOVERN (`EXP-06`). Its rows are the
+           exceptions open at the moment of export, so a January-2020 report carried nine records
+           dated today under a banner asserting `01.01.2020–31.01.2020`. The sheet NAME already
+           said `כרגע`; the two rows that make the window claim did not, and those are the rows an
+           accountant reads first. They say it now, in place of a window that never applied. */
+        subtitle: t('reports.xlExceptionsSubtitle', {
+          at: input.window?.at ?? fmtDateTime(input.generatedAt.toISOString()),
+        }),
+        emptyNote: t('reports.xlNoOpenExceptions'),
         columns: [
           { header: t('reports.xlType'), key: 'type', width: 16 },
           { header: t('reports.xlDescription'), key: 'title', width: 40 },
@@ -472,9 +523,21 @@ export function buildMonthlyWorkbook(input: {
 export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthlyWorkbook>[0] & {
   summary: ReportTemplateValues;
 }): WorkbookSpec {
-  const base = buildMonthlyWorkbook(input);
-
   const { data, summary, t } = input;
+  /* THE WINDOW IS HANDED TO THE BASE BUILDER, not bolted onto the result (`EXP-01`). It used to be
+     applied here, at the end, after the mixed-currency branch had already returned — so the one
+     kind of month that takes the other path was also the one kind of month whose file never named
+     a start or an end date. Passing it in means every branch below this line inherits it. */
+  const base = buildMonthlyWorkbook({
+    ...input,
+    window: {
+      label: String(summary.period_label ?? input.month),
+      from: String(summary.period_from ?? ''),
+      to: String(summary.period_to ?? ''),
+      at: String(summary.generated_at ?? fmtDateTime(input.generatedAt.toISOString())),
+    },
+  });
+
   const currencies = orderedCurrencies([
     ...data.invoices.map((row) => row.currency),
     ...data.payments.map((row) => row.currency),
@@ -489,7 +552,9 @@ export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthly
   const definition = exportDefinition('accountant_monthly_report');
   const commonKeys = new Set(['org_name', 'period_label', 'period_from', 'period_to', 'generated_at']);
   const moneyKeys = new Set(['net_total', 'vat_total', 'gross_total', 'credits_recognized', 'net_expense']);
-  // A missing value stays an empty cell — never 0 (constitution: אפס הוא גם טענה על המציאות).
+  // A missing value carries the one absence marker `workbook.ts` owns — never 0 (constitution:
+  // אפס הוא גם טענה על המציאות), and no longer a blank cell either, which said the same thing
+  // invisibly and let a SUM over the column read as reconciled (`EXP-03`).
   const fieldRows: WorkbookMatrixRow[] = (definition?.fields ?? [])
     .filter((field) => !commonKeys.has(field.key))
     .map((field) => (moneyKeys.has(field.key)
@@ -518,20 +583,19 @@ export function buildStyledMonthlyWorkbook(input: Parameters<typeof buildMonthly
       data.payments.length], types: [undefined, 'number'] },
       { cells: [t('reports.xlCredits'), data.credits.length], types: [undefined, 'number'] },
       { cells: [t('reports.xlOpenExceptionsNow'), data.exceptions.length], types: [undefined, 'number'] },
+      // Same sentence, same reason as the base summary: this count is not the month's (`EXP-06`).
+      { cells: [t('reports.xlExceptionsScopeNote')] },
       { cells: [] },
       pair(t('reports.xlNote'), t('reports.xlNoteLive')),
     ],
   };
 
   // The data sheets are already described by the base builder; only the summary sheet is replaced.
+  // The subtitle comes from the base too — it is built from the window handed in above, so both
+  // branches of this builder now state one window in one format.
   return {
     title: base.title,
-    subtitle: t('reports.xlStyledSubtitle', {
-      label: summary.period_label ?? input.month,
-      from: summary.period_from ?? '',
-      to: summary.period_to ?? '',
-      at: summary.generated_at ?? fmtDateTime(input.generatedAt.toISOString()),
-    }),
+    subtitle: base.subtitle,
     sheets: base.sheets.map((sheet) => sheet.name === t('reports.xlSheetReportDetails') ? summarySheet : sheet),
   };
 }
@@ -628,24 +692,32 @@ export function buildLockedMonthlyWorkbook(input: {
     const payments = paymentRows.filter((row) => row.currency === currency);
     const credits = creditRows.filter((row) => row.currency === currency);
     const bank = bankRows.filter((row) => row.currency === currency);
-    const line = (label: string, count: number, amount: number): WorkbookMatrixRow => ({
+    const line = (label: string, count: number, amount: number | null): WorkbookMatrixRow => ({
       cells: [label, count, amount, currency],
       types: [undefined, 'number', 'money'],
       moneyFormat: moneyFormat(currency),
     });
+    // The same rule as the live builder, and evidence is exactly where it matters most: a frozen
+    // artifact asserting `0.00` for a currency it holds no rows in is a false record, not a
+    // conservative one.
+    const total = <T>(rows: readonly T[], value: (row: T) => number) =>
+      rows.length === 0 ? null : sum(rows, value);
     summaryMatrix.push(
-      line(t('reports.xlInvoices'), invoices.length, sum(invoices, (row) => row.total_amount)),
-      line(t('reports.xlBeforeVat'), invoices.length, sum(invoices, (row) => row.amount_before_vat)),
-      line(t('reports.xlVat'), invoices.length, sum(invoices, (row) => row.vat_amount)),
-      line(t('reports.xlPayments'), payments.length, sum(payments, (row) => row.amount)),
-      line(t('reports.xlCredits'), credits.length, sum(credits, (row) => row.amount)),
-      line(t('reports.xlBankTransactions'), bank.length, sum(bank, (row) => row.amount)),
+      line(t('reports.xlInvoices'), invoices.length, total(invoices, (row) => row.total_amount)),
+      line(t('reports.xlBeforeVat'), invoices.length, total(invoices, (row) => row.amount_before_vat)),
+      line(t('reports.xlVat'), invoices.length, total(invoices, (row) => row.vat_amount)),
+      line(t('reports.xlPayments'), payments.length, total(payments, (row) => row.amount)),
+      line(t('reports.xlCredits'), credits.length, total(credits, (row) => row.amount)),
+      line(t('reports.xlBankTransactions'), bank.length, total(bank, (row) => row.amount)),
     );
   }
   summaryMatrix.push({
     cells: [t('reports.xlOpenExceptionsAtCreation'), snapshot.totals.exception_count, null, null],
     types: [undefined, 'number', 'money'],
   });
+  // The frozen artifact counts the exceptions open when it was CREATED, which is still not the
+  // month's own count, and it sits in the month's own count column (`EXP-06`).
+  summaryMatrix.push({ cells: [t('reports.xlExceptionsScopeNote')] });
 
   const summarySheet: WorkbookMatrixSheet = {
     name: t('reports.xlSheetReportDetails'),
@@ -665,6 +737,9 @@ export function buildLockedMonthlyWorkbook(input: {
       ...currencies.map((currency): WorkbookSheet => ({
         name: namedSheet(t('reports.xlBankTransactions'), currency, mixed),
         moneyFormat: moneyFormat(currency),
+        emptyNote: mixed
+          ? t('reports.xlNoRowsInCurrency', { note: t('reports.xlNoBankTransactions'), currency })
+          : t('reports.xlNoBankTransactions'),
         columns: [
           { header: t('reports.xlDate'), key: 'date', width: 12, type: 'date' },
           { header: t('reports.xlDescription'), key: 'description', width: 40 },

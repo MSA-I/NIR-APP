@@ -1,0 +1,48 @@
+PR32 - GUARDS AND SUITE (post-fix)
+
+
+> inplace@0.1.0 check:money
+> node scripts/check-money.ts
+
+check:money passed: 3 rules over src/**/*.ts(x), src/lib/format.ts exempt.
+
+> inplace@0.1.0 check:currency
+> node scripts/check-currency.mjs
+
+GATE_CURRENCY_COLUMNS_OK — 84 numeric columns declared, all classified (40 money, 44 not money); carrier check enforced.
+GATE_CURRENCY_AGGREGATES_OK — money aggregates enforced from 0217 onward.
+GATE_CURRENCY_INTAKE_GUARD_OK — 0244_intake_says_when_it_could_not_check.sql still rejects an unrecognised currency as currency_unrecognised/error.
+
+> inplace@0.1.0 check:i18n
+> node scripts/check-i18n.ts
+
+check:i18n passed: 64 file(s) still carry 911 Hebrew line(s), all at their pinned counts (64 documented exception(s)).
+
+> inplace@0.1.0 check:orphan-keys
+> node scripts/check-orphan-keys.mjs
+
+check:orphan-keys passed: 6038 leaf key(s), 106 with no call site, pinned.
+
+> inplace@0.1.0 check:plurals
+> node scripts/check-plurals.mjs
+
+check:plurals passed: 76 counted phrase(s), 31 with a singular sibling, 45 pinned.
+
+$ npx tsc --noEmit
+exit 0 (no diagnostics)
+
+$ npx vitest run   (whole unit suite)
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab033ae7e071c8f4a
+
+
+ Test Files  255 passed (255)
+      Tests  2604 passed (2604)
+   Start at  16:12:42
+   Duration  106.40s (transform 82.61s, setup 226.22s, import 235.24s, tests 321.96s, environment 593.40s)
+
+
+NOTE: an earlier full-suite run in this session showed one timeout in
+src/pages/supplierBankDetails.spec.tsx (5000ms default). A second plain run failed a DIFFERENT
+test in the same file, and the file passed 11/11 with --testTimeout=30000; the run recorded above
+passes it plainly. Environmental (CPU contention on a shared machine), unrelated to exports.

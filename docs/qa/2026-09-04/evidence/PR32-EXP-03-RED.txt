@@ -1,0 +1,59 @@
+PR32 - EXP-03 - RED
+tree: unfixed, HEAD 50188f6e (worktree-qa-sweep-20260904)
+oracle: npx vitest run src/lib/exportAbsenceAndWindow.spec.ts -t "EXP-03"
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab033ae7e071c8f4a
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ❯ src/lib/exportAbsenceAndWindow.spec.ts (7 tests | 2 failed | 5 skipped) 923ms
+     × renders a blank number, an empty money list and fmtMoneyExact identically 878ms
+     × never writes a literal zero for a figure an empty month cannot have 37ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/exportAbsenceAndWindow.spec.ts > EXP-03 — one representation of "not measured" in an exported cell > renders a blank number, an empty money list and fmtMoneyExact identically
+AssertionError: expected undefined to be '—' // Object.is equality
+
+- Expected:
+"—"
+
++ Received:
+undefined
+
+ ❯ src/lib/exportAbsenceAndWindow.spec.ts:165:33
+    163|     const sheet = book.Sheets['מוצרים'];
+    164|     for (const address of ['A5', 'B5', 'C5']) {
+    165|       expect(sheet[address]?.v).toBe(ABSENT);
+       |                                 ^
+    166|     }
+    167|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/lib/exportAbsenceAndWindow.spec.ts > EXP-03 — one representation of "not measured" in an exported cell > never writes a literal zero for a figure an empty month cannot have
+AssertionError: expected undefined to be '—' // Object.is equality
+
+- Expected:
+"—"
+
++ Received:
+undefined
+
+ ❯ src/lib/exportAbsenceAndWindow.spec.ts:173:30
+    171|     const valueOf = (label: string) => rows.find((row) => row[0] === l…
+    172|     for (const label of ['סה״כ לפני מע״מ', 'סה״כ מע״מ', 'סה״כ כולל מע״…
+    173|       expect(valueOf(label)).toBe(ABSENT);
+       |                              ^
+    174|     }
+    175|     // The counts are measurements over an empty universe and stay num…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 5 skipped (7)
+   Start at  15:53:32
+   Duration  4.48s (transform 862ms, setup 712ms, import 1.15s, tests 923ms, environment 1.37s)
+
