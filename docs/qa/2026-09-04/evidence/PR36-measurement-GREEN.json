@@ -1,0 +1,171 @@
+{
+  "label": "GREEN",
+  "baseUrl": "http://localhost:5236",
+  "expectedRows": 52,
+  "findings": {
+    "ENTRY-02": {
+      "desktop": {
+        "inDom": 52,
+        "laidOut": 52,
+        "expanders": 0,
+        "bodyTextLength": 2661
+      },
+      "phone": {
+        "inDom": 52,
+        "laidOut": 52,
+        "expanders": 0,
+        "bodyTextLength": 2573
+      }
+    },
+    "ENTRY-06": {
+      "badges": [
+        {
+          "plan": "free",
+          "text": "רק 30 יום ראשונים",
+          "tagWidth": 110,
+          "cardWidth": 209,
+          "rowHeight": 61,
+          "overflowStart": -30,
+          "overflowEnd": -69,
+          "label": "קריאה אוטומטית של מסמכים"
+        },
+        {
+          "plan": "free",
+          "text": "רק 30 יום ראשונים",
+          "tagWidth": 110,
+          "cardWidth": 209,
+          "rowHeight": 61,
+          "overflowStart": -30,
+          "overflowEnd": -69,
+          "label": "ייצוא Excel ודוחות לרו״ח"
+        },
+        {
+          "plan": "free",
+          "text": "רק 30 יום ראשונים",
+          "tagWidth": 110,
+          "cardWidth": 209,
+          "rowHeight": 44,
+          "overflowStart": -30,
+          "overflowEnd": -69,
+          "label": "לוח ביצועי ספקים"
+        },
+        {
+          "plan": "free",
+          "text": "רק 30 יום ראשונים",
+          "tagWidth": 110,
+          "cardWidth": 209,
+          "rowHeight": 44,
+          "overflowStart": -30,
+          "overflowEnd": -69,
+          "label": "התאמות בנק"
+        },
+        {
+          "plan": "free",
+          "text": "רק 30 יום ראשונים",
+          "tagWidth": 110,
+          "cardWidth": 209,
+          "rowHeight": 61,
+          "overflowStart": -30,
+          "overflowEnd": -69,
+          "label": "תור תשלומים לרואה החשבון"
+        }
+      ],
+      "cards": [
+        {
+          "plan": "free",
+          "height": 822,
+          "tallestRow": 61
+        },
+        {
+          "plan": "basic",
+          "height": 822,
+          "tallestRow": 35
+        },
+        {
+          "plan": "pro",
+          "height": 817,
+          "tallestRow": 35
+        },
+        {
+          "plan": "premium",
+          "height": 822,
+          "tallestRow": 35
+        }
+      ]
+    },
+    "ENTRY-12": [
+      {
+        "route": "/login",
+        "selector": "a[href=\"/forgot-password\"]",
+        "expect": "שכחתי סיסמה",
+        "measured": {
+          "text": "שכחתי סיסמה",
+          "height": 44,
+          "width": 84
+        }
+      },
+      {
+        "route": "/login",
+        "selector": "main form ~ p button",
+        "expect": "להרשמה",
+        "measured": {
+          "text": "להרשמה",
+          "height": 44,
+          "width": 53
+        }
+      },
+      {
+        "route": "/login",
+        "selector": "main > div a[href=\"/terms\"]",
+        "expect": "תנאי שימוש",
+        "measured": {
+          "text": "תנאי שימוש",
+          "height": 44,
+          "width": 59
+        }
+      },
+      {
+        "route": "/login",
+        "selector": "main > div a[href=\"/privacy\"]",
+        "expect": "מדיניות פרטיות",
+        "measured": {
+          "text": "מדיניות פרטיות",
+          "height": 44,
+          "width": 77
+        }
+      },
+      {
+        "route": "/signup",
+        "selector": "main form ~ p button",
+        "expect": "התחברות",
+        "measured": {
+          "text": "התחברות",
+          "height": 44,
+          "width": 57
+        }
+      },
+      {
+        "route": "/forgot-password",
+        "selector": "a[href=\"/login\"]",
+        "expect": "חזרה למסך הכניסה",
+        "measured": {
+          "text": "חזרה למסך הכניסה",
+          "height": 44,
+          "width": 113
+        }
+      }
+    ]
+  },
+  "screenshots": {
+    "pricing-1440x900": "docs\\qa\\2026-09-04\\evidence\\PR36-pricing-1440x900-GREEN.png",
+    "pricing-390x844": "docs\\qa\\2026-09-04\\evidence\\PR36-pricing-390x844-GREEN.png",
+    "login-390x844": "docs\\qa\\2026-09-04\\evidence\\PR36-login-390x844-GREEN.png",
+    "login-1440x900": "docs\\qa\\2026-09-04\\evidence\\PR36-login-1440x900-GREEN.png",
+    "signup-390x844": "docs\\qa\\2026-09-04\\evidence\\PR36-signup-390x844-GREEN.png",
+    "signup-1440x900": "docs\\qa\\2026-09-04\\evidence\\PR36-signup-1440x900-GREEN.png",
+    "forgot-password-390x844": "docs\\qa\\2026-09-04\\evidence\\PR36-forgot-password-390x844-GREEN.png",
+    "forgot-password-1440x900": "docs\\qa\\2026-09-04\\evidence\\PR36-forgot-password-1440x900-GREEN.png"
+  },
+  "failures": [],
+  "verdict": "PASS"
+}

@@ -5961,13 +5961,12 @@ export const en: Dictionary = {
 
   pricingTail: {
     figureIsQuota: '{label} allowance: {value}',
-    entitlementIntroOnly: '{label} — open for the first 30 days',
     perUsagePeriod: 'per monthly usage period',
     recommended: 'Recommended',
     loadFailed: 'The plans cannot be loaded right now.',
     title: 'Plans',
     subtitle: 'The same control. A pace that fits your business.',
-    notice: 'Every capability is open on every plan; only volume differs. The price is not published on this page — it is provided inside the account when moving to a paid plan, in the currency determined by the verified billing address held by the payment provider, not by an estimated location. Opening an account and the free plan do not require a payment method.',
+    notice: 'Plans differ in volume and in capabilities — what each plan includes is listed on its own card below. The price is not published on this page — it is provided inside the account when moving to a paid plan, in the currency determined by the verified billing address held by the payment provider, not by an estimated location. Opening an account and the free plan do not require a payment method.',
     unlimitedFeature: 'Unlimited {label}',
     unlimited: 'Unlimited',
     quotaPeriod: 'Quotas are counted over the organisation\'s monthly usage period. Exceeding one stops new processing only — no document is deleted and nothing already completed is blocked retroactively.',

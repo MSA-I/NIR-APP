@@ -1,0 +1,296 @@
+PR 36 — ENTRY-02, ENTRY-05, ENTRY-06, ENTRY-12 — THE RED, on the UNFIXED tree.
+Branch worktree-agent-a3c28df0cf03a73f4, merge-base 2001b9af.
+Measured 04.09.2026 on this machine, headed Microsoft Edge through playwright-core, dev server on
+port 5236 with its own vite cacheDir (the shared .vite cache in a junctioned node_modules can hand
+the page two copies of React). /pricing is public: the three catalogue RPCs are answered from a
+fixture injected into the page's own fetch, so nothing here depends on the local Supabase stack,
+its migration head or the demo seed.
+
+Four oracles, one per finding:
+  ENTRY-02  scripts/measure-public-entrance.mjs  (rendered)  + src/components/planCardPhone.spec.ts
+  ENTRY-05  src/pages/pricingPublicClaims.spec.tsx
+  ENTRY-06  scripts/measure-public-entrance.mjs  (rendered)  + the two specs above
+  ENTRY-12  scripts/measure-public-entrance.mjs  (rendered)  + src/pages/publicEntranceTouchTargets.spec.tsx
+
+
+================================================================================================
+$ npx vitest run src/components/planCardPhone.spec.ts
+================================================================================================
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3c28df0cf03a73f4
+
+ ❯ src/components/planCardPhone.spec.ts (3 tests | 2 failed) 15ms
+     × אינו מסתיר את שורות היכולות בטלפון בלי פקד שיפתח אותן 7ms
+     × שורת יכולת יכולה לעבור שורה, כך שתג שאינו נשבר לא יוצא מהכרטיס 1ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  15:06:44
+   Duration  1.54s (transform 65ms, setup 383ms, import 22ms, tests 15ms, environment 908ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/planCardPhone.spec.ts > כרטיס המסלול על טלפון > אינו מסתיר את שורות היכולות בטלפון בלי פקד שיפתח אותן
+AssertionError: A phone rule removes .plan-block from the layout while PlanTicket draws no .plan-card__more to open it again — /pricing then shows four plan names and nothing else (ENTRY-02).: expected [ '.plan-block { display: none; }' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   ".plan-block { display: none; }",
++ ]
+
+ ❯ src/components/planCardPhone.spec.ts:90:7
+     88|       'A phone rule removes .plan-block from the layout while PlanTick…
+     89|       + 'to open it again — /pricing then shows four plan names and no…
+     90|     ).toEqual([]);
+       |       ^
+     91|   });
+     92|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/components/planCardPhone.spec.ts > כרטיס המסלול על טלפון > שורת יכולת יכולה לעבור שורה, כך שתג שאינו נשבר לא יוצא מהכרטיס
+AssertionError: expected 'display: flex; align-items: flex-star…' to match /flex-wrap\s*:\s*wrap/
+
+- Expected:
+/flex-wrap\s*:\s*wrap/
+
++ Received:
+"display: flex; align-items: flex-start; gap: 0.45rem; font-size: 0.8rem; line-height: 1.35; color: color-mix(in srgb, var(--pc-ink) 88%, transparent);"
+
+ ❯ src/components/planCardPhone.spec.ts:105:23
+    103|     const row = rules(withoutComments(css)).find((rule) => rule.select…
+    104|     expect(row, 'plan-card.css has no .plan-row rule').toBeDefined();
+    105|     expect(row!.body).toMatch(/flex-wrap\s*:\s*wrap/);
+       |                       ^
+    106|     const tag = rules(withoutComments(css)).find((rule) => rule.select…
+    107|     expect(tag, 'plan-card.css has no .plan-row__tag rule').toBeDefine…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+[exit 1]
+
+================================================================================================
+$ npx vitest run src/pages/pricingPublicClaims.spec.tsx
+================================================================================================
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3c28df0cf03a73f4
+
+ ❯ src/pages/pricingPublicClaims.spec.tsx (3 tests | 3 failed) 307ms
+     × אינו מבטיח שכל היכולות פתוחות בכל מסלול בזמן שהכרטיסים שוללים יכולות 190ms
+     × אותה הבטחה גם באנגלית 73ms
+     × שורת חלון ההיכרות אומרת את החלון פעם אחת, והתווית היא שם היכולת בלבד 38ms
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  15:06:48
+   Duration  3.31s (transform 651ms, setup 546ms, import 860ms, tests 307ms, environment 1.33s)
+
+stderr | src/pages/pricingPublicClaims.spec.tsx > הבטחות דף המסלולים הציבורי > אינו מבטיח שכל היכולות פתוחות בכל מסלול בזמן שהכרטיסים שוללים יכולות
+In HTML, <div> cannot be a descendant of <p>.
+This will cause a hydration error.
+
+  <LocaleProvider initialLocale="he">
+    <MemoryRouter>
+      <Router basename={undefined} location={{pathname:"/", ...}} navigationType="POP" navigator={{index:0, ...}} ...>
+        <Pricing>
+          <main className="mx-auto ma...">
+            <header>
+            <Note>
+            <PlanTicketSkeleton rows={4} action={false} testId="pricing-sk...">
+              <div role="status" aria-busy="true" className="space-y-4" data-testid="pricing-sk...">
+                <span>
+                <ul className="plan-tray">
+                  <li className="plan-slot ...">
+                    <span>
+                    <div className="plan-card ...">
+                      <div>
+                      <div>
+                      <div>
+>                     <p className="plan-card__billed">
+                        <Skeleton className="h-3 w-32">
+>                         <div className="skeleton h-3 w-32" aria-hidden={true}>
+                      ...
+                  ...
+
+<p> cannot contain a nested <div>.
+See this log for the ancestor stack trace.
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/pricingPublicClaims.spec.tsx > הבטחות דף המסלולים הציבורי > אינו מבטיח שכל היכולות פתוחות בכל מסלול בזמן שהכרטיסים שוללים יכולות
+AssertionError: expected 'מסלוליםאותה שליטה. קצב שמתאים לעסק של…' not to match /כל היכולות פתוחות בכל המסלולים/
+
+- Expected:
+/כל היכולות פתוחות בכל המסלולים/
+
++ Received:
+"מסלוליםאותה שליטה. קצב שמתאים לעסק שלך. כל היכולות פתוחות בכל המסלולים; ההבדל הוא נפח בלבד. המחיר אינו מפורסם בדף הזה — הוא נמסר בתוך החשבון, בשלב המעבר למסלול בתשלום, במטבע שנקבע לפי כתובת החיוב המאומתת מול ספק הסליקה ולא לפי מיקום משוער. פתיחת חשבון והמסלול החינמי אינם דורשים אמצעי תשלום. המכסות נספרות בתקופת שימוש חודשית של הארגון. חריגה עוצרת עיבוד חדש בלבד — שום מסמך אינו נמחק ושום דבר שכבר נעשה אינו נחסם למפרע. פתיחת חשבון חינם"
+
+ ❯ src/pages/pricingPublicClaims.spec.tsx:125:24
+    123|     const notice = noticeText();
+    124|     // The claim the sweep quoted, in the words it quoted.
+    125|     expect(notice).not.toMatch(/כל היכולות פתוחות בכל המסלולים/);
+       |                        ^
+    126|     expect(notice).not.toMatch(/ההבדל הוא נפח בלבד/);
+    127|     // And it still tells the reader what the difference IS, rather th…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/pages/pricingPublicClaims.spec.tsx > הבטחות דף המסלולים הציבורי > אותה הבטחה גם באנגלית
+AssertionError: expected 'PlansThe same control. A pace that fi…' not to match /every capability is open on every pl…/i
+
+- Expected:
+/every capability is open on every plan/i
+
++ Received:
+"PlansThe same control. A pace that fits your business. Every capability is open on every plan; only volume differs. The price is not published on this page — it is provided inside the account when moving to a paid plan, in the currency determined by the verified billing address held by the payment provider, not by an estimated location. Opening an account and the free plan do not require a payment method. Quotas are counted over the organisation's monthly usage period. Exceeding one stops new processing only — no document is deleted and nothing already completed is blocked retroactively. Open a free account"
+
+ ❯ src/pages/pricingPublicClaims.spec.tsx:137:24
+    135|     await settle();
+    136|     const notice = noticeText();
+    137|     expect(notice).not.toMatch(/every capability is open on every plan…
+       |                        ^
+    138|     expect(notice).not.toMatch(/only volume differs/i);
+    139|     expect(notice).toMatch(/capabilit/i);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/pages/pricingPublicClaims.spec.tsx > הבטחות דף המסלולים הציבורי > שורת חלון ההיכרות אומרת את החלון פעם אחת, והתווית היא שם היכולת בלבד
+AssertionError: expected 'קריאה אוטומטית של מסמכים — פתוח ב־30 …' to be 'קריאה אוטומטית של מסמכים' // Object.is equality
+
+Expected: "קריאה אוטומטית של מסמכים"
+Received: "קריאה אוטומטית של מסמכים — פתוח ב־30 הימים הראשונים"
+
+ ❯ src/pages/pricingPublicClaims.spec.tsx:160:42
+    158|       expect(tag!.textContent?.trim()).toBeTruthy();
+    159|       // The label is the name, not the name plus the sentence the bad…
+    160|       expect(label?.textContent?.trim()).toBe(AUTOMATION.label);
+       |                                          ^
+    161|     }
+    162|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+[exit 1]
+
+================================================================================================
+$ npx vitest run src/pages/publicEntranceTouchTargets.spec.tsx
+================================================================================================
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3c28df0cf03a73f4
+
+ ❯ src/pages/publicEntranceTouchTargets.spec.tsx (4 tests | 3 failed) 207ms
+     × /login — שכחתי סיסמה, המעבר להרשמה ושתי שורות הכותרת התחתונה 149ms
+     × /signup — המעבר חזרה להתחברות 23ms
+     × /forgot-password — חזרה למסך הכניסה 8ms
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed (4)
+   Start at  15:06:53
+   Duration  3.29s (transform 815ms, setup 486ms, import 1.07s, tests 207ms, environment 1.24s)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/publicEntranceTouchTargets.spec.tsx > גובה הפקדים בכניסה הציבורית > /login — שכחתי סיסמה, המעבר להרשמה ושתי שורות הכותרת התחתונה
+AssertionError: «שכחתי סיסמה» carries no 44px floor: class="mt-2 inline-block text-sm text-action underline-offset-2 hover:underline". On a phone it renders 16-20px tall, against the floor plan-card.css and Entrance.tsx both cite (ENTRY-12).: expected 'mt-2 inline-block text-sm text-action…' to match /(^|\s)(min-h-(1[1-9]|[2-9]\d)|h-(1[1-…/
+
+- Expected:
+/(^|\s)(min-h-(1[1-9]|[2-9]\d)|h-(1[1-9]|[2-9]\d)|btn-(primary|secondary))(\s|$)/
+
++ Received:
+"mt-2 inline-block text-sm text-action underline-offset-2 hover:underline"
+
+ ❯ holdsTheFloor src/pages/publicEntranceTouchTargets.spec.tsx:65:5
+     63|     `${name} carries no 44px floor: class="${el!.className}". On a pho…
+     64|     + 'tall, against the floor plan-card.css and Entrance.tsx both cit…
+     65|   ).toMatch(FLOOR);
+       |     ^
+     66| };
+     67|
+ ❯ src/pages/publicEntranceTouchTargets.spec.tsx:76:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/pages/publicEntranceTouchTargets.spec.tsx > גובה הפקדים בכניסה הציבורית > /signup — המעבר חזרה להתחברות
+AssertionError: «התחברות» carries no 44px floor: class="link font-medium text-action underline-offset-2 hover:underline". On a phone it renders 16-20px tall, against the floor plan-card.css and Entrance.tsx both cite (ENTRY-12).: expected 'link font-medium text-action underlin…' to match /(^|\s)(min-h-(1[1-9]|[2-9]\d)|h-(1[1-…/
+
+- Expected:
+/(^|\s)(min-h-(1[1-9]|[2-9]\d)|h-(1[1-9]|[2-9]\d)|btn-(primary|secondary))(\s|$)/
+
++ Received:
+"link font-medium text-action underline-offset-2 hover:underline"
+
+ ❯ holdsTheFloor src/pages/publicEntranceTouchTargets.spec.tsx:65:5
+     63|     `${name} carries no 44px floor: class="${el!.className}". On a pho…
+     64|     + 'tall, against the floor plan-card.css and Entrance.tsx both cit…
+     65|   ).toMatch(FLOOR);
+       |     ^
+     66| };
+     67|
+ ❯ src/pages/publicEntranceTouchTargets.spec.tsx:84:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/pages/publicEntranceTouchTargets.spec.tsx > גובה הפקדים בכניסה הציבורית > /forgot-password — חזרה למסך הכניסה
+AssertionError: «חזרה למסך הכניסה» carries no 44px floor: class="text-sm text-ink-muted hover:text-ink underline underline-offset-2". On a phone it renders 16-20px tall, against the floor plan-card.css and Entrance.tsx both cite (ENTRY-12).: expected 'text-sm text-ink-muted hover:text-ink…' to match /(^|\s)(min-h-(1[1-9]|[2-9]\d)|h-(1[1-…/
+
+- Expected:
+/(^|\s)(min-h-(1[1-9]|[2-9]\d)|h-(1[1-9]|[2-9]\d)|btn-(primary|secondary))(\s|$)/
+
++ Received:
+"text-sm text-ink-muted hover:text-ink underline underline-offset-2"
+
+ ❯ holdsTheFloor src/pages/publicEntranceTouchTargets.spec.tsx:65:5
+     63|     `${name} carries no 44px floor: class="${el!.className}". On a pho…
+     64|     + 'tall, against the floor plan-card.css and Entrance.tsx both cit…
+     65|   ).toMatch(FLOOR);
+       |     ^
+     66| };
+     67|
+ ❯ src/pages/publicEntranceTouchTargets.spec.tsx:89:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+[exit 1]
+
+================================================================================================
+$ node scripts/measure-public-entrance.mjs
+================================================================================================
+— /pricing 1440x900: 52/52 entitlement rows laid out
+— /pricing 390x844 : 0/52 entitlement rows laid out, 0 expander(s), body text 817 chars
+— badge free «רק 30 יום ראשונים» card 209px, badge 110px, row 138px, overflow start 13px / end -112px, label «קריאה אוטומטית של מסמכים — פתוח ב־30 הימים הראשונים»
+— badge free «רק 30 יום ראשונים» card 209px, badge 110px, row 138px, overflow start 13px / end -112px, label «ייצוא Excel ודוחות לרו״ח — פתוח ב־30 הימים הראשונים»
+— badge free «רק 30 יום ראשונים» card 209px, badge 110px, row 121px, overflow start 13px / end -112px, label «לוח ביצועי ספקים — פתוח ב־30 הימים הראשונים»
+— badge free «רק 30 יום ראשונים» card 209px, badge 110px, row 104px, overflow start 13px / end -112px, label «התאמות בנק — פתוח ב־30 הימים הראשונים»
+— badge free «רק 30 יום ראשונים» card 209px, badge 110px, row 138px, overflow start 13px / end -112px, label «תור תשלומים לרואה החשבון — פתוח ב־30 הימים הראשונים»
+— card free: 1172px, tallest row 138px
+— card basic: 1172px, tallest row 35px
+— card pro: 1168px, tallest row 35px
+— card premium: 1172px, tallest row 35px
+— /login «שכחתי סיסמה»: 20px
+— /login «להרשמה»: 20px
+— /login «תנאי שימוש»: 16px
+— /login «מדיניות פרטיות»: 16px
+— /signup «התחברות»: 20px
+— /forgot-password «חזרה למסך הכניסה»: 19px
+
+FAIL — 8 failure(s)
+  FAIL ENTRY-02: 390x844 lays out 0 of the 52 entitlement rows in the DOM, against 52 on the desktop, and offers 0 control(s) to open them. A visitor on a phone cannot tell the plans apart.
+  FAIL ENTRY-06: 5 intro badge(s) cross their own card's border — free "רק 30 יום ראשונים" by 13px (card 209px, badge 110px, row 138px); free "רק 30 יום ראשונים" by 13px (card 209px, badge 110px, row 138px); free "רק 30 יום ראשונים" by 13px (card 209px, badge 110px, row 121px); free "רק 30 יום ראשונים" by 13px (card 209px, badge 110px, row 104px); free "רק 30 יום ראשונים" by 13px (card 209px, badge 110px, row 138px)
+  FAIL ENTRY-12: /login «שכחתי סיסמה» is 20px tall at 390x844, under the product's own 44px floor.
+  FAIL ENTRY-12: /login «להרשמה» is 20px tall at 390x844, under the product's own 44px floor.
+  FAIL ENTRY-12: /login «תנאי שימוש» is 16px tall at 390x844, under the product's own 44px floor.
+  FAIL ENTRY-12: /login «מדיניות פרטיות» is 16px tall at 390x844, under the product's own 44px floor.
+  FAIL ENTRY-12: /signup «התחברות» is 20px tall at 390x844, under the product's own 44px floor.
+  FAIL ENTRY-12: /forgot-password «חזרה למסך הכניסה» is 19px tall at 390x844, under the product's own 44px floor.
+
+[exit 1]

@@ -271,21 +271,27 @@ export default function Pricing() {
            *
            * `affirmative` is now the server's `included` and nothing else, so a row that is not
            * included cannot be marked as though it were.
+           *
+           * AND THE WINDOW IS STATED ONCE (`ENTRY-06`). This page used to append a whole sentence
+           * to the label — «{label} — פתוח ב־30 הימים הראשונים» — on a row where `BlockRow`
+           * ALREADY draws the clock, the `sr-only` state word «כלול ב־30 הימים הראשונים בלבד» and
+           * the `.plan-row__tag` badge «רק 30 יום ראשונים». Three statements of one fact, and the
+           * third of them is a 110px `white-space: nowrap` chip: in the free rung's 209px column
+           * the sentence and the chip together starved the label to about 50px, wrapped it one
+           * word per line, made the row 138px where every other plan's is 17, and pushed the chip
+           * out through the card's own border. The label is now the capability's name — the same
+           * string every other rung prints, which is what makes the four cards comparable — and
+           * the badge is the one place the window is written.
            */
           const capabilityRows = state.features
             .filter((row) => row.plan_key === plan.plan_key)
             .sort((a, b) => a.display_order - b.display_order)
-            .map((row): PlanTicketFeature => {
-              const introOnly = row.plan_key === 'free' && row.intro_included && !row.included;
-              return {
-                key: row.entitlement_key,
-                text: introOnly
-                  ? t('pricingTail.entitlementIntroOnly', { label: featureName(row.entitlement_key, row.label) })
-                  : featureName(row.entitlement_key, row.label),
-                affirmative: row.included,
-                intro: introOnly,
-              };
-            });
+            .map((row): PlanTicketFeature => ({
+              key: row.entitlement_key,
+              text: featureName(row.entitlement_key, row.label),
+              affirmative: row.included,
+              intro: row.plan_key === 'free' && row.intro_included && !row.included,
+            }));
           return (
             <PlanTicket
               key={plan.plan_key}

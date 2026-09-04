@@ -1,0 +1,180 @@
+{
+  "label": "RED",
+  "baseUrl": "http://localhost:5236",
+  "expectedRows": 52,
+  "findings": {
+    "ENTRY-02": {
+      "desktop": {
+        "inDom": 52,
+        "laidOut": 52,
+        "expanders": 0,
+        "bodyTextLength": 2768
+      },
+      "phone": {
+        "inDom": 52,
+        "laidOut": 0,
+        "expanders": 0,
+        "bodyTextLength": 817
+      }
+    },
+    "ENTRY-06": {
+      "badges": [
+        {
+          "plan": "free",
+          "text": "רק 30 יום ראשונים",
+          "tagWidth": 110,
+          "cardWidth": 209,
+          "rowHeight": 138,
+          "overflowStart": 13,
+          "overflowEnd": -112,
+          "label": "קריאה אוטומטית של מסמכים — פתוח ב־30 הימים הראשונים"
+        },
+        {
+          "plan": "free",
+          "text": "רק 30 יום ראשונים",
+          "tagWidth": 110,
+          "cardWidth": 209,
+          "rowHeight": 138,
+          "overflowStart": 13,
+          "overflowEnd": -112,
+          "label": "ייצוא Excel ודוחות לרו״ח — פתוח ב־30 הימים הראשונים"
+        },
+        {
+          "plan": "free",
+          "text": "רק 30 יום ראשונים",
+          "tagWidth": 110,
+          "cardWidth": 209,
+          "rowHeight": 121,
+          "overflowStart": 13,
+          "overflowEnd": -112,
+          "label": "לוח ביצועי ספקים — פתוח ב־30 הימים הראשונים"
+        },
+        {
+          "plan": "free",
+          "text": "רק 30 יום ראשונים",
+          "tagWidth": 110,
+          "cardWidth": 209,
+          "rowHeight": 104,
+          "overflowStart": 13,
+          "overflowEnd": -112,
+          "label": "התאמות בנק — פתוח ב־30 הימים הראשונים"
+        },
+        {
+          "plan": "free",
+          "text": "רק 30 יום ראשונים",
+          "tagWidth": 110,
+          "cardWidth": 209,
+          "rowHeight": 138,
+          "overflowStart": 13,
+          "overflowEnd": -112,
+          "label": "תור תשלומים לרואה החשבון — פתוח ב־30 הימים הראשונים"
+        }
+      ],
+      "cards": [
+        {
+          "plan": "free",
+          "height": 1172,
+          "tallestRow": 138
+        },
+        {
+          "plan": "basic",
+          "height": 1172,
+          "tallestRow": 35
+        },
+        {
+          "plan": "pro",
+          "height": 1168,
+          "tallestRow": 35
+        },
+        {
+          "plan": "premium",
+          "height": 1172,
+          "tallestRow": 35
+        }
+      ]
+    },
+    "ENTRY-12": [
+      {
+        "route": "/login",
+        "selector": "a[href=\"/forgot-password\"]",
+        "expect": "שכחתי סיסמה",
+        "measured": {
+          "text": "שכחתי סיסמה",
+          "height": 20,
+          "width": 84
+        }
+      },
+      {
+        "route": "/login",
+        "selector": "main form ~ p button",
+        "expect": "להרשמה",
+        "measured": {
+          "text": "להרשמה",
+          "height": 20,
+          "width": 53
+        }
+      },
+      {
+        "route": "/login",
+        "selector": "main > div a[href=\"/terms\"]",
+        "expect": "תנאי שימוש",
+        "measured": {
+          "text": "תנאי שימוש",
+          "height": 16,
+          "width": 59
+        }
+      },
+      {
+        "route": "/login",
+        "selector": "main > div a[href=\"/privacy\"]",
+        "expect": "מדיניות פרטיות",
+        "measured": {
+          "text": "מדיניות פרטיות",
+          "height": 16,
+          "width": 77
+        }
+      },
+      {
+        "route": "/signup",
+        "selector": "main form ~ p button",
+        "expect": "התחברות",
+        "measured": {
+          "text": "התחברות",
+          "height": 20,
+          "width": 57
+        }
+      },
+      {
+        "route": "/forgot-password",
+        "selector": "a[href=\"/login\"]",
+        "expect": "חזרה למסך הכניסה",
+        "measured": {
+          "text": "חזרה למסך הכניסה",
+          "height": 19,
+          "width": 113
+        }
+      }
+    ]
+  },
+  "screenshots": {
+    "pricing-1440x900": "docs\\qa\\2026-09-04\\evidence\\PR36-pricing-1440x900-RED.png",
+    "pricing-390x844": "docs\\qa\\2026-09-04\\evidence\\PR36-pricing-390x844-RED.png",
+    "login-390x844": "docs\\qa\\2026-09-04\\evidence\\PR36-login-390x844-RED.png",
+    "login-1440x900": "docs\\qa\\2026-09-04\\evidence\\PR36-login-1440x900-RED.png",
+    "signup-390x844": "docs\\qa\\2026-09-04\\evidence\\PR36-signup-390x844-RED.png",
+    "signup-1440x900": "docs\\qa\\2026-09-04\\evidence\\PR36-signup-1440x900-RED.png",
+    "forgot-password-390x844": "docs\\qa\\2026-09-04\\evidence\\PR36-forgot-password-390x844-RED.png",
+    "forgot-password-1440x900": "docs\\qa\\2026-09-04\\evidence\\PR36-forgot-password-1440x900-RED.png"
+  },
+  "failures": [
+    "ENTRY-02: 390x844 lays out 0 of the 52 entitlement rows in the DOM, against 52 on the desktop, and offers 0 control(s) to open them. A visitor on a phone cannot tell the plans apart.",
+    "ENTRY-06: 5 intro badge(s) cross their own card's border — free \"רק 30 יום ראשונים\" by 13px (card 209px, badge 110px, row 138px); free \"רק 30 יום ראשונים\" by 13px (card 209px, badge 110px, row 138px); free \"רק 30 יום ראשונים\" by 13px (card 209px, badge 110px, row 121px); free \"רק 30 יום ראשונים\" by 13px (card 209px, badge 110px, row 104px); free \"רק 30 יום ראשונים\" by 13px (card 209px, badge 110px, row 138px)",
+    "ENTRY-12: /login «שכחתי סיסמה» is 20px tall at 390x844, under the product's own 44px floor.",
+    "ENTRY-12: /login «להרשמה» is 20px tall at 390x844, under the product's own 44px floor.",
+    "ENTRY-12: /login «תנאי שימוש» is 16px tall at 390x844, under the product's own 44px floor.",
+    "ENTRY-12: /login «מדיניות פרטיות» is 16px tall at 390x844, under the product's own 44px floor.",
+    "ENTRY-12: /signup «התחברות» is 20px tall at 390x844, under the product's own 44px floor.",
+    "ENTRY-12: /forgot-password «חזרה למסך הכניסה» is 19px tall at 390x844, under the product's own 44px floor."
+  ],
+  "verdict": "FAIL"
+}

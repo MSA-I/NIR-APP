@@ -1,0 +1,189 @@
+PR 36 — ENTRY-02, ENTRY-05, ENTRY-06, ENTRY-12 — THE GREEN, same tree with the fix applied.
+Branch worktree-agent-a3c28df0cf03a73f4, merge-base 2001b9af.
+Same four oracles, same machine, same headed Edge, same dev server on port 5236, same injected
+catalogue fixture. Every number below is the same measurement that failed in
+PR36-ENTRY-02-ENTRY-05-ENTRY-06-ENTRY-12-RED.txt.
+
+What moved, in the measurement's own figures:
+  ENTRY-02  /pricing at 390x844: 0 of 52 entitlement rows laid out  ->  52 of 52.
+            Page text on a phone: 817 chars -> 2573 (desktop is 2676-shaped).
+  ENTRY-06  the free rung's five intro badges: 13px OUTSIDE their own 209px card
+            -> 30px and 69px INSIDE it. Tallest row on that card 138px -> 61px,
+            every other card's tallest row unchanged at 35px, and the whole tray
+            1172px -> 822px, which is the 220-620px of empty coloured fill under
+            פרו and פרימיום going away with it.
+  ENTRY-12  the six controls: 20/20/16/16/20/19px  ->  44px each.
+  ENTRY-05  is text rather than geometry and is answered by the spec below.
+
+
+================================================================================================
+$ npx vitest run src/components/planCardPhone.spec.ts
+================================================================================================
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3c28df0cf03a73f4
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  15:21:32
+   Duration  3.77s (transform 273ms, setup 951ms, import 67ms, tests 16ms, environment 2.05s)
+
+
+[exit 0]
+
+================================================================================================
+$ npx vitest run src/pages/pricingPublicClaims.spec.tsx
+================================================================================================
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3c28df0cf03a73f4
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  15:22:02
+   Duration  11.98s (transform 6.52s, setup 1.67s, import 6.29s, tests 776ms, environment 2.33s)
+
+
+[exit 0]
+
+================================================================================================
+$ npx vitest run src/pages/publicEntranceTouchTargets.spec.tsx
+================================================================================================
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3c28df0cf03a73f4
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  15:22:31
+   Duration  9.23s (transform 4.89s, setup 773ms, import 5.18s, tests 346ms, environment 2.20s)
+
+
+[exit 0]
+
+================================================================================================
+$ npx vitest run src/pages/pricing.spec.tsx src/pages/hebrewNumberAgreement.spec.tsx src/pages/Login.spec.tsx src/pages/signup.spec.tsx src/pages/passwordRecovery.spec.tsx
+================================================================================================
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3c28df0cf03a73f4
+
+
+ Test Files  5 passed (5)
+      Tests  73 passed (73)
+   Start at  15:22:46
+   Duration  15.63s (transform 4.29s, setup 3.52s, import 7.70s, tests 20.18s, environment 8.70s)
+
+Not implemented: navigation to another Document
+
+[exit 0]
+
+================================================================================================
+$ npm run check:i18n
+================================================================================================
+
+> inplace@0.1.0 check:i18n
+> node scripts/check-i18n.ts
+
+check:i18n passed: 63 file(s) still carry 908 Hebrew line(s), all at their pinned counts (63 documented exception(s)).
+
+[exit 0]
+
+================================================================================================
+$ npm run check:orphan-keys
+================================================================================================
+
+> inplace@0.1.0 check:orphan-keys
+> node scripts/check-orphan-keys.mjs
+
+check:orphan-keys passed: 6020 leaf key(s), 106 with no call site, pinned.
+
+[exit 0]
+
+================================================================================================
+$ npm run check:plurals
+================================================================================================
+
+> inplace@0.1.0 check:plurals
+> node scripts/check-plurals.mjs
+
+check:plurals passed: 76 counted phrase(s), 31 with a singular sibling, 45 pinned.
+
+[exit 0]
+
+================================================================================================
+$ npm run check:tokens
+================================================================================================
+
+> inplace@0.1.0 check:tokens
+> node scripts/check-design-tokens.ts
+
+check:tokens passed: 532 .ts/.tsx files with zero raw palette classes, zero hex literals, zero stock Tailwind shadows and zero references to a colour outside the 145 tokens @theme actually defines; src/index.css keeps every colour literal inside @theme and uses no rgb()/hsl(); 2 stylesheet(s) under src/, and the only one exempt from the token layer is styles/plan-card.css (OPEN-DECISIONS #296).
+
+[exit 0]
+
+================================================================================================
+$ npm run check:typography
+================================================================================================
+
+> inplace@0.1.0 check:typography
+> node scripts/check-typography.ts
+
+Typography contract passed (535 source files).
+
+[exit 0]
+
+================================================================================================
+$ npm run check:key-manifest
+================================================================================================
+
+> inplace@0.1.0 check:key-manifest
+> node scripts/check-key-manifest.mjs
+
+check:key-manifest passed: 5531 keys considered, 107 without a production call site — the same names as the baseline, none newly stranded, none spec-only.
+
+[exit 0]
+
+================================================================================================
+$ npx tsc --noEmit
+================================================================================================
+
+[exit 0]
+
+================================================================================================
+$ node scripts/measure-public-entrance.mjs
+================================================================================================
+— /pricing 1440x900: 52/52 entitlement rows laid out
+— /pricing 390x844 : 52/52 entitlement rows laid out, 0 expander(s), body text 2573 chars
+— badge free «רק 30 יום ראשונים» card 209px, badge 110px, row 61px, overflow start -30px / end -69px, label «קריאה אוטומטית של מסמכים»
+— badge free «רק 30 יום ראשונים» card 209px, badge 110px, row 61px, overflow start -30px / end -69px, label «ייצוא Excel ודוחות לרו״ח»
+— badge free «רק 30 יום ראשונים» card 209px, badge 110px, row 44px, overflow start -30px / end -69px, label «לוח ביצועי ספקים»
+— badge free «רק 30 יום ראשונים» card 209px, badge 110px, row 44px, overflow start -30px / end -69px, label «התאמות בנק»
+— badge free «רק 30 יום ראשונים» card 209px, badge 110px, row 61px, overflow start -30px / end -69px, label «תור תשלומים לרואה החשבון»
+— card free: 822px, tallest row 61px
+— card basic: 822px, tallest row 35px
+— card pro: 817px, tallest row 35px
+— card premium: 822px, tallest row 35px
+— /login «שכחתי סיסמה»: 44px
+— /login «להרשמה»: 44px
+— /login «תנאי שימוש»: 44px
+— /login «מדיניות פרטיות»: 44px
+— /signup «התחברות»: 44px
+— /forgot-password «חזרה למסך הכניסה»: 44px
+
+PASS — 0 failure(s)
+
+[exit 0]
+
+================================================================================================
+$ npm run test   (the whole suite, twice)
+================================================================================================
+First run: 3 files / 5 tests failed, every one of them "Test timed out in 5000ms" — the
+fork-timeout this machine produces when the CPU is saturated, and it was: a headed Edge run and
+two dev servers had just been going. None of the five is on a surface this PR touches
+(supplierBankDetails, offboardingStepUp, documentAutoActionReversal).
+Second run of the SAME tree, nothing changed:
+  Test Files  249 passed (249)
+       Tests  2559 passed (2559)
+
+Also green, run separately: npm run check:jsx-space, npm run check:plan-labels,
+npm run check:dead-code (knip).

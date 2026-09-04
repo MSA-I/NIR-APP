@@ -109,8 +109,12 @@ export default function ForgotPassword() {
               {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <MailQuestion size={ICON.sm} aria-hidden="true" />}
               {t('forgotPassword.sendResetLink')}
             </button>
+            {/* The way back, at the product's own 44px floor. Measured 04.09.2026 at 390x844 it
+                was 19px (`ENTRY-12`) — and this is the only control on the screen for somebody who
+                has arrived here by mistake, which is most of the people who arrive here. */}
             <div className="text-center">
-              <Link to="/login" className="text-sm text-ink-muted hover:text-ink underline underline-offset-2">
+              <Link to="/login"
+                className="inline-flex min-h-11 items-center text-sm text-ink-muted hover:text-ink underline underline-offset-2">
                 {t('forgotPassword.backToLogin')}
               </Link>
             </div>
