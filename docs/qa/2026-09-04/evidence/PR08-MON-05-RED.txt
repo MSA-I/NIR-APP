@@ -1,0 +1,47 @@
+PR 08 — RED — MON-05
+"FIN-10 confirmed by action and raised to medium: the red block says the transfer cannot be
+performed, and I performed it twice on that same card."
+
+MON-05 is FIN-10 measured from the action side, so it shares FIN-10's oracle — the block must not
+be there — and adds the reason the severity rose: the recording the block discourages SUCCEEDS,
+and the sweep performed it twice (payments a3785e05… ref QA16-916560 and 95ff0a6d… ref
+QA19-602625, docs/qa/2026-09-04/money-actions.json).
+
+Oracle run against the UNFIXED tree (base b2f91be2).
+
+  npx vitest run src/pages/payQueueSettledBalance.spec.tsx src/pages/payQueueBalanceArithmetic.spec.ts
+
+Full run: docs/qa/2026-09-04/evidence/PR08-RUN-RED.txt
+
+  × never claims the transfer cannot be performed
+    AssertionError: expected <span></span> to be null
+    + Received:
+    <span>
+      לא הוזנו פרטי בנק לספק זה, ולכן לא ניתן לבצע את ההעברה. יש לפנות לבעלים או למנהל הרכש כדי שיזינו את הפרטים
+
+      בכרטיס הספק. אין במסך זה דרך לדווח על כך.
+    </span>
+
+  ✓ keeps the primary enabled — ruling #353 accepts the recording
+
+The pass and the failure together ARE MON-05: a screen that says the action is impossible, above a
+control that performs it. The sweep's finding is not "the button should be disabled" — its own
+`expected` field says "A screen whose job is recording a transfer already made does not open with a
+red block saying the transfer cannot be made. Missing bank details are a note about the NEXT
+transfer, not a refusal of this recording."
+
+BROWSER READING of the unfixed dialog, 1440x900, system Edge:
+
+  saysCannotTransfer : true
+  primaryDisabled    : false
+  bankNoteTone       : "note-alert"
+  dialogText (head)  : "ביצוע העברה — נקי וזוהר / פרטי חשבון להעברה / לא הוזנו פרטי בנק /
+                        לא הוזנו פרטי בנק לספק זה, ולכן לא ניתן לבצע את ההעברה. …"
+
+Screenshot: PR08-RED-pay-dialog-1440x900.png.
+
+WHAT THIS ORACLE DOES NOT TOUCH. Whether the server accepts a recording that exceeds the invoice
+balance is the SERVER half of ruling #353 — a supplier advance with its own contract, its own
+currency, its own reconciliation path — and it is PR 9. Today `execute_payment_request` still
+raises `allocation_exceeds_balance` (0031:690). Nothing in this PR promises otherwise, and nothing
+on the screen claims the recording will be accepted.

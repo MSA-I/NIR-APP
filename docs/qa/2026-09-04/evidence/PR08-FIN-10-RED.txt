@@ -1,0 +1,42 @@
+PR 08 — RED — FIN-10
+"The execution dialog says the transfer cannot be performed and offers an enabled 'ההעברה בוצעה'
+button two blocks below."
+
+Oracle run against the UNFIXED tree (base b2f91be2).
+
+  npx vitest run src/pages/payQueueSettledBalance.spec.tsx src/pages/payQueueBalanceArithmetic.spec.ts
+
+Full run: docs/qa/2026-09-04/evidence/PR08-RUN-RED.txt
+
+  × never claims the transfer cannot be performed
+    AssertionError: expected <span></span> to be null
+
+    - Expected:
+    null
+
+    + Received:
+    <span>
+      לא הוזנו פרטי בנק לספק זה, ולכן לא ניתן לבצע את ההעברה. יש לפנות לבעלים או למנהל הרכש כדי שיזינו את הפרטים
+
+      בכרטיס הספק. אין במסך זה דרך לדווח על כך.
+    </span>
+
+    ❯ src/pages/payQueueSettledBalance.spec.tsx:196
+       expect(dialog.queryByText(/לא ניתן לבצע את ההעברה/)).toBeNull();
+
+  ✓ keeps the primary enabled — ruling #353 accepts the recording
+
+BOTH LINES ARE THE FINDING. The refusal is present AND the button under it is enabled — which is
+the contradiction, and it is why this row is closed by removing the refusal rather than by
+disabling the button. Ruling #353 (04.09.2026) is explicit: /pay documents a transfer that has
+already left the bank, so the recording is always accepted.
+
+MEASURED IN A BROWSER. `.tmp/pay-visual-check.cjs` at 1440x900 through system Edge, reading the
+live DOM of the unfixed dialog rather than a source file:
+
+  saysCannotTransfer : true
+  primaryDisabled    : false
+  bankNoteTone       : "note-alert"
+
+Screenshot: PR08-RED-pay-dialog-1440x900.png — the red block sits four lines above the enabled
+primary, on a supplier with no stored bank account.

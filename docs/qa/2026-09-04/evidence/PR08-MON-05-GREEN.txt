@@ -1,0 +1,38 @@
+PR 08 — GREEN — MON-05
+
+  npx vitest run src/pages/payQueueSettledBalance.spec.tsx src/pages/payQueueBalanceArithmetic.spec.ts
+
+  Test Files  2 passed (2)
+       Tests  12 passed (12)
+
+Full run: docs/qa/2026-09-04/evidence/PR08-RUN-GREEN.txt
+
+  ✓ never claims the transfer cannot be performed
+  ✓ keeps the primary enabled — ruling #353 accepts the recording
+
+The screen no longer opens with a block saying the action is impossible, and the action it was
+sitting above is still available. That is the whole of MON-05: the contradiction goes, the
+capability stays.
+
+MON-05 raised FIN-10 to medium because the discouraged recording SUCCEEDS. The fix does not make it
+succeed or fail — it stops the screen from lying about it. What the accountant now reads before
+pressing, on a settled request, is a statement of what is true (`tone="await"`):
+
+  החשבוניות שבדרישה כבר נפרעו. היתרה לתשלום עליהן היא אפס. המסך הזה מתעד העברה שכבר יצאה
+  מהבנק, ולכן הרישום נשאר אפשרי — אך יש לוודא מול דף החשבון שההעברה הזו אכן בוצעה ואינה
+  כפילות של תשלום קודם.
+
+and, where the product itself already raised a finding (`tone="alert"`, with a link into it):
+
+  המערכת פתחה חריג על הדרישה הזו. כדאי לקרוא אותו לפני רישום ההעברה:
+  חשד לתשלום כפול · חשד לדרישת תשלום כפולה — #12 · נקי וזוהר — פתיחת החריג
+
+BROWSER READING after the fix, 1440x900, system Edge:
+
+  saysCannotTransfer : false
+  primaryDisabled    : false
+  bankNoteTone       : "note-info"
+
+Screenshots: PR08-GREEN-pay-dialog-1440x900.png, PR08-GREEN-pay-dialog-dark-1440x900.png,
+PR08-GREEN-pay-queue-1440x900.png. Read and compared against the RED pair in
+PR08-SCREEN-READ.txt.
