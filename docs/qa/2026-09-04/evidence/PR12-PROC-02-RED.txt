@@ -1,0 +1,225 @@
+PR 12 · PROC-02 — RED
+The oracle run against the UNFIXED tree (worktree base 182eef90, product files stashed).
+
+Oracle:  npx vitest run src/pages/priceEditParser.spec.tsx
+Result:  5 of 5 FAIL.
+
+The headline failure is the finding itself, in the figure the ledger names:
+
+    expected [ 1250 ] to deeply equal []
+
+Typing 12,50 into the manual price editor wrote 1250 — the value the browser's own
+number-input sanitiser produced, which nothing in the application ever read. The other four
+fail because the screen has no named refusal at all: no role="alert" for a comma that does not
+group in threes, for a figure above the 1,000,000 cap, for a cell priced in another currency,
+or for a negative one, and no notice when a value is rounded to the currency's minor units.
+
+--------------------------------------------------------------------------------
+
+RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab39f5a6f1b8696cf
+
+ × src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > refuses 12,50 by its cause and writes nothing — the comma does not group in threes 577ms
+   → expected [ 1250 ] to deeply equal []
+ × src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > says a price was rounded to the currency's smallest unit, and stores exactly what it said 377ms
+   → expect(element).toHaveValue(1.2345)
+
+Expected the element to have value:
+  1.2345 (string)
+Received:
+  1.2345 (number)
+ × src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > refuses a price above the cap AS above the cap, without asking the server 3359ms
+   → Unable to find role="alert"
+
+      עדכון מחיר — ⁨מטליות מיקרופייבר⁩ (⁨ספק בדיקה⁩)
+          מחיר חדש (ILS)
+          בתוקף מתאריך
+         זמין אצל הספק
+          סיבת העדכון (רשות)
+        ביטול
+        שמירה
+
+      עדכון מחיר — ⁨מטליות מיקרופייבר⁩ (⁨ספק בדיקה⁩)
+          מחיר חדש (ILS)
+          בתוקף מתאריך
+         זמין אצל הספק
+          סיבת העדכון (רשות)
+        ביטול
+        שמירה
+ × src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > refuses a cell priced in another currency by naming both, and never converts 3386ms
+   → Unable to find role="alert"
+
+      עדכון מחיר — ⁨מטליות מיקרופייבר⁩ (⁨ספק בדיקה⁩)
+          מחיר חדש (ILS)
+          בתוקף מתאריך
+         זמין אצל הספק
+          סיבת העדכון (רשות)
+        ביטול
+        שמירה
+
+      עדכון מחיר — ⁨מטליות מיקרופייבר⁩ (⁨ספק בדיקה⁩)
+          מחיר חדש (ILS)
+          בתוקף מתאריך
+         זמין אצל הספק
+          סיבת העדכון (רשות)
+        ביטול
+        שמירה
+ × src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > refuses a negative price as not positive, not as a missing one 3309ms
+   → Unable to find role="alert"
+
+      עדכון מחיר — ⁨מטליות מיקרופייבר⁩ (⁨ספק בדיקה⁩)
+          מחיר חדש (ILS)
+          בתוקף מתאריך
+         זמין אצל הספק
+          סיבת העדכון (רשות)
+        ביטול
+        שמירה
+
+      עדכון מחיר — ⁨מטליות מיקרופייבר⁩ (⁨ספק בדיקה⁩)
+          מחיר חדש (ILS)
+          בתוקף מתאריך
+         זמין אצל הספק
+          סיבת העדכון (רשות)
+        ביטול
+        שמירה
+node.exe :
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > refuses 12,50 by
+its cause and writes nothing — the comma does not group in threes
+AssertionError: expected [ 1250 ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   1250,
++ ]
+
+    129|     // typist did not type.
+    130|     await save(user, dialog);
+    131|     expect(writes.map((write) => write.p_price)).toEqual([]);
+       |                                                  ^
+    132|
+    133|     // And the field holds what was typed. A number input never gets t…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > says a price was
+rounded to the currency's smallest unit, and stores exactly what it said
+Error: expect(element).toHaveValue(1.2345)
+
+Expected the element to have value:
+  1.2345 (string)
+Received:
+  1.2345 (number)
+    141|     const { user, dialog, field } = await openEditor('1.2345');
+    142|
+    143|     expect(field).toHaveValue('1.2345');
+       |                   ^
+    144|     expect(await within(dialog).findByText(/1\.23/)).toBeInTheDocument…
+    145|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > refuses a price
+above the cap AS above the cap, without asking the server
+TestingLibraryElementError: Unable to find role="alert"
+
+flex flex-col focus:outline-none"
+      עדכון מחיר — ⁨מטליות מיקרופייבר⁩ (⁨ספק בדיקה⁩)
+          מחיר חדש (ILS)
+          בתוקף מתאריך
+         זמין אצל הספק
+          סיבת העדכון (רשות)
+        ביטול
+        שמירה
+
+flex flex-col focus:outline-none"
+      עדכון מחיר — ⁨מטליות מיקרופייבר⁩ (⁨ספק בדיקה⁩)
+          מחיר חדש (ILS)
+          בתוקף מתאריך
+         זמין אצל הספק
+          סיבת העדכון (רשות)
+        ביטול
+        שמירה
+    152|     const { user, dialog, field } = await openEditor('2000000');
+    153|
+    154|     expect(await within(dialog).findByRole('alert')).toHaveTextContent…
+       |                                 ^
+    155|
+    156|     await save(user, dialog);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > refuses a cell
+priced in another currency by naming both, and never converts
+TestingLibraryElementError: Unable to find role="alert"
+
+flex flex-col focus:outline-none"
+      עדכון מחיר — ⁨מטליות מיקרופייבר⁩ (⁨ספק בדיקה⁩)
+          מחיר חדש (ILS)
+          בתוקף מתאריך
+         זמין אצל הספק
+          סיבת העדכון (רשות)
+        ביטול
+        שמירה
+
+flex flex-col focus:outline-none"
+      עדכון מחיר — ⁨מטליות מיקרופייבר⁩ (⁨ספק בדיקה⁩)
+          מחיר חדש (ILS)
+          בתוקף מתאריך
+         זמין אצל הספק
+          סיבת העדכון (רשות)
+        ביטול
+        שמירה
+    167|     const { user, dialog } = await openEditor('$12.50');
+    168|
+    169|     expect(await within(dialog).findByRole('alert'))
+       |                                 ^
+    170|       .toHaveTextContent('המחיר נקוב ב-USD והמחירון הזה ב-ILS');
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > refuses a
+negative price as not positive, not as a missing one
+TestingLibraryElementError: Unable to find role="alert"
+
+flex flex-col focus:outline-none"
+      עדכון מחיר — ⁨מטליות מיקרופייבר⁩ (⁨ספק בדיקה⁩)
+          מחיר חדש (ILS)
+          בתוקף מתאריך
+
+ Test Files  1 failed (1)
+      Tests  5 failed (5)
+   Start at  14:05:04
+   Duration  14.20s (transform 756ms, setup 458ms, import 1.55s, tests 11.01s, environment 970ms)
+
+         זמין אצל הספק
+          סיבת העדכון (רשות)
+        ביטול
+        שמירה
+
+flex flex-col focus:outline-none"
+      עדכון מחיר — ⁨מטליות מיקרופייבר⁩ (⁨ספק בדיקה⁩)
+          מחיר חדש (ILS)
+          בתוקף מתאריך
+         זמין אצל הספק
+          סיבת העדכון (רשות)
+        ביטול
+        שמירה
+    177|     const { user, dialog } = await openEditor('-5');
+    178|
+    179|     expect(await within(dialog).findByRole('alert')).toHaveTextContent…
+       |                                 ^
+    180|
+    181|     await save(user, dialog);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯

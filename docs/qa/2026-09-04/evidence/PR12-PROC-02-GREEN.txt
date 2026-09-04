@@ -1,0 +1,51 @@
+PR 12 · PROC-02 — GREEN
+The same oracle, unchanged, against the fixed tree.
+
+Oracle:  npx vitest run src/pages/priceEditParser.spec.tsx
+Result:  5 of 5 PASS.
+
+The editor now reads the field with parsePrice — the same reading the importer on this screen
+performs, and the client twin of private.parse_price from 0298. 12,50 is refused and nothing is
+written; 1.2345 states the figure that will be stored (1.23 in ILS) and stores exactly that;
+2000000 is refused BY THE CAP without a round trip; $12.50 is refused by naming both currencies;
+-5 is refused as not positive.
+
+Guards re-run after the fix, all green:
+  npm run check:money         3 rules over src/**/*.ts(x)
+  npm run check:currency      GATE_CURRENCY_COLUMNS_OK / AGGREGATES_OK / INTAKE_GUARD_OK
+  npm run check:i18n          63 files, 908 Hebrew lines, all at their pinned counts
+  npm run check:orphan-keys   5993 leaf keys, 106 with no call site, pinned
+  npm run check:plurals       75 counted phrases, 48 pinned
+  npm run check:key-manifest  107 without a production call site, the same names as the baseline
+  npm run check:jsx-space · check:typography · check:tokens
+  npx tsc --noEmit            exit 0
+  npx vitest run src/pages/priceEditParser.spec.tsx src/pages/priceComparison.spec.tsx
+                 src/pages/priceListMultiImport.spec.tsx src/pages/priceListsI18n.spec.ts
+                 src/lib/price.spec.ts src/pages/deadEndFixes.spec.tsx
+                              6 files, 56 tests, all passing
+  npm run test                236 files, 2498 tests, all passing (the whole Vitest suite)
+
+Read screenshots (Edge via playwright-core, 1440x900, signed in as the local demo owner,
+/prices with 68 real supplier prices):
+  PR12-01-prices.png             the screen before the dialog
+  PR12-02-refusal-comma.png      12,50   -> "לא ניתן לקרוא את המחיר בתא"
+  PR12-03-refusal-above-cap.png  2000000 -> "המחיר חורג מהתקרה של 1,000,000"
+  PR12-04-rounded-notice.png     1.2345  -> "המחיר יישמר כ-1.23 ₪, מעוגל ליחידה הקטנה ביותר של המטבע."
+  PR12-05-refusal-currency.png   $12.50  -> "המחיר נקוב ב-USD והמחירון הזה ב-ILS; אין המרה בין מטבעות"
+The typed text stays in the field in every one of them; the cause sits under the field, bound to
+it by aria-describedby with aria-invalid set.
+
+--------------------------------------------------------------------------------
+
+RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab39f5a6f1b8696cf
+
+ ✓ src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > refuses 12,50 by its cause and writes nothing — the comma does not group in threes 646ms
+ ✓ src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > says a price was rounded to the currency's smallest unit, and stores exactly what it said 448ms
+ ✓ src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > refuses a price above the cap AS above the cap, without asking the server 479ms
+ ✓ src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > refuses a cell priced in another currency by naming both, and never converts 446ms
+ ✓ src/pages/priceEditParser.spec.tsx > PROC-02 — /prices manual editor: one parser for a price > refuses a negative price as not positive, not as a missing one 386ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  14:04:23
+   Duration  5.64s (transform 796ms, setup 423ms, import 1.66s, tests 2.41s, environment 929ms)

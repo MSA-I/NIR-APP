@@ -399,6 +399,9 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
   );
 }
 
+const PRICE_PROBLEM_ID = 'price-list-price-problem';
+const PRICE_ROUNDED_ID = 'price-list-price-rounded';
+
 function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => void; onSaved: () => void }) {
   const { errorText, t } = useT();
   const toast = useToast();
@@ -407,14 +410,47 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
   const [available, setAvailable] = useState(row.available);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const priceRef = useRef<HTMLInputElement>(null);
+
+  /* ONE PARSER FOR A PRICE — `parsePrice`, the same reading the importer above performs and the
+     client twin of `private.parse_price` from `0298`. This field used to be an
+     `<input type="number">` whose value went straight to `Number()`, which is not "no parser" but
+     a SECOND one, owned by the browser and keyed to the reader's locale: a Hebrew-locale Chrome
+     reads the comma in `12,50` as a thousands separator and hands over 1250, so the editor stored
+     1,250.00 for a cell the importer refuses outright — and that number then decides the cheapest
+     supplier and the next order's unit price. `maxLength` is the parser's own 64.
+
+     The expected currency is the ROW's own, and no `knownCurrencies` set is passed: with none,
+     `parsePrice` recognises this row's code and the printed symbols and calls every other word
+     UNREADABLE rather than guessing at it — the conservative half of the same contract. */
+  const reading = parsePrice(price, row.currency);
+  const value = reading.ok ? reading.value : null;
+  /** Non-null exactly when there is nothing to write, and it names the cause rather than lumping
+      every refusal into one "invalid price": a comma that does not group in threes, a figure over
+      the cap, a cell priced in another currency. */
+  const refusal = value === null
+    ? t(PRICE_REASON_KEYS[reading.reason ?? 'price_unreadable'] as TKey, {
+      currency: reading.currency ?? row.currency, printed: reading.printedCurrency ?? '',
+    })
+    : null;
+  /* Rounding to the currency's own minor units is a change to the number the user typed, so it is
+     stated BEFORE the save and in the figure that will be stored — never applied in silence. */
+  const roundedNote = value !== null && reading.rounded
+    ? t('priceListsTail.priceRounded', { value: fmtMoneyExact(value, row.currency) })
+    : null;
 
   async function save() {
-    const p = Number(price);
-    if (!p || p <= 0) { toast(t('priceLists.toast'), 'error'); return; }
+    if (value === null) {
+      // The cause is already on screen, bound to this field and announced; the caret goes back to
+      // the cell that has to change rather than a second copy of the same sentence.
+      priceRef.current?.focus();
+      return;
+    }
     setBusy(true);
     const upd = await supabase.rpc('set_supplier_product_price', {
       p_supplier_product_id: row.id,
-      p_price: p,
+      // Exactly the figure the notice promised, to this currency's minor units.
+      p_price: value,
       p_effective_date: date,
       p_available: available,
       p_reason: reasonOr(reason, 'עדכון המחיר'),
@@ -433,7 +469,15 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
         {/* The row already carries its currency and every READ on this screen honours it — the
             table, the trend column, the chart axis and the history table all format from
             `r.currency`. This one label was the exception, and it is the field that WRITES. */}
-        <div><label className="label" htmlFor="price-list-price">{`מחיר חדש (${row.currency})`}</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
+        <div>
+          <label className="label" htmlFor="price-list-price">{`מחיר חדש (${row.currency})`}</label>
+          <input id="price-list-price" ref={priceRef} className="input num" inputMode="decimal" maxLength={64}
+            value={price} onChange={(e) => setPrice(e.target.value)}
+            aria-invalid={refusal !== null || undefined}
+            aria-describedby={refusal !== null ? PRICE_PROBLEM_ID : roundedNote !== null ? PRICE_ROUNDED_ID : undefined} />
+          {refusal !== null && <div id={PRICE_PROBLEM_ID} className="mt-2"><Note tone="alert" role="alert">{refusal}</Note></div>}
+          {roundedNote !== null && <div id={PRICE_ROUNDED_ID} className="mt-2"><Note tone="info" role="status">{roundedNote}</Note></div>}
+        </div>
         <div><label className="label" htmlFor="price-list-date">בתוקף מתאריך</label><input id="price-list-date" type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="rounded" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> זמין אצל הספק</label>
         <div><label className="label" htmlFor="price-list-reason">סיבת העדכון (רשות)</label><input id="price-list-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
